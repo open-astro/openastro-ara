@@ -11006,7 +11006,7 @@ The only steady-state backpressure path is **image processor → capture**, and 
 { "type": "capture.backpressure", "payload": { "queue_depth": 10, "queue_max": 10, "exposure_paused_ms": 1850 } }
 ```
 
-**Silent + WS event only** per the bake decision — no user notification. Visible in the WILMA Stats dashboard if/when the §50 Pi performance panel ships (future; see §66.7).
+**Silent + WS event only** per the bake decision — no user notification. The Stats "Pi performance" section (§66.7, #1175) shows the process figures, not these events; backpressure stays WS-event + log only.
 
 Other backpressure-adjacent events:
 
@@ -11058,14 +11058,11 @@ total pause, CPU share since the previous read, thread pool, open WebSocket clie
 and runtime — sampled on read, nothing in the background) and the WILMA Stats "Pi performance"
 section that renders it. Per-executor queue/throughput figures are still log-only.
 
-It does **not** ship:
-- per-executor metrics on that endpoint
-
-Both are future paths (ROADMAP). Rationale: under DSO workloads the backpressure events fire essentially never, so the operational value of live metrics is low; if a user does hit storage problems, the WS event + log entry is sufficient diagnosis. Adding the endpoint + panel is ~2 days of work that's better spent elsewhere in the initial release.
+It does **not** ship per-executor metrics (queue depth, throughput EWMA, backpressure counts) on that endpoint. Rationale: under DSO workloads the backpressure events fire essentially never, so the operational value of live per-pool figures is low; if a user does hit storage problems, the WS event + log entry is sufficient diagnosis.
 
 ### 66.8 Out of initial scope
 
-- Live performance dashboard in WILMA (deferred — see the `P1`–`P5` issue backlog — `GET /api/v1/server/internal-state` + Stats "Pi performance" panel)
+- Per-executor metrics on `GET /api/v1/server/internal-state` and in the Stats "Pi performance" section (the process-level figures shipped in #1175; the per-pool ones stay log-only)
 - Per-pool runtime tuning via API (`PATCH /api/v1/server/concurrency` to change worker counts on the fly) — fixed at startup in the initial release
 - Dynamic priority adjustment under load (e.g., promoting capture to realtime priority on Pi 4 specifically) — fixed priorities
 - Hot-reload of executor config without server restart
