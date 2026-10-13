@@ -48,7 +48,7 @@ namespace OpenAstroAra.Test {
             builder.Services.AddSingleton<IProfileStore>(store);
             // #1264 stage 1 — the prior route asks the sequencer's executor; the real one with no sheet.
             builder.Services.AddSingleton<OpenAstroAra.Sequencer.SequenceItem.Telescope.ITrackingProbeExecutor>(
-                new TrackingProbeService(store, new NoFrames()));
+                new TrackingProbeService(store, new NoFrames(), specs: specs));
             builder.Services.AddProblemDetails();
             builder.Services.ConfigureHttpJsonOptions(opts => {
                 // Program.cs's wire shape: the source-gen context plus snake_case names.
@@ -67,6 +67,11 @@ namespace OpenAstroAra.Test {
             await app.StopAsync();
             await app.DisposeAsync();
         }
+
+        private sealed class FixedSpecs : IMountSpecSheetSource {
+            public MountSpecSheetDto? CurrentMountSpecs { get; set; }
+        }
+        private readonly FixedSpecs specs = new();
 
         private sealed class NoFrames : IAnalysisFrameSource {
             public Task<AnalysisFrame> CaptureForAnalysisAsync(double exposureSec, int binning, CancellationToken ct) =>
@@ -89,6 +94,21 @@ namespace OpenAstroAra.Test {
             Assert.That(doc2.RootElement.GetProperty("seconds").GetDouble(), Is.EqualTo(45));
             Assert.That(doc2.RootElement.GetProperty("source").GetString(), Is.EqualTo("the last probe"));
             store.PutTrackingCalibration(null);
+        }
+
+        [Test]
+        public async Task The_prior_route_serves_a_spec_sheet_prior_with_its_source_on_the_wire() {
+            store.PutTrackingCalibration(null);
+            store.PutOpticsSettings(new OpticsSettingsDto(447, 1.0, 6248, 4176, 3.76, 91));
+            specs.CurrentMountSpecs = MountSpecSheet.Parse("{\"model\":\"EQM-35 Pro\",\"source\":\"manufacturer\",\"worm_period_s\":638,\"periodic_error_pp_arcsec\":25}");
+            try {
+                using var res = await http.GetAsync(new Uri("/api/v1/tracking/prior", UriKind.Relative));
+                using var doc = JsonDocument.Parse(await res.Content.ReadAsStringAsync());
+                Assert.That(doc.RootElement.GetProperty("seconds").GetDouble(), Is.GreaterThan(MountSpecSheet.MinPriorSeconds));
+                Assert.That(doc.RootElement.GetProperty("source").GetString(), Is.EqualTo("the mount's spec sheet (manufacturer)"));
+            } finally {
+                specs.CurrentMountSpecs = null;
+            }
         }
 
         [Test]

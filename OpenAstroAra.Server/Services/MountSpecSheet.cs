@@ -101,8 +101,8 @@ public static class MountSpecSheet {
         }
         var rate = 0.0;
         var anyTerm = false;
-        if (sheet is { HasEncoders: false, WormPeriodS: double worm, PeriodicErrorPpArcsec: double pp } && worm > 0 && pp > 0) {
-            rate += 2 * Math.PI * (pp / 2) / worm;
+        if (ContributesPeriodicError(sheet)) {
+            rate += 2 * Math.PI * (sheet!.PeriodicErrorPpArcsec!.Value / 2) / sheet.WormPeriodS!.Value;
             anyTerm = true;
         }
         if (polarAlignErrorArcmin is double pa && pa > 0) {
@@ -114,6 +114,13 @@ public static class MountSpecSheet {
         }
         return Math.Max(MinPriorSeconds, tol / rate);
     }
+
+    /// <summary>True when the sheet carries a usable periodic-error term: both figures present and positive,
+    /// and no encoders (encoders take the periodic error out of the drift budget).</summary>
+    public static bool ContributesPeriodicError(MountSpecSheetDto? sheet) =>
+        sheet is not null && !sheet.HasEncoders
+        && sheet.WormPeriodS is double worm && worm > 0
+        && sheet.PeriodicErrorPpArcsec is double pp && pp > 0;
 
     /// <summary>The trailing tolerance in arcseconds: a pixel, or half the seeing disc, whichever is larger.</summary>
     public static double? Tolerance(double? pixelScaleArcsec, double? seeingFwhmArcsec) {

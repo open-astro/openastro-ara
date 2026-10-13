@@ -127,5 +127,22 @@ namespace OpenAstroAra.Test {
             store.PutTrackingCalibration(null);
             Assert.That(await svc.ResolvePriorWithSourceAsync(null, CancellationToken.None), Is.EqualTo(((double?)null, (string?)null)), "no sheet, never probed");
         }
+
+        private sealed class OneResidual : IPolarAlignmentLog {
+            public Task InsertAsync(PolarAlignmentRecord record, CancellationToken ct) => Task.CompletedTask;
+            public Task<PolarAlignmentRecord?> GetLatestMeasuredAsync(DateTimeOffset since, CancellationToken ct) =>
+                Task.FromResult<PolarAlignmentRecord?>(new PolarAlignmentRecord(since, since, 10, 6, 8, 2, "complete"));
+        }
+
+        [Test]
+        public async Task A_sheet_that_contributes_nothing_is_not_credited_for_a_polar_align_prior() {
+            var store = new InMemoryProfileStore();
+            store.PutOpticsSettings(new OpticsSettingsDto(447, 1.0, 6248, 4176, 3.76, 91));
+            var specs = new FixedSpecs { CurrentMountSpecs = MountSpecSheet.Parse("{\"model\":\"ZWO AM5\",\"has_encoders\":true}") };
+            var svc = new TrackingProbeService(store, new NoFrames(), specs: specs, polarAlignLog: new OneResidual());
+            var (seconds, source) = await svc.ResolvePriorWithSourceAsync(null, CancellationToken.None);
+            Assert.That(seconds, Is.Not.Null);
+            Assert.That(source, Is.EqualTo("the latest polar alignment"));
+        }
     }
 }

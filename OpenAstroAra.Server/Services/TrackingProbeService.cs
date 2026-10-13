@@ -152,7 +152,15 @@ public sealed partial class TrackingProbeService : ITrackingProbeExecutor {
         var seeing = _profiles.GetSiteSettings()?.TypicalSeeingArcsec;
         var polarAlign = await LatestPolarAlignErrorAsync(token).ConfigureAwait(false);
         var seconds = MountSpecSheet.UnguidedPriorSeconds(sheet, pixelScale, seeing, polarAlign);
-        return seconds is null ? (null, null) : (seconds, sheet.Source is null ? "the mount's spec sheet" : $"the mount's spec sheet ({sheet.Source})");
+        if (seconds is null) {
+            return (null, null);
+        }
+        // A sheet with no usable tracking figures (or encoders) contributes nothing: the number is the
+        // polar-align drift alone, and the label must not credit the sheet for it.
+        var source = !MountSpecSheet.ContributesPeriodicError(sheet)
+            ? "the latest polar alignment"
+            : sheet.Source is null ? "the mount's spec sheet" : $"the mount's spec sheet ({sheet.Source})";
+        return (seconds, source);
     }
 
     public async Task<TrackingProbeResult> ProbeAsync(TrackingProbeRequest request, IProgress<ApplicationStatus> progress, CancellationToken token) {
