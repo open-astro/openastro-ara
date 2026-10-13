@@ -61,9 +61,9 @@ namespace OpenAstroAra.Server.Services {
 
         public long? TotalBytes { get; }
 
-        /// <summary>True when a conditional fetch got 304 Not Modified — the remote package is unchanged since the
-        /// caller's <c>ifModifiedSince</c>, <see cref="Content"/> is empty, and the caller should keep the existing
-        /// install rather than re-extract.</summary>
+        /// <summary>True when a conditional fetch got 304 Not Modified — the remote package is unchanged per the
+        /// caller's validator (ETag and/or Last-Modified), <see cref="Content"/> is empty, and the caller should keep
+        /// the existing install rather than re-extract.</summary>
         public bool NotModified { get; init; }
 
         /// <summary>The remote <c>Last-Modified</c> for this package, when the server sent one — persisted alongside the
