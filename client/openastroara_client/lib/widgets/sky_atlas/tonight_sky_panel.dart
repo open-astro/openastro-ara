@@ -14,6 +14,7 @@ import '../../state/stats/stats_targets_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../state/settings/settings_nav.dart' show kRunTabIndex;
 import '../../theme/ara_metrics.dart';
+import '../../util/banked_hours.dart';
 import '../../util/integration_budget.dart';
 import '../../util/coord_format.dart';
 import 'planning_visuals.dart';
@@ -341,18 +342,7 @@ class _ObjectRowState extends ConsumerState<_ObjectRow> {
   double? _bankedHours() {
     final targets = ref.watch(statsTargetsProvider).value;
     if (targets == null || targets.isEmpty) return null;
-    String norm(String s) =>
-        s.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
-    final keys = {norm(_object.id), norm(_object.name)}..remove('');
-    var sum = 0.0;
-    var found = false;
-    for (final t in targets) {
-      if (keys.contains(norm(t.targetName))) {
-        sum += t.integrationHours;
-        found = true;
-      }
-    }
-    return found && sum > 0 ? sum : null;
+    return bankedHoursFor(targets, id: _object.id, name: _object.name);
   }
 
   @override

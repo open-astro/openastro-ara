@@ -12,6 +12,8 @@ import '../../state/sky_atlas/tonight_sky_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../util/mosaic_geometry.dart';
 import '../../util/session_planner.dart';
+import '../../util/banked_hours.dart';
+import '../../state/stats/stats_targets_state.dart';
 import '../../util/tonight_sky_local.dart' show opticsFovArcmin;
 import 'target_preview.dart';
 
@@ -107,6 +109,12 @@ class _SessionPlanDialogState extends ConsumerState<SessionPlanDialog> {
             windowEndUtc: end.toUtc(),
             targetCount: s.targetCount,
             overheads: overheads,
+            // §Integration Budget P5 — what the library already holds, so the
+            // plan favours finishing a tier tonight over re-shooting a done one.
+            bankedHours: bankedHoursByObjectId(
+              ref.read(statsTargetsProvider).value,
+              ranked,
+            ),
           ),
           ranked: ranked,
           overheads: overheads,

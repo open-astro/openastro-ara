@@ -163,17 +163,57 @@ const double _hoursSaturationHours = 6.0;
 // plate solve, guider settle all eat into it).
 const double _minSliceHours = 0.75;
 
-double _valueOf(TonightSkyObject o, double hours) {
+// §Integration Budget P5 — the tier handshake. A slice that completes the
+// target's full-structure tier tonight is worth this much extra (scaled by
+// how much of the remaining need it covers); a target whose tier is already
+// complete keeps only this fraction of its hours value, so a fresh object
+// wins the slot — diminishing returns, steered.
+const double _tierCompletionBonus = 12.0;
+const double _tierCompleteHoursFactor = 0.3;
+
+/// What the library already holds against the target's full-structure tier:
+/// hours still needed (≤ 0 = complete), or null when there is no budget or
+/// nothing banked.
+double? _tierHoursToGo(TonightSkyObject o, Map<String, double> banked) {
+  final needed = o.budgetFullHours;
+  final have = banked[o.id];
+  if (needed == null || needed <= 0 || have == null) return null;
+  return needed - have;
+}
+
+double _valueOf(TonightSkyObject o, double hours, [Map<String, double> banked = const {}]) {
   final base = o.hoursFreeScore ?? ((o.score ?? 0) * 0.75);
+  final toGo = _tierHoursToGo(o, banked);
+  final hoursFactor = toGo != null && toGo <= 0 ? _tierCompleteHoursFactor : 1.0;
+  final completion = toGo != null && toGo > 0
+      ? _tierCompletionBonus * (hours / toGo).clamp(0.0, 1.0)
+      : 0.0;
   // CONCAVE hours value (sqrt, saturating at 6 h): integration has diminishing
   // returns, and concavity is what makes the greedy allocator split windows
   // near-EQUALLY — the linear form valued every split point the same, so
   // every target but the last collapsed to the 45-min floor (review, live
   // walkthrough round 5).
   return base +
-      _hoursWeight *
+      completion +
+      hoursFactor *
+          _hoursWeight *
           math.sqrt(hours.clamp(0, _hoursSaturationHours) /
               _hoursSaturationHours);
+}
+
+/// The P5 notes for a planned slice, or null: the tier it completes tonight,
+/// or the tier that was already complete before the night began.
+String? tierNoteFor(SessionPlanTarget t, Map<String, double> banked) {
+  final toGo = _tierHoursToGo(t.object, banked);
+  if (toGo == null) return null;
+  if (toGo <= 0) {
+    return '${t.object.name}: full-structure tier already complete — '
+        'diminishing returns; a new target would gain more from these hours.';
+  }
+  if (t.hours >= toGo) {
+    return '${t.object.name}: this slice completes its full-structure tier.';
+  }
+  return null;
 }
 
 (DateTime, DateTime)? _usable(
@@ -218,6 +258,9 @@ SessionPlan planImagingSession({
   required DateTime windowEndUtc,
   int targetCount = 1,
   SessionOverheads overheads = const SessionOverheads(),
+  // §Integration Budget P5 — hours already banked per object id (the
+  // library's per-target totals); empty = plan on tonight alone.
+  Map<String, double> bankedHours = const {},
 }) {
   final winStart = windowStartUtc.toUtc();
   final winEnd = windowEndUtc.toUtc();
@@ -243,7 +286,7 @@ SessionPlan planImagingSession({
   (TonightSkyObject, DateTime, DateTime)? bestSingle;
   var bestSingleValue = double.negativeInfinity;
   for (final c in candidates) {
-    final v = _valueOf(c.$1, _hoursBetween(c.$2, c.$3));
+    final v = _valueOf(c.$1, _hoursBetween(c.$2, c.$3), bankedHours);
     if (v > bestSingleValue) {
       bestSingleValue = v;
       bestSingle = c;
@@ -252,7 +295,8 @@ SessionPlan planImagingSession({
 
   if (targetCount <= 1) {
     final s = _slice(bestSingle!.$1, bestSingle.$2, bestSingle.$3, overheads);
-    return SessionPlan(targets: [s], plannedHours: s.hours);
+    final note = tierNoteFor(s, bankedHours);
+    return SessionPlan(targets: [s], plannedHours: s.hours, notes: [?note]);
   }
 
   var slices = <SessionPlanTarget>[
@@ -275,7 +319,7 @@ SessionPlan planImagingSession({
     var bestGain = 0.0;
     for (var i = 0; i < slices.length; i++) {
       final s0 = slices[i];
-      final currentValue = _valueOf(s0.object, s0.hours);
+      final currentValue = _valueOf(s0.object, s0.hours, bankedHours);
       final own = usableOf[s0.object.id]!;
       // The region this split may occupy: the slice itself PLUS any
       // unallocated window on either side (up to the neighbouring slices) —
@@ -312,8 +356,8 @@ SessionPlan planImagingSession({
                 t.isAfter(secondUsable.$1) ? t : secondUsable.$1;
             final h2 = _hoursBetween(s2start, s2end);
             if (h1 < _minSliceHours || h2 < _minSliceHours) continue;
-            final gain = _valueOf(firstObj, h1) +
-                _valueOf(secondObj, h2) -
+            final gain = _valueOf(firstObj, h1, bankedHours) +
+                _valueOf(secondObj, h2, bankedHours) -
                 currentValue;
             if (gain > bestGain) {
               bestGain = gain;
@@ -338,6 +382,9 @@ SessionPlan planImagingSession({
     slices = bestSlices;
   }
   slices.sort((a, b) => a.startUtc.compareTo(b.startUtc));
+  for (final t in slices) {
+    if (tierNoteFor(t, bankedHours) case final note?) notes.add(note);
+  }
   return SessionPlan(
     targets: slices,
     plannedHours: slices.fold(0.0, (sum, t) => sum + t.hours),
