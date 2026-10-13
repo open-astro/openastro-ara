@@ -124,6 +124,13 @@ public sealed partial class TelescopeService : ITelescopeMediator {
                     && runtime.RightAscensionHours is double ra && runtime.DeclinationDegrees is double dec) {
                 info.Coordinates = new Coordinates(Angle.ByHours(ra), Angle.ByDegree(dec), epoch);
             }
+            // #1159 — where the last slew was aimed: the mount's own TargetRA/TargetDec registers (§57.9,
+            // already masked after a Park/Home by the target latch), in the same frame as the position.
+            // Null when the mount reports none, so a consumer never mistakes "unknown" for 0h/0°.
+            if (connected && _equatorialSystemKnown
+                    && runtime.TargetRightAscensionHours is double targetRa && runtime.TargetDeclinationDegrees is double targetDec) {
+                info.TargetCoordinates = new Coordinates(Angle.ByHours(targetRa), Angle.ByDegree(targetDec), epoch);
+            }
             if (connected && caps is not null) {
                 PopulateTrackingModes(info.TrackingModes, caps);
             }

@@ -187,6 +187,31 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        [Category("bench")] // loopback-only, runs in the default job too
+        public async Task GetInfo_serves_the_mounts_target_registers_as_TargetCoordinates() {
+            // #1159 — Verify-Position's "where the slew was aimed" comes from the mount's own
+            // TargetRA/TargetDec registers through the real GetInfo path (not a hand-built TelescopeInfo).
+            using var profile = ProfileWith(false);
+            var mount = Mount(6.0, sideOfPier: "1");
+            await using var box = ScriptedAlpacaDevice.Start(path =>
+                path.EndsWith("/targetrightascension", StringComparison.Ordinal) ? "9.93"
+                : path.EndsWith("/targetdeclination", StringComparison.Ordinal) ? "69.07"
+                : mount(path));
+            using var svc = await ConnectAsync(box, profile);
+
+            var info = ((ITelescopeMediator)svc).GetInfo();
+            Assert.That(info.TargetCoordinates, Is.Not.Null, "the registers reached the info");
+            Assert.That(info.TargetCoordinates.RA, Is.EqualTo(9.93).Within(1e-6));
+            Assert.That(info.TargetCoordinates.Dec, Is.EqualTo(69.07).Within(1e-6));
+            Assert.That(info.TargetCoordinates.Epoch, Is.EqualTo(info.Coordinates!.Epoch), "same frame as the position");
+
+            // A mount that reports no target (a PropertyNotImplemented read) leaves it null, never 0h/0°.
+            await using var bare = ScriptedAlpacaDevice.Start(Mount(6.0, sideOfPier: "1"));
+            using var plain = await ConnectAsync(bare, profile);
+            Assert.That(((ITelescopeMediator)plain).GetInfo().TargetCoordinates, Is.Null);
+        }
+
+        [Test]
         [Category("bench")]
         public async Task A_mount_without_SideOfPier_reports_unknown_not_east() {
             await using var box = ScriptedAlpacaDevice.Start(Mount(6.0, sideOfPier: "\"not-an-int\""));
