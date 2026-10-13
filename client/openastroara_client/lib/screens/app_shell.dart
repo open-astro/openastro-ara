@@ -11,6 +11,7 @@ import '../theme/ara_colors.dart';
 import '../widgets/notifications/notification_center.dart';
 import '../widgets/auto_flats_prompt_listener.dart';
 import '../widgets/manual_filter_swap_listener.dart';
+import '../widgets/pending_profile_replay_listener.dart';
 import '../widgets/backup_stream_chip.dart';
 import '../widgets/command_palette.dart';
 import '../widgets/connection_policy_listener.dart';
@@ -101,7 +102,8 @@ class _AppShellState extends ConsumerState<AppShell> {
       // session transferred) listen here, at the always-alive shell level.
       // §48 — the "capture calibration tonight?" prompt nests inside for the
       // same reason: it must fire no matter which tab is showing.
-      body: ManualFilterSwapListener(
+      body: PendingProfileReplayListener(
+        child: ManualFilterSwapListener(
         // #1298 — the manual filter wheel's "install the X filter" prompt must
         // reach the user on whatever tab is showing.
         child: ConnectionPolicyListener(
@@ -190,6 +192,7 @@ class _AppShellState extends ConsumerState<AppShell> {
               ),
             ),
           ),
+        ),
         ),
       ),
       )),

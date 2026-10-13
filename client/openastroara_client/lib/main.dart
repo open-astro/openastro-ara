@@ -18,6 +18,7 @@ import 'state/backup/backup_stream_state.dart';
 import 'state/launch_gate_state.dart';
 import 'state/sky_atlas/dso_catalog_state.dart';
 import 'state/saved_server_state.dart';
+import 'state/pending_profile_drafts_state.dart';
 import 'theme/ara_theme.dart';
 import 'widgets/night_filter.dart';
 import 'widgets/night_hotkey.dart';
@@ -124,6 +125,20 @@ class _RootRouter extends ConsumerWidget {
     // app root, and every sync (busy on, busy off) rebuilt MaterialApp and
     // re-themed the whole tree (#1111).
     ref.listen(clientGpsProvider, (previous, next) {});
+    // §2 / #1137 — apply profiles the wizard saved offline when a server connects.
+    ref.listen(pendingProfileDraftReplayProvider, (previous, next) {});
+    // #1137 — a different server mid-session re-arms the launch gate: the
+    // profile box, the cache seed and the gear hydration belong to the old rig.
+    ref.listen(activeServerProvider, (previous, next) {
+      if (shouldRearmLaunchGate(
+        previous: previous == null ? null : (hostname: previous.hostname, port: previous.port),
+        next: next == null ? null : (hostname: next.hostname, port: next.port),
+        gatePassed: ref.read(profileGatePassedProvider),
+        offline: ref.read(offlineModeProvider),
+      )) {
+        ref.read(profileGatePassedProvider.notifier).reset();
+      }
+    });
     final saved = ref.watch(savedServersProvider);
     final gatePassed = ref.watch(profileGatePassedProvider);
     final offline = ref.watch(offlineModeProvider);

@@ -6,6 +6,7 @@ import '../services/profile_api.dart';
 import '../services/profile_cache_service.dart';
 import 'settings/autofocus_settings_state.dart';
 import 'settings/camera_electronics_state.dart';
+import 'settings/custom_horizon_state.dart';
 import 'settings/filter_set_state.dart';
 import 'settings/imaging_defaults_state.dart';
 import 'settings/optics_settings_state.dart';
@@ -82,13 +83,16 @@ Future<void> captureProfileCache(
     // The section GETs read the ACTIVE profile — that's the one we snapshot.
     // Parallel (like _hydratePlanningSettings): this fires on every list load
     // AND after every mutation, so serializing 6 round-trips adds up.
-    final (optics, imaging, autofocus, site, filters, electronics) = await (
+    final (optics, imaging, autofocus, site, filters, electronics, horizon) = await (
       api.getOptics(),
       api.getImagingDefaults(),
       api.getAutofocusSettings(),
       api.getSiteSettings(),
       api.getFilterSet(),
       api.getCameraElectronics(),
+      // #1137 — the §36 terrain skyline: the offline Tonight's Sky ranker
+      // honours it, so it must come from the cache too, not only the server.
+      api.getCustomHorizon(),
     ).wait;
     await cache.saveSections(activeId, {
       'optics': ProfileApi.opticsToJson(optics),
@@ -97,6 +101,7 @@ Future<void> captureProfileCache(
       'site': ProfileApi.siteSettingsToJson(site),
       'filter_set': ProfileApi.filterSetToJson(filters),
       'camera_electronics': ProfileApi.cameraElectronicsToJson(electronics),
+      'custom_horizon': ProfileApi.customHorizonToJson(horizon),
     });
   } catch (e) {
     debugPrint('[profile-cache] capture failed (offline cache stays stale): $e');
@@ -133,5 +138,11 @@ Future<bool> seedPlanningFromCache(
       () async => ProfileApi.filterSetFromJson(sec('filter_set')));
   await container.read(cameraElectronicsProvider.notifier).hydrateGuarded(
       () async => ProfileApi.cameraElectronicsFromJson(sec('camera_electronics')));
+  // #1137 — a snapshot taken before the horizon was cached has no key: leave
+  // the notifier alone rather than wiping a skyline the user may have staged.
+  if (snap['custom_horizon'] is Map) {
+    await container.read(customHorizonProvider.notifier).hydrateGuarded(
+        () async => ProfileApi.customHorizonFromJson(sec('custom_horizon')));
+  }
   return true;
 }

@@ -209,7 +209,7 @@ class ProfileApi {
     final res = await _dio.get<Map<String, dynamic>>(
       '/api/v1/profile/custom-horizon',
     );
-    return _customHorizonFromJson(res.data ?? const {});
+    return customHorizonFromJson(res.data ?? const {});
   }
 
   /// PUT the skyline; the daemon canonicalizes (sort/dedupe/wrap, 422 on
@@ -226,10 +226,19 @@ class ProfileApi {
         ],
       },
     );
-    return _customHorizonFromJson(res.data ?? const {});
+    return customHorizonFromJson(res.data ?? const {});
   }
 
-  static List<CustomHorizonPoint> _customHorizonFromJson(
+  /// Wire shape of the §36 custom horizon (`{points: [{azimuth_deg, altitude_deg}]}`),
+  /// also what the offline profile cache stores (#1137).
+  static Map<String, dynamic> customHorizonToJson(List<CustomHorizonPoint> points) => {
+        'points': [
+          for (final p in points)
+            {'azimuth_deg': p.azimuthDeg, 'altitude_deg': p.altitudeDeg},
+        ],
+      };
+
+  static List<CustomHorizonPoint> customHorizonFromJson(
     Map<String, dynamic> json,
   ) {
     final raw = json['points'];

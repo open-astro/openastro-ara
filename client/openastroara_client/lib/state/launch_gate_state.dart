@@ -58,3 +58,20 @@ class ServerChooserRequestNotifier extends Notifier<bool> {
 
   void clear() => state = false;
 }
+
+/// #1137 — should a server change mid-session send the user back through the
+/// launch flow? Yes when the shell is up against a server and the ACTIVE server
+/// becomes a different one (host or port): the profile box, the cache seed and
+/// the gear hydration all belong to the old rig. A first server appearing, a
+/// server disappearing (offline planning keeps the shell), or the same server
+/// re-saved are not switches.
+bool shouldRearmLaunchGate({
+  required ({String hostname, int port})? previous,
+  required ({String hostname, int port})? next,
+  required bool gatePassed,
+  required bool offline,
+}) {
+  if (!gatePassed || offline) return false;
+  if (previous == null || next == null) return false;
+  return previous.hostname != next.hostname || previous.port != next.port;
+}

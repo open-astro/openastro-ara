@@ -10,6 +10,7 @@ import 'package:openastroara/services/profile_cache_service.dart';
 import 'package:openastroara/state/profile_cache_state.dart';
 import 'package:openastroara/state/settings/autofocus_settings_state.dart';
 import 'package:openastroara/state/settings/camera_electronics_state.dart';
+import 'package:openastroara/state/settings/custom_horizon_state.dart';
 import 'package:openastroara/state/settings/filter_set_state.dart';
 import 'package:openastroara/state/settings/imaging_defaults_state.dart';
 import 'package:openastroara/state/settings/optics_settings_state.dart';
@@ -53,6 +54,12 @@ class _FakeApi extends ProfileApi {
           readNoiseE: 1.5,
           fullWellE: 51000,
           quantumEfficiencyPeak: 0.8);
+
+  @override
+  Future<List<CustomHorizonPoint>> getCustomHorizon() async => const [
+        CustomHorizonPoint(azimuthDeg: 90, altitudeDeg: 25),
+        CustomHorizonPoint(azimuthDeg: 180, altitudeDeg: 12),
+      ];
 }
 
 void main() {
@@ -88,6 +95,34 @@ void main() {
         DateTime.tryParse(
             (sections['p1'] as Map)['captured_utc']?.toString() ?? ''),
         isNotNull);
+  });
+
+  test('#1137: the custom horizon is captured and seeds the offline notifier', () async {
+    await captureProfileCache(cache, _FakeApi(), list);
+    final stored = await cache.load();
+    final horizon = ((stored['sections'] as Map)['p1'] as Map)['custom_horizon'] as Map;
+    expect((horizon['points'] as List), hasLength(2));
+
+    final container = ProviderContainer(overrides: [
+      profileCacheServiceProvider.overrideWithValue(cache),
+    ]);
+    addTearDown(container.dispose);
+    expect(await seedPlanningFromCache(container, 'p1'), isTrue);
+    final seeded = container.read(customHorizonProvider);
+    expect(seeded.map((p) => p.azimuthDeg), [90, 180]);
+    expect(seeded.map((p) => p.altitudeDeg), [25, 12]);
+  });
+
+  test('#1137: a snapshot without a horizon leaves the notifier alone', () async {
+    await cache.saveList('p1', [(id: 'p1', name: 'RedCat 91')]);
+    await cache.saveSections('p1', {'optics': ProfileApi.opticsToJson(const OpticsSettings())});
+    final container = ProviderContainer(overrides: [
+      profileCacheServiceProvider.overrideWithValue(cache),
+    ]);
+    addTearDown(container.dispose);
+    container.read(customHorizonProvider.notifier).addPoint(45, 30);
+    expect(await seedPlanningFromCache(container, 'p1'), isTrue);
+    expect(container.read(customHorizonProvider), hasLength(1), reason: 'an older snapshot must not wipe a staged skyline');
   });
 
   test('cachedProfilesProvider reflects capture, including hasSections',

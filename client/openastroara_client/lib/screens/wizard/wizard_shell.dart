@@ -2,11 +2,14 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../models/profile_draft.dart';
 import '../../models/server.dart';
+import '../../services/pending_profile_draft_service.dart';
 import '../../services/profile_api.dart';
 import '../../state/guider/guider_build_activity_state.dart';
 import '../../state/guider/guider_calibration_state.dart';
 import '../../state/guider/guider_equipment_state.dart';
+import '../../state/pending_profile_drafts_state.dart';
 import '../../state/profile_management_state.dart';
 import '../../state/saved_server_state.dart';
 import '../../state/wizard_state.dart';
@@ -122,8 +125,10 @@ class _WizardShellState extends ConsumerState<WizardShell> {
 
     final server = ref.read(activeServerProvider);
     if (server == null) {
-      _showError(messenger, 'Connect to your rig before saving this profile.');
-      return; // keep the wizard open; nothing to save against
+      // §2 / #1137 — no rig in reach: keep the profile on this device and
+      // apply it the moment a server connects (pending_profile_drafts_state).
+      await _saveLocally(draft, finalSave: finalSave, nav: nav, messenger: messenger);
+      return;
     }
     final api = (widget.createApi ?? ProfileApi.new)(server);
 
@@ -152,8 +157,21 @@ class _WizardShellState extends ConsumerState<WizardShell> {
     try {
       await saveWizardProfile(api, draft);
     } on DioException catch (e) {
+      if (e.response == null) {
+        // #1137 — the daemon never answered (down, out of Wi-Fi range): a
+        // transport failure, not a rejection. Keep the draft on this device
+        // and replay it on reconnect, exactly like the no-server path.
+        if (nav.mounted) nav.pop(); // the spinner
+        if (mounted) {
+          setState(() => _isSaving = false);
+        } else {
+          _isSaving = false;
+        }
+        await _saveLocally(draft, finalSave: finalSave, nav: nav, messenger: messenger);
+        return;
+      }
       error = 'Couldn\'t save the profile: ${e.message ?? 'network error'} '
-          '(${e.response?.statusCode ?? 'no response'}).';
+          '(${e.response!.statusCode}).';
     } catch (e) {
       // Keep the raw detail in the logs; show the user a clean message (no
       // "Exception:" prefix / internal section text) — Save is retryable.
@@ -272,6 +290,41 @@ class _WizardShellState extends ConsumerState<WizardShell> {
         duration: const Duration(seconds: 8),
       ));
     }
+    widget.onComplete?.call(ProfileDraftSnapshot(draft));
+  }
+
+  /// §2 / #1137 — persist the draft as a pending profile on this device and
+  /// leave the wizard; `pendingProfileDraftReplayProvider` applies it when a
+  /// server connects. A persist failure keeps the wizard open with an error.
+  Future<void> _saveLocally(
+    ProfileDraft draft, {
+    required bool finalSave,
+    required NavigatorState nav,
+    required ScaffoldMessengerState messenger,
+  }) async {
+    final name = (draft.profileName?.trim().isNotEmpty ?? false)
+        ? draft.profileName!.trim()
+        : 'Untitled profile';
+    try {
+      final store = ref.read(pendingProfileDraftServiceProvider);
+      await ref.read(pendingProfileDraftsProvider.notifier).add(PendingProfileDraft(
+        id: store.newId(),
+        name: name,
+        savedUtc: DateTime.now().toUtc(),
+        draft: draft,
+        finalSave: finalSave,
+      ));
+    } catch (e) {
+      debugPrint('[wizard] local profile save failed: $e');
+      _showError(messenger, 'Couldn\'t save the profile on this device. Please try again.');
+      return;
+    }
+    if (nav.mounted) nav.pop(); // exit the wizard
+    messenger.showSnackBar(SnackBar(
+      content: Text('"$name" is saved on this device. It will be applied to your rig '
+          'the next time you connect.'),
+      duration: const Duration(seconds: 6),
+    ));
     widget.onComplete?.call(ProfileDraftSnapshot(draft));
   }
 
