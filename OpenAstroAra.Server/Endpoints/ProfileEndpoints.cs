@@ -13,11 +13,11 @@
 #endregion "copyright"
 
 using Microsoft.AspNetCore.Builder;
-using System.Linq;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Services;
+using System.Linq;
 
 namespace OpenAstroAra.Server.Endpoints;
 
@@ -529,9 +529,6 @@ public static class ProfileEndpoints {
         return Results.Ok(body);
     }
 
-    /// <summary>§45.12 — <c>PUT /profile/polar-align</c>. The live loop re-reads these settings before
-    /// every frame, so a bad exposure or an unknown loop mode must be refused at the write boundary
-    /// (400) rather than reaching the camera. Extracted so the 400s are unit-testable without a host.</summary>
     /// <summary>#1264 — write-boundary validation: the guard's two eccentricity bars must be ordered and
     /// in (0, 1], its counts positive, the ladder ascending and positive, the re-centre figures positive,
     /// and the tolerance basis one of the three names — a bad body would hand the sequencer a guard that
@@ -567,6 +564,9 @@ public static class ProfileEndpoints {
         return Results.Ok(body);
     }
 
+    /// <summary>§45.12 — <c>PUT /profile/polar-align</c>. The live loop re-reads these settings before
+    /// every frame, so a bad exposure or an unknown loop mode must be refused at the write boundary
+    /// (400) rather than reaching the camera. Extracted so the 400s are unit-testable without a host.</summary>
     internal static IResult PutPolarAlignSettings(PolarAlignSettingsDto body, IProfileStore store) {
         if (!(double.IsFinite(body.ExposureSeconds) && body.ExposureSeconds > 0 && body.ExposureSeconds <= 60)) {
             return Results.Problem(detail: "exposure_seconds must be greater than 0 and at most 60",
