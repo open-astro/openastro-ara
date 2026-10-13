@@ -259,11 +259,46 @@ public class FrameFileConfinementTest {
             Assert.That(File.Exists(outsideVariant), Is.True, "a foreign directory is never enumerated or deleted from");
         }
 
-        private static void WriteRealFits(string path) {
+        private static void WriteRealFits(string path, ushort[]? pixels = null) {
             File.Delete(path); // InsertAsync leaves a text stub; cfitsio must create the file itself
             using var fits = OpenAstroAra.Fits.FitsImage.Create(path, 4, 4, OpenAstroAra.Fits.FitsBitDepth.UnsignedShort);
-            fits.WriteImageData(new ushort[16]);
+            fits.WriteImageData(pixels ?? new ushort[16]);
             fits.Complete(); // renames the .tmp into place
+        }
+
+        [Test]
+        public async Task A_histogram_read_back_fills_the_sky_background_once_and_keeps_a_measured_value() {
+            // #1140 P2 — 15 sky pixels at 500 and one star at 9000: p05 (rank 1 of 16) and the median are both 500.
+            var sky = Enumerable.Repeat((ushort)500, 15).Append((ushort)9000).ToArray();
+            var path = Path.Combine(_root, "unmeasured.fits");
+            var id = await InsertAsync(path);
+            WriteRealFits(path, sky);
+            Assert.That((await _repo.GetAsync(id, CancellationToken.None))!.BackgroundAdu, Is.Null);
+
+            Assert.That(await _repo.GetHistogramAsync(id, CancellationToken.None), Is.Not.Null);
+            var filled = await _repo.GetAsync(id, CancellationToken.None);
+            Assert.That(filled!.BackgroundAdu, Is.EqualTo(500));
+            Assert.That(filled.MedianAdu, Is.EqualTo(500));
+
+            // A frame whose histogram is already cached (this second read) and whose row was measured
+            // by the worker keeps the worker's value: COALESCE, never an overwrite.
+            await _repo.UpdateBackgroundAsync(id, 123, 456, CancellationToken.None);
+            Assert.That(await _repo.GetHistogramAsync(id, CancellationToken.None), Is.Not.Null);
+            Assert.That((await _repo.GetAsync(id, CancellationToken.None))!.BackgroundAdu, Is.EqualTo(123));
+
+            // A frame whose histogram was cached BEFORE the column existed is back-filled on a cache hit too.
+            var cachedPath = Path.Combine(_root, "cached.fits");
+            var cached = await InsertAsync(cachedPath);
+            WriteRealFits(cachedPath, sky);
+            Assert.That(await _repo.GetHistogramAsync(cached, CancellationToken.None), Is.Not.Null, "warms the cache and fills");
+            await using (var conn = _db.OpenConnection()) {
+                await using var cmd = conn.CreateCommand();
+                cmd.CommandText = "UPDATE frames SET background_adu = NULL, median_adu = NULL WHERE id = $id";
+                cmd.Parameters.AddWithValue("$id", cached.ToString());
+                await cmd.ExecuteNonQueryAsync();
+            }
+            Assert.That(await _repo.GetHistogramAsync(cached, CancellationToken.None), Is.Not.Null);
+            Assert.That((await _repo.GetAsync(cached, CancellationToken.None))!.BackgroundAdu, Is.EqualTo(500), "filled from the pixels although the histogram came from the cache");
         }
 
         [Test]

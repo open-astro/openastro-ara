@@ -1336,24 +1336,12 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
                 // Corrupt cache entry — fall through and recompute.
             }
         }
+        ushort[]? pixels = null;
         if (histogram is null) {
-            var (pixels, _, _, _) = LoadFitsPixels(filePath);
+            (pixels, _, _, _) = LoadFitsPixels(filePath);
             histogram = ComputeHistogram(pixels);
             TryWriteCache(cachePath, System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(
                 histogram, AraJsonSerializerContext.Default.FrameHistogramDto));
-            // #1140 P2 — the pixels are in hand: back-fill the catalog's sky background for a frame
-            // the analysis worker never measured (scan-ingested, or captured before the column).
-            // COALESCE keeps a value the worker already wrote.
-            var (p05, median) = FrameBackground.Measure(pixels);
-            if (!double.IsNaN(p05)) {
-                await using var fill = _db.OpenConnection();
-                await using var fillCmd = fill.CreateCommand();
-                fillCmd.CommandText = "UPDATE frames SET background_adu = COALESCE(background_adu, $bg), median_adu = COALESCE(median_adu, $med) WHERE id = $id";
-                fillCmd.Parameters.AddWithValue("$bg", p05);
-                fillCmd.Parameters.AddWithValue("$med", median);
-                fillCmd.Parameters.AddWithValue("$id", id.ToString());
-                await fillCmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
-            }
         }
         // Catalog columns merge fresh at serve time (never cached): analysis
         // lands asynchronously, so Stars/Hfr can appear after the pixel
@@ -1361,23 +1349,57 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
         await using var conn = _db.OpenConnection();
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = """
-            SELECT width, height, bit_depth, star_count, hfr, gain, "offset"
+            SELECT width, height, bit_depth, star_count, hfr, gain, "offset", background_adu
             FROM frames WHERE id = $id LIMIT 1;
             """;
         cmd.Parameters.AddWithValue("$id", id.ToString());
-        await using var reader = await cmd.ExecuteReaderAsync(ct);
-        if (await reader.ReadAsync(ct)) {
-            histogram = histogram with {
-                Width = reader.GetInt32(0),
-                Height = reader.GetInt32(1),
-                BitDepth = reader.GetInt32(2),
-                Stars = await reader.IsDBNullAsync(3, ct) ? null : reader.GetInt32(3),
-                Hfr = await reader.IsDBNullAsync(4, ct) ? null : reader.GetDouble(4),
-                Gain = await reader.IsDBNullAsync(5, ct) ? null : reader.GetInt32(5),
-                Offset = await reader.IsDBNullAsync(6, ct) ? null : reader.GetInt32(6),
-            };
+        var backgroundMissing = false;
+        await using (var reader = await cmd.ExecuteReaderAsync(ct)) {
+            if (await reader.ReadAsync(ct)) {
+                histogram = histogram with {
+                    Width = reader.GetInt32(0),
+                    Height = reader.GetInt32(1),
+                    BitDepth = reader.GetInt32(2),
+                    Stars = await reader.IsDBNullAsync(3, ct) ? null : reader.GetInt32(3),
+                    Hfr = await reader.IsDBNullAsync(4, ct) ? null : reader.GetDouble(4),
+                    Gain = await reader.IsDBNullAsync(5, ct) ? null : reader.GetInt32(5),
+                    Offset = await reader.IsDBNullAsync(6, ct) ? null : reader.GetInt32(6),
+                };
+                backgroundMissing = await reader.IsDBNullAsync(7, ct);
+            }
+        }
+        if (backgroundMissing) {
+            await BackfillBackgroundAsync(id, filePath, pixels, ct).ConfigureAwait(false);
         }
         return histogram;
+    }
+
+    /// <summary>#1140 P2 — a frame the capture worker never measured (scan-ingested, captured before
+    /// the column, or its histogram was cached before this build) gets its sky background the first
+    /// time its histogram is read. Best effort: the histogram is the request; a catalog write that
+    /// fails (a locked database) must not fail it. COALESCE keeps a value a worker wrote meanwhile.</summary>
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Best-effort enrichment on a read path: any fault is logged and the histogram is still served.")]
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Sky-background back-fill for frame {FrameId} failed; the histogram is still served.")]
+    private partial void LogBackgroundBackfillFailed(Exception ex, Guid frameId);
+
+    private async Task BackfillBackgroundAsync(Guid id, string filePath, ushort[]? pixels, CancellationToken ct) {
+        try {
+            pixels ??= LoadFitsPixels(filePath).Pixels;
+            var (p05, median) = FrameBackground.Measure(pixels);
+            if (double.IsNaN(p05)) {
+                return;
+            }
+            await using var conn = _db.OpenConnection();
+            await using var cmd = conn.CreateCommand();
+            cmd.CommandText = "UPDATE frames SET background_adu = COALESCE(background_adu, $bg), median_adu = COALESCE(median_adu, $med) WHERE id = $id";
+            cmd.Parameters.AddWithValue("$bg", p05);
+            cmd.Parameters.AddWithValue("$med", median);
+            cmd.Parameters.AddWithValue("$id", id.ToString());
+            await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+        } catch (Exception ex) when (ex is not OperationCanceledException) {
+            LogBackgroundBackfillFailed(ex, id);
+        }
     }
 
     private static string HistogramCachePath(string fitsPath) {
