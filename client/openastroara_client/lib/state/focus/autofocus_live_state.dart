@@ -5,6 +5,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/autofocus_run.dart';
+import '../../models/collimation_verdict.dart';
 import '../../models/ws_event.dart';
 import '../equipment/focuser_state.dart';
 import '../ws/ws_providers.dart';
@@ -45,6 +46,11 @@ class AutofocusLive {
   /// [focusedThisSession]. Ara keeps its last run until it restarts.
   final DateTime? staleRunStartedUtc;
 
+  /// §59.10 / #1139 — the collimation verdict the last sweep produced, if any
+  /// (obstructed scopes only; cleared when a new run starts). Live-only: the
+  /// daemon broadcasts it, it is not part of the run record.
+  final CollimationVerdict? collimation;
+
   const AutofocusLive({
     this.run = AutofocusRun.idle,
     this.frame,
@@ -54,6 +60,7 @@ class AutofocusLive {
     this.focusedThisSession = false,
     this.hydrated = false,
     this.staleRunStartedUtc,
+    this.collimation,
   });
 
   static const idle = AutofocusLive();
@@ -69,6 +76,8 @@ class AutofocusLive {
     bool? focusedThisSession,
     bool? hydrated,
     DateTime? staleRunStartedUtc,
+    CollimationVerdict? collimation,
+    bool clearCollimation = false,
   }) =>
       AutofocusLive(
         run: run ?? this.run,
@@ -79,6 +88,8 @@ class AutofocusLive {
         focusedThisSession: focusedThisSession ?? this.focusedThisSession,
         hydrated: hydrated ?? this.hydrated,
         staleRunStartedUtc: staleRunStartedUtc ?? this.staleRunStartedUtc,
+        collimation:
+            clearCollimation ? null : (collimation ?? this.collimation),
       );
 }
 
@@ -144,6 +155,17 @@ class AutofocusLiveNotifier extends Notifier<AutofocusLive> {
   }
 
   void _onEvent(WsEvent event) {
+    // §59.10 — the verdict rides the stream only; fold it straight in. A new
+    // run clears the previous one so a refractor's run never shows last
+    // night's SCT verdict.
+    if (event.type == AutofocusWsEvents.collimationVerdict) {
+      final verdict = CollimationVerdict.fromPayload(event.payload, at: event.ts);
+      if (verdict != null) state = state.copyWith(collimation: verdict);
+      return;
+    }
+    if (event.type == AutofocusWsEvents.started) {
+      state = state.copyWith(clearCollimation: true);
+    }
     // Coalesce a burst (step_complete + curve_fit + completed) into one read.
     _debounce?.cancel();
     _debounce = Timer(_debounceDelay, () => unawaited(refresh()));

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/autofocus_run.dart';
+import 'package:openastroara/models/collimation_verdict.dart';
+import 'package:openastroara/widgets/focus/collimation_dial.dart';
 import 'package:openastroara/models/guide_focus.dart';
 import 'package:openastroara/state/focus/autofocus_live_state.dart';
 import 'package:openastroara/state/focus/bahtinov_focus_state.dart';
@@ -498,5 +500,42 @@ void main() {
     test('a failed run says nothing here', () {
       expect(MainFocusCard.weakFitText(const AutofocusRun(state: 'failed')), isNull);
     });
+  });
+
+  testWidgets('#1139 a collimation verdict draws the donut card under the tiles; a running run hides it', (t) async {
+    final verdict = CollimationVerdict(
+      severity: CollimationSeverity.slight,
+      offsetPercent: 12.0,
+      directionDegrees: 90,
+      starsUsed: 14,
+      atUtc: DateTime.utc(2026, 10, 13, 2),
+    );
+    await t.pumpWidget(_harness(autofocus: AutofocusLive(run: _completed, focusedThisSession: true, collimation: verdict)));
+    await t.pump();
+    expect(find.byType(CollimationCard), findsOneWidget);
+    expect(find.text('Slight miscollimation detected'), findsOneWidget);
+    expect(find.textContaining('12.0 % of the donut diameter toward 6 o\'clock in the image'), findsOneWidget);
+    expect(find.textContaining('collimation procedure'), findsOneWidget);
+    expect(find.byType(CustomPaint), findsWidgets);
+
+    await t.pumpWidget(const SizedBox());
+    await t.pumpWidget(_harness(autofocus: AutofocusLive(run: _completed, focusedThisSession: true)));
+    await t.pump();
+    expect(find.byType(CollimationCard), findsNothing, reason: 'no verdict → no card');
+  });
+
+  testWidgets('#1139 a good verdict reads green with nothing to do', (t) async {
+    final verdict = CollimationVerdict(
+      severity: CollimationSeverity.good,
+      offsetPercent: 2.1,
+      directionDegrees: 0,
+      starsUsed: 30,
+      atUtc: DateTime.utc(2026, 10, 13, 2),
+    );
+    await t.pumpWidget(_harness(autofocus: AutofocusLive(run: _completed, focusedThisSession: true, collimation: verdict)));
+    await t.pump();
+    expect(find.text('Collimation looks good'), findsOneWidget);
+    expect(find.textContaining('collimation procedure'), findsNothing);
+    expect(CollimationCard.colorFor(CollimationSeverity.good), AraColors.accentConnected);
   });
 }

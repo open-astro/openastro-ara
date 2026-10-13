@@ -2256,4 +2256,21 @@ const Map<String, Help> helpRegistry = {
     relatedSettings: ['img.defaults.noise_tolerance_pct'],
     keywords: ['glover', 'sub length', 'read noise'],
   ),
+
+  // ── Collimation health (§59.10, #1139) ─────────────────────────────────
+  'focus.collimation': Help(
+    key: 'focus.collimation',
+    title: 'Collimation health',
+    body:
+        'A free byproduct of autofocus on an obstructed scope (SCT, Maksutov, RC, Newtonian): a defocused star '
+        'images as a donut, and a tilted mirror shifts the central-obstruction shadow off the ring\'s centre. '
+        'After each sweep Ara vector-averages that shift over the near-centre donut stars and reports it as a '
+        'percent of the donut diameter: under 5 % looks good, 5–15 % is slight, over 15 % is significant and '
+        'worth collimating before you continue. Random seeing offsets cancel in the average; a real tilt adds up.\n\n'
+        'The picture and the clock position are in the IMAGE as displayed — your optical train\'s mirror flips '
+        'and camera angle decide what that is at the eyepiece, so use it as a magnitude and a consistency check, '
+        'and follow your scope\'s own collimation procedure for the adjustment. Refractors and in-focus fields '
+        'produce no donut and get no verdict.',
+    keywords: ['collimation', 'donut', 'secondary mirror', 'tilt', 'sct', 'newtonian'],
+  ),
 };

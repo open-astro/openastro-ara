@@ -15,6 +15,7 @@ import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
 import '../fit_pane.dart';
 import 'bahtinov_focus_card.dart';
+import 'collimation_dial.dart';
 import 'focus_frame_view.dart';
 import 'focus_section.dart';
 import 'guide_focus_card.dart';
@@ -285,6 +286,12 @@ class MainFocusCard extends ConsumerWidget {
               DetailsDisclosure(rows: detailsFor(run)),
           ] else ...[
             StatRow(tiles: tilesFor(run)),
+            // §59.10 / #1139 — the collimation verdict the sweep produced, as a
+            // donut picture; obstructed scopes only, nothing until one lands.
+            if (live.collimation case final verdict? when !run.isRunning) ...[
+              SizedBox(height: AraBreakpoints.isShort(context) ? 8 : 12),
+              CollimationCard(verdict: verdict),
+            ],
             SizedBox(height: AraBreakpoints.isShort(context) ? 12 : 16),
             FitFill(child: FitBand(builder: (context, width, height) {
               final chart = VCurveChart(run: run);
