@@ -133,21 +133,24 @@ class SessionSummaryNotifier extends AsyncNotifier<SessionSummary?> {
         return;
       }
       final notifications = await _freshInbox();
-      final summaries = <SessionSummary>[];
-      for (final seq in candidates) {
-        try {
-          final run = await api.getRunState(seq.id);
-          if (run == null) continue;
-          final s = buildSessionSummary(
-            sequence: seq,
-            run: run,
-            notifications: notifications,
-          );
-          if (s != null) summaries.add(s);
-        } catch (e) {
-          debugPrint('[session-summary] run state for ${seq.id} failed: $e');
-        }
-      }
+      // All the per-id reads at once: a connect on a large library should not
+      // wait for 50 sequential round-trips.
+      final summaries = (await Future.wait(
+        candidates.map((seq) async {
+          try {
+            final run = await api.getRunState(seq.id);
+            if (run == null) return null;
+            return buildSessionSummary(
+              sequence: seq,
+              run: run,
+              notifications: notifications,
+            );
+          } catch (e) {
+            debugPrint('[session-summary] run state for ${seq.id} failed: $e');
+            return null;
+          }
+        }),
+      )).whereType<SessionSummary>().toList();
       // The newest UNSEEN one: filter first, then pick, so a seen newer run
       // never hides an older end the user has not been told about.
       final ack = await _ack();
@@ -181,7 +184,9 @@ class SessionSummaryNotifier extends AsyncNotifier<SessionSummary?> {
   Future<void> acknowledge(SessionSummary summary) async {
     final ack = await _ack()
       ..add(summary.ackKey);
-    if (ref.mounted && state.asData?.value?.runId == summary.runId) {
+    // Clear only the card being dismissed: a re-evaluation may have swapped
+    // in the same run in a later state, which is a different card.
+    if (ref.mounted && state.asData?.value?.ackKey == summary.ackKey) {
       state = const AsyncData(null);
     }
     await ref.read(sessionSummaryPrefsProvider).saveAcknowledged(ack);
