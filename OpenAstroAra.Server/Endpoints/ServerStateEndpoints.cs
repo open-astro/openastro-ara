@@ -66,6 +66,16 @@ public static class ServerStateEndpoints {
               .WithName("PushTimeSync")
               .WithSummary("Push a client/mobile-GPS/manual time (+ optional location) per the §31.1 waterfall.");
 
+        // §66.7 / #1175 — live process/GC/thread-pool/WS/host figures for the Stats panel.
+        server.MapGet("/internal-state",
+                ([FromServices] ServerInternalStateService svc, HttpContext http) => {
+                    http.Response.Headers.CacheControl = "no-store";
+                    return Results.Ok(svc.Sample());
+                })
+              .Produces<ServerInternalStateDto>(StatusCodes.Status200OK)
+              .WithName("GetServerInternalState")
+              .WithSummary("The daemon's live internal state: memory, GC, CPU, thread pool, open WebSocket clients, host load.");
+
         server.MapGet("/versions",
                 async (IServerStateService svc, CancellationToken ct) =>
                     Results.Ok(await svc.GetVersionsAsync(ct)))

@@ -23,6 +23,39 @@ namespace OpenAstroAra.Server.Contracts;
 // trip, then the WS resume protocol takes over for live updates.
 // ────────────────────────────────────────────────────────────────────────────
 
+/// <summary>§66.7 / #1175 — GET /api/v1/server/internal-state: the daemon's live process,
+/// GC, thread-pool, WebSocket and host figures for the Stats "Pi performance" panel.
+/// Sampled on read; <c>cpu_percent</c> is the share of one core's wall time consumed since
+/// the previous read (null on the first read after boot).</summary>
+public sealed record ServerInternalStateDto(
+    DateTimeOffset CapturedUtc,
+    double UptimeSeconds,
+    ProcessStateDto Process,
+    WsStateDto WebSockets,
+    HostStateDto Host);
+
+public sealed record ProcessStateDto(
+    long WorkingSetBytes,
+    long ManagedHeapBytes,
+    long HeapCommittedBytes,
+    int Gen0Collections,
+    int Gen1Collections,
+    int Gen2Collections,
+    double GcPauseTotalMs,
+    double? CpuPercent,
+    int ThreadCount,
+    int ThreadPoolBusyWorkers,
+    long ThreadPoolPendingWorkItems);
+
+public sealed record WsStateDto(int OpenConnections, int MaxConnections);
+
+public sealed record HostStateDto(
+    int ProcessorCount,
+    double? LoadAverage1Min,
+    string OsDescription,
+    string Architecture,
+    string RuntimeVersion);
+
 /// <summary>Full server state snapshot per §60.4. Returned by /api/v1/server/state.</summary>
 public sealed record ServerStateDto(
     string ServerUuid,

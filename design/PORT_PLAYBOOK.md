@@ -11053,9 +11053,13 @@ ARA ships **log-only** telemetry today:
 - Per-executor queue depth, throughput EWMA, backpressure event count written to the server log every 60 s during active session
 - `capture.backpressure`, `storage.slow`, `diagnostics.frame_dropped`, `ws.client_disconnected` WS events for real-time visibility
 
+Since #1175 it also ships `GET /api/v1/server/internal-state` (process memory, GC counts and
+total pause, CPU share since the previous read, thread pool, open WebSocket clients, host load
+and runtime — sampled on read, nothing in the background) and the WILMA Stats "Pi performance"
+section that renders it. Per-executor queue/throughput figures are still log-only.
+
 It does **not** ship:
-- `GET /api/v1/server/internal-state` endpoint exposing live executor metrics
-- WILMA Stats "Pi performance" panel
+- per-executor metrics on that endpoint
 
 Both are future paths (ROADMAP). Rationale: under DSO workloads the backpressure events fire essentially never, so the operational value of live metrics is low; if a user does hit storage problems, the WS event + log entry is sufficient diagnosis. Adding the endpoint + panel is ~2 days of work that's better spent elsewhere in the initial release.
 

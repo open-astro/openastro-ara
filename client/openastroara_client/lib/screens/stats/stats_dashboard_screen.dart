@@ -12,6 +12,7 @@ import '../../widgets/stats/overview_section.dart';
 import '../../widgets/stats/targets_section.dart';
 import '../../widgets/stats/astrobin_export_dialog.dart';
 import '../../widgets/stats/charts/guiding_rms_chart.dart';
+import '../../widgets/stats/pi_performance_section.dart';
 import '../../util/friendly_error.dart';
 
 /// Stats dashboard per playbook §50. The Overview, Targets, Best Frames, and
@@ -71,6 +72,8 @@ class StatsDashboardScreen extends ConsumerWidget {
           const BestFramesSection(),
           const SizedBox(height: 24),
           const AchievementsSection(),
+          const SizedBox(height: 24),
+          const PiPerformanceSection(),
           const SizedBox(height: 24),
           _SectionTitle(title: 'Visualizations', context: context),
           const FocusTempScatterChart(),

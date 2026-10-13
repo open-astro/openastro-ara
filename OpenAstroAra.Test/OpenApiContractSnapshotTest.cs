@@ -77,6 +77,8 @@ namespace OpenAstroAra.Test {
 
         [OneTimeTearDown]
         public async Task TearDownTheDaemon() {
+            // BuildApp installed the process-global Notifier → inbox sink pointing at this root (#1174).
+            OpenAstroAra.Core.Utility.Notification.Notifier.Use(null);
             await app.DisposeAsync();
             await Serilog.Log.CloseAndFlushAsync();
             Environment.SetEnvironmentVariable("OPENASTROARA_PROFILE_DIR", previousProfileDir);

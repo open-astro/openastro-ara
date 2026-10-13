@@ -344,6 +344,20 @@ The card now keeps a known device's card while it is not live: name, state chip,
 
 ---
 
+### 2026-10-13 — #1175 server internal state (§66.7)
+
+**Endpoint(s) or area:** new `GET /api/v1/server/internal-state` → `ServerInternalStateDto`.
+
+**Decision:** `{ captured_utc, uptime_seconds, process: { working_set_bytes, managed_heap_bytes, heap_committed_bytes, gen0_collections, gen1_collections, gen2_collections, gc_pause_total_ms, cpu_percent?, thread_count, thread_pool_busy_workers, thread_pool_pending_work_items }, web_sockets: { open_connections, max_connections }, host: { processor_count, load_average1_min?, os_description, architecture, runtime_version } }`. Sampled on read from the runtime (no background sampler). `cpu_percent` is the process's share of one core's wall time since the previous read (400 = four cores flat out) and is null on the first read after boot; `load_average1_min` is Linux-only. `Cache-Control: no-store`. The §66.10 latency budget for `/healthz` and this route is a test that records the figures and gates only with `OPENASTROARA_PERF_GATE=1`.
+
+**Reasoning:** the Stats "Pi performance" panel was the one §66.7 item without a wire surface; a read-on-demand sample keeps the cost at zero when nobody looks, which is why the executor's own per-pool figures (still log-only) are not polled here.
+
+**Spec ref:** `Services/ServerInternalStateService.cs`, `Endpoints/ServerStateEndpoints.cs`, `Contracts/ServerStateDtos.cs`; client `widgets/stats/pi_performance_section.dart`, `state/stats/server_internal_state_state.dart`.
+
+**Related:** #1175; tests `ServerInternalStateTest`, `ServerInternalStateRouteTest`.
+
+---
+
 ### 2026-10-13 — #1156 per-axis minimum move
 
 **Endpoint(s) or area:** `GET/PUT /api/v1/profile/phd2` (`Phd2SettingsDto`): new optional `dec_minimum_move` (double, px).

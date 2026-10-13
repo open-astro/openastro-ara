@@ -54,6 +54,7 @@ public sealed partial class NotifierInboxBridge : INotifierSink {
         if (string.IsNullOrWhiteSpace(message)) {
             return;
         }
+        header = string.IsNullOrWhiteSpace(header) ? null : header.Trim(); // a blank header is no header
         var key = (isError ? "E|" : "W|") + header + "|" + message;
         var now = _clock();
         if (!ClaimSlot(key, now)) {

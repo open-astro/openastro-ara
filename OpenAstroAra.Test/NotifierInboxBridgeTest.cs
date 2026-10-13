@@ -78,10 +78,12 @@ namespace OpenAstroAra.Test {
             bridge.Notify(isError: false, header: null, "guide star lost");
             bridge.Notify(isError: false, header: null, "guide star lost"); // same tick-loop toast again
             bridge.Notify(isError: true, header: "PHD2", "settle failed");
+            bridge.Notify(isError: true, header: "  ", "blank header");
             now += NotifierInboxBridge.RepeatWindow + TimeSpan.FromSeconds(1);
             bridge.Notify(isError: false, header: null, "guide star lost"); // outside the window: a new episode
 
-            Assert.That(await WaitForCountAsync(posted, 3), Is.True, "three distinct posts");
+            Assert.That(await WaitForCountAsync(posted, 4), Is.True, "four distinct posts");
+            Assert.That(posted.Single(p => p.Message == "blank header").Title, Is.EqualTo("Equipment error"), "a whitespace header falls back to the generic title");
             var warning = posted.First(p => p.Message == "guide star lost");
             Assert.That(warning.Severity, Is.EqualTo(NotificationSeverity.Warning));
             Assert.That(warning.Category, Is.EqualTo(NotificationCategory.Equipment));

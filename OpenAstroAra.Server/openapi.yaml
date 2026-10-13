@@ -3669,6 +3669,19 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
+  /api/v1/server/internal-state:
+    get:
+      tags:
+        - Server
+      summary: 'The daemon''s live internal state: memory, GC, CPU, thread pool, open WebSocket clients, host load.'
+      operationId: GetServerInternalState
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServerInternalStateDto'
   /api/v1/server/versions:
     get:
       tags:
@@ -9362,6 +9375,34 @@ components:
         frame_id:
           type: string
           format: uuid
+    HostStateDto:
+      required:
+        - processor_count
+        - load_average1_min
+        - os_description
+        - architecture
+        - runtime_version
+      type: object
+      properties:
+        processor_count:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+        load_average1_min:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        os_description:
+          type: string
+        architecture:
+          type: string
+        runtime_version:
+          type: string
     ImagingDefaultsDto:
       required:
         - exposure_seconds
@@ -10644,6 +10685,88 @@ components:
           type:
             - 'null'
             - string
+    ProcessStateDto:
+      required:
+        - working_set_bytes
+        - managed_heap_bytes
+        - heap_committed_bytes
+        - gen0_collections
+        - gen1_collections
+        - gen2_collections
+        - gc_pause_total_ms
+        - cpu_percent
+        - thread_count
+        - thread_pool_busy_workers
+        - thread_pool_pending_work_items
+      type: object
+      properties:
+        working_set_bytes:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int64
+        managed_heap_bytes:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int64
+        heap_committed_bytes:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int64
+        gen0_collections:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+        gen1_collections:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+        gen2_collections:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+        gc_pause_total_ms:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+        cpu_percent:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        thread_count:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+        thread_pool_busy_workers:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+        thread_pool_pending_work_items:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int64
     ProfileListDto:
       required:
         - active_id
@@ -11795,6 +11918,30 @@ components:
           type:
             - 'null'
             - string
+    ServerInternalStateDto:
+      required:
+        - captured_utc
+        - uptime_seconds
+        - process
+        - web_sockets
+        - host
+      type: object
+      properties:
+        captured_utc:
+          type: string
+          format: date-time
+        uptime_seconds:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+        process:
+          $ref: '#/components/schemas/ProcessStateDto'
+        web_sockets:
+          $ref: '#/components/schemas/WsStateDto'
+        host:
+          $ref: '#/components/schemas/HostStateDto'
     ServerStateDto:
       required:
         - server_uuid
@@ -13334,6 +13481,24 @@ components:
           type: array
           items:
             type: string
+    WsStateDto:
+      required:
+        - open_connections
+        - max_connections
+      type: object
+      properties:
+        open_connections:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+        max_connections:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
 tags:
   - name: OpenAstroAra.Server
   - name: Health

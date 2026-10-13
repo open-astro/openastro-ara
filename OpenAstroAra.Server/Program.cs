@@ -181,6 +181,8 @@ public partial class Program {
         // profile carries both of a channel's values; inert otherwise.
         builder.Services.AddSingleton<PushChannelService>();
         builder.Services.AddSingleton<INotificationService, SqliteNotificationService>();
+        // §66.7 / #1175 — the Stats "Pi performance" panel's source; sampled on read, no background work.
+        builder.Services.AddSingleton<ServerInternalStateService>();
         // Phase 13.5 — placeholder IDiagnosticsService. Static fixtures
         // (Yellow health + 1 open issue + 3-event history); SetMode stores
         // in-memory. The §51 *operating* mode reported here (Off/Observe/

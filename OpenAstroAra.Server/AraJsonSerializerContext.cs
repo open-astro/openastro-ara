@@ -240,6 +240,7 @@ namespace OpenAstroAra.Server;
 [JsonSerializable(typeof(SequenceUpdateRequestDto))]
 [JsonSerializable(typeof(ServerInfoDto))]
 [JsonSerializable(typeof(ServerStateDto))]
+[JsonSerializable(typeof(ServerInternalStateDto))]
 [JsonSerializable(typeof(SessionDto))]
 [JsonSerializable(typeof(SessionRestretchRequestDto))]
 [JsonSerializable(typeof(CustomHorizonDto))]
