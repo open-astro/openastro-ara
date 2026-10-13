@@ -130,15 +130,7 @@ class _WizardShellState extends ConsumerState<WizardShell> {
       // The guard covers the file write: a second tap must not store a second
       // draft that the replay would turn into two profiles.
       setState(() => _isSaving = true);
-      try {
-        await _saveLocally(draft, server: null, finalSave: finalSave, nav: nav, messenger: messenger);
-      } finally {
-        if (mounted) {
-          setState(() => _isSaving = false);
-        } else {
-          _isSaving = false;
-        }
-      }
+      await _saveLocallyGuarded(draft, server: null, finalSave: finalSave, nav: nav, messenger: messenger);
       return;
     }
     final api = (widget.createApi ?? ProfileApi.new)(server);
@@ -173,15 +165,7 @@ class _WizardShellState extends ConsumerState<WizardShell> {
       if (nav.mounted) nav.pop(); // the spinner
       // _isSaving stays set until the file write is done: a second tap while
       // the wizard is still open must not start another network save.
-      try {
-        await _saveLocally(draft, server: server, finalSave: finalSave, nav: nav, messenger: messenger);
-      } finally {
-        if (mounted) {
-          setState(() => _isSaving = false);
-        } else {
-          _isSaving = false;
-        }
-      }
+      await _saveLocallyGuarded(draft, server: server, finalSave: finalSave, nav: nav, messenger: messenger);
       return;
     } on DioException catch (e) {
       if (e.response == null) {
@@ -189,15 +173,7 @@ class _WizardShellState extends ConsumerState<WizardShell> {
         // transport failure, not a rejection. Keep the draft on this device
         // and replay it on reconnect, exactly like the no-server path.
         if (nav.mounted) nav.pop(); // the spinner
-        try {
-          await _saveLocally(draft, server: server, finalSave: finalSave, nav: nav, messenger: messenger);
-        } finally {
-          if (mounted) {
-            setState(() => _isSaving = false);
-          } else {
-            _isSaving = false;
-          }
-        }
+        await _saveLocallyGuarded(draft, server: server, finalSave: finalSave, nav: nav, messenger: messenger);
         return;
       }
       error = 'Couldn\'t save the profile: ${e.message ?? 'network error'} '
@@ -326,6 +302,26 @@ class _WizardShellState extends ConsumerState<WizardShell> {
   /// §2 / #1137 — persist the draft as a pending profile on this device and
   /// leave the wizard; `pendingProfileDraftReplayProvider` applies it when a
   /// server connects. A persist failure keeps the wizard open with an error.
+  /// [_saveLocally] with the double-tap guard held until the file write is
+  /// done (the caller set `_isSaving`); released even when the write throws.
+  Future<void> _saveLocallyGuarded(
+    ProfileDraft draft, {
+    required AraServer? server,
+    required bool finalSave,
+    required NavigatorState nav,
+    required ScaffoldMessengerState messenger,
+  }) async {
+    try {
+      await _saveLocally(draft, server: server, finalSave: finalSave, nav: nav, messenger: messenger);
+    } finally {
+      if (mounted) {
+        setState(() => _isSaving = false);
+      } else {
+        _isSaving = false;
+      }
+    }
+  }
+
   Future<void> _saveLocally(
     ProfileDraft draft, {
     required AraServer? server,
