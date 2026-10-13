@@ -6,6 +6,10 @@ import 'package:openastroara/models/sequence/sequence_summary.dart';
 import 'package:openastroara/models/tracking_calibration.dart';
 import 'package:openastroara/models/ws_event.dart';
 import 'package:openastroara/state/sequencer/sequence_list_state.dart';
+import 'package:openastroara/models/server.dart';
+import 'package:openastroara/services/tracking_api.dart';
+import 'package:openastroara/state/saved_server_state.dart';
+import 'package:openastroara/state/tracking/tracking_calibration_state.dart';
 import 'package:openastroara/state/tracking/tracking_probe_live_state.dart';
 import 'package:openastroara/state/ws/ws_providers.dart';
 
@@ -24,6 +28,7 @@ class _PushableRun extends SequenceRunStateNotifier {
 }
 
 void main() {
+  _calibrationTests();
   group('foldTrackingProbeEvent', () {
     test(
       'started begins a fresh ladder, rungs append, completed closes it',
@@ -212,6 +217,47 @@ void main() {
         reason: 'run-scoped',
       );
     });
+  });
+}
+
+/// A TrackingApi that answers from memory and counts reads.
+class _CountingApi extends TrackingApi {
+  _CountingApi(this.record) : super(const AraServer(hostname: 'x', port: 1));
+  TrackingCalibration? record;
+  int reads = 0;
+  @override
+  Future<TrackingCalibration?> read() async {
+    reads++;
+    return record;
+  }
+  @override
+  void close() {}
+}
+
+void _calibrationTests() {
+  test('#1264 trackingCalibrationProvider re-reads when a probe completes', () async {
+    final ws = StreamController<WsEvent>.broadcast();
+    final api = _CountingApi(null);
+    final container = ProviderContainer(overrides: [
+      wsEventsProvider.overrideWith((ref) => ws.stream),
+      activeServerProvider.overrideWithValue(const AraServer(hostname: 'x', port: 1)),
+      trackingApiFactoryProvider.overrideWithValue((_) => api),
+    ]);
+    addTearDown(container.dispose);
+    addTearDown(ws.close);
+    container.listen(trackingCalibrationProvider, (_, _) {});
+    expect(await container.read(trackingCalibrationProvider.future), isNull);
+    expect(api.reads, 1);
+
+    api.record = TrackingCalibration(ceilingSeconds: 20, measuredUtc: DateTime.utc(2026, 10, 12), source: 'measured');
+    ws.add(_ev('tracking_probe.completed', {'ceiling_seconds': 20, 'source': 'measured'}));
+    await Future<void>.delayed(Duration.zero);
+    expect((await container.read(trackingCalibrationProvider.future))!.ceilingSeconds, 20);
+    expect(api.reads, 2, reason: 'one re-read per completed probe');
+
+    ws.add(_ev('frame.complete', {}, seq: 3));
+    await Future<void>.delayed(Duration.zero);
+    expect(api.reads, 2, reason: 'other events do not re-read');
   });
 }
 
