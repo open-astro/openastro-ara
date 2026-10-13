@@ -80,7 +80,7 @@ void main() {
     (tester) async {
       await pump(tester, summary);
       expect(find.text('Session paused — the rig needs you'), findsOneWidget);
-      expect(find.textContaining('M81 night (M81) paused at'), findsOneWidget);
+      expect(find.textContaining('M81 night (M81) paused and is waiting'), findsOneWidget);
       expect(find.text('47 frames captured'), findsOneWidget);
       expect(
         find.textContaining('Unattended shutdown executed'),
@@ -108,4 +108,31 @@ void main() {
     await pump(tester, null);
     expect(find.byType(AlertDialog), findsNothing);
   });
+
+  testWidgets(
+    '#1138 Got it just acknowledges; Review details opens the notification centre',
+    (tester) async {
+      var (container, notifier) = await pump(tester, summary);
+      await tester.tap(find.text('Got it'));
+      await tester.pumpAndSettle();
+      expect(notifier.acked, ['r1']);
+      expect(
+        container.read(selectedSequenceIdProvider),
+        isNull,
+        reason: 'Got it does not navigate',
+      );
+      expect(find.byType(AlertDialog), findsNothing);
+
+      await tester.pumpWidget(const SizedBox());
+      (container, notifier) = await pump(tester, summary);
+      await tester.tap(find.text('Review details'));
+      await tester.pumpAndSettle();
+      expect(notifier.acked, ['r1']);
+      expect(
+        find.text('Notifications'),
+        findsOneWidget,
+        reason: 'the notification centre is up',
+      );
+    },
+  );
 }
