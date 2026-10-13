@@ -8,7 +8,9 @@ import '../../models/sequence/sequence_summary.dart';
 import '../../services/session_summary_prefs_service.dart';
 import '../../services/ws_event_stream.dart';
 import '../../util/session_summary.dart';
-import '../notifications/notifications_state.dart';
+import '../../services/notifications_api.dart';
+import '../notifications/notifications_state.dart'
+    show notificationsApiProvider;
 import '../sequencer/sequence_list_state.dart'
     show SequenceWsEvents, sequenceApiProvider;
 import '../ws/ws_providers.dart';
@@ -59,6 +61,12 @@ class SessionSummaryNotifier extends AsyncNotifier<SessionSummary?> {
       if (runId is! String || state == null) return;
       if (isSummaryWorthyState(state)) {
         _seenEndingLive.add(runId);
+        // A run watched reaching a TERMINAL state is persisted as seen: a
+        // restart before the morning must not resurrect its card. A pause is
+        // only remembered in memory — the user may resume it and leave.
+        if (state != SequenceRunState.pausedAwaitingUser) {
+          unawaited(_persistSeen(runId));
+        }
       } else {
         _seenEndingLive.remove(runId);
       }
@@ -69,6 +77,27 @@ class SessionSummaryNotifier extends AsyncNotifier<SessionSummary?> {
   Future<Set<String>> _ack() async => _acknowledged ??= await ref
       .read(sessionSummaryPrefsProvider)
       .loadAcknowledged();
+
+  Future<void> _persistSeen(String runId) async {
+    final ack = await _ack()
+      ..add(runId);
+    await ref.read(sessionSummaryPrefsProvider).saveAcknowledged(ack);
+  }
+
+  /// The inbox straight from the daemon: the cached notifier only refreshes on
+  /// its poll, so right after a reconnect it still holds last evening's list
+  /// (and an `AsyncError` from a poll that fired before Wi-Fi came back). A
+  /// failed read means "no incidents", never "no card".
+  Future<List<AraNotification>> _freshInbox() async {
+    final api = ref.read(notificationsApiProvider);
+    if (api == null) return const [];
+    try {
+      return (await api.list(limit: 100)).items;
+    } catch (e) {
+      debugPrint('[session-summary] inbox read failed: $e');
+      return const [];
+    }
+  }
 
   /// Read the daemon's ended runs and surface the newest unseen one. A
   /// connect that lands mid-evaluation re-runs it once after, so the fresher
@@ -85,20 +114,26 @@ class SessionSummaryNotifier extends AsyncNotifier<SessionSummary?> {
       final api = ref.read(sequenceApiProvider);
       if (api == null) return;
       final list = (await api.list(limit: 50)).items;
-      final candidates = list
-          .where(
-            (s) =>
-                !isDraftSequenceId(s.id) &&
-                isSummaryWorthyState(s.currentRunState),
-          )
-          .take(8)
-          .toList();
+      // Newest-touched first, so a long list still yields the night's run.
+      final candidates =
+          list
+              .where(
+                (s) =>
+                    !isDraftSequenceId(s.id) &&
+                    isSummaryWorthyState(s.currentRunState),
+              )
+              .toList()
+            ..sort(
+              (a, b) => (b.modifiedUtc ?? DateTime(0)).compareTo(
+                a.modifiedUtc ?? DateTime(0),
+              ),
+            );
+      candidates.length = candidates.length > 8 ? 8 : candidates.length;
       if (candidates.isEmpty) {
         if (ref.mounted) state = const AsyncData(null);
         return;
       }
-      final notifications =
-          await ref.read(notificationInboxProvider.future) ?? const [];
+      final notifications = await _freshInbox();
       final summaries = <SessionSummary>[];
       for (final seq in candidates) {
         try {

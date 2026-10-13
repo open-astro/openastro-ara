@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/sequence/sequence_summary.dart';
+import 'package:openastroara/models/cursor_page.dart';
 import 'package:openastroara/models/ws_event.dart';
 import 'package:openastroara/services/notifications_api.dart';
 import 'package:openastroara/services/sequence_api.dart';
@@ -44,6 +45,32 @@ class _List extends SequenceListNotifier {
   final List<SequenceListItem> items;
   @override
   Future<List<SequenceListItem>?> build() async => items;
+}
+
+/// The daemon's notification feed as the card reads it (fresh, not the
+/// polled cache); can be made to fail like a poll that fired before Wi-Fi.
+class _Feed implements NotificationsClient {
+  _Feed(this.items, {this.fail = false});
+  List<AraNotification> items;
+  bool fail;
+  int lists = 0;
+  @override
+  Future<CursorPage<AraNotification>> list({
+    int limit = 50,
+    String? cursor,
+    bool? unreadOnly,
+  }) async {
+    lists++;
+    if (fail) throw StateError('daemon unreachable');
+    return CursorPage(items: items, nextCursor: null, hasMore: false);
+  }
+
+  @override
+  Future<AraNotification?> markRead(String id) async => null;
+  @override
+  Future<AraNotification?> dismiss(String id, {String? reason}) async => null;
+  @override
+  void close() {}
 }
 
 class _Inbox extends NotificationInboxNotifier {
@@ -103,15 +130,31 @@ void main() {
   late StreamController<WsEvent> ws;
   late _MemPrefs prefs;
   late _RunStates api;
+  late _Feed feed;
+
+  AraNotification shutdownRecord(DateTime at) => AraNotification(
+    id: 'shutdown',
+    postedUtc: at,
+    severity: NotificationSeverity.warning,
+    category: NotificationCategory.safety,
+    title: 'Unattended shutdown executed',
+    message: 'put to bed',
+    read: false,
+    dismissed: false,
+    relatedEntityType: 'sequence',
+    relatedEntityId: 'seq-1',
+  );
 
   ProviderContainer make({
     List<SequenceListItem> list = _daemonList,
     List<AraNotification> inbox = const [],
+    bool inboxFails = false,
   }) {
     link = StreamController<WsConnectionState>.broadcast();
     ws = StreamController<WsEvent>.broadcast();
     prefs = _MemPrefs();
     api = _RunStates({'seq-1': ended, 'seq-0': older}, list);
+    feed = _Feed(inbox, fail: inboxFails);
     final c = ProviderContainer(
       overrides: [
         wsConnectionStateProvider.overrideWith((ref) => link.stream),
@@ -128,7 +171,9 @@ void main() {
             ),
           ]),
         ),
-        notificationInboxProvider.overrideWith(() => _Inbox(inbox)),
+        // The polled inbox cache is STALE too (empty since last evening).
+        notificationInboxProvider.overrideWith(() => _Inbox(const [])),
+        notificationsApiProvider.overrideWithValue(feed),
         sessionSummaryPrefsProvider.overrideWithValue(prefs),
         sessionSummaryClockProvider.overrideWithValue(() => now),
       ],
@@ -292,5 +337,48 @@ void main() {
     link.add(WsConnectionState.connected);
     await settle();
     expect(c.read(sessionSummaryProvider).asData?.value, isNull);
+  });
+
+  test('incidents come from the daemon feed, not the polled cache; a failed feed still yields the card', () async {
+    final c = make(
+      inbox: [shutdownRecord(start.add(const Duration(hours: 4)))],
+    );
+    await c.read(sessionSummaryProvider.future);
+    link.add(WsConnectionState.connected);
+    await settle();
+    final s = c.read(sessionSummaryProvider).asData?.value;
+    expect(s?.incidents.map((n) => n.title), ['Unattended shutdown executed']);
+    expect(feed.lists, 1);
+
+    final c2 = make(inboxFails: true);
+    await c2.read(sessionSummaryProvider.future);
+    link.add(WsConnectionState.connected);
+    await settle();
+    final s2 = c2.read(sessionSummaryProvider).asData?.value;
+    expect(
+      s2?.runId,
+      'r1',
+      reason: 'an unreadable inbox is "no incidents", not "no card"',
+    );
+    expect(s2?.incidents, isEmpty);
+  });
+
+  test('a run watched ending live is remembered across a restart (persisted as acknowledged)', () async {
+    final c = make();
+    await c.read(sessionSummaryProvider.future);
+    ws.add(
+      WsEvent(
+        type: 'sequence.completed',
+        ts: now,
+        seq: 1,
+        payload: const {
+          'sequence_id': 'seq-1',
+          'run_id': 'r1',
+          'state': 'completed',
+        },
+      ),
+    );
+    await settle();
+    expect(prefs.acked, contains('r1'));
   });
 }
