@@ -78,7 +78,7 @@ namespace OpenAstroAra.Sequencer.Trigger.Telescope {
 
         /// <summary>Median eccentricity above which a frame counts as trailed (issue #1264: 0.5).</summary>
         [JsonProperty]
-        public double EccentricityTolerance { get; set; } = 0.5;
+        public double EccentricityTolerance { get; set; } = UnguidedExposureLadder.DefaultEccentricityTolerance;
 
         /// <summary>Median eccentricity at or under which a frame counts as well inside tolerance (0.3).</summary>
         [JsonProperty]

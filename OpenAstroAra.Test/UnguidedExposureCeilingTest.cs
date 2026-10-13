@@ -231,6 +231,15 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void Cloning_the_probe_keeps_its_trailed_bar() {
+            var executor = new ScriptedProbe();
+            var (_, probe, _, _, _) = Tree(Factory(executor), exposureSeconds: 300, frames: 10);
+            probe.EccentricityTolerance = 0.6;
+            var clone = (TrackingProbe)probe.Clone();
+            Assert.That(clone.EccentricityTolerance, Is.EqualTo(0.6), "a duplicated or templated node keeps the profile's bar");
+        }
+
+        [Test]
         public async Task The_node_passes_its_trailed_bar_to_the_request_and_zero_falls_back() {
             var executor = new ScriptedProbe { Result = new TrackingProbeResult(45, 3, "measured") };
             var (_, probe, _, _, _) = Tree(Factory(executor), exposureSeconds: 300, frames: 10, maxExposure: 300);

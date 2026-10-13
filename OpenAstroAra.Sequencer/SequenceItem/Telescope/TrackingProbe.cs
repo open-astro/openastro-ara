@@ -149,6 +149,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Telescope {
                 Category = Category,
                 Description = Description,
                 MaxExposure = MaxExposure,
+                EccentricityTolerance = EccentricityTolerance,
                 PriorSeconds = PriorSeconds,
                 CeilingSeconds = CeilingSeconds,
             };
