@@ -127,7 +127,7 @@ class _WizardShellState extends ConsumerState<WizardShell> {
     if (server == null) {
       // §2 / #1137 — no rig in reach: keep the profile on this device and
       // apply it the moment a server connects (pending_profile_drafts_state).
-      await _saveLocally(draft, finalSave: finalSave, nav: nav, messenger: messenger);
+      await _saveLocally(draft, server: null, finalSave: finalSave, nav: nav, messenger: messenger);
       return;
     }
     final api = (widget.createApi ?? ProfileApi.new)(server);
@@ -167,7 +167,7 @@ class _WizardShellState extends ConsumerState<WizardShell> {
         } else {
           _isSaving = false;
         }
-        await _saveLocally(draft, finalSave: finalSave, nav: nav, messenger: messenger);
+        await _saveLocally(draft, server: server, finalSave: finalSave, nav: nav, messenger: messenger);
         return;
       }
       error = 'Couldn\'t save the profile: ${e.message ?? 'network error'} '
@@ -298,6 +298,7 @@ class _WizardShellState extends ConsumerState<WizardShell> {
   /// server connects. A persist failure keeps the wizard open with an error.
   Future<void> _saveLocally(
     ProfileDraft draft, {
+    required AraServer? server,
     required bool finalSave,
     required NavigatorState nav,
     required ScaffoldMessengerState messenger,
@@ -313,6 +314,9 @@ class _WizardShellState extends ConsumerState<WizardShell> {
         savedUtc: DateTime.now().toUtc(),
         draft: draft,
         finalSave: finalSave,
+        // A save that broke off partway created the profile on THIS server
+        // (savedProfileId); the replay must go back to it, not to the next rig.
+        serverKey: server == null ? null : pendingDraftServerKey(server),
       ));
     } catch (e) {
       debugPrint('[wizard] local profile save failed: $e');

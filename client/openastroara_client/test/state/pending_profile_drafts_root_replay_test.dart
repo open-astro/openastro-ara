@@ -10,6 +10,7 @@ import 'package:openastroara/services/profile_api.dart';
 import 'package:openastroara/services/ws_event_stream.dart';
 import 'package:openastroara/state/pending_profile_drafts_state.dart';
 import 'package:openastroara/state/profile_management_state.dart';
+import 'package:openastroara/state/saved_server_state.dart';
 import 'package:openastroara/state/settings/autofocus_settings_state.dart';
 import 'package:openastroara/state/settings/camera_electronics_state.dart';
 import 'package:openastroara/state/settings/filter_set_state.dart';
@@ -112,6 +113,9 @@ void main() {
         overrides: [
           pendingProfileDraftServiceProvider.overrideWithValue(store),
           profileApiProvider.overrideWithValue(api),
+          activeServerProvider.overrideWithValue(
+            const AraServer(hostname: 'test', port: 1),
+          ),
           wsConnectionStateProvider.overrideWith((ref) => link.stream),
         ],
       );

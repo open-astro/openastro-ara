@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/profile_draft.dart' show ProfileDraft;
+import 'package:openastroara/models/profile_list.dart';
 import 'package:openastroara/models/profile_meta.dart';
 import 'package:openastroara/models/server.dart';
 import 'package:openastroara/services/pending_profile_draft_service.dart';
@@ -28,7 +29,24 @@ class _FakeProfileApi extends ProfileApi {
   @override
   Future<ProfileMeta> createProfile(String name) async {
     created.add(name);
-    return ProfileMeta(id: 'profile-${++n}', name: name);
+    activeId = 'profile-${++n}';
+    known.add(activeId!);
+    return ProfileMeta(id: activeId!, name: name);
+  }
+
+  // The daemon's profile list: which one is active, and which exist.
+  String? activeId;
+  final known = <String>[];
+  final selected = <String>[];
+  @override
+  Future<ProfileList> listProfiles() async => ProfileList(
+    activeId: activeId,
+    profiles: [for (final id in known) ProfileMeta(id: id, name: id)],
+  );
+  @override
+  Future<void> selectProfile(String id) async {
+    selected.add(id);
+    activeId = id;
   }
 
   @override
@@ -94,15 +112,19 @@ void main() {
   });
   tearDown(() => tmp.delete(recursive: true));
 
-  Future<void> pend(String name) => store.save(
-    PendingProfileDraft(
-      id: store.newId(),
-      name: name,
-      savedUtc: DateTime.now().toUtc(),
-      draft: ProfileDraft()..profileName = name,
-      finalSave: true,
-    ),
-  );
+  Future<void> pend(String name, {String? serverKey, String? savedProfileId}) =>
+      store.save(
+        PendingProfileDraft(
+          id: store.newId(),
+          name: name,
+          savedUtc: DateTime.now().toUtc(),
+          draft: ProfileDraft()
+            ..profileName = name
+            ..savedProfileId = savedProfileId,
+          finalSave: true,
+          serverKey: serverKey,
+        ),
+      );
 
   test(
     '#1137: every pending draft is created on the daemon and then forgotten',
@@ -111,9 +133,13 @@ void main() {
       await pend('Backyard');
       final api = _FakeProfileApi();
 
-      final (applied, failed) = await replayPendingProfileDrafts(store, api);
+      final (applied, failed, held) = await replayPendingProfileDrafts(
+        store,
+        api,
+        serverKey: 'rig-a:5555',
+      );
 
-      expect((applied, failed), (2, 0));
+      expect((applied, failed, held), (2, 0, 0));
       expect(api.created, containsAll(['Dark site rig', 'Backyard']));
       expect(await store.loadAll(), isEmpty);
     },
@@ -123,9 +149,13 @@ void main() {
     await pend('Flaky');
     final api = _FakeProfileApi()..failSite = true;
 
-    final (applied, failed) = await replayPendingProfileDrafts(store, api);
+    final (applied, failed, held) = await replayPendingProfileDrafts(
+      store,
+      api,
+      serverKey: 'rig-a:5555',
+    );
 
-    expect((applied, failed), (0, 1));
+    expect((applied, failed, held), (0, 1, 0));
     final left = await store.loadAll();
     expect(left.single.name, 'Flaky');
     expect(
@@ -135,9 +165,80 @@ void main() {
     );
 
     api.failSite = false;
-    final second = await replayPendingProfileDrafts(store, api);
-    expect(second, (1, 0));
+    final second = await replayPendingProfileDrafts(
+      store,
+      api,
+      serverKey: 'rig-a:5555',
+    );
+    expect(second, (1, 0, 0));
     expect(api.created, ['Flaky'], reason: 'no second create on the retry');
     expect(await store.loadAll(), isEmpty);
+  });
+
+  test(
+    '#1327: a draft saved against another rig is held, not applied here',
+    () async {
+      await pend('For rig B', serverKey: 'rig-b:5555');
+      await pend('Anywhere');
+      final api = _FakeProfileApi();
+
+      final (applied, failed, held) = await replayPendingProfileDrafts(
+        store,
+        api,
+        serverKey: 'rig-a:5555',
+      );
+
+      expect((applied, failed, held), (1, 0, 1));
+      expect(api.created, ['Anywhere']);
+      expect(
+        (await store.loadAll()).single.name,
+        'For rig B',
+        reason: 'waits for rig B',
+      );
+    },
+  );
+
+  test('#1327: a half-created profile that is no longer active is re-selected before its sections land', () async {
+    final api = _FakeProfileApi()
+      ..known.addAll(['profile-old', 'other'])
+      ..activeId = 'other';
+    await pend(
+      'Resumed',
+      serverKey: 'rig-a:5555',
+      savedProfileId: 'profile-old',
+    );
+
+    final result = await replayPendingProfileDrafts(
+      store,
+      api,
+      serverKey: 'rig-a:5555',
+    );
+
+    expect(result, (1, 0, 0));
+    expect(api.created, isEmpty, reason: 'no second profile');
+    expect(api.selected, [
+      'profile-old',
+    ], reason: 'the sections must not land on "other"');
+  });
+
+  test('#1327: a half-created profile that was deleted meanwhile starts a fresh one', () async {
+    final api = _FakeProfileApi()
+      ..known.add('other')
+      ..activeId = 'other';
+    await pend(
+      'Vanished',
+      serverKey: 'rig-a:5555',
+      savedProfileId: 'profile-gone',
+    );
+
+    final result = await replayPendingProfileDrafts(
+      store,
+      api,
+      serverKey: 'rig-a:5555',
+    );
+
+    expect(result, (1, 0, 0));
+    expect(api.created, ['Vanished']);
+    expect(api.selected, isEmpty);
   });
 }

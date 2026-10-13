@@ -19,8 +19,18 @@ class PendingProfileDraft {
   final ProfileDraft draft;
 
   /// Where the user was: a Save & Exit mid-wizard (false) or the final Save
-  /// (true). Only a final save provisions the guider / shoots darks on replay.
+  /// (true). Recorded for the Library of pending drafts; the replay applies the
+  /// PROFILE SECTIONS only in either case — the guider push, the darks build
+  /// and the equipment connects need the live rig and the wizard's own screen,
+  /// so they are not replayed (do them from Setup once connected).
   final bool finalSave;
+
+  /// `hostname:port` of the server the draft was meant for (the active server
+  /// when it was saved), or null when none was saved at the time. A draft is
+  /// replayed only onto this server: a save that broke off partway has already
+  /// created a profile THERE, and its sections must not land on another rig's
+  /// active profile.
+  final String? serverKey;
 
   const PendingProfileDraft({
     required this.id,
@@ -28,6 +38,7 @@ class PendingProfileDraft {
     required this.savedUtc,
     required this.draft,
     required this.finalSave,
+    this.serverKey,
   });
 
   Map<String, dynamic> toJson() => {
@@ -35,6 +46,7 @@ class PendingProfileDraft {
     'name': name,
     'saved_utc': savedUtc.toUtc().toIso8601String(),
     'final_save': finalSave,
+    if (serverKey != null) 'server_key': serverKey,
     'draft': profileDraftToJson(draft),
   };
 
@@ -54,6 +66,7 @@ class PendingProfileDraft {
           : DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
       draft: profileDraftFromJson(Map<String, dynamic>.from(draft)),
       finalSave: json['final_save'] == true,
+      serverKey: json['server_key'] is String ? json['server_key'] as String : null,
     );
   }
 }
