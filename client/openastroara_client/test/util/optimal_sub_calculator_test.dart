@@ -56,17 +56,53 @@ void main() {
     expect(
       calculate(_rig.copyWith(quantumEfficiency: 1.4, skyMagPerArcsec2: 30))
           .error,
-      'Needs a positive QE (0–1), sky brightness (10–23 mag/arcsec²).',
+      'Needs a QE between 0 and 1, a sky brightness between 10 and 23 mag/arcsec².',
     );
     expect(
       calculate(_rig.copyWith(skyCalibrationK: 0)).error,
       contains('calibration k'),
     );
+    // What computeOptimalSub would throw on: a negative e⁻/ADU, an infinite or NaN figure.
+    expect(
+      calculate(_rig.copyWith(electronsPerAdu: -0.8)).error,
+      'Needs e⁻/ADU of 0 or more.',
+    );
+    expect(
+      calculate(_rig.copyWith(electronsPerAdu: double.infinity)).error,
+      contains('e⁻/ADU'),
+    );
+    expect(
+      calculate(_rig.copyWith(fullWellE: double.infinity)).error,
+      'Needs a positive full well.',
+    );
+    expect(
+      calculate(_rig.copyWith(readNoiseE: double.nan)).error,
+      'Needs a positive read noise.',
+    );
+    expect(
+      calculate(_rig.copyWith(peakAltitudeDeg: 0)).error,
+      contains('peak altitude'),
+    );
+    expect(
+      calculate(_rig.copyWith(surfaceBrightnessMagArcsec2: -3)).error,
+      contains('surface brightness'),
+    );
+    for (final v in [-1.0, double.infinity, double.nan, 1e999]) {
+      expect(() => calculate(_rig.copyWith(pixelSizeUm: v)), returnsNormally);
+    }
   });
 
   test('#1140 seconds format like the advisor', () {
     expect(formatSubSeconds(45), '45 s');
     expect(formatSubSeconds(150), '2.5 min');
     expect(formatSubSeconds(600), '10 min');
+  });
+
+  test('#1140 a row\'s number keeps its integer zeros', () {
+    expect(formatCalculatorNumber(50000, 0), '50000');
+    expect(formatCalculatorNumber(60, 0), '60');
+    expect(formatCalculatorNumber(20.5, 2), '20.5');
+    expect(formatCalculatorNumber(1.0, 3), '1');
+    expect(formatCalculatorNumber(0.8, 3), '0.8');
   });
 }

@@ -111,24 +111,41 @@ class CalculatorResult {
 /// The one place the dialog computes. Invalid inputs become a sentence, not a
 /// throw: the user is typing.
 CalculatorResult calculate(CalculatorInputs inputs) {
+  // Every figure computeOptimalSub would reject (it throws ArgumentError on a
+  // non-positive, negative or non-finite input) is named here first, so a
+  // typed "-0.8" or "1e999" is a sentence, never an error widget.
+  bool pos(double v) => v.isFinite && v > 0;
+  bool inRange(double v, double lo, double hi) =>
+      v.isFinite && v >= lo && v <= hi;
   final problems = <String>[
-    if (!(inputs.readNoiseE > 0)) 'read noise',
-    if (!(inputs.fullWellE > 0)) 'full well',
-    if (!(inputs.pixelSizeUm > 0)) 'pixel size',
-    if (!(inputs.apertureMm > 0)) 'aperture',
-    if (!(inputs.focalLengthMm > 0)) 'focal length',
-    if (!(inputs.reducerFactor > 0)) 'reducer factor',
-    if (!(inputs.quantumEfficiency > 0 && inputs.quantumEfficiency <= 1))
-      'QE (0–1)',
-    if (!(inputs.filterBandwidthNm > 0)) 'filter passband',
-    if (!(inputs.noiseTolerancePct > 0 && inputs.noiseTolerancePct <= 100))
-      'noise tolerance (0–100 %)',
-    if (!(inputs.skyCalibrationK > 0)) 'calibration k',
-    if (!(inputs.skyMagPerArcsec2 >= 10 && inputs.skyMagPerArcsec2 <= 23))
-      'sky brightness (10–23 mag/arcsec²)',
+    if (!pos(inputs.readNoiseE)) 'a positive read noise',
+    if (!pos(inputs.fullWellE)) 'a positive full well',
+    if (!(inputs.electronsPerAdu.isFinite && inputs.electronsPerAdu >= 0))
+      'e⁻/ADU of 0 or more',
+    if (!pos(inputs.pixelSizeUm)) 'a positive pixel size',
+    if (!pos(inputs.apertureMm)) 'a positive aperture',
+    if (!pos(inputs.focalLengthMm)) 'a positive focal length',
+    if (!pos(inputs.reducerFactor)) 'a positive reducer factor',
+    if (!(inputs.quantumEfficiency.isFinite &&
+        inputs.quantumEfficiency > 0 &&
+        inputs.quantumEfficiency <= 1))
+      'a QE between 0 and 1',
+    if (!pos(inputs.filterBandwidthNm)) 'a positive filter passband',
+    if (!(inputs.noiseTolerancePct.isFinite &&
+        inputs.noiseTolerancePct > 0 &&
+        inputs.noiseTolerancePct <= 100))
+      'a noise tolerance between 0 and 100 %',
+    if (!pos(inputs.skyCalibrationK)) 'a positive calibration k',
+    if (!inRange(inputs.skyMagPerArcsec2, 10, 23))
+      'a sky brightness between 10 and 23 mag/arcsec²',
+    if (!inRange(inputs.peakAltitudeDeg, 0.001, 90))
+      'a peak altitude between 0 and 90°',
+    if (inputs.surfaceBrightnessMagArcsec2 case final sb?
+        when !(sb.isFinite && sb >= 0))
+      'a surface brightness of 0 or more',
   ];
   if (problems.isNotEmpty) {
-    return CalculatorResult(error: 'Needs a positive ${problems.join(', ')}.');
+    return CalculatorResult(error: 'Needs ${problems.join(', ')}.');
   }
   final input = inputs.toSubInput();
   final sub = computeOptimalSub(input);
@@ -137,7 +154,7 @@ CalculatorResult calculate(CalculatorInputs inputs) {
     budget = computeIntegrationBudget(
       input: input,
       surfaceBrightnessMagArcsec2: sb,
-      peakAltitudeDeg: inputs.peakAltitudeDeg.clamp(1.0, 90.0),
+      peakAltitudeDeg: inputs.peakAltitudeDeg,
     );
   }
   return CalculatorResult(
@@ -145,6 +162,14 @@ CalculatorResult calculate(CalculatorInputs inputs) {
     budget: budget,
     pixelScaleArcsec: pixelScaleArcsec(input),
   );
+}
+
+/// A row's number: fixed decimals with the fractional tail trimmed; an integer
+/// (digits 0) is left whole — its own zeros are not a tail.
+String formatCalculatorNumber(double v, int digits) {
+  if (!v.isFinite) return v.toString();
+  final fixed = v.toStringAsFixed(digits);
+  return digits == 0 ? fixed : fixed.replaceFirst(RegExp(r'\.?0+$'), '');
 }
 
 /// Seconds as the advisor prints them.
