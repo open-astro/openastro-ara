@@ -108,21 +108,29 @@ public sealed partial class DewFormationAdvisor : IHostedService, IDisposable {
             if (weather is null || weather.State != EquipmentConnectionState.Connected) {
                 return; // a station that is not connected reads nothing: same as a failed read
             }
+            // Deliberate asymmetry: a CONNECTED station that leaves a reading null is answering
+            // ("I cannot see dew conditions"), so an open episode closes; a station that has gone
+            // away is not answering, so the episode keeps its last state (above).
             var hfr = RecentLightHfr(_history.ImagePoints, _history.AutofocusPoints);
             var verdict = DewFormationRule.Evaluate(weather.HumidityPct, weather.TemperatureC, weather.DewPointC, hfr);
             if (verdict.Suspected && !_episodeOpen) {
-                // The flag follows a successful open, so a failed diagnostics/notification write retries
-                // next tick instead of counting as an episode nobody heard about.
+                // The flag follows a successfully WRITTEN diagnostic: a failed write retries next tick
+                // instead of counting as an episode nobody can see; the notification after it is best
+                // effort, so a failed post never re-opens a second diagnostic.
                 await OpenEpisodeAsync(verdict.Detail, ct).ConfigureAwait(false);
-                _episodeOpen = true;
             } else if (!verdict.Suspected && _episodeOpen) {
                 await CloseEpisodeAsync(ct).ConfigureAwait(false);
                 _episodeOpen = false;
             }
+        } catch (ObjectDisposedException) {
+            // A timer callback queued just before Dispose: nothing to do.
+            return;
         } catch (Exception ex) when (ex is not OperationCanceledException) {
             LogTickFailed(ex);
         } finally {
-            _tick.Release();
+            if (!_disposed) {
+                _tick.Release();
+            }
         }
     }
 
@@ -152,12 +160,17 @@ public sealed partial class DewFormationAdvisor : IHostedService, IDisposable {
                 recommendedAction: "Wipe the optics or switch on the dew heaters.",
                 autoCorrectible: false, ct).ConfigureAwait(false);
         }
+        _episodeOpen = true; // the diagnostic is on record (or there is no diagnostics store to write)
         if (_notifications is not null) {
-            await _notifications.CreateAsync(new NotificationDto(
-                Id: Guid.NewGuid(), PostedUtc: now, Severity: NotificationSeverity.Warning, Category: NotificationCategory.Equipment,
-                Title: "Dew formation suspected", Message: description,
-                Read: false, Dismissed: false, DismissedUtc: null, Payload: null, RelatedEntityType: null, RelatedEntityId: null), ct)
-                .ConfigureAwait(false);
+            try {
+                await _notifications.CreateAsync(new NotificationDto(
+                    Id: Guid.NewGuid(), PostedUtc: now, Severity: NotificationSeverity.Warning, Category: NotificationCategory.Equipment,
+                    Title: "Dew formation suspected", Message: description,
+                    Read: false, Dismissed: false, DismissedUtc: null, Payload: null, RelatedEntityType: null, RelatedEntityId: null), ct)
+                    .ConfigureAwait(false);
+            } catch (Exception ex) when (ex is not OperationCanceledException) {
+                LogNotifyFailed(ex); // best effort: the diagnostic already carries the advisory
+            }
         }
     }
 
@@ -182,6 +195,8 @@ public sealed partial class DewFormationAdvisor : IHostedService, IDisposable {
     private partial void LogWeatherReadFailed(Exception ex);
     [LoggerMessage(Level = LogLevel.Warning, Message = "Dew advisor tick failed.")]
     private partial void LogTickFailed(Exception ex);
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Dew advisory notification could not be posted; the dew_formation diagnostic is open.")]
+    private partial void LogNotifyFailed(Exception ex);
 }
 
 /// <summary>The §42.2 row-18 pattern as a pure rule.</summary>

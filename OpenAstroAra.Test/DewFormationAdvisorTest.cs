@@ -72,6 +72,31 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_failed_diagnostic_write_retries_next_tick_but_a_failed_notification_does_not_reopen() {
+            var weather = new Mock<IObservingConditionsService>();
+            weather.Setup(w => w.GetAsync(It.IsAny<CancellationToken>())).ReturnsAsync(
+                new ObservingConditionsDto("w", "Station", EquipmentConnectionState.Connected, 8.0, 97, 7.6, null, null, null, null, null, null, true, "now"));
+            var history = new ImageHistoryService();
+            foreach (var h in Rising()) history.RecordImage("LIGHT", h, "L");
+            var diagnostics = new Mock<IDiagnosticsService>();
+            var writes = 0;
+            diagnostics.Setup(d => d.CreateEventAsync(It.IsAny<DiagnosticEventDto>(), It.IsAny<string?>(), It.IsAny<bool?>(), It.IsAny<CancellationToken>()))
+                .Returns(() => ++writes == 1 ? Task.FromException(new InvalidOperationException("sqlite locked")) : Task.CompletedTask);
+            var notifications = new Mock<INotificationService>();
+            notifications.Setup(n => n.CreateAsync(It.IsAny<NotificationDto>(), It.IsAny<CancellationToken>()))
+                .ThrowsAsync(new InvalidOperationException("inbox down"));
+            using var advisor = new DewFormationAdvisor(weather.Object, history, diagnostics.Object, notifications.Object);
+
+            await advisor.CheckOnceAsync(CancellationToken.None); // write fails → no episode yet
+            await advisor.CheckOnceAsync(CancellationToken.None); // write lands, notification fails → episode open
+            await advisor.CheckOnceAsync(CancellationToken.None); // sustained: nothing more
+            diagnostics.Verify(d => d.CreateEventAsync(It.IsAny<DiagnosticEventDto>(), It.IsAny<string?>(), It.IsAny<bool?>(), It.IsAny<CancellationToken>()), Times.Exactly(2),
+                "retried once after the failed write, then never duplicated");
+            notifications.Verify(n => n.CreateAsync(It.IsAny<NotificationDto>(), It.IsAny<CancellationToken>()), Times.Once,
+                "a failed post is best effort: it does not re-open the episode every tick");
+        }
+
+        [Test]
         public async Task Startup_clears_an_event_a_previous_daemon_left_open() {
             // The episode is in memory, the diagnostic is in SQLite: without this, autofocus would stay
             // deferred for good after a restart during dew.
