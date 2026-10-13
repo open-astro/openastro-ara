@@ -46,12 +46,13 @@ public sealed class ServerInternalStateService {
     }
 
     public ServerInternalStateDto Sample() {
-        var now = _clock();
         using var process = Process.GetCurrentProcess();
         var gc = GC.GetGCMemoryInfo();
         ThreadPool.GetAvailableThreads(out var workerAvailable, out _);
         ThreadPool.GetMaxThreads(out var workerMax, out _);
-        var cpu = CpuPercent(process.TotalProcessorTime, now);
+        // Clock and CPU are read inside the gate (r1 note): two overlapping reads must not hand the
+        // earlier one a later baseline and a negative window.
+        var (cpu, now) = CpuPercent(() => (process.TotalProcessorTime, _clock()));
         return new ServerInternalStateDto(
             CapturedUtc: now,
             UptimeSeconds: Math.Max(0, (now - _startedUtc).TotalSeconds),
@@ -64,7 +65,7 @@ public sealed class ServerInternalStateService {
                 Gen2Collections: GC.CollectionCount(2),
                 GcPauseTotalMs: GC.GetTotalPauseDuration().TotalMilliseconds,
                 CpuPercent: cpu,
-                ThreadCount: process.Threads.Count,
+                ThreadCount: ThreadCount(process),
                 ThreadPoolBusyWorkers: Math.Max(0, workerMax - workerAvailable),
                 ThreadPoolPendingWorkItems: ThreadPool.PendingWorkItemCount),
             WebSockets: new WsStateDto(WsConnectionGate.Open, WsConnectionGate.MaxConcurrentConnections),
@@ -78,8 +79,13 @@ public sealed class ServerInternalStateService {
 
     /// <summary>Process CPU as a percentage of one core's wall time since the previous
     /// sample (so 400 % is four cores flat out). Null until a second sample exists.</summary>
-    internal double? CpuPercent(TimeSpan totalCpu, DateTimeOffset now) {
+    internal double? CpuPercent(TimeSpan totalCpu, DateTimeOffset now) => CpuPercent(() => (totalCpu, now)).Cpu;
+
+    /// <summary>The locked form: <paramref name="read"/> runs inside the gate so the CPU time and the
+    /// clock belong to the same sample and consecutive samples are strictly ordered.</summary>
+    private (double? Cpu, DateTimeOffset Now) CpuPercent(Func<(TimeSpan Cpu, DateTimeOffset Now)> read) {
         lock (_cpuGate) {
+            var (totalCpu, now) = read();
             double? result = null;
             if (_haveCpuSample) {
                 var wall = (now - _lastCpuAt).TotalMilliseconds;
@@ -90,8 +96,23 @@ public sealed class ServerInternalStateService {
             _lastCpu = totalCpu;
             _lastCpuAt = now;
             _haveCpuSample = true;
-            return result;
+            return (result, now);
         }
+    }
+
+    /// <summary>Thread count without materialising a ProcessThread per thread: on Linux the
+    /// /proc/self/task entries are the threads (r1 note — a Pi daemon runs a few dozen).</summary>
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "A cheaper read that falls back to the portable one on any fault.")]
+    private static int ThreadCount(Process process) {
+        try {
+            if (Directory.Exists("/proc/self/task")) {
+                return Directory.GetDirectories("/proc/self/task").Length;
+            }
+        } catch (Exception) {
+            // fall through to the portable read
+        }
+        return process.Threads.Count;
     }
 
     /// <summary>Linux 1-minute load average from /proc/loadavg; null elsewhere or when unreadable.</summary>
