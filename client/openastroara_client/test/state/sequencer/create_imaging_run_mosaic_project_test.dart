@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/library/mosaic.dart';
 import 'package:openastroara/models/sequence/draft_sequence.dart';
+import 'package:openastroara/models/sequence/imaging_run_body.dart';
+import 'package:openastroara/models/sequence/sequence_summary.dart';
 import 'package:openastroara/services/draft_sequence_service.dart';
 import 'package:openastroara/services/mosaic_api.dart';
 import 'package:openastroara/services/sequence_api.dart';
@@ -40,6 +42,49 @@ class _SeqClient implements SequenceClient {
   }) async {
     created.add(name);
     return 'seq-${created.length}';
+  }
+
+  // Append paths: an existing (non-draft) sequence the planner appends to.
+  Map<String, dynamic>? existingBody;
+  bool running = false;
+  int patches = 0;
+  int liveAdds = 0;
+
+  @override
+  Future<SequenceRunStateInfo?> getRunState(String id) async =>
+      SequenceRunStateInfo(
+        sequenceId: id,
+        state: running ? SequenceRunState.running : SequenceRunState.idle,
+      );
+
+  @override
+  Future<SequenceDetail> getSequenceDetail(String id) async =>
+      SequenceDetail(id: id, name: 'Existing', body: existingBody ?? const {});
+
+  @override
+  Future<SequenceDetail> updateSequence(
+    String id, {
+    String? name,
+    String? description,
+    Map<String, dynamic>? body,
+  }) async {
+    patches++;
+    return SequenceDetail(id: id, name: 'Existing', body: body ?? const {});
+  }
+
+  @override
+  Future<SequenceDetail> addRunItem(
+    String id, {
+    required List<int> parentPath,
+    int? index,
+    required Map<String, dynamic> item,
+  }) async {
+    liveAdds++;
+    return SequenceDetail(
+      id: id,
+      name: 'Existing',
+      body: existingBody ?? const {},
+    );
   }
 
   @override
@@ -215,6 +260,79 @@ void main() {
     ], reason: 'the run reached the daemon exactly once');
     expect(mosaics.creates, isEmpty);
   });
+
+  Map<String, dynamic> existingRun() => buildImagingRunBody(
+    raDeg: 10,
+    decDeg: 20,
+    targetName: 'M 31',
+    exposureSeconds: 60,
+    frameCount: 5,
+  );
+
+  testWidgets(
+    'appending a mosaic to an open idle sequence (PATCH) registers the project',
+    (tester) async {
+      final seq = _SeqClient()..existingBody = existingRun();
+      final mosaics = _MosaicClient();
+      final container = ProviderContainer(
+        overrides: [
+          draftSequenceServiceProvider.overrideWithValue(_MemDraftService()),
+          sequenceApiProvider.overrideWith((ref) => seq),
+          mosaicApiProvider.overrideWithValue(mosaics),
+        ],
+      );
+      addTearDown(container.dispose);
+      container
+          .read(selectedSequenceIdProvider.notifier)
+          .select('seq-existing');
+
+      final result = await _run(
+        tester,
+        container,
+        panels: const [(raDeg: 10, decDeg: 20), (raDeg: 11, decDeg: 20)],
+        grid: (cols: 2, rows: 1, overlapPercent: 10),
+      );
+
+      expect(result?.appended, isTrue);
+      expect(seq.patches, 1, reason: 'the PATCH append path');
+      expect(seq.created, isEmpty);
+      expect(mosaics.creates, hasLength(1));
+      expect(mosaics.creates.single['name'], 'Veil');
+    },
+  );
+
+  testWidgets(
+    'appending a mosaic to a RUNNING sequence (live add) registers the project',
+    (tester) async {
+      final seq = _SeqClient()
+        ..existingBody = existingRun()
+        ..running = true;
+      final mosaics = _MosaicClient();
+      final container = ProviderContainer(
+        overrides: [
+          draftSequenceServiceProvider.overrideWithValue(_MemDraftService()),
+          sequenceApiProvider.overrideWith((ref) => seq),
+          mosaicApiProvider.overrideWithValue(mosaics),
+        ],
+      );
+      addTearDown(container.dispose);
+      container
+          .read(selectedSequenceIdProvider.notifier)
+          .select('seq-existing');
+
+      final result = await _run(
+        tester,
+        container,
+        panels: const [(raDeg: 10, decDeg: 20), (raDeg: 11, decDeg: 20)],
+        grid: (cols: 2, rows: 1, overlapPercent: 10),
+      );
+
+      expect(result?.appended, isTrue);
+      expect(seq.liveAdds, 2, reason: 'one live add per panel block');
+      expect(seq.patches, 0);
+      expect(mosaics.creates, hasLength(1));
+    },
+  );
 
   testWidgets('a single-target run registers no project', (tester) async {
     final mosaics = _MosaicClient();
