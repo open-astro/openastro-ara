@@ -4,8 +4,12 @@ import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 
 /// #1138 — which overnight summaries this device has already shown and the
-/// user dismissed (by run id), so a card is shown once. Capped so the file
-/// never grows past a season of nights.
+/// user dismissed, keyed by run AND the state it was dismissed in
+/// (`runId:state`, see `SessionSummary.ackKey`), so a card is shown once per
+/// outcome — a dismissed "paused" card never hides the same run's later
+/// failure. Capped so the file never grows past a season of nights. The
+/// JSON key keeps its original name for compatibility with files already on
+/// disk.
 class SessionSummaryPrefsService {
   SessionSummaryPrefsService({Future<Directory> Function()? supportDir})
     : _supportDir = supportDir ?? getApplicationSupportDirectory;

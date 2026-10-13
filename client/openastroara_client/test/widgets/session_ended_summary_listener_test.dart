@@ -18,8 +18,8 @@ class _Seeded extends SessionSummaryNotifier {
   @override
   Future<SessionSummary?> build() async => _v;
   @override
-  Future<void> acknowledge(String runId) async {
-    acked.add(runId);
+  Future<void> acknowledge(SessionSummary summary) async {
+    acked.add(summary.runId);
     state = const AsyncData(null);
   }
 }

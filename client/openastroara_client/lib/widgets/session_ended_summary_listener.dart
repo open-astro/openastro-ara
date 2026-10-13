@@ -70,7 +70,7 @@ class _SessionEndedSummaryListenerState
     if (!mounted) return;
     // Any way out acknowledges: the card is a once-per-night surface.
     unawaited(
-      ref.read(sessionSummaryProvider.notifier).acknowledge(summary.runId),
+      ref.read(sessionSummaryProvider.notifier).acknowledge(summary),
     );
     _showingRunId = null;
   }
