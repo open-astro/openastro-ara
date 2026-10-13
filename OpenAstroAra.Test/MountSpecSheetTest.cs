@@ -144,5 +144,18 @@ namespace OpenAstroAra.Test {
             Assert.That(seconds, Is.Not.Null);
             Assert.That(source, Is.EqualTo("the latest polar alignment"));
         }
+    
+        [Test]
+        public void The_mount_specs_are_served_only_while_connected() {
+            var caps = new TelescopeCapabilitiesDto(
+                CanSlew: true, CanSync: true, CanPark: true, CanUnpark: true, CanSetTracking: true, CanPulseGuide: false,
+                CanFindHome: false, SupportedSiderealRates: Array.Empty<string>(),
+                MountSpecs: MountSpecSheet.Parse(Eqm35));
+            Assert.That(TelescopeService.MountSpecsWhileConnected(EquipmentConnectionState.Connected, caps), Is.Not.Null);
+            Assert.That(TelescopeService.MountSpecsWhileConnected(EquipmentConnectionState.Disconnected, caps), Is.Null, "the kept capabilities do not speak for a mount that is not there");
+            Assert.That(TelescopeService.MountSpecsWhileConnected(EquipmentConnectionState.Connecting, caps), Is.Null);
+            Assert.That(TelescopeService.MountSpecsWhileConnected(EquipmentConnectionState.Connected, null), Is.Null);
+        }
     }
+
 }

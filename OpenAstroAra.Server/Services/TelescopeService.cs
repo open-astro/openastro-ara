@@ -998,12 +998,16 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
     public MountSpecSheetDto? CurrentMountSpecs {
         get {
             lock (_gate) {
-                // Only while connected: a disconnect keeps the last capabilities for a fast
-                // reconnect, but the prior must not be built from a mount that is not there.
-                return _state == EquipmentConnectionState.Connected ? _capabilities?.MountSpecs : null;
+                return MountSpecsWhileConnected(_state, _capabilities);
             }
         }
     }
+
+    /// <summary>Only while connected: a disconnect keeps the last capabilities for a fast reconnect,
+    /// but the prior must not be built from a mount that is not there. Pure (the test project has no
+    /// fake Alpaca harness to drive a real connect/disconnect through).</summary>
+    internal static MountSpecSheetDto? MountSpecsWhileConnected(EquipmentConnectionState state, TelescopeCapabilitiesDto? capabilities) =>
+        state == EquipmentConnectionState.Connected ? capabilities?.MountSpecs : null;
 
     /// <summary>The direction pad's two AxisRates reads (Primary, Secondary) as [Min,Max] bands, each
     /// null when the read threw (transient or NotImplemented) and empty when the mount answered with
