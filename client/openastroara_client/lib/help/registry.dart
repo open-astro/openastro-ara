@@ -2251,7 +2251,8 @@ const Map<String, Help> helpRegistry = {
         'ruined frame; raise it (8–10 %) when guiding or wind limit your subs and you accept a little more '
         'read noise in the stack.\n\n'
         'It is a planning preference on this device, not a profile setting: Tonight\'s Sky, the plan dialog '
-        'and the sequence editor\'s advisor all read it, and so does the integration budget\'s hours figure.',
+        'and the sequence editor\'s advisor all read it. The integration budget\'s hours do not depend on it: '
+        'they come from the sky and target fluxes alone.',
     relatedSettings: ['img.defaults.noise_tolerance_pct'],
     keywords: ['glover', 'sub length', 'read noise'],
   ),
