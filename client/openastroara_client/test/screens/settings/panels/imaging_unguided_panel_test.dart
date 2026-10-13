@@ -13,6 +13,7 @@ import 'package:openastroara/screens/settings/panels/imaging_unguided_panel.dart
 import 'package:openastroara/state/saved_server_state.dart';
 import 'package:openastroara/state/tracking/tracking_calibration_state.dart';
 import 'package:openastroara/state/settings/unguided_settings_state.dart';
+import 'package:openastroara/state/settings/optics_settings_state.dart';
 import 'package:openastroara/widgets/settings/editable_field.dart';
 
 /// #1264 Imaging → Unguided: the stored ceiling, its ladder and Recalibrate.
@@ -202,5 +203,35 @@ void main() {
     await tester.pumpWidget(const SizedBox());
     await _pump(tester, connected: true, mountLoading: true);
     expect(find.text('Reading the mount…'), findsOneWidget);
+  });
+
+  test('#1264 basisGapFor names the missing figure, and only then', () {
+    const noOptics = OpticsSettings();
+    const optics = OpticsSettings(focalLengthMm: 447, pixelSizeUm: 3.76);
+    expect(basisGapFor('max', optics: noOptics, seeingArcsec: 0), isNull);
+    expect(basisGapFor('pixel', optics: noOptics, seeingArcsec: 3), contains('optics'));
+    expect(basisGapFor('pixel', optics: optics, seeingArcsec: 0), isNull);
+    expect(basisGapFor('seeing', optics: optics, seeingArcsec: 0), contains('typical seeing'));
+    expect(basisGapFor('seeing', optics: noOptics, seeingArcsec: 2.5), isNull);
+  });
+
+  testWidgets('#1264 the basis hint appears only while its figure is missing', (tester) async {
+    await _pump(tester, connected: true, mountKnown: true);
+    final element = tester.element(find.byType(ImagingUnguidedPanel));
+    final container = ProviderScope.containerOf(element);
+    expect(find.textContaining('gives no prior'), findsNothing, reason: 'max needs nothing');
+
+    container.read(unguidedSettingsProvider.notifier).setPriorToleranceBasis('pixel');
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Needs the optics'), findsOneWidget, reason: 'default optics are unset');
+
+    container.read(opticsSettingsProvider.notifier).setFocalLengthMm(447);
+    container.read(opticsSettingsProvider.notifier).setPixelSizeUm(3.76);
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Needs the optics'), findsNothing);
+
+    container.read(unguidedSettingsProvider.notifier).setPriorToleranceBasis('seeing');
+    await tester.pumpAndSettle();
+    expect(find.textContaining('typical seeing'), findsNothing, reason: 'the default site seeing (2.5") is set');
   });
 }

@@ -7,6 +7,8 @@ import '../../../state/equipment/mount_state.dart';
 import '../../../state/saved_server_state.dart';
 import '../../../state/settings/panel_save_registry.dart';
 import '../../../state/settings/unguided_settings_state.dart';
+import '../../../state/settings/optics_settings_state.dart';
+import '../../../state/settings/site_settings_state.dart';
 import '../../../state/tracking/tracking_calibration_state.dart';
 import '../../../theme/ara_colors.dart';
 import '../../../util/friendly_error.dart';
@@ -271,16 +273,17 @@ class _ImagingUnguidedPanelState extends ConsumerState<ImagingUnguidedPanel>
             if (v != null) n.setPriorToleranceBasis(v);
           },
         ),
-        // #1264 — a single-figure basis gives no prior until that figure exists.
-        if (u.priorToleranceBasis != 'max')
+        // #1264 — a single-figure basis gives no prior until that figure exists;
+        // say so only while it is actually missing.
+        if (basisGapFor(
+              u.priorToleranceBasis,
+              optics: ref.watch(opticsSettingsProvider),
+              seeingArcsec: ref.watch(siteSettingsProvider).typicalSeeingArcsec,
+            )
+            case final gap?)
           Padding(
             padding: const EdgeInsets.only(left: 4, bottom: 4),
-            child: Text(
-              u.priorToleranceBasis == 'pixel'
-                  ? 'Needs the optics (focal length and pixel size) set; without them the spec sheet gives no prior.'
-                  : 'Needs the site\'s typical seeing set; without it the spec sheet gives no prior.',
-              style: dim,
-            ),
+            child: Text(gap, style: dim),
           ),
         const SettingsSectionHeader('Re-centre after drift'),
         EditableNumberRow(
@@ -314,5 +317,22 @@ class _ImagingUnguidedPanelState extends ConsumerState<ImagingUnguidedPanel>
         ),
       ],
     );
+  }
+}
+
+/// #1264 — what a single-figure prior tolerance basis still lacks, or null
+/// when the figure is there (or the basis needs none). Pure — unit-tested.
+String? basisGapFor(String basis, {required OpticsSettings optics, required double seeingArcsec}) {
+  switch (basis) {
+    case 'pixel':
+      return optics.focalLengthMm > 0 && optics.pixelSizeUm > 0
+          ? null
+          : 'Needs the optics (focal length and pixel size) set; without them the spec sheet gives no prior.';
+    case 'seeing':
+      return seeingArcsec > 0
+          ? null
+          : 'Needs the site\'s typical seeing set; without it the spec sheet gives no prior.';
+    default:
+      return null;
   }
 }
