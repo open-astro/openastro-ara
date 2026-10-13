@@ -352,14 +352,26 @@ namespace OpenAstroAra.Server.Services {
         private readonly record struct CatalogCacheKey(string Path, long Length, long MtimeTicks, double? MaxMag, int? Limit);
         private readonly ConcurrentDictionary<CatalogCacheKey, IReadOnlyList<CatalogObjectDto>> _catalogCache = new();
         internal const int CatalogCacheEntries = 8;
+        /// <summary>Total rows held across entries — a Pi must not keep eight full 50 000-row catalogs around.</summary>
+        internal const int CatalogCacheMaxRows = 120_000;
 
-        /// <summary>Keep the last few distinct queries; a full clear on overflow is simpler than LRU bookkeeping
-        /// and the entries are few (one planetarium, a handful of magnitude cuts).</summary>
+        /// <summary>Keep the last few distinct queries within a row budget; a full clear on overflow is simpler
+        /// than LRU bookkeeping and the entries are few (one planetarium, a handful of magnitude cuts).</summary>
         private void RememberCatalog(CatalogCacheKey key, IReadOnlyList<CatalogObjectDto> rows) {
-            if (_catalogCache.Count >= CatalogCacheEntries) {
+            if (_catalogCache.Count >= CatalogCacheEntries || _catalogCache.Values.Sum(v => v.Count) + rows.Count > CatalogCacheMaxRows) {
                 _catalogCache.Clear();
             }
             _catalogCache[key] = rows;
+        }
+
+        /// <summary>Drop every cached query for a package (its directory) — on delete and on a fresh install, so a
+        /// same-length rewrite inside the mtime granularity can never serve the old rows.</summary>
+        private void ForgetCatalog(string packageDir) {
+            foreach (var key in _catalogCache.Keys) {
+                if (key.Path.StartsWith(packageDir, StringComparison.Ordinal)) {
+                    _catalogCache.TryRemove(key, out _);
+                }
+            }
         }
 
         /// <summary>Cached catalog queries (for tests).</summary>
@@ -372,6 +384,7 @@ namespace OpenAstroAra.Server.Services {
                 return Task.FromResult(PackageDeleteResult.NotInstalled);
             }
             try {
+                ForgetCatalog(dir);
                 Directory.Delete(dir, recursive: true);
                 LogDeleted(packageId);
                 return Task.FromResult(PackageDeleteResult.Deleted);
@@ -550,6 +563,7 @@ namespace OpenAstroAra.Server.Services {
                         $"Unsupported sky-data package format for '{pkg.Id}': {pkg.SourceUrl!.AbsolutePath}");
                 }
 
+                ForgetCatalog(targetDir);
                 await EmitAsync(WsEventCatalog.DataManagerDownloadComplete, job, error: null).ConfigureAwait(false);
                 LogDownloadComplete(pkg.Id, job.Id);
             } catch (OperationCanceledException) {

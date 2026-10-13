@@ -847,8 +847,9 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
         // §29 — per-frame pre-capture free-space check: the disk monitor polls every 60 s, and a
         // burst of large frames can fill the volume between ticks. Blocks BEFORE the shutter
         // opens (an exposure that can't be saved is wasted sky time) — but only when the volume
-        // is critically low AND the profile's OnDiskSpaceCritical policy is "abort"; the "warn"
-        // default never blocks (the monitor's own notification path owns telling the user).
+        // is critically low AND the profile's OnDiskSpaceCritical policy is "abort" or "pause"
+        // (#1185); the "warn" default never blocks (the monitor's own notification path owns telling
+        // the user).
         if (PreCaptureDiskBlocked(out var freeBytes)) {
             LogPreCaptureDiskBlocked(frameId, freeBytes);
             return false;
@@ -2339,7 +2340,7 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
     [LoggerMessage(Level = LogLevel.Debug, Message = "ignored error while disconnecting Camera during teardown")]
     private partial void LogTeardownIgnored(Exception ex);
 
-    [LoggerMessage(Level = LogLevel.Error, Message = "§29 pre-capture check blocked frame {FrameId}: save volume critically low ({FreeBytes} bytes free) and OnDiskSpaceCritical=abort — the exposure never started")]
+    [LoggerMessage(Level = LogLevel.Error, Message = "§29 pre-capture check blocked frame {FrameId}: save volume critically low ({FreeBytes} bytes free) and OnDiskSpaceCritical is abort or pause — the exposure never started")]
     private partial void LogPreCaptureDiskBlocked(Guid frameId, long freeBytes);
 
     [LoggerMessage(Level = LogLevel.Error, Message = "§29 pre-capture check blocked frame {FrameId}: the store drive is ejected/unmounted (save directory {SaveDirectory}) — writing would land on the root disk. Reconnect the drive or choose a store.")]
