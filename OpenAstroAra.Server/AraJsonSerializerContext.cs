@@ -160,6 +160,8 @@ namespace OpenAstroAra.Server;
 [JsonSerializable(typeof(MosaicCreateRequestDto))]
 [JsonSerializable(typeof(MosaicDto))]
 [JsonSerializable(typeof(MosaicPanelDto))]
+[JsonSerializable(typeof(MosaicPanelCenterDto))]
+[JsonSerializable(typeof(IReadOnlyList<MosaicPanelCenterDto>))]
 [JsonSerializable(typeof(MosaicProgressDto))]
 [JsonSerializable(typeof(NotificationActionRequestDto))]
 [JsonSerializable(typeof(NotificationCategoryPrefDto))]

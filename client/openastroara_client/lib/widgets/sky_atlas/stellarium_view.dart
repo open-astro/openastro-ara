@@ -314,6 +314,16 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
             ),
     ];
     final isMosaic = mosaicPanels.length > 1;
+    // §47 / #1146 — the grid behind the panels, for the mosaic project record.
+    final cols = (event['cols'] as num?)?.toInt();
+    final rows = (event['rows'] as num?)?.toInt();
+    final mosaicGrid = isMosaic && cols != null && rows != null && cols * rows == mosaicPanels.length
+        ? (
+            cols: cols,
+            rows: rows,
+            overlapPercent: ((event['overlapPercent'] as num?) ?? 0).toDouble(),
+          )
+        : null;
     // A mosaic's panels only tile correctly when each slew is plate-solved to
     // the drawn grid, so mosaics ALWAYS carry the position angle (0° included)
     // and get Center and Rotate; a single frame keeps the old rule — a dialed
@@ -342,6 +352,7 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
         targetName: targetName,
         positionAngleDeg: positionAngleDeg,
         mosaicPanels: mosaicPanels,
+        mosaicGrid: mosaicGrid,
       );
     } catch (e, st) {
       debugPrint('[planning] framing create-run failed: $e\n$st');

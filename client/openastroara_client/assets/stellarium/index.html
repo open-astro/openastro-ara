@@ -1552,6 +1552,8 @@ function addFrameToSequence() {
       type: 'addToSequence', raDeg: frameRaDeg, decDeg: frameDecDeg,
       rotationDeg: frameRotDeg, name: cleanName(frameTargetName) || 'Target',
       panels: panels,
+      // #1146 — the grid behind the panels, so Flutter can record the mosaic project.
+      cols: frameCols, rows: frameRows, overlapPercent: frameOverlap,
     }),
   }).then(function (r) {
     btn.textContent = r.ok ? (API ? 'Created ✓' : 'Draft saved ✓') : "Couldn't create";

@@ -9394,6 +9394,19 @@ components:
           type:
             - 'null'
             - string
+        panels:
+          type:
+            - 'null'
+            - array
+          items:
+            $ref: '#/components/schemas/MosaicPanelCenterDto'
+        frames_per_panel:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - 'null'
+            - integer
+            - string
+          format: int32
     MosaicDto:
       required:
         - id
@@ -9464,6 +9477,24 @@ components:
             - 'null'
             - string
           format: uuid
+    MosaicPanelCenterDto:
+      required:
+        - ra_degrees
+        - dec_degrees
+      type: object
+      properties:
+        ra_degrees:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+        dec_degrees:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
     MosaicPanelDto:
       required:
         - mosaic_id
@@ -9519,6 +9550,13 @@ components:
             - 'null'
             - string
           format: uuid
+        frames_captured:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+          default: 0
     MosaicProgressDto:
       required:
         - mosaic_id

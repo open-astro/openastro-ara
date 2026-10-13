@@ -276,6 +276,39 @@ public sealed partial class SqliteAraDatabase : IAraDatabase {
         await ExecAsync(conn, "CREATE INDEX IF NOT EXISTS idx_pa_residuals_completed_at ON pa_residuals(completed_at);", ct);
         await ExecAsync(conn, "CREATE INDEX IF NOT EXISTS idx_pa_residuals_session_id ON pa_residuals(session_id);", ct);
 
+        // §47 / #1146 — mosaic projects: the plan (centre, grid, overlap, PA, frames owed per panel)
+        // and the per-panel J2000 centres the planetarium drew. Panel completion is NOT stored: it is
+        // derived from the frames table at read time (light frames whose target_name is the panel's
+        // "<name> i/N" block), so it survives restarts and never drifts from the catalog.
+        await ExecAsync(conn, """
+            CREATE TABLE IF NOT EXISTS mosaics (
+                id                     TEXT PRIMARY KEY NOT NULL,
+                name                   TEXT NOT NULL,
+                center_ra_deg          REAL NOT NULL,
+                center_dec_deg         REAL NOT NULL,
+                panels_x               INTEGER NOT NULL,
+                panels_y               INTEGER NOT NULL,
+                overlap_percent        REAL NOT NULL,
+                position_angle_deg     REAL NOT NULL,
+                frames_per_panel       INTEGER NOT NULL,
+                created_at             TEXT NOT NULL,
+                generated_sequence_id  TEXT
+            );
+            """, ct);
+        await ExecAsync(conn, """
+            CREATE TABLE IF NOT EXISTS mosaic_panels (
+                mosaic_id              TEXT NOT NULL REFERENCES mosaics(id) ON DELETE CASCADE,
+                panel_index            INTEGER NOT NULL,
+                panel_x                INTEGER NOT NULL,
+                panel_y                INTEGER NOT NULL,
+                center_ra_deg          REAL NOT NULL,
+                center_dec_deg         REAL NOT NULL,
+                crosses_ra_wrap        INTEGER NOT NULL,
+                PRIMARY KEY (mosaic_id, panel_index)
+            );
+            """, ct);
+        await ExecAsync(conn, "CREATE INDEX IF NOT EXISTS idx_mosaics_created_at ON mosaics(created_at);", ct);
+
         LogCatalogInitialized(DatabasePath);
     }
 

@@ -32,7 +32,10 @@ public sealed record MosaicDto(
     DateTimeOffset CreatedUtc,
     Guid? GeneratedSequenceId);
 
-/// <summary>POST /api/v1/mosaics body.</summary>
+/// <summary>POST /api/v1/mosaics body. #1146: <paramref name="Panels"/> are the per-panel J2000
+/// centres the planetarium drew (row-major, <c>PanelCountX × PanelCountY</c> of them); when absent
+/// the daemon spreads a grid from the profile optics. <paramref name="FramesPerPanel"/> is how many
+/// light frames a panel owes before it counts as done (the run's planned frame count; default 20).</summary>
 public sealed record MosaicCreateRequestDto(
     string Name,
     double CenterRaDegrees,
@@ -41,9 +44,17 @@ public sealed record MosaicCreateRequestDto(
     int PanelCountY,
     double OverlapPercent,
     double? PositionAngleDegrees,
-    string? SequenceTemplateName);
+    string? SequenceTemplateName,
+    IReadOnlyList<MosaicPanelCenterDto>? Panels = null,
+    int? FramesPerPanel = null);
 
-/// <summary>One panel within a mosaic.</summary>
+/// <summary>One panel centre supplied by the client (J2000 degrees).</summary>
+public sealed record MosaicPanelCenterDto(double RaDegrees, double DecDegrees);
+
+/// <summary>One panel within a mosaic. <c>Status</c> is derived from the frame catalog (#1146):
+/// <c>pending</c> (no light frames yet), <c>in_progress</c> (some, fewer than owed), <c>done</c>
+/// (at least the owed count). <c>TargetFrameId</c> is the panel's newest light frame, if any;
+/// <c>FramesCaptured</c> its light-frame count.</summary>
 public sealed record MosaicPanelDto(
     Guid MosaicId,
     int PanelIndex,
@@ -53,7 +64,8 @@ public sealed record MosaicPanelDto(
     double CenterDecDegrees,
     bool CrossesRaWrap,
     string Status,
-    Guid? TargetFrameId);
+    Guid? TargetFrameId,
+    int FramesCaptured = 0);
 
 /// <summary>Progress of a mosaic run.</summary>
 public sealed record MosaicProgressDto(

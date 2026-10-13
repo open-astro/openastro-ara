@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/library/live_library.dart';
 import '../../state/faults/fault_feed_state.dart';
 import '../../state/library/library_selection.dart';
+import '../../state/library/mosaics_state.dart';
 import '../../state/library/library_state.dart';
 import '../../state/library/live_library_state.dart';
 import '../../theme/ara_colors.dart';
@@ -15,6 +16,7 @@ import '../../state/backup/backup_stream_state.dart';
 import '../../widgets/imaging/fault_panel.dart' show FaultHistoryTile;
 import '../../widgets/imaging/polar_error_rating.dart';
 import '../../widgets/library/bulk_action_bar.dart';
+import '../../widgets/library/mosaics_section.dart';
 import '../../widgets/library/frame_thumbnail.dart';
 import '../../widgets/library/load_more_button.dart';
 import '../calibration/calibration_screen.dart';
@@ -120,12 +122,17 @@ class ImageLibraryScreen extends ConsumerWidget {
             children: [
               Expanded(
                 child: RefreshIndicator(
-                  onRefresh: () =>
-                      ref.read(liveLibrarySessionsProvider.notifier).refresh(),
+                  onRefresh: () async {
+                    await ref.read(liveLibrarySessionsProvider.notifier).refresh();
+                    await ref.read(mosaicProjectsProvider.notifier).refresh();
+                  },
                   child: CustomScrollView(
                     physics: const AlwaysScrollableScrollPhysics(),
                     slivers: [
                       const SliverToBoxAdapter(child: SizedBox(height: 8)),
+                      // §47 / #1146 — mosaic projects with per-panel progress;
+                      // renders nothing without a server or a project.
+                      const SliverToBoxAdapter(child: MosaicsSection()),
                       for (final g in groups) ...[
                         // A lone "All sessions" banner is noise — group
                         // labels only earn their row when grouping is on.
