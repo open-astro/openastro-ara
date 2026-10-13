@@ -179,6 +179,21 @@ namespace OpenAstroAra.Test {
         private static readonly double[] OnlyTen = { 10.0 };
 
         [Test]
+        public async Task The_request_tolerance_decides_what_trails() {
+            // 30 s rung at eccentricity 0.55 (roundness 0.835): trailed at the shipped 0.5 bar, round at a 0.6 bar.
+            var frames = new ScriptedFrames();
+            var svc = new TrackingProbeService(new InMemoryProfileStore(), frames, metric: Metric(frames, s => s switch {
+                10 => (80, 0.95, 3.0),
+                30 => (80, 0.835, 3.1),
+                _ => (80, 0.5, 4.5), // ecc 0.87: trails at any bar
+            }));
+            var strict = await svc.ProbeAsync(new TrackingProbeRequest(DefaultLadder, 300, null, "Veil"), new Progress<ApplicationStatus>(), CancellationToken.None);
+            Assert.That(strict.CeilingSeconds, Is.EqualTo(20), "10 passes, 30 trails at 0.5: the midpoint");
+            var lenient = await svc.ProbeAsync(new TrackingProbeRequest(DefaultLadder, 300, null, "Veil", null, 0.6), new Progress<ApplicationStatus>(), CancellationToken.None);
+            Assert.That(lenient.CeilingSeconds, Is.EqualTo(45), "10 and 30 pass at 0.6, 60 trails: the midpoint");
+        }
+
+        [Test]
         public async Task The_stored_ceiling_is_the_prior_unless_the_body_carries_one() {
             var store = new InMemoryProfileStore();
             var svc = new TrackingProbeService(store, new ScriptedFrames());

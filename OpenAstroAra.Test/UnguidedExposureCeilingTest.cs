@@ -224,6 +224,7 @@ namespace OpenAstroAra.Test {
             Assert.That(executor.Request!.RungsSeconds, Is.EqualTo(new[] { 10.0, 30, 40 }), "capped at 2 × the 20 s prior");
             Assert.That(executor.Request.PriorSeconds, Is.EqualTo(20));
             Assert.That(executor.Request.PriorSource, Is.EqualTo("the sequence's own prior"), "the executor names the source (#1264 stage 1)");
+            Assert.That(executor.Request.EccentricityTolerance, Is.EqualTo(0.5), "the node's shipped trailed bar reaches the request");
             Assert.That(probe.CeilingSeconds, Is.EqualTo(45));
             Assert.That(exposure.ExposureTime, Is.EqualTo(45));
             Assert.That(count.Iterations, Is.EqualTo((int)Math.Ceiling(3000.0 / 45)));

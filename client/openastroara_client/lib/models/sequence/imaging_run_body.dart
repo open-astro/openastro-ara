@@ -361,7 +361,8 @@ Map<String, dynamic> buildTargetBlock({
         : plan.map((s) => s.exposureSeconds).reduce(math.max);
     final probe = _item(trackingProbeType)
       ..['MaxExposure'] = longest
-      ..['Rungs'] = unguidedOptions.probeRungsSeconds;
+      ..['Rungs'] = unguidedOptions.probeRungsSeconds
+      ..['EccentricityTolerance'] = unguidedOptions.eccentricityTolerance;
     if (trackingPriorSeconds != null && trackingPriorSeconds > 0) {
       probe['PriorSeconds'] = trackingPriorSeconds;
     }

@@ -393,6 +393,7 @@ void main() {
           raDeg: 1, decDeg: 2, exposureSeconds: 300, frameCount: 10, rig: RigCapabilities.nothing, unguidedOptions: knobs);
       final probe = childrenOf(b).singleWhere((c) => c[r'$type'] == trackingProbeType);
       expect(probe['Rungs'], [5, 20, 80]);
+      expect(probe['EccentricityTolerance'], 0.6, reason: 'the probe judges rungs with the same trailed bar as the guard');
       final loop = childrenOf(b).singleWhere((c) => c['Name'] == 'Imaging');
       final guard = triggersOf(loop).singleWhere((t) => t[r'$type'] == unguidedExposureGuardType);
       expect(guard['EccentricityTolerance'], 0.6);

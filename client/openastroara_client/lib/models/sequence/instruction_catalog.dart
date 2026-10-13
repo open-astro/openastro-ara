@@ -798,6 +798,13 @@ const List<InstructionDef> instructionCatalog = [
         min: 0,
       ),
       InstructionField(
+        'EccentricityTolerance',
+        'Trailed above this median eccentricity',
+        InstructionFieldType.number,
+        defaultValue: 0.5,
+        min: 0.05,
+      ),
+      InstructionField(
         'PriorSeconds',
         'Mount spec-sheet ceiling (s, blank = unknown)',
         InstructionFieldType.number,
