@@ -29,7 +29,9 @@ class CollimationCard extends ConsumerWidget {
     final theme = Theme.of(context);
     final color = colorFor(verdict.severity);
     final scopeType = ref.watch(
-      autofocusSettingsProvider.select((s) => s.telescopeType.name),
+      autofocusSettingsProvider.select(
+        (s) => telescopeTypeToWire(s.telescopeType),
+      ),
     );
     final hint = collimationHintFor(scopeType, verdict.severity);
     return Container(
