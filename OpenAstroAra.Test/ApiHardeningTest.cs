@@ -259,11 +259,55 @@ public class FrameFileConfinementTest {
             Assert.That(File.Exists(outsideVariant), Is.True, "a foreign directory is never enumerated or deleted from");
         }
 
-        private static void WriteRealFits(string path, ushort[]? pixels = null) {
+        private static void WriteRealFits(string path, ushort[]? pixels = null, int width = 4, int height = 4, string? bayerPat = null) {
             File.Delete(path); // InsertAsync leaves a text stub; cfitsio must create the file itself
-            using var fits = OpenAstroAra.Fits.FitsImage.Create(path, 4, 4, OpenAstroAra.Fits.FitsBitDepth.UnsignedShort);
-            fits.WriteImageData(pixels ?? new ushort[16]);
+            using var fits = OpenAstroAra.Fits.FitsImage.Create(path, width, height, OpenAstroAra.Fits.FitsBitDepth.UnsignedShort);
+            fits.WriteImageData(pixels ?? new ushort[width * height]);
+            if (bayerPat is not null) {
+                fits.SetHeader("BAYERPAT", bayerPat);
+            }
             fits.Complete(); // renames the .tmp into place
+        }
+
+        [Test]
+        public async Task Loaded_image_data_carries_the_fits_bayer_pattern_and_a_working_detector_and_annotator() {
+            // #1147 — (a) BAYERPAT lands in the metadata, so an OSC frame renders as debayered luminance
+            // (a red-only RGGB mosaic is a checkerboard raw, smooth debayered); (b) the headless detector
+            // and circle annotator are wired, so annotated detection changes the display buffer.
+            const int w = 64, h = 64;
+            var mosaic = new ushort[w * h];
+            for (var y = 0; y < h; y++) for (var x = 0; x < w; x++) mosaic[y * w + x] = (y % 2 == 0 && x % 2 == 0) ? (ushort)60000 : (ushort)0;
+            var oscPath = Path.Combine(_root, "osc.fits");
+            var osc = await InsertAsync(oscPath);
+            WriteRealFits(oscPath, mosaic, w, h, bayerPat: "rggb"); // lowercase on purpose: cameras do that
+            var profile = new HeadlessProfileService();
+
+            var loaded = (await _repo.LoadImageDataAsync(osc, profile, CancellationToken.None))!;
+            Assert.That(loaded.MetaData.Camera.SensorType, Is.EqualTo(OpenAstroAra.Core.Enums.SensorType.RGGB));
+            Assert.That(loaded.Properties.IsBayered, Is.True);
+            var display = loaded.RenderBitmapSource();
+            var rawChecker = new OpenAstroAra.Image.ImageData.BaseImageData(mosaic, w, h, 16, false,
+                new OpenAstroAra.Image.ImageData.ImageMetaData(), profile, null!, null!).RenderBitmapSource();
+            Assert.That(Contrast(display), Is.LessThan(Contrast(rawChecker) / 4), "luminance, not the CFA checkerboard");
+
+            var starPath = Path.Combine(_root, "stars.fits");
+            var stars = await InsertAsync(starPath);
+            WriteRealFits(starPath, SyntheticSky.Render(320, 240, 1.6, stars: 25), 320, 240);
+            var starData = (await _repo.LoadImageDataAsync(stars, profile, CancellationToken.None))!;
+            var rendered = starData.RenderImage();
+            await rendered.DetectStars(annotateImage: true, OpenAstroAra.Core.Enums.StarSensitivity.Normal,
+                OpenAstroAra.Core.Enums.NoiseReduction.None, cancelToken: CancellationToken.None);
+            Assert.That(starData.StarDetectionAnalysis.DetectedStars, Is.GreaterThan(5), "the wired detector ran");
+            Assert.That(rendered.Image, Is.Not.EqualTo(rendered.OriginalImage), "the wired annotator drew the rings");
+            Assert.That(SqliteFrameRepository.SensorTypeFromBayerPat("'BGGR    '"), Is.EqualTo(OpenAstroAra.Core.Enums.SensorType.BGGR));
+            Assert.That(SqliteFrameRepository.SensorTypeFromBayerPat("CMYG"), Is.EqualTo(OpenAstroAra.Core.Enums.SensorType.Monochrome));
+            Assert.That(SqliteFrameRepository.SensorTypeFromBayerPat(null), Is.EqualTo(OpenAstroAra.Core.Enums.SensorType.Monochrome));
+        }
+
+        private static double Contrast(byte[] display) {
+            double sum = 0;
+            for (var i = 1; i < display.Length; i++) sum += Math.Abs(display[i] - display[i - 1]);
+            return sum / (display.Length - 1);
         }
 
         [Test]
@@ -335,13 +379,7 @@ public class FrameFileConfinementTest {
             WriteRealFits(outsidePath);
             var profile = new HeadlessProfileService();
 
-            var loaded = await _repo.LoadImageDataAsync(inside, profile, CancellationToken.None);
-            Assert.That(loaded, Is.Not.Null, "ours loads");
-            // #1147 — the detector and annotator are wired: annotation runs, it no longer dereferences a null.
-            var detected = await loaded!.RenderImage().DetectStars(annotateImage: true,
-                OpenAstroAra.Core.Enums.StarSensitivity.Normal, OpenAstroAra.Core.Enums.NoiseReduction.None,
-                cancelToken: CancellationToken.None);
-            Assert.That(detected.Image.Length, Is.EqualTo(16), "a 4×4 frame renders one byte per pixel, annotated or not");
+            Assert.That(await _repo.LoadImageDataAsync(inside, profile, CancellationToken.None), Is.Not.Null, "ours loads");
             Assert.That(await _repo.LoadImageDataAsync(outside, profile, CancellationToken.None), Is.Null, "foreign FITS is not loaded for solving");
             Assert.That(await _repo.TryReadTargetCoordinatesAsync(outside, CancellationToken.None), Is.Null, "no header peek at a foreign file");
 
