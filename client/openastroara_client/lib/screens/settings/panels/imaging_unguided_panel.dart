@@ -271,6 +271,17 @@ class _ImagingUnguidedPanelState extends ConsumerState<ImagingUnguidedPanel>
             if (v != null) n.setPriorToleranceBasis(v);
           },
         ),
+        // #1264 — a single-figure basis gives no prior until that figure exists.
+        if (u.priorToleranceBasis != 'max')
+          Padding(
+            padding: const EdgeInsets.only(left: 4, bottom: 4),
+            child: Text(
+              u.priorToleranceBasis == 'pixel'
+                  ? 'Needs the optics (focal length and pixel size) set; without them the spec sheet gives no prior.'
+                  : 'Needs the site\'s typical seeing set; without it the spec sheet gives no prior.',
+              style: dim,
+            ),
+          ),
         const SettingsSectionHeader('Re-centre after drift'),
         EditableNumberRow(
           label: 'Re-centre past drift (arcmin)',

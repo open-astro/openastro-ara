@@ -97,13 +97,17 @@ Future<void> captureProfileCache(
       // capture (null = not captured; the seed then leaves the notifier alone).
       _tryHorizon(api),
       // #1264 — the offline run builder cooks the probe / guard from it too.
-      api.getUnguidedSettings(),
+      // Best-effort like the horizon: a failed read of this one section must
+      // not fail the whole capture (null = not captured; the seed then keeps
+      // the notifier's defaults).
+      _tryUnguided(api),
     ).wait;
     await cache.saveSections(activeId, {
       'optics': ProfileApi.opticsToJson(optics),
       'imaging_defaults': ProfileApi.imagingDefaultsToJson(imaging),
       'autofocus': ProfileApi.autofocusSettingsToJson(autofocus),
-      'unguided': ProfileApi.unguidedSettingsToJson(unguided),
+      if (unguided != null)
+        'unguided': ProfileApi.unguidedSettingsToJson(unguided),
       'site': ProfileApi.siteSettingsToJson(site),
       'filter_set': ProfileApi.filterSetToJson(filters),
       'camera_electronics': ProfileApi.cameraElectronicsToJson(electronics),
@@ -112,6 +116,15 @@ Future<void> captureProfileCache(
     });
   } catch (e) {
     debugPrint('[profile-cache] capture failed (offline cache stays stale): $e');
+  }
+}
+
+Future<UnguidedSettings?> _tryUnguided(ProfileApi api) async {
+  try {
+    return await api.getUnguidedSettings();
+  } catch (e) {
+    debugPrint('[profile-cache] unguided settings not captured: $e');
+    return null;
   }
 }
 
@@ -147,8 +160,10 @@ Future<bool> seedPlanningFromCache(
       () async => ProfileApi.imagingDefaultsFromJson(sec('imaging_defaults')));
   await container.read(autofocusSettingsProvider.notifier).hydrateGuarded(
       () async => ProfileApi.autofocusSettingsFromJson(sec('autofocus')));
-  await container.read(unguidedSettingsProvider.notifier).hydrateGuarded(
-      () async => ProfileApi.unguidedSettingsFromJson(sec('unguided')));
+  if (snap['unguided'] is Map) {
+    await container.read(unguidedSettingsProvider.notifier).hydrateGuarded(
+        () async => ProfileApi.unguidedSettingsFromJson(sec('unguided')));
+  }
   await container
       .read(siteSettingsProvider.notifier)
       .hydrateGuarded(() async => ProfileApi.siteSettingsFromJson(sec('site')));
