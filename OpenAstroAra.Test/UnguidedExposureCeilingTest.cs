@@ -231,6 +231,21 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task The_node_passes_its_trailed_bar_to_the_request_and_zero_falls_back() {
+            var executor = new ScriptedProbe { Result = new TrackingProbeResult(45, 3, "measured") };
+            var (_, probe, _, _, _) = Tree(Factory(executor), exposureSeconds: 300, frames: 10, maxExposure: 300);
+            probe.EccentricityTolerance = 0.6;
+            await probe.Execute(new Progress<ApplicationStatus>(), CancellationToken.None);
+            Assert.That(executor.Request!.EccentricityTolerance, Is.EqualTo(0.6), "the body's bar reaches the daemon");
+
+            var zero = new ScriptedProbe { Result = new TrackingProbeResult(45, 3, "measured") };
+            var (_, probe2, _, _, _) = Tree(Factory(zero), exposureSeconds: 300, frames: 10, maxExposure: 300);
+            probe2.EccentricityTolerance = 0;
+            await probe2.Execute(new Progress<ApplicationStatus>(), CancellationToken.None);
+            Assert.That(zero.Request!.EccentricityTolerance, Is.EqualTo(UnguidedExposureLadder.DefaultEccentricityTolerance), "a zeroed bar means the shipped one");
+        }
+
+        [Test]
         public async Task An_inconclusive_probe_applies_the_prior_and_leaves_the_loop_alone_without_one() {
             var executor = new ScriptedProbe { Result = new TrackingProbeResult(null, 1, "one usable rung") };
             var withPrior = Tree(Factory(executor), exposureSeconds: 300, frames: 10, prior: 30);

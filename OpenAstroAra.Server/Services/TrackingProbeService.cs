@@ -43,7 +43,7 @@ public sealed partial class TrackingProbeService : ITrackingProbeExecutor {
     internal const int MinStars = CameraService.MinStarsForAnalysis;
     /// <summary>A rung passes when its median eccentricity is at or under the request's tolerance; this is
     /// the shipped bar when the request carries none (issue #1264, Imaging → Unguided).</summary>
-    internal const double EccentricityTolerance = 0.5;
+    internal const double EccentricityTolerance = OpenAstroAra.Sequencer.Utility.UnguidedExposureLadder.DefaultEccentricityTolerance;
     /// <summary>…and its median FWHM is at most this × the first usable rung's (trailing fattens stars too).</summary>
     internal const double FwhmGrowth = 1.2;
     /// <summary>Measured ceiling more than this × off the prior (either way) raises a notification.</summary>

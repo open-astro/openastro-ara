@@ -27,6 +27,10 @@ namespace OpenAstroAra.Sequencer.Utility {
         /// <summary>The default rungs, in seconds (issue #1264).</summary>
         public static readonly IReadOnlyList<double> DefaultRungs = new[] { 10.0, 30.0, 60.0, 120.0 };
 
+        /// <summary>The shipped "trailed above this median eccentricity" bar (#1264): the probe's pass rule,
+        /// the guard's step-down and the request default all share it.</summary>
+        public const double DefaultEccentricityTolerance = 0.5;
+
         /// <summary>
         /// The rungs to try: <paramref name="rungs"/> (or the defaults) sorted, distinct, positive, and
         /// capped at the sky-limited / planned length <paramref name="maxExposureSeconds"/> (ignored when

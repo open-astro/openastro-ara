@@ -78,7 +78,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Telescope {
         /// <summary>#1264 Imaging → Unguided — a rung is "trailed" above this median eccentricity; the
         /// run builder copies the profile's trailed bar here so the probe and the guard judge alike.</summary>
         [JsonProperty]
-        public double EccentricityTolerance { get; set; } = 0.5;
+        public double EccentricityTolerance { get; set; } = UnguidedExposureLadder.DefaultEccentricityTolerance;
 
         /// <summary>The mount's spec-sheet ceiling (seconds), null for an unknown mount.</summary>
         [JsonProperty]
@@ -113,7 +113,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Telescope {
             var (prior, priorSource) = await executor.ResolvePriorWithSourceAsync(PriorSeconds, token);
             var ladder = UnguidedExposureLadder.Build(Rungs, MaxExposure, prior);
             var request = new TrackingProbeRequest(ladder, MaxExposure, prior, ItemUtility.ResolveTargetName(Parent), priorSource,
-                EccentricityTolerance > 0 ? EccentricityTolerance : 0.5);
+                EccentricityTolerance > 0 ? EccentricityTolerance : UnguidedExposureLadder.DefaultEccentricityTolerance);
             var result = await executor.ProbeAsync(request, progress, token);
             var ceiling = result.CeilingSeconds ?? prior;
             CeilingSeconds = result.CeilingSeconds;
