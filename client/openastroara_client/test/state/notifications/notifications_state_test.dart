@@ -200,6 +200,27 @@ void main() {
     expect(parsed.postedUtc.isUtc, isFalse, reason: 'shown in local time');
   });
 
+  test('#1138 the related entity survives the wire and a markRead copy', () {
+    final parsed = AraNotification.fromJson(const {
+      'id': 'x',
+      'posted_utc': '2026-10-13T03:30:00Z',
+      'severity': 'warning',
+      'category': 'safety',
+      'title': 'Unattended shutdown executed',
+      'message': 'put to bed',
+      'read': false,
+      'dismissed': false,
+      'related_entity_type': 'sequence',
+      'related_entity_id': 'seq-1',
+    });
+    expect(parsed.relatedEntityType, 'sequence');
+    expect(parsed.relatedEntityId, 'seq-1');
+    final read = parsed.copyWith(read: true);
+    expect(read.relatedEntityType, 'sequence');
+    expect(read.relatedEntityId, 'seq-1');
+    expect(AraNotification.fromJson(const {'id': 'y'}).relatedEntityId, isNull);
+  });
+
   test('an unknown severity from a newer server degrades to info', () {
     final parsed = AraNotification.fromJson(const {
       'id': 'x',

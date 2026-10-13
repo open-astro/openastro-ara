@@ -111,6 +111,34 @@ void main() {
       expect(s.headline, contains('waiting for you'));
     });
 
+    test('the daemon\'s wire record for the shutdown anchors a parked run end to end', () {
+      final run = SequenceRunStateInfo(
+        sequenceId: 'seq-1',
+        runId: 'r4',
+        state: SequenceRunState.pausedAwaitingUser,
+        startedUtc: start,
+      );
+      final wire = AraNotification.fromJson(const {
+        'id': 'n',
+        'posted_utc': '2026-10-13T03:30:00Z',
+        'severity': 'warning',
+        'category': 'safety',
+        'title': 'Unattended shutdown executed',
+        'message': 'put to bed',
+        'read': false,
+        'dismissed': false,
+        'related_entity_type': 'sequence',
+        'related_entity_id': 'seq-1',
+      });
+      final s = buildSessionSummary(
+        sequence: seq,
+        run: run,
+        notifications: [wire],
+      )!;
+      expect(s.endedUtc!.toUtc(), DateTime.utc(2026, 10, 13, 3, 30));
+      expect(s.incidents.single.title, 'Unattended shutdown executed');
+    });
+
     test('a parked run with no daemon record keeps only notifications tied to it, and no time', () {
       final run = SequenceRunStateInfo(
         sequenceId: 'seq-1',
