@@ -15,6 +15,9 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using NUnit.Framework;
+using System.Linq;
+using System.Threading;
+using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Server;
 using OpenAstroAra.Server.Services;
@@ -66,6 +69,37 @@ namespace OpenAstroAra.Test {
             previousExchangeDir = Environment.GetEnvironmentVariable(StorageDeviceService.ExchangeDirEnvVar);
             Environment.SetEnvironmentVariable(StorageDeviceService.ExchangeDirEnvVar, exchangeDir);
             app = Program.BuildApp([]);
+        }
+
+        [Test]
+        public async Task A_device_layer_toast_lands_in_the_notification_inbox() {
+            // #1174 — the boot wiring under test: BuildApp installs the Notifier → inbox bridge, so a
+            // static Notifier.ShowWarning from the ported device code becomes a §46 Equipment/Warning
+            // entry. Delete the Notifier.Use(...) line in Program.cs and this is the test that fails.
+            Assert.That(OpenAstroAra.Core.Utility.Notification.Notifier.Current, Is.TypeOf<NotifierInboxBridge>(),
+                "BuildApp must install the inbox bridge as the Notifier sink");
+            var message = $"composition smoke toast {Guid.NewGuid():N}";
+            OpenAstroAra.Core.Utility.Notification.Notifier.ShowWarning(message);
+
+            var inbox = app.Services.GetRequiredService<INotificationService>();
+            NotificationDto? posted = null;
+            var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(10);
+            while (posted is null && DateTime.UtcNow < deadline) {
+                var page = await inbox.ListAsync(50, null, null, CancellationToken.None);
+                // §58.10 may append "(severity raised — unattended hours)" to the text at night.
+                posted = page.Items.FirstOrDefault(n => n.Message.StartsWith(message, StringComparison.Ordinal));
+                if (posted is null) {
+                    await Task.Delay(50);
+                }
+            }
+            if (posted is null) {
+                var page = await inbox.ListAsync(50, null, null, CancellationToken.None);
+                await TestContext.Out.WriteLineAsync("inbox holds: " + string.Join(" | ", page.Items.Select(n => $"{n.Severity}/{n.Category}: {n.Message}")));
+            }
+            Assert.That(posted, Is.Not.Null, "the toast never reached the inbox");
+            // A Warning, or Error when §58.10 raised it for unattended hours (the site is in darkness).
+            Assert.That(posted!.Severity, Is.EqualTo(NotificationSeverity.Warning).Or.EqualTo(NotificationSeverity.Error));
+            Assert.That(posted.Category, Is.EqualTo(NotificationCategory.Equipment));
         }
 
         [Test]

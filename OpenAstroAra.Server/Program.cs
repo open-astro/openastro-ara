@@ -1120,12 +1120,15 @@ public partial class Program {
         var app = builder.Build();
 
         // #1174 — the ported device layers' Notifier toasts land in the §46 inbox from here on.
-        Notifier.Use(new NotifierInboxBridge(
+        var inboxBridge = new NotifierInboxBridge(
             app.Services.GetRequiredService<INotificationService>(),
-            app.Services.GetRequiredService<Microsoft.Extensions.Logging.ILogger<NotifierInboxBridge>>()));
+            app.Services.GetRequiredService<Microsoft.Extensions.Logging.ILogger<NotifierInboxBridge>>());
+        Notifier.Use(inboxBridge);
         // The sink is process-global: detach it when this host stops so a toast raised during
-        // shutdown (or, in the test process, by a later fixture) never targets a disposed root.
-        app.Lifetime.ApplicationStopping.Register(() => Notifier.Use(null));
+        // shutdown (or, in the test process, by a later fixture) never targets a disposed root —
+        // but only if it is still OURS (a second host built in the same process may have
+        // installed its own since; r2 note).
+        app.Lifetime.ApplicationStopping.Register(() => Notifier.Detach(inboxBridge));
 
         app.UseCors();
 

@@ -44,6 +44,13 @@ namespace OpenAstroAra.Core.Utility.Notification {
         /// at boot; tests set and clear their own.</summary>
         public static void Use(INotifierSink? sink) => Volatile.Write(ref _sink, sink);
 
+        /// <summary>Remove <paramref name="sink"/> only if it is the installed one — a host that
+        /// stops must not clear a sink a later host installed.</summary>
+        public static void Detach(INotifierSink sink) => Interlocked.CompareExchange(ref _sink, null, sink);
+
+        /// <summary>The installed sink (for tests).</summary>
+        public static INotifierSink? Current => Volatile.Read(ref _sink);
+
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
             Justification = "A sink that throws must never turn a logged warning into an exception at the device call site; the log line already carries the message.")]
         private static void Forward(bool isError, string? header, string message) {
