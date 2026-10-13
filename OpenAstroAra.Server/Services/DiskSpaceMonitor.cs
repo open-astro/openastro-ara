@@ -389,16 +389,16 @@ namespace OpenAstroAra.Server.Services {
                     ct);
             }
 
-            // The abort itself is surfaced unconditionally (the user explicitly opted into halting), not gated
-            // on the OnDiskSpaceLow toggle.
-            if (abortedRuns > 0) {
+            // The abort/pause itself is surfaced unconditionally (the user explicitly opted into halting), not
+            // gated on the OnDiskSpaceLow toggle.
+            if (haltedRuns > 0) {
                 await _notifications.CreateAsync(
                     new NotificationDto(
                         Id: Guid.NewGuid(),
                         PostedUtc: now,
                         Severity: NotificationSeverity.Critical,
                         Category: NotificationCategory.Storage,
-                        Title: "Sequence halted — disk critically low",
+                        Title: abortedRuns > 0 ? "Sequence halted — disk critically low" : "Sequence paused — disk critically low",
                         Message: $"{(abortedRuns > 0 ? "Aborted" : "Paused")} {haltedRuns} running sequence(s): {freeGb:F1} GB free on {saveDir} (your OnDiskSpaceCritical policy is set to {(abortedRuns > 0 ? "abort" : "pause")}).",
                         Read: false,
                         Dismissed: false,

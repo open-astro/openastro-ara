@@ -9734,10 +9734,6 @@ Catalog is implementation source-of-truth in code; table here is the human-reada
 | `meridian_flip.failed` | `MeridianFlipFailedPayload` | §58 | C | v1 |
 | **Calibration + dark library** | | | | |
 | `calibration.flats_generated` | `CalibrationFlatsGeneratedPayload` | §39 | I | v1 |
-| `calibration.dark_library.build_started` | `DarkLibraryBuildPayload` | §39, §63 | I | v1 |
-| `calibration.dark_library.frame_complete` | `DarkLibraryFramePayload` | §39 | D | v1 |
-| `calibration.dark_library.build_complete` | `DarkLibraryBuildPayload` | §39 | I | v1 |
-| `calibration.dark_library.build_failed` | `DarkLibraryBuildPayload` | §39 | W | v1 |
 | **Mosaic** | | | | |
 | `mosaic.created` | `MosaicCreatedPayload` | §47 | I | v1 |
 | `mosaic.panel_complete` | `MosaicPanelPayload` | §47 | I | v1 |
