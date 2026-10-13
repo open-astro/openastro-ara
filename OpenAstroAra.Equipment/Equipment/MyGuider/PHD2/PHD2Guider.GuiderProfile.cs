@@ -356,6 +356,15 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             }
             var selected = SelectedProfile?.Id == old.Id;
             if (selected) {
+                // Renaming the selected twin needs the equipment released, and releasing it stops
+                // capture — which would kill a guided run from a Settings rename (#1156 r1). While
+                // the guider is doing anything but sitting idle, leave the twin alone; the rename
+                // is reported as skipped and the operator can redo it once guiding has stopped.
+                var state = await GetAppState(EquipmentRpcTimeoutMs).ConfigureAwait(false);
+                if (!IsIdleAppState(state)) {
+                    Logger.Info($"PHD2 #1156 - rename of the selected guider profile '{oldName}' skipped: the guider is {state ?? "in an unknown state"}; rename again once it is stopped.");
+                    return false;
+                }
                 await DisconnectPHD2Equipment(ct).ConfigureAwait(false);
             }
             try {
@@ -376,6 +385,12 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                 await GetProfiles().ConfigureAwait(false);
             }
         }
+
+        /// <summary>Only a Stopped (or unreported) guider may lose its equipment for a rename:
+        /// Looping, Selected, Calibrating, Guiding, LostLock and Paused all have a capture or a
+        /// run behind them.</summary>
+        public static bool IsIdleAppState(string? state) =>
+            state is null || string.Equals(state, PhdAppState.STOPPED, StringComparison.Ordinal);
 
         /// <summary>PHD2 profile names are exact identifiers; the daemon's own uniqueness check is
         /// case-insensitive, so a name that differs only by case is "taken" too.</summary>

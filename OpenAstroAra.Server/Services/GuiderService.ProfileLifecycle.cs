@@ -97,7 +97,7 @@ public sealed partial class GuiderService {
     public async Task<bool> TryCloneAraGuiderProfileAsync(string? sourceAraProfileName, string? newAraProfileName, CancellationToken ct) {
         var source = PHD2Guider.AraGuiderDisplayProfileName(sourceAraProfileName);
         var target = PHD2Guider.AraGuiderDisplayProfileName(newAraProfileName);
-        if (string.Equals(source, target, StringComparison.Ordinal)) {
+        if (SameTwin(source, target)) {
             return false; // same display name → same twin already
         }
         var guider = ConnectedGuiderOrNull();
@@ -127,8 +127,8 @@ public sealed partial class GuiderService {
         var oldName = PHD2Guider.AraGuiderDisplayProfileName(oldAraProfileName);
         var legacyName = PHD2Guider.AraGuiderProfileName(oldAraProfileName, araProfileId);
         var newName = PHD2Guider.AraGuiderDisplayProfileName(newAraProfileName);
-        if (string.Equals(oldName, newName, StringComparison.Ordinal)) {
-            return false;
+        if (SameTwin(oldName, newName)) {
+            return false; // a case-only change maps to the same twin (the daemon's names are case-insensitive)
         }
         var guider = ConnectedGuiderOrNull();
         if (guider is null) {
@@ -146,6 +146,10 @@ public sealed partial class GuiderService {
         }
         return false;
     }
+
+    /// <summary>Two ARA display names map to one twin when they differ only by case: the daemon's
+    /// profile-name uniqueness and <c>ResolveAraProfileSelection</c> are both case-insensitive.</summary>
+    internal static bool SameTwin(string a, string b) => string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
 
     private PHD2Guider? ConnectedGuiderOrNull() {
         lock (_gate) {

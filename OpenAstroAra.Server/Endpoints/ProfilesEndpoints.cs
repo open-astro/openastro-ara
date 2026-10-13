@@ -75,7 +75,9 @@ public static partial class ProfilesEndpoints {
                 // twin must stay put for the survivor). Read-only; the repository owns atomicity.
                 var before = repo.List().Profiles;
                 var oldName = before.FirstOrDefault(p => p.Id == id)?.Name;
-                var shared = oldName is not null && before.Count(p => string.Equals(p.Name, oldName, StringComparison.Ordinal)) > 1;
+                // Case-insensitive + trimmed, the way the twin names are matched (AraGuiderDisplayProfileName
+                // trims; the daemon's name check ignores case).
+                var shared = oldName is not null && before.Count(p => string.Equals(p.Name?.Trim(), oldName.Trim(), StringComparison.OrdinalIgnoreCase)) > 1;
                 if (!repo.Rename(id, body.Name)) {
                     return Results.NotFound();
                 }
