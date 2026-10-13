@@ -1123,6 +1123,9 @@ public partial class Program {
         Notifier.Use(new NotifierInboxBridge(
             app.Services.GetRequiredService<INotificationService>(),
             app.Services.GetRequiredService<Microsoft.Extensions.Logging.ILogger<NotifierInboxBridge>>()));
+        // The sink is process-global: detach it when this host stops so a toast raised during
+        // shutdown (or, in the test process, by a later fixture) never targets a disposed root.
+        app.Lifetime.ApplicationStopping.Register(() => Notifier.Use(null));
 
         app.UseCors();
 

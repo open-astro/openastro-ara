@@ -79,6 +79,8 @@ namespace OpenAstroAra.Test {
 
         [OneTimeTearDown]
         public async Task TearDownTheDaemon() {
+            // BuildApp installed the process-global Notifier → inbox sink pointing at this root (#1174).
+            OpenAstroAra.Core.Utility.Notification.Notifier.Use(null);
             await app.DisposeAsync();
             // BuildApp installs the §29.9 rolling file sink under the profile dir as Main does;
             // release the file so the directory can go (Main's finally does the same after Run).
