@@ -493,17 +493,17 @@ class _CompactToolButton extends StatelessWidget {
   }
 }
 
-/// Start the selected sequence, with the soft pre-flight gate (§25 flow
-/// redesign): when polar alignment hasn't reached the green zone this
-/// session, confirm before starting — the gate SUGGESTS, it never blocks
-/// (planning-only rigs, permanent piers and daytime tests all run fine
-/// unaligned). "Go to Setup" jumps to the checklist instead. Public: the
 /// What the public lifecycle helpers need from Riverpod: `read` only. A
 /// [WidgetRef] dies with its widget — the ⌘K palette pops itself before it
 /// dispatches, so it hands over the root container's `read` (#1154 r1); the
 /// toolbar and the tab pass `ref.read`.
 typedef ProviderReader = T Function<T>(ProviderListenable<T> provider);
 
+/// Start the selected sequence, with the soft pre-flight gate (§25 flow
+/// redesign): when polar alignment hasn't reached the green zone this
+/// session, confirm before starting — the gate SUGGESTS, it never blocks
+/// (planning-only rigs, permanent piers and daytime tests all run fine
+/// unaligned). "Go to Setup" jumps to the checklist instead. Public: the
 /// tab's keyboard shortcuts drive the same path as the Run button.
 Future<void> preflightAndRunSequence(BuildContext context, ProviderReader read) async {
   final aligned =

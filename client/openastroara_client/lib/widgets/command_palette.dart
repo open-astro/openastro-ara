@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -141,6 +143,28 @@ class _CommandPaletteDialogState extends ConsumerState<_CommandPaletteDialog> {
     return armed;
   }
 
+  /// The run state is autoDispose and only the Run tab keeps it alive; when
+  /// that tab was never built a bare read sees loading. Hold a listen and
+  /// wait for the value before branching (r2 note). A failed load branches on
+  /// null, which the helpers treat as "not running".
+  static Future<void> _withRunState(
+      ProviderContainer ref, Future<void> Function(SequenceRunState? state) then) async {
+    final sub = ref.listen(sequenceRunStateProvider, (_, _) {});
+    try {
+      SequenceRunState? state;
+      try {
+        state = (await ref.read(sequenceRunStateProvider.future))?.state;
+      } catch (_) {
+        state = null;
+      }
+      // The helpers refresh the run state after the command, so the listen
+      // must outlive them too.
+      await then(state);
+    } finally {
+      sub.close();
+    }
+  }
+
   // The id → launcher switch for the palette's action hits. Mirrors the
   // top-bar buttons in app_shell.dart — same routes, same dialog. The run
   // actions (#1154) go through the Run tab's own helpers, so ⌘K and the key
@@ -150,29 +174,31 @@ class _CommandPaletteDialogState extends ConsumerState<_CommandPaletteDialog> {
       case 'action.run.start':
         ref.read(selectedTabIndexProvider.notifier).select(kRunTabIndex);
         if (!_runArmed(rootContext, ref)) return;
-        final state = ref.read(sequenceRunStateProvider).value?.state;
-        if (state?.isAnyPaused ?? false) {
-          promptAndResumeSequence(rootContext, ref.read);
-        } else if (state?.isActive ?? false) {
-          ScaffoldMessenger.maybeOf(rootContext)?.showSnackBar(
-            const SnackBar(content: Text('The sequence is already running — Space pauses it.')),
-          );
-        } else {
-          preflightAndRunSequence(rootContext, ref.read);
-        }
+        unawaited(_withRunState(ref, (state) async {
+          if (state?.isAnyPaused ?? false) {
+            await promptAndResumeSequence(rootContext, ref.read);
+          } else if (state?.isActive ?? false) {
+            ScaffoldMessenger.maybeOf(rootContext)?.showSnackBar(
+              const SnackBar(content: Text('The sequence is already running — Space pauses it.')),
+            );
+          } else {
+            await preflightAndRunSequence(rootContext, ref.read);
+          }
+        }));
       case 'action.run.pause':
         ref.read(selectedTabIndexProvider.notifier).select(kRunTabIndex);
         if (!_runArmed(rootContext, ref)) return;
-        final state = ref.read(sequenceRunStateProvider).value?.state;
-        if (state == SequenceRunState.running) {
-          runSequenceLifecycle(rootContext, ref.read, (api, id) => api.pause(id));
-        } else if (state?.isAnyPaused ?? false) {
-          promptAndResumeSequence(rootContext, ref.read);
-        } else {
-          ScaffoldMessenger.maybeOf(rootContext)?.showSnackBar(
-            const SnackBar(content: Text('No sequence is running — ⌘R starts the selected one.')),
-          );
-        }
+        unawaited(_withRunState(ref, (state) async {
+          if (state == SequenceRunState.running) {
+            await runSequenceLifecycle(rootContext, ref.read, (api, id) => api.pause(id));
+          } else if (state?.isAnyPaused ?? false) {
+            await promptAndResumeSequence(rootContext, ref.read);
+          } else {
+            ScaffoldMessenger.maybeOf(rootContext)?.showSnackBar(
+              const SnackBar(content: Text('No sequence is running — ⌘R starts the selected one.')),
+            );
+          }
+        }));
       case 'action.plan.tonight':
         ref.read(selectedTabIndexProvider.notifier).select(kPlanningTabIndex);
         showDialog<void>(

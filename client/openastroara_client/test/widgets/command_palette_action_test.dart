@@ -50,7 +50,7 @@ class _SeededRunState extends SequenceRunStateNotifier {
 
 /// Opens the palette over a rig with `seq-1` selected and the run in [state].
 Future<(ProviderContainer, _FakeLifecycleClient)> _pumpRunPalette(WidgetTester tester, SequenceRunState? state,
-    {String? selected = 'seq-1'}) async {
+    {String? selected = 'seq-1', bool runTabAlive = true}) async {
   final client = _FakeLifecycleClient();
   final container = ProviderContainer(overrides: [
     savedServerServiceProvider.overrideWithValue(_FakeSavedServerService()),
@@ -59,9 +59,12 @@ Future<(ProviderContainer, _FakeLifecycleClient)> _pumpRunPalette(WidgetTester t
   ]);
   addTearDown(container.dispose);
   if (selected != null) container.read(selectedSequenceIdProvider.notifier).select(selected);
-  // Keep the autoDispose run state alive, as the Run tab's watch does.
-  container.listen(sequenceRunStateProvider, (_, _) {});
-  await container.read(sequenceRunStateProvider.future);
+  // Keep the autoDispose run state alive, as the Run tab's watch does — or
+  // not, for the case where that tab was never built.
+  if (runTabAlive) {
+    container.listen(sequenceRunStateProvider, (_, _) {});
+    await container.read(sequenceRunStateProvider.future);
+  }
   await tester.pumpWidget(UncontrolledProviderScope(
     container: container,
     child: MaterialApp(
@@ -211,6 +214,16 @@ void main() {
     testWidgets('Run while paused offers the resume choice and resumes with it', (tester) async {
       final (_, client) = await _pumpRunPalette(tester, SequenceRunState.paused);
       await _pick(tester, 'run or resume', 'Run or resume the sequence (⌘R)');
+      await tester.tap(find.text('Just resume'));
+      await tester.pumpAndSettle();
+      expect(client.calls, ['resume seq-1 recenter=false refocus=false']);
+    });
+
+    testWidgets('a paused run is still seen when the Run tab was never built (run state not yet loaded)',
+        (tester) async {
+      final (_, client) = await _pumpRunPalette(tester, SequenceRunState.paused, runTabAlive: false);
+      await _pick(tester, 'pause', 'Pause or resume the sequence (Space)');
+      expect(find.text('Resume imaging?'), findsOneWidget, reason: 'the palette waited for the run state');
       await tester.tap(find.text('Just resume'));
       await tester.pumpAndSettle();
       expect(client.calls, ['resume seq-1 recenter=false refocus=false']);
