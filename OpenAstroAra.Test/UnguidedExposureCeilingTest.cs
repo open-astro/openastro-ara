@@ -95,6 +95,7 @@ namespace OpenAstroAra.Test {
 
         private static readonly double[] MessyRungs = { 120.0, 5, 5, -1, 60 };
         private static readonly double[] OnlyEight = { 8.0 };
+        private static readonly double[] OnlyFive = { 5.0 };
 
         [Test]
         public void The_ladder_is_capped_at_the_planned_exposure_and_twice_the_prior() {
@@ -107,6 +108,8 @@ namespace OpenAstroAra.Test {
             Assert.That(UnguidedExposureLadder.Build(null, 300, 5), Is.EqualTo(new[] { 5.0, 10 }), "a floored 5 s prior still gets two rungs: the prior, then twice it");
             Assert.That(UnguidedExposureLadder.Build(null, 300, 4), Is.EqualTo(new[] { 4.0, 8 }), "below the first default rung: [prior, 2 × prior]");
             Assert.That(UnguidedExposureLadder.Build(null, 300, 7), Is.EqualTo(new[] { 10.0, 14 }), "two rungs already fit under 2 × 7 s: the prior is not inserted");
+            Assert.That(UnguidedExposureLadder.Build(null, 8, 5), Is.EqualTo(new[] { 5.0, 8 }), "a plan shorter than every rung with a prior below it: [prior, plan]");
+            Assert.That(UnguidedExposureLadder.Build(OnlyFive, 300, 3), Is.EqualTo(new[] { 5.0, 6 }), "custom single rung with a lower prior: 2 × 3 s is the final rung, two rungs already — nothing inserted");
             Assert.That(UnguidedExposureLadder.Build(MessyRungs, 0, null), Is.EqualTo(new[] { 5.0, 60, 120 }), "sorted, distinct, positive");
         }
 

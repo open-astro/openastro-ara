@@ -33,7 +33,11 @@ namespace OpenAstroAra.Sequencer.Utility {
         /// ≤ 0) and at twice the spec-sheet prior <paramref name="priorSeconds"/> (ignored when null or
         /// ≤ 0). The lowest rung always survives the caps — a probe needs a first measurement — but
         /// never exceeds the planned exposure itself when that is shorter than every rung (then the
-        /// planned exposure IS the only rung: there is nothing shorter worth measuring against). A
+        /// planned exposure is the only rung, unless a positive prior below it is inserted ahead of it,
+        /// see below). When the caps leave a single rung and a positive prior sits below it, the prior
+        /// becomes the first rung ([prior, cap]): a 5 s floor would otherwise give [10], make every
+        /// probe inconclusive and hand the run the prior even when that one frame was clean. The guard
+        /// shares this ladder, so it may then step down to the prior itself. A
         /// cap ABOVE the ladder's top — the planned exposure, or 2 × the prior when that is lower —
         /// becomes the final rung (review of #1318): a mount that holds the top rung cleanly must get
         /// the chance to pass the planned 300 s, not have its plan cut to 120 s with nothing to step
