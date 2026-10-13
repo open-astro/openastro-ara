@@ -266,7 +266,7 @@ class _OptimalSubCalculatorDialogState
                 'Peak altitude (°)',
                 () => _in.peakAltitudeDeg,
                 (v) => _set(_in.copyWith(peakAltitudeDeg: v)),
-                digits: 0,
+                digits: 1,
               ),
               const SizedBox(height: 8),
               Text(

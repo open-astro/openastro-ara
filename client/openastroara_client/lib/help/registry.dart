@@ -2254,7 +2254,7 @@ const Map<String, Help> helpRegistry = {
         'where the sky alone fills the well. Add a target\'s surface brightness and the Integration Budget tiers '
         'appear with their inputs.\n\n'
         'It opens seeded from your profile and your rig\'s fitted sky-model k for the first filter\'s kind; '
-        'picking another kind swaps in its default passband and k. Nothing here writes back to the profile.',
+        'picking another kind swaps in your profile\'s passband for that kind (else its default) and its k. Nothing here writes back to the profile.',
     relatedHelpKeys: ['img.defaults.noise_tolerance_pct', 'img.defaults.sky_model_calibration'],
   ),
   'img.defaults.sky_model_calibration': Help(
