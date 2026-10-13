@@ -190,6 +190,10 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
             return OpenAstroAra.Core.Utility.CoreUtil.Wait(GetEstimatedDuration(), true, progress, "", token);
         }
 
+        /// <summary>The estimate below is target minus now: it already shrinks while running, so the
+        /// ETA must not subtract the elapsed time a second time (#1155).</summary>
+        public bool EstimateIsRemaining => true;
+
         public override TimeSpan GetEstimatedDuration() {
             var now = DateTime.Now;
             var then = new DateTime(now.Year, now.Month, now.Day, Hours, Minutes, Seconds);

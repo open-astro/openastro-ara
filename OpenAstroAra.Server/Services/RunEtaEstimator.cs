@@ -134,6 +134,10 @@ public static class RunEtaEstimator {
     // keeps the full cost (it is the plan, not the clock).
     private static double RemainingLeafCost(ISequenceItem leaf) {
         var cost = LeafCost(leaf);
+        // An estimate that is already "left from now" (WaitForTime) must not be credited again.
+        if (leaf is IEstimatesOwnDuration { EstimateIsRemaining: true }) {
+            return cost;
+        }
         if (leaf.Status == SequenceEntityStatus.RUNNING && leaf is IRunningSince { RunningSinceUtc: { } since }) {
             var elapsed = (UtcNow() - since).TotalSeconds;
             if (elapsed > 0) {

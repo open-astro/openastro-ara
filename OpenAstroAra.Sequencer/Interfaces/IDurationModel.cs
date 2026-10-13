@@ -28,6 +28,12 @@ namespace OpenAstroAra.Sequencer.SequenceItem {
         /// <summary>Always true: the member exists so the contract is more than a marker (CA1040) and a
         /// consumer can read the declaration off any item through the interface.</summary>
         bool EstimatesOwnDuration => true;
+
+        /// <summary>True when the estimate is already "time left from now" (a WaitForTime reports
+        /// target minus now), so the run ETA must NOT also subtract the elapsed running time —
+        /// doing both counted the elapsed part twice. False (the default) for a fixed-length
+        /// instruction such as an exposure.</summary>
+        bool EstimateIsRemaining => false;
     }
 
     /// <summary>

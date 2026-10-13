@@ -24,6 +24,7 @@ using OpenAstroAra.Equipment.Equipment.MyCamera;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Server.Services;
 using System;
+using System.Linq;
 
 namespace OpenAstroAra.Test {
 
@@ -31,6 +32,7 @@ namespace OpenAstroAra.Test {
     // walk the client used to do from the stored body (15 s nominal + exposure × iterations) and
     // the remaining-credit rules it never had.
     [TestFixture]
+    [NonParallelizable] // RunEtaEstimator.UtcNow is a process-wide test clock
     public class RunEtaEstimatorTest {
 
         private static ISequenceItem Leaf(double seconds, SequenceEntityStatus status = SequenceEntityStatus.CREATED) {
@@ -41,13 +43,46 @@ namespace OpenAstroAra.Test {
         }
 
         // #1155 — a leaf that DECLARES its duration model (zero means zero), optionally running since a moment.
-        private static ISequenceItem ModelledLeaf(double seconds, SequenceEntityStatus status = SequenceEntityStatus.CREATED, DateTimeOffset? runningSince = null) {
+        private static ISequenceItem ModelledLeaf(double seconds, SequenceEntityStatus status = SequenceEntityStatus.CREATED, DateTimeOffset? runningSince = null, bool estimateIsRemaining = false) {
             var m = new Mock<ISequenceItem>();
             m.SetupProperty(i => i.Status, status);
             m.Setup(i => i.GetEstimatedDuration()).Returns(TimeSpan.FromSeconds(seconds));
-            m.As<IEstimatesOwnDuration>();
+            m.As<IEstimatesOwnDuration>().SetupGet(d => d.EstimateIsRemaining).Returns(estimateIsRemaining);
             m.As<IRunningSince>().SetupGet(r => r.RunningSinceUtc).Returns(runningSince);
             return m.Object;
+        }
+
+        [Test]
+        public void An_estimate_that_is_already_time_left_is_not_credited_a_second_time() {
+            // A "wait until 22:00" started at 21:00 reports 1800 s at 21:30; subtracting the 1800 s
+            // elapsed as well read 0 with half an hour still to wait.
+            var now = new DateTimeOffset(2026, 10, 13, 21, 30, 0, TimeSpan.Zero);
+            RunEtaEstimator.UtcNow = () => now;
+            try {
+                var root = new SequentialContainer();
+                root.Add(ModelledLeaf(1800, SequenceEntityStatus.RUNNING, runningSince: now.AddMinutes(-30), estimateIsRemaining: true));
+                root.Status = SequenceEntityStatus.RUNNING;
+                Assert.That(RunEtaEstimator.EstimateRemainingSeconds(root), Is.EqualTo(1800));
+            } finally {
+                RunEtaEstimator.UtcNow = () => DateTimeOffset.UtcNow;
+            }
+            var wait = new WaitForTime(new System.Collections.Generic.List<OpenAstroAra.Sequencer.Utility.DateTimeProvider.IDateTimeProvider>());
+            Assert.That(((IEstimatesOwnDuration)wait).EstimateIsRemaining, Is.True, "the real WaitForTime opts out of the credit");
+            Assert.That(((IEstimatesOwnDuration)new WaitForTimeSpan()).EstimateIsRemaining, Is.False, "a fixed-length wait is credited");
+        }
+
+        [Test]
+        public void Every_instruction_that_overrides_the_estimate_declares_the_contract() {
+            // #1155 — the point of the contract over the hand list: a type that models its duration but
+            // forgets the interface would silently cost the nominal again. Reflection keeps them honest.
+            var sequenceItem = typeof(OpenAstroAra.Sequencer.SequenceItem.SequenceItem);
+            var overriding = sequenceItem.Assembly.GetTypes()
+                .Where(t => !t.IsAbstract && sequenceItem.IsAssignableFrom(t)
+                    && t.GetMethod("GetEstimatedDuration", Type.EmptyTypes) is { } m && m.DeclaringType == t)
+                .ToList();
+            Assert.That(overriding, Is.Not.Empty);
+            Assert.That(overriding.Where(t => !typeof(IEstimatesOwnDuration).IsAssignableFrom(t)).Select(t => t.Name), Is.Empty,
+                "every instruction with its own duration model must implement IEstimatesOwnDuration");
         }
 
         [Test]
@@ -93,7 +128,10 @@ namespace OpenAstroAra.Test {
             var item = new WaitForTimeSpan();
             Assert.That(item.RunningSinceUtc, Is.Null);
             item.Status = SequenceEntityStatus.RUNNING;
-            Assert.That(item.RunningSinceUtc, Is.Not.Null.And.GreaterThan(DateTimeOffset.UtcNow.AddMinutes(-1)));
+            var first = item.RunningSinceUtc;
+            Assert.That(first, Is.Not.Null.And.GreaterThan(DateTimeOffset.UtcNow.AddMinutes(-1)));
+            item.Status = SequenceEntityStatus.RUNNING; // re-assigned (a future pause/resume): the stamp survives
+            Assert.That(item.RunningSinceUtc, Is.EqualTo(first));
             item.Status = SequenceEntityStatus.FINISHED;
             Assert.That(item.RunningSinceUtc, Is.Null, "cleared on every other transition");
         }
