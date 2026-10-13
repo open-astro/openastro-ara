@@ -43,10 +43,10 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Accord" Version="3.8.2-alpha" />
-    <PackageReference Include="Accord.Math" Version="3.8.2-alpha" />
-    <PackageReference Include="Accord.Statistics" Version="3.8.2-alpha" />
-    <PackageReference Include="System.Drawing.Common" Version="10.0.12" />
+    <PackageReference Include="Accord" />
+    <PackageReference Include="Accord.Math" />
+    <PackageReference Include="Accord.Statistics" />
+    <PackageReference Include="System.Drawing.Common" />
   </ItemGroup>
 
 

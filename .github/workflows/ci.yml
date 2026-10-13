@@ -351,7 +351,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
         with:
           path: ~/.nuget/packages
-          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', 'Directory.Build.props', 'global.json') }}
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', 'Directory.Build.props', 'Directory.Packages.props', 'global.json') }}
           restore-keys: |
             ${{ runner.os }}-nuget-
 
@@ -437,7 +437,7 @@ jobs:
         with:
           path: ~/.nuget/packages
           # global.json pins the SDK; include it so an SDK bump busts the cache.
-          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', 'Directory.Build.props', 'global.json') }}
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', 'Directory.Build.props', 'Directory.Packages.props', 'global.json') }}
           restore-keys: |
             ${{ runner.os }}-nuget-
 
@@ -503,7 +503,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
         with:
           path: ~/.nuget/packages
-          key: ${{ runner.os }}-arm64-nuget-${{ hashFiles('**/*.csproj', 'Directory.Build.props', 'global.json') }}
+          key: ${{ runner.os }}-arm64-nuget-${{ hashFiles('**/*.csproj', 'Directory.Build.props', 'Directory.Packages.props', 'global.json') }}
           restore-keys: |
             ${{ runner.os }}-arm64-nuget-
 
@@ -552,7 +552,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
         with:
           path: ~/.nuget/packages
-          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', 'Directory.Build.props', 'global.json') }}
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', 'Directory.Build.props', 'Directory.Packages.props', 'global.json') }}
           restore-keys: |
             ${{ runner.os }}-nuget-
 

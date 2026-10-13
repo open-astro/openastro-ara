@@ -30,25 +30,17 @@
     </Compile>
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="Accord.Math" Version="3.8.2-alpha" />
-    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+    <PackageReference Include="Accord.Math" />
+    <PackageReference Include="CommunityToolkit.Mvvm" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="Newtonsoft.Json">
-      <Version>13.0.4</Version>
-    </PackageReference>
-    <PackageReference Include="OxyPlot.Core">
-      <Version>2.2.0</Version>
-    </PackageReference>
-    <PackageReference Include="Serilog.Sinks.Console">
-      <Version>6.1.1</Version>
-    </PackageReference>
-    <PackageReference Include="Serilog.Sinks.File">
-      <Version>7.0.0</Version>
-    </PackageReference>
-    <PackageReference Include="System.ComponentModel.Composition" Version="10.0.12" />
-    <PackageReference Include="System.Data.SqlClient" Version="4.9.1" />
-    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.12" />
+    <PackageReference Include="Newtonsoft.Json" />
+    <PackageReference Include="OxyPlot.Core" />
+    <PackageReference Include="Serilog.Sinks.Console" />
+    <PackageReference Include="Serilog.Sinks.File" />
+    <PackageReference Include="System.ComponentModel.Composition" />
+    <PackageReference Include="System.Data.SqlClient" />
+    <PackageReference Include="Microsoft.Data.Sqlite" />
     <!-- CVE-2025-6965 (GHSA-2m69-gcr7-jv3q): Microsoft.Data.Sqlite 10.0.x pulls the
          transitive native lib SQLitePCLRaw.lib.e_sqlite3 2.1.11, which bundles
          SQLite < 3.50.2. Pin the patched lib (3.53.3 bundles SQLite ≥ 3.50.2 (the CVE floor)); the
@@ -56,9 +48,9 @@
          provider, so this swaps in fixed SQLite without changing the managed
          layer. Propagates to transitive consumers via highest-version resolution.
          Remove once Microsoft.Data.Sqlite ships a build on the patched lib. -->
-    <PackageReference Include="SQLitePCLRaw.lib.e_sqlite3" Version="3.53.3" />
-    <PackageReference Include="System.IO.Ports" Version="10.0.12" />
-    <PackageReference Include="System.Runtime.Caching" Version="10.0.12" />
+    <PackageReference Include="SQLitePCLRaw.lib.e_sqlite3" />
+    <PackageReference Include="System.IO.Ports" />
+    <PackageReference Include="System.Runtime.Caching" />
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Remove="Locale\Locale.ar-SA.resx" />

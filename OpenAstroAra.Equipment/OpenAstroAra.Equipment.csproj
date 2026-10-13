@@ -46,19 +46,19 @@
     <Service Include="{508349B6-6B84-4DF5-91F0-309BEEBAD82D}" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="ASCOM.Alpaca.Components" Version="4.0.0" />
-    <PackageReference Include="ASCOM.Alpaca.Device" Version="4.0.0" />
-    <PackageReference Include="Castle.Core" Version="5.2.1" />
-    <PackageReference Include="Castle.Core.AsyncInterceptor" Version="2.1.0" />
-    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3">
+    <PackageReference Include="ASCOM.Alpaca.Components" />
+    <PackageReference Include="ASCOM.Alpaca.Device" />
+    <PackageReference Include="Castle.Core" />
+    <PackageReference Include="Castle.Core.AsyncInterceptor" />
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
-    <PackageReference Include="NJsonSchema" Version="11.6.1" />
+    <PackageReference Include="NJsonSchema" />
     <!-- Pinned to 2.x: 3.0.0 drops SerialPortDevice from the modern-TFM assemblies
          (net6.0+/netstandard2.0), which NMEAGps.cs depends on for serial GPS. -->
-    <PackageReference Include="SharpGIS.NmeaParser" Version="[2.2.2]" />
-    <PackageReference Include="System.Data.SqlClient" Version="4.9.1" />
+    <PackageReference Include="SharpGIS.NmeaParser" />
+    <PackageReference Include="System.Data.SqlClient" />
   </ItemGroup>
   <ItemGroup>
   </ItemGroup>

@@ -20,6 +20,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Endpoints;
+using OpenAstroAra.Core.Utility.Notification;
 using OpenAstroAra.Server.Services;
 using Scalar.AspNetCore;
 using Serilog;
@@ -1117,6 +1118,11 @@ public partial class Program {
         builder.Services.AddSingleton<SequenceBodyDeserializer>();
 
         var app = builder.Build();
+
+        // #1174 — the ported device layers' Notifier toasts land in the §46 inbox from here on.
+        Notifier.Use(new NotifierInboxBridge(
+            app.Services.GetRequiredService<INotificationService>(),
+            app.Services.GetRequiredService<Microsoft.Extensions.Logging.ILogger<NotifierInboxBridge>>()));
 
         app.UseCors();
 
