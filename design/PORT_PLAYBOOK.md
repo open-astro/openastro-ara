@@ -2895,17 +2895,21 @@ On a packaged install neither line is reachable (NoNewPrivileges, above); the st
 
 **Helper script exit codes:**
 
-| Code | Meaning |
+| Code | Meaning (`ERROR:` token) |
 |---|---|
 | 0 | Success |
-| 2 | UUID not found in `blkid` |
-| 3 | Filesystem is not ext4 |
-| 4 | Label mismatch on `--format` |
-| 5 | Device busy (unmount failed) |
-| 6 | mkfs.ext4 failed |
-| 7 | mount failed |
-| 8 | chown failed |
-| 9 | fstab write failed (immutable / read-only `/etc`?) |
+| 2 | UUID not found in `blkid` (`uuid_not_found`) |
+| 3 | Filesystem is neither exFAT nor ext4 (`not_ext4`) |
+| 4 | Label mismatch on `--format` (`label_mismatch`) |
+| 5 | Device busy — unmount failed (`device_busy`) |
+| 6 | Refused: the root or boot disk (`refused system_disk`) |
+| 7 | mkfs failed (`mkfs_failed`) |
+| 8 | mount failed, or the fstab rebuild could not run (`mount_failed`, `fstab_unreadable`, `fstab_tmp_failed`, `fstab_locked`) |
+| 9 | Usage error — bad or conflicting arguments (`usage`) |
+| 10 | chown failed / no resolvable owner (`chown_failed`) |
+| 11 | fsck failed on `--check` (`fsck_failed`) |
+
+The table mirrors the header of `configure-storage.sh`; the script is the source of truth (#1248 reconciled the two — 9 had been listed as the fstab write failure).
 
 Each code maps to a structured `code` field in the server's 422 response so WILMA can surface a specific user-facing message.
 

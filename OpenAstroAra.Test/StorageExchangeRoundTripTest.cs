@@ -34,7 +34,7 @@ namespace OpenAstroAra.Test {
     public class StorageExchangeRoundTripTest {
 
         private static readonly string RepoRoot = FindRepoRoot();
-        private static readonly string[] KeptFiles = ["c.other"];
+        private static readonly string[] KeptFiles = ["c.other", "d.result"];
         private static string Wrapper => Path.Combine(RepoRoot, "packaging", "debian", "opt", "openastroara", "scripts", "storage-request.sh");
 
         private string root = null!;
@@ -102,15 +102,36 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public void The_startup_sweep_removes_stale_request_and_result_files_only() {
+            var stale = DateTime.UtcNow - StorageDeviceService.SweepMinimumAge - TimeSpan.FromMinutes(1);
             File.WriteAllText(Path.Combine(exchange, "a.request"), "x\n");
             File.WriteAllText(Path.Combine(exchange, "b.result"), "0\n");
             File.WriteAllText(Path.Combine(exchange, "c.other"), "keep\n");
+            File.WriteAllText(Path.Combine(exchange, "d.result"), "0\n"); // fresh: a unit from before the restart may still own it (#1248)
+            foreach (var old in new[] { "a.request", "b.result", "c.other" }) {
+                File.SetLastWriteTimeUtc(Path.Combine(exchange, old), stale);
+            }
 
             var svc = new StorageDeviceService(NullLogger<StorageDeviceService>.Instance, Paths, run: null);
 
             Assert.That(Directory.GetFiles(exchange).Select(Path.GetFileName), Is.EquivalentTo(KeptFiles),
-                "construction sweeps the daemon's own leftovers and nothing else");
+                "construction sweeps the daemon's own OLD leftovers and nothing else");
             Assert.That(svc.SweepStaleExchangeFiles(), Is.EqualTo(0), "a second sweep finds nothing");
+        }
+
+        [Test]
+        public void The_exchange_directory_follows_the_test_env_override_only_when_set() {
+            // #1248 — the composition-root test points the boot sweep at a directory it owns.
+            var previous = Environment.GetEnvironmentVariable(StorageDeviceService.ExchangeDirEnvVar);
+            try {
+                Environment.SetEnvironmentVariable(StorageDeviceService.ExchangeDirEnvVar, null);
+                Assert.That(StorageHelperPaths.FromEnvironment(), Is.EqualTo(StorageHelperPaths.Default));
+                Environment.SetEnvironmentVariable(StorageDeviceService.ExchangeDirEnvVar, exchange);
+                var paths = StorageHelperPaths.FromEnvironment();
+                Assert.That(paths.RequestDirectory, Is.EqualTo(exchange));
+                Assert.That(paths.HelperPath, Is.EqualTo(StorageHelperPaths.Default.HelperPath), "only the exchange directory moves");
+            } finally {
+                Environment.SetEnvironmentVariable(StorageDeviceService.ExchangeDirEnvVar, previous);
+            }
         }
 
         [Test]

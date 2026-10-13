@@ -46,13 +46,35 @@ namespace OpenAstroAra.Test {
         private string? previousProfileDir;
         private WebApplication app = null!;
 
+        private string exchangeDir = null!;
+        private string? previousExchangeDir;
+
         [OneTimeSetUp]
         public void BuildTheDaemon() {
             profileDir = Path.Combine(Path.GetTempPath(), $"oara-composition-{Guid.NewGuid():N}");
             Directory.CreateDirectory(profileDir);
             previousProfileDir = Environment.GetEnvironmentVariable("OPENASTROARA_PROFILE_DIR");
             Environment.SetEnvironmentVariable("OPENASTROARA_PROFILE_DIR", profileDir);
+            // #1248 — a stale storage result planted BEFORE the build: BuildApp's eager resolve of
+            // IStorageDeviceService runs the boot sweep, and the test below asserts it is gone
+            // without ever resolving the service itself.
+            exchangeDir = Path.Combine(profileDir, "storage-exchange");
+            Directory.CreateDirectory(exchangeDir);
+            var stale = Path.Combine(exchangeDir, "cancelled.result");
+            File.WriteAllText(stale, "0\n");
+            File.SetLastWriteTimeUtc(stale, DateTime.UtcNow - StorageDeviceService.SweepMinimumAge - TimeSpan.FromMinutes(1));
+            previousExchangeDir = Environment.GetEnvironmentVariable(StorageDeviceService.ExchangeDirEnvVar);
+            Environment.SetEnvironmentVariable(StorageDeviceService.ExchangeDirEnvVar, exchangeDir);
             app = Program.BuildApp([]);
+        }
+
+        [Test]
+        public void Storage_service_is_built_eagerly_so_the_boot_sweep_runs() {
+            // #1248 — the sweep is a constructor side effect; a lazily resolved singleton would
+            // leave a cancelled request's leftover in tmpfs for the whole uptime (#1135). The file
+            // planted in OneTimeSetUp must already be gone, with the service never resolved here.
+            Assert.That(File.Exists(Path.Combine(exchangeDir, "cancelled.result")), Is.False,
+                "BuildApp must resolve IStorageDeviceService itself (Program.cs #1135 eager resolve)");
         }
 
         [OneTimeTearDown]
@@ -62,6 +84,7 @@ namespace OpenAstroAra.Test {
             // release the file so the directory can go (Main's finally does the same after Run).
             await Serilog.Log.CloseAndFlushAsync();
             Environment.SetEnvironmentVariable("OPENASTROARA_PROFILE_DIR", previousProfileDir);
+            Environment.SetEnvironmentVariable(StorageDeviceService.ExchangeDirEnvVar, previousExchangeDir);
             // The pooled SQLite handle would keep the catalog file open past DisposeAsync on
             // Windows and leave the temp dir behind.
             Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();

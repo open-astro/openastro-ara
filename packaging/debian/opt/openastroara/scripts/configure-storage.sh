@@ -8,6 +8,7 @@
 #   sudo configure-storage.sh --format [--fs exfat|ext4] <uuid-or-/dev/path> [<expected-label>]
 #   sudo configure-storage.sh --check <uuid>
 #   sudo configure-storage.sh --eject <uuid>
+#   configure-storage.sh --fstab-entry <uuid> [exfat|ext4]   (bench only, see below)
 #
 # A /dev/ path identifies a brand-new blank disk (no filesystem, hence no
 # UUID yet). An empty expected label is legal only when the disk truly has
@@ -25,10 +26,15 @@
 #             4 label_mismatch · 5 device_busy · 6 refused (root/boot disk) ·
 #             7 mkfs_failed · 8 mount_failed · 9 usage · 10 chown_failed ·
 #             11 fsck_failed
+#
+# Bench overrides (#1248): FSTAB and FSTAB_LOCK point the fstab rebuild at scratch
+# files, and --fstab-entry runs ONLY that rebuild (no device lookup, no mount), so
+# scripts/tests can race six rebuilds against one scratch fstab. sudoers keeps
+# env_reset, so the daemon user cannot steer root's run with either variable.
 set -eu
 
 MOUNT_POINT=/media/openastroara
-FSTAB=/etc/fstab
+FSTAB=${FSTAB:-/etc/fstab}
 OWNER=${ARA_STORAGE_OWNER:-openastroara}
 # Dev rigs run the daemon as a regular user without the .deb's service
 # account — fall back to whoever invoked sudo so mounts still own correctly.
@@ -112,10 +118,17 @@ ensure_fstab_entry() { # $1=uuid $2=fstype
     # lock timing out) must not leave a uniquely named temp file beside fstab.
     trap 'rm -f "$tmp"' EXIT
     lockfd=
-    if command -v flock >/dev/null 2>&1; then
-        exec 9>"${FSTAB_LOCK:-/run/openastroara-fstab.lock}"
+    lockpath=${FSTAB_LOCK:-/run/openastroara-fstab.lock}
+    # `exec 9>path` is a special builtin: under a POSIX sh its redirection failure
+    # (a read-only /run) exits the script with no typed line at all. Probe the open
+    # in a subshell first and fall back to the unlocked rebuild when it cannot be
+    # opened — one unlocked rebuild beats a silent death with the temp file in place.
+    if command -v flock >/dev/null 2>&1 && ( exec 9>"$lockpath" ) 2>/dev/null; then
+        exec 9>"$lockpath"
         flock -w 30 9 || { rm -f "$tmp"; echo "ERROR: fstab_locked"; exit 8; }
         lockfd=9
+    elif command -v flock >/dev/null 2>&1; then
+        echo "WARN: fstab_lock_unavailable $lockpath" >&2
     fi
     rc=0
     grep -v "[[:space:]]${MOUNT_POINT}[[:space:]]" "$FSTAB" > "$tmp" || rc=$?
@@ -176,9 +189,11 @@ mount_and_own() { # $1=uuid $2=fstype $3=deep-chown (1 after mkfs, else top-leve
 FORMAT=0
 CHECK=0
 EJECT=0
+FSTAB_ONLY=0
 NEW_FS=exfat
 while [ $# -gt 0 ]; do
     case "$1" in
+        --fstab-entry) FSTAB_ONLY=1; shift ;;
         --format) FORMAT=1; shift ;;
         --check) CHECK=1; shift ;;
         --eject) EJECT=1; shift ;;
@@ -190,10 +205,18 @@ while [ $# -gt 0 ]; do
         *) break ;;
     esac
 done
-[ $((FORMAT + CHECK + EJECT)) -gt 1 ] && usage
+[ $((FORMAT + CHECK + EJECT + FSTAB_ONLY)) -gt 1 ] && usage
 UUID=${1:-}
 EXPECTED_LABEL=${2:-}
 [ -n "$UUID" ] || usage
+
+if [ "$FSTAB_ONLY" = 1 ]; then
+    # Bench mode: just the locked fstab rebuild for this uuid, against $FSTAB.
+    fs=${2:-ext4}
+    case "$fs" in exfat|ext4) ;; *) usage ;; esac
+    ensure_fstab_entry "$UUID" "$fs"
+    exit 0
+fi
 
 case "$UUID" in
     /dev/*) DEVICE=$UUID ;;
