@@ -998,7 +998,9 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
     public MountSpecSheetDto? CurrentMountSpecs {
         get {
             lock (_gate) {
-                return _capabilities?.MountSpecs;
+                // Only while connected: a disconnect keeps the last capabilities for a fast
+                // reconnect, but the prior must not be built from a mount that is not there.
+                return _state == EquipmentConnectionState.Connected ? _capabilities?.MountSpecs : null;
             }
         }
     }
