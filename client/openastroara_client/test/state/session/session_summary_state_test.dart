@@ -13,11 +13,21 @@ import 'package:openastroara/state/sequencer/sequence_list_state.dart';
 import 'package:openastroara/state/session/session_summary_state.dart';
 import 'package:openastroara/state/ws/ws_providers.dart';
 
-/// Only getRunState matters here; the rest of the (large) interface is unused.
+/// Only list() and getRunState matter here; the rest of the (large) interface
+/// is unused.
 class _RunStates implements SequenceClient {
-  _RunStates(this.byId);
+  _RunStates(this.byId, this.listing);
   final Map<String, SequenceRunStateInfo?> byId;
+  List<SequenceListItem> listing;
   int reads = 0;
+  int lists = 0;
+
+  @override
+  Future<SequencePage> list({int limit = 50, String? cursor}) async {
+    lists++;
+    return SequencePage(items: listing);
+  }
+
   @override
   Future<SequenceRunStateInfo?> getRunState(String id) async {
     reads++;
@@ -51,6 +61,24 @@ class _MemPrefs extends SessionSummaryPrefsService {
   Future<void> saveAcknowledged(Set<String> ids) async => acked = ids;
 }
 
+const _daemonList = [
+  SequenceListItem(
+    id: 'seq-1',
+    name: 'M81 night',
+    currentRunState: SequenceRunState.completed,
+  ),
+  SequenceListItem(
+    id: 'seq-0',
+    name: 'Old',
+    currentRunState: SequenceRunState.stopped,
+  ),
+  SequenceListItem(
+    id: 'seq-2',
+    name: 'Idle',
+    currentRunState: SequenceRunState.idle,
+  ),
+];
+
 void main() {
   final start = DateTime.utc(2026, 10, 12, 22);
   final now = start.add(const Duration(hours: 10));
@@ -77,39 +105,28 @@ void main() {
   late _RunStates api;
 
   ProviderContainer make({
-    List<SequenceListItem>? list,
+    List<SequenceListItem> list = _daemonList,
     List<AraNotification> inbox = const [],
   }) {
     link = StreamController<WsConnectionState>.broadcast();
     ws = StreamController<WsEvent>.broadcast();
     prefs = _MemPrefs();
-    api = _RunStates({'seq-1': ended, 'seq-0': older});
+    api = _RunStates({'seq-1': ended, 'seq-0': older}, list);
     final c = ProviderContainer(
       overrides: [
         wsConnectionStateProvider.overrideWith((ref) => link.stream),
         wsEventsProvider.overrideWith((ref) => ws.stream),
         sequenceApiProvider.overrideWith((ref) => api),
+        // The cached list a tab loaded last evening: deliberately STALE (the
+        // run still "running") — the card must not read it.
         sequenceListProvider.overrideWith(
-          () => _List(
-            list ??
-                const [
-                  SequenceListItem(
-                    id: 'seq-1',
-                    name: 'M81 night',
-                    currentRunState: SequenceRunState.completed,
-                  ),
-                  SequenceListItem(
-                    id: 'seq-0',
-                    name: 'Old',
-                    currentRunState: SequenceRunState.stopped,
-                  ),
-                  SequenceListItem(
-                    id: 'seq-2',
-                    name: 'Idle',
-                    currentRunState: SequenceRunState.idle,
-                  ),
-                ],
-          ),
+          () => _List(const [
+            SequenceListItem(
+              id: 'seq-1',
+              name: 'M81 night',
+              currentRunState: SequenceRunState.running,
+            ),
+          ]),
         ),
         notificationInboxProvider.overrideWith(() => _Inbox(inbox)),
         sessionSummaryPrefsProvider.overrideWithValue(prefs),
@@ -124,29 +141,69 @@ void main() {
   }
 
   Future<void> settle() async {
-    for (var i = 0; i < 6; i++) {
+    for (var i = 0; i < 8; i++) {
       await Future<void>.delayed(Duration.zero);
     }
   }
 
-  test(
-    'connecting surfaces the newest ended run, idle sequences are never read',
-    () async {
-      final c = make();
-      await c.read(sessionSummaryProvider.future);
-      link.add(WsConnectionState.connected);
-      await settle();
-      final s = c.read(sessionSummaryProvider).asData?.value;
-      expect(s, isNotNull);
-      expect(
-        s!.runId,
-        'r1',
-        reason: 'newest end wins over the older stopped run',
-      );
-      expect(s.framesCaptured, 47);
-      expect(api.reads, 2, reason: 'only the two ended runs were read');
-    },
-  );
+  /// A real morning reconnect: the link dropped overnight, then came back.
+  void reconnect() {
+    link.add(WsConnectionState.reconnecting);
+    link.add(WsConnectionState.connected);
+  }
+
+  test('connecting surfaces the newest ended run from a FRESH list; idle sequences are never read', () async {
+    final c = make();
+    await c.read(sessionSummaryProvider.future);
+    link.add(WsConnectionState.connected);
+    await settle();
+    final s = c.read(sessionSummaryProvider).asData?.value;
+    expect(
+      s,
+      isNotNull,
+      reason: 'the stale cached list said "running"; the daemon says completed',
+    );
+    expect(
+      s!.runId,
+      'r1',
+      reason: 'newest end wins over the older stopped run',
+    );
+    expect(s.framesCaptured, 47);
+    expect(api.lists, 1);
+    expect(api.reads, 2, reason: 'only the two ended runs were read');
+  });
+
+  test('the list is re-read on every connect: a run that ended between connects gets its card', () async {
+    final c = make(
+      list: const [
+        SequenceListItem(
+          id: 'seq-1',
+          name: 'M81 night',
+          currentRunState: SequenceRunState.running,
+        ),
+      ],
+    );
+    await c.read(sessionSummaryProvider.future);
+    link.add(WsConnectionState.connected);
+    await settle();
+    expect(
+      c.read(sessionSummaryProvider).asData?.value,
+      isNull,
+      reason: 'still running at the first look',
+    );
+
+    api.listing = const [
+      SequenceListItem(
+        id: 'seq-1',
+        name: 'M81 night',
+        currentRunState: SequenceRunState.completed,
+      ),
+    ];
+    reconnect();
+    await settle();
+    expect(c.read(sessionSummaryProvider).asData?.value?.runId, 'r1');
+    expect(api.lists, 2);
+  });
 
   test('acknowledging hides it now and on the next connect', () async {
     final c = make();
@@ -157,7 +214,7 @@ void main() {
     expect(c.read(sessionSummaryProvider).asData?.value, isNull);
     expect(prefs.acked, contains('r1'));
 
-    link.add(WsConnectionState.connected);
+    reconnect();
     await settle();
     expect(
       c.read(sessionSummaryProvider).asData?.value,
@@ -185,6 +242,40 @@ void main() {
     link.add(WsConnectionState.connected);
     await settle();
     expect(c.read(sessionSummaryProvider).asData?.value, isNull);
+  });
+
+  test('a pause watched live and then resumed does not suppress a later unwatched end', () async {
+    final c = make();
+    await c.read(sessionSummaryProvider.future);
+    ws.add(
+      WsEvent(
+        type: 'sequence.paused',
+        ts: now,
+        seq: 1,
+        payload: const {
+          'sequence_id': 'seq-1',
+          'run_id': 'r1',
+          'state': 'pausedawaitinguser',
+        },
+      ),
+    );
+    ws.add(
+      WsEvent(
+        type: 'sequence.resumed',
+        ts: now,
+        seq: 2,
+        payload: const {
+          'sequence_id': 'seq-1',
+          'run_id': 'r1',
+          'state': 'running',
+        },
+      ),
+    );
+    await settle();
+    // ...the client goes away; the run ends; the morning connect:
+    link.add(WsConnectionState.connected);
+    await settle();
+    expect(c.read(sessionSummaryProvider).asData?.value?.runId, 'r1');
   });
 
   test('a stale end (older than 36 h) is history, not a card', () async {

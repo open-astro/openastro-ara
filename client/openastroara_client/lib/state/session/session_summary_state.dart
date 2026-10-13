@@ -9,7 +9,8 @@ import '../../services/session_summary_prefs_service.dart';
 import '../../services/ws_event_stream.dart';
 import '../../util/session_summary.dart';
 import '../notifications/notifications_state.dart';
-import '../sequencer/sequence_list_state.dart';
+import '../sequencer/sequence_list_state.dart'
+    show SequenceWsEvents, sequenceApiProvider;
 import '../ws/ws_providers.dart';
 
 final sessionSummaryPrefsProvider = Provider<SessionSummaryPrefsService>(
@@ -23,14 +24,16 @@ final sessionSummaryClockProvider = Provider<DateTime Function()>(
 );
 
 /// §58.13 / #1138 — the overnight card to show, or null. Recomputed each time
-/// the WebSocket reaches `connected` (the morning reconnect): every sequence
-/// the daemon lists with an ended or parked run is read, the newest one wins,
-/// and it is shown unless this device already acknowledged it or watched it
-/// end live. Null between showings.
+/// the WebSocket reaches `connected` (the morning reconnect): the sequence
+/// list is read FRESH from the daemon (a tab's cached list still says what
+/// the run was doing last evening), every sequence with an ended or parked
+/// run is read, the newest one wins, and it is shown unless this device
+/// already acknowledged it or watched it end live. Null between showings.
 class SessionSummaryNotifier extends AsyncNotifier<SessionSummary?> {
   Set<String>? _acknowledged;
   final _seenEndingLive = <String>{};
   bool _inFlight = false;
+  bool _rerun = false;
 
   @override
   Future<SessionSummary?> build() async {
@@ -42,7 +45,10 @@ class SessionSummaryNotifier extends AsyncNotifier<SessionSummary?> {
         unawaited(_evaluate());
       }
     });
-    // A run this client watched reach its end needs no morning card.
+    // A run this client watched reach its end (or get parked) needs no
+    // morning card — until it runs again: a pause the user resumed is not the
+    // end of the night, so a later unwatched failure of the same run still
+    // earns a card.
     ref.listen(wsEventsProvider, (prev, next) {
       final event = next.asData?.value;
       if (event == null || !event.type.startsWith(SequenceWsEvents.prefix)) {
@@ -50,8 +56,11 @@ class SessionSummaryNotifier extends AsyncNotifier<SessionSummary?> {
       }
       final state = SequenceRunState.fromWire(event.payload['state']);
       final runId = event.payload['run_id'];
-      if (runId is String && isSummaryWorthyState(state)) {
+      if (runId is! String || state == null) return;
+      if (isSummaryWorthyState(state)) {
         _seenEndingLive.add(runId);
+      } else {
+        _seenEndingLive.remove(runId);
       }
     });
     return null;
@@ -61,16 +70,21 @@ class SessionSummaryNotifier extends AsyncNotifier<SessionSummary?> {
       .read(sessionSummaryPrefsProvider)
       .loadAcknowledged();
 
-  /// Read the daemon's ended runs and surface the newest unseen one.
+  /// Read the daemon's ended runs and surface the newest unseen one. A
+  /// connect that lands mid-evaluation re-runs it once after, so the fresher
+  /// look is never dropped.
   Future<void> _evaluate() async {
-    if (_inFlight) return;
+    if (_inFlight) {
+      _rerun = true;
+      return;
+    }
     _inFlight = true;
+    // Hold the autoDispose API alive for the whole read.
+    final keep = ref.listen(sequenceApiProvider, (_, _) {});
     try {
       final api = ref.read(sequenceApiProvider);
       if (api == null) return;
-      final list =
-          await ref.read(sequenceListProvider.future) ??
-          const <SequenceListItem>[];
+      final list = (await api.list(limit: 50)).items;
       final candidates = list
           .where(
             (s) =>
@@ -79,7 +93,10 @@ class SessionSummaryNotifier extends AsyncNotifier<SessionSummary?> {
           )
           .take(8)
           .toList();
-      if (candidates.isEmpty) return;
+      if (candidates.isEmpty) {
+        if (ref.mounted) state = const AsyncData(null);
+        return;
+      }
       final notifications =
           await ref.read(notificationInboxProvider.future) ?? const [];
       final summaries = <SessionSummary>[];
@@ -98,7 +115,11 @@ class SessionSummaryNotifier extends AsyncNotifier<SessionSummary?> {
         }
       }
       final newest = newestSummary(summaries);
-      if (newest == null || !ref.mounted) return;
+      if (!ref.mounted) return;
+      if (newest == null) {
+        state = const AsyncData(null);
+        return;
+      }
       final show = shouldShowSessionSummary(
         newest,
         acknowledgedRunIds: await _ack(),
@@ -109,7 +130,12 @@ class SessionSummaryNotifier extends AsyncNotifier<SessionSummary?> {
     } catch (e) {
       debugPrint('[session-summary] evaluation failed: $e');
     } finally {
+      keep.close();
       _inFlight = false;
+      if (_rerun) {
+        _rerun = false;
+        unawaited(_evaluate());
+      }
     }
   }
 
