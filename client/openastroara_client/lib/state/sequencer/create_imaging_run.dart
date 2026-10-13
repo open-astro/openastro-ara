@@ -11,6 +11,7 @@ import '../../models/sequence/rig_capabilities.dart';
 import '../../models/sequence/sequence_summary.dart';
 import '../../services/profile_api.dart';
 import '../../services/sequence_api.dart';
+import '../../util/mosaic_project_math.dart';
 import '../../theme/ara_colors.dart';
 import '../../widgets/sequencer/target_plan_dialog.dart';
 import '../app_shell_state.dart';
@@ -384,7 +385,7 @@ Future<ImagingRunResult?> _createImagingRunPinned(
     // creating a fresh run then would duplicate the target.
     final liveResult = await _tryLiveAppend(container, api, selectedId, blocks);
     if (liveResult != null) {
-      await _registerMosaicProject(container, targetName, panels, mosaicGrid, positionAngleDeg, frameCount);
+      await _registerMosaicProject(container, targetName, panels, mosaicGrid, positionAngleDeg, frameCount, choice.filterPlan);
       if (jumpToRun) {
         container.read(selectedTabIndexProvider.notifier).select(kRunTabIndex);
       }
@@ -399,7 +400,7 @@ Future<ImagingRunResult?> _createImagingRunPinned(
     if (newBody != null) {
       final detail = await api.updateSequence(selectedId, body: newBody);
       _syncAfterBodyChange(container, selectedId, detail);
-      await _registerMosaicProject(container, targetName, panels, mosaicGrid, positionAngleDeg, frameCount);
+      await _registerMosaicProject(container, targetName, panels, mosaicGrid, positionAngleDeg, frameCount, choice.filterPlan);
       if (jumpToRun) {
         container.read(selectedTabIndexProvider.notifier).select(kRunTabIndex);
       }
@@ -476,7 +477,7 @@ Future<ImagingRunResult?> _createImagingRunPinned(
     return ImagingRunResult(draftId, appended: false, draft: true);
   }
 
-  await _registerMosaicProject(container, targetName, panels, mosaicGrid, positionAngleDeg, frameCount);
+  await _registerMosaicProject(container, targetName, panels, mosaicGrid, positionAngleDeg, frameCount, choice.filterPlan);
 
   // Same post-create choreography as the NINA import flow: refresh the list,
   // select the new sequence (the Run tab listens and loads it), then bring the
@@ -739,13 +740,15 @@ Future<void> _registerMosaicProject(
   ({int cols, int rows, double overlapPercent})? grid,
   double? positionAngleDeg,
   int frameCount,
+  List<FilterPlanStep>? filterPlan,
 ) async {
   if (panels.length < 2) return;
   final api = container.read(mosaicApiProvider);
   if (api == null) return;
   final cols = grid?.cols ?? panels.length;
   final rows = grid?.rows ?? 1;
-  final centreRa = panels.map((p) => p.raDeg).reduce((a, b) => a + b) / panels.length;
+  // On the circle: a mosaic straddling 0h must not average to 12h (§47.3).
+  final centreRa = circularMeanRaDeg(panels.map((p) => p.raDeg));
   final centreDec = panels.map((p) => p.decDeg).reduce((a, b) => a + b) / panels.length;
   try {
     await api.create(
@@ -757,7 +760,9 @@ Future<void> _registerMosaicProject(
       overlapPercent: grid?.overlapPercent ?? 0,
       positionAngleDeg: positionAngleDeg ?? 0,
       panels: [for (final p in panels) (raDeg: p.raDeg, decDeg: p.decDeg)],
-      framesPerPanel: frameCount,
+      // A filter plan gives each panel one loop PER STEP, so the panel owes
+      // the sum of the steps, not the single-filter frame count.
+      framesPerPanel: mosaicFramesPerPanel(frameCount, filterPlan),
     );
     // The Library's Mosaics section, when it is on screen, picks the project up.
     unawaited(container.read(mosaicProjectsProvider.notifier).refresh());
