@@ -5413,6 +5413,43 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
+  /api/v1/profile/unguided:
+    get:
+      tags:
+        - Profile
+      summary: Get the active profile's unguided-imaging settings.
+      operationId: GetUnguidedSettings
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnguidedSettingsDto'
+    put:
+      tags:
+        - Profile
+      summary: Replace the active profile's unguided-imaging settings.
+      operationId: PutUnguidedSettings
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UnguidedSettingsDto'
+        required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnguidedSettingsDto'
+        '400':
+          description: Bad Request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/profile/plate-solve:
     get:
       tags:
@@ -10544,6 +10581,10 @@ components:
           oneOf:
             - type: 'null'
             - $ref: '#/components/schemas/PolarAlignSettingsDto'
+        unguided:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/UnguidedSettingsDto'
         filter_wheel_policy:
           oneOf:
             - type: 'null'
@@ -12798,6 +12839,77 @@ components:
           type: boolean
         passed:
           type: boolean
+    UnguidedSettingsDto:
+      type: object
+      properties:
+        guard_enabled:
+          type: boolean
+          default: true
+        eccentricity_tolerance:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+          default: 0.5
+        good_eccentricity:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+          default: 0.3
+        step_down_after:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+          default: 2
+        step_up_after:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+          default: 10
+        probe_rungs_seconds:
+          type:
+            - 'null'
+            - array
+          items:
+            pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+            type:
+              - number
+              - string
+            format: double
+        recentre_drift_arcmin:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+          default: 10
+        recentre_solve_every_n:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+          default: 1
+        prior_tolerance_basis:
+          type: string
+          default: max
+        effective_probe_rungs_seconds:
+          type:
+            - 'null'
+            - array
+          items:
+            pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+            type:
+              - number
+              - string
+            format: double
     WsCatalogResponse:
       required:
         - events

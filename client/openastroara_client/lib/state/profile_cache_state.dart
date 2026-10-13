@@ -5,6 +5,7 @@ import '../models/profile_list.dart';
 import '../services/profile_api.dart';
 import '../services/profile_cache_service.dart';
 import 'settings/autofocus_settings_state.dart';
+import 'settings/unguided_settings_state.dart';
 import 'settings/camera_electronics_state.dart';
 import 'settings/custom_horizon_state.dart';
 import 'settings/filter_set_state.dart';
@@ -83,7 +84,7 @@ Future<void> captureProfileCache(
     // The section GETs read the ACTIVE profile — that's the one we snapshot.
     // Parallel (like _hydratePlanningSettings): this fires on every list load
     // AND after every mutation, so serializing 6 round-trips adds up.
-    final (optics, imaging, autofocus, site, filters, electronics, horizon) = await (
+    final (optics, imaging, autofocus, site, filters, electronics, horizon, unguided) = await (
       api.getOptics(),
       api.getImagingDefaults(),
       api.getAutofocusSettings(),
@@ -95,11 +96,14 @@ Future<void> captureProfileCache(
       // Best-effort: a daemon without the endpoint must not fail the whole
       // capture (null = not captured; the seed then leaves the notifier alone).
       _tryHorizon(api),
+      // #1264 — the offline run builder cooks the probe / guard from it too.
+      api.getUnguidedSettings(),
     ).wait;
     await cache.saveSections(activeId, {
       'optics': ProfileApi.opticsToJson(optics),
       'imaging_defaults': ProfileApi.imagingDefaultsToJson(imaging),
       'autofocus': ProfileApi.autofocusSettingsToJson(autofocus),
+      'unguided': ProfileApi.unguidedSettingsToJson(unguided),
       'site': ProfileApi.siteSettingsToJson(site),
       'filter_set': ProfileApi.filterSetToJson(filters),
       'camera_electronics': ProfileApi.cameraElectronicsToJson(electronics),
@@ -143,6 +147,8 @@ Future<bool> seedPlanningFromCache(
       () async => ProfileApi.imagingDefaultsFromJson(sec('imaging_defaults')));
   await container.read(autofocusSettingsProvider.notifier).hydrateGuarded(
       () async => ProfileApi.autofocusSettingsFromJson(sec('autofocus')));
+  await container.read(unguidedSettingsProvider.notifier).hydrateGuarded(
+      () async => ProfileApi.unguidedSettingsFromJson(sec('unguided')));
   await container
       .read(siteSettingsProvider.notifier)
       .hydrateGuarded(() async => ProfileApi.siteSettingsFromJson(sec('site')));

@@ -462,6 +462,20 @@ The run state carries `frames_captured` (int, default 0): the count of frames fi
 
 ---
 
+### 2026-10-13 — Imaging → Unguided profile section (`/api/v1/profile/unguided`) (#1264)
+
+**Endpoint(s) or area:** `GET`/`PUT /api/v1/profile/unguided` (`UnguidedSettingsDto`), profile JSON `unguided`.
+
+**Decision:** the knobs behind the Tracking Probe, the Unguided Exposure Guard and Center After Drift become a profile section, shaped like `autofocus` / `polar_align`: `{guard_enabled, eccentricity_tolerance, good_eccentricity, step_down_after, step_up_after, probe_rungs_seconds[], recentre_drift_arcmin, recentre_solve_every_n, prior_tolerance_basis}` with constructor defaults equal to the shipped behaviour (true, 0.5, 0.3, 2, 10, [10,30,60,120], 10, 1, `max`), so a pre-#1264 profile back-fills unchanged. The PUT validates at the write boundary (400 problem details): tolerance in (0, 1], the round bar strictly below the trailed bar, counts ≥ 1, the ladder 1–10 strictly ascending positive exposures, drift > 0, basis ∈ {`max`, `pixel`, `seeing`}. The client builds the sequence nodes from this section (the guard is omitted when `guard_enabled` is false; the probe and the re-centre stay); the daemon reads only `prior_tolerance_basis`, when it turns the mount's spec sheet into a prior (`MountSpecSheet.Tolerance`: `max` = one pixel or half the seeing disc, whichever is larger; `pixel`; `seeing`). The probe's FWHM rule (1.2× the first usable rung) and the 2 × prior cap stay fixed.
+
+**Reasoning:** the run is cooked from the rig on the client, so the knobs that shape nodes live where the nodes are built and ride on the body like every other node field; the one knob the daemon itself consumes (the prior's tolerance basis) lives in the same section so the user has one panel. The section is on the profile, not a client preference, because the guard thresholds are a property of the rig and must follow it between clients.
+
+**Spec ref:** `OpenAstroAra.Server/openapi.yaml#/paths/~1api~1v1~1profile~1unguided`; `Contracts/ProfileDtos.cs` (`UnguidedSettingsDto`), `Endpoints/ProfileEndpoints.cs` (`PutUnguidedSettings`), `Services/MountSpecSheet.cs`; client `unguided_settings_state.dart`, `imaging_run_body.dart` (`UnguidedOptions`), `imaging_unguided_panel.dart`.
+
+**Related:** #1264 (issue's "Settings (registry + help entries per §61.4/§69.4)" box), PR #1318 (the nodes), PR #1334 (the spec-sheet prior); tests `UnguidedSettingsTest`, client `unguided_settings_state_test`, `imaging_run_body_test`.
+
+---
+
 ### 2026-10-11 — Unguided exposure ceiling: `tracking_calibration`, `/api/v1/tracking/*`, `tracking_probe.*` (#1264)
 
 **Endpoint(s) or area:** `GET /api/v1/tracking/calibration` (`TrackingCalibrationDto`, 404 = never measured), `POST /api/v1/tracking/recalibrate` (204, clears), profile JSON `tracking_calibration`; WS `tracking_probe.started` / `tracking_probe.rung_complete` / `tracking_probe.completed`; sequence `$type`s `OpenAstroAra.Sequencer.SequenceItem.Telescope.TrackingProbe` and `OpenAstroAra.Sequencer.Trigger.Telescope.UnguidedExposureGuard`.

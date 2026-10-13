@@ -384,6 +384,43 @@ void main() {
       expect(findProbe(viaRun)!['PriorSeconds'], 30);
     });
 
+    test('#1264 Imaging → Unguided knobs land on the probe, the guard and the re-centre; the guard can be switched off', () {
+      const knobs = UnguidedOptions(
+        guardEnabled: true, eccentricityTolerance: 0.6, goodEccentricity: 0.35, stepDownAfter: 3, stepUpAfter: 8,
+        probeRungsSeconds: [5, 20, 80], recentreDriftArcmin: 4.5, recentreSolveEveryN: 2,
+      );
+      final b = buildTargetBlock(
+          raDeg: 1, decDeg: 2, exposureSeconds: 300, frameCount: 10, rig: RigCapabilities.nothing, unguidedOptions: knobs);
+      final probe = childrenOf(b).singleWhere((c) => c[r'$type'] == trackingProbeType);
+      expect(probe['Rungs'], [5, 20, 80]);
+      final loop = childrenOf(b).singleWhere((c) => c['Name'] == 'Imaging');
+      final guard = triggersOf(loop).singleWhere((t) => t[r'$type'] == unguidedExposureGuardType);
+      expect(guard['EccentricityTolerance'], 0.6);
+      expect(guard['GoodEccentricity'], 0.35);
+      expect(guard['StepDownAfter'], 3);
+      expect(guard['StepUpAfter'], 8);
+      expect(guard['Rungs'], [5, 20, 80]);
+      expect(guard['MaxExposure'], 300);
+      final drift = triggersOf(loop).singleWhere((t) => t[r'$type'] == centerAfterDriftType);
+      expect(drift['DistanceArcMinutes'], 4.5);
+      expect(drift['AfterExposures'], 2);
+
+      final noGuard = buildTargetBlock(
+          raDeg: 1, decDeg: 2, exposureSeconds: 300, frameCount: 10, rig: RigCapabilities.nothing,
+          unguidedOptions: const UnguidedOptions(guardEnabled: false));
+      final loop2 = childrenOf(noGuard).singleWhere((c) => c['Name'] == 'Imaging');
+      expect(triggersOf(loop2).map((t) => t[r'$type']), [centerAfterDriftType], reason: 'probe and re-centre stay');
+      expect(childrenOf(noGuard).map((c) => c[r'$type']), contains(trackingProbeType));
+
+      // Defaults build the same body as before the knobs existed.
+      final plain = buildTargetBlock(raDeg: 1, decDeg: 2, exposureSeconds: 300, frameCount: 10, rig: RigCapabilities.nothing);
+      final plainGuard = triggersOf(childrenOf(plain).singleWhere((c) => c['Name'] == 'Imaging'))
+          .singleWhere((t) => t[r'$type'] == unguidedExposureGuardType);
+      expect(plainGuard['EccentricityTolerance'], 0.5);
+      expect(plainGuard['StepDownAfter'], 2);
+      expect(childrenOf(plain).singleWhere((c) => c[r'$type'] == trackingProbeType)['Rungs'], [10, 30, 60, 120]);
+    });
+
     test('a bare rig gets slew + tracking probe + loop: no AF, no guiding, no filter', () {
       final b = block(RigCapabilities.nothing, filter: 'Ha');
       final t = types(b);

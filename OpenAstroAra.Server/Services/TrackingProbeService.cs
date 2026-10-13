@@ -151,7 +151,8 @@ public sealed partial class TrackingProbeService : ITrackingProbeExecutor {
         var pixelScale = PixelScaleArcsec(_profiles.GetOpticsSettings());
         var seeing = _profiles.GetSiteSettings()?.TypicalSeeingArcsec;
         var polarAlign = await LatestPolarAlignErrorAsync(token).ConfigureAwait(false);
-        var seconds = MountSpecSheet.UnguidedPriorSeconds(sheet, pixelScale, seeing, polarAlign);
+        var basis = _profiles.GetUnguidedSettings().PriorToleranceBasis;
+        var seconds = MountSpecSheet.UnguidedPriorSeconds(sheet, pixelScale, seeing, polarAlign, basis);
         if (seconds is null) {
             return (null, null);
         }

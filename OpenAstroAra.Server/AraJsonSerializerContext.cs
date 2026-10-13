@@ -62,6 +62,7 @@ namespace OpenAstroAra.Server;
 [JsonSerializable(typeof(ServerUpdateStatusDto))]
 [JsonSerializable(typeof(AutoFlatsDecisionRequestDto))]
 [JsonSerializable(typeof(AutofocusSettingsDto))]
+[JsonSerializable(typeof(UnguidedSettingsDto))]
 [JsonSerializable(typeof(BackupStreamStatusDto))]
 [JsonSerializable(typeof(BackupStreamClaimRequestDto))]
 [JsonSerializable(typeof(BackupStreamClaimResultDto))]

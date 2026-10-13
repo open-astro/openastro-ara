@@ -68,6 +68,10 @@ public interface IProfileStore {
     PolarAlignSettingsDto GetPolarAlignSettings();
     void PutPolarAlignSettings(PolarAlignSettingsDto value);
 
+    // #1264 Imaging → Unguided.
+    UnguidedSettingsDto GetUnguidedSettings();
+    void PutUnguidedSettings(UnguidedSettingsDto value);
+
     PlateSolveSettingsDto GetPlateSolveSettings();
     void PutPlateSolveSettings(PlateSolveSettingsDto value);
 

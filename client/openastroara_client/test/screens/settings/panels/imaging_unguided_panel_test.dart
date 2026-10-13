@@ -10,6 +10,8 @@ import 'package:openastroara/models/tracking_calibration.dart';
 import 'package:openastroara/screens/settings/panels/imaging_unguided_panel.dart';
 import 'package:openastroara/state/saved_server_state.dart';
 import 'package:openastroara/state/tracking/tracking_calibration_state.dart';
+import 'package:openastroara/state/settings/unguided_settings_state.dart';
+import 'package:openastroara/widgets/settings/editable_field.dart';
 
 /// #1264 Imaging → Unguided: the stored ceiling, its ladder and Recalibrate.
 class _Fixed extends TrackingCalibrationNotifier {
@@ -162,5 +164,29 @@ void main() {
     await tester.pumpWidget(const SizedBox());
     await _pump(tester, connected: true, mountKnown: true);
     expect(find.textContaining('No spec sheet for this mount'), findsOneWidget);
+  });
+
+  testWidgets('#1264 the knobs edit the Unguided settings (guard switch, ladder text)', (tester) async {
+    await _pump(tester, connected: true, mountKnown: true);
+    final element = tester.element(find.byType(ImagingUnguidedPanel));
+    final container = ProviderScope.containerOf(element);
+
+    await tester.tap(find.descendant(
+        of: find.widgetWithText(SettingsSwitchRow, 'Unguided exposure guard'), matching: find.byType(Switch)));
+    await tester.pumpAndSettle();
+    expect(container.read(unguidedSettingsProvider).guardEnabled, isFalse);
+    expect(find.textContaining("Off: the probe's ceiling holds"), findsOneWidget);
+
+    final ladder = find.widgetWithText(EditableTextRow, 'Probe ladder (s, shortest first)');
+    await tester.scrollUntilVisible(ladder, 200, scrollable: find.byType(Scrollable).first);
+    await tester.enterText(find.descendant(of: ladder, matching: find.byType(TextField)), '5, 20, 80');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
+    expect(container.read(unguidedSettingsProvider).probeRungsSeconds, [5, 20, 80]);
+
+    await tester.enterText(find.descendant(of: ladder, matching: find.byType(TextField)), '80, 5');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
+    expect(container.read(unguidedSettingsProvider).probeRungsSeconds, [5, 20, 80], reason: 'a descending ladder is rejected');
   });
 }

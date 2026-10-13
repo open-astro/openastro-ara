@@ -77,6 +77,8 @@ public sealed record ProfileSnapshotDto(
     // §45.12 polar-alignment settings. Optional so older profile.json keeps deserializing; the
     // normalizer back-fills null to the all-defaults section.
     PolarAlignSettingsDto? PolarAlign = null,
+    // #1264 — Imaging → Unguided; a pre-#1264 file back-fills to the ctor defaults.
+    UnguidedSettingsDto? Unguided = null,
     // #1075 filter-wheel policy (home on first connect). Optional so older profile.json keeps
     // deserializing; the normalizer back-fills null to the default (home on).
     FilterWheelPolicyDto? FilterWheelPolicy = null,

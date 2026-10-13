@@ -116,6 +116,9 @@ public sealed partial class FileProfileStore : IProfileStore {
     public void PutAutofocusSettings(AutofocusSettingsDto value) => UpdateAndPersist(s => s with { Autofocus = value });
 
     public PolarAlignSettingsDto GetPolarAlignSettings() { lock (_lock) { return _snapshot.PolarAlign ?? new PolarAlignSettingsDto(); } }
+
+    public UnguidedSettingsDto GetUnguidedSettings() { lock (_lock) { return _snapshot.Unguided ?? new UnguidedSettingsDto(); } }
+    public void PutUnguidedSettings(UnguidedSettingsDto value) => UpdateAndPersist(s => s with { Unguided = value });
     public void PutPolarAlignSettings(PolarAlignSettingsDto value) => UpdateAndPersist(s => s with { PolarAlign = value });
 
     public PlateSolveSettingsDto GetPlateSolveSettings() { lock (_lock) { return _snapshot.PlateSolve; } }

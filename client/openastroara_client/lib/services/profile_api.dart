@@ -8,6 +8,7 @@ import '../models/profile_share_import_preview.dart';
 import '../models/server.dart';
 import '../state/imaging/exposure_state.dart' show FrameKind;
 import '../state/settings/autofocus_settings_state.dart';
+import '../state/settings/unguided_settings_state.dart';
 import '../state/settings/custom_horizon_state.dart';
 import '../state/settings/camera_electronics_state.dart';
 import '../state/settings/diagnostics_mode_state.dart';
@@ -402,6 +403,61 @@ class ProfileApi {
     );
     return safetyPoliciesFromJson(res.data ?? const {});
   }
+
+  /// GET the active profile's unguided-imaging settings (#1264). A daemon
+  /// predating the section (404) answers the defaults.
+  Future<UnguidedSettings> getUnguidedSettings() async {
+    try {
+      final res = await _dio.get<Map<String, dynamic>>('/api/v1/profile/unguided');
+      return unguidedSettingsFromJson(res.data ?? const {});
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 404) return const UnguidedSettings();
+      rethrow;
+    }
+  }
+
+  /// PUT the active profile's unguided-imaging settings (#1264).
+  Future<UnguidedSettings> putUnguidedSettings(UnguidedSettings value) async {
+    final res = await _dio.put<Map<String, dynamic>>(
+      '/api/v1/profile/unguided',
+      data: unguidedSettingsToJson(value),
+    );
+    return unguidedSettingsFromJson(res.data ?? const {});
+  }
+
+  static UnguidedSettings unguidedSettingsFromJson(Map<String, dynamic> j) {
+    final rungs = (j['probe_rungs_seconds'] as List<dynamic>?)
+        ?.whereType<num>()
+        .map((n) => n.toDouble())
+        .toList();
+    return UnguidedSettings(
+      guardEnabled: (j['guard_enabled'] as bool?) ?? true,
+      eccentricityTolerance:
+          (j['eccentricity_tolerance'] as num?)?.toDouble() ?? 0.5,
+      goodEccentricity: (j['good_eccentricity'] as num?)?.toDouble() ?? 0.3,
+      stepDownAfter: (j['step_down_after'] as num?)?.toInt() ?? 2,
+      stepUpAfter: (j['step_up_after'] as num?)?.toInt() ?? 10,
+      probeRungsSeconds: rungs == null || rungs.isEmpty
+          ? UnguidedSettings.defaultProbeRungsSeconds
+          : rungs,
+      recentreDriftArcmin:
+          (j['recentre_drift_arcmin'] as num?)?.toDouble() ?? 10,
+      recentreSolveEveryN: (j['recentre_solve_every_n'] as num?)?.toInt() ?? 1,
+      priorToleranceBasis: (j['prior_tolerance_basis'] as String?) ?? 'max',
+    );
+  }
+
+  static Map<String, dynamic> unguidedSettingsToJson(UnguidedSettings v) => {
+    'guard_enabled': v.guardEnabled,
+    'eccentricity_tolerance': v.eccentricityTolerance,
+    'good_eccentricity': v.goodEccentricity,
+    'step_down_after': v.stepDownAfter,
+    'step_up_after': v.stepUpAfter,
+    'probe_rungs_seconds': v.probeRungsSeconds,
+    'recentre_drift_arcmin': v.recentreDriftArcmin,
+    'recentre_solve_every_n': v.recentreSolveEveryN,
+    'prior_tolerance_basis': v.priorToleranceBasis,
+  };
 
   /// GET the active profile's autofocus settings.
   Future<AutofocusSettings> getAutofocusSettings() async {

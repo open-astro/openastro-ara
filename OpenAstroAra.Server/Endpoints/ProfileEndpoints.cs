@@ -13,6 +13,7 @@
 #endregion "copyright"
 
 using Microsoft.AspNetCore.Builder;
+using System.Linq;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using OpenAstroAra.Server.Contracts;
@@ -204,6 +205,20 @@ public static class ProfileEndpoints {
             .ProducesProblem(StatusCodes.Status400BadRequest)
             .WithName("PutPolarAlignSettings")
             .WithSummary("Replace the active profile's §45 polar-alignment settings.");
+
+        // #1264 — Imaging → Unguided: the probe / guard / re-centre knobs and the prior's tolerance basis.
+        profile.MapGet("/unguided", (IProfileStore store) =>
+                Results.Ok(store.GetUnguidedSettings()))
+            .Produces<UnguidedSettingsDto>(StatusCodes.Status200OK)
+            .WithName("GetUnguidedSettings")
+            .WithSummary("Get the active profile's unguided-imaging settings.");
+
+        profile.MapPut("/unguided", PutUnguidedSettings)
+            .Accepts<UnguidedSettingsDto>("application/json")
+            .Produces<UnguidedSettingsDto>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .WithName("PutUnguidedSettings")
+            .WithSummary("Replace the active profile's unguided-imaging settings.");
 
         profile.MapGet("/plate-solve", (IProfileStore store) =>
                 Results.Ok(store.GetPlateSolveSettings()))
@@ -517,6 +532,41 @@ public static class ProfileEndpoints {
     /// <summary>§45.12 — <c>PUT /profile/polar-align</c>. The live loop re-reads these settings before
     /// every frame, so a bad exposure or an unknown loop mode must be refused at the write boundary
     /// (400) rather than reaching the camera. Extracted so the 400s are unit-testable without a host.</summary>
+    /// <summary>#1264 — write-boundary validation: the guard's two eccentricity bars must be ordered and
+    /// in (0, 1], its counts positive, the ladder ascending and positive, the re-centre figures positive,
+    /// and the tolerance basis one of the three names — a bad body would hand the sequencer a guard that
+    /// never steps or a probe that never passes.</summary>
+    internal static IResult PutUnguidedSettings(UnguidedSettingsDto body, IProfileStore store) {
+        static IResult Bad(string detail) => Results.Problem(detail: detail, statusCode: StatusCodes.Status400BadRequest);
+        if (!(double.IsFinite(body.EccentricityTolerance) && body.EccentricityTolerance > 0 && body.EccentricityTolerance <= 1)) {
+            return Bad("eccentricity_tolerance must be in (0, 1]");
+        }
+        if (!(double.IsFinite(body.GoodEccentricity) && body.GoodEccentricity > 0 && body.GoodEccentricity < body.EccentricityTolerance)) {
+            return Bad("good_eccentricity must be in (0, eccentricity_tolerance)");
+        }
+        if (body.StepDownAfter < 1 || body.StepUpAfter < 1) {
+            return Bad("step_down_after and step_up_after must be at least 1");
+        }
+        if (body.ProbeRungsSeconds is { Count: > 0 } rungs) {
+            if (rungs.Count > 10 || rungs.Any(r => !double.IsFinite(r) || r <= 0)) {
+                return Bad("probe_rungs_seconds must hold 1–10 positive exposures");
+            }
+            for (var i = 1; i < rungs.Count; i++) {
+                if (rungs[i] <= rungs[i - 1]) {
+                    return Bad("probe_rungs_seconds must be strictly ascending");
+                }
+            }
+        }
+        if (!(double.IsFinite(body.RecentreDriftArcmin) && body.RecentreDriftArcmin > 0) || body.RecentreSolveEveryN < 1) {
+            return Bad("recentre_drift_arcmin must be positive and recentre_solve_every_n at least 1");
+        }
+        if (!UnguidedPriorToleranceBases.IsValid(body.PriorToleranceBasis)) {
+            return Bad("prior_tolerance_basis must be \"max\", \"pixel\" or \"seeing\"");
+        }
+        store.PutUnguidedSettings(body);
+        return Results.Ok(body);
+    }
+
     internal static IResult PutPolarAlignSettings(PolarAlignSettingsDto body, IProfileStore store) {
         if (!(double.IsFinite(body.ExposureSeconds) && body.ExposureSeconds > 0 && body.ExposureSeconds <= 60)) {
             return Results.Problem(detail: "exposure_seconds must be greater than 0 and at most 60",

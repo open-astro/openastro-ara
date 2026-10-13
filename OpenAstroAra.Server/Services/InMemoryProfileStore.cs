@@ -214,6 +214,18 @@ public sealed class InMemoryProfileStore : IProfileStore {
         RaiseChanged();
     }
 
+    // #1264 — ctor defaults ARE the shipped behaviour.
+    private UnguidedSettingsDto _unguided = new();
+
+    public UnguidedSettingsDto GetUnguidedSettings() {
+        lock (_lock) { return _unguided; }
+    }
+
+    public void PutUnguidedSettings(UnguidedSettingsDto value) {
+        lock (_lock) { _unguided = value; }
+        RaiseChanged();
+    }
+
     // Defaults match PlateSolveSettings() constructor.
     private PlateSolveSettingsDto _plateSolve = new(
         Engine: "astap",

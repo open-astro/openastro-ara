@@ -18,6 +18,7 @@ import '../app_shell_state.dart';
 import '../library/mosaics_state.dart';
 import '../saved_server_state.dart';
 import '../settings/autofocus_settings_state.dart';
+import '../settings/unguided_settings_state.dart';
 import '../settings/filter_set_state.dart';
 import '../settings/imaging_defaults_state.dart';
 import '../settings/phd2_settings_state.dart';
@@ -238,6 +239,7 @@ Future<ImagingRunResult?> _createImagingRunPinned(
       filterPlan: choice.filterPlan,
       startGuiding: choice.guide,
       rig: rig,
+      unguidedOptions: unguidedOptionsOf(container),
       ditherEveryNExposures: _ditherCadence(container, choice),
       manualFilterSwap: choice.manualFilterSwap,
     );
@@ -261,6 +263,7 @@ Future<ImagingRunResult?> _createImagingRunPinned(
           filterPlan: choice.filterPlan,
           startGuiding: choice.guide,
           rig: rig,
+          unguidedOptions: unguidedOptionsOf(container),
           ditherEveryNExposures: _ditherCadence(container, choice),
           manualFilterSwap: choice.manualFilterSwap,
         ),
@@ -290,6 +293,7 @@ Future<ImagingRunResult?> _createImagingRunPinned(
             filterPlan: choice.filterPlan,
             startGuiding: choice.guide,
             rig: rig,
+            unguidedOptions: unguidedOptionsOf(container),
             ditherEveryNExposures: _ditherCadence(container, choice),
             manualFilterSwap: choice.manualFilterSwap,
           ),
@@ -372,6 +376,7 @@ Future<ImagingRunResult?> _createImagingRunPinned(
           filterPlan: choice.filterPlan,
           startGuiding: choice.guide,
           rig: rig,
+          unguidedOptions: unguidedOptionsOf(container),
           ditherEveryNExposures: ditherEvery,
           manualFilterSwap: choice.manualFilterSwap,
         ),
@@ -424,6 +429,7 @@ Future<ImagingRunResult?> _createImagingRunPinned(
     filterPlan: choice.filterPlan,
     startGuiding: choice.guide,
     rig: rig,
+    unguidedOptions: unguidedOptionsOf(container),
     ditherEveryNExposures: ditherEvery,
     manualFilterSwap: choice.manualFilterSwap,
   );
@@ -445,6 +451,7 @@ Future<ImagingRunResult?> _createImagingRunPinned(
         filterPlan: choice.filterPlan,
         startGuiding: choice.guide,
         rig: rig,
+        unguidedOptions: unguidedOptionsOf(container),
         ditherEveryNExposures: ditherEvery,
         manualFilterSwap: choice.manualFilterSwap,
       ),
@@ -503,6 +510,7 @@ Future<void> _hydratePlanningSettings(ProviderContainer container) async {
     await Future.wait([
       container.read(imagingDefaultsProvider.notifier).hydrateFromServer(api),
       container.read(autofocusSettingsProvider.notifier).hydrateFromServer(api),
+      container.read(unguidedSettingsProvider.notifier).hydrateFromServer(api),
       container.read(filterSetProvider.notifier).hydrateFromServer(api),
       container.read(phd2SettingsProvider.notifier).hydrateFromServer(api),
     ]);
@@ -770,4 +778,19 @@ Future<void> _registerMosaicProject(
   } catch (e) {
     debugPrint('[planning] mosaic project registration failed (run is unaffected): $e');
   }
+}
+
+/// #1264 — the Imaging → Unguided knobs as the run builder takes them.
+UnguidedOptions unguidedOptionsOf(ProviderContainer container) {
+  final u = container.read(unguidedSettingsProvider);
+  return UnguidedOptions(
+    guardEnabled: u.guardEnabled,
+    eccentricityTolerance: u.eccentricityTolerance,
+    goodEccentricity: u.goodEccentricity,
+    stepDownAfter: u.stepDownAfter,
+    stepUpAfter: u.stepUpAfter,
+    probeRungsSeconds: u.probeRungsSeconds,
+    recentreDriftArcmin: u.recentreDriftArcmin,
+    recentreSolveEveryN: u.recentreSolveEveryN,
+  );
 }

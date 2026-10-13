@@ -458,6 +458,45 @@ public sealed record PolarAlignSettingsDto(
     double SettleSeconds = 2.0,
     string LoopMode = PolarAlignLoopModes.Loop);
 
+/// <summary>#1264 — Imaging → Unguided (profile section <c>unguided</c>): the knobs behind the
+/// Tracking Probe, the Unguided Exposure Guard and Center After Drift on a rig without a guider.
+/// The client builds those sequence nodes from this section; the daemon reads
+/// <see cref="PriorToleranceBasis"/> when it turns the mount's spec sheet into a prior. Constructor
+/// defaults ARE the shipped behaviour, so a profile.json predating the section is unchanged.</summary>
+/// <param name="GuardEnabled">Attach the Unguided Exposure Guard to each imaging loop.</param>
+/// <param name="EccentricityTolerance">A light is "trailed" above this median eccentricity (probe pass rule and guard step-down).</param>
+/// <param name="GoodEccentricity">A light is "round" at or under this (guard step-up).</param>
+/// <param name="StepDownAfter">Consecutive trailed lights before the guard steps the exposure down a rung.</param>
+/// <param name="StepUpAfter">Consecutive round lights before the guard steps back up.</param>
+/// <param name="ProbeRungsSeconds">The probe's ladder (ascending, before the planned-sub / 2 × prior cap).</param>
+/// <param name="RecentreDriftArcmin">Center After Drift re-centres once the field has drifted past this.</param>
+/// <param name="RecentreSolveEveryN">Center After Drift plate-solves every Nth saved light.</param>
+/// <param name="PriorToleranceBasis"><c>max</c> (1 px or half the seeing, whichever is larger), <c>pixel</c>, or <c>seeing</c>: the trailing tolerance the spec-sheet prior is built on.</param>
+public sealed record UnguidedSettingsDto(
+    bool GuardEnabled = true,
+    double EccentricityTolerance = 0.5,
+    double GoodEccentricity = 0.3,
+    int StepDownAfter = 2,
+    int StepUpAfter = 10,
+    IReadOnlyList<double>? ProbeRungsSeconds = null,
+    double RecentreDriftArcmin = 10,
+    int RecentreSolveEveryN = 1,
+    string PriorToleranceBasis = UnguidedPriorToleranceBases.Max) {
+    /// <summary>The ladder, or the daemon's default (10/30/60/120 s) when the section carries none.</summary>
+    public IReadOnlyList<double> EffectiveProbeRungsSeconds =>
+        ProbeRungsSeconds is { Count: > 0 } ? ProbeRungsSeconds : DefaultProbeRungsSeconds;
+
+    public static readonly IReadOnlyList<double> DefaultProbeRungsSeconds = [10, 30, 60, 120];
+}
+
+/// <summary>#1264 — <see cref="UnguidedSettingsDto.PriorToleranceBasis"/> values.</summary>
+public static class UnguidedPriorToleranceBases {
+    public const string Max = "max";
+    public const string Pixel = "pixel";
+    public const string Seeing = "seeing";
+    public static bool IsValid(string? v) => v is Max or Pixel or Seeing;
+}
+
 /// <summary>§45 live-adjust capture modes (<see cref="PolarAlignSettingsDto.LoopMode"/>).</summary>
 public static class PolarAlignLoopModes {
     public const string Loop = "loop";

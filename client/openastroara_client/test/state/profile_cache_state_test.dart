@@ -9,6 +9,7 @@ import 'package:openastroara/services/profile_api.dart';
 import 'package:openastroara/services/profile_cache_service.dart';
 import 'package:openastroara/state/profile_cache_state.dart';
 import 'package:openastroara/state/settings/autofocus_settings_state.dart';
+import 'package:openastroara/state/settings/unguided_settings_state.dart';
 import 'package:openastroara/state/settings/camera_electronics_state.dart';
 import 'package:openastroara/state/settings/custom_horizon_state.dart';
 import 'package:openastroara/state/settings/filter_set_state.dart';
@@ -36,6 +37,10 @@ class _FakeApi extends ProfileApi {
   @override
   Future<AutofocusSettings> getAutofocusSettings() async =>
       const AutofocusSettings(steps: 9);
+
+  @override
+  Future<UnguidedSettings> getUnguidedSettings() async =>
+      const UnguidedSettings(stepDownAfter: 3);
 
   @override
   Future<SiteSettings> getSiteSettings() async =>

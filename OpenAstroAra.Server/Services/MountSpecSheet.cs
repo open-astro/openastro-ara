@@ -94,8 +94,8 @@ public static class MountSpecSheet {
     /// <summary>The unguided exposure prior the sheet implies for THIS rig, in seconds, or null when the
     /// sheet has no usable tracking figures (no worm period or periodic error, and no polar-align error
     /// either) or no pixel scale/seeing is known to set the tolerance. Pure.</summary>
-    public static double? UnguidedPriorSeconds(MountSpecSheetDto? sheet, double? pixelScaleArcsec, double? seeingFwhmArcsec, double? polarAlignErrorArcmin) {
-        var tolerance = Tolerance(pixelScaleArcsec, seeingFwhmArcsec);
+    public static double? UnguidedPriorSeconds(MountSpecSheetDto? sheet, double? pixelScaleArcsec, double? seeingFwhmArcsec, double? polarAlignErrorArcmin, string basis = UnguidedPriorToleranceBases.Max) {
+        var tolerance = Tolerance(pixelScaleArcsec, seeingFwhmArcsec, basis);
         if (tolerance is not double tol || tol <= 0) {
             return null;
         }
@@ -122,14 +122,17 @@ public static class MountSpecSheet {
         && sheet.WormPeriodS is double worm && worm > 0
         && sheet.PeriodicErrorPpArcsec is double pp && pp > 0;
 
-    /// <summary>The trailing tolerance in arcseconds: a pixel, or half the seeing disc, whichever is larger.</summary>
-    public static double? Tolerance(double? pixelScaleArcsec, double? seeingFwhmArcsec) {
+    /// <summary>The trailing tolerance in arcseconds on the chosen basis (#1264 Imaging → Unguided):
+    /// <c>max</c> = a pixel or half the seeing disc, whichever is larger; <c>pixel</c> = one pixel;
+    /// <c>seeing</c> = half the seeing disc. Null when the figures the basis needs are missing.</summary>
+    public static double? Tolerance(double? pixelScaleArcsec, double? seeingFwhmArcsec, string basis = UnguidedPriorToleranceBases.Max) {
         var px = pixelScaleArcsec is double s && s > 0 ? s : (double?)null;
         var see = seeingFwhmArcsec is double f && f > 0 ? 0.5 * f : (double?)null;
-        if (px is null && see is null) {
-            return null;
-        }
-        return Math.Max(px ?? 0, see ?? 0);
+        return basis switch {
+            UnguidedPriorToleranceBases.Pixel => px,
+            UnguidedPriorToleranceBases.Seeing => see,
+            _ => px is null && see is null ? null : Math.Max(px ?? 0, see ?? 0),
+        };
     }
 
     private static string? Str(JsonElement o, string name) =>

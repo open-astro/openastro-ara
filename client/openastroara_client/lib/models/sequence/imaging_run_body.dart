@@ -8,6 +8,33 @@ import 'nina_dom.dart';
 import 'slew_target_body.dart';
 import 'trigger_catalog.dart';
 
+/// #1264 — Imaging → Unguided as the run builder consumes it: what goes on the
+/// Tracking Probe, the Unguided Exposure Guard and Center After Drift nodes of a
+/// rig without a guider. Defaults ARE the shipped behaviour (the daemon's
+/// `UnguidedSettingsDto` defaults), so a caller without settings builds the
+/// same body as before.
+class UnguidedOptions {
+  final bool guardEnabled;
+  final double eccentricityTolerance;
+  final double goodEccentricity;
+  final int stepDownAfter;
+  final int stepUpAfter;
+  final List<double> probeRungsSeconds;
+  final double recentreDriftArcmin;
+  final int recentreSolveEveryN;
+
+  const UnguidedOptions({
+    this.guardEnabled = true,
+    this.eccentricityTolerance = 0.5,
+    this.goodEccentricity = 0.3,
+    this.stepDownAfter = 2,
+    this.stepUpAfter = 10,
+    this.probeRungsSeconds = const [10, 30, 60, 120],
+    this.recentreDriftArcmin = 10,
+    this.recentreSolveEveryN = 1,
+  });
+}
+
 /// §36 Planning → "Create Run": build a COMPLETE, runnable imaging session for
 /// a target, not just a slew. The tree (all `$type`s are registered prototypes
 /// in the daemon's `HeadlessSequencerFactory`, so every step executes for real
@@ -74,6 +101,8 @@ Map<String, dynamic> buildImagingRunBody({
   // [RigCapabilities]). Callers without a rig to read keep the old
   // "assume everything" shape.
   RigCapabilities rig = RigCapabilities.everything,
+  // #1264 — Imaging → Unguided: the guard / probe / re-centre knobs.
+  UnguidedOptions unguidedOptions = const UnguidedOptions(),
   // #1264 — the mount's SPEC-SHEET prior for the probe (AlpacaBridge #815),
   // never the stored ceiling: the daemon already starts from last night's
   // measurement on its own, and a body prior would override a Recalibrate.
@@ -98,6 +127,7 @@ Map<String, dynamic> buildImagingRunBody({
     ditherEveryNExposures: ditherEveryNExposures,
     manualFilterSwap: manualFilterSwap,
     rig: rig,
+    unguidedOptions: unguidedOptions,
     trackingPriorSeconds: trackingPriorSeconds,
   );
 
@@ -166,6 +196,7 @@ Map<String, dynamic> buildTargetBlock({
   int? ditherEveryNExposures,
   bool manualFilterSwap = false,
   RigCapabilities rig = RigCapabilities.everything,
+  UnguidedOptions unguidedOptions = const UnguidedOptions(),
   double? trackingPriorSeconds,
 }) {
   // Cook the block from the rig: a device the rig lacks gets no step and no
@@ -288,8 +319,20 @@ Map<String, dynamic> buildTargetBlock({
           'UnguidedExposureGuard missing from the trigger catalog',
         );
       }
-      // The planned sub is the longest the guard may step back up to.
-      triggers.add(guardDef.build()..['MaxExposure'] = expSeconds);
+      // The planned sub is the longest the guard may step back up to; the
+      // thresholds and streak lengths come from Imaging → Unguided. The guard
+      // can be switched off there (the probe and re-centre stay).
+      if (unguidedOptions.guardEnabled) {
+        triggers.add(
+          guardDef.build()
+            ..['MaxExposure'] = expSeconds
+            ..['EccentricityTolerance'] = unguidedOptions.eccentricityTolerance
+            ..['GoodEccentricity'] = unguidedOptions.goodEccentricity
+            ..['StepDownAfter'] = unguidedOptions.stepDownAfter
+            ..['StepUpAfter'] = unguidedOptions.stepUpAfter
+            ..['Rungs'] = unguidedOptions.probeRungsSeconds,
+        );
+      }
       // #1195 — and the periodic re-centre: unguided, nothing else pulls the
       // field back when polar-alignment drift walks it off the framing.
       final driftDef = triggerForType(centerAfterDriftType);
@@ -299,7 +342,10 @@ Map<String, dynamic> buildTargetBlock({
         );
       }
       triggers.add(
-        driftDef.build()..['Coordinates'] = inputCoordinatesFromDeg(raDeg, decDeg),
+        driftDef.build()
+          ..['Coordinates'] = inputCoordinatesFromDeg(raDeg, decDeg)
+          ..['DistanceArcMinutes'] = unguidedOptions.recentreDriftArcmin
+          ..['AfterExposures'] = unguidedOptions.recentreSolveEveryN,
       );
     }
     if (triggers.isNotEmpty) imaging = withTriggers(imaging, triggers);
@@ -313,7 +359,9 @@ Map<String, dynamic> buildTargetBlock({
     final longest = plan == null
         ? exposureSeconds
         : plan.map((s) => s.exposureSeconds).reduce(math.max);
-    final probe = _item(trackingProbeType)..['MaxExposure'] = longest;
+    final probe = _item(trackingProbeType)
+      ..['MaxExposure'] = longest
+      ..['Rungs'] = unguidedOptions.probeRungsSeconds;
     if (trackingPriorSeconds != null && trackingPriorSeconds > 0) {
       probe['PriorSeconds'] = trackingPriorSeconds;
     }
