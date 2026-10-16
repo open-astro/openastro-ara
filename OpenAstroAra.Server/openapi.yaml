@@ -1410,6 +1410,40 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
+  /api/v1/equipment/guider/live/calibration:
+    get:
+      tags:
+        - Equipment
+      summary: 'This session''s calibration run (steps, outcome), the stored calibration and Ara''s verdict.'
+      operationId: GetGuiderCalibrationView
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GuiderCalibrationViewDto'
+  /api/v1/equipment/guider/live/calibration/clear:
+    post:
+      tags:
+        - Equipment
+      summary: Drop the stored calibration; the next guide start calibrates again.
+      operationId: ClearGuiderCalibration
+      responses:
+        '204':
+          description: No Content
+        '409':
+          description: Conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '422':
+          description: Unprocessable Entity
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/equipment/guider/live/deselect:
     post:
       tags:
@@ -9476,6 +9510,71 @@ components:
           type:
             - 'null'
             - string
+    GuiderCalibrationDataDto:
+      required:
+        - calibrated
+        - x_angle_deg
+        - y_angle_deg
+        - x_rate_px_per_sec
+        - y_rate_px_per_sec
+        - x_parity
+        - y_parity
+        - declination_deg
+        - orthogonality_error_deg
+      type: object
+      properties:
+        calibrated:
+          type: boolean
+        x_angle_deg:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        y_angle_deg:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        x_rate_px_per_sec:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        y_rate_px_per_sec:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        x_parity:
+          type:
+            - 'null'
+            - string
+        y_parity:
+          type:
+            - 'null'
+            - string
+        declination_deg:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        orthogonality_error_deg:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
     GuiderCalibrationEntryDto:
       type: object
       properties:
@@ -9487,6 +9586,74 @@ components:
             - 'null'
             - string
           format: date-time
+    GuiderCalibrationStepDto:
+      required:
+        - direction
+        - step
+        - dx
+        - dy
+        - dist
+      type: object
+      properties:
+        direction:
+          type: string
+        step:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+        dx:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+        dy:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+        dist:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+    GuiderCalibrationViewDto:
+      required:
+        - connected
+        - run_state
+        - steps
+        - error
+        - data
+        - verdict
+        - verdict_reason
+      type: object
+      properties:
+        connected:
+          type: boolean
+        run_state:
+          type: string
+        steps:
+          type: array
+          items:
+            $ref: '#/components/schemas/GuiderCalibrationStepDto'
+        error:
+          type:
+            - 'null'
+            - string
+        data:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/GuiderCalibrationDataDto'
+        verdict:
+          type: string
+        verdict_reason:
+          type:
+            - 'null'
+            - string
     GuiderConnectRequestDto:
       type: object
       properties:

@@ -408,6 +408,20 @@ The card now keeps a known device's card while it is not live: name, state chip,
 
 ---
 
+### 2026-10-16 — Guider calibration in Ara: step plot, stored result, verdict, clear (#1364 item 2)
+
+**Endpoint(s) or area:** new `GET /api/v1/equipment/guider/live/calibration`, `POST …/live/calibration/clear`; WS `guider.event` kind `calibrating` gains `dx_px`, `dy_px`.
+
+**Decision:** `GET …/live/calibration` is always 200 with `GuiderCalibrationViewDto { connected, run_state, steps[{direction, step, dx, dy, dist}], error?, data?, verdict, verdict_reason? }`. `run_state` is this session's calibration run: `none` | `running` | `complete` | `failed`; `steps` are every `Calibrating` event of the run (the star's displacement from the leg's start, guide px — PHD2's calibration plot), kept after completion and cleared when the next calibration starts; a run that stops before it finishes (loop stopped, guiding stopped, guider link lost — the guider sends no `CalibrationFailed` for these) ends `failed` with the reason in `error`. `data` is the guider's stored calibration (`get_calibration_data`): `calibrated`, `x_angle_deg`, `y_angle_deg`, `x_rate_px_per_sec`, `y_rate_px_per_sec`, `x_parity`, `y_parity`, `declination_deg`, and `orthogonality_error_deg` (how far the axes are from 90° apart); null when the guider does not answer. `verdict`: `redo` when the run failed or nothing is stored; `check` while running, when the axes are more than 10° from square, or when the Dec rate is more than 2× off the RA rate corrected for declination; `good` otherwise — `verdict_reason` says why. `connected` false → `run_state` `none`, `verdict` `redo`. `POST …/clear` drops the stored calibration (`clear_calibration Mount`) so the next guide start calibrates: 204; 409 no guider; 422 the guider refused.
+
+**Reasoning:** field night 2026-10-16: a five-minute calibration ran with nothing in Ara to show it, and no way to judge or redo the result without the guider's page.
+
+**Spec ref:** `OpenAstroAra.Server/openapi.yaml#/paths/~1api~1v1~1equipment~1guider~1live~1calibration` (…`~1clear`); `Contracts/EquipmentDtos.cs` (`GuiderCalibrationViewDto`, `GuiderCalibrationStepDto`, `GuiderCalibrationDataDto`), `Services/GuiderLiveService.cs` (`GetCalibrationAsync`, `Judge`, `ToDto`), `Equipment/MyGuider/PHD2/PHD2Guider.Calibration.cs`, `PHD2Guider.cs` (`CalibrationRun`); client `widgets/imaging/guide_calibration_panel.dart`, `models/guider_calibration_view.dart`.
+
+**Related:** #1364; tests `GuiderLiveServiceTest` (verdict, orthogonality), `PHD2GuiderMarkerEventTest` (run bookkeeping), client `guide_camera_panel_test`.
+
+---
+
 ### 2026-10-16 — Live guide-camera view: the guider's picture, locked star, stars, star pick (#1364 item 1)
 
 **Endpoint(s) or area:** new `GET /api/v1/equipment/guider/live`, `GET …/live/frame`, `POST …/live/loop`, `POST …/live/stop`, `POST …/live/select {x, y}`, `POST …/live/deselect`.
@@ -870,7 +884,7 @@ is connected, straight from its GuideStep events):
         settle_done         { status (0 = ok), error? }
         star_lost           { frame?, star_mass?, snr?, distance_px?, status?, error? }
         calibration_started | calibration_complete | calibration_failed { error? }
-        calibrating         { direction, frame (= step), distance_px }  one per step
+        calibrating         { direction, frame (= step), distance_px, dx_px, dy_px }  one per step
         guiding_started | guiding_stopped | paused | resumed | lock_position_lost
       A dither is drawn as dithered → (settling …) → settle_done; the client
       shades the settle window and marks the dither, exactly as PHD2 does.

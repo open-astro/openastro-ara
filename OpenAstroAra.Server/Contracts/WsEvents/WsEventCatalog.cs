@@ -99,7 +99,7 @@ public static class WsEventCatalog {
     // markers PHD2's own graph draws: payload { kind, ... } with kind = dithered {dx_px, dy_px} |
     // settling {distance_px, time_sec, settle_time_sec} | settle_done {status, error?} |
     // star_lost {frame?, star_mass?, snr?, distance_px?, status?, error?} | calibration_started |
-    // calibrating {direction, frame = step, distance_px} (one per calibration step) |
+    // calibrating {direction, frame = step, distance_px, dx_px, dy_px} (one per calibration step) |
     // calibration_complete | calibration_failed {error?} | guiding_started | guiding_stopped |
     // paused | resumed | lock_position_lost. Detail fields are omitted when PHD2 sent none.
     public const string GuiderEvent = "guider.event";
