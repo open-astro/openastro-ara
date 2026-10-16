@@ -408,6 +408,20 @@ The card now keeps a known device's card while it is not live: name, state chip,
 
 ---
 
+### 2026-10-16 — Live guide-camera view: the guider's picture, locked star, stars, star pick (#1364 item 1)
+
+**Endpoint(s) or area:** new `GET /api/v1/equipment/guider/live`, `GET …/live/frame`, `POST …/live/loop`, `POST …/live/stop`, `POST …/live/select {x, y}`, `POST …/live/deselect`.
+
+**Decision:** `GET …/live` is always 200 with `GuiderLiveDto { connected, app_state, frame_width?, frame_height?, lock_x?, lock_y?, search_region?, snr?, star_mass?, multi_star_enabled?, stars[{x, y, snr?, mass?, hfd?}], has_frame }`: `connected` false with nulls and no stars when no guider is connected; `app_state` is the guider's own phase (`Stopped` | `Looping` | `Selected` | `Calibrating` | `Guiding` | `LostLock` | `Paused`); coordinates are guide-camera pixels; `snr`/`star_mass` are the last guide frame's; `stars` are the guider's detected stars, brightest first, at most 12. Each field is read best-effort: one the guider refuses (no camera, no image yet) is null and the rest still answer. `GET …/live/frame` is the guider's own live JPEG fetched daemon-side (the client never talks to the guider, §63.20) — 204 until it has one. `loop` connects the guider's camera and mount first when they are not, then starts looping exposures; `stop` stops looping or guiding; `select {x, y}` locks the guider on the star nearest that guide-pixel position (`set_lock_position`, exact = false); `deselect` drops the star. Each action: 204; 409 when no guider is connected; 400 for a negative or non-finite position; 422 when the guider refuses (no image, no star near the tap, could not connect its equipment).
+
+**Reasoning:** field night 2026-10-16: choosing a guide star, watching it and seeing what the guider was doing all meant opening the guider's own web page; the epic (#1364) makes the guider part of Ara.
+
+**Spec ref:** `OpenAstroAra.Server/openapi.yaml#/paths/~1api~1v1~1equipment~1guider~1live` (…`~1frame`, `~1loop`, `~1stop`, `~1select`, `~1deselect`); `Contracts/EquipmentDtos.cs` (`GuiderLiveDto`, `GuiderLiveStarDto`, `GuiderLiveSelectRequestDto`), `Services/GuiderLiveService.cs`, `Endpoints/EquipmentEndpoints.cs` (`GuiderLiveActionAsync`), `Equipment/MyGuider/PHD2/PHD2Guider.LiveView.cs`; client `widgets/imaging/guide_camera_panel.dart`, `state/guider/guider_live_state.dart`, `services/guider_live_api.dart`, `models/guider_live.dart`.
+
+**Related:** #1364; tests `GuiderLiveServiceTest`, client `guide_camera_panel_test`.
+
+---
+
 ### 2026-10-16 — Bahtinov star pick, cropped picture while locked, short-spike detector; guider calibration leg
 
 **Endpoint(s) or area:** new `POST /api/v1/bahtinov-focus/pick {x, y}` and `DELETE …/pick`; `GET …/state` gains `frame_width`, `frame_height`, `frame_crop {left, top, size}?`, `pick_x?`, `pick_y?`; `GET …/frame` semantics; `GET /api/v1/equipment/guider` runtime gains `calibration_direction?`, `calibration_step?`, `calibration_distance_px?`; WS `guider.event` gains kind `calibrating`.

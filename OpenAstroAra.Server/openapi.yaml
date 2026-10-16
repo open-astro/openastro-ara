@@ -1311,6 +1311,126 @@ paths:
           description: OK
         '204':
           description: No Content
+  /api/v1/equipment/guider/live:
+    get:
+      tags:
+        - Equipment
+      summary: 'The live guide-camera view: guider state, frame size, locked star, search box, SNR, multi-star, stars.'
+      operationId: GetGuiderLive
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GuiderLiveDto'
+  /api/v1/equipment/guider/live/frame:
+    get:
+      tags:
+        - Equipment
+      summary: The guider's latest frame as JPEG (204 until it has one).
+      operationId: GetGuiderLiveFrame
+      responses:
+        '200':
+          description: OK
+        '204':
+          description: No Content
+  /api/v1/equipment/guider/live/loop:
+    post:
+      tags:
+        - Equipment
+      summary: Start looping guide exposures so the live view has a picture.
+      operationId: GuiderLiveLoop
+      responses:
+        '204':
+          description: No Content
+        '409':
+          description: Conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '422':
+          description: Unprocessable Entity
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  /api/v1/equipment/guider/live/stop:
+    post:
+      tags:
+        - Equipment
+      summary: Stop looping or guiding.
+      operationId: GuiderLiveStop
+      responses:
+        '204':
+          description: No Content
+        '409':
+          description: Conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '422':
+          description: Unprocessable Entity
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  /api/v1/equipment/guider/live/select:
+    post:
+      tags:
+        - Equipment
+      summary: 'Lock the guider on the star nearest (x, y) guide pixels.'
+      operationId: GuiderLiveSelectStar
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GuiderLiveSelectRequestDto'
+        required: true
+      responses:
+        '204':
+          description: No Content
+        '400':
+          description: Bad Request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '409':
+          description: Conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '422':
+          description: Unprocessable Entity
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  /api/v1/equipment/guider/live/deselect:
+    post:
+      tags:
+        - Equipment
+      summary: Drop the guider's selected star.
+      operationId: GuiderLiveDeselectStar
+      responses:
+        '204':
+          description: No Content
+        '409':
+          description: Conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '422':
+          description: Unprocessable Entity
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/equipment/guider/darklibrary/build:
     post:
       tags:
@@ -9381,6 +9501,147 @@ components:
             - integer
             - string
           format: int32
+    GuiderLiveDto:
+      required:
+        - connected
+        - app_state
+        - frame_width
+        - frame_height
+        - lock_x
+        - lock_y
+        - search_region
+        - snr
+        - star_mass
+        - multi_star_enabled
+        - stars
+        - has_frame
+      type: object
+      properties:
+        connected:
+          type: boolean
+        app_state:
+          type:
+            - 'null'
+            - string
+        frame_width:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - 'null'
+            - integer
+            - string
+          format: int32
+        frame_height:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - 'null'
+            - integer
+            - string
+          format: int32
+        lock_x:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        lock_y:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        search_region:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - 'null'
+            - integer
+            - string
+          format: int32
+        snr:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        star_mass:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        multi_star_enabled:
+          type:
+            - 'null'
+            - boolean
+        stars:
+          type: array
+          items:
+            $ref: '#/components/schemas/GuiderLiveStarDto'
+        has_frame:
+          type: boolean
+    GuiderLiveSelectRequestDto:
+      required:
+        - x
+        - y
+      type: object
+      properties:
+        x:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+        y:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+    GuiderLiveStarDto:
+      required:
+        - x
+        - y
+        - snr
+        - mass
+        - hfd
+      type: object
+      properties:
+        x:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+        y:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+        snr:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        mass:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        hfd:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
     GuidingRmsPointDto:
       required:
         - timestamp
