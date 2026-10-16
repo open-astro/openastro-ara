@@ -124,8 +124,12 @@ public sealed partial class GuiderService : IGuiderMediator {
     /// The guider's polar-align lease outlives whoever took it: a live-focus loop that died with a daemon
     /// restart left "polar-alignment session in progress" standing with nothing holding it, and every
     /// guide request after that was refused (2026-10-03, twice). Guiding is about to own the guide
-    /// camera anyway, so the lease is released — unless this daemon's polar alignment is running and
-    /// holds it (<see cref="ShouldReleasePaLease"/>); a refusal here is logged, not fatal.
+    /// camera anyway, so <see cref="PaLeaseActionFor"/> decides: <c>Release</c> — no polar alignment in
+    /// this daemon holds the lease, so it is stale and released; <c>EndPolarAlignThenRelease</c> — this
+    /// daemon's polar alignment is still open (the Polar Align step never finished with Done,
+    /// 2026-10-16) and <see cref="EndPolarAlignAsync"/> is wired (Program.cs always wires it), so the
+    /// alignment is stopped (not completed) and then the lease released; <c>Keep</c> — the guider reports
+    /// no lease, or an alignment holds it and nothing can end it. A refusal here is logged, not fatal.
     /// </summary>
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Best-effort lease release before guiding: the guide attempt reports its own outcome.")]
