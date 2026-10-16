@@ -154,6 +154,55 @@ void main() {
     expect(find.byKey(const Key('guider-advanced-status')), findsOneWidget);
   });
 
+  test('cross-field rules match the server: delay trio and min <= max', () {
+    String? p(Map<String, Object?> v) =>
+        GuiderAdvancedPanelTestHooks.crossFieldProblem(
+          GuiderAdvancedSettings(v),
+        );
+    expect(p({}), isNull);
+    expect(p({'variable_delay_enabled': true}), contains('all three'));
+    expect(
+      p({'variable_delay_enabled': true, 'variable_delay_short_s': 1.0}),
+      contains('all three'),
+    );
+    expect(
+      p({
+        'variable_delay_enabled': false,
+        'variable_delay_short_s': 1.0,
+        'variable_delay_long_s': 5.0,
+      }),
+      isNull,
+    );
+    expect(p({'min_star_hfd': 9.0, 'max_star_hfd': 3.0}), contains('Star HFD'));
+    expect(
+      p({'auto_exposure_min_ms': 4000, 'auto_exposure_max_ms': 1000}),
+      contains('Auto exposure'),
+    );
+    expect(
+      p({'backlash_floor_ms': 300, 'backlash_ceiling_ms': 100}),
+      contains('Backlash'),
+    );
+  });
+
+  testWidgets('a half-set variable delay blocks Apply with a reason', (
+    t,
+  ) async {
+    final fake = await _pump(t);
+    await t.enterText(find.byKey(const Key('ga-variable_delay_short_s')), '2');
+    await t.pump();
+    expect(
+      find.byKey(const Key('guider-advanced-cross-field')),
+      findsOneWidget,
+    );
+    expect(
+      t
+          .widget<FilledButton>(find.widgetWithText(FilledButton, 'Apply'))
+          .onPressed,
+      isNull,
+    );
+    expect(fake.putBody, isNull);
+  });
+
   testWidgets('an invalid number blocks Apply', (t) async {
     final fake = await _pump(t);
     await t.enterText(find.byKey(const Key('ga-max_dec_duration_ms')), '-3');

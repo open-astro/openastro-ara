@@ -39,6 +39,8 @@ Future<void> showGuiderAdvancedDialog(BuildContext context) => showDialog<void>(
 abstract final class GuiderAdvancedPanelTestHooks {
   static (Object?, String?) parse(GuiderAdvancedField f, String raw) =>
       _GuiderAdvancedPanelState.parseNumber(f, raw);
+  static String? crossFieldProblem(GuiderAdvancedSettings d) =>
+      _GuiderAdvancedPanelState.crossFieldProblem(d);
 }
 
 class GuiderAdvancedPanel extends ConsumerStatefulWidget {
@@ -133,6 +135,29 @@ class _GuiderAdvancedPanelState extends ConsumerState<GuiderAdvancedPanel> {
     return (n.toDouble(), null);
   }
 
+  /// The server's rules across fields, checked before Apply so the user sees
+  /// them by the fields rather than as a 400: the variable delay is all three
+  /// values or none (the guider takes them together), and each min ≤ max.
+  /// Pure — tested.
+  static String? crossFieldProblem(GuiderAdvancedSettings d) {
+    final delay = [
+      d['variable_delay_enabled'],
+      d['variable_delay_short_s'],
+      d['variable_delay_long_s'],
+    ].where((v) => v != null).length;
+    if (delay == 1 || delay == 2) {
+      return 'Variable delay needs all three: on/off, short and long delay.';
+    }
+    String? order(String min, String max, String what) {
+      final lo = d[min], hi = d[max];
+      return lo is num && hi is num && lo > hi ? '$what: the minimum is above the maximum.' : null;
+    }
+    return order('min_star_hfd', 'max_star_hfd', 'Star HFD') ??
+        order('auto_exposure_min_ms', 'auto_exposure_max_ms', 'Auto exposure') ??
+        order('backlash_floor_ms', 'backlash_ceiling_ms', 'Backlash') ??
+        order('variable_delay_short_s', 'variable_delay_long_s', 'Variable delay');
+  }
+
   void _onText(GuiderAdvancedField f, String raw) {
     final (value, error) = parseNumber(f, raw);
     setState(() {
@@ -147,7 +172,9 @@ class _GuiderAdvancedPanelState extends ConsumerState<GuiderAdvancedPanel> {
 
   Future<void> _apply() async {
     final api = ref.read(guiderAdvancedApiProvider);
-    if (api == null || _errors.isNotEmpty) return;
+    if (api == null || _errors.isNotEmpty || crossFieldProblem(_draft) != null) {
+      return;
+    }
     setState(() {
       _applying = true;
       _status = null;
@@ -228,7 +255,8 @@ class _GuiderAdvancedPanelState extends ConsumerState<GuiderAdvancedPanel> {
             ],
           ),
           Text(
-            'Blank or "Guider\'s" keeps the guider\'s own value; anything you set here is kept in this profile.',
+            'Blank or "Guider\'s" leaves the setting to the guider — Ara stops sending it, and the guider keeps what it has now, '
+            'including a value Ara sent earlier. Anything you set here is kept in this profile.',
             style: small,
           ),
           const SizedBox(height: 8),
@@ -263,11 +291,21 @@ class _GuiderAdvancedPanelState extends ConsumerState<GuiderAdvancedPanel> {
                 ),
               ),
             ),
+          if (crossFieldProblem(_draft) case final problem?)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text(
+                problem,
+                key: const Key('guider-advanced-cross-field'),
+                style: text.bodySmall?.copyWith(color: AraColors.accentError),
+              ),
+            ),
           const SizedBox(height: 8),
           Row(
             children: [
               TextButton(
                 onPressed: _loading || _applying ? null : _resetAll,
+                // Clears the profile's values only; nothing already sent is undone.
                 child: const Text("All guider's"),
               ),
               const Spacer(),
@@ -277,7 +315,11 @@ class _GuiderAdvancedPanelState extends ConsumerState<GuiderAdvancedPanel> {
               ),
               const SizedBox(width: 8),
               FilledButton.icon(
-                onPressed: _loading || _applying || _errors.isNotEmpty
+                onPressed:
+                    _loading ||
+                        _applying ||
+                        _errors.isNotEmpty ||
+                        crossFieldProblem(_draft) != null
                     ? null
                     : _apply,
                 icon: _applying
