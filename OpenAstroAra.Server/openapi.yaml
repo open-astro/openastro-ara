@@ -1444,6 +1444,28 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
+  /api/v1/equipment/guider/history:
+    get:
+      tags:
+        - Equipment
+      summary: 'The guider''s recent guide steps (oldest first, with ages) — max_points 1..400, default 400.'
+      operationId: GetGuiderHistory
+      parameters:
+        - name: maxPoints
+          in: query
+          schema:
+            pattern: '^-?(?:0|[1-9]\d*)$'
+            type:
+              - integer
+              - string
+            format: int32
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GuiderHistoryDto'
   /api/v1/equipment/guider/advanced:
     get:
       tags:
@@ -9916,6 +9938,99 @@ components:
             - integer
             - string
           format: int32
+    GuiderHistoryDto:
+      required:
+        - connected
+        - steps
+      type: object
+      properties:
+        connected:
+          type: boolean
+        steps:
+          type: array
+          items:
+            $ref: '#/components/schemas/GuiderHistoryStepDto'
+    GuiderHistoryStepDto:
+      required:
+        - age_sec
+        - ra_raw_px
+        - dec_raw_px
+        - ra_arcsec
+        - dec_arcsec
+        - ra_duration_ms
+        - dec_duration_ms
+        - pixel_scale_arcsec
+        - snr
+        - star_mass
+      type: object
+      properties:
+        age_sec:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+        ra_raw_px:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        dec_raw_px:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        ra_arcsec:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        dec_arcsec:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        ra_duration_ms:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+        dec_duration_ms:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+        pixel_scale_arcsec:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        snr:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        star_mass:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
     GuiderLiveDto:
       required:
         - connected

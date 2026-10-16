@@ -408,6 +408,20 @@ The card now keeps a known device's card while it is not live: name, state chip,
 
 ---
 
+### 2026-10-16 — The guider's graph history for a client that connects mid-session (#1364 item 5)
+
+**Endpoint(s) or area:** new `GET /api/v1/equipment/guider/history?max_points=` (`GuiderHistoryDto`).
+
+**Decision:** always 200: `{connected, steps[{age_sec, ra_raw_px?, dec_raw_px?, ra_arcsec?, dec_arcsec?, ra_duration_ms, dec_duration_ms, pixel_scale_arcsec?, snr?, star_mass?}]}`, oldest first, from the guider's own graph history (`get_guide_history`, `max_points` 1–400, default 400). The step fields match `guider.step` (pulse durations negative = East / South). `age_sec` is how long ago the step was taken, measured on the daemon's clock, which is the guider's — so a client places history on its own time axis without the Pi's and the client's clocks having to agree; a point without a plausible Unix-millisecond stamp (an older guider build) is spaced 2 s back from the newest. `connected` false or no history → `steps` empty. The client fills an empty guiding graph from it at start-up and when the guider connects, once, never over live steps.
+
+**Reasoning:** a client that connects (or reconnects) mid-run started with an empty graph and no RMS for minutes, though the guider had the whole session.
+
+**Spec ref:** `OpenAstroAra.Server/openapi.yaml#/paths/~1api~1v1~1equipment~1guider~1history`; `Contracts/EquipmentDtos.cs` (`GuiderHistoryDto`, `GuiderHistoryStepDto`), `Services/GuiderLiveService.cs` (`GetHistoryAsync`, `MapHistory`), `Equipment/MyGuider/PHD2/PHD2Guider.LiveView.cs` (`GetGuideHistoryAsync`); client `state/guider/guide_step_state.dart` (`seedFromHistory`, `historySteps`).
+
+**Related:** #1364; tests `GuiderLiveServiceTest` (`History_maps_to_guide_steps_with_ages_and_signed_pulses`), client `guide_step_history_test`.
+
+---
+
 ### 2026-10-16 — One guider state everywhere: `looping`, `star_selected`, `settling` (#1364 item 6)
 
 **Endpoint(s) or area:** `GET /api/v1/equipment/guider` — `runtime.state` (`GuiderStateDto.State`).
