@@ -128,6 +128,29 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Resume_replaces_the_pause_description_at_once() {
+            // The run paused with an instruction's pause text in its description ("Guiding did not
+            // start … press Resume"); that text stood for minutes after Resume on 2026-10-16 while the
+            // run was already calibrating. Resume writes its own line before the gate opens. The
+            // centering is held on a TCS so the gate stays shut and nothing else can write the
+            // description while it is read.
+            var id = Guid.NewGuid();
+            var hold = new TaskCompletionSource<PlateSolveResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var (svc, _, _) = BuildService(id, _ => hold.Task);
+            await PauseAtBoundaryAsync(svc, id);
+            var paused = await svc.GetRunStateAsync(id, CancellationToken.None);
+            Assert.That(paused!.CurrentInstructionDescription, Is.Not.EqualTo(SequencerService.ResumedDescription));
+
+            await svc.ResumeAsync(id, new SequenceResumeRequestDto(Recenter: true, Refocus: false), null, CancellationToken.None);
+            var resumed = await svc.GetRunStateAsync(id, CancellationToken.None);
+            Assert.That(resumed!.State, Is.EqualTo(SequenceRunState.Running));
+            Assert.That(resumed.CurrentInstructionDescription, Is.EqualTo(SequencerService.ResumedDescription));
+
+            hold.SetResult(new PlateSolveResult { Success = true });
+            await WaitForTerminalAsync(svc, id);
+        }
+
+        [Test]
         public async Task Default_resume_recenters_the_paused_target_then_completes() {
             var id = Guid.NewGuid();
             var (svc, centering, af) = BuildService(id);
