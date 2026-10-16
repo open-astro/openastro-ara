@@ -178,8 +178,8 @@ namespace OpenAstroAra.Test {
             Assert.That(s.FrameCrop, Is.Not.Null, "the picture is the crop around the picked star");
             var crop = s.FrameCrop!;
             Assert.That(crop.Size, Is.EqualTo(256));
-            // Centred on the brightest star near the pick (within the finder's 96 px search window), so
-            // the crop holds the pick and sits near the frame's bottom-left corner.
+            // Centred on the brightest star near the pick (within the picked 32 px search window), so the
+            // crop holds the pick and sits near the frame's bottom-left corner.
             Assert.That(crop.Left, Is.InRange(0, 100), "clamped near the left edge");
             Assert.That(crop.Top, Is.InRange(H - 256 - 100, H - 256), "clamped near the bottom edge");
             Assert.That((s.Latest.StarX, s.Latest.StarY), Is.EqualTo((100, 400)), "the lock stays on the pick");
