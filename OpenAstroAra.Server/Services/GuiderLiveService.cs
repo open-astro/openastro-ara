@@ -73,11 +73,19 @@ public sealed partial class GuiderLiveService : IGuiderLiveService {
         }
         // Each read is independent and best-effort: a guider without a camera answers the frame size
         // with an error, one that is not looping has no stars — neither is a reason to hide the rest.
-        var size = await Quietly(() => guider.GetCameraFrameSizeAsync(ct), "frame size").ConfigureAwait(false);
-        var lockPos = await Quietly<OpenAstroAra.Equipment.Equipment.MyGuider.LockPosition?>(async () => await guider.GetLockPosition().ConfigureAwait(false), "lock position").ConfigureAwait(false);
-        var region = await Quietly(() => guider.GetSearchRegionAsync(ct), "search region").ConfigureAwait(false);
-        var multi = await Quietly(() => guider.GetMultiStarEnabledAsync(ct), "multi-star").ConfigureAwait(false);
-        var centroids = await Quietly<IReadOnlyList<Phd2StarCentroid>?>(async () => await guider.GetStarCentroidsAsync(null, MaxStars, ct).ConfigureAwait(false), "star centroids").ConfigureAwait(false);
+        // They run together (each RPC is its own connection), so a slow guider costs one RPC's time,
+        // not five, against the client's poll.
+        var sizeTask = Quietly(() => guider.GetCameraFrameSizeAsync(ct), "frame size");
+        var lockTask = Quietly<OpenAstroAra.Equipment.Equipment.MyGuider.LockPosition?>(async () => await guider.GetLockPosition().ConfigureAwait(false), "lock position");
+        var regionTask = Quietly(() => guider.GetSearchRegionAsync(ct), "search region");
+        var multiTask = Quietly(() => guider.GetMultiStarEnabledAsync(ct), "multi-star");
+        var centroidsTask = Quietly<IReadOnlyList<Phd2StarCentroid>?>(async () => await guider.GetStarCentroidsAsync(null, MaxStars, ct).ConfigureAwait(false), "star centroids");
+        await Task.WhenAll(sizeTask, lockTask, regionTask, multiTask, centroidsTask).ConfigureAwait(false);
+        var size = await sizeTask.ConfigureAwait(false);
+        var lockPos = await lockTask.ConfigureAwait(false);
+        var region = await regionTask.ConfigureAwait(false);
+        var multi = await multiTask.ConfigureAwait(false);
+        var centroids = await centroidsTask.ConfigureAwait(false);
         var stars = new List<GuiderLiveStarDto>();
         if (centroids is not null) {
             foreach (var c in centroids) {
@@ -103,17 +111,26 @@ public sealed partial class GuiderLiveService : IGuiderLiveService {
             HasFrame: state is not null && state != "Stopped");
     }
 
+    /// <summary>How long the frame fetch may take before the picture is skipped this poll — the same
+    /// bound the polar-align preview uses (<see cref="PolarAlignService"/>).</summary>
+    internal static readonly TimeSpan FrameFetchTimeout = TimeSpan.FromSeconds(5);
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "The picture is best-effort: any fetch failure (no frame yet, a wedged or slow guider HTTP side, a timeout) means no image this poll — 204, never a 500.")]
     public async Task<byte[]?> GetFrameJpegAsync(CancellationToken ct) {
         var guider = _guider.ConnectedGuiderOrNull();
         if (guider is null || string.IsNullOrEmpty(guider.ConnectedHost)) {
             return null;
         }
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeout.CancelAfter(FrameFetchTimeout);
         try {
-            return await _fetcher.FetchLiveFrameJpegAsync(guider.ConnectedHost, guider.ConnectedRpcPort, ct).ConfigureAwait(false);
+            return await _fetcher.FetchLiveFrameJpegAsync(guider.ConnectedHost, guider.ConnectedRpcPort, timeout.Token).ConfigureAwait(false);
         } catch (OperationCanceledException) when (ct.IsCancellationRequested) {
             throw;
-        } catch (System.Net.Http.HttpRequestException ex) {
-            // No frame yet (404 while not looping) or the guider's HTTP side is down: no picture, not a fault.
+        } catch (Exception ex) {
+            // No frame yet (404 while not looping), the guider's HTTP side down or too slow (the fetcher's
+            // own timeout surfaces as TaskCanceledException with the caller's token still live).
             LogFrameUnavailable(ex.Message);
             return null;
         }
@@ -123,11 +140,19 @@ public sealed partial class GuiderLiveService : IGuiderLiveService {
 
     public Task StopAsync(CancellationToken ct) => _guider.RequireConnectedGuider().StopCaptureAsync(ct);
 
-    public Task SelectStarAsync(double x, double y, CancellationToken ct) {
+    /// <summary>Lock on the star nearest (x, y). Refused as out of range (400) when the position is
+    /// negative or not finite, or — once the guider reports its frame size — outside the frame; with no
+    /// frame size known, the guider itself judges the position.</summary>
+    public async Task SelectStarAsync(double x, double y, CancellationToken ct) {
         if (!double.IsFinite(x) || !double.IsFinite(y) || x < 0 || y < 0) {
             throw new ArgumentOutOfRangeException(nameof(x), $"({x}, {y}) is not a position in the frame");
         }
-        return _guider.RequireConnectedGuider().SetLockPositionAsync(x, y, ct);
+        var guider = _guider.RequireConnectedGuider();
+        var size = await Quietly(() => guider.GetCameraFrameSizeAsync(ct), "frame size").ConfigureAwait(false);
+        if (size is { } s && (x >= s.Width || y >= s.Height)) {
+            throw new ArgumentOutOfRangeException(nameof(x), $"({x}, {y}) is outside the {s.Width}×{s.Height} guide frame");
+        }
+        await guider.SetLockPositionAsync(x, y, ct).ConfigureAwait(false);
     }
 
     public Task DeselectStarAsync(CancellationToken ct) => _guider.RequireConnectedGuider().DeselectStarAsync(ct);
