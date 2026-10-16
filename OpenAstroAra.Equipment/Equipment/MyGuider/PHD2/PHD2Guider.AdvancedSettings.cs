@@ -183,26 +183,45 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             }
             async Task<JToken?> Get(string method, Dictionary<string, object>? p = null) {
                 ct.ThrowIfCancellationRequested();
-                var resp = await SendMessage<GenericPhdMethodResponse>(new Phd2NamedGetter(method, p), LiveRpcTimeoutMs).ConfigureAwait(false);
+                // Best-effort and expected to be refused (no mount defined, an older build): never an inbox
+                // Error per setting when the dialog opens (#1366's lesson).
+                var resp = await SendMessage<GenericPhdMethodResponse>(new Phd2NamedGetter(method, p), LiveRpcTimeoutMs, notifyOnError: false).ConfigureAwait(false);
                 return resp.error != null || resp.result is null ? null : JToken.FromObject(resp.result);
             }
             static bool? B(JToken? o, string k) => o?[k]?.Type == JTokenType.Boolean ? o[k]!.Value<bool>() : null;
             static double? D(JToken? o, string k) => o?[k]?.Type is JTokenType.Float or JTokenType.Integer ? o[k]!.Value<double>() : null;
             static int? I(JToken? o, string k) => D(o, k) is double d ? (int)Math.Round(d) : null;
 
-            var options = await Get("get_guider_options").ConfigureAwait(false);
-            var setup = await Get("get_profile_setup").ConfigureAwait(false);
-            var detection = await Get("get_star_detection").ConfigureAwait(false);
-            var autoExp = await Get("get_auto_exposure").ConfigureAwait(false);
-            var noise = await Get("get_noise_reduction").ConfigureAwait(false);
-            var subframes = await Get("get_use_subframes").ConfigureAwait(false);
-            var limits = await Get("get_guide_limits").ConfigureAwait(false);
-            var backlash = await Get("get_backlash_comp").ConfigureAwait(false);
-            var mount = await Get("get_mount_options").ConfigureAwait(false);
-            var delay = await Get("get_variable_delay_settings").ConfigureAwait(false);
-            var dither = await Get("get_dither_settings").ConfigureAwait(false);
-            var raAlgo = await Get("get_algo", new() { ["axis"] = "ra" }).ConfigureAwait(false);
-            var decAlgo = await Get("get_algo", new() { ["axis"] = "dec" }).ConfigureAwait(false);
+            // In parallel (each call is its own connection, as the live view's reads are): thirteen
+            // sequential 5 s timeouts could outlast the client's request on a slow guider.
+            var optionsT = Get("get_guider_options");
+            var setupT = Get("get_profile_setup");
+            var detectionT = Get("get_star_detection");
+            var autoExpT = Get("get_auto_exposure");
+            var noiseT = Get("get_noise_reduction");
+            var subframesT = Get("get_use_subframes");
+            var limitsT = Get("get_guide_limits");
+            var backlashT = Get("get_backlash_comp");
+            var mountT = Get("get_mount_options");
+            var delayT = Get("get_variable_delay_settings");
+            var ditherT = Get("get_dither_settings");
+            var raAlgoT = Get("get_algo", new() { ["axis"] = "ra" });
+            var decAlgoT = Get("get_algo", new() { ["axis"] = "dec" });
+            await Task.WhenAll(optionsT, setupT, detectionT, autoExpT, noiseT, subframesT, limitsT, backlashT, mountT, delayT, ditherT, raAlgoT, decAlgoT)
+                .ConfigureAwait(false);
+            var options = await optionsT.ConfigureAwait(false);
+            var setup = await setupT.ConfigureAwait(false);
+            var detection = await detectionT.ConfigureAwait(false);
+            var autoExp = await autoExpT.ConfigureAwait(false);
+            var noise = await noiseT.ConfigureAwait(false);
+            var subframes = await subframesT.ConfigureAwait(false);
+            var limits = await limitsT.ConfigureAwait(false);
+            var backlash = await backlashT.ConfigureAwait(false);
+            var mount = await mountT.ConfigureAwait(false);
+            var delay = await delayT.ConfigureAwait(false);
+            var dither = await ditherT.ConfigureAwait(false);
+            var raAlgo = await raAlgoT.ConfigureAwait(false);
+            var decAlgo = await decAlgoT.ConfigureAwait(false);
 
             return new GuiderAdvancedSettings {
                 MultiStarEnabled = B(setup, "multistar_enabled"),
@@ -247,7 +266,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             }
             ct.ThrowIfCancellationRequested();
             var resp = await SendMessage<GenericPhdMethodResponse>(
-                new Phd2NamedGetter("get_algos", new() { ["axis"] = axis }), LiveRpcTimeoutMs).ConfigureAwait(false);
+                new Phd2NamedGetter("get_algos", new() { ["axis"] = axis }), LiveRpcTimeoutMs, notifyOnError: false).ConfigureAwait(false);
             if (resp.error != null || resp.result is null) {
                 return Array.Empty<string>();
             }
