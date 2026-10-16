@@ -605,19 +605,13 @@ class BahtinovFrameView extends StatelessWidget {
     this.onZoom,
   });
 
-  /// The part of [crop] on screen at [zoom]: its central 1/zoom. Pure.
-  static BahtinovFrameCrop? visibleCrop(BahtinovFrameCrop? crop, int zoom) {
-    if (crop == null || zoom <= 1) return crop;
-    final visible = crop.size ~/ zoom;
-    final inset = (crop.size - visible) ~/ 2;
-    return BahtinovFrameCrop(left: crop.left + inset, top: crop.top + inset, size: visible);
-  }
-
-  /// Where a tap at [tap] inside a [box] showing the picture (BoxFit.contain)
-  /// lands in frame pixels, or null off the picture or without a frame size.
-  /// The picture is the [crop] square (its centre at [zoom]) when one is
-  /// given, else the whole [frameWidth] × [frameHeight] frame. Pure —
-  /// unit-tested.
+  /// Where a tap at [tap] inside a [box] showing the picture lands in frame
+  /// pixels, or null off the picture or without a frame size. The picture is
+  /// the [crop] square when one is given, else the whole [frameWidth] ×
+  /// [frameHeight] frame, drawn BoxFit.contain; a crop is then magnified by
+  /// [zoom] about the box centre and clipped to the BOX — so in a box wider
+  /// than tall the zoomed crop shows more than a central square, and a tap
+  /// anywhere on it maps through the magnified rect. Pure — unit-tested.
   static ({int x, int y})? tapToFramePixel({
     required Size box,
     required Offset tap,
@@ -626,18 +620,17 @@ class BahtinovFrameView extends StatelessWidget {
     BahtinovFrameCrop? crop,
     int zoom = 1,
   }) {
-    crop = visibleCrop(crop, zoom);
     final imgW = crop?.size ?? frameWidth;
     final imgH = crop?.size ?? frameHeight;
     if (imgW <= 0 || imgH <= 0 || box.width <= 0 || box.height <= 0) return null;
-    final scale = math.min(box.width / imgW, box.height / imgH);
-    final drawnW = imgW * scale;
-    final drawnH = imgH * scale;
-    final u = (tap.dx - (box.width - drawnW) / 2) / drawnW;
-    final v = (tap.dy - (box.height - drawnH) / 2) / drawnH;
-    if (u < 0 || u > 1 || v < 0 || v > 1) return null;
-    final x = (crop?.left ?? 0) + (u * imgW).floor();
-    final y = (crop?.top ?? 0) + (v * imgH).floor();
+    if (tap.dx < 0 || tap.dy < 0 || tap.dx > box.width || tap.dy > box.height) return null;
+    final magnify = crop != null && zoom > 1 ? zoom : 1;
+    final scale = math.min(box.width / imgW, box.height / imgH) * magnify;
+    final u = (tap.dx - (box.width - imgW * scale) / 2) / scale;
+    final v = (tap.dy - (box.height - imgH * scale) / 2) / scale;
+    if (u < 0 || u >= imgW || v < 0 || v >= imgH) return null;
+    final x = (crop?.left ?? 0) + u.floor();
+    final y = (crop?.top ?? 0) + v.floor();
     return (x: x.clamp(0, frameWidth - 1), y: y.clamp(0, frameHeight - 1));
   }
 

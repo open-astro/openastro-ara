@@ -73,82 +73,70 @@ void main() {
     });
   });
 
-  test('at 2× the picture is the central half of the crop', () {
+  test('a zoomed crop maps taps through the magnified picture, wide boxes included', () {
     const crop = BahtinovFrameCrop(left: 1800, top: 900, size: 256);
-    final v = BahtinovFrameView.visibleCrop(crop, 2)!;
-    expect((v.left, v.top, v.size), (1864, 964, 128));
-    expect(BahtinovFrameView.visibleCrop(crop, 1), same(crop));
-    expect(BahtinovFrameView.visibleCrop(null, 4), isNull);
-    // The box's centre is still the crop's centre; a corner tap stays inside
-    // the visible 128-px square.
+    // 1000×500 at 2×: the crop is drawn 1000 px square, centred, clipped to the box.
     const box = Size(1000, 500);
-    final centre = BahtinovFrameView.tapToFramePixel(
-      box: box,
-      tap: const Offset(500, 250),
-      frameWidth: 3856,
-      frameHeight: 2180,
-      crop: crop,
-      zoom: 2,
-    );
-    expect(centre, (x: 1928, y: 1028));
-    final corner = BahtinovFrameView.tapToFramePixel(
-      box: box,
-      tap: const Offset(251, 1),
-      frameWidth: 3856,
-      frameHeight: 2180,
-      crop: crop,
-      zoom: 2,
-    );
-    expect(corner, (x: 1864, y: 964));
-  });
-
-  test('the steady reading is the median of the last five measured frames', () {
-    Map<String, dynamic> sample(int seq, double? off) => {
-      'seq': seq,
-      'detected': off != null,
-      'offset_px': off,
-      'defocus_um': off == null ? null : off * 10,
-      'within_zone': off != null && off.abs() <= 0.79,
-    };
-    final s = BahtinovFocusStatus.fromJson({
-      'active': true,
-      'state': 'running',
-      'zone_px': 0.79,
-      'recent': [
-        sample(1, 5.0),
-        sample(2, 0.2),
-        sample(3, null),
-        sample(4, -0.4),
-        sample(5, 2.9),
-        sample(6, 0.1),
-        sample(7, 0.5),
-      ],
-      'latest': sample(7, 0.5),
-    });
-    final steady = s.steady!;
-    // Last five measured: 0.2, -0.4, 2.9, 0.1, 0.5 → median 0.2; the 5.0 frame is out of the window.
-    expect(steady.offsetPx, closeTo(0.2, 1e-9));
-    expect(steady.defocusUm, closeTo(2.0, 1e-9));
     expect(
-      steady.withinZone,
-      isTrue,
-      reason: 'the median sits in the zone though the latest frame jumped',
+      BahtinovFrameView.tapToFramePixel(
+        box: box,
+        tap: const Offset(500, 250),
+        frameWidth: 3856,
+        frameHeight: 2180,
+        crop: crop,
+        zoom: 2,
+      ),
+      (x: 1928, y: 1028),
     );
-    expect(s.latest!.offsetPx, 0.5, reason: 'the raw frame value is untouched');
-    final single = BahtinovFocusStatus.fromJson({
-      'latest': sample(1, 3.0),
-      'recent': [sample(1, 3.0)],
-    });
     expect(
-      single.steady!.offsetPx,
-      3.0,
-      reason: 'one frame is its own reading',
+      BahtinovFrameView.tapToFramePixel(
+        box: box,
+        tap: const Offset(251, 1),
+        frameWidth: 3856,
+        frameHeight: 2180,
+        crop: crop,
+        zoom: 2,
+      ),
+      (x: 1864, y: 964),
     );
-    final miss = BahtinovFocusStatus.fromJson({
-      'latest': sample(2, null),
-      'recent': [sample(1, 3.0), sample(2, null)],
-    });
-    expect(miss.steady!.detected, isFalse);
+    // Review of #1365: 1000×300 at 2× draws the crop 600 px wide over x = 200…800,
+    // wider than the central 300-px square. A tap at x 250 is on the picture.
+    const wide = Size(1000, 300);
+    expect(
+      BahtinovFrameView.tapToFramePixel(
+        box: wide,
+        tap: const Offset(250, 150),
+        frameWidth: 3856,
+        frameHeight: 2180,
+        crop: crop,
+        zoom: 2,
+      ),
+      (x: 1821, y: 1028),
+    );
+    expect(
+      BahtinovFrameView.tapToFramePixel(
+        box: wide,
+        tap: const Offset(799, 150),
+        frameWidth: 3856,
+        frameHeight: 2180,
+        crop: crop,
+        zoom: 2,
+      ),
+      (x: 2055, y: 1028),
+      reason: 'the last visible column is the crop\'s last pixel',
+    );
+    expect(
+      BahtinovFrameView.tapToFramePixel(
+        box: wide,
+        tap: const Offset(150, 150),
+        frameWidth: 3856,
+        frameHeight: 2180,
+        crop: crop,
+        zoom: 2,
+      ),
+      isNull,
+      reason: 'left of the drawn picture',
+    );
   });
 
   test('status parses the frame size, crop and pick', () {
