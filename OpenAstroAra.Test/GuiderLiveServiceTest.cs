@@ -108,6 +108,9 @@ namespace OpenAstroAra.Test {
             Assert.That(GuiderLiveService.Judge("complete", null, Cal(10, 100, 12, 12, dec: 60)).Verdict, Is.EqualTo("good"));
             Assert.That(GuiderLiveService.Judge("complete", null, Cal(10, 100, 12, 5, dec: 60)).Verdict, Is.EqualTo("check"));
             Assert.That(GuiderLiveService.Judge("complete", null, Cal(10, 100, 12, 5, dec: 0)).Verdict, Is.EqualTo("check"), "and at the equator too (0.4×)");
+            // Near the pole the cos(dec) correction is meaningless: no rate verdict either way.
+            Assert.That(GuiderLiveService.Judge("complete", null, Cal(10, 100, 12, 5, dec: 85)).Verdict, Is.EqualTo("good"));
+            Assert.That(GuiderLiveService.Judge("complete", null, Cal(10, 100, 12, 5, dec: double.NaN)).Verdict, Is.EqualTo("good"), "an unknown declination skips the rate check");
         }
 
         [Test]

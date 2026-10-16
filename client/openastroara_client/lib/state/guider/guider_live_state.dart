@@ -89,7 +89,14 @@ class GuiderLiveNotifier extends Notifier<GuiderLiveState> {
         frame = await api.getFrame();
         if (!ref.mounted || gen != _generation) return;
       }
-      final calibration = await api.getCalibration();
+      // The calibration column is secondary: a failed read keeps the last
+      // one rather than throwing away this poll's picture and state.
+      GuiderCalibrationView? calibration;
+      try {
+        calibration = await api.getCalibration();
+      } catch (_) {
+        calibration = null;
+      }
       if (!ref.mounted || gen != _generation) return;
       state = state.copyWith(
         live: live,

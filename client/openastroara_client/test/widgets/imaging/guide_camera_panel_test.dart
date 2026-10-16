@@ -40,8 +40,13 @@ class _FakeLive implements GuiderLiveClient {
     verdict: 'redo',
     verdictReason: 'No calibration stored — the next guide start calibrates.',
   );
+  bool calibrationFails = false;
   @override
-  Future<GuiderCalibrationView> getCalibration() async => calibration;
+  Future<GuiderCalibrationView> getCalibration() async {
+    if (calibrationFails) throw StateError('calibration read failed');
+    return calibration;
+  }
+
   @override
   Future<void> clearCalibration() async => calls.add('clear_calibration');
   @override
@@ -290,5 +295,44 @@ void main() {
     await t.tap(find.text('Clear calibration'));
     await t.pump();
     expect(fake.calls, contains('clear_calibration'));
+  });
+
+  testWidgets('a failed calibration read keeps the picture and the state', (
+    t,
+  ) async {
+    final fake = _FakeLive(_looping())..calibrationFails = true;
+    await t.pumpWidget(
+      ProviderScope(
+        overrides: [
+          activeServerProvider.overrideWithValue(
+            const AraServer(hostname: 'localhost', port: 5555),
+          ),
+          guiderLiveApiFactoryProvider.overrideWithValue((_) => fake),
+        ],
+        child: const MaterialApp(
+          home: Scaffold(
+            body: SizedBox(width: 1000, height: 600, child: GuideCameraPanel()),
+          ),
+        ),
+      ),
+    );
+    await t.pump();
+    await t.pump();
+    expect(
+      find.text('Looping · SNR 42 · mass 12.3k'),
+      findsNothing,
+      reason: 'SNR only while guiding',
+    );
+    expect(find.byKey(const Key('guide-camera-summary')), findsOneWidget);
+    expect(
+      find.textContaining('Looping'),
+      findsWidgets,
+      reason: 'the live state still landed',
+    );
+    expect(
+      find.textContaining('calibration read failed'),
+      findsNothing,
+      reason: 'no error for the side column',
+    );
   });
 }

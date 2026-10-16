@@ -169,6 +169,9 @@ public sealed partial class GuiderLiveService : IGuiderLiveService {
     /// <summary>Dec rate outside this factor of the RA rate (RA rate corrected for declination): one
     /// axis barely moved — usually a stuck Dec or a wrong guide rate.</summary>
     internal const double RateRatioCheck = 2.0;
+    /// <summary>Above this declination (or with none reported) the RA rate's cos(dec) correction is too
+    /// large to trust, so the rate comparison is skipped rather than reading a false "check".</summary>
+    internal const double RateCheckMaxDecDeg = 80;
 
     public async Task<GuiderCalibrationViewDto> GetCalibrationAsync(CancellationToken ct) {
         var guider = _guider.ConnectedGuiderOrNull();
@@ -207,7 +210,8 @@ public sealed partial class GuiderLiveService : IGuiderLiveService {
     /// Ara's verdict on a calibration. <c>redo</c>: the run failed, or there is no stored calibration.
     /// <c>check</c>: there is one, but the axes are more than <see cref="OrthogonalityCheckDeg"/> from
     /// square, or the Dec rate is more than <see cref="RateRatioCheck"/>× off the RA rate once the RA
-    /// rate is corrected for the declination (RA moves cos(dec) slower on the sky). <c>good</c> otherwise.
+    /// rate is corrected for the declination (RA moves cos(dec) slower on the sky) — a check made only
+    /// when the declination is known and within ±<see cref="RateCheckMaxDecDeg"/>°. <c>good</c> otherwise.
     /// A run still in progress is <c>check</c> with "Calibrating…". Pure — unit-tested.
     /// </summary>
     internal static (string Verdict, string? Reason) Judge(string runState, string? error, GuiderCalibrationDataDto? data) {
@@ -223,9 +227,9 @@ public sealed partial class GuiderLiveService : IGuiderLiveService {
         if (data.OrthogonalityErrorDeg is double ortho && ortho > OrthogonalityCheckDeg) {
             return ("check", $"RA and Dec axes are {ortho:F0}° from square — the mount or camera may have moved during calibration.");
         }
-        if (data.XRatePxPerSec is > 0 and var xr && data.YRatePxPerSec is > 0 and var yr) {
-            var cosDec = Math.Cos((data.DeclinationDeg ?? 0) * Math.PI / 180);
-            var raOnSky = cosDec > 0.05 ? xr / cosDec : xr;
+        if (data.XRatePxPerSec is > 0 and var xr && data.YRatePxPerSec is > 0 and var yr
+                && data.DeclinationDeg is double dec && double.IsFinite(dec) && Math.Abs(dec) <= RateCheckMaxDecDeg) {
+            var raOnSky = xr / Math.Cos(dec * Math.PI / 180);
             var ratio = yr / raOnSky;
             if (ratio > RateRatioCheck || ratio < 1 / RateRatioCheck) {
                 return ("check", $"Dec rate is {ratio:F1}× the RA rate — one axis barely moved (backlash, or a wrong guide rate).");
