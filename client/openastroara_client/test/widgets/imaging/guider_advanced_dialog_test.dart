@@ -132,6 +132,11 @@ void main() {
     expect(GuiderAdvancedField.editText(0.125), '0.125', reason: 'full precision in the editor');
     expect(GuiderAdvancedField.editText(6.0), '6');
     expect(GuiderAdvancedField.editText(1500), '1500');
+    final pulse = GuiderAdvancedField.all.firstWhere((f) => f.key == 'backlash_pulse_ms');
+    expect(GuiderAdvancedPanelTestHooks.parse(pulse, '10').$2, 'The guider takes 20–8000', reason: 'below the guider\'s minimum');
+    expect(GuiderAdvancedPanelTestHooks.parse(pulse, '9000').$2, 'The guider takes 20–8000');
+    expect(GuiderAdvancedPanelTestHooks.parse(pulse, '450'), (450, null));
+    expect(GuiderAdvancedPanelTestHooks.parse(maxDec, '1000001').$2, 'The guider takes 0–1000000');
     expect(ms.format(1500), '1500 ms');
   });
 

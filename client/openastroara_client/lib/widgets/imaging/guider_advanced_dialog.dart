@@ -129,6 +129,9 @@ class _GuiderAdvancedPanelState extends ConsumerState<GuiderAdvancedPanel> {
     if (n == null || !n.isFinite || n < 0 || (n == 0 && !f.allowZero)) {
       return (null, f.allowZero ? 'Zero or a positive number' : 'A positive number');
     }
+    if ((f.min != null && n < f.min!) || (f.max != null && n > f.max!)) {
+      return (null, 'The guider takes ${f.min ?? (f.allowZero ? 0 : '>0')}–${f.max ?? '…'}');
+    }
     if (f.kind == GuiderAdvancedKind.integer) {
       if (n != n.roundToDouble()) return (null, 'A whole number');
       return (n.round(), null);

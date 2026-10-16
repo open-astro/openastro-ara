@@ -55,6 +55,10 @@ class GuiderAdvancedField {
   /// 0 is a real value to the guider (a max pulse of 0 = no correction on
   /// that axis); every other number must be positive.
   final bool allowZero;
+
+  /// The guider's own limits, when it has them (it refuses values outside).
+  final num? min;
+  final num? max;
   const GuiderAdvancedField(
     this.key,
     this.label,
@@ -64,6 +68,8 @@ class GuiderAdvancedField {
     required this.help,
     this.options,
     this.allowZero = false,
+    this.min,
+    this.max,
   });
 
   Object? parse(Object? v) => switch (kind) {
@@ -242,6 +248,7 @@ class GuiderAdvancedField {
       unit: 'ms',
       help: 'The longest single RA correction. 0 turns RA corrections off.',
       allowZero: true,
+      max: 1000000,
     ),
     GuiderAdvancedField(
       'max_dec_duration_ms',
@@ -251,6 +258,7 @@ class GuiderAdvancedField {
       unit: 'ms',
       help: 'The longest single Dec correction. 0 turns Dec corrections off.',
       allowZero: true,
+      max: 1000000,
     ),
     GuiderAdvancedField(
       'backlash_enabled',
@@ -266,6 +274,8 @@ class GuiderAdvancedField {
       GuiderAdvancedKind.integer,
       unit: 'ms',
       help: 'How long the extra pulse is.',
+      min: 20,
+      max: 8000,
     ),
     GuiderAdvancedField(
       'backlash_floor_ms',
