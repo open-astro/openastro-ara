@@ -216,6 +216,35 @@ namespace OpenAstroAra.Test {
             await svc.StopAsync();
         }
 
+        /// <summary>Holds the first capture until released, so a test can act before the first frame.</summary>
+        private sealed class GatedFrames : IAnalysisFrameSource, IDisposable {
+            public readonly SemaphoreSlim Gate = new(0);
+            public void Dispose() => Gate.Dispose();
+            private int _seed;
+            public async Task<AnalysisFrame> CaptureForAnalysisAsync(double exposureSec, int binning, CancellationToken ct) {
+                await Gate.WaitAsync(ct);
+                Gate.Release(); // every later capture passes straight through
+                var pixels = SyntheticSky.RenderBahtinov(W, H, 330, 250, 2.0, 2.0, frameSeed: ++_seed);
+                return new AnalysisFrame(pixels, W, H, DateTimeOffset.UtcNow);
+            }
+        }
+
+        [Test]
+        public async Task A_pick_outside_the_first_frame_is_dropped_when_the_frame_arrives() {
+            // Review of #1365: before the first frame Pick can only refuse negatives, so an off-frame
+            // pick became a lock that never found a star and never fell back.
+            using var frames = new GatedFrames();
+            using var svc = new BahtinovFocusService(frames, () => RedCat);
+            await svc.StartAsync(new BahtinovFocusStartRequestDto(ExposureSec: 0.1), CancellationToken.None);
+            svc.Pick(W + 500, 10); // no frame yet: accepted
+            Assert.That(svc.GetStatus().PickX, Is.EqualTo(W + 500));
+            frames.Gate.Release();
+            var s = await WaitForSeq(svc, 3);
+            Assert.That(s.PickX, Is.Null, "dropped once the frame size was known");
+            Assert.That(s.Latest!.Detected, Is.True, "the search went back to the brightest star");
+            await svc.StopAsync();
+        }
+
         [Test]
         public void The_crop_around_a_star_stays_inside_the_frame() {
             Assert.That(BahtinovFocusService.CropAround((5, 5), 640, 480), Is.EqualTo((0, 0, 256)));

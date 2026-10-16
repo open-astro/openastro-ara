@@ -173,6 +173,11 @@ framing/focus loop when you need to point or focus by eye.
   good start on a harmonic mount). Apply sends only these runtime-safe values to the guider, so
   guiding keeps running; equipment and optics changes live in **Settings → Guider** and do
   reconnect the guider.
+- **Starting guiding ends Polar Align.** Polar Align holds the guide camera while it runs. If guiding
+  is started while it is still open (a run's Start Guiding after the Polar Align step was left
+  without **Done**, a re-guide after a meridian flip, or Guide pressed by hand), Ara stops the
+  alignment, without saving a result, and then guides. Finish Polar Align with **Done** first if you
+  want its result kept.
 - **Polar alignment left after Align.** Each time guiding starts, Ara measures how much polar
   alignment error is really left, at no setup cost: over the first 5 minutes of clean guiding
   (dithers and settling are left out) it adds the guider's Dec corrections back onto the star's

@@ -422,6 +422,14 @@ public sealed partial class BahtinovFocusService : IBahtinovFocusService, IDispo
         _consecutiveFailures = 0;
         _frameWidth = frame.Width;
         _frameHeight = frame.Height;
+        // A pick made before this session's first frame (Pick can only check x, y ≥ 0 then) that lands
+        // outside the frame would be a lock that never finds a star and never falls back: drop it.
+        if (_pick is { } p && (p.X >= frame.Width || p.Y >= frame.Height)) {
+            _pick = null;
+            if (_lock == p) {
+                _lock = null;
+            }
+        }
         BahtinovSampleDto sample;
         if (m is null) {
             // A picked star keeps its lock: the user said which star, so a faint pattern must not send the

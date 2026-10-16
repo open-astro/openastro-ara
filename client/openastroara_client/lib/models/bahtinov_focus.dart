@@ -94,6 +94,9 @@ class BahtinovSample {
   final bool withinZone;
   final double peakAdu;
   final BahtinovOverlay? overlay;
+  /// The measured star, frame pixels (0 when the daemon sent none).
+  final int starX;
+  final int starY;
 
   const BahtinovSample({
     required this.seq,
@@ -104,6 +107,8 @@ class BahtinovSample {
     this.withinZone = false,
     this.peakAdu = 0,
     this.overlay,
+    this.starX = 0,
+    this.starY = 0,
   });
 
   factory BahtinovSample.fromJson(Map<String, dynamic> json) => BahtinovSample(
@@ -115,6 +120,8 @@ class BahtinovSample {
         withinZone: json['within_zone'] as bool? ?? false,
         peakAdu: _d(json, 'peak_adu'),
         overlay: BahtinovOverlay.fromJson(json['overlay']),
+        starX: _i(json, 'star_x'),
+        starY: _i(json, 'star_y'),
       );
 }
 
@@ -194,6 +201,10 @@ class BahtinovFocusStatus {
   /// frames.
   static const steadyWindow = 5;
 
+  /// Two samples within this many frame pixels measured the same star (the
+  /// daemon's picked-star search window).
+  static const sameStarPx = 32;
+
   /// [latest] with its offset replaced by the median of the last
   /// [steadyWindow] measured frames (and the zone verdict and µm estimate
   /// re-derived from it). The raw frame-by-frame value stays in [latest] and
@@ -214,11 +225,18 @@ class BahtinovFocusStatus {
       ...recent,
       if (latest case final l? when recent.isEmpty || recent.last.seq != l.seq) l,
     ];
-    final measured = [
+    final all = [
       for (final s in history.reversed)
         if (s.detected && s.offsetPx != null) s,
     ];
-    if (measured.isEmpty) return null;
+    if (all.isEmpty) return null;
+    // Only frames of the same star: after a pick moves the readout to another
+    // star, the previous star's offsets must not blend into the median.
+    final star = all.first;
+    final measured = [
+      for (final s in all)
+        if ((s.starX - star.starX).abs() <= sameStarPx && (s.starY - star.starY).abs() <= sameStarPx) s,
+    ];
     // The overlay rides on `latest` only; keep it when latest is the anchor.
     final anchor = latest != null && latest!.seq == measured.first.seq ? latest! : measured.first;
     final offsets = [for (final s in measured.take(steadyWindow)) s.offsetPx!]..sort();

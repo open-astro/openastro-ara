@@ -141,6 +141,34 @@ void main() {
     );
   });
 
+  test('the steady reading does not blend a previous star after a pick', () {
+    Map<String, dynamic> sample(int seq, double off, int x) => {
+      'seq': seq,
+      'detected': true,
+      'offset_px': off,
+      'within_zone': off.abs() <= 0.79,
+      'star_x': x,
+      'star_y': 500,
+    };
+    // Three frames of star A (x 330, 2.5 px off), then a tap moves the
+    // readout to star B (x 1200, 0.2 px): B's two frames alone decide.
+    final s = BahtinovFocusStatus.fromJson({
+      'active': true,
+      'state': 'running',
+      'zone_px': 0.79,
+      'recent': [
+        sample(1, 2.5, 330),
+        sample(2, 2.4, 331),
+        sample(3, 2.6, 329),
+        sample(4, 0.2, 1200),
+        sample(5, 0.3, 1201),
+      ],
+      'latest': sample(5, 0.3, 1201),
+    });
+    expect(s.steady!.offsetPx, closeTo(0.25, 1e-9));
+    expect(s.steady!.withinZone, isTrue);
+  });
+
   test('status parses the frame size, crop and pick', () {
     final s = BahtinovFocusStatus.fromJson({
       'active': true,
@@ -180,9 +208,9 @@ void main() {
         intersectionY: 128,
       );
       t.view.physicalSize = const Size(1200, 800);
-    t.view.devicePixelRatio = 1;
-    addTearDown(t.view.reset);
-    final picks = <(int, int)>[];
+      t.view.devicePixelRatio = 1;
+      addTearDown(t.view.reset);
+      final picks = <(int, int)>[];
       final zooms = <int>[];
       var cleared = 0;
       await t.pumpWidget(
