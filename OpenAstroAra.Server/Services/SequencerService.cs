@@ -1279,7 +1279,7 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         public void NoteTreeChanged() => Interlocked.Increment(ref _treeVersion);
 
         public void SetDescription(string? description) {
-            if (string.IsNullOrEmpty(description)) return;
+            if (string.IsNullOrWhiteSpace(description)) return;
             lock (_gate) { CurrentInstructionDescription = description; }
         }
 
