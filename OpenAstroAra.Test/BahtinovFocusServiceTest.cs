@@ -192,6 +192,31 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_tap_during_a_frames_measurement_is_not_overwritten_by_that_frame() {
+            // Review of #1365: Record wrote the lock from a frame whose search position predated the tap,
+            // so the readout went back to the old star while pick_x/pick_y reported the new one.
+            var frames = new ScriptedFrames();
+            frames.Script.Enqueue((2.0, 23));
+            using var svc = new BahtinovFocusService(frames, () => RedCat);
+            await svc.StartAsync(new BahtinovFocusStartRequestDto(ExposureSec: 0.1), CancellationToken.None);
+            var s = await WaitForSeq(svc, 3);
+            Assert.That(s.Latest!.Detected, Is.True, "precondition: locked on the mask star at (330, 250)");
+
+            var tapped = 0;
+            svc.AfterMeasureForTest = () => {
+                if (Interlocked.Exchange(ref tapped, 1) == 0) {
+                    svc.Pick(100, 400); // lands between that frame's search and its Record
+                }
+            };
+            s = await WaitForSeq(svc, s.Seq + 4);
+            Assert.That(tapped, Is.EqualTo(1));
+            Assert.That((s.PickX, s.PickY), Is.EqualTo((100, 400)));
+            Assert.That(Math.Abs(s.Latest!.StarX - 100), Is.LessThan(40),
+                $"the readout followed the tap, not the frame that was in flight (star_x {s.Latest.StarX})");
+            await svc.StopAsync();
+        }
+
+        [Test]
         public void The_crop_around_a_star_stays_inside_the_frame() {
             Assert.That(BahtinovFocusService.CropAround((5, 5), 640, 480), Is.EqualTo((0, 0, 256)));
             Assert.That(BahtinovFocusService.CropAround((320, 240), 640, 480), Is.EqualTo((192, 112, 256)));

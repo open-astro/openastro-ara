@@ -100,6 +100,12 @@ public sealed partial class BahtinovFocusService : IBahtinovFocusService, IDispo
     private (double X, double Y)? _normal;
     // The user's star (§Pick): the lock falls back to it instead of to the whole frame.
     private (int X, int Y)? _pick;
+    // Bumped by Pick/ClearPick. A frame snapshots it with its search position; if it moved while the
+    // frame was measured, the user's tap is newer than that frame and Record must not overwrite it.
+    private long _pickGeneration;
+    /// <summary>Test seam: runs after a frame is measured and before it is recorded — the window in
+    /// which a tap can race the frame.</summary>
+    internal Action? AfterMeasureForTest { get; set; }
     private int _frameWidth;
     private int _frameHeight;
     // What GetFrame's picture covers when it is a crop; null for the whole frame.
@@ -331,8 +337,10 @@ public sealed partial class BahtinovFocusService : IBahtinovFocusService, IDispo
                 (int X, int Y)? near;
                 (double X, double Y)? normal;
                 int searchRadius;
+                long pickGeneration;
                 lock (_gate) {
                     near = _lock;
+                    pickGeneration = _pickGeneration;
                     normal = _normal;
                     // The user's star is searched tightly: a brighter neighbour must not take the lock.
                     searchRadius = _pick is not null ? BahtinovAnalyzer.PickedSearchRadius : BahtinovAnalyzer.DefaultSearchRadius;
@@ -340,9 +348,10 @@ public sealed partial class BahtinovFocusService : IBahtinovFocusService, IDispo
                 // The fit is a few tens of ms of arithmetic on a Pi 4; off the loop's thread so a status read
                 // never waits on it.
                 var (measurement, problem, jpeg, crop) = await Task.Run(() => Measure(frame, near, normal, searchRadius), ct).ConfigureAwait(false);
+                AfterMeasureForTest?.Invoke();
                 var optics = OpticsQuietly();
                 lock (_gate) {
-                    Record(frame, measurement, problem, jpeg, crop, optics, binning);
+                    Record(frame, measurement, problem, jpeg, crop, optics, binning, pickChanged: pickGeneration != _pickGeneration);
                 }
             }
         } catch (OperationCanceledException) {
@@ -391,6 +400,7 @@ public sealed partial class BahtinovFocusService : IBahtinovFocusService, IDispo
             _pick = (x, y);
             _lock = (x, y);
             _misses = 0;
+            _pickGeneration++;
         }
     }
 
@@ -400,12 +410,13 @@ public sealed partial class BahtinovFocusService : IBahtinovFocusService, IDispo
             _pick = null;
             _lock = null;
             _misses = 0;
+            _pickGeneration++;
         }
     }
 
     /// <summary>Append one frame's result. Caller holds <see cref="_gate"/>.</summary>
     private void Record(AnalysisFrame frame, BahtinovMeasurement? m, BahtinovProblem problem, byte[]? jpeg,
-            (int Left, int Top, int Size)? crop, BahtinovOptics? optics, int binning) {
+            (int Left, int Top, int Size)? crop, BahtinovOptics? optics, int binning, bool pickChanged = false) {
         _seq++;
         _consecutiveFailures = 0;
         _frameWidth = frame.Width;
@@ -414,14 +425,17 @@ public sealed partial class BahtinovFocusService : IBahtinovFocusService, IDispo
         if (m is null) {
             // A picked star keeps its lock: the user said which star, so a faint pattern must not send the
             // search back to the brightest star elsewhere in the frame.
-            if (++_misses >= LockLostAfter) {
+            // A pick that came in while this frame was measured is newer than the frame: leave its lock.
+            if (!pickChanged && ++_misses >= LockLostAfter) {
                 _lock = _pick;
             }
             sample = new BahtinovSampleDto(_seq, frame.CapturedAt, Detected: false, ProblemToken(problem),
                 OffsetPx: null, DefocusUm: null, WithinZone: false, StarX: _lock?.X ?? 0, StarY: _lock?.Y ?? 0, PeakAdu: 0);
         } else {
-            _misses = 0;
-            _lock = (m.StarX, m.StarY);
+            if (!pickChanged) {
+                _misses = 0;
+                _lock = (m.StarX, m.StarY);
+            }
             _normal ??= (m.NormalX, m.NormalY);
             var (zonePx, _) = ZonePx(optics, binning);
             var offset = Math.Round(m.OffsetPx, 3);
