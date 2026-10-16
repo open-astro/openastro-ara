@@ -203,6 +203,8 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
         /// <c>set_algo_param</c> expects (ARA already stores it that way); minimum-move goes to both axes.
         /// Socket-free, so the mapping is unit-testable without a live PHD2.
         /// </summary>
+        private const string AlgorithmSetter = "set_algo";
+
         public static IReadOnlyList<Phd2Method> BuildGuiderEngineConfigMessages(IGuiderSettings guider, GuiderAdvancedSettings? advanced = null) {
             var messages = new List<Phd2Method>();
 
@@ -279,6 +281,11 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             // hysteresis|fastSwitch, aggression — verified against openastro-guider 2.1.0). ARA's
             // profile calls it aggressiveness; the wire name must be the daemon's or set_algo_param
             // answers "could not set param" and the value never lands (#1093).
+            // #1364 — an algorithm change goes BEFORE the aggression / minimum-move params: set_algo replaces
+            // the axis's algorithm instance, so params sent first would land on the old one and the new
+            // algorithm would run with the guider's stored values instead of Ara's.
+            var advancedMessages = BuildAdvancedSettingsMessages(advanced);
+            messages.AddRange(advancedMessages.Where(m => m.Method == AlgorithmSetter));
             if (guider.RAAggressiveness > 0) {
                 messages.Add(AlgoParam("ra", "aggression", guider.RAAggressiveness));
             }
@@ -307,8 +314,8 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             if (decMode != "Auto") {
                 messages.Add(new Phd2SetDecGuideMode { Parameters = new() { Mode = decMode } });
             }
-            // #1364 — the advanced settings Ara keeps; all runtime-safe.
-            messages.AddRange(BuildAdvancedSettingsMessages(advanced));
+            // #1364 — the rest of the advanced settings Ara keeps; all runtime-safe.
+            messages.AddRange(advancedMessages.Where(m => m.Method != AlgorithmSetter));
             return messages;
         }
 

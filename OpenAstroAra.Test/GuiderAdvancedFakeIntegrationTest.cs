@@ -57,6 +57,7 @@ namespace OpenAstroAra.Test {
 
         private static readonly string[] Recorded = [
             "set_profile_setup", "set_star_detection", "set_guide_limits", "set_algo", "set_noise_reduction", "set_mount_options",
+            "set_algo_param",
         ];
 
         private static async Task<(FakeGuider Fake, GuiderService Svc, ConcurrentQueue<(string Method, JsonNode? Params)> Sent)> ConnectedAsync(
@@ -166,6 +167,10 @@ namespace OpenAstroAra.Test {
             Assert.That(sent.Single(s => s.Method == "set_guide_limits").Params!["MaxDecDuration"]!.GetValue<int>(), Is.EqualTo(1500));
             var algo = sent.Single(s => s.Method == "set_algo").Params!;
             Assert.That((algo["axis"]!.GetValue<string>(), algo["name"]!.GetValue<string>()), Is.EqualTo(("ra", "Predictive PEC")));
+            var order = sent.Select(s => s.Method).ToList();
+            var firstRaParam = order.FindIndex(m => m == "set_algo_param");
+            Assert.That(firstRaParam, Is.GreaterThan(order.IndexOf("set_algo")),
+                "the algorithm is set before Tune Guiding's params, so they land on the new algorithm: " + string.Join(", ", order));
             Assert.That(sent.Any(s => s.Method is "set_noise_reduction" or "set_mount_options"), Is.False, "groups with nothing set are not sent");
         }
 

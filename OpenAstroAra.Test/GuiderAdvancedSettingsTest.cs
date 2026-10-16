@@ -87,6 +87,29 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void An_algorithm_change_is_sent_before_the_tune_guiding_params_so_they_land_on_it() {
+            // set_algo replaces the axis's algorithm; params sent before it land on the old instance and the
+            // new one runs with the guider's stored values instead of Ara's aggression / minimum move.
+            var tuned = new Mock<IGuiderSettings>();
+            tuned.SetupGet(x => x.DecGuideMode).Returns("auto");
+            tuned.SetupGet(x => x.RAAggressiveness).Returns(0.7);
+            tuned.SetupGet(x => x.DecAggressiveness).Returns(0.6);
+            tuned.SetupGet(x => x.MinimumMove).Returns(0.15);
+            tuned.SetupGet(x => x.DecMinimumMove).Returns(0.2);
+            var advanced = new GuiderAdvancedSettings { RaAlgorithm = "Lowpass2", DecAlgorithm = "Resist Switch", MinStarSnr = 6 };
+            foreach (var msgs in new[] {
+                    PHD2Guider.BuildGuiderEngineConfigMessages(tuned.Object, advanced),
+                    PHD2Guider.BuildGuiderTuningMessages(tuned.Object, advanced) }) {
+                var methods = msgs.Select(m => m.Method).ToList();
+                var lastAlgo = methods.LastIndexOf("set_algo");
+                var firstParam = methods.IndexOf("set_algo_param");
+                Assert.That(lastAlgo, Is.GreaterThanOrEqualTo(0));
+                Assert.That(firstParam, Is.GreaterThanOrEqualTo(0));
+                Assert.That(lastAlgo, Is.LessThan(firstParam), string.Join(", ", methods));
+            }
+        }
+
+        [Test]
         public void The_write_boundary_refuses_values_the_guider_would_reject() {
             Assert.That(GuiderAdvancedSettingsMapping.Validate(new GuiderAdvancedSettingsDto()), Is.Null);
             Assert.That(GuiderAdvancedSettingsMapping.Validate(new GuiderAdvancedSettingsDto(MinStarSnr: 0)), Does.Contain("min_star_snr"));
