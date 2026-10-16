@@ -129,7 +129,7 @@ public sealed partial class GuiderService : IGuiderMediator {
     /// </summary>
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Best-effort lease release before guiding: the guide attempt reports its own outcome.")]
-    private async Task ClearPaSessionQuietlyAsync(PHD2Guider guider, CancellationToken token) {
+    internal async Task ClearPaSessionQuietlyAsync(PHD2Guider guider, CancellationToken token) {
         try {
             var status = await guider.GetPaSessionAsync(token).ConfigureAwait(false);
             switch (PaLeaseActionFor(status.Active)) {

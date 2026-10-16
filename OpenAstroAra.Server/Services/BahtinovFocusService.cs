@@ -382,8 +382,11 @@ public sealed partial class BahtinovFocusService : IBahtinovFocusService, IDispo
     public void Pick(int x, int y) {
         lock (_gate) {
             ObjectDisposedException.ThrowIf(_disposed, this);
-            if (_frameWidth > 0 && (x < 0 || y < 0 || x >= _frameWidth || y >= _frameHeight)) {
-                throw new ArgumentOutOfRangeException(nameof(x), $"({x}, {y}) is outside the {_frameWidth}×{_frameHeight} frame");
+            // Negative coordinates are never in any frame; the upper bound needs a frame to compare with.
+            if (x < 0 || y < 0 || (_frameWidth > 0 && (x >= _frameWidth || y >= _frameHeight))) {
+                throw new ArgumentOutOfRangeException(nameof(x), _frameWidth > 0
+                    ? $"({x}, {y}) is outside the {_frameWidth}×{_frameHeight} frame"
+                    : $"({x}, {y}) is not a frame position");
             }
             _pick = (x, y);
             _lock = (x, y);
@@ -393,6 +396,7 @@ public sealed partial class BahtinovFocusService : IBahtinovFocusService, IDispo
 
     public void ClearPick() {
         lock (_gate) {
+            ObjectDisposedException.ThrowIf(_disposed, this);
             _pick = null;
             _lock = null;
             _misses = 0;
