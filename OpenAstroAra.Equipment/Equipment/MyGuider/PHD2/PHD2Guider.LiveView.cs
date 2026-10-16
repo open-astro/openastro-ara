@@ -88,10 +88,15 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
         }
 
         /// <summary>Start looping exposures (no guiding) so the live view has frames to show and a star
-        /// can be chosen.</summary>
+        /// can be chosen. The guider's camera and mount are connected first when they are not: a guider
+        /// whose equipment is disconnected answers <c>loop</c> with "could not start looping" (seen
+        /// 2026-10-16 after a session's equipment had been dropped), which tells the user nothing.</summary>
         public async Task LoopAsync(CancellationToken ct) {
             ct.ThrowIfCancellationRequested();
             RequireConnectedForLive();
+            if (!await EnsurePHD2EquipmentConnected().ConfigureAwait(false)) {
+                throw new GuiderRpcException("loop", 1, "the guider could not connect its camera and mount — check Settings → Guider");
+            }
             var response = await SendMessage<GenericPhdMethodResponse>(new Phd2Loop(), LiveRpcTimeoutMs).ConfigureAwait(false);
             ThrowOnError("loop", response);
         }
