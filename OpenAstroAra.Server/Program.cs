@@ -405,7 +405,8 @@ public partial class Program {
                     await focus.StopAsync().ConfigureAwait(false);
                 }
             };
-            // ...but never the lease a running polar alignment holds (resolved lazily for the same reason).
+            // ...and whether one is running: its lease is real, so it is ended (below) rather than pulled
+            // (resolved lazily for the same reason).
             guider.PolarAlignActive = () => sp.GetService<IPolarAlignService>() is PolarAlignService { IsActive: true };
             // ...and a polar alignment left open when a run asks to guide is ended (stopped, not completed):
             // the Polar Align step without a Done kept the guider's lease and paused the run (2026-10-16).

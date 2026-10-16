@@ -77,7 +77,8 @@ public sealed partial class GuiderService : IGuiderMediator {
     /// </summary>
     public Func<Task>? ReleaseGuideCameraAsync { get; set; }
 
-    /// <summary>True while this daemon's polar alignment runs — its lease is real and is never pulled
+    /// <summary>True while this daemon's polar alignment runs — its lease is real, not stale: a guide
+    /// request ends that alignment first (<see cref="EndPolarAlignAsync"/>) rather than pulling the lease
     /// from under it. Program.cs wires it to <see cref="PolarAlignService.IsActive"/>; null means none.</summary>
     public Func<bool>? PolarAlignActive { get; set; }
 
