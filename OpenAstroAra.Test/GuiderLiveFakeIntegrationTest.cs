@@ -147,6 +147,46 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task The_calibration_view_reads_the_stored_calibration_and_judges_it() {
+            // #1364 item 2 — get_calibration_data over the wire: rates px/s, angles degrees.
+            var (fake, svc) = await ConnectedAsync(f => f.OnRpc("get_calibration_data", _ => new JsonObject {
+                ["calibrated"] = true, ["xAngle"] = 172.4, ["yAngle"] = 84.1, ["xRate"] = 12.1, ["yRate"] = 11.6,
+                ["xParity"] = "+", ["yParity"] = "-", ["declination"] = 44.2,
+            })).ConfigureAwait(false);
+            await using var _ = fake;
+            using var __ = svc;
+            var view = await new GuiderLiveService(svc, new NoFrames()).GetCalibrationAsync(CancellationToken.None).ConfigureAwait(false);
+            Assert.That(view.Connected, Is.True);
+            Assert.That(view.RunState, Is.EqualTo("none"), "no calibration ran this session");
+            Assert.That(view.Data, Is.Not.Null);
+            Assert.That(view.Data!.Calibrated, Is.True);
+            Assert.That((view.Data.XAngleDeg, view.Data.YAngleDeg, view.Data.DeclinationDeg), Is.EqualTo(((double?)172.4, (double?)84.1, (double?)44.2)));
+            Assert.That(view.Data.OrthogonalityErrorDeg, Is.EqualTo(1.7));
+            Assert.That(view.Verdict, Is.EqualTo("good"));
+        }
+
+        [Test]
+        [NonParallelizable] // Notifier.Use is process-global
+        public async Task A_refused_calibration_read_raises_no_notification() {
+            var (fake, svc) = await ConnectedAsync(f =>
+                f.OnRpc("get_calibration_data", _ => throw new InvalidOperationException("mount not defined (calibration view)"))).ConfigureAwait(false);
+            await using var _ = fake;
+            using var __ = svc;
+            var sink = new RecordingSink();
+            var previous = OpenAstroAra.Core.Utility.Notification.Notifier.Current;
+            OpenAstroAra.Core.Utility.Notification.Notifier.Use(sink);
+            try {
+                var view = await new GuiderLiveService(svc, new NoFrames()).GetCalibrationAsync(CancellationToken.None).ConfigureAwait(false);
+                Assert.That(view.Data, Is.Null);
+                Assert.That(view.Verdict, Is.EqualTo("redo"));
+                Assert.That(sink.Messages.Where(m => m.Contains("(calibration view)", StringComparison.Ordinal)), Is.Empty,
+                    "the dialog polls this every second: a refusal must not post an inbox Error");
+            } finally {
+                OpenAstroAra.Core.Utility.Notification.Notifier.Use(previous);
+            }
+        }
+
+        [Test]
         public async Task A_refused_read_leaves_its_field_null_and_the_rest_answers() {
             var (fake, svc) = await ConnectedAsync(f => {
                 LiveRpcs(f);

@@ -41,7 +41,9 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             if (!Connected) {
                 return null;
             }
-            var resp = await SendMessage(new Phd2GetCalibrationData(), LiveRpcTimeoutMs).ConfigureAwait(false);
+            // The calibration view polls this once a second; a guider without a mount defined refuses it,
+            // which is expected and handled here — never an inbox Error (#1366's lesson).
+            var resp = await SendMessage<GenericPhdMethodResponse>(new Phd2GetCalibrationData(), LiveRpcTimeoutMs, notifyOnError: false).ConfigureAwait(false);
             if (resp?.error != null || resp?.result is not JObject cal) {
                 return null;
             }
