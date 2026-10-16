@@ -1444,6 +1444,19 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
+  /api/v1/equipment/guider/advanced:
+    get:
+      tags:
+        - Equipment
+      summary: The guider's current advanced settings and its guide algorithms per axis.
+      operationId: GetGuiderAdvanced
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GuiderAdvancedViewDto'
   /api/v1/equipment/guider/live/deselect:
     post:
       tags:
@@ -5729,6 +5742,43 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
+  /api/v1/profile/guider-advanced:
+    get:
+      tags:
+        - Profile
+      summary: Get the active profile's guider-advanced settings (null fields keep the guider's own).
+      operationId: GetGuiderAdvancedSettings
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GuiderAdvancedSettingsDto'
+    put:
+      tags:
+        - Profile
+      summary: Replace the active profile's guider-advanced settings.
+      operationId: PutGuiderAdvancedSettings
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GuiderAdvancedSettingsDto'
+        required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GuiderAdvancedSettingsDto'
+        '400':
+          description: Bad Request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/profile/plate-solve:
     get:
       tags:
@@ -9510,6 +9560,204 @@ components:
           type:
             - 'null'
             - string
+    GuiderAdvancedSettingsDto:
+      type: object
+      properties:
+        multi_star_enabled:
+          type:
+            - 'null'
+            - boolean
+        fast_recenter:
+          type:
+            - 'null'
+            - boolean
+        tolerate_jumps:
+          type:
+            - 'null'
+            - boolean
+        tolerate_jumps_threshold_px:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        min_star_hfd:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        max_star_hfd:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        min_star_snr:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        mass_change_threshold_enabled:
+          type:
+            - 'null'
+            - boolean
+        mass_change_threshold:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        search_region_px:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - 'null'
+            - integer
+            - string
+          format: int32
+        auto_exposure_min_ms:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - 'null'
+            - integer
+            - string
+          format: int32
+        auto_exposure_max_ms:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - 'null'
+            - integer
+            - string
+          format: int32
+        auto_exposure_target_snr:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        noise_reduction:
+          type:
+            - 'null'
+            - string
+        use_subframes:
+          type:
+            - 'null'
+            - boolean
+        max_ra_duration_ms:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - 'null'
+            - integer
+            - string
+          format: int32
+        max_dec_duration_ms:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - 'null'
+            - integer
+            - string
+          format: int32
+        backlash_enabled:
+          type:
+            - 'null'
+            - boolean
+        backlash_pulse_ms:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - 'null'
+            - integer
+            - string
+          format: int32
+        backlash_floor_ms:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - 'null'
+            - integer
+            - string
+          format: int32
+        backlash_ceiling_ms:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - 'null'
+            - integer
+            - string
+          format: int32
+        assume_orthogonal:
+          type:
+            - 'null'
+            - boolean
+        stop_guiding_when_slewing:
+          type:
+            - 'null'
+            - boolean
+        cal_flip_requires_dec_flip:
+          type:
+            - 'null'
+            - boolean
+        variable_delay_enabled:
+          type:
+            - 'null'
+            - boolean
+        variable_delay_short_s:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        variable_delay_long_s:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        dither_scale_factor:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        dither_ra_only:
+          type:
+            - 'null'
+            - boolean
+        ra_algorithm:
+          type:
+            - 'null'
+            - string
+        dec_algorithm:
+          type:
+            - 'null'
+            - string
+    GuiderAdvancedViewDto:
+      required:
+        - connected
+        - current
+        - ra_algorithms
+        - dec_algorithms
+      type: object
+      properties:
+        connected:
+          type: boolean
+        current:
+          $ref: '#/components/schemas/GuiderAdvancedSettingsDto'
+        ra_algorithms:
+          type: array
+          items:
+            type: string
+        dec_algorithms:
+          type: array
+          items:
+            type: string
     GuiderCalibrationDataDto:
       required:
         - calibrated
@@ -11469,6 +11717,10 @@ components:
           oneOf:
             - type: 'null'
             - $ref: '#/components/schemas/UnguidedSettingsDto'
+        guider_advanced:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/GuiderAdvancedSettingsDto'
         filter_wheel_policy:
           oneOf:
             - type: 'null'

@@ -172,7 +172,11 @@ framing/focus loop when you need to point or focus by eye.
   aggressiveness, minimum move, Dec guide mode, dither pixels and the **guide exposure** (0.5 s is a
   good start on a harmonic mount). Apply sends only these runtime-safe values to the guider, so
   guiding keeps running; equipment and optics changes live in **Settings → Guider** and do
-  reconnect the guider.
+  reconnect the guider. **More…** opens **Guider settings** for everything else the guider offers —
+  multi-star, star detection, auto exposure, noise reduction, subframes, the RA and Dec algorithms,
+  maximum pulses, Dec backlash, mount options, dither scale and variable delay. Each row shows the
+  guider's own value until you set one; your values are kept in the profile and sent on Apply while
+  guiding continues (multi-star takes effect the next time the guider connects).
 - **Starting guiding ends Polar Align.** Polar Align holds the guide camera while it runs. If guiding
   is started while it is still open (a run's Start Guiding after the Polar Align step was left
   without **Done**, a re-guide after a meridian flip, or Guide pressed by hand in the guider panel), Ara stops the

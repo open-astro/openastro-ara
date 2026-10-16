@@ -408,6 +408,20 @@ The card now keeps a known device's card while it is not live: name, state chip,
 
 ---
 
+### 2026-10-16 — Every guider setting from Ara, kept in the profile (`/api/v1/profile/guider-advanced`) (#1364 item 3)
+
+**Endpoint(s) or area:** new `GET`/`PUT /api/v1/profile/guider-advanced` (`GuiderAdvancedSettingsDto`), profile JSON `guider_advanced`; new `GET /api/v1/equipment/guider/advanced` (`GuiderAdvancedViewDto`); the guider push (`POST /api/v1/equipment/guider/profile/push`, both scopes, and the connect-time push) carries the section; profile select and clone (`ProfileStoreSnapshot`) now carry `unguided` and `guider_advanced`.
+
+**Decision:** the guider's settings beyond Tune Guiding become a profile section with every field optional — null keeps the guider's own value, so a profile never overwrites a setting it did not set: `{multi_star_enabled, fast_recenter, tolerate_jumps, tolerate_jumps_threshold_px, min_star_hfd, max_star_hfd, min_star_snr, mass_change_threshold_enabled, mass_change_threshold, search_region_px, auto_exposure_min_ms, auto_exposure_max_ms, auto_exposure_target_snr, noise_reduction ("None" | "2x2 Mean" | "3x3 Median"), use_subframes, max_ra_duration_ms, max_dec_duration_ms, backlash_enabled, backlash_pulse_ms, backlash_floor_ms, backlash_ceiling_ms, assume_orthogonal, stop_guiding_when_slewing, cal_flip_requires_dec_flip, variable_delay_enabled, variable_delay_short_s, variable_delay_long_s, dither_scale_factor, dither_ra_only, ra_algorithm, dec_algorithm}`. It is kept apart from `phd2` so a client that PUTs that section without these fields cannot wipe them. The PUT validates at the write boundary (400): every set number positive, min ≤ max for HFD, auto exposure and backlash, a known noise method, the variable delay as all three values or none, algorithm names non-blank (trimmed). Only set keys reach the guider, grouped as its setters take them (`set_guider_options`, `set_star_detection`, `set_auto_exposure`, `set_noise_reduction`, `set_use_subframes`, `set_guide_limits`, `set_backlash_comp`, `set_mount_options`, `set_variable_delay_settings`, `set_dither_settings`, `set_algo` per axis) on the tuning push — guiding continues; `multi_star_enabled` rides `set_profile_setup`, which the guider accepts only with its equipment disconnected, so it lands on the next connect or full push. `GET /equipment/guider/advanced` is always 200: `{connected, current: GuiderAdvancedSettingsDto (the guider's values now, null where it did not answer), ra_algorithms[], dec_algorithms[]}`. Profile select and clone previously skipped `unguided` (#1264), so selecting a profile kept the previous rig's unguided values; both sections now follow the profile, and a profile without them reads the defaults (all-null for `guider_advanced`).
+
+**Reasoning:** field night 2026-10-16: multi-star, star detection and the algorithms were reachable only on the guider's own page; the epic (#1364) puts the guider inside Ara, and the values belong to the rig, so they live in its profile.
+
+**Spec ref:** `OpenAstroAra.Server/openapi.yaml#/paths/~1api~1v1~1profile~1guider-advanced`, `…~1equipment~1guider~1advanced`; `Contracts/ProfileDtos.cs` (`GuiderAdvancedSettingsDto`), `Contracts/EquipmentDtos.cs` (`GuiderAdvancedViewDto`), `Services/GuiderAdvancedSettingsMapping.cs`, `Services/ProfileStoreSnapshot.cs`, `Endpoints/ProfileEndpoints.cs`, `Equipment/MyGuider/PHD2/PHD2Guider.AdvancedSettings.cs`, `PHD2Guider.GuiderEngineConfig.cs`; client `widgets/imaging/guider_advanced_dialog.dart`, `models/guider_advanced_settings.dart`, `services/guider_advanced_api.dart`.
+
+**Related:** #1364, #1264; tests `GuiderAdvancedSettingsTest`, `ProfileStoreNullSectionTest` (`Unguided_and_guider_advanced_follow_the_profile_through_select`), client `guider_advanced_dialog_test`.
+
+---
+
 ### 2026-10-16 — Guider calibration in Ara: step plot, stored result, verdict, clear (#1364 item 2)
 
 **Endpoint(s) or area:** new `GET /api/v1/equipment/guider/live/calibration`, `POST …/live/calibration/clear`; WS `guider.event` kind `calibrating` gains `dx_px`, `dy_px`.
