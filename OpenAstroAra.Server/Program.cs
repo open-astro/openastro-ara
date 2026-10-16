@@ -468,6 +468,12 @@ public partial class Program {
                 sp.GetRequiredService<ILogger<GuideFocusService>>(),
                 syntheticFrames: sp.GetService<SyntheticGuideFrames>() is { } synthetic ? synthetic.Next : null,
                 optics: () => GuideOpticsFor(sp.GetRequiredService<IProfileStore>())));
+        // #1364 — the live guide-camera view: the guider's picture and star pick, through the daemon.
+        builder.Services.AddSingleton<IGuiderLiveService>(sp =>
+            new GuiderLiveService(
+                sp.GetRequiredService<GuiderService>(),
+                sp.GetRequiredService<IPolarAlignFrameFetcher>(),
+                sp.GetRequiredService<ILogger<GuiderLiveService>>()));
         // Phase 13.13 — §38 sequence CRUD + runtime control.
         // ISequenceService swapped to FileSequenceService below after
         // profileDir is resolved (filesystem-backed per §38.2). Runtime control

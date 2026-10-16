@@ -19,6 +19,7 @@ import '../../state/settings/phd2_settings_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../util/guide_graph_stats.dart';
 import '../../util/phd2_guide_log.dart';
+import 'guide_camera_panel.dart';
 import 'guiding_tune_dialog.dart';
 import 'polar_error_rating.dart';
 
@@ -146,6 +147,14 @@ class GuidingStrip extends ConsumerWidget {
                     const _LegendDot(color: AraColors.accentError, label: 'Dec'),
                     const SizedBox(width: 8),
                   ],
+                  IconButton(
+                    key: const Key('guide-camera-button'),
+                    tooltip: 'Guide camera…',
+                    visualDensity: VisualDensity.compact,
+                    icon: const Icon(Icons.camera_outlined,
+                        size: 16, color: AraColors.textSecondary),
+                    onPressed: () => showGuideCameraDialog(context),
+                  ),
                   IconButton(
                     tooltip: 'Tune guiding…',
                     visualDensity: VisualDensity.compact,

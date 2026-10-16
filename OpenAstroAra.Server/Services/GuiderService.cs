@@ -64,6 +64,18 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
     // recent guiding rather than the whole session. Fed by the guider's GuideEvent stream.
     private const int MaxGuideStepWindow = 200;
     private readonly Queue<(double Ra, double Dec)> _guideSteps = new();
+    // #1364 — the latest guide frame's star SNR and mass, for the live guide-camera view.
+    private (double? Snr, double? Mass) _latestStarStats;
+
+    /// <summary>The guide star's SNR and mass from the most recent guide step this session; both null
+    /// before the first step.</summary>
+    internal (double? Snr, double? Mass) LatestStarStats {
+        get {
+            lock (_gate) {
+                return _latestStarStats;
+            }
+        }
+    }
 
     private PHD2Guider? _guider;
     private EquipmentConnectionState _state = EquipmentConnectionState.Disconnected;
@@ -231,6 +243,7 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
             guider.EquipmentFault += OnEquipmentFault;
             guider.EquipmentReconnected += OnEquipmentReconnected; // #1191 — closes that fault's row
             _guideSteps.Clear(); // fresh session — drop the prior connection's RMS window
+            _latestStarStats = default;
             _guider = guider;
             generation = ++_connectGeneration;
             CancelConnectLocked();
@@ -542,6 +555,10 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
             _guideSteps.Enqueue((step.RADistanceRaw, step.DECDistanceRaw));
             while (_guideSteps.Count > MaxGuideStepWindow) {
                 _guideSteps.Dequeue();
+            }
+            // #1364 — the live view shows the guide star's SNR and mass from the latest frame.
+            if (step is PhdEventGuideStep phd) {
+                _latestStarStats = (phd.SNR, phd.StarMass);
             }
             guider = _guider!; // non-null: ReferenceEquals(sender, _guider) with a non-null sender
             pixelScale = guider.PixelScale;

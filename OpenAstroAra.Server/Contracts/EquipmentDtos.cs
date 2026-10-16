@@ -467,6 +467,34 @@ public sealed record GuiderStateDto(
     double? CalibrationDistancePx = null);
 
 /// <summary>
+/// #1364 — the live guide-camera view (<c>GET /equipment/guider/live</c>): what the guider is doing
+/// (<c>AppState</c>: Stopped | Looping | Selected | Calibrating | Guiding | LostLock | Paused), the frame
+/// size the picture at <c>GET …/live/frame</c> covers, the locked star and the search box around it, the
+/// latest guide frame's star SNR and mass, whether multi-star tracking is on, and the other stars the
+/// guider found (<c>Stars</c>, brightest first; empty when it has no image). Coordinates are guide-camera
+/// pixels. Fields the guider could not answer are null, never an error — the picture still shows.
+/// </summary>
+public sealed record GuiderLiveDto(
+    bool Connected,
+    string? AppState,
+    int? FrameWidth,
+    int? FrameHeight,
+    double? LockX,
+    double? LockY,
+    int? SearchRegion,
+    double? Snr,
+    double? StarMass,
+    bool? MultiStarEnabled,
+    IReadOnlyList<GuiderLiveStarDto> Stars,
+    bool HasFrame);
+
+/// <summary>One star the guider sees, in guide-camera pixels.</summary>
+public sealed record GuiderLiveStarDto(double X, double Y, double? Snr, double? Mass, double? Hfd);
+
+/// <summary>A tap on the live picture: lock on the star nearest (<c>X</c>, <c>Y</c>) guide pixels.</summary>
+public sealed record GuiderLiveSelectRequestDto(double X, double Y);
+
+/// <summary>
 /// #1311 — the polar alignment error left after Align, measured from the Dec drift the guider
 /// corrects during the first minutes of each guided run (no extra setup step). Status is
 /// <c>measuring</c> (progress in <c>SampleSeconds</c> of <c>TargetSeconds</c>), <c>done</c> or

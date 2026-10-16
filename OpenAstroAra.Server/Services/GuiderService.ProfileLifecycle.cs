@@ -151,7 +151,7 @@ public sealed partial class GuiderService {
     /// profile-name uniqueness and <c>ResolveAraProfileSelection</c> are both case-insensitive.</summary>
     internal static bool SameTwin(string a, string b) => string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
 
-    private PHD2Guider? ConnectedGuiderOrNull() {
+    internal PHD2Guider? ConnectedGuiderOrNull() {
         lock (_gate) {
             return !_disposed && _state == EquipmentConnectionState.Connected ? _guider : null;
         }
