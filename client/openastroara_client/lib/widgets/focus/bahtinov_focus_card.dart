@@ -742,7 +742,10 @@ class BahtinovFrameView extends StatelessWidget {
               ),
             if (jpeg != null && overlay != null)
               Positioned.fill(
-                child: magnified(CustomPaint(painter: _SpikePainter(overlay!, offsetPx))),
+                // Drawn only: a CustomPaint is hit everywhere by default, and on top of
+                // the tap layer and the zoom row it swallowed every tap once a pattern
+                // fitted (review of #1365).
+                child: IgnorePointer(child: magnified(CustomPaint(painter: _SpikePainter(overlay!, offsetPx)))),
               ),
             if (jpeg != null)
               Positioned(

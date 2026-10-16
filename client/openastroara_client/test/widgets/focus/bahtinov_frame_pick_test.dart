@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/bahtinov_focus.dart';
@@ -159,4 +161,65 @@ void main() {
     expect(whole.frameCrop, isNull);
     expect(whole.hasPick, isFalse);
   });
+
+  testWidgets(
+    'with a fitted overlay the picture, zoom and Whole frame still take taps',
+    (t) async {
+      // Review of #1365: the spike overlay was the top layer and swallowed every tap.
+      final png = base64Decode(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=',
+      );
+      const overlay = BahtinovOverlay(
+        cropSize: 256,
+        lines: [
+          BahtinovLine(role: 'outer', x1: 0, y1: 0, x2: 256, y2: 256),
+          BahtinovLine(role: 'central', x1: 0, y1: 10, x2: 256, y2: 246),
+          BahtinovLine(role: 'outer', x1: 256, y1: 0, x2: 0, y2: 256),
+        ],
+        intersectionX: 128,
+        intersectionY: 128,
+      );
+      t.view.physicalSize = const Size(1200, 800);
+    t.view.devicePixelRatio = 1;
+    addTearDown(t.view.reset);
+    final picks = <(int, int)>[];
+      final zooms = <int>[];
+      var cleared = 0;
+      await t.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 1000,
+              height: 300,
+              child: BahtinovFrameView(
+                frame: png,
+                overlay: overlay,
+                offsetPx: 0.4,
+                live: true,
+                height: 300,
+                frameWidth: 3856,
+                frameHeight: 2180,
+                crop: const BahtinovFrameCrop(left: 1800, top: 900, size: 256),
+                picked: true,
+                onPick: (x, y) => picks.add((x, y)),
+                onClearPick: () => cleared++,
+                zoom: 2,
+                onZoom: zooms.add,
+              ),
+            ),
+          ),
+        ),
+      );
+      await t.pump();
+      await t.tap(find.text('4×'));
+      expect(zooms, [4]);
+      await t.tap(find.text('Whole frame'));
+      expect(cleared, 1);
+      await t.tapAt(
+        t.getTopLeft(find.byType(BahtinovFrameView)) + const Offset(250, 150),
+      );
+      expect(picks, hasLength(1));
+      expect(picks.single, (1821, 1028));
+    },
+  );
 }
