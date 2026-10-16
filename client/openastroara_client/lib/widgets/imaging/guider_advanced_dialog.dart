@@ -57,6 +57,10 @@ class _GuiderAdvancedPanelState extends ConsumerState<GuiderAdvancedPanel> {
   final Map<String, TextEditingController> _text = {};
   final Map<String, String> _errors = {};
   bool _loading = true;
+  // Apply PUTs the whole section, so it is only allowed once the profile's
+  // block has actually loaded: from the empty draft a failed load leaves, it
+  // would erase every saved value.
+  bool _profileLoaded = false;
   bool _applying = false;
   String? _status;
   bool _statusIsError = false;
@@ -100,6 +104,7 @@ class _GuiderAdvancedPanelState extends ConsumerState<GuiderAdvancedPanel> {
         _draft = profile;
         _guider = guider;
         _loading = false;
+        _profileLoaded = true;
         for (final e in _text.entries) {
           final v = profile[e.key];
           e.value.text = v == null
@@ -150,12 +155,23 @@ class _GuiderAdvancedPanelState extends ConsumerState<GuiderAdvancedPanel> {
     }
     String? order(String min, String max, String what) {
       final lo = d[min], hi = d[max];
-      return lo is num && hi is num && lo > hi ? '$what: the minimum is above the maximum.' : null;
+      return lo is num && hi is num && lo > hi
+          ? '$what: the minimum is above the maximum.'
+          : null;
     }
+
     return order('min_star_hfd', 'max_star_hfd', 'Star HFD') ??
-        order('auto_exposure_min_ms', 'auto_exposure_max_ms', 'Auto exposure') ??
+        order(
+          'auto_exposure_min_ms',
+          'auto_exposure_max_ms',
+          'Auto exposure',
+        ) ??
         order('backlash_floor_ms', 'backlash_ceiling_ms', 'Backlash') ??
-        order('variable_delay_short_s', 'variable_delay_long_s', 'Variable delay');
+        order(
+          'variable_delay_short_s',
+          'variable_delay_long_s',
+          'Variable delay',
+        );
   }
 
   void _onText(GuiderAdvancedField f, String raw) {
@@ -172,7 +188,10 @@ class _GuiderAdvancedPanelState extends ConsumerState<GuiderAdvancedPanel> {
 
   Future<void> _apply() async {
     final api = ref.read(guiderAdvancedApiProvider);
-    if (api == null || _errors.isNotEmpty || crossFieldProblem(_draft) != null) {
+    if (api == null ||
+        !_profileLoaded ||
+        _errors.isNotEmpty ||
+        crossFieldProblem(_draft) != null) {
       return;
     }
     setState(() {
@@ -304,7 +323,9 @@ class _GuiderAdvancedPanelState extends ConsumerState<GuiderAdvancedPanel> {
           Row(
             children: [
               TextButton(
-                onPressed: _loading || _applying ? null : _resetAll,
+                onPressed: _loading || _applying || !_profileLoaded
+                    ? null
+                    : _resetAll,
                 // Clears the profile's values only; nothing already sent is undone.
                 child: const Text("All guider's"),
               ),
@@ -318,6 +339,7 @@ class _GuiderAdvancedPanelState extends ConsumerState<GuiderAdvancedPanel> {
                 onPressed:
                     _loading ||
                         _applying ||
+                        !_profileLoaded ||
                         _errors.isNotEmpty ||
                         crossFieldProblem(_draft) != null
                     ? null

@@ -9,12 +9,17 @@ import 'package:openastroara/widgets/imaging/guider_advanced_dialog.dart';
 
 class _Fake implements GuiderAdvancedClient {
   GuiderAdvancedSettings profile;
+  bool failProfileRead = false;
   final GuiderAdvancedView guider;
   Map<String, dynamic>? putBody;
   int pushes = 0;
   _Fake(this.profile, this.guider);
   @override
-  Future<GuiderAdvancedSettings> getProfile() async => profile;
+  Future<GuiderAdvancedSettings> getProfile() async {
+    if (failProfileRead) throw Exception('profile read timed out');
+    return profile;
+  }
+
   @override
   Future<GuiderAdvancedSettings> putProfile(GuiderAdvancedSettings s) async {
     putBody = s.toJson();
@@ -202,6 +207,60 @@ void main() {
     );
     expect(fake.putBody, isNull);
   });
+
+  testWidgets(
+    'a failed profile load disables Apply so it cannot wipe the saved block',
+    (t) async {
+      // Apply PUTs the whole section; from an empty draft it would erase the
+      // values the load failed to bring back.
+      final fake = _Fake(GuiderAdvancedSettings.empty, _guider())
+        ..failProfileRead = true;
+      t.view.physicalSize = const Size(900, 2400);
+      t.view.devicePixelRatio = 1;
+      addTearDown(t.view.resetPhysicalSize);
+      addTearDown(t.view.resetDevicePixelRatio);
+      await t.pumpWidget(
+        ProviderScope(
+          overrides: [
+            activeServerProvider.overrideWithValue(
+              const AraServer(hostname: 'localhost', port: 5555),
+            ),
+            guiderAdvancedApiFactoryProvider.overrideWithValue((_) => fake),
+          ],
+          child: const MaterialApp(
+            home: Scaffold(
+              body: SizedBox(
+                width: 800,
+                height: 2300,
+                child: GuiderAdvancedPanel(),
+              ),
+            ),
+          ),
+        ),
+      );
+      await t.pumpAndSettle();
+      expect(
+        find.byKey(const Key('guider-advanced-status')),
+        findsOneWidget,
+        reason: 'the load error is shown',
+      );
+      await t.enterText(find.byKey(const Key('ga-min_star_snr')), '9');
+      await t.pump();
+      expect(
+        t
+            .widget<FilledButton>(find.widgetWithText(FilledButton, 'Apply'))
+            .onPressed,
+        isNull,
+      );
+      expect(
+        t
+            .widget<TextButton>(find.widgetWithText(TextButton, "All guider's"))
+            .onPressed,
+        isNull,
+      );
+      expect(fake.putBody, isNull);
+    },
+  );
 
   testWidgets('an invalid number blocks Apply', (t) async {
     final fake = await _pump(t);
