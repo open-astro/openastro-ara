@@ -8,6 +8,7 @@ import '../../models/guider_live.dart';
 import '../../state/guider/guider_live_state.dart';
 import '../../theme/ara_colors.dart';
 import '../focus/bahtinov_focus_card.dart' show BahtinovFrameView;
+import 'guide_calibration_panel.dart';
 
 /// #1364 (epic item 1) — the guide camera's own picture from Ara: what the
 /// guider is looping on, the star it locked (cross + search box), the other
@@ -78,12 +79,34 @@ class GuideCameraPanel extends ConsumerWidget {
           ),
           const SizedBox(height: 8),
           Expanded(
-            child: GuideCameraView(
-              frame: state.frame,
-              live: live,
-              onTap: live.connected && !state.busy
-                  ? (x, y) => unawaited(notifier.selectStar(x, y))
-                  : null,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(
+                  child: GuideCameraView(
+                    frame: state.frame,
+                    live: live,
+                    onTap: live.connected && !state.busy
+                        ? (x, y) => unawaited(notifier.selectStar(x, y))
+                        : null,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                // #1364 item 2 — the calibration beside the picture: the step
+                // plot, the stored result and Ara's verdict.
+                SizedBox(
+                  width: 260,
+                  child: GuideCalibrationPanel(
+                    view: state.calibration,
+                    onClear:
+                        live.connected &&
+                            !state.busy &&
+                            !state.calibration.isRunning
+                        ? () => unawaited(notifier.clearCalibration())
+                        : null,
+                  ),
+                ),
+              ],
             ),
           ),
           const SizedBox(height: 8),

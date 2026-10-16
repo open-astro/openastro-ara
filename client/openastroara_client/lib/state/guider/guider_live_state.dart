@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../models/guider_calibration_view.dart';
 import '../../models/guider_live.dart';
 import '../../models/server.dart';
 import '../../services/guider_live_api.dart';
@@ -27,11 +28,13 @@ final guiderLiveApiProvider = Provider<GuiderLiveClient?>((ref) {
 class GuiderLiveState {
   final GuiderLive live;
   final Uint8List? frame;
+  final GuiderCalibrationView calibration;
   final bool busy;
   final String? error;
   const GuiderLiveState({
     this.live = GuiderLive.disconnected,
     this.frame,
+    this.calibration = GuiderCalibrationView.disconnected,
     this.busy = false,
     this.error,
   });
@@ -39,6 +42,7 @@ class GuiderLiveState {
   GuiderLiveState copyWith({
     GuiderLive? live,
     Uint8List? frame,
+    GuiderCalibrationView? calibration,
     bool? busy,
     String? error,
     bool clearError = false,
@@ -46,6 +50,7 @@ class GuiderLiveState {
   }) => GuiderLiveState(
     live: live ?? this.live,
     frame: clearFrame ? null : (frame ?? this.frame),
+    calibration: calibration ?? this.calibration,
     busy: busy ?? this.busy,
     error: clearError ? null : (error ?? this.error),
   );
@@ -84,9 +89,12 @@ class GuiderLiveNotifier extends Notifier<GuiderLiveState> {
         frame = await api.getFrame();
         if (!ref.mounted || gen != _generation) return;
       }
+      final calibration = await api.getCalibration();
+      if (!ref.mounted || gen != _generation) return;
       state = state.copyWith(
         live: live,
         frame: frame,
+        calibration: calibration,
         clearFrame: !live.hasFrame && frame == null,
         clearError: true,
       );
@@ -126,9 +134,10 @@ class GuiderLiveNotifier extends Notifier<GuiderLiveState> {
   Future<void> selectStar(double x, double y) =>
       _act((api) => api.selectStar(x, y));
   Future<void> deselectStar() => _act((api) => api.deselectStar());
+  Future<void> clearCalibration() => _act((api) => api.clearCalibration());
 }
 
 final guiderLiveProvider =
     NotifierProvider.autoDispose<GuiderLiveNotifier, GuiderLiveState>(
-  GuiderLiveNotifier.new,
-);
+      GuiderLiveNotifier.new,
+    );

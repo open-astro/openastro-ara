@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 
+import '../models/guider_calibration_view.dart';
 import '../models/guider_live.dart';
 import '../models/server.dart';
 
@@ -18,6 +19,12 @@ abstract interface class GuiderLiveClient {
   /// Lock on the star nearest (x, y) guide pixels.
   Future<void> selectStar(double x, double y);
   Future<void> deselectStar();
+
+  /// This session's calibration run, the stored result and Ara's verdict.
+  Future<GuiderCalibrationView> getCalibration();
+
+  /// Drop the stored calibration; the next guide start calibrates again.
+  Future<void> clearCalibration();
   void close();
 }
 
@@ -73,6 +80,21 @@ class GuiderLiveApi implements GuiderLiveClient {
   @override
   Future<void> deselectStar() =>
       _dio.post<void>('/api/v1/equipment/guider/live/deselect');
+
+  @override
+  Future<GuiderCalibrationView> getCalibration() async {
+    final res = await _dio.get<dynamic>(
+      '/api/v1/equipment/guider/live/calibration',
+    );
+    final data = res.data;
+    return data is Map<String, dynamic>
+        ? GuiderCalibrationView.fromJson(data)
+        : GuiderCalibrationView.disconnected;
+  }
+
+  @override
+  Future<void> clearCalibration() =>
+      _dio.post<void>('/api/v1/equipment/guider/live/calibration/clear');
 
   @override
   void close() => _dio.close(force: true);

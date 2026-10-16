@@ -531,6 +531,13 @@ public static partial class EquipmentEndpoints {
             .Produces(StatusCodes.Status204NoContent).ProducesProblem(StatusCodes.Status400BadRequest)
             .ProducesProblem(StatusCodes.Status409Conflict).ProducesProblem(StatusCodes.Status422UnprocessableEntity)
             .WithName("GuiderLiveSelectStar").WithSummary("Lock the guider on the star nearest (x, y) guide pixels.");
+        guider.MapGet("/live/calibration", async (IGuiderLiveService live, CancellationToken ct) => Results.Ok(await live.GetCalibrationAsync(ct)))
+            .Produces<GuiderCalibrationViewDto>(StatusCodes.Status200OK)
+            .WithName("GetGuiderCalibrationView")
+            .WithSummary("This session's calibration run (steps, outcome), the stored calibration and Ara's verdict.");
+        guider.MapPost("/live/calibration/clear", (IGuiderLiveService live, CancellationToken ct) => GuiderLiveActionAsync(() => live.ClearCalibrationAsync(ct)))
+            .Produces(StatusCodes.Status204NoContent).ProducesProblem(StatusCodes.Status409Conflict).ProducesProblem(StatusCodes.Status422UnprocessableEntity)
+            .WithName("ClearGuiderCalibration").WithSummary("Drop the stored calibration; the next guide start calibrates again.");
         guider.MapPost("/live/deselect", (IGuiderLiveService live, CancellationToken ct) => GuiderLiveActionAsync(() => live.DeselectStarAsync(ct)))
             .Produces(StatusCodes.Status204NoContent).ProducesProblem(StatusCodes.Status409Conflict).ProducesProblem(StatusCodes.Status422UnprocessableEntity)
             .WithName("GuiderLiveDeselectStar").WithSummary("Drop the guider's selected star.");

@@ -30,6 +30,18 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2.PhdEvents {
         [JsonProperty(PropertyName = "dist")]
         public double Distance { get; set; }
 
+        /// <summary>The star's displacement from the leg's start, guide-camera pixels — what the
+        /// calibration plot draws.</summary>
+        [JsonProperty(PropertyName = "dx")]
+        public double Dx { get; set; }
+
+        [JsonProperty(PropertyName = "dy")]
+        public double Dy { get; set; }
+
+        /// <summary>The star's absolute position, <c>[x, y]</c> guide pixels.</summary>
+        [JsonProperty(PropertyName = "pos")]
+        public System.Collections.Generic.IReadOnlyList<double>? Position { get; set; }
+
         [JsonProperty(PropertyName = "State")]
         public string? State { get; set; }
     }

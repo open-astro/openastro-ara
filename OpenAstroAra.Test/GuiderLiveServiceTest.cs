@@ -79,6 +79,48 @@ namespace OpenAstroAra.Test {
             Assert.That(StatusOf(ok), Is.EqualTo(204));
         }
 
+        private static OpenAstroAra.Server.Contracts.GuiderCalibrationDataDto Cal(double xAngle, double yAngle, double xRate, double yRate, double dec = 0, bool calibrated = true) =>
+            GuiderLiveService.ToDto(new OpenAstroAra.Equipment.Equipment.MyGuider.PHD2.GuiderCalibrationData(calibrated, xAngle, yAngle, xRate, yRate, "Even", "Odd", dec));
+
+        [Test]
+        public void The_orthogonality_error_is_how_far_the_axes_are_from_square() {
+            Assert.That(Cal(10, 100, 10, 10).OrthogonalityErrorDeg, Is.EqualTo(0));
+            Assert.That(Cal(10, 85, 10, 10).OrthogonalityErrorDeg, Is.EqualTo(15));
+            Assert.That(Cal(170, 80, 10, 10).OrthogonalityErrorDeg, Is.EqualTo(0), "angles wrap at 180°");
+            Assert.That(Cal(-5, 100, 10, 10).OrthogonalityErrorDeg, Is.EqualTo(15));
+        }
+
+        [Test]
+        public void The_verdict_reads_the_run_and_the_stored_calibration() {
+            Assert.That(GuiderLiveService.Judge("running", null, null).Verdict, Is.EqualTo("check"));
+            Assert.That(GuiderLiveService.Judge("failed", "star lost", null), Is.EqualTo(("redo", "The last calibration failed: star lost")));
+            Assert.That(GuiderLiveService.Judge("none", null, null).Verdict, Is.EqualTo("redo"), "nothing stored");
+            Assert.That(GuiderLiveService.Judge("complete", null, Cal(10, 100, 10, 10, calibrated: false)).Verdict, Is.EqualTo("redo"));
+            Assert.That(GuiderLiveService.Judge("complete", null, Cal(10, 100, 12, 11)).Verdict, Is.EqualTo("good"));
+            var skew = GuiderLiveService.Judge("complete", null, Cal(10, 85, 12, 11));
+            Assert.That(skew.Verdict, Is.EqualTo("check"));
+            Assert.That(skew.Reason, Does.Contain("15°"));
+            var stuck = GuiderLiveService.Judge("none", null, Cal(10, 100, 12, 3));
+            Assert.That(stuck.Verdict, Is.EqualTo("check"));
+            Assert.That(stuck.Reason, Does.Contain("Dec rate"));
+            // At dec 60° the camera's RA rate is half the sky rate, so the Dec rate is compared with
+            // twice the camera RA rate: 12 vs 24 (0.5×) is at the edge and still good; 5 vs 24 is not.
+            Assert.That(GuiderLiveService.Judge("complete", null, Cal(10, 100, 12, 12, dec: 60)).Verdict, Is.EqualTo("good"));
+            Assert.That(GuiderLiveService.Judge("complete", null, Cal(10, 100, 12, 5, dec: 60)).Verdict, Is.EqualTo("check"));
+            Assert.That(GuiderLiveService.Judge("complete", null, Cal(10, 100, 12, 5, dec: 0)).Verdict, Is.EqualTo("check"), "and at the equator too (0.4×)");
+        }
+
+        [Test]
+        public async Task Without_a_guider_the_calibration_view_says_redo() {
+            using var guider = NewGuiderService();
+            var live = new GuiderLiveService(guider, new NoFrames());
+            var view = await live.GetCalibrationAsync(CancellationToken.None);
+            Assert.That(view.Connected, Is.False);
+            Assert.That(view.Verdict, Is.EqualTo("redo"));
+            Assert.That(view.Steps, Is.Empty);
+            await Assert.ThatAsync(() => live.ClearCalibrationAsync(CancellationToken.None), Throws.InvalidOperationException);
+        }
+
         private static int? StatusOf(Microsoft.AspNetCore.Http.IResult result) =>
             (result as Microsoft.AspNetCore.Http.IStatusCodeHttpResult)?.StatusCode;
     }

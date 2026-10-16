@@ -491,6 +491,40 @@ public sealed record GuiderLiveDto(
 /// <summary>One star the guider sees, in guide-camera pixels.</summary>
 public sealed record GuiderLiveStarDto(double X, double Y, double? Snr, double? Mass, double? Hfd);
 
+/// <summary>
+/// #1364 — the guider's calibration (<c>GET /equipment/guider/live/calibration</c>): the run this
+/// session (<c>RunState</c>: <c>none</c> | <c>running</c> | <c>complete</c> | <c>failed</c>, its steps —
+/// the plot PHD2 draws — and the failure reason), the stored result (<c>Data</c>, null when the guider
+/// has none), and Ara's verdict on it: <c>good</c>, <c>check</c> (usable, but the axes are far from
+/// square or the rates far apart — <c>VerdictReason</c> says which) or <c>redo</c> (failed or absent).
+/// </summary>
+public sealed record GuiderCalibrationViewDto(
+    bool Connected,
+    string RunState,
+    IReadOnlyList<GuiderCalibrationStepDto> Steps,
+    string? Error,
+    GuiderCalibrationDataDto? Data,
+    string Verdict,
+    string? VerdictReason);
+
+/// <summary>One calibration step: the leg (<c>West</c>, <c>East</c>, <c>North</c>, <c>South</c> or a
+/// backlash-clearing leg), its number and the star's displacement from the leg's start, guide px.</summary>
+public sealed record GuiderCalibrationStepDto(string Direction, int Step, double Dx, double Dy, double Dist);
+
+/// <summary>The stored calibration: axis angles on the camera (degrees), guide rates (px/s), parities,
+/// the declination it was taken at, and the orthogonality error (how far the RA and Dec axes are from
+/// 90° apart).</summary>
+public sealed record GuiderCalibrationDataDto(
+    bool Calibrated,
+    double? XAngleDeg,
+    double? YAngleDeg,
+    double? XRatePxPerSec,
+    double? YRatePxPerSec,
+    string? XParity,
+    string? YParity,
+    double? DeclinationDeg,
+    double? OrthogonalityErrorDeg);
+
 /// <summary>A tap on the live picture: lock on the star nearest (<c>X</c>, <c>Y</c>) guide pixels.</summary>
 public sealed record GuiderLiveSelectRequestDto(double X, double Y);
 

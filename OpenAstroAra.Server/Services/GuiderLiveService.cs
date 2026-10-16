@@ -36,6 +36,10 @@ public interface IGuiderLiveService {
     /// <summary>Lock on the star nearest a tap, in guide pixels.</summary>
     Task SelectStarAsync(double x, double y, CancellationToken ct);
     Task DeselectStarAsync(CancellationToken ct);
+    /// <summary>This session's calibration run, the stored result and Ara's verdict on it.</summary>
+    Task<GuiderCalibrationViewDto> GetCalibrationAsync(CancellationToken ct);
+    /// <summary>Drop the stored calibration so the next guide start calibrates again.</summary>
+    Task ClearCalibrationAsync(CancellationToken ct);
 }
 
 /// <summary>
@@ -158,6 +162,77 @@ public sealed partial class GuiderLiveService : IGuiderLiveService {
     }
 
     public Task DeselectStarAsync(CancellationToken ct) => _guider.RequireConnectedGuider().DeselectStarAsync(ct);
+
+    /// <summary>Axes more than this far from square: the mount or the camera orientation moved during
+    /// calibration, or Dec backlash ate the first steps — PHD2 warns at the same figure.</summary>
+    internal const double OrthogonalityCheckDeg = 10;
+    /// <summary>Dec rate outside this factor of the RA rate (RA rate corrected for declination): one
+    /// axis barely moved — usually a stuck Dec or a wrong guide rate.</summary>
+    internal const double RateRatioCheck = 2.0;
+
+    public async Task<GuiderCalibrationViewDto> GetCalibrationAsync(CancellationToken ct) {
+        var guider = _guider.ConnectedGuiderOrNull();
+        if (guider is null) {
+            return new GuiderCalibrationViewDto(false, "none", Array.Empty<GuiderCalibrationStepDto>(), null, null, "redo", "No guider connected.");
+        }
+        var (runState, steps, error) = guider.CalibrationRun;
+        var data = await Quietly<GuiderCalibrationData?>(async () => await guider.GetCalibrationDataAsync(ct).ConfigureAwait(false), "calibration data").ConfigureAwait(false);
+        var dto = data is null ? null : ToDto(data);
+        var (verdict, reason) = Judge(runState, error, dto);
+        var stepDtos = new List<GuiderCalibrationStepDto>(steps.Count);
+        foreach (var s in steps) {
+            stepDtos.Add(new GuiderCalibrationStepDto(s.Direction ?? "", s.Step, Math.Round(s.Dx, 2), Math.Round(s.Dy, 2), Math.Round(s.Distance, 2)));
+        }
+        return new GuiderCalibrationViewDto(true, runState, stepDtos, error, dto, verdict, reason);
+    }
+
+    public Task ClearCalibrationAsync(CancellationToken ct) => _guider.RequireConnectedGuider().ClearCalibrationAsync(ct);
+
+    /// <summary>The stored calibration with its orthogonality error: how far the RA and Dec axes are
+    /// from 90° apart on the camera. Pure.</summary>
+    internal static GuiderCalibrationDataDto ToDto(GuiderCalibrationData d) {
+        double? ortho = null;
+        if (d.XAngleDeg is double xa && d.YAngleDeg is double ya) {
+            var diff = Math.Abs(xa - ya) % 180;
+            if (diff > 90) {
+                diff = 180 - diff;
+            }
+            ortho = Math.Round(Math.Abs(90 - diff), 1);
+        }
+        return new GuiderCalibrationDataDto(d.Calibrated, d.XAngleDeg, d.YAngleDeg, d.XRatePxPerSec, d.YRatePxPerSec,
+            d.XParity, d.YParity, d.DeclinationDeg, ortho);
+    }
+
+    /// <summary>
+    /// Ara's verdict on a calibration. <c>redo</c>: the run failed, or there is no stored calibration.
+    /// <c>check</c>: there is one, but the axes are more than <see cref="OrthogonalityCheckDeg"/> from
+    /// square, or the Dec rate is more than <see cref="RateRatioCheck"/>× off the RA rate once the RA
+    /// rate is corrected for the declination (RA moves cos(dec) slower on the sky). <c>good</c> otherwise.
+    /// A run still in progress is <c>check</c> with "Calibrating…". Pure — unit-tested.
+    /// </summary>
+    internal static (string Verdict, string? Reason) Judge(string runState, string? error, GuiderCalibrationDataDto? data) {
+        if (runState == "running") {
+            return ("check", "Calibrating…");
+        }
+        if (runState == "failed") {
+            return ("redo", string.IsNullOrWhiteSpace(error) ? "The last calibration failed." : $"The last calibration failed: {error}");
+        }
+        if (data is null || !data.Calibrated) {
+            return ("redo", "No calibration stored — the next guide start calibrates.");
+        }
+        if (data.OrthogonalityErrorDeg is double ortho && ortho > OrthogonalityCheckDeg) {
+            return ("check", $"RA and Dec axes are {ortho:F0}° from square — the mount or camera may have moved during calibration.");
+        }
+        if (data.XRatePxPerSec is > 0 and var xr && data.YRatePxPerSec is > 0 and var yr) {
+            var cosDec = Math.Cos((data.DeclinationDeg ?? 0) * Math.PI / 180);
+            var raOnSky = cosDec > 0.05 ? xr / cosDec : xr;
+            var ratio = yr / raOnSky;
+            if (ratio > RateRatioCheck || ratio < 1 / RateRatioCheck) {
+                return ("check", $"Dec rate is {ratio:F1}× the RA rate — one axis barely moved (backlash, or a wrong guide rate).");
+            }
+        }
+        return ("good", null);
+    }
 
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Best-effort read of one field of the live view: a refused RPC leaves it null, the rest of the view still answers. Log-and-recover boundary.")]
