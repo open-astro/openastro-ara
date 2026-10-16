@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -31,19 +33,32 @@ class RunDashboardBand extends ConsumerStatefulWidget {
 class _RunDashboardBandState extends ConsumerState<RunDashboardBand> {
   bool _tickerExpanded = false;
 
-  @override
-  void initState() {
-    super.initState();
-    // Tick the elapsed readout once a second while mounted. The band only
-    // mounts during an active run, so the timer's lifetime is the run's.
-    // Broadcast: the band hides while no run is active and the StreamBuilder
-    // is rebuilt when one starts again. A single-subscription periodic stream
-    // threw "Stream has already been listened to" on that second subscribe
-    // and took the whole Run tab down (2026-10-16, second run of the night).
-    _ticker = Stream<void>.periodic(const Duration(seconds: 1)).asBroadcastStream();
+  // The elapsed readout's one-second tick. A broadcast controller whose timer
+  // runs only while something listens: the band hides while no run is active
+  // (its StreamBuilder goes away) and comes back when the next run starts,
+  // which subscribes again. A single-subscription `Stream.periodic` threw
+  // "Stream has already been listened to" on that second subscribe and took
+  // the whole Run tab down (#1363, 2026-10-16, second run of the night); a
+  // plain `asBroadcastStream()` would keep its timer alive with no listener.
+  late final StreamController<void> _ticker =
+      StreamController<void>.broadcast(onListen: _startTicking, onCancel: _stopTicking);
+  Timer? _tickTimer;
+
+  void _startTicking() {
+    _tickTimer ??= Timer.periodic(const Duration(seconds: 1), (_) => _ticker.add(null));
   }
 
-  late final Stream<void> _ticker;
+  void _stopTicking() {
+    _tickTimer?.cancel();
+    _tickTimer = null;
+  }
+
+  @override
+  void dispose() {
+    _stopTicking();
+    _ticker.close();
+    super.dispose();
+  }
 
   String _fmtDuration(Duration d) {
     final h = d.inHours;
@@ -79,7 +94,7 @@ class _RunDashboardBandState extends ConsumerState<RunDashboardBand> {
     // a daemon that sent none.
 
     return StreamBuilder<void>(
-      stream: _ticker,
+      stream: _ticker.stream,
       builder: (context, _) {
         final elapsed = run.startedUtc == null
             ? Duration.zero
