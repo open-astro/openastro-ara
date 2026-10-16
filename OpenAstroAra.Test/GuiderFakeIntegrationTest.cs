@@ -1077,6 +1077,31 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Looping_a_selected_star_and_settling_reach_their_own_runtime_states() {
+            // #1364 item 6 — these used to read "stopped" (looping, star selected) or "guiding" (settling).
+            await using var fake = FakeGuider.Start();
+            fake.SetOnConnectEvents(PhdEvents.Version(subver: "openastroara-fake"), PhdEvents.AppState("Stopped"));
+            using var svc = new GuiderService(new HeadlessProfileService(), NewRecovery(),
+                NullLogger<GuiderService>.Instance, Mock.Of<IGuiderProcessSupervisor>());
+            await svc.ConnectAsync(new GuiderConnectRequestDto("127.0.0.1", fake.Port), idempotencyKey: null, CancellationToken.None)
+                .ConfigureAwait(false);
+            Assert.That(await PollAsync(svc, d => d.State == EquipmentConnectionState.Connected).ConfigureAwait(false), Is.Not.Null);
+
+            await fake.BroadcastAsync(PhdEvents.AppState("Looping")).ConfigureAwait(false);
+            Assert.That(await PollAsync(svc, d => d.Runtime?.State == "looping").ConfigureAwait(false), Is.Not.Null, "Looping");
+            await fake.BroadcastAsync(PhdEvents.AppState("Selected")).ConfigureAwait(false);
+            Assert.That(await PollAsync(svc, d => d.Runtime?.State == "star_selected").ConfigureAwait(false), Is.Not.Null, "Selected");
+            await fake.BroadcastAsync(PhdEvents.AppState("Guiding")).ConfigureAwait(false);
+            Assert.That(await PollAsync(svc, d => d.Runtime?.State == "guiding").ConfigureAwait(false), Is.Not.Null, "Guiding");
+            await fake.BroadcastAsync(PhdEvents.Settling(1.2, 3, 10)).ConfigureAwait(false);
+            Assert.That(await PollAsync(svc, d => d.Runtime?.State == "settling").ConfigureAwait(false), Is.Not.Null,
+                "a Settling event while guiding reads settling");
+            await fake.BroadcastAsync(PhdEvents.SettleDone()).ConfigureAwait(false);
+            Assert.That(await PollAsync(svc, d => d.Runtime?.State == "guiding").ConfigureAwait(false), Is.Not.Null,
+                "SettleDone returns to guiding");
+        }
+
+        [Test]
         public async Task Drops_to_Error_when_the_guider_link_dies_mid_session() {
             await using var fake = FakeGuider.Start();
             fake.SetOnConnectEvents(PhdEvents.Version(subver: "openastroara-fake"), PhdEvents.AppState("Stopped"));
