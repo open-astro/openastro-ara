@@ -367,6 +367,55 @@ namespace OpenAstroAra.Image.ImageAnalysis {
         /// (px) from the analysed star, to count as another star.</summary>
         public const double OtherStarSigmas = 15;
         public const int OtherStarMinDistance = 20;
+        /// <summary>How far out (px) a candidate's profile is sampled to tell a star from a spike ridge.</summary>
+        public const int OtherStarCompactRadius = 4;
+
+        /// <summary>
+        /// A star falls to the sky within a few pixels in every direction; a point on the analysed star's
+        /// own spike or halo stays bright along the ridge. Sampled in 8 directions at
+        /// <see cref="OtherStarCompactRadius"/> px: more than one direction still above half the
+        /// candidate's height over the sky means a ridge, not a star; so do two or more of four points along
+        /// the ray through the analysed star (±4, ±6 px) above a quarter of its height. Without this a bright mask star's
+        /// spikes read as 17–25 "neighbours" and were masked out of the fit (review of #1365). Pure.
+        /// </summary>
+        internal static bool IsCompact(double[] crop, int size, int x, int y, double sky, double value, double starX, double starY) {
+            var half = sky + (value - sky) / 2;
+            var bright = 0;
+            for (var k = 0; k < 8; k++) {
+                var a = k * Math.PI / 4;
+                var sx = (int)Math.Round(x + OtherStarCompactRadius * Math.Cos(a));
+                var sy = (int)Math.Round(y + OtherStarCompactRadius * Math.Sin(a));
+                if (sx < 0 || sy < 0 || sx >= size || sy >= size) {
+                    continue;
+                }
+                if (crop[sy * size + sx] > half) {
+                    bright++;
+                }
+            }
+            if (bright > 1) {
+                return false;
+            }
+            // Spikes are radial: a ridge point stays lit along the ray through the analysed star even
+            // where it slips between the 45° samples above. A separate star on that ray is dark along it.
+            var rx = x + 0.5 - starX;
+            var ry = y + 0.5 - starY;
+            var r = Math.Sqrt(rx * rx + ry * ry);
+            if (r < 1) {
+                return false;
+            }
+            var quarter = sky + (value - sky) / 4;
+            var lit = 0;
+            foreach (var d in RadialProbeOffsets) {
+                var sx = (int)Math.Round(x + d * rx / r);
+                var sy = (int)Math.Round(y + d * ry / r);
+                if (sx >= 0 && sy >= 0 && sx < size && sy < size && crop[sy * size + sx] > quarter) {
+                    lit++;
+                }
+            }
+            return lit < 2;
+        }
+
+        private static readonly int[] RadialProbeOffsets = [-6, -4, 4, 6];
 
         /// <summary>Peaks of other stars in the crop: local maxima at least <see cref="OtherStarSigmas"/> over
         /// the sky, <see cref="OtherStarMinDistance"/> px or more from the analysed star and from each other.
@@ -401,7 +450,7 @@ namespace OpenAstroAra.Image.ImageAnalysis {
                             }
                         }
                     }
-                    if (isMax) {
+                    if (isMax && IsCompact(crop, size, x, y, median, v, cx, cy)) {
                         found.Add((x, y, v));
                     }
                 }

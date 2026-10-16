@@ -96,6 +96,22 @@ namespace OpenAstroAra.Test {
                 "the real crop has the mask star alone");
         }
 
+        [TestCase(1.2, 0.0)]
+        [TestCase(1.5, 8.0)]
+        [TestCase(2.5, 3.0)]
+        [TestCase(4.0, 0.0)]
+        public void A_bright_mask_stars_own_spikes_are_not_taken_for_neighbours(double blurPx, double offsetPx) {
+            // A saturated synthetic mask star with long spikes: before the compactness test 17–25 points on
+            // its own spike ridges cleared 15σ and were masked out of the fit (review of #1365).
+            var px = OpenAstroAra.Server.Services.SyntheticSky.RenderBahtinov(Size, Size, 128, 128, offsetPx, blurPx,
+                fieldStars: false, frameSeed: 3);
+            var crop = Array.ConvertAll(px, v => (double)v);
+            Assert.That(BahtinovAnalyzer.OtherStars(crop, Size, 128.5, 128.5), Is.Empty);
+            var m = BahtinovAnalyzer.Analyze(px, Size, Size, out var problem);
+            Assert.That(m, Is.Not.Null, $"no measurement: {problem}");
+            Assert.That(m!.OffsetPx, Is.EqualTo(offsetPx).Within(0.3));
+        }
+
         [Test]
         public void Neighbouring_stars_in_the_crop_do_not_spoil_the_measurement() {
             var alone = BahtinovAnalyzer.Analyze(LoadCrop(), Size, Size, out _)!;
