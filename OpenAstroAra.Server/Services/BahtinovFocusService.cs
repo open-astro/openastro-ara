@@ -436,8 +436,9 @@ public sealed partial class BahtinovFocusService : IBahtinovFocusService, IDispo
             if (!pickChanged) {
                 _misses = 0;
                 _lock = (m.StarX, m.StarY);
+                // Nor does a frame of the star before a tap fix the session's sign convention.
+                _normal ??= (m.NormalX, m.NormalY);
             }
-            _normal ??= (m.NormalX, m.NormalY);
             var (zonePx, _) = ZonePx(optics, binning);
             var offset = Math.Round(m.OffsetPx, 3);
             double? defocus = optics is not null ? Math.Round(m.OffsetPx * MicronsPerPixel(optics, binning), 1) : null;
