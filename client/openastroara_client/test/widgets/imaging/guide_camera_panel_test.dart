@@ -73,6 +73,42 @@ void main() {
     );
   });
 
+  testWidgets('a paused guide offers Stop, not Loop', (t) async {
+    final fake = _FakeLive(
+      GuiderLive.fromJson({'connected': true, 'app_state': 'Paused'}),
+    );
+    await t.pumpWidget(
+      ProviderScope(
+        overrides: [
+          activeServerProvider.overrideWithValue(
+            const AraServer(hostname: 'localhost', port: 5555),
+          ),
+          guiderLiveApiFactoryProvider.overrideWithValue((_) => fake),
+        ],
+        child: const MaterialApp(
+          home: Scaffold(
+            body: SizedBox(width: 1000, height: 600, child: GuideCameraPanel()),
+          ),
+        ),
+      ),
+    );
+    await t.pump();
+    await t.pump();
+    expect(
+      t
+          .widget<FilledButton>(find.widgetWithText(FilledButton, 'Loop'))
+          .onPressed,
+      isNull,
+      reason: 'Loop would throw the paused guide away',
+    );
+    expect(
+      t
+          .widget<FilledButton>(find.widgetWithText(FilledButton, 'Stop'))
+          .onPressed,
+      isNotNull,
+    );
+  });
+
   test('frame pixels map onto a BoxFit.contain picture', () {
     // 1280×960 in a 1000×500 box: scale 0.5208, picture 666.7×500, 166.7 px letterbox each side.
     const box = Size(1000, 500);

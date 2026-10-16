@@ -90,7 +90,7 @@ class GuideCameraPanel extends ConsumerWidget {
           Row(
             children: [
               FilledButton.tonalIcon(
-                onPressed: !live.connected || state.busy || live.isActive
+                onPressed: !live.connected || state.busy || live.isBusy
                     ? null
                     : () => unawaited(notifier.loop()),
                 icon: const Icon(Icons.loop, size: 16),
@@ -98,7 +98,7 @@ class GuideCameraPanel extends ConsumerWidget {
               ),
               const SizedBox(width: 8),
               FilledButton.tonalIcon(
-                onPressed: !live.connected || state.busy || !live.isActive
+                onPressed: !live.connected || state.busy || !live.isBusy
                     ? null
                     : () => unawaited(notifier.stop()),
                 icon: const Icon(Icons.stop, size: 16),

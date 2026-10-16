@@ -41,6 +41,10 @@ class GuiderLive {
   bool get hasLock => lockX != null && lockY != null;
   bool get hasFrameSize => (frameWidth ?? 0) > 0 && (frameHeight ?? 0) > 0;
   bool get isLooping => appState == 'Looping' || appState == 'Selected';
+  /// Something is running: Loop would abandon it and Stop ends it. A paused
+  /// guide counts — Loop there would throw away the paused session.
+  bool get isBusy => appState != null && appState != 'Stopped';
+
   bool get isActive =>
       appState != null && appState != 'Stopped' && appState != 'Paused';
 
