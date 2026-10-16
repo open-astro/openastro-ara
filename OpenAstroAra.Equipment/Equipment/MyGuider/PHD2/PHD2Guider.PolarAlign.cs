@@ -150,7 +150,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
         /// starless or a subframe — surfaced as a <see cref="GuiderRpcException"/>. Throws on any error.
         /// </summary>
         public async Task<IReadOnlyList<Phd2StarCentroid>> GetStarCentroidsAsync(
-            IReadOnlyList<int>? roi, int? maxStars, CancellationToken ct) {
+            IReadOnlyList<int>? roi, int? maxStars, CancellationToken ct, int receiveTimeoutMs = 60000) {
             ct.ThrowIfCancellationRequested();
             if (!Connected) {
                 throw new InvalidOperationException("guider is not connected");
@@ -163,7 +163,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                     $"max_stars must be {CentroidsMinStars}..{CentroidsMaxStars}.");
             }
             var request = new Phd2GetStarCentroids { Parameters = new Phd2GetStarCentroidsParameter { Roi = roi, MaxStars = maxStars } };
-            var response = await SendMessage<Phd2GetStarCentroidsResponse>(request);
+            var response = await SendMessage<Phd2GetStarCentroidsResponse>(request, receiveTimeoutMs);
             if (response.error != null) {
                 throw new GuiderRpcException("get_star_centroids", response.error.code, response.error.message);
             }

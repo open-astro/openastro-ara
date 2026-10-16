@@ -40,6 +40,7 @@ class GuiderLive {
 
   bool get hasLock => lockX != null && lockY != null;
   bool get hasFrameSize => (frameWidth ?? 0) > 0 && (frameHeight ?? 0) > 0;
+  bool get isGuidingNow => appState == 'Guiding';
   bool get isLooping => appState == 'Looping' || appState == 'Selected';
   /// Something is running: Loop would abandon it and Stop ends it. A paused
   /// guide counts — Loop there would throw away the paused session.
@@ -62,8 +63,10 @@ class GuiderLive {
         'Paused' => 'Paused',
         final other => other,
       },
-      if (snr != null) 'SNR ${snr!.toStringAsFixed(0)}',
-      if (starMass != null) 'mass ${_k(starMass!)}',
+      // SNR and mass are the last guide frame's: shown only while guiding,
+      // so a stopped or looping guider never shows a stale reading.
+      if (isGuidingNow && snr != null) 'SNR ${snr!.toStringAsFixed(0)}',
+      if (isGuidingNow && starMass != null) 'mass ${_k(starMass!)}',
     ];
     return parts.join(' · ');
   }

@@ -26,7 +26,9 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
     /// </summary>
     public partial class PHD2Guider {
 
-        private const int LiveRpcTimeoutMs = 5000;
+        /// <summary>The live view's bound on each guider RPC: a guider that stops answering costs one
+        /// poll, not a minute.</summary>
+        public const int LiveRpcTimeoutMs = 5000;
 
         private void RequireConnectedForLive() {
             if (!Connected) {

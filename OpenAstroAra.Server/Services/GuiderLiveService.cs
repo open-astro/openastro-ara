@@ -79,7 +79,7 @@ public sealed partial class GuiderLiveService : IGuiderLiveService {
         var lockTask = Quietly<OpenAstroAra.Equipment.Equipment.MyGuider.LockPosition?>(async () => await guider.GetLockPosition().ConfigureAwait(false), "lock position");
         var regionTask = Quietly(() => guider.GetSearchRegionAsync(ct), "search region");
         var multiTask = Quietly(() => guider.GetMultiStarEnabledAsync(ct), "multi-star");
-        var centroidsTask = Quietly<IReadOnlyList<Phd2StarCentroid>?>(async () => await guider.GetStarCentroidsAsync(null, MaxStars, ct).ConfigureAwait(false), "star centroids");
+        var centroidsTask = Quietly<IReadOnlyList<Phd2StarCentroid>?>(async () => await guider.GetStarCentroidsAsync(null, MaxStars, ct, PHD2Guider.LiveRpcTimeoutMs).ConfigureAwait(false), "star centroids");
         await Task.WhenAll(sizeTask, lockTask, regionTask, multiTask, centroidsTask).ConfigureAwait(false);
         var size = await sizeTask.ConfigureAwait(false);
         var lockPos = await lockTask.ConfigureAwait(false);

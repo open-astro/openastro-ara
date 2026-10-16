@@ -62,7 +62,20 @@ void main() {
     expect(v.isLooping, isTrue);
     expect(v.hasLock, isTrue);
     expect(v.stars, hasLength(2));
-    expect(v.summary, 'Looping · SNR 42 · mass 12.3k');
+    expect(
+      v.summary,
+      'Looping',
+      reason: 'the last guide frame\'s SNR is not shown while looping',
+    );
+    expect(
+      GuiderLive.fromJson({
+        'connected': true,
+        'app_state': 'Guiding',
+        'snr': 42.0,
+        'star_mass': 12300.0,
+      }).summary,
+      'Guiding · SNR 42 · mass 12.3k',
+    );
     expect(
       GuiderLive.fromJson({'connected': false}).summary,
       'Guider not connected',
@@ -149,7 +162,7 @@ void main() {
       );
       await t.pump();
       await t.pump();
-      expect(find.text('Looping · SNR 42 · mass 12.3k'), findsOneWidget);
+      expect(find.text('Looping'), findsOneWidget);
       expect(find.text('Multi-star'), findsOneWidget);
       expect(find.byKey(const Key('guide-camera-hint')), findsOneWidget);
       // Tap the picture's centre: the frame's middle in guide pixels.
