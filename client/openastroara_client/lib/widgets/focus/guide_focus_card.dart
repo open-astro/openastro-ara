@@ -77,8 +77,12 @@ class _GuideFocusCardState extends ConsumerState<GuideFocusCard> {
     final guiderBusy = guider != null &&
         const {
           GuiderRuntimeState.guiding,
+          GuiderRuntimeState.settling,
           GuiderRuntimeState.calibrating,
           GuiderRuntimeState.dithering,
+          // #1364 — a looping guider refuses the single frames this loop takes.
+          GuiderRuntimeState.looping,
+          GuiderRuntimeState.starSelected,
           GuiderRuntimeState.starLost,
           GuiderRuntimeState.paused,
         }.contains(guider.runtimeState);

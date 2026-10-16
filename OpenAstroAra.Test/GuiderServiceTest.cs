@@ -133,6 +133,22 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void Every_guider_phase_has_its_own_state_token() {
+            // #1364 item 6 — looping and a selected star used to read "stopped" while the guide camera was
+            // busy; a guiding session that settles reads "settling".
+            Assert.That(GuiderService.MapGuidingState("Looping"), Is.EqualTo("looping"));
+            Assert.That(GuiderService.MapGuidingState("Selected"), Is.EqualTo("star_selected"));
+            Assert.That(GuiderService.MapGuidingState("Calibrating"), Is.EqualTo("calibrating"));
+            Assert.That(GuiderService.MapGuidingState("Guiding"), Is.EqualTo("guiding"));
+            Assert.That(GuiderService.MapGuidingState("Guiding", settling: true), Is.EqualTo("settling"));
+            Assert.That(GuiderService.MapGuidingState("Calibrating", settling: true), Is.EqualTo("calibrating"), "settling only qualifies guiding");
+            Assert.That(GuiderService.MapGuidingState("LostLock"), Is.EqualTo("star_lost"));
+            Assert.That(GuiderService.MapGuidingState("Paused"), Is.EqualTo("paused"));
+            Assert.That(GuiderService.MapGuidingState("Stopped"), Is.EqualTo("stopped"));
+            Assert.That(GuiderService.MapGuidingState(null), Is.EqualTo("stopped"));
+        }
+
+        [Test]
         public void Start_guiding_releases_a_stale_pa_lease_and_ends_an_open_polar_alignment_when_it_can() {
             using var svc = NewService();
             Assert.That(svc.ShouldReleasePaLease(true), Is.True, "nothing wired: a lease the guider reports is stale");

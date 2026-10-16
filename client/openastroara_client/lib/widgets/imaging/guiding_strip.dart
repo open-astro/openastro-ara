@@ -218,6 +218,12 @@ class GuidingStrip extends ConsumerWidget {
         return 'star lost';
       case GuiderRuntimeState.dithering:
         return 'dithering';
+      case GuiderRuntimeState.looping:
+        return 'looping';
+      case GuiderRuntimeState.starSelected:
+        return 'star selected';
+      case GuiderRuntimeState.settling:
+        return 'settling';
       case GuiderRuntimeState.unknown:
         return 'connected';
     }
@@ -234,6 +240,9 @@ class GuidingStrip extends ConsumerWidget {
         return AraColors.accentError;
       case GuiderRuntimeState.calibrating:
       case GuiderRuntimeState.dithering:
+      case GuiderRuntimeState.settling:
+      case GuiderRuntimeState.looping:
+      case GuiderRuntimeState.starSelected:
         return AraColors.accentBusy;
       case GuiderRuntimeState.stopped:
       case GuiderRuntimeState.paused:
@@ -696,6 +705,7 @@ class _GraphArea extends StatelessWidget {
       empty = 'Guider not connected';
     } else if (model.visible.isEmpty) {
       empty = status!.runtimeState == GuiderRuntimeState.guiding ||
+              status!.runtimeState == GuiderRuntimeState.settling ||
               status!.runtimeState == GuiderRuntimeState.dithering
           ? 'Waiting for guide frames…'
           : 'Not guiding';

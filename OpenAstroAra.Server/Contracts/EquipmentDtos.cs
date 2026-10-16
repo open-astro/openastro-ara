@@ -450,7 +450,7 @@ public sealed record GuiderDto(
 /// the pixel RMS is null or the guider hasn't reported a positive pixel scale yet (§63 guider-a
 /// follow-up: "also expose arcsec via PixelScale").</summary>
 public sealed record GuiderStateDto(
-    string State,    // "stopped" | "calibrating" | "guiding" | "paused" | "star_lost" | "dithering"
+    string State,    // "stopped" | "looping" | "star_selected" | "calibrating" | "guiding" | "settling" | "paused" | "star_lost" (#1364; "dithering" is never sent)
     double? RmsTotal,
     double? RmsRa,
     double? RmsDec,

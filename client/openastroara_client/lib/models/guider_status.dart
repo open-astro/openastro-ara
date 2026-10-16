@@ -30,13 +30,34 @@ GuiderConnectionState _connectionFromWire(String? token) {
 /// link state: a guider can be `connected` while runtime is `stopped`.
 enum GuiderRuntimeState {
   stopped,
+  /// #1364 — exposures looping with no star chosen (the guide camera is busy).
+  looping,
+  /// #1364 — looping with a star chosen, not guiding yet.
+  starSelected,
   calibrating,
   guiding,
+  /// #1364 — guiding, settling after a dither or a start.
+  settling,
   paused,
   starLost,
   dithering,
   unknown,
 }
+
+/// #1364 item 6 — the one wording of a guider phase, used by the guiding
+/// strip, the guider dialog and the Run tab alike.
+String guiderRuntimeText(GuiderRuntimeState state) => switch (state) {
+      GuiderRuntimeState.stopped => 'Stopped',
+      GuiderRuntimeState.looping => 'Looping',
+      GuiderRuntimeState.starSelected => 'Star selected',
+      GuiderRuntimeState.calibrating => 'Calibrating',
+      GuiderRuntimeState.guiding => 'Guiding',
+      GuiderRuntimeState.settling => 'Settling',
+      GuiderRuntimeState.paused => 'Paused',
+      GuiderRuntimeState.starLost => 'Star lost',
+      GuiderRuntimeState.dithering => 'Dithering',
+      GuiderRuntimeState.unknown => 'Unknown',
+    };
 
 GuiderRuntimeState _runtimeFromWire(String? token) {
   switch (token) {
@@ -52,6 +73,12 @@ GuiderRuntimeState _runtimeFromWire(String? token) {
       return GuiderRuntimeState.starLost;
     case 'dithering':
       return GuiderRuntimeState.dithering;
+    case 'looping':
+      return GuiderRuntimeState.looping;
+    case 'star_selected':
+      return GuiderRuntimeState.starSelected;
+    case 'settling':
+      return GuiderRuntimeState.settling;
     default:
       return GuiderRuntimeState.unknown;
   }
@@ -114,6 +141,14 @@ class GuiderStatus {
       if (calibrationDistancePx != null) '${calibrationDistancePx!.toStringAsFixed(1)} px',
     ];
     return parts.join(' · ');
+  }
+
+  /// "Calibrating · North step 7 · 11.9 px", "Guiding", "Not connected".
+  String get runtimeSummary {
+    if (!isConnected) return 'Not connected';
+    final base = guiderRuntimeText(runtimeState);
+    final leg = runtimeState == GuiderRuntimeState.calibrating ? calibrationText : null;
+    return leg == null ? base : '$base · $leg';
   }
 
   bool get isConnected => connectionState == GuiderConnectionState.connected;

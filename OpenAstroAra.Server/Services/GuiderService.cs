@@ -147,7 +147,7 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
             }
             var (rmsTotal, rmsRa, rmsDec) = ComputeRms(_guideSteps);
             var pixelScale = _guider.PixelScale;
-            var state = MapGuidingState(_guider.State);
+            var state = MapGuidingState(_guider.State, _guider.Settling);
             // The leg is reported only while calibrating: after a link drop the guider can come back
             // already guiding, with no CalibrationComplete this client saw (review of #1365).
             var calibration = state == "calibrating" ? _guider.Calibration : null;
@@ -717,13 +717,17 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
         }
     }
 
-    // NINA PhdAppState → §63.2 GuiderStateDto.State token. Selected/Looping/unknown collapse to
-    // "stopped"; "dithering" arrives via the GuideEvent settling path (not modeled until RMS lands).
-    private static string MapGuidingState(string? phdState) => phdState switch {
+    // NINA PhdAppState → §63.2 GuiderStateDto.State token. #1364 item 6 — one guider state everywhere:
+    // looping and a selected star are their own states (they used to read "stopped", so the strip said
+    // "stopped" while the guide camera was busy and refused a single frame), and a guiding session that
+    // is settling after a dither or a start reads "settling". Unknown tokens still read "stopped".
+    internal static string MapGuidingState(string? phdState, bool settling = false) => phdState switch {
         "Calibrating" => "calibrating",
-        "Guiding" => "guiding",
+        "Guiding" => settling ? "settling" : "guiding",
         "Paused" => "paused",
         "LostLock" => "star_lost",
+        "Looping" => "looping",
+        "Selected" => "star_selected",
         _ => "stopped",
     };
 
