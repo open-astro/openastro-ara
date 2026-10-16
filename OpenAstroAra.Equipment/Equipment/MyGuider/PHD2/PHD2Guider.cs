@@ -150,6 +150,18 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             }
         }
 
+        /// <summary>A run still in progress ends as failed with <paramref name="reason"/>: the guider
+        /// sends no CalibrationFailed when the loop is stopped, guiding stops or the link drops mid-run,
+        /// so without this the run would read "running" for the rest of the session.</summary>
+        private void AbandonCalibrationRun(string reason) {
+            lock (lockobj) {
+                if (_calibrationRunState == "running") {
+                    _calibrationRunState = "failed";
+                    _calibrationError = reason;
+                }
+            }
+        }
+
         private void EndCalibrationRun(string state, string? error) {
             lock (lockobj) {
                 _calibrationRunState = state;
@@ -1257,6 +1269,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                         AppState = new PhdEventAppState() { State = "Stopped" };
                         // A calibration abandoned by stopping the loop sends no CalibrationFailed.
                         Calibration = null;
+                        AbandonCalibrationRun("stopped before calibration finished");
                         break;
                     }
                 case "CalibrationComplete": {
@@ -1274,6 +1287,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                     }
                 case "GuidingStopped": {
                         Calibration = null;
+                        AbandonCalibrationRun("stopped before calibration finished");
                         RaiseMarker(new PhdGuiderMarkerEventArgs { Kind = "guiding_stopped" });
                         break;
                     }
@@ -1506,6 +1520,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                 Settling = false;
                 // A calibration in progress when the link dropped is over as far as this client knows.
                 Calibration = null;
+                AbandonCalibrationRun("guider connection lost during calibration");
                 AppState = new PhdEventAppState() { State = "" };
                 PixelScale = 0.0d;
                 Connected = false;

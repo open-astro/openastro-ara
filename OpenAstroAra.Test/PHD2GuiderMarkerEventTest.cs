@@ -206,6 +206,47 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_calibration_run_keeps_its_steps_and_ends_complete() {
+            // #1364 item 2 — the run behind Ara's calibration plot.
+            await PushAndReceive(Event("StartCalibration")).ConfigureAwait(false);
+            Assert.That(_guider!.CalibrationRun.State, Is.EqualTo("running"));
+            await PushAndReceive(Event("Calibrating", e => { e["dir"] = "West"; e["step"] = 1; e["dist"] = 1.3; e["dx"] = -1.3; e["dy"] = -0.1; })).ConfigureAwait(false);
+            await PushAndReceive(Event("Calibrating", e => { e["dir"] = "West"; e["step"] = 2; e["dist"] = 2.6; e["dx"] = -2.5; e["dy"] = -0.6; })).ConfigureAwait(false);
+            var run = _guider.CalibrationRun;
+            Assert.That(run.Steps, Has.Count.EqualTo(2));
+            Assert.That((run.Steps[1].Dx, run.Steps[1].Dy), Is.EqualTo((-2.5, -0.6)), "dx/dy are what the plot draws");
+            await PushAndReceive(Event("CalibrationComplete")).ConfigureAwait(false);
+            run = _guider.CalibrationRun;
+            Assert.That(run.State, Is.EqualTo("complete"));
+            Assert.That(run.Steps, Has.Count.EqualTo(2), "kept after completion for review");
+            await PushAndReceive(Event("StartCalibration")).ConfigureAwait(false);
+            Assert.That(_guider.CalibrationRun.Steps, Is.Empty, "the next calibration starts a fresh run");
+        }
+
+        [TestCase("GuidingStopped")]
+        [TestCase("LoopingExposuresStopped")]
+        public async Task A_calibration_run_stopped_midway_ends_failed_not_running(string phdEvent) {
+            await PushAndReceive(Event("StartCalibration")).ConfigureAwait(false);
+            await PushAndReceive(Event("Calibrating", e => { e["dir"] = "North"; e["step"] = 3; e["dist"] = 4.0; })).ConfigureAwait(false);
+            await _fake.BroadcastAsync(Event(phdEvent)).ConfigureAwait(false);
+            var deadline = DateTime.UtcNow + MarkerTimeout;
+            while (_guider!.CalibrationRun.State == "running" && DateTime.UtcNow < deadline) {
+                await Task.Delay(20).ConfigureAwait(false);
+            }
+            Assert.That(_guider.CalibrationRun.State, Is.EqualTo("failed"), $"{phdEvent} sends no CalibrationFailed");
+            Assert.That(_guider.CalibrationRun.Error, Does.Contain("stopped"));
+            DrainQueue();
+        }
+
+        [Test]
+        public async Task Stopping_after_a_finished_calibration_keeps_it_complete() {
+            await PushAndReceive(Event("StartCalibration")).ConfigureAwait(false);
+            await PushAndReceive(Event("CalibrationComplete")).ConfigureAwait(false);
+            await PushAndReceive(Event("GuidingStopped")).ConfigureAwait(false);
+            Assert.That(_guider!.CalibrationRun.State, Is.EqualTo("complete"));
+        }
+
+        [Test]
         public async Task CalibrationFailed_maps_Reason_to_error() {
             var marker = await PushAndReceive(Event("CalibrationFailed", e => {
                 e["Reason"] = "star did not move enough";
