@@ -133,7 +133,7 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void Start_guiding_releases_a_stale_pa_lease_but_never_a_running_polar_alignments() {
+        public void Start_guiding_releases_a_stale_pa_lease_and_ends_an_open_polar_alignment_when_it_can() {
             using var svc = NewService();
             Assert.That(svc.ShouldReleasePaLease(true), Is.True, "nothing wired: a lease the guider reports is stale");
             Assert.That(svc.ShouldReleasePaLease(false), Is.False);
