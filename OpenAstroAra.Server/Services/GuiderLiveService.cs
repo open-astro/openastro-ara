@@ -184,7 +184,12 @@ public sealed partial class GuiderLiveService : IGuiderLiveService {
         var (verdict, reason) = Judge(runState, error, dto);
         var stepDtos = new List<GuiderCalibrationStepDto>(steps.Count);
         foreach (var s in steps) {
-            stepDtos.Add(new GuiderCalibrationStepDto(s.Direction ?? "", s.Step, Math.Round(s.Dx ?? 0, 2), Math.Round(s.Dy ?? 0, 2), Math.Round(s.Distance, 2)));
+            // A step without dx/dy (an older guider build) has nowhere to go on the plot: drawing it at
+            // the origin would read as a star that never moved.
+            if (s.Dx is not double dx || s.Dy is not double dy) {
+                continue;
+            }
+            stepDtos.Add(new GuiderCalibrationStepDto(s.Direction ?? "", s.Step, Math.Round(dx, 2), Math.Round(dy, 2), Math.Round(s.Distance, 2)));
         }
         return new GuiderCalibrationViewDto(true, runState, stepDtos, error, dto, verdict, reason);
     }
@@ -219,7 +224,12 @@ public sealed partial class GuiderLiveService : IGuiderLiveService {
             return ("check", "Calibrating…");
         }
         if (runState == "failed") {
-            return ("redo", string.IsNullOrWhiteSpace(error) ? "The last calibration failed." : $"The last calibration failed: {error}");
+            var failed = string.IsNullOrWhiteSpace(error) ? "The last calibration failed." : $"The last calibration failed: {error}.";
+            // The guider may still hold the calibration from before this run; say so rather than imply
+            // there is none.
+            return ("redo", data is { Calibrated: true }
+                ? $"{failed} The guider still holds an earlier calibration, used until a new one completes."
+                : failed);
         }
         if (data is null || !data.Calibrated) {
             return ("redo", "No calibration stored — the next guide start calibrates.");

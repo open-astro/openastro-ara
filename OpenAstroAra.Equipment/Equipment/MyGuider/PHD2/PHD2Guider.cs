@@ -162,6 +162,16 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             }
         }
 
+        /// <summary>After a successful clear there is no calibration to show the run of: the plot and the
+        /// verdict start over together.</summary>
+        private void ResetCalibrationRun() {
+            lock (lockobj) {
+                _calibrationSteps.Clear();
+                _calibrationRunState = "none";
+                _calibrationError = null;
+            }
+        }
+
         private void EndCalibrationRun(string state, string? error) {
             lock (lockobj) {
                 _calibrationRunState = state;

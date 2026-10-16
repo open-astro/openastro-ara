@@ -67,6 +67,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             var response = await SendMessage<GenericPhdMethodResponse>(
                 new Phd2ClearCalibration { Parameters = new object[] { "Mount" } }, LiveRpcTimeoutMs).ConfigureAwait(false);
             ThrowOnError("clear_calibration", response);
+            ResetCalibrationRun();
         }
     }
 }

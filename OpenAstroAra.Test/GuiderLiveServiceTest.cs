@@ -80,7 +80,7 @@ namespace OpenAstroAra.Test {
         }
 
         private static OpenAstroAra.Server.Contracts.GuiderCalibrationDataDto Cal(double xAngle, double yAngle, double xRate, double yRate, double dec = 0, bool calibrated = true) =>
-            GuiderLiveService.ToDto(new OpenAstroAra.Equipment.Equipment.MyGuider.PHD2.GuiderCalibrationData(calibrated, xAngle, yAngle, xRate, yRate, "Even", "Odd", dec));
+            GuiderLiveService.ToDto(new OpenAstroAra.Equipment.Equipment.MyGuider.PHD2.GuiderCalibrationData(calibrated, xAngle, yAngle, xRate, yRate, "+", "-", dec));
 
         [Test]
         public void The_orthogonality_error_is_how_far_the_axes_are_from_square() {
@@ -93,7 +93,10 @@ namespace OpenAstroAra.Test {
         [Test]
         public void The_verdict_reads_the_run_and_the_stored_calibration() {
             Assert.That(GuiderLiveService.Judge("running", null, null).Verdict, Is.EqualTo("check"));
-            Assert.That(GuiderLiveService.Judge("failed", "star lost", null), Is.EqualTo(("redo", "The last calibration failed: star lost")));
+            Assert.That(GuiderLiveService.Judge("failed", "star lost", null), Is.EqualTo(("redo", "The last calibration failed: star lost.")));
+            var failedOverStored = GuiderLiveService.Judge("failed", "star lost", Cal(10, 100, 12, 11));
+            Assert.That(failedOverStored.Verdict, Is.EqualTo("redo"));
+            Assert.That(failedOverStored.Reason, Does.Contain("earlier calibration"), "a stored calibration from before the run is still in use");
             Assert.That(GuiderLiveService.Judge("none", null, null).Verdict, Is.EqualTo("redo"), "nothing stored");
             Assert.That(GuiderLiveService.Judge("complete", null, Cal(10, 100, 10, 10, calibrated: false)).Verdict, Is.EqualTo("redo"));
             Assert.That(GuiderLiveService.Judge("complete", null, Cal(10, 100, 12, 11)).Verdict, Is.EqualTo("good"));
