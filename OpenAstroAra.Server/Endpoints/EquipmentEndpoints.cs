@@ -34,9 +34,6 @@ namespace OpenAstroAra.Server.Endpoints;
 /// </summary>
 public static partial class EquipmentEndpoints {
 
-    /// <summary>POST /equipment/filterwheel/change. Out of range is the caller's mistake (400);
-    /// not connected, or a manual wheel with no filters, is a state conflict (409). Both used to
-    /// surface as 500. A disposed service is the daemon shutting down and stays a 5xx.</summary>
     /// <summary>#1364 — one live-view action: 204 on success; 409 when no guider is connected
     /// (InvalidOperationException), 400 for a bad position (ArgumentOutOfRangeException), 422 when the
     /// guider refused (GuiderRpcException — no image yet, no star near the tap, not looping).</summary>
@@ -53,6 +50,9 @@ public static partial class EquipmentEndpoints {
         }
     }
 
+    /// <summary>POST /equipment/filterwheel/change. Out of range is the caller's mistake (400);
+    /// not connected, or a manual wheel with no filters, is a state conflict (409). Both used to
+    /// surface as 500. A disposed service is the daemon shutting down and stays a 5xx.</summary>
     internal static async Task<IResult> ChangeFilterAsync(FilterChangeRequestDto request, string? key, IFilterWheelService svc, CancellationToken ct) {
         try {
             return Results.Accepted(value: await svc.ChangeFilterAsync(request, key, ct));
@@ -497,14 +497,12 @@ public static partial class EquipmentEndpoints {
             .Produces(StatusCodes.Status204NoContent)
             .WithName("GetGuideFocusFrame");
 
-        // §63.6 dark library: build (202, long-running ~minutes; WS reports guider.dark_library.started, then
-        // §63.8 guider.dark_library.progress ticks during the build, then complete/failed) and a status read for
-        // the wizard's "Build dark library" affordance.
         // #1364 — the live guide-camera view: what the guider sees and holds, its picture, and the
         // star pick. The status is always 200 (Connected false when no guider); the frame is 204 until
-        // the guider has one. Loop/stop/select/deselect: 409 when no guider is connected
-        // (InvalidOperationException), 400 for a position outside the frame, 422 when the guider
-        // refuses (GuiderRpcException: no image yet, no star near the tap).
+        // the guider has one (and when its fetch fails or takes over 5 s). Loop/stop/select/deselect:
+        // 409 when no guider is connected (InvalidOperationException), 400 for a negative or non-finite
+        // position or one outside the frame the guider reports, 422 when the guider refuses
+        // (GuiderRpcException: no image yet, no star near the tap, could not connect its equipment).
         guider.MapGet("/live", async (IGuiderLiveService live, CancellationToken ct) => Results.Ok(await live.GetAsync(ct)))
             .Produces<GuiderLiveDto>(StatusCodes.Status200OK)
             .WithName("GetGuiderLive")
@@ -537,6 +535,9 @@ public static partial class EquipmentEndpoints {
             .Produces(StatusCodes.Status204NoContent).ProducesProblem(StatusCodes.Status409Conflict).ProducesProblem(StatusCodes.Status422UnprocessableEntity)
             .WithName("GuiderLiveDeselectStar").WithSummary("Drop the guider's selected star.");
 
+        // §63.6 dark library: build (202, long-running ~minutes; WS reports guider.dark_library.started, then
+        // §63.8 guider.dark_library.progress ticks during the build, then complete/failed) and a status read for
+        // the wizard's "Build dark library" affordance.
         guider.MapPost("/darklibrary/build", async ([FromBody] BuildDarkLibraryRequestDto request,
                 [FromHeader(Name = "Idempotency-Key")] string? key, IGuiderService svc, CancellationToken ct) =>
             await BuildDarkLibraryAsync(request, key, svc, ct));
