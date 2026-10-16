@@ -181,7 +181,7 @@ public sealed partial class GuiderLiveService : IGuiderLiveService {
         var (verdict, reason) = Judge(runState, error, dto);
         var stepDtos = new List<GuiderCalibrationStepDto>(steps.Count);
         foreach (var s in steps) {
-            stepDtos.Add(new GuiderCalibrationStepDto(s.Direction ?? "", s.Step, Math.Round(s.Dx, 2), Math.Round(s.Dy, 2), Math.Round(s.Distance, 2)));
+            stepDtos.Add(new GuiderCalibrationStepDto(s.Direction ?? "", s.Step, Math.Round(s.Dx ?? 0, 2), Math.Round(s.Dy ?? 0, 2), Math.Round(s.Distance, 2)));
         }
         return new GuiderCalibrationViewDto(true, runState, stepDtos, error, dto, verdict, reason);
     }

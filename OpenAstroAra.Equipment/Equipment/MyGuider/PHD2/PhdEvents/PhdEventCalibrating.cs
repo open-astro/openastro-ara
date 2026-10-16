@@ -31,12 +31,13 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2.PhdEvents {
         public double Distance { get; set; }
 
         /// <summary>The star's displacement from the leg's start, guide-camera pixels — what the
-        /// calibration plot draws.</summary>
+        /// calibration plot draws. Null when the guider left it out, so <c>dx_px</c>/<c>dy_px</c> are omitted from
+        /// <c>guider.event</c> rather than sent as 0.</summary>
         [JsonProperty(PropertyName = "dx")]
-        public double Dx { get; set; }
+        public double? Dx { get; set; }
 
         [JsonProperty(PropertyName = "dy")]
-        public double Dy { get; set; }
+        public double? Dy { get; set; }
 
         /// <summary>The star's absolute position, <c>[x, y]</c> guide pixels.</summary>
         [JsonProperty(PropertyName = "pos")]

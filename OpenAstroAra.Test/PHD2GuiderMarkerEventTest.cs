@@ -179,6 +179,7 @@ namespace OpenAstroAra.Test {
             Assert.That(marker.Direction, Is.EqualTo("North"));
             Assert.That(marker.Frame, Is.EqualTo(7), "the step rides in Frame");
             Assert.That(marker.Distance, Is.EqualTo(11.9));
+            Assert.That((marker.Dx, marker.Dy), Is.EqualTo(((double?)-4.7, (double?)13.4)), "dx/dy ride the calibrating marker (#1364 item 2)");
             var step = _guider!.Calibration;
             Assert.That(step, Is.Not.Null, "the latest step is kept for the guider state");
             Assert.That((step!.Direction, step.Step, step.Distance), Is.EqualTo(("North", 7, 11.9)));
@@ -227,7 +228,8 @@ namespace OpenAstroAra.Test {
         [TestCase("LoopingExposuresStopped")]
         public async Task A_calibration_run_stopped_midway_ends_failed_not_running(string phdEvent) {
             await PushAndReceive(Event("StartCalibration")).ConfigureAwait(false);
-            await PushAndReceive(Event("Calibrating", e => { e["dir"] = "North"; e["step"] = 3; e["dist"] = 4.0; })).ConfigureAwait(false);
+            var noDxDy = await PushAndReceive(Event("Calibrating", e => { e["dir"] = "North"; e["step"] = 3; e["dist"] = 4.0; })).ConfigureAwait(false);
+            Assert.That((noDxDy.Dx, noDxDy.Dy), Is.EqualTo(((double?)null, (double?)null)), "missing dx/dy stay absent, never 0");
             await _fake.BroadcastAsync(Event(phdEvent)).ConfigureAwait(false);
             var deadline = DateTime.UtcNow + MarkerTimeout;
             while (_guider!.CalibrationRun.State == "running" && DateTime.UtcNow < deadline) {
