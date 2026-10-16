@@ -200,33 +200,17 @@ class GuidingStrip extends ConsumerWidget {
     );
   }
 
+  /// The phase in the one shared wording (`guiderRuntimeText`), lower case,
+  /// with the calibration leg while calibrating (#1364 item 6). Only an
+  /// unpolled runtime reads differently: "connected", not "unknown".
   static String stateLabel(GuiderStatus? status) {
     if (status == null || !status.isConnected) return 'disconnected';
-    switch (status.runtimeState) {
-      case GuiderRuntimeState.stopped:
-        return 'stopped';
-      case GuiderRuntimeState.calibrating:
-        // The leg and step while the guider calibrates — its own page only
-        // says "guiding" for the same minutes (2026-10-16).
-        final leg = status.calibrationText;
-        return leg == null ? 'calibrating' : 'calibrating · $leg';
-      case GuiderRuntimeState.guiding:
-        return 'guiding';
-      case GuiderRuntimeState.paused:
-        return 'paused';
-      case GuiderRuntimeState.starLost:
-        return 'star lost';
-      case GuiderRuntimeState.dithering:
-        return 'dithering';
-      case GuiderRuntimeState.looping:
-        return 'looping';
-      case GuiderRuntimeState.starSelected:
-        return 'star selected';
-      case GuiderRuntimeState.settling:
-        return 'settling';
-      case GuiderRuntimeState.unknown:
-        return 'connected';
-    }
+    if (status.runtimeState == GuiderRuntimeState.unknown) return 'connected';
+    // The leg and step while the guider calibrates — its own page only says
+    // "guiding" for the same minutes (2026-10-16).
+    final base = guiderRuntimeText(status.runtimeState).toLowerCase();
+    final leg = status.runtimeState == GuiderRuntimeState.calibrating ? status.calibrationText : null;
+    return leg == null ? base : '$base · $leg';
   }
 
   static Color _stateColor(GuiderStatus? status) {
