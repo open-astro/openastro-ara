@@ -412,7 +412,7 @@ The card now keeps a known device's card while it is not live: name, state chip,
 
 **Endpoint(s) or area:** `GET /api/v1/equipment/guider` — `runtime.state` (`GuiderStateDto.State`).
 
-**Decision:** `runtime.state` is one of `stopped` | `looping` | `star_selected` | `calibrating` | `guiding` | `settling` | `paused` | `star_lost`. `looping` (exposures looping, no star chosen) and `star_selected` (looping with a star chosen) used to read `stopped`; `settling` is `guiding` while the guider settles after a dither or a start. `dithering`, listed before, was never sent and still is not. Tokens a client does not know should be shown as-is, not read as `stopped`. Clients use one wording for every phase (the Live strip, the guider dialog and the Run tab) and, while `calibrating`, append the leg from `calibration_*`.
+**Decision:** `runtime.state` is one of `stopped` | `looping` | `star_selected` | `calibrating` | `guiding` | `settling` | `paused` | `star_lost`. `looping` (exposures looping, no star chosen) and `star_selected` (looping with a star chosen) used to read `stopped`; `settling` is `guiding` while the guider settles after a dither or a start. `dithering`, listed before, was never sent and still is not. A token a client does not know is read as an unknown phase — the Ara client shows *Unknown* (the guiding strip, *connected*) — never as `stopped`. Clients use one wording for every phase (the Live strip in lower case, the guider dialog and the Run tab) and, while `calibrating`, append the leg from `calibration_*`.
 
 **Reasoning:** field night 2026-10-16: the strip said "stopped" while the guide camera was looping (and refused a single frame for guide-camera focus), and the Run tab said nothing while the guider calibrated for five minutes.
 
