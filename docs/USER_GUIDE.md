@@ -175,7 +175,7 @@ framing/focus loop when you need to point or focus by eye.
   reconnect the guider.
 - **Starting guiding ends Polar Align.** Polar Align holds the guide camera while it runs. If guiding
   is started while it is still open (a run's Start Guiding after the Polar Align step was left
-  without **Done**, a re-guide after a meridian flip, or Guide pressed by hand), Ara stops the
+  without **Done**, a re-guide after a meridian flip, or Guide pressed by hand in the guider panel), Ara stops the
   alignment, without saving a result, and then guides. Finish Polar Align with **Done** first if you
   want its result kept.
 - **Polar alignment left after Align.** Each time guiding starts, Ara measures how much polar

@@ -244,6 +244,13 @@ namespace OpenAstroAra.Test {
             Assert.That(order, Has.Count.EqualTo(1).And.Contains("end-polar-align"), "the alignment is ended first");
             Assert.That(fake.ReceivedMethods, Does.Contain("set_pa_session"), "then the guider's lease is released");
 
+            // Guide pressed by hand (the REST start) takes the same path: end, then release, then guide.
+            var releasesBefore = fake.ReceivedMethods.Count(m => m == "set_pa_session");
+            await svc.StartGuidingAsync(idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => order.Count == 2
+                    && fake.ReceivedMethods.Count(m => m == "set_pa_session") > releasesBefore).ConfigureAwait(false), Is.True,
+                "the manual Guide ended the alignment and released the lease");
+
             // Without the hook a running alignment keeps its lease: no release is sent.
             svc.EndPolarAlignAsync = null;
             var before = fake.ReceivedMethods.Count(m => m == "set_pa_session");

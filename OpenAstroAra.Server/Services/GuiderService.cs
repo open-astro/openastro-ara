@@ -260,7 +260,14 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
     public Task<OperationAcceptedDto> StartGuidingAsync(string? idempotencyKey, CancellationToken ct) {
         var guider = RequireConnectedGuider();
         var accepted = Accepted("guider.start", idempotencyKey);
-        _ = RunAndReportAsync(accepted, () => guider.StartGuiding(forceCalibration: false, _noProgress, CancellationToken.None), ditherGuider: null);
+        // Guide pressed by hand gets the same preparation as a run's Start Guiding: the live-focus loop
+        // gives up the guide camera, and a stale lease or an open polar alignment is cleared, so the
+        // guider does not refuse with "polar-alignment session in progress" (review of #1365).
+        _ = RunAndReportAsync(accepted, async () => {
+            await ReleaseGuideCameraQuietlyAsync().ConfigureAwait(false);
+            await ClearPaSessionQuietlyAsync(guider, CancellationToken.None).ConfigureAwait(false);
+            return await guider.StartGuiding(forceCalibration: false, _noProgress, CancellationToken.None).ConfigureAwait(false);
+        }, ditherGuider: null);
         return Task.FromResult(accepted);
     }
 
