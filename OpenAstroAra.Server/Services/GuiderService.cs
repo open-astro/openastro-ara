@@ -135,8 +135,12 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
             }
             var (rmsTotal, rmsRa, rmsDec) = ComputeRms(_guideSteps);
             var pixelScale = _guider.PixelScale;
+            var state = MapGuidingState(_guider.State);
+            // The leg is reported only while calibrating: after a link drop the guider can come back
+            // already guiding, with no CalibrationComplete this client saw (review of #1365).
+            var calibration = state == "calibrating" ? _guider.Calibration : null;
             var runtime = new GuiderStateDto(
-                State: MapGuidingState(_guider.State),
+                State: state,
                 RmsTotal: rmsTotal, // raw pixels over the recent guide-step window
                 RmsRa: rmsRa,
                 RmsDec: rmsDec,
@@ -145,9 +149,9 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
                 RmsRaArcsec: RmsArcsec(rmsRa, pixelScale),
                 RmsDecArcsec: RmsArcsec(rmsDec, pixelScale),
                 PaResidual: PaResidualSnapshot(),
-                CalibrationDirection: _guider.Calibration?.Direction,
-                CalibrationStep: _guider.Calibration?.Step,
-                CalibrationDistancePx: _guider.Calibration is { } cal ? Math.Round(cal.Distance, 1) : null);
+                CalibrationDirection: calibration?.Direction,
+                CalibrationStep: calibration?.Step,
+                CalibrationDistancePx: calibration is { } cal ? Math.Round(cal.Distance, 1) : null);
             return Task.FromResult<GuiderDto?>(new GuiderDto("PHD2_Single", "PHD2", _state, runtime));
         }
     }

@@ -183,11 +183,44 @@ namespace OpenAstroAra.Test {
             Assert.That(runtime.CalibrationDirection, Is.EqualTo("North"));
             Assert.That(runtime.CalibrationDistancePx, Is.EqualTo(11.9), "rounded to 0.1 px");
 
+            // The guider reporting another state without a CalibrationComplete this client saw (it
+            // finished while the link was down): the leg is not reported outside calibrating.
+            await fake.BroadcastAsync(PhdEvents.AppState("Guiding")).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => svc.GetAsync(CancellationToken.None).Result?.Runtime.CalibrationStep is null)
+                .ConfigureAwait(false), Is.True, "no leg outside calibrating");
+            Assert.That((await svc.GetAsync(CancellationToken.None).ConfigureAwait(false))!.Runtime.State, Is.EqualTo("guiding"));
+
             await fake.BroadcastAsync(PhdEvents.CalibrationComplete()).ConfigureAwait(false);
             Assert.That(await WaitUntilAsync(() => svc.GetAsync(CancellationToken.None).Result?.Runtime.CalibrationStep is null)
                 .ConfigureAwait(false), Is.True, "CalibrationComplete clears the leg");
             runtime = (await svc.GetAsync(CancellationToken.None).ConfigureAwait(false))!.Runtime;
             Assert.That((runtime.CalibrationDirection, runtime.CalibrationDistancePx), Is.EqualTo(((string?)null, (double?)null)));
+        }
+
+        [Test]
+        public async Task A_dropped_link_mid_calibration_clears_the_calibration_leg() {
+            // Review of #1365: only calibration events cleared the leg, so a link that dropped mid-
+            // calibration left a stale leg on the guider for the reconnect to report.
+            await using var fake = FakeGuider.Start();
+            fake.SetOnConnectEvents(PhdEvents.Version(subver: "openastroara-fake"), PhdEvents.AppState("Stopped"));
+            fake.OnRpc("get_pixel_scale", JsonValue.Create(1.5));
+            var profiles = new HeadlessProfileService();
+            profiles.ActiveProfile.GuiderSettings.PHD2ServerHost = "127.0.0.1";
+            profiles.ActiveProfile.GuiderSettings.PHD2ServerPort = fake.Port;
+            using var guider = new PHD2Guider(profiles);
+            using (var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60))) {
+                Assert.That(await guider.Connect(cts.Token).ConfigureAwait(false), Is.True, "precondition: connected");
+            }
+            await fake.BroadcastAsync(new JsonObject {
+                ["Event"] = "Calibrating", ["Timestamp"] = 1.0, ["Host"] = "fake", ["Inst"] = 1,
+                ["Mount"] = "Mount", ["dir"] = "East", ["step"] = 3, ["dist"] = 4.2,
+            }).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => guider.Calibration is not null).ConfigureAwait(false), Is.True,
+                "precondition: calibrating");
+
+            fake.DropConnections();
+            Assert.That(await WaitUntilAsync(() => !guider.Connected).ConfigureAwait(false), Is.True, "the drop was seen");
+            Assert.That(guider.Calibration, Is.Null, "the leg went with the link");
         }
 
         [Test]

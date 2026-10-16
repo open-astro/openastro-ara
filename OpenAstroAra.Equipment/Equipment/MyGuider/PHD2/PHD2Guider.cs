@@ -1445,6 +1445,8 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                 // unobserved exception. The finally below fires PHD2ConnectionLost for §63.3 recovery.
             } finally {
                 Settling = false;
+                // A calibration in progress when the link dropped is over as far as this client knows.
+                Calibration = null;
                 AppState = new PhdEventAppState() { State = "" };
                 PixelScale = 0.0d;
                 Connected = false;
