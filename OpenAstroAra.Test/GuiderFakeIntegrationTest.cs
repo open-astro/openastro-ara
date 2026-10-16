@@ -147,6 +147,77 @@ namespace OpenAstroAra.Test {
             Assert.That(marker.GetProperty("dx_px").GetDouble(), Is.EqualTo(2.0));
         }
 
+        private static async Task<(FakeGuider Fake, GuiderService Svc)> ConnectedServiceAsync() {
+            var fake = FakeGuider.Start();
+            fake.SetOnConnectEvents(PhdEvents.Version(subver: "openastroara-fake"), PhdEvents.AppState("Stopped"));
+            fake.OnRpc("get_pixel_scale", JsonValue.Create(1.5));
+            fake.OnRpc("get_profile", _ => new JsonObject { ["id"] = 1, ["name"] = "My Equipment" });
+            fake.OnRpc("get_profiles", _ => new JsonArray(new JsonObject { ["id"] = 1, ["name"] = "My Equipment" }));
+            fake.OnRpc("create_profile", _ => new JsonObject { ["id"] = 5, ["name"] = "Ara", ["selected"] = true });
+            fake.OnRpc("get_connected", JsonValue.Create(true));
+            var svc = new GuiderService(new HeadlessProfileService(), NewRecovery(),
+                NullLogger<GuiderService>.Instance, Mock.Of<IGuiderProcessSupervisor>());
+            await svc.ConnectAsync(new GuiderConnectRequestDto("127.0.0.1", fake.Port), idempotencyKey: null, CancellationToken.None)
+                .ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => svc.GetInfo().PixelScale > 0).ConfigureAwait(false), Is.True,
+                "precondition: the guider connected");
+            return (fake, svc);
+        }
+
+        [Test]
+        public async Task The_guider_state_carries_the_calibration_leg_until_calibration_ends() {
+            var (fake, svc) = await ConnectedServiceAsync().ConfigureAwait(false);
+            await using var _ = fake;
+            using var __ = svc;
+            await fake.BroadcastAsync(PhdEvents.StartCalibration()).ConfigureAwait(false);
+            var calibrating = new JsonObject {
+                ["Event"] = "Calibrating", ["Timestamp"] = 1.0, ["Host"] = "fake", ["Inst"] = 1,
+                ["Mount"] = "Mount", ["dir"] = "North", ["step"] = 7, ["dist"] = 11.94, ["dx"] = -4.7, ["dy"] = 13.4,
+                ["pos"] = new JsonArray(512.0, 384.0), ["State"] = "North",
+            };
+            await fake.BroadcastAsync(calibrating).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => svc.GetAsync(CancellationToken.None).Result?.Runtime.CalibrationStep == 7)
+                .ConfigureAwait(false), Is.True, "the step reached the guider state");
+            var runtime = (await svc.GetAsync(CancellationToken.None).ConfigureAwait(false))!.Runtime;
+            Assert.That(runtime.State, Is.EqualTo("calibrating"));
+            Assert.That(runtime.CalibrationDirection, Is.EqualTo("North"));
+            Assert.That(runtime.CalibrationDistancePx, Is.EqualTo(11.9), "rounded to 0.1 px");
+
+            await fake.BroadcastAsync(PhdEvents.CalibrationComplete()).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => svc.GetAsync(CancellationToken.None).Result?.Runtime.CalibrationStep is null)
+                .ConfigureAwait(false), Is.True, "CalibrationComplete clears the leg");
+            runtime = (await svc.GetAsync(CancellationToken.None).ConfigureAwait(false))!.Runtime;
+            Assert.That((runtime.CalibrationDirection, runtime.CalibrationDistancePx), Is.EqualTo(((string?)null, (double?)null)));
+        }
+
+        [Test]
+        public async Task An_open_polar_alignment_is_ended_and_its_lease_released_before_guiding() {
+            var (fake, svc) = await ConnectedServiceAsync().ConfigureAwait(false);
+            await using var _ = fake;
+            using var __ = svc;
+            fake.OnRpc("get_pa_session", _ => new JsonObject { ["active"] = true, ["expires_in_s"] = 300 });
+            fake.OnRpc("set_pa_session", _ => new JsonObject { ["active"] = false });
+            var order = new List<string>();
+            svc.PolarAlignActive = () => true;
+            svc.EndPolarAlignAsync = _ => {
+                lock (order) {
+                    order.Add("end-polar-align");
+                }
+                return Task.CompletedTask;
+            };
+
+            await svc.ClearPaSessionQuietlyAsync(svc.RequireConnectedGuider(), CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(order, Has.Count.EqualTo(1).And.Contains("end-polar-align"), "the alignment is ended first");
+            Assert.That(fake.ReceivedMethods, Does.Contain("set_pa_session"), "then the guider's lease is released");
+
+            // Without the hook a running alignment keeps its lease: no release is sent.
+            svc.EndPolarAlignAsync = null;
+            var before = fake.ReceivedMethods.Count(m => m == "set_pa_session");
+            await svc.ClearPaSessionQuietlyAsync(svc.RequireConnectedGuider(), CancellationToken.None).ConfigureAwait(false);
+            Assert.That(fake.ReceivedMethods.Count(m => m == "set_pa_session"), Is.EqualTo(before));
+        }
+
         private sealed class RecordingPaResidualLog : IPaResidualLog {
             public List<PaResidualDto> Rows { get; } = new();
             public Task InsertAsync(PaResidualDto result, CancellationToken ct) {

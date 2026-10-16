@@ -165,6 +165,47 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Calibrating_maps_dir_step_and_dist_and_the_step_is_kept_until_calibration_ends() {
+            var marker = await PushAndReceive(Event("Calibrating", e => {
+                e["dir"] = "North";
+                e["step"] = 7;
+                e["dist"] = 11.9;
+                e["dx"] = -4.7;
+                e["dy"] = 13.4;
+                e["State"] = "North";
+            })).ConfigureAwait(false);
+
+            Assert.That(marker.Kind, Is.EqualTo("calibrating"));
+            Assert.That(marker.Direction, Is.EqualTo("North"));
+            Assert.That(marker.Frame, Is.EqualTo(7), "the step rides in Frame");
+            Assert.That(marker.Distance, Is.EqualTo(11.9));
+            var step = _guider!.Calibration;
+            Assert.That(step, Is.Not.Null, "the latest step is kept for the guider state");
+            Assert.That((step!.Direction, step.Step, step.Distance), Is.EqualTo(("North", 7, 11.9)));
+            Assert.That(_guider.AppState?.State, Is.EqualTo("Calibrating"));
+
+            await PushAndReceive(Event("CalibrationComplete")).ConfigureAwait(false);
+            Assert.That(_guider.Calibration, Is.Null, "cleared when calibration ends");
+        }
+
+        [TestCase("CalibrationFailed")]
+        [TestCase("GuidingStopped")]
+        [TestCase("LoopingExposuresStopped")]
+        public async Task A_calibration_step_is_cleared_when_calibration_stops_any_way(string phdEvent) {
+            await PushAndReceive(Event("Calibrating", e => { e["dir"] = "West"; e["step"] = 2; e["dist"] = 3.1; })).ConfigureAwait(false);
+            Assert.That(_guider!.Calibration, Is.Not.Null);
+
+            await _fake.BroadcastAsync(Event(phdEvent)).ConfigureAwait(false);
+            // LoopingExposuresStopped raises no marker; wait for the state instead.
+            var deadline = DateTime.UtcNow + MarkerTimeout;
+            while (_guider.Calibration is not null && DateTime.UtcNow < deadline) {
+                await Task.Delay(20).ConfigureAwait(false);
+            }
+            Assert.That(_guider.Calibration, Is.Null, $"{phdEvent} must clear the calibration step");
+            DrainQueue();
+        }
+
+        [Test]
         public async Task CalibrationFailed_maps_Reason_to_error() {
             var marker = await PushAndReceive(Event("CalibrationFailed", e => {
                 e["Reason"] = "star did not move enough";
