@@ -204,6 +204,10 @@ public sealed partial class BahtinovFocusService : IBahtinovFocusService, IDispo
                 _normal = null;
                 _pick = null;
                 _frameCrop = null;
+                // The pick's bounds check reads these; a restart at another binning must not judge a
+                // pick sent before the first new frame against the old frame size.
+                _frameWidth = 0;
+                _frameHeight = 0;
             }
             _loopCts?.Dispose();
             _loopCts = new CancellationTokenSource();

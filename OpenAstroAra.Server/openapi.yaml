@@ -1770,6 +1770,35 @@ paths:
       responses:
         '204':
           description: No Content
+  /api/v1/bahtinov-focus/pick:
+    post:
+      tags:
+        - Bahtinov focus
+      summary: 'Lock the Bahtinov readout on the star at (x, y) frame pixels and show its crop.'
+      operationId: PickBahtinovStar
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BahtinovPickRequestDto'
+        required: true
+      responses:
+        '204':
+          description: No Content
+        '400':
+          description: Bad Request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+    delete:
+      tags:
+        - Bahtinov focus
+      summary: Forget the picked star; the brightest star in the whole frame is searched again.
+      operationId: ClearBahtinovStar
+      responses:
+        '204':
+          description: No Content
   /api/v1/bahtinov-focus/state:
     get:
       tags:
@@ -6710,6 +6739,63 @@ components:
             - integer
             - string
           format: int64
+        frame_width:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+          default: 0
+        frame_height:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+          default: 0
+        frame_crop:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/BahtinovFrameCropDto'
+        pick_x:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - 'null'
+            - integer
+            - string
+          format: int32
+        pick_y:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - 'null'
+            - integer
+            - string
+          format: int32
+    BahtinovFrameCropDto:
+      required:
+        - left
+        - top
+        - size
+      type: object
+      properties:
+        left:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+        top:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+        size:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
     BahtinovLineDto:
       required:
         - role
@@ -6789,6 +6875,24 @@ components:
             - number
             - string
           format: double
+    BahtinovPickRequestDto:
+      required:
+        - x
+        - y
+      type: object
+      properties:
+        x:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+        y:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
     BahtinovSampleDto:
       required:
         - seq

@@ -176,8 +176,12 @@ void main() {
   group('headline', () {
     test('follows the readout', () {
       expect(BahtinovFocusCard.headlineFor(BahtinovFocusLive.idle).$1, 'Fit the mask, then Start');
-      final inFocus = BahtinovFocusCard.headlineFor(BahtinovFocusLive(status: _running([1.0, 0.1])));
+      // The headline is the median of the last five measured frames, so one
+      // early 1.0 px frame does not pull it; three at 0.1 px read in focus.
+      final inFocus = BahtinovFocusCard.headlineFor(BahtinovFocusLive(status: _running([1.0, 0.1, 0.1, 0.1])));
       expect(inFocus, ('In focus · 0.10 px', AraColors.accentConnected));
+      final jitter = BahtinovFocusCard.headlineFor(BahtinovFocusLive(status: _running([0.1, 0.1, 0.1, 0.1, 2.5])));
+      expect(jitter.$1, 'In focus · 0.10 px', reason: 'one seeing-blown frame does not move the readout');
       final passed = BahtinovFocusCard.headlineFor(BahtinovFocusLive(status: _running([1.2, 1.2, 1.2, -0.6, -0.6, -0.6])));
       expect(passed, ('Go back · 0.60 px from focus', AraColors.accentWarning));
       final stopped = BahtinovFocusCard.headlineFor(BahtinovFocusLive(status: _running([1.5], active: false)));
@@ -304,7 +308,7 @@ void main() {
       overrides: [
         autofocusLiveProvider.overrideWith(_StubAutofocus.new),
         bahtinovFocusProvider.overrideWith(
-            () => _StubBahtinov(BahtinovFocusLive(status: _running([0.8, 0.4, 0.1]), frame: _png, frameSeq: 3), calls)),
+            () => _StubBahtinov(BahtinovFocusLive(status: _running([0.8, 0.1, 0.1]), frame: _png, frameSeq: 3), calls)),
         focuserProvider.overrideWith(() => _StubFocuser(null)),
       ],
       child: MaterialApp(

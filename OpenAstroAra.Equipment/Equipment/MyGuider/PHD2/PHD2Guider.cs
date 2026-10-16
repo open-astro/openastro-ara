@@ -1199,6 +1199,8 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                     }
                 case "LoopingExposuresStopped": {
                         AppState = new PhdEventAppState() { State = "Stopped" };
+                        // A calibration abandoned by stopping the loop sends no CalibrationFailed.
+                        Calibration = null;
                         break;
                     }
                 case "CalibrationComplete": {
@@ -1212,6 +1214,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                         break;
                     }
                 case "GuidingStopped": {
+                        Calibration = null;
                         RaiseMarker(new PhdGuiderMarkerEventArgs { Kind = "guiding_stopped" });
                         break;
                     }

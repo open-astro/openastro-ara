@@ -210,7 +210,11 @@ class BahtinovFocusStatus {
     if (offsets.length < 2) return l;
     final mid = offsets.length ~/ 2;
     final median = offsets.length.isOdd ? offsets[mid] : (offsets[mid - 1] + offsets[mid]) / 2;
-    final umPerPx = l.defocusUm != null && l.offsetPx != 0 ? l.defocusUm! / l.offsetPx! : null;
+    // µm per pixel from the zone (both come from the same optics), so a latest
+    // frame at exactly 0 px still yields a µm figure for a non-zero median.
+    final umPerPx = zoneUm != null && zonePx > 0
+        ? zoneUm! / zonePx
+        : (l.defocusUm != null && l.offsetPx != 0 ? l.defocusUm! / l.offsetPx! : null);
     return BahtinovSample(
       seq: l.seq,
       detected: true,
