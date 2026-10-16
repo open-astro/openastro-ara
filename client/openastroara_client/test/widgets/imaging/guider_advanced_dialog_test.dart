@@ -125,6 +125,13 @@ void main() {
       'A whole number',
     );
     expect(snr.format(6.0), '6');
+    final maxDec = GuiderAdvancedField.all.firstWhere((f) => f.key == 'max_dec_duration_ms');
+    expect(GuiderAdvancedPanelTestHooks.parse(maxDec, '0'), (0, null), reason: '0 = no Dec correction');
+    expect(GuiderAdvancedPanelTestHooks.parse(snr, '0').$2, 'A positive number');
+    expect(GuiderAdvancedPanelTestHooks.parse(maxDec, '-1').$2, 'Zero or a positive number');
+    expect(GuiderAdvancedField.editText(0.125), '0.125', reason: 'full precision in the editor');
+    expect(GuiderAdvancedField.editText(6.0), '6');
+    expect(GuiderAdvancedField.editText(1500), '1500');
     expect(ms.format(1500), '1500 ms');
   });
 
@@ -266,7 +273,7 @@ void main() {
     final fake = await _pump(t);
     await t.enterText(find.byKey(const Key('ga-max_dec_duration_ms')), '-3');
     await t.pump();
-    expect(find.text('A positive number'), findsOneWidget);
+    expect(find.text('Zero or a positive number'), findsOneWidget);
     expect(
       t
           .widget<FilledButton>(find.widgetWithText(FilledButton, 'Apply'))

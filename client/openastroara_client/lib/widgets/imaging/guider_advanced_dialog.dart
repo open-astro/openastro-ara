@@ -107,13 +107,7 @@ class _GuiderAdvancedPanelState extends ConsumerState<GuiderAdvancedPanel> {
         _profileLoaded = true;
         for (final e in _text.entries) {
           final v = profile[e.key];
-          e.value.text = v == null
-              ? ''
-              : GuiderAdvancedField.all
-                    .firstWhere((f) => f.key == e.key)
-                    .format(v)
-                    .split(' ')
-                    .first;
+          e.value.text = v == null ? '' : GuiderAdvancedField.editText(v);
         }
       });
     } catch (e) {
@@ -132,7 +126,9 @@ class _GuiderAdvancedPanelState extends ConsumerState<GuiderAdvancedPanel> {
     final t = raw.trim();
     if (t.isEmpty) return (null, null);
     final n = num.tryParse(t);
-    if (n == null || n <= 0 || !n.isFinite) return (null, 'A positive number');
+    if (n == null || !n.isFinite || n < 0 || (n == 0 && !f.allowZero)) {
+      return (null, f.allowZero ? 'Zero or a positive number' : 'A positive number');
+    }
     if (f.kind == GuiderAdvancedKind.integer) {
       if (n != n.roundToDouble()) return (null, 'A whole number');
       return (n.round(), null);

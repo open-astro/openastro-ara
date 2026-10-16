@@ -114,6 +114,12 @@ namespace OpenAstroAra.Test {
             Assert.That(GuiderAdvancedSettingsMapping.Validate(new GuiderAdvancedSettingsDto()), Is.Null);
             Assert.That(GuiderAdvancedSettingsMapping.Validate(new GuiderAdvancedSettingsDto(MinStarSnr: 0)), Does.Contain("min_star_snr"));
             Assert.That(GuiderAdvancedSettingsMapping.Validate(new GuiderAdvancedSettingsDto(MaxRaDurationMs: -5)), Does.Contain("max_ra_duration_ms"));
+            Assert.That(GuiderAdvancedSettingsMapping.Validate(new GuiderAdvancedSettingsDto(MaxDecDurationMs: 0)), Is.Null,
+                "0 is a real max pulse to the guider (no Dec correction)");
+            Assert.That(GuiderAdvancedSettingsMapping.Validate(new GuiderAdvancedSettingsDto(MaxRaDurationMs: 1_000_001)), Does.Contain("max_ra_duration_ms"));
+            Assert.That(GuiderAdvancedSettingsMapping.Validate(new GuiderAdvancedSettingsDto(BacklashPulseMs: 10)), Does.Contain("backlash_pulse_ms"));
+            Assert.That(GuiderAdvancedSettingsMapping.Validate(new GuiderAdvancedSettingsDto(BacklashPulseMs: 9000)), Does.Contain("backlash_pulse_ms"));
+            Assert.That(GuiderAdvancedSettingsMapping.Validate(new GuiderAdvancedSettingsDto(BacklashPulseMs: 450)), Is.Null);
             Assert.That(GuiderAdvancedSettingsMapping.Validate(new GuiderAdvancedSettingsDto(MinStarHfd: 9, MaxStarHfd: 3)), Does.Contain("min_star_hfd"));
             Assert.That(GuiderAdvancedSettingsMapping.Validate(new GuiderAdvancedSettingsDto(AutoExposureMinMs: 4000, AutoExposureMaxMs: 1000)), Does.Contain("auto_exposure_min_ms"));
             Assert.That(GuiderAdvancedSettingsMapping.Validate(new GuiderAdvancedSettingsDto(NoiseReduction: "median")), Does.Contain("noise_reduction"));

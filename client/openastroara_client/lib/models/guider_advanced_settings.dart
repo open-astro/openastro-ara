@@ -51,6 +51,10 @@ class GuiderAdvancedField {
   /// For [GuiderAdvancedKind.choice]: fixed options; null means the options
   /// come from the guider (algorithms per axis).
   final List<String>? options;
+
+  /// 0 is a real value to the guider (a max pulse of 0 = no correction on
+  /// that axis); every other number must be positive.
+  final bool allowZero;
   const GuiderAdvancedField(
     this.key,
     this.label,
@@ -59,6 +63,7 @@ class GuiderAdvancedField {
     this.unit,
     required this.help,
     this.options,
+    this.allowZero = false,
   });
 
   Object? parse(Object? v) => switch (kind) {
@@ -78,6 +83,14 @@ class GuiderAdvancedField {
       GuiderAdvancedKind.integer => '$v${unit == null ? '' : ' $unit'}',
       GuiderAdvancedKind.choice => '$v',
     };
+  }
+
+  /// The value as an editable number, at full precision (the display format
+  /// rounds decimals; editing must not save the rounded value). Pure.
+  static String editText(Object v) {
+    if (v is int) return '$v';
+    if (v is double) return v == v.roundToDouble() ? v.toStringAsFixed(0) : '$v';
+    return '$v';
   }
 
   static String _trim(double d) => d == d.roundToDouble()
@@ -227,7 +240,8 @@ class GuiderAdvancedField {
       'Algorithms & limits',
       GuiderAdvancedKind.integer,
       unit: 'ms',
-      help: 'The longest single RA correction.',
+      help: 'The longest single RA correction. 0 turns RA corrections off.',
+      allowZero: true,
     ),
     GuiderAdvancedField(
       'max_dec_duration_ms',
@@ -235,7 +249,8 @@ class GuiderAdvancedField {
       'Algorithms & limits',
       GuiderAdvancedKind.integer,
       unit: 'ms',
-      help: 'The longest single Dec correction.',
+      help: 'The longest single Dec correction. 0 turns Dec corrections off.',
+      allowZero: true,
     ),
     GuiderAdvancedField(
       'backlash_enabled',

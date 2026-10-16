@@ -20,6 +20,11 @@ namespace OpenAstroAra.Server.Services;
 /// boundary's validation. Pure.</summary>
 public static class GuiderAdvancedSettingsMapping {
 
+    /// <summary>The guider's limits for these settings (openastro-guider event_server.cpp / backlash_comp.cpp).</summary>
+    public const int MaxPulseLimitMs = 1_000_000;
+    public const int BacklashPulseMinMs = 20;
+    public const int BacklashPulseMaxMs = 8000;
+
     /// <summary>The guider's noise-reduction names, the only values it accepts.</summary>
     public static readonly IReadOnlyList<string> NoiseReductionMethods = ["None", "2x2 Mean", "3x3 Median"];
 
@@ -89,14 +94,23 @@ public static class GuiderAdvancedSettingsMapping {
         }
         (string Name, int? Value)[] ints = [
             ("search_region_px", d.SearchRegionPx), ("auto_exposure_min_ms", d.AutoExposureMinMs),
-            ("auto_exposure_max_ms", d.AutoExposureMaxMs), ("max_ra_duration_ms", d.MaxRaDurationMs),
-            ("max_dec_duration_ms", d.MaxDecDurationMs), ("backlash_pulse_ms", d.BacklashPulseMs),
+            ("auto_exposure_max_ms", d.AutoExposureMaxMs),
             ("backlash_floor_ms", d.BacklashFloorMs), ("backlash_ceiling_ms", d.BacklashCeilingMs),
         ];
         foreach (var (name, value) in ints) {
             if (BadInt(value)) {
                 return $"{name} must be a positive whole number";
             }
+        }
+        // The guider's own ranges (event_server.cpp set_guide_limits / set_backlash_comp): a max pulse of
+        // 0 is a real value (no correction on that axis), up to 1,000,000 ms; the backlash pulse is 20–8000 ms.
+        foreach (var (name, value) in new (string, int?)[] { ("max_ra_duration_ms", d.MaxRaDurationMs), ("max_dec_duration_ms", d.MaxDecDurationMs) }) {
+            if (value is int ms && ms is < 0 or > MaxPulseLimitMs) {
+                return $"{name} must be 0–{MaxPulseLimitMs} ms";
+            }
+        }
+        if (d.BacklashPulseMs is int pulse && pulse is < BacklashPulseMinMs or > BacklashPulseMaxMs) {
+            return $"backlash_pulse_ms must be {BacklashPulseMinMs}–{BacklashPulseMaxMs} ms";
         }
         if (d.MinStarHfd is double minHfd && d.MaxStarHfd is double maxHfd && minHfd > maxHfd) {
             return "min_star_hfd must not exceed max_star_hfd";

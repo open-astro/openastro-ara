@@ -203,9 +203,15 @@ public sealed partial class GuiderLiveService : IGuiderLiveService {
         if (guider is null) {
             return new GuiderAdvancedViewDto(false, new GuiderAdvancedSettingsDto(), Array.Empty<string>(), Array.Empty<string>());
         }
-        var current = await Quietly<GuiderAdvancedSettings?>(async () => await guider.ReadAdvancedSettingsAsync(ct).ConfigureAwait(false), "advanced settings").ConfigureAwait(false);
-        var ra = await Quietly<IReadOnlyList<string>?>(async () => await guider.GetAlgorithmsAsync("ra", ct).ConfigureAwait(false), "RA algorithms").ConfigureAwait(false);
-        var dec = await Quietly<IReadOnlyList<string>?>(async () => await guider.GetAlgorithmsAsync("dec", ct).ConfigureAwait(false), "Dec algorithms").ConfigureAwait(false);
+        // All three at once: the read-back's thirteen getters already run in parallel, and the two
+        // algorithm lists must not add two more timeouts after them on a slow guider.
+        var currentT = Quietly<GuiderAdvancedSettings?>(async () => await guider.ReadAdvancedSettingsAsync(ct).ConfigureAwait(false), "advanced settings");
+        var raT = Quietly<IReadOnlyList<string>?>(async () => await guider.GetAlgorithmsAsync("ra", ct).ConfigureAwait(false), "RA algorithms");
+        var decT = Quietly<IReadOnlyList<string>?>(async () => await guider.GetAlgorithmsAsync("dec", ct).ConfigureAwait(false), "Dec algorithms");
+        await Task.WhenAll(currentT, raT, decT).ConfigureAwait(false);
+        var current = await currentT.ConfigureAwait(false);
+        var ra = await raT.ConfigureAwait(false);
+        var dec = await decT.ConfigureAwait(false);
         return new GuiderAdvancedViewDto(
             true,
             current is null ? new GuiderAdvancedSettingsDto() : GuiderAdvancedSettingsMapping.ToDto(current),
