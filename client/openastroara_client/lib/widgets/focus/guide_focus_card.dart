@@ -95,7 +95,7 @@ class _GuideFocusCardState extends ConsumerState<GuideFocusCard> {
       if (!guiderConnected) {
         blocker = 'Connect the guider first — the frames come through it.';
       } else if (guiderBusy) {
-        blocker = 'Stop guiding first; the guider owns its camera while it guides or calibrates.';
+        blocker = 'Stop the guider first; it owns its camera while it loops, guides or calibrates.';
       }
     }
 
