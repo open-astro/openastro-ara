@@ -9,6 +9,7 @@ import '../../state/guider/guider_live_state.dart';
 import '../../theme/ara_colors.dart';
 import '../focus/bahtinov_focus_card.dart' show BahtinovFrameView;
 import 'guide_calibration_panel.dart';
+import 'guider_advanced_dialog.dart';
 
 /// #1364 (epic item 1) — the guide camera's own picture from Ara: what the
 /// guider is looping on, the star it locked (cross + search box), the other
@@ -70,6 +71,12 @@ class GuideCameraPanel extends ConsumerWidget {
                   ),
                 ),
               const SizedBox(width: 8),
+              IconButton(
+                key: const Key('guide-camera-settings'),
+                tooltip: 'Guider settings…',
+                icon: const Icon(Icons.tune, size: 18),
+                onPressed: () => showGuiderAdvancedDialog(context),
+              ),
               IconButton(
                 tooltip: 'Close',
                 icon: const Icon(Icons.close, size: 18),

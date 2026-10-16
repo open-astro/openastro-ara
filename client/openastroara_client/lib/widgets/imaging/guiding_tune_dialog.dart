@@ -10,6 +10,7 @@ import '../../state/settings/phd2_settings_state.dart';
 import '../../theme/ara_colors.dart';
 import '../profile/profile_import_flow.dart' show friendlyDaemonError;
 import '../settings/editable_field.dart';
+import 'guider_advanced_dialog.dart';
 
 /// Open the §63.18 guiding-tune dialog (the quick-adjust controls that used to
 /// live inline in the Imaging tab's Guiding panel — moved to a focused dialog
@@ -357,6 +358,18 @@ class _GuidingTuneDialogState extends ConsumerState<GuidingTuneDialog> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
+                  // #1364 item 3 — every other guider setting.
+                  Expanded(
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton.icon(
+                        key: const Key('tune-advanced'),
+                        onPressed: () => showGuiderAdvancedDialog(context),
+                        icon: const Icon(Icons.settings_suggest_outlined, size: 16),
+                        label: const Text('More…', overflow: TextOverflow.ellipsis),
+                      ),
+                    ),
+                  ),
                   TextButton(
                     onPressed: () => Navigator.of(context).pop(),
                     child: const Text('Done'),

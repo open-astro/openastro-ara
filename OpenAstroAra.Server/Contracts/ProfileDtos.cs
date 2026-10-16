@@ -462,6 +462,48 @@ public sealed record PolarAlignSettingsDto(
     double SettleSeconds = 2.0,
     string LoopMode = PolarAlignLoopModes.Loop);
 
+/// <summary>
+/// #1364 — the guider's settings beyond Tune Guiding (profile section <c>guider_advanced</c>, endpoint
+/// <c>/api/v1/profile/guider-advanced</c>). Every field is optional: null leaves the guider's own value, so
+/// a profile never overwrites a setting it did not set. Kept apart from the PHD2 block so a client that
+/// PUTs that block without these fields cannot wipe them. Units are the guider's: ms, px, plain SNR;
+/// <c>NoiseReduction</c> is "None" | "2x2 Mean" | "3x3 Median"; algorithms are names from
+/// <c>GET /equipment/guider/advanced/algorithms</c>. Multi-star lands on the next connect (the guider takes
+/// it only with its equipment disconnected); everything else applies on Apply, while guiding.
+/// </summary>
+public sealed record GuiderAdvancedSettingsDto(
+    bool? MultiStarEnabled = null,
+    bool? FastRecenter = null,
+    bool? TolerateJumps = null,
+    double? TolerateJumpsThresholdPx = null,
+    double? MinStarHfd = null,
+    double? MaxStarHfd = null,
+    double? MinStarSnr = null,
+    bool? MassChangeThresholdEnabled = null,
+    double? MassChangeThreshold = null,
+    int? SearchRegionPx = null,
+    int? AutoExposureMinMs = null,
+    int? AutoExposureMaxMs = null,
+    double? AutoExposureTargetSnr = null,
+    string? NoiseReduction = null,
+    bool? UseSubframes = null,
+    int? MaxRaDurationMs = null,
+    int? MaxDecDurationMs = null,
+    bool? BacklashEnabled = null,
+    int? BacklashPulseMs = null,
+    int? BacklashFloorMs = null,
+    int? BacklashCeilingMs = null,
+    bool? AssumeOrthogonal = null,
+    bool? StopGuidingWhenSlewing = null,
+    bool? CalFlipRequiresDecFlip = null,
+    bool? VariableDelayEnabled = null,
+    double? VariableDelayShortS = null,
+    double? VariableDelayLongS = null,
+    double? DitherScaleFactor = null,
+    bool? DitherRaOnly = null,
+    string? RaAlgorithm = null,
+    string? DecAlgorithm = null);
+
 /// <summary>#1264 — Imaging → Unguided (profile section <c>unguided</c>): the knobs behind the
 /// Tracking Probe, the Unguided Exposure Guard and Center After Drift on a rig without a guider.
 /// The client builds those sequence nodes from this section; the daemon reads

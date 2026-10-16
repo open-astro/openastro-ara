@@ -40,6 +40,8 @@ public interface IGuiderLiveService {
     Task<GuiderCalibrationViewDto> GetCalibrationAsync(CancellationToken ct);
     /// <summary>Drop the stored calibration so the next guide start calibrates again.</summary>
     Task ClearCalibrationAsync(CancellationToken ct);
+    /// <summary>#1364 item 3 — the guider's current settings and its algorithm names per axis.</summary>
+    Task<GuiderAdvancedViewDto> GetAdvancedAsync(CancellationToken ct);
 }
 
 /// <summary>
@@ -195,6 +197,21 @@ public sealed partial class GuiderLiveService : IGuiderLiveService {
     }
 
     public Task ClearCalibrationAsync(CancellationToken ct) => _guider.RequireConnectedGuider().ClearCalibrationAsync(ct);
+
+    public async Task<GuiderAdvancedViewDto> GetAdvancedAsync(CancellationToken ct) {
+        var guider = _guider.ConnectedGuiderOrNull();
+        if (guider is null) {
+            return new GuiderAdvancedViewDto(false, new GuiderAdvancedSettingsDto(), Array.Empty<string>(), Array.Empty<string>());
+        }
+        var current = await Quietly<GuiderAdvancedSettings?>(async () => await guider.ReadAdvancedSettingsAsync(ct).ConfigureAwait(false), "advanced settings").ConfigureAwait(false);
+        var ra = await Quietly<IReadOnlyList<string>?>(async () => await guider.GetAlgorithmsAsync("ra", ct).ConfigureAwait(false), "RA algorithms").ConfigureAwait(false);
+        var dec = await Quietly<IReadOnlyList<string>?>(async () => await guider.GetAlgorithmsAsync("dec", ct).ConfigureAwait(false), "Dec algorithms").ConfigureAwait(false);
+        return new GuiderAdvancedViewDto(
+            true,
+            current is null ? new GuiderAdvancedSettingsDto() : GuiderAdvancedSettingsMapping.ToDto(current),
+            ra ?? Array.Empty<string>(),
+            dec ?? Array.Empty<string>());
+    }
 
     /// <summary>The stored calibration with its orthogonality error: how far the RA and Dec axes are
     /// from 90° apart on the camera. Pure.</summary>

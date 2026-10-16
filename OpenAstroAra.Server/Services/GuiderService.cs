@@ -227,6 +227,7 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
             if (request.Port is { } port) settings.PHD2ServerPort = port;
             DisposeGuiderLocked();
             guider = new PHD2Guider(_profileService);
+            guider.AdvancedSettings = AdvancedSettings; // #1364 — pushed with the engine config
             // §63.4 — the guider twin is named after the ARA profile from the MULTI-PROFILE repository
             // (what the user sees as their profile, e.g. "RC91 - Backyard"), not the Equipment layer's
             // legacy single-profile store (whose name is a constant "Default"). Null resolver (benches)

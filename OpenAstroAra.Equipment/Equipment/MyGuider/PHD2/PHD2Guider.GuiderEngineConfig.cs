@@ -42,7 +42,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             Justification = "Best-effort §63.5 push boundary: each setter RPC may throw (socket drop, a PHD2 build that doesn't expose a param) — it's logged and skipped so a config push can never fail or block the guider connect itself.")]
         private async Task PushGuiderEngineConfigAsync(CancellationToken ct) {
             var guider = profileService.ActiveProfile.GuiderSettings;
-            var messages = BuildGuiderEngineConfigMessages(guider);
+            var messages = BuildGuiderEngineConfigMessages(guider, AdvancedSettingsQuietly());
 
             if (messages.Count == 0) {
                 // All values left at their unset sentinels (0 / "auto") — nothing to push. Logged so an
@@ -130,7 +130,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             if (!Connected) {
                 throw new InvalidOperationException("guider is not connected");
             }
-            var messages = BuildGuiderTuningMessages(profileService.ActiveProfile.GuiderSettings);
+            var messages = BuildGuiderTuningMessages(profileService.ActiveProfile.GuiderSettings, AdvancedSettingsQuietly());
             if (messages.Count == 0) {
                 Logger.Debug("PHD2 §63.5 tuning push - no runtime-safe guider config set; nothing sent.");
                 return System.Array.Empty<string>();
@@ -203,7 +203,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
         /// <c>set_algo_param</c> expects (ARA already stores it that way); minimum-move goes to both axes.
         /// Socket-free, so the mapping is unit-testable without a live PHD2.
         /// </summary>
-        public static IReadOnlyList<Phd2Method> BuildGuiderEngineConfigMessages(IGuiderSettings guider) {
+        public static IReadOnlyList<Phd2Method> BuildGuiderEngineConfigMessages(IGuiderSettings guider, GuiderAdvancedSettings? advanced = null) {
             var messages = new List<Phd2Method>();
 
             // §63.17 equipment selection — ordered FIRST (the daemon's own integration flow selects devices
@@ -263,7 +263,11 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             if (guider.GuidePixelSize > 0) {
                 setup.PixelSize = guider.GuidePixelSize;
             }
-            if (setup.FocalLength != null || setup.PixelSize != null) {
+            // #1364 — multi-star is a profile-setup key, so it rides the same disconnected window.
+            if (advanced?.MultiStarEnabled is bool multiStar) {
+                setup.MultiStarEnabled = multiStar;
+            }
+            if (setup.FocalLength != null || setup.PixelSize != null || setup.MultiStarEnabled != null) {
                 messages.Add(new Phd2SetProfileSetup { Parameters = setup });
             }
 
@@ -303,6 +307,8 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             if (decMode != "Auto") {
                 messages.Add(new Phd2SetDecGuideMode { Parameters = new() { Mode = decMode } });
             }
+            // #1364 — the advanced settings Ara keeps; all runtime-safe.
+            messages.AddRange(BuildAdvancedSettingsMessages(advanced));
             return messages;
         }
 
@@ -322,8 +328,8 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
         /// equipment stays connected (set_algo_param, set_dec_guide_mode, set_exposure). This is what
         /// Imaging → Guiding → Tune Guiding sends, so an aggressiveness or exposure change never stops a
         /// running guide session. Pure — unit-tested.</summary>
-        public static IReadOnlyList<Phd2Method> BuildGuiderTuningMessages(IGuiderSettings guider) =>
-            BuildGuiderEngineConfigMessages(guider).Where(m => !RequiresDisconnectedEquipment(m)).ToList();
+        public static IReadOnlyList<Phd2Method> BuildGuiderTuningMessages(IGuiderSettings guider, GuiderAdvancedSettings? advanced = null) =>
+            BuildGuiderEngineConfigMessages(guider, advanced).Where(m => !RequiresDisconnectedEquipment(m)).ToList();
 
         /// <summary>
         /// §63.17 — on-demand re-push of the §63.5 engine config + equipment selections (the connect path
@@ -352,7 +358,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                 Logger.Warning($"PHD2 §63.4 - profile refresh before push failed (ensure decides on a stale list): {ex.Message}");
             }
             await EnsureAraGuiderProfileAsync(ct);
-            var pushed = BuildGuiderEngineConfigMessages(profileService.ActiveProfile.GuiderSettings)
+            var pushed = BuildGuiderEngineConfigMessages(profileService.ActiveProfile.GuiderSettings, AdvancedSettingsQuietly())
                 .Select(m => m.Method).Distinct().ToList();
             await PushGuiderEngineConfigAsync(ct);
             // The push only reconnects equipment when it opened the disconnect window; make the post-push

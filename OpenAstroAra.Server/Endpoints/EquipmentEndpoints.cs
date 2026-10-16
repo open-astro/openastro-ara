@@ -538,6 +538,11 @@ public static partial class EquipmentEndpoints {
         guider.MapPost("/live/calibration/clear", (IGuiderLiveService live, CancellationToken ct) => GuiderLiveActionAsync(() => live.ClearCalibrationAsync(ct)))
             .Produces(StatusCodes.Status204NoContent).ProducesProblem(StatusCodes.Status409Conflict).ProducesProblem(StatusCodes.Status422UnprocessableEntity)
             .WithName("ClearGuiderCalibration").WithSummary("Drop the stored calibration; the next guide start calibrates again.");
+        // #1364 item 3 — the guider's current settings beside the profile's guider-advanced block.
+        guider.MapGet("/advanced", async (IGuiderLiveService live, CancellationToken ct) => Results.Ok(await live.GetAdvancedAsync(ct)))
+            .Produces<GuiderAdvancedViewDto>(StatusCodes.Status200OK)
+            .WithName("GetGuiderAdvanced")
+            .WithSummary("The guider's current advanced settings and its guide algorithms per axis.");
         guider.MapPost("/live/deselect", (IGuiderLiveService live, CancellationToken ct) => GuiderLiveActionAsync(() => live.DeselectStarAsync(ct)))
             .Produces(StatusCodes.Status204NoContent).ProducesProblem(StatusCodes.Status409Conflict).ProducesProblem(StatusCodes.Status422UnprocessableEntity)
             .WithName("GuiderLiveDeselectStar").WithSummary("Drop the guider's selected star.");

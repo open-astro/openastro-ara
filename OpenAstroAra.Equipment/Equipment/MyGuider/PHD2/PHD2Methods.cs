@@ -305,6 +305,11 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
 
         [JsonProperty(PropertyName = "calibration_distance", NullValueHandling = NullValueHandling.Ignore)]
         public int? CalibrationDistance { get; set; }
+
+        /// <summary>#1364 - the guider's multi-star tracking; part of the profile setup, so it lands only
+        /// in the disconnected window.</summary>
+        [JsonProperty(PropertyName = "multistar_enabled", NullValueHandling = NullValueHandling.Ignore)]
+        public bool? MultiStarEnabled { get; set; }
     }
 
     public class Phd2SetExposure : Phd2Method<Array> {

@@ -45,6 +45,8 @@ public static class ProfileStoreSnapshot {
         FocusCalibration: s.GetFocusCalibration(),
         CalibrationState: s.GetCalibrationState(),
         PolarAlign: s.GetPolarAlignSettings(),
+        Unguided: s.GetUnguidedSettings(),
+        GuiderAdvanced: s.GetGuiderAdvancedSettings(),
         FilterWheelPolicy: s.GetFilterWheelPolicy(),
         TrackingCalibration: s.GetTrackingCalibration(),
         SkyModelCalibration: s.GetSkyModelCalibration());
@@ -85,6 +87,12 @@ public static class ProfileStoreSnapshot {
         s.PutCalibrationState(snap.CalibrationState ?? CalibrationStateDto.Empty);
         // §45.12 — all fields carry their playbook defaults; a pre-§45 snapshot back-fills to them.
         s.PutPolarAlignSettings(snap.PolarAlign ?? new PolarAlignSettingsDto());
+        // #1264 — the unguided-imaging block was missing here, so selecting a profile kept the previous
+        // rig's probe ladder and guard settings (found with #1364). A pre-#1264 snapshot back-fills the defaults.
+        s.PutUnguidedSettings(snap.Unguided ?? new UnguidedSettingsDto());
+        // #1364 — a profile that never set an advanced guider value must read all-null (keep the guider's
+        // own) after select, never inherit the previous rig's star detection or algorithms.
+        s.PutGuiderAdvancedSettings(snap.GuiderAdvanced ?? new GuiderAdvancedSettingsDto());
         // #1075 — a pre-policy snapshot back-fills the default (home on); a profile that never turned
         // the home off must turn it back on when selected, never inherit the previous rig's "off".
         s.PutFilterWheelPolicy(snap.FilterWheelPolicy ?? FilterWheelPolicyDto.Default);

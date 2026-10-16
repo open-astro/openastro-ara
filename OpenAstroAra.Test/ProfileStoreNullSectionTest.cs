@@ -57,6 +57,35 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void Unguided_and_guider_advanced_follow_the_profile_through_select() {
+            // Profile select = Capture the saved profile, Apply it to the live store. #1264's unguided block
+            // and #1364's guider-advanced block were not in that list, so the previous rig's values stayed.
+            var dir = TempDir();
+            try {
+                var store = new FileProfileStore(dir);
+                store.PutUnguidedSettings(new UnguidedSettingsDto() with { GuardEnabled = false });
+                store.PutGuiderAdvancedSettings(new GuiderAdvancedSettingsDto(MinStarSnr: 7, RaAlgorithm: "Hysteresis"));
+                var saved = ProfileStoreSnapshot.Capture(store);
+                Assert.That(saved.Unguided!.GuardEnabled, Is.False);
+                Assert.That(saved.GuiderAdvanced!.MinStarSnr, Is.EqualTo(7));
+
+                // Another profile is selected (defaults), then this one again.
+                ProfileStoreSnapshot.Apply(store, saved with { Unguided = null, GuiderAdvanced = null });
+                Assert.That(store.GetUnguidedSettings().GuardEnabled, Is.EqualTo(new UnguidedSettingsDto().GuardEnabled), "a profile without the block reads the defaults");
+                Assert.That(store.GetGuiderAdvancedSettings().MinStarSnr, Is.Null, "and keeps the guider's own values");
+                ProfileStoreSnapshot.Apply(store, saved);
+                Assert.That(store.GetUnguidedSettings().GuardEnabled, Is.False);
+                Assert.That(store.GetGuiderAdvancedSettings(), Is.EqualTo(new GuiderAdvancedSettingsDto(MinStarSnr: 7, RaAlgorithm: "Hysteresis")));
+
+                // And the block survives a daemon restart (re-read from disk).
+                var reopened = new FileProfileStore(dir);
+                Assert.That(reopened.GetGuiderAdvancedSettings().RaAlgorithm, Is.EqualTo("Hysteresis"));
+            } finally {
+                Directory.Delete(dir, recursive: true);
+            }
+        }
+
+        [Test]
         public void Put_of_a_null_section_is_coalesced_not_stored() {
             var dir = TempDir();
             try {

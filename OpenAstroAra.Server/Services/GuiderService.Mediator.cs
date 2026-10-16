@@ -82,6 +82,10 @@ public sealed partial class GuiderService : IGuiderMediator {
     /// from under it. Program.cs wires it to <see cref="PolarAlignService.IsActive"/>; null means none.</summary>
     public Func<bool>? PolarAlignActive { get; set; }
 
+    /// <summary>#1364 — the profile's guider-advanced block for every push; handed to each new guider
+    /// connection. Program.cs wires it to the profile store; null pushes none.</summary>
+    public Func<OpenAstroAra.Equipment.Equipment.MyGuider.PHD2.GuiderAdvancedSettings?>? AdvancedSettings { get; set; }
+
     /// <summary>Ends this daemon's polar alignment (stop, not complete — an abandoned session is not a
     /// result). Program.cs wires it to <see cref="PolarAlignService.StopAsync"/>; null means a running
     /// polar alignment keeps its lease and guiding is refused, as before.</summary>

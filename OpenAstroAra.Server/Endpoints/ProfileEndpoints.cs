@@ -220,6 +220,31 @@ public static class ProfileEndpoints {
             .WithName("PutUnguidedSettings")
             .WithSummary("Replace the active profile's unguided-imaging settings.");
 
+        // #1364 — the guider's settings beyond Tune Guiding. Apply = PUT here, then
+        // POST /equipment/guider/profile/push?scope=tuning (multi-star lands on the next connect).
+        profile.MapGet("/guider-advanced", (IProfileStore store) =>
+                Results.Ok(store.GetGuiderAdvancedSettings()))
+            .Produces<GuiderAdvancedSettingsDto>(StatusCodes.Status200OK)
+            .WithName("GetGuiderAdvancedSettings")
+            .WithSummary("Get the active profile's guider-advanced settings (null fields keep the guider's own).");
+
+        profile.MapPut("/guider-advanced", (GuiderAdvancedSettingsDto body, IProfileStore store) => {
+            if (GuiderAdvancedSettingsMapping.Validate(body) is { } problem) {
+                return Results.Problem(detail: problem, statusCode: StatusCodes.Status400BadRequest);
+            }
+            var normalized = body with {
+                RaAlgorithm = body.RaAlgorithm?.Trim(),
+                DecAlgorithm = body.DecAlgorithm?.Trim(),
+            };
+            store.PutGuiderAdvancedSettings(normalized);
+            return Results.Ok(normalized);
+        })
+            .Accepts<GuiderAdvancedSettingsDto>("application/json")
+            .Produces<GuiderAdvancedSettingsDto>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .WithName("PutGuiderAdvancedSettings")
+            .WithSummary("Replace the active profile's guider-advanced settings.");
+
         profile.MapGet("/plate-solve", (IProfileStore store) =>
                 Results.Ok(store.GetPlateSolveSettings()))
             .Produces<PlateSolveSettingsDto>(StatusCodes.Status200OK)

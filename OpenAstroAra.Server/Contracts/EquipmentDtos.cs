@@ -507,6 +507,15 @@ public sealed record GuiderCalibrationViewDto(
     string Verdict,
     string? VerdictReason);
 
+/// <summary>#1364 — what the guider has now (<c>GET /equipment/guider/advanced</c>), beside the profile's
+/// guider-advanced block: its current values (fields it did not answer are null) and the guide algorithms
+/// each axis offers. <c>Connected</c> false with nulls and empty lists when no guider is connected.</summary>
+public sealed record GuiderAdvancedViewDto(
+    bool Connected,
+    GuiderAdvancedSettingsDto Current,
+    IReadOnlyList<string> RaAlgorithms,
+    IReadOnlyList<string> DecAlgorithms);
+
 /// <summary>One calibration step: the leg (<c>West</c>, <c>East</c>, <c>North</c>, <c>South</c> or a
 /// backlash-clearing leg), its number and the star's displacement from the leg's start, guide px.</summary>
 public sealed record GuiderCalibrationStepDto(string Direction, int Step, double Dx, double Dy, double Dist);

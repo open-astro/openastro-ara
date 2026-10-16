@@ -408,6 +408,8 @@ public partial class Program {
             // ...and whether one is running: its lease is real, so it is ended (below) rather than pulled
             // (resolved lazily for the same reason).
             guider.PolarAlignActive = () => sp.GetService<IPolarAlignService>() is PolarAlignService { IsActive: true };
+            // #1364 — the guider settings beyond Tune Guiding, read from the active profile on every push.
+            guider.AdvancedSettings = () => GuiderAdvancedSettingsMapping.ToEngine(sp.GetRequiredService<IProfileStore>().GetGuiderAdvancedSettings());
             // ...and a polar alignment left open when a run asks to guide is ended (stopped, not completed):
             // the Polar Align step without a Done kept the guider's lease and paused the run (2026-10-16).
             guider.EndPolarAlignAsync = async ct => {
