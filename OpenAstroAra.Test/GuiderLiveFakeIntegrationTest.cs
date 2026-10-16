@@ -90,13 +90,13 @@ namespace OpenAstroAra.Test {
             await fake.BroadcastAsync(step).ConfigureAwait(false);
             Assert.That(await WaitUntilAsync(() => svc.LatestStarStats.Snr is not null).ConfigureAwait(false), Is.True,
                 "the guide step's SNR and mass feed the view");
-            await fake.BroadcastAsync(PhdEvents.AppState("Looping")).ConfigureAwait(false);
-            Assert.That(await WaitUntilAsync(() => svc.ConnectedGuiderOrNull()?.AppState?.State == "Looping").ConfigureAwait(false), Is.True);
+            // GuideStep folds the guider into Guiding: the star stats are reported while it guides.
+            Assert.That(await WaitUntilAsync(() => svc.ConnectedGuiderOrNull()?.AppState?.State == "Guiding").ConfigureAwait(false), Is.True);
 
             var view = await new GuiderLiveService(svc, new NoFrames()).GetAsync(CancellationToken.None).ConfigureAwait(false);
 
             Assert.That(view.Connected, Is.True);
-            Assert.That(view.AppState, Is.EqualTo("Looping"));
+            Assert.That(view.AppState, Is.EqualTo("Guiding"));
             Assert.That(view.HasFrame, Is.True, "anything but Stopped has a picture");
             Assert.That((view.FrameWidth, view.FrameHeight), Is.EqualTo((1280, 960)));
             Assert.That((view.LockX, view.LockY), Is.EqualTo((640.12, 480.46)));
@@ -107,6 +107,43 @@ namespace OpenAstroAra.Test {
             Assert.That(view.Stars.Select(s => (s.X, s.Y)), Is.EqualTo(new[] { (640.12, 480.46), (100.01, 200.0) }),
                 "rounded to 0.01 px; a centroid without x is dropped");
             Assert.That(view.Stars[0].Hfd, Is.EqualTo(2.1));
+
+            // Looping again: the last guide frame's stats no longer describe anything.
+            await fake.BroadcastAsync(PhdEvents.AppState("Looping")).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => svc.ConnectedGuiderOrNull()?.AppState?.State == "Looping").ConfigureAwait(false), Is.True);
+            var looping = await new GuiderLiveService(svc, new NoFrames()).GetAsync(CancellationToken.None).ConfigureAwait(false);
+            Assert.That((looping.Snr, looping.StarMass), Is.EqualTo(((double?)null, (double?)null)));
+        }
+
+        private sealed class RecordingSink : OpenAstroAra.Core.Utility.Notification.INotifierSink {
+            public readonly ConcurrentQueue<string> Messages = new();
+            public void Notify(bool isError, string? header, string message) => Messages.Enqueue(message);
+        }
+
+        [Test]
+        [NonParallelizable] // Notifier.Use is process-global
+        public async Task Refused_live_reads_raise_no_notification() {
+            var (fake, svc) = await ConnectedAsync(f => {
+                f.OnRpc("get_camera_frame_size", _ => throw new InvalidOperationException("camera not connected (live view)"));
+                f.OnRpc("get_star_centroids", _ => throw new InvalidOperationException("no image available (live view)"));
+                f.OnRpc("get_lock_position", _ => throw new InvalidOperationException("no lock position (live view)"));
+                f.OnRpc("get_search_region", _ => throw new InvalidOperationException("no search region (live view)"));
+                f.OnRpc("get_guider_options", _ => throw new InvalidOperationException("no options (live view)"));
+            }).ConfigureAwait(false);
+            await using var _ = fake;
+            using var __ = svc;
+            var sink = new RecordingSink();
+            var previous = OpenAstroAra.Core.Utility.Notification.Notifier.Current;
+            OpenAstroAra.Core.Utility.Notification.Notifier.Use(sink);
+            try {
+                var view = await new GuiderLiveService(svc, new NoFrames()).GetAsync(CancellationToken.None).ConfigureAwait(false);
+                Assert.That(view.Connected, Is.True);
+                Assert.That((view.FrameWidth, view.LockX, view.SearchRegion, view.MultiStarEnabled), Is.EqualTo(((int?)null, (double?)null, (int?)null, (bool?)null)));
+                Assert.That(sink.Messages.Where(m => m.Contains("(live view)", StringComparison.Ordinal)), Is.Empty,
+                    "an expected refusal while the dialog polls must not post an inbox Error");
+            } finally {
+                OpenAstroAra.Core.Utility.Notification.Notifier.Use(previous);
+            }
         }
 
         [Test]

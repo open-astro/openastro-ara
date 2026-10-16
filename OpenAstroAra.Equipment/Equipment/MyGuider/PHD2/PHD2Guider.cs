@@ -996,7 +996,11 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             return SendMessage<GenericPhdMethodResponse>(msg, receiveTimeout);
         }
 
-        public async Task<T> SendMessage<T>(Phd2Method msg, int receiveTimeout = 60000) where T : PhdMethodResponse {
+        /// <param name="notifyOnError">false for a read whose refusal is expected and handled by the caller
+        /// (#1364's live view polls fields the guider refuses while it has no camera or image): the
+        /// refusal is returned in <c>error</c> without raising <see cref="Notifier.ShowError"/>, which
+        /// would post an inbox Error on every poll.</param>
+        public async Task<T> SendMessage<T>(Phd2Method msg, int receiveTimeout = 60000, bool notifyOnError = true) where T : PhdMethodResponse {
             try {
                 var serializedMessage = JsonConvert.SerializeObject(msg, new JsonSerializerSettings() { NullValueHandling = NullValueHandling.Ignore });
                 Logger.Debug($"Phd2 - Sending message '{serializedMessage}'");
@@ -1032,8 +1036,12 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                     if (phdevent == msg.Id) {
                         Logger.Debug($"Phd2 - Received message answer '{line}'");
                         var response = o.ToObject<T>();
-                        CheckPhdError(response);
-                        return response;
+                        if (notifyOnError) {
+                            CheckPhdError(response);
+                        } else if (response?.error != null) {
+                            Logger.Debug($"Phd2 - {msg.Method} refused (expected, not notified): {response.error.message}");
+                        }
+                        return response!;
                     }
                 }
             } catch (Exception ex) {

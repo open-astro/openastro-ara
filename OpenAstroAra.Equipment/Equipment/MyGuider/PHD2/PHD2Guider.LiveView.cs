@@ -47,18 +47,27 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
         public async Task<(int Width, int Height)?> GetCameraFrameSizeAsync(CancellationToken ct) {
             ct.ThrowIfCancellationRequested();
             RequireConnectedForLive();
-            var response = await SendMessage<Phd2IntListResponse>(new Phd2GetCameraFrameSize(), LiveRpcTimeoutMs).ConfigureAwait(false);
+            var response = await SendMessage<Phd2IntListResponse>(new Phd2GetCameraFrameSize(), LiveRpcTimeoutMs, notifyOnError: false).ConfigureAwait(false);
             if (response.error != null || response.result is not { Count: 2 } size) {
                 return null;
             }
             return (size[0], size[1]);
         }
 
+        /// <summary>The locked star's position, or null when none is locked. Quiet: no star is the
+        /// normal answer while stopped, never an inbox error (the live view polls it).</summary>
+        public async Task<LockPosition?> GetLockPositionQuietlyAsync(CancellationToken ct) {
+            ct.ThrowIfCancellationRequested();
+            RequireConnectedForLive();
+            var response = await SendMessage<GetLockPositionResponse>(new Phd2GetLockPosition(), LiveRpcTimeoutMs, notifyOnError: false).ConfigureAwait(false);
+            return response.error == null && response.result is { Count: 2 } p ? new LockPosition(p[0], p[1]) : null;
+        }
+
         /// <summary>Half-size of the star search box, in guide pixels.</summary>
         public async Task<int?> GetSearchRegionAsync(CancellationToken ct) {
             ct.ThrowIfCancellationRequested();
             RequireConnectedForLive();
-            var response = await SendMessage<Phd2IntResponse>(new Phd2GetSearchRegion(), LiveRpcTimeoutMs).ConfigureAwait(false);
+            var response = await SendMessage<Phd2IntResponse>(new Phd2GetSearchRegion(), LiveRpcTimeoutMs, notifyOnError: false).ConfigureAwait(false);
             return response.error != null ? null : response.result;
         }
 
@@ -66,7 +75,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
         public async Task<bool?> GetMultiStarEnabledAsync(CancellationToken ct) {
             ct.ThrowIfCancellationRequested();
             RequireConnectedForLive();
-            var response = await SendMessage<Phd2GuiderOptionsResponse>(new Phd2GetGuiderOptions(), LiveRpcTimeoutMs).ConfigureAwait(false);
+            var response = await SendMessage<Phd2GuiderOptionsResponse>(new Phd2GetGuiderOptions(), LiveRpcTimeoutMs, notifyOnError: false).ConfigureAwait(false);
             return response.error != null ? null : response.result?.MultiStarEnabled;
         }
 

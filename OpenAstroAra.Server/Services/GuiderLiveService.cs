@@ -76,10 +76,10 @@ public sealed partial class GuiderLiveService : IGuiderLiveService {
         // They run together (each RPC is its own connection), so a slow guider costs one RPC's time,
         // not five, against the client's poll.
         var sizeTask = Quietly(() => guider.GetCameraFrameSizeAsync(ct), "frame size");
-        var lockTask = Quietly<OpenAstroAra.Equipment.Equipment.MyGuider.LockPosition?>(async () => await guider.GetLockPosition().ConfigureAwait(false), "lock position");
+        var lockTask = Quietly(() => guider.GetLockPositionQuietlyAsync(ct), "lock position");
         var regionTask = Quietly(() => guider.GetSearchRegionAsync(ct), "search region");
         var multiTask = Quietly(() => guider.GetMultiStarEnabledAsync(ct), "multi-star");
-        var centroidsTask = Quietly<IReadOnlyList<Phd2StarCentroid>?>(async () => await guider.GetStarCentroidsAsync(null, MaxStars, ct, PHD2Guider.LiveRpcTimeoutMs).ConfigureAwait(false), "star centroids");
+        var centroidsTask = Quietly<IReadOnlyList<Phd2StarCentroid>?>(async () => await guider.GetStarCentroidsAsync(null, MaxStars, ct, PHD2Guider.LiveRpcTimeoutMs, notifyOnError: false).ConfigureAwait(false), "star centroids");
         await Task.WhenAll(sizeTask, lockTask, regionTask, multiTask, centroidsTask).ConfigureAwait(false);
         var size = await sizeTask.ConfigureAwait(false);
         var lockPos = await lockTask.ConfigureAwait(false);
@@ -94,8 +94,10 @@ public sealed partial class GuiderLiveService : IGuiderLiveService {
                 }
             }
         }
-        var (snr, mass) = _guider.LatestStarStats;
         var state = guider.AppState?.State;
+        // The last guide frame's SNR and mass describe the guide star only while guiding; a stopped or
+        // looping guider would otherwise report a previous session's values to every consumer.
+        var (snr, mass) = state == "Guiding" ? _guider.LatestStarStats : default;
         return new GuiderLiveDto(
             Connected: true,
             AppState: state,
