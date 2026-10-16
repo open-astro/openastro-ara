@@ -621,7 +621,7 @@ namespace OpenAstroAra.Image.ImageAnalysis {
         // within 1.5 px of the peak) for the offset.
         private static BahtinovSpike Refine(List<Light> points, double coarseDeg, int radius, double median, double mad) {
             var hist = new double[4 * radius + 16];
-            double bestScore = -1, bestAngle = coarseDeg, bestCentre = 0;
+            double bestScore = double.NegativeInfinity, bestAngle = coarseDeg, bestCentre = 0;
             for (var k = -20; k <= 20; k++) {
                 var angle = coarseDeg + k * 0.05;
                 var s = Score(points, angle, radius, 0.5, hist, out var centre);
