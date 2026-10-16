@@ -117,6 +117,10 @@ The **Sequencer** tab is where the night gets defined.
   instruction set executes natively; anything unknown is shown and skipped safely).
 - Templates let you save shapes you reuse ("LRGB target", "flats at dawn").
 - Start/pause/resume/abort from the toolbar; a running sequence's file is protected from edits.
+- While a run is up, the band above the tree shows the current step and, under it, what the guider
+  is doing in the same words as the Live tab's guiding strip — *Looping*, *Star selected*,
+  *Calibrating · North step 7 · 11.9 px*, *Guiding*, *Settling*, *Star lost* — so a long
+  calibration behind "Start guiding" never looks like a stalled run.
 - **Calibration frames** — the Calibration screen generates flats/darks plans as sequences and
   tracks your library's coverage against what your lights need.
 

@@ -408,6 +408,20 @@ The card now keeps a known device's card while it is not live: name, state chip,
 
 ---
 
+### 2026-10-16 — One guider state everywhere: `looping`, `star_selected`, `settling` (#1364 item 6)
+
+**Endpoint(s) or area:** `GET /api/v1/equipment/guider` — `runtime.state` (`GuiderStateDto.State`).
+
+**Decision:** `runtime.state` is one of `stopped` | `looping` | `star_selected` | `calibrating` | `guiding` | `settling` | `paused` | `star_lost`. `looping` (exposures looping, no star chosen) and `star_selected` (looping with a star chosen) used to read `stopped`; `settling` is `guiding` while the guider settles after a dither or a start. `dithering`, listed before, was never sent and still is not. Tokens a client does not know should be shown as-is, not read as `stopped`. Clients use one wording for every phase (the Live strip, the guider dialog and the Run tab) and, while `calibrating`, append the leg from `calibration_*`.
+
+**Reasoning:** field night 2026-10-16: the strip said "stopped" while the guide camera was looping (and refused a single frame for guide-camera focus), and the Run tab said nothing while the guider calibrated for five minutes.
+
+**Spec ref:** `Services/GuiderService.cs` (`MapGuidingState`), `Contracts/EquipmentDtos.cs` (`GuiderStateDto`); client `models/guider_status.dart` (`GuiderRuntimeState`, `guiderRuntimeText`, `runtimeSummary`), `widgets/sequencer/run_dashboard_band.dart` (`RunGuiderLine`), `widgets/imaging/guiding_strip.dart`.
+
+**Related:** #1364; tests `GuiderServiceTest` (`Every_guider_phase_has_its_own_state_token`), client `guider_status_test`, `run_guider_line_test`.
+
+---
+
 ### 2026-10-16 — Every guider setting from Ara, kept in the profile (`/api/v1/profile/guider-advanced`) (#1364 item 3)
 
 **Endpoint(s) or area:** new `GET`/`PUT /api/v1/profile/guider-advanced` (`GuiderAdvancedSettingsDto`), profile JSON `guider_advanced`; new `GET /api/v1/equipment/guider/advanced` (`GuiderAdvancedViewDto`); the guider push (`POST /api/v1/equipment/guider/profile/push`, both scopes, and the connect-time push) carries the section; profile select and clone (`ProfileStoreSnapshot`) now carry `unguided` and `guider_advanced`.
