@@ -112,6 +112,22 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             ThrowOnError("loop", response);
         }
 
+        /// <summary>#1364 item 5 — the guider's own graph history (<c>get_guide_history</c>, newest last,
+        /// up to <paramref name="maxPoints"/> 1..400) as its raw JSON result, or null when the guider has
+        /// none (not guiding yet) or is not connected.</summary>
+        public async Task<Newtonsoft.Json.Linq.JObject?> GetGuideHistoryAsync(int maxPoints, CancellationToken ct) {
+            ct.ThrowIfCancellationRequested();
+            if (!Connected) {
+                return null;
+            }
+            var request = new Phd2NamedGetter("get_guide_history", new() { ["max_points"] = Math.Clamp(maxPoints, 1, 400) });
+            var response = await SendMessage<GenericPhdMethodResponse>(request, LiveRpcTimeoutMs).ConfigureAwait(false);
+            if (response.error != null || response.result is null) {
+                return null;
+            }
+            return Newtonsoft.Json.Linq.JToken.FromObject(response.result) as Newtonsoft.Json.Linq.JObject;
+        }
+
         /// <summary>Stop looping (or guiding) — the guider's Stop button.</summary>
         public async Task StopCaptureAsync(CancellationToken ct) {
             ct.ThrowIfCancellationRequested();

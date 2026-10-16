@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -24,6 +26,10 @@ import 'package:openastroara/state/ws/ws_providers.dart';
 import 'package:openastroara/theme/ara_colors.dart';
 import 'package:openastroara/widgets/imaging/guiding_strip.dart';
 import 'package:openastroara/widgets/imaging/guiding_tune_dialog.dart';
+import 'package:openastroara/models/guider_calibration_view.dart';
+import 'package:openastroara/models/guider_live.dart';
+import 'package:openastroara/services/guider_live_api.dart';
+import 'package:openastroara/state/guider/guider_live_state.dart';
 
 /// Records the painter's rectangles; every other canvas call is a no-op.
 class _RectCanvas implements Canvas {
@@ -137,6 +143,8 @@ Future<ProviderContainer> _pump(WidgetTester tester,
     profileApiProvider.overrideWithValue(profileApi ?? _FakeProfileApi()),
     // Apply's push goes to a pure fake, never the real Dio client.
     guiderEquipmentApiFactoryProvider.overrideWithValue((_) => equipmentClient),
+    // #1364 — the step buffer seeds from the guider's history on connect.
+    guiderLiveApiFactoryProvider.overrideWithValue((_) => _NoHistoryLive()),
   ]);
   addTearDown(container.dispose);
   // Steps and markers are stamped on arrival. On Windows (~15 ms clock) three
@@ -625,6 +633,7 @@ void main() {
       guiderApiFactoryProvider.overrideWithValue((_) => api),
       wsEventsProvider.overrideWith((ref) => const Stream<WsEvent>.empty()),
       profileApiProvider.overrideWith((ref) => ref.watch(_apiSwitchProvider)),
+      guiderLiveApiFactoryProvider.overrideWithValue((_) => _NoHistoryLive()),
     ]);
     addTearDown(container.dispose);
     await tester.pumpWidget(UncontrolledProviderScope(
@@ -922,4 +931,29 @@ void main() {
       await _teardownPanel(tester, container);
     });
   });
+}
+
+/// #1364 — a live-view client with no history, so the step buffer's seed
+/// never reaches the network.
+class _NoHistoryLive implements GuiderLiveClient {
+  @override
+  Future<List<Map<String, dynamic>>> getHistory() async => const [];
+  @override
+  Future<GuiderLive> getLive() async => GuiderLive.disconnected;
+  @override
+  Future<Uint8List?> getFrame() async => null;
+  @override
+  Future<void> loop() async {}
+  @override
+  Future<void> stop() async {}
+  @override
+  Future<void> selectStar(double x, double y) async {}
+  @override
+  Future<void> deselectStar() async {}
+  @override
+  Future<GuiderCalibrationView> getCalibration() async => GuiderCalibrationView.disconnected;
+  @override
+  Future<void> clearCalibration() async {}
+  @override
+  void close() {}
 }

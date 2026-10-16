@@ -48,6 +48,8 @@ class _FakeLive implements GuiderLiveClient {
   }
 
   @override
+  Future<List<Map<String, dynamic>>> getHistory() async => const [];
+  @override
   Future<void> clearCalibration() async => calls.add('clear_calibration');
   @override
   void close() {}

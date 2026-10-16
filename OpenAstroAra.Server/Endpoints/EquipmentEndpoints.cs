@@ -538,6 +538,12 @@ public static partial class EquipmentEndpoints {
         guider.MapPost("/live/calibration/clear", (IGuiderLiveService live, CancellationToken ct) => GuiderLiveActionAsync(() => live.ClearCalibrationAsync(ct)))
             .Produces(StatusCodes.Status204NoContent).ProducesProblem(StatusCodes.Status409Conflict).ProducesProblem(StatusCodes.Status422UnprocessableEntity)
             .WithName("ClearGuiderCalibration").WithSummary("Drop the stored calibration; the next guide start calibrates again.");
+        // #1364 item 5 — the guider's recent guide steps for a client that connects mid-session.
+        guider.MapGet("/history", async (int? maxPoints, IGuiderLiveService live, CancellationToken ct) =>
+                Results.Ok(await live.GetHistoryAsync(maxPoints ?? 400, ct)))
+            .Produces<GuiderHistoryDto>(StatusCodes.Status200OK)
+            .WithName("GetGuiderHistory")
+            .WithSummary("The guider's recent guide steps (oldest first, with ages) — max_points 1..400, default 400.");
         // #1364 item 3 — the guider's current settings beside the profile's guider-advanced block.
         guider.MapGet("/advanced", async (IGuiderLiveService live, CancellationToken ct) => Results.Ok(await live.GetAdvancedAsync(ct)))
             .Produces<GuiderAdvancedViewDto>(StatusCodes.Status200OK)

@@ -12,6 +12,7 @@
 
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Newtonsoft.Json.Linq;
 using OpenAstroAra.Equipment.Equipment.MyGuider.PHD2;
 using OpenAstroAra.Server.Contracts;
 using System;
@@ -42,6 +43,8 @@ public interface IGuiderLiveService {
     Task ClearCalibrationAsync(CancellationToken ct);
     /// <summary>#1364 item 3 — the guider's current settings and its algorithm names per axis.</summary>
     Task<GuiderAdvancedViewDto> GetAdvancedAsync(CancellationToken ct);
+    /// <summary>#1364 item 5 — the guider's recent guide steps, oldest first, with their ages.</summary>
+    Task<GuiderHistoryDto> GetHistoryAsync(int maxPoints, CancellationToken ct);
 }
 
 /// <summary>
@@ -197,6 +200,60 @@ public sealed partial class GuiderLiveService : IGuiderLiveService {
     }
 
     public Task ClearCalibrationAsync(CancellationToken ct) => _guider.RequireConnectedGuider().ClearCalibrationAsync(ct);
+
+    public async Task<GuiderHistoryDto> GetHistoryAsync(int maxPoints, CancellationToken ct) {
+        var guider = _guider.ConnectedGuiderOrNull();
+        if (guider is null) {
+            return new GuiderHistoryDto(false, Array.Empty<GuiderHistoryStepDto>());
+        }
+        var raw = await Quietly<Newtonsoft.Json.Linq.JObject?>(async () => await guider.GetGuideHistoryAsync(maxPoints, ct).ConfigureAwait(false), "guide history").ConfigureAwait(false);
+        return new GuiderHistoryDto(true, raw is null ? Array.Empty<GuiderHistoryStepDto>() : MapHistory(raw, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()));
+    }
+
+    /// <summary>Spacing assumed between points whose timestamp is not a plausible Unix time (an older
+    /// guider build), so the graph still draws them in order.</summary>
+    internal const double FallbackStepSpacingSec = 2.0;
+
+    /// <summary>
+    /// The guider's <c>get_guide_history</c> result → guide steps, oldest first. <c>ra</c>/<c>dec</c> are
+    /// the star's offset on the mount axes in guide px (what <c>guider.step</c> calls raw); the pulse
+    /// signs follow the direction letters (E and S negative). Ages come from the guider's millisecond
+    /// timestamps against <paramref name="nowUnixMs"/>; a point without one is spaced
+    /// <see cref="FallbackStepSpacingSec"/> back from the newest. Pure — unit-tested.
+    /// </summary>
+    internal static IReadOnlyList<GuiderHistoryStepDto> MapHistory(Newtonsoft.Json.Linq.JObject raw, long nowUnixMs) {
+        static double? Num(Newtonsoft.Json.Linq.JToken? t) =>
+            t is { Type: Newtonsoft.Json.Linq.JTokenType.Float or Newtonsoft.Json.Linq.JTokenType.Integer } && double.IsFinite(t.Value<double>()) ? t.Value<double>() : null;
+        var scale = Num(raw["pixel_scale"]) is > 0 and var s ? s : (double?)null;
+        if (raw["points"] is not Newtonsoft.Json.Linq.JArray points) {
+            return Array.Empty<GuiderHistoryStepDto>();
+        }
+        var steps = new List<GuiderHistoryStepDto>(points.Count);
+        for (var i = 0; i < points.Count; i++) {
+            var p = points[i];
+            var ra = Num(p["ra"]);
+            var dec = Num(p["dec"]);
+            var raDur = Math.Abs(Num(p["ra_dur"]) ?? 0);
+            var decDur = Math.Abs(Num(p["dec_dur"]) ?? 0);
+            if (string.Equals(p["ra_dir"]?.ToString(), "E", StringComparison.OrdinalIgnoreCase)) {
+                raDur = -raDur;
+            }
+            if (string.Equals(p["dec_dir"]?.ToString(), "S", StringComparison.OrdinalIgnoreCase)) {
+                decDur = -decDur;
+            }
+            var t = Num(p["t"]);
+            // Plausible Unix ms: after 2001 and not in the future by more than a minute.
+            var age = t is double ms && ms > 1e12 && ms <= nowUnixMs + 60_000
+                ? Math.Max(0, (nowUnixMs - ms) / 1000.0)
+                : (points.Count - 1 - i) * FallbackStepSpacingSec;
+            steps.Add(new GuiderHistoryStepDto(
+                Math.Round(age, 3), ra, dec,
+                scale is double sc && ra is double r ? Math.Round(r * sc, 3) : null,
+                scale is double sc2 && dec is double d ? Math.Round(d * sc2, 3) : null,
+                raDur, decDur, scale, Num(p["snr"]), Num(p["mass"])));
+        }
+        return steps;
+    }
 
     public async Task<GuiderAdvancedViewDto> GetAdvancedAsync(CancellationToken ct) {
         var guider = _guider.ConnectedGuiderOrNull();

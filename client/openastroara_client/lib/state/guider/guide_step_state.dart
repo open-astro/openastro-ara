@@ -1,6 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../ws/ws_providers.dart';
+import 'guider_live_state.dart';
+import 'guider_state.dart';
 
 /// One guide frame as the daemon relayed it (`guider.step` WS event): the
 /// star's RA/Dec offset and the pulse the guider sent back. Distances are in
@@ -226,7 +230,52 @@ class GuideStepNotifier extends Notifier<List<GuideStep>> {
       final step = GuideStep.fromPayload(event.payload, now());
       if (step != null) add(step);
     });
+    // #1364 item 5 — a client that connects mid-session (or a guider that
+    // reconnects) draws the guider's last minutes instead of an empty graph.
+    ref.listen(guiderStatusProvider, (prev, next) {
+      final was = prev?.asData?.value?.isConnected ?? false;
+      final isNow = next.asData?.value?.isConnected ?? false;
+      if (!was && isNow) unawaited(seedFromHistory());
+    });
+    Future<void>.microtask(seedFromHistory);
     return const [];
+  }
+
+  Future<void>? _seeding;
+
+  /// Fill an empty graph from the guider's history. Never overwrites live
+  /// steps: if any arrived first, the history is not needed. Single-flight —
+  /// the start-up seed and the on-connect seed can both ask at once.
+  /// Best-effort.
+  Future<void> seedFromHistory() => _seeding ??= _seed().whenComplete(() => _seeding = null);
+
+  Future<void> _seed() async {
+    final api = ref.read(guiderLiveApiProvider);
+    if (api == null || state.isNotEmpty) return;
+    // Only a connected guider has history; the status listener seeds on connect.
+    final connected = ref.read(guiderStatusProvider).asData?.value?.isConnected ?? false;
+    if (!connected) return;
+    try {
+      final history = await api.getHistory();
+      if (!ref.mounted || state.isNotEmpty || history.isEmpty) return;
+      state = historySteps(history, now());
+    } catch (_) {
+      // No history (older daemon, guider not connected): the graph fills live.
+    }
+  }
+
+  /// History payloads → steps stamped `age_sec` before [at], oldest first,
+  /// capped at [kGuideStepHistory]. Pure — tested.
+  static List<GuideStep> historySteps(List<Map<String, dynamic>> history, DateTime at) {
+    final steps = <GuideStep>[];
+    for (final p in history) {
+      final age = p['age_sec'];
+      final ms = age is num && age.isFinite && age >= 0 ? (age * 1000).round() : 0;
+      final step = GuideStep.fromPayload(p, at.subtract(Duration(milliseconds: ms)));
+      if (step != null) steps.add(step);
+    }
+    steps.sort((a, b) => a.at.compareTo(b.at));
+    return steps.length > kGuideStepHistory ? steps.sublist(steps.length - kGuideStepHistory) : steps;
   }
 
   void add(GuideStep step) {

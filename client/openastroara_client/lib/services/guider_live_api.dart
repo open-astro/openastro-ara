@@ -20,6 +20,11 @@ abstract interface class GuiderLiveClient {
   Future<void> selectStar(double x, double y);
   Future<void> deselectStar();
 
+  /// #1364 item 5 — the guider's recent guide steps, oldest first: each in
+  /// the `guider.step` payload shape plus `age_sec` (seconds before now,
+  /// measured on the guider's clock). Empty when it has none.
+  Future<List<Map<String, dynamic>>> getHistory();
+
   /// This session's calibration run, the stored result and Ara's verdict.
   Future<GuiderCalibrationView> getCalibration();
 
@@ -80,6 +85,18 @@ class GuiderLiveApi implements GuiderLiveClient {
   @override
   Future<void> deselectStar() =>
       _dio.post<void>('/api/v1/equipment/guider/live/deselect');
+
+  @override
+  Future<List<Map<String, dynamic>>> getHistory() async {
+    final res = await _dio.get<dynamic>('/api/v1/equipment/guider/history');
+    final data = res.data;
+    final steps = data is Map<String, dynamic> ? data['steps'] : null;
+    return [
+      if (steps is List)
+        for (final s in steps)
+          if (s is Map<String, dynamic>) s,
+    ];
+  }
 
   @override
   Future<GuiderCalibrationView> getCalibration() async {
