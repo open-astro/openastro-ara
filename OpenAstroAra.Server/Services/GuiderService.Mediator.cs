@@ -95,6 +95,9 @@ public sealed partial class GuiderService : IGuiderMediator {
     /// polar alignment DOES hold: guiding is an explicit request for the mount and the guide camera, so an
     /// alignment left open (the Polar Align step never finished with Done — 2026-10-16, the run paused at
     /// "Guiding did not start") is ended first when <see cref="EndPolarAlignAsync"/> is wired, else kept.
+    /// That ends ANY polar alignment this daemon reports active, including one mid-measurement: a guide
+    /// request (a run's Start Guiding, a re-guide after a meridian flip) is taken as the user's intent to
+    /// use the mount and guide camera for guiding.
     /// </summary>
     internal PaLeaseAction PaLeaseActionFor(bool? guiderReportsActive) {
         if (guiderReportsActive != true) {

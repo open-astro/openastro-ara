@@ -34,9 +34,10 @@ public interface IBahtinovFocusService {
     /// <summary>Stop the readout (idempotent; waits for the in-flight frame to drain).</summary>
     Task StopAsync();
     BahtinovFocusStatusDto GetStatus();
-    /// <summary>The latest frame as JPEG — the star crop the overlay is drawn over, or the whole frame
-    /// (auto-stretched, stars ringed) when nothing was measured — with its sequence number; null before the
-    /// first frame.</summary>
+    /// <summary>The latest frame as JPEG with its sequence number; null before the first frame. It is the
+    /// 256-px crop around the locked or picked star whenever there is one — with or without a fitted
+    /// pattern, rendered with the sky-relative spike stretch (<c>StretchSpikes</c>) — and the whole frame
+    /// (auto-stretched, stars ringed) only when no star is locked. The status's <c>FrameCrop</c> says which.</summary>
     (ReadOnlyMemory<byte> Jpeg, long Seq)? GetFrame();
     /// <summary>Lock the readout on the star at (<paramref name="x"/>, <paramref name="y"/>) in frame pixels:
     /// the next frames search near it, the picture becomes the crop around it even before a pattern fits, and
