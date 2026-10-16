@@ -407,6 +407,13 @@ public partial class Program {
             };
             // ...but never the lease a running polar alignment holds (resolved lazily for the same reason).
             guider.PolarAlignActive = () => sp.GetService<IPolarAlignService>() is PolarAlignService { IsActive: true };
+            // ...and a polar alignment left open when a run asks to guide is ended (stopped, not completed):
+            // the Polar Align step without a Done kept the guider's lease and paused the run (2026-10-16).
+            guider.EndPolarAlignAsync = async ct => {
+                if (sp.GetService<IPolarAlignService>() is { } pa) {
+                    await pa.StopAsync(null, ct).ConfigureAwait(false);
+                }
+            };
             // #1311 — the polar alignment residual from guiding: logged with the running imaging
             // session, compared with tonight's Polar Align result, stamped with where the mount pointed.
             guider.PaResidualLog = sp.GetService<IPaResidualLog>();

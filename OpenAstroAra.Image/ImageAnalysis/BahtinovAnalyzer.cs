@@ -21,8 +21,8 @@ namespace OpenAstroAra.Image.ImageAnalysis {
     /// <param name="AngleDeg">The line's direction in [0, 180), image frame (0° = +x, y down as pixels are stored).</param>
     /// <param name="RhoPx">Signed distance of the line from the crop centre along its normal
     /// (−sin φ, cos φ), in pixels.</param>
-    /// <param name="Strength">The spike's peak line integral over the median of all angles: how far it
-    /// stands out of the halo and noise (≥ <see cref="BahtinovAnalyzer.MinStrength"/> to be found at all).</param>
+    /// <param name="Strength">How far the spike's peak line integral stands above the median of all angles,
+    /// in units of the angle scores' noise (≥ <see cref="BahtinovAnalyzer.MinStrength"/> to be found at all).</param>
     public readonly record struct BahtinovSpike(double AngleDeg, double RhoPx, double Strength);
 
     /// <summary>
@@ -92,11 +92,24 @@ namespace OpenAstroAra.Image.ImageAnalysis {
         /// star at typical image scales, small enough to analyse well inside a frame time on a Pi 4.</summary>
         public const int DefaultCropSize = 256;
 
-        /// <summary>A spike must stand this many times above the median of all angles' scores.</summary>
-        public const double MinStrength = 3.0;
+        /// <summary>How far from the previous frame's star the next frame is searched: wide enough to follow
+        /// drift, narrow enough that a satellite elsewhere never steals the lock.</summary>
+        public const int DefaultSearchRadius = 96;
+        /// <summary>The search window around a star the USER picked: a brighter neighbour inside the default
+        /// window would otherwise take the lock from the star they tapped (a RedCat 51 field, 2026-10-16).</summary>
+        public const int PickedSearchRadius = 32;
+
+        /// <summary>A spike's angle score must stand this many noise sigmas (the MAD of all angles' scores)
+        /// above their median. The scores are signed line integrals, so off-spike angles scatter around a
+        /// near-zero median and a real spike is a clean outlier even when its light is below the per-pixel
+        /// noise (a short-spike pattern on a small image scale: a 2 s RedCat 51 frame at 2.4"/px put the
+        /// spikes at 6–17 ADU per pixel beyond r≈40 px against 24 ADU noise, yet 4–12σ along the line).</summary>
+        public const double MinStrength = 4.0;
 
         private const double CoarseStepDeg = 0.5;
-        private const double MinSeparationDeg = 4.0;
+        /// <summary>Spikes closer than this are one ridge: a mask's gratings sit 15–20° apart, and where the
+        /// three spikes blur together near the core the scan shows a shoulder between two of them.</summary>
+        private const double MinSeparationDeg = 12.0;
         private const int MinRadius = 24;
         private const int BlockSize = 8;
         private const double OverlapRadius = 24;
@@ -200,9 +213,9 @@ namespace OpenAstroAra.Image.ImageAnalysis {
         public static BahtinovMeasurement? Analyze(ReadOnlySpan<ushort> pixels, int width, int height,
                 out BahtinovProblem problem,
                 (int X, int Y)? near = null, (double X, double Y)? referenceNormal = null,
-                int cropSize = DefaultCropSize) {
+                int cropSize = DefaultCropSize, int searchRadius = DefaultSearchRadius) {
             problem = BahtinovProblem.NoStar;
-            if (FindBrightStar(pixels, width, height, near) is not { } star) {
+            if (FindBrightStar(pixels, width, height, near, searchRadius) is not { } star) {
                 return null;
             }
             var size = Math.Min(cropSize, Math.Min(width, height));
@@ -228,7 +241,7 @@ namespace OpenAstroAra.Image.ImageAnalysis {
                 return null;
             }
 
-            var points = SpikeLight(crop, size, cx, cy, radius);
+            var points = SpikeLight(crop, size, cx, cy, radius, OtherStars(crop, size, cx, cy));
             problem = BahtinovProblem.NoPattern;
             if (points.Count < 30) {
                 return null;
@@ -241,11 +254,9 @@ namespace OpenAstroAra.Image.ImageAnalysis {
             for (var i = 0; i < steps; i++) {
                 scores[i] = Score(points, i * CoarseStepDeg, radius, 1.0, hist, out _);
             }
-            var sorted = (double[])scores.Clone();
-            Array.Sort(sorted);
-            var median = Math.Max(sorted[steps / 2], 1e-9);
+            var (median, mad) = MedianAndMad(scores);
 
-            var angles = PickPeaks(scores, median);
+            var angles = PickPeaks(scores, median, mad);
             if (angles is null) {
                 return null;
             }
@@ -254,12 +265,12 @@ namespace OpenAstroAra.Image.ImageAnalysis {
             // other and pull each other's centroids (fitted from the core out, every offset read ~7% long).
             // The ridges part at r·sin(spread/2) ± offset, so a large offset needs a wider exclusion: fit
             // once, then again with the exclusion sized from the first fit.
-            if (Fit(points, angles, radius, median, Math.Max(OverlapRadius, radius / 6.0), referenceNormal) is not { } first) {
+            if (Fit(points, angles, radius, median, mad, Math.Max(OverlapRadius, radius / 6.0), referenceNormal) is not { } first) {
                 return null;
             }
             var inner = Math.Max(OverlapRadius, (Math.Abs(first.Offset) + 8) / Math.Sin(first.Spread / 2 * Math.PI / 180));
             var fit = inner <= radius * 0.6
-                ? Fit(points, angles, radius, median, inner, referenceNormal) ?? first
+                ? Fit(points, angles, radius, median, mad, inner, referenceNormal) ?? first
                 : first;
 
             problem = BahtinovProblem.None;
@@ -277,15 +288,15 @@ namespace OpenAstroAra.Image.ImageAnalysis {
         // Refine the three coarse angles on the light beyond `inner` px, name the central spike, cross the
         // outer two and measure the central one from the crossing. Null when the lines do not make a
         // Bahtinov pattern.
-        private static LineFit? Fit(List<Light> all, double[] angles, int radius, double median, double inner,
+        private static LineFit? Fit(List<Light> all, double[] angles, int radius, double median, double mad, double inner,
                 (double X, double Y)? referenceNormal) {
-            var points = all.FindAll(p => p.Dx * p.Dx + p.Dy * p.Dy >= inner * inner);
+            var points = all.FindAll(p => p.R >= inner);
             if (points.Count < 30) {
                 points = all;
             }
             var spikes = new BahtinovSpike[3];
             for (var k = 0; k < 3; k++) {
-                spikes[k] = Refine(points, angles[k], radius, median);
+                spikes[k] = Refine(points, angles[k], radius, median, mad);
             }
 
             // The central spike is the one opposite the widest gap between the three angles.
@@ -344,12 +355,92 @@ namespace OpenAstroAra.Image.ImageAnalysis {
             return d > 90 ? 180 - d : d;
         }
 
-        private readonly record struct Light(double Dx, double Dy, double W);
+        /// <summary>One pixel's light after the halo: offset from the star, residual over its ring's median
+        /// (signed — noise cancels along a line, a spike adds up) and radius.</summary>
+        private readonly record struct Light(double Dx, double Dy, double W, double R);
+
+        /// <summary>Another star's light within <see cref="OtherStarRadius"/> px of its peak is left out of the
+        /// spike light: a neighbour in the crop otherwise pollutes the ring medians and the angle scores' noise
+        /// (a picked RedCat 51 star with two neighbours in its crop lost every detection, 2026-10-16).</summary>
+        public const int OtherStarRadius = 12;
+        /// <summary>A neighbour must stand this many noise sigmas over the crop's sky, and at least this far
+        /// (px) from the analysed star, to count as another star.</summary>
+        public const double OtherStarSigmas = 15;
+        public const int OtherStarMinDistance = 20;
+
+        /// <summary>Peaks of other stars in the crop: local maxima at least <see cref="OtherStarSigmas"/> over
+        /// the sky, <see cref="OtherStarMinDistance"/> px or more from the analysed star and from each other.
+        /// Pure.</summary>
+        public static IReadOnlyList<(int X, int Y)> OtherStars(double[] crop, int size, double cx, double cy) {
+            var sorted = (double[])crop.Clone();
+            Array.Sort(sorted);
+            var median = sorted[sorted.Length / 2];
+            for (var i = 0; i < sorted.Length; i++) {
+                sorted[i] = Math.Abs(sorted[i] - median);
+            }
+            Array.Sort(sorted);
+            var threshold = median + OtherStarSigmas * Math.Max(1, 1.4826 * sorted[sorted.Length / 2]);
+            var found = new List<(int X, int Y, double V)>();
+            for (var y = 1; y < size - 1; y++) {
+                for (var x = 1; x < size - 1; x++) {
+                    var v = crop[y * size + x];
+                    if (v < threshold) {
+                        continue;
+                    }
+                    var dx = x + 0.5 - cx;
+                    var dy = y + 0.5 - cy;
+                    if (dx * dx + dy * dy < OtherStarMinDistance * OtherStarMinDistance) {
+                        continue;
+                    }
+                    var isMax = true;
+                    for (var j = -1; j <= 1 && isMax; j++) {
+                        for (var i = -1; i <= 1; i++) {
+                            if ((i != 0 || j != 0) && crop[(y + j) * size + x + i] > v) {
+                                isMax = false;
+                                break;
+                            }
+                        }
+                    }
+                    if (isMax) {
+                        found.Add((x, y, v));
+                    }
+                }
+            }
+            // Brightest first; a fainter maximum inside a kept star's radius is that star's own noise.
+            found.Sort((a, b) => b.V.CompareTo(a.V));
+            var stars = new List<(int X, int Y)>();
+            foreach (var (x, y, _) in found) {
+                var own = true;
+                foreach (var (sx, sy) in stars) {
+                    if ((x - sx) * (x - sx) + (y - sy) * (y - sy) < OtherStarRadius * OtherStarRadius) {
+                        own = false;
+                        break;
+                    }
+                }
+                if (own) {
+                    stars.Add((x, y));
+                }
+            }
+            return stars;
+        }
 
         // The light left once the halo is gone: each pixel inside the disc minus the median of its
-        // one-pixel ring and a noise allowance, kept where positive. The core (everything brighter than half
-        // the peak, plus a margin) is masked — saturated there, it carries no line.
-        private static List<Light> SpikeLight(double[] crop, int size, double cx, double cy, int radius) {
+        // one-pixel ring, signed. No per-pixel threshold: a short-spike pattern keeps most of its light below
+        // the noise per pixel and only shows integrated along the line, so every pixel votes. The core
+        // (everything brighter than half the peak, plus a margin) is masked — saturated there, it carries no
+        // line — and so is every other star's disc.
+        private static List<Light> SpikeLight(double[] crop, int size, double cx, double cy, int radius,
+                IReadOnlyList<(int X, int Y)> otherStars) {
+            var masked = new bool[size * size];
+            foreach (var (sx, sy) in otherStars) {
+                for (var y = Math.Max(0, sy - OtherStarRadius); y <= Math.Min(size - 1, sy + OtherStarRadius); y++) {
+                    for (var x = Math.Max(0, sx - OtherStarRadius); x <= Math.Min(size - 1, sx + OtherStarRadius); x++) {
+                        if ((x - sx) * (x - sx) + (y - sy) * (y - sy) <= OtherStarRadius * OtherStarRadius) {
+                            masked[y * size + x] = true;
+                        }
+                    }
+                }
+            }
             var rings = new List<double>[radius + 1];
             for (var i = 0; i <= radius; i++) {
                 rings[i] = [];
@@ -359,7 +450,7 @@ namespace OpenAstroAra.Image.ImageAnalysis {
                     var dx = x + 0.5 - cx;
                     var dy = y + 0.5 - cy;
                     var r = (int)Math.Round(Math.Sqrt(dx * dx + dy * dy));
-                    if (r <= radius) {
+                    if (r <= radius && !masked[y * size + x]) {
                         rings[r].Add(crop[y * size + x]);
                     }
                 }
@@ -370,16 +461,6 @@ namespace OpenAstroAra.Image.ImageAnalysis {
                 ring.Sort();
                 ringMedian[i] = ring.Count == 0 ? 0 : ring[ring.Count / 2];
             }
-
-            // Noise from the outermost rings, where the halo is flat: MAD of the residuals.
-            var residuals = new List<double>();
-            for (var i = Math.Max(1, radius - 6); i <= radius; i++) {
-                foreach (var v in rings[i]) {
-                    residuals.Add(Math.Abs(v - ringMedian[i]));
-                }
-            }
-            residuals.Sort();
-            var sigma = residuals.Count == 0 ? 1 : Math.Max(1, 1.4826 * residuals[residuals.Count / 2]);
 
             // The core: rings whose median is above half the way from the edge to the peak, plus a margin.
             var peak = ringMedian[0];
@@ -397,20 +478,20 @@ namespace OpenAstroAra.Image.ImageAnalysis {
                     var dy = y + 0.5 - cy;
                     var rr = Math.Sqrt(dx * dx + dy * dy);
                     var r = (int)Math.Round(rr);
-                    if (r <= core || r > radius) {
+                    if (r <= core || r > radius || masked[y * size + x]) {
                         continue;
                     }
-                    var w = crop[y * size + x] - ringMedian[r] - 2 * sigma;
-                    if (w > 0) {
-                        points.Add(new Light(dx, dy, w));
-                    }
+                    points.Add(new Light(dx, dy, crop[y * size + x] - ringMedian[r], rr));
                 }
             }
             return points;
         }
 
         // The projection's sharpest peak at one angle: the light summed into bins of `bin` px along the
-        // normal, scored as the best 3-bin window. `centre` is that window's middle, in px.
+        // normal, scored as the best 3-bin window. `centre` is that window's middle, in px. Each pixel is
+        // weighted by its radius: light near the core lands in the middle bins at every angle and would
+        // score them all alike, while light at radius r moves r·sin(Δθ) off the line — it is what tells the
+        // angles apart.
         private static double Score(List<Light> points, double angleDeg, int radius, double bin, double[] hist, out double centre) {
             var (nx, ny) = Normal(angleDeg);
             var bins = (int)Math.Ceiling(2 * (radius + 2) / bin) + 1;
@@ -420,11 +501,11 @@ namespace OpenAstroAra.Image.ImageAnalysis {
                 var d = p.Dx * nx + p.Dy * ny;
                 var b = (int)Math.Round((d + offset) / bin);
                 if ((uint)b < (uint)bins) {
-                    hist[b] += p.W;
+                    hist[b] += p.W * p.R;
                 }
             }
-            double best = 0;
-            var at = 0;
+            var best = double.NegativeInfinity;
+            var at = 1;
             for (var b = 1; b < bins - 1; b++) {
                 var s = hist[b - 1] + hist[b] + hist[b + 1];
                 if (s > best) {
@@ -436,9 +517,22 @@ namespace OpenAstroAra.Image.ImageAnalysis {
             return best;
         }
 
+        /// <summary>The median of the angle scores and their robust sigma (1.4826 × MAD, at least a sliver
+        /// above zero). Pure.</summary>
+        internal static (double Median, double Mad) MedianAndMad(double[] scores) {
+            var sorted = (double[])scores.Clone();
+            Array.Sort(sorted);
+            var median = sorted[sorted.Length / 2];
+            for (var i = 0; i < sorted.Length; i++) {
+                sorted[i] = Math.Abs(sorted[i] - median);
+            }
+            Array.Sort(sorted);
+            return (median, Math.Max(1e-9, 1.4826 * sorted[sorted.Length / 2]));
+        }
+
         // The three strongest local maxima of the coarse scan, at least MinSeparationDeg apart (circularly),
-        // each MinStrength × the median. Null when there are fewer than three.
-        private static double[]? PickPeaks(double[] scores, double median) {
+        // each MinStrength sigmas above the median. Null when there are fewer than three.
+        private static double[]? PickPeaks(double[] scores, double median, double mad) {
             var n = scores.Length;
             var candidates = new List<int>();
             for (var i = 0; i < n; i++) {
@@ -449,7 +543,7 @@ namespace OpenAstroAra.Image.ImageAnalysis {
                         isMax = false;
                     }
                 }
-                if (isMax && v >= MinStrength * median) {
+                if (isMax && v - median >= MinStrength * mad) {
                     candidates.Add(i);
                 }
             }
@@ -476,7 +570,7 @@ namespace OpenAstroAra.Image.ImageAnalysis {
 
         // ±1° around the coarse angle in 0.05° steps on half-pixel bins, then the ridge's centroid (light
         // within 1.5 px of the peak) for the offset.
-        private static BahtinovSpike Refine(List<Light> points, double coarseDeg, int radius, double median) {
+        private static BahtinovSpike Refine(List<Light> points, double coarseDeg, int radius, double median, double mad) {
             var hist = new double[4 * radius + 16];
             double bestScore = -1, bestAngle = coarseDeg, bestCentre = 0;
             for (var k = -20; k <= 20; k++) {
@@ -494,7 +588,8 @@ namespace OpenAstroAra.Image.ImageAnalysis {
                 double sw = 0, sd = 0;
                 foreach (var p in points) {
                     var d = p.Dx * nx + p.Dy * ny;
-                    if (Math.Abs(d - rho) <= 1.5) {
+                    // Positive light only: a signed residual can push the centroid off the ridge.
+                    if (Math.Abs(d - rho) <= 1.5 && p.W > 0) {
                         sw += p.W;
                         sd += p.W * d;
                     }
@@ -513,7 +608,7 @@ namespace OpenAstroAra.Image.ImageAnalysis {
                 rho = -rho;
             }
             // Strength on the coarse scan's scale (1 px bins), so it compares with MinStrength.
-            var strength = Score(points, bestAngle, radius, 1.0, hist, out _) / median;
+            var strength = (Score(points, bestAngle, radius, 1.0, hist, out _) - median) / mad;
             return new BahtinovSpike(bestAngle, rho, strength);
         }
 

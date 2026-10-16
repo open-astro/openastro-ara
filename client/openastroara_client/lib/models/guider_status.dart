@@ -80,6 +80,12 @@ class GuiderStatus {
   /// #1311 — the polar alignment residual from guiding (`runtime.pa_residual`),
   /// so a client that (re)connects mid-run shows it before the next WS event.
   final PaResidual? paResidual;
+  /// While calibrating: the leg under way (`West`, `East`, `North`, `South`…),
+  /// its step and the star's distance from the leg's start in guide pixels
+  /// (`runtime.calibration_*`). Null otherwise.
+  final String? calibrationDirection;
+  final int? calibrationStep;
+  final double? calibrationDistancePx;
 
   const GuiderStatus({
     this.deviceId,
@@ -94,7 +100,21 @@ class GuiderStatus {
     this.rmsDecArcsec,
     this.currentProfile,
     this.paResidual,
+    this.calibrationDirection,
+    this.calibrationStep,
+    this.calibrationDistancePx,
   });
+
+  /// "North step 7 · 11.9 px" while a calibration leg is reported; null otherwise.
+  String? get calibrationText {
+    final dir = calibrationDirection;
+    if (dir == null || dir.isEmpty) return null;
+    final parts = [
+      calibrationStep == null ? dir : '$dir step $calibrationStep',
+      if (calibrationDistancePx != null) '${calibrationDistancePx!.toStringAsFixed(1)} px',
+    ];
+    return parts.join(' · ');
+  }
 
   bool get isConnected => connectionState == GuiderConnectionState.connected;
   bool get isGuiding => runtimeState == GuiderRuntimeState.guiding;
@@ -121,6 +141,9 @@ class GuiderStatus {
       rmsDecArcsec: _asDouble(runtimeMap['rms_dec_arcsec']),
       currentProfile: _str(runtimeMap['current_profile']),
       paResidual: PaResidual.fromJson(runtimeMap['pa_residual']),
+      calibrationDirection: _str(runtimeMap['calibration_direction']),
+      calibrationStep: (runtimeMap['calibration_step'] as num?)?.toInt(),
+      calibrationDistancePx: _asDouble(runtimeMap['calibration_distance_px']),
     );
   }
 

@@ -144,7 +144,10 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
                 RmsTotalArcsec: RmsArcsec(rmsTotal, pixelScale),
                 RmsRaArcsec: RmsArcsec(rmsRa, pixelScale),
                 RmsDecArcsec: RmsArcsec(rmsDec, pixelScale),
-                PaResidual: PaResidualSnapshot());
+                PaResidual: PaResidualSnapshot(),
+                CalibrationDirection: _guider.Calibration?.Direction,
+                CalibrationStep: _guider.Calibration?.Step,
+                CalibrationDistancePx: _guider.Calibration is { } cal ? Math.Round(cal.Distance, 1) : null);
             return Task.FromResult<GuiderDto?>(new GuiderDto("PHD2_Single", "PHD2", _state, runtime));
         }
     }
@@ -587,6 +590,9 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
         }
         if (!string.IsNullOrEmpty(marker.Error)) {
             payload["error"] = marker.Error;
+        }
+        if (!string.IsNullOrEmpty(marker.Direction)) {
+            payload["direction"] = marker.Direction;
         }
         return payload;
     }

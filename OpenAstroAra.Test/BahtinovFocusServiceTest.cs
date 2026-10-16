@@ -156,7 +156,47 @@ namespace OpenAstroAra.Test {
             Assert.That(s.Latest.Problem, Is.EqualTo("no_pattern"));
             Assert.That(s.Latest.OffsetPx, Is.Null);
             Assert.That(s.HasFrame, Is.True, "the whole frame shows instead");
+            Assert.That(s.FrameCrop, Is.Null, "the picture is the whole frame");
+            Assert.That((s.FrameWidth, s.FrameHeight), Is.EqualTo((W, H)));
             await svc.StopAsync();
+        }
+
+        [Test]
+        public async Task A_picked_star_is_cropped_and_kept_without_a_pattern() {
+            var frames = new ScriptedFrames();
+            frames.Script.Enqueue((double.NaN, 0));
+            using var svc = new BahtinovFocusService(frames, () => RedCat);
+            await svc.StartAsync(new BahtinovFocusStartRequestDto(ExposureSec: 0.1), CancellationToken.None);
+            await WaitForSeq(svc, 2);
+            Assert.That(() => svc.Pick(W + 5, 10), Throws.TypeOf<ArgumentOutOfRangeException>());
+
+            svc.Pick(100, 400);
+            // Well past LockLostAfter misses: an unpicked lock would have been dropped by now.
+            var s = await WaitForSeq(svc, svc.GetStatus().Seq + BahtinovFocusService.LockLostAfter + 3);
+            Assert.That(s.Latest!.Detected, Is.False);
+            Assert.That((s.PickX, s.PickY), Is.EqualTo((100, 400)));
+            Assert.That(s.FrameCrop, Is.Not.Null, "the picture is the crop around the picked star");
+            var crop = s.FrameCrop!;
+            Assert.That(crop.Size, Is.EqualTo(256));
+            // Centred on the brightest star near the pick (within the finder's 96 px search window), so
+            // the crop holds the pick and sits near the frame's bottom-left corner.
+            Assert.That(crop.Left, Is.InRange(0, 100), "clamped near the left edge");
+            Assert.That(crop.Top, Is.InRange(H - 256 - 100, H - 256), "clamped near the bottom edge");
+            Assert.That((s.Latest.StarX, s.Latest.StarY), Is.EqualTo((100, 400)), "the lock stays on the pick");
+
+            svc.ClearPick();
+            s = await WaitForSeq(svc, s.Seq + 2);
+            Assert.That(s.PickX, Is.Null);
+            Assert.That(s.FrameCrop, Is.Null, "back to the whole frame");
+            await svc.StopAsync();
+        }
+
+        [Test]
+        public void The_crop_around_a_star_stays_inside_the_frame() {
+            Assert.That(BahtinovFocusService.CropAround((5, 5), 640, 480), Is.EqualTo((0, 0, 256)));
+            Assert.That(BahtinovFocusService.CropAround((320, 240), 640, 480), Is.EqualTo((192, 112, 256)));
+            Assert.That(BahtinovFocusService.CropAround((639, 479), 640, 480), Is.EqualTo((384, 224, 256)));
+            Assert.That(BahtinovFocusService.CropAround((50, 50), 100, 120), Is.EqualTo((0, 0, 100)), "a small frame is its own crop");
         }
 
         [Test]

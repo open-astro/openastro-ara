@@ -40,6 +40,17 @@ namespace OpenAstroAra.Test {
     [TestFixture]
     public class SequencerLiveStatusTest {
 
+        [Test]
+        public void A_progress_report_describes_the_status_and_its_detail() {
+            Assert.That(SequencerService.DescribeStatus(new ApplicationStatus { Status = "Start guiding", Status2 = "Calibrating" }),
+                Is.EqualTo("Start guiding · Calibrating"));
+            Assert.That(SequencerService.DescribeStatus(new ApplicationStatus { Status = "Start guiding" }), Is.EqualTo("Start guiding"));
+            Assert.That(SequencerService.DescribeStatus(new ApplicationStatus { Status = "", Status2 = "Calibrating" }), Is.EqualTo("Calibrating"),
+                "a detail without a headline still shows");
+            Assert.That(SequencerService.DescribeStatus(new ApplicationStatus { Status = "" }), Is.Empty, "nothing to show keeps the last description");
+            Assert.That(SequencerService.ResumedDescription, Does.StartWith("Resumed"));
+        }
+
         private static (SequenceRootContainer Root, TakeExposure Exposure, LoopCondition Loop) ClientBuiltTree(TakeExposure? withExposure = null) {
             var factory = HeadlessSequencerFactory.WithDefaults();
             var exposure = withExposure ?? (TakeExposure)factory.Items.OfType<TakeExposure>().First().Clone();

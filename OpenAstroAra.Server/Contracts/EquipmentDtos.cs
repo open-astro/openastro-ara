@@ -458,7 +458,13 @@ public sealed record GuiderStateDto(
     double? RmsTotalArcsec = null,
     double? RmsRaArcsec = null,
     double? RmsDecArcsec = null,
-    PaResidualDto? PaResidual = null);
+    PaResidualDto? PaResidual = null,
+    /// <summary>While <c>State</c> is <c>calibrating</c>: the leg under way (<c>West</c>, <c>East</c>,
+    /// <c>North</c>, <c>South</c> or a backlash-clearing leg), its step count and the star's distance from
+    /// the leg's start in guide-camera pixels. Null otherwise.</summary>
+    string? CalibrationDirection = null,
+    int? CalibrationStep = null,
+    double? CalibrationDistancePx = null);
 
 /// <summary>
 /// #1311 — the polar alignment error left after Align, measured from the Dec drift the guider

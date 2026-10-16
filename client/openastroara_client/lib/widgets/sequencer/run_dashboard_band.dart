@@ -36,7 +36,11 @@ class _RunDashboardBandState extends ConsumerState<RunDashboardBand> {
     super.initState();
     // Tick the elapsed readout once a second while mounted. The band only
     // mounts during an active run, so the timer's lifetime is the run's.
-    _ticker = Stream<void>.periodic(const Duration(seconds: 1));
+    // Broadcast: the band hides while no run is active and the StreamBuilder
+    // is rebuilt when one starts again. A single-subscription periodic stream
+    // threw "Stream has already been listened to" on that second subscribe
+    // and took the whole Run tab down (2026-10-16, second run of the night).
+    _ticker = Stream<void>.periodic(const Duration(seconds: 1)).asBroadcastStream();
   }
 
   late final Stream<void> _ticker;

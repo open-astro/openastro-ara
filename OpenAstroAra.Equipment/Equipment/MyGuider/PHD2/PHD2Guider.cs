@@ -95,6 +95,23 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             }
         }
 
+        private PhdEventCalibrating? _calibration;
+
+        /// <summary>The latest calibration step while the guider calibrates (direction, step, distance);
+        /// null otherwise. What the Live tab shows instead of a bare "calibrating".</summary>
+        public PhdEventCalibrating? Calibration {
+            get {
+                lock (lockobj) {
+                    return _calibration;
+                }
+            }
+            private set {
+                lock (lockobj) {
+                    _calibration = value;
+                }
+            }
+        }
+
         private bool settling;
 
         public bool Settling {
@@ -1159,7 +1176,21 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                     }
                 case "StartCalibration": {
                         AppState = new PhdEventAppState() { State = "Calibrating" };
+                        Calibration = null;
                         RaiseMarker(new PhdGuiderMarkerEventArgs { Kind = "calibration_started" });
+                        break;
+                    }
+                case "Calibrating": {
+                        // One step of a leg; the Live tab shows "North step 7 · 11.9 px" while the
+                        // guider's own page only says "guiding" (2026-10-16).
+                        var step = message.ToObject<PhdEventCalibrating>();
+                        Calibration = step;
+                        if (AppState?.State != "Calibrating") {
+                            AppState = new PhdEventAppState() { State = "Calibrating" };
+                        }
+                        RaiseMarker(new PhdGuiderMarkerEventArgs {
+                            Kind = "calibrating", Direction = step?.Direction, Distance = step?.Distance, Frame = step?.Step,
+                        });
                         break;
                     }
                 case "LoopingExposures": {
@@ -1171,10 +1202,12 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                         break;
                     }
                 case "CalibrationComplete": {
+                        Calibration = null;
                         RaiseMarker(new PhdGuiderMarkerEventArgs { Kind = "calibration_complete" });
                         break;
                     }
                 case "CalibrationFailed": {
+                        Calibration = null;
                         RaiseMarker(new PhdGuiderMarkerEventArgs { Kind = "calibration_failed", Error = message["Reason"]?.ToString() });
                         break;
                     }

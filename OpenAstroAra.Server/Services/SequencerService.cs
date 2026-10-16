@@ -257,6 +257,23 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         return Task.FromResult(PlaceholderEquipmentHelpers.Accepted("sequencer.pause", idempotencyKey));
     }
 
+    /// <summary>The run's one-line description from an instruction's progress report: the status and, when
+    /// the instruction gives one, its detail — "Start guiding · Calibrating" rather than a bare "Start
+    /// guiding" that left the Run tab saying nothing while the guider calibrated for minutes. Pure.</summary>
+    internal static string? DescribeStatus(ApplicationStatus status) {
+        var main = status.Status;
+        var detail = status.Status2;
+        if (string.IsNullOrWhiteSpace(main)) {
+            return string.IsNullOrWhiteSpace(detail) ? main : detail;
+        }
+        return string.IsNullOrWhiteSpace(detail) ? main : $"{main} · {detail}";
+    }
+
+    /// <summary>What the Run tab shows from Resume until the retried instruction reports again. The pause
+    /// text ("Guiding did not start … press Resume") otherwise stood for minutes over a run that was
+    /// already calibrating (2026-10-16).</summary>
+    internal const string ResumedDescription = "Resumed — trying the step again";
+
     public Task<OperationAcceptedDto> ResumeAsync(Guid id, SequenceResumeRequestDto? request, string? idempotencyKey, CancellationToken ct) {
         _unattendedShutdown?.NotifyUserActivity("sequencer.resume");
         if (_runs.TryGetValue(id, out var run)) {
@@ -271,6 +288,7 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
             // the same explicit user command (that IS the user coming back).
             if (run.TryTransition(SequenceRunState.Paused, SequenceRunState.Running)
                 || run.TryTransition(SequenceRunState.PausedAwaitingUser, SequenceRunState.Running)) {
+                run.SetDescription(ResumedDescription);
                 _ = EmitAsync("sequence.resumed", id, run);
                 WriteCheckpointIfOwner(run, id);
                 // §38.10 — while the rig sat paused on the SAME target, pointing
@@ -812,7 +830,7 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
                 var progress = new Progress<ApplicationStatus>(status => {
                     // Tree-derived status first, so the instruction's own report wins.
                     RefreshLiveStatus(run);
-                    run.SetDescription(status.Status);
+                    run.SetDescription(DescribeStatus(status));
                     progressPublisher.Poke();
                     checkpoints.Poke();
                 });

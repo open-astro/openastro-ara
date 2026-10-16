@@ -81,10 +81,33 @@ public sealed partial class GuiderService : IGuiderMediator {
     /// from under it. Program.cs wires it to <see cref="PolarAlignService.IsActive"/>; null means none.</summary>
     public Func<bool>? PolarAlignActive { get; set; }
 
-    /// <summary>The guider reports a lease and no polar alignment in this daemon holds it: a stale lease
-    /// (or one the live-focus loop left behind) that would make the guider refuse to guide.</summary>
+    /// <summary>Ends this daemon's polar alignment (stop, not complete — an abandoned session is not a
+    /// result). Program.cs wires it to <see cref="PolarAlignService.StopAsync"/>; null means a running
+    /// polar alignment keeps its lease and guiding is refused, as before.</summary>
+    public Func<CancellationToken, Task>? EndPolarAlignAsync { get; set; }
+
+    /// <summary>What to do with the guider's polar-align lease before guiding.</summary>
+    internal enum PaLeaseAction { Keep, Release, EndPolarAlignThenRelease }
+
+    /// <summary>
+    /// The guider reports a lease and no polar alignment in this daemon holds it: a stale lease (or one the
+    /// live-focus loop left behind) that would make the guider refuse to guide — released. One this daemon's
+    /// polar alignment DOES hold: guiding is an explicit request for the mount and the guide camera, so an
+    /// alignment left open (the Polar Align step never finished with Done — 2026-10-16, the run paused at
+    /// "Guiding did not start") is ended first when <see cref="EndPolarAlignAsync"/> is wired, else kept.
+    /// </summary>
+    internal PaLeaseAction PaLeaseActionFor(bool? guiderReportsActive) {
+        if (guiderReportsActive != true) {
+            return PaLeaseAction.Keep;
+        }
+        if (PolarAlignActive?.Invoke() != true) {
+            return PaLeaseAction.Release;
+        }
+        return EndPolarAlignAsync is null ? PaLeaseAction.Keep : PaLeaseAction.EndPolarAlignThenRelease;
+    }
+
     internal bool ShouldReleasePaLease(bool? guiderReportsActive) =>
-        guiderReportsActive == true && PolarAlignActive?.Invoke() != true;
+        PaLeaseActionFor(guiderReportsActive) != PaLeaseAction.Keep;
 
     // ── Guider ops drive the live device ───────────────────────────────────────────────────────────
     public async Task<bool> StartGuiding(bool forceCalibration, IProgress<ApplicationStatus> progress, CancellationToken token) {
@@ -109,11 +132,16 @@ public sealed partial class GuiderService : IGuiderMediator {
     private async Task ClearPaSessionQuietlyAsync(PHD2Guider guider, CancellationToken token) {
         try {
             var status = await guider.GetPaSessionAsync(token).ConfigureAwait(false);
-            if (!ShouldReleasePaLease(status.Active)) {
-                if (status.Active == true) {
-                    LogPaSessionKept();
-                }
-                return;
+            switch (PaLeaseActionFor(status.Active)) {
+                case PaLeaseAction.Keep:
+                    if (status.Active == true) {
+                        LogPaSessionKept();
+                    }
+                    return;
+                case PaLeaseAction.EndPolarAlignThenRelease:
+                    await EndPolarAlignAsync!(token).ConfigureAwait(false);
+                    LogPolarAlignEnded();
+                    break;
             }
             await guider.SetPaSessionAsync(active: false, timeoutS: null, token).ConfigureAwait(false);
             LogPaSessionCleared();
@@ -129,6 +157,9 @@ public sealed partial class GuiderService : IGuiderMediator {
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Polar alignment is running — its guider session is kept, and the guider will refuse to guide until it ends")]
     partial void LogPaSessionKept();
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Polar alignment was still open when guiding was requested — ended it (not completed) so the run can guide")]
+    partial void LogPolarAlignEnded();
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Could not release the guider's polar-align session before guiding — trying to guide anyway")]
     partial void LogPaSessionClearFailed(Exception ex);

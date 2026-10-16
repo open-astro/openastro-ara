@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
@@ -33,7 +34,7 @@ class BahtinovFocusCard extends ConsumerStatefulWidget {
   /// The card's headline and its colour. Pure — unit-tested.
   static (String, Color) headlineFor(BahtinovFocusLive live) {
     final status = live.status;
-    final latest = status.latest;
+    final latest = status.steady;
     if (live.finished) {
       return status.hasMeasurement && _lastMeasured(status)?.withinZone == true
           ? ('In focus · mask off', AraColors.accentConnected)
@@ -62,7 +63,13 @@ class BahtinovFocusCard extends ConsumerStatefulWidget {
 
 class _BahtinovFocusCardState extends ConsumerState<BahtinovFocusCard> {
   double _exposureSec = 1;
-  static const _exposures = [0.5, 1.0, 2.0];
+  // Up to 8 s: on a small image scale the spikes are faint (a 2 s RedCat 51
+  // frame put the weakest one at the detector's limit), and the exposure is
+  // the cleanest gain in signal.
+  static const _exposures = [0.5, 1.0, 2.0, 4.0, 8.0];
+  // 2× by default: a 256-px crop in a ~400-px box shows a short-spike pattern
+  // (a few dozen px) too small to judge; long spikes can go back to 1×.
+  int _zoom = 2;
 
   @override
   Widget build(BuildContext context) {
@@ -72,7 +79,9 @@ class _BahtinovFocusCardState extends ConsumerState<BahtinovFocusCard> {
     final autofocusRunning = ref.watch(autofocusLiveProvider.select((s) => s.run.isRunning));
     final status = live.status;
     final active = status.active;
-    final latest = status.latest;
+    // The steadied (median) reading drives the headline, the hero and the
+    // Finish verdict; the per-frame value is on the picture and the trend.
+    final latest = status.steady;
     final hasData = live.frame != null || latest != null;
     final measured = status.hasMeasurement;
     final (headline, headlineColor) = BahtinovFocusCard.headlineFor(live);
@@ -178,8 +187,16 @@ class _BahtinovFocusCardState extends ConsumerState<BahtinovFocusCard> {
               Widget frame(double h) => BahtinovFrameView(
                 frame: live.frame,
                 overlay: live.overlay,
-                offsetPx: latest?.offsetPx,
+                offsetPx: status.latest?.offsetPx,
                 live: active,
+                frameWidth: status.frameWidth,
+                frameHeight: status.frameHeight,
+                crop: status.frameCrop,
+                picked: status.hasPick,
+                onPick: active ? (x, y) => unawaited(ref.read(bahtinovFocusProvider.notifier).pick(x, y)) : null,
+                onClearPick: active && status.hasPick ? () => unawaited(ref.read(bahtinovFocusProvider.notifier).clearPick()) : null,
+                zoom: _zoom,
+                onZoom: (z) => setState(() => _zoom = z),
                 caption: latest == null
                     ? null
                     : [
@@ -449,7 +466,7 @@ class _Hero extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final latest = status.latest;
+    final latest = status.steady;
     final offset = latest?.detected == true ? latest!.offsetPx : null;
     final within = latest?.withinZone == true;
     final zone = formatOffset(status.zonePx);
@@ -560,6 +577,23 @@ class BahtinovFrameView extends StatelessWidget {
   final bool live;
   final String? caption;
   final double height;
+  /// The analysed frame's size in frame pixels (0 when unknown) and what the
+  /// picture covers when it is a crop. Together they map a tap on the picture
+  /// to a frame pixel for [onPick].
+  final int frameWidth;
+  final int frameHeight;
+  final BahtinovFrameCrop? crop;
+  /// A star is locked by the user; shows the way back to the whole frame.
+  final bool picked;
+  /// A tap on the picture, in frame pixels. Null: the picture is not tappable.
+  final void Function(int x, int y)? onPick;
+  final VoidCallback? onClearPick;
+  /// Magnification of the crop about its centre (1, 2 or 4): a short-spike
+  /// pattern on a small image scale is a few dozen pixels across, invisible
+  /// at 1×. The whole frame is never zoomed.
+  final int zoom;
+  final ValueChanged<int>? onZoom;
+  static const zooms = [1, 2, 4];
 
   const BahtinovFrameView({
     super.key,
@@ -569,12 +603,59 @@ class BahtinovFrameView extends StatelessWidget {
     this.live = false,
     this.caption,
     this.height = 300,
+    this.frameWidth = 0,
+    this.frameHeight = 0,
+    this.crop,
+    this.picked = false,
+    this.onPick,
+    this.onClearPick,
+    this.zoom = 1,
+    this.onZoom,
   });
+
+  /// The part of [crop] on screen at [zoom]: its central 1/zoom. Pure.
+  static BahtinovFrameCrop? visibleCrop(BahtinovFrameCrop? crop, int zoom) {
+    if (crop == null || zoom <= 1) return crop;
+    final visible = crop.size ~/ zoom;
+    final inset = (crop.size - visible) ~/ 2;
+    return BahtinovFrameCrop(left: crop.left + inset, top: crop.top + inset, size: visible);
+  }
+
+  /// Where a tap at [tap] inside a [box] showing the picture (BoxFit.contain)
+  /// lands in frame pixels, or null off the picture or without a frame size.
+  /// The picture is the [crop] square (its centre at [zoom]) when one is
+  /// given, else the whole [frameWidth] × [frameHeight] frame. Pure —
+  /// unit-tested.
+  static ({int x, int y})? tapToFramePixel({
+    required Size box,
+    required Offset tap,
+    required int frameWidth,
+    required int frameHeight,
+    BahtinovFrameCrop? crop,
+    int zoom = 1,
+  }) {
+    crop = visibleCrop(crop, zoom);
+    final imgW = crop?.size ?? frameWidth;
+    final imgH = crop?.size ?? frameHeight;
+    if (imgW <= 0 || imgH <= 0 || box.width <= 0 || box.height <= 0) return null;
+    final scale = math.min(box.width / imgW, box.height / imgH);
+    final drawnW = imgW * scale;
+    final drawnH = imgH * scale;
+    final u = (tap.dx - (box.width - drawnW) / 2) / drawnW;
+    final v = (tap.dy - (box.height - drawnH) / 2) / drawnH;
+    if (u < 0 || u > 1 || v < 0 || v > 1) return null;
+    final x = (crop?.left ?? 0) + (u * imgW).floor();
+    final y = (crop?.top ?? 0) + (v * imgH).floor();
+    return (x: x.clamp(0, frameWidth - 1), y: y.clamp(0, frameHeight - 1));
+  }
 
   @override
   Widget build(BuildContext context) {
     final jpeg = frame;
     final small = Theme.of(context).textTheme.bodySmall;
+    final tappable = jpeg != null && onPick != null && frameWidth > 0 && frameHeight > 0;
+    final magnify = crop != null && zoom > 1 ? zoom.toDouble() : 1.0;
+    Widget magnified(Widget child) => magnify == 1 ? child : ClipRect(child: Transform.scale(scale: magnify, child: child));
     return ClipRRect(
       borderRadius: BorderRadius.circular(10),
       child: Container(
@@ -589,11 +670,94 @@ class BahtinovFrameView extends StatelessWidget {
                       child: Text('Waiting for the first frame…',
                           style: small?.copyWith(color: AraColors.textSecondary)),
                     )
-                  : Image.memory(jpeg, gaplessPlayback: true, fit: BoxFit.contain, filterQuality: FilterQuality.medium),
+                  : magnified(Image.memory(jpeg,
+                      gaplessPlayback: true, fit: BoxFit.contain, filterQuality: FilterQuality.medium)),
             ),
+            if (tappable)
+              Positioned.fill(
+                child: LayoutBuilder(builder: (context, constraints) {
+                  return GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTapUp: (d) {
+                      final p = tapToFramePixel(
+                        box: constraints.biggest,
+                        tap: d.localPosition,
+                        frameWidth: frameWidth,
+                        frameHeight: frameHeight,
+                        crop: crop,
+                        zoom: zoom,
+                      );
+                      if (p != null) onPick!(p.x, p.y);
+                    },
+                    child: const MouseRegion(cursor: SystemMouseCursors.precise),
+                  );
+                }),
+              ),
+            if (tappable && overlay == null && crop == null)
+              Positioned(
+                bottom: 12,
+                right: 12,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.55),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: const Text('Tap a star to zoom in on it',
+                      style: TextStyle(fontSize: 12, color: Color(0xFFC8C8C8))),
+                ),
+              ),
+            if (jpeg != null && (crop != null || picked))
+              Positioned(
+                bottom: 8,
+                right: 8,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (crop != null && onZoom != null)
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.55),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            for (final z in zooms)
+                              TextButton(
+                                onPressed: () => onZoom!(z),
+                                style: TextButton.styleFrom(
+                                  foregroundColor: z == zoom ? Colors.white : const Color(0xFF9A9A9A),
+                                  visualDensity: VisualDensity.compact,
+                                  minimumSize: const Size(36, 32),
+                                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                                ),
+                                child: Text('$z×',
+                                    style: TextStyle(
+                                        fontSize: 12, fontWeight: z == zoom ? FontWeight.w700 : FontWeight.w400)),
+                              ),
+                          ],
+                        ),
+                      ),
+                    if (picked && onClearPick != null) ...[
+                      const SizedBox(width: 6),
+                      TextButton.icon(
+                        onPressed: onClearPick,
+                        style: TextButton.styleFrom(
+                          backgroundColor: Colors.black.withValues(alpha: 0.55),
+                          foregroundColor: const Color(0xFFC8C8C8),
+                          visualDensity: VisualDensity.compact,
+                        ),
+                        icon: const Icon(Icons.zoom_out_map, size: 16),
+                        label: const Text('Whole frame', style: TextStyle(fontSize: 12)),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
             if (jpeg != null && overlay != null)
               Positioned.fill(
-                child: CustomPaint(painter: _SpikePainter(overlay!, offsetPx)),
+                child: magnified(CustomPaint(painter: _SpikePainter(overlay!, offsetPx))),
               ),
             if (jpeg != null)
               Positioned(

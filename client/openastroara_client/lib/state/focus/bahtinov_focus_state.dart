@@ -193,6 +193,37 @@ class BahtinovFocusNotifier extends Notifier<BahtinovFocusLive> {
     await refresh();
   }
 
+  /// The user tapped a star on the picture: lock the readout on it. The next
+  /// poll brings the crop around it.
+  Future<void> pick(int x, int y) async {
+    final api = ref.read(bahtinovFocusApiProvider);
+    if (api == null) return;
+    try {
+      await api.pick(x: x, y: y);
+      if (!ref.mounted) return;
+      state = state.copyWith(clearError: true);
+      await refresh();
+    } catch (e) {
+      if (!ref.mounted) return;
+      state = state.copyWith(error: describeRequestError(e));
+    }
+  }
+
+  /// Back to the whole frame and the brightest star.
+  Future<void> clearPick() async {
+    final api = ref.read(bahtinovFocusApiProvider);
+    if (api == null) return;
+    try {
+      await api.clearPick();
+      if (!ref.mounted) return;
+      state = state.copyWith(clearError: true);
+      await refresh();
+    } catch (e) {
+      if (!ref.mounted) return;
+      state = state.copyWith(error: describeRequestError(e));
+    }
+  }
+
   /// The user confirmed the mask is off: stop the readout if it still runs,
   /// and count the main telescope as focused when the last measurement sat
   /// inside the focus zone.

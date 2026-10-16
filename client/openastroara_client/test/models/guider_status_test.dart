@@ -59,6 +59,27 @@ void main() {
       expect(s.isGuiding, isFalse);
     });
 
+    test('a calibrating guider carries the leg, step and distance', () {
+      final s = GuiderStatus.fromJson(<String, dynamic>{
+        'device_id': 'phd2',
+        'name': 'PHD2',
+        'state': 'connected',
+        'runtime': <String, dynamic>{
+          'state': 'calibrating',
+          'calibration_direction': 'North',
+          'calibration_step': 7,
+          'calibration_distance_px': 11.9,
+        },
+      });
+      expect(s.runtimeState, GuiderRuntimeState.calibrating);
+      expect(s.calibrationText, 'North step 7 · 11.9 px');
+      final bare = GuiderStatus.fromJson(<String, dynamic>{
+        'state': 'connected',
+        'runtime': <String, dynamic>{'state': 'calibrating'},
+      });
+      expect(bare.calibrationText, isNull, reason: 'no leg reported yet');
+    });
+
     test('a disconnected guider has null RMS and stopped/unknown runtime', () {
       final s = GuiderStatus.fromJson(<String, dynamic>{
         'device_id': 'phd2',

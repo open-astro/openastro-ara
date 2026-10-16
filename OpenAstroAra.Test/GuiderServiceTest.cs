@@ -141,9 +141,19 @@ namespace OpenAstroAra.Test {
 
             var aligning = true;
             svc.PolarAlignActive = () => aligning;
-            Assert.That(svc.ShouldReleasePaLease(true), Is.False, "polar alignment holds the lease");
+            Assert.That(svc.ShouldReleasePaLease(true), Is.False, "polar alignment holds the lease and nothing can end it");
+            Assert.That(svc.PaLeaseActionFor(true), Is.EqualTo(GuiderService.PaLeaseAction.Keep));
             aligning = false;
             Assert.That(svc.ShouldReleasePaLease(true), Is.True);
+            Assert.That(svc.PaLeaseActionFor(true), Is.EqualTo(GuiderService.PaLeaseAction.Release));
+
+            // An alignment left open (no Done) when a run asks to guide is ended first, then the lease
+            // released — guiding is the explicit request for the mount and guide camera.
+            aligning = true;
+            svc.EndPolarAlignAsync = _ => System.Threading.Tasks.Task.CompletedTask;
+            Assert.That(svc.PaLeaseActionFor(true), Is.EqualTo(GuiderService.PaLeaseAction.EndPolarAlignThenRelease));
+            Assert.That(svc.ShouldReleasePaLease(true), Is.True);
+            Assert.That(svc.PaLeaseActionFor(false), Is.EqualTo(GuiderService.PaLeaseAction.Keep), "no lease, nothing to do");
         }
 
         [Test]

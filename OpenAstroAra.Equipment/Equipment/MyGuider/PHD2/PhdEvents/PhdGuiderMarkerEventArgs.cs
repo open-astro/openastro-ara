@@ -50,5 +50,8 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2.PhdEvents {
         public double? StarMass { get; init; }
         public double? Snr { get; init; }
         public int? Frame { get; init; }
+        /// <summary>The calibration leg (<c>West</c>, <c>East</c>, <c>North</c>, <c>South</c>…) of a
+        /// <c>calibrating</c> marker; <see cref="Frame"/> carries its step, <see cref="Distance"/> its px.</summary>
+        public string? Direction { get; init; }
     }
 }

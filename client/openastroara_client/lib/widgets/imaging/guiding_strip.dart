@@ -197,7 +197,10 @@ class GuidingStrip extends ConsumerWidget {
       case GuiderRuntimeState.stopped:
         return 'stopped';
       case GuiderRuntimeState.calibrating:
-        return 'calibrating';
+        // The leg and step while the guider calibrates — its own page only
+        // says "guiding" for the same minutes (2026-10-16).
+        final leg = status.calibrationText;
+        return leg == null ? 'calibrating' : 'calibrating · $leg';
       case GuiderRuntimeState.guiding:
         return 'guiding';
       case GuiderRuntimeState.paused:
