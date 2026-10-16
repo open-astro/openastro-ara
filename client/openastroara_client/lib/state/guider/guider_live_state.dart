@@ -103,6 +103,9 @@ class GuiderLiveNotifier extends Notifier<GuiderLiveState> {
     _timer = Timer(delay, () => unawaited(refresh()));
   }
 
+  // An action's re-read can overlap a timer-driven refresh(); both end in
+  // _schedule(), which cancels the other's pending timer, so exactly one
+  // poll chain survives.
   Future<void> _act(Future<void> Function(GuiderLiveClient api) op) async {
     final api = ref.read(guiderLiveApiProvider);
     if (api == null || state.busy) return;

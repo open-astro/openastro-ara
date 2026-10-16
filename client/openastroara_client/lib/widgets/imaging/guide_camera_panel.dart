@@ -233,24 +233,11 @@ class GuideMarksPainter extends CustomPainter {
   GuideMarksPainter(this.live, this.box);
 
   /// Frame pixel → canvas point for a BoxFit.contain picture. Pure — tested.
-  static Offset toCanvas(
-    double x,
-    double y,
-    int frameWidth,
-    int frameHeight,
-    Size box,
-  ) {
-    final scale =
-        (box.width / frameWidth).clamp(0.0, double.infinity) <
-            (box.height / frameHeight)
-        ? box.width / frameWidth
-        : box.height / frameHeight;
+  static Offset toCanvas(double x, double y, int frameWidth, int frameHeight, Size box) {
+    final scale = scaleFor(frameWidth, frameHeight, box);
     final drawnW = frameWidth * scale;
     final drawnH = frameHeight * scale;
-    return Offset(
-      (box.width - drawnW) / 2 + x * scale,
-      (box.height - drawnH) / 2 + y * scale,
-    );
+    return Offset((box.width - drawnW) / 2 + x * scale, (box.height - drawnH) / 2 + y * scale);
   }
 
   static double scaleFor(int frameWidth, int frameHeight, Size box) {
