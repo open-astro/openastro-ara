@@ -36,7 +36,7 @@ class BahtinovFocusCard extends ConsumerStatefulWidget {
     final status = live.status;
     final latest = status.steady;
     if (live.finished) {
-      return status.hasMeasurement && _lastMeasured(status)?.withinZone == true
+      return status.hasMeasurement && status.lastSteady?.withinZone == true
           ? ('In focus · mask off', AraColors.accentConnected)
           : ('Mask off', AraColors.textPrimary);
     }
@@ -54,7 +54,7 @@ class BahtinovFocusCard extends ConsumerStatefulWidget {
         hint.advice == TurnAdvice.turnBack ? AraColors.accentWarning : AraColors.textPrimary,
       );
     }
-    if (_lastMeasured(status) case final last?) {
+    if (status.lastSteady case final last?) {
       return ('Stopped · last ${formatOffset(last.offsetPx!.abs())} px from focus', AraColors.textPrimary);
     }
     return ('Fit the mask, then Start', AraColors.textPrimary);
@@ -160,7 +160,7 @@ class _BahtinovFocusCardState extends ConsumerState<BahtinovFocusCard> {
             const SizedBox(height: 16),
           ],
           if (live.finished) ...[
-            InlineNotice.info(_lastMeasured(status)?.withinZone == true
+            InlineNotice.info(status.lastSteady?.withinZone == true
                 ? 'Focused with the Bahtinov mask, and the mask is off. Lock the focuser.'
                 : 'The mask is off. The readout never reached the focus zone — start again to check focus.'),
             const SizedBox(height: 16),
@@ -353,14 +353,6 @@ String formatOffset(double px, {bool signed = false}) {
 }
 
 String _seconds(double s) => s == s.roundToDouble() ? '${s.round()} s' : '$s s';
-
-BahtinovSample? _lastMeasured(BahtinovFocusStatus status) {
-  if (status.latest case final l? when l.detected) return l;
-  for (final s in status.recent.reversed) {
-    if (s.detected) return s;
-  }
-  return null;
-}
 
 /// What to do with the focuser next. The offset's sign says which side of
 /// focus the star is on, but which way that is on the focuser depends on how

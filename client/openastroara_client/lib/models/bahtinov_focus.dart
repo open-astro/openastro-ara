@@ -197,32 +197,47 @@ class BahtinovFocusStatus {
   /// [latest] with its offset replaced by the median of the last
   /// [steadyWindow] measured frames (and the zone verdict and µm estimate
   /// re-derived from it). The raw frame-by-frame value stays in [latest] and
-  /// the trend. Pure.
+  /// the trend. A latest frame without a measurement is returned as is (the
+  /// live readout shows why). Pure.
   BahtinovSample? get steady {
     final l = latest;
     if (l == null || !l.detected || l.offsetPx == null) return l;
-    final history = recent.isEmpty || recent.last.seq != l.seq ? [...recent, l] : recent;
-    final offsets = [
+    return lastSteady;
+  }
+
+  /// The steadied reading at the LAST MEASURED frame, whatever the frames
+  /// after it show: what Finish decides on, since by the time the user
+  /// presses it the mask may be off and the newest frames have no spikes.
+  /// Null before any measurement. Pure.
+  BahtinovSample? get lastSteady {
+    final history = [
+      ...recent,
+      if (latest case final l? when recent.isEmpty || recent.last.seq != l.seq) l,
+    ];
+    final measured = [
       for (final s in history.reversed)
-        if (s.detected && s.offsetPx != null) s.offsetPx!,
-    ].take(steadyWindow).toList()
-      ..sort();
-    if (offsets.length < 2) return l;
+        if (s.detected && s.offsetPx != null) s,
+    ];
+    if (measured.isEmpty) return null;
+    // The overlay rides on `latest` only; keep it when latest is the anchor.
+    final anchor = latest != null && latest!.seq == measured.first.seq ? latest! : measured.first;
+    final offsets = [for (final s in measured.take(steadyWindow)) s.offsetPx!]..sort();
+    if (offsets.length < 2) return anchor;
     final mid = offsets.length ~/ 2;
     final median = offsets.length.isOdd ? offsets[mid] : (offsets[mid - 1] + offsets[mid]) / 2;
-    // µm per pixel from the zone (both come from the same optics), so a latest
+    // µm per pixel from the zone (both come from the same optics), so an anchor
     // frame at exactly 0 px still yields a µm figure for a non-zero median.
     final umPerPx = zoneUm != null && zonePx > 0
         ? zoneUm! / zonePx
-        : (l.defocusUm != null && l.offsetPx != 0 ? l.defocusUm! / l.offsetPx! : null);
+        : (anchor.defocusUm != null && anchor.offsetPx != 0 ? anchor.defocusUm! / anchor.offsetPx! : null);
     return BahtinovSample(
-      seq: l.seq,
+      seq: anchor.seq,
       detected: true,
       offsetPx: median,
       defocusUm: umPerPx == null ? null : median * umPerPx,
       withinZone: median.abs() <= zonePx,
-      peakAdu: l.peakAdu,
-      overlay: l.overlay,
+      peakAdu: anchor.peakAdu,
+      overlay: anchor.overlay,
     );
   }
 

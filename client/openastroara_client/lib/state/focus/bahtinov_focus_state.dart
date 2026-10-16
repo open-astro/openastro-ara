@@ -225,13 +225,15 @@ class BahtinovFocusNotifier extends Notifier<BahtinovFocusLive> {
   }
 
   /// The user confirmed the mask is off: stop the readout if it still runs,
-  /// and count the main telescope as focused when the last measurement sat
-  /// inside the focus zone.
+  /// and count the main telescope as focused when the steadied reading (the
+  /// median of the last measured frames, as the headline shows) sat inside the
+  /// focus zone.
   Future<void> finish() async {
-    // The last MEASURED frame decides: by the time the user presses Finish the
-    // mask may already be off, and those frames show no spikes.
-    final measured = [...state.status.recent, ?state.status.latest].where((s) => s.detected);
-    final focused = measured.isNotEmpty && measured.last.withinZone;
+    // The last MEASURED frames decide: by the time the user presses Finish the
+    // mask may already be off, and those frames show no spikes. The median, not
+    // the last frame alone, so one seeing-jittered frame neither grants nor
+    // denies focus.
+    final focused = state.status.lastSteady?.withinZone == true;
     if (state.status.active) {
       await stop();
       if (!ref.mounted) return;
