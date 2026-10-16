@@ -166,6 +166,54 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Clear_calibration_sends_mount_and_a_refusal_is_422() {
+            var received = new ConcurrentQueue<JsonNode?>();
+            var refuse = false;
+            var (fake, svc) = await ConnectedAsync(f => f.OnRpc("clear_calibration", req => {
+                if (refuse) {
+                    throw new InvalidOperationException("mount not defined");
+                }
+                received.Enqueue(req["params"]?.DeepClone());
+                return JsonValue.Create(0);
+            })).ConfigureAwait(false);
+            await using var _ = fake;
+            using var __ = svc;
+            var live = new GuiderLiveService(svc, new NoFrames());
+            var ok = await OpenAstroAra.Server.Endpoints.EquipmentEndpoints.GuiderLiveActionAsync(
+                () => live.ClearCalibrationAsync(CancellationToken.None)).ConfigureAwait(false);
+            Assert.That((ok as Microsoft.AspNetCore.Http.IStatusCodeHttpResult)?.StatusCode, Is.EqualTo(204));
+            Assert.That(received.TryDequeue(out var sent), Is.True, "clear_calibration reached the guider");
+            Assert.That(sent!.ToJsonString(), Is.EqualTo("[\"Mount\"]"), "the mount's calibration, not the AO's");
+
+            refuse = true;
+            var refused = await OpenAstroAra.Server.Endpoints.EquipmentEndpoints.GuiderLiveActionAsync(
+                () => live.ClearCalibrationAsync(CancellationToken.None)).ConfigureAwait(false);
+            Assert.That((refused as Microsoft.AspNetCore.Http.IStatusCodeHttpResult)?.StatusCode, Is.EqualTo(422));
+        }
+
+        [Test]
+        public async Task A_calibration_run_cut_by_a_link_drop_ends_failed() {
+            var (fake, svc) = await ConnectedAsync().ConfigureAwait(false);
+            await using var _ = fake;
+            using var __ = svc;
+            var guider = svc.ConnectedGuiderOrNull()!;
+            await fake.BroadcastAsync(new JsonObject { ["Event"] = "StartCalibration", ["Timestamp"] = 0.0, ["Host"] = "fake", ["Inst"] = 1 }).ConfigureAwait(false);
+            await fake.BroadcastAsync(new JsonObject {
+                ["Event"] = "Calibrating", ["Timestamp"] = 0.0, ["Host"] = "fake", ["Inst"] = 1,
+                ["dir"] = "West", ["step"] = 4, ["dist"] = 5.2, ["dx"] = -5.0, ["dy"] = -1.1,
+            }).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => guider.CalibrationRun.Steps.Count == 1).ConfigureAwait(false), Is.True, "precondition: a running calibration");
+            Assert.That(guider.CalibrationRun.State, Is.EqualTo("running"));
+
+            Assert.That(fake.DropConnections(), Is.GreaterThan(0));
+            Assert.That(await WaitUntilAsync(() => guider.CalibrationRun.State != "running").ConfigureAwait(false), Is.True,
+                "the guider sends no CalibrationFailed when the link drops");
+            Assert.That(guider.CalibrationRun.State, Is.EqualTo("failed"));
+            Assert.That(guider.CalibrationRun.Error, Does.Contain("connection lost"));
+            Assert.That(guider.CalibrationRun.Steps, Has.Count.EqualTo(1), "the steps stay for review");
+        }
+
+        [Test]
         [NonParallelizable] // Notifier.Use is process-global
         public async Task A_refused_calibration_read_raises_no_notification() {
             var (fake, svc) = await ConnectedAsync(f =>
