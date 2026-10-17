@@ -111,6 +111,12 @@ class GuideCameraPanel extends ConsumerWidget {
                             !state.calibration.isRunning
                         ? () => unawaited(notifier.clearCalibration())
                         : null,
+                    // One tap turns the measured Dec backlash into the guider's
+                    // compensation pulse: saved to the profile's guider-advanced
+                    // block, sent to the connected guider.
+                    onUseBacklash: live.connected && !state.busy
+                        ? (ms) => unawaited(_useBacklash(context, ref, ms))
+                        : null,
                   ),
                 ),
               ],
@@ -345,4 +351,24 @@ class GuideMarksPainter extends CustomPainter {
   @override
   bool shouldRepaint(GuideMarksPainter old) =>
       old.live != live || old.box != box;
+}
+
+/// Save the measured Dec backlash as the guider's compensation pulse (enabled)
+/// and push it to the guider. Reads the current advanced block first so the
+/// PUT (which replaces the block) keeps every other value.
+Future<void> _useBacklash(BuildContext context, WidgetRef ref, int pulseMs) async {
+  final api = ref.read(guiderAdvancedApiProvider);
+  final messenger = ScaffoldMessenger.maybeOf(context);
+  if (api == null) return;
+  try {
+    final current = await api.getProfile();
+    await api.putProfile(current
+        .withValue('backlash_enabled', true)
+        .withValue('backlash_pulse_ms', pulseMs));
+    await api.pushTuning();
+    messenger?.showSnackBar(SnackBar(
+        content: Text('Dec backlash compensation on, pulse $pulseMs ms — sent to the guider')));
+  } catch (e) {
+    messenger?.showSnackBar(SnackBar(content: Text('Could not apply backlash compensation: $e')));
+  }
 }

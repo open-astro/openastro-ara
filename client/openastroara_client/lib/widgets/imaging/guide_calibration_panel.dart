@@ -12,7 +12,11 @@ import '../../theme/ara_colors.dart';
 class GuideCalibrationPanel extends StatelessWidget {
   final GuiderCalibrationView view;
   final VoidCallback? onClear;
-  const GuideCalibrationPanel({super.key, required this.view, this.onClear});
+
+  /// Enable the guider's Dec backlash compensation with the measured pulse;
+  /// null hides the button (no measurement, nothing to apply, or busy).
+  final void Function(int pulseMs)? onUseBacklash;
+  const GuideCalibrationPanel({super.key, required this.view, this.onClear, this.onUseBacklash});
 
   @override
   Widget build(BuildContext context) {
@@ -121,6 +125,22 @@ class GuideCalibrationPanel extends StatelessWidget {
                 : '${data.declinationDeg!.toStringAsFixed(1)}°',
             small,
           ),
+        ],
+        // What the calibration measured about the mount's Dec gear (2026-10-16:
+        // 3–10 clearing steps every run, about 1.5 s, and compensation off).
+        if (describeDecBacklash(view) case final backlash?) ...[
+          const SizedBox(height: 6),
+          Text(backlash, key: const Key('calibration-backlash'), style: small),
+          if (view.estimatedDecBacklashMs case final ms? when ms > 0 && onUseBacklash != null)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                key: const Key('calibration-use-backlash'),
+                onPressed: () => onUseBacklash!(ms),
+                icon: const Icon(Icons.tune, size: 16),
+                label: Text('Use $ms ms for backlash compensation'),
+              ),
+            ),
         ],
         Align(
           alignment: Alignment.centerRight,

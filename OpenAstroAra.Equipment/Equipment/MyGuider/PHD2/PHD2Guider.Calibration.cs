@@ -60,6 +60,23 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                 DeclinationDeg: Num(cal, "declination"));
         }
 
+        /// <summary>The guider's calibration step length (ms), from <c>get_profile_setup</c>; null when the
+        /// guider is not connected or did not answer. Best-effort like the calibration read.</summary>
+        public async Task<int?> GetCalibrationStepMsAsync(CancellationToken ct) {
+            ct.ThrowIfCancellationRequested();
+            if (!Connected) {
+                return null;
+            }
+            var resp = await SendMessage<GenericPhdMethodResponse>(new Phd2NamedGetter("get_profile_setup"), LiveRpcTimeoutMs, notifyOnError: false).ConfigureAwait(false);
+            if (resp?.error != null || resp?.result is null) {
+                return null;
+            }
+            var setup = JToken.FromObject(resp.result);
+            return setup["calibration_duration"]?.Type is JTokenType.Integer or JTokenType.Float
+                ? (int) Math.Round(setup["calibration_duration"]!.Value<double>())
+                : null;
+        }
+
         /// <summary>Drop the stored calibration so the next guide start calibrates again.</summary>
         public async Task ClearCalibrationAsync(CancellationToken ct) {
             ct.ThrowIfCancellationRequested();

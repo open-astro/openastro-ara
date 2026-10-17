@@ -1873,6 +1873,48 @@ namespace OpenAstroAra.Test {
             Assert.That(svc.LastDitherError, Is.EqualTo("refused"), "a disconnected guider is a plain refusal, never the stale reason");
         }
 
+        private static async Task<bool?> MediatorStartRecalibrateFlagAsync(JsonObject calibration) {
+            await using var fake = FakeGuider.Start();
+            _ = new ProfileDaemon(fake);
+            fake.OnRpc("get_calibration_data", _ => calibration);
+            // The start path: a lock position (star selected), a calibrated guider (no calibration wait),
+            // then the app state reaching Guiding after the guide RPC.
+            fake.OnRpc("get_lock_position", _ => new JsonArray(100.0, 100.0));
+            fake.OnRpc("get_calibrated", JsonValue.Create(true));
+            var appState = "Stopped";
+            fake.OnRpc("get_app_state", _ => JsonValue.Create(appState));
+            JsonObject? guideParams = null;
+            fake.OnRpc("guide", p => {
+                guideParams = p;
+                appState = "Guiding";
+                return JsonValue.Create(0);
+            });
+            using var svc = await ConnectedAgainstAsync(fake, "Rig A").ConfigureAwait(false);
+            var started = await ((IGuiderMediator) svc).StartGuiding(false, null!, CancellationToken.None).ConfigureAwait(false);
+            Assert.That(started, Is.True, "the fake accepted the guide");
+            Assert.That(guideParams, Is.Not.Null, "no guide RPC was sent");
+            return guideParams!["recalibrate"]?.GetValue<bool>();
+        }
+
+        [Test]
+        public async Task A_sequencer_start_recalibrates_only_when_the_stored_calibration_is_not_trusted() {
+            // A good calibration near the equator is reused as-is…
+            var good = new JsonObject {
+                ["calibrated"] = true, ["xAngle"] = -97.4, ["yAngle"] = -3.9, ["xRate"] = 1.82, ["yRate"] = 2.50,
+                ["xParity"] = "+", ["yParity"] = "+", ["declination"] = 43.7,
+            };
+            Assert.That(await MediatorStartRecalibrateFlagAsync(good).ConfigureAwait(false), Is.Not.True);
+
+            // …one whose axes are 23° off square (Dec backlash ate the first North steps, or the camera
+            // moved mid-calibration) is redone. (A calibration rotated WHOLE, like 2026-10-16's, stays
+            // orthogonal — that case is caught at its cause, #1381, not here.)
+            var skewed = new JsonObject {
+                ["calibrated"] = true, ["xAngle"] = -97.0, ["yAngle"] = -30.0, ["xRate"] = 1.82, ["yRate"] = 2.50,
+                ["xParity"] = "+", ["yParity"] = "+", ["declination"] = 43.7,
+            };
+            Assert.That(await MediatorStartRecalibrateFlagAsync(skewed).ConfigureAwait(false), Is.True);
+        }
+
         [Test]
         public async Task A_rest_stop_with_nothing_running_is_reported_as_refused() {
             await using var fake = FakeGuider.Start();
