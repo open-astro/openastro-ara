@@ -430,10 +430,21 @@ void main() {
 
     testWidgets('an unknown filter shows the actionable detail quietly',
         (tester) async {
-      await pumpAdvisor(tester, filterName: 'H-alpha');
-      expect(find.textContaining("Unknown filter 'H-alpha'"), findsOneWidget);
+      await pumpAdvisor(tester, filterName: 'Filter 9');
+      expect(find.textContaining("Unknown filter 'Filter 9'"), findsOneWidget);
       expect(find.text('Open filter set'), findsOneWidget);
       expect(find.text('Apply'), findsNothing);
+    });
+
+    testWidgets("a wheel name of the same kind finds the planning filter",
+        (tester) async {
+      // AlpacaBridge / custom spellings of the set's 'Ha 7nm' entry.
+      for (final name in ['Hα', 'H-alpha', 'Ha']) {
+        await pumpAdvisor(tester, filterName: name);
+        expect(find.textContaining('Unknown filter'), findsNothing,
+            reason: name);
+        expect(find.text('Apply'), findsOneWidget, reason: name);
+      }
     });
 
     testWidgets('an incomplete imaging train points at optics', (tester) async {

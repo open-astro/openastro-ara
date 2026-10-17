@@ -341,10 +341,40 @@ public sealed partial class FilterWheelService : IFilterWheelMediator {
         LogProfileFiltersImported(slots.Count);
     }
 
-    // NINA import-on-connect semantics: the device is the truth for slot COUNT and for the names of
-    // newly-seen positions; entries the profile already has at a still-valid position are preserved
-    // verbatim (they may carry user-edited autofocus exposure/binning/offsets). Extracted (internal,
-    // static) for direct sim-free unit testing.
+    /// <summary>The connected wheel's names are the truth for filter names (AlpacaBridge carries the
+    /// user's own names, else "Filter N"), so mirror them into the profile's slot labels: offline
+    /// sequence authoring and the planning filter-set seed then use the same names the wheel will
+    /// report at run time. Writes only on a change, so a reconnect doesn't churn the profile file.</summary>
+    internal void MirrorSlotLabels(List<FilterSlotDto> slots) {
+        if (_profileStore is null) {
+            return;
+        }
+        var labels = SlotLabels(slots);
+        if (labels is null || labels.SequenceEqual(_profileStore.GetFilterWheelLabels().Labels)) {
+            return;
+        }
+        _profileStore.PutFilterWheelLabels(new FilterWheelLabelsDto(labels));
+        LogSlotLabelsMirrored(labels.Count);
+    }
+
+    /// <summary>The slot labels for a device's slots, inside the labels endpoint's limits (1–32
+    /// entries, 64 characters each); null when the wheel reported no slots. Pure.</summary>
+    internal static List<string>? SlotLabels(List<FilterSlotDto> slots) {
+        if (slots.Count == 0) {
+            return null;
+        }
+        var labels = new List<string>(Math.Min(slots.Count, 32));
+        foreach (var slot in slots.OrderBy(s => s.Position).Take(32)) {
+            var name = slot.Name.Trim();
+            labels.Add(name.Length > 64 ? name[..64] : name);
+        }
+        return labels;
+    }
+
+    // NINA import-on-connect semantics: the device is the truth for slot COUNT and for every slot's
+    // NAME; entries the profile already has at a still-valid position keep everything else (they may
+    // carry user-edited autofocus exposure/binning/offsets). A slot the device leaves unnamed keeps
+    // the profile's name. Extracted (internal, static) for direct sim-free unit testing.
     internal static void SyncProfileFilters(IList<FilterInfo> profileFilters, List<FilterSlotDto> slots) {
         for (var i = profileFilters.Count - 1; i >= 0; i--) {
             if (profileFilters[i].Position >= slots.Count || profileFilters[i].Position < 0) {
@@ -356,6 +386,9 @@ public sealed partial class FilterWheelService : IFilterWheelMediator {
             foreach (var filter in profileFilters) {
                 if (filter.Position == slot.Position) {
                     known = true;
+                    if (!string.IsNullOrWhiteSpace(slot.Name) && filter.Name != slot.Name) {
+                        filter.Name = slot.Name;
+                    }
                     break;
                 }
             }
@@ -397,6 +430,9 @@ public sealed partial class FilterWheelService : IFilterWheelMediator {
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Imported {Count} filters from the connected wheel into the active profile")]
     private partial void LogProfileFiltersImported(int count);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Mirrored the connected wheel's {Count} filter names into the profile's slot labels")]
+    private partial void LogSlotLabelsMirrored(int count);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "filter change to position {Position} timed out waiting for the wheel to settle")]
     private partial void LogFilterChangeTimedOut(short position);

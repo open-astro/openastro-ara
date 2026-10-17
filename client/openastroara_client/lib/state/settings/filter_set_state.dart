@@ -79,6 +79,23 @@ class FilterSetSettings {
   final List<PlanningFilter> filters;
 
   const FilterSetSettings({this.filters = const []});
+
+  /// The planning filter a sequence/wheel filter [name] refers to: the
+  /// case-insensitive name match first, else — when the name is a recognised
+  /// filter label ('Hα' for a set that calls it 'Ha', 'R' for 'Red') — the
+  /// one entry of that kind. Null when nothing matches or the kind is
+  /// ambiguous (two Hα entries), so the caller keeps its "unknown filter"
+  /// story.
+  PlanningFilter? lookup(String name) {
+    final key = name.trim().toLowerCase();
+    final exact =
+        filters.where((f) => f.name.trim().toLowerCase() == key).firstOrNull;
+    if (exact != null) return exact;
+    final kind = FilterSetNotifier.recognizedKind(name);
+    if (kind == null) return null;
+    final sameKind = filters.where((f) => f.kind == kind).toList();
+    return sameKind.length == 1 ? sameKind.single : null;
+  }
 }
 
 class FilterSetNotifier extends Notifier<FilterSetSettings>
@@ -139,8 +156,18 @@ class FilterSetNotifier extends Notifier<FilterSetSettings>
   /// Best-effort kind guess from a wheel label ('Ha 3nm' → ha, 'OIII' → oiii,
   /// 'Red' → r …). Exposed for the seed flow + tests; the user can always
   /// correct the dropdown.
-  static FilterKind guessKind(String label) {
-    final l = label.toLowerCase();
+  static FilterKind guessKind(String label) =>
+      recognizedKind(label) ?? FilterKind.l;
+
+  /// [guessKind] without the broadband fallback: null when the label names
+  /// no filter kind it recognises. Covers AlpacaBridge's filter-name presets
+  /// and their aliases (Luminance/L/Lum, Red/R, Ha/H/Hα/H-alpha, OIII/O/O3,
+  /// SII/S/S2 …) plus custom names that embed them ('Antlia Ha 3nm'). Sloan
+  /// (U' G' R' I' Z'), Clear, Dark, UV, IR and "Filter N" have no planning
+  /// kind, so they stay unrecognised rather than passing as L or R.
+  static FilterKind? recognizedKind(String label) {
+    final l = label.trim().toLowerCase();
+    if (l.isEmpty || RegExp(r"^[ugriz]\s*['′’]").hasMatch(l)) return null;
     // Multi-band product names first — they embed line-filter substrings
     // ('l-enhance' contains "ha", 'l-extreme' contains "tre"), so a naive
     // contains('ha') check would misfile them as Hα.
@@ -148,24 +175,40 @@ class FilterSetNotifier extends Notifier<FilterSetSettings>
       return FilterKind.duo;
     }
     if (l.contains('enhance') || l.contains('tri')) return FilterKind.tri;
-    // Line filters match whole label tokens (split on non-alphanumerics) so
-    // substrings inside ordinary words can't trigger them.
-    final tokens = l
-        .split(RegExp('[^a-z0-9α]+'))
-        .where((t) => t.isNotEmpty)
-        .toSet();
-    if (tokens.contains('ha') || tokens.contains('hα') || tokens.contains('halpha')) {
+    // Line filters match whole label tokens (letter and digit runs, so
+    // 'Ha7nm' → ha, 7, nm) or two adjacent tokens joined ('H-alpha' →
+    // halpha, 'O-III' → oiii, 'S 2' → s2), so substrings inside ordinary
+    // words can't trigger them.
+    final parts = RegExp('[a-zα]+|[0-9]+')
+        .allMatches(l)
+        .map((m) => m.group(0)!)
+        .toList();
+    final tokens = {
+      ...parts,
+      for (var i = 0; i + 1 < parts.length; i++) parts[i] + parts[i + 1],
+    };
+    // AlpacaBridge's one-letter codes (H, O, S) only as the whole label — as
+    // a token they'd catch 'UHC-S'.
+    if (l == 'h' ||
+        tokens.contains('ha') ||
+        tokens.contains('hα') ||
+        tokens.contains('halpha')) {
       return FilterKind.ha;
     }
-    if (tokens.contains('oiii') || tokens.contains('o3')) return FilterKind.oiii;
-    if (tokens.contains('sii') || tokens.contains('s2')) return FilterKind.sii;
+    if (l == 'o' || tokens.contains('oiii') || tokens.contains('o3')) {
+      return FilterKind.oiii;
+    }
+    if (l == 's' || tokens.contains('sii') || tokens.contains('s2')) {
+      return FilterKind.sii;
+    }
     if (tokens.contains('r') || l.startsWith('red')) return FilterKind.r;
     if (tokens.contains('g') || l.startsWith('green')) return FilterKind.g;
     if (tokens.contains('b') || l.startsWith('blue')) return FilterKind.b;
     if (l.contains('osc') || l.contains('color') || l.contains('colour')) {
       return FilterKind.osc;
     }
-    return FilterKind.l;
+    if (tokens.contains('l') || l.startsWith('lum')) return FilterKind.l;
+    return null;
   }
 
   /// Replace local state with what the daemon currently holds.

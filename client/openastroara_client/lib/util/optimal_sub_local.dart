@@ -13,7 +13,8 @@ import 'star_model.dart' as star_model;
 /// merge semantics as the daemon's `OptimalSubOverrides`, sourced from the
 /// live (or offline-seeded) settings notifiers instead of the profile store:
 ///
-/// - Filter passband: the named planning filter (case-insensitive) → its
+/// - Filter passband: the named planning filter (case-insensitive, else the
+///   one filter of the label's recognised kind, so 'Hα' finds 'Ha') → its
 ///   bandwidth or kind default; unknown name fails with the SAME actionable
 ///   message the daemon used; no name → broadband default, tagged assumed.
 /// - Electronics: profile value → Tier-0 default, tagged assumed.
@@ -60,9 +61,7 @@ LocalOptimalSubOutcome resolveOptimalSubLocal({
   var k = 1.0;
   final name = filterName?.trim();
   if (name != null && name.isNotEmpty) {
-    final match = filterSet.filters
-        .where((f) => f.name.trim().toLowerCase() == name.toLowerCase())
-        .firstOrNull;
+    final match = filterSet.lookup(name);
     if (match == null) {
       final known = filterSet.filters.isNotEmpty
           ? filterSet.filters.map((f) => "'${f.name}'").join(', ')

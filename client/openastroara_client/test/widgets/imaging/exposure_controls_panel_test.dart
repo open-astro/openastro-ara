@@ -463,14 +463,14 @@ void main() {
     );
   });
 
-  testWidgets('a locally-labelled filter maps to its physical slot by position',
+  testWidgets("a connected wheel's names replace the local labels",
       (tester) async {
     final container = ProviderContainer(overrides: [
       filterWheelLabelsProvider.overrideWith(_FixedLabels.new),
       filterWheelProvider.overrideWith(_FakeWheelNotifier.new),
     ]);
-    // Local labels use 'Ha'; the driver reports that same physical slot as
-    // 'Hα' — the two lists have diverged.
+    // Local labels say 'Ha'; the driver (AlpacaBridge) names that slot 'Hα'.
+    // The wheel's name is the truth, so the picker offers 'Hα' only.
     _FixedLabels.labels = ['L', 'Ha', 'OIII', '', ''];
     addTearDown(container.dispose);
 
@@ -498,16 +498,14 @@ void main() {
 
     await tester.tap(find.text('L').last);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Ha').last);
+    expect(find.text('Ha'), findsNothing,
+        reason: "the stale local label isn't offered");
+    await tester.tap(find.text('Hα').last);
     await tester.pumpAndSettle();
-
-    // 'Ha' has no driver-name match, but profile slot 2 → wheel position 1:
-    // the wheel must still move there.
-    expect(wheel.changeCalls, [1],
-        reason: 'the local label resolves to its physical slot by position');
+    expect(wheel.changeCalls, [1]);
   });
 
-  testWidgets('an unresolvable filter name on a connected wheel says so',
+  testWidgets("labels beyond the connected wheel's slots aren't offered",
       (tester) async {
     final container = ProviderContainer(overrides: [
       filterWheelLabelsProvider.overrideWith(_FixedLabels.new),
@@ -524,7 +522,7 @@ void main() {
 
     final wheel = container.read(filterWheelProvider.notifier)
         as _FakeWheelNotifier;
-    // A one-slot wheel: 'Ha' maps to no physical slot at all.
+    // A one-slot wheel: 'Ha' and 'OIII' have no physical slot.
     wheel.park(FilterWheelStatus(
       deviceId: 'fw',
       name: 'FILTERWHEEL',
@@ -537,16 +535,9 @@ void main() {
 
     await tester.tap(find.text('L').last);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Ha').last);
-    await tester.pumpAndSettle();
-
-    // No silent lie: no tag, no move, and a snackbar says the name isn't on
-    // the wheel.
-    expect(container.read(exposureControllerProvider).filterSlot, 'L');
+    expect(find.text('Ha'), findsNothing);
+    expect(find.text('OIII'), findsNothing);
     expect(wheel.changeCalls, isEmpty);
-    expect(
-        find.textContaining("isn't a slot on the connected wheel"),
-        findsOneWidget);
   });
 
   testWidgets('a pick landing on an unnamed device slot tags the local label',

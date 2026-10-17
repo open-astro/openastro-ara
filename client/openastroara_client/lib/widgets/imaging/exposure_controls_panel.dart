@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/filter_wheel_status.dart';
 import '../../state/equipment/camera_state.dart';
+import '../../state/equipment/filter_choices_state.dart';
 import '../../state/equipment/filter_wheel_state.dart';
 import '../../state/imaging/exposure_state.dart';
 import '../../state/settings/filter_wheel_labels_state.dart';
@@ -574,16 +575,10 @@ class _FilterDropdownState extends ConsumerState<_FilterDropdown>
         });
       }
     });
-    final labels = ref.watch(filterWheelLabelsProvider);
-    // Dedupe (keep-first): two slots labelled identically would otherwise
-    // crash the picker's exactly-one-item-per-value assertion, and a
-    // name-keyed picker only needs each name once anyway.
-    final seen = <String>{};
-    final names = <String>[
-      for (var slot = 1; slot <= labels.slotCount; slot++)
-        if (labels.labelAt(slot).isNotEmpty && seen.add(labels.labelAt(slot)))
-          labels.labelAt(slot),
-    ];
+    // The connected wheel's names, else the profile labels — deduped
+    // keep-first by [filterChoicesProvider] (a duplicate would crash the
+    // picker's exactly-one-item-per-value assertion).
+    final names = [for (final c in ref.watch(filterChoicesProvider)) c.name];
     if (!names.contains(widget.value)) names.insert(0, widget.value);
 
     final busy = _phase == _FilterPhase.changing;

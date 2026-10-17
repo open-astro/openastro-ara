@@ -55,4 +55,48 @@ void main() {
       );
     },
   );
+
+  test("a wheel label of a recognised kind finds the set's entry ('Hα' → 'Ha')",
+      () {
+    LocalOptimalSubOutcome run(String name, FilterSetSettings set) =>
+        resolveOptimalSubLocal(
+          optics: optics,
+          electronics: electronics,
+          site: site,
+          filterSet: set,
+          filterName: name,
+        );
+    final greek = run('Hα', filters);
+    final plain = run('Ha', filters);
+    expect(greek, isA<LocalOptimalSubSuccess>());
+    expect(
+      (greek as LocalOptimalSubSuccess).result.recommendedSec,
+      (plain as LocalOptimalSubSuccess).result.recommendedSec,
+    );
+    expect(run('R', const FilterSetSettings(filters: [
+      PlanningFilter(name: 'Red', kind: FilterKind.r),
+    ])), isA<LocalOptimalSubSuccess>());
+    // Two Hα entries: ambiguous, so the unknown-filter story stays.
+    expect(run('Hα', const FilterSetSettings(filters: [
+      PlanningFilter(name: 'Ha 3nm', kind: FilterKind.ha),
+      PlanningFilter(name: 'Ha 7nm', kind: FilterKind.ha),
+    ])), isA<LocalOptimalSubUnavailable>());
+    // An unrecognised label never falls back to the broadband entry.
+    expect(run('Clear', filters), isA<LocalOptimalSubUnavailable>());
+  });
+
+  test("a wheel name of the set entry's kind resolves to it ('Hα' → 'Ha')",
+      () {
+    LocalOptimalSubOutcome run(String name) => resolveOptimalSubLocal(
+          optics: optics,
+          electronics: electronics,
+          site: site,
+          filterSet: filters,
+          filterName: name,
+        );
+    final greek = run('Hα') as LocalOptimalSubSuccess;
+    final plain = run('Ha') as LocalOptimalSubSuccess;
+    expect(greek.result.recommendedSec, plain.result.recommendedSec);
+    expect(run('Filter 3'), isA<LocalOptimalSubUnavailable>());
+  });
 }

@@ -93,15 +93,54 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void SyncProfileFilters_preserves_user_edited_entries_at_valid_positions() {
+        public void SyncProfileFilters_keeps_user_edited_settings_but_takes_the_device_name() {
             var userEdited = new FilterInfo("Luminance (custom)", 5, 0) { AutoFocusExposureTime = 3.5 };
             var profile = new List<FilterInfo> { userEdited };
             FilterWheelService.SyncProfileFilters(profile, SampleSlots());
 
             Assert.That(profile, Has.Count.EqualTo(3));
             Assert.That(profile, Does.Contain(userEdited),
-                "an existing profile entry at a still-valid position must be preserved verbatim");
+                "an existing profile entry at a still-valid position keeps its settings");
             Assert.That(userEdited.AutoFocusExposureTime, Is.EqualTo(3.5));
+            Assert.That(userEdited.FocusOffset, Is.EqualTo(5));
+            Assert.That(userEdited.Name, Is.EqualTo("L"), "the wheel's (Alpaca) name is the truth");
+        }
+
+        [Test]
+        public void SyncProfileFilters_keeps_the_profile_name_for_an_unnamed_device_slot() {
+            var named = new FilterInfo("Ha", 0, 0);
+            var profile = new List<FilterInfo> { named };
+            FilterWheelService.SyncProfileFilters(profile, new List<FilterSlotDto> {
+                new(Position: 0, Name: "  ", FocusOffset: 0),
+            });
+            Assert.That(named.Name, Is.EqualTo("Ha"));
+        }
+
+        [Test]
+        public void SlotLabels_follow_the_device_slots_within_the_labels_limits() {
+            Assert.That(FilterWheelService.SlotLabels(SampleSlots()), Is.EqualTo(new List<string> { "L", "R", "G" }));
+            Assert.That(FilterWheelService.SlotLabels(new List<FilterSlotDto>()), Is.Null);
+
+            var many = new List<FilterSlotDto>();
+            for (var i = 0; i < 40; i++) {
+                many.Add(new FilterSlotDto(Position: i, Name: i == 0 ? new string('x', 80) : $" Filter {i + 1} ", FocusOffset: 0));
+            }
+            var labels = FilterWheelService.SlotLabels(many)!;
+            Assert.That(labels, Has.Count.EqualTo(32));
+            Assert.That(labels[0], Has.Length.EqualTo(64));
+            Assert.That(labels[1], Is.EqualTo("Filter 2"));
+        }
+
+        [Test]
+        public void MirrorSlotLabels_writes_the_wheel_names_over_the_default_labels() {
+            var store = new InMemoryProfileStore();
+            using var svc = new FilterWheelService(profileStore: store);
+            var wheel = new List<FilterSlotDto> {
+                new(Position: 0, Name: "Luminance", FocusOffset: 0),
+                new(Position: 1, Name: "Ha", FocusOffset: 0),
+            };
+            svc.MirrorSlotLabels(wheel);
+            Assert.That(store.GetFilterWheelLabels().Labels, Is.EqualTo(new List<string> { "Luminance", "Ha" }));
         }
 
         [Test]
