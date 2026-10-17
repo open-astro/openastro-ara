@@ -91,7 +91,9 @@
        the SDK targets import, after the project body. -->
   <Target Name="_AstrometryNativeProps">
     <PropertyGroup>
-      <AstrometryNativesDir>$(MSBuildProjectDirectory)/$(IntermediateOutputPath)natives/</AstrometryNativesDir>
+      <!-- NormalizeDirectory: IntermediateOutputPath is relative today, but an absolute
+           BaseIntermediateOutputPath or UseArtifactsOutput would otherwise double the prefix. -->
+      <AstrometryNativesDir>$([MSBuild]::NormalizeDirectory('$(MSBuildProjectDirectory)', '$(IntermediateOutputPath)', 'natives'))</AstrometryNativesDir>
       <AstrometryNativeExt Condition="$([MSBuild]::IsOSPlatform('OSX'))">dylib</AstrometryNativeExt>
       <AstrometryNativeExt Condition="'$(AstrometryNativeExt)' == ''">so</AstrometryNativeExt>
       <_AstrometrySofa>$(AstrometryNativesDir)libsofa.$(AstrometryNativeExt)</_AstrometrySofa>
@@ -105,6 +107,10 @@
           DependsOnTargets="_AstrometryNativeProps"
           Inputs="@(_AstrometryNativeSource)"
           Outputs="$(_AstrometrySofa);$(_AstrometryNovas)">
+    <!-- Drop the previous pair first: a rebuild that fails (a source edit that does not
+         compile) must leave nothing for the Exists checks to stage, so the warning fires
+         instead of a stale library shipping quietly. -->
+    <Delete Files="$(_AstrometrySofa);$(_AstrometryNovas)" />
     <Exec Command="bash scripts/build-astrometry-natives.sh &quot;$(AstrometryNativesDir)&quot;"
           WorkingDirectory="$(MSBuildProjectDirectory)/.."
           ContinueOnError="true"
