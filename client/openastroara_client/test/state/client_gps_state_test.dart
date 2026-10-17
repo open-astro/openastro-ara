@@ -25,21 +25,37 @@ final _gga = _cs('GPGGA,041926.000,3851.2384,N,07702.6101,W,1,08,0.9,120.5,M,-33
 final _void = _cs('GPRMC,041920.000,V,,,,,,,220926,,,N');
 
 class _FakeSource implements SerialGpsSource {
-  _FakeSource(this.script, {this.supported = true});
+  _FakeSource(this.script, {this.supported = true, this.ports = const ['/dev/cu.usbserial-1'], this.unopenable = const {}});
   final List<String> script;
   @override
   final bool supported;
-  final List<String> ports = const ['/dev/cu.usbserial-1'];
+  final List<String> ports;
+  /// Ports whose open fails, like a dongle that was unplugged from them.
+  final Set<String> unopenable;
   int opens = 0;
   String? lastPort;
+  final opened = <String>[];
+  /// When set, every enumeration after the first (build's) waits on it, like a slow `mode`.
+  Completer<void>? slowPorts;
+  /// When set, every enumeration after the first (build's) throws.
+  bool portsThrow = false;
+  int _portCalls = 0;
 
   @override
-  Future<List<String>> availablePorts() async => ports;
+  Future<List<String>> availablePorts() async {
+    final later = ++_portCalls > 1;
+    final gate = slowPorts;
+    if (gate != null && later) await gate.future;
+    if (portsThrow && later) throw StateError('enumeration failed');
+    return ports;
+  }
 
   @override
   Stream<String> lines(String port) {
     opens++;
     lastPort = port;
+    opened.add(port);
+    if (unopenable.contains(port)) return Stream<String>.error(StateError('could not open $port'));
     // Like the real port: emits its lines and then stays open until cancelled.
     final c = StreamController<String>();
     Future<void>.microtask(() {
@@ -182,7 +198,8 @@ void main() {
     });
 
     test('changing the port during an in-flight read re-arms the loop and reads the new port', () async {
-      final source = _FakeSource([]); // no fix: each read holds busy for the whole window
+      // no fix: each read holds busy for the whole window
+      final source = _FakeSource([], ports: const ['/dev/old', '/dev/new']);
       final api = _FakeApi();
       final c = await container(source, api, const ClientGpsPrefs(enabled: true, port: '/dev/old'));
       await c.read(clientGpsProvider.future);
@@ -212,6 +229,121 @@ void main() {
       // The tick re-armed itself (50 ms retry in tests): another background read follows.
       await Future<void>.delayed(const Duration(milliseconds: 300));
       expect(source.opens, greaterThan(opensAfterManual), reason: 'the loop is still alive');
+    });
+
+    test('Read now follows a dongle moved to another USB socket and remembers the new port', () async {
+      // 2026-10-16: saved /dev/cu.usbmodem1101, the dongle came back as /dev/cu.usbmodem101.
+      final source = _FakeSource([_rmc],
+          ports: const ['/dev/cu.RW403B', '/dev/cu.usbmodem101'], unopenable: const {'/dev/cu.usbmodem1101'});
+      final api = _FakeApi();
+      final c = await container(source, api, const ClientGpsPrefs(enabled: true, port: '/dev/cu.usbmodem1101'));
+      await c.read(clientGpsProvider.future);
+      await Future<void>.delayed(const Duration(milliseconds: 400)); // the loop's own read fails on the saved port
+      c.listen(activeServerProvider, (_, _) {}); // connected to the rig (the failed loop read never asked)
+      await c.read(savedServersProvider.future);
+      final fix = await c.read(clientGpsProvider.notifier).syncNow();
+      expect(fix, isNotNull);
+      expect(source.lastPort, '/dev/cu.usbmodem101');
+      expect(c.read(clientGpsProvider).value!.prefs.port, '/dev/cu.usbmodem101');
+      final saved = await ClientGpsPrefsService(supportDir: () async => tmp).load();
+      expect(saved.port, '/dev/cu.usbmodem101', reason: 'remembered for the next launch');
+      expect(api.pushes, isNotEmpty);
+    });
+
+    test('with two candidate dongles the saved port is kept and the failure names them', () async {
+      final source = _FakeSource([_rmc],
+          ports: const ['/dev/cu.usbmodem101', '/dev/cu.usbserial-9'], unopenable: const {'/dev/cu.usbmodem1101'});
+      final c = await container(source, _FakeApi(), const ClientGpsPrefs(enabled: true, port: '/dev/cu.usbmodem1101'));
+      await c.read(clientGpsProvider.future);
+      final fix = await c.read(clientGpsProvider.notifier).syncNow();
+      expect(fix, isNull);
+      final status = c.read(clientGpsProvider).value!;
+      expect(status.prefs.port, '/dev/cu.usbmodem1101', reason: 'never guess between two dongles');
+      expect(status.lastError, contains('/dev/cu.usbmodem101 or /dev/cu.usbserial-9'));
+    });
+
+    test('the background loop never opens a port the user did not choose', () async {
+      // Opening runs stty and toggles DTR: the lone usbmodem port may be a focuser or OnStep board.
+      final source = _FakeSource([_rmc], ports: const ['/dev/cu.usbmodem101'], unopenable: const {'/dev/cu.usbmodem1101'});
+      final c = await container(source, _FakeApi(), const ClientGpsPrefs(enabled: true, port: '/dev/cu.usbmodem1101'));
+      await c.read(clientGpsProvider.future);
+      await Future<void>.delayed(const Duration(milliseconds: 400)); // the loop's own read
+      expect(source.opened, isNot(contains('/dev/cu.usbmodem101')));
+      final status = c.read(clientGpsProvider).value!;
+      expect(status.prefs.port, '/dev/cu.usbmodem1101');
+      expect(status.lastError, contains('the GPS may be on /dev/cu.usbmodem101'));
+    });
+
+    test('a followed port that gives no fix is never remembered', () async {
+      // The lone usbmodem port may be an Arduino focuser or an OnStep mount, not the GPS.
+      final source = _FakeSource([], ports: const ['/dev/cu.usbmodem101']);
+      final c = await container(source, _FakeApi(), const ClientGpsPrefs(enabled: true, port: '/dev/cu.usbmodem1101'));
+      await c.read(clientGpsProvider.future);
+      await Future<void>.delayed(const Duration(milliseconds: 400)); // let the loop's own read finish
+      final fix = await c.read(clientGpsProvider.notifier).syncNow();
+      expect(fix, isNull);
+      expect(source.lastPort, '/dev/cu.usbmodem101', reason: 'it was tried');
+      expect(c.read(clientGpsProvider).value!.lastError, contains('(the saved /dev/cu.usbmodem1101 is gone)'));
+      expect(c.read(clientGpsProvider).value!.prefs.port, '/dev/cu.usbmodem1101');
+      final saved = await ClientGpsPrefsService(supportDir: () async => tmp).load();
+      expect(saved.port, '/dev/cu.usbmodem1101');
+    });
+
+    test('a read while the first is still enumerating ports never opens the port twice', () async {
+      final source = _FakeSource([_rmc])..slowPorts = Completer<void>();
+      final c = await container(source, _FakeApi(), const ClientGpsPrefs(enabled: true, port: '/dev/cu.usbserial-1'));
+      await c.read(clientGpsProvider.future);
+      await Future<void>.delayed(const Duration(milliseconds: 20)); // the loop's first read is enumerating
+      final manual = c.read(clientGpsProvider.notifier).syncNow(); // "Read now" in that gap
+      source.slowPorts!.complete();
+      await manual;
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+      expect(source.opens, 1);
+    });
+
+    test('a port chosen while the read is enumerating is never overwritten by the follow', () async {
+      final source = _FakeSource([_rmc], ports: const ['/dev/cu.usbmodem101', '/dev/ttyS0'])..slowPorts = Completer<void>();
+      final c = await container(source, _FakeApi(), const ClientGpsPrefs(enabled: true, port: '/dev/cu.usbmodem1101'));
+      await c.read(clientGpsProvider.future);
+      await Future<void>.delayed(const Duration(milliseconds: 20)); // the loop's first read is enumerating
+      final picked = c.read(clientGpsProvider.notifier).setPort('/dev/ttyS0');
+      source.slowPorts!.complete();
+      await picked;
+      await Future<void>.delayed(const Duration(milliseconds: 600));
+      expect(c.read(clientGpsProvider).value!.prefs.port, '/dev/ttyS0');
+      final saved = await ClientGpsPrefsService(supportDir: () async => tmp).load();
+      expect(saved.port, '/dev/ttyS0');
+      expect(source.lastPort, '/dev/ttyS0', reason: 'the chosen port is read once the first read ends');
+    });
+
+    test('a port enumeration that throws still reads the saved port and clears busy', () async {
+      final source = _FakeSource([_rmc])..portsThrow = true;
+      final c = await container(source, _FakeApi(), const ClientGpsPrefs(enabled: true, port: '/dev/cu.usbserial-1'));
+      await c.read(clientGpsProvider.future);
+      await Future<void>.delayed(const Duration(milliseconds: 400)); // the loop's own read
+      final fix = await c.read(clientGpsProvider.notifier).syncNow();
+      expect(fix, isNotNull);
+      expect(c.read(clientGpsProvider).value!.busy, isFalse);
+    });
+
+    test('a listed port that fails gets no "the GPS may be on" hint', () async {
+      final source = _FakeSource([_rmc], ports: const ['/dev/cu.usbmodem1101', '/dev/cu.usbmodem101'], unopenable: const {'/dev/cu.usbmodem1101'});
+      final c = await container(source, _FakeApi(), const ClientGpsPrefs(enabled: true, port: '/dev/cu.usbmodem1101'));
+      await c.read(clientGpsProvider.future);
+      await Future<void>.delayed(const Duration(milliseconds: 400)); // let the loop's own read finish
+      await c.read(clientGpsProvider.notifier).syncNow();
+      final error = c.read(clientGpsProvider).value!.lastError;
+      expect(error, contains('GPS read failed on /dev/cu.usbmodem1101'));
+      expect(error, isNot(contains('may be on')));
+    });
+
+    test('replacementPort follows only an unambiguous GPS-like port', () {
+      const saved = '/dev/cu.usbmodem1101';
+      expect(ClientGpsNotifier.replacementPort(saved, const [saved, '/dev/cu.usbmodem101']), saved);
+      expect(ClientGpsNotifier.replacementPort(saved, const ['/dev/cu.usbmodem101']), '/dev/cu.usbmodem101');
+      expect(ClientGpsNotifier.replacementPort(saved, const ['/dev/cu.RW403B']), isNull, reason: 'not a GPS-like name');
+      expect(ClientGpsNotifier.replacementPort(saved, const ['/dev/cu.usbmodem101', '/dev/cu.usbserial-2']), isNull);
+      expect(ClientGpsNotifier.replacementPort('COM3', const ['COM4']), isNull, reason: 'COM names are never guessed');
     });
 
     test('a failed read clears the stale fix from the status', () async {
