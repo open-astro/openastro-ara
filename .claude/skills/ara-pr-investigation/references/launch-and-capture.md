@@ -38,8 +38,7 @@ dir so the user's real profile is never written:
 
 ```bash
 cd "$WT"    # or $ROOT for master's daemon
-dotnet build OpenAstroAra.Server -c Debug; echo "build exit $?"      # check the exit code, not grep
-scripts/build-astrometry-natives.sh OpenAstroAra.Server/bin/Debug/net10.0/
+dotnet build OpenAstroAra.Server -c Debug; echo "build exit $?"      # check the exit code, not grep; the build stages the astrometry natives itself
 OPENASTROARA_PROFILE_DIR="$SCRATCH/ara-profile-$PR" ASPNETCORE_ENVIRONMENT=Development \
   dotnet run --no-build --project OpenAstroAra.Server > "$SCRATCH/daemon-$PR.log" 2>&1 &
 curl -s http://localhost:5555/healthz     # "ok"

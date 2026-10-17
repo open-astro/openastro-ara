@@ -31,9 +31,9 @@ namespace OpenAstroAra.Test {
     /// native stack is present it agrees with the independent Meeus-grade
     /// math — two implementations, one sky.
     ///
-    /// Skips (never fails) where the natives aren't installed, so CI without
-    /// them stays green while any dev who runs
-    /// scripts/build-astrometry-natives.sh gets the real check.
+    /// Skips (never fails) where the natives aren't present (a box with no C
+    /// compiler, so dotnet build could not stage them); everywhere else the
+    /// build stages them and this is the real check.
     /// </summary>
     [TestFixture]
     public class NovasEphemerisAgreementTest {
@@ -46,7 +46,7 @@ namespace OpenAstroAra.Test {
         [Test]
         public async Task Novas_and_SiteAstrometry_agree_on_the_sky() {
             if (!NativesAvailable()) {
-                Assert.Ignore("libnovas31 not installed — run scripts/build-astrometry-natives.sh");
+                Assert.Ignore("libnovas31 not present — install a C compiler (cc) and build again; dotnet build stages it.");
             }
             if (!File.Exists(NOVAS.EphemerisLocation)) {
                 Assert.Ignore($"JPLEPH not found at {NOVAS.EphemerisLocation}");

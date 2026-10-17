@@ -28,15 +28,15 @@ namespace OpenAstroAra.Test {
             // Deserializing an InputTarget with real coordinates eagerly computes the target's
             // horizon/transit via the SOFA/NOVAS natives (§14e). The SequenceJsonConverter swallows
             // a native-load failure and degrades the target to UnknownSequenceContainer, so probe the
-            // natives up front and self-ignore when they're absent (a dev box that hasn't run
-            // scripts/build-astrometry-natives.sh) — the analyzer-gate CI job stages them and runs
-            // this fixture for real, exactly like AstrometryNativeTransformTest.
+            // natives up front and self-ignore when they're absent (a dev box with no C compiler, so
+            // dotnet build could not stage them) — the analyzer-gate CI job asserts they are there
+            // and runs this fixture for real, exactly like AstrometryNativeTransformTest.
             try {
                 _ = new Coordinates(Angle.ByHours(6.0), Angle.ByDegree(45.0), Epoch.J2000).Transform(Epoch.JNOW);
             } catch (Exception e) when (e is DllNotFoundException or BadImageFormatException) {
                 // A missing/incompatible native can surface either way (absent lib vs wrong-arch
                 // binary); both mean "natives unavailable on this box" → skip, don't error the fixture.
-                Assert.Ignore("SOFA/NOVAS natives not present/loadable — run scripts/build-astrometry-natives.sh into the test bin dir to exercise NINA import.");
+                Assert.Ignore("SOFA/NOVAS natives not present/loadable — install a C compiler (cc) and build again; dotnet build stages them.");
             }
         }
 

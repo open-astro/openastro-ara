@@ -200,7 +200,7 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public void TransformBestEffort_degrades_to_untransformed_target_when_natives_missing() {
-            // A dev box without the SOFA/NOVAS natives staged (scripts/build-astrometry-natives.sh)
+            // A dev box without the SOFA/NOVAS natives (no C compiler, so dotnet build could not stage them)
             // must see a cross-epoch transform fall back to the original coordinates, never throw.
             using var svc = new TelescopeService();
             var j2000 = SampleTarget();

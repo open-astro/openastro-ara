@@ -20,10 +20,10 @@ namespace OpenAstroAra.Test {
 
     /// <summary>
     /// §14e — exercises the cross-epoch coordinate transform against the REAL SOFA/NOVAS natives
-    /// (built by <c>scripts/build-astrometry-natives.sh</c> and staged next to the test binary by
-    /// the analyzer-gate CI job). Self-ignores when the natives are absent (e.g. a dev box that
-    /// hasn't built them) so the sim-free suite stays green everywhere while CI proves the
-    /// resolver + native build actually work.
+    /// (built from the vendored sources by <c>OpenAstroAra.Astrometry.csproj</c> during
+    /// <c>dotnet build</c> and staged next to the test binary; the analyzer-gate CI job asserts they
+    /// are there). Self-ignores when the natives are absent (a dev box with no C compiler) so the
+    /// sim-free suite stays green everywhere while CI proves the resolver + native build actually work.
     /// </summary>
     [TestFixture]
     public class AstrometryNativeTransformTest {
@@ -35,7 +35,7 @@ namespace OpenAstroAra.Test {
             try {
                 jnow = j2000.Transform(Epoch.JNOW);
             } catch (DllNotFoundException) {
-                Assert.Ignore("SOFA/NOVAS natives not present — run scripts/build-astrometry-natives.sh into the test bin dir to exercise this.");
+                Assert.Ignore("SOFA/NOVAS natives not present — install a C compiler (cc) and build again; dotnet build stages them.");
                 return;
             }
 
@@ -59,7 +59,7 @@ namespace OpenAstroAra.Test {
             try {
                 roundTripped = original.Transform(Epoch.JNOW).Transform(Epoch.J2000);
             } catch (DllNotFoundException) {
-                Assert.Ignore("SOFA/NOVAS natives not present — run scripts/build-astrometry-natives.sh into the test bin dir to exercise this.");
+                Assert.Ignore("SOFA/NOVAS natives not present — install a C compiler (cc) and build again; dotnet build stages them.");
                 return;
             }
 
