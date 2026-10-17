@@ -450,11 +450,13 @@ jobs:
       - name: dotnet build (solution, Release) — warnings are errors
         run: dotnet build OpenAstroAra.sln -c Release --no-restore
 
-      # §14e — build the SOFA/NOVAS31 astrometry natives from the vendored C sources and
-      # stage them next to the test binary, so AstrometryNativeTransformTest exercises the
-      # REAL cross-epoch transforms (it self-Ignores when the natives are absent; this step
-      # makes sure CI never silently skips it).
-      - name: Build astrometry natives (SOFA + NOVAS31) for tests
+      # §14e — the SOFA/NOVAS31 astrometry natives are built from the vendored C sources by
+      # OpenAstroAra.Astrometry.csproj during the solution build above and staged next to the
+      # test binary, so AstrometryNativeTransformTest exercises the REAL cross-epoch transforms
+      # (it self-Ignores when the natives are absent). This step only asserts the build did
+      # that: a regression in the csproj target must fail CI here, not be masked by a manual
+      # staging step (as the old one did) or by a test that quietly Ignores itself.
+      - name: Assert the build staged the astrometry natives (SOFA + NOVAS31)
         run: |
           # Derive the TFM dir instead of hardcoding net10.0 (a TFM bump must not silently
           # stop staging the natives — the transform tests would self-Ignore, masking it).
@@ -464,7 +466,13 @@ jobs:
             echo "expected exactly one test output TFM dir, found: ${dirs[*]:-none}" >&2
             exit 1
           fi
-          ./scripts/build-astrometry-natives.sh "${dirs[0]}"
+          for lib in libsofa.so libnovas31.so; do
+            if [ ! -f "${dirs[0]}$lib" ]; then
+              echo "::error::dotnet build did not stage ${dirs[0]}$lib — the BuildAstrometryNatives target in OpenAstroAra.Astrometry.csproj regressed" >&2
+              exit 1
+            fi
+            file "${dirs[0]}$lib" | tee /dev/stderr | grep -q 'x86-64'
+          done
 
       # Exclude the live Alpaca discovery test (TestCategory=Integration): it needs a
       # running OmniSim, which this job doesn't start. It is covered by the dedicated
