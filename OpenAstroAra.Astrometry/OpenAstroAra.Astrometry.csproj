@@ -73,4 +73,57 @@
          daemon has it wherever the assembly runs, offline included. -->
     <EmbeddedResource Include="External\iers-dut1.tsv" LogicalName="OpenAstroAra.Astrometry.External.iers-dut1.tsv" />
   </ItemGroup>
+  <!-- §14e — the SOFA + NOVAS31 natives on Linux/macOS, built once from the vendored C sources
+       by scripts/build-astrometry-natives.sh into obj/ and copied to every consumer's output
+       (Server, Test) the way External\JPLEPH is. Before this, a fresh checkout or worktree ran
+       `dotnet test` with 30-odd astrometry, refraction and sequencer-target failures until someone
+       ran the script by hand into the test bin dir (2026-10-17). Incremental: rebuilt only when a
+       vendored source or the script changes. Skipped when a RuntimeIdentifier is set — a
+       cross-publish (linux-arm64 from an x64 runner) must not carry host-arch libraries; CI stages
+       its own arm64 build after publish. A host without a C compiler gets a warning and the
+       un-staged behaviour it had before (the transform tests self-Ignore).
+       The output dir is computed inside the targets: IntermediateOutputPath is not defined until
+       the SDK targets import, after the project body. -->
+  <Target Name="_AstrometryNativeProps">
+    <PropertyGroup>
+      <AstrometryNativesDir>$(MSBuildProjectDirectory)/$(IntermediateOutputPath)natives/</AstrometryNativesDir>
+      <AstrometryNativeExt Condition="$([MSBuild]::IsOSPlatform('OSX'))">dylib</AstrometryNativeExt>
+      <AstrometryNativeExt Condition="'$(AstrometryNativeExt)' == ''">so</AstrometryNativeExt>
+      <_AstrometrySofa>$(AstrometryNativesDir)libsofa.$(AstrometryNativeExt)</_AstrometrySofa>
+      <_AstrometryNovas>$(AstrometryNativesDir)libnovas31.$(AstrometryNativeExt)</_AstrometryNovas>
+    </PropertyGroup>
+    <ItemGroup>
+      <_AstrometryNativeSource Include="$(MSBuildProjectDirectory)/../scripts/build-astrometry-natives.sh;$(MSBuildProjectDirectory)/../NOVAS31/NOVAS31/*.c;$(MSBuildProjectDirectory)/../NOVAS31/NOVAS31/*.h;$(MSBuildProjectDirectory)/../SOFA/SOFA/src/*.c;$(MSBuildProjectDirectory)/../SOFA/SOFA/src/*.h" />
+    </ItemGroup>
+  </Target>
+  <Target Name="_CompileAstrometryNatives"
+          DependsOnTargets="_AstrometryNativeProps"
+          Inputs="@(_AstrometryNativeSource)"
+          Outputs="$(_AstrometrySofa);$(_AstrometryNovas)">
+    <Exec Command="bash scripts/build-astrometry-natives.sh &quot;$(AstrometryNativesDir)&quot;"
+          WorkingDirectory="$(MSBuildProjectDirectory)/.."
+          ContinueOnError="true"
+          StandardOutputImportance="low" />
+  </Target>
+  <Target Name="BuildAstrometryNatives"
+          BeforeTargets="AssignTargetPaths"
+          DependsOnTargets="_AstrometryNativeProps;_CompileAstrometryNatives"
+          Condition="'$(OS)' != 'Windows_NT' and '$(RuntimeIdentifier)' == ''">
+    <ItemGroup>
+      <!-- Literal Link values: a %(Filename) transform here batches against the JPLEPH
+           Content item above and copied the library out as "JPLEPH". -->
+      <Content Include="$(_AstrometrySofa)" Condition="Exists('$(_AstrometrySofa)') and Exists('$(_AstrometryNovas)')">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        <Link>libsofa.$(AstrometryNativeExt)</Link>
+        <Visible>false</Visible>
+      </Content>
+      <Content Include="$(_AstrometryNovas)" Condition="Exists('$(_AstrometrySofa)') and Exists('$(_AstrometryNovas)')">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        <Link>libnovas31.$(AstrometryNativeExt)</Link>
+        <Visible>false</Visible>
+      </Content>
+    </ItemGroup>
+    <Warning Condition="!Exists('$(_AstrometrySofa)') or !Exists('$(_AstrometryNovas)')"
+             Text="SOFA/NOVAS31 astrometry natives were not built (no C compiler?) — cross-epoch transforms and the tests that need them will not work on this host. See scripts/build-astrometry-natives.sh." />
+  </Target>
 </Project>

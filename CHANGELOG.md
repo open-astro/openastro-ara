@@ -38,6 +38,9 @@ at the top. This happens in the same commit that pushes the release tag.
 ### Security
 - **API hardening (#1194).** While another client holds the control slot, a command that carries the session id of a client that was taken over is refused with 409 until that client re-claims the slot; with the slot free, and for requests without a session header, nothing changes. The daemon serves at most 16 WebSocket subscribers at once and answers the next with 503 and a retry hint instead of running out of memory to a reconnect storm. Frame downloads, previews, exports and deletes only ever touch files under the capture roots (the save directory, the storage drive, the daemon's fallback folder); a catalog row pointing anywhere else is treated as a missing file and logged.
 
+### Fixed
+- **A fresh checkout's `dotnet test` no longer fails 34 astrometry tests.** The SOFA and NOVAS31 natives are now built from the vendored sources during `dotnet build` on Linux and macOS (once, into `obj/`, rebuilt only when a source changes) and copied next to every binary like the JPL ephemeris, instead of waiting for someone to run `scripts/build-astrometry-natives.sh` by hand into the test directory. A cross-publish (the Pi's linux-arm64 package) is untouched: CI still stages its own arm64 build after publish. A host without a C compiler gets a build warning and the old behaviour.
+
 ### Added
 - **The guiding graph has history when you connect mid-run (#1364).** Opening Ara during a guided session draws the guider's last minutes (up to 400 frames) straight away instead of an empty graph.
 - **The guider's phase on every screen (#1364).** The guider now reports *Looping*, *Star selected* and *Settling* instead of folding them into "stopped", in the same words on the Live strip, the guider dialog and the Run tab — where a new line under the current step shows e.g. *Guider · Calibrating · North step 7 · 11.9 px*.
