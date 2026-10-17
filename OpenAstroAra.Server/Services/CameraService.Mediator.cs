@@ -153,6 +153,10 @@ public sealed partial class CameraService : ICameraMediator, IImagingMediator {
             // IProgress reporter, which has no subscriber in the server.
             var ok = await CaptureCoreAsync(client, frameId, request, imageType, MapFrameType(imageType), effectiveTarget, token).ConfigureAwait(false);
             if (!ok) {
+                // The store can drop while this capture waited its turn: still a pause, not a failed frame.
+                if (StoreEjected(out var lostDir)) {
+                    throw new StoreUnavailableException(StoreMissingMessage(lostDir));
+                }
                 throw new InvalidOperationException(
                     $"capture of '{effectiveTarget}' failed — see the daemon log for the cause (device timeout, disconnect, or storage failure)");
             }

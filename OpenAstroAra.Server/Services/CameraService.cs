@@ -854,9 +854,9 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
             LogPreCaptureDiskBlocked(frameId, freeBytes);
             return false;
         }
-        // The sequencer's CaptureImage refuses an ejected store before it queues (a typed refusal that
-        // pauses the run); this check stays for the REST capture, which comes straight here, and for a
-        // store lost while a sequence capture waited its turn behind another exposure.
+        // The sequencer's CaptureImage refuses an ejected store before it queues, and again after a failed
+        // capture (a typed refusal that pauses the run); this check stays for the REST capture, which
+        // comes straight here, and is what turns a store lost in the queue into that failed capture.
         // §29 — an ejected store must fail capture LOUDLY. After eject the
         // mount point still exists as an empty directory on the root disk;
         // writing there would silently misdirect the night's frames onto the
