@@ -185,12 +185,26 @@ public sealed partial class GuiderService {
                         affected = await sequencer.SkipActiveRunsAsync(CancellationToken.None).ConfigureAwait(false);
                         break;
                     default:
-                        var paused = await sequencer.PauseActiveRunsAsync(CancellationToken.None).ConfigureAwait(false);
+                        // A star-lost pause is adoptable: should the safety engine pause and park before the
+                        // star is back, its auto-resume takes these runs over (a parked, stopped guider sends
+                        // no guide step for this watch to act on).
+                        var paused = kind == GuiderFaultKind.StarLost
+                            ? await sequencer.PauseActiveRunsAsync(adoptable: true, CancellationToken.None).ConfigureAwait(false)
+                            : await sequencer.PauseActiveRunsAsync(CancellationToken.None).ConfigureAwait(false);
                         affected = paused.Count;
                         if (kind == GuiderFaultKind.StarLost) {
-                            // The star-lost watch resumes exactly these runs when guide steps return.
+                            // The star-lost watch resumes exactly these runs when guide steps return. If a step
+                            // already landed while the pause was being placed, release them right away.
+                            var starBackAlready = false;
                             lock (_gate) {
-                                _starLostPausedRuns = paused;
+                                if (_starLostReacted) {
+                                    _starLostPausedRuns = paused;
+                                } else {
+                                    starBackAlready = true;
+                                }
+                            }
+                            if (starBackAlready) {
+                                _ = Task.Run(() => ResumeAfterStarRecoveredAsync(null, paused), CancellationToken.None);
                             }
                         }
                         break;

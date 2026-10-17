@@ -767,6 +767,36 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task An_adoptable_daemon_pause_is_reported_by_the_next_daemon_pause_so_its_auto_resume_covers_it() {
+            // §42.2 — the star-lost watch pauses adoptably: if safety goes unsafe before the star is back,
+            // safety's bulk pause must report the run among its own ids, or auto-resume-when-safe would
+            // leave it parked behind a release that can never come (a parked, stopped guider sends no
+            // guide step). A plain daemon pause keeps the old rule (never adopted — see the test above).
+            var id = Guid.NewGuid();
+            var ws = new RecordingWsBroadcaster();
+            var svc = BuildService(id, BuildBody(c => {
+                c.Items.Add(new WaitForTimeSpan { Time = 2 });
+                c.Items.Add(new Annotation { Name = "after-star-lost-pause" });
+            }), ws);
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            await WaitForInstructionInFlightAsync(svc, id, 0);
+
+            var starLost = await svc.PauseActiveRunsAsync(adoptable: true, CancellationToken.None);
+            Assert.That(starLost, Is.EquivalentTo(new[] { id }));
+            await WaitForStateAsync(svc, id, SequenceRunState.Paused);
+
+            var safety = await svc.PauseActiveRunsAsync(CancellationToken.None);
+            Assert.That(safety, Is.EquivalentTo(new[] { id }), "the later daemon pause adopts the star-lost pause");
+
+            Assert.That(await svc.ResumeRunsAsync(safety, CancellationToken.None), Is.EqualTo(1));
+            Assert.That(await svc.PauseActiveRunsAsync(CancellationToken.None), Is.Not.Empty.And.Not.Null,
+                "after the release the run is Running again and a fresh pause arms it");
+            await svc.ResumeRunsAsync(new[] { id }, CancellationToken.None);
+            var state = await WaitForTerminalAsync(svc, id);
+            Assert.That(state!.State, Is.EqualTo(SequenceRunState.Completed));
+        }
+
+        [Test]
         public async Task SkipActiveRunsAsync_advances_a_running_run_past_its_current_instruction() {
             // §42.2 skip_target: the bulk skip cancels the currently-running items
             // (here a long wait) so the engine advances — the run completes early

@@ -129,6 +129,17 @@ public interface ISequencerService {
     Task<IReadOnlyList<Guid>> PauseActiveRunsAsync(CancellationToken ct);
 
     /// <summary>
+    /// §42.2 — like <see cref="PauseActiveRunsAsync(CancellationToken)"/>, with custody rules for a pause
+    /// that another daemon reaction may need to take over. <paramref name="adoptable"/> marks the runs THIS
+    /// call pauses as adoptable: a later daemon pause (the safety engine going unsafe, say) reports them
+    /// among its own ids and so resumes them when conditions clear, instead of leaving them parked behind
+    /// a pause whose own release can never come (the star-lost watch waits for guide steps that a parked,
+    /// stopped guider will never send). Every call also adopts runs already paused with that flag. A
+    /// user's pause and a PausedAwaitingUser debt are never adopted.
+    /// </summary>
+    Task<IReadOnlyList<Guid>> PauseActiveRunsAsync(bool adoptable, CancellationToken ct);
+
+    /// <summary>
     /// §35 — resume the given runs (the safety engine's auto-resume when conditions turn safe again). Same
     /// CAS + gate-release semantics as <see cref="ResumeAsync"/> but daemon-automated (no §58.12 user-activity
     /// signal), and it never resurrects a <c>PausedAwaitingUser</c> run — that state means a human is owed and

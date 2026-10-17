@@ -113,12 +113,12 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public async Task Star_lost_reaction_pauses_and_reports_kind_star_lost() {
-            sequencer.Setup(s => s.PauseActiveRunsAsync(It.IsAny<CancellationToken>()))
+            sequencer.Setup(s => s.PauseActiveRunsAsync(true, It.IsAny<CancellationToken>()))
                 .ReturnsAsync(new List<Guid> { Guid.NewGuid() });
 
             await service.ReactToGuidingLossAsync(GuiderService.GuiderFaultKind.StarLost);
 
-            sequencer.Verify(s => s.PauseActiveRunsAsync(It.IsAny<CancellationToken>()), Times.Once);
+            sequencer.Verify(s => s.PauseActiveRunsAsync(true, It.IsAny<CancellationToken>()), Times.Once, "adoptable: safety may take the pause over");
             Assert.That(postedNotifications.Select(n => n.Title), Does.Contain("Guide star lost — sequence paused"));
         }
 

@@ -392,7 +392,9 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         return aborted;
     }
 
-    public Task<IReadOnlyList<Guid>> PauseActiveRunsAsync(CancellationToken ct) {
+    public Task<IReadOnlyList<Guid>> PauseActiveRunsAsync(CancellationToken ct) => PauseActiveRunsAsync(adoptable: false, ct);
+
+    public Task<IReadOnlyList<Guid>> PauseActiveRunsAsync(bool adoptable, CancellationToken ct) {
         // §35 safety pause — daemon-automated, so no NotifyUserActivity (an automated
         // reaction must never masquerade as the user coming back per §58.12). Same
         // gate-arm semantics as PauseAsync: the engine suspends at the next instruction
@@ -403,15 +405,23 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
             if (!_runs.TryGetValue(id, out var run)) {
                 continue;
             }
-            // Only arm runs that are actually advancing. An already-Paused (or
-            // PausedAwaitingUser) run is excluded so the safety engine never
-            // "adopts" a pause the user (or a flip failure) owns — auto-resume
-            // must release only pauses this call created.
             var state = run.State;
-            if (!IsAbortableRun(state) || state is SequenceRunState.Paused or SequenceRunState.PausedAwaitingUser) {
+            if (!IsAbortableRun(state) || state is SequenceRunState.PausedAwaitingUser) {
+                continue;
+            }
+            // An already-Paused run is excluded so the safety engine never "adopts" a pause the
+            // user (or a flip failure) owns — auto-resume must release only pauses this call
+            // created. The one exception is a pause its owner marked adoptable (§42.2 star-lost
+            // watch): that owner's release depends on guide steps a parked, stopped guider will
+            // never send, so a later daemon pause takes it over, and both may release it.
+            if (state == SequenceRunState.Paused) {
+                if (run.AdoptablePause) {
+                    paused.Add(id);
+                }
                 continue;
             }
             run.Gate.RequestPause();
+            run.AdoptablePause = adoptable;
             paused.Add(id);
         }
         return Task.FromResult<IReadOnlyList<Guid>>(paused);
@@ -432,6 +442,7 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
                 continue;
             }
             var released = false;
+            run.AdoptablePause = false; // custody ends with the release, whoever releases
             if (run.TryTransition(SequenceRunState.Paused, SequenceRunState.Running)) {
                 _ = EmitAsync("sequence.resumed", id, run);
                 WriteCheckpointIfOwner(run, id);
@@ -1158,6 +1169,10 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         private readonly object _gate = new();
 
         public Guid RunId { get; } = Guid.NewGuid();
+
+        /// <summary>§42.2 — this run's current daemon pause may be adopted by a later daemon pause
+        /// (set by PauseActiveRunsAsync(adoptable: true), cleared on any daemon resume).</summary>
+        public volatile bool AdoptablePause;
 
         public SequenceRunState State {
             get => (SequenceRunState)Volatile.Read(ref _state);
