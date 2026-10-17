@@ -243,7 +243,10 @@ namespace OpenAstroAra.Test {
                 var status = await new GuiderLiveService(svc, new NoFrames()).GetGuidingAssistantAsync(CancellationToken.None).ConfigureAwait(false);
                 Assert.That(status.Connected, Is.False, "an older guider build has no assistant");
                 Assert.That(status.State, Is.EqualTo("idle"));
-                Assert.That(sink.Messages, Is.Empty, "a polled read never raises an inbox error");
+                // Not Is.Empty: the sink is process-global and the bench job runs fixtures in parallel,
+                // so another test's notification (a dither out of range) can land here. What must be
+                // absent is OUR refusal, which notifyOnError:false keeps out of the inbox.
+                Assert.That(sink.Messages, Has.None.Contains("method not found"), "a polled read never raises an inbox error");
             } finally {
                 OpenAstroAra.Core.Utility.Notification.Notifier.Use(previous);
             }
