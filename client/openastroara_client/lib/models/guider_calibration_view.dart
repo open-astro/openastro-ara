@@ -15,6 +15,14 @@ class GuiderCalibrationView {
   final String verdict;
   final String? verdictReason;
 
+  /// The Dec backlash this session's calibration measured: PHD2's
+  /// backlash-clearing pulses before the North leg, each one calibration step
+  /// long. Null until a run with clearing legs completed and the guider told
+  /// Ara its step length.
+  final int? backlashClearingSteps;
+  final int? calibrationStepMs;
+  final int? estimatedDecBacklashMs;
+
   const GuiderCalibrationView({
     this.connected = false,
     this.runState = 'none',
@@ -23,6 +31,9 @@ class GuiderCalibrationView {
     this.data,
     this.verdict = 'redo',
     this.verdictReason,
+    this.backlashClearingSteps,
+    this.calibrationStepMs,
+    this.estimatedDecBacklashMs,
   });
 
   static const disconnected = GuiderCalibrationView();
@@ -48,6 +59,9 @@ class GuiderCalibrationView {
           ? GuiderCalibrationData.fromJson(data)
           : null,
       verdict: json['verdict'] is String ? json['verdict'] as String : 'redo',
+      backlashClearingSteps: (json['backlash_clearing_steps'] as num?)?.toInt(),
+      calibrationStepMs: (json['calibration_step_ms'] as num?)?.toInt(),
+      estimatedDecBacklashMs: (json['estimated_dec_backlash_ms'] as num?)?.toInt(),
       verdictReason: json['verdict_reason'] is String
           ? json['verdict_reason'] as String
           : null,
@@ -57,6 +71,21 @@ class GuiderCalibrationView {
 
 /// One calibration step: the leg, its number, and the star's displacement from
 /// the leg's start in guide pixels.
+/// "Dec backlash ≈ 1.5 s (6 clearing steps × 250 ms)", "no measurable Dec
+/// backlash" (zero clearing steps), or null when the run has not told us yet.
+String? describeDecBacklash(GuiderCalibrationView view) {
+  final steps = view.backlashClearingSteps;
+  if (steps == null) return null;
+  if (steps == 0) return 'No measurable Dec backlash in this calibration';
+  final ms = view.estimatedDecBacklashMs;
+  final stepMs = view.calibrationStepMs;
+  if (ms == null || stepMs == null) {
+    return 'Dec backlash: $steps clearing step${steps == 1 ? '' : 's'} (step length unknown)';
+  }
+  final seconds = (ms / 1000).toStringAsFixed(ms >= 1000 ? 1 : 2);
+  return 'Dec backlash ≈ $seconds s ($steps clearing step${steps == 1 ? '' : 's'} × $stepMs ms)';
+}
+
 class GuiderCalibrationStep {
   final String direction;
   final int step;

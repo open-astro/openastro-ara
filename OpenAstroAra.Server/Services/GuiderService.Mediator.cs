@@ -25,6 +25,7 @@ using OpenAstroAra.Equipment.Equipment.MyGuider.PHD2;
 using OpenAstroAra.Equipment.Interfaces;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Server.Contracts;
+using System.Diagnostics.CodeAnalysis;
 using System;
 using System.Collections.Generic;
 using System.Threading;
@@ -125,8 +126,76 @@ public sealed partial class GuiderService : IGuiderMediator {
         }
         await ReleaseGuideCameraQuietlyAsync().ConfigureAwait(false);
         await ClearPaSessionQuietlyAsync(guider, token).ConfigureAwait(false);
-        return await guider.StartGuiding(forceCalibration, progress ?? _noProgress, token).ConfigureAwait(false);
+        var (recalibrate, why) = await DecideRecalibrationAsync(guider, forceCalibration, token).ConfigureAwait(false);
+        if (recalibrate && why is not null) {
+            LogRecalibrating(why);
+            progress?.Report(new ApplicationStatus { Status = $"Recalibrating the guider first: {why}" });
+        }
+        return await guider.StartGuiding(recalibrate, progress ?? _noProgress, token).ConfigureAwait(false);
     }
+
+    /// <summary>Above this declination a calibration's RA rate is too far from the sky's to reuse
+    /// elsewhere (PHD2 itself refuses declination compensation past its limit).</summary>
+    internal const double RecalibrateAboveDecDeg = 60;
+
+    /// <summary>
+    /// Whether to calibrate again before guiding, and why. Calibration measures the guide camera's angle
+    /// and the mount's guide speed, not the sky position — PHD2 corrects a reused calibration for
+    /// declination itself (2026-10-16: one taken at Dec 44 matched cos(Dec) at Dec 56 and Dec 0) — so
+    /// nothing is forced every run (2–8 minutes, and a fresh chance to calibrate on a bad star).
+    /// Recalibration happens when the instruction asks, when the profile's "force calibration each
+    /// session" is on, when the stored calibration fails Ara's verdict (axes far from square, one axis
+    /// barely moved, the last run failed) or when it was taken above <see cref="RecalibrateAboveDecDeg"/>°.
+    /// No stored calibration needs no forcing: the guider calibrates on its own. Pure — unit-tested.
+    /// </summary>
+    internal static (bool Recalibrate, string? Why) ShouldRecalibrate(bool requested, bool forceEachSession,
+            string runState, string? runError, GuiderCalibrationDataDto? data) {
+        if (requested) {
+            return (true, "the Start Guiding step asks for a fresh calibration");
+        }
+        if (forceEachSession) {
+            return (true, "the profile asks for a fresh calibration every session");
+        }
+        if (data is null || !data.Calibrated) {
+            return (false, null); // the guider calibrates by itself
+        }
+        // Declination first: past this limit the verdict's own rate comparison (RA corrected by cos(dec))
+        // is no longer trustworthy and would name the wrong reason.
+        if (data.DeclinationDeg is double dec && double.IsFinite(dec) && Math.Abs(dec) > RecalibrateAboveDecDeg) {
+            return (true, $"the stored calibration was taken at Dec {dec:F0}°, too far from the equator to reuse");
+        }
+        var (verdict, reason) = GuiderLiveService.Judge(runState == "running" ? "complete" : runState, runError, data);
+        if (verdict != "good") {
+            return (true, reason ?? "the stored calibration is not trusted");
+        }
+        return (false, null);
+    }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Best-effort read before a guide start: a refused calibration read means 'no reason to recalibrate', never a failed start.")]
+    private async Task<(bool, string?)> DecideRecalibrationAsync(PHD2Guider guider, bool requested, CancellationToken ct) {
+        bool forceEachSession;
+        try {
+            forceEachSession = _profileStore?.GetPhd2Settings().ForceCalibrationEachSession ?? false;
+        } catch (Exception) {
+            forceEachSession = false;
+        }
+        if (requested || forceEachSession) {
+            return ShouldRecalibrate(requested, forceEachSession, "none", null, null);
+        }
+        try {
+            var data = await guider.GetCalibrationDataAsync(ct).ConfigureAwait(false);
+            var (runState, _, runError) = guider.CalibrationRun;
+            return ShouldRecalibrate(false, false, runState, runError, data is null ? null : GuiderLiveService.ToDto(data));
+        } catch (OperationCanceledException) {
+            throw;
+        } catch (Exception) {
+            return (false, null);
+        }
+    }
+
+    [LoggerMessage(EventId = 4231, Level = Microsoft.Extensions.Logging.LogLevel.Information, Message = "§63 recalibrating the guider before guiding: {Why}")]
+    private partial void LogRecalibrating(string why);
 
     /// <summary>
     /// The guider's polar-align lease outlives whoever took it: a live-focus loop that died with a daemon

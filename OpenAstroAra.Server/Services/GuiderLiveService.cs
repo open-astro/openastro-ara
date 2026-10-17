@@ -14,6 +14,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Newtonsoft.Json.Linq;
 using OpenAstroAra.Equipment.Equipment.MyGuider.PHD2;
+using OpenAstroAra.Equipment.Equipment.MyGuider.PHD2.PhdEvents;
 using OpenAstroAra.Server.Contracts;
 using System;
 using System.Collections.Generic;
@@ -187,6 +188,14 @@ public sealed partial class GuiderLiveService : IGuiderLiveService {
         var data = await Quietly<GuiderCalibrationData?>(async () => await guider.GetCalibrationDataAsync(ct).ConfigureAwait(false), "calibration data").ConfigureAwait(false);
         var dto = data is null ? null : ToDto(data);
         var (verdict, reason) = Judge(runState, error, dto);
+        // The Dec backlash this run measured: PHD2 pulses the Dec axis until it moves before the North
+        // leg ("Backlash" legs), each pulse one calibration step long. Only a completed run has the
+        // whole count; the step length is the guider's profile setting.
+        var clearing = runState == "complete" ? CountBacklashClearingSteps(steps) : (int?) null;
+        var stepMs = clearing is > 0
+            ? await Quietly<int?>(async () => await guider.GetCalibrationStepMsAsync(ct).ConfigureAwait(false), "calibration step").ConfigureAwait(false)
+            : null;
+        var backlashMs = EstimateDecBacklashMs(clearing, stepMs);
         var stepDtos = new List<GuiderCalibrationStepDto>(steps.Count);
         foreach (var s in steps) {
             // A step without dx/dy (an older guider build) has nowhere to go on the plot: drawing it at
@@ -196,8 +205,27 @@ public sealed partial class GuiderLiveService : IGuiderLiveService {
             }
             stepDtos.Add(new GuiderCalibrationStepDto(s.Direction ?? "", s.Step, Math.Round(dx, 2), Math.Round(dy, 2), Math.Round(s.Distance, 2)));
         }
-        return new GuiderCalibrationViewDto(true, runState, stepDtos, error, dto, verdict, reason);
+        return new GuiderCalibrationViewDto(true, runState, stepDtos, error, dto, verdict, reason,
+            BacklashClearingSteps: clearing, CalibrationStepMs: stepMs, EstimatedDecBacklashMs: backlashMs);
     }
+
+    /// <summary>PHD2 names its backlash-clearing legs "Backlash"; every other leg is an axis.</summary>
+    internal static int CountBacklashClearingSteps(IReadOnlyList<PhdEventCalibrating> steps) {
+        var n = 0;
+        foreach (var s in steps) {
+            if (string.Equals(s.Direction, "Backlash", StringComparison.OrdinalIgnoreCase)) {
+                n++;
+            }
+        }
+        return n;
+    }
+
+    /// <summary>Clearing steps × the step length, or null when either is unknown. Zero clearing steps
+    /// is a real answer (no measurable backlash) and reads as 0 ms.</summary>
+    internal static int? EstimateDecBacklashMs(int? clearingSteps, int? stepMs) =>
+        clearingSteps is null ? null
+        : clearingSteps == 0 ? 0
+        : stepMs is > 0 ? clearingSteps * stepMs : null;
 
     public Task ClearCalibrationAsync(CancellationToken ct) => _guider.RequireConnectedGuider().ClearCalibrationAsync(ct);
 

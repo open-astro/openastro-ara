@@ -505,7 +505,15 @@ public sealed record GuiderCalibrationViewDto(
     string? Error,
     GuiderCalibrationDataDto? Data,
     string Verdict,
-    string? VerdictReason);
+    string? VerdictReason,
+    /// <summary>The Dec backlash this session's calibration measured, from PHD2's backlash-clearing
+    /// legs: how many clearing pulses the Dec axis needed before it moved, each
+    /// <c>CalibrationStepMs</c> long, so the estimate is their product. Null until a run with clearing
+    /// legs has completed and the guider has answered its calibration step length. 2026-10-16: every
+    /// calibration needed 3–10 clearing steps (≈ 1.5 s) and backlash compensation was off.</summary>
+    int? BacklashClearingSteps = null,
+    int? CalibrationStepMs = null,
+    int? EstimatedDecBacklashMs = null);
 
 /// <summary>#1364 item 5 — the guider's own graph history (<c>GET /equipment/guider/history</c>), so a
 /// client that connects mid-session draws the last minutes instead of an empty graph. Steps are oldest
