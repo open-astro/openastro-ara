@@ -18,6 +18,7 @@ using OpenAstroAra.Core.Utility;
 using OpenAstroAra.Sequencer.Container;
 using OpenAstroAra.Sequencer.Interfaces;
 using OpenAstroAra.Sequencer.SequenceItem;
+using OpenAstroAra.Sequencer.Utility;
 using System;
 using System.ComponentModel.Composition;
 using System.Threading;
@@ -107,7 +108,7 @@ namespace OpenAstroAra.Sequencer.Trigger.Autofocus {
             // SequenceEntityFailedException through the run-engine rather than rewinding the count.
             var after = AfterExposures;
             var due = false;
-            if (previousItem is IExposureItem && after > 0) {
+            if (previousItem is IExposureItem && ItemUtility.ExposureTaken(previousItem) && after > 0) {
                 var count = Interlocked.Increment(ref exposureCount);
                 due = count % after == 0;
             }

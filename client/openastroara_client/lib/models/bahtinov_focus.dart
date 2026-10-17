@@ -94,6 +94,9 @@ class BahtinovSample {
   final bool withinZone;
   final double peakAdu;
   final BahtinovOverlay? overlay;
+  /// The measured star, frame pixels (0 when the daemon sent none).
+  final int starX;
+  final int starY;
 
   const BahtinovSample({
     required this.seq,
@@ -104,6 +107,8 @@ class BahtinovSample {
     this.withinZone = false,
     this.peakAdu = 0,
     this.overlay,
+    this.starX = 0,
+    this.starY = 0,
   });
 
   factory BahtinovSample.fromJson(Map<String, dynamic> json) => BahtinovSample(
@@ -115,7 +120,25 @@ class BahtinovSample {
         withinZone: json['within_zone'] as bool? ?? false,
         peakAdu: _d(json, 'peak_adu'),
         overlay: BahtinovOverlay.fromJson(json['overlay']),
+        starX: _i(json, 'star_x'),
+        starY: _i(json, 'star_y'),
       );
+}
+
+/// What the daemon's picture covers when it is a crop of the frame, in frame
+/// pixels. Absent when the picture is the whole frame.
+class BahtinovFrameCrop {
+  final int left;
+  final int top;
+  final int size;
+  const BahtinovFrameCrop({required this.left, required this.top, required this.size});
+
+  static BahtinovFrameCrop? fromJson(Object? json) {
+    if (json is! Map<String, dynamic>) return null;
+    final size = _i(json, 'size');
+    if (size <= 0) return null;
+    return BahtinovFrameCrop(left: _i(json, 'left'), top: _i(json, 'top'), size: size);
+  }
 }
 
 /// The readout's snapshot.
@@ -139,6 +162,14 @@ class BahtinovFocusStatus {
   /// The sample the daemon's current frame belongs to. Behind [seq] when a
   /// frame failed to render, so the client compares against this, not [seq].
   final int frameSeq;
+  /// The analysed frame's size in (binned) camera pixels; 0 before a frame.
+  final int frameWidth;
+  final int frameHeight;
+  /// What the picture shows when it is a crop; null for the whole frame.
+  final BahtinovFrameCrop? frameCrop;
+  /// The star the user locked by tapping, in frame pixels.
+  final int? pickX;
+  final int? pickY;
 
   const BahtinovFocusStatus({
     this.active = false,
@@ -155,7 +186,78 @@ class BahtinovFocusStatus {
     this.error,
     this.hasFrame = false,
     this.frameSeq = 0,
+    this.frameWidth = 0,
+    this.frameHeight = 0,
+    this.frameCrop,
+    this.pickX,
+    this.pickY,
   });
+
+  bool get hasPick => pickX != null && pickY != null;
+
+  /// How many measured frames the readout averages. Seeing on a small image
+  /// scale moves a single frame's offset by a pixel either way; the median of
+  /// five holds still, while a real focuser move still shows within a few
+  /// frames.
+  static const steadyWindow = 5;
+
+  /// Two samples within this many frame pixels measured the same star (the
+  /// daemon's picked-star search window).
+  static const sameStarPx = 32;
+
+  /// [latest] with its offset replaced by the median of the last
+  /// [steadyWindow] measured frames (and the zone verdict and µm estimate
+  /// re-derived from it). The raw frame-by-frame value stays in [latest] and
+  /// the trend. A latest frame without a measurement is returned as is (the
+  /// live readout shows why). Pure.
+  BahtinovSample? get steady {
+    final l = latest;
+    if (l == null || !l.detected || l.offsetPx == null) return l;
+    return lastSteady;
+  }
+
+  /// The steadied reading at the LAST MEASURED frame, whatever the frames
+  /// after it show: what Finish decides on, since by the time the user
+  /// presses it the mask may be off and the newest frames have no spikes.
+  /// Null before any measurement. Pure.
+  BahtinovSample? get lastSteady {
+    final history = [
+      ...recent,
+      if (latest case final l? when recent.isEmpty || recent.last.seq != l.seq) l,
+    ];
+    final all = [
+      for (final s in history.reversed)
+        if (s.detected && s.offsetPx != null) s,
+    ];
+    if (all.isEmpty) return null;
+    // Only frames of the same star: after a pick moves the readout to another
+    // star, the previous star's offsets must not blend into the median.
+    final star = all.first;
+    final measured = [
+      for (final s in all)
+        if ((s.starX - star.starX).abs() <= sameStarPx && (s.starY - star.starY).abs() <= sameStarPx) s,
+    ];
+    // The overlay rides on `latest` only; keep it when latest is the anchor.
+    final anchor = latest != null && latest!.seq == measured.first.seq ? latest! : measured.first;
+    final offsets = [for (final s in measured.take(steadyWindow)) s.offsetPx!]..sort();
+    if (offsets.length < 2) return anchor;
+    final mid = offsets.length ~/ 2;
+    final median = offsets.length.isOdd ? offsets[mid] : (offsets[mid - 1] + offsets[mid]) / 2;
+    // µm per pixel from the zone (both come from the same optics), so an anchor
+    // frame at exactly 0 px still yields a µm figure for a non-zero median.
+    final umPerPx = zoneUm != null && zonePx > 0
+        ? zoneUm! / zonePx
+        : (anchor.defocusUm != null && anchor.offsetPx != 0 ? anchor.defocusUm! / anchor.offsetPx! : null);
+    return BahtinovSample(
+      seq: anchor.seq,
+      detected: true,
+      offsetPx: median,
+      defocusUm: umPerPx == null ? null : median * umPerPx,
+      withinZone: median.abs() <= zonePx,
+      peakAdu: anchor.peakAdu,
+      overlay: anchor.overlay,
+    );
+  }
 
   static const idle = BahtinovFocusStatus();
 
@@ -184,6 +286,11 @@ class BahtinovFocusStatus {
       error: json['error'] is String ? json['error'] as String : null,
       hasFrame: json['has_frame'] as bool? ?? false,
       frameSeq: _i(json, 'frame_seq'),
+      frameWidth: _i(json, 'frame_width'),
+      frameHeight: _i(json, 'frame_height'),
+      frameCrop: BahtinovFrameCrop.fromJson(json['frame_crop']),
+      pickX: (json['pick_x'] as num?)?.toInt(),
+      pickY: (json['pick_y'] as num?)?.toInt(),
     );
   }
 }

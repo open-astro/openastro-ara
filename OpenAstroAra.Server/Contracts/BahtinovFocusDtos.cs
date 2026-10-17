@@ -22,6 +22,14 @@ namespace OpenAstroAra.Server.Contracts;
 /// binning costs precision — it is there for cameras whose full frames download slowly).</summary>
 public sealed record BahtinovFocusStartRequestDto(double ExposureSec = 1.0, int? Binning = null);
 
+/// <summary>Lock the readout on a star: its position in (binned) frame pixels — the frame is
+/// <c>FrameWidth</c> × <c>FrameHeight</c> in the status.</summary>
+public sealed record BahtinovPickRequestDto(int X, int Y);
+
+/// <summary>What the picture at <c>GET …/frame</c> covers when it is a crop of the frame: its top-left
+/// corner and side in frame pixels. Absent when the picture is the whole frame.</summary>
+public sealed record BahtinovFrameCropDto(int Left, int Top, int Size);
+
 /// <summary>One fitted spike over the star crop, in crop pixel coordinates (0…<c>CropSize</c>, the picture
 /// at <c>GET …/frame</c>). <c>Role</c> is <c>outer</c> (the X) or <c>central</c>.</summary>
 public sealed record BahtinovLineDto(string Role, double X1, double Y1, double X2, double Y2, double AngleDeg);
@@ -61,7 +69,9 @@ public sealed record BahtinovSampleDto(
 /// <c>Error</c> says why). <c>ZonePx</c> is the in-focus limit on the offset: the critical focus zone from
 /// the optics when <c>ZoneFromOptics</c>, else a fixed half pixel. <c>BestOffsetPx</c> is the
 /// smallest-magnitude offset this session (signed). <c>Recent</c> is the trend window, newest last. The star
-/// crop is at <c>GET …/frame</c> when <c>HasFrame</c>.
+/// crop is at <c>GET …/frame</c> when <c>HasFrame</c>; <c>FrameCrop</c> says what part of the
+/// <c>FrameWidth</c> × <c>FrameHeight</c> frame it shows (absent: the whole frame). <c>PickX</c>/<c>PickY</c>
+/// is the star the user locked with <c>POST …/pick</c>, when one is.
 /// </summary>
 public sealed record BahtinovFocusStatusDto(
     bool Active,
@@ -81,4 +91,9 @@ public sealed record BahtinovFocusStatusDto(
     string? Error,
     int ConsecutiveFailures,
     bool HasFrame,
-    long FrameSeq);
+    long FrameSeq,
+    int FrameWidth = 0,
+    int FrameHeight = 0,
+    BahtinovFrameCropDto? FrameCrop = null,
+    int? PickX = null,
+    int? PickY = null);

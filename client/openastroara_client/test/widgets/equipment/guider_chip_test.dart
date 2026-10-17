@@ -98,6 +98,16 @@ void main() {
       );
     });
 
+    test('connected + settling/looping/star selected → busy (#1364: the guide camera is in use)', () {
+      for (final r in [GuiderRuntimeState.settling, GuiderRuntimeState.looping, GuiderRuntimeState.starSelected]) {
+        expect(
+          guiderStatusLevel(_status(GuiderConnectionState.connected, r)),
+          StatusLevel.busy,
+          reason: '$r is not a healthy idle or a steady guide',
+        );
+      }
+    });
+
     test('connected + stopped → connected (idle but healthy)', () {
       expect(
         guiderStatusLevel(_status(GuiderConnectionState.connected, GuiderRuntimeState.stopped)),

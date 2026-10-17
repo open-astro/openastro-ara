@@ -405,8 +405,18 @@ public partial class Program {
                     await focus.StopAsync().ConfigureAwait(false);
                 }
             };
-            // ...but never the lease a running polar alignment holds (resolved lazily for the same reason).
+            // ...and whether one is running: its lease is real, so it is ended (below) rather than pulled
+            // (resolved lazily for the same reason).
             guider.PolarAlignActive = () => sp.GetService<IPolarAlignService>() is PolarAlignService { IsActive: true };
+            // #1364 — the guider settings beyond Tune Guiding, read from the active profile on every push.
+            guider.AdvancedSettings = () => GuiderAdvancedSettingsMapping.ToEngine(sp.GetRequiredService<IProfileStore>().GetGuiderAdvancedSettings());
+            // ...and a polar alignment left open when a run asks to guide is ended (stopped, not completed):
+            // the Polar Align step without a Done kept the guider's lease and paused the run (2026-10-16).
+            guider.EndPolarAlignAsync = async ct => {
+                if (sp.GetService<IPolarAlignService>() is { } pa) {
+                    await pa.StopAsync(null, ct).ConfigureAwait(false);
+                }
+            };
             // #1311 — the polar alignment residual from guiding: logged with the running imaging
             // session, compared with tonight's Polar Align result, stamped with where the mount pointed.
             guider.PaResidualLog = sp.GetService<IPaResidualLog>();
@@ -460,6 +470,12 @@ public partial class Program {
                 sp.GetRequiredService<ILogger<GuideFocusService>>(),
                 syntheticFrames: sp.GetService<SyntheticGuideFrames>() is { } synthetic ? synthetic.Next : null,
                 optics: () => GuideOpticsFor(sp.GetRequiredService<IProfileStore>())));
+        // #1364 — the live guide-camera view: the guider's picture and star pick, through the daemon.
+        builder.Services.AddSingleton<IGuiderLiveService>(sp =>
+            new GuiderLiveService(
+                sp.GetRequiredService<GuiderService>(),
+                sp.GetRequiredService<IPolarAlignFrameFetcher>(),
+                sp.GetRequiredService<ILogger<GuiderLiveService>>()));
         // Phase 13.13 — §38 sequence CRUD + runtime control.
         // ISequenceService swapped to FileSequenceService below after
         // profileDir is resolved (filesystem-backed per §38.2). Runtime control

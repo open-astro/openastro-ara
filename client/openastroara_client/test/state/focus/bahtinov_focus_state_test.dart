@@ -26,6 +26,10 @@ class _FakeClient implements BahtinovFocusClient {
   @override
   Future<void> stop() async {}
   @override
+  Future<void> pick({required int x, required int y}) async {}
+  @override
+  Future<void> clearPick() async {}
+  @override
   void close() {}
 }
 

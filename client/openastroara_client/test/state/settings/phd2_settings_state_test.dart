@@ -33,6 +33,19 @@ void main() {
       expect(s.guiderAlpacaPort, 0);
       // Guide exposure — 0 = unset, the guider keeps its own duration.
       expect(s.guideExposureMs, 0);
+      // Not the guider's own 95 %, which buries stars in read noise.
+      expect(s.guideCameraGain, 50);
+    });
+
+    test('setGuideCameraGain accepts 0..100 and rejects anything outside', () {
+      final n = container.read(phd2SettingsProvider.notifier);
+      n.setGuideCameraGain(30);
+      expect(container.read(phd2SettingsProvider).guideCameraGain, 30);
+      n.setGuideCameraGain(101);
+      n.setGuideCameraGain(-1);
+      expect(container.read(phd2SettingsProvider).guideCameraGain, 30);
+      n.setGuideCameraGain(0);
+      expect(container.read(phd2SettingsProvider).guideCameraGain, 0);
     });
 
     test('setGuideExposureMs accepts 0 (= unset) and rejects negative', () {

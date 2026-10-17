@@ -11,6 +11,10 @@ import 'guide_focus_api.dart' show GuideFocusFrame;
 abstract interface class BahtinovFocusClient {
   Future<void> start({required double exposureSec});
   Future<void> stop();
+  /// Lock the readout on the star at (x, y) frame pixels.
+  Future<void> pick({required int x, required int y});
+  /// Forget the picked star.
+  Future<void> clearPick();
   Future<BahtinovFocusStatus> status();
   /// The latest star crop (or whole frame); [GuideFocusFrame] carries the
   /// JPEG and its `X-Frame-Seq`.
@@ -41,6 +45,19 @@ class BahtinovFocusApi implements BahtinovFocusClient {
   @override
   Future<void> stop() async {
     await _dio.post<void>('/api/v1/bahtinov-focus/stop');
+  }
+
+  @override
+  Future<void> pick({required int x, required int y}) async {
+    await _dio.post<void>(
+      '/api/v1/bahtinov-focus/pick',
+      data: <String, dynamic>{'x': x, 'y': y},
+    );
+  }
+
+  @override
+  Future<void> clearPick() async {
+    await _dio.delete<void>('/api/v1/bahtinov-focus/pick');
   }
 
   @override

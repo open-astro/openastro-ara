@@ -156,7 +156,101 @@ namespace OpenAstroAra.Test {
             Assert.That(s.Latest.Problem, Is.EqualTo("no_pattern"));
             Assert.That(s.Latest.OffsetPx, Is.Null);
             Assert.That(s.HasFrame, Is.True, "the whole frame shows instead");
+            Assert.That(s.FrameCrop, Is.Null, "the picture is the whole frame");
+            Assert.That((s.FrameWidth, s.FrameHeight), Is.EqualTo((W, H)));
             await svc.StopAsync();
+        }
+
+        [Test]
+        public async Task A_picked_star_is_cropped_and_kept_without_a_pattern() {
+            var frames = new ScriptedFrames();
+            frames.Script.Enqueue((double.NaN, 0));
+            using var svc = new BahtinovFocusService(frames, () => RedCat);
+            await svc.StartAsync(new BahtinovFocusStartRequestDto(ExposureSec: 0.1), CancellationToken.None);
+            await WaitForSeq(svc, 2);
+            Assert.That(() => svc.Pick(W + 5, 10), Throws.TypeOf<ArgumentOutOfRangeException>());
+
+            svc.Pick(100, 400);
+            // Well past LockLostAfter misses: an unpicked lock would have been dropped by now.
+            var s = await WaitForSeq(svc, svc.GetStatus().Seq + BahtinovFocusService.LockLostAfter + 3);
+            Assert.That(s.Latest!.Detected, Is.False);
+            Assert.That((s.PickX, s.PickY), Is.EqualTo((100, 400)));
+            Assert.That(s.FrameCrop, Is.Not.Null, "the picture is the crop around the picked star");
+            var crop = s.FrameCrop!;
+            Assert.That(crop.Size, Is.EqualTo(256));
+            // Centred on the brightest star near the pick (within the picked 32 px search window), so the
+            // crop holds the pick and sits near the frame's bottom-left corner.
+            Assert.That(crop.Left, Is.InRange(0, 100), "clamped near the left edge");
+            Assert.That(crop.Top, Is.InRange(H - 256 - 100, H - 256), "clamped near the bottom edge");
+            Assert.That((s.Latest.StarX, s.Latest.StarY), Is.EqualTo((100, 400)), "the lock stays on the pick");
+
+            svc.ClearPick();
+            s = await WaitForSeq(svc, s.Seq + 2);
+            Assert.That(s.PickX, Is.Null);
+            Assert.That(s.FrameCrop, Is.Null, "back to the whole frame");
+            await svc.StopAsync();
+        }
+
+        [Test]
+        public async Task A_tap_during_a_frames_measurement_is_not_overwritten_by_that_frame() {
+            // Review of #1365: Record wrote the lock from a frame whose search position predated the tap,
+            // so the readout went back to the old star while pick_x/pick_y reported the new one.
+            var frames = new ScriptedFrames();
+            frames.Script.Enqueue((2.0, 23));
+            using var svc = new BahtinovFocusService(frames, () => RedCat);
+            await svc.StartAsync(new BahtinovFocusStartRequestDto(ExposureSec: 0.1), CancellationToken.None);
+            var s = await WaitForSeq(svc, 3);
+            Assert.That(s.Latest!.Detected, Is.True, "precondition: locked on the mask star at (330, 250)");
+
+            var tapped = 0;
+            svc.AfterMeasureForTest = () => {
+                if (Interlocked.Exchange(ref tapped, 1) == 0) {
+                    svc.Pick(100, 400); // lands between that frame's search and its Record
+                }
+            };
+            s = await WaitForSeq(svc, s.Seq + 4);
+            Assert.That(tapped, Is.EqualTo(1));
+            Assert.That((s.PickX, s.PickY), Is.EqualTo((100, 400)));
+            Assert.That(Math.Abs(s.Latest!.StarX - 100), Is.LessThan(40),
+                $"the readout followed the tap, not the frame that was in flight (star_x {s.Latest.StarX})");
+            await svc.StopAsync();
+        }
+
+        /// <summary>Holds the first capture until released, so a test can act before the first frame.</summary>
+        private sealed class GatedFrames : IAnalysisFrameSource, IDisposable {
+            public readonly SemaphoreSlim Gate = new(0);
+            public void Dispose() => Gate.Dispose();
+            private int _seed;
+            public async Task<AnalysisFrame> CaptureForAnalysisAsync(double exposureSec, int binning, CancellationToken ct) {
+                await Gate.WaitAsync(ct);
+                Gate.Release(); // every later capture passes straight through
+                var pixels = SyntheticSky.RenderBahtinov(W, H, 330, 250, 2.0, 2.0, frameSeed: ++_seed);
+                return new AnalysisFrame(pixels, W, H, DateTimeOffset.UtcNow);
+            }
+        }
+
+        [Test]
+        public async Task A_pick_outside_the_first_frame_is_dropped_when_the_frame_arrives() {
+            // Review of #1365: before the first frame Pick can only refuse negatives, so an off-frame
+            // pick became a lock that never found a star and never fell back.
+            using var frames = new GatedFrames();
+            using var svc = new BahtinovFocusService(frames, () => RedCat);
+            await svc.StartAsync(new BahtinovFocusStartRequestDto(ExposureSec: 0.1), CancellationToken.None);
+            svc.Pick(W + 500, 10); // no frame yet: accepted
+            Assert.That(svc.GetStatus().PickX, Is.EqualTo(W + 500));
+            frames.Gate.Release();
+            var s = await WaitForSeq(svc, 3);
+            Assert.That(s.PickX, Is.Null, "dropped once the frame size was known");
+            Assert.That(s.Latest!.Detected, Is.True, "the search went back to the brightest star");
+            await svc.StopAsync();
+        }
+
+        [Test]
+        public void The_crop_around_a_star_stays_inside_the_frame() {
+            Assert.That(BahtinovFocusService.CropAround((5, 5), 640, 480), Is.EqualTo((0, 0, 256)));
+            Assert.That(BahtinovFocusService.CropAround((320, 240), 640, 480), Is.EqualTo((192, 112, 256)));
+            Assert.That(BahtinovFocusService.CropAround((639, 479), 640, 480), Is.EqualTo((384, 224, 256)));
+            Assert.That(BahtinovFocusService.CropAround((50, 50), 100, 120), Is.EqualTo((0, 0, 100)), "a small frame is its own crop");
         }
 
         [Test]

@@ -147,6 +147,117 @@ namespace OpenAstroAra.Test {
             Assert.That(marker.GetProperty("dx_px").GetDouble(), Is.EqualTo(2.0));
         }
 
+        private static async Task<(FakeGuider Fake, GuiderService Svc)> ConnectedServiceAsync() {
+            var fake = FakeGuider.Start();
+            fake.SetOnConnectEvents(PhdEvents.Version(subver: "openastroara-fake"), PhdEvents.AppState("Stopped"));
+            fake.OnRpc("get_pixel_scale", JsonValue.Create(1.5));
+            fake.OnRpc("get_profile", _ => new JsonObject { ["id"] = 1, ["name"] = "My Equipment" });
+            fake.OnRpc("get_profiles", _ => new JsonArray(new JsonObject { ["id"] = 1, ["name"] = "My Equipment" }));
+            fake.OnRpc("create_profile", _ => new JsonObject { ["id"] = 5, ["name"] = "Ara", ["selected"] = true });
+            fake.OnRpc("get_connected", JsonValue.Create(true));
+            var svc = new GuiderService(new HeadlessProfileService(), NewRecovery(),
+                NullLogger<GuiderService>.Instance, Mock.Of<IGuiderProcessSupervisor>());
+            await svc.ConnectAsync(new GuiderConnectRequestDto("127.0.0.1", fake.Port), idempotencyKey: null, CancellationToken.None)
+                .ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => svc.GetInfo().PixelScale > 0).ConfigureAwait(false), Is.True,
+                "precondition: the guider connected");
+            return (fake, svc);
+        }
+
+        [Test]
+        public async Task The_guider_state_carries_the_calibration_leg_until_calibration_ends() {
+            var (fake, svc) = await ConnectedServiceAsync().ConfigureAwait(false);
+            await using var _ = fake;
+            using var __ = svc;
+            await fake.BroadcastAsync(PhdEvents.StartCalibration()).ConfigureAwait(false);
+            var calibrating = new JsonObject {
+                ["Event"] = "Calibrating", ["Timestamp"] = 1.0, ["Host"] = "fake", ["Inst"] = 1,
+                ["Mount"] = "Mount", ["dir"] = "North", ["step"] = 7, ["dist"] = 11.94, ["dx"] = -4.7, ["dy"] = 13.4,
+                ["pos"] = new JsonArray(512.0, 384.0), ["State"] = "North",
+            };
+            await fake.BroadcastAsync(calibrating).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => svc.GetAsync(CancellationToken.None).Result?.Runtime.CalibrationStep == 7)
+                .ConfigureAwait(false), Is.True, "the step reached the guider state");
+            var runtime = (await svc.GetAsync(CancellationToken.None).ConfigureAwait(false))!.Runtime;
+            Assert.That(runtime.State, Is.EqualTo("calibrating"));
+            Assert.That(runtime.CalibrationDirection, Is.EqualTo("North"));
+            Assert.That(runtime.CalibrationDistancePx, Is.EqualTo(11.9), "rounded to 0.1 px");
+
+            // The guider reporting another state without a CalibrationComplete this client saw (it
+            // finished while the link was down): the leg is not reported outside calibrating.
+            await fake.BroadcastAsync(PhdEvents.AppState("Guiding")).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => svc.GetAsync(CancellationToken.None).Result?.Runtime.CalibrationStep is null)
+                .ConfigureAwait(false), Is.True, "no leg outside calibrating");
+            Assert.That((await svc.GetAsync(CancellationToken.None).ConfigureAwait(false))!.Runtime.State, Is.EqualTo("guiding"));
+
+            await fake.BroadcastAsync(PhdEvents.CalibrationComplete()).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => svc.GetAsync(CancellationToken.None).Result?.Runtime.CalibrationStep is null)
+                .ConfigureAwait(false), Is.True, "CalibrationComplete clears the leg");
+            runtime = (await svc.GetAsync(CancellationToken.None).ConfigureAwait(false))!.Runtime;
+            Assert.That((runtime.CalibrationDirection, runtime.CalibrationDistancePx), Is.EqualTo(((string?)null, (double?)null)));
+        }
+
+        [Test]
+        public async Task A_dropped_link_mid_calibration_clears_the_calibration_leg() {
+            // Review of #1365: only calibration events cleared the leg, so a link that dropped mid-
+            // calibration left a stale leg on the guider for the reconnect to report.
+            await using var fake = FakeGuider.Start();
+            fake.SetOnConnectEvents(PhdEvents.Version(subver: "openastroara-fake"), PhdEvents.AppState("Stopped"));
+            fake.OnRpc("get_pixel_scale", JsonValue.Create(1.5));
+            var profiles = new HeadlessProfileService();
+            profiles.ActiveProfile.GuiderSettings.PHD2ServerHost = "127.0.0.1";
+            profiles.ActiveProfile.GuiderSettings.PHD2ServerPort = fake.Port;
+            using var guider = new PHD2Guider(profiles);
+            using (var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60))) {
+                Assert.That(await guider.Connect(cts.Token).ConfigureAwait(false), Is.True, "precondition: connected");
+            }
+            await fake.BroadcastAsync(new JsonObject {
+                ["Event"] = "Calibrating", ["Timestamp"] = 1.0, ["Host"] = "fake", ["Inst"] = 1,
+                ["Mount"] = "Mount", ["dir"] = "East", ["step"] = 3, ["dist"] = 4.2,
+            }).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => guider.Calibration is not null).ConfigureAwait(false), Is.True,
+                "precondition: calibrating");
+
+            fake.DropConnections();
+            Assert.That(await WaitUntilAsync(() => !guider.Connected).ConfigureAwait(false), Is.True, "the drop was seen");
+            Assert.That(guider.Calibration, Is.Null, "the leg went with the link");
+        }
+
+        [Test]
+        public async Task An_open_polar_alignment_is_ended_and_its_lease_released_before_guiding() {
+            var (fake, svc) = await ConnectedServiceAsync().ConfigureAwait(false);
+            await using var _ = fake;
+            using var __ = svc;
+            fake.OnRpc("get_pa_session", _ => new JsonObject { ["active"] = true, ["expires_in_s"] = 300 });
+            fake.OnRpc("set_pa_session", _ => new JsonObject { ["active"] = false });
+            var order = new List<string>();
+            svc.PolarAlignActive = () => true;
+            svc.EndPolarAlignAsync = _ => {
+                lock (order) {
+                    order.Add("end-polar-align");
+                }
+                return Task.CompletedTask;
+            };
+
+            await svc.ClearPaSessionQuietlyAsync(svc.RequireConnectedGuider(), CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(order, Has.Count.EqualTo(1).And.Contains("end-polar-align"), "the alignment is ended first");
+            Assert.That(fake.ReceivedMethods, Does.Contain("set_pa_session"), "then the guider's lease is released");
+
+            // Guide pressed by hand (the REST start) takes the same path: end, then release, then guide.
+            var releasesBefore = fake.ReceivedMethods.Count(m => m == "set_pa_session");
+            await svc.StartGuidingAsync(idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => order.Count == 2
+                    && fake.ReceivedMethods.Count(m => m == "set_pa_session") > releasesBefore).ConfigureAwait(false), Is.True,
+                "the manual Guide ended the alignment and released the lease");
+
+            // Without the hook a running alignment keeps its lease: no release is sent.
+            svc.EndPolarAlignAsync = null;
+            var before = fake.ReceivedMethods.Count(m => m == "set_pa_session");
+            await svc.ClearPaSessionQuietlyAsync(svc.RequireConnectedGuider(), CancellationToken.None).ConfigureAwait(false);
+            Assert.That(fake.ReceivedMethods.Count(m => m == "set_pa_session"), Is.EqualTo(before));
+        }
+
         private sealed class RecordingPaResidualLog : IPaResidualLog {
             public List<PaResidualDto> Rows { get; } = new();
             public Task InsertAsync(PaResidualDto result, CancellationToken ct) {
@@ -715,6 +826,54 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Profile_push_sends_the_camera_gain_after_the_equipment_reconnects() {
+            // Settings → Guider → Save runs the full push: selections in a disconnected window, then a
+            // reconnect. The gain must follow the reconnect (the daemon refuses it from a camera that is
+            // off) and be reported in guider.profile_pushed.
+            await using var fake = FakeGuider.Start();
+            fake.SetOnConnectEvents(PhdEvents.Version(subver: "openastroara-fake"), PhdEvents.AppState("Stopped"));
+            fake.OnRpc("get_profile", _ => new JsonObject { ["id"] = 1, ["name"] = "My Equipment" });
+            fake.OnRpc("get_profiles", _ => new JsonArray(new JsonObject { ["id"] = 1, ["name"] = "My Equipment" }));
+            fake.OnRpc("create_profile", _ => new JsonObject { ["id"] = 5, ["name"] = "Ara", ["selected"] = true });
+            var connected = false;
+            fake.OnRpc("get_connected", _ => JsonValue.Create(connected));
+            fake.OnRpc("set_connected", req => { connected = (bool?)req["params"]?[0] ?? connected; return JsonValue.Create(0); });
+            var gains = new System.Collections.Concurrent.ConcurrentQueue<(int Gain, bool Connected)>();
+            fake.OnRpc("set_camera_gain", req => {
+                gains.Enqueue(((int?)req["params"]?[0] ?? -1, connected));
+                return JsonValue.Create(0);
+            });
+            var events = new System.Collections.Concurrent.ConcurrentQueue<(string Type, System.Text.Json.JsonElement Payload)>();
+            var ws = new Mock<IWsBroadcaster>();
+            ws.Setup(w => w.PublishAsync(It.IsAny<string>(), It.IsAny<System.Text.Json.JsonElement>(), It.IsAny<CancellationToken>()))
+                .Callback<string, System.Text.Json.JsonElement, CancellationToken>((t, p, _) => events.Enqueue((t, p.Clone())))
+                .Returns(Task.CompletedTask);
+            var profiles = new HeadlessProfileService();
+            var settings = profiles.ActiveProfile.GuiderSettings;
+            settings.GuiderCamera = "Alpaca Camera [192.168.1.20:11111/0]"; // a selection opens the disconnect window
+            settings.GuideCameraGain = 35;
+            using var svc = new GuiderService(profiles, NewRecovery(),
+                NullLogger<GuiderService>.Instance, Mock.Of<IGuiderProcessSupervisor>(), ws.Object);
+            await svc.ConnectAsync(new GuiderConnectRequestDto("127.0.0.1", fake.Port), idempotencyKey: null, CancellationToken.None)
+                .ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => !gains.IsEmpty).ConfigureAwait(false), Is.True,
+                "precondition: the connect pushed the gain");
+            gains.Clear();
+            events.Clear();
+            var disconnectsBefore = fake.ReceivedMethods.Count(m => m == "set_connected");
+
+            await svc.PushGuiderProfileAsync("push-gain", CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(fake.ReceivedMethods.Count(m => m == "set_connected"), Is.GreaterThan(disconnectsBefore),
+                "precondition: the full push opened the disconnect window");
+            Assert.That(gains, Is.EqualTo(new[] { (35, true) }), "one gain push, sent with the camera reconnected");
+            var pushed = events.Where(e => e.Type == "guider.profile_pushed").ToList();
+            Assert.That(pushed, Has.Count.EqualTo(1));
+            Assert.That(pushed[0].Payload.GetProperty("methods").EnumerateArray().Select(m => m.GetString()),
+                Does.Contain("set_camera_gain"));
+        }
+
+        [Test]
         public async Task Profile_push_refuses_a_bare_alpaca_selection_before_anything_reaches_the_guider() {
             // #1306 — the field case: bare "Alpaca Camera"/"Alpaca Mount" with no stored host/port. The
             // push must throw the typed refusal (→ 422) and send NOTHING, rather than leave the guider on
@@ -905,12 +1064,46 @@ namespace OpenAstroAra.Test {
             var sent = fake.ReceivedMethods.Skip(before).ToList();
             Assert.That(sent, Does.Contain("set_exposure"));
             Assert.That(sent, Does.Contain("set_algo_param"));
+            Assert.That(sent, Does.Contain("set_camera_gain"), "a gain change in Tune Guiding must reach the guider");
             Assert.That(sent.Where(m => m is "set_connected" or "stop_capture" or "set_profile_setup" or "set_profile"
                     || m.StartsWith("set_selected", StringComparison.Ordinal)),
                 Is.Empty, "a tuning push must never open the equipment disconnect window");
             var pushed = events.Where(e => e.Type == "guider.profile_pushed").ToList();
             Assert.That(pushed, Has.Count.EqualTo(1));
             Assert.That(pushed[0].Payload.GetProperty("scope").GetString(), Is.EqualTo("tuning"));
+        }
+
+        [Test]
+        public async Task Connect_sends_the_profile_camera_gain_once_the_equipment_is_connected() {
+            // 2026-10-17: a fresh guider runs its stock 95% gain (ASI290MM at 570 of 600) and guide focus found
+            // no stars in pure read noise. The daemon refuses set_camera_gain until the camera is connected, so
+            // the gain must follow the equipment connect, never ride the disconnected window.
+            await using var fake = FakeGuider.Start();
+            fake.SetOnConnectEvents(PhdEvents.Version(subver: "openastroara-fake"), PhdEvents.AppState("Stopped"));
+            // The gain belongs to Ara's profile twin, so the profile step must succeed first.
+            fake.OnRpc("get_profile", _ => new JsonObject { ["id"] = 1, ["name"] = "My Equipment" });
+            fake.OnRpc("get_profiles", _ => new JsonArray(new JsonObject { ["id"] = 1, ["name"] = "My Equipment" }));
+            fake.OnRpc("create_profile", _ => new JsonObject { ["id"] = 5, ["name"] = "Ara", ["selected"] = true });
+            var connected = false;
+            fake.OnRpc("get_connected", _ => JsonValue.Create(connected));
+            fake.OnRpc("set_connected", req => { connected = (bool?)req["params"]?[0] ?? connected; return JsonValue.Create(0); });
+            var gains = new System.Collections.Concurrent.ConcurrentQueue<(int Gain, bool Connected)>();
+            fake.OnRpc("set_camera_gain", req => {
+                gains.Enqueue(((int?)req["params"]?[0] ?? -1, connected));
+                return JsonValue.Create(0);
+            });
+            var profiles = new HeadlessProfileService();
+            profiles.ActiveProfile.GuiderSettings.GuideCameraGain = 140; // clamped to the daemon's 0..100
+            using var svc = new GuiderService(profiles, NewRecovery(),
+                NullLogger<GuiderService>.Instance, Mock.Of<IGuiderProcessSupervisor>());
+
+            await svc.ConnectAsync(new GuiderConnectRequestDto("127.0.0.1", fake.Port), idempotencyKey: null, CancellationToken.None)
+                .ConfigureAwait(false);
+            Assert.That(await PollAsync(svc, d => d.State == EquipmentConnectionState.Connected).ConfigureAwait(false), Is.Not.Null,
+                "the service never reached Connected against the fake guider");
+            Assert.That(await WaitUntilAsync(() => !gains.IsEmpty).ConfigureAwait(false), Is.True,
+                "the connect never sent set_camera_gain");
+            Assert.That(gains, Is.EqualTo(new[] { (100, true) }), "one gain push, clamped, sent with the camera connected");
         }
 
         [Test]
@@ -963,6 +1156,31 @@ namespace OpenAstroAra.Test {
             var afterLost = await svc.GetAsync(CancellationToken.None).ConfigureAwait(false);
             Assert.That(afterLost?.State, Is.EqualTo(EquipmentConnectionState.Connected),
                 "a lost star is a guiding fault, not a disconnect — the link should stay Connected");
+        }
+
+        [Test]
+        public async Task Looping_a_selected_star_and_settling_reach_their_own_runtime_states() {
+            // #1364 item 6 — these used to read "stopped" (looping, star selected) or "guiding" (settling).
+            await using var fake = FakeGuider.Start();
+            fake.SetOnConnectEvents(PhdEvents.Version(subver: "openastroara-fake"), PhdEvents.AppState("Stopped"));
+            using var svc = new GuiderService(new HeadlessProfileService(), NewRecovery(),
+                NullLogger<GuiderService>.Instance, Mock.Of<IGuiderProcessSupervisor>());
+            await svc.ConnectAsync(new GuiderConnectRequestDto("127.0.0.1", fake.Port), idempotencyKey: null, CancellationToken.None)
+                .ConfigureAwait(false);
+            Assert.That(await PollAsync(svc, d => d.State == EquipmentConnectionState.Connected).ConfigureAwait(false), Is.Not.Null);
+
+            await fake.BroadcastAsync(PhdEvents.AppState("Looping")).ConfigureAwait(false);
+            Assert.That(await PollAsync(svc, d => d.Runtime?.State == "looping").ConfigureAwait(false), Is.Not.Null, "Looping");
+            await fake.BroadcastAsync(PhdEvents.AppState("Selected")).ConfigureAwait(false);
+            Assert.That(await PollAsync(svc, d => d.Runtime?.State == "star_selected").ConfigureAwait(false), Is.Not.Null, "Selected");
+            await fake.BroadcastAsync(PhdEvents.AppState("Guiding")).ConfigureAwait(false);
+            Assert.That(await PollAsync(svc, d => d.Runtime?.State == "guiding").ConfigureAwait(false), Is.Not.Null, "Guiding");
+            await fake.BroadcastAsync(PhdEvents.Settling(1.2, 3, 10)).ConfigureAwait(false);
+            Assert.That(await PollAsync(svc, d => d.Runtime?.State == "settling").ConfigureAwait(false), Is.Not.Null,
+                "a Settling event while guiding reads settling");
+            await fake.BroadcastAsync(PhdEvents.SettleDone()).ConfigureAwait(false);
+            Assert.That(await PollAsync(svc, d => d.Runtime?.State == "guiding").ConfigureAwait(false), Is.Not.Null,
+                "SettleDone returns to guiding");
         }
 
         [Test]

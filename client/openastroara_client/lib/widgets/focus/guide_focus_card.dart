@@ -77,8 +77,12 @@ class _GuideFocusCardState extends ConsumerState<GuideFocusCard> {
     final guiderBusy = guider != null &&
         const {
           GuiderRuntimeState.guiding,
+          GuiderRuntimeState.settling,
           GuiderRuntimeState.calibrating,
           GuiderRuntimeState.dithering,
+          // #1364 — a looping guider refuses the single frames this loop takes.
+          GuiderRuntimeState.looping,
+          GuiderRuntimeState.starSelected,
           GuiderRuntimeState.starLost,
           GuiderRuntimeState.paused,
         }.contains(guider.runtimeState);
@@ -91,7 +95,7 @@ class _GuideFocusCardState extends ConsumerState<GuideFocusCard> {
       if (!guiderConnected) {
         blocker = 'Connect the guider first — the frames come through it.';
       } else if (guiderBusy) {
-        blocker = 'Stop guiding first; the guider owns its camera while it guides or calibrates.';
+        blocker = 'Stop the guider first; it owns its camera while it is looping, guiding, calibrating or paused.';
       }
     }
 

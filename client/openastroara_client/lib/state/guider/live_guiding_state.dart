@@ -151,6 +151,7 @@ class LiveGuidingNotifier extends Notifier<List<RmsSample>> {
 
   void _fold(GuiderStatus status) {
     final actively = status.runtimeState == GuiderRuntimeState.guiding ||
+        status.runtimeState == GuiderRuntimeState.settling ||
         status.runtimeState == GuiderRuntimeState.dithering;
     final total = status.rmsTotal;
     if (!actively || total == null) return;

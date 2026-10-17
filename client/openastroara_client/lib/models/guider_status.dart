@@ -30,13 +30,34 @@ GuiderConnectionState _connectionFromWire(String? token) {
 /// link state: a guider can be `connected` while runtime is `stopped`.
 enum GuiderRuntimeState {
   stopped,
+  /// #1364 — exposures looping with no star chosen (the guide camera is busy).
+  looping,
+  /// #1364 — looping with a star chosen, not guiding yet.
+  starSelected,
   calibrating,
   guiding,
+  /// #1364 — guiding, settling after a dither or a start.
+  settling,
   paused,
   starLost,
   dithering,
   unknown,
 }
+
+/// #1364 item 6 — the one wording of a guider phase, used by the guiding
+/// strip, the guider dialog and the Run tab alike.
+String guiderRuntimeText(GuiderRuntimeState state) => switch (state) {
+      GuiderRuntimeState.stopped => 'Stopped',
+      GuiderRuntimeState.looping => 'Looping',
+      GuiderRuntimeState.starSelected => 'Star selected',
+      GuiderRuntimeState.calibrating => 'Calibrating',
+      GuiderRuntimeState.guiding => 'Guiding',
+      GuiderRuntimeState.settling => 'Settling',
+      GuiderRuntimeState.paused => 'Paused',
+      GuiderRuntimeState.starLost => 'Star lost',
+      GuiderRuntimeState.dithering => 'Dithering',
+      GuiderRuntimeState.unknown => 'Unknown',
+    };
 
 GuiderRuntimeState _runtimeFromWire(String? token) {
   switch (token) {
@@ -52,6 +73,12 @@ GuiderRuntimeState _runtimeFromWire(String? token) {
       return GuiderRuntimeState.starLost;
     case 'dithering':
       return GuiderRuntimeState.dithering;
+    case 'looping':
+      return GuiderRuntimeState.looping;
+    case 'star_selected':
+      return GuiderRuntimeState.starSelected;
+    case 'settling':
+      return GuiderRuntimeState.settling;
     default:
       return GuiderRuntimeState.unknown;
   }
@@ -80,6 +107,12 @@ class GuiderStatus {
   /// #1311 — the polar alignment residual from guiding (`runtime.pa_residual`),
   /// so a client that (re)connects mid-run shows it before the next WS event.
   final PaResidual? paResidual;
+  /// While calibrating: the leg under way (`West`, `East`, `North`, `South`…),
+  /// its step and the star's distance from the leg's start in guide pixels
+  /// (`runtime.calibration_*`). Null otherwise.
+  final String? calibrationDirection;
+  final int? calibrationStep;
+  final double? calibrationDistancePx;
 
   const GuiderStatus({
     this.deviceId,
@@ -94,7 +127,29 @@ class GuiderStatus {
     this.rmsDecArcsec,
     this.currentProfile,
     this.paResidual,
+    this.calibrationDirection,
+    this.calibrationStep,
+    this.calibrationDistancePx,
   });
+
+  /// "North step 7 · 11.9 px" while a calibration leg is reported; null otherwise.
+  String? get calibrationText {
+    final dir = calibrationDirection;
+    if (dir == null || dir.isEmpty) return null;
+    final parts = [
+      calibrationStep == null ? dir : '$dir step $calibrationStep',
+      if (calibrationDistancePx != null) '${calibrationDistancePx!.toStringAsFixed(1)} px',
+    ];
+    return parts.join(' · ');
+  }
+
+  /// "Calibrating · North step 7 · 11.9 px", "Guiding", "Not connected".
+  String get runtimeSummary {
+    if (!isConnected) return 'Not connected';
+    final base = guiderRuntimeText(runtimeState);
+    final leg = runtimeState == GuiderRuntimeState.calibrating ? calibrationText : null;
+    return leg == null ? base : '$base · $leg';
+  }
 
   bool get isConnected => connectionState == GuiderConnectionState.connected;
   bool get isGuiding => runtimeState == GuiderRuntimeState.guiding;
@@ -121,6 +176,9 @@ class GuiderStatus {
       rmsDecArcsec: _asDouble(runtimeMap['rms_dec_arcsec']),
       currentProfile: _str(runtimeMap['current_profile']),
       paResidual: PaResidual.fromJson(runtimeMap['pa_residual']),
+      calibrationDirection: _str(runtimeMap['calibration_direction']),
+      calibrationStep: (runtimeMap['calibration_step'] as num?)?.toInt(),
+      calibrationDistancePx: _asDouble(runtimeMap['calibration_distance_px']),
     );
   }
 

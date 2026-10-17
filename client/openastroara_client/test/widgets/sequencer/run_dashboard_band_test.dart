@@ -17,6 +17,18 @@ class _FakeRunNotifier extends SequenceRunStateNotifier {
   Future<SequenceRunStateInfo?> build() async => _v;
 }
 
+/// A run whose state the test flips while the same widget tree stays mounted.
+class _MutableRunNotifier extends SequenceRunStateNotifier {
+  _MutableRunNotifier(this._v);
+  SequenceRunStateInfo? _v;
+  @override
+  Future<SequenceRunStateInfo?> build() async => _v;
+  void set(SequenceRunStateInfo? v) {
+    _v = v;
+    state = AsyncData(v);
+  }
+}
+
 class _FixedProbe extends TrackingProbeLiveNotifier {
   _FixedProbe(this._v);
   final TrackingProbeLive? _v;
@@ -213,5 +225,46 @@ void main() {
     await tester.pumpWidget(const SizedBox());
     await _pump(tester, running);
     expect(find.textContaining('Tracking probe'), findsNothing, reason: 'guided rig: no strip');
+  });
+
+  testWidgets('#1363 the band survives being hidden and shown again in one session', (tester) async {
+    // Second run of a session: the band hid while no run was active (the
+    // StreamBuilder went away) and came back when the next run started, which
+    // subscribed to the band's one-second ticker a second time. A
+    // single-subscription ticker threw "Stream has already been listened to"
+    // and took the Run tab down; a broadcast one carries on.
+    SequenceRunStateInfo running(String id) => SequenceRunStateInfo(
+          sequenceId: id,
+          runId: 'r-$id',
+          state: SequenceRunState.running,
+          instructionsCompleted: 1,
+          instructionsTotal: 7,
+          currentInstructionDescription: 'Cooling camera to -10 °C',
+          startedUtc: DateTime.now().toUtc(),
+        );
+    final runs = _MutableRunNotifier(running('first'));
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          sequenceRunStateProvider.overrideWith(() => runs),
+          filterWheelProvider.overrideWith(() => _FakeWheel(null)),
+          trackingProbeLiveProvider.overrideWith(() => _FixedProbe(null)),
+        ],
+        child: const MaterialApp(home: Scaffold(body: RunDashboardBand())),
+      ),
+    );
+    await tester.pump();
+    expect(find.byKey(const Key('run-dashboard-band')), findsOneWidget);
+
+    runs.set(const SequenceRunStateInfo(state: SequenceRunState.completed));
+    await tester.pump();
+    expect(find.byKey(const Key('run-dashboard-band')), findsNothing, reason: 'no active run: the band hides');
+
+    runs.set(running('second'));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+    expect(tester.takeException(), isNull, reason: 'the ticker is subscribed a second time');
+    expect(find.byKey(const Key('run-dashboard-band')), findsOneWidget);
+    expect(find.textContaining('Cooling camera to -10 °C'), findsWidgets);
   });
 }

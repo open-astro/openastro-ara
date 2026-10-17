@@ -48,6 +48,9 @@
   </ItemGroup>
 
   <ItemGroup>
+    <None Update="fixtures\bahtinov-redcat51-2s-256.u16">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
     <None Update="fixtures\iers-finals2000A-excerpt.txt">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>

@@ -117,6 +117,10 @@ The **Sequencer** tab is where the night gets defined.
   instruction set executes natively; anything unknown is shown and skipped safely).
 - Templates let you save shapes you reuse ("LRGB target", "flats at dawn").
 - Start/pause/resume/abort from the toolbar; a running sequence's file is protected from edits.
+- While a run is up, the band above the tree shows the current step and, under it, what the guider
+  is doing in the same words as the Live tab's guiding strip — *Looping*, *Star selected*,
+  *Calibrating · North step 7 · 11.9 px*, *Guiding*, *Settling*, *Star lost* — so a long
+  calibration behind "Start guiding" never looks like a stalled run.
 - **Calibration frames** — the Calibration screen generates flats/darks plans as sequences and
   tracks your library's coverage against what your lights need.
 
@@ -168,11 +172,24 @@ framing/focus loop when you need to point or focus by eye.
   not the guiding; PHD2's own graph counts them): RMS RA / Dec / Total, peak per axis, and the RA oscillation index. The axis is in
   arcseconds once the guider has reported its pixel scale (or you have set the guide focal length
   and pixel size under **Settings → Guider**), and in guide-camera pixels until then. Tap the
-  header to collapse the graph to a one-line status. **Tune** opens **Tune Guiding**: RA/Dec
-  aggressiveness, minimum move, Dec guide mode, dither pixels and the **guide exposure** (0.5 s is a
-  good start on a harmonic mount). Apply sends only these runtime-safe values to the guider, so
+  header to collapse the graph to a one-line status. A client that connects while guiding is already
+  running gets the guider's last frames (up to 400) drawn straight away. **Tune** opens **Tune Guiding**: RA/Dec
+  aggressiveness, minimum move, Dec guide mode, dither pixels, the **guide exposure** (0.5 s is a
+  good start on a harmonic mount) and the **guide camera gain** (percent of the camera's range, 50 %
+  by default; lower it if guide frames look grainy and stars are hard to find). Apply sends only these runtime-safe values to the guider, so
   guiding keeps running; equipment and optics changes live in **Settings → Guider** and do
-  reconnect the guider.
+  reconnect the guider. **More…** opens **Guider settings** for everything else the guider offers —
+  multi-star, star detection, auto exposure, noise reduction, subframes, the RA and Dec algorithms,
+  maximum pulses, Dec backlash, mount options, dither scale and variable delay. Each row shows the
+  guider's own value until you set one; your values are kept in the profile and sent on Apply while
+  guiding continues (multi-star takes effect the next time the guider connects). Setting a row back
+  to the guider's (or **All guider's**) only stops Ara sending it: the guider keeps whatever value it has,
+  including one Ara sent before.
+- **Starting guiding ends Polar Align.** Polar Align holds the guide camera while it runs. If guiding
+  is started while it is still open (a run's Start Guiding after the Polar Align step was left
+  without **Done**, a re-guide after a meridian flip, or Guide pressed by hand in the guider panel), Ara stops the
+  alignment, without saving a result, and then guides. Finish Polar Align with **Done** first if you
+  want its result kept.
 - **Polar alignment left after Align.** Each time guiding starts, Ara measures how much polar
   alignment error is really left, at no setup cost: over the first 5 minutes of clean guiding
   (dithers and settling are left out) it adds the guider's Dec corrections back onto the star's

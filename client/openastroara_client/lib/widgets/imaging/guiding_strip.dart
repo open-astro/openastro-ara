@@ -19,6 +19,7 @@ import '../../state/settings/phd2_settings_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../util/guide_graph_stats.dart';
 import '../../util/phd2_guide_log.dart';
+import 'guide_camera_panel.dart';
 import 'guiding_tune_dialog.dart';
 import 'polar_error_rating.dart';
 
@@ -147,6 +148,14 @@ class GuidingStrip extends ConsumerWidget {
                     const SizedBox(width: 8),
                   ],
                   IconButton(
+                    key: const Key('guide-camera-button'),
+                    tooltip: 'Guide camera…',
+                    visualDensity: VisualDensity.compact,
+                    icon: const Icon(Icons.camera_outlined,
+                        size: 16, color: AraColors.textSecondary),
+                    onPressed: () => showGuideCameraDialog(context),
+                  ),
+                  IconButton(
                     tooltip: 'Tune guiding…',
                     visualDensity: VisualDensity.compact,
                     icon: const Icon(Icons.tune,
@@ -191,24 +200,17 @@ class GuidingStrip extends ConsumerWidget {
     );
   }
 
+  /// The phase in the one shared wording (`guiderRuntimeText`), lower case,
+  /// with the calibration leg while calibrating (#1364 item 6). Only an
+  /// unpolled runtime reads differently: "connected", not "unknown".
   static String stateLabel(GuiderStatus? status) {
     if (status == null || !status.isConnected) return 'disconnected';
-    switch (status.runtimeState) {
-      case GuiderRuntimeState.stopped:
-        return 'stopped';
-      case GuiderRuntimeState.calibrating:
-        return 'calibrating';
-      case GuiderRuntimeState.guiding:
-        return 'guiding';
-      case GuiderRuntimeState.paused:
-        return 'paused';
-      case GuiderRuntimeState.starLost:
-        return 'star lost';
-      case GuiderRuntimeState.dithering:
-        return 'dithering';
-      case GuiderRuntimeState.unknown:
-        return 'connected';
-    }
+    if (status.runtimeState == GuiderRuntimeState.unknown) return 'connected';
+    // The leg and step while the guider calibrates — its own page only says
+    // "guiding" for the same minutes (2026-10-16).
+    final base = guiderRuntimeText(status.runtimeState).toLowerCase();
+    final leg = status.runtimeState == GuiderRuntimeState.calibrating ? status.calibrationText : null;
+    return leg == null ? base : '$base · $leg';
   }
 
   static Color _stateColor(GuiderStatus? status) {
@@ -222,6 +224,9 @@ class GuidingStrip extends ConsumerWidget {
         return AraColors.accentError;
       case GuiderRuntimeState.calibrating:
       case GuiderRuntimeState.dithering:
+      case GuiderRuntimeState.settling:
+      case GuiderRuntimeState.looping:
+      case GuiderRuntimeState.starSelected:
         return AraColors.accentBusy;
       case GuiderRuntimeState.stopped:
       case GuiderRuntimeState.paused:
@@ -684,6 +689,7 @@ class _GraphArea extends StatelessWidget {
       empty = 'Guider not connected';
     } else if (model.visible.isEmpty) {
       empty = status!.runtimeState == GuiderRuntimeState.guiding ||
+              status!.runtimeState == GuiderRuntimeState.settling ||
               status!.runtimeState == GuiderRuntimeState.dithering
           ? 'Waiting for guide frames…'
           : 'Not guiding';

@@ -450,7 +450,7 @@ public sealed record GuiderDto(
 /// the pixel RMS is null or the guider hasn't reported a positive pixel scale yet (§63 guider-a
 /// follow-up: "also expose arcsec via PixelScale").</summary>
 public sealed record GuiderStateDto(
-    string State,    // "stopped" | "calibrating" | "guiding" | "paused" | "star_lost" | "dithering"
+    string State,    // "stopped" | "looping" | "star_selected" | "calibrating" | "guiding" | "settling" | "paused" | "star_lost" (#1364; "dithering" is never sent)
     double? RmsTotal,
     double? RmsRa,
     double? RmsDec,
@@ -458,7 +458,105 @@ public sealed record GuiderStateDto(
     double? RmsTotalArcsec = null,
     double? RmsRaArcsec = null,
     double? RmsDecArcsec = null,
-    PaResidualDto? PaResidual = null);
+    PaResidualDto? PaResidual = null,
+    /// <summary>While <c>State</c> is <c>calibrating</c>: the leg under way (<c>West</c>, <c>East</c>,
+    /// <c>North</c>, <c>South</c> or a backlash-clearing leg), its step count and the star's distance from
+    /// the leg's start in guide-camera pixels. Null otherwise.</summary>
+    string? CalibrationDirection = null,
+    int? CalibrationStep = null,
+    double? CalibrationDistancePx = null);
+
+/// <summary>
+/// #1364 — the live guide-camera view (<c>GET /equipment/guider/live</c>): what the guider is doing
+/// (<c>AppState</c>: Stopped | Looping | Selected | Calibrating | Guiding | LostLock | Paused), the frame
+/// size the picture at <c>GET …/live/frame</c> covers, the locked star and the search box around it, the
+/// latest guide frame's star SNR and mass (only while <c>AppState</c> is Guiding), whether multi-star tracking is on, and the other stars the
+/// guider found (<c>Stars</c>, brightest first; empty when it has no image). Coordinates are guide-camera
+/// pixels. Fields the guider could not answer are null, never an error — the picture still shows.
+/// </summary>
+public sealed record GuiderLiveDto(
+    bool Connected,
+    string? AppState,
+    int? FrameWidth,
+    int? FrameHeight,
+    double? LockX,
+    double? LockY,
+    int? SearchRegion,
+    double? Snr,
+    double? StarMass,
+    bool? MultiStarEnabled,
+    IReadOnlyList<GuiderLiveStarDto> Stars,
+    bool HasFrame);
+
+/// <summary>One star the guider sees, in guide-camera pixels.</summary>
+public sealed record GuiderLiveStarDto(double X, double Y, double? Snr, double? Mass, double? Hfd);
+
+/// <summary>
+/// #1364 — the guider's calibration (<c>GET /equipment/guider/live/calibration</c>): the run this
+/// session (<c>RunState</c>: <c>none</c> | <c>running</c> | <c>complete</c> | <c>failed</c>, its steps —
+/// the plot PHD2 draws — and the failure reason), the stored result (<c>Data</c>, null when the guider
+/// has none), and Ara's verdict on it: <c>good</c>, <c>check</c> (usable, but the axes are far from
+/// square or the rates far apart — <c>VerdictReason</c> says which) or <c>redo</c> (failed or absent).
+/// </summary>
+public sealed record GuiderCalibrationViewDto(
+    bool Connected,
+    string RunState,
+    IReadOnlyList<GuiderCalibrationStepDto> Steps,
+    string? Error,
+    GuiderCalibrationDataDto? Data,
+    string Verdict,
+    string? VerdictReason);
+
+/// <summary>#1364 item 5 — the guider's own graph history (<c>GET /equipment/guider/history</c>), so a
+/// client that connects mid-session draws the last minutes instead of an empty graph. Steps are oldest
+/// first in the <c>guider.step</c> shape, each with its age in seconds measured on the daemon's clock (the
+/// guider's own when co-hosted, as on the SBC), so the client can place it on its own time axis without trusting the two clocks
+/// agree. Empty when the guider has no history or is not connected.</summary>
+public sealed record GuiderHistoryDto(bool Connected, IReadOnlyList<GuiderHistoryStepDto> Steps);
+
+/// <summary>One historical guide step: the <c>guider.step</c> fields plus <c>AgeSec</c>. Pulse durations
+/// follow <c>guider.step</c>'s sign: negative = East (RA) / South (Dec).</summary>
+public sealed record GuiderHistoryStepDto(
+    double AgeSec,
+    double? RaRawPx,
+    double? DecRawPx,
+    double? RaArcsec,
+    double? DecArcsec,
+    double RaDurationMs,
+    double DecDurationMs,
+    double? PixelScaleArcsec,
+    double? Snr,
+    double? StarMass);
+
+/// <summary>#1364 — what the guider has now (<c>GET /equipment/guider/advanced</c>), beside the profile's
+/// guider-advanced block: its current values (fields it did not answer are null) and the guide algorithms
+/// each axis offers. <c>Connected</c> false with nulls and empty lists when no guider is connected.</summary>
+public sealed record GuiderAdvancedViewDto(
+    bool Connected,
+    GuiderAdvancedSettingsDto Current,
+    IReadOnlyList<string> RaAlgorithms,
+    IReadOnlyList<string> DecAlgorithms);
+
+/// <summary>One calibration step: the leg (<c>West</c>, <c>East</c>, <c>North</c>, <c>South</c> or a
+/// backlash-clearing leg), its number and the star's displacement from the leg's start, guide px.</summary>
+public sealed record GuiderCalibrationStepDto(string Direction, int Step, double Dx, double Dy, double Dist);
+
+/// <summary>The stored calibration: axis angles on the camera (degrees), guide rates (px/s), parities,
+/// the declination it was taken at, and the orthogonality error (how far the RA and Dec axes are from
+/// 90° apart).</summary>
+public sealed record GuiderCalibrationDataDto(
+    bool Calibrated,
+    double? XAngleDeg,
+    double? YAngleDeg,
+    double? XRatePxPerSec,
+    double? YRatePxPerSec,
+    string? XParity,
+    string? YParity,
+    double? DeclinationDeg,
+    double? OrthogonalityErrorDeg);
+
+/// <summary>A tap on the live picture: lock on the star nearest (<c>X</c>, <c>Y</c>) guide pixels.</summary>
+public sealed record GuiderLiveSelectRequestDto(double X, double Y);
 
 /// <summary>
 /// #1311 — the polar alignment error left after Align, measured from the Dec drift the guider

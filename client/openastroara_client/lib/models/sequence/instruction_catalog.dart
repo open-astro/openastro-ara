@@ -403,6 +403,11 @@ Object? deepCloneJson(Object? value) {
   return value;
 }
 
+/// `InstructionErrorBehavior.SkipInstructionSetOnError` as the daemon
+/// serialises it (an int; `ContinueOnError` is 0): a failed item ends its
+/// parent container and the run carries on after it.
+const int skipInstructionSetOnError = 1;
+
 /// The full instruction palette, in display order within each category.
 /// The assembly-qualified `$type` of the general-purpose sequential container —
 /// the single source of truth for this string (also reused by the trigger

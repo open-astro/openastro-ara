@@ -141,6 +141,8 @@ public sealed class ProfileShareService : IProfileShareService {
     ///   <item>Optics — STRIP all (rig geometry → rig description; includes aperture_mm)</item>
     ///   <item>CameraElectronics — STRIP all (donor's camera hardware, incl. sensor_name; recipient's camera differs and auto-captures on connect)</item>
     ///   <item>FilterSet — STRIP all (donor's physical filters; recipient declares their own)</item>
+    ///   <item>Unguided — KEEP (guard thresholds and probe ladder: tuning judgement, no PII)</item>
+    ///   <item>GuiderAdvanced — KEEP (guider tuning like aggressiveness: star detection, algorithms, limits; no path, network or identity)</item>
     /// </list>
     /// </remarks>
     internal static ProfileSnapshotDto StripForShare(ProfileSnapshotDto s) => s with {

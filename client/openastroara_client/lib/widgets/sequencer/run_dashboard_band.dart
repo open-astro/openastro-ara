@@ -1,8 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../models/guider_status.dart';
 import '../../models/sequence/run_eta.dart';
 import '../../state/equipment/filter_wheel_state.dart';
+import '../../state/guider/guider_state.dart';
 import '../../state/library/live_library_state.dart';
 import '../../state/sequencer/run_event_ticker.dart';
 import '../../state/sequencer/run_latest_frame_state.dart';
@@ -31,15 +35,32 @@ class RunDashboardBand extends ConsumerStatefulWidget {
 class _RunDashboardBandState extends ConsumerState<RunDashboardBand> {
   bool _tickerExpanded = false;
 
-  @override
-  void initState() {
-    super.initState();
-    // Tick the elapsed readout once a second while mounted. The band only
-    // mounts during an active run, so the timer's lifetime is the run's.
-    _ticker = Stream<void>.periodic(const Duration(seconds: 1));
+  // The elapsed readout's one-second tick. A broadcast controller whose timer
+  // runs only while something listens: the band hides while no run is active
+  // (its StreamBuilder goes away) and comes back when the next run starts,
+  // which subscribes again. A single-subscription `Stream.periodic` threw
+  // "Stream has already been listened to" on that second subscribe and took
+  // the whole Run tab down (#1363, 2026-10-16, second run of the night); a
+  // plain `asBroadcastStream()` would keep its timer alive with no listener.
+  late final StreamController<void> _ticker =
+      StreamController<void>.broadcast(onListen: _startTicking, onCancel: _stopTicking);
+  Timer? _tickTimer;
+
+  void _startTicking() {
+    _tickTimer ??= Timer.periodic(const Duration(seconds: 1), (_) => _ticker.add(null));
   }
 
-  late final Stream<void> _ticker;
+  void _stopTicking() {
+    _tickTimer?.cancel();
+    _tickTimer = null;
+  }
+
+  @override
+  void dispose() {
+    _stopTicking();
+    _ticker.close();
+    super.dispose();
+  }
 
   String _fmtDuration(Duration d) {
     final h = d.inHours;
@@ -75,7 +96,7 @@ class _RunDashboardBandState extends ConsumerState<RunDashboardBand> {
     // a daemon that sent none.
 
     return StreamBuilder<void>(
-      stream: _ticker,
+      stream: _ticker.stream,
       builder: (context, _) {
         final elapsed = run.startedUtc == null
             ? Duration.zero
@@ -206,6 +227,10 @@ class _RunDashboardBandState extends ConsumerState<RunDashboardBand> {
                     Text('$completed/$total', style: AraText.numeric),
                 ],
               ),
+              // #1364 item 6 — what the guider is doing, in the same words as
+              // the Live tab's strip, so "Start guiding" never looks stuck
+              // while the guider calibrates.
+              const RunGuiderLine(),
               // #1264 — the Tracking Probe's ladder while it runs, then the
               // ceiling it chose, the way the autofocus run shows its curve.
               const _TrackingProbeStrip(),
@@ -354,6 +379,70 @@ class _TickerStrip extends ConsumerWidget {
               ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// #1364 item 6 — the guider's phase under the run's current step: "Guider ·
+/// Calibrating · North step 7 · 11.9 px", "Guider · Settling", "Guider · Star
+/// lost". Polls the guider status every 2 s while the run band shows (the
+/// Live tab's strip polls only while its graph is open). Hidden when no
+/// guider is connected.
+class RunGuiderLine extends ConsumerStatefulWidget {
+  const RunGuiderLine({super.key});
+
+  static const pollInterval = Duration(seconds: 2);
+
+  @override
+  ConsumerState<RunGuiderLine> createState() => _RunGuiderLineState();
+}
+
+class _RunGuiderLineState extends ConsumerState<RunGuiderLine> {
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer.periodic(RunGuiderLine.pollInterval, (_) {
+      // Offstage (another tab in an IndexedStack) the line is not seen: no request.
+      if (mounted && TickerMode.valuesOf(context).enabled) {
+        unawaited(ref.read(guiderStatusProvider.notifier).refresh());
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final status = ref.watch(guiderStatusProvider).asData?.value;
+    if (status == null || !status.isConnected) return const SizedBox.shrink();
+    final color = switch (status.runtimeState) {
+      GuiderRuntimeState.guiding => AraColors.accentConnected,
+      GuiderRuntimeState.starLost => AraColors.accentError,
+      GuiderRuntimeState.stopped || GuiderRuntimeState.paused || GuiderRuntimeState.unknown => AraColors.textSecondary,
+      _ => AraColors.accentBusy,
+    };
+    return Padding(
+      padding: const EdgeInsets.only(top: AraSpace.s4),
+      child: Row(
+        children: [
+          Icon(Icons.track_changes, size: 12, color: color),
+          const SizedBox(width: 4),
+          Expanded(
+            child: Text(
+              'Guider · ${status.runtimeSummary}',
+              key: const Key('run-guider-line'),
+              style: AraText.caption.copyWith(color: color),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -70,6 +70,30 @@ public static class BahtinovFocusEndpoints {
             .WithName("StopBahtinovFocus")
             .WithSummary("Stop the Bahtinov mask focus readout.");
 
+        // The user's star: a tap on the whole-frame picture. 400 outside the frame; allowed while idle too
+        // (the pick is only consulted by a running loop, and Start clears it).
+        bahtinov.MapPost("/pick", ([FromBody] BahtinovPickRequestDto request, IBahtinovFocusService svc) => {
+            try {
+                svc.Pick(request.X, request.Y);
+                return Results.NoContent();
+            } catch (System.ArgumentOutOfRangeException ex) {
+                return Results.Problem(ex.Message, statusCode: StatusCodes.Status400BadRequest);
+            }
+        })
+            .Accepts<BahtinovPickRequestDto>("application/json")
+            .Produces(StatusCodes.Status204NoContent)
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .WithName("PickBahtinovStar")
+            .WithSummary("Lock the Bahtinov readout on the star at (x, y) frame pixels and show its crop.");
+
+        bahtinov.MapDelete("/pick", (IBahtinovFocusService svc) => {
+            svc.ClearPick();
+            return Results.NoContent();
+        })
+            .Produces(StatusCodes.Status204NoContent)
+            .WithName("ClearBahtinovStar")
+            .WithSummary("Forget the picked star; the brightest star in the whole frame is searched again.");
+
         bahtinov.MapGet("/state", (IBahtinovFocusService svc) => Results.Ok(svc.GetStatus()))
             .Produces<BahtinovFocusStatusDto>(StatusCodes.Status200OK)
             .WithName("GetBahtinovFocus")

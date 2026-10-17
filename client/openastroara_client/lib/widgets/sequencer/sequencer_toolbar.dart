@@ -12,7 +12,8 @@ import '../../state/sequencer/draft_sequences_state.dart';
 import '../../state/sequencer/sequence_editor_state.dart';
 import '../../state/sequencer/sequence_list_state.dart';
 import '../../state/app_shell_state.dart';
-import '../../state/settings/settings_nav.dart' show kSetupTabIndex;
+import '../../state/settings/settings_nav.dart'
+    show kOptionsTabIndex, kSetupTabIndex, selectedSettingsPanelProvider;
 import '../../state/setup/setup_readiness.dart';
 import '../../theme/ara_colors.dart';
 import 'sequence_delete.dart';
@@ -561,6 +562,36 @@ Future<void> preflightAndRunSequence(BuildContext context, ProviderReader read) 
 
 enum _PreflightChoice { cancel, goToSetup, runAnyway }
 
+/// The daemon refused to start: there is no storage disk for the frames.
+/// "Open Storage" jumps to Options → Storage, where the drive is set up.
+Future<void> _showNoStorageDisk(
+    BuildContext context, ProviderReader read, String detail) async {
+  final openStorage = await showDialog<bool>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      backgroundColor: AraColors.bgPanel,
+      title: const Text('No storage disk'),
+      content: Text(detail.isNotEmpty
+          ? detail
+          : 'There is no disk to save frames to. Plug in the storage drive '
+              'before imaging.'),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(dialogContext).pop(false),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(dialogContext).pop(true),
+          child: const Text('Open Storage'),
+        ),
+      ],
+    ),
+  );
+  if (openStorage != true) return;
+  read(selectedSettingsPanelProvider.notifier).select('session.storage');
+  read(selectedTabIndexProvider.notifier).select(kOptionsTabIndex);
+}
+
 /// Run a lifecycle transition on the selected sequence, surface a transport
 /// failure as a SnackBar, then re-read the run state so the buttons re-gate.
 /// Public: the tab-level keyboard shortcuts (Space, R — run-redesign S12)
@@ -586,14 +617,27 @@ Future<void> runSequenceLifecycle(
       await op(api, id);
     } on DioException catch (e) {
       final code = e.response?.statusCode;
-      // 409 is an expected business error (the run already moved past this
-      // action), so give it a clearer message than a raw status code.
-      messenger.showSnackBar(SnackBar(
-        content: Text(code == 409
-            ? "Command not valid in the sequence's current state."
-            : 'Sequence command failed (${code ?? e.message ?? 'network error'}).'),
-        backgroundColor: AraColors.accentError,
-      ));
+      final data = e.response?.data;
+      final title = data is Map ? data['title'] : null;
+      final detail = data is Map && data['detail'] is String
+          ? (data['detail'] as String).trim()
+          : '';
+      if (title == 'store_unavailable' && context.mounted) {
+        // No disk, no run: a dialog the user must answer, not a toast that
+        // fades while they walk back to the rig (2026-10-16).
+        await _showNoStorageDisk(context, read, detail);
+      } else {
+        // The daemon's own words when it sent them (the Bahtinov mask is on…);
+        // a bare 409 is the run having already moved past this action.
+        messenger.showSnackBar(SnackBar(
+          content: Text(detail.isNotEmpty
+              ? detail
+              : code == 409
+                  ? "Command not valid in the sequence's current state."
+                  : 'Sequence command failed (${code ?? e.message ?? 'network error'}).'),
+          backgroundColor: AraColors.accentError,
+        ));
+      }
     } catch (e) {
       // e.g. a FormatException if the 202 lacked an operation_id — still surface
       // it rather than let it propagate as an unhandled exception.

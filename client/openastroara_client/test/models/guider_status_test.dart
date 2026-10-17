@@ -59,6 +59,57 @@ void main() {
       expect(s.isGuiding, isFalse);
     });
 
+    test('a calibrating guider carries the leg, step and distance', () {
+      final s = GuiderStatus.fromJson(<String, dynamic>{
+        'device_id': 'phd2',
+        'name': 'PHD2',
+        'state': 'connected',
+        'runtime': <String, dynamic>{
+          'state': 'calibrating',
+          'calibration_direction': 'North',
+          'calibration_step': 7,
+          'calibration_distance_px': 11.9,
+        },
+      });
+      expect(s.runtimeState, GuiderRuntimeState.calibrating);
+      expect(s.calibrationText, 'North step 7 · 11.9 px');
+      final bare = GuiderStatus.fromJson(<String, dynamic>{
+        'state': 'connected',
+        'runtime': <String, dynamic>{'state': 'calibrating'},
+      });
+      expect(bare.calibrationText, isNull, reason: 'no leg reported yet');
+    });
+
+    test('looping, a selected star and settling are their own phases', () {
+      GuiderStatus withState(String token) => GuiderStatus.fromJson(<String, dynamic>{
+            'state': 'connected',
+            'runtime': <String, dynamic>{'state': token},
+          });
+      expect(withState('looping').runtimeState, GuiderRuntimeState.looping);
+      expect(withState('star_selected').runtimeState, GuiderRuntimeState.starSelected);
+      expect(withState('settling').runtimeState, GuiderRuntimeState.settling);
+      expect(withState('looping').runtimeSummary, 'Looping');
+      expect(withState('settling').runtimeSummary, 'Settling');
+      expect(withState('settling').isGuiding, isFalse, reason: 'isGuiding stays the plain guiding phase');
+    });
+
+    test('the summary carries the calibration leg and says when not connected', () {
+      final cal = GuiderStatus.fromJson(<String, dynamic>{
+        'state': 'connected',
+        'runtime': <String, dynamic>{
+          'state': 'calibrating',
+          'calibration_direction': 'West',
+          'calibration_step': 3,
+          'calibration_distance_px': 4.2,
+        },
+      });
+      expect(cal.runtimeSummary, 'Calibrating · West step 3 · 4.2 px');
+      expect(GuiderStatus.fromJson(<String, dynamic>{'state': 'disconnected'}).runtimeSummary, 'Not connected');
+      for (final s in GuiderRuntimeState.values) {
+        expect(guiderRuntimeText(s), isNotEmpty);
+      }
+    });
+
     test('a disconnected guider has null RMS and stopped/unknown runtime', () {
       final s = GuiderStatus.fromJson(<String, dynamic>{
         'device_id': 'phd2',

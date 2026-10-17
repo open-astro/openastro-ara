@@ -1,10 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/models/guider_equipment_choices.dart';
+import 'package:openastroara/models/server.dart';
 import 'package:openastroara/screens/wizard/screens/screen_guiding.dart';
+import 'package:openastroara/services/alpaca_device_names_api.dart';
 import 'package:openastroara/services/guider_equipment_api.dart';
+import 'package:openastroara/services/profile_api.dart';
 import 'package:openastroara/state/guider/guider_equipment_state.dart';
+import 'package:openastroara/state/profile_management_state.dart';
+import 'package:openastroara/state/settings/optics_settings_state.dart';
+import 'package:openastroara/state/settings/phd2_settings_state.dart';
 import 'package:openastroara/state/wizard_state.dart';
+import 'package:openastroara/widgets/guider/guider_setup_wizard.dart'
+    show alpacaDeviceNamesApiProvider;
 
 /// §76 S3 — records the pixel-size lookup and answers with a scripted value.
 class _FakeGuiderEquipment implements GuiderEquipmentClient {
@@ -28,11 +37,49 @@ class _FakeGuiderEquipment implements GuiderEquipmentClient {
       throw UnimplementedError('${invocation.memberName}');
 }
 
+/// A fresh guider: it offers an Alpaca camera and "None", and has none picked.
+class _FreshGuiderEquipment extends _FakeGuiderEquipment {
+  @override
+  Future<GuiderEquipmentChoicesResponse> getChoices() async =>
+      const GuiderEquipmentChoicesResponse(
+          connected: true,
+          choices: GuiderEquipmentChoices(
+              cameras: ['Alpaca Camera [localhost:6800/0]', 'None']));
+  @override
+  Future<List<String>> discoverAlpaca(
+          {int? numQueries, int? timeoutSeconds}) async =>
+      const [];
+}
+
+/// The base profile the wizard clones: [camera] is its guide camera.
+class _BaseProfileApi extends ProfileApi {
+  _BaseProfileApi(this.camera)
+      : super(const AraServer(hostname: 'h', port: 5555));
+  final String camera;
+  @override
+  Future<Phd2Settings> getPhd2Settings() async =>
+      Phd2Settings(guiderCamera: camera);
+  @override
+  Future<OpticsSettings> getOptics() async => const OpticsSettings();
+}
+
+class _NoAlpacaNames extends AlpacaDeviceNamesClient {
+  @override
+  Future<Map<String, AlpacaDeviceInfo>> fetchDevices(
+          String host, int port) async =>
+      const {};
+  @override
+  void close() {}
+}
+
 Future<ProviderContainer> _pump(WidgetTester tester,
     {GuiderEquipmentClient? equipment,
+    ProfileApi? profile,
     void Function(ProviderContainer)? seedDraft}) async {
   final container = ProviderContainer(overrides: [
     guiderEquipmentApiProvider.overrideWithValue(equipment),
+    if (profile != null) profileApiProvider.overrideWithValue(profile),
+    alpacaDeviceNamesApiProvider.overrideWithValue(_NoAlpacaNames()),
   ]);
   addTearDown(container.dispose);
   container.listen(wizardStepValidProvider, (_, _) {});
@@ -46,6 +93,82 @@ Future<ProviderContainer> _pump(WidgetTester tester,
 }
 
 void main() {
+  group('guideCameraPickNeeded', () {
+    const cameras = ['Alpaca Camera [localhost:6800/0]', 'None'];
+    test('a fresh profile on a reachable guider must pick a camera', () {
+      expect(
+          guideCameraPickNeeded(
+              baseLoaded: true,
+              baseCamera: null,
+              draftCamera: null,
+              cameraChoices: cameras),
+          isTrue);
+    });
+    test('any pick, None included, clears the gate', () {
+      for (final pick in ['Alpaca Camera [localhost:6800/0]', 'None']) {
+        expect(
+            guideCameraPickNeeded(
+                baseLoaded: true,
+                baseCamera: null,
+                draftCamera: pick,
+                cameraChoices: cameras),
+            isFalse,
+            reason: pick);
+      }
+    });
+    test('a base profile camera is kept, so no pick is needed', () {
+      expect(
+          guideCameraPickNeeded(
+              baseLoaded: true,
+              baseCamera: 'Alpaca Camera [localhost:6800/0]',
+              draftCamera: null,
+              cameraChoices: cameras),
+          isFalse);
+    });
+    test('offline never blocks: base unread or no choices', () {
+      expect(
+          guideCameraPickNeeded(
+              baseLoaded: false,
+              baseCamera: null,
+              draftCamera: null,
+              cameraChoices: cameras),
+          isFalse);
+      expect(
+          guideCameraPickNeeded(
+              baseLoaded: true,
+              baseCamera: null,
+              draftCamera: null,
+              cameraChoices: null),
+          isFalse);
+    });
+  });
+
+  testWidgets('a fresh profile holds Next until a guide camera is picked',
+      (tester) async {
+    final container = await _pump(tester,
+        equipment: _FreshGuiderEquipment(), profile: _BaseProfileApi(''));
+    await tester.pumpAndSettle();
+    expect(container.read(wizardStepValidProvider), isFalse);
+    expect(find.textContaining('No guide camera picked'), findsOneWidget);
+
+    tester
+        .widget<DropdownMenu<String>>(find.byType(DropdownMenu<String>).first)
+        .onSelected!('Alpaca Camera [localhost:6800/0]');
+    await tester.pumpAndSettle();
+    expect(container.read(wizardStepValidProvider), isTrue);
+    expect(find.textContaining('No guide camera picked'), findsNothing);
+  });
+
+  testWidgets('a base profile with a guide camera keeps Next open',
+      (tester) async {
+    final container = await _pump(tester,
+        equipment: _FreshGuiderEquipment(),
+        profile: _BaseProfileApi('Alpaca Camera [localhost:6800/0]'));
+    await tester.pumpAndSettle();
+    expect(container.read(wizardStepValidProvider), isTrue);
+    expect(find.textContaining('No guide camera picked'), findsNothing);
+  });
+
   testWidgets('the exposure range defaults to the guider\'s own 1.0–6.0 s '
       'and darks-on-finish defaults ON', (tester) async {
     final container = await _pump(tester);

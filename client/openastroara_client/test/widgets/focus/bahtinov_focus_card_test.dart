@@ -176,14 +176,27 @@ void main() {
   group('headline', () {
     test('follows the readout', () {
       expect(BahtinovFocusCard.headlineFor(BahtinovFocusLive.idle).$1, 'Fit the mask, then Start');
-      final inFocus = BahtinovFocusCard.headlineFor(BahtinovFocusLive(status: _running([1.0, 0.1])));
+      // The headline is the median of the last five measured frames, so one
+      // early 1.0 px frame does not pull it; three at 0.1 px read in focus.
+      final inFocus = BahtinovFocusCard.headlineFor(BahtinovFocusLive(status: _running([1.0, 0.1, 0.1, 0.1])));
       expect(inFocus, ('In focus · 0.10 px', AraColors.accentConnected));
+      final jitter = BahtinovFocusCard.headlineFor(BahtinovFocusLive(status: _running([0.1, 0.1, 0.1, 0.1, 2.5])));
+      expect(jitter.$1, 'In focus · 0.10 px', reason: 'one seeing-blown frame does not move the readout');
       final passed = BahtinovFocusCard.headlineFor(BahtinovFocusLive(status: _running([1.2, 1.2, 1.2, -0.6, -0.6, -0.6])));
       expect(passed, ('Go back · 0.60 px from focus', AraColors.accentWarning));
       final stopped = BahtinovFocusCard.headlineFor(BahtinovFocusLive(status: _running([1.5], active: false)));
       expect(stopped.$1, 'Stopped · last 1.50 px from focus');
       final off = BahtinovFocusCard.headlineFor(BahtinovFocusLive(status: _running([0.1], active: false), finished: true));
       expect(off.$1, 'In focus · mask off');
+      // Finish reads the same median as the live headline, never one frame:
+      // a last frame blown by seeing does not deny focus, a lucky one does not
+      // grant it, and mask-off frames after the last measurement do not count.
+      final jitterOff = BahtinovFocusCard.headlineFor(
+          BahtinovFocusLive(status: _running([0.1, 0.1, 0.1, 0.1, 2.5, null, null], active: false), finished: true));
+      expect(jitterOff.$1, 'In focus · mask off');
+      final luckyOff = BahtinovFocusCard.headlineFor(
+          BahtinovFocusLive(status: _running([2.5, 2.5, 2.5, 2.5, 0.1], active: false), finished: true));
+      expect(luckyOff.$1, 'Mask off');
     });
   });
 
@@ -304,7 +317,8 @@ void main() {
       overrides: [
         autofocusLiveProvider.overrideWith(_StubAutofocus.new),
         bahtinovFocusProvider.overrideWith(
-            () => _StubBahtinov(BahtinovFocusLive(status: _running([0.8, 0.4, 0.1]), frame: _png, frameSeq: 3), calls)),
+            // The last frame is out of the zone; the median of the last five is in it.
+            () => _StubBahtinov(BahtinovFocusLive(status: _running([0.1, 0.1, 0.1, 0.1, 2.5]), frame: _png, frameSeq: 5), calls)),
         focuserProvider.overrideWith(() => _StubFocuser(null)),
       ],
       child: MaterialApp(

@@ -117,6 +117,15 @@ namespace OpenAstroAra.Test {
             Assert.That(lost["snr"]!.GetValue<double>(), Is.EqualTo(3.2));
             Assert.That(lost["error"]!.GetValue<string>(), Is.EqualTo("low SNR"));
             Assert.DoesNotThrow(() => JsonNode.Parse(lost.ToJsonString()));
+
+            var calibrating = GuiderService.BuildGuiderEventPayload(new PhdGuiderMarkerEventArgs {
+                Kind = "calibrating", Direction = "North", Frame = 7, Distance = 11.9,
+            });
+            Assert.That(calibrating["kind"]!.GetValue<string>(), Is.EqualTo("calibrating"));
+            Assert.That(calibrating["direction"]!.GetValue<string>(), Is.EqualTo("North"));
+            Assert.That(calibrating["frame"]!.GetValue<int>(), Is.EqualTo(7));
+            Assert.That(calibrating["distance_px"]!.GetValue<double>(), Is.EqualTo(11.9));
+            Assert.That(dither.ContainsKey("direction"), Is.False, "direction is a calibrating detail only");
         }
 
     }

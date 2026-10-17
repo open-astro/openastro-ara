@@ -42,7 +42,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             Justification = "Best-effort §63.5 push boundary: each setter RPC may throw (socket drop, a PHD2 build that doesn't expose a param) — it's logged and skipped so a config push can never fail or block the guider connect itself.")]
         private async Task PushGuiderEngineConfigAsync(CancellationToken ct) {
             var guider = profileService.ActiveProfile.GuiderSettings;
-            var messages = BuildGuiderEngineConfigMessages(guider);
+            var messages = BuildGuiderEngineConfigMessages(guider, AdvancedSettingsQuietly());
 
             if (messages.Count == 0) {
                 // All values left at their unset sentinels (0 / "auto") — nothing to push. Logged so an
@@ -130,13 +130,51 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             if (!Connected) {
                 throw new InvalidOperationException("guider is not connected");
             }
-            var messages = BuildGuiderTuningMessages(profileService.ActiveProfile.GuiderSettings);
+            // The gain always goes: a profile with every other tuning value unset can still change it.
+            await PushCameraGainAsync(ct);
+            var messages = BuildGuiderTuningMessages(profileService.ActiveProfile.GuiderSettings, AdvancedSettingsQuietly());
             if (messages.Count == 0) {
-                Logger.Debug("PHD2 §63.5 tuning push - no runtime-safe guider config set; nothing sent.");
-                return System.Array.Empty<string>();
+                Logger.Debug("PHD2 §63.5 tuning push - no other runtime-safe guider config set; only the gain sent.");
+                return new[] { CameraGainSetter };
             }
             await SendEngineConfigMessagesAsync(messages, " (tuning only, equipment left connected)", ct);
-            return messages.Select(m => m.Method).Distinct().ToList();
+            return messages.Select(m => m.Method).Append(CameraGainSetter).Distinct().ToList();
+        }
+
+        private const string CameraGainSetter = "set_camera_gain";
+
+        /// <summary>The guide camera gain as the guider's <c>set_camera_gain</c> expects it (percent of the
+        /// camera's range, clamped to 0..100). Sent apart from the engine-config list: the daemon only knows
+        /// whether the camera has gain control once it is connected, so the gain goes out after the equipment
+        /// reconnects, never inside the disconnected window. Pure — unit-tested.</summary>
+        public static Phd2SetCameraGain BuildCameraGainMessage(IGuiderSettings guider) =>
+            new() { Parameters = new int[] { CameraGainPercent(guider) } };
+
+        private static int CameraGainPercent(IGuiderSettings guider) => Math.Clamp(guider.GuideCameraGain, 0, 100);
+
+        /// <summary>Best-effort push of the profile's guide camera gain to a connected camera. A camera with
+        /// no gain control (or none connected) refuses it; that is logged, never raised to the inbox, and
+        /// never fails the caller. Without this the guider runs its stock 95% gain, which buried every star
+        /// on an ASI290MM (gain 570 of 600, 2026-10-17).</summary>
+        [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+            Justification = "Best-effort push boundary: a socket drop or daemon refusal is logged and skipped so the gain can never fail a connect or a profile push.")]
+        private async Task PushCameraGainAsync(CancellationToken ct) {
+            var guider = profileService.ActiveProfile.GuiderSettings;
+            var msg = BuildCameraGainMessage(guider);
+            var gain = CameraGainPercent(guider);
+            try {
+                var resp = await SendMessage<GenericPhdMethodResponse>(msg, EquipmentRpcTimeoutMs, notifyOnError: false);
+                if (resp?.error != null) {
+                    Logger.Warning($"PHD2 - {CameraGainSetter} {gain}% not applied: {resp.error}");
+                } else {
+                    Logger.Info($"PHD2 - guide camera gain set to {gain}%.");
+                }
+            } catch (OperationCanceledException) {
+                throw;
+            } catch (Exception ex) {
+                Logger.Warning($"PHD2 - {CameraGainSetter} failed: {ex.Message}");
+            }
+            ct.ThrowIfCancellationRequested();
         }
 
         /// <summary>§63.20 — the <c>[host:port/N]</c> endpoint a daemon Alpaca choice string embeds
@@ -203,7 +241,9 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
         /// <c>set_algo_param</c> expects (ARA already stores it that way); minimum-move goes to both axes.
         /// Socket-free, so the mapping is unit-testable without a live PHD2.
         /// </summary>
-        public static IReadOnlyList<Phd2Method> BuildGuiderEngineConfigMessages(IGuiderSettings guider) {
+        private const string AlgorithmSetter = "set_algo";
+
+        public static IReadOnlyList<Phd2Method> BuildGuiderEngineConfigMessages(IGuiderSettings guider, GuiderAdvancedSettings? advanced = null) {
             var messages = new List<Phd2Method>();
 
             // §63.17 equipment selection — ordered FIRST (the daemon's own integration flow selects devices
@@ -263,7 +303,11 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             if (guider.GuidePixelSize > 0) {
                 setup.PixelSize = guider.GuidePixelSize;
             }
-            if (setup.FocalLength != null || setup.PixelSize != null) {
+            // #1364 — multi-star is a profile-setup key, so it rides the same disconnected window.
+            if (advanced?.MultiStarEnabled is bool multiStar) {
+                setup.MultiStarEnabled = multiStar;
+            }
+            if (setup.FocalLength != null || setup.PixelSize != null || setup.MultiStarEnabled != null) {
                 messages.Add(new Phd2SetProfileSetup { Parameters = setup });
             }
 
@@ -275,6 +319,11 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             // hysteresis|fastSwitch, aggression — verified against openastro-guider 2.1.0). ARA's
             // profile calls it aggressiveness; the wire name must be the daemon's or set_algo_param
             // answers "could not set param" and the value never lands (#1093).
+            // #1364 — an algorithm change goes BEFORE the aggression / minimum-move params: set_algo replaces
+            // the axis's algorithm instance, so params sent first would land on the old one and the new
+            // algorithm would run with the guider's stored values instead of Ara's.
+            var advancedMessages = BuildAdvancedSettingsMessages(advanced);
+            messages.AddRange(advancedMessages.Where(m => m.Method == AlgorithmSetter));
             if (guider.RAAggressiveness > 0) {
                 messages.Add(AlgoParam("ra", "aggression", guider.RAAggressiveness));
             }
@@ -303,6 +352,8 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             if (decMode != "Auto") {
                 messages.Add(new Phd2SetDecGuideMode { Parameters = new() { Mode = decMode } });
             }
+            // #1364 — the rest of the advanced settings Ara keeps; all runtime-safe.
+            messages.AddRange(advancedMessages.Where(m => m.Method != AlgorithmSetter));
             return messages;
         }
 
@@ -322,8 +373,8 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
         /// equipment stays connected (set_algo_param, set_dec_guide_mode, set_exposure). This is what
         /// Imaging → Guiding → Tune Guiding sends, so an aggressiveness or exposure change never stops a
         /// running guide session. Pure — unit-tested.</summary>
-        public static IReadOnlyList<Phd2Method> BuildGuiderTuningMessages(IGuiderSettings guider) =>
-            BuildGuiderEngineConfigMessages(guider).Where(m => !RequiresDisconnectedEquipment(m)).ToList();
+        public static IReadOnlyList<Phd2Method> BuildGuiderTuningMessages(IGuiderSettings guider, GuiderAdvancedSettings? advanced = null) =>
+            BuildGuiderEngineConfigMessages(guider, advanced).Where(m => !RequiresDisconnectedEquipment(m)).ToList();
 
         /// <summary>
         /// §63.17 — on-demand re-push of the §63.5 engine config + equipment selections (the connect path
@@ -352,8 +403,8 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                 Logger.Warning($"PHD2 §63.4 - profile refresh before push failed (ensure decides on a stale list): {ex.Message}");
             }
             await EnsureAraGuiderProfileAsync(ct);
-            var pushed = BuildGuiderEngineConfigMessages(profileService.ActiveProfile.GuiderSettings)
-                .Select(m => m.Method).Distinct().ToList();
+            var pushed = BuildGuiderEngineConfigMessages(profileService.ActiveProfile.GuiderSettings, AdvancedSettingsQuietly())
+                .Select(m => m.Method).Append(CameraGainSetter).Distinct().ToList();
             await PushGuiderEngineConfigAsync(ct);
             // The push only reconnects equipment when it opened the disconnect window; make the post-push
             // state deterministic for the caller either way. A reconnect failure here is a real, actionable
@@ -377,6 +428,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                     "profile pushed, but the daemon could not reconnect its equipment — check that the "
                     + "selected camera/mount/rotator are reachable (get_connected/set_connected failed).");
             }
+            await PushCameraGainAsync(ct);
             return pushed;
         }
 

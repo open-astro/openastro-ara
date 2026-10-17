@@ -34,10 +34,18 @@ public interface IBahtinovFocusService {
     /// <summary>Stop the readout (idempotent; waits for the in-flight frame to drain).</summary>
     Task StopAsync();
     BahtinovFocusStatusDto GetStatus();
-    /// <summary>The latest frame as JPEG — the star crop the overlay is drawn over, or the whole frame
-    /// (auto-stretched, stars ringed) when nothing was measured — with its sequence number; null before the
-    /// first frame.</summary>
+    /// <summary>The latest frame as JPEG with its sequence number; null before the first frame. It is the
+    /// 256-px crop around the locked or picked star whenever there is one — with or without a fitted
+    /// pattern, rendered with the sky-relative spike stretch (<c>StretchSpikes</c>) — and the whole frame
+    /// (auto-stretched, stars ringed) only when no star is locked. The status's <c>FrameCrop</c> says which.</summary>
     (ReadOnlyMemory<byte> Jpeg, long Seq)? GetFrame();
+    /// <summary>Lock the readout on the star at (<paramref name="x"/>, <paramref name="y"/>) in frame pixels:
+    /// the next frames search near it, the picture becomes the crop around it even before a pattern fits, and
+    /// the lock is not dropped while the star stays unmeasured. Throws <see cref="ArgumentOutOfRangeException"/>
+    /// when the point is outside the last frame.</summary>
+    void Pick(int x, int y);
+    /// <summary>Forget the picked star: the brightest star in the whole frame is searched again.</summary>
+    void ClearPick();
 }
 
 /// <summary>
@@ -91,6 +99,18 @@ public sealed partial class BahtinovFocusService : IBahtinovFocusService, IDispo
     private (int X, int Y)? _lock;
     private int _misses;
     private (double X, double Y)? _normal;
+    // The user's star (§Pick): the lock falls back to it instead of to the whole frame.
+    private (int X, int Y)? _pick;
+    // Bumped by Pick/ClearPick. A frame snapshots it with its search position; if it moved while the
+    // frame was measured, the user's tap is newer than that frame and Record must not overwrite it.
+    private long _pickGeneration;
+    /// <summary>Test seam: runs after a frame is measured and before it is recorded — the window in
+    /// which a tap can race the frame.</summary>
+    internal Action? AfterMeasureForTest { get; set; }
+    private int _frameWidth;
+    private int _frameHeight;
+    // What GetFrame's picture covers when it is a crop; null for the whole frame.
+    private (int Left, int Top, int Size)? _frameCrop;
     private CancellationTokenSource? _loopCts;
     private Task? _loop;
     private bool _disposed;
@@ -189,6 +209,12 @@ public sealed partial class BahtinovFocusService : IBahtinovFocusService, IDispo
                 _lock = null;
                 _misses = 0;
                 _normal = null;
+                _pick = null;
+                _frameCrop = null;
+                // The pick's bounds check reads these; a restart at another binning must not judge a
+                // pick sent before the first new frame against the old frame size.
+                _frameWidth = 0;
+                _frameHeight = 0;
             }
             _loopCts?.Dispose();
             _loopCts = new CancellationTokenSource();
@@ -256,7 +282,12 @@ public sealed partial class BahtinovFocusService : IBahtinovFocusService, IDispo
                 Error: _error,
                 ConsecutiveFailures: _consecutiveFailures,
                 HasFrame: _frame is not null,
-                FrameSeq: _frameSeq);
+                FrameSeq: _frameSeq,
+                FrameWidth: _frameWidth,
+                FrameHeight: _frameHeight,
+                FrameCrop: _frameCrop is { } c ? new BahtinovFrameCropDto(c.Left, c.Top, c.Size) : null,
+                PickX: _pick?.X,
+                PickY: _pick?.Y);
         }
     }
 
@@ -306,16 +337,22 @@ public sealed partial class BahtinovFocusService : IBahtinovFocusService, IDispo
                 }
                 (int X, int Y)? near;
                 (double X, double Y)? normal;
+                int searchRadius;
+                long pickGeneration;
                 lock (_gate) {
                     near = _lock;
+                    pickGeneration = _pickGeneration;
                     normal = _normal;
+                    // The user's star is searched tightly: a brighter neighbour must not take the lock.
+                    searchRadius = _pick is not null ? BahtinovAnalyzer.PickedSearchRadius : BahtinovAnalyzer.DefaultSearchRadius;
                 }
                 // The fit is a few tens of ms of arithmetic on a Pi 4; off the loop's thread so a status read
                 // never waits on it.
-                var (measurement, problem, jpeg) = await Task.Run(() => Measure(frame, near, normal), ct).ConfigureAwait(false);
+                var (measurement, problem, jpeg, crop) = await Task.Run(() => Measure(frame, near, normal, searchRadius), ct).ConfigureAwait(false);
+                AfterMeasureForTest?.Invoke();
                 var optics = OpticsQuietly();
                 lock (_gate) {
-                    Record(frame, measurement, problem, jpeg, optics, binning);
+                    Record(frame, measurement, problem, jpeg, crop, optics, binning, pickChanged: pickGeneration != _pickGeneration);
                 }
             }
         } catch (OperationCanceledException) {
@@ -323,30 +360,93 @@ public sealed partial class BahtinovFocusService : IBahtinovFocusService, IDispo
         }
     }
 
-    private (BahtinovMeasurement? Measurement, BahtinovProblem Problem, byte[]? Jpeg) Measure(
-            AnalysisFrame frame, (int X, int Y)? near, (double X, double Y)? normal) {
-        var m = BahtinovAnalyzer.Analyze(frame.Pixels.Span, frame.Width, frame.Height, out var problem, near, normal);
-        // A star near the lock that no longer shows a pattern still deserves its crop (the user sees the
-        // mask came off, or clouds); without a measurement the whole frame shows where the stars are.
-        return (m, problem, m is null ? RenderQuietly(frame) : RenderCropQuietly(frame, m));
+    private (BahtinovMeasurement? Measurement, BahtinovProblem Problem, byte[]? Jpeg, (int Left, int Top, int Size)? Crop) Measure(
+            AnalysisFrame frame, (int X, int Y)? near, (double X, double Y)? normal, int searchRadius) {
+        var m = BahtinovAnalyzer.Analyze(frame.Pixels.Span, frame.Width, frame.Height, out var problem, near, normal,
+            searchRadius: searchRadius);
+        if (m is not null) {
+            var fitted = (m.CropLeft, m.CropTop, m.CropSize);
+            return (m, problem, RenderCropQuietly(frame, fitted), fitted);
+        }
+        // A locked (or picked) star that shows no pattern still deserves its crop: the user sees the star
+        // large — the mask came off, clouds, or the spikes are too faint to fit yet — instead of a whole
+        // frame where a 256-px crop is a few dozen pixels on screen. Without a lock the whole frame shows
+        // where the stars are so one can be picked.
+        if (near is { } n) {
+            // Centre on the star itself when one stands out near the lock: a tap on the shrunken whole
+            // frame lands tens of pixels off, and a crop centred on the tap puts the star at its edge.
+            var centre = BahtinovAnalyzer.FindBrightStar(frame.Pixels.Span, frame.Width, frame.Height, n, searchRadius) ?? n;
+            var crop = CropAround(centre, frame.Width, frame.Height);
+            return (null, problem, RenderCropQuietly(frame, crop), crop);
+        }
+        return (null, problem, RenderQuietly(frame), null);
+    }
+
+    /// <summary>The analyzer's crop square around a star, clamped inside the frame. Pure.</summary>
+    internal static (int Left, int Top, int Size) CropAround((int X, int Y) star, int width, int height) {
+        var size = Math.Min(BahtinovAnalyzer.DefaultCropSize, Math.Min(width, height));
+        return (Math.Clamp(star.X - size / 2, 0, Math.Max(0, width - size)),
+                Math.Clamp(star.Y - size / 2, 0, Math.Max(0, height - size)), size);
+    }
+
+    public void Pick(int x, int y) {
+        lock (_gate) {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            // Negative coordinates are never in any frame; the upper bound needs a frame to compare with.
+            if (x < 0 || y < 0 || (_frameWidth > 0 && (x >= _frameWidth || y >= _frameHeight))) {
+                throw new ArgumentOutOfRangeException(nameof(x), _frameWidth > 0
+                    ? $"({x}, {y}) is outside the {_frameWidth}×{_frameHeight} frame"
+                    : $"({x}, {y}) is not a frame position");
+            }
+            _pick = (x, y);
+            _lock = (x, y);
+            _misses = 0;
+            _pickGeneration++;
+        }
+    }
+
+    public void ClearPick() {
+        lock (_gate) {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            _pick = null;
+            _lock = null;
+            _misses = 0;
+            _pickGeneration++;
+        }
     }
 
     /// <summary>Append one frame's result. Caller holds <see cref="_gate"/>.</summary>
     private void Record(AnalysisFrame frame, BahtinovMeasurement? m, BahtinovProblem problem, byte[]? jpeg,
-            BahtinovOptics? optics, int binning) {
+            (int Left, int Top, int Size)? crop, BahtinovOptics? optics, int binning, bool pickChanged = false) {
         _seq++;
         _consecutiveFailures = 0;
+        _frameWidth = frame.Width;
+        _frameHeight = frame.Height;
+        // A pick made before this session's first frame (Pick can only check x, y ≥ 0 then) that lands
+        // outside the frame would be a lock that never finds a star and never falls back: drop it.
+        if (_pick is { } p && (p.X >= frame.Width || p.Y >= frame.Height)) {
+            _pick = null;
+            if (_lock == p) {
+                _lock = null;
+            }
+        }
         BahtinovSampleDto sample;
         if (m is null) {
-            if (++_misses >= LockLostAfter) {
-                _lock = null;
+            // A picked star keeps its lock: the user said which star, so a faint pattern must not send the
+            // search back to the brightest star elsewhere in the frame.
+            // A pick that came in while this frame was measured is newer than the frame: leave its lock.
+            if (!pickChanged && ++_misses >= LockLostAfter) {
+                _lock = _pick;
             }
             sample = new BahtinovSampleDto(_seq, frame.CapturedAt, Detected: false, ProblemToken(problem),
                 OffsetPx: null, DefocusUm: null, WithinZone: false, StarX: _lock?.X ?? 0, StarY: _lock?.Y ?? 0, PeakAdu: 0);
         } else {
-            _misses = 0;
-            _lock = (m.StarX, m.StarY);
-            _normal ??= (m.NormalX, m.NormalY);
+            if (!pickChanged) {
+                _misses = 0;
+                _lock = (m.StarX, m.StarY);
+                // Nor does a frame of the star before a tap fix the session's sign convention.
+                _normal ??= (m.NormalX, m.NormalY);
+            }
             var (zonePx, _) = ZonePx(optics, binning);
             var offset = Math.Round(m.OffsetPx, 3);
             double? defocus = optics is not null ? Math.Round(m.OffsetPx * MicronsPerPixel(optics, binning), 1) : null;
@@ -367,6 +467,7 @@ public sealed partial class BahtinovFocusService : IBahtinovFocusService, IDispo
         if (jpeg is not null) {
             _frame = jpeg;
             _frameSeq = _seq;
+            _frameCrop = crop;
         }
     }
 
@@ -418,20 +519,52 @@ public sealed partial class BahtinovFocusService : IBahtinovFocusService, IDispo
     // The star crop the overlay is drawn on: auto-stretched, no star rings (the lines are the annotation).
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Cosmetic: a failed JPEG render must never fail the readout. Log-and-recover boundary.")]
-    private byte[]? RenderCropQuietly(AnalysisFrame frame, BahtinovMeasurement m) {
+    private byte[]? RenderCropQuietly(AnalysisFrame frame, (int Left, int Top, int Size) rect) {
         try {
-            var size = m.CropSize;
+            var size = rect.Size;
             var crop = new ushort[size * size];
             var src = frame.Pixels.Span;
             for (var y = 0; y < size; y++) {
-                src.Slice((m.CropTop + y) * frame.Width + m.CropLeft, size).CopyTo(crop.AsSpan(y * size, size));
+                src.Slice((rect.Top + y) * frame.Width + rect.Left, size).CopyTo(crop.AsSpan(y * size, size));
             }
-            var (jpeg, _, _) = CameraService.RenderLiveFrame(crop, size, size, bayerPattern: null, annotate: false);
-            return jpeg;
+            return OpenAstroAra.Stretch.JpegEncoder.EncodeGray(StretchSpikes(crop), size, size);
         } catch (Exception ex) {
             LogRenderFailed(ex);
             return null;
         }
+    }
+
+    /// <summary>Spike light sits a few noise sigmas over the sky while the core is hundreds; the live view's
+    /// auto-stretch, set for a whole field, shows the core and little else.</summary>
+    internal const double SpikeStretchWhiteSigmas = 30;
+
+    /// <summary>
+    /// A sky-relative asinh stretch for the star crop: black at the sky median, the asinh knee at 2 noise
+    /// sigmas and white at <see cref="SpikeStretchWhiteSigmas"/>, so a spike arm at 2–15σ lands in the
+    /// visible middle greys (the grain at 1σ stays dark) and only the core clips. On a small image scale (a 2 s RedCat 51 frame at
+    /// 2.4"/px) the arms are 6–17 ADU over a 24 ADU noise and vanished in the auto-stretch. Pure.
+    /// </summary>
+    internal static byte[] StretchSpikes(ushort[] crop) {
+        var sorted = (ushort[])crop.Clone();
+        Array.Sort(sorted);
+        double median = sorted[sorted.Length / 2];
+        var dev = new double[sorted.Length];
+        for (var i = 0; i < sorted.Length; i++) {
+            dev[i] = Math.Abs(sorted[i] - median);
+        }
+        Array.Sort(dev);
+        var sigma = Math.Max(1.0, 1.4826 * dev[dev.Length / 2]);
+        var knee = 2 * sigma;
+        var white = Math.Asinh(SpikeStretchWhiteSigmas * sigma / knee);
+        var output = new byte[crop.Length];
+        for (var i = 0; i < crop.Length; i++) {
+            var t = (crop[i] - median) / knee;
+            if (t <= 0) {
+                continue;
+            }
+            output[i] = (byte)Math.Round(Math.Min(1.0, Math.Asinh(t) / white) * 255);
+        }
+        return output;
     }
 
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",

@@ -80,6 +80,9 @@ namespace OpenAstroAra.Profile.Interfaces {
         /// <summary>Guide exposure, ms, sent with PHD2's <c>set_exposure</c> (runtime-safe: it applies on
         /// the next guide frame, guiding continues). 0 = unset, leave the guider's own value.</summary>
         int GuideExposureMs { get; set; }
+        /// <summary>Guide camera gain, percent of the camera's range (0..100), sent with the guider's
+        /// <c>set_camera_gain</c> once its camera is connected.</summary>
+        int GuideCameraGain { get; set; }
 
         // §63.17 guider equipment selection — pushed to the daemon inside the §63.5 disconnected window
         // (the set_selected_* RPCs are blocked while equipment is connected). Values are the daemon's own

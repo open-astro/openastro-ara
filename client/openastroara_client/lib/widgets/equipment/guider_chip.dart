@@ -32,6 +32,9 @@ StatusLevel guiderStatusLevel(GuiderStatus? status) {
           return StatusLevel.error;
         case GuiderRuntimeState.calibrating:
         case GuiderRuntimeState.dithering:
+        case GuiderRuntimeState.settling:
+        case GuiderRuntimeState.looping:
+        case GuiderRuntimeState.starSelected:
         case GuiderRuntimeState.paused:
           // Not actively correcting — amber so a paused guider (e.g. during a
           // plate-solve/flip) is visually distinct from a healthy green guide.

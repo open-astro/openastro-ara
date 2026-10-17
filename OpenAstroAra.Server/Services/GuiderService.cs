@@ -64,6 +64,18 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
     // recent guiding rather than the whole session. Fed by the guider's GuideEvent stream.
     private const int MaxGuideStepWindow = 200;
     private readonly Queue<(double Ra, double Dec)> _guideSteps = new();
+    // #1364 — the latest guide frame's star SNR and mass, for the live guide-camera view.
+    private (double? Snr, double? Mass) _latestStarStats;
+
+    /// <summary>The guide star's SNR and mass from the most recent guide step this session; both null
+    /// before the first step.</summary>
+    internal (double? Snr, double? Mass) LatestStarStats {
+        get {
+            lock (_gate) {
+                return _latestStarStats;
+            }
+        }
+    }
 
     private PHD2Guider? _guider;
     private EquipmentConnectionState _state = EquipmentConnectionState.Disconnected;
@@ -135,8 +147,12 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
             }
             var (rmsTotal, rmsRa, rmsDec) = ComputeRms(_guideSteps);
             var pixelScale = _guider.PixelScale;
+            var state = MapGuidingState(_guider.State, _guider.Settling);
+            // The leg is reported only while calibrating: after a link drop the guider can come back
+            // already guiding, with no CalibrationComplete this client saw (review of #1365).
+            var calibration = state == "calibrating" ? _guider.Calibration : null;
             var runtime = new GuiderStateDto(
-                State: MapGuidingState(_guider.State),
+                State: state,
                 RmsTotal: rmsTotal, // raw pixels over the recent guide-step window
                 RmsRa: rmsRa,
                 RmsDec: rmsDec,
@@ -144,7 +160,10 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
                 RmsTotalArcsec: RmsArcsec(rmsTotal, pixelScale),
                 RmsRaArcsec: RmsArcsec(rmsRa, pixelScale),
                 RmsDecArcsec: RmsArcsec(rmsDec, pixelScale),
-                PaResidual: PaResidualSnapshot());
+                PaResidual: PaResidualSnapshot(),
+                CalibrationDirection: calibration?.Direction,
+                CalibrationStep: calibration?.Step,
+                CalibrationDistancePx: calibration is { } cal ? Math.Round(cal.Distance, 1) : null);
             return Task.FromResult<GuiderDto?>(new GuiderDto("PHD2_Single", "PHD2", _state, runtime));
         }
     }
@@ -208,6 +227,7 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
             if (request.Port is { } port) settings.PHD2ServerPort = port;
             DisposeGuiderLocked();
             guider = new PHD2Guider(_profileService);
+            guider.AdvancedSettings = AdvancedSettings; // #1364 — pushed with the engine config
             // §63.4 — the guider twin is named after the ARA profile from the MULTI-PROFILE repository
             // (what the user sees as their profile, e.g. "RC91 - Backyard"), not the Equipment layer's
             // legacy single-profile store (whose name is a constant "Default"). Null resolver (benches)
@@ -224,6 +244,7 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
             guider.EquipmentFault += OnEquipmentFault;
             guider.EquipmentReconnected += OnEquipmentReconnected; // #1191 — closes that fault's row
             _guideSteps.Clear(); // fresh session — drop the prior connection's RMS window
+            _latestStarStats = default;
             _guider = guider;
             generation = ++_connectGeneration;
             CancelConnectLocked();
@@ -253,7 +274,14 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
     public Task<OperationAcceptedDto> StartGuidingAsync(string? idempotencyKey, CancellationToken ct) {
         var guider = RequireConnectedGuider();
         var accepted = Accepted("guider.start", idempotencyKey);
-        _ = RunAndReportAsync(accepted, () => guider.StartGuiding(forceCalibration: false, _noProgress, CancellationToken.None), ditherGuider: null);
+        // Guide pressed by hand gets the same preparation as a run's Start Guiding: the live-focus loop
+        // gives up the guide camera, and a stale lease or an open polar alignment is cleared, so the
+        // guider does not refuse with "polar-alignment session in progress" (review of #1365).
+        _ = RunAndReportAsync(accepted, async () => {
+            await ReleaseGuideCameraQuietlyAsync().ConfigureAwait(false);
+            await ClearPaSessionQuietlyAsync(guider, CancellationToken.None).ConfigureAwait(false);
+            return await guider.StartGuiding(forceCalibration: false, _noProgress, CancellationToken.None).ConfigureAwait(false);
+        }, ditherGuider: null);
         return Task.FromResult(accepted);
     }
 
@@ -529,6 +557,10 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
             while (_guideSteps.Count > MaxGuideStepWindow) {
                 _guideSteps.Dequeue();
             }
+            // #1364 — the live view shows the guide star's SNR and mass from the latest frame.
+            if (step is PhdEventGuideStep phd) {
+                _latestStarStats = (phd.SNR, phd.StarMass);
+            }
             guider = _guider!; // non-null: ReferenceEquals(sender, _guider) with a non-null sender
             pixelScale = guider.PixelScale;
         }
@@ -587,6 +619,9 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
         }
         if (!string.IsNullOrEmpty(marker.Error)) {
             payload["error"] = marker.Error;
+        }
+        if (!string.IsNullOrEmpty(marker.Direction)) {
+            payload["direction"] = marker.Direction;
         }
         return payload;
     }
@@ -682,13 +717,17 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
         }
     }
 
-    // NINA PhdAppState → §63.2 GuiderStateDto.State token. Selected/Looping/unknown collapse to
-    // "stopped"; "dithering" arrives via the GuideEvent settling path (not modeled until RMS lands).
-    private static string MapGuidingState(string? phdState) => phdState switch {
+    // NINA PhdAppState → §63.2 GuiderStateDto.State token. #1364 item 6 — one guider state everywhere:
+    // looping and a selected star are their own states (they used to read "stopped", so the strip said
+    // "stopped" while the guide camera was busy and refused a single frame), and a guiding session that
+    // is settling after a dither or a start reads "settling". Unknown tokens still read "stopped".
+    internal static string MapGuidingState(string? phdState, bool settling = false) => phdState switch {
         "Calibrating" => "calibrating",
-        "Guiding" => "guiding",
+        "Guiding" => settling ? "settling" : "guiding",
         "Paused" => "paused",
         "LostLock" => "star_lost",
+        "Looping" => "looping",
+        "Selected" => "star_selected",
         _ => "stopped",
     };
 

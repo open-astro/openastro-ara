@@ -193,14 +193,47 @@ class BahtinovFocusNotifier extends Notifier<BahtinovFocusLive> {
     await refresh();
   }
 
+  /// The user tapped a star on the picture: lock the readout on it. The next
+  /// poll brings the crop around it.
+  Future<void> pick(int x, int y) async {
+    final api = ref.read(bahtinovFocusApiProvider);
+    if (api == null) return;
+    try {
+      await api.pick(x: x, y: y);
+      if (!ref.mounted) return;
+      state = state.copyWith(clearError: true);
+      await refresh();
+    } catch (e) {
+      if (!ref.mounted) return;
+      state = state.copyWith(error: describeRequestError(e));
+    }
+  }
+
+  /// Back to the whole frame and the brightest star.
+  Future<void> clearPick() async {
+    final api = ref.read(bahtinovFocusApiProvider);
+    if (api == null) return;
+    try {
+      await api.clearPick();
+      if (!ref.mounted) return;
+      state = state.copyWith(clearError: true);
+      await refresh();
+    } catch (e) {
+      if (!ref.mounted) return;
+      state = state.copyWith(error: describeRequestError(e));
+    }
+  }
+
   /// The user confirmed the mask is off: stop the readout if it still runs,
-  /// and count the main telescope as focused when the last measurement sat
-  /// inside the focus zone.
+  /// and count the main telescope as focused when the steadied reading (the
+  /// median of the last measured frames, as the headline shows) sat inside the
+  /// focus zone.
   Future<void> finish() async {
-    // The last MEASURED frame decides: by the time the user presses Finish the
-    // mask may already be off, and those frames show no spikes.
-    final measured = [...state.status.recent, ?state.status.latest].where((s) => s.detected);
-    final focused = measured.isNotEmpty && measured.last.withinZone;
+    // The last MEASURED frames decide: by the time the user presses Finish the
+    // mask may already be off, and those frames show no spikes. The median, not
+    // the last frame alone, so one seeing-jittered frame neither grants nor
+    // denies focus.
+    final focused = state.status.lastSteady?.withinZone == true;
     if (state.status.active) {
       await stop();
       if (!ref.mounted) return;

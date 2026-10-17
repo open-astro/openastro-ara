@@ -72,6 +72,10 @@ public interface IProfileStore {
     UnguidedSettingsDto GetUnguidedSettings();
     void PutUnguidedSettings(UnguidedSettingsDto value);
 
+    // #1364 the guider's settings beyond Tune Guiding.
+    GuiderAdvancedSettingsDto GetGuiderAdvancedSettings();
+    void PutGuiderAdvancedSettings(GuiderAdvancedSettingsDto value);
+
     PlateSolveSettingsDto GetPlateSolveSettings();
     void PutPlateSolveSettings(PlateSolveSettingsDto value);
 

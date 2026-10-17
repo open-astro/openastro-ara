@@ -441,7 +441,10 @@ public sealed record Phd2SettingsDto(
     int GuideExposureMs = 0,
     // #1156 — Dec minimum move, px. Null = "same as minimum_move" so a profile.json written before the
     // split keeps guiding exactly as it did; the client always sends both.
-    double? DecMinimumMove = null);
+    double? DecMinimumMove = null,
+    // Guide camera gain, percent of the camera's range (0..100), pushed with the guider's set_camera_gain.
+    // Defaults to 50: the guider's own 95% buries stars in read noise on a fresh install.
+    int GuideCameraGain = 50);
 
 /// <summary>
 /// §45.12 polar-alignment settings — the routine's knobs. Every field carries its playbook default
@@ -461,6 +464,48 @@ public sealed record PolarAlignSettingsDto(
     int LoopCadenceMs = 1000,
     double SettleSeconds = 2.0,
     string LoopMode = PolarAlignLoopModes.Loop);
+
+/// <summary>
+/// #1364 — the guider's settings beyond Tune Guiding (profile section <c>guider_advanced</c>, endpoint
+/// <c>/api/v1/profile/guider-advanced</c>). Every field is optional: null leaves the guider's own value, so
+/// a profile never overwrites a setting it did not set. Kept apart from the PHD2 block so a client that
+/// PUTs that block without these fields cannot wipe them. Units are the guider's: ms, px, plain SNR;
+/// <c>NoiseReduction</c> is "None" | "2x2 Mean" | "3x3 Median"; algorithms are names from
+/// <c>ra_algorithms</c> / <c>dec_algorithms</c> of <c>GET /equipment/guider/advanced</c>. Multi-star lands on the next connect (the guider takes
+/// it only with its equipment disconnected); everything else applies on Apply, while guiding.
+/// </summary>
+public sealed record GuiderAdvancedSettingsDto(
+    bool? MultiStarEnabled = null,
+    bool? FastRecenter = null,
+    bool? TolerateJumps = null,
+    double? TolerateJumpsThresholdPx = null,
+    double? MinStarHfd = null,
+    double? MaxStarHfd = null,
+    double? MinStarSnr = null,
+    bool? MassChangeThresholdEnabled = null,
+    double? MassChangeThreshold = null,
+    int? SearchRegionPx = null,
+    int? AutoExposureMinMs = null,
+    int? AutoExposureMaxMs = null,
+    double? AutoExposureTargetSnr = null,
+    string? NoiseReduction = null,
+    bool? UseSubframes = null,
+    int? MaxRaDurationMs = null,
+    int? MaxDecDurationMs = null,
+    bool? BacklashEnabled = null,
+    int? BacklashPulseMs = null,
+    int? BacklashFloorMs = null,
+    int? BacklashCeilingMs = null,
+    bool? AssumeOrthogonal = null,
+    bool? StopGuidingWhenSlewing = null,
+    bool? CalFlipRequiresDecFlip = null,
+    bool? VariableDelayEnabled = null,
+    double? VariableDelayShortS = null,
+    double? VariableDelayLongS = null,
+    double? DitherScaleFactor = null,
+    bool? DitherRaOnly = null,
+    string? RaAlgorithm = null,
+    string? DecAlgorithm = null);
 
 /// <summary>#1264 — Imaging → Unguided (profile section <c>unguided</c>): the knobs behind the
 /// Tracking Probe, the Unguided Exposure Guard and Center After Drift on a rig without a guider.

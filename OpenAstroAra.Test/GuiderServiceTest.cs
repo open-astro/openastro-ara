@@ -133,7 +133,23 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void Start_guiding_releases_a_stale_pa_lease_but_never_a_running_polar_alignments() {
+        public void Every_guider_phase_has_its_own_state_token() {
+            // #1364 item 6 — looping and a selected star used to read "stopped" while the guide camera was
+            // busy; a guiding session that settles reads "settling".
+            Assert.That(GuiderService.MapGuidingState("Looping"), Is.EqualTo("looping"));
+            Assert.That(GuiderService.MapGuidingState("Selected"), Is.EqualTo("star_selected"));
+            Assert.That(GuiderService.MapGuidingState("Calibrating"), Is.EqualTo("calibrating"));
+            Assert.That(GuiderService.MapGuidingState("Guiding"), Is.EqualTo("guiding"));
+            Assert.That(GuiderService.MapGuidingState("Guiding", settling: true), Is.EqualTo("settling"));
+            Assert.That(GuiderService.MapGuidingState("Calibrating", settling: true), Is.EqualTo("calibrating"), "settling only qualifies guiding");
+            Assert.That(GuiderService.MapGuidingState("LostLock"), Is.EqualTo("star_lost"));
+            Assert.That(GuiderService.MapGuidingState("Paused"), Is.EqualTo("paused"));
+            Assert.That(GuiderService.MapGuidingState("Stopped"), Is.EqualTo("stopped"));
+            Assert.That(GuiderService.MapGuidingState(null), Is.EqualTo("stopped"));
+        }
+
+        [Test]
+        public void Start_guiding_releases_a_stale_pa_lease_and_ends_an_open_polar_alignment_when_it_can() {
             using var svc = NewService();
             Assert.That(svc.ShouldReleasePaLease(true), Is.True, "nothing wired: a lease the guider reports is stale");
             Assert.That(svc.ShouldReleasePaLease(false), Is.False);
@@ -141,9 +157,19 @@ namespace OpenAstroAra.Test {
 
             var aligning = true;
             svc.PolarAlignActive = () => aligning;
-            Assert.That(svc.ShouldReleasePaLease(true), Is.False, "polar alignment holds the lease");
+            Assert.That(svc.ShouldReleasePaLease(true), Is.False, "polar alignment holds the lease and nothing can end it");
+            Assert.That(svc.PaLeaseActionFor(true), Is.EqualTo(GuiderService.PaLeaseAction.Keep));
             aligning = false;
             Assert.That(svc.ShouldReleasePaLease(true), Is.True);
+            Assert.That(svc.PaLeaseActionFor(true), Is.EqualTo(GuiderService.PaLeaseAction.Release));
+
+            // An alignment left open (no Done) when a run asks to guide is ended first, then the lease
+            // released — guiding is the explicit request for the mount and guide camera.
+            aligning = true;
+            svc.EndPolarAlignAsync = _ => System.Threading.Tasks.Task.CompletedTask;
+            Assert.That(svc.PaLeaseActionFor(true), Is.EqualTo(GuiderService.PaLeaseAction.EndPolarAlignThenRelease));
+            Assert.That(svc.ShouldReleasePaLease(true), Is.True);
+            Assert.That(svc.PaLeaseActionFor(false), Is.EqualTo(GuiderService.PaLeaseAction.Keep), "no lease, nothing to do");
         }
 
         [Test]

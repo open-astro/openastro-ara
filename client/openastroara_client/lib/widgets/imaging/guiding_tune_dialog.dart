@@ -10,6 +10,7 @@ import '../../state/settings/phd2_settings_state.dart';
 import '../../theme/ara_colors.dart';
 import '../profile/profile_import_flow.dart' show friendlyDaemonError;
 import '../settings/editable_field.dart';
+import 'guider_advanced_dialog.dart';
 
 /// Open the §63.18 guiding-tune dialog (the quick-adjust controls that used to
 /// live inline in the Imaging tab's Guiding panel — moved to a focused dialog
@@ -21,8 +22,9 @@ Future<void> showGuidingTuneDialog(BuildContext context) => showDialog<void>(
     );
 
 /// The RUNTIME-SAFE §63.5 tuning params only (aggressiveness, minimum move,
-/// dec guide mode, dither pixels, guide exposure) — they map to OpenAstro
-/// Guider `set_algo_param` / `set_dec_guide_mode` / `set_exposure`, which apply
+/// dec guide mode, dither pixels, guide exposure, guide camera gain) — they map
+/// to OpenAstro Guider `set_algo_param` / `set_dec_guide_mode` / `set_exposure`
+/// / `set_camera_gain`, which apply
 /// while guiding continues. Apply asks the daemon for the TUNING-ONLY push
 /// (`?scope=tuning`): the full push also re-sends the equipment selections,
 /// which the guider only accepts with its equipment disconnected, so it
@@ -59,7 +61,7 @@ class _GuidingTuneDialogState extends ConsumerState<GuidingTuneDialog> {
   // The daemon's copy as fetched at open. The dialog's hydrate deliberately
   // does NOT go through the shared notifier: Settings → Guider stages its own
   // unsaved edits in the shared provider (pre-Save), and a provider hydrate
-  // here would silently revert them. Apply PUTs _serverCopy + the seven tuning
+  // here would silently revert them. Apply PUTs _serverCopy + the eight tuning
   // fields, so nothing unconfirmed is persisted and nothing staged is lost.
   Phd2Settings? _serverCopy;
 
@@ -110,8 +112,8 @@ class _GuidingTuneDialogState extends ConsumerState<GuidingTuneDialog> {
   }
 
   /// Persist the edited §63 settings, then ask the daemon for the tuning-only
-  /// re-push (set_algo_param / set_dec_guide_mode / set_exposure — runtime-safe,
-  /// guiding is not interrupted).
+  /// re-push (set_algo_param / set_dec_guide_mode / set_exposure /
+  /// set_camera_gain — runtime-safe, guiding is not interrupted).
   Future<void> _apply() async {
     final api = ref.read(profileApiProvider);
     if (api == null) {
@@ -126,7 +128,7 @@ class _GuidingTuneDialogState extends ConsumerState<GuidingTuneDialog> {
       _status = null;
     });
     try {
-      // PUT the daemon's own copy + ONLY the seven runtime-safe tuning fields
+      // PUT the daemon's own copy + ONLY the eight runtime-safe tuning fields
       // from the draft — never the shared provider's object, which may hold
       // Settings → Guider edits the user hasn't confirmed with Save.
       final toSave = serverCopy.copyWith(
@@ -137,11 +139,12 @@ class _GuidingTuneDialogState extends ConsumerState<GuidingTuneDialog> {
         decGuideMode: draft.decGuideMode,
         ditherPixels: draft.ditherPixels,
         guideExposureMs: draft.guideExposureMs,
+        guideCameraGain: draft.guideCameraGain,
       );
       final echoed = await api.putPhd2Settings(toSave);
       _serverCopy = echoed;
       // Reflect the now-persisted tuning values in the shared provider (the
-      // setters touch only these seven fields — staged Settings edits survive).
+      // setters touch only these eight fields — staged Settings edits survive).
       final n = ref.read(phd2SettingsProvider.notifier);
       n.setRaAggressiveness(draft.raAggressiveness);
       n.setDecAggressiveness(draft.decAggressiveness);
@@ -150,6 +153,7 @@ class _GuidingTuneDialogState extends ConsumerState<GuidingTuneDialog> {
       n.setDecGuideMode(draft.decGuideMode);
       n.setDitherPixels(draft.ditherPixels);
       n.setGuideExposureMs(draft.guideExposureMs);
+      n.setGuideCameraGain(draft.guideCameraGain);
       // Tuning-only: the full push re-sends the equipment selections inside a
       // stop_capture / disconnect window and ends the guide session.
       await ref
@@ -307,6 +311,19 @@ class _GuidingTuneDialogState extends ConsumerState<GuidingTuneDialog> {
                                 ?.copyWith(color: AraColors.textDisabled),
                           ),
                         ),
+                      // The guider's own scale: percent of the camera's gain
+                      // range. Its stock 95% buries stars in read noise.
+                      EditableNumberRow(
+                        label: 'Guide camera gain (%)',
+                        currentValue: phd2.guideCameraGain.toString(),
+                        getCanonical: () => _current.guideCameraGain.toString(),
+                        parse: (s) {
+                          final v = int.tryParse(s);
+                          if (v != null && v >= 0 && v <= 100) {
+                            _edit((d) => d.copyWith(guideCameraGain: v));
+                          }
+                        },
+                      ),
                       SettingsDropdownRow<String>(
                         label: 'Dec guide mode',
                         value: phd2.decGuideMode,
@@ -357,6 +374,18 @@ class _GuidingTuneDialogState extends ConsumerState<GuidingTuneDialog> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
+                  // #1364 item 3 — every other guider setting.
+                  Expanded(
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton.icon(
+                        key: const Key('tune-advanced'),
+                        onPressed: () => showGuiderAdvancedDialog(context),
+                        icon: const Icon(Icons.settings_suggest_outlined, size: 16),
+                        label: const Text('More…', overflow: TextOverflow.ellipsis),
+                      ),
+                    ),
+                  ),
                   TextButton(
                     onPressed: () => Navigator.of(context).pop(),
                     child: const Text('Done'),
