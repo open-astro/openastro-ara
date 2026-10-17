@@ -753,7 +753,10 @@ class _GuiderSetupWizardState extends ConsumerState<GuiderSetupWizard> {
               // guide scope drops any rotator pick (the daemon clears it too).
               _edit((d) => d.copyWith(
                   guiderSetupType: norm,
-                  guiderRotator: norm == 'oag' ? d.guiderRotator : ''));
+                  guiderRotator:
+                      Phd2SettingsNotifier.usesGuideCameraRotator(norm)
+                          ? d.guiderRotator
+                          : ''));
               if (norm == 'oag') {
                 // §63.19 — OAG derives the guide focal length from the main
                 // optics (focal length × reducer), same rule as the panel.
@@ -836,7 +839,8 @@ class _GuiderSetupWizardState extends ConsumerState<GuiderSetupWizard> {
           // right when the guide camera rides behind it and wrong for a
           // separate guide scope that never turns (2026-10-16: a 49°
           // Center-and-Rotate spiralled every dither).
-          if (draft.guiderSetupType == 'oag') ...[
+          if (Phd2SettingsNotifier.usesGuideCameraRotator(
+              draft.guiderSetupType)) ...[
             _choiceDropdown(
               label: 'Rotator',
               value: draft.guiderRotator,
@@ -911,7 +915,8 @@ class _GuiderSetupWizardState extends ConsumerState<GuiderSetupWizard> {
                       draft.guiderAuxMount, 'telescope', _alpacaNames)),
           _summaryRow(
               'Rotator',
-              draft.guiderSetupType != 'oag'
+              !Phd2SettingsNotifier.usesGuideCameraRotator(
+                      draft.guiderSetupType)
                   ? '(not used — separate guide scope)'
                   : draft.guiderRotator.isEmpty
                       ? '(use the guider\'s own setting)'
