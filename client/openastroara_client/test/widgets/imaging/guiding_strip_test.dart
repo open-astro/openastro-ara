@@ -1,19 +1,22 @@
-import 'dart:typed_data';
-
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/guider_equipment_choices.dart';
+import 'package:openastroara/models/guider_calibration_view.dart';
+import 'package:openastroara/models/guider_live.dart';
 import 'package:openastroara/models/guider_status.dart';
 import 'package:openastroara/models/pa_residual.dart';
 import 'package:openastroara/models/server.dart';
 import 'package:openastroara/services/guider_api.dart';
 import 'package:openastroara/services/guider_equipment_api.dart';
+import 'package:openastroara/services/guider_live_api.dart';
 import 'package:openastroara/services/profile_api.dart';
 import 'package:openastroara/services/saved_server_service.dart';
 import 'package:openastroara/state/guider/guider_equipment_state.dart';
+import 'package:openastroara/state/guider/guider_live_state.dart';
 import 'package:openastroara/state/guider/guider_state.dart';
 import 'package:openastroara/state/guider/pa_residual_state.dart';
 import 'package:openastroara/state/profile_management_state.dart';
@@ -26,10 +29,6 @@ import 'package:openastroara/state/ws/ws_providers.dart';
 import 'package:openastroara/theme/ara_colors.dart';
 import 'package:openastroara/widgets/imaging/guiding_strip.dart';
 import 'package:openastroara/widgets/imaging/guiding_tune_dialog.dart';
-import 'package:openastroara/models/guider_calibration_view.dart';
-import 'package:openastroara/models/guider_live.dart';
-import 'package:openastroara/services/guider_live_api.dart';
-import 'package:openastroara/state/guider/guider_live_state.dart';
 
 /// Records the painter's rectangles; every other canvas call is a no-op.
 class _RectCanvas implements Canvas {
