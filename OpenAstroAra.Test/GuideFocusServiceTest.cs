@@ -17,6 +17,7 @@ using Moq;
 using NUnit.Framework;
 using OpenAstroAra.Image.ImageAnalysis;
 using OpenAstroAra.Core.Enums;
+using OpenAstroAra.Equipment.Equipment.MyGuider.PHD2;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Endpoints;
 using OpenAstroAra.Server.Services;
@@ -78,6 +79,16 @@ namespace OpenAstroAra.Test {
             Assert.Throws<ArgumentOutOfRangeException>(() => GuideFocusService.Validate(new GuideFocusStartRequestDto(31)));
             Assert.Throws<ArgumentOutOfRangeException>(() => GuideFocusService.Validate(new GuideFocusStartRequestDto(double.NaN)));
             Assert.Throws<ArgumentOutOfRangeException>(() => GuideFocusService.Validate(new GuideFocusStartRequestDto(1, 0)));
+        }
+
+        [Test]
+        public void A_guider_with_no_camera_ends_the_loop_with_a_pick_the_camera_error() {
+            var noCamera = new GuiderRpcException("capture_single_frame", 1, "cannot capture single frame when camera is not connected");
+            Assert.That(GuideFocusService.NoGuideCameraError(noCamera), Does.Contain("pick the guide camera"));
+            Assert.That(GuideFocusService.NoGuideCameraError(new GuiderRpcException("capture_single_frame", 1, "exposure timed out")), Is.Null,
+                "other daemon errors keep the retry budget");
+            Assert.That(GuideFocusService.NoGuideCameraError(new InvalidOperationException("camera is not connected")), Is.Null,
+                "only the daemon's own refusal counts");
         }
 
         [Test]

@@ -228,6 +228,8 @@ void main() {
       'Discover Alpaca puts real [host:port/N] devices in the pickers and a pick fills host/port',
       (tester) async {
     final h = await _pump(tester, const Phd2Settings());
+    // No camera picked: a fresh guider has none, so the panel says so.
+    expect(find.byKey(const ValueKey('guider_no_camera')), findsOneWidget);
 
     await tester.ensureVisible(find.text('Discover Alpaca'));
     await tester.tap(find.text('Discover Alpaca'));
@@ -247,6 +249,7 @@ void main() {
     expect(phd2.guiderAlpacaHost, '127.0.0.1');
     expect(phd2.guiderAlpacaPort, 6800);
     expect(find.byKey(const ValueKey('guider_unserved_alpaca')), findsNothing);
+    expect(find.byKey(const ValueKey('guider_no_camera')), findsNothing);
 
     await tester.ensureVisible(find.text('Apply to guider'));
     await tester.tap(find.text('Apply to guider'));

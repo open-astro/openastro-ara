@@ -46,6 +46,56 @@ Future<ProviderContainer> _pump(WidgetTester tester,
 }
 
 void main() {
+  group('guideCameraPickNeeded', () {
+    const cameras = ['Alpaca Camera [localhost:6800/0]', 'None'];
+    test('a fresh profile on a reachable guider must pick a camera', () {
+      expect(
+          guideCameraPickNeeded(
+              baseLoaded: true,
+              baseCamera: null,
+              draftCamera: null,
+              cameraChoices: cameras),
+          isTrue);
+    });
+    test('any pick, None included, clears the gate', () {
+      for (final pick in ['Alpaca Camera [localhost:6800/0]', 'None']) {
+        expect(
+            guideCameraPickNeeded(
+                baseLoaded: true,
+                baseCamera: null,
+                draftCamera: pick,
+                cameraChoices: cameras),
+            isFalse,
+            reason: pick);
+      }
+    });
+    test('a base profile camera is kept, so no pick is needed', () {
+      expect(
+          guideCameraPickNeeded(
+              baseLoaded: true,
+              baseCamera: 'Alpaca Camera [localhost:6800/0]',
+              draftCamera: null,
+              cameraChoices: cameras),
+          isFalse);
+    });
+    test('offline never blocks: base unread or no choices', () {
+      expect(
+          guideCameraPickNeeded(
+              baseLoaded: false,
+              baseCamera: null,
+              draftCamera: null,
+              cameraChoices: cameras),
+          isFalse);
+      expect(
+          guideCameraPickNeeded(
+              baseLoaded: true,
+              baseCamera: null,
+              draftCamera: null,
+              cameraChoices: null),
+          isFalse);
+    });
+  });
+
   testWidgets('the exposure range defaults to the guider\'s own 1.0–6.0 s '
       'and darks-on-finish defaults ON', (tester) async {
     final container = await _pump(tester);

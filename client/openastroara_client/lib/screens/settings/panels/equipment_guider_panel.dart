@@ -544,8 +544,9 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
   /// list it (disconnected, or a stale selection) — so hydrated state is
   /// always representable and never silently coerced.
   Map<String, String> _slotItems(
-      List<String> choices, String current, String alpacaType) {
-    final items = <String, String>{'': '(use the guider\'s own setting)'};
+      List<String> choices, String current, String alpacaType,
+      {String blankLabel = '(use the guider\'s own setting)'}) {
+    final items = <String, String>{'': blankLabel};
     for (final c in choices) {
       items[c] = friendlyAlpacaChoiceLabel(c, alpacaType, _alpacaNames);
     }
@@ -686,7 +687,10 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
         label: 'Guide camera',
         helpKey: 'eq.guider.guide_camera',
         value: phd2.guiderCamera,
-        items: _slotItems(cameraOptions, phd2.guiderCamera, 'camera'),
+        // A new guider has no camera of its own, so the blank entry is
+        // "nothing picked", not a working default.
+        items: _slotItems(cameraOptions, phd2.guiderCamera, 'camera',
+            blankLabel: 'None picked'),
         onChanged: (v) {
           if (v == null) return;
           phd2N.setGuiderCamera(v);
@@ -702,6 +706,18 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
           }
         },
       ),
+      if (phd2.guiderCamera.trim().isEmpty)
+        Padding(
+          padding: const EdgeInsets.only(top: 4, bottom: 4),
+          child: Text(
+            kNoGuideCameraWarning,
+            key: const ValueKey('guider_no_camera'),
+            style: Theme.of(context)
+                .textTheme
+                .bodySmall!
+                .copyWith(color: Theme.of(context).colorScheme.error),
+          ),
+        ),
       EditableTextRow(
         label: 'Guide camera ID',
         helpKey: 'eq.guider.guide_camera_id',

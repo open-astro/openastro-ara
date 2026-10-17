@@ -75,6 +75,13 @@ List<String> mergedAlpacaOptions(List<String> daemonChoices, String alpacaType,
   return merged;
 }
 
+/// Shown wherever a profile has no guide camera: a freshly installed guider
+/// has none of its own, so leaving the slot blank is not a working default.
+const String kNoGuideCameraWarning =
+    'No guide camera picked. A new guider has no camera of its own, so '
+    'guiding, guide-camera focus and polar alignment fail until you pick one. '
+    'Pick "None" if this rig has no guide camera.';
+
 /// §63.20 / #1306 — mirror of the daemon's `DescribeUnservedAlpacaSelection`:
 /// an "Alpaca …" choice is only pushable when a server is known, from the
 /// guide camera's `[host:port/N]` or the stored Alpaca host AND port;
@@ -691,6 +698,13 @@ class _GuiderSetupWizardState extends ConsumerState<GuiderSetupWizard> {
               _autofillPixelSize(v);
             },
           ),
+          if (draft.guiderCamera.trim().isEmpty)
+            Text(kNoGuideCameraWarning,
+                key: const ValueKey('wiz-no-guide-camera'),
+                style: Theme.of(context)
+                    .textTheme
+                    .bodySmall!
+                    .copyWith(color: Theme.of(context).colorScheme.error)),
           KeyedSubtree(
             // Rebuild with the driver-read value when the autofill lands
             // (TextFormField only honors initialValue on first build).
@@ -978,9 +992,15 @@ class _GuiderSetupWizardState extends ConsumerState<GuiderSetupWizard> {
     final canBack = _step.index > 0 && !_busy;
     final isLast = _step == _WizStep.darks;
     // Apply gates the step after it: no skipping ahead with an unpushed draft.
+    // The camera step holds Next until a camera is picked whenever the guider
+    // offers any: a fresh guider has none of its own to fall back on.
+    final cameraMissing = _step == _WizStep.camera &&
+        (_draft?.guiderCamera.trim().isEmpty ?? true) &&
+        (_choices?.cameras.isNotEmpty ?? false);
     final canNext = !_busy &&
         _draft != null &&
         (_step != _WizStep.apply || _applied) &&
+        !cameraMissing &&
         !isLast;
     return [
       // The final step's primary action is Finish — a disabled Next there

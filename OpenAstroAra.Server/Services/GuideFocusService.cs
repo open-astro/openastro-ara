@@ -188,6 +188,13 @@ public sealed partial class GuideFocusService : IGuideFocusService, IDisposable 
         }
     }
 
+    /// <summary>The loop's error when a frame failed because the guider has no camera connected (a fresh
+    /// guider has none until the profile names one), else null. Pure — unit-tested.</summary>
+    internal static string? NoGuideCameraError(Exception ex) =>
+        ex is GuiderRpcException && ex.Message.Contains("camera is not connected", StringComparison.OrdinalIgnoreCase)
+            ? "the guider has no camera connected — pick the guide camera in Settings → Guider and Apply"
+            : null;
+
     /// <summary>The daemon owns its camera while it guides or calibrates; the focus loop must not pull frames
     /// out from under it. Pure — unit-tested against the PHD2 app-state tokens.</summary>
     internal static bool GuiderBusy(string? appState) => appState switch {
@@ -348,6 +355,16 @@ public sealed partial class GuideFocusService : IGuideFocusService, IDisposable 
                     throw;
                 } catch (Exception ex) {
                     LogFrameFailed(ex);
+                    if (NoGuideCameraError(ex) is { } noCamera) {
+                        // Retrying cannot help: the guider has no camera until one is picked.
+                        lock (_gate) {
+                            _state = "error";
+                            _error = noCamera;
+                        }
+                        LogGaveUp(1, ex.Message);
+                        await ReleaseLeaseQuietlyAsync().ConfigureAwait(false);
+                        return;
+                    }
                     if (RecordFailure(ex.Message) >= MaxConsecutiveFailures) {
                         lock (_gate) {
                             _state = "error";
