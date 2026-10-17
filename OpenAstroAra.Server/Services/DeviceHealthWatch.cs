@@ -6,7 +6,7 @@
     This file is part of OpenAstro Ara (forked from N.I.N.A.).
 
     This Source Code Form is subject to the terms of the Mozilla Public
-    License, v. 2.0. If a copy of the MPL was not distributed from this
+    License, v. 2.0. If a copy of the MPL was not distributed with this
     file, You can obtain one at http://mozilla.org/MPL/2.0/.
 */
 
@@ -59,9 +59,15 @@ internal sealed class DeviceHealthWatch {
         }
     }
 
-    /// <summary>A fresh session (connect / disconnect / trip) starts clean.</summary>
+    /// <summary>A fresh session (connect / disconnect / trip) starts clean. A degraded episode that
+    /// was standing ends here too — resolved as recovered, so its §42.5 row does not seed the chip
+    /// amber again on the next relaunch (the reconnect hook only resolves <c>disconnected</c> rows).</summary>
     public void Reset() {
         _tracker.Reset();
+        var fault = _degradedFault;
         _degradedFault = null;
+        if (fault is not null) {
+            _faults?.Recovered(fault);
+        }
     }
 }
