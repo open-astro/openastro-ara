@@ -54,6 +54,8 @@ namespace OpenAstroAra.Test {
                     GuiderRetryTimeoutSec: 60, SkipTargetIfRecoveryFails: false));
                 Sequencer.Setup(s => s.PauseActiveRunsAsync(It.IsAny<CancellationToken>()))
                     .ReturnsAsync(runActive ? new List<Guid> { RunId } : new List<Guid>());
+                Sequencer.Setup(s => s.PauseActiveRunsAsync(true, It.IsAny<CancellationToken>()))
+                    .ReturnsAsync(runActive ? new List<Guid> { RunId } : new List<Guid>());
                 Sequencer.Setup(s => s.ResumeRunsAsync(It.IsAny<IReadOnlyCollection<Guid>>(), It.IsAny<CancellationToken>()))
                     .ReturnsAsync((IReadOnlyCollection<Guid> ids, CancellationToken _) => ids.Count);
                 var notifications = new Mock<INotificationService>();
@@ -98,6 +100,10 @@ namespace OpenAstroAra.Test {
             await rig.Service.ConnectAsync(new GuiderConnectRequestDto("127.0.0.1", fake.Port), idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
             Assert.That(await WaitUntilAsync(() => rig.Service.GetAsync(CancellationToken.None).Result?.State == EquipmentConnectionState.Connected).ConfigureAwait(false),
                 Is.True, "the guider never reached Connected against the fake");
+            // A guide step: the watch only concerns a star lost from a GUIDING session.
+            await fake.BroadcastAsync(PhdEvents.GuideStep(0.05, 0.05)).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => rig.Service.GetAsync(CancellationToken.None).Result?.Runtime.RmsTotal is not null).ConfigureAwait(false),
+                Is.True, "the guide step never landed");
             return fake;
         }
 
@@ -108,6 +114,7 @@ namespace OpenAstroAra.Test {
 
             await fake.BroadcastAsync(PhdEvents.StarLost(status: "low SNR")).ConfigureAwait(false);
             Assert.That(await WaitUntilAsync(() => rig.Paused() == 1).ConfigureAwait(false), Is.True, "the run was not paused after the grace");
+            rig.Sequencer.Verify(s => s.PauseActiveRunsAsync(true, It.IsAny<CancellationToken>()), Times.Once, "a star-lost pause is adoptable by a later daemon pause");
             Assert.That(await WaitUntilAsync(() => rig.Notifications.Count == 1).ConfigureAwait(false), Is.True);
             Assert.That(rig.Notifications[0].Title, Is.EqualTo("Guide star lost — sequence paused"));
             Assert.That(rig.WsTopics, Does.Contain(OpenAstroAra.Server.Contracts.WsEvents.WsEventCatalog.GuiderFaultActionTaken));
@@ -135,6 +142,25 @@ namespace OpenAstroAra.Test {
 
             Assert.That(rig.Paused(), Is.Zero, "a brief loss is PHD2's business");
             Assert.That(rig.Resumed(), Is.Zero);
+            Assert.That(rig.Notifications, Is.Empty);
+        }
+
+        [Test]
+        public async Task A_star_lost_while_merely_looping_does_not_pause_the_run() {
+            // PHD2 also sends StarLost while looping with a selected star, before any guiding.
+            using var rig = new Rig(runActive: true);
+            var fake = FakeGuider.Start();
+            await using var _ = fake;
+            fake.SetOnConnectEvents(PhdEvents.Version(subver: "openastroara-fake"), PhdEvents.AppState("Looping"));
+            fake.OnRpc("get_app_state", JsonValue.Create("Looping"));
+            fake.OnRpc("get_connected", JsonValue.Create(true));
+            await rig.Service.ConnectAsync(new GuiderConnectRequestDto("127.0.0.1", fake.Port), idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => rig.Service.GetAsync(CancellationToken.None).Result?.State == EquipmentConnectionState.Connected).ConfigureAwait(false), Is.True);
+
+            await fake.BroadcastAsync(PhdEvents.StarLost(status: "low SNR")).ConfigureAwait(false);
+            await Task.Delay(Grace * 3).ConfigureAwait(false);
+
+            Assert.That(rig.Paused(), Is.Zero, "no guiding session was lost");
             Assert.That(rig.Notifications, Is.Empty);
         }
 

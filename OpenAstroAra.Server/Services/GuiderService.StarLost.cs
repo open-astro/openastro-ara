@@ -42,6 +42,7 @@ public sealed partial class GuiderService {
     internal TimeSpan StarLostGrace { get; set; } = DefaultStarLostGrace;
 
     private Timer? _starLostTimer;                 // armed on star_lost, disarmed by any guide step (under _gate)
+    private bool _guidingSeen;                     // a guide step or guiding_started since the last guiding_stopped
     private bool _starLostReacted;                 // the reaction ran for the current lost-star episode
     private EquipmentFaultEvent? _starLostFault;   // its §42.5 row, resolved when the star is back
     private IReadOnlyList<Guid> _starLostPausedRuns = Array.Empty<Guid>();
@@ -49,13 +50,22 @@ public sealed partial class GuiderService {
     private void NoteStarLostMarker(string? kind) {
         lock (_gate) {
             switch (kind) {
+                case "guiding_started":
+                    _guidingSeen = true;
+                    break;
                 case "star_lost":
                 case "lock_position_lost":
-                    ArmStarLostWatchLocked();
+                    // PHD2 also reports StarLost while merely looping with a star selected; only a star
+                    // lost from a guiding session concerns the run.
+                    if (_guidingSeen) {
+                        ArmStarLostWatchLocked();
+                    }
                     break;
                 case "guiding_stopped":
                     // The user (or a park) stopped guiding: nothing to wait for. A pause that is already
-                    // outstanding stays until guide steps return or the user resumes.
+                    // outstanding stays until guide steps return, a later daemon pause adopts it, or the
+                    // user resumes.
+                    _guidingSeen = false;
                     DisarmStarLostWatchLocked();
                     break;
             }
@@ -76,6 +86,7 @@ public sealed partial class GuiderService {
 
     private void ResetStarLostWatchLocked() {
         DisarmStarLostWatchLocked();
+        _guidingSeen = false;
         _starLostReacted = false;
         _starLostFault = null;
         _starLostPausedRuns = Array.Empty<Guid>();
@@ -105,6 +116,7 @@ public sealed partial class GuiderService {
 
     // Caller holds _gate.
     private void NoteGuideStepLocked() {
+        _guidingSeen = true;
         DisarmStarLostWatchLocked();
         if (!_starLostReacted) {
             return;
