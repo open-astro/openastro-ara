@@ -43,7 +43,10 @@ class _GuidingAssistantPanelState extends ConsumerState<GuidingAssistantPanel> {
   bool _measureBacklash = true;
   final Set<String> _accept = {};
   // The suggestions ticked by default belong to one run: a new run re-ticks.
-  int _tickedFor = -1;
+  // Armed (true) while a run is in progress so the next `done` re-ticks even
+  // when its sample count equals the last run's (a fixed duration and
+  // exposure give the same count run after run — review of #1387).
+  bool _retickOnDone = true;
 
   @override
   Widget build(BuildContext context) {
@@ -52,8 +55,10 @@ class _GuidingAssistantPanelState extends ConsumerState<GuidingAssistantPanel> {
     final status = state.status;
     final text = Theme.of(context).textTheme;
     final recs = status.recommendations;
-    if (status.isDone && recs != null && _tickedFor != status.samples) {
-      _tickedFor = status.samples ?? 0;
+    if (status.isRunning) {
+      _retickOnDone = true;
+    } else if (status.isDone && recs != null && _retickOnDone) {
+      _retickOnDone = false;
       _accept
         ..clear()
         ..addAll(recs.suggestions.map((s) => s.key));

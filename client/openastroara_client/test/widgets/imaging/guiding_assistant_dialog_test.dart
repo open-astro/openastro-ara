@@ -37,6 +37,10 @@ class _Fake implements GuidingAssistantClient {
     return status;
   }
 
+  /// Finish the fake's run with the same sample count as [_done] (a fixed
+  /// duration and exposure give the same count run after run).
+  void finish() => status = _done();
+
   @override
   Future<GuidingAssistantStatus> stop() async {
     calls.add('stop');
@@ -196,7 +200,7 @@ void main() {
       expect(find.text('2–4 s'), findsOneWidget);
 
       await t.ensureVisible(find.byKey(const Key('ga-suggest-min_move_dec')));
-    await t.tap(find.byKey(const Key('ga-suggest-min_move_dec')));
+      await t.tap(find.byKey(const Key('ga-suggest-min_move_dec')));
       await t.pump();
       await t.tap(find.byKey(const Key('guiding-assistant-apply')));
       await t.pump();
@@ -248,4 +252,46 @@ void main() {
       isFalse,
     );
   });
+
+  testWidgets(
+    'Run again re-ticks every suggestion even when the sample count repeats',
+    (t) async {
+      final fake = await _pump(t, _done());
+      await t.ensureVisible(find.byKey(const Key('ga-suggest-exposure')));
+      await t.tap(find.byKey(const Key('ga-suggest-exposure')));
+      await t.pump();
+      expect(
+        t
+            .widget<CheckboxListTile>(
+              find.byKey(const Key('ga-suggest-exposure')),
+            )
+            .value,
+        isFalse,
+      );
+
+      await t.ensureVisible(find.byKey(const Key('guiding-assistant-start')));
+      await t.tap(find.byKey(const Key('guiding-assistant-start')));
+      await t.pump();
+      await t.pump();
+      expect(find.byKey(const Key('guiding-assistant-stop')), findsOneWidget);
+      // Run 2 ends with samples: 60 again, exactly as run 1 did.
+      fake.finish();
+      await t.pump(GuidingAssistantNotifier.runningPollInterval);
+      await t.pump();
+      await t.pump();
+      expect(find.byKey(const Key('guiding-assistant-apply')), findsOneWidget);
+      for (final k in [
+        'exposure',
+        'min_move_ra',
+        'min_move_dec',
+        'dec_backlash',
+      ]) {
+        expect(
+          t.widget<CheckboxListTile>(find.byKey(Key('ga-suggest-$k'))).value,
+          isTrue,
+          reason: '$k re-ticked for the new run',
+        );
+      }
+    },
+  );
 }
