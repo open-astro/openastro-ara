@@ -191,7 +191,7 @@ public static partial class EquipmentEndpoints {
                     detail: CameraConnectGuard.Detail(request.Device, profiles.GetPhd2Settings()),
                     statusCode: StatusCodes.Status409Conflict);
             }
-            return await ConnectAndRememberAsync(request, selectionStore, () => svc.ConnectAsync(request, key, ct), ct);
+            return await ConnectAndRememberAsync(Localized(request), selectionStore, () => svc.ConnectAsync(Localized(request), key, ct), ct);
         });
         camera.MapPost("/disconnect", async ([FromHeader(Name = "Idempotency-Key")] string? key, ICameraService svc, CancellationToken ct) =>
             Results.Accepted(value: await svc.DisconnectAsync(key, ct)));
@@ -269,7 +269,7 @@ public static partial class EquipmentEndpoints {
             var dto = await svc.GetAsync(ct); return dto is null ? Results.NotFound() : Results.Ok(dto);
         });
         telescope.MapPost("/connect", async ([FromBody] ConnectRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, ITelescopeService svc, IEquipmentSelectionStore selectionStore, CancellationToken ct) =>
-            await ConnectAndRememberAsync(request, selectionStore, () => svc.ConnectAsync(request, key, ct), ct));
+            await ConnectAndRememberAsync(Localized(request), selectionStore, () => svc.ConnectAsync(Localized(request), key, ct), ct));
         telescope.MapPost("/disconnect", async ([FromHeader(Name = "Idempotency-Key")] string? key, ITelescopeService svc, CancellationToken ct) =>
             Results.Accepted(value: await svc.DisconnectAsync(key, ct)));
         telescope.MapPost("/slew", ([FromBody] SlewRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, ITelescopeService svc, ISequencerService sequencer, CancellationToken ct) =>
@@ -306,7 +306,7 @@ public static partial class EquipmentEndpoints {
             var dto = await svc.GetAsync(ct); return dto is null ? Results.NotFound() : Results.Ok(dto);
         });
         focuser.MapPost("/connect", async ([FromBody] ConnectRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, IFocuserService svc, IEquipmentSelectionStore selectionStore, CancellationToken ct) =>
-            await ConnectAndRememberAsync(request, selectionStore, () => svc.ConnectAsync(request, key, ct), ct));
+            await ConnectAndRememberAsync(Localized(request), selectionStore, () => svc.ConnectAsync(Localized(request), key, ct), ct));
         focuser.MapPost("/disconnect", async ([FromHeader(Name = "Idempotency-Key")] string? key, IFocuserService svc, CancellationToken ct) =>
             Results.Accepted(value: await svc.DisconnectAsync(key, ct)));
         focuser.MapPost("/move", async ([FromBody] FocuserMoveRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, IFocuserService svc, CancellationToken ct) =>
@@ -333,7 +333,7 @@ public static partial class EquipmentEndpoints {
             var dto = await svc.GetAsync(ct); return dto is null ? Results.NotFound() : Results.Ok(dto);
         });
         filterwheel.MapPost("/connect", async ([FromBody] ConnectRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, IFilterWheelService svc, IEquipmentSelectionStore selectionStore, CancellationToken ct) =>
-            await ConnectAndRememberAsync(request, selectionStore, () => svc.ConnectAsync(request, key, ct), ct));
+            await ConnectAndRememberAsync(Localized(request), selectionStore, () => svc.ConnectAsync(Localized(request), key, ct), ct));
         filterwheel.MapPost("/disconnect", async ([FromHeader(Name = "Idempotency-Key")] string? key, IFilterWheelService svc, CancellationToken ct) =>
             Results.Accepted(value: await svc.DisconnectAsync(key, ct)));
         // An out-of-range slot is the caller's mistake (400) and a wheel that is not connected
@@ -359,7 +359,7 @@ public static partial class EquipmentEndpoints {
             var dto = await svc.GetAsync(ct); return dto is null ? Results.NotFound() : Results.Ok(dto);
         });
         rotator.MapPost("/connect", async ([FromBody] ConnectRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, IRotatorService svc, IEquipmentSelectionStore selectionStore, CancellationToken ct) =>
-            await ConnectAndRememberAsync(request, selectionStore, () => svc.ConnectAsync(request, key, ct), ct));
+            await ConnectAndRememberAsync(Localized(request), selectionStore, () => svc.ConnectAsync(Localized(request), key, ct), ct));
         rotator.MapPost("/disconnect", async ([FromHeader(Name = "Idempotency-Key")] string? key, IRotatorService svc, CancellationToken ct) =>
             Results.Accepted(value: await svc.DisconnectAsync(key, ct)));
         rotator.MapPost("/move", async ([FromBody] RotatorMoveRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, IRotatorService svc, CancellationToken ct) =>
@@ -375,7 +375,7 @@ public static partial class EquipmentEndpoints {
             var dto = await svc.GetAsync(ct); return dto is null ? Results.NotFound() : Results.Ok(dto);
         });
         dome.MapPost("/connect", async ([FromBody] ConnectRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, IDomeService svc, IEquipmentSelectionStore selectionStore, CancellationToken ct) =>
-            await ConnectAndRememberAsync(request, selectionStore, () => svc.ConnectAsync(request, key, ct), ct));
+            await ConnectAndRememberAsync(Localized(request), selectionStore, () => svc.ConnectAsync(Localized(request), key, ct), ct));
         dome.MapPost("/disconnect", async ([FromHeader(Name = "Idempotency-Key")] string? key, IDomeService svc, CancellationToken ct) =>
             Results.Accepted(value: await svc.DisconnectAsync(key, ct)));
         dome.MapPost("/slew", async ([FromBody] DomeSlewRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, IDomeService svc, CancellationToken ct) =>
@@ -411,7 +411,7 @@ public static partial class EquipmentEndpoints {
         // Connect an ADDITIONAL switch (no longer evicts the others). The device's UniqueId
         // (in the body's DiscoveredDeviceDto) becomes its address.
         sw.MapPost("/connect", async ([FromBody] ConnectRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, ISwitchService svc, IEquipmentSelectionStore selectionStore, CancellationToken ct) =>
-            await ConnectAndRememberAsync(request, selectionStore, () => svc.ConnectAsync(request, key, ct), ct));
+            await ConnectAndRememberAsync(Localized(request), selectionStore, () => svc.ConnectAsync(Localized(request), key, ct), ct));
         // Disconnect is idempotent (like every device's disconnect): an unknown/already-disconnected
         // device id is a no-op 202, not a 404.
         sw.MapPost("/{id}/disconnect", async (string id, [FromHeader(Name = "Idempotency-Key")] string? key, ISwitchService svc, CancellationToken ct) =>
@@ -449,7 +449,7 @@ public static partial class EquipmentEndpoints {
             var dto = await svc.GetAsync(ct); return dto is null ? Results.NotFound() : Results.Ok(dto);
         });
         oc.MapPost("/connect", async ([FromBody] ConnectRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, IObservingConditionsService svc, IEquipmentSelectionStore selectionStore, CancellationToken ct) =>
-            await ConnectAndRememberAsync(request, selectionStore, () => svc.ConnectAsync(request, key, ct), ct));
+            await ConnectAndRememberAsync(Localized(request), selectionStore, () => svc.ConnectAsync(Localized(request), key, ct), ct));
         oc.MapPost("/disconnect", async ([FromHeader(Name = "Idempotency-Key")] string? key, IObservingConditionsService svc, CancellationToken ct) =>
             Results.Accepted(value: await svc.DisconnectAsync(key, ct)));
 
@@ -459,7 +459,7 @@ public static partial class EquipmentEndpoints {
             var dto = await svc.GetAsync(ct); return dto is null ? Results.NotFound() : Results.Ok(dto);
         });
         safety.MapPost("/connect", async ([FromBody] ConnectRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, ISafetyMonitorService svc, IEquipmentSelectionStore selectionStore, CancellationToken ct) =>
-            await ConnectAndRememberAsync(request, selectionStore, () => svc.ConnectAsync(request, key, ct), ct));
+            await ConnectAndRememberAsync(Localized(request), selectionStore, () => svc.ConnectAsync(Localized(request), key, ct), ct));
         safety.MapPost("/disconnect", async ([FromHeader(Name = "Idempotency-Key")] string? key, ISafetyMonitorService svc, CancellationToken ct) =>
             Results.Accepted(value: await svc.DisconnectAsync(key, ct)));
 
@@ -469,7 +469,7 @@ public static partial class EquipmentEndpoints {
             var dto = await svc.GetAsync(ct); return dto is null ? Results.NotFound() : Results.Ok(dto);
         });
         flat.MapPost("/connect", async ([FromBody] ConnectRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, IFlatDeviceService svc, IEquipmentSelectionStore selectionStore, CancellationToken ct) =>
-            await ConnectAndRememberAsync(request, selectionStore, () => svc.ConnectAsync(request, key, ct), ct));
+            await ConnectAndRememberAsync(Localized(request), selectionStore, () => svc.ConnectAsync(Localized(request), key, ct), ct));
         flat.MapPost("/disconnect", async ([FromHeader(Name = "Idempotency-Key")] string? key, IFlatDeviceService svc, CancellationToken ct) =>
             Results.Accepted(value: await svc.DisconnectAsync(key, ct)));
         flat.MapPost("/apply", async ([FromBody] FlatPanelRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, IFlatDeviceService svc, CancellationToken ct) =>
@@ -1131,6 +1131,12 @@ public static partial class EquipmentEndpoints {
     // (§52/§67 trusted LAN) — ARA connects any standard Alpaca device without a version/protection
     // handshake. Extracted so the connect+remember flow is shared across every device type and unit-
     // testable. NOT applied to the guider — it's the PHD2 daemon, not an Alpaca device.
+    /// <summary>A device on this machine's own Alpaca server is dialled and remembered as localhost,
+    /// whatever address the client discovered it under (the CM4's hotspot, field and home addresses
+    /// all named the same bridge on 2026-10-16, and each move left half the rig "offline" at boot).</summary>
+    internal static ConnectRequestDto Localized(ConnectRequestDto request) =>
+        request.Device is null ? request : request with { Device = HostLocality.LocalizeDevice(request.Device) };
+
     public static async Task<IResult> ConnectAndRememberAsync(
             ConnectRequestDto request, IEquipmentSelectionStore selectionStore,
             System.Func<Task<OperationAcceptedDto>> connect, CancellationToken ct) {

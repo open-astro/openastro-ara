@@ -64,30 +64,64 @@ public sealed partial class EquipmentReconnector : IEquipmentReconnector {
     private readonly IServiceProvider _services;
     private readonly IEquipmentSelectionStore _store;
     private readonly ILogger<EquipmentReconnector> _logger;
+    // Finds a device saved under an address this box no longer has on this box's own Alpaca server.
+    // Null (tests, no management client) dials the saved record as it is.
+    private readonly IAlpacaManagementClient? _alpaca;
+    private readonly Func<string?, bool>? _isThisMachine;
 
     public EquipmentReconnector(IServiceProvider services, IEquipmentSelectionStore store,
-            ILogger<EquipmentReconnector> logger) {
+            ILogger<EquipmentReconnector> logger, IAlpacaManagementClient? alpaca = null,
+            Func<string?, bool>? isThisMachine = null) {
         _services = services;
         _store = store;
         _logger = logger;
+        _alpaca = alpaca;
+        _isThisMachine = isThisMachine;
     }
 
     public Func<Task>? ResolveConnect(DeviceType type, DiscoveredDeviceDto device, CancellationToken ct) {
-        var req = new ConnectRequestDto(device);
-        return type switch {
-            DeviceType.Camera => () => _services.GetRequiredService<ICameraService>().ConnectAsync(req, null, ct),
-            DeviceType.Telescope => () => _services.GetRequiredService<ITelescopeService>().ConnectAsync(req, null, ct),
-            DeviceType.Focuser => () => _services.GetRequiredService<IFocuserService>().ConnectAsync(req, null, ct),
-            DeviceType.FilterWheel => () => _services.GetRequiredService<IFilterWheelService>().ConnectAsync(req, null, ct),
-            DeviceType.Rotator => () => _services.GetRequiredService<IRotatorService>().ConnectAsync(req, null, ct),
-            DeviceType.Dome => () => _services.GetRequiredService<IDomeService>().ConnectAsync(req, null, ct),
-            DeviceType.SafetyMonitor => () => _services.GetRequiredService<ISafetyMonitorService>().ConnectAsync(req, null, ct),
-            DeviceType.ObservingConditions => () => _services.GetRequiredService<IObservingConditionsService>().ConnectAsync(req, null, ct),
+        Func<ConnectRequestDto, Task>? connect = type switch {
+            DeviceType.Camera => req => _services.GetRequiredService<ICameraService>().ConnectAsync(req, null, ct),
+            DeviceType.Telescope => req => _services.GetRequiredService<ITelescopeService>().ConnectAsync(req, null, ct),
+            DeviceType.Focuser => req => _services.GetRequiredService<IFocuserService>().ConnectAsync(req, null, ct),
+            DeviceType.FilterWheel => req => _services.GetRequiredService<IFilterWheelService>().ConnectAsync(req, null, ct),
+            DeviceType.Rotator => req => _services.GetRequiredService<IRotatorService>().ConnectAsync(req, null, ct),
+            DeviceType.Dome => req => _services.GetRequiredService<IDomeService>().ConnectAsync(req, null, ct),
+            DeviceType.SafetyMonitor => req => _services.GetRequiredService<ISafetyMonitorService>().ConnectAsync(req, null, ct),
+            DeviceType.ObservingConditions => req => _services.GetRequiredService<IObservingConditionsService>().ConnectAsync(req, null, ct),
             DeviceType.FlatDevice or DeviceType.CoverCalibrator =>
-                () => _services.GetRequiredService<IFlatDeviceService>().ConnectAsync(req, null, ct),
-            DeviceType.Switch => () => _services.GetRequiredService<ISwitchService>().ConnectAsync(req, null, ct),
+                req => _services.GetRequiredService<IFlatDeviceService>().ConnectAsync(req, null, ct),
+            DeviceType.Switch => req => _services.GetRequiredService<ISwitchService>().ConnectAsync(req, null, ct),
             _ => null,
         };
+        if (connect is null) {
+            return null;
+        }
+        var localized = HostLocality.LocalizeDevice(device, _isThisMachine);
+        return async () => {
+            var target = await FindMovedAsync(localized, ct).ConfigureAwait(false) ?? localized;
+            await connect(new ConnectRequestDto(target)).ConfigureAwait(false);
+        };
+    }
+
+    // A record saved under an address this box no longer has (the field router's, back on the home LAN)
+    // whose device this box's own Alpaca server serves: dial it as localhost and re-save it, so the next
+    // boot goes straight there instead of waiting out the Alpaca timeout on a dead address.
+    private async Task<DiscoveredDeviceDto?> FindMovedAsync(DiscoveredDeviceDto device, CancellationToken ct) {
+        if (_alpaca is null) {
+            return null;
+        }
+        var moved = await HostLocality.FindOnLocalServerAsync(device, _alpaca, ct, _isThisMachine).ConfigureAwait(false);
+        if (moved is null) {
+            return null;
+        }
+        LogMovedToLocalhost(device.Type, device.Name, device.IpAddress);
+        // A switch is remembered per endpoint, so the old address's entry has to go or boot dials it too.
+        if (device.Type == DeviceType.Switch && !string.IsNullOrWhiteSpace(device.UniqueId)) {
+            await _store.ForgetSwitchAsync(device.UniqueId, ct).ConfigureAwait(false);
+        }
+        await _store.RememberAsync(moved, ct).ConfigureAwait(false);
+        return moved;
     }
 
     public async Task<ReconnectOutcome> ReconnectAsync(DeviceType type, CancellationToken ct) {
@@ -218,6 +252,10 @@ public sealed partial class EquipmentReconnector : IEquipmentReconnector {
 
     // FlatDevice/CoverCalibrator collapse lives on DeviceTypeExtensions.Canonical (shared).
     private static bool SameGroup(DeviceType a, DeviceType b) => a.Canonical() == b.Canonical();
+
+    [LoggerMessage(Level = LogLevel.Information,
+        Message = "{DeviceType} '{DeviceName}' was saved under {OldAddress}, which no longer serves it; this box's own Alpaca server does, so it is dialled and saved as localhost")]
+    private partial void LogMovedToLocalhost(DeviceType deviceType, string deviceName, string oldAddress);
 
     [LoggerMessage(Level = LogLevel.Warning,
         Message = "Reconnect dispatch for {DeviceType} '{DeviceName}' failed; the other remembered devices still get their turn.")]
