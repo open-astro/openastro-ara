@@ -130,13 +130,14 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             if (!Connected) {
                 throw new InvalidOperationException("guider is not connected");
             }
+            // The gain always goes: a profile with every other tuning value unset can still change it.
+            await PushCameraGainAsync(ct);
             var messages = BuildGuiderTuningMessages(profileService.ActiveProfile.GuiderSettings, AdvancedSettingsQuietly());
             if (messages.Count == 0) {
-                Logger.Debug("PHD2 §63.5 tuning push - no runtime-safe guider config set; nothing sent.");
-                return System.Array.Empty<string>();
+                Logger.Debug("PHD2 §63.5 tuning push - no other runtime-safe guider config set; only the gain sent.");
+                return new[] { CameraGainSetter };
             }
             await SendEngineConfigMessagesAsync(messages, " (tuning only, equipment left connected)", ct);
-            await PushCameraGainAsync(ct);
             return messages.Select(m => m.Method).Append(CameraGainSetter).Distinct().ToList();
         }
 
