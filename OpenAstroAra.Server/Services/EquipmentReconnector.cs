@@ -73,7 +73,7 @@ public sealed partial class EquipmentReconnector : IEquipmentReconnector {
     }
 
     public Func<Task>? ResolveConnect(DeviceType type, DiscoveredDeviceDto device, CancellationToken ct) {
-        var req = new ConnectRequestDto(device);
+        var req = new ConnectRequestDto(HostLocality.LocalizeDevice(device));
         return type switch {
             DeviceType.Camera => () => _services.GetRequiredService<ICameraService>().ConnectAsync(req, null, ct),
             DeviceType.Telescope => () => _services.GetRequiredService<ITelescopeService>().ConnectAsync(req, null, ct),

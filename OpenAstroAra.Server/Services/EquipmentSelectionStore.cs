@@ -72,14 +72,21 @@ public sealed partial class EquipmentSelectionStore : IEquipmentSelectionStore, 
     private readonly ILogger<EquipmentSelectionStore> _logger;
     private readonly SemaphoreSlim _gate = new(1, 1);
 
-    public EquipmentSelectionStore(string profileDir, ILogger<EquipmentSelectionStore> logger) {
+    // "Is this address this machine?" — injectable so the store's localhost rule is testable on any box.
+    private readonly Func<string?, bool> _isThisMachine;
+
+    public EquipmentSelectionStore(string profileDir, ILogger<EquipmentSelectionStore> logger, Func<string?, bool>? isThisMachine = null) {
         ArgumentException.ThrowIfNullOrEmpty(profileDir);
         _path = Path.Combine(profileDir, FileName);
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _isThisMachine = isThisMachine ?? HostLocality.IsThisMachine;
     }
 
     public async Task RememberAsync(DiscoveredDeviceDto device, CancellationToken ct) {
         ArgumentNullException.ThrowIfNull(device);
+        // A device on this machine's own Alpaca server is remembered as localhost: the one address
+        // that survives a move between the hotspot, the field router and the home LAN.
+        device = HostLocality.LocalizeDevice(device, _isThisMachine);
         await _gate.WaitAsync(ct).ConfigureAwait(false);
         // Atomic replace: write a temp sibling then move over the target so a
         // crash mid-write can never leave a half-written selection file.
@@ -244,8 +251,14 @@ public sealed partial class EquipmentSelectionStore : IEquipmentSelectionStore, 
     private async Task<Dictionary<string, DiscoveredDeviceDto>> ReadLocked(CancellationToken ct) {
         try {
             var text = await File.ReadAllTextAsync(_path, ct).ConfigureAwait(false);
-            return JsonSerializer.Deserialize<Dictionary<string, DiscoveredDeviceDto>>(text, JsonOptions)
+            var map = JsonSerializer.Deserialize<Dictionary<string, DiscoveredDeviceDto>>(text, JsonOptions)
                 ?? new Dictionary<string, DiscoveredDeviceDto>();
+            // A file written before the localhost rule (or on another network) migrates on read: every
+            // entry naming one of this machine's addresses is dialled as localhost from now on.
+            foreach (var key in map.Keys.ToList()) {
+                map[key] = HostLocality.LocalizeDevice(map[key], _isThisMachine);
+            }
+            return map;
         } catch (FileNotFoundException) {
             return new Dictionary<string, DiscoveredDeviceDto>();
         } catch (DirectoryNotFoundException) {

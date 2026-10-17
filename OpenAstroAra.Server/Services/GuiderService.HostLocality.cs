@@ -46,63 +46,10 @@ public sealed partial class GuiderService {
     /// address, this machine's host name (with or without a domain suffix), or an address bound to
     /// one of this machine's interfaces. Case-insensitive; an IPv6 literal may carry its brackets.
     /// </summary>
-    internal static bool IsLocalGuiderHost(string? host, string machineName, IEnumerable<IPAddress> localAddresses) {
-        var name = host?.Trim().Trim('[', ']');
-        if (string.IsNullOrEmpty(name) || name.Equals("localhost", StringComparison.OrdinalIgnoreCase)) {
-            return true;
-        }
-        if (IPAddress.TryParse(name, out var ip)) {
-            if (IPAddress.IsLoopback(ip) || ip.Equals(IPAddress.Any) || ip.Equals(IPAddress.IPv6Any)) {
-                return true;
-            }
-            foreach (var local in localAddresses) {
-                if (SameAddress(local, ip)) {
-                    return true;
-                }
-            }
-            return false;
-        }
-        return SameMachineName(name, machineName);
-    }
+    internal static bool IsLocalGuiderHost(string? host, string machineName, IEnumerable<IPAddress> localAddresses) =>
+        HostLocality.IsLocalHost(host, machineName, localAddresses);
 
-    // IPAddress.Equals includes the IPv6 scope id, so the NIC's fe80::1234%2 would never match a
-    // profile host typed as fe80::1234. Compare the bytes only (family first: the byte arrays of an
-    // IPv4 and an IPv6 address can never collide in length, but be explicit).
-    private static bool SameAddress(IPAddress a, IPAddress b) =>
-        a.AddressFamily == b.AddressFamily && a.GetAddressBytes().AsSpan().SequenceEqual(b.GetAddressBytes());
-
-    // Domain suffixes under which "<our label>.<suffix>" can only mean this machine: mDNS's own
-    // .local and the usual router / RFC 8375 home suffixes. Any other domain on the profile host is
-    // a real DNS name that two boxes with the same label may share (raspberrypi.site2, #1234), so
-    // the pure check says no and the resolve decides.
-    private static readonly string[] SelfSuffixes = ["local", "localdomain", "lan", "home", "home.arpa", "internal"];
-
-    // "raspberrypi" == "raspberrypi.local" == "RASPBERRYPI.lan": the first DNS label, plus a domain
-    // check when the profile host carries one (#1234): it must be the machine's own domain or one of
-    // SelfSuffixes. "raspberrypi.site2" is NOT this machine by name alone.
-    internal static bool SameMachineName(string host, string machineName) {
-        if (string.IsNullOrWhiteSpace(machineName)) {
-            return false;
-        }
-        var hostParts = host.Split('.', 2);
-        var machineParts = machineName.Trim().Split('.', 2);
-        if (hostParts[0].Length == 0 || !hostParts[0].Equals(machineParts[0], StringComparison.OrdinalIgnoreCase)) {
-            return false;
-        }
-        if (hostParts.Length == 1) {
-            return true; // bare label
-        }
-        var hostDomain = hostParts[1].TrimEnd('.');
-        if (machineParts.Length == 2 && hostDomain.Equals(machineParts[1].TrimEnd('.'), StringComparison.OrdinalIgnoreCase)) {
-            return true; // our own FQDN
-        }
-        foreach (var suffix in SelfSuffixes) {
-            if (hostDomain.Equals(suffix, StringComparison.OrdinalIgnoreCase)) {
-                return true;
-            }
-        }
-        return false;
-    }
+    internal static bool SameMachineName(string host, string machineName) => HostLocality.SameMachineName(host, machineName);
 
     /// <summary>The production decision: the pure check against this machine's name and interface
     /// addresses, then — for a DNS name that is not ours — a bounded resolve so a name that points at
@@ -146,29 +93,9 @@ public sealed partial class GuiderService {
         return false;
     }
 
-    private static string SafeMachineName() {
-        try {
-            return Dns.GetHostName();
-        } catch (SocketException) {
-            return string.Empty;
-        }
-    }
+    private static string SafeMachineName() => HostLocality.SafeMachineName();
 
-    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "NetworkInterface enumeration throws platform-specific exceptions on some sandboxed hosts; an empty list just narrows 'local' to loopback + host name.")]
-    private static List<IPAddress> SafeLocalAddresses() {
-        var addresses = new List<IPAddress>();
-        try {
-            foreach (var nic in NetworkInterface.GetAllNetworkInterfaces()) {
-                foreach (var unicast in nic.GetIPProperties().UnicastAddresses) {
-                    addresses.Add(unicast.Address);
-                }
-            }
-        } catch (Exception) {
-            // see justification
-        }
-        return addresses;
-    }
+    private static IReadOnlyList<IPAddress> SafeLocalAddresses() => HostLocality.SafeLocalAddresses();
 
     [LoggerMessage(EventId = 6363, Level = LogLevel.Information, Message = "Guider host {Host}:{Port} is not this machine — not starting the local openastro-guider unit; connecting directly")]
     private partial void LogRemoteHostNoLocalStart(string host, int port);
