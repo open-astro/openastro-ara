@@ -534,7 +534,11 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                 if (ditherMsgResponse.error != null) {
                     /* Dither failed */
                     Settling = false;
-                    _lastSettleError = ditherMsgResponse.error.ToString();
+                    // The guider's own words (ToString() was the PhdError type name — the verdict the
+                    // Dither instruction shows the user must be the message).
+                    _lastSettleError = string.IsNullOrWhiteSpace(ditherMsgResponse.error.message)
+                        ? $"dither refused by the guider (code {ditherMsgResponse.error.code})"
+                        : ditherMsgResponse.error.message;
                     return false;
                 }
                 await WaitForSettling(progress, ct);

@@ -16,6 +16,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using NUnit.Framework;
 using OpenAstroAra.Equipment.Equipment.MyGuider.PHD2;
+using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Profile;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Services;
@@ -1813,6 +1814,63 @@ namespace OpenAstroAra.Test {
             Assert.That(failed.GetProperty("operation_id").GetString(), Is.EqualTo(second.OperationId.ToString()));
             var ops = ws.Of("guider.operation_complete");
             Assert.That(ops.Select(o => o.GetProperty("ok").GetBoolean()), Is.EqualTo(OkThenFailed));
+        }
+
+        // ── the sequencer's dither (IGuiderMediator.Dither) and its verdict, LastDitherError ──
+
+        private static Task SettleWhenSentAsync(FakeGuider fake, Func<int> dithers, int n, JsonObject settleDone) =>
+            Task.Run(async () => {
+                await WaitUntilAsync(() => dithers() >= n).ConfigureAwait(false);
+                await fake.BroadcastAsync(settleDone).ConfigureAwait(false);
+            });
+
+        [Test]
+        public async Task A_sequencer_dither_that_settles_has_no_verdict_and_a_settle_timeout_is_the_verdict() {
+            await using var fake = FakeGuider.Start();
+            _ = new ProfileDaemon(fake);
+            fake.OnRpc("get_app_state", JsonValue.Create("Guiding"));
+            var dithers = 0;
+            fake.OnRpc("dither", _ => { Interlocked.Increment(ref dithers); return JsonValue.Create(0); });
+            var ws = new RecordingBroadcaster();
+            using var svc = await ConnectedAgainstAsync(fake, "Rig A", ws).ConfigureAwait(false);
+            await fake.BroadcastAsync(PhdEvents.AppState("Guiding")).ConfigureAwait(false);
+            var mediator = svc; // GuiderService IS the sequencer's IGuiderMediator; Dither below is that interface's method
+
+            var settle = SettleWhenSentAsync(fake, () => dithers, 1, PhdEvents.SettleDone(status: 0));
+            Assert.That(await mediator.Dither(CancellationToken.None).ConfigureAwait(false), Is.True);
+            await settle.ConfigureAwait(false);
+            Assert.That(svc.LastDitherError, Is.Null, "settled: no verdict for the Dither instruction to act on");
+
+            settle = SettleWhenSentAsync(fake, () => dithers, 2, PhdEvents.SettleDone(status: 1, error: "timed-out waiting for guider to settle"));
+            Assert.That(await mediator.Dither(CancellationToken.None).ConfigureAwait(false), Is.True, "the RPC was sent; the settle is what failed");
+            await settle.ConfigureAwait(false);
+            Assert.That(svc.LastDitherError, Is.EqualTo("timed-out waiting for guider to settle"));
+            Assert.That(await WaitUntilAsync(() => ws.Of("guider.dither_complete").Count == 2).ConfigureAwait(false), Is.True);
+            Assert.That(ws.Of("guider.dither_complete")[1].GetProperty("error").GetString(), Is.EqualTo("timed-out waiting for guider to settle"));
+        }
+
+        [Test]
+        public async Task A_dither_the_guider_rejects_carries_its_reason_and_a_disconnected_guider_is_a_plain_refusal() {
+            await using var fake = FakeGuider.Start();
+            _ = new ProfileDaemon(fake);
+            fake.OnRpc("get_app_state", JsonValue.Create("Guiding"));
+            // A result factory that throws is answered as a JSON-RPC error with that message.
+            fake.OnRpc("dither", _ => throw new InvalidOperationException("dither amount out of range"));
+            var ws = new RecordingBroadcaster();
+            using var svc = await ConnectedAgainstAsync(fake, "Rig A", ws).ConfigureAwait(false);
+            await fake.BroadcastAsync(PhdEvents.AppState("Guiding")).ConfigureAwait(false);
+            var mediator = svc; // GuiderService IS the sequencer's IGuiderMediator; Dither below is that interface's method
+
+            Assert.That(await mediator.Dither(CancellationToken.None).ConfigureAwait(false), Is.False);
+            Assert.That(svc.LastDitherError, Does.Contain("dither amount out of range"), "the guider's own reason, not a bare 'refused'");
+            Assert.That(await WaitUntilAsync(() => ws.Of("guider.dither_complete").Count == 1).ConfigureAwait(false), Is.True);
+            Assert.That(ws.Of("guider.dither_complete")[0].GetProperty("error").GetString(), Does.Contain("dither amount out of range"));
+
+            // The guider drops before the retry: the verdict must not be the previous one (round 5 finding).
+            await svc.DisconnectAsync(idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => svc.GetAsync(CancellationToken.None).Result?.State != EquipmentConnectionState.Connected).ConfigureAwait(false), Is.True);
+            Assert.That(await mediator.Dither(CancellationToken.None).ConfigureAwait(false), Is.False);
+            Assert.That(svc.LastDitherError, Is.EqualTo("refused"), "a disconnected guider is a plain refusal, never the stale reason");
         }
 
         [Test]
