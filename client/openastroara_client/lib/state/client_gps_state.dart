@@ -193,7 +193,14 @@ class ClientGpsNotifier extends AsyncNotifier<ClientGpsStatus> {
     // that happens to be the lone usbmodem port, so the background loop never opens
     // a port the user did not choose. The loop's failure names the candidate.
     final source = ref.read(serialGpsSourceProvider);
-    final ports = await _ports(source);
+    List<String> ports;
+    try {
+      ports = await _ports(source);
+    } catch (e) {
+      // busy is already set: a throwing enumeration must not leave it stuck. Read the saved port.
+      debugPrint('[client-gps] could not list serial ports: $e');
+      ports = const [];
+    }
     if (!ref.mounted) return null;
     state = AsyncData(_current.copyWith(ports: ports));
     final savedGone = ports.isNotEmpty && !ports.contains(saved);
@@ -215,7 +222,7 @@ class ClientGpsNotifier extends AsyncNotifier<ClientGpsStatus> {
     var pushed = false;
     try {
       fix = await acquireFix(source, port, ref.read(clientGpsListenWindowProvider));
-      if (fix != null && port != saved && ref.mounted && _current.prefs.port == saved) {
+      if (fix != null && port != saved && ref.mounted && _current.enabled && _current.prefs.port == saved) {
         // Remembered only once it spoke NMEA: a lone usbmodem/ttyACM port can just as
         // well be an Arduino focuser or an OnStep mount, which must never become the
         // saved GPS port.
@@ -229,7 +236,8 @@ class ClientGpsNotifier extends AsyncNotifier<ClientGpsStatus> {
         if (ref.mounted) state = AsyncData(_current.copyWith(prefs: prefs));
       }
       if (fix == null) {
-        error = 'No GPS fix on $port yet — the receiver needs a clear view of the sky.';
+        error = 'No GPS fix on $port${port != saved ? ' (the saved $saved is gone)' : ''} yet'
+            ' — the receiver needs a clear view of the sky.';
       } else if ((gen != null && gen != _gen) || !ref.mounted || !_current.enabled) {
         // Disabled or re-pointed while reading (timer read: generation moved; manual
         // read: the switch is now off): keep the fix locally, never relay it.

@@ -37,12 +37,16 @@ class _FakeSource implements SerialGpsSource {
   final opened = <String>[];
   /// When set, every enumeration after the first (build's) waits on it, like a slow `mode`.
   Completer<void>? slowPorts;
+  /// When set, every enumeration after the first (build's) throws.
+  bool portsThrow = false;
   int _portCalls = 0;
 
   @override
   Future<List<String>> availablePorts() async {
+    final later = ++_portCalls > 1;
     final gate = slowPorts;
-    if (gate != null && ++_portCalls > 1) await gate.future;
+    if (gate != null && later) await gate.future;
+    if (portsThrow && later) throw StateError('enumeration failed');
     return ports;
   }
 
@@ -279,6 +283,7 @@ void main() {
       final fix = await c.read(clientGpsProvider.notifier).syncNow();
       expect(fix, isNull);
       expect(source.lastPort, '/dev/cu.usbmodem101', reason: 'it was tried');
+      expect(c.read(clientGpsProvider).value!.lastError, contains('(the saved /dev/cu.usbmodem1101 is gone)'));
       expect(c.read(clientGpsProvider).value!.prefs.port, '/dev/cu.usbmodem1101');
       final saved = await ClientGpsPrefsService(supportDir: () async => tmp).load();
       expect(saved.port, '/dev/cu.usbmodem1101');
@@ -309,6 +314,16 @@ void main() {
       final saved = await ClientGpsPrefsService(supportDir: () async => tmp).load();
       expect(saved.port, '/dev/ttyS0');
       expect(source.lastPort, '/dev/ttyS0', reason: 'the chosen port is read once the first read ends');
+    });
+
+    test('a port enumeration that throws still reads the saved port and clears busy', () async {
+      final source = _FakeSource([_rmc])..portsThrow = true;
+      final c = await container(source, _FakeApi(), const ClientGpsPrefs(enabled: true, port: '/dev/cu.usbserial-1'));
+      await c.read(clientGpsProvider.future);
+      await Future<void>.delayed(const Duration(milliseconds: 400)); // the loop's own read
+      final fix = await c.read(clientGpsProvider.notifier).syncNow();
+      expect(fix, isNotNull);
+      expect(c.read(clientGpsProvider).value!.busy, isFalse);
     });
 
     test('a listed port that fails gets no "the GPS may be on" hint', () async {
