@@ -209,8 +209,9 @@ public sealed partial class GuiderService : IGuiderMediator {
         var error = !sent ? "refused"
             : token.IsCancellationRequested ? "cancelled"
             : guider.LastSettleError;
-        await PublishDitherCompleteAsync(operationId: null, ok: sent && error is null, error).ConfigureAwait(false);
+        // The verdict is set BEFORE the publish so a publish fault can't leave the previous one in place.
         LastDitherError = error;
+        await PublishDitherCompleteAsync(operationId: null, ok: sent && error is null, error).ConfigureAwait(false);
         return sent;
     }
 

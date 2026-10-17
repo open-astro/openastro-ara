@@ -81,7 +81,8 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Guider {
             while (true) {
                 var sent = await guiderMediator.Dither(token);
                 token.ThrowIfCancellationRequested();
-                var error = sent ? guiderMediator.LastDitherError : "the guider is not guiding";
+                var error = sent ? guiderMediator.LastDitherError
+                    : guiderMediator.GetInfo().Connected ? "the guider is not guiding" : "the guider is not connected";
                 if (error is null) {
                     return;
                 }
