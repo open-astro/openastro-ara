@@ -82,6 +82,12 @@ namespace OpenAstroAra.Sequencer.SequenceItem {
         [JsonProperty]
         public ISequenceContainer? Parent { get; private set; }
 
+        /// <summary>Did this item's most recent <see cref="Run"/> finish? Null before it has run. Unlike
+        /// <see cref="Status"/>, a loop's block reset leaves it alone, so the next pass's triggers still
+        /// know a failed frame failed when it was the block's last item (2026-10-16: every failed frame
+        /// of a SmartExposure loop still dithered). Not persisted: it describes this run only.</summary>
+        public bool? LastRunFinished { get; private set; }
+
         private InstructionErrorBehavior errorBehavior = InstructionErrorBehavior.ContinueOnError;
 
         [JsonProperty]
@@ -232,6 +238,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem {
             using (localCts = CancellationTokenSource.CreateLinkedTokenSource(token)) {
                 if (Status == SequenceEntityStatus.CREATED) {
                     Status = SequenceEntityStatus.RUNNING;
+                    LastRunFinished = false;
 
                     var root = ItemUtility.GetRootContainer(this.Parent);
 
@@ -287,6 +294,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem {
 
                                 Logger.Info($"Finishing {this}");
                                 Status = SequenceEntityStatus.FINISHED;
+                                LastRunFinished = true;
                                 success = true;
                                 break;
                             } catch (SequenceItemSkippedException) {

@@ -21,6 +21,7 @@ using OpenAstroAra.Core.Model;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Equipment.Model;
 using OpenAstroAra.Image.Interfaces;
+using OpenAstroAra.Sequencer.Conditions;
 using OpenAstroAra.Sequencer.Container;
 using OpenAstroAra.Sequencer.SequenceItem.Imaging;
 using OpenAstroAra.Sequencer.Trigger.Autofocus;
@@ -216,6 +217,40 @@ namespace OpenAstroAra.Test {
             Assert.That(trigger.ShouldTrigger(ExposureWith(status), null), Is.False);
             Assert.That(trigger.ShouldTrigger(ExposureWith(SequenceEntityStatus.FINISHED), null), Is.True,
                 "the next frame taken is the first of the group");
+        }
+
+        /// <summary>Counts fires instead of dithering: no guider needed.</summary>
+        private sealed class CountingDither : DitherAfterExposures {
+            public int Fired;
+            public override Task Execute(ISequenceContainer context, IProgress<ApplicationStatus> progress, CancellationToken token) {
+                Fired++;
+                return Task.CompletedTask;
+            }
+        }
+
+        [Test]
+        public async Task A_failed_last_frame_of_a_looping_block_does_not_dither_on_the_next_pass() {
+            // The SmartExposure shape: the exposure is the block's last item, so its trigger pass runs
+            // on the NEXT iteration — after the loop's reset has put the failed item back to CREATED.
+            var imaging = new Mock<IImagingMediator>();
+            var captures = 0;
+            imaging.Setup(m => m.CaptureImage(It.IsAny<CaptureSequence>(), It.IsAny<CancellationToken>(), It.IsAny<IProgress<ApplicationStatus>?>(), It.IsAny<string>()))
+                .Returns(() => ++captures <= 2
+                    ? throw new InvalidOperationException("device timeout")
+                    : Task.FromResult(new Mock<IExposureData>().Object));
+            var block = new SequentialContainer();
+            block.Add(new LoopCondition { Iterations = 4 });
+            var dither = new CountingDither { AfterExposures = 1 };
+            block.Add(dither);
+            block.Add(new TakeExposure(ConnectedCamera().Object, imaging.Object) {
+                ExposureTime = 1, ErrorBehavior = OpenAstroAra.Sequencer.Utility.InstructionErrorBehavior.ContinueOnError,
+            });
+
+            await block.Run(new SyncProgress(_ => { }), CancellationToken.None);
+
+            Assert.That(captures, Is.EqualTo(4));
+            // Frames 1 and 2 failed, 3 and 4 were taken; frame 4's trigger pass never comes (the loop ends).
+            Assert.That(dither.Fired, Is.EqualTo(1), "only the taken frame 3 dithers (before frame 4)");
         }
 
         [Test]
