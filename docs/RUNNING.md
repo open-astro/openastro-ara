@@ -145,23 +145,28 @@ before the default search, for a library outside the loader path.
 ### Astrometry natives (SOFA + NOVAS31)
 
 The cross-epoch transforms, rise/set bodies and Julian-date helpers P/Invoke two
-C libraries built from the vendored sources. They are not checked in and not built
-by `dotnet build`. The daemon logs `Astrometry natives loaded` or an
-`Astrometry natives incomplete` warning in its first lines, and the test suite
-fails seven NOVAS/SOFA-dependent tests without them. Stage them once per output
-directory (a `dotnet clean` wipes them):
-
-```bash
-# daemon
-scripts/build-astrometry-natives.sh OpenAstroAra.Server/bin/Debug/net10.0/    # or bin/Release/…
-# tests
-scripts/build-astrometry-natives.sh OpenAstroAra.Test/bin/Release/net10.0/
-```
+C libraries, `libsofa` and `libnovas31`, built from the vendored sources. They are
+not checked in. On Linux and macOS `dotnet build` builds them (once, into
+`OpenAstroAra.Astrometry/obj/…/natives/`, rebuilt only when a vendored source or
+`scripts/build-astrometry-natives.sh` changes) and copies them next to every
+binary that needs them, the daemon's and the test suite's, the same way the JPL
+ephemeris is copied; a `dotnet clean` followed by a build brings them back. The
+daemon logs `Astrometry natives loaded` or an `Astrometry natives incomplete`
+warning in its first lines.
 
 Needs a C compiler (`cc`): Xcode command-line tools on macOS, `build-essential` on
-Debian/Ubuntu. CI builds them for the host on the test job and cross-compiles them
-for linux-arm64 into the publish directory, so the Docker image and the `.deb` ship
-them. Windows keeps the inherited `SOFAlib.dll` / `NOVAS31lib.dll` probing (untested).
+Debian/Ubuntu. Without one the build still succeeds but prints
+`SOFA/NOVAS31 astrometry natives were not built (no C compiler?)`, the daemon runs
+with untransformed coordinates, and the NOVAS/SOFA-dependent tests fail or
+self-ignore; install a compiler and build again.
+
+The publish directory is different: the build-staged libraries are for the host
+and are never published. CI cross-compiles the pair for linux-arm64 into the
+publish directory after `dotnet publish`, so the Docker image and the `.deb` ship
+arm64 natives, and `packaging/build-deb.sh` refuses a publish tree without them
+(for a hand-rolled publish, run `CC=aarch64-linux-gnu-gcc
+scripts/build-astrometry-natives.sh <publish-dir>` yourself). Windows keeps the
+inherited `SOFAlib.dll` / `NOVAS31lib.dll` probing (untested).
 
 ## 2. Run the client
 
