@@ -581,6 +581,22 @@ void main() {
       expect(client.calls.where((c) => c == 'pause' || c == 'resume'), isEmpty,
           reason: 'the shortcut must yield while a button owns focus');
     });
+
+    testWidgets('Space in the palette search types a space instead of pausing',
+        (tester) async {
+      final (_, client) = await pumpWithRun(tester, SequenceRunState.running);
+      final search = find.descendant(
+        of: find.byType(SequencerPalette),
+        matching: find.byType(TextField),
+      );
+      await tester.tap(search);
+      await tester.pump();
+      await tester.sendKeyEvent(LogicalKeyboardKey.space);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(client.calls.where((c) => c == 'pause' || c == 'resume'), isEmpty,
+          reason: 'searching must never pause a running sequence');
+    });
   });
 }
 
