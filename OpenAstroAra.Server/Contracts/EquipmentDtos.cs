@@ -510,7 +510,7 @@ public sealed record GuiderCalibrationViewDto(
 /// <summary>#1364 item 5 — the guider's own graph history (<c>GET /equipment/guider/history</c>), so a
 /// client that connects mid-session draws the last minutes instead of an empty graph. Steps are oldest
 /// first in the <c>guider.step</c> shape, each with its age in seconds measured on the daemon's clock (the
-/// guider's clock), so the client can place it on its own time axis without trusting the two clocks
+/// guider's own when co-hosted, as on the SBC), so the client can place it on its own time axis without trusting the two clocks
 /// agree. Empty when the guider has no history or is not connected.</summary>
 public sealed record GuiderHistoryDto(bool Connected, IReadOnlyList<GuiderHistoryStepDto> Steps);
 

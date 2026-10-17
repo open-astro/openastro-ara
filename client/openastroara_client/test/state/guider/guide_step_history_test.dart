@@ -213,6 +213,39 @@ void main() {
     expect(steps.single.raPx, 0.9);
   });
 
+  test(
+    'a clear while the history is in flight drops the late history',
+    () async {
+      // A log replay clears the graph and then draws its own frames; a seed
+      // started before the clear must not land in the gap and mix with them.
+      final gate = Completer<void>();
+      final fake = _History([_p(4, 0.2), _p(2, 0.3)], gate: gate);
+      final ws = StreamController<WsEvent>.broadcast();
+      addTearDown(() => unawaited(ws.close()));
+      final c = ProviderContainer(
+        overrides: [
+          activeServerProvider.overrideWithValue(
+            const AraServer(hostname: 'h', port: 1),
+          ),
+          guiderLiveApiFactoryProvider.overrideWithValue((_) => fake),
+          guiderStatusProvider.overrideWith(() => _Connected()),
+          wsEventsProvider.overrideWith((ref) => ws.stream),
+        ],
+      );
+      addTearDown(c.dispose);
+      final sub = c.listen(guideStepsProvider, (_, _) {});
+      addTearDown(sub.close);
+      await c.read(guiderStatusProvider.future);
+      await Future<void>.delayed(Duration.zero);
+      expect(fake.calls, 1, reason: 'the start-up fetch is in flight');
+      c.read(guideStepsProvider.notifier).clear();
+      gate.complete();
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+      expect(c.read(guideStepsProvider), isEmpty);
+    },
+  );
+
   test('without a server nothing is fetched', () async {
     final c = ProviderContainer(
       overrides: [activeServerProvider.overrideWithValue(null)],

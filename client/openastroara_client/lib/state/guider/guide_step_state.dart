@@ -242,6 +242,9 @@ class GuideStepNotifier extends Notifier<List<GuideStep>> {
   }
 
   Future<void>? _seeding;
+  // Bumped by clear(): a seed whose fetch started before a clear (a log
+  // replay starting) must not land after it and mix with the replay.
+  int _clears = 0;
 
   /// Fill an empty graph from the guider's history. Never overwrites live
   /// steps: if any arrived first, the history is not needed. Single-flight —
@@ -256,8 +259,9 @@ class GuideStepNotifier extends Notifier<List<GuideStep>> {
     final connected = ref.read(guiderStatusProvider).asData?.value?.isConnected ?? false;
     if (!connected) return;
     try {
+      final clears = _clears;
       final history = await api.getHistory();
-      if (!ref.mounted || state.isNotEmpty || history.isEmpty) return;
+      if (!ref.mounted || state.isNotEmpty || history.isEmpty || clears != _clears) return;
       state = historySteps(history, now());
     } catch (_) {
       // No history (older daemon, guider not connected): the graph fills live.
@@ -286,7 +290,10 @@ class GuideStepNotifier extends Notifier<List<GuideStep>> {
     state = next;
   }
 
-  void clear() => state = const [];
+  void clear() {
+    _clears++;
+    state = const [];
+  }
 }
 
 final guideStepsProvider =
