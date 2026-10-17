@@ -143,9 +143,10 @@ and confirm the main checkout is untouched (`git status --short`).
   means a comment exists, and on fork PRs it is SKIPPED. Read the facts
   script's bot section, not the check colour.
 - **Gating a step on `dotnet build | grep`** hides failures; check `$?`.
-- **Astrometry natives** are not built by `dotnet build`; stage them with
-  `scripts/build-astrometry-natives.sh` or the daemon logs a warning and
-  rise/set code paths misbehave.
+- **Astrometry natives** are built and staged by `dotnet build` on
+  Linux/macOS (needs `cc`); if the daemon logs `Astrometry natives incomplete`
+  the build warned about a missing compiler, so install one and rebuild. The
+  script by hand is only for a publish dir (arm64 cross-build).
 - **Contributor's Flutter version** may differ from the pin in
   `.flutter-version`; a PR that says "analyzer clean on 3.44" was not checked
   on the pinned SDK — CI is the arbiter, mention it if CI and the body disagree.
