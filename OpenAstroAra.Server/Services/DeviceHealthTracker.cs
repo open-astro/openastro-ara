@@ -40,7 +40,7 @@ public enum HealthVerdict {
 /// the next move or exposure. Each polling service feeds its ONE essential runtime read here
 /// (wheel position, camera state, focuser and rotator position); a consecutive-failure streak of
 /// <see cref="DefaultThreshold"/> ticks (≈ 6 s at the 2 s refresh) is a <c>degraded</c> fault
-/// (amber chip, one reconnect attempt), and the first good read afterwards is the recovery.
+/// (a standing amber chip, notify-only), and the first good read afterwards is the recovery.
 /// Pure and unsynchronized like the probe: the owning service calls it under its gate.
 /// </summary>
 public sealed class DeviceHealthTracker {

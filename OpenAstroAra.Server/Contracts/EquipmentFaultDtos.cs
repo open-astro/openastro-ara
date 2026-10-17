@@ -44,8 +44,9 @@ public enum EquipmentFaultKind {
 
     /// <summary>The device still answers its connection probe but its essential runtime read
     /// (wheel position, camera state, focuser/rotator position) has failed for a streak of ticks
-    /// (§42.3 second channel, <see cref="Services.DeviceHealthTracker"/>). Standing: it holds until
-    /// a <c>recovered</c> action (the reads came back, or a reconnect succeeded).</summary>
+    /// (§42.3 second channel, <see cref="Services.DeviceHealthTracker"/>). Standing and notify-only:
+    /// it holds until the device's own <c>recovered</c> action (the reads came back), or until the
+    /// session ends (a disconnect, a reconnect, a trip), which resolves it too.</summary>
     Degraded,
 }
 
