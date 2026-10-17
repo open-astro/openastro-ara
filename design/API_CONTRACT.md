@@ -408,6 +408,20 @@ The card now keeps a known device's card while it is not live: name, state chip,
 
 ---
 
+### 2026-10-16 — No storage disk, no run: `POST /sequences/{id}/start` refuses without one (#1374)
+
+**Endpoint(s) or area:** `POST /api/v1/sequences/{id}/start` gains a second 409.
+
+**Decision:** when the save directory sits under the store mount (`/media/openastroara`) and nothing is mounted there, or the save volume is critically low under an `OnDiskSpaceCritical` policy of `abort` or `pause`, the start answers 409 Problem `title: store_unavailable` with `detail` in words for the user ("No storage disk: nothing is mounted at …"). The client shows that text in a dialog with a jump to Options → Storage. A host whose mount table cannot be read (no `/proc`) never refuses. Mid-run, a sequence capture into an ejected store parks the run `paused_awaiting_user` (Resume retakes the frame) instead of failing it, and a failed, skipped or disabled exposure no longer counts toward Dither or Autofocus after N exposures.
+
+**Reasoning:** 2026-10-16 the store drive fell off mid-run; every frame was refused at once by the §29 pre-capture check, the run carried on under ContinueOnError, and each refused frame still fired the dither — half an hour of "settling" with nothing saved. Asking the same question once before the run (and stopping when it turns false) costs nothing and tells the user while they are still at the rig.
+
+**Spec ref:** `OpenAstroAra.Server/Endpoints/SequenceEndpoints.cs` (`StartSequenceAsync`), `ICameraService.StoreRefusal`, `OpenAstroAra.Core/Model/StoreUnavailableException.cs`, `TakeExposure.Execute`, `ItemUtility.ExposureTaken`.
+
+**Related:** #1374; tests `NoStorageDiskTest`, client `sequencer_run_controls_test`. The auto-flats run started at the end of a session goes through `StartAsync` directly, not the endpoint, so it meets the mid-run pause rather than the start refusal.
+
+---
+
 ### 2026-10-16 — The guider's graph history for a client that connects mid-session (#1364 item 5)
 
 **Endpoint(s) or area:** new `GET /api/v1/equipment/guider/history?max_points=` (`GuiderHistoryDto`).
