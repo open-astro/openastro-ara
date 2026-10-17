@@ -173,8 +173,8 @@ namespace OpenAstroAra.Test {
                         return;
                     }
                     // Every read answers true, except the numeric essential read the §42.3 health tracker
-                    // watches (a focuser's Position): a "true" there is a failed parse every tick, i.e. a
-                    // degraded device, which is not what this stub stands for.
+                    // watches (Position on a focuser, rotator or filter wheel): a "true" there is a failed
+                    // parse every tick, i.e. a degraded device, which is not what this stub stands for.
                     var numeric = ctx.Request.Url?.AbsolutePath.EndsWith("/position", StringComparison.OrdinalIgnoreCase) == true;
                     var body = Encoding.UTF8.GetBytes(numeric
                         ? """{"Value":0,"ClientTransactionID":0,"ServerTransactionID":0,"ErrorNumber":0,"ErrorMessage":""}"""
