@@ -136,7 +136,44 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                 return System.Array.Empty<string>();
             }
             await SendEngineConfigMessagesAsync(messages, " (tuning only, equipment left connected)", ct);
-            return messages.Select(m => m.Method).Distinct().ToList();
+            await PushCameraGainAsync(ct);
+            return messages.Select(m => m.Method).Append(CameraGainSetter).Distinct().ToList();
+        }
+
+        private const string CameraGainSetter = "set_camera_gain";
+
+        /// <summary>The guide camera gain as the guider's <c>set_camera_gain</c> expects it (percent of the
+        /// camera's range, clamped to 0..100). Sent apart from the engine-config list: the daemon only knows
+        /// whether the camera has gain control once it is connected, so the gain goes out after the equipment
+        /// reconnects, never inside the disconnected window. Pure — unit-tested.</summary>
+        public static Phd2SetCameraGain BuildCameraGainMessage(IGuiderSettings guider) =>
+            new() { Parameters = new int[] { CameraGainPercent(guider) } };
+
+        private static int CameraGainPercent(IGuiderSettings guider) => Math.Clamp(guider.GuideCameraGain, 0, 100);
+
+        /// <summary>Best-effort push of the profile's guide camera gain to a connected camera. A camera with
+        /// no gain control (or none connected) refuses it; that is logged, never raised to the inbox, and
+        /// never fails the caller. Without this the guider runs its stock 95% gain, which buried every star
+        /// on an ASI290MM (gain 570 of 600, 2026-10-17).</summary>
+        [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+            Justification = "Best-effort push boundary: a socket drop or daemon refusal is logged and skipped so the gain can never fail a connect or a profile push.")]
+        private async Task PushCameraGainAsync(CancellationToken ct) {
+            var guider = profileService.ActiveProfile.GuiderSettings;
+            var msg = BuildCameraGainMessage(guider);
+            var gain = CameraGainPercent(guider);
+            try {
+                var resp = await SendMessage<GenericPhdMethodResponse>(msg, EquipmentRpcTimeoutMs, notifyOnError: false);
+                if (resp?.error != null) {
+                    Logger.Warning($"PHD2 - {CameraGainSetter} {gain}% not applied: {resp.error}");
+                } else {
+                    Logger.Info($"PHD2 - guide camera gain set to {gain}%.");
+                }
+            } catch (OperationCanceledException) {
+                throw;
+            } catch (Exception ex) {
+                Logger.Warning($"PHD2 - {CameraGainSetter} failed: {ex.Message}");
+            }
+            ct.ThrowIfCancellationRequested();
         }
 
         /// <summary>§63.20 — the <c>[host:port/N]</c> endpoint a daemon Alpaca choice string embeds
@@ -366,7 +403,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             }
             await EnsureAraGuiderProfileAsync(ct);
             var pushed = BuildGuiderEngineConfigMessages(profileService.ActiveProfile.GuiderSettings, AdvancedSettingsQuietly())
-                .Select(m => m.Method).Distinct().ToList();
+                .Select(m => m.Method).Append(CameraGainSetter).Distinct().ToList();
             await PushGuiderEngineConfigAsync(ct);
             // The push only reconnects equipment when it opened the disconnect window; make the post-push
             // state deterministic for the caller either way. A reconnect failure here is a real, actionable
@@ -390,6 +427,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                     "profile pushed, but the daemon could not reconnect its equipment — check that the "
                     + "selected camera/mount/rotator are reachable (get_connected/set_connected failed).");
             }
+            await PushCameraGainAsync(ct);
             return pushed;
         }
 

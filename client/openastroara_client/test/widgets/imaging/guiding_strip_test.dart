@@ -679,6 +679,7 @@ void main() {
         reason: 'provider unchanged until Apply');
 
     // Done discards the draft; reopening shows the provider values again.
+    await tester.ensureVisible(find.text('Done'));
     await tester.tap(find.text('Done'));
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Tune guiding…'));
@@ -710,6 +711,7 @@ void main() {
     // tuning fields in the provider — the staged host edit survives.
     await tester.drag(find.byType(Slider).first, const Offset(400, 0));
     await tester.pump();
+    await tester.ensureVisible(find.text('Apply'));
     await tester.tap(find.text('Apply'));
     await tester.pumpAndSettle();
     expect(container.read(phd2SettingsProvider).host, 'edited.local');
@@ -766,6 +768,11 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('2 s').last);
     await tester.pumpAndSettle();
+    // Lower the guide camera gain from its 50 % default.
+    await tester.enterText(find.widgetWithText(TextField, '50'), '30');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Apply'));
     await tester.tap(find.text('Apply'));
     await tester.pumpAndSettle();
     expect(container.read(phd2SettingsProvider).raAggressiveness, 1.0,
@@ -774,6 +781,8 @@ void main() {
     // The PUT carries the chosen guide exposure…
     expect(profileApi.puts, hasLength(1));
     expect(profileApi.puts.single.guideExposureMs, 2000);
+    expect(profileApi.puts.single.guideCameraGain, 30);
+    expect(container.read(phd2SettingsProvider).guideCameraGain, 30);
     expect(profileApi.puts.single.raAggressiveness, 1.0);
     // …and the re-push is the tuning-only one: the full push re-sends the
     // equipment selections and stops guiding mid-run.

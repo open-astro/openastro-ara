@@ -11256,6 +11256,13 @@ components:
             - number
             - string
           format: double
+        guide_camera_gain:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+          default: 50
     PlanningFilterDto:
       required:
         - name

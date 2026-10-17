@@ -84,9 +84,10 @@ namespace OpenAstroAra.Test {
                 ForceCalibrationEachSession: false,
                 GuideFocalLength: 250, GuidePixelSize: 2.9, RaAggressiveness: 0.8,
                 DecAggressiveness: 0.65, MinimumMove: 0.2, DecGuideMode: "north",
-                GuideExposureMs: 500));
+                GuideExposureMs: 500, GuideCameraGain: 35));
 
             var guider = svc.ActiveProfile.GuiderSettings;
+            Assert.That(guider.GuideCameraGain, Is.EqualTo(35));
             Assert.That(guider.PHD2ServerHost, Is.EqualTo("astro-pi.local"));
             Assert.That(guider.PHD2ServerPort, Is.EqualTo(4400));
             Assert.That(guider.DitherPixels, Is.EqualTo(4.5));
@@ -140,7 +141,8 @@ namespace OpenAstroAra.Test {
                 RaAggressiveness: 1.5, DecAggressiveness: -0.2,  // out of [0,1]
                 MinimumMove: -1.0,                               // negative
                 DecGuideMode: "SIDEWAYS",                         // not in the known set
-                GuideExposureMs: -500));                          // negative
+                GuideExposureMs: -500,                            // negative
+                GuideCameraGain: 180));                           // above the daemon's 0..100
 
             var guider = svc.ActiveProfile.GuiderSettings;
             Assert.That(guider.GuideFocalLength, Is.EqualTo(0));     // floored at 0
@@ -151,6 +153,7 @@ namespace OpenAstroAra.Test {
             Assert.That(guider.DecMinimumMove, Is.EqualTo(0.0));     // #1156 — follows the floored RA value
             Assert.That(guider.DecGuideMode, Is.EqualTo("auto"));    // unknown → auto
             Assert.That(guider.GuideExposureMs, Is.EqualTo(0));      // floored at 0 (= unset)
+            Assert.That(guider.GuideCameraGain, Is.EqualTo(100));    // clamped to 0..100
         }
 
         [Test]
@@ -174,6 +177,7 @@ namespace OpenAstroAra.Test {
             Assert.That(dto.MinimumMove, Is.EqualTo(0.15));
             Assert.That(dto.GuideFocalLength, Is.EqualTo(0));
             Assert.That(dto.GuidePixelSize, Is.EqualTo(0));
+            Assert.That(dto.GuideCameraGain, Is.EqualTo(50), "an existing profile gets Ara's gain, not the guider's 95%");
         }
 
         [Test]

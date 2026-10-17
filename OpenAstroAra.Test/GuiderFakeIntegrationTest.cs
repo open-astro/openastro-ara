@@ -1016,12 +1016,46 @@ namespace OpenAstroAra.Test {
             var sent = fake.ReceivedMethods.Skip(before).ToList();
             Assert.That(sent, Does.Contain("set_exposure"));
             Assert.That(sent, Does.Contain("set_algo_param"));
+            Assert.That(sent, Does.Contain("set_camera_gain"), "a gain change in Tune Guiding must reach the guider");
             Assert.That(sent.Where(m => m is "set_connected" or "stop_capture" or "set_profile_setup" or "set_profile"
                     || m.StartsWith("set_selected", StringComparison.Ordinal)),
                 Is.Empty, "a tuning push must never open the equipment disconnect window");
             var pushed = events.Where(e => e.Type == "guider.profile_pushed").ToList();
             Assert.That(pushed, Has.Count.EqualTo(1));
             Assert.That(pushed[0].Payload.GetProperty("scope").GetString(), Is.EqualTo("tuning"));
+        }
+
+        [Test]
+        public async Task Connect_sends_the_profile_camera_gain_once_the_equipment_is_connected() {
+            // 2026-10-17: a fresh guider runs its stock 95% gain (ASI290MM at 570 of 600) and guide focus found
+            // no stars in pure read noise. The daemon refuses set_camera_gain until the camera is connected, so
+            // the gain must follow the equipment connect, never ride the disconnected window.
+            await using var fake = FakeGuider.Start();
+            fake.SetOnConnectEvents(PhdEvents.Version(subver: "openastroara-fake"), PhdEvents.AppState("Stopped"));
+            // The gain belongs to Ara's profile twin, so the profile step must succeed first.
+            fake.OnRpc("get_profile", _ => new JsonObject { ["id"] = 1, ["name"] = "My Equipment" });
+            fake.OnRpc("get_profiles", _ => new JsonArray(new JsonObject { ["id"] = 1, ["name"] = "My Equipment" }));
+            fake.OnRpc("create_profile", _ => new JsonObject { ["id"] = 5, ["name"] = "Ara", ["selected"] = true });
+            var connected = false;
+            fake.OnRpc("get_connected", _ => JsonValue.Create(connected));
+            fake.OnRpc("set_connected", req => { connected = (bool?)req["params"]?[0] ?? connected; return JsonValue.Create(0); });
+            var gains = new System.Collections.Concurrent.ConcurrentQueue<(int Gain, bool Connected)>();
+            fake.OnRpc("set_camera_gain", req => {
+                gains.Enqueue(((int?)req["params"]?[0] ?? -1, connected));
+                return JsonValue.Create(0);
+            });
+            var profiles = new HeadlessProfileService();
+            profiles.ActiveProfile.GuiderSettings.GuideCameraGain = 140; // clamped to the daemon's 0..100
+            using var svc = new GuiderService(profiles, NewRecovery(),
+                NullLogger<GuiderService>.Instance, Mock.Of<IGuiderProcessSupervisor>());
+
+            await svc.ConnectAsync(new GuiderConnectRequestDto("127.0.0.1", fake.Port), idempotencyKey: null, CancellationToken.None)
+                .ConfigureAwait(false);
+            Assert.That(await PollAsync(svc, d => d.State == EquipmentConnectionState.Connected).ConfigureAwait(false), Is.Not.Null,
+                "the service never reached Connected against the fake guider");
+            Assert.That(await WaitUntilAsync(() => !gains.IsEmpty).ConfigureAwait(false), Is.True,
+                "the connect never sent set_camera_gain");
+            Assert.That(gains, Is.EqualTo(new[] { (100, true) }), "one gain push, clamped, sent with the camera connected");
         }
 
         [Test]
