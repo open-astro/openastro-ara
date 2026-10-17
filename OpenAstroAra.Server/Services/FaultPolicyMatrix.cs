@@ -74,10 +74,6 @@ public static class FaultPolicyMatrix {
 
     private static readonly TimeSpan[] NoRetries = [];
 
-    /// <summary>The one reconnect a degraded device gets, after a short wait for the reads to
-    /// recover on their own.</summary>
-    public static readonly IReadOnlyList<TimeSpan> DegradedReconnectOnce = [TimeSpan.FromSeconds(5)];
-
     /// <summary>
     /// Resolve the plan for a fault. Returns <c>null</c> when the fault is NOT the reaction
     /// service's to handle: the guider owns its own §42.2 reaction + §63.3 recovery
@@ -112,12 +108,13 @@ public static class FaultPolicyMatrix {
             case EquipmentFaultKind.Degraded:
                 // The device answers its probe but its reads fail (2026-10-16: EFW_ERROR_REMOVED on
                 // every wheel position read, the camera's state read failing the same way, both
-                // chips green). One reconnect attempt — AlpacaBridge re-opens the device on connect
-                // — then the standing amber stays until the reads come back (the device's own
-                // recovery) or the user acts. Nothing is paused: the instruction that needs the
-                // device still fails on its own, and the reads may recover by themselves.
-                return new FaultPlan(hot ? DegradedReconnectOnce : NoRetries,
-                    FaultTerminalAction.None, NotificationSeverity.Warning, PauseWhileRecovering: false);
+                // chips green). Notify only: the standing amber is cleared by the device's OWN
+                // recovery (the service's Recovered when the reads come back) or by the user's
+                // reconnect. No ladder attempt — a service's ConnectAsync on an already-Connected
+                // device is a no-op (review on #1384), so a "reconnect" here would report
+                // recovered while the reads still fail and drop the chip back to green. Nothing is
+                // paused: the instruction that needs the device still fails on its own.
+                return new FaultPlan(NoRetries, FaultTerminalAction.None, NotificationSeverity.Warning, PauseWhileRecovering: false);
             default:
                 // §42.2 escalation rows — PERSISTENT op failures stop being instruction-level
                 // news: a mount that keeps failing slews may be against an obstruction

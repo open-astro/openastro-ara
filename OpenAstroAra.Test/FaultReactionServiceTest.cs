@@ -171,6 +171,25 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_degraded_device_is_notify_only_and_is_never_reported_recovered_by_the_ladder() {
+            // Review on #1384: a ladder "reconnect" on an already-Connected device is a no-op that would
+            // publish recovered while the reads still fail, dropping the amber chip back to green for
+            // the rest of the outage. The device's own Recovered (reads back) is the only clear.
+            foreach (var type in new[] { DeviceType.FilterWheel, DeviceType.Camera, DeviceType.Focuser, DeviceType.Rotator }) {
+                ReconnectSucceeds(type); // would succeed if it were ever asked
+                service.OnFault(Fault(type, EquipmentFaultKind.Degraded));
+                await service.WhenIdleAsync();
+            }
+
+            Assert.That(Actions(), Is.All.EqualTo("notify_only"));
+            Assert.That(Actions(), Does.Not.Contain("recovered").And.Not.Contain("reconnecting"));
+            reconnector.Verify(r => r.ReconnectAsync(It.IsAny<DeviceType>(), It.IsAny<CancellationToken>()), Times.Never,
+                "no attempt: ConnectAsync on a Connected device reopens nothing");
+            sequencer.Verify(s => s.PauseActiveRunsAsync(It.IsAny<CancellationToken>()), Times.Never);
+            Assert.That(posted.Select(n => n.Severity), Is.All.EqualTo(NotificationSeverity.Warning));
+        }
+
+        [Test]
         public async Task Peripheral_op_fault_bursts_never_escalate() {
             for (var i = 0; i < 5; i++) {
                 service.OnFault(Fault(DeviceType.Focuser, EquipmentFaultKind.StallTimeout));
