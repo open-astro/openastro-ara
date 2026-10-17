@@ -958,6 +958,8 @@ is connected, straight from its GuideStep events):
         calibration_started | calibration_complete | calibration_failed { error? }
         calibrating         { direction, frame (= step), distance_px, dx_px, dy_px }  one per step
         guiding_started | guiding_stopped | paused | resumed | lock_position_lost
+        guiding_assistant_progress { state }                 one per Guiding Assistant sample / backlash step
+        guiding_assistant_done     { state, error? }         state = done | failed; figures via GET …/live/assistant
       A dither is drawn as dithered → (settling …) → settle_done; the client
       shades the settle window and marks the dither, exactly as PHD2 does.
   guider.pa_residual { id, status, started_utc, completed_utc?, sample_seconds,
