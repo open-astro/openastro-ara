@@ -54,7 +54,8 @@ class ActiveFault {
 
   /// Chip overlay severity: [StatusLevel.error] for the recovery-tracked kinds
   /// (disconnected / tracking_lost — cleared by `recovered` or a reconnect),
-  /// [StatusLevel.busy] (amber) for the advisory one-shot kinds (TTL-pruned).
+  /// [StatusLevel.warning] (solid amber) for the advisory one-shot kinds
+  /// (TTL-pruned) and the standing `degraded`.
   final StatusLevel level;
 
   const ActiveFault({
@@ -73,7 +74,9 @@ class ActiveFault {
 /// until the TTL prune.
 StatusLevel faultKindLevel(String kind) => switch (kind) {
       'disconnected' || 'tracking_lost' => StatusLevel.error,
-      _ => StatusLevel.busy,
+      // A fault is a standing problem, never "busy": it draws solid, not as the
+      // activity ring, so a failing wheel is told apart from a moving one.
+      _ => StatusLevel.warning,
     };
 
 /// The set of devices with a standing fault, keyed by the lowercase
@@ -84,6 +87,26 @@ class ActiveFaultsSnapshot {
   final Map<String, ActiveFault> byDeviceType;
   const ActiveFaultsSnapshot(
       {this.byDeviceType = const <String, ActiveFault>{}});
+
+  /// The worst standing fault across [deviceTypes] in one line for a tooltip
+  /// ("degraded: still answers its connection probe but …"), or null when
+  /// none of them has a fault.
+  String? describeFor(Set<String> deviceTypes) {
+    ActiveFault? worst;
+    for (final type in deviceTypes) {
+      final fault = byDeviceType[type];
+      if (fault == null) continue;
+      if (worst == null ||
+          statusLevelRank(fault.level) > statusLevelRank(worst.level)) {
+        worst = fault;
+      }
+    }
+    if (worst == null) return null;
+    final details = worst.details;
+    return details == null || details.isEmpty
+        ? worst.kind
+        : '${worst.kind}: $details';
+  }
 
   /// Worst standing-fault severity across [deviceTypes], or null when none of
   /// them has a fault. A chip covering two wire tokens (FLAT =
@@ -101,10 +124,11 @@ class ActiveFaultsSnapshot {
   }
 }
 
-/// Severity ordering shared by the fault blend: error > busy > info >
-/// connected > disconnected.
+/// Severity ordering shared by the fault blend: error > warning > busy >
+/// info > connected > disconnected.
 int statusLevelRank(StatusLevel level) => switch (level) {
-      StatusLevel.error => 4,
+      StatusLevel.error => 5,
+      StatusLevel.warning => 4,
       StatusLevel.busy => 3,
       StatusLevel.info => 2,
       StatusLevel.connected => 1,

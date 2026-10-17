@@ -3,8 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/guider_status.dart';
 import '../../state/guider/guider_state.dart';
+import '../../state/sequencer/sequence_list_state.dart';
 import '../../state/ws/ws_providers.dart';
-import '../../theme/ara_colors.dart';
+import '../equipment_chip.dart';
 import '../status_indicator.dart';
 import 'guider_dialog.dart';
 
@@ -12,18 +13,39 @@ import 'guider_dialog.dart';
 /// mapping is unit-testable. `loading` reads as *info* (a connect/poll is in
 /// flight), `error` as *error*, and a resolved status delegates to
 /// [guiderStatusLevel].
-StatusLevel guiderChipLevel(AsyncValue<GuiderStatus?> async) {
+StatusLevel guiderChipLevel(AsyncValue<GuiderStatus?> async,
+    {bool runActive = false}) {
   return async.when(
-    data: guiderStatusLevel,
+    data: (s) => guiderStatusLevel(s, runActive: runActive),
     loading: () => StatusLevel.info,
     error: (_, _) => StatusLevel.error,
   );
 }
 
+/// The tooltip for the dot, or null when green needs no explanation.
+String? guiderChipTooltip(GuiderStatus? status, {bool runActive = false}) {
+  if (status == null ||
+      status.connectionState != GuiderConnectionState.connected) {
+    return null;
+  }
+  return switch (status.runtimeState) {
+    GuiderRuntimeState.stopped when runActive =>
+      'Not guiding while a sequence runs',
+    GuiderRuntimeState.starLost => 'Guide star lost',
+    GuiderRuntimeState.calibrating => 'Calibrating',
+    GuiderRuntimeState.settling => 'Settling after a dither',
+    GuiderRuntimeState.dithering => 'Dithering',
+    GuiderRuntimeState.paused => 'Guiding paused',
+    GuiderRuntimeState.looping => 'Looping exposures, not guiding',
+    GuiderRuntimeState.starSelected => 'Star selected, not guiding',
+    _ => null,
+  };
+}
+
 /// The status dot for a resolved [GuiderStatus]: the link state, with the
 /// runtime phase overriding it when connected (a lost star is an error; an
 /// active calibrate/dither is busy).
-StatusLevel guiderStatusLevel(GuiderStatus? status) {
+StatusLevel guiderStatusLevel(GuiderStatus? status, {bool runActive = false}) {
   if (status == null) return StatusLevel.disconnected;
   switch (status.connectionState) {
     case GuiderConnectionState.connected:
@@ -40,8 +62,12 @@ StatusLevel guiderStatusLevel(GuiderStatus? status) {
           // plate-solve/flip) is visually distinct from a healthy green guide.
           return StatusLevel.busy;
         case GuiderRuntimeState.guiding:
-        case GuiderRuntimeState.stopped:
           return StatusLevel.connected;
+        case GuiderRuntimeState.stopped:
+          // Idle between sessions is healthy; idle while a sequence runs is a
+          // standing problem (2026-10-16: 20 minutes of unguided frames behind
+          // a green dot after Stop in the guide-camera dialog).
+          return runActive ? StatusLevel.warning : StatusLevel.connected;
         case GuiderRuntimeState.unknown:
           // Connected but runtime not yet polled — info, not a misleading green.
           return StatusLevel.info;
@@ -65,52 +91,22 @@ class GuiderChip extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     // Stale-guard: grey the dot when the server link is down (last status stale).
-    final level = ref.watch(serverLinkUpProvider)
-        ? guiderChipLevel(ref.watch(guiderStatusProvider))
+    final linkUp = ref.watch(serverLinkUpProvider);
+    final status = ref.watch(guiderStatusProvider);
+    final runActive =
+        ref.watch(sequenceRunStateProvider).value?.state?.isActive ?? false;
+    final level = linkUp
+        ? guiderChipLevel(status, runActive: runActive)
         : StatusLevel.disconnected;
-    return Semantics(
-      label: 'GUIDE (${level.name})',
-      button: true,
-      child: InkWell(
-        onTap: () => showGuiderDialog(context),
-        borderRadius: BorderRadius.circular(6),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-          width: 64,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  const Icon(Icons.gps_fixed, size: 28, color: AraColors.textPrimary),
-                  Positioned(
-                    top: -2,
-                    right: -2,
-                    child: Container(
-                      width: 10,
-                      height: 10,
-                      decoration: BoxDecoration(
-                        color: level.color,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: AraColors.bgPanel, width: 2),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 2),
-              Text(
-                'GUIDE',
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: AraColors.textSecondary,
-                      letterSpacing: 0.5,
-                    ),
-              ),
-            ],
-          ),
-        ),
-      ),
+    final tooltip = !linkUp
+        ? 'Server link lost — status is stale'
+        : guiderChipTooltip(status.value, runActive: runActive);
+    return EquipmentChip(
+      icon: Icons.gps_fixed,
+      label: 'GUIDE',
+      status: level,
+      tooltip: tooltip,
+      onTap: () => showGuiderDialog(context),
     );
   }
 }

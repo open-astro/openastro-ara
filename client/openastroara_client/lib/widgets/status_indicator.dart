@@ -55,9 +55,14 @@ class StatusIndicator extends StatelessWidget {
   }
 }
 
+/// `busy` is activity (an exposure, a slew, a settle) and is drawn as a ring;
+/// `warning` is a standing problem the user should look at (a fault, a
+/// degraded device, a guider not guiding during a run) and is drawn solid.
+/// Same hue, different shape — the night of 2026-10-16 the two were one dot.
 enum StatusLevel {
   connected(AraColors.accentConnected),
   busy(AraColors.accentBusy),
+  warning(AraColors.accentWarning),
   error(AraColors.accentError),
   info(AraColors.accentInfo),
   disconnected(AraColors.accentDisconnected);
