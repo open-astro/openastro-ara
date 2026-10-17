@@ -4,10 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../models/profile_draft.dart';
-import '../../../services/profile_api.dart';
 import '../../../state/guider/guider_equipment_state.dart';
 import '../../../state/guider/guider_state.dart';
-import '../../../state/saved_server_state.dart';
+import '../../../state/profile_management_state.dart';
 import '../../../state/wizard_state.dart';
 import '../../../theme/ara_colors.dart';
 import '../../../util/guide_optics.dart';
@@ -276,9 +275,8 @@ class _ScreenGuiderState extends ConsumerState<ScreenGuider> {
   }
 
   Future<void> _loadBaseGuideSetup() async {
-    final server = ref.read(activeServerProvider);
-    if (server == null) return;
-    final api = ProfileApi(server);
+    final api = ref.read(profileApiProvider);
+    if (api == null) return;
     try {
       final phd2 = await api.getPhd2Settings();
       final optics = await api.getOptics();
