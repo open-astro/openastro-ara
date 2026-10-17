@@ -142,6 +142,43 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_guider_that_hangs_on_stop_delays_the_move_only_by_the_bound() {
+            // PHD2Guider.StopGuiding largely ignores its token (about 13 s on a hung guider); the bound
+            // lives in the telescope service so the emergency stop's 10 s park rung still succeeds.
+            await using var box = ScriptedAlpacaDevice.Start(Mount);
+            var guider = new Mock<IGuiderMediator>();
+            guider.Setup(g => g.GetInfo()).Returns(new GuiderInfo { Connected = true });
+            var never = new TaskCompletionSource<bool>();
+            guider.Setup(g => g.StopGuiding(It.IsAny<CancellationToken>())).Returns(never.Task); // ignores the token
+            using var svc = await ConnectedAsync(box, () => guider.Object);
+            svc.StopGuidingBeforeMoveTimeout = TimeSpan.FromMilliseconds(200);
+
+            var started = DateTime.UtcNow;
+            await svc.ParkAsync(new ParkRequestDto(), idempotencyKey: null, CancellationToken.None);
+            await WaitForAsync(() => PutSeen(box, "park"), "the park never reached the mount");
+
+            Assert.That(DateTime.UtcNow - started, Is.LessThan(TimeSpan.FromSeconds(5)), "the move waited only for the bound");
+            never.TrySetResult(true);
+        }
+
+        [Test]
+        public async Task A_guider_that_is_connected_but_not_guiding_is_not_asked_to_stop() {
+            // The safety and emergency parks stop guiding themselves first; an idle guider costs nothing.
+            await using var box = ScriptedAlpacaDevice.Start(Mount);
+            var guider = new Mock<IGuiderMediator>();
+            guider.Setup(g => g.GetInfo()).Returns(new GuiderInfo { Connected = true });
+            guider.As<IGuiderService>().Setup(g => g.GetAsync(It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new GuiderDto("phd2", "PHD2", EquipmentConnectionState.Connected,
+                    new GuiderStateDto(State: "stopped", RmsTotal: null, RmsRa: null, RmsDec: null, CurrentProfile: null)));
+            using var svc = await ConnectedAsync(box, () => guider.Object);
+
+            await svc.FindHomeAsync(idempotencyKey: null, CancellationToken.None);
+
+            await WaitForAsync(() => PutSeen(box, "findhome"), "the mount never received findhome");
+            guider.Verify(g => g.StopGuiding(It.IsAny<CancellationToken>()), Times.Never);
+        }
+
+        [Test]
         public async Task Without_a_guider_in_the_composition_the_move_is_unchanged() {
             await using var box = ScriptedAlpacaDevice.Start(Mount);
             using var svc = await ConnectedAsync(box, guider: null);

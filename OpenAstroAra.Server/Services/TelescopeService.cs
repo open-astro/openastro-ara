@@ -300,16 +300,37 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
             return;
         }
         try {
-            using var cts = new CancellationTokenSource(StopGuidingBeforeMoveTimeout);
-            var stopped = await guider.StopGuiding(cts.Token).ConfigureAwait(false);
+            // A guider that is not guiding (the safety and emergency parks stop guiding themselves first;
+            // an idle guider between targets) is left alone: no RPC, no wait. The read is in-memory.
+            if (guider is IGuiderService readable
+                    && (await readable.GetAsync(CancellationToken.None).ConfigureAwait(false))?.Runtime.State is "stopped" or "looping" or "star_selected") {
+                return;
+            }
+            // PHD2Guider.StopGuiding largely ignores its token (its RPCs carry their own timeouts, about
+            // 13 s on a hung guider), so the bound is enforced here: the move goes ahead when the limit
+            // passes, inside the emergency stop's 10 s rung.
+            using var cts = new CancellationTokenSource();
+            var stop = guider.StopGuiding(cts.Token);
+            var finished = await Task.WhenAny(stop, Task.Delay(StopGuidingBeforeMoveTimeout, cts.Token)).ConfigureAwait(false);
+            if (!ReferenceEquals(finished, stop)) {
+                LogGuidingStopBeforeMoveTimedOut(op, (int) StopGuidingBeforeMoveTimeout.TotalSeconds);
+                _ = stop.ContinueWith(t => _ = t.Exception, CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default); // observe a late fault
+                return;
+            }
+            await cts.CancelAsync().ConfigureAwait(false); // retire the delay
+            var stopped = await stop.ConfigureAwait(false);
             LogGuidingStoppedBeforeMove(op, stopped);
         } catch (Exception ex) {
             LogGuidingStopBeforeMoveFailed(ex, op);
         }
     }
 
-    /// <summary>How long a REST park/home waits for the guider to stop before moving anyway.</summary>
-    internal TimeSpan StopGuidingBeforeMoveTimeout { get; set; } = TimeSpan.FromSeconds(10);
+    /// <summary>How long a REST park/home waits for the guider to stop before moving anyway. Short on
+    /// purpose: a healthy stop takes milliseconds, and the emergency stop's park rung allows 10 s.</summary>
+    internal TimeSpan StopGuidingBeforeMoveTimeout { get; set; } = TimeSpan.FromSeconds(3);
+
+    [LoggerMessage(EventId = 6370, Level = LogLevel.Warning, Message = "telescope.{Op}: the guider did not stop within {Seconds} s; moving anyway")]
+    private partial void LogGuidingStopBeforeMoveTimedOut(string op, int seconds);
 
     [LoggerMessage(EventId = 6368, Level = LogLevel.Information, Message = "telescope.{Op}: guiding stopped first (stopped={Stopped})")]
     private partial void LogGuidingStoppedBeforeMove(string op, bool stopped);
