@@ -14,11 +14,13 @@ import 'package:openastroara/state/saved_server_state.dart';
 
 class _History implements GuiderLiveClient {
   final List<Map<String, dynamic>> history;
+  final bool fail;
   int calls = 0;
-  _History(this.history);
+  _History(this.history, {this.fail = false});
   @override
   Future<List<Map<String, dynamic>>> getHistory() async {
     calls++;
+    if (fail) throw StateError('daemon without the history route');
     return history;
   }
 
@@ -105,6 +107,28 @@ void main() {
       expect(fake.calls, 1);
     },
   );
+
+  test('a failed history fetch leaves the graph empty and quiet', () async {
+    final fake = _History(const [], fail: true);
+    final c = ProviderContainer(
+      overrides: [
+        activeServerProvider.overrideWithValue(
+          const AraServer(hostname: 'h', port: 1),
+        ),
+        guiderLiveApiFactoryProvider.overrideWithValue((_) => fake),
+        guiderStatusProvider.overrideWith(() => _Connected()),
+      ],
+    );
+    addTearDown(c.dispose);
+    c.read(guideStepsProvider);
+    await Future<void>.delayed(Duration.zero);
+    await Future<void>.delayed(Duration.zero);
+    expect(fake.calls, 1);
+    expect(c.read(guideStepsProvider), isEmpty);
+    // The graph still fills live afterwards, and a later seed may try again.
+    await c.read(guideStepsProvider.notifier).seedFromHistory();
+    expect(fake.calls, 2, reason: 'a failure is not remembered as "seeded"');
+  });
 
   test('without a server nothing is fetched', () async {
     final c = ProviderContainer(

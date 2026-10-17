@@ -244,6 +244,55 @@ namespace OpenAstroAra.Test {
             Assert.That(guider.CalibrationRun.Steps, Has.Count.EqualTo(1), "the steps stay for review");
         }
 
+        private static readonly int[] OnlyMax = [400];
+
+        [Test]
+        public async Task The_history_reads_the_guiders_graph_over_the_wire() {
+            // #1364 item 5 — get_guide_history with max_points, mapped to guider.step-shaped steps.
+            var asked = new System.Collections.Concurrent.ConcurrentQueue<int>();
+            var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            var (fake, svc) = await ConnectedAsync(f => f.OnRpc("get_guide_history", req => {
+                asked.Enqueue(req["params"]?["max_points"]?.GetValue<int>() ?? -1);
+                return new JsonObject {
+                    ["pixel_scale"] = 2.0,
+                    ["points"] = new JsonArray(
+                        new JsonObject { ["t"] = now - 4000, ["ra"] = 0.5, ["dec"] = -0.25, ["ra_dur"] = 100, ["ra_dir"] = "E", ["dec_dur"] = 0, ["dec_dir"] = "", ["snr"] = 30.0, ["mass"] = 9000.0 },
+                        new JsonObject { ["t"] = now - 2000, ["ra"] = -0.1, ["dec"] = 0.2, ["ra_dur"] = 0, ["ra_dir"] = "", ["dec_dur"] = 80, ["dec_dir"] = "S", ["snr"] = 31.0, ["mass"] = 9100.0 }),
+                };
+            })).ConfigureAwait(false);
+            await using var _ = fake;
+            using var __ = svc;
+            var history = await new GuiderLiveService(svc, new NoFrames()).GetHistoryAsync(1000, CancellationToken.None).ConfigureAwait(false);
+            Assert.That(asked, Is.EqualTo(OnlyMax), "max_points is clamped to the guider's 1..400");
+            Assert.That(history.Connected, Is.True);
+            Assert.That(history.Steps, Has.Count.EqualTo(2));
+            Assert.That(history.Steps[0].AgeSec, Is.EqualTo(4).Within(1.0), "oldest first, aged on the daemon's clock");
+            Assert.That(history.Steps[0].RaDurationMs, Is.EqualTo(-100), "East is negative");
+            Assert.That(history.Steps[1].DecDurationMs, Is.EqualTo(-80), "South is negative");
+            Assert.That(history.Steps[0].RaArcsec, Is.EqualTo(1.0));
+        }
+
+        [Test]
+        [NonParallelizable] // Notifier.Use is process-global
+        public async Task A_refused_history_read_raises_no_notification() {
+            var (fake, svc) = await ConnectedAsync(f =>
+                f.OnRpc("get_guide_history", _ => throw new InvalidOperationException("graph data not available (history)"))).ConfigureAwait(false);
+            await using var _ = fake;
+            using var __ = svc;
+            var sink = new RecordingSink();
+            var previous = OpenAstroAra.Core.Utility.Notification.Notifier.Current;
+            OpenAstroAra.Core.Utility.Notification.Notifier.Use(sink);
+            try {
+                var history = await new GuiderLiveService(svc, new NoFrames()).GetHistoryAsync(400, CancellationToken.None).ConfigureAwait(false);
+                Assert.That(history.Connected, Is.True);
+                Assert.That(history.Steps, Is.Empty);
+                Assert.That(sink.Messages.Where(m => m.Contains("(history)", StringComparison.Ordinal)), Is.Empty,
+                    "a guider that is not guiding yet has no graph: every client connect must not post an inbox Error");
+            } finally {
+                OpenAstroAra.Core.Utility.Notification.Notifier.Use(previous);
+            }
+        }
+
         [Test]
         [NonParallelizable] // Notifier.Use is process-global
         public async Task A_refused_calibration_read_raises_no_notification() {

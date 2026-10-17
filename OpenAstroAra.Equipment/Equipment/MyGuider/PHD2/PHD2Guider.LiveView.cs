@@ -121,7 +121,9 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                 return null;
             }
             var request = new Phd2NamedGetter("get_guide_history", new() { ["max_points"] = Math.Clamp(maxPoints, 1, 400) });
-            var response = await SendMessage<GenericPhdMethodResponse>(request, LiveRpcTimeoutMs).ConfigureAwait(false);
+            // Read on every client connect; a guider that has not guided yet has no graph and refuses it —
+            // expected and handled, never an inbox Error.
+            var response = await SendMessage<GenericPhdMethodResponse>(request, LiveRpcTimeoutMs, notifyOnError: false).ConfigureAwait(false);
             if (response.error != null || response.result is null) {
                 return null;
             }
