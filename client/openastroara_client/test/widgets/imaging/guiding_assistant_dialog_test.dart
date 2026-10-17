@@ -294,4 +294,34 @@ void main() {
       }
     },
   );
+
+  testWidgets('polling continues after a refused action', (t) async {
+    // Review of #1387: an action's failure path never re-armed the poll, so a
+    // Stop refused because the run had just finished left "Measuring…" on
+    // screen for good.
+    final fake = await _pump(
+      t,
+      const GuidingAssistantStatus(connected: true, state: 'idle'),
+    );
+    fake.refuseStart = true;
+    await t.tap(find.byKey(const Key('guiding-assistant-start')));
+    await t.pump();
+    await t.pump();
+    expect(find.byKey(const Key('guiding-assistant-error')), findsOneWidget);
+    // The guider moved on regardless; the next poll must show it.
+    fake.status = GuidingAssistantStatus.fromJson({
+      'connected': true,
+      'state': 'measuring',
+      'duration_sec': 120,
+      'elapsed_sec': 5,
+      'samples': 2,
+    });
+    await t.pump(GuidingAssistantNotifier.idlePollInterval);
+    await t.pump();
+    await t.pump();
+    expect(
+      _text(t, const Key('guiding-assistant-headline')),
+      'Measuring drift…',
+    );
+  });
 }

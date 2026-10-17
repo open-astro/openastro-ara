@@ -116,6 +116,10 @@ class GuidingAssistantNotifier extends Notifier<GuidingAssistantState> {
     } catch (e) {
       if (!ref.mounted) return;
       state = state.copyWith(busy: false, error: describeRequestError(e));
+      // The timer was cancelled above; a refused action (Stop on a run that
+      // just finished, a Start that timed out client-side) must not end the
+      // polling, or the guider's real state never reaches the screen.
+      _schedule();
     }
   }
 
