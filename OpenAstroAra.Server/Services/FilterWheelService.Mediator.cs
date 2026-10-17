@@ -345,17 +345,23 @@ public sealed partial class FilterWheelService : IFilterWheelMediator {
     /// user's own names, else "Filter N"), so mirror them into the profile's slot labels: offline
     /// sequence authoring and the planning filter-set seed then use the same names the wheel will
     /// report at run time. Writes only on a change, so a reconnect doesn't churn the profile file.</summary>
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Profile-write boundary: a failed label write is logged as itself, not as the runtime read failure the caller's catch would report.")]
     internal void MirrorSlotLabels(List<FilterSlotDto> slots) {
         if (_profileStore is null) {
             return;
         }
-        var current = _profileStore.GetFilterWheelLabels().Labels;
-        var labels = SlotLabels(slots, current);
-        if (labels is null || labels.SequenceEqual(current)) {
-            return;
+        try {
+            var current = _profileStore.GetFilterWheelLabels().Labels;
+            var labels = SlotLabels(slots, current);
+            if (labels is null || labels.SequenceEqual(current)) {
+                return;
+            }
+            _profileStore.PutFilterWheelLabels(new FilterWheelLabelsDto(labels));
+            LogSlotLabelsMirrored(labels.Count);
+        } catch (Exception ex) {
+            LogSlotLabelsMirrorFailed(ex);
         }
-        _profileStore.PutFilterWheelLabels(new FilterWheelLabelsDto(labels));
-        LogSlotLabelsMirrored(labels.Count);
     }
 
     /// <summary>The slot labels for a device's slots, inside the labels endpoint's limits (1–32
@@ -439,6 +445,9 @@ public sealed partial class FilterWheelService : IFilterWheelMediator {
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Mirrored the connected wheel's {Count} filter names into the profile's slot labels")]
     private partial void LogSlotLabelsMirrored(int count);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Could not mirror the connected wheel's filter names into the profile's slot labels")]
+    private partial void LogSlotLabelsMirrorFailed(Exception ex);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "filter change to position {Position} timed out waiting for the wheel to settle")]
     private partial void LogFilterChangeTimedOut(short position);

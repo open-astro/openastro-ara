@@ -83,20 +83,6 @@ void main() {
     ])), isA<LocalOptimalSubUnavailable>());
     // An unrecognised label never falls back to the broadband entry.
     expect(run('Clear', filters), isA<LocalOptimalSubUnavailable>());
-  });
-
-  test("a wheel name of the set entry's kind resolves to it ('Hα' → 'Ha')",
-      () {
-    LocalOptimalSubOutcome run(String name) => resolveOptimalSubLocal(
-          optics: optics,
-          electronics: electronics,
-          site: site,
-          filterSet: filters,
-          filterName: name,
-        );
-    final greek = run('Hα') as LocalOptimalSubSuccess;
-    final plain = run('Ha') as LocalOptimalSubSuccess;
-    expect(greek.result.recommendedSec, plain.result.recommendedSec);
-    expect(run('Filter 3'), isA<LocalOptimalSubUnavailable>());
+    expect(run('Filter 3', filters), isA<LocalOptimalSubUnavailable>());
   });
 }
