@@ -82,13 +82,19 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void A_guider_with_no_camera_ends_the_loop_with_a_pick_the_camera_error() {
+        public void A_guider_without_its_camera_gives_up_naming_both_fixes() {
+            // A dropped camera and a profile that never picked one read the same from the daemon, so the
+            // error names the cable/power AND the pick; the loop keeps its retry budget for the first case.
             var noCamera = new GuiderRpcException("capture_single_frame", 1, "cannot capture single frame when camera is not connected");
-            Assert.That(GuideFocusService.NoGuideCameraError(noCamera), Does.Contain("pick the guide camera"));
-            Assert.That(GuideFocusService.NoGuideCameraError(new GuiderRpcException("capture_single_frame", 1, "exposure timed out")), Is.Null,
-                "other daemon errors keep the retry budget");
-            Assert.That(GuideFocusService.NoGuideCameraError(new InvalidOperationException("camera is not connected")), Is.Null,
-                "only the daemon's own refusal counts");
+            var error = GuideFocusService.GaveUpError(5, noCamera);
+            Assert.That(error, Does.StartWith("gave up after 5 failed frames"));
+            Assert.That(error, Does.Contain("cable and power"));
+            Assert.That(error, Does.Contain("pick the guide camera"));
+            Assert.That(GuideFocusService.GaveUpError(5, new GuiderRpcException("capture_single_frame", 1, "exposure timed out")),
+                Is.EqualTo("gave up after 5 failed frames — last: capture_single_frame failed (code 1): exposure timed out"),
+                "other daemon errors keep the plain message");
+            Assert.That(GuideFocusService.GaveUpError(5, new InvalidOperationException("camera is not connected")),
+                Does.Not.Contain("pick the guide camera"), "only the daemon's own refusal counts");
         }
 
         [Test]

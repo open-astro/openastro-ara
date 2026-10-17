@@ -188,12 +188,14 @@ public sealed partial class GuideFocusService : IGuideFocusService, IDisposable 
         }
     }
 
-    /// <summary>The loop's error when a frame failed because the guider has no camera connected (a fresh
-    /// guider has none until the profile names one), else null. Pure — unit-tested.</summary>
-    internal static string? NoGuideCameraError(Exception ex) =>
-        ex is GuiderRpcException && ex.Message.Contains("camera is not connected", StringComparison.OrdinalIgnoreCase)
-            ? "the guider has no camera connected — pick the guide camera in Settings → Guider and Apply"
-            : null;
+    /// <summary>The loop's error once it gives up. The daemon's "camera is not connected" has two causes the
+    /// loop cannot tell apart: a picked camera that dropped off the bus, or a profile that never named one (a
+    /// fresh guider has no camera of its own), so that refusal names both fixes. Pure — unit-tested.</summary>
+    internal static string GaveUpError(int failures, Exception last) =>
+        last is GuiderRpcException && last.Message.Contains("camera is not connected", StringComparison.OrdinalIgnoreCase)
+            ? $"gave up after {failures} failed frames — the guider has no camera connected: check the guide camera's "
+                + "cable and power, or pick the guide camera in Settings → Guider and Apply"
+            : $"gave up after {failures} failed frames — last: {last.Message}";
 
     /// <summary>The daemon owns its camera while it guides or calibrates; the focus loop must not pull frames
     /// out from under it. Pure — unit-tested against the PHD2 app-state tokens.</summary>
@@ -355,20 +357,10 @@ public sealed partial class GuideFocusService : IGuideFocusService, IDisposable 
                     throw;
                 } catch (Exception ex) {
                     LogFrameFailed(ex);
-                    if (NoGuideCameraError(ex) is { } noCamera) {
-                        // Retrying cannot help: the guider has no camera until one is picked.
-                        lock (_gate) {
-                            _state = "error";
-                            _error = noCamera;
-                        }
-                        LogGaveUp(1, ex.Message);
-                        await ReleaseLeaseQuietlyAsync().ConfigureAwait(false);
-                        return;
-                    }
                     if (RecordFailure(ex.Message) >= MaxConsecutiveFailures) {
                         lock (_gate) {
                             _state = "error";
-                            _error = $"gave up after {MaxConsecutiveFailures} failed frames — last: {ex.Message}";
+                            _error = GaveUpError(MaxConsecutiveFailures, ex);
                         }
                         LogGaveUp(MaxConsecutiveFailures, ex.Message);
                         await ReleaseLeaseQuietlyAsync().ConfigureAwait(false);
