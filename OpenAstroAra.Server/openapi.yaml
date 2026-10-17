@@ -1451,7 +1451,7 @@ paths:
       summary: 'The guider''s recent guide steps (oldest first, with ages) — max_points 1..400, default 400.'
       operationId: GetGuiderHistory
       parameters:
-        - name: maxPoints
+        - name: max_points
           in: query
           schema:
             pattern: '^-?(?:0|[1-9]\d*)$'
