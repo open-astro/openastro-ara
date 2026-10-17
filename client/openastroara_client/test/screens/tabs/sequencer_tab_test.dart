@@ -15,6 +15,7 @@ import 'package:openastroara/services/sequence_api.dart';
 import 'package:openastroara/state/sequencer/sequence_editor_state.dart';
 import 'package:openastroara/state/sequencer/sequence_list_state.dart';
 import 'package:openastroara/widgets/sequencer/sequence_field_editor.dart';
+import 'package:openastroara/widgets/sequencer/sequencer_palette.dart';
 
 // A body whose single child is a Take Exposure, so the tree renders a row the
 // test can see — and the root Name carries the id to prove the right load.
@@ -372,6 +373,31 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(childCount(container), 0);
+    });
+
+    testWidgets('Backspace in the palette search edits the query, not the tree',
+        (tester) async {
+      final container = await pumpLoaded(tester);
+      expect(childCount(container), 1);
+
+      final search = find.descendant(
+        of: find.byType(SequencerPalette),
+        matching: find.byType(TextField),
+      );
+      await tester.tap(search);
+      await tester.enterText(search, 'take ex');
+      await tester.pumpAndSettle();
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.backspace);
+      await tester.sendKeyEvent(LogicalKeyboardKey.delete);
+      await tester.pumpAndSettle();
+
+      expect(childCount(container), 1,
+          reason: 'searching must never delete the selected instruction');
+      expect(tester.widget<EditableText>(find.descendant(
+        of: search,
+        matching: find.byType(EditableText),
+      )).controller.text, 'take e');
     });
   });
 
