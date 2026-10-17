@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -11,15 +12,21 @@ import 'package:openastroara/services/guider_live_api.dart';
 import 'package:openastroara/state/guider/guide_step_state.dart';
 import 'package:openastroara/state/guider/guider_live_state.dart';
 import 'package:openastroara/state/saved_server_state.dart';
+import 'package:openastroara/state/ws/ws_providers.dart';
+import 'package:openastroara/models/ws_event.dart';
 
 class _History implements GuiderLiveClient {
   final List<Map<String, dynamic>> history;
   final bool fail;
+
+  /// When set, getHistory waits for it — a fetch still in flight.
+  final Completer<void>? gate;
   int calls = 0;
-  _History(this.history, {this.fail = false});
+  _History(this.history, {this.fail = false, this.gate});
   @override
   Future<List<Map<String, dynamic>>> getHistory() async {
     calls++;
+    if (gate != null) await gate!.future;
     if (fail) throw StateError('daemon without the history route');
     return history;
   }
@@ -130,6 +137,82 @@ void main() {
     expect(fake.calls, 2, reason: 'a failure is not remembered as "seeded"');
   });
 
+  test('a guider that connects later seeds the graph then', () async {
+    // The on-connect listener, not the start-up seed: the guider is
+    // disconnected at start-up, so only the transition can fill the graph.
+    final fake = _History([_p(4, 0.2), _p(2, 0.3)]);
+    final status = _Switchable();
+    final ws = StreamController<WsEvent>.broadcast();
+    addTearDown(() => unawaited(ws.close()));
+    final c = ProviderContainer(
+      overrides: [
+        activeServerProvider.overrideWithValue(
+          const AraServer(hostname: 'h', port: 1),
+        ),
+        guiderLiveApiFactoryProvider.overrideWithValue((_) => fake),
+        guiderStatusProvider.overrideWith(() => status),
+        wsEventsProvider.overrideWith((ref) => ws.stream),
+      ],
+    );
+    addTearDown(c.dispose);
+    c.read(guideStepsProvider);
+    await c.read(guiderStatusProvider.future);
+    await Future<void>.delayed(Duration.zero);
+    expect(fake.calls, 0, reason: 'no history from a disconnected guider');
+    expect(c.read(guideStepsProvider), isEmpty);
+    status.goConnected();
+    await Future<void>.delayed(Duration.zero);
+    await Future<void>.delayed(Duration.zero);
+    expect(fake.calls, 1);
+    expect(c.read(guideStepsProvider), hasLength(2));
+  });
+
+  test('a live step that lands while the history is in flight wins', () async {
+    final gate = Completer<void>();
+    final fake = _History([_p(4, 0.2), _p(2, 0.3)], gate: gate);
+    final ws = StreamController<WsEvent>.broadcast();
+    addTearDown(() => unawaited(ws.close()));
+    final c = ProviderContainer(
+      overrides: [
+        activeServerProvider.overrideWithValue(
+          const AraServer(hostname: 'h', port: 1),
+        ),
+        guiderLiveApiFactoryProvider.overrideWithValue((_) => fake),
+        guiderStatusProvider.overrideWith(() => _Connected()),
+        wsEventsProvider.overrideWith((ref) => ws.stream),
+      ],
+    );
+    addTearDown(c.dispose);
+    final sub = c.listen(guideStepsProvider, (_, _) {});
+    addTearDown(sub.close);
+    await c.read(guiderStatusProvider.future);
+    await c
+        .read(guideStepsProvider.notifier)
+        .seedFromHistory()
+        .timeout(Duration.zero, onTimeout: () {});
+    expect(fake.calls, 1, reason: 'the fetch is in flight');
+    ws.add(
+      WsEvent(
+        type: 'guider.step',
+        ts: DateTime.utc(2026, 10, 16),
+        seq: 1,
+        payload: const {'ra_raw_px': 0.9, 'dec_raw_px': -0.9},
+      ),
+    );
+    await Future<void>.delayed(Duration.zero);
+    expect(c.read(guideStepsProvider), hasLength(1));
+    gate.complete();
+    await Future<void>.delayed(Duration.zero);
+    await Future<void>.delayed(Duration.zero);
+    final steps = c.read(guideStepsProvider);
+    expect(
+      steps,
+      hasLength(1),
+      reason: 'the late history never replaces live steps',
+    );
+    expect(steps.single.raPx, 0.9);
+  });
+
   test('without a server nothing is fetched', () async {
     final c = ProviderContainer(
       overrides: [activeServerProvider.overrideWithValue(null)],
@@ -147,5 +230,23 @@ class _Connected extends GuiderStatusNotifier {
     name: 'Guider',
     connectionState: GuiderConnectionState.connected,
     runtimeState: GuiderRuntimeState.guiding,
+  );
+}
+
+/// Disconnected until [goConnected] — drives the on-connect seed.
+class _Switchable extends GuiderStatusNotifier {
+  @override
+  Future<GuiderStatus?> build() async => const GuiderStatus(
+    name: 'Guider',
+    connectionState: GuiderConnectionState.disconnected,
+    runtimeState: GuiderRuntimeState.unknown,
+  );
+
+  void goConnected() => state = const AsyncData(
+    GuiderStatus(
+      name: 'Guider',
+      connectionState: GuiderConnectionState.connected,
+      runtimeState: GuiderRuntimeState.guiding,
+    ),
   );
 }
