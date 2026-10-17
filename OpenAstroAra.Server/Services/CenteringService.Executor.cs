@@ -43,8 +43,17 @@ public sealed partial class CenteringService : ICenteringExecutor {
 
     /// <inheritdoc/>
     public async Task<bool> CenterAsync(Coordinates target, IProgress<ApplicationStatus> progress, CancellationToken token) {
-        var result = await CenterOnTarget(target, solveProgress: null, progress, token);
-        return result.Success;
+        ArgumentNullException.ThrowIfNull(target);
+        await _centeringGate.WaitAsync(token);
+        try {
+            if (!await SlewToTargetAsync(target, token)) {
+                return false;
+            }
+            var result = await CenterCoreAsync(target, solveProgress: null, progress, token);
+            return result.Success;
+        } finally {
+            _centeringGate.Release();
+        }
     }
 
     /// <inheritdoc/>
@@ -55,6 +64,9 @@ public sealed partial class CenteringService : ICenteringExecutor {
             "Cannot rotate: no rotator mediator is wired into the centering service.");
         await _centeringGate.WaitAsync(token);
         try {
+            if (!await SlewToTargetAsync(target, token)) {
+                return false;
+            }
             // NINA's rotate-first order (Center&Rotate): settle the position angle before the
             // centre — a rotator move shifts the field centre on off-axis rigs, so rotating
             // after centring would immediately un-centre what the loop just converged.
@@ -66,6 +78,19 @@ public sealed partial class CenteringService : ICenteringExecutor {
         } finally {
             _centeringGate.Release();
         }
+    }
+
+    // NINA's Center / Center and Rotate slew to the target before the first solve. Without it the
+    // rotation solve and the centring solve both run wherever the mount happens to be (the pole after
+    // unpark), the hinted solve misses, and the mount only moves after a slow blind solve — or never,
+    // when that fails too (rig night 2026-10-17).
+    private async Task<bool> SlewToTargetAsync(Coordinates target, CancellationToken token) {
+        Logger.Info($"Centering: slewing to {target} before the first solve");
+        if (await telescopeMediator.SlewToCoordinatesAsync(target, token)) {
+            return true;
+        }
+        Logger.Warning($"Centering: the slew to {target} failed (mount not connected or parked) — not solving off target");
+        return false;
     }
 
     // Solve → sync the rotator to the solved sky angle → move by the folded delta, until the

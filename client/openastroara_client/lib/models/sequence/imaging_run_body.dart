@@ -373,12 +373,17 @@ Map<String, dynamic> buildTargetBlock({
   // Center and Rotate carrying it (slew + plate-solve centre + rotate); with
   // no PA the blind slew stays, so runs never require a solver the user
   // didn't opt into by framing with rotation.
-  final goToTarget = positionAngleDeg != null
+  //
+  // A failed go-to skips the rest of this target (SkipInstructionSetOnError)
+  // instead of the default ContinueOnError: filter, focus, guiding and every
+  // frame after it would run on the wrong patch of sky.
+  final goToTarget = (positionAngleDeg != null
       ? (_item(centerAndRotateType)
           ..['Coordinates'] = inputCoordinatesFromDeg(raDeg, decDeg)
           ..['PositionAngle'] = ((positionAngleDeg % 360) + 360) % 360)
       : (_item(slewScopeToRaDecType)
-          ..['Coordinates'] = inputCoordinatesFromDeg(raDeg, decDeg));
+          ..['Coordinates'] = inputCoordinatesFromDeg(raDeg, decDeg)))
+    ..['ErrorBehavior'] = skipInstructionSetOnError;
 
   final children = <Map<String, dynamic>>[
     // A framing angle on a rig WITHOUT a rotator is the user's job before the
