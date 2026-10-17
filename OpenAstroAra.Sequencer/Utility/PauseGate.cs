@@ -133,11 +133,13 @@ namespace OpenAstroAra.Sequencer.Utility {
     }
 
     /// <summary>
-    /// Implemented by root containers, and by a trigger's runner (a SequentialContainer that hangs off nothing and is handed the root's gate by SequenceTrigger.Run) that can carry a <see cref="PauseGate"/>.
+    /// Implemented by root containers that can carry a <see cref="PauseGate"/>.
     /// The execution strategies resolve the gate from the tree's root (via
     /// <c>ItemUtility.GetRootContainer</c>), so attaching a gate to the root
     /// pauses every nesting level; a null gate (tests, standalone containers)
-    /// means pause is simply unavailable.
+    /// means pause is simply unavailable. A trigger's runner (a SequentialContainer that
+    /// hangs off nothing) hosts a copy of the root's gate, set by SequenceTrigger.Run, so
+    /// the instructions it fires can pause too.
     /// </summary>
     public interface IPauseGateHost {
 
