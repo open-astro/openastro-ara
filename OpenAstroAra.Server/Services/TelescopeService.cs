@@ -17,6 +17,7 @@ using ASCOM.Common.Alpaca;
 using ASCOM.Common.DeviceInterfaces;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Profile.Interfaces;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Contracts.WsEvents;
@@ -148,8 +149,10 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
     private bool _disposed;
 
     public TelescopeService(ILogger<TelescopeService>? logger = null, EquipmentEventPublisher? events = null,
-            IEquipmentFaultSink? faults = null, IWsBroadcaster? ws = null, IProfileService? profileService = null) {
+            IEquipmentFaultSink? faults = null, IWsBroadcaster? ws = null, IProfileService? profileService = null,
+            Func<IGuiderMediator?>? guiderResolver = null) {
         _logger = logger ?? NullLogger<TelescopeService>.Instance;
+        _guiderResolver = guiderResolver;
         _events = events;
         _faults = faults;
         _ws = ws;
@@ -283,12 +286,50 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
         return Task.FromResult(Accepted(sync ? "telescope.sync" : "telescope.slew", idempotencyKey));
     }
 
+    // The guider is resolved lazily (it is built after the mount in the composition root). A REST
+    // Park / Find Home stops guiding first, exactly as the sequencer's Park and Find Home instructions
+    // do: on 2026-10-16 the client's Home button moved the mount under a guiding PHD2, which chased a
+    // lost star for nine minutes (313 dropped frames) until the daemon was restarted.
+    private readonly Func<IGuiderMediator?>? _guiderResolver;
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Best-effort pre-step: a guider that will not stop must not block a park or home (the mount move is the safety action); logged and the move proceeds.")]
+    private async Task StopGuidingBeforeMountMoveAsync(string op) {
+        var guider = _guiderResolver?.Invoke();
+        if (guider is null || !guider.GetInfo().Connected) {
+            return;
+        }
+        try {
+            using var cts = new CancellationTokenSource(StopGuidingBeforeMoveTimeout);
+            var stopped = await guider.StopGuiding(cts.Token).ConfigureAwait(false);
+            LogGuidingStoppedBeforeMove(op, stopped);
+        } catch (Exception ex) {
+            LogGuidingStopBeforeMoveFailed(ex, op);
+        }
+    }
+
+    /// <summary>How long a REST park/home waits for the guider to stop before moving anyway.</summary>
+    internal TimeSpan StopGuidingBeforeMoveTimeout { get; set; } = TimeSpan.FromSeconds(10);
+
+    [LoggerMessage(EventId = 6368, Level = LogLevel.Information, Message = "telescope.{Op}: guiding stopped first (stopped={Stopped})")]
+    private partial void LogGuidingStoppedBeforeMove(string op, bool stopped);
+
+    [LoggerMessage(EventId = 6369, Level = LogLevel.Warning, Message = "telescope.{Op}: could not stop guiding first; moving anyway")]
+    private partial void LogGuidingStopBeforeMoveFailed(Exception exception, string op);
+
     public Task<OperationAcceptedDto> ParkAsync(ParkRequestDto request, string? idempotencyKey, CancellationToken ct) {
         // No ArgumentNullException.ThrowIfNull(request): the /park endpoint substitutes
         // `request ?? new ParkRequestDto()`, so request is never null here, and the Reason field is
         // unused by the park itself — the param is kept only for the interface contract.
         _ = request;
+        // Not-connected / disposed still throw synchronously (the endpoint and tests rely on it); only
+        // the guider stop and the move itself are deferred.
         var client = RequireConnectedClient();
+        return ParkAfterGuidingStoppedAsync(client, idempotencyKey);
+    }
+
+    private async Task<OperationAcceptedDto> ParkAfterGuidingStoppedAsync(AlpacaTelescope client, string? idempotencyKey) {
+        await StopGuidingBeforeMountMoveAsync("park").ConfigureAwait(false);
         lock (_gate) { TargetLatch.NoteNonTargetCommand(); } // §57.9 — parking isn't a target command
         NoteMountCommand(w => w.NoteParkCommanded());
         _ = Task.Run(() => RunControlInBackground("telescope.park", client, c => {
@@ -298,7 +339,7 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
             TryEnableTracking(c);
             c.Park();
         }), CancellationToken.None);
-        return Task.FromResult(Accepted("telescope.park", idempotencyKey));
+        return Accepted("telescope.park", idempotencyKey);
     }
 
     public Task<OperationAcceptedDto> UnparkAsync(string? idempotencyKey, CancellationToken ct) {
@@ -309,7 +350,12 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
     }
 
     public Task<OperationAcceptedDto> FindHomeAsync(string? idempotencyKey, CancellationToken ct) {
-        var client = RequireConnectedClient();
+        var client = RequireConnectedClient(); // synchronous throw when not connected / disposed, as before
+        return FindHomeAfterGuidingStoppedAsync(client, idempotencyKey);
+    }
+
+    private async Task<OperationAcceptedDto> FindHomeAfterGuidingStoppedAsync(AlpacaTelescope client, string? idempotencyKey) {
+        await StopGuidingBeforeMountMoveAsync("findhome").ConfigureAwait(false);
         lock (_gate) { TargetLatch.NoteNonTargetCommand(); } // §57.9 — homing isn't a target command
         // FindHome blocks until the mount reaches its home switch; run it off the request
         // thread like Park/Unpark so the endpoint returns 202 and the refresh cache surfaces
@@ -322,7 +368,7 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
         // armed and fire a spurious TrackingLost ~6 s after a normal Find Home (review finding).
         NoteMountCommand(w => w.NoteParkCommanded());
         _ = Task.Run(() => RunControlInBackground("telescope.findhome", client, c => c.FindHome()), CancellationToken.None);
-        return Task.FromResult(Accepted("telescope.findhome", idempotencyKey));
+        return Accepted("telescope.findhome", idempotencyKey);
     }
 
     public async Task SetTrackingAsync(bool enabled, CancellationToken ct) {

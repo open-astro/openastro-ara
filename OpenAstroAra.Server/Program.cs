@@ -292,7 +292,16 @@ public partial class Program {
         // park/unpark, set-tracking, abort-slew. One singleton backs BOTH the REST ITelescopeService
         // and the Sequencer's ITelescopeMediator (§8.1), so the telescope instructions drive the live
         // device (mediator wiring is below; this replaces the HeadlessTelescopeMediator stub).
-        builder.Services.AddSingleton<TelescopeService>();
+        builder.Services.AddSingleton<TelescopeService>(sp => new TelescopeService(
+            sp.GetService<ILogger<TelescopeService>>(),
+            sp.GetService<EquipmentEventPublisher>(),
+            sp.GetService<IEquipmentFaultSink>(),
+            sp.GetService<IWsBroadcaster>(),
+            sp.GetService<OpenAstroAra.Profile.Interfaces.IProfileService>(),
+            // A REST park / home stops guiding first; the guider is registered after the mount, so it is
+            // resolved lazily (and the factory lambda bypasses constructor activation: every optional
+            // parameter is passed by hand, #711).
+            () => sp.GetService<OpenAstroAra.Equipment.Interfaces.Mediator.IGuiderMediator>()));
         builder.Services.AddSingleton<ITelescopeService>(sp => sp.GetRequiredService<TelescopeService>());
         builder.Services.AddSingleton<IMountSpecSheetSource>(sp => sp.GetRequiredService<TelescopeService>());
         // §14e — fourth real device service: live focuser (position/temp) + Move. One singleton

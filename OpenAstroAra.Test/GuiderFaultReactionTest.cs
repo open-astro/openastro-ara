@@ -19,6 +19,7 @@ using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Services;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -97,6 +98,28 @@ namespace OpenAstroAra.Test {
                 Assert.That(GuiderService.ParseGuiderLostAction("garbage"), Is.EqualTo(GuiderService.GuiderLostAction.PauseAndRetry));
                 Assert.That(GuiderService.ParseGuiderLostAction(null), Is.EqualTo(GuiderService.GuiderLostAction.PauseAndRetry));
             });
+        }
+
+        [Test]
+        public void Star_lost_copy_names_the_grace_and_the_auto_resume() {
+            var (title, message) = GuiderService.BuildFaultCopy(GuiderService.GuiderFaultKind.StarLost, GuiderService.GuiderLostAction.PauseAndRetry, 30);
+            Assert.That(title, Is.EqualTo("Guide star lost — sequence paused"));
+            Assert.That(message, Does.Contain("more than 30 s").And.Contain("resumes on its own"));
+            Assert.That(GuiderService.BuildFaultCopy(GuiderService.GuiderFaultKind.StarLost, GuiderService.GuiderLostAction.AbortSequence).title,
+                Is.EqualTo("Guide star lost — sequence aborted"));
+            Assert.That(GuiderService.BuildFaultCopy(GuiderService.GuiderFaultKind.StarLost, GuiderService.GuiderLostAction.SkipTarget).title,
+                Is.EqualTo("Guide star lost — current target skipped"));
+        }
+
+        [Test]
+        public async Task Star_lost_reaction_pauses_and_reports_kind_star_lost() {
+            sequencer.Setup(s => s.PauseActiveRunsAsync(It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new List<Guid> { Guid.NewGuid() });
+
+            await service.ReactToGuidingLossAsync(GuiderService.GuiderFaultKind.StarLost);
+
+            sequencer.Verify(s => s.PauseActiveRunsAsync(It.IsAny<CancellationToken>()), Times.Once);
+            Assert.That(postedNotifications.Select(n => n.Title), Does.Contain("Guide star lost — sequence paused"));
         }
 
         [Test]

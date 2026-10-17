@@ -63,7 +63,7 @@ public sealed partial class GuiderService {
     // behaviour. A LinkDown is covered by the §63.3 process recovery's own notification; an
     // EquipmentDisconnected (guide camera dropped, link still up) starts no recovery, so it must alert
     // the user itself even when no sequence is running.
-    internal enum GuiderFaultKind { LinkDown, EquipmentDisconnected }
+    internal enum GuiderFaultKind { LinkDown, EquipmentDisconnected, StarLost }
 
     /// <summary>
     /// Maps the profile's snake_case on_guider_lost token. Unknown tokens fall
@@ -185,7 +185,14 @@ public sealed partial class GuiderService {
                         affected = await sequencer.SkipActiveRunsAsync(CancellationToken.None).ConfigureAwait(false);
                         break;
                     default:
-                        affected = (await sequencer.PauseActiveRunsAsync(CancellationToken.None).ConfigureAwait(false)).Count;
+                        var paused = await sequencer.PauseActiveRunsAsync(CancellationToken.None).ConfigureAwait(false);
+                        affected = paused.Count;
+                        if (kind == GuiderFaultKind.StarLost) {
+                            // The star-lost watch resumes exactly these runs when guide steps return.
+                            lock (_gate) {
+                                _starLostPausedRuns = paused;
+                            }
+                        }
                         break;
                 }
                 LogFaultReacted(GuiderLostActionToken(action), affected);
@@ -216,10 +223,14 @@ public sealed partial class GuiderService {
             await PublishFaultEventAsync(new JsonObject {
                 ["action"] = GuiderLostActionToken(action),
                 ["runs_affected"] = affected,
-                ["kind"] = kind == GuiderFaultKind.EquipmentDisconnected ? "equipment_disconnected" : "link_down",
+                ["kind"] = kind switch {
+                    GuiderFaultKind.EquipmentDisconnected => "equipment_disconnected",
+                    GuiderFaultKind.StarLost => "star_lost",
+                    _ => "link_down",
+                },
             }).ConfigureAwait(false);
 
-            var (title, message) = BuildFaultCopy(kind, action);
+            var (title, message) = BuildFaultCopy(kind, action, (int) StarLostGrace.TotalSeconds);
             await NotifyFaultQuietlyAsync(title, message).ConfigureAwait(false);
         } catch (Exception ex) {
             LogFaultReactionFailed(ex);
@@ -231,7 +242,21 @@ public sealed partial class GuiderService {
     // machine — #1192 — so the copy names neither). An EquipmentDisconnected left the guider
     // connected — only the guide camera dropped — so the copy must NOT tell the user to reconnect the
     // guider or claim process recovery is running (neither is true).
-    private static (string title, string message) BuildFaultCopy(GuiderFaultKind kind, GuiderLostAction action) {
+    internal static (string title, string message) BuildFaultCopy(GuiderFaultKind kind, GuiderLostAction action, int starLostGraceSec = 30) {
+        if (kind == GuiderFaultKind.StarLost) {
+            // The link and the camera are fine; the guider cannot see its star (cloud, a bump, dew). PHD2
+            // keeps looking on its own, so a pause resumes by itself when guide steps return.
+            var lost = $"The guider lost its guide star for more than {starLostGraceSec} s (cloud, dew, a knock)";
+            return action switch {
+                GuiderLostAction.AbortSequence => ("Guide star lost — sequence aborted",
+                    $"{lost} and your safety policy is set to abort: the running sequence was aborted. The guider keeps looking for the star."),
+                GuiderLostAction.SkipTarget => ("Guide star lost — current target skipped",
+                    $"{lost} and your safety policy is set to skip: the current instructions were skipped and the sequence advances. The guider keeps looking for the star."),
+                _ => ("Guide star lost — sequence paused",
+                    $"{lost}: the running sequence pauses so no unguided frame burns sky time. It resumes on its own as soon as the guider is guiding again; "
+                    + "if the star does not come back, check the guider and press Resume."),
+            };
+        }
         if (kind == GuiderFaultKind.EquipmentDisconnected) {
             return action switch {
                 GuiderLostAction.AbortSequence => ("Guide camera dropped — sequence aborted",

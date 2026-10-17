@@ -561,6 +561,7 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
             if (step is PhdEventGuideStep phd) {
                 _latestStarStats = (phd.SNR, phd.StarMass);
             }
+            NoteGuideStepLocked(); // a guide step means the guider has its star: the star-lost watch stands down
             guider = _guider!; // non-null: ReferenceEquals(sender, _guider) with a non-null sender
             pixelScale = guider.PixelScale;
         }
@@ -592,6 +593,7 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
             _ = PublishGuiderEventAsync(BuildGuiderEventPayload(marker));
         }
         FeedPaResidualMarker(guider, marker.Kind);
+        NoteStarLostMarker(marker.Kind);
     }
 
     /// <summary>The <c>guider.event</c> payload: <c>kind</c> plus whichever details the PHD2
@@ -765,6 +767,7 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
             _guider.Dispose();
             _guider = null;
             ResetPaResidual();
+            ResetStarLostWatchLocked();
         }
     }
 
