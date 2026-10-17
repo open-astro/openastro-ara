@@ -60,5 +60,18 @@ namespace OpenAstroAra.Test {
                 SettlePixels: 1.5, SettleTimeSec: 10, SettleTimeoutSec: 60,
                 ForceCalibrationEachSession: false,
                 GuideExposureMs: exposureMs)) is null;
+
+        [TestCase(0, ExpectedResult = true)]
+        [TestCase(50, ExpectedResult = true)]
+        [TestCase(100, ExpectedResult = true)]
+        [TestCase(-1, ExpectedResult = false)]
+        [TestCase(101, ExpectedResult = false)]
+        public bool Guide_camera_gain_gate(int gain) =>
+            ProfileEndpoints.ValidateGuideCameraGain(new OpenAstroAra.Server.Contracts.Phd2SettingsDto(
+                Host: "localhost", Port: 4400, Phd2Profile: "Default",
+                DitherEnabled: true, DitherEveryNFrames: 1, DitherPixels: 5.0,
+                SettlePixels: 1.5, SettleTimeSec: 10, SettleTimeoutSec: 60,
+                ForceCalibrationEachSession: false,
+                GuideCameraGain: gain)) is null;
     }
 }

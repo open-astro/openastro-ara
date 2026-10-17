@@ -316,6 +316,12 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
         public override string Method => "set_exposure";
     }
 
+    /// <summary><c>set_camera_gain [0..100]</c> - the guide camera's gain as a percent of its range. The
+    /// daemon refuses it until the camera is connected (gain control is only known after connect).</summary>
+    public class Phd2SetCameraGain : Phd2Method<Array> {
+        public override string Method => "set_camera_gain";
+    }
+
     public class Phd2SetGuideOutputEnabled : Phd2Method<Array> {
         public override string Method => "set_guide_output_enabled";
     }

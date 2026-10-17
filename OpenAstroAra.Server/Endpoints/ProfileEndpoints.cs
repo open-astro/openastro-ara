@@ -283,7 +283,7 @@ public static class ProfileEndpoints {
             // arbitrary token (#885 review): unknown → the guide_scope default, matching the client's read-side
             // coercion. Other fields keep the store's existing store-verbatim posture.
             var normalized = body with { GuiderSetupType = NormalizeGuiderSetupType(body.GuiderSetupType) };
-            var rangeError = ValidateGuideExposureRange(normalized);
+            var rangeError = ValidateGuideExposureRange(normalized) ?? ValidateGuideCameraGain(normalized);
             if (rangeError is not null) {
                 return Results.Problem(detail: rangeError, statusCode: StatusCodes.Status400BadRequest);
             }
@@ -616,4 +616,8 @@ public static class ProfileEndpoints {
             : body.GuideExposureMs < 0
                 ? "guide_exposure_ms must be >= 0 (0 = leave the guider's own exposure)."
                 : null;
+
+    /// <summary>The guider refuses a gain outside 0..100 (percent of the camera's range).</summary>
+    internal static string? ValidateGuideCameraGain(Phd2SettingsDto body) =>
+        body.GuideCameraGain is < 0 or > 100 ? "guide_camera_gain must be 0..100 (percent of the camera's gain range)." : null;
 }

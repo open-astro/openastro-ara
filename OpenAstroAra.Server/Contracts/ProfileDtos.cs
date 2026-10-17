@@ -441,7 +441,10 @@ public sealed record Phd2SettingsDto(
     int GuideExposureMs = 0,
     // #1156 — Dec minimum move, px. Null = "same as minimum_move" so a profile.json written before the
     // split keeps guiding exactly as it did; the client always sends both.
-    double? DecMinimumMove = null);
+    double? DecMinimumMove = null,
+    // Guide camera gain, percent of the camera's range (0..100), pushed with the guider's set_camera_gain.
+    // Defaults to 50: the guider's own 95% buries stars in read noise on a fresh install.
+    int GuideCameraGain = 50);
 
 /// <summary>
 /// §45.12 polar-alignment settings — the routine's knobs. Every field carries its playbook default

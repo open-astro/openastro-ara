@@ -375,7 +375,13 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                         await TryInitStepAsync("ensure_ara_profile", () => EnsureAraGuiderProfileAsync(token)).ConfigureAwait(false);
                         await TryInitStepAsync("push_engine_config", () => PushGuiderEngineConfigAsync(token)).ConfigureAwait(false);
                     }
-                    await TryInitStepAsync("set_connected", EnsurePHD2EquipmentConnected).ConfigureAwait(false);
+                    var equipmentConnected = false;
+                    await TryInitStepAsync("set_connected", async () => { equipmentConnected = await EnsurePHD2EquipmentConnected().ConfigureAwait(false); }).ConfigureAwait(false);
+                    // The gain belongs to the Ara profile's twin, and the daemon only accepts it from a
+                    // connected camera: both must hold or it would land on the wrong profile or be refused.
+                    if (profilesOk && equipmentConnected) {
+                        await TryInitStepAsync("camera_gain", () => PushCameraGainAsync(token)).ConfigureAwait(false);
+                    }
                     await TryInitStepAsync("shift_lock_params", TryRefreshShiftLockParams).ConfigureAwait(false);
                     await TryInitStepAsync("pixel_scale", SetPixelScale).ConfigureAwait(false);
                     initialized = profilesOk;

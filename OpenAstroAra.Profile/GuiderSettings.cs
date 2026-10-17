@@ -90,6 +90,7 @@ namespace OpenAstroAra.Profile {
             minimumMove = 0.15;
             decGuideMode = "auto";
             guideExposureMs = 0;
+            guideCameraGain = DefaultGuideCameraGain;
         }
 
         private string lastDeviceName = string.Empty;
@@ -699,6 +700,22 @@ namespace OpenAstroAra.Profile {
             set {
                 if (guideExposureMs != value) {
                     guideExposureMs = value;
+                    RaisePropertyChanged();
+                }
+            }
+        }
+
+        /// <summary>The guider's own default (95%) runs a ZWO ASI290MM at gain 570 of 600, where read
+        /// noise buries every star; half of the range suits the usual guide cameras.</summary>
+        public const int DefaultGuideCameraGain = 50;
+
+        private int guideCameraGain = DefaultGuideCameraGain;
+        [DataMember]
+        public int GuideCameraGain {
+            get => guideCameraGain;
+            set {
+                if (guideCameraGain != value) {
+                    guideCameraGain = value;
                     RaisePropertyChanged();
                 }
             }

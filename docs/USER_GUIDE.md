@@ -174,8 +174,9 @@ framing/focus loop when you need to point or focus by eye.
   and pixel size under **Settings → Guider**), and in guide-camera pixels until then. Tap the
   header to collapse the graph to a one-line status. A client that connects while guiding is already
   running gets the guider's last frames (up to 400) drawn straight away. **Tune** opens **Tune Guiding**: RA/Dec
-  aggressiveness, minimum move, Dec guide mode, dither pixels and the **guide exposure** (0.5 s is a
-  good start on a harmonic mount). Apply sends only these runtime-safe values to the guider, so
+  aggressiveness, minimum move, Dec guide mode, dither pixels, the **guide exposure** (0.5 s is a
+  good start on a harmonic mount) and the **guide camera gain** (percent of the camera's range, 50 %
+  by default; lower it if guide frames look grainy and stars are hard to find). Apply sends only these runtime-safe values to the guider, so
   guiding keeps running; equipment and optics changes live in **Settings → Guider** and do
   reconnect the guider. **More…** opens **Guider settings** for everything else the guider offers —
   multi-star, star detection, auto exposure, noise reduction, subframes, the RA and Dec algorithms,
