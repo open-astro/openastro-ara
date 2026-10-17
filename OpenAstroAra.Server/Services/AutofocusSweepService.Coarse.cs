@@ -47,6 +47,21 @@ public sealed partial class AutofocusSweepService {
     /// <summary>How many times the fine sweep may re-centre on an edge minimum before failing.</summary>
     internal const int MaxSweepRecentres = 2;
 
+    /// <summary>A fine probe whose binned (coarse-metric) HFR exceeds this multiple of the sweep's best binned
+    /// HFR, while its full-resolution HFR stays under <see cref="FineGateRatio"/> × the sharpest near-focus
+    /// probe, is too defocused for the full-resolution measurement to be the star field, and is dropped. On 2026-10-17 (ASI533MC Pro) full resolution read HFR ≈ 1.2 on 9-15 "stars" from 540 to
+    /// 1350, below the ≈ 1.27 measured near real focus, while the binned probe at 550 read 11.6 against
+    /// 4.74 near focus: the plateau won the fit and the run settled at 1014. Every fine probe now logs
+    /// its binned value, so the ratio can be checked against a real run.</summary>
+    internal const double CoarseGateRatio = 2.0;
+
+    /// <summary>The full-resolution side of the same veto: a probe the binned frame puts far from focus is
+    /// dropped only while its full-resolution HFR stays under this multiple of the sharpest near-focus probe.
+    /// The 2026-10-17 10 s run had genuine wings at 2.5-3.7 around a 1.22 minimum and the false plateau at
+    /// 1.14-1.45, so 1.5× (1.83) separates them; comparing against a mid-slope probe instead dropped real
+    /// wings and cost the fit.</summary>
+    internal const double FineGateRatio = 1.5;
+
     /// <summary>Production coarse metric: native-pixel HFR measured on a software-binned frame, or
     /// +∞ when too few stars are measurable (treated as "worse than anything measured").</summary>
     internal static double DefaultCoarseMetric(AnalysisFrame frame, CancellationToken ct) {
@@ -99,6 +114,8 @@ public sealed partial class AutofocusSweepService {
         }
         var baseStep = settings.Steps * settings.StepSize;
         var measured = new Dictionary<int, double>();
+        // Positions where the binned frame lost every star but full resolution still measured enough of them.
+        var sharpUnbinned = new HashSet<int>();
         _lastCoarseFailure = null;
 
         async Task<double> Measure(int position) {
@@ -112,6 +129,15 @@ public sealed partial class AutofocusSweepService {
             var hfr = _coarseMetric(frame, token);
             LogCoarseProbe(reached, hfr);
             measured[position] = hfr;
+            if (!double.IsFinite(hfr)) {
+                // +∞ has two causes: discs too big even for the binned frame, or stars so sharp and faint
+                // (a narrowband filter) that binning averages them into the noise. Full resolution tells
+                // whether anything is there; the neighbours decide which side of the V it is.
+                var sharp = _metric(frame, token);
+                if (sharp.DetectedStars >= MinStarsPerProbe && sharp.AverageHFR > 0 && double.IsFinite(sharp.AverageHFR) && !sharp.NoiseFlooded) {
+                    sharpUnbinned.Add(position);
+                }
+            }
             // The coarse metric reports no star count (∞ = too few to measure); the run record shows it as 0.
             await RecordProbeAsync("coarse", reached, hfr, 0, double.IsFinite(hfr), CoarseMaxProbes, null).ConfigureAwait(false);
             return hfr;
@@ -123,6 +149,17 @@ public sealed partial class AutofocusSweepService {
         bool InTravel(int position) => position >= travel.Min && position <= travel.Max;
         var up = start + baseStep;
         var hUp = InTravel(up) ? await Measure(up).ConfigureAwait(false) : double.PositiveInfinity;
+        if (!double.IsFinite(h) && sharpUnbinned.Contains(start) && double.IsFinite(hUp)) {
+            // A start whose stars only full resolution can see, between two neighbours the binned frame can
+            // measure, sits inside the V: a start too defocused to bin would have a far neighbour lost too. Near
+            // the travel stop the lower neighbour is the stop itself (2026-10-17: focus 220, half-width 288).
+            var down = Math.Max(start - baseStep, travel.Min);
+            var hDown = down < start ? await Measure(down).ConfigureAwait(false) : double.PositiveInfinity;
+            if (double.IsFinite(hDown)) {
+                LogCoarseSharpStart(start, hUp, hDown);
+                return start;
+            }
+        }
         if (hUp < h) {
             dir = 1;
             pos = up;
@@ -234,11 +271,20 @@ public sealed partial class AutofocusSweepService {
     [LoggerMessage(Level = LogLevel.Information, Message = "Autofocus coarse probe: position {Position} HFR {Hfr:0.##} (native px, binned measurement)")]
     private partial void LogCoarseProbe(int position, double hfr);
 
+    [LoggerMessage(Level = LogLevel.Information, Message = "Autofocus coarse search: the binned frame lost the stars at {Position} but full resolution sees them, between measurable neighbours (HFR {Up:0.##} above, {Down:0.##} below) — keeping it as the sweep centre")]
+    private partial void LogCoarseSharpStart(int position, double up, double down);
+
     [LoggerMessage(Level = LogLevel.Information, Message = "Autofocus coarse search: centring the fine sweep at {Position} (HFR {Hfr:0.##})")]
     private partial void LogCoarseResult(int position, double hfr);
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Autofocus probe at {Position} skipped: too few stars to measure ({Stars} stars, HFR {Hfr:0.###})")]
     private partial void LogProbeSkipped(int position, int stars, double hfr);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Autofocus probe at {Position} dropped: the binned frame reads HFR {Binned:0.##}, over {Ratio}× the sweep best {Best:0.##}, yet full resolution read HFR {Hfr:0.###} ({Stars} stars), as sharp as focus — not the star field, dropped")]
+    private partial void LogProbeTooDefocused(int position, double binned, double ratio, double best, double hfr, int stars);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Autofocus probe at {Position}: binned HFR {Binned:0.##}")]
+    private partial void LogProbeBinned(int position, double binned);
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Autofocus: curve minimum at the sweep edge — re-centring at {Position} (re-sweep {Attempt})")]
     private partial void LogSweepRecentred(int position, int attempt);

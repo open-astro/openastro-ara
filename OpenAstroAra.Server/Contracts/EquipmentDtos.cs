@@ -559,6 +559,70 @@ public sealed record GuiderCalibrationDataDto(
 public sealed record GuiderLiveSelectRequestDto(double X, double Y);
 
 /// <summary>
+/// #1364 item 4 — the guider's Guiding Assistant (<c>GET /equipment/guider/live/assistant</c>): the
+/// unguided-drift measurement PHD2's dialog runs, headless (openastro-guider #83). <c>State</c> is
+/// <c>idle</c> | <c>measuring</c> | <c>measuring_backlash</c> | <c>done</c> | <c>failed</c>; <c>Connected</c>
+/// false (state <c>idle</c>) when no guider is connected or it does not answer. The statistics are present
+/// once two samples are in; <c>Recommendations</c> once the run is done.
+/// </summary>
+public sealed record GuidingAssistantStatusDto(
+    bool Connected,
+    string State,
+    double? DurationSec,
+    bool? MeasureBacklash,
+    double? ElapsedSec,
+    int? Samples,
+    double? PixelScale,
+    double? RaDriftPxMin,
+    double? DecDriftPxMin,
+    double? RaRmsPx,
+    double? DecRmsPx,
+    double? HighFreqRmsPx,
+    double? RaPeakPx,
+    double? DecPeakPx,
+    double? RaPeakPeakPx,
+    double? RaMaxDriftPxSec,
+    double? Snr,
+    double? StarMass,
+    double? PolarAlignErrorArcmin,
+    bool? PolarAlignErrorIsLowerBound,
+    string? BacklashStatus,
+    string? BacklashResult,
+    double? BacklashMs,
+    double? BacklashSigmaMs,
+    double? BacklashPx,
+    GuidingAssistantRecommendationsDto? Recommendations,
+    string? Error);
+
+/// <summary>What the assistant suggests: min-move per axis (guide px), the exposure range, the Dec
+/// backlash compensation and, when the backlash is too big to compensate, a Dec guide mode or
+/// algorithm. <c>Messages</c> are PHD2's own explanations, one id + text each. The names accepted by
+/// <c>POST …/assistant/apply</c> are <c>exposure</c>, <c>min_move_ra</c>, <c>min_move_dec</c>,
+/// <c>dec_backlash</c>, <c>dec_guide_mode</c>, <c>dec_algorithm</c>.</summary>
+public sealed record GuidingAssistantRecommendationsDto(
+    double? MinMoveRaPx,
+    double? MinMoveDecPx,
+    bool? MinMoveSeeingBased,
+    double? ExposureSec,
+    double? ExposureMaxSec,
+    double? DriftLimitingExposureSec,
+    double? DecBacklashMs,
+    string? DecGuideMode,
+    string? DecAlgorithm,
+    IReadOnlyList<GuidingAssistantMessageDto> Messages);
+
+public sealed record GuidingAssistantMessageDto(string Id, string Text);
+
+/// <summary><c>POST /equipment/guider/live/assistant/start</c>: how long to sample (10–3600 s; null =
+/// the guider's two-minute default) and whether to measure Dec backlash afterwards.</summary>
+public sealed record GuidingAssistantStartRequestDto(double? DurationSec, bool MeasureBacklash);
+
+/// <summary><c>POST /equipment/guider/live/assistant/apply</c>: the recommendation names to write.</summary>
+public sealed record GuidingAssistantApplyRequestDto(IReadOnlyList<string> Which);
+
+public sealed record GuidingAssistantApplyResultDto(IReadOnlyList<string> Applied);
+
+/// <summary>
 /// #1311 — the polar alignment error left after Align, measured from the Dec drift the guider
 /// corrects during the first minutes of each guided run (no extra setup step). Status is
 /// <c>measuring</c> (progress in <c>SampleSeconds</c> of <c>TargetSeconds</c>), <c>done</c> or

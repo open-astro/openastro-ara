@@ -470,7 +470,7 @@ public sealed partial class RotationAssistService : IRotationAssistService, IDis
             return null;
         }
         try {
-            var (jpeg, _, _) = CameraService.RenderLiveFrame(frame.Pixels.ToArray(), frame.Width, frame.Height, bayerPattern: null, annotate: true);
+            var (jpeg, _, _) = CameraService.RenderLiveFrame(frame.Pixels.ToArray(), frame.Width, frame.Height, AutofocusSweepService.PreviewBayer(frame), annotate: true);
             return jpeg;
         } catch (Exception ex) {
             LogRenderFailed(ex);

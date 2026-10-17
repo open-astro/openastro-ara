@@ -35,6 +35,7 @@ namespace OpenAstroAra.Test {
             private double? _last;
             public int Solves;
             public int FrameSize = 4; // 4×4 stub: too small to render, so HasFrame stays false unless a test asks for a real-sized one
+            public string? Bayer; // the frame's Bayer pattern (null = mono), as CameraService stamps a 1×1 colour readout
             public ScriptedSolver(params double?[] script) { _script = new Queue<double?>(script); }
             public double LastExposure;
             public int LastBinning;
@@ -48,7 +49,7 @@ namespace OpenAstroAra.Test {
                 Binnings.Add(binning);
                 if (_script.Count > 0) { _last = _script.Dequeue(); }
                 if (_last is not { } pa) return null;
-                var frame = new AnalysisFrame(new ushort[FrameSize * FrameSize], FrameSize, FrameSize, DateTimeOffset.UtcNow);
+                var frame = new AnalysisFrame(new ushort[FrameSize * FrameSize], FrameSize, FrameSize, DateTimeOffset.UtcNow, Bayer);
                 return new RotationSolve(pa, RaDeg: 314.82, DecDeg: 44.53, PixelScaleArcsec: 2.3, Flipped: true, frame);
             }
         }
@@ -140,6 +141,22 @@ namespace OpenAstroAra.Test {
             await svc.StopAsync();
             await svc.StopAsync();
             Assert.That(svc.GetStatus().State, Is.EqualTo("stopped"));
+        }
+
+        [Test]
+        public async Task A_colour_camera_frame_is_rendered_debayered() {
+            // #1385: the solve frame's preview rendered a colour camera's mosaic as a grid. With the frame's Bayer
+            // pattern it goes through the super-pixel debayer and comes out half the width.
+            var solver = new ScriptedSolver(10) { FrameSize = 96, Bayer = "RGGB" };
+            using var svc = new RotationAssistService(solver, () => 1.0);
+            await svc.StartAsync(new RotationAssistStartRequestDto(10), CancellationToken.None);
+            var s = await WaitForSeq(svc, 1);
+            await svc.StopAsync();
+
+            Assert.That(s.HasFrame, Is.True);
+            var frame = svc.GetFrame();
+            Assert.That(frame, Is.Not.Null);
+            Assert.That(AutofocusSweepServiceTest.JpegWidth(frame!.Value.Jpeg.Span), Is.EqualTo(48), "super-pixel debayer: 96 → 48");
         }
 
         [Test]

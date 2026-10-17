@@ -37,10 +37,17 @@ public static partial class EquipmentEndpoints {
     /// <summary>#1364 — one live-view action: 204 on success; 409 when no guider is connected
     /// (InvalidOperationException), 400 for a bad position (ArgumentOutOfRangeException), 422 when the
     /// guider refused (GuiderRpcException — no image yet, no star near the tap, not looping).</summary>
-    internal static async Task<IResult> GuiderLiveActionAsync(Func<Task> action) {
+    internal static Task<IResult> GuiderLiveActionAsync(Func<Task> action) =>
+        GuiderLiveResultAsync<IResult>(async () => { await action(); return Results.NoContent(); });
+
+    /// <summary>The one refusal mapping for every live-view action: 400 ArgumentOutOfRange, 409
+    /// InvalidOperation (no guider), 422 GuiderRpcException (the guider refused). An action that
+    /// answers a body gets it wrapped in 200; <see cref="GuiderLiveActionAsync"/> answers 204
+    /// through the same catch list, so the two cannot drift apart.</summary>
+    internal static async Task<IResult> GuiderLiveResultAsync<T>(Func<Task<T>> action) {
         try {
-            await action();
-            return Results.NoContent();
+            var result = await action();
+            return result is IResult r ? r : Results.Ok(result);
         } catch (ArgumentOutOfRangeException ex) {
             return Results.Problem(ex.Message, statusCode: StatusCodes.Status400BadRequest);
         } catch (InvalidOperationException ex) when (ex is not ObjectDisposedException) {
@@ -554,6 +561,27 @@ public static partial class EquipmentEndpoints {
             .Produces<GuiderAdvancedViewDto>(StatusCodes.Status200OK)
             .WithName("GetGuiderAdvanced")
             .WithSummary("The guider's current advanced settings and its guide algorithms per axis.");
+        // #1364 item 4 — the Guiding Assistant (openastro-guider #83). Status is always 200 (Connected
+        // false when no guider, or one that does not know the method). Start/stop answer the status
+        // they leave the guider in; apply answers the names written. 409 no guider, 400 a duration or
+        // selection out of range, 422 the guider refused (no star, not calibrated, already running…).
+        guider.MapGet("/live/assistant", async (IGuiderLiveService live, CancellationToken ct) => Results.Ok(await live.GetGuidingAssistantAsync(ct)))
+            .Produces<GuidingAssistantStatusDto>(StatusCodes.Status200OK)
+            .WithName("GetGuidingAssistant")
+            .WithSummary("The Guiding Assistant's state, drift / seeing / backlash figures and recommendations.");
+        guider.MapPost("/live/assistant/start", ([FromBody] GuidingAssistantStartRequestDto request, IGuiderLiveService live, CancellationToken ct) =>
+                GuiderLiveResultAsync(() => live.StartGuidingAssistantAsync(request.DurationSec, request.MeasureBacklash, ct)))
+            .Produces<GuidingAssistantStatusDto>(StatusCodes.Status200OK).ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status409Conflict).ProducesProblem(StatusCodes.Status422UnprocessableEntity)
+            .WithName("StartGuidingAssistant").WithSummary("Measure unguided drift, seeing and (optionally) Dec backlash for duration_sec (10–3600, default 120).");
+        guider.MapPost("/live/assistant/stop", (IGuiderLiveService live, CancellationToken ct) => GuiderLiveResultAsync(() => live.StopGuidingAssistantAsync(ct)))
+            .Produces<GuidingAssistantStatusDto>(StatusCodes.Status200OK).ProducesProblem(StatusCodes.Status409Conflict).ProducesProblem(StatusCodes.Status422UnprocessableEntity)
+            .WithName("StopGuidingAssistant").WithSummary("End the measurement early; the figures so far stay readable.");
+        guider.MapPost("/live/assistant/apply", ([FromBody] GuidingAssistantApplyRequestDto request, IGuiderLiveService live, CancellationToken ct) =>
+                GuiderLiveResultAsync(async () => new GuidingAssistantApplyResultDto(await live.ApplyGuidingAssistantAsync(request.Which ?? Array.Empty<string>(), ct))))
+            .Produces<GuidingAssistantApplyResultDto>(StatusCodes.Status200OK).ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status409Conflict).ProducesProblem(StatusCodes.Status422UnprocessableEntity)
+            .WithName("ApplyGuidingAssistant").WithSummary("Write the chosen recommendations (exposure, min_move_ra, min_move_dec, dec_backlash, dec_guide_mode, dec_algorithm) to the guider's profile.");
         guider.MapPost("/live/deselect", (IGuiderLiveService live, CancellationToken ct) => GuiderLiveActionAsync(() => live.DeselectStarAsync(ct)))
             .Produces(StatusCodes.Status204NoContent).ProducesProblem(StatusCodes.Status409Conflict).ProducesProblem(StatusCodes.Status422UnprocessableEntity)
             .WithName("GuiderLiveDeselectStar").WithSummary("Drop the guider's selected star.");

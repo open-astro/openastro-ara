@@ -95,7 +95,9 @@ public sealed record FocusCalibrationSampleDto(
 /// 0 = none detected. Null when the probe could not measure (too few stars, no usable model) or on a calibration
 /// recorded before this field existed. Only the upward direction matters: every other move approaches from above.</param>
 /// <param name="BacklashVerified">True when a compensated upward move (best + <see cref="BacklashUpSteps"/>) landed back
-/// at the baseline HFR; Smart Focus compensates its upward shot only then.</param>
+/// at the baseline HFR. Recorded for the run record and the user only: since 2026-10-17 Smart Focus enters its + bracket
+/// shot from above (an overshoot of one bracket) and no longer compensates an upward move, so nothing acts on this
+/// pair (#1385 — the probe at the V's flat bottom verified 0 on a ZWO EAF that then landed ≈ 40 steps short).</param>
 public sealed record FocusCalibrationDto(
     IReadOnlyList<FocusCalibrationSampleDto> Samples,
     DateTimeOffset CalibratedUtc,

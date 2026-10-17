@@ -102,6 +102,28 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task An_analysis_frame_carries_the_bayer_pattern_only_at_bin_1() {
+            // #1385 — a 1×1 readout of an RGGB sensor is a raw mosaic (the autofocus metric equalises its phases
+            // and the preview debayers it); a binned readout is not one and must carry null, or a 2×2 coarse
+            // frame would be debayered as if it were a mosaic.
+            await using var box = ScriptedAlpacaDevice.Start(path =>
+                path.EndsWith("/imageready", StringComparison.Ordinal) ? "true"
+                : path.EndsWith("/imagearray", StringComparison.Ordinal) ? "[[100,200],[300,400]],\"Type\":2,\"Rank\":2"
+                : path.EndsWith("/sensortype", StringComparison.Ordinal) ? "2" // RGGB
+                : path.EndsWith("/bayeroffsetx", StringComparison.Ordinal) || path.EndsWith("/bayeroffsety", StringComparison.Ordinal) ? "0"
+                : path.EndsWith("/maxbinx", StringComparison.Ordinal) || path.EndsWith("/maxbiny", StringComparison.Ordinal) ? "2"
+                : null);
+            var ws = new RecordingBroadcaster();
+            using var svc = await ConnectedAsync(box, ws);
+
+            var bin1 = await svc.CaptureForAnalysisAsync(0.01, 1, CancellationToken.None);
+            var bin2 = await svc.CaptureForAnalysisAsync(0.01, 2, CancellationToken.None);
+
+            Assert.That(bin1.BayerPattern, Is.EqualTo("RGGB"));
+            Assert.That(bin2.BayerPattern, Is.Null);
+        }
+
+        [Test]
         public async Task A_capture_announces_its_start_and_ends_in_exactly_one_complete() {
             await using var box = Camera(() => true);
             var ws = new RecordingBroadcaster();

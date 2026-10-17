@@ -1020,6 +1020,70 @@ namespace OpenAstroAra.Test {
 
         /// <summary>Runs the routine against <paramref name="mount"/> with solvable seeds and
         /// returns the reason on its error event once it has failed.</summary>
+        /// <summary>A mount that reports AtPark until <see cref="ITelescopeMediator.UnparkTelescope"/> succeeds
+        /// (or forever when <paramref name="unparks"/> is false), recording the order of park and slew calls.</summary>
+        private static (Mock<ITelescopeMediator> Mount, List<string> Calls) ParkedMount(bool unparks) {
+            var mount = NewMount();
+            var parked = true;
+            var calls = new List<string>();
+            mount.Setup(m => m.GetInfo()).Returns(() => new TelescopeInfo {
+                Connected = true, SiderealTime = 0.0, TrackingEnabled = !parked, AtPark = parked,
+            });
+            mount.Setup(m => m.UnparkTelescope(It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()))
+                .Returns(() => {
+                    lock (calls) { calls.Add("unpark"); }
+                    parked = !unparks;
+                    return Task.FromResult(unparks);
+                });
+            var position = new Coordinates(0.0, 85.0, Epoch.JNOW, Coordinates.RAType.Degrees);
+            mount.Setup(m => m.GetCurrentPosition()).Returns(() => position);
+            mount.Setup(m => m.SlewToCoordinatesAsync(It.IsAny<Coordinates>(), It.IsAny<CancellationToken>()))
+                .Returns<Coordinates, CancellationToken>((target, _) => {
+                    lock (calls) { calls.Add("slew"); }
+                    if (parked) {
+                        return Task.FromResult(false); // the mediator refuses a slew while parked
+                    }
+                    position = target;
+                    return Task.FromResult(true);
+                });
+            return (mount, calls);
+        }
+
+        [Test]
+        public async Task A_parked_mount_is_unparked_before_the_seed_slew() {
+            // 2026-10-17: the mount had been parked a minute earlier; the routine solved its first frame and
+            // then failed with "the RA seed slew was rejected by the mount". A routine the user started to move
+            // the mount unparks it first.
+            var (mount, calls) = ParkedMount(unparks: true);
+            var paCalls = new ConcurrentQueue<bool>();
+            await using var fake = StartFake(paCalls);
+            using var guider = await ConnectGuiderAsync(fake).ConfigureAwait(false);
+            var solver = new ScriptedSolver();
+            solver.Enqueue(SolveA, SolveB);
+            using var svc = NewService(guider, solver, mount);
+
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
+            var status = await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(status.State, Is.EqualTo("adjusting"));
+            lock (calls) {
+                Assert.That(calls.Take(2), Is.EqualTo(UnparkThenSlew));
+            }
+        }
+
+        private static readonly string[] UnparkThenSlew = { "unpark", "slew" };
+
+        [Test]
+        public async Task A_mount_that_will_not_unpark_fails_as_mount_parked_before_any_slew() {
+            var (mount, calls) = ParkedMount(unparks: false);
+
+            Assert.That(await SeedFailureReasonAsync(mount).ConfigureAwait(false), Is.EqualTo("mount_parked"));
+            lock (calls) {
+                Assert.That(calls, Does.Not.Contain("slew"));
+            }
+        }
+
         private static async Task<string?> SeedFailureReasonAsync(Mock<ITelescopeMediator> mount) {
             var paCalls = new ConcurrentQueue<bool>();
             await using var fake = StartFake(paCalls);

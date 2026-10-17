@@ -625,6 +625,9 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
         if (!string.IsNullOrEmpty(marker.Direction)) {
             payload["direction"] = marker.Direction;
         }
+        if (!string.IsNullOrEmpty(marker.State)) {
+            payload["state"] = marker.State;
+        }
         return payload;
     }
 

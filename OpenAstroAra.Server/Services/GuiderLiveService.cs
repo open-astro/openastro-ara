@@ -45,6 +45,13 @@ public interface IGuiderLiveService {
     Task<GuiderAdvancedViewDto> GetAdvancedAsync(CancellationToken ct);
     /// <summary>#1364 item 5 — the guider's recent guide steps, oldest first, with their ages.</summary>
     Task<GuiderHistoryDto> GetHistoryAsync(int maxPoints, CancellationToken ct);
+    /// <summary>#1364 item 4 — the Guiding Assistant's state, figures and recommendations.</summary>
+    Task<GuidingAssistantStatusDto> GetGuidingAssistantAsync(CancellationToken ct);
+    /// <summary>Start the unguided measurement; the status it returns is the run's first.</summary>
+    Task<GuidingAssistantStatusDto> StartGuidingAssistantAsync(double? durationSec, bool measureBacklash, CancellationToken ct);
+    Task<GuidingAssistantStatusDto> StopGuidingAssistantAsync(CancellationToken ct);
+    /// <summary>Write the named recommendations to the guider's profile; returns what it applied.</summary>
+    Task<IReadOnlyList<string>> ApplyGuidingAssistantAsync(IReadOnlyList<string> which, CancellationToken ct);
 }
 
 /// <summary>
@@ -326,6 +333,93 @@ public sealed partial class GuiderLiveService : IGuiderLiveService {
             }
         }
         return ("good", null);
+    }
+
+    internal static readonly GuidingAssistantStatusDto AssistantDisconnected = MapGuidingAssistant(null, connected: false);
+
+    public async Task<GuidingAssistantStatusDto> GetGuidingAssistantAsync(CancellationToken ct) {
+        var guider = _guider.ConnectedGuiderOrNull();
+        if (guider is null) {
+            return AssistantDisconnected;
+        }
+        var raw = await Quietly<JObject?>(async () => await guider.GetGuidingAssistantStatusAsync(ct).ConfigureAwait(false), "guiding assistant").ConfigureAwait(false);
+        // A guider that does not answer (older build without the method) reads as disconnected: the
+        // dialog says "not available" rather than idle-and-ready.
+        return raw is null ? AssistantDisconnected : MapGuidingAssistant(raw, connected: true);
+    }
+
+    public async Task<GuidingAssistantStatusDto> StartGuidingAssistantAsync(double? durationSec, bool measureBacklash, CancellationToken ct) {
+        var raw = await _guider.RequireConnectedGuider().StartGuidingAssistantAsync(durationSec, measureBacklash, ct).ConfigureAwait(false);
+        return MapGuidingAssistant(raw, connected: true);
+    }
+
+    public async Task<GuidingAssistantStatusDto> StopGuidingAssistantAsync(CancellationToken ct) {
+        var raw = await _guider.RequireConnectedGuider().StopGuidingAssistantAsync(ct).ConfigureAwait(false);
+        return MapGuidingAssistant(raw, connected: true);
+    }
+
+    public Task<IReadOnlyList<string>> ApplyGuidingAssistantAsync(IReadOnlyList<string> which, CancellationToken ct) =>
+        _guider.RequireConnectedGuider().ApplyGuidingAssistantAsync(which, ct);
+
+    /// <summary>The guider's <c>guiding_assistant_get_status</c> result → DTO. Fields the guider left
+    /// out (idle; fewer than two samples; no backlash test; not done) are null, never 0. Pure — unit-tested.</summary>
+    internal static GuidingAssistantStatusDto MapGuidingAssistant(JObject? raw, bool connected) {
+        static double? Num(JToken? t) =>
+            t is { Type: JTokenType.Float or JTokenType.Integer } && double.IsFinite(t.Value<double>()) ? t.Value<double>() : null;
+        static bool? Flag(JToken? t) => t is { Type: JTokenType.Boolean } ? t.Value<bool>() : null;
+        static string? Str(JToken? t) => t is { Type: JTokenType.String } && !string.IsNullOrEmpty(t.Value<string>()) ? t.Value<string>() : null;
+        var state = Str(raw?["state"]) ?? "idle";
+        GuidingAssistantRecommendationsDto? recs = null;
+        if (raw?["recommendations"] is JObject r) {
+            var messages = new List<GuidingAssistantMessageDto>();
+            if (r["messages"] is JArray msgs) {
+                foreach (var m in msgs) {
+                    // A bare string in the array would throw on indexing a JValue; skip it.
+                    if (m is JObject mo && Str(mo["text"]) is string text) {
+                        messages.Add(new GuidingAssistantMessageDto(Str(mo["id"]) ?? "", text));
+                    }
+                }
+            }
+            recs = new GuidingAssistantRecommendationsDto(
+                MinMoveRaPx: Num(r["min_move_ra_px"]),
+                MinMoveDecPx: Num(r["min_move_dec_px"]),
+                MinMoveSeeingBased: Flag(r["min_move_seeing_based"]),
+                ExposureSec: Num(r["exposure_s"]),
+                ExposureMaxSec: Num(r["exposure_max_s"]),
+                DriftLimitingExposureSec: Num(r["drift_limiting_exposure_s"]),
+                DecBacklashMs: Num(r["dec_backlash_ms"]),
+                DecGuideMode: Str(r["dec_guide_mode"]),
+                DecAlgorithm: Str(r["dec_algorithm"]),
+                Messages: messages);
+        }
+        return new GuidingAssistantStatusDto(
+            Connected: connected,
+            State: state,
+            DurationSec: Num(raw?["duration_s"]),
+            MeasureBacklash: Flag(raw?["measure_backlash"]),
+            ElapsedSec: Num(raw?["elapsed_s"]),
+            Samples: Num(raw?["samples"]) is double n ? (int)Math.Clamp(n, 0, int.MaxValue) : null,
+            PixelScale: Num(raw?["pixel_scale"]),
+            RaDriftPxMin: Num(raw?["ra_drift_px_min"]),
+            DecDriftPxMin: Num(raw?["dec_drift_px_min"]),
+            RaRmsPx: Num(raw?["ra_rms_px"]),
+            DecRmsPx: Num(raw?["dec_rms_px"]),
+            HighFreqRmsPx: Num(raw?["high_freq_rms_px"]),
+            RaPeakPx: Num(raw?["ra_peak_px"]),
+            DecPeakPx: Num(raw?["dec_peak_px"]),
+            RaPeakPeakPx: Num(raw?["ra_peak_peak_px"]),
+            RaMaxDriftPxSec: Num(raw?["ra_max_drift_px_s"]),
+            Snr: Num(raw?["snr"]),
+            StarMass: Num(raw?["star_mass"]),
+            PolarAlignErrorArcmin: Num(raw?["polar_align_error_arcmin"]),
+            PolarAlignErrorIsLowerBound: Flag(raw?["polar_align_error_is_lower_bound"]),
+            BacklashStatus: Str(raw?["backlash_status"]),
+            BacklashResult: Str(raw?["backlash_result"]),
+            BacklashMs: Num(raw?["backlash_ms"]),
+            BacklashSigmaMs: Num(raw?["backlash_sigma_ms"]),
+            BacklashPx: Num(raw?["backlash_px"]),
+            Recommendations: recs,
+            Error: Str(raw?["error"]));
     }
 
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",

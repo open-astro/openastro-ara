@@ -422,6 +422,20 @@ The card now keeps a known device's card while it is not live: name, state chip,
 
 ---
 
+### 2026-10-17 — The Guiding Assistant from Ara (#1364 item 4)
+
+**Endpoint(s) or area:** new `GET /api/v1/equipment/guider/live/assistant`, `POST …/live/assistant/start`, `POST …/live/assistant/stop`, `POST …/live/assistant/apply`; WS `guider.event` gains kinds `guiding_assistant_progress` and `guiding_assistant_done` (payload `state`, `error?`).
+
+**Decision:** PHD2's Guiding Assistant runs headless in openastro-guider (#83: `guiding_assistant_start/stop/get_status/apply`); Ara drives it through the daemon, never client → guider (§63.20). `GET …/assistant` is always 200 with `GuidingAssistantStatusDto { connected, state, duration_sec?, measure_backlash?, elapsed_sec?, samples?, pixel_scale?, ra_drift_px_min?, dec_drift_px_min?, ra_rms_px?, dec_rms_px?, high_freq_rms_px?, ra_peak_px?, dec_peak_px?, ra_peak_peak_px?, ra_max_drift_px_sec?, snr?, star_mass?, polar_align_error_arcmin?, polar_align_error_is_lower_bound?, backlash_status?, backlash_result?, backlash_ms?, backlash_sigma_ms?, backlash_px?, recommendations?, error? }` — `state` is `idle` | `measuring` | `measuring_backlash` | `done` | `failed`; a figure the guider left out (idle; fewer than two samples; no backlash test) is null, never 0; `connected` is false (state `idle`) with no guider **or a guider that does not answer the method** (an older build), so the client says "not available" rather than "ready". `recommendations { min_move_ra_px, min_move_dec_px, min_move_seeing_based, exposure_sec, exposure_max_sec, drift_limiting_exposure_sec?, dec_backlash_ms?, dec_guide_mode?, dec_algorithm?, messages[{id, text}] }` is present once `done`. `POST …/start { duration_sec?, measure_backlash }` (duration 10–3600, null = the guider's 120 s default, sent as `duration_s` only when given) and `POST …/stop` answer the status they leave the guider in (200); `POST …/apply { which[] }` writes the named recommendations (`exposure`, `min_move_ra`, `min_move_dec`, `dec_backlash`, `dec_guide_mode`, `dec_algorithm`) to the guider's current profile and answers `{ applied[] }`. Refusals: 409 no guider; 400 a duration out of range or an empty `which`; 422 the guider refused, in its own words (no star selected, not calibrated, already running, a polar-alignment tool holding the star, dark build). The two WS kinds tell a client to re-read the status; the figures are never duplicated on the wire.
+
+**Reasoning:** the epic's last item: the measurement behind PHD2's min-move / exposure / backlash advice was reachable only from a desktop dialog; with the guider's headless RPC in place, Ara is the only screen needed.
+
+**Spec ref:** `OpenAstroAra.Server/openapi.yaml#/paths/~1api~1v1~1equipment~1guider~1live~1assistant` (…`~1start`, `~1stop`, `~1apply`); `Contracts/EquipmentDtos.cs` (`GuidingAssistantStatusDto`, `GuidingAssistantRecommendationsDto`, `GuidingAssistantStartRequestDto`, `GuidingAssistantApplyRequestDto`), `Services/GuiderLiveService.cs` (`MapGuidingAssistant`), `Equipment/MyGuider/PHD2/PHD2Guider.GuidingAssistant.cs`, `PHD2Methods.GuidingAssistant.cs`; client `widgets/imaging/guiding_assistant_dialog.dart`, `state/guider/guiding_assistant_state.dart`, `models/guiding_assistant.dart`.
+
+**Related:** #1364, openastro-guider #83; tests `GuiderLiveServiceTest` (mapping, refusals without a guider), `GuiderLiveFakeIntegrationTest` (the four methods over the wire, named params, 400/422, a silent older guider), `PHD2GuiderMarkerEventTest`, `GuiderStepPayloadTest`; client `guiding_assistant_dialog_test`, `guiding_assistant_test`.
+
+---
+
 ### 2026-10-16 — The guider's graph history for a client that connects mid-session (#1364 item 5)
 
 **Endpoint(s) or area:** new `GET /api/v1/equipment/guider/history?max_points=` (`GuiderHistoryDto`).
@@ -616,9 +630,11 @@ The run state carries `frames_captured` (int, default 0): the count of frames fi
 
 **Reasoning:** the playbook's layer 1 steps up through OUT corrections until HFR snaps back; inverting the sweep's own fitted V turns the one return shot into the distance directly, so the probe costs two or three frames instead of eight to ten. Backlash lives on `focus_calibration` rather than in the autofocus settings because it is derived data tied to the calibration's rig, invalidated by the same recalibrate. Layers 2 (passive refinement) and 3 (device-signature invalidation) are not in this change.
 
-**Spec ref:** `OpenAstroAra.Server/openapi.yaml#/components/schemas/FocusCalibrationDto`; `Services/AutofocusSweepService.Backlash.cs`, `Services/AutofocusSweepService.Smart.cs` (`BacklashCompensation`).
+**Spec ref:** `OpenAstroAra.Server/openapi.yaml#/components/schemas/FocusCalibrationDto`; `Services/AutofocusSweepService.Backlash.cs` (the probe that writes the pair).
 
 **Related:** #1139, §59.7, §59.2; tests `AutofocusBacklashProbeTest`, `SmartFocusRunnerTest`.
+
+**Addendum 2026-10-17 (#1385):** the fields are still measured and stored, but nothing compensates by them any more. The Smart bracket's + side, the one upward move, is now entered from above through an overshoot of one bracket (`AutofocusSweepService.Smart.cs`, `BracketMoves`), so no move depends on a measured backlash. The probe measures at the V's flat bottom, where it cannot see a shortfall: on 2026-10-17 it verified 0 on a ZWO EAF whose upward move then landed ≈ 40 steps short and the bracket read "no clear rise". `backlash_up_steps` / `backlash_verified` are informational (run record, client readout) until a later layer uses them.
 
 ---
 
@@ -942,6 +958,8 @@ is connected, straight from its GuideStep events):
         calibration_started | calibration_complete | calibration_failed { error? }
         calibrating         { direction, frame (= step), distance_px, dx_px, dy_px }  one per step
         guiding_started | guiding_stopped | paused | resumed | lock_position_lost
+        guiding_assistant_progress { state }                 one per Guiding Assistant sample / backlash step
+        guiding_assistant_done     { state, error? }         state = done | failed; figures via GET …/live/assistant
       A dither is drawn as dithered → (settling …) → settle_done; the client
       shades the settle window and marks the dither, exactly as PHD2 does.
   guider.pa_residual { id, status, started_utc, completed_utc?, sample_seconds,

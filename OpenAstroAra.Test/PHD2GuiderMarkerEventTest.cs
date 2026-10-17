@@ -118,6 +118,28 @@ namespace OpenAstroAra.Test {
         // ── Events that carry fields ──
 
         [Test]
+        public async Task Guiding_assistant_progress_and_done_relay_state_and_error() {
+            // #1364 item 4 — openastro-guider #83 pushes the status object on both; the marker keeps
+            // state and error only (the dialog re-reads the figures).
+            var progress = await PushAndReceive(Event("GuidingAssistantProgress", e => {
+                e["state"] = "measuring";
+                e["elapsed_s"] = 12.5;
+                e["samples"] = 6;
+            })).ConfigureAwait(false);
+            Assert.That(progress.Kind, Is.EqualTo("guiding_assistant_progress"));
+            Assert.That(progress.State, Is.EqualTo("measuring"));
+            Assert.That(progress.Error, Is.Null);
+
+            var done = await PushAndReceive(Event("GuidingAssistantDone", e => {
+                e["state"] = "failed";
+                e["error"] = "star lost";
+            })).ConfigureAwait(false);
+            Assert.That(done.Kind, Is.EqualTo("guiding_assistant_done"));
+            Assert.That(done.State, Is.EqualTo("failed"));
+            Assert.That(done.Error, Is.EqualTo("star lost"));
+        }
+
+        [Test]
         public async Task GuidingDithered_maps_dx_and_dy() {
             var marker = await PushAndReceive(Event("GuidingDithered", e => {
                 e["dx"] = 2.5;

@@ -12,6 +12,7 @@ import '../../state/settings/phd2_settings_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
 import '../fit_pane.dart';
+import '../imaging/guiding_assistant_dialog.dart';
 import 'focus_frame_view.dart';
 import 'focus_section.dart';
 import 'hfr_trend_chart.dart';
@@ -156,6 +157,18 @@ class _GuideFocusCardState extends ConsumerState<GuideFocusCard> {
             InlineNotice.info(blocker),
             const SizedBox(height: 16),
           ],
+          // #1364 item 4 — once focused, calibrated and guiding-ready, the
+          // Guiding Assistant tunes min-move, exposure and Dec backlash.
+          if (guiderConnected)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                key: const Key('guide-focus-assistant'),
+                onPressed: () => showGuidingAssistantDialog(context),
+                icon: const Icon(Icons.insights, size: 16),
+                label: const Text('Guiding Assistant…'),
+              ),
+            ),
           if (live.error != null || status.error != null) ...[
             InlineNotice.error(live.error ?? status.error!),
             const SizedBox(height: 16),

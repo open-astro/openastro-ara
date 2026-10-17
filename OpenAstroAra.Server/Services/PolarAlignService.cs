@@ -369,6 +369,25 @@ namespace OpenAstroAra.Server.Services {
 
         // ── the routine ──────────────────────────────────────────────────────────────────────
 
+        /// <summary>Unpark a parked mount before the routine moves it; fail as <c>mount_parked</c> when it
+        /// will not unpark.</summary>
+        private async Task UnparkIfParkedAsync(CancellationToken ct) {
+            if (_mount.GetInfo() is not { AtPark: true }) {
+                return;
+            }
+            LogUnparking();
+            bool unparked;
+            try {
+                unparked = await _mount.UnparkTelescope(new Progress<ApplicationStatus>(), ct).ConfigureAwait(false);
+            } catch (SequenceEntityFailedException ex) {
+                throw new RoutineFailedException("mount_parked", $"the mount is parked and could not be unparked: {ex.Message}");
+            }
+            if (!unparked || _mount.GetInfo() is { AtPark: true }) {
+                throw new RoutineFailedException("mount_parked",
+                    "the mount is parked and could not be unparked — unpark it from the mount controls, then start again");
+            }
+        }
+
         /// <summary>A fatal routine failure with a machine-readable reason for the WS error event
         /// (<c>seed_solve_failed</c>, <c>slew_failed</c>, …). Anything else that escapes the run
         /// task is reported as reason <c>internal_error</c>.</summary>
@@ -389,6 +408,12 @@ namespace OpenAstroAra.Server.Services {
             try {
                 Directory.CreateDirectory(workDir);
                 var north = site.LatitudeDeg > 0;
+
+                // ── unpark: the routine rotates the mount, and the mediator refuses every slew while it is
+                // parked. 2026-10-17 the mount had been parked a minute before; the first frame solved and
+                // the run then failed with "the RA seed slew was rejected by the mount". The user started a
+                // routine that moves the mount, so unpark it here, before anything else.
+                await UnparkIfParkedAsync(ct).ConfigureAwait(false);
 
                 // ── seed: frame A at the current pointing ──
                 var hintA = CurrentMountPointingJnow();
@@ -1137,5 +1162,8 @@ namespace OpenAstroAra.Server.Services {
 
         [LoggerMessage(EventId = 4522, Level = LogLevel.Information, Message = "§45 live frame fetch from the guider failed")]
         private partial void LogLiveFrameFetchFailed(Exception exception);
+
+        [LoggerMessage(EventId = 4523, Level = LogLevel.Information, Message = "§45 polar alignment: the mount is parked — unparking it before the seed slew")]
+        private partial void LogUnparking();
     }
 }

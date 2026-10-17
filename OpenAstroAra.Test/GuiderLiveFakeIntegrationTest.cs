@@ -165,6 +165,93 @@ namespace OpenAstroAra.Test {
             Assert.That(view.Verdict, Is.EqualTo("good"));
         }
 
+        private static readonly string[] ExposureAndMinMoveRa = ["exposure", "min_move_ra"];
+
+        [Test]
+        public async Task Guiding_assistant_start_status_apply_over_the_wire_and_refusals() {
+            // #1364 item 4 — openastro-guider #83's four methods through the daemon.
+            var received = new ConcurrentQueue<(string Method, JsonNode? Params)>();
+            var refuseStart = false;
+            var (fake, svc) = await ConnectedAsync(f => {
+                f.OnRpc("guiding_assistant_start", req => {
+                    received.Enqueue(("start", req["params"]?.DeepClone()));
+                    if (refuseStart) {
+                        throw new InvalidOperationException("no star selected - start looping and select a star first");
+                    }
+                    return new JsonObject { ["state"] = "measuring", ["duration_s"] = 90, ["measure_backlash"] = true, ["elapsed_s"] = 0.0, ["samples"] = 0, ["pixel_scale"] = 3.9 };
+                });
+                f.OnRpc("guiding_assistant_get_status", _ => new JsonObject {
+                    ["state"] = "done", ["duration_s"] = 90, ["measure_backlash"] = true, ["elapsed_s"] = 91.0, ["samples"] = 45, ["pixel_scale"] = 3.9,
+                    ["ra_drift_px_min"] = 0.5, ["dec_drift_px_min"] = -0.8, ["ra_rms_px"] = 0.3, ["dec_rms_px"] = 0.2, ["high_freq_rms_px"] = 0.15,
+                    ["polar_align_error_arcmin"] = 3.1, ["polar_align_error_is_lower_bound"] = true,
+                    ["recommendations"] = new JsonObject { ["min_move_ra_px"] = 0.15, ["min_move_dec_px"] = 0.15, ["min_move_seeing_based"] = true, ["exposure_s"] = 2.0, ["exposure_max_s"] = 3.0, ["messages"] = new JsonArray() },
+                });
+                f.OnRpc("guiding_assistant_stop", _ => new JsonObject { ["state"] = "done", ["elapsed_s"] = 30.0, ["samples"] = 15 });
+                f.OnRpc("guiding_assistant_apply", req => {
+                    received.Enqueue(("apply", req["params"]?.DeepClone()));
+                    return new JsonObject { ["applied"] = new JsonArray("exposure", "min_move_ra") };
+                });
+            }).ConfigureAwait(false);
+            await using var _ = fake;
+            using var __ = svc;
+            var live = new GuiderLiveService(svc, new NoFrames());
+
+            var started = await live.StartGuidingAssistantAsync(90, measureBacklash: true, CancellationToken.None).ConfigureAwait(false);
+            Assert.That((started.Connected, started.State, started.DurationSec, started.MeasureBacklash), Is.EqualTo((true, "measuring", 90.0, true)));
+            Assert.That(received.TryDequeue(out var start), Is.True);
+            Assert.That(start.Params!.ToJsonString(), Is.EqualTo("{\"duration_s\":90.0,\"measure_backlash\":true}"), "named params, the guider's snake_case");
+
+            var status = await live.GetGuidingAssistantAsync(CancellationToken.None).ConfigureAwait(false);
+            Assert.That((status.State, status.Samples, status.PolarAlignErrorArcmin, status.PolarAlignErrorIsLowerBound), Is.EqualTo(("done", 45, 3.1, true)));
+            Assert.That(status.Recommendations?.ExposureSec, Is.EqualTo(2.0));
+
+            var stopped = await live.StopGuidingAssistantAsync(CancellationToken.None).ConfigureAwait(false);
+            Assert.That((stopped.State, stopped.Samples), Is.EqualTo(("done", 15)));
+
+            var applied = await live.ApplyGuidingAssistantAsync(ExposureAndMinMoveRa, CancellationToken.None).ConfigureAwait(false);
+            Assert.That(applied, Is.EqualTo(ExposureAndMinMoveRa));
+            Assert.That(received.TryDequeue(out var apply), Is.True);
+            Assert.That(apply.Params!.ToJsonString(), Is.EqualTo("{\"which\":[\"exposure\",\"min_move_ra\"]}"));
+
+            // The default duration is the guider's: no duration_s on the wire.
+            await live.StartGuidingAssistantAsync(null, measureBacklash: false, CancellationToken.None).ConfigureAwait(false);
+            Assert.That(received.TryDequeue(out var defaults), Is.True);
+            Assert.That(defaults.Params!.ToJsonString(), Is.EqualTo("{\"measure_backlash\":false}"));
+
+            refuseStart = true;
+            var refused = await OpenAstroAra.Server.Endpoints.EquipmentEndpoints.GuiderLiveResultAsync(
+                () => live.StartGuidingAssistantAsync(null, false, CancellationToken.None)).ConfigureAwait(false);
+            Assert.That((refused as Microsoft.AspNetCore.Http.IStatusCodeHttpResult)?.StatusCode, Is.EqualTo(422), "the guider's refusal, in its words");
+            var badDuration = await OpenAstroAra.Server.Endpoints.EquipmentEndpoints.GuiderLiveResultAsync(
+                () => live.StartGuidingAssistantAsync(5, false, CancellationToken.None)).ConfigureAwait(false);
+            Assert.That((badDuration as Microsoft.AspNetCore.Http.IStatusCodeHttpResult)?.StatusCode, Is.EqualTo(400));
+            var emptyApply = await OpenAstroAra.Server.Endpoints.EquipmentEndpoints.GuiderLiveResultAsync(
+                () => live.ApplyGuidingAssistantAsync(Array.Empty<string>(), CancellationToken.None)).ConfigureAwait(false);
+            Assert.That((emptyApply as Microsoft.AspNetCore.Http.IStatusCodeHttpResult)?.StatusCode, Is.EqualTo(400));
+        }
+
+        [Test]
+        public async Task Guiding_assistant_on_a_guider_without_the_method_reads_disconnected_and_stays_quiet() {
+            var sink = new RecordingSink();
+            var previous = OpenAstroAra.Core.Utility.Notification.Notifier.Current;
+            OpenAstroAra.Core.Utility.Notification.Notifier.Use(sink);
+            try {
+                var (fake, svc) = await ConnectedAsync(f =>
+                    f.OnRpc("guiding_assistant_get_status", _ => throw new InvalidOperationException("method not found"))).ConfigureAwait(false);
+                await using var _ = fake;
+                using var __ = svc;
+                var status = await new GuiderLiveService(svc, new NoFrames()).GetGuidingAssistantAsync(CancellationToken.None).ConfigureAwait(false);
+                Assert.That(status.Connected, Is.False, "an older guider build has no assistant");
+                Assert.That(status.State, Is.EqualTo("idle"));
+                // Not Is.Empty: the sink is process-global and the bench job runs fixtures in parallel,
+                // so another test's notification (a dither out of range) can land here. What must be
+                // absent is OUR refusal, which notifyOnError:false keeps out of the inbox.
+                Assert.That(sink.Messages, Has.None.Contains("method not found"), "a polled read never raises an inbox error");
+            } finally {
+                OpenAstroAra.Core.Utility.Notification.Notifier.Use(previous);
+            }
+        }
+
         [Test]
         public async Task Clear_calibration_sends_mount_and_a_refusal_is_422() {
             var received = new ConcurrentQueue<JsonNode?>();

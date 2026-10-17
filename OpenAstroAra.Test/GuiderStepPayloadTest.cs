@@ -118,6 +118,10 @@ namespace OpenAstroAra.Test {
             Assert.That(lost["error"]!.GetValue<string>(), Is.EqualTo("low SNR"));
             Assert.DoesNotThrow(() => JsonNode.Parse(lost.ToJsonString()));
 
+            var assistant = GuiderService.BuildGuiderEventPayload(new PhdGuiderMarkerEventArgs { Kind = "guiding_assistant_done", State = "done" });
+            Assert.That(assistant["state"]!.GetValue<string>(), Is.EqualTo("done"));
+            Assert.That(dither.ContainsKey("state"), Is.False, "state is the assistant's field only");
+
             var calibrating = GuiderService.BuildGuiderEventPayload(new PhdGuiderMarkerEventArgs {
                 Kind = "calibrating", Direction = "North", Frame = 7, Distance = 11.9,
             });

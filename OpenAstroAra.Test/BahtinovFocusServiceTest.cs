@@ -36,6 +36,8 @@ namespace OpenAstroAra.Test {
         private sealed class ScriptedFrames : IAnalysisFrameSource {
             public readonly ConcurrentQueue<(double Offset, double Rotation)> Script = new();
             public (double Offset, double Rotation) Last = (0, 23);
+            /// <summary>The Bayer pattern the frames carry (null = mono), as CameraService stamps a 1×1 colour readout.</summary>
+            public string? Bayer;
             private int _seed;
 
             public async Task<AnalysisFrame> CaptureForAnalysisAsync(double exposureSec, int binning, CancellationToken ct) {
@@ -50,7 +52,7 @@ namespace OpenAstroAra.Test {
                 var pixels = double.IsNaN(offset)
                     ? SyntheticSky.Render(W, H, 1.6, stars: 40, frameSeed: ++_seed)
                     : SyntheticSky.RenderBahtinov(W, H, 330, 250, offset, 1.5 + Math.Abs(offset) / 3, rotationDeg: rotation, frameSeed: ++_seed);
-                return new AnalysisFrame(pixels, W, H, DateTimeOffset.UtcNow);
+                return new AnalysisFrame(pixels, W, H, DateTimeOffset.UtcNow, Bayer);
             }
         }
 
@@ -141,6 +143,23 @@ namespace OpenAstroAra.Test {
             Assert.That(s.ZoneFromOptics, Is.False);
             Assert.That(s.ZonePx, Is.EqualTo(BahtinovFocusService.FallbackZonePx));
             Assert.That(s.Latest.DefocusUm, Is.Null, "no optics, no micrometres");
+            await svc.StopAsync();
+        }
+
+        [Test]
+        public async Task The_whole_frame_preview_of_a_colour_camera_is_debayered() {
+            // #1385: the readout's picture of a colour camera's frame went through the renderer with no Bayer
+            // pattern and showed the colour-filter grid. A frame carrying one renders through the super-pixel
+            // debayer, half the width, like the autofocus preview.
+            var frames = new ScriptedFrames { Bayer = "RGGB" };
+            frames.Script.Enqueue((double.NaN, 0));
+            using var svc = new BahtinovFocusService(frames, () => RedCat);
+            await svc.StartAsync(new BahtinovFocusStartRequestDto(ExposureSec: 0.1), CancellationToken.None);
+            var s = await WaitForSeq(svc, 3);
+            Assert.That(s.HasFrame, Is.True);
+            var frame = svc.GetFrame();
+            Assert.That(frame, Is.Not.Null);
+            Assert.That(AutofocusSweepServiceTest.JpegWidth(frame!.Value.Jpeg.Span), Is.EqualTo(W / 2), "super-pixel debayer: 640 → 320");
             await svc.StopAsync();
         }
 

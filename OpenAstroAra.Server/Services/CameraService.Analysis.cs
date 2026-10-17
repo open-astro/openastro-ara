@@ -25,7 +25,9 @@ namespace OpenAstroAra.Server.Services;
 /// Deliberately NOT persisted: no §72 FITS write, no §28 catalog row — probe frames are
 /// instrument readings, not data the user ever revisits.
 /// </summary>
-public sealed record AnalysisFrame(ReadOnlyMemory<ushort> Pixels, int Width, int Height, DateTimeOffset CapturedAt);
+/// <param name="BayerPattern">The colour sensor's effective Bayer pattern (e.g. "RGGB") when the frame is a raw
+/// 1×1 mosaic, else null (mono, or a binned readout that no longer is one). Previews debayer by it.</param>
+public sealed record AnalysisFrame(ReadOnlyMemory<ushort> Pixels, int Width, int Height, DateTimeOffset CapturedAt, string? BayerPattern = null);
 
 /// <summary>
 /// §59 — the capture seam the autofocus sweep measures through. Implemented by
@@ -178,7 +180,13 @@ public sealed partial class CameraService : IAnalysisFrameSource {
             }
             var (pixels, width, height, capturedAt) = exposed.Value;
             LogUnpersistedCaptureComplete(kind, frameId, width, height, exposureSec);
-            return new AnalysisFrame(pixels, width, height, capturedAt);
+            // A 1×1 readout of a colour sensor is a Bayer mosaic (same rule as live view and BAYERPAT stamping);
+            // carry the pattern so previews of the frame debayer instead of showing the colour-filter grid.
+            string? bayer;
+            lock (_gate) {
+                bayer = request.BinX == 1 && request.BinY == 1 ? _capabilities?.BayerPattern : null;
+            }
+            return new AnalysisFrame(pixels, width, height, capturedAt, bayer);
         } finally {
             Interlocked.Exchange(ref _captureInFlight, 0);
             RefreshCacheOnce();

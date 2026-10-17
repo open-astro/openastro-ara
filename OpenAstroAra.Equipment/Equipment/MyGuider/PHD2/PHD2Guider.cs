@@ -1261,6 +1261,22 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                         RaiseMarker(new PhdGuiderMarkerEventArgs { Kind = "paused" });
                         break;
                     }
+                case "GuidingAssistantProgress":
+                case "GuidingAssistantDone": {
+                        // #1364 item 4 — the headless Guiding Assistant (openastro-guider #83): one
+                        // Progress per unguided sample / backlash step, then Done. Both carry the status
+                        // object; the marker relays only state and error, so the payload stays small.
+                        // The figures are read with guiding_assistant_get_status (the client's dialog
+                        // polls it; a WS subscriber can use these kinds as its cue to re-read).
+                        var state = message["state"]?.ToString();
+                        var error = message["error"]?.ToString();
+                        RaiseMarker(new PhdGuiderMarkerEventArgs {
+                            Kind = phdevent == "GuidingAssistantDone" ? "guiding_assistant_done" : "guiding_assistant_progress",
+                            State = string.IsNullOrEmpty(state) ? null : state,
+                            Error = string.IsNullOrEmpty(error) ? null : error,
+                        });
+                        break;
+                    }
                 case "StartCalibration": {
                         AppState = new PhdEventAppState() { State = "Calibrating" };
                         Calibration = null;

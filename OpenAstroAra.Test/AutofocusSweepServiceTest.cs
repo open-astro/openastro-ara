@@ -1109,5 +1109,465 @@ namespace OpenAstroAra.Test {
             var even = points.Select(p => p with { StarCount = 50 }).ToList();
             Assert.That(AutofocusSweepService.TrimThinWings(even, 5), Has.Count.EqualTo(even.Count), "nothing thin, nothing dropped");
         }
+
+        // ---- 2026-10-17 rig run (ASI533MC Pro + ZWO EAF through AlpacaBridge, travel 0..23000, start 100). ----
+        // Fine (full-resolution) probes as the rig logged them, keyed by focuser position: 0..900 from the
+        // first sweep, 930..1350 from the re-sweep. From 540 up every frame read HFR ≈ 1.21 on 9-15 "stars",
+        // below anything measured near real focus (≈ 1.27 at 210), although the binned coarse probe at 550
+        // read 11.6 native px: whatever full resolution detected there was not the defocused star field.
+        private static readonly Dictionary<int, (double Hfr, int Stars)> Rig20261017Fine = new() {
+            [0] = (1.717, 19), [30] = (1.770, 14), [60] = (1.891, 11), [90] = (1.859, 18), [120] = (1.922, 19),
+            [150] = (1.625, 23), [180] = (1.300, 28), [210] = (1.269, 25), [240] = (1.490, 26), [270] = (1.700, 27),
+            [300] = (1.654, 20), [330] = (1.938, 14), [360] = (2.117, 14), [390] = (1.750, 12), [420] = (1.718, 14),
+            [450] = (1.810, 14), [480] = (2.138, 15), [510] = (1.322, 17), [540] = (1.214, 11), [570] = (1.213, 10),
+            [600] = (1.227, 11), [630] = (1.223, 11), [660] = (1.208, 9), [690] = (1.210, 9), [720] = (1.215, 10),
+            [750] = (1.211, 10), [780] = (1.216, 10), [810] = (1.222, 11), [840] = (1.220, 11), [870] = (1.231, 12),
+            [900] = (1.198, 9), [930] = (1.212, 10), [960] = (1.213, 10), [990] = (1.215, 10), [1020] = (1.212, 10),
+            [1050] = (1.205, 9), [1080] = (1.229, 12), [1110] = (1.225, 11), [1140] = (1.218, 11), [1170] = (1.217, 10),
+            [1200] = (1.217, 10), [1230] = (1.211, 10), [1260] = (1.214, 10), [1290] = (1.225, 11), [1320] = (1.241, 14),
+            [1350] = (1.214, 10),
+        };
+
+        /// <summary>The rig only measured the binned coarse metric at 100 (4.74) and 550 (11.59); this V through
+        /// both points (floor 4, focus near 140) stands in for the positions it never measured.</summary>
+        private static double Rig20261017Coarse(int position) => 4.0 + 0.0185 * Math.Abs(position - 140);
+
+        [Test]
+        public async Task Defocused_plateau_from_the_2026_10_17_rig_run_neither_re_centres_into_it_nor_settles_there() {
+            var position = 100;
+            var moves = new List<int>();
+            var focuser = new Mock<IFocuserMediator>();
+            focuser.Setup(f => f.GetInfo()).Returns(() => new FocuserInfo { Connected = true, Position = position, Temperature = double.NaN });
+            focuser.Setup(f => f.MoveFocuser(It.IsAny<int>(), It.IsAny<CancellationToken>()))
+                .Returns<int, CancellationToken>((p, _) => { position = p; moves.Add(p); return Task.FromResult(p); });
+            var profiles = Profiles(Settings(steps: 15, stepSize: 30, restore: true, stepSizeAuto: false));
+            using var svc = new AutofocusSweepService(
+                profiles.Object, focuser.Object, Frames().Object,
+                metric: (_, _) => Rig20261017Fine.TryGetValue(position, out var probe) ? Result(probe.Hfr, probe.Stars) : Result(0, 0),
+                coarseMetric: (_, _) => Rig20261017Coarse(position),
+                travelRange: _ => Task.FromResult<(int Min, int Max)?>((0, 23_000)));
+
+            var ok = await svc.RunAutofocusAsync(NoProgress, CancellationToken.None);
+
+            // Even without the plateau the near-focus probes are too noisy for a trustworthy V, so the honest
+            // outcome is a loud failure back at the start, not a "completed" run at a defocused position.
+            Assert.That(moves.Max(), Is.LessThanOrEqualTo(930), "no re-sweep into the plateau above the first window (top 900 + overshoot)");
+            Assert.That(ok, Is.False, "the rig run settled at 1014 with R² 0.59, deep in the defocused plateau");
+            Assert.That(position, Is.EqualTo(100), "restore-on-failure returns to the starting position");
+            profiles.Verify(p => p.PutFocusCalibration(It.IsAny<FocusCalibrationDto?>()), Times.Never,
+                "a failed run must not store a curve width, backlash or Smart Focus samples");
+        }
+
+        [Test]
+        public async Task Probes_the_binned_frame_shows_far_from_focus_are_dropped_so_a_false_low_plateau_cannot_win() {
+            // A clean V at 200 (the in-focus floor 1.5), but from 500 up the full-resolution detector reads a
+            // false HFR 1.2 on ten "stars" (the 2026-10-17 shape); the binned measurement still sees the real
+            // defocus there. Dropping those probes leaves the V to the fit.
+            const int best = 200;
+            var position = 100;
+            var moves = new List<int>();
+            var focuser = new Mock<IFocuserMediator>();
+            focuser.Setup(f => f.GetInfo()).Returns(() => new FocuserInfo { Connected = true, Position = position, Temperature = double.NaN });
+            focuser.Setup(f => f.MoveFocuser(It.IsAny<int>(), It.IsAny<CancellationToken>()))
+                .Returns<int, CancellationToken>((p, _) => { position = p; moves.Add(p); return Task.FromResult(p); });
+            using var svc = new AutofocusSweepService(
+                Profiles(Settings(steps: 15, stepSize: 30, stepSizeAuto: false)).Object, focuser.Object, Frames().Object,
+                metric: (_, _) => {
+                    if (position >= 500) {
+                        return Result(1.2, 10);
+                    }
+                    var delta = (position - best) / 100.0;
+                    return Result(1.5 + 0.4 * delta * delta, 30);
+                },
+                coarseMetric: (_, _) => 4.0 + 0.0185 * Math.Abs(position - best),
+                travelRange: _ => Task.FromResult<(int Min, int Max)?>((0, 23_000)));
+
+            var ok = await svc.RunAutofocusAsync(NoProgress, CancellationToken.None);
+
+            Assert.That(ok, Is.True);
+            Assert.That(position, Is.EqualTo(best).Within(30));
+            Assert.That(moves.Max(), Is.LessThanOrEqualTo(930), "no re-sweep toward the plateau");
+        }
+
+        [Test]
+        public async Task A_fit_that_explains_too_little_of_the_curve_fails_instead_of_moving_there() {
+            // Every probe measurable, but alternating ±0.3 HFR noise swamps a shallow V: the parabola still
+            // opens upward with its vertex inside the sweep, yet it explains well under the R² floor.
+            var (focuser, moves) = Focuser();
+            int Current() => moves.Count == 0 ? StartPosition : moves[^1];
+            var profiles = Profiles(Settings(steps: 4, stepSize: 100, restore: true, stepSizeAuto: false));
+            using var svc = new AutofocusSweepService(
+                profiles.Object, focuser.Object, Frames().Object,
+                metric: (_, _) => {
+                    var delta = (Current() - StartPosition - 50) / 100.0;
+                    var noise = (Math.Abs(Current() - StartPosition) / 100) % 2 == 0 ? 0.3 : -0.3;
+                    return Result(1.5 + 0.03 * delta * delta + noise, 42);
+                });
+
+            var ok = await svc.RunAutofocusAsync(NoProgress, CancellationToken.None);
+
+            Assert.That(ok, Is.False);
+            Assert.That(Current(), Is.EqualTo(StartPosition));
+            profiles.Verify(p => p.PutFocusCalibration(It.IsAny<FocusCalibrationDto?>()), Times.Never);
+        }
+
+        [Test]
+        public async Task Edge_re_centre_follows_the_probes_the_fit_used_not_a_thin_wing() {
+            // Focus 550 above the start, beyond the first ±400 sweep's top edge. The bottom probe saw only 3
+            // stars against 42 elsewhere and reads a spuriously low HFR: the thin-wing trim keeps it out of the
+            // fit, and the re-centre must ignore it too, or the re-sweep heads down, away from focus.
+            var (focuser, moves) = Focuser();
+            int Current() => moves.Count == 0 ? StartPosition : moves[^1];
+            using var svc = new AutofocusSweepService(
+                Profiles(Settings(steps: 4, stepSize: 100, stepSizeAuto: false)).Object, focuser.Object, Frames().Object,
+                metric: (_, _) => {
+                    if (Current() == StartPosition - 400) {
+                        return Result(0.5, 3);
+                    }
+                    var delta = (Current() - StartPosition - 550) / 100.0;
+                    return Result(1.5 + 0.2 * delta * delta, 42);
+                });
+
+            var ok = await svc.RunAutofocusAsync(NoProgress, CancellationToken.None);
+
+            Assert.That(ok, Is.True);
+            Assert.That(Current(), Is.EqualTo(StartPosition + 550).Within(30));
+        }
+
+        [Test]
+        public async Task Coarse_search_keeps_a_start_already_in_focus_when_binning_loses_its_sharp_stars() {
+            // 2026-10-17, narrowband (L-eNhance) filter: a refocus started at focus, where the faint, sharp
+            // stars vanish once the frame is binned 8× (coarse metric +∞) although full resolution measures
+            // them. Treated as "worse than anything", the coarse walk left focus for the finite reading above
+            // and the fine sweep had to re-centre. Both neighbours measurable means the start lies between
+            // them, inside the V: keep it.
+            var (focuser, moves) = Focuser();
+            int Current() => moves.Count == 0 ? StartPosition : moves[^1];
+            using var svc = new AutofocusSweepService(
+                Profiles(Settings(steps: 4, stepSize: 100, stepSizeAuto: false)).Object, focuser.Object, Frames().Object,
+                metric: VCurveMetric(Current, StartPosition),
+                coarseMetric: (_, _) => Math.Abs(Current() - StartPosition) < 100 ? double.PositiveInfinity : 2.0 + Math.Abs(Current() - StartPosition) / 50.0);
+
+            var ok = await svc.RunAutofocusAsync(NoProgress, CancellationToken.None);
+
+            Assert.That(ok, Is.True);
+            Assert.That(moves.GetRange(0, 4), Is.EqualTo(SharpStartMoves),
+                "start, both neighbours, then the fine sweep's overshoot above a sweep centred on the start");
+            Assert.That(Current(), Is.EqualTo(StartPosition).Within(30));
+        }
+
+        [Test]
+        public async Task Coarse_search_does_not_mistake_a_start_too_defocused_to_bin_for_focus() {
+            // The other way +∞ happens: a start so far out that even the binned discs are lost, with full
+            // resolution finding a few spurious blobs. Its far neighbour is lost too, so it is not bracketed and
+            // the walk still heads toward the measurable side.
+            const int best = StartPosition - 2000;
+            var (focuser, moves) = Focuser();
+            int Current() => moves.Count == 0 ? StartPosition : moves[^1];
+            using var svc = new AutofocusSweepService(
+                Profiles(Settings(steps: 4, stepSize: 100, stepSizeAuto: false)).Object, focuser.Object, Frames().Object,
+                metric: (_, _) => {
+                    var off = Math.Abs(Current() - best);
+                    if (off > 600) {
+                        return Result(1.1, 5); // spurious blobs, the 2026-10-17 plateau shape
+                    }
+                    var delta = (Current() - best) / 100.0;
+                    return Result(1.5 + 0.2 * delta * delta, 42);
+                },
+                coarseMetric: (_, _) => Math.Abs(Current() - best) > 1800 ? double.PositiveInfinity : 2.0 + Math.Abs(Current() - best) / 50.0);
+
+            var ok = await svc.RunAutofocusAsync(NoProgress, CancellationToken.None);
+
+            Assert.That(ok, Is.True);
+            Assert.That(Current(), Is.EqualTo(best).Within(30));
+        }
+
+        private static readonly int[] PlateauDropped = { 796, 760, 724, 688, 652, 616 };
+        private static readonly int[] SharpStartMoves = { StartPosition, StartPosition + 400, StartPosition - 400, StartPosition + 500 };
+
+        [Test]
+        public void FalsePlateauProbes_drops_the_plateau_but_keeps_genuine_wings_from_the_2026_10_17_runs() {
+            // 10 s re-sweep: genuine wings (full-resolution HFR stops growing near 2.5-3.7) around a 1.22 minimum,
+            // binned +∞ at 216 and 180 where the sharp narrowband stars average away.
+            var wings = new List<(int Pos, double Hfr, int Stars, double Binned)> {
+                (576, 3.746, 8, 12.8), (540, 3.531, 5, 11.77), (504, 2.759, 6, 10.23), (468, 2.479, 8, 9.17),
+                (432, 2.616, 12, 8.0), (396, 3.601, 7, 7.05), (360, 3.455, 6, 6.13), (324, 2.247, 13, 5.12),
+                (288, 2.021, 19, 4.3), (252, 1.491, 23, 4.39), (216, 1.223, 28, double.PositiveInfinity),
+                (180, 1.485, 22, double.PositiveInfinity), (144, 2.272, 13, 4.13), (108, 2.793, 12, 4.78),
+                (72, 2.469, 13, 6.21), (36, 2.826, 9, 6.61), (0, 2.621, 9, 6.92),
+            };
+            Assert.That(AutofocusSweepService.FalsePlateauProbes(
+                wings.Select(w => new FocusPoint(w.Pos, w.Hfr, w.Stars)).ToList(), wings.Select(w => w.Binned).ToList()),
+                Is.Empty, "every far probe reads well above the 1.22 minimum: real wings");
+
+            // 10 s first sweep: the false plateau (3-8 "stars" at 1.14-1.45) far out, the V near 220.
+            var plateau = new List<(int Pos, double Hfr, int Stars, double Binned)> {
+                (796, 1.140, 3, 21.81), (760, 1.451, 4, 20.6), (724, 1.135, 3, 19.33), (688, 1.139, 3, 17.69),
+                (652, 1.142, 3, 16.78), (616, 1.281, 8, 15.24), (580, 2.899, 12, 13.29), (544, 3.905, 4, 11.95),
+                (508, 3.579, 4, 10.69), (472, 2.531, 7, 9.24), (436, 2.725, 11, 8.05), (400, 3.558, 7, 7.14),
+                (364, 2.705, 11, 6.34), (328, 2.420, 13, 5.13), (292, 2.197, 13, 4.5), (256, 1.567, 21, 4.21),
+                (220, 1.216, 33, double.PositiveInfinity),
+            };
+            var dropped = AutofocusSweepService.FalsePlateauProbes(
+                plateau.Select(p => new FocusPoint(p.Pos, p.Hfr, p.Stars)).ToList(), plateau.Select(p => p.Binned).ToList());
+            Assert.That(dropped.Select(k => plateau[k].Pos), Is.EquivalentTo(PlateauDropped),
+                "the probes reading as sharp as focus with the binned frame far out go; 580 and in are wing");
+            Assert.That(dropped, Is.Ordered.Descending, "removable in order");
+        }
+
+        // The 2026-10-17 22:10 re-sweep (L-eNhance, 10 s): a clean V around 216 whose full-resolution HFR stops
+        // growing about 150 steps out and scatters at 2.3-3.8.
+        private static readonly (int Pos, double Hfr, int Stars)[] Rig20261017Sweep = {
+            (576, 3.001, 13), (540, 3.840, 4), (504, 3.079, 5), (468, 2.286, 9), (432, 2.809, 13), (396, 3.236, 8),
+            (360, 2.695, 12), (324, 2.304, 12), (288, 1.858, 16), (252, 1.451, 20), (216, 1.245, 32), (180, 1.489, 25),
+            (144, 2.139, 12), (108, 2.744, 11), (72, 3.299, 9), (36, 2.819, 10), (0, 2.681, 11),
+        };
+
+        [Test]
+        public void MeasuredHalfWidth_reads_the_doubling_distance_off_the_probes_not_the_flattened_model() {
+            var points = Rig20261017Sweep.Select(p => new FocusPoint(p.Pos, p.Hfr, p.Stars)).ToList();
+            // 2 × 1.245 = 2.49: crossed between 324 and 360 above (≈ 127 out) and between 144 and 108 below (≈ 95).
+            Assert.That(AutofocusSweepService.MeasuredHalfWidth(points), Is.EqualTo(111).Within(5));
+            Assert.That(AutofocusSweepService.MeasuredHalfWidth(points.Where(p => p.Hfr < 2.4).ToList()), Is.Null,
+                "a sweep that never reaches twice the minimum has nothing to read");
+        }
+
+        [Test]
+        public async Task An_automatic_step_sized_from_a_too_wide_stored_width_shrinks_itself_and_stores_the_measured_width() {
+            // The stored width (192, from a fit dragged wide by flat wings) gives step 36 over 8 steps a side:
+            // half the probes land where the V has gone flat and noisy, and the fit fails. Automatic sizing must
+            // recover on its own: re-sweep at the step the probes themselves measure, then store that width.
+            const int best = 216;
+            var position = 220;
+            var moves = new List<int>();
+            var focuser = new Mock<IFocuserMediator>();
+            focuser.Setup(f => f.GetInfo()).Returns(() => new FocuserInfo { Connected = true, Position = position, Temperature = double.NaN });
+            focuser.Setup(f => f.MoveFocuser(It.IsAny<int>(), It.IsAny<CancellationToken>()))
+                .Returns<int, CancellationToken>((p, _) => { position = p; moves.Add(p); return Task.FromResult(p); });
+            var store = new InMemoryProfileStore();
+            store.PutAutofocusSettings(Settings(steps: 8, stepSize: 30, stepSizeAuto: true));
+            store.PutFocusCalibration(new FocusCalibrationDto(
+                Samples: new[] { new FocusCalibrationSampleDto(9_000, 30, 2.0, 4.0, 0.9, 8.0, 0, 0, 0, 0) },
+                CalibratedUtc: DateTimeOffset.UtcNow, FocuserTemperatureC: null, Filter: null, CurveHalfWidthSteps: 192.4));
+            using var svc = new AutofocusSweepService(
+                store, focuser.Object, Frames().Object,
+                metric: (_, _) => {
+                    var d = position - best;
+                    if (Math.Abs(d) > 150) {
+                        var flat = (position / 36) % 2 == 0 ? 2.4 : 3.6; // flat, noisy wings
+                        return Result(flat, 9, FeatureStars(9, flat));
+                    }
+                    var hfr = 1.25 * Math.Sqrt(1 + Math.Pow(d / 64.0, 2)); // doubles ≈ 111 out
+                    return Result(hfr, 30, FeatureStars(12, hfr));
+                },
+                coarseMetric: (_, _) => Math.Abs(position - best) < 50 ? double.PositiveInfinity : 4.0 + 0.03 * Math.Abs(position - best),
+                travelRange: _ => Task.FromResult<(int Min, int Max)?>((0, 23_000)));
+
+            var ok = await svc.RunAutofocusAsync(NoProgress, CancellationToken.None);
+
+            Assert.That(ok, Is.True);
+            Assert.That(position, Is.EqualTo(best).Within(25));
+            Assert.That(store.GetFocusCalibration()!.CurveHalfWidthSteps, Is.LessThan(150),
+                "the next automatic sweep is sized from the V the probes measured, not the flattened fit");
+        }
+
+        [Test]
+        public async Task A_completed_sweep_stores_the_probe_measured_width_when_the_fit_reads_wider() {
+            // A sky whose HFR grows linearly with defocus (1.5 + |d|/50, doubling 75 steps out). The hyperbolic
+            // and parabolic models both round that corner off and reach twice their minimum further out than
+            // the probes do; the stored width must be the probes', so the next automatic sweep is not sized wide.
+            const int best = 10_000;
+            var position = 10_000;
+            var moves = new List<int>();
+            var focuser = new Mock<IFocuserMediator>();
+            focuser.Setup(f => f.GetInfo()).Returns(() => new FocuserInfo { Connected = true, Position = position, Temperature = double.NaN });
+            focuser.Setup(f => f.MoveFocuser(It.IsAny<int>(), It.IsAny<CancellationToken>()))
+                .Returns<int, CancellationToken>((p, _) => { position = p; moves.Add(p); return Task.FromResult(p); });
+            var store = new InMemoryProfileStore();
+            store.PutAutofocusSettings(Settings(steps: 4, stepSize: 40, stepSizeAuto: false));
+            var probes = new List<FocusPoint>();
+            var posted = new List<NotificationDto>();
+            var notifications = new Mock<INotificationService>();
+            notifications.Setup(n => n.CreateAsync(It.IsAny<NotificationDto>(), It.IsAny<CancellationToken>()))
+                .Returns<NotificationDto, CancellationToken>((d, _) => { posted.Add(d); return Task.CompletedTask; });
+            using var svc = new AutofocusSweepService(
+                store, focuser.Object, Frames().Object,
+                metric: (_, _) => {
+                    var hfr = 1.5 + Math.Abs(position - best) / 50.0;
+                    probes.Add(new FocusPoint(position, hfr, 30));
+                    return Result(hfr, 30, FeatureStars(12, hfr));
+                },
+                coarseMetric: (_, _) => Math.Abs(position - best) < 50 ? double.PositiveInfinity : 4.0 + 0.03 * Math.Abs(position - best),
+                notifications: notifications.Object);
+
+            var ok = await svc.RunAutofocusAsync(NoProgress, CancellationToken.None);
+
+            Assert.That(ok, Is.True, string.Join(" | ", posted.Select(n => n.Message)));
+            var measured = AutofocusSweepService.MeasuredHalfWidth(probes.Where(p => Math.Abs(p.Position - best) <= 160).ToList());
+            var fit = FocusCurveFit.FitBest(probes.Where(p => Math.Abs(p.Position - best) <= 160).ToList());
+            var model = AutofocusSweepService.CurveHalfWidth(fit!, best - 160, best + 160);
+            Assert.That(model, Is.GreaterThan(measured!.Value + 5), "precondition: the fitted curve reads wider than the probes");
+            Assert.That(store.GetFocusCalibration()!.CurveHalfWidthSteps, Is.EqualTo(measured.Value).Within(1.0),
+                "the narrower, probe-measured width is stored");
+        }
+
+        [Test]
+        public async Task Coarse_search_keeps_a_sharp_start_near_the_travel_stop() {
+            // Focus 120 above the travel stop with a ±400 half-width: the lower neighbour would be at -280, so the
+            // bracket is checked at the stop itself (0) instead of giving up on it.
+            const int best = 120;
+            var position = best;
+            var moves = new List<int>();
+            var focuser = new Mock<IFocuserMediator>();
+            focuser.Setup(f => f.GetInfo()).Returns(() => new FocuserInfo { Connected = true, Position = position, Temperature = double.NaN });
+            focuser.Setup(f => f.MoveFocuser(It.IsAny<int>(), It.IsAny<CancellationToken>()))
+                .Returns<int, CancellationToken>((p, _) => { position = p; moves.Add(p); return Task.FromResult(p); });
+            using var svc = new AutofocusSweepService(
+                Profiles(Settings(steps: 4, stepSize: 100, stepSizeAuto: false)).Object, focuser.Object, Frames().Object,
+                metric: (_, _) => Result(1.5 + 0.2 * Math.Pow((position - best) / 100.0, 2), 42),
+                coarseMetric: (_, _) => Math.Abs(position - best) < 60 ? double.PositiveInfinity : 2.0 + Math.Abs(position - best) / 50.0,
+                travelRange: _ => Task.FromResult<(int Min, int Max)?>((0, 23_000)));
+
+            var ok = await svc.RunAutofocusAsync(NoProgress, CancellationToken.None);
+
+            Assert.That(ok, Is.True);
+            Assert.That(moves.GetRange(0, 3), Is.EqualTo(SharpStartAtStopMoves), "start, the neighbour above, then the stop below");
+            Assert.That(moves.Take(4).Max(), Is.LessThan(best + 800), "no walk away from focus");
+            Assert.That(position, Is.EqualTo(best).Within(30));
+        }
+
+        private static readonly int[] SharpStartAtStopMoves = { 120, 520, 0 };
+
+        [Test]
+        public void FalsePlateauProbes_spares_a_near_focus_probe_whose_binned_reading_spiked() {
+            // 2026-10-17 22:24, step 20: as focus nears, the binned frame starts losing stars and two readings
+            // spiked (9.17 at 281, 11.8 at 261) between ordinary ones (4.5 at 301, +∞ at 241). 261 read 1.63 on
+            // 23 stars, a real probe on the V, and was dropped. The plateau is contiguous out to the sweep edge;
+            // a spike with in-gate readings beyond it is not.
+            var probes = new List<(int Pos, double Hfr, int Stars, double Binned)> {
+                (381, 3.304, 7, 6.28), (361, 2.733, 9, 6.01), (341, 2.994, 9, 5.98), (321, 2.350, 12, 4.91),
+                (301, 2.034, 16, 4.5), (281, 1.962, 14, 9.17), (261, 1.634, 23, 11.8), (241, 1.388, 23, double.PositiveInfinity),
+                (221, 1.247, 45, double.PositiveInfinity), (201, 1.304, 34, double.PositiveInfinity), (181, 1.414, 28, 4.05),
+                (161, 1.917, 14, 5.65), (141, 2.159, 12, 5.96), (121, 2.803, 9, 5.25), (101, 2.776, 11, 5.3),
+                (81, 2.992, 9, 5.87), (61, 2.250, 15, 6.46),
+            };
+            Assert.That(AutofocusSweepService.FalsePlateauProbes(
+                probes.Select(p => new FocusPoint(p.Pos, p.Hfr, p.Stars)).ToList(), probes.Select(p => p.Binned).ToList()),
+                Is.Empty);
+        }
+
+        /// <summary>A one-shot-colour frame shaped like the 2026-10-17 ASI533MC Pro + L-eNhance light at offset
+        /// 50: R background 2073, G 2004, B 3796 (per-colour noise 6-12 ADU), with 100 faint stars of peak
+        /// 60-250 ADU on a 10 × 10 grid.</summary>
+        private static AnalysisFrame UnevenBayerFrame(int size = 1000) {
+            var pixels = new ushort[size * size];
+            // Deterministic noise from a tiny LCG (System.Random trips CA5394; test-only pseudo-noise).
+            uint state = 1017;
+            double Next() { state = state * 1664525u + 1013904223u; return (state >> 8) / 16777216.0; }
+            for (int y = 0; y < size; y++) {
+                for (int x = 0; x < size; x++) {
+                    var (bg, sd) = ((y & 1) << 1 | (x & 1)) switch {
+                        0 => (2073.0, 7.0), 3 => (3796.0, 12.0), _ => (2004.0, 6.0),
+                    };
+                    var noise = sd * Math.Sqrt(-2 * Math.Log(1 - Next())) * Math.Cos(2 * Math.PI * Next());
+                    var v = bg + noise;
+                    var cx = (x / 100) * 100 + 50;
+                    var cy = (y / 100) * 100 + 50;
+                    var peak = 60 + 190 * (((x / 100) * 10 + (y / 100)) % 10) / 9.0;
+                    var r2 = (x - cx) * (x - cx) + (y - cy) * (y - cy);
+                    v += peak * Math.Exp(-r2 / (2 * 1.2 * 1.2));
+                    pixels[y * size + x] = (ushort)Math.Clamp(v, 0, 65535);
+                }
+            }
+            return new AnalysisFrame(pixels, size, size, DateTimeOffset.UnixEpoch, "RGGB");
+        }
+
+        [Test]
+        public void DefaultMetric_equalises_the_bayer_phases_only_when_the_frame_carries_a_pattern() {
+            // The same uneven frame tagged mono must measure as the raw detector would (no equalisation), and
+            // a mono frame whose sampled phase medians differ by noise alone must come back untouched.
+            var colour = UnevenBayerFrame();
+            var asMono = colour with { BayerPattern = null };
+            var direct = StarDetector.Detect(asMono.Pixels.Span, asMono.Width, asMono.Height,
+                new StarDetectionParams { Sensitivity = 8.0, NoiseReduction = 0, IsAutoFocus = true });
+            var viaMetric = AutofocusSweepService.DefaultMetric(asMono, CancellationToken.None);
+            Assert.That(viaMetric.DetectedStars, Is.EqualTo(direct.DetectedStars), "a frame without a Bayer pattern is not equalised");
+            Assert.That(viaMetric.DetectedStars, Is.LessThan(AutofocusSweepService.DefaultMetric(colour, CancellationToken.None).DetectedStars));
+
+            var noisy = NoisyMonoFrame(256);
+            var measured = AutofocusSweepService.DefaultMetric(noisy, CancellationToken.None);
+            var raw = StarDetector.Detect(noisy.Pixels.Span, noisy.Width, noisy.Height,
+                new StarDetectionParams { Sensitivity = 8.0, NoiseReduction = 0, IsAutoFocus = true });
+            Assert.That(measured.AverageHFR, Is.EqualTo(raw.AverageHFR).Within(1e-9), "the metric leaves a mono frame alone");
+        }
+
+        /// <summary>A mono frame with 1000 ADU background, a few ADU of pseudo-noise and a handful of stars.</summary>
+        private static AnalysisFrame NoisyMonoFrame(int size) {
+            var pixels = new ushort[size * size];
+            uint state = 4242;
+            double Next() { state = state * 1664525u + 1013904223u; return (state >> 8) / 16777216.0; }
+            for (int y = 0; y < size; y++) {
+                for (int x = 0; x < size; x++) {
+                    var v = 1000.0 + 20.0 * (Next() - 0.5);
+                    var cx = (x / 64) * 64 + 32;
+                    var cy = (y / 64) * 64 + 32;
+                    var r2 = (x - cx) * (x - cx) + (y - cy) * (y - cy);
+                    v += 20000.0 * Math.Exp(-r2 / (2 * 1.5 * 1.5));
+                    pixels[y * size + x] = (ushort)Math.Clamp(v, 0, 65535);
+                }
+            }
+            return new AnalysisFrame(pixels, size, size, DateTimeOffset.UnixEpoch);
+        }
+
+        [Test]
+        public void DefaultMetric_finds_the_stars_on_a_colour_frame_whose_bayer_channels_sit_at_different_backgrounds() {
+            // 2026-10-17: on the raw mosaic the blue pixels' background (1.8× the others) inflated the robust
+            // sigma ten-fold (65 ADU against a real 6-12), the threshold rose with it and the probe saw 26 stars
+            // where the frame held ~240. Equalising the four Bayer phases first restores them.
+            var result = AutofocusSweepService.DefaultMetric(UnevenBayerFrame(), CancellationToken.None);
+            Assert.That(result.DetectedStars, Is.GreaterThanOrEqualTo(80), "most of the 100 faint stars");
+            Assert.That(result.NoiseFlooded, Is.False);
+        }
+
+        [Test]
+        public void DefaultMetric_leaves_a_mono_frame_measuring_as_before() {
+            var frame = StarFrame(512, 1.5, 64);
+            var direct = StarDetector.Detect(frame.Pixels.Span, frame.Width, frame.Height,
+                new StarDetectionParams { Sensitivity = 8.0, NoiseReduction = 0, IsAutoFocus = true });
+            var viaMetric = AutofocusSweepService.DefaultMetric(frame, CancellationToken.None);
+            Assert.That(viaMetric.DetectedStars, Is.EqualTo(direct.DetectedStars));
+            Assert.That(viaMetric.AverageHFR, Is.EqualTo(direct.AverageHFR).Within(1e-9));
+        }
+
+        /// <summary>Width of a baseline JPEG, read from its SOF0 marker.</summary>
+        internal static int JpegWidth(ReadOnlySpan<byte> jpeg) {
+            for (var i = 2; i + 8 < jpeg.Length; i++) {
+                if (jpeg[i] == 0xFF && (jpeg[i + 1] == 0xC0 || jpeg[i + 1] == 0xC2)) {
+                    return (jpeg[i + 7] << 8) | jpeg[i + 8];
+                }
+            }
+            return -1;
+        }
+
+        [Test]
+        public async Task The_probe_preview_of_a_colour_camera_is_debayered() {
+            // 2026-10-17: the Smart Focus page showed the raw colour-filter grid of an ASI533MC Pro frame. A frame
+            // carrying a Bayer pattern renders through the super-pixel debayer (half the width), not as a mosaic.
+            var (focuser, moves) = Focuser();
+            int Current() => moves.Count == 0 ? StartPosition : moves[^1];
+            var frames = new Mock<IAnalysisFrameSource>();
+            frames.Setup(f => f.CaptureForAnalysisAsync(It.IsAny<double>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(() => new AnalysisFrame(StarFrame(128, 1.5, 32).Pixels, 128, 128, DateTimeOffset.UnixEpoch, "RGGB"));
+            var tracker = new AutofocusRunTracker();
+            using var svc = new AutofocusSweepService(
+                Profiles(Settings(steps: 4, stepSize: 100, stepSizeAuto: false)).Object, focuser.Object, frames.Object,
+                metric: VCurveMetric(Current, StartPosition), tracker: tracker);
+
+            Assert.That(await svc.RunAutofocusAsync(NoProgress, CancellationToken.None), Is.True);
+
+            var frame = tracker.GetFrame();
+            Assert.That(frame, Is.Not.Null);
+            Assert.That(JpegWidth(frame!.Value.Jpeg.Span), Is.EqualTo(64), "super-pixel debayer: 128 → 64");
+        }
     }
 }
