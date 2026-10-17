@@ -98,14 +98,18 @@ public sealed partial class CenteringService : ICenteringExecutor {
     // the once-more-than-attempts loop shape: attempt N's move gets verified by solve N+1).
     private async Task<bool> RotateToPositionAngleAsync(OpenAstroAra.Equipment.Interfaces.Mediator.IRotatorMediator rotator,
             double positionAngleDeg, CancellationToken token) {
+        // Rotation runs before the centre, so it needs the same ARA store → legacy sync.
+        LegacyProfileBridge.SyncPlateSolve(profileService, profileStore);
         var profile = profileService.ActiveProfile
             ?? throw new PlateSolverConfigurationException("Cannot rotate: no active profile is loaded.");
         var settings = profile.PlateSolveSettings;
-        double focalLength = profile.TelescopeSettings.FocalLength;
-        double pixelSize = profile.CameraSettings.PixelSize;
+        // ARA-store optics first, legacy fallback — the legacy focal length stays NaN on a
+        // configured rig, so reading it alone failed every Center and Rotate.
+        var (focalLength, pixelSize) = PlateSolveService.ResolveSolveGeometry(
+            profileStore?.GetOpticsSettings(), profile.TelescopeSettings.FocalLength, profile.CameraSettings.PixelSize);
         if (!(focalLength > 0) || !(pixelSize > 0)) {
             throw new PlateSolverConfigurationException(
-                $"Cannot rotate: telescope focal length ({focalLength}) and camera pixel size ({pixelSize}) must both be configured (> 0) in the profile.");
+                $"Cannot rotate: telescope focal length ({focalLength}) and camera pixel size ({pixelSize}) must both be configured (> 0) — set them in Options → Imaging → Optics.");
         }
         var plateSolver = plateSolverFactory.GetPlateSolver(settings);
         var blindSolver = plateSolverFactory.GetBlindSolver(settings);

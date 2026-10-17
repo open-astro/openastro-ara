@@ -89,6 +89,35 @@ public class FitsImageTests {
         }
     }
 
+    // Target names land in the frame path ("Lion Nebula (Sh2-132)/…"), and
+    // CFITSIO's extended filename syntax reads "(…)" as a template file and
+    // "[…]" as an HDU filter — every frame of such a target failed with
+    // status 105/366 and nothing reached Live or the library.
+    [Theory]
+    [InlineData("Lion Nebula (Sh2-132)")]
+    [InlineData("M 31 [Andromeda]")]
+    [InlineData("Sh2-155 + Cave!")]
+    public void Paths_with_cfitsio_syntax_characters_are_taken_literally(string target) {
+        if (!CfitsioReady()) return;
+        var dir = TempPath(target);
+        var path = Path.Combine(dir, $"{target}_Ha_60s.fits");
+        Directory.CreateDirectory(dir);
+        try {
+            var input = new ushort[] { 1, 2, 3, 4, 5, 6 };
+            using (var fits = FitsImage.Create(path, 3, 2, FitsBitDepth.UnsignedShort)) {
+                fits.WriteImageData(input);
+                fits.Complete();
+            }
+            Assert.True(File.Exists(path), "the frame must land at exactly the path asked for");
+
+            using (var fits = FitsImage.Open(path)) {
+                Assert.Equal(input, fits.ReadImageData16());
+            }
+        } finally {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
     [Fact]
     public void Write_read_round_trip_preserves_float_pixels() {
         if (!CfitsioReady()) return;

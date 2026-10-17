@@ -238,9 +238,10 @@ class _SequencerTabState extends ConsumerState<SequencerTab> {
   /// doesn't actually act on, so the key continues to whatever has focus.
   KeyEventResult _onTabKeyEvent(FocusNode node, KeyEvent event) {
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
-    // While the inspector owns focus, every one of these keys belongs to the
-    // field being edited — not to the tree or the run controls.
-    if (_focusInFieldEditor) return KeyEventResult.ignored;
+    // While the inspector or any text field (the palette's search box) owns
+    // focus, every one of these keys belongs to it — not to the tree or the
+    // run controls.
+    if (_focusOwnsKeys) return KeyEventResult.ignored;
 
     final keyboard = HardwareKeyboard.instance;
     final accel = keyboard.isMetaPressed || keyboard.isControlPressed;
@@ -291,15 +292,18 @@ class _SequencerTabState extends ConsumerState<SequencerTab> {
 
   /// True while focus is inside the field editor (inspector) — any field type
   /// (text, dropdown, switch) must win over tree shortcuts, so editing a value
-  /// never deletes/moves the selected instruction.
-  bool get _focusInFieldEditor {
+  /// never deletes/moves the selected instruction — or in any text field
+  /// elsewhere on the tab, so Backspace in the palette's search box deletes a
+  /// character rather than the selected instruction.
+  bool get _focusOwnsKeys {
     final ctx = FocusManager.instance.primaryFocus?.context;
     return ctx != null &&
-        ctx.findAncestorWidgetOfExactType<SequenceFieldEditor>() != null;
+        (ctx.findAncestorWidgetOfExactType<SequenceFieldEditor>() != null ||
+            ctx.findAncestorWidgetOfExactType<EditableText>() != null);
   }
 
   void _deleteSelected() {
-    if (_focusInFieldEditor) return;
+    if (_focusOwnsKeys) return;
     final editor = ref.read(sequenceEditorProvider);
     final path = editor?.selectedPath;
     if (path == null || path.isEmpty) return;

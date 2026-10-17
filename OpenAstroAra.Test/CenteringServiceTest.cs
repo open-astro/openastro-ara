@@ -22,6 +22,7 @@ using OpenAstroAra.Equipment.Model;
 using OpenAstroAra.PlateSolving;
 using OpenAstroAra.PlateSolving.Interfaces;
 using OpenAstroAra.Profile.Interfaces;
+using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Services;
 using System;
 using System.Collections.Generic;
@@ -193,9 +194,36 @@ namespace OpenAstroAra.Test {
                     .Returns(CenteringSolver.Object);
             }
 
-            public CenteringService CreateSUT() =>
+            public CenteringService CreateSUT(IProfileStore? profileStore = null) =>
                 new(ProfileService.Object, Factory.Object, Mock.Of<IImagingMediator>(), Telescope.Object,
-                    Mock.Of<IFilterWheelMediator>(), Mock.Of<IDomeMediator>(), Mock.Of<IDomeFollower>(), Rotator.Object);
+                    Mock.Of<IFilterWheelMediator>(), Mock.Of<IDomeMediator>(), Mock.Of<IDomeFollower>(), Rotator.Object,
+                    profileStore: profileStore);
+        }
+
+        [Test]
+        public async Task CenterAndRotate_rotation_solve_uses_the_store_optics_when_the_legacy_focal_length_is_unset() {
+            // Rig night 2026-10-17: Options → Optics said 448 mm but the legacy profile's focal
+            // length was NaN, and every Center and Rotate failed "focal length (NaN)".
+            var h = new RotateHarness(rotationTolerance: 0.5, solvedAngles: 0.0);
+            h.ProfileService.SetupGet(p => p.ActiveProfile.TelescopeSettings.FocalLength).Returns(double.NaN);
+            var store = new Mock<IProfileStore>();
+            store.Setup(s => s.GetPlateSolveSettings()).Returns(ProfileSnapshotNormalizer.Defaults.PlateSolve);
+            store.Setup(s => s.GetOpticsSettings()).Returns(new OpticsSettingsDto(448, 0.8, 6248, 4176, 3.76));
+            CaptureSolverParameter? seen = null;
+            h.CaptureSolver
+                .Setup(s => s.Solve(It.IsAny<CaptureSequence>(), It.IsAny<CaptureSolverParameter>(),
+                    It.IsAny<IProgress<PlateSolveProgress>>(), It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()))
+                .Callback<CaptureSequence, CaptureSolverParameter, IProgress<PlateSolveProgress>?, IProgress<ApplicationStatus>?, CancellationToken>(
+                    (_, p, _, _, _) => seen = p)
+                .ReturnsAsync(new PlateSolveResult { Success = true, PositionAngle = 0.0 });
+            using var sut = h.CreateSUT(store.Object);
+
+            var ok = await sut.CenterAndRotateAsync(Target, 0.0, NoProgress, CancellationToken.None);
+
+            Assert.That(ok, Is.True);
+            Assert.That(seen, Is.Not.Null);
+            Assert.That(seen!.FocalLength, Is.EqualTo(448 * 0.8).Within(1e-9), "reducer folded in, as for the centre solve");
+            Assert.That(seen.PixelSize, Is.EqualTo(3.76));
         }
 
         [Test]

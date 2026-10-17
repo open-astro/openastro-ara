@@ -121,8 +121,10 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
         [DllImport(DLLNAME, EntryPoint = "ffomem", CallingConvention = CallingConvention.Cdecl, BestFitMapping = false, ThrowOnUnmappableChar = true)]
         internal static extern int fits_open_memory(out IntPtr fptr, string filename, IOMODE iomode, ref IntPtr buffer, ref UIntPtr size, ref UIntPtr deltaSize, IntPtr fnMemRealloc, out int status);
 
-        // int CFITS_API ffopen(fitsfile **fptr, const char *filename, int iomode, int *status);
-        [DllImport(DLLNAME, EntryPoint = "ffopen", CallingConvention = CallingConvention.Cdecl, BestFitMapping = false, ThrowOnUnmappableChar = true)]
+        // int CFITS_API ffdkopn(fitsfile **fptr, const char *filename, int iomode, int *status);
+        // The disk-file variant takes the name literally: ffopen parses CFITSIO's extended
+        // filename syntax, so "Lion Nebula (Sh2-132)/…" reads as a template and fails.
+        [DllImport(DLLNAME, EntryPoint = "ffdkopn", CallingConvention = CallingConvention.Cdecl, BestFitMapping = false, ThrowOnUnmappableChar = true)]
         internal static extern int fits_open_file(out IntPtr fptr, string filename, IOMODE iomode, out int status);
 
         // int CFITS_API ffghsp(fitsfile *fptr, int *nexist, int *nmore, int *status);
@@ -470,8 +472,9 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
         [DllImport(DLLNAME, EntryPoint = "ffcrim", CallingConvention = CallingConvention.Cdecl, BestFitMapping = false, ThrowOnUnmappableChar = true)]
         internal static extern int fits_create_img(IntPtr fptr, BITPIX bitpix, int naxis, int[] naxes, out int status);
 
-        // int CFITS_API ffinit(  fitsfile **fptr, const char *filename, int *status);
-        [DllImport(DLLNAME, CharSet = CharSet.Ansi, EntryPoint = "ffinit", CallingConvention = CallingConvention.Cdecl, BestFitMapping = false, ThrowOnUnmappableChar = true)]
+        // int CFITS_API ffdkinit(fitsfile **fptr, const char *filename, int *status);
+        // Literal-name create, for the same reason as fits_open_file above.
+        [DllImport(DLLNAME, CharSet = CharSet.Ansi, EntryPoint = "ffdkinit", CallingConvention = CallingConvention.Cdecl, BestFitMapping = false, ThrowOnUnmappableChar = true)]
         internal static extern int fits_create_file(
             out IntPtr fptr,
             [MarshalAs(UnmanagedType.LPStr, SizeConst = FLEN_FILENAME)] string filename,

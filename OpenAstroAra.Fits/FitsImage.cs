@@ -83,7 +83,7 @@ public sealed class FitsImage : IDisposable {
 
         var status = 0;
         if (CFitsIO.CreateFile(out var fptr, tempPath, ref status) != 0) {
-            throw new FitsException("ffinit", status);
+            throw new FitsException("ffdkinit", status);
         }
         var naxes = new long[] { width, height };
         if (CFitsIO.CreateImage(fptr, (int)bitDepth, 2, naxes, ref status) != 0) {
@@ -95,10 +95,12 @@ public sealed class FitsImage : IDisposable {
     }
 
     /// <summary>Open an existing FITS file for reading or read-write.</summary>
+    /// <remarks>The path is taken literally (ffdkopn): CFITSIO extended syntax such as
+    /// <c>file.fits[1]</c>, a <c>!</c> clobber prefix or URL forms is not parsed.</remarks>
     public static FitsImage Open(string path, FitsOpenMode mode = FitsOpenMode.ReadOnly) {
         var status = 0;
         if (CFitsIO.OpenFile(out var fptr, path, (int)mode, ref status) != 0) {
-            throw new FitsException("ffopen", status);
+            throw new FitsException("ffdkopn", status);
         }
         // No temp on the read path — caller's writes are unsupported in this
         // overload (callers that need read-modify-write open with ReadWrite

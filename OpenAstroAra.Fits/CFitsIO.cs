@@ -53,10 +53,14 @@ internal static partial class CFitsIO {
     internal static partial void GetErrorStatus(int status, [Out] byte[] errText);
 
     // ── File lifecycle ──────────────────────────────────────────────────────────────
-    [LibraryImport(LibraryName, EntryPoint = "ffinit", StringMarshalling = StringMarshalling.Utf8)]
+    // The "disk file" entry points (fits_create_diskfile / fits_open_diskfile) take the
+    // name literally. ffinit/ffopen parse CFITSIO's extended filename syntax, so a target
+    // name in the path — "Lion Nebula (Sh2-132)", "M 31 [Andromeda]" — reads as a template
+    // or an HDU filter and the create fails.
+    [LibraryImport(LibraryName, EntryPoint = "ffdkinit", StringMarshalling = StringMarshalling.Utf8)]
     internal static partial int CreateFile(out IntPtr fptr, string filename, ref int status);
 
-    [LibraryImport(LibraryName, EntryPoint = "ffopen", StringMarshalling = StringMarshalling.Utf8)]
+    [LibraryImport(LibraryName, EntryPoint = "ffdkopn", StringMarshalling = StringMarshalling.Utf8)]
     internal static partial int OpenFile(out IntPtr fptr, string filename, int mode, ref int status);
 
     [LibraryImport(LibraryName, EntryPoint = "ffclos")]

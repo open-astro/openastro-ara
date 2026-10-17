@@ -485,7 +485,9 @@ namespace OpenAstroAra.Image.ImageData {
                     extension += ".fz";
                 }
 
-                // CFitsio treats paranthesis for special logic and are thus not allowed
+                // Filename policy kept from NINA: brackets become "_". CFITSIO no longer needs it
+                // (fits_create_file binds the disk-file entry point ffdkinit, which takes the name
+                // literally), so this only keeps existing folder names stable.
                 fileSaveInfo.FilePath = fileSaveInfo.FilePath.Replace("(", "_", StringComparison.Ordinal).Replace(")", "_", StringComparison.Ordinal).Replace("[", "_", StringComparison.Ordinal).Replace("]", "_", StringComparison.Ordinal);
                 Directory.CreateDirectory(Path.GetDirectoryName(fileSaveInfo.FilePath) ?? string.Empty);
 

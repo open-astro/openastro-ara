@@ -15,6 +15,7 @@ import 'package:openastroara/services/sequence_api.dart';
 import 'package:openastroara/state/sequencer/sequence_editor_state.dart';
 import 'package:openastroara/state/sequencer/sequence_list_state.dart';
 import 'package:openastroara/widgets/sequencer/sequence_field_editor.dart';
+import 'package:openastroara/widgets/sequencer/sequencer_palette.dart';
 
 // A body whose single child is a Take Exposure, so the tree renders a row the
 // test can see — and the root Name carries the id to prove the right load.
@@ -373,6 +374,31 @@ void main() {
 
       expect(childCount(container), 0);
     });
+
+    testWidgets('Backspace in the palette search edits the query, not the tree',
+        (tester) async {
+      final container = await pumpLoaded(tester);
+      expect(childCount(container), 1);
+
+      final search = find.descendant(
+        of: find.byType(SequencerPalette),
+        matching: find.byType(TextField),
+      );
+      await tester.tap(search);
+      await tester.enterText(search, 'take ex');
+      await tester.pumpAndSettle();
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.backspace);
+      await tester.sendKeyEvent(LogicalKeyboardKey.delete);
+      await tester.pumpAndSettle();
+
+      expect(childCount(container), 1,
+          reason: 'searching must never delete the selected instruction');
+      expect(tester.widget<EditableText>(find.descendant(
+        of: search,
+        matching: find.byType(EditableText),
+      )).controller.text, 'take e');
+    });
   });
 
   // A shortcut the tab declines must reach the widget that has focus. The tab
@@ -554,6 +580,22 @@ void main() {
       await tester.pump(const Duration(milliseconds: 400));
       expect(client.calls.where((c) => c == 'pause' || c == 'resume'), isEmpty,
           reason: 'the shortcut must yield while a button owns focus');
+    });
+
+    testWidgets('Space in the palette search types a space instead of pausing',
+        (tester) async {
+      final (_, client) = await pumpWithRun(tester, SequenceRunState.running);
+      final search = find.descendant(
+        of: find.byType(SequencerPalette),
+        matching: find.byType(TextField),
+      );
+      await tester.tap(search);
+      await tester.pump();
+      await tester.sendKeyEvent(LogicalKeyboardKey.space);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(client.calls.where((c) => c == 'pause' || c == 'resume'), isEmpty,
+          reason: 'searching must never pause a running sequence');
     });
   });
 }

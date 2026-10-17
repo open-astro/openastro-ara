@@ -2659,7 +2659,7 @@ The unifying principle: **never lose the user's data silently, but never block s
 | **SQLite DB** (`data.db`) | `PRAGMA integrity_check` returns anything other than `ok` on startup | Move `data.db` to `data.db.corrupt.<unix-ts>` + WAL/SHM siblings; restore the most recent §28.14 pre-migration backup; if no backup, initialize a fresh empty DB and run §28.8 orphan scan over existing FITS to rebuild what's recoverable | Critical notification with explicit options: "Database was corrupted. Restored from backup taken <date>." OR (if no backup) "Database was corrupted with no backup available. Started fresh; <N> existing FITS files re-indexed via orphan scan. Sessions and notes from before the corruption are lost — old DB saved to `<path>.corrupt.<ts>`." |
 | **Profile JSON** | Parse fails OR schema-validation fails | Move profile to `profiles/<name>.corrupt.<ts>.json`; do NOT auto-recover; mark profile slot as invalid in DB | Critical notification when WILMA loads the profile list: "Profile '<name>' could not be loaded — file was damaged. Recreate from the wizard or restore from your backup ZIP." |
 | **Sequence JSON** (saved sequence file loaded by user) | Parse fails | Reject the load with HTTP 422 + `code: sequence_corrupt`; do not move the file (user may want to repair it manually) | WILMA shows error inline in sequence picker; offers [Show file location] for manual recovery |
-| **FITS file with malformed header** (orphan scan §28.8) | cfitsio `fits_open_file` returns non-zero | Skip the file; log `FITS_HEADER_CORRUPT` (warning) with path; do not delete (user may want to repair via external tools) | Aggregated: "Recovered <N> frames; <M> had malformed headers and were skipped — see <link to log>" |
+| **FITS file with malformed header** (orphan scan §28.8) | cfitsio `fits_open_diskfile` returns non-zero | Skip the file; log `FITS_HEADER_CORRUPT` (warning) with path; do not delete (user may want to repair via external tools) | Aggregated: "Recovered <N> frames; <M> had malformed headers and were skipped — see <link to log>" |
 | **DB row → missing FITS file** | Row in `frames` table, file at the row's path doesn't exist | Mark the row's `missing` boolean true; do not delete the row (preserves session metadata + stats); WILMA shows the frame greyed-out with "missing file" indicator + relocate button (per §43.8 pattern) | Subtle: greyed-out frame in library; no alarming notification (could be user-moved files). Only escalates to critical if the missing-file rate jumps suddenly (>10% of expected frames in current session). |
 | **Calibration metadata JSON** (§39.3 session_meta.json) | Parse fails | Move to `<file>.corrupt.<ts>`; treat the calibration set as if it had no metadata (still usable as raw frames but won't match via §39.5 auto-match) | Notification scoped to calibration browsing UI: "<N> calibration sets have damaged metadata and won't auto-match — see Library → Calibration." |
 | **Notification feed DB rows** (§46.5) | Individual row JSON payload parse fails | Skip the row at read time; never block startup; log the row ID to journal | Silent unless every single row is corrupt (then critical notification "Notification history damaged"). |
@@ -12025,10 +12025,13 @@ internal static partial class CFitsIO
 {
     private const string LibraryName = "cfitsio";
 
-    [LibraryImport(LibraryName, EntryPoint = "ffinit", StringMarshalling = StringMarshalling.Utf8)]
+    // The disk-file entry points take the name literally. ffinit/ffopen parse CFITSIO's
+    // extended filename syntax, so a target name in the path ("Lion Nebula (Sh2-132)")
+    // reads as a template or HDU filter and the create fails (status 105/366).
+    [LibraryImport(LibraryName, EntryPoint = "ffdkinit", StringMarshalling = StringMarshalling.Utf8)]
     internal static partial int CreateFile(out IntPtr fptr, string filename, out int status);
 
-    [LibraryImport(LibraryName, EntryPoint = "ffopen", StringMarshalling = StringMarshalling.Utf8)]
+    [LibraryImport(LibraryName, EntryPoint = "ffdkopn", StringMarshalling = StringMarshalling.Utf8)]
     internal static partial int OpenFile(out IntPtr fptr, string filename, int mode, out int status);
 
     [LibraryImport(LibraryName, EntryPoint = "ffclos")]
