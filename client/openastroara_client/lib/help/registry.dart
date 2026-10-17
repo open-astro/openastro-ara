@@ -1402,12 +1402,16 @@ const Map<String, Help> helpRegistry = {
     key: 'eq.filterwheel.slot_labels',
     title: 'Filter wheel slot labels',
     body:
-        'Names you give each physical filter slot. They flow through to several places:\n\n'
+        'The name of each physical filter slot. When an Alpaca filter wheel connects, the names it '
+        'reports replace these labels, so the wheel is the source of truth: to use your own names, '
+        'set them in AlpacaBridge (`filterNames`). A slot the wheel leaves unnamed keeps its label '
+        'here. With no wheel connected, these labels are what sequences and planning use. '
+        'They flow through to several places:\n\n'
         '* **`\$\$FILTER\$\$` filename token** — e.g. `M31_L_60s.fits` uses the active slot\'s label.\n'
         '* **FITS-header `FILTER` keyword** — read by downstream stacking tools (DSS, Siril, PixInsight) to group frames per filter.\n'
         '* **Sequence per-filter exposure blocks** — sequences reference filters by label, so labels here must match the labels used in your sequence templates.\n'
         '* **calibration-set indexing** — matching darks and flats are found by filter.\n\n'
-        '**Conventions** (not enforced — use whatever you like):\n'
+        '**Conventions** (not enforced):\n'
         '* Mono LRGB: `L`, `R`, `G`, `B`\n'
         '* Narrowband: `Hα` (or `Ha`), `OIII`, `SII`\n'
         '* Photometric: `U`, `B`, `V`, `R`, `I` (Johnson) or `u`, `g`, `r`, `i`, `z` (SDSS)\n\n'

@@ -409,8 +409,9 @@ public static class ProfileEndpoints {
             .WithSummary("Replace the active profile's planning filter set.");
 
         // §37.4/§46.2 filter-wheel slot labels — the offline-authoring names the §38
-        // editor's filter picker sources (12h.2b round-trip). Distinct from the
-        // connected wheel's driver names AND the planning filter set above.
+        // editor's filter picker sources (12h.2b round-trip). Mirrored from the
+        // connected wheel's Alpaca names on connect (FilterWheelService.MirrorSlotLabels);
+        // distinct from the planning filter set above.
         profile.MapGet("/filter-wheel/labels", (IProfileStore store) =>
                 Results.Ok(store.GetFilterWheelLabels()))
             .Produces<FilterWheelLabelsDto>(StatusCodes.Status200OK)
