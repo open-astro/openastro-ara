@@ -13,6 +13,7 @@
 #endregion "copyright"
 
 using OpenAstroAra.Core.Utility;
+using OpenAstroAra.Profile;
 using OpenAstroAra.Profile.Interfaces;
 using System;
 using System.Collections.Generic;
@@ -243,6 +244,11 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
         /// </summary>
         private const string AlgorithmSetter = "set_algo";
 
+        /// <summary>The guider's "no rotator" choice (first entry of its <c>Rotator::RotatorList</c>, matched
+        /// verbatim by <c>set_selected_rotator</c>). Pushed on every guide-scope connect so a rotator the
+        /// guider stored earlier — from its own UI or a pre-§63.19 Ara profile — stops steering calibration.</summary>
+        public const string NoRotatorChoice = "None";
+
         public static IReadOnlyList<Phd2Method> BuildGuiderEngineConfigMessages(IGuiderSettings guider, GuiderAdvancedSettings? advanced = null) {
             var messages = new List<Phd2Method>();
 
@@ -262,7 +268,13 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             // contributes its own device number when it lives on that same server.
             var cameraEp = ParseAlpacaSelectionEndpoint(guider.GuiderCamera);
             var mountEp = ParseAlpacaSelectionEndpoint(guider.GuiderMount);
-            var rotatorEp = ParseAlpacaSelectionEndpoint(guider.GuiderRotator);
+            // §63.19 — PHD2 rotates its calibration by every move of the rotator it is given, on the
+            // assumption that the GUIDE camera turns with it. That holds for an off-axis guider only. On a
+            // separate guide scope the imaging CAA turns and the guide camera doesn't, so the rotator is
+            // withheld and the guider's stored choice is reset to "None" (2026-10-16: a 49° Center-and-Rotate
+            // turned a good calibration into dither spirals, and every frame after it trailed).
+            var usesRotator = GuiderSettings.UsesGuideCameraRotator(guider.GuiderSetupType);
+            var rotatorEp = usesRotator ? ParseAlpacaSelectionEndpoint(guider.GuiderRotator) : null;
             var host = cameraEp?.Host
                 ?? (string.IsNullOrWhiteSpace(guider.GuiderAlpacaHost) ? null : guider.GuiderAlpacaHost.Trim());
             var port = cameraEp?.Port ?? (guider.GuiderAlpacaPort > 0 ? guider.GuiderAlpacaPort : (int?) null);
@@ -292,7 +304,13 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             if (!string.IsNullOrWhiteSpace(guider.GuiderAuxMount)) {
                 messages.Add(new Phd2SetSelectedAuxMount { Parameters = new() { AuxMount = guider.GuiderAuxMount.Trim() } });
             }
-            if (!string.IsNullOrWhiteSpace(guider.GuiderRotator)) {
+            // The reset rides only when Ara owns the guider's equipment (a guide camera is picked): a profile
+            // with nothing selected leaves the guider's own setup alone, as every other slot does.
+            if (!usesRotator) {
+                if (!string.IsNullOrWhiteSpace(guider.GuiderCamera)) {
+                    messages.Add(new Phd2SetSelectedRotator { Parameters = new() { Rotator = NoRotatorChoice } });
+                }
+            } else if (!string.IsNullOrWhiteSpace(guider.GuiderRotator)) {
                 messages.Add(new Phd2SetSelectedRotator { Parameters = new() { Rotator = guider.GuiderRotator.Trim() } });
             }
 

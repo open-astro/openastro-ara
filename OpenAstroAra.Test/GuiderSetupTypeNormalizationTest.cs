@@ -34,6 +34,20 @@ namespace OpenAstroAra.Test {
         public string Normalize_coerces_to_the_known_enum(string? raw) =>
             ProfileEndpoints.NormalizeGuiderSetupType(raw);
 
+        // §63.19 — a rotator selection only survives the write boundary on an off-axis guider: PHD2 turns
+        // its calibration by that rotator's moves, which is only right when the guide camera turns with it.
+        [TestCase("oag", "Alpaca Rotator [localhost:6800/0]", ExpectedResult = "Alpaca Rotator [localhost:6800/0]")]
+        [TestCase("guide_scope", "Alpaca Rotator [localhost:6800/0]", ExpectedResult = "")]
+        [TestCase("banana", "Alpaca Rotator [localhost:6800/0]", ExpectedResult = "")]
+        [TestCase("oag", "", ExpectedResult = "")]
+        public string Rotator_survives_only_on_an_off_axis_guider(string setupType, string rotator) =>
+            ProfileEndpoints.NormalizeGuideTrain(new OpenAstroAra.Server.Contracts.Phd2SettingsDto(
+                Host: "localhost", Port: 4400, Phd2Profile: "Default",
+                DitherEnabled: true, DitherEveryNFrames: 1, DitherPixels: 5.0,
+                SettlePixels: 1.5, SettleTimeSec: 10, SettleTimeoutSec: 60,
+                ForceCalibrationEachSession: false,
+                GuiderRotator: rotator, GuiderSetupType: setupType)).GuiderRotator;
+
         // §76.2 — the guide exposure range gate at the same write boundary: min/max must be
         // positive and ordered, because the range drives BOTH darks coverage and guiding bounds.
         [TestCase(1000, 6000, ExpectedResult = true)]

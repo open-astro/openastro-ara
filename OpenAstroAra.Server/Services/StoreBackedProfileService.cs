@@ -199,13 +199,17 @@ internal static class ProfileStoreMapper {
         guider.GuiderCameraAlpacaUniqueId = (phd2.GuiderCameraAlpacaUniqueId ?? string.Empty).Trim();
         guider.GuiderMount = (phd2.GuiderMount ?? string.Empty).Trim();
         guider.GuiderAuxMount = (phd2.GuiderAuxMount ?? string.Empty).Trim();
-        guider.GuiderRotator = (phd2.GuiderRotator ?? string.Empty).Trim();
+        // §63.19 guide train — the push needs it: a rotator is only handed to PHD2 on an off-axis guider,
+        // because PHD2 turns its calibration by that rotator's every move (correct when the guide camera
+        // turns with it, a 49° calibration error when it doesn't — 2026-10-16). A guide-scope profile that
+        // still carries a rotator (written before this rule) is cleaned here, so an old profile.json cannot
+        // keep steering the guider by the imaging CAA. The focal-length derivation for OAG stays client-side.
+        guider.GuiderSetupType = GuiderSettings.NormalizeSetupType(phd2.GuiderSetupType);
+        guider.GuiderRotator = GuiderSettings.UsesGuideCameraRotator(guider.GuiderSetupType)
+            ? (phd2.GuiderRotator ?? string.Empty).Trim()
+            : string.Empty;
         guider.GuiderAlpacaHost = (phd2.GuiderAlpacaHost ?? string.Empty).Trim();
         guider.GuiderAlpacaPort = Math.Clamp(phd2.GuiderAlpacaPort, 0, 65535);
-        // §63.19 GuiderSetupType is deliberately NOT mapped onto IGuiderSettings: it only shapes the
-        // CLIENT's editing/derivation UX (OAG derives the guide focal length from the main optics), while
-        // the daemon push consumes the resulting guide_focal_length either way. It round-trips through the
-        // store verbatim; the client treats an unknown token as "guide_scope".
         // DitherEnabled / DitherEveryNFrames are per-sequence concerns in NINA (the Dither
         // instruction + trigger carry them), and Phd2Profile selection is a §63 connect-time
         // concern — store-only here.

@@ -260,8 +260,23 @@ class Phd2SettingsNotifier extends Notifier<Phd2Settings>
     return guiderSetupTypes.contains(v) ? v : 'guide_scope';
   }
 
-  void setGuiderSetupType(String v) =>
-      state = state.copyWith(guiderSetupType: normalizeGuiderSetupType(v));
+  /// §63.19 — the guide train also decides whether the guider gets a rotator:
+  /// PHD2 turns its calibration by every move of the rotator it is given,
+  /// which is right when the guide camera rides behind it (OAG) and wrong
+  /// for a separate guide scope. Leaving the OAG train drops the rotator
+  /// (the daemon clears it at the write boundary as well).
+  void setGuiderSetupType(String v) {
+    final norm = normalizeGuiderSetupType(v);
+    state = state.copyWith(
+      guiderSetupType: norm,
+      guiderRotator: norm == 'oag' ? state.guiderRotator : '',
+    );
+  }
+
+  /// True when the guide camera turns with the imaging rotator — the only
+  /// train where a guider rotator selection belongs.
+  static bool usesGuideCameraRotator(String setupType) =>
+      normalizeGuiderSetupType(setupType) == 'oag';
 
   void setGuideFocalLength(int v) {
     if (v < 0) return;

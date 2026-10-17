@@ -745,15 +745,30 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
           if (v != null) phd2N.setGuiderAuxMount(v);
         },
       ),
-      SettingsDropdownRow<String>(
-        label: 'Rotator',
-        helpKey: 'eq.guider.rotator',
-        value: phd2.guiderRotator,
-        items: _slotItems(rotatorOptions, phd2.guiderRotator, 'rotator'),
-        onChanged: (v) {
-          if (v != null) phd2N.setGuiderRotator(v);
-        },
-      ),
+      // §63.19 — a rotator is only offered on an off-axis guider. PHD2 turns
+      // its calibration by that rotator's every move, which is wrong when the
+      // guide camera sits on its own scope and never turns (2026-10-16: a
+      // 49° Center-and-Rotate spiralled every dither until guiding was stopped).
+      if (Phd2SettingsNotifier.usesGuideCameraRotator(phd2.guiderSetupType))
+        SettingsDropdownRow<String>(
+          key: const ValueKey('guider_pick_rotator'),
+          label: 'Rotator',
+          helpKey: 'eq.guider.rotator',
+          value: phd2.guiderRotator,
+          items: _slotItems(rotatorOptions, phd2.guiderRotator, 'rotator'),
+          onChanged: (v) {
+            if (v != null) phd2N.setGuiderRotator(v);
+          },
+        )
+      else
+        const SettingsRow(
+          key: ValueKey('guider_rotator_not_used'),
+          label: 'Rotator',
+          helpKey: 'eq.guider.rotator',
+          value: 'Not used',
+          hint: 'A separate guide scope does not turn with the camera rotator; '
+              'the guider is told "None". Choose Off-axis guider above if it does.',
+        ),
       for (final warning in crossServer)
         Padding(
           padding: const EdgeInsets.only(top: 4, bottom: 4),

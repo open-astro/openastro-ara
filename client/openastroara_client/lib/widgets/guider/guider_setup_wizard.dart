@@ -749,7 +749,11 @@ class _GuiderSetupWizardState extends ConsumerState<GuiderSetupWizard> {
             },
             onChanged: (v) {
               final norm = Phd2SettingsNotifier.normalizeGuiderSetupType(v);
-              _edit((d) => d.copyWith(guiderSetupType: norm));
+              // §63.19 — only an OAG turns with the imaging rotator, so a
+              // guide scope drops any rotator pick (the daemon clears it too).
+              _edit((d) => d.copyWith(
+                  guiderSetupType: norm,
+                  guiderRotator: norm == 'oag' ? d.guiderRotator : ''));
               if (norm == 'oag') {
                 // §63.19 — OAG derives the guide focal length from the main
                 // optics (focal length × reducer), same rule as the panel.
@@ -827,31 +831,48 @@ class _GuiderSetupWizardState extends ConsumerState<GuiderSetupWizard> {
             allowUnset: true,
             onChanged: (v) => _edit((d) => d.copyWith(guiderAuxMount: v)),
           ),
-          // Guide-field rotators are rare but the daemon supports them
-          // (mirrors the original wizard's rotator page) — "None" is the
-          // normal pick.
-          _choiceDropdown(
-            label: 'Rotator',
-            value: draft.guiderRotator,
-            options: _mergedOptions(
-                _choices?.rotators ?? const [], 'rotator', 'Rotator',
-                onlyEndpoint: _cameraEndpoint),
-            labels: _labelsFor(
-                _mergedOptions(_choices?.rotators ?? const [], 'rotator',
-                    'Rotator',
-                    onlyEndpoint: _cameraEndpoint),
-                'rotator'),
-            allowUnset: true,
-            onChanged: (v) => _edit((d) => d.copyWith(guiderRotator: v)),
-          ),
-          if (_isCrossServerPick(draft.guiderRotator))
-            Text(
-              'This rotator lives on a different Alpaca server than the guide '
-              'camera — it won\'t take effect on Apply.',
-              style: Theme.of(context)
-                  .textTheme
-                  .bodySmall
-                  ?.copyWith(color: AraColors.accentBusy),
+          // §63.19 — a rotator is only offered on an off-axis guider: PHD2
+          // turns its calibration by that rotator's every move, which is
+          // right when the guide camera rides behind it and wrong for a
+          // separate guide scope that never turns (2026-10-16: a 49°
+          // Center-and-Rotate spiralled every dither).
+          if (draft.guiderSetupType == 'oag') ...[
+            _choiceDropdown(
+              label: 'Rotator',
+              value: draft.guiderRotator,
+              options: _mergedOptions(
+                  _choices?.rotators ?? const [], 'rotator', 'Rotator',
+                  onlyEndpoint: _cameraEndpoint),
+              labels: _labelsFor(
+                  _mergedOptions(_choices?.rotators ?? const [], 'rotator',
+                      'Rotator',
+                      onlyEndpoint: _cameraEndpoint),
+                  'rotator'),
+              allowUnset: true,
+              onChanged: (v) => _edit((d) => d.copyWith(guiderRotator: v)),
+            ),
+            if (_isCrossServerPick(draft.guiderRotator))
+              Text(
+                'This rotator lives on a different Alpaca server than the guide '
+                'camera — it won\'t take effect on Apply.',
+                style: Theme.of(context)
+                    .textTheme
+                    .bodySmall
+                    ?.copyWith(color: AraColors.accentBusy),
+              ),
+          ] else
+            Padding(
+              key: const ValueKey('wiz-rotator-not-used'),
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: Text(
+                'Rotator: not used. A separate guide scope does not turn with '
+                'the camera rotator, so the guider is told "None". Go back to '
+                'Optics and pick Off-axis guider if your guide camera does turn.',
+                style: Theme.of(context)
+                    .textTheme
+                    .bodySmall
+                    ?.copyWith(color: AraColors.textSecondary),
+              ),
             ),
           _refreshChoicesButton(),
         ];
@@ -890,10 +911,12 @@ class _GuiderSetupWizardState extends ConsumerState<GuiderSetupWizard> {
                       draft.guiderAuxMount, 'telescope', _alpacaNames)),
           _summaryRow(
               'Rotator',
-              draft.guiderRotator.isEmpty
-                  ? '(use the guider\'s own setting)'
-                  : friendlyAlpacaChoiceLabel(
-                      draft.guiderRotator, 'rotator', _alpacaNames)),
+              draft.guiderSetupType != 'oag'
+                  ? '(not used — separate guide scope)'
+                  : draft.guiderRotator.isEmpty
+                      ? '(use the guider\'s own setting)'
+                      : friendlyAlpacaChoiceLabel(
+                          draft.guiderRotator, 'rotator', _alpacaNames)),
           // Belt for a stale draft: the mount step restricts new picks to the
           // camera's server, but a selection made before a camera change can
           // still be cross-server — say so rather than implying it will land.

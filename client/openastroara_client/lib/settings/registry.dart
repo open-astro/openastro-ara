@@ -1768,7 +1768,7 @@ const List<Setting> settingsRegistry = [
   Setting(
     id: 'eq.guider.setup_type',
     label: 'Guide setup',
-    description: 'Whether guiding uses a separate guide scope (enter its focal length yourself) or an off-axis guider behind the main optics (the guide focal length is derived: telescope focal length × reducer factor).',
+    description: 'Whether guiding uses a separate guide scope (enter its focal length yourself) or an off-axis guider behind the main optics (the guide focal length is derived: telescope focal length × reducer factor). Also decides whether the guider gets a rotator: only an OAG turns with the imaging rotator.',
     keywords: ['guide scope', 'oag', 'off-axis guider', 'guide focal length', 'setup', 'guider', 'phd2'],
     path: ['Settings', 'Equipment', 'Guider'],
     type: SettingType.enumValue(['Guide scope', 'Off-axis guider (OAG)']),
@@ -1893,7 +1893,7 @@ const List<Setting> settingsRegistry = [
   Setting(
     id: 'eq.guider.equipment.rotator',
     label: 'Guider rotator',
-    description: 'Rotator the guider server should track for calibration-angle compensation, picked from Ara\'s own device list. Blank keeps Ara\'s current selection.',
+    description: 'Off-axis guider only: the imaging rotator the guide camera turns with, so the guider can rotate its calibration when the camera angle changes. Not offered on a separate guide scope (the guider is told "None" there — it would otherwise rotate a good calibration). Blank keeps Ara\'s current selection.',
     keywords: ['rotator', 'guider', 'equipment', 'phd2', 'angle', 'select'],
     path: ['Settings', 'Equipment', 'Guider'],
     type: SettingType.string(),

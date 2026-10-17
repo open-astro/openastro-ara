@@ -15,6 +15,7 @@
 using Moq;
 using NUnit.Framework;
 using OpenAstroAra.Equipment.Equipment.MyGuider.PHD2;
+using OpenAstroAra.Profile;
 using OpenAstroAra.Profile.Interfaces;
 using System.Linq;
 
@@ -125,9 +126,55 @@ namespace OpenAstroAra.Test {
             s.SetupGet(x => x.GuiderMount).Returns("On-camera");
             s.SetupGet(x => x.GuiderAuxMount).Returns("Alpaca Telescope");
             s.SetupGet(x => x.GuiderRotator).Returns("Alpaca Rotator");
+            s.SetupGet(x => x.GuiderSetupType).Returns(GuiderSettings.OagSetupType);
             s.SetupGet(x => x.GuiderAlpacaHost).Returns("192.168.1.20");
             s.SetupGet(x => x.GuiderAlpacaPort).Returns(11111);
             return s.Object;
+        }
+
+        // ── §63.19: the guide train decides whether PHD2 gets a rotator at all ──
+
+        [Test]
+        public void Build_withholds_the_rotator_and_resets_the_guider_to_None_on_a_separate_guide_scope() {
+            // The night of 2026-10-16: the imaging CAA was the guider's rotator, so a 49° Center-and-Rotate
+            // rotated PHD2's calibration and every dither spiralled. A guide-scope train never pushes a rotator.
+            var s = new Mock<IGuiderSettings>();
+            s.SetupGet(x => x.GuiderCamera).Returns("Alpaca Camera [bridge.local:11111/2]");
+            s.SetupGet(x => x.GuiderRotator).Returns("Alpaca Rotator [bridge.local:11111/0]");
+            s.SetupGet(x => x.GuiderSetupType).Returns(GuiderSettings.GuideScopeSetupType);
+            var msgs = PHD2Guider.BuildGuiderEngineConfigMessages(s.Object);
+
+            Assert.That(msgs.OfType<Phd2SetSelectedRotator>().Single().Parameters!.Rotator, Is.EqualTo(PHD2Guider.NoRotatorChoice),
+                "the guider's own stored rotator must be cleared, not merely left alone");
+            Assert.That(msgs.OfType<Phd2SetAlpacaServer>().Single().Parameters!.RotatorDevice, Is.Null,
+                "no rotator device number rides along either");
+        }
+
+        [Test]
+        public void Build_treats_a_missing_setup_type_as_a_separate_guide_scope() {
+            // Moq's null default = a profile from before the field existed: the safe reading is guide scope.
+            var s = new Mock<IGuiderSettings>();
+            s.SetupGet(x => x.GuiderCamera).Returns("Alpaca Camera");
+            s.SetupGet(x => x.GuiderRotator).Returns("Alpaca Rotator");
+            var rotator = PHD2Guider.BuildGuiderEngineConfigMessages(s.Object).OfType<Phd2SetSelectedRotator>().Single();
+            Assert.That(rotator.Parameters!.Rotator, Is.EqualTo(PHD2Guider.NoRotatorChoice));
+            // …but only once Ara owns the guider's equipment: with no guide camera picked nothing is sent.
+            var unowned = new Mock<IGuiderSettings>();
+            unowned.SetupGet(x => x.GuiderRotator).Returns("Alpaca Rotator");
+            Assert.That(PHD2Guider.BuildGuiderEngineConfigMessages(unowned.Object).OfType<Phd2SetSelectedRotator>(), Is.Empty);
+        }
+
+        [Test]
+        public void Build_pushes_the_rotator_only_for_an_off_axis_guider() {
+            var s = new Mock<IGuiderSettings>();
+            s.SetupGet(x => x.GuiderRotator).Returns(" Alpaca Rotator ");
+            s.SetupGet(x => x.GuiderSetupType).Returns("OAG");
+            var rotator = PHD2Guider.BuildGuiderEngineConfigMessages(s.Object).OfType<Phd2SetSelectedRotator>().Single();
+            Assert.That(rotator.Parameters!.Rotator, Is.EqualTo("Alpaca Rotator"));
+            // An OAG with no rotator picked keeps the guider's own choice — "None" is only forced on a guide scope.
+            var none = new Mock<IGuiderSettings>();
+            none.SetupGet(x => x.GuiderSetupType).Returns(GuiderSettings.OagSetupType);
+            Assert.That(PHD2Guider.BuildGuiderEngineConfigMessages(none.Object).OfType<Phd2SetSelectedRotator>(), Is.Empty);
         }
 
         // ── §63.17: equipment-selection messages ──
@@ -160,6 +207,8 @@ namespace OpenAstroAra.Test {
             Assert.That(msgs.OfType<Phd2SetSelectedCameraId>(), Is.Empty);
             Assert.That(msgs.OfType<Phd2SetSelectedMount>(), Is.Empty);
             Assert.That(msgs.OfType<Phd2SetSelectedAuxMount>(), Is.Empty);
+            // No guide camera picked = Ara doesn't own the guider's equipment, so not even the guide-scope
+            // rotator reset is sent.
             Assert.That(msgs.OfType<Phd2SetSelectedRotator>(), Is.Empty);
         }
 
@@ -344,6 +393,7 @@ namespace OpenAstroAra.Test {
             s.SetupGet(x => x.GuiderCamera).Returns("Alpaca Camera [bridge.local:11111/2]");
             s.SetupGet(x => x.GuiderMount).Returns("Alpaca Mount [rc91.lan:6800/0]");
             s.SetupGet(x => x.GuiderRotator).Returns("Alpaca Rotator [bridge.local:11111/0]");
+            s.SetupGet(x => x.GuiderSetupType).Returns(GuiderSettings.OagSetupType);
             s.SetupGet(x => x.GuiderAlpacaHost).Returns("rc91.lan");
             s.SetupGet(x => x.GuiderAlpacaPort).Returns(6800);
             var alpaca = PHD2Guider.BuildGuiderEngineConfigMessages(s.Object)

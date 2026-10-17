@@ -99,8 +99,14 @@ namespace OpenAstroAra.Profile.Interfaces {
         string GuiderMount { get; set; }
         /// <summary>Aux (pointing) mount choice string ("" = unset).</summary>
         string GuiderAuxMount { get; set; }
-        /// <summary>Rotator choice string ("" = unset).</summary>
+        /// <summary>Rotator choice string ("" = unset). Only meaningful for an off-axis guider (see
+        /// <see cref="GuiderSetupType"/>): PHD2 treats the selected rotator as the GUIDE camera's and turns
+        /// its calibration by every rotator move, which is wrong for a separate guide scope.</summary>
         string GuiderRotator { get; set; }
+        /// <summary>§63.19 guide train: <c>"guide_scope"</c> (a separate guide scope — the guide camera never
+        /// turns with the imaging rotator) or <c>"oag"</c> (off-axis guider — it does). Normalized by
+        /// <c>GuiderSettings.NormalizeSetupType</c>.</summary>
+        string GuiderSetupType { get; set; }
         /// <summary>Alpaca server host the guider's Alpaca devices live on ("" = unset).</summary>
         string GuiderAlpacaHost { get; set; }
         /// <summary>Alpaca server port (0 = unset).</summary>

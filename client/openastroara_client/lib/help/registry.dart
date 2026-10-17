@@ -1583,7 +1583,8 @@ const Map<String, Help> helpRegistry = {
         'How your guide camera sees the sky: through a separate guide scope riding on the main telescope, '
         'or through an off-axis guider (OAG) that picks off a corner of the main telescope\'s light path. '
         'This determines which focal length applies to guide pixels: a guide scope uses its own short focal length, '
-        'an OAG uses the main telescope\'s. Getting it wrong makes every guiding error number meaningless.',
+        'an OAG uses the main telescope\'s. Getting it wrong makes every guiding error number meaningless. '
+        'It also decides whether the guider is given the imaging rotator: only an OAG\'s guide camera turns with it.',
   ),
   'eq.guider.guide_camera': Help(
     key: 'eq.guider.guide_camera',
@@ -1625,9 +1626,11 @@ const Map<String, Help> helpRegistry = {
     key: 'eq.guider.rotator',
     title: 'Rotator',
     body:
-        'If your imaging train has a camera rotator, telling the guider about it lets guiding survive rotation: '
-        'when the camera angle changes, the guider rotates its calibration data instead of guiding in the wrong direction. '
-        'Leave unset if you have no rotator.',
+        'Only for an off-axis guider. The guider assumes the rotator you give it turns the GUIDE camera, and rotates '
+        'its calibration by every move so guiding keeps the right direction. With an OAG that is true, so pick the '
+        'imaging rotator here. With a separate guide scope it is false: the guide camera never turns, and handing the '
+        'guider the imaging rotator makes it rotate a good calibration — every dither then spirals and frames trail. '
+        'Ara therefore only offers this on an OAG and tells the guider "None" otherwise.',
   ),
   'eq.guider.alpaca_host': Help(
     key: 'eq.guider.alpaca_host',

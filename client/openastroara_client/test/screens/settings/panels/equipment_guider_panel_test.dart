@@ -224,6 +224,30 @@ void main() {
         findsWidgets);
   });
 
+  testWidgets('the rotator picker is offered on an off-axis guider only',
+      (tester) async {
+    // §63.19 — PHD2 turns its calibration by the rotator it is given, which
+    // is only right when the guide camera turns with it (OAG). A guide scope
+    // shows "Not used" instead and drops the rotator when switched to.
+    final h = await _pump(
+        tester,
+        const Phd2Settings(
+          guiderSetupType: 'oag',
+          guiderRotator: 'Alpaca Rotator [127.0.0.1:6800/0]',
+        ));
+    expect(find.byKey(const ValueKey('guider_pick_rotator')), findsOneWidget);
+    expect(find.byKey(const ValueKey('guider_rotator_not_used')), findsNothing);
+
+    final element = tester.element(find.byType(EquipmentGuiderPanel));
+    final container = ProviderScope.containerOf(element);
+    container.read(phd2SettingsProvider.notifier).setGuiderSetupType('guide_scope');
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('guider_pick_rotator')), findsNothing);
+    expect(find.byKey(const ValueKey('guider_rotator_not_used')), findsOneWidget);
+    expect(container.read(phd2SettingsProvider).guiderRotator, '');
+    expect(h.profile, isNotNull);
+  });
+
   testWidgets(
       'Discover Alpaca puts real [host:port/N] devices in the pickers and a pick fills host/port',
       (tester) async {

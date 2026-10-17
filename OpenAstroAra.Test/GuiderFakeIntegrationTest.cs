@@ -16,6 +16,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using NUnit.Framework;
 using OpenAstroAra.Equipment.Equipment.MyGuider.PHD2;
+using OpenAstroAra.Profile;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Services;
 using OpenAstroAra.TestHarness.Guider;
@@ -801,6 +802,7 @@ namespace OpenAstroAra.Test {
             settings.GuiderCamera = "Alpaca Camera";
             settings.GuiderMount = "On-camera";
             settings.GuiderRotator = "Alpaca Rotator";
+            settings.GuiderSetupType = GuiderSettings.OagSetupType; // a rotator only reaches the guider on an OAG
             settings.GuiderAlpacaHost = "192.168.1.20";
             settings.GuiderAlpacaPort = 11111;
             using var svc = new GuiderService(profiles, NewRecovery(),

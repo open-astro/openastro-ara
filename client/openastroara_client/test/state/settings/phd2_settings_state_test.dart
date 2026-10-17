@@ -83,6 +83,23 @@ void main() {
       expect(container.read(phd2SettingsProvider).guiderSetupType, 'oag');
     });
 
+    test('§63.19 leaving the OAG train drops the guider rotator', () {
+      final n = container.read(phd2SettingsProvider.notifier);
+      n.setGuiderSetupType('oag');
+      n.setGuiderRotator('Alpaca Rotator [localhost:6800/0]');
+      expect(container.read(phd2SettingsProvider).guiderRotator,
+          'Alpaca Rotator [localhost:6800/0]');
+      n.setGuiderSetupType('oag'); // re-asserting OAG keeps it
+      expect(container.read(phd2SettingsProvider).guiderRotator,
+          'Alpaca Rotator [localhost:6800/0]');
+      n.setGuiderSetupType('guide_scope');
+      expect(container.read(phd2SettingsProvider).guiderRotator, '');
+      expect(Phd2SettingsNotifier.usesGuideCameraRotator('oag'), isTrue);
+      expect(Phd2SettingsNotifier.usesGuideCameraRotator('guide_scope'),
+          isFalse);
+      expect(Phd2SettingsNotifier.usesGuideCameraRotator('bogus'), isFalse);
+    });
+
     test('§63.19 unknown setup-type tokens coerce to guide_scope', () {
       final n = container.read(phd2SettingsProvider.notifier);
       n.setGuiderSetupType('oag');

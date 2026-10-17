@@ -795,6 +795,36 @@ namespace OpenAstroAra.Profile {
             }
         }
 
+        /// <summary>§63.19 guide-train tokens. Only an off-axis guider turns with the imaging rotator.</summary>
+        public const string GuideScopeSetupType = "guide_scope";
+        public const string OagSetupType = "oag";
+
+        /// <summary>Write-boundary normalization shared by the profile endpoint and the store hydrator:
+        /// only the two enum tokens pass (case/whitespace-insensitive); anything else is the guide-scope
+        /// default, matching the client's read-side coercion.</summary>
+        public static string NormalizeSetupType(string? setupType) =>
+            string.Equals(setupType?.Trim(), OagSetupType, StringComparison.OrdinalIgnoreCase) ? OagSetupType : GuideScopeSetupType;
+
+        /// <summary>True when the guide camera rides behind the imaging rotator (off-axis guider), i.e. the
+        /// only train where PHD2's rotator-angle calibration compensation is correct. A separate guide
+        /// scope never turns with the CAA, so handing PHD2 that rotator makes it rotate a perfectly good
+        /// calibration (night of 2026-10-16: a 49° Center-and-Rotate turned every dither into a spiral).</summary>
+        public static bool UsesGuideCameraRotator(string? setupType) =>
+            NormalizeSetupType(setupType) == OagSetupType;
+
+        private string guiderSetupType = GuideScopeSetupType;
+        [DataMember]
+        public string GuiderSetupType {
+            get => guiderSetupType;
+            set {
+                var normalized = NormalizeSetupType(value);
+                if (guiderSetupType != normalized) {
+                    guiderSetupType = normalized;
+                    RaisePropertyChanged();
+                }
+            }
+        }
+
         private string guiderAlpacaHost = string.Empty;
         [DataMember]
         public string GuiderAlpacaHost {

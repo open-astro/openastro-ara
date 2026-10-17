@@ -15,6 +15,7 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
+using OpenAstroAra.Profile;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Services;
 using System.Linq;
@@ -272,8 +273,10 @@ public static class ProfileEndpoints {
             .WithName("PutDiagnosticsMode")
             .WithSummary("Replace the active profile's diagnostics mode.");
 
+        // §63.19 — the read side applies the same guide-train rule as the write side, so a guide-scope
+        // profile.json written before the rule never shows a rotator the daemon no longer pushes.
         profile.MapGet("/phd2", (IProfileStore store) =>
-                Results.Ok(store.GetPhd2Settings()))
+                Results.Ok(NormalizeGuideTrain(store.GetPhd2Settings())))
             .Produces<Phd2SettingsDto>(StatusCodes.Status200OK)
             .WithName("GetPhd2Settings")
             .WithSummary("Get the active profile's PHD2 settings.");
@@ -282,7 +285,7 @@ public static class ProfileEndpoints {
             // §63.19 — normalize the setup type at the write boundary so an out-of-band PUT can't persist an
             // arbitrary token (#885 review): unknown → the guide_scope default, matching the client's read-side
             // coercion. Other fields keep the store's existing store-verbatim posture.
-            var normalized = body with { GuiderSetupType = NormalizeGuiderSetupType(body.GuiderSetupType) };
+            var normalized = NormalizeGuideTrain(body);
             var rangeError = ValidateGuideExposureRange(normalized) ?? ValidateGuideCameraGain(normalized);
             if (rangeError is not null) {
                 return Results.Problem(detail: rangeError, statusCode: StatusCodes.Status400BadRequest);
@@ -516,7 +519,20 @@ public static class ProfileEndpoints {
     /// tokens pass through; anything else (case/whitespace variants included, matching the client's
     /// read-side coercion) becomes the <c>guide_scope</c> default. Extracted for unit tests.</summary>
     internal static string NormalizeGuiderSetupType(string? setupType) =>
-        setupType?.Trim().ToLowerInvariant() == "oag" ? "oag" : "guide_scope";
+        GuiderSettings.NormalizeSetupType(setupType);
+
+    /// <summary>The guide-train rule at the write boundary: the setup type is coerced to its enum and a
+    /// rotator selection only survives on an off-axis guider. PHD2 turns its calibration by every move of
+    /// the rotator it is given, which is right for an OAG (the guide camera turns with it) and wrong for a
+    /// separate guide scope (it doesn't) — so a guide-scope profile never stores one, and the push tells the
+    /// guider "None". Extracted for unit tests.</summary>
+    internal static Phd2SettingsDto NormalizeGuideTrain(Phd2SettingsDto body) {
+        var setupType = GuiderSettings.NormalizeSetupType(body.GuiderSetupType);
+        return body with {
+            GuiderSetupType = setupType,
+            GuiderRotator = GuiderSettings.UsesGuideCameraRotator(setupType) ? body.GuiderRotator : string.Empty,
+        };
+    }
 
     /// <summary>#1215 — <c>PUT /profile/plate-solve</c> echoes what the store HOLDS, not the body as
     /// typed: the normalizer's <c>/usr/bin/astap</c> → <c>/usr/bin/astap_cli</c> migration runs on the

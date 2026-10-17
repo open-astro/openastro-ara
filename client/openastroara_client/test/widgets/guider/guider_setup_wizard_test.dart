@@ -182,8 +182,10 @@ typedef _Harness = ({
   _FakeCalibrationApi calibration,
 });
 
-Future<_Harness> _pump(WidgetTester tester, {bool connected = true}) async {
+Future<_Harness> _pump(WidgetTester tester,
+    {bool connected = true, Phd2Settings? stored}) async {
   final profile = _FakeProfileApi();
+  if (stored != null) profile.stored = stored;
   final guider = _FakeGuiderApi();
   if (connected) {
     guider.status = const GuiderStatus(
@@ -351,7 +353,7 @@ void main() {
     expect(find.textContaining('Read from the camera'), findsOneWidget);
   });
 
-  testWidgets('mount step offers a rotator picker from the daemon list',
+  testWidgets('mount step offers a rotator picker on an off-axis guider',
       (tester) async {
     // Tall surface so the whole mount step (rotator included) is hittable.
     tester.view.physicalSize = const Size(1400, 1800);
@@ -360,6 +362,12 @@ void main() {
     final h = await _pump(tester);
     await _next(tester); // camera
     await _next(tester); // optics
+    // §63.19 — only an OAG turns with the imaging rotator, so only an OAG
+    // gets the picker.
+    await tester.tap(find.byKey(const ValueKey('wiz-Setup type')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Off-axis guider (OAG)').last);
+    await tester.pumpAndSettle();
     await _next(tester); // mount
     await tester.tap(find.byKey(const ValueKey('wiz-Rotator')));
     await tester.pumpAndSettle();
@@ -369,6 +377,42 @@ void main() {
     await tester.tap(find.text('Apply to guider'));
     await tester.pumpAndSettle();
     expect(h.profile.lastPut?.guiderRotator, 'Simulator');
+    expect(h.profile.lastPut?.guiderSetupType, 'oag');
+  });
+
+  testWidgets(
+      'a separate guide scope hides the rotator picker and applies none',
+      (tester) async {
+    // The guider rotates its calibration by every move of the rotator it is
+    // given; on a guide scope the guide camera never turns, so no rotator may
+    // reach it — not even one stored before the rule (night of 2026-10-16).
+    tester.view.physicalSize = const Size(1400, 1800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    final h = await _pump(tester,
+        stored: const Phd2Settings(
+          host: 'rc91.lan',
+          port: 4400,
+          guiderCamera: 'Old Camera',
+          guiderRotator: 'Simulator',
+          guiderSetupType: 'oag',
+        ));
+    await _next(tester); // camera
+    await _next(tester); // optics
+    await tester.tap(find.byKey(const ValueKey('wiz-Setup type')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Guide scope').last);
+    await tester.pumpAndSettle();
+    await _next(tester); // mount
+    expect(find.byKey(const ValueKey('wiz-Rotator')), findsNothing);
+    expect(find.byKey(const ValueKey('wiz-rotator-not-used')), findsOneWidget);
+    await _next(tester); // apply
+    expect(find.textContaining('not used — separate guide scope'),
+        findsOneWidget);
+    await tester.tap(find.text('Apply to guider'));
+    await tester.pumpAndSettle();
+    expect(h.profile.lastPut?.guiderSetupType, 'guide_scope');
+    expect(h.profile.lastPut?.guiderRotator, '');
   });
 
   testWidgets('entering a picker step re-fetches the device lists',
