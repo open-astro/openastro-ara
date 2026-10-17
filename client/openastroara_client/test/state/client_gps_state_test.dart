@@ -34,9 +34,16 @@ class _FakeSource implements SerialGpsSource {
   final Set<String> unopenable;
   int opens = 0;
   String? lastPort;
+  /// When set, every enumeration after the first (build's) waits on it, like a slow `mode`.
+  Completer<void>? slowPorts;
+  int _portCalls = 0;
 
   @override
-  Future<List<String>> availablePorts() async => ports;
+  Future<List<String>> availablePorts() async {
+    final gate = slowPorts;
+    if (gate != null && ++_portCalls > 1) await gate.future;
+    return ports;
+  }
 
   @override
   Stream<String> lines(String port) {
@@ -245,6 +252,58 @@ void main() {
       final status = c.read(clientGpsProvider).value!;
       expect(status.prefs.port, '/dev/cu.usbmodem1101', reason: 'never guess between two dongles');
       expect(status.lastError, contains('/dev/cu.usbmodem101 or /dev/cu.usbserial-9'));
+    });
+
+    test('a followed port that gives no fix is never remembered', () async {
+      // The lone usbmodem port may be an Arduino focuser or an OnStep mount, not the GPS.
+      final source = _FakeSource([], ports: const ['/dev/cu.usbmodem101']);
+      final c = await container(source, _FakeApi(), const ClientGpsPrefs(enabled: true, port: '/dev/cu.usbmodem1101'));
+      await c.read(clientGpsProvider.future);
+      await Future<void>.delayed(const Duration(milliseconds: 400)); // let the loop's own read finish
+      final fix = await c.read(clientGpsProvider.notifier).syncNow();
+      expect(fix, isNull);
+      expect(source.lastPort, '/dev/cu.usbmodem101', reason: 'it was tried');
+      expect(c.read(clientGpsProvider).value!.prefs.port, '/dev/cu.usbmodem1101');
+      final saved = await ClientGpsPrefsService(supportDir: () async => tmp).load();
+      expect(saved.port, '/dev/cu.usbmodem1101');
+    });
+
+    test('a read while the first is still enumerating ports never opens the port twice', () async {
+      final source = _FakeSource([_rmc])..slowPorts = Completer<void>();
+      final c = await container(source, _FakeApi(), const ClientGpsPrefs(enabled: true, port: '/dev/cu.usbserial-1'));
+      await c.read(clientGpsProvider.future);
+      await Future<void>.delayed(const Duration(milliseconds: 20)); // the loop's first read is enumerating
+      final manual = c.read(clientGpsProvider.notifier).syncNow(); // "Read now" in that gap
+      source.slowPorts!.complete();
+      await manual;
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+      expect(source.opens, 1);
+    });
+
+    test('a port chosen while the read is enumerating is never overwritten by the follow', () async {
+      final source = _FakeSource([_rmc], ports: const ['/dev/cu.usbmodem101', '/dev/ttyS0'])..slowPorts = Completer<void>();
+      final c = await container(source, _FakeApi(), const ClientGpsPrefs(enabled: true, port: '/dev/cu.usbmodem1101'));
+      await c.read(clientGpsProvider.future);
+      await Future<void>.delayed(const Duration(milliseconds: 20)); // the loop's first read is enumerating
+      final picked = c.read(clientGpsProvider.notifier).setPort('/dev/ttyS0');
+      source.slowPorts!.complete();
+      await picked;
+      await Future<void>.delayed(const Duration(milliseconds: 600));
+      expect(c.read(clientGpsProvider).value!.prefs.port, '/dev/ttyS0');
+      final saved = await ClientGpsPrefsService(supportDir: () async => tmp).load();
+      expect(saved.port, '/dev/ttyS0');
+      expect(source.lastPort, '/dev/ttyS0', reason: 'the chosen port is read once the first read ends');
+    });
+
+    test('a listed port that fails gets no "the GPS may be on" hint', () async {
+      final source = _FakeSource([_rmc], ports: const ['/dev/cu.usbmodem1101', '/dev/cu.usbmodem101'], unopenable: const {'/dev/cu.usbmodem1101'});
+      final c = await container(source, _FakeApi(), const ClientGpsPrefs(enabled: true, port: '/dev/cu.usbmodem1101'));
+      await c.read(clientGpsProvider.future);
+      await Future<void>.delayed(const Duration(milliseconds: 400)); // let the loop's own read finish
+      await c.read(clientGpsProvider.notifier).syncNow();
+      final error = c.read(clientGpsProvider).value!.lastError;
+      expect(error, contains('GPS read failed on /dev/cu.usbmodem1101'));
+      expect(error, isNot(contains('may be on')));
     });
 
     test('replacementPort follows only an unambiguous GPS-like port', () {

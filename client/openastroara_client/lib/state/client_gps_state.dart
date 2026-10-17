@@ -176,11 +176,14 @@ class ClientGpsNotifier extends AsyncNotifier<ClientGpsStatus> {
       if (gen != null && gen == _gen) _schedule(ref.read(clientGpsBusyRetryProvider));
       return s.lastFix;
     }
-    var port = s.prefs.port;
-    if (port == null || port.isEmpty) {
+    final saved = s.prefs.port;
+    if (saved == null || saved.isEmpty) {
       state = AsyncData(s.copyWith(lastError: 'Choose the serial port the GPS dongle is on.'));
       return null;
     }
+    // Busy before the first await: the port enumeration below can take a while (a `mode`
+    // subprocess on Windows), and a second caller in that gap must still see the guard.
+    state = AsyncData(s.copyWith(busy: true, clearError: true));
     // macOS names a USB serial port after the socket it is plugged into, so the
     // dongle moved to another socket comes back as a different /dev/cu.usbmodem…
     // and the saved one no longer exists (2026-10-16: saved usbmodem1101, dongle
@@ -188,27 +191,34 @@ class ClientGpsNotifier extends AsyncNotifier<ClientGpsStatus> {
     final source = ref.read(serialGpsSourceProvider);
     final ports = await _ports(source);
     if (!ref.mounted) return null;
-    if (ports.isNotEmpty && !ports.contains(port)) {
-      final moved = replacementPort(port, ports);
+    state = AsyncData(_current.copyWith(ports: ports));
+    final savedGone = ports.isNotEmpty && !ports.contains(saved);
+    var port = saved;
+    // Only while the saved port is still the user's choice: a port picked during the
+    // enumeration wins, and the newer generation reads it once this read ends.
+    if (savedGone && _current.prefs.port == saved) {
+      final moved = replacementPort(saved, ports);
       if (moved != null) {
-        debugPrint('[client-gps] $port is gone; following the dongle to $moved');
-        final prefs = _current.prefs.copyWith(port: moved);
-        await ref.read(clientGpsPrefsServiceProvider).save(prefs);
-        if (!ref.mounted) return null;
-        state = AsyncData(_current.copyWith(prefs: prefs, ports: ports));
+        debugPrint('[client-gps] $saved is gone; trying the dongle on $moved');
         port = moved;
       }
       // Otherwise read the saved port as before: a port the enumeration misses may
       // still open (a COM port `mode` does not list), and two candidates are the
       // user's choice — the failure message below names them.
     }
-    final s2 = _current;
-    state = AsyncData(s2.copyWith(busy: true, clearError: true));
     NmeaFix? fix;
     String? error;
     var pushed = false;
     try {
       fix = await acquireFix(source, port, ref.read(clientGpsListenWindowProvider));
+      if (fix != null && port != saved && ref.mounted && _current.prefs.port == saved) {
+        // Remembered only once it spoke NMEA: a lone usbmodem/ttyACM port can just as
+        // well be an Arduino focuser or an OnStep mount, which must never become the
+        // saved GPS port (probeAndAdopt keeps the same rule).
+        final prefs = _current.prefs.copyWith(port: port);
+        await ref.read(clientGpsPrefsServiceProvider).save(prefs);
+        if (ref.mounted) state = AsyncData(_current.copyWith(prefs: prefs));
+      }
       if (fix == null) {
         error = 'No GPS fix on $port yet — the receiver needs a clear view of the sky.';
       } else if ((gen != null && gen != _gen) || !ref.mounted || !_current.enabled) {
@@ -225,7 +235,8 @@ class ClientGpsNotifier extends AsyncNotifier<ClientGpsStatus> {
         }
       }
     } catch (e) {
-      final others = ports.where((p) => p != port && looksLikeGpsPort(p)).toList();
+      // Only when the saved port is gone; a listed port that failed (busy) is not misplaced.
+      final others = savedGone ? ports.where((p) => p != port && looksLikeGpsPort(p)).toList() : const <String>[];
       error = fix == null
           ? 'GPS read failed on $port: $e'
               '${others.isEmpty ? '' : ' — the GPS may be on ${others.join(' or ')}; choose it in GPS on this computer.'}'
@@ -298,8 +309,9 @@ class ClientGpsNotifier extends AsyncNotifier<ClientGpsStatus> {
 
   /// The port to follow when [saved] is no longer present: the one GPS-like
   /// port in [ports], or null when there is none or more than one (the user
-  /// must choose — never guess between two dongles or grab a mount's line).
-  /// Pure — tested.
+  /// must choose — never guess between two dongles). The name alone cannot tell
+  /// a GPS from a mount or focuser, so [syncNow] saves the follow only after it
+  /// reads a fix there. Pure — tested.
   static String? replacementPort(String saved, List<String> ports) {
     if (ports.contains(saved)) return saved;
     final candidates = ports.where(looksLikeGpsPort).toList();
