@@ -15,8 +15,10 @@
 using Newtonsoft.Json;
 using OpenAstroAra.Core.Locale;
 using OpenAstroAra.Core.Model;
+using OpenAstroAra.Core.Utility;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Profile.Interfaces;
+using OpenAstroAra.Sequencer.Utility;
 using OpenAstroAra.Sequencer.Validations;
 using System;
 using System.Collections.Generic;
@@ -63,9 +65,45 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Guider {
             }
         }
 
-        public override Task Execute(IProgress<ApplicationStatus> progress, CancellationToken token) {
-            //todo missing progress
-            return guiderMediator.Dither(token);
+        public override async Task Execute(IProgress<ApplicationStatus> progress, CancellationToken token) {
+            // A frame is never started on a star that is still swinging. The night of 2026-10-16: two
+            // dithers failed to settle (a rotated calibration spiralled every correction) and the next
+            // exposure started anyway — both frames trailed. A settle failure gets ONE more dither (the
+            // guider settles again from wherever it is); a second failure, or a dither the guider refused
+            // because it is not guiding, parks the run awaiting the user, and Resume dithers again. A rig
+            // whose guider is not connected keeps the old behaviour: nothing to wait for.
+            if (!guiderMediator.GetInfo().Connected) {
+                await guiderMediator.Dither(token);
+                return;
+            }
+            var gate = (ItemUtility.GetRootContainer(this.Parent) as IPauseGateHost)?.PauseGate;
+            var settleRetried = false;
+            while (true) {
+                var sent = await guiderMediator.Dither(token);
+                token.ThrowIfCancellationRequested();
+                var error = sent ? guiderMediator.LastDitherError : "the guider is not guiding";
+                if (error is null) {
+                    return;
+                }
+                if (sent && !settleRetried) {
+                    settleRetried = true;
+                    Logger.Warning($"Dither: the guider did not settle ({error}) — dithering once more before pausing");
+                    progress?.Report(new ApplicationStatus { Status = $"Guider did not settle ({error}) — trying once more" });
+                    continue;
+                }
+                var why = sent ? $"the guider did not settle twice ({error})" : error;
+                if (gate is null) {
+                    throw new SequenceEntityFailedException($"Dither failed: {why}");
+                }
+                Logger.Warning($"Dither: {why} — pausing the run awaiting the user");
+                progress?.Report(new ApplicationStatus {
+                    Status = $"Dither failed ({why}) — check the guider, then press Resume to dither again"
+                });
+                gate.RequestPause(PauseKind.AwaitingUser);
+                await gate.WaitWhilePausedAsync(token);
+                Logger.Info("Dither: resumed — dithering again");
+                settleRetried = false;
+            }
         }
 
         public bool Validate() {

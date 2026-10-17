@@ -210,8 +210,11 @@ public sealed partial class GuiderService : IGuiderMediator {
             : token.IsCancellationRequested ? "cancelled"
             : guider.LastSettleError;
         await PublishDitherCompleteAsync(operationId: null, ok: sent && error is null, error).ConfigureAwait(false);
+        LastDitherError = error;
         return sent;
     }
+
+    public string? LastDitherError { get; private set; }
 
     public Task<bool> AutoSelectGuideStar(CancellationToken token) =>
         MediatorGuider()?.AutoSelectGuideStar() ?? Task.FromResult(false);

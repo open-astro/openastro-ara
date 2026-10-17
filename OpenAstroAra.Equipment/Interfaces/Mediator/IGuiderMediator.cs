@@ -27,6 +27,12 @@ namespace OpenAstroAra.Equipment.Interfaces.Mediator {
 
         Task<bool> Dither(CancellationToken token);
 
+        /// <summary>The verdict of the last <see cref="Dither"/>: null when the guider settled, otherwise why
+        /// it did not ("refused" when it was not guiding, the guider's settle error, "cancelled"). The Dither
+        /// instruction reads it so a frame never starts on a star still swinging from a failed settle
+        /// (2026-10-16: two settle timeouts, two trailed frames).</summary>
+        string? LastDitherError { get; }
+
         Guid StartRMSRecording();
 
         RMS GetRMSRecording(Guid handle);
