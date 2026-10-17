@@ -6,6 +6,9 @@ import 'package:openastroara/models/sequence/instruction_catalog.dart';
 import 'package:openastroara/models/sequence/nina_dom.dart';
 import 'package:openastroara/models/sequence/trigger_catalog.dart';
 import 'package:openastroara/models/sequence/sequence_summary.dart';
+import 'package:openastroara/models/equipment_device_status.dart';
+import 'package:openastroara/models/filter_wheel_status.dart';
+import 'package:openastroara/state/equipment/filter_wheel_state.dart';
 import 'package:openastroara/state/settings/filter_wheel_labels_state.dart';
 import 'package:openastroara/state/sequencer/sequence_editor_state.dart';
 import 'package:openastroara/widgets/sequencer/sequence_field_editor.dart';
@@ -59,8 +62,12 @@ SequenceDetail sampleDetail() => SequenceDetail(
     );
 
 Future<ProviderContainer> _pump(WidgetTester tester,
-    {SequenceDetail? detail, NodePath? select}) async {
-  final container = ProviderContainer();
+    {SequenceDetail? detail,
+    NodePath? select,
+    bool connectedWheel = false}) async {
+  final container = ProviderContainer(overrides: [
+    if (connectedWheel) filterWheelProvider.overrideWith(_ConnectedWheel.new),
+  ]);
   addTearDown(container.dispose);
   if (detail != null) {
     container.read(sequenceEditorProvider.notifier).load(detail);
@@ -75,6 +82,24 @@ Future<ProviderContainer> _pump(WidgetTester tester,
     ),
   );
   return container;
+}
+
+/// A connected wheel reporting AlpacaBridge names that differ from the default
+/// slot labels (`Luminance` for `L`, `Ha` for `Hα`).
+class _ConnectedWheel extends FilterWheelNotifier {
+  @override
+  Future<FilterWheelStatus?> build() async => FilterWheelStatus(
+        deviceId: 'ZWO_EFW_0',
+        name: 'ZWO EFW',
+        connectionState: EquipmentConnectionState.connected,
+        runtimeState: 'idle',
+        currentSlot: 0,
+        slots: [
+          for (final (i, n) in const ['Luminance', 'Red', 'Green', 'Blue', 'Ha', 'OIII', 'SII']
+              .indexed)
+            FilterSlot(position: i, name: n, focusOffset: 0),
+        ],
+      );
 }
 
 Map<String, dynamic> _nodeAt(ProviderContainer c, NodePath p) =>
@@ -827,6 +852,23 @@ void main() {
       expect(filter['_name'], 'OIII');
       expect(filter['_position'], 5); // 0-based slot index (6th slot)
       expect(filter[r'$type'], contains('FilterInfo'));
+    });
+
+    testWidgets("a connected wheel's Alpaca names replace the slot labels",
+        (tester) async {
+      final c = await _pump(tester,
+          detail: _detailWith(_switchFilter),
+          select: const [0],
+          connectedWheel: true);
+      await tester.pumpAndSettle(); // the wheel status future resolves
+      await tester.tap(find.byType(DropdownButton<String>));
+      await tester.pumpAndSettle();
+      expect(find.text('Hα'), findsNothing); // the profile label is not offered
+      await tester.tap(find.text('Ha').last);
+      await tester.pumpAndSettle();
+      final filter = _nodeAt(c, [0])['Filter'] as Map;
+      expect(filter['_name'], 'Ha');
+      expect(filter['_position'], 4);
     });
 
     testWidgets('an unknown stored filter stays visible rather than blanking',
