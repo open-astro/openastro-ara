@@ -190,6 +190,9 @@ void main() {
     (GuiderRuntimeState.starLost, 'Guide', 'startGuiding'),
     (GuiderRuntimeState.guiding, 'Stop guiding', 'stopGuiding'),
     (GuiderRuntimeState.settling, 'Stop guiding', 'stopGuiding'),
+    (GuiderRuntimeState.paused, 'Stop guiding', 'stopGuiding'),
+    (GuiderRuntimeState.calibrating, 'Stop guiding', 'stopGuiding'),
+    (GuiderRuntimeState.dithering, 'Stop guiding', 'stopGuiding'),
   ]) {
     testWidgets('a ${state.name} guider offers $label on the strip header',
         (tester) async {

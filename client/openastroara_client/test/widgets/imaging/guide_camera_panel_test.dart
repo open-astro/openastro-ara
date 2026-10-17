@@ -195,6 +195,30 @@ void main() {
     );
   });
 
+  // A lost star is still a guiding phase, so Stop guiding stays, but Guide
+  // must be on to pick the guide back up.
+  testWidgets('a lost lock offers both Guide and Stop guiding', (t) async {
+    final fake = _FakeLive(
+      GuiderLive.fromJson({'connected': true, 'app_state': 'LostLock'}),
+    );
+    final guider = _FakeGuider();
+    await _pumpPanel(t, fake, guider: guider);
+    expect(find.descendant(
+      of: find.byKey(const Key('guide-camera-stop')),
+      matching: find.text('Stop guiding'),
+    ), findsOneWidget);
+    expect(
+      t.widget<FilledButton>(find.byKey(const Key('guide-camera-guide'))).onPressed,
+      isNotNull,
+    );
+
+    await t.tap(find.byKey(const Key('guide-camera-guide')));
+    await t.pump();
+    await t.pump();
+
+    expect(guider.starts, 1);
+  });
+
   testWidgets('a stopped guider can Guide again from the panel', (t) async {
     final fake = _FakeLive(
       GuiderLive.fromJson({'connected': true, 'app_state': 'Stopped'}),
