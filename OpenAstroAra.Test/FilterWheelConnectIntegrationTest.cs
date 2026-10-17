@@ -17,6 +17,7 @@ using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Services;
 using System;
+using System.Linq;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
@@ -84,7 +85,8 @@ namespace OpenAstroAra.Test {
             Assert.That(device, Is.Not.Null, "no FilterWheel device discovered from the running OmniSim");
 
             var profileService = new HeadlessProfileService();
-            using var svc = new FilterWheelService(logger: null, profileService);
+            var store = new InMemoryProfileStore();
+            using var svc = new FilterWheelService(logger: null, profileService, profileStore: store);
             await svc.ConnectAsync(new ConnectRequestDto(device!), idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
             var connected = await PollUntilAsync(svc, s => s != EquipmentConnectionState.Connecting).ConfigureAwait(false);
             Assert.That(connected!.State, Is.EqualTo(EquipmentConnectionState.Connected));
@@ -100,6 +102,10 @@ namespace OpenAstroAra.Test {
                 var profileFilters = profileService.ActiveProfile.FilterWheelSettings.FilterWheelFilters;
                 Assert.That(profileFilters, Has.Count.EqualTo(withSlots.Slots.Count),
                     "the connected wheel's slots should be imported into the active profile");
+                // ...and the wheel's names mirrored into the profile's slot labels.
+                Assert.That(store.GetFilterWheelLabels().Labels,
+                    Is.EqualTo(withSlots.Slots.OrderBy(s => s.Position).Select(s => s.Name.Trim()).ToList()),
+                    "the connected wheel's names should be mirrored into the profile's slot labels");
 
                 var info = ((IFilterWheelMediator)svc).GetInfo();
                 Assert.That(info.Connected, Is.True);
