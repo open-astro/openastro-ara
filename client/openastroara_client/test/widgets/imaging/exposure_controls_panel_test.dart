@@ -540,6 +540,53 @@ void main() {
     expect(wheel.changeCalls, isEmpty);
   });
 
+  testWidgets('a stale picked name on a connected wheel says so', (tester) async {
+    final container = ProviderContainer(overrides: [
+      filterWheelLabelsProvider.overrideWith(_FixedLabels.new),
+      filterWheelProvider.overrideWith(_FakeWheelNotifier.new),
+    ]);
+    _FixedLabels.labels = ['L', 'Ha', 'OIII', '', ''];
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: const MaterialApp(home: Scaffold(body: ExposureControlsPanel())),
+    ));
+    await tester.pumpAndSettle();
+
+    // The capture is tagged 'Ha' offline, then a one-slot wheel ('L' only)
+    // connects without reporting its slot yet, so the follow-logic can't
+    // re-tag it: the stale value stays at the head of the picker, not blanked.
+    await tester.tap(find.text('L').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Ha').last);
+    await tester.pumpAndSettle();
+    expect(container.read(exposureControllerProvider).filterSlot, 'Ha');
+
+    final wheel = container.read(filterWheelProvider.notifier)
+        as _FakeWheelNotifier;
+    wheel.park(FilterWheelStatus(
+      deviceId: 'fw',
+      name: 'FILTERWHEEL',
+      connectionState: EquipmentConnectionState.connected,
+      runtimeState: 'idle',
+      currentSlot: null,
+      slots: const [FilterSlot(position: 0, name: 'L', focusOffset: 0)],
+    ));
+    await tester.pump();
+    expect(container.read(exposureControllerProvider).filterSlot, 'Ha');
+
+    await tester.tap(find.text('Ha').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Ha').last);
+    await tester.pumpAndSettle();
+
+    // No silent lie: no move, and a snackbar says the name isn't on the wheel.
+    expect(wheel.changeCalls, isEmpty);
+    expect(find.textContaining("isn't a slot on the connected wheel"),
+        findsOneWidget);
+  });
+
   testWidgets('a pick landing on an unnamed device slot tags the local label',
       (tester) async {
     final container = ProviderContainer(overrides: [
