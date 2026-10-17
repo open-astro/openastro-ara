@@ -1874,6 +1874,18 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task The_runtime_snapshot_carries_the_guiders_pixel_scale_once_reported() {
+            await using var fake = FakeGuider.Start();
+            _ = new ProfileDaemon(fake);
+            fake.OnRpc("get_pixel_scale", JsonValue.Create(2.99));
+            using var svc = await ConnectedAgainstAsync(fake, "Rig A").ConfigureAwait(false);
+
+            Assert.That(await WaitUntilAsync(() => svc.GetAsync(CancellationToken.None).Result?.Runtime.PixelScaleArcsec is not null).ConfigureAwait(false), Is.True,
+                "get_pixel_scale is part of the connect handshake");
+            Assert.That((await svc.GetAsync(CancellationToken.None).ConfigureAwait(false))!.Runtime.PixelScaleArcsec, Is.EqualTo(2.99));
+        }
+
+        [Test]
         public async Task A_rest_stop_with_nothing_running_is_reported_as_refused() {
             await using var fake = FakeGuider.Start();
             _ = new ProfileDaemon(fake);

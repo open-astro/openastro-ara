@@ -464,7 +464,11 @@ public sealed record GuiderStateDto(
     /// the leg's start in guide-camera pixels. Null otherwise.</summary>
     string? CalibrationDirection = null,
     int? CalibrationStep = null,
-    double? CalibrationDistancePx = null);
+    double? CalibrationDistancePx = null,
+    /// <summary>The guider's reported image scale (arcsec per guide-camera pixel), null until it has
+    /// answered <c>get_pixel_scale</c>. The client turns dither and settle pixels into arcsec and imaging
+    /// pixels with it: on 2026-10-16 "5 px" was 15″ on one rig and would be 60″ on a short guider.</summary>
+    double? PixelScaleArcsec = null);
 
 /// <summary>
 /// #1364 — the live guide-camera view (<c>GET /equipment/guider/live</c>): what the guider is doing

@@ -6,12 +6,14 @@ import '../../../models/guider_equipment_choices.dart';
 import '../../../services/alpaca_device_names_api.dart';
 import '../../../services/profile_api.dart';
 import '../../../state/guider/guider_equipment_state.dart';
+import '../../../state/guider/guider_state.dart';
 import '../../../state/profile_management_state.dart';
 import '../../../state/settings/equipment_connection_state.dart';
 import '../../../state/settings/optics_settings_state.dart';
 import '../../../state/settings/panel_save_registry.dart';
 import '../../../state/settings/phd2_settings_state.dart';
 import '../../../util/guide_optics.dart';
+import '../../../util/guide_units.dart';
 import '../../../util/host_port.dart';
 import '../../../widgets/guider/guider_setup_wizard.dart';
 import '../../../widgets/profile/profile_import_flow.dart'
@@ -285,6 +287,12 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
     final connN = ref.read(equipmentConnectionProvider.notifier);
     final phd2 = ref.watch(phd2SettingsProvider);
     final phd2N = ref.read(phd2SettingsProvider.notifier);
+    final guideScale = ref.watch(guiderStatusProvider).value?.pixelScaleArcsec;
+    final opticsForScale = ref.watch(opticsSettingsProvider);
+    final imagingScale = imagingPixelScaleArcsec(
+        focalLengthMm: opticsForScale.focalLengthMm,
+        reducerFactor: opticsForScale.reducerFactor,
+        pixelSizeUm: opticsForScale.pixelSizeUm);
 
     return ListView(
       padding: const EdgeInsets.all(24),
@@ -351,6 +359,19 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
             if (v != null) phd2N.setDitherPixels(v);
           },
         ),
+        // Guide pixels in units a person can judge: the guider's reported scale
+        // turns them into arcsec, the main optics into imaging pixels. 2026-10-16:
+        // "5 px" was 15″ and 8.6 imaging px against a 1.5 px settle tolerance,
+        // and twelve settles timed out with nothing on screen saying how big
+        // either figure was. Shown only once the guider has reported its scale.
+        ..._guideUnitRows(
+          key: 'dither',
+          label: 'Dither',
+          guidePx: phd2.ditherPixels,
+          guideScale: guideScale,
+          imagingScale: imagingScale,
+          onArcsec: phd2N.setDitherPixels,
+        ),
         EditableNumberRow(
           label: 'Settle threshold (pixels)',
           helpKey: 'eq.guider.settle_pixels',
@@ -361,6 +382,14 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
             final v = double.tryParse(s);
             if (v != null) phd2N.setSettlePixels(v);
           },
+        ),
+        ..._guideUnitRows(
+          key: 'settle',
+          label: 'Settle threshold',
+          guidePx: phd2.settlePixels,
+          guideScale: guideScale,
+          imagingScale: imagingScale,
+          onArcsec: phd2N.setSettlePixels,
         ),
         EditableNumberRow(
           label: 'Settle time (s)',
@@ -854,4 +883,42 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
         ),
     ];
   }
+}
+
+/// The "what is that in the sky" pair under a guide-pixel field: a read-only
+/// line with the arcsec and imaging-pixel equivalents, and an arcsec entry that
+/// writes back in guide pixels. Empty until the guider has reported its scale.
+List<Widget> _guideUnitRows({
+  required String key,
+  required String label,
+  required double guidePx,
+  required double? guideScale,
+  required double? imagingScale,
+  required void Function(double guidePx) onArcsec,
+}) {
+  final described = describeGuidePixels(guidePx, guideScale, imagingScale);
+  if (described == null) return const [];
+  final arcsec = guidePixelsToArcsec(guidePx, guideScale)!;
+  return [
+    SettingsRow(
+      key: ValueKey('guide-units-$key'),
+      label: '$label on the sky',
+      value: described,
+      hint: imagingScale == null
+          ? 'Set the telescope focal length and camera pixel size under Imaging → Optics to see imaging pixels too'
+          : null,
+    ),
+    EditableNumberRow(
+      key: ValueKey('guide-units-$key-arcsec'),
+      label: '$label (arcsec)',
+      currentValue: arcsec.toStringAsFixed(1),
+      getCanonical: () => arcsec.toStringAsFixed(1),
+      parse: (s) {
+        final v = double.tryParse(s);
+        final px = v == null || v < 0 ? null : arcsecToGuidePixels(v, guideScale);
+        if (px != null) onArcsec(roundGuidePixels(px));
+      },
+      hint: 'Converted to guide pixels with the guider\'s scale',
+    ),
+  ];
 }

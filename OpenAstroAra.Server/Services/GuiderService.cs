@@ -163,7 +163,8 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
                 PaResidual: PaResidualSnapshot(),
                 CalibrationDirection: calibration?.Direction,
                 CalibrationStep: calibration?.Step,
-                CalibrationDistancePx: calibration is { } cal ? Math.Round(cal.Distance, 1) : null);
+                CalibrationDistancePx: calibration is { } cal ? Math.Round(cal.Distance, 1) : null,
+                PixelScaleArcsec: pixelScale > 0 ? pixelScale : null);
             return Task.FromResult<GuiderDto?>(new GuiderDto("PHD2_Single", "PHD2", _state, runtime));
         }
     }

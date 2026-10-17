@@ -1276,7 +1276,8 @@ const Map<String, Help> helpRegistry = {
     key: 'eq.guider.dither_pixels',
     title: 'Dither amplitude',
     body:
-        'How many guide-camera pixels to shift the mount between exposures. Larger amplitudes randomize fixed-pattern noise more aggressively but mean longer settle times.\n\n'
+        'How many guide-camera pixels to shift the mount between exposures. Larger amplitudes randomize fixed-pattern noise more aggressively but mean longer settle times. '
+        'A guide pixel is a different angle on every rig, so the row below shows the same figure in arcsec and in imaging pixels once the guider has reported its scale — and you can type the dither in arcsec instead.\n\n'
         '* **3-5 px**: conservative. Settles fast on most mounts.\n'
         '* **5-10 px**: aggressive. Better noise reduction in stacks; needs a stable mount + good RMS.\n'
         '* **>10 px**: usually overkill; can push the guide star off the chip on small guide scopes.',
@@ -1289,7 +1290,8 @@ const Map<String, Help> helpRegistry = {
     key: 'eq.guider.settle_pixels',
     title: 'Settle threshold',
     body:
-        'Once a dither completes, OpenAstro Guider considers the guider re-settled when guide-RMS error stays below this many pixels for `settle_time` seconds.\n\n'
+        'Once a dither completes, OpenAstro Guider considers the guider re-settled when guide-RMS error stays below this many pixels for `settle_time` seconds. '
+        'The row below shows the threshold in arcsec; compare it with your guide RMS in arcsec on the Live tab, and with the dither — a dither several times the tolerance takes the guider a while to settle.\n\n'
         'Tight thresholds (0.5-1.0 px) catch the last bit of motion but waste time on mounts that hover at 1 px RMS — they\'ll never converge.\n'
         '1.5 px (default) is a sensible middle ground. Loosen to 2-3 px for slower mounts; tighten only if your guide RMS routinely sits below 1 px.',
     relatedSettings: [
