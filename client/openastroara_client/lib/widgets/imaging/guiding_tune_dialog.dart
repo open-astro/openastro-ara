@@ -22,8 +22,9 @@ Future<void> showGuidingTuneDialog(BuildContext context) => showDialog<void>(
     );
 
 /// The RUNTIME-SAFE §63.5 tuning params only (aggressiveness, minimum move,
-/// dec guide mode, dither pixels, guide exposure) — they map to OpenAstro
-/// Guider `set_algo_param` / `set_dec_guide_mode` / `set_exposure`, which apply
+/// dec guide mode, dither pixels, guide exposure, guide camera gain) — they map
+/// to OpenAstro Guider `set_algo_param` / `set_dec_guide_mode` / `set_exposure`
+/// / `set_camera_gain`, which apply
 /// while guiding continues. Apply asks the daemon for the TUNING-ONLY push
 /// (`?scope=tuning`): the full push also re-sends the equipment selections,
 /// which the guider only accepts with its equipment disconnected, so it
@@ -60,7 +61,7 @@ class _GuidingTuneDialogState extends ConsumerState<GuidingTuneDialog> {
   // The daemon's copy as fetched at open. The dialog's hydrate deliberately
   // does NOT go through the shared notifier: Settings → Guider stages its own
   // unsaved edits in the shared provider (pre-Save), and a provider hydrate
-  // here would silently revert them. Apply PUTs _serverCopy + the seven tuning
+  // here would silently revert them. Apply PUTs _serverCopy + the eight tuning
   // fields, so nothing unconfirmed is persisted and nothing staged is lost.
   Phd2Settings? _serverCopy;
 
