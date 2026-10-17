@@ -86,6 +86,17 @@ void main() {
       );
     });
 
+    test('connected + stopped: green between sessions, solid amber during a run', () {
+      final stopped = _status(GuiderConnectionState.connected, GuiderRuntimeState.stopped);
+      expect(guiderStatusLevel(stopped), StatusLevel.connected);
+      expect(guiderStatusLevel(stopped, runActive: true), StatusLevel.warning,
+          reason: '2026-10-16: 20 unguided minutes behind a green dot after Stop');
+      expect(guiderChipTooltip(stopped), isNull);
+      expect(guiderChipTooltip(stopped, runActive: true), 'Not guiding while a sequence runs');
+      expect(guiderChipTooltip(_status(GuiderConnectionState.connected, GuiderRuntimeState.starLost)), 'Guide star lost');
+      expect(guiderChipTooltip(_status(GuiderConnectionState.disconnected, GuiderRuntimeState.stopped)), isNull);
+    });
+
     test('connected + calibrating/dithering/paused → busy (not actively guiding)', () {
       expect(
         guiderStatusLevel(_status(GuiderConnectionState.connected, GuiderRuntimeState.calibrating)),

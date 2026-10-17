@@ -26,11 +26,13 @@ void main() {
     test('recovery-tracked kinds are red, everything else amber', () {
       expect(faultKindLevel('disconnected'), StatusLevel.error);
       expect(faultKindLevel('tracking_lost'), StatusLevel.error);
-      expect(faultKindLevel('stall_timeout'), StatusLevel.busy);
-      expect(faultKindLevel('value_mismatch'), StatusLevel.busy);
-      expect(faultKindLevel('op_error'), StatusLevel.busy);
-      expect(faultKindLevel('cooling_drift'), StatusLevel.busy);
-      expect(faultKindLevel('some_future_kind'), StatusLevel.busy);
+      // A fault is a standing problem: solid amber (warning), never the
+      // activity ring (busy).
+      expect(faultKindLevel('stall_timeout'), StatusLevel.warning);
+      expect(faultKindLevel('value_mismatch'), StatusLevel.warning);
+      expect(faultKindLevel('op_error'), StatusLevel.warning);
+      expect(faultKindLevel('cooling_drift'), StatusLevel.warning);
+      expect(faultKindLevel('some_future_kind'), StatusLevel.warning);
     });
   });
 
@@ -174,8 +176,8 @@ void main() {
       final types = snap!.byDeviceType;
       expect(types['telescope']!.level, StatusLevel.error,
           reason: 'an overnight red fault seeds red');
-      expect(types['switch']!.level, StatusLevel.busy,
-          reason: 'a fresh advisory seeds amber');
+      expect(types['switch']!.level, StatusLevel.warning,
+          reason: 'a fresh advisory seeds solid amber');
       expect(types.containsKey('dome'), isFalse,
           reason: 'an advisory past its TTL is stale');
       expect(types.containsKey('focuser'), isFalse,
@@ -266,7 +268,7 @@ void main() {
       acc.apply(_fault('flatdevice', 'op_error'));
       final snap = acc.snapshot;
       expect(snap.worstFor(const {'covercalibrator', 'flatdevice'}),
-          StatusLevel.busy);
+          StatusLevel.warning);
       expect(snap.worstFor(const {'camera'}), isNull);
     });
   });

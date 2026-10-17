@@ -153,14 +153,18 @@ class EquipmentStatusChip extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     // Stale-guard: while the server link is down the last device status can't be
     // trusted — show the dot grey (disconnected) instead of a false green.
-    final level = ref.watch(serverLinkUpProvider)
-        ? blendFaultLevel(watchLevel(ref),
-            ref.watch(activeFaultsProvider).worstFor(faultTypes))
+    final linkUp = ref.watch(serverLinkUpProvider);
+    final faults = ref.watch(activeFaultsProvider);
+    final level = linkUp
+        ? blendFaultLevel(watchLevel(ref), faults.worstFor(faultTypes))
         : StatusLevel.disconnected;
     return EquipmentChip(
       icon: icon,
       label: label,
       status: level,
+      tooltip: !linkUp
+          ? 'Server link lost — status is stale'
+          : faults.describeFor(faultTypes),
       onTap: () => openSettingsPanel(ref, panelId),
     );
   }

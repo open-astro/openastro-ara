@@ -247,6 +247,7 @@ class DiagnosticsAccumulator {
     switch (level) {
       case StatusLevel.error:
         return 'Diagnostics: $n issue$plural — critical';
+      case StatusLevel.warning:
       case StatusLevel.busy:
         return 'Diagnostics: $n issue$plural — warning';
       case StatusLevel.info:
@@ -269,6 +270,8 @@ class DiagnosticsAccumulator {
   static int _rank(StatusLevel level) {
     switch (level) {
       case StatusLevel.error:
+        return 5;
+      case StatusLevel.warning:
         return 4;
       case StatusLevel.busy:
         return 3;

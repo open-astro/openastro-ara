@@ -27,6 +27,7 @@ class _FakeSavedServerService implements SavedServerService {
 /// statuses.
 class _FakeGuiderApi implements GuiderClient {
   GuiderStatus? status;
+  bool throwOnStatus = false;
   int connectCalls = 0;
   int disconnectCalls = 0;
   int closeCalls = 0;
@@ -37,7 +38,10 @@ class _FakeGuiderApi implements GuiderClient {
   Completer<void>? connectGate;
 
   @override
-  Future<GuiderStatus?> getStatus() async => status;
+  Future<GuiderStatus?> getStatus() async {
+    if (throwOnStatus) throw StateError('status read failed');
+    return status;
+  }
 
   @override
   void close() => closeCalls++;
@@ -115,6 +119,38 @@ void main() {
       expect(c.read(guiderApiProvider), isNull);
       final status = await c.read(guiderStatusProvider.future);
       expect(status, isNull);
+    });
+
+    test('a guider that was reporting keeps its status through three failed reads, the fourth surfaces the error', () async {
+      // The GUIDE chip used to go red on one dropped 2 s poll; the other device
+      // chips wait four. A failure streak is what should turn the chip red.
+      final api = _FakeGuiderApi()
+        ..status = const GuiderStatus(
+          deviceId: 'phd2',
+          name: 'OpenAstro Guider',
+          connectionState: GuiderConnectionState.connected,
+          runtimeState: GuiderRuntimeState.guiding,
+        );
+      final c = _container(const [server], api);
+      await c.read(savedServersProvider.future);
+      await c.read(guiderStatusProvider.future);
+      final notifier = c.read(guiderStatusProvider.notifier);
+
+      api.throwOnStatus = true;
+      for (var i = 1; i < GuiderStatusNotifier.staleAfterFailures; i++) {
+        await notifier.refresh();
+        expect(c.read(guiderStatusProvider).hasValue, isTrue, reason: 'read $i of a blip keeps the last status');
+        expect(c.read(guiderStatusProvider).value!.isConnected, isTrue);
+      }
+      await notifier.refresh();
+      expect(c.read(guiderStatusProvider).hasError, isTrue, reason: 'the fourth failure in a row is an outage');
+
+      api.throwOnStatus = false;
+      await notifier.refresh();
+      expect(c.read(guiderStatusProvider).hasValue, isTrue, reason: 'one good read restores the status');
+      api.throwOnStatus = true;
+      await notifier.refresh();
+      expect(c.read(guiderStatusProvider).hasValue, isTrue, reason: 'the streak restarted from zero');
     });
 
     test('active server → exposes the daemon status', () async {

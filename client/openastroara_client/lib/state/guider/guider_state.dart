@@ -135,6 +135,12 @@ class GuiderStatusNotifier extends AsyncNotifier<GuiderStatus?> {
   /// Re-read status. [client] pins the read to a specific [GuiderClient] (used
   /// by connect/disconnect so a mid-action server switch can't redirect the
   /// follow-up read); when omitted it reads the current active client.
+  /// Consecutive failed status reads of a guider that was reporting; the
+  /// error surfaces at [staleAfterFailures] (~8 s at the 2 s live poll, one
+  /// minute at the slow poll), matching EquipmentDeviceNotifier.
+  static const int staleAfterFailures = 4;
+  int _consecutiveReadFailures = 0;
+
   Future<void> refresh([GuiderClient? client]) async {
     if (!ref.mounted) return;
     // A manual refresh (no pinned client) serializes so rapid taps don't stack
@@ -161,7 +167,18 @@ class GuiderStatusNotifier extends AsyncNotifier<GuiderStatus?> {
       // Skip the write if the notifier was disposed or rebuilt for a new server
       // mid-flight (gen changed) — otherwise this stale read could clobber the
       // new server's status.
-      if (ref.mounted && gen == _generation) state = next;
+      if (!ref.mounted || gen != _generation) return;
+      // The same patience the other device chips have: one failed read of a
+      // guider that WAS reporting keeps the last status (the 2 s live poll
+      // retries); only [staleAfterFailures] in a row surface the error. The
+      // GUIDE chip used to go red on a single dropped poll.
+      if (next.hasError && state.hasValue) {
+        _consecutiveReadFailures++;
+        if (_consecutiveReadFailures < staleAfterFailures) return;
+      } else if (!next.hasError) {
+        _consecutiveReadFailures = 0;
+      }
+      state = next;
     } finally {
       // Only clear the flag if this was the manual path and no rebuild happened —
       // build() already reset it for the new generation, and a fresh manual

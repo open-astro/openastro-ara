@@ -22,6 +22,7 @@ import '../widgets/emergency_stop_button.dart';
 import '../widgets/safety_alarm_listener.dart';
 import '../widgets/stop_mount_overlay.dart';
 import '../widgets/equipment/equipment_status_chip.dart';
+import '../widgets/server_link_banner.dart';
 import '../widgets/help_dialog.dart';
 import '../widgets/launchpad_button.dart';
 import '../widgets/ws_connection_indicator.dart';
@@ -146,6 +147,7 @@ class _AppShellState extends ConsumerState<AppShell> {
                     child: Column(
                       children: [
                         const _TopEquipmentBar(),
+                        const ServerLinkBanner(),
                         Expanded(
                           child: Row(
                             children: [
