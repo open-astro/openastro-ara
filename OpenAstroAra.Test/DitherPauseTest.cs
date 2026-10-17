@@ -64,7 +64,8 @@ namespace OpenAstroAra.Test {
                 var verdict = calls.Count < verdicts.Length ? verdicts[calls.Count] : null;
                 calls.Add(calls.Count + 1);
                 last = verdict;
-                return Task.FromResult(verdict != "refused");
+                // "refused" = not guiding; "refused: …" = the guider rejected the dither RPC with that text.
+                return Task.FromResult(!(verdict?.StartsWith("refused", StringComparison.Ordinal) ?? false));
             });
             guider.SetupGet(g => g.LastDitherError).Returns(() => last);
             return (guider, calls);
@@ -137,6 +138,21 @@ namespace OpenAstroAra.Test {
             gate.Resume();
             await execute.WaitAsync(TimeSpan.FromSeconds(5));
             Assert.That(calls, Has.Count.EqualTo(2));
+        }
+
+        [Test]
+        public async Task A_dither_the_guider_rejected_pauses_with_the_guiders_own_reason() {
+            var (guider, calls) = Guider(connected: true, "refused: dither amount out of range", null);
+            var (item, gate) = Rig(guider.Object);
+            string? status = null;
+
+            var execute = item.Execute(new SyncProgress(s => status = s.Status), CancellationToken.None);
+            Assert.That(await PauseRequested(gate), Is.True);
+            Assert.That(calls, Has.Count.EqualTo(1));
+            Assert.That(status, Does.Contain("dither amount out of range"), "the guider's reason, not a generic 'not guiding'");
+
+            gate.Resume();
+            await execute.WaitAsync(TimeSpan.FromSeconds(5));
         }
 
         [Test]

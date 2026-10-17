@@ -206,7 +206,9 @@ public sealed partial class GuiderService : IGuiderMediator {
         // nothing was accepted over REST), so the Live tab sees a settle failure as it happens.
         // An abort mid-settle makes Dither() return true with no verdict (WaitForSettling
         // swallows the cancellation) — that is not a settled dither (#1351 r1 note).
-        var error = !sent ? "refused"
+        // A refusal carries the guider's own reason when it has one (the dither RPC errored); a plain
+        // "refused" means it was not guiding.
+        var error = !sent ? (guider.LastSettleError ?? "refused")
             : token.IsCancellationRequested ? "cancelled"
             : guider.LastSettleError;
         // The verdict is set BEFORE the publish so a publish fault can't leave the previous one in place.
