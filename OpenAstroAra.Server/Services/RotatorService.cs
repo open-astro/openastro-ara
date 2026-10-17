@@ -52,6 +52,40 @@ public sealed partial class RotatorService : IRotatorService, IRetainedDeviceSou
     private readonly EquipmentEventPublisher? _events;
     private readonly IEquipmentFaultSink? _faults;
     private readonly DeviceConnectionProbe _probe = new();
+    // §42.3 second channel — the essential runtime read's health (the probe alone misses a bridge
+    // that answers Connected while every read fails, 2026-10-16). Mutated under _gate like _probe.
+    private readonly DeviceHealthTracker _health = new();
+    private EquipmentFaultEvent? _degradedFault; // the standing fault to resolve when the reads come back
+
+    // Caller holds _gate. One call per refresh tick with the essential read's outcome.
+    private void ObserveRuntimeReadLocked(bool ok, string? reason, DiscoveredDeviceDto? device) {
+        switch (_health.Observe(ok, reason)) {
+            case HealthVerdict.BecameDegraded: {
+                var fault = new EquipmentFaultEvent(DeviceType.Rotator, device?.UniqueId, device?.Name,
+                    EquipmentFaultKind.Degraded,
+                    $"still answers its connection probe but its runtime read has failed {_health.FailureStreak} ticks in a row: {_health.LastReason ?? "unknown error"}",
+                    DateTimeOffset.UtcNow);
+                _degradedFault = fault;
+                _faults?.Publish(fault);
+                break;
+            }
+            case HealthVerdict.Recovered: {
+                var fault = _degradedFault;
+                _degradedFault = null;
+                if (fault is not null) {
+                    _faults?.Recovered(fault);
+                }
+                break;
+            }
+        }
+    }
+
+    // Caller holds _gate. A fresh session (connect / disconnect / trip) starts clean.
+    private void ResetHealthLocked() {
+        _health.Reset();
+        _degradedFault = null;
+    }
+
     private readonly RotatorDriftWatch _drift = new();
     private readonly object _gate = new();
     private readonly Timer _refreshTimer;
@@ -299,13 +333,14 @@ public sealed partial class RotatorService : IRotatorService, IRetainedDeviceSou
                 return; // the device didn't answer — skip this tick's reads
             }
             ObserveProbeIfLive(client, probeSucceeded: true);
-            var runtime = ReadRuntime(client);
+            var runtime = ReadRuntime(client, out var readError);
             var verdict = ReadbackVerdict.Idle;
             (float TargetDeg, bool Mechanical)? commanded = null;
             string? deviceName = null;
             lock (_gate) {
                 if (_state == EquipmentConnectionState.Connected && ReferenceEquals(_client, client)) {
                     _runtime = runtime;
+                    ObserveRuntimeReadLocked(readError is null, readError, _device);
                     // §42.2 item 4 — angle-drift check against the last commanded move, under the
                     // same commit lock as the liveness check (the #789 one-critical-section
                     // lesson). The verdict is acted on off-lock below.
@@ -339,13 +374,17 @@ public sealed partial class RotatorService : IRotatorService, IRetainedDeviceSou
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Per-field read boundary: an unsupported/transiently-failing rotator property throws; that field is reported null rather than failing the whole runtime read. CA1031's log-and-recover boundary applies.")]
-    private static RotatorStateDto ReadRuntime(AlpacaRotator c) {
+    private static RotatorStateDto ReadRuntime(AlpacaRotator c, out string? readError) {
         bool moving;
+        readError = null;
         try { moving = c.IsMoving; } catch (Exception) { moving = false; }
         double? mechanical;
         try { mechanical = c.MechanicalPosition; } catch (Exception) { mechanical = null; }
         double? sky;
-        try { sky = c.Position; } catch (Exception) { sky = null; }
+        // Position is the essential read: a streak of failures is a degraded fault (§42.3 second channel).
+        try { sky = c.Position; }
+        catch (ASCOM.NotImplementedException) { sky = null; } // not a fault: the driver has no Position
+        catch (Exception ex) { sky = null; readError = ex.Message; }
         bool reverse;
         try { reverse = c.Reverse; } catch (Exception) { reverse = false; }
         return new RotatorStateDto(moving ? "moving" : "idle", mechanical, sky, reverse);
@@ -387,7 +426,7 @@ public sealed partial class RotatorService : IRotatorService, IRetainedDeviceSou
                     _client = client;
                     _runtime = IdleRuntime; // don't serve a prior device's runtime
                     _capabilities = caps;
-                    _probe.Reset();         // §42.3 — a fresh session starts a fresh streak
+                    _probe.Reset(); ResetHealthLocked();         // §42.3 — a fresh session starts a fresh streak
                     _drift.Reset();         // a prior session's commanded angle means nothing here
                     SetState(EquipmentConnectionState.Connected);
                     adopted = true;
@@ -537,7 +576,7 @@ public sealed partial class RotatorService : IRotatorService, IRetainedDeviceSou
             }
             device = _device;
             SetState(EquipmentConnectionState.Error);
-            _probe.Reset();
+            _probe.Reset(); ResetHealthLocked();
             _drift.Reset();
         }
         LogConnectionLost(device?.Name ?? "?");

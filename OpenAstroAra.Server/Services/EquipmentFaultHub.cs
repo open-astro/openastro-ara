@@ -27,6 +27,12 @@ namespace OpenAstroAra.Server.Services;
 /// fire-and-forget: publishing must never block, throw into, or slow a device path.</summary>
 public interface IEquipmentFaultSink {
     void Publish(EquipmentFaultEvent fault);
+
+    /// <summary>The device's own reads came back after a standing fault it published (a
+    /// <c>degraded</c> episode ended on its own): resolve the §42.5 row and broadcast the same
+    /// <c>equipment.fault_action_taken { action: "recovered" }</c> the reaction ladder sends, so the
+    /// chip clears either way. Default no-op keeps test fakes compiling.</summary>
+    void Recovered(EquipmentFaultEvent fault) { }
 }
 
 /// <summary>
@@ -118,8 +124,47 @@ public sealed partial class EquipmentFaultHub : IEquipmentFaultSink {
         EquipmentFaultKind.StallTimeout => "stall_timeout",
         EquipmentFaultKind.ValueMismatch => "value_mismatch",
         EquipmentFaultKind.CoolingDrift => "cooling_drift",
+        EquipmentFaultKind.Degraded => "degraded",
         _ => "op_error",
     };
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Recovery publication is the same best-effort detection-side path as Publish: a serialization or channel fault is logged and dropped, never propagated into a device refresh tick. CA1031's log-and-recover boundary applies.")]
+    public void Recovered(EquipmentFaultEvent fault) {
+        ArgumentNullException.ThrowIfNull(fault);
+        LogRecovered(fault.DeviceType, fault.Kind, fault.DeviceName ?? fault.DeviceId ?? "?");
+        if (_faultLog is not null) {
+            _ = ResolveQuietlyAsync(fault);
+        }
+        try {
+            var payload = new JsonObject {
+                ["device_type"] = fault.DeviceType.ToString().ToLowerInvariant(),
+                ["device_id"] = fault.DeviceId,
+                ["device_name"] = fault.DeviceName,
+                ["kind"] = WireToken(fault.Kind),
+                ["action"] = "recovered",
+                ["source"] = "device_reads",
+            };
+            using var doc = JsonDocument.Parse(payload.ToJsonString());
+            var element = doc.RootElement.Clone();
+            _ = _broadcaster.PublishAsync(WsEventCatalog.EquipmentFaultActionTaken, element, System.Threading.CancellationToken.None);
+        } catch (Exception ex) {
+            LogPublishFailed(ex);
+        }
+    }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "§42.5 resolution is best-effort off a device path: a store fault is logged and dropped; the task is fire-and-forget so the catch also keeps it from dying unobserved. CA1031's log-and-recover boundary applies.")]
+    private async System.Threading.Tasks.Task ResolveQuietlyAsync(EquipmentFaultEvent fault) {
+        try {
+            await _faultLog!.ResolveAsync(fault, DateTimeOffset.UtcNow, System.Threading.CancellationToken.None).ConfigureAwait(false);
+        } catch (Exception ex) {
+            LogPersistFailed(ex);
+        }
+    }
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Equipment recovered: {DeviceType} {Kind} on '{Device}' — the device's reads are back")]
+    private partial void LogRecovered(DeviceType deviceType, EquipmentFaultKind kind, string device);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Equipment fault: {DeviceType} {Kind} on '{Device}' — {Details}")]
     private partial void LogFault(DeviceType deviceType, EquipmentFaultKind kind, string device, string details);

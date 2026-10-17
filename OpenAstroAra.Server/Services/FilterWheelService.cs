@@ -53,6 +53,40 @@ public sealed partial class FilterWheelService : IFilterWheelService, IRetainedD
     private readonly EquipmentEventPublisher? _events;
     private readonly IEquipmentFaultSink? _faults;
     private readonly DeviceConnectionProbe _probe = new();
+    // §42.3 second channel — the essential runtime read's health (the probe alone misses a bridge
+    // that answers Connected while every read fails, 2026-10-16). Mutated under _gate like _probe.
+    private readonly DeviceHealthTracker _health = new();
+    private EquipmentFaultEvent? _degradedFault; // the standing fault to resolve when the reads come back
+
+    // Caller holds _gate. One call per refresh tick with the essential read's outcome.
+    private void ObserveRuntimeReadLocked(bool ok, string? reason, DiscoveredDeviceDto? device) {
+        switch (_health.Observe(ok, reason)) {
+            case HealthVerdict.BecameDegraded: {
+                var fault = new EquipmentFaultEvent(DeviceType.FilterWheel, device?.UniqueId, device?.Name,
+                    EquipmentFaultKind.Degraded,
+                    $"still answers its connection probe but its runtime read has failed {_health.FailureStreak} ticks in a row: {_health.LastReason ?? "unknown error"}",
+                    DateTimeOffset.UtcNow);
+                _degradedFault = fault;
+                _faults?.Publish(fault);
+                break;
+            }
+            case HealthVerdict.Recovered: {
+                var fault = _degradedFault;
+                _degradedFault = null;
+                if (fault is not null) {
+                    _faults?.Recovered(fault);
+                }
+                break;
+            }
+        }
+    }
+
+    // Caller holds _gate. A fresh session (connect / disconnect / trip) starts clean.
+    private void ResetHealthLocked() {
+        _health.Reset();
+        _degradedFault = null;
+    }
+
     private readonly object _gate = new();
     private readonly Timer _refreshTimer;
     // #1265 — bench-test knob: re-arms the refresh timer at a shorter cadence so a fixture that
@@ -394,7 +428,7 @@ public sealed partial class FilterWheelService : IFilterWheelService, IRetainedD
                 return; // the device didn't answer — skip this tick's reads
             }
             ObserveProbeIfLive(client, probeSucceeded: true);
-            var runtime = ReadRuntime(client);
+            var runtime = ReadRuntime(client, out var readError);
             var slots = needSlots ? ReadSlots(client) : null;
             var adoptedSlots = false;
             int? homeFrom = null;
@@ -404,6 +438,7 @@ public sealed partial class FilterWheelService : IFilterWheelService, IRetainedD
             lock (_gate) {
                 if (_state == EquipmentConnectionState.Connected && ReferenceEquals(_client, client)) {
                     _runtime = runtime;
+                    ObserveRuntimeReadLocked(readError is null, readError, _device);
                     if (slots is not null) {
                         _slots = slots;
                         adoptedSlots = true;
@@ -449,11 +484,15 @@ public sealed partial class FilterWheelService : IFilterWheelService, IRetainedD
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Per-field read boundary: a transiently-failing Position read reports idle (and logs at Debug) rather than failing the snapshot. CA1031's log-and-recover boundary applies.")]
-    private FilterWheelStateDto ReadRuntime(AlpacaFilterWheel c) {
+    private FilterWheelStateDto ReadRuntime(AlpacaFilterWheel c, out string? readError) {
         short pos;
+        readError = null;
         // Log at Debug, not silently: a persistent Position fault would otherwise present as a
-        // steady "idle" with no diagnostic trail.
-        try { pos = c.Position; } catch (Exception ex) { LogPositionReadFailed(ex); return IdleRuntime; }
+        // steady "idle" with no diagnostic trail — and the health tracker turns a streak into a
+        // degraded fault (§42.3 second channel).
+        try { pos = c.Position; }
+        catch (ASCOM.NotImplementedException ex) { LogPositionReadFailed(ex); return IdleRuntime; } // not a fault: the driver has no Position
+        catch (Exception ex) { LogPositionReadFailed(ex); readError = ex.Message; return IdleRuntime; }
         // ASCOM reports Position == -1 while the wheel is moving between slots.
         return pos < 0 ? new FilterWheelStateDto("moving", null) : new FilterWheelStateDto("idle", pos);
     }
@@ -508,6 +547,7 @@ public sealed partial class FilterWheelService : IFilterWheelService, IRetainedD
                     _slots = null;          // re-read for the new device
                     _runtime = IdleRuntime; // don't serve a prior device's runtime
                     _probe.Reset();         // §42.3 — a fresh session starts a fresh streak
+                    ResetHealthLocked();
                     // #1066 — claim the once-per-session home NOW, position known or not, so a
                     // later reconnect of this wheel (auto or manual) can never home it. A previous
                     // wheel's still-pending decision is superseded (and its journal line kept).
@@ -622,6 +662,7 @@ public sealed partial class FilterWheelService : IFilterWheelService, IRetainedD
             device = _device;
             SetState(EquipmentConnectionState.Error);
             _probe.Reset();
+            ResetHealthLocked();
             neverDecided = TakePendingHomeNeverDecidedLocked();
             _homeGeneration++; // #1079 — an in-flight home for a wheel that stopped answering is stale
         }

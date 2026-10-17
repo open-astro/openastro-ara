@@ -19,7 +19,7 @@ namespace OpenAstroAra.Server.Contracts;
 /// <summary>
 /// §42.2 — the fault taxonomy. Wire tokens are the snake_case of the name
 /// (<c>disconnected</c>, <c>tracking_lost</c>, <c>stall_timeout</c>, <c>value_mismatch</c>,
-/// <c>op_error</c>, <c>cooling_drift</c>).
+/// <c>op_error</c>, <c>cooling_drift</c>, <c>degraded</c>).
 /// </summary>
 public enum EquipmentFaultKind {
     /// <summary>The device stopped answering its Alpaca connection probe (§42.3 rows 1/6).</summary>
@@ -41,6 +41,12 @@ public enum EquipmentFaultKind {
 
     /// <summary>Camera cooling can't hold the setpoint (§42.2 row 2) — advisory.</summary>
     CoolingDrift,
+
+    /// <summary>The device still answers its connection probe but its essential runtime read
+    /// (wheel position, camera state, focuser/rotator position) has failed for a streak of ticks
+    /// (§42.3 second channel, <see cref="Services.DeviceHealthTracker"/>). Standing: it holds until
+    /// a <c>recovered</c> action (the reads came back, or a reconnect succeeded).</summary>
+    Degraded,
 }
 
 /// <summary>

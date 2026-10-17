@@ -178,5 +178,19 @@ namespace OpenAstroAra.Test {
             Assert.That(plan.Escalated, Is.False, "disconnects run the §42.3 reconnect episode, never the op escalation");
             Assert.That(plan.RetrySchedule, Is.EqualTo(FaultPolicyMatrix.HotReconnectLadder));
         }
+
+        [Test]
+        public void A_degraded_device_gets_one_reconnect_after_five_seconds_and_no_pause() {
+            // 2026-10-16: the wheel and the camera kept answering their probe while every read failed.
+            foreach (var type in new[] { DeviceType.FilterWheel, DeviceType.Camera, DeviceType.Focuser, DeviceType.Rotator }) {
+                var plan = FaultPolicyMatrix.Resolve(type, EquipmentFaultKind.Degraded, policies: null)!;
+                Assert.That(plan.RetrySchedule, Is.EqualTo(FaultPolicyMatrix.DegradedReconnectOnce), type.ToString());
+                Assert.That(plan.TerminalAction, Is.EqualTo(FaultTerminalAction.None), "nothing to escalate to: the device still answers");
+                Assert.That(plan.PauseWhileRecovering, Is.False, "the instruction that needs the device reports its own failure");
+                Assert.That(plan.GiveUpSeverity, Is.EqualTo(NotificationSeverity.Warning));
+                Assert.That(plan.Escalated, Is.False);
+            }
+            Assert.That(FaultPolicyMatrix.Resolve(DeviceType.Guider, EquipmentFaultKind.Degraded, null), Is.Null, "the guider owns its own reactions");
+        }
     }
 }

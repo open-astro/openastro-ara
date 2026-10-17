@@ -70,10 +70,20 @@ class ActiveFault {
 /// Fault-kind wire token → chip overlay severity. Recovery-tracked kinds run a
 /// §42.3 episode and get a definite clear signal, so they hold red; everything
 /// else (including an unknown future kind) is a one-shot advisory held amber
-/// until the TTL prune.
+/// until the TTL prune. `degraded` is the exception: amber (the device still
+/// answers, only its reads fail) but standing — see [isStandingFaultKind].
 StatusLevel faultKindLevel(String kind) => switch (kind) {
       'disconnected' || 'tracking_lost' => StatusLevel.error,
       _ => StatusLevel.busy,
+    };
+
+/// Kinds with a definite clear signal (`recovered` / `released` / a fresh
+/// connect): they are never TTL-pruned. `degraded` (a device whose essential
+/// read keeps failing while its probe answers — the 2026-10-16 filter wheel)
+/// is standing amber: it holds until the reads come back or a reconnect lands.
+bool isStandingFaultKind(String kind) => switch (kind) {
+      'disconnected' || 'tracking_lost' || 'degraded' => true,
+      _ => false,
     };
 
 /// The set of devices with a standing fault, keyed by the lowercase
@@ -221,16 +231,16 @@ class ActiveFaultsAccumulator {
     return _active.remove(deviceType) != null;
   }
 
-  /// A fresh successful connect is the heal for a standing red fault whose
-  /// episode never recovered (manual user reconnect after `gave_up`). Advisory
-  /// faults are left to their TTL — reconnecting a switch doesn't retract a
-  /// port read-back mismatch.
+  /// A fresh successful connect is the heal for a standing fault whose episode
+  /// never recovered (manual user reconnect after `gave_up`, or a degraded
+  /// device the user reconnected). Advisory faults are left to their TTL —
+  /// reconnecting a switch doesn't retract a port read-back mismatch.
   bool _applyConnected(WsEvent event) {
     final deviceType = _string(event.payload['device_type']);
     if (deviceType == null) return false;
     _recordClear(deviceType, event.ts);
     final existing = _active[deviceType];
-    if (existing == null || existing.level != StatusLevel.error) return false;
+    if (existing == null || !isStandingFaultKind(existing.kind)) return false;
     _active.remove(deviceType);
     return true;
   }
@@ -254,7 +264,8 @@ class ActiveFaultsAccumulator {
       if (clearedAt != null && !row.detectedUtc.isAfter(clearedAt)) continue;
       final level = faultKindLevel(row.faultType);
       final age = now.difference(row.detectedUtc);
-      if (age > (level == StatusLevel.error ? staleRedGuard : advisoryTtl)) {
+      if (age >
+          (isStandingFaultKind(row.faultType) ? staleRedGuard : advisoryTtl)) {
         continue;
       }
       final existing = _active[row.equipmentType];
@@ -276,14 +287,15 @@ class ActiveFaultsAccumulator {
     return changed ? snapshot : null;
   }
 
-  /// Drop advisory faults older than [advisoryTtl]. Returns the new snapshot
-  /// when anything was dropped, else null. The notifier drives this on a
-  /// periodic timer; `now` is a parameter so tests control the clock.
+  /// Drop advisory faults older than [advisoryTtl]. Standing kinds (red, and
+  /// the amber `degraded`) wait for their clear signal. Returns the new
+  /// snapshot when anything was dropped, else null. The notifier drives this
+  /// on a periodic timer; `now` is a parameter so tests control the clock.
   ActiveFaultsSnapshot? prune(DateTime now) {
     final cutoff = now.subtract(advisoryTtl);
     final before = _active.length;
     _active.removeWhere((_, fault) =>
-        fault.level != StatusLevel.error && fault.at.isBefore(cutoff));
+        !isStandingFaultKind(fault.kind) && fault.at.isBefore(cutoff));
     return _active.length == before ? null : snapshot;
   }
 
