@@ -381,9 +381,16 @@ public sealed partial class GuiderLiveService : IGuiderLiveService {
                 }
             }
             recs = new GuidingAssistantRecommendationsDto(
-                Num(r["min_move_ra_px"]), Num(r["min_move_dec_px"]), Flag(r["min_move_seeing_based"]),
-                Num(r["exposure_s"]), Num(r["exposure_max_s"]), Num(r["drift_limiting_exposure_s"]),
-                Num(r["dec_backlash_ms"]), Str(r["dec_guide_mode"]), Str(r["dec_algorithm"]), messages);
+                MinMoveRaPx: Num(r["min_move_ra_px"]),
+                MinMoveDecPx: Num(r["min_move_dec_px"]),
+                MinMoveSeeingBased: Flag(r["min_move_seeing_based"]),
+                ExposureSec: Num(r["exposure_s"]),
+                ExposureMaxSec: Num(r["exposure_max_s"]),
+                DriftLimitingExposureSec: Num(r["drift_limiting_exposure_s"]),
+                DecBacklashMs: Num(r["dec_backlash_ms"]),
+                DecGuideMode: Str(r["dec_guide_mode"]),
+                DecAlgorithm: Str(r["dec_algorithm"]),
+                Messages: messages);
         }
         return new GuidingAssistantStatusDto(
             Connected: connected,
