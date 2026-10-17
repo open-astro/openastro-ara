@@ -63,6 +63,12 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
     /// heavy defocus, hot-pixel-only detections) and is dropped rather than feeding a junk HFR to the fit.</summary>
     internal const int MinStarsPerProbe = 3;
 
+    /// <summary>A fit explaining less of the curve than this is noise, not a V, and is never acted on: the
+    /// 2026-10-17 run settled 900 steps outside focus on a parabola with R² 0.59 (the 2026-10-03 RedCat
+    /// plateau fit at 0.57). 0.7 is the default of the R² threshold this fork inherited from N.I.N.A.
+    /// (FocuserSettings.RSquaredThreshold), which the sweep had never consulted.</summary>
+    internal const double MinFitRSquared = 0.7;
+
     /// <summary>
     /// The sweep's probe count for a given configuration — the ONE place the
     /// `2·Steps+1` scheme lives, shared with the autofocus job endpoint so the
@@ -132,8 +138,14 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
     // for every probe of the sweep. Returns the whole result (not just HFR + count) so the sweep can
     // also read each probe's per-star donut metrics for the §59.10 end-of-sweep collimation check.
     internal static StarDetectionResult DefaultMetric(AnalysisFrame frame, CancellationToken ct) {
+        // Only a raw colour mosaic has phases to equalise. A mono frame's four phases differ by sampling
+        // noise alone, and shifting them by that would stamp a faint checkerboard on it, so the frame's own
+        // Bayer pattern (null for mono or a binned readout) is the gate, not the medians.
+        var pixels = frame.BayerPattern is null
+            ? frame.Pixels.Span
+            : EqualiseBayerPhases(frame.Pixels.Span, frame.Width, frame.Height);
         var result = StarDetector.Detect(
-            frame.Pixels.Span, frame.Width, frame.Height,
+            pixels, frame.Width, frame.Height,
             new StarDetectionParams { Sensitivity = 8.0, NoiseReduction = 0, IsAutoFocus = true },
             ct);
         // More blobs than one per NoiseFloodDivisor native pixels is not a star field, it is noise that
@@ -142,6 +154,52 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
         // Native frames only — the 8x-binned coarse probe packs real stars far denser than this.
         result.NoiseFlooded = result.DetectedStars > frame.Width * frame.Height / NoiseFloodDivisor;
         return result;
+    }
+
+    /// <summary>
+    /// Shift each of the four 2×2 Bayer phases so their background medians match the lowest one. A colour
+    /// sensor's raw mosaic can carry very different backgrounds per colour (2026-10-17, ASI533MC Pro with an
+    /// L-eNhance filter at offset 50: R 2073, G 2004, B 3796 ADU), and the detector's robust sigma then
+    /// measures that step instead of the noise: 65 ADU against a real 6-12, a threshold eight sigmas up, and
+    /// 26 stars detected where the frame held about 240. Equalised, it found 237, and stopped depending on the
+    /// camera offset. Resolution is kept, unlike a 2×2 superpixel bin. The caller applies it to raw colour
+    /// mosaics only (<see cref="AnalysisFrame.BayerPattern"/>); a frame whose sampled medians already agree
+    /// comes back as is.
+    /// </summary>
+    internal static ReadOnlySpan<ushort> EqualiseBayerPhases(ReadOnlySpan<ushort> pixels, int width, int height) {
+        if (width < 4 || height < 4) {
+            return pixels;
+        }
+        Span<int> medians = stackalloc int[4];
+        // Sample each phase on a grid whose stride puts about 20,000 pixels in the four medians together
+        // (≈ 20 rows and columns apart on an 8 MP frame): the background median needs thousands of pixels,
+        // not millions (the detector's own background estimate samples the same way).
+        var stride = Math.Max(2, (int)Math.Sqrt((double)width * height / 20_000) & ~1);
+        for (var phase = 0; phase < 4; phase++) {
+            var sample = new List<ushort>();
+            for (var y = phase >> 1; y < height; y += stride) {
+                for (var x = phase & 1; x < width; x += stride) {
+                    sample.Add(pixels[y * width + x]);
+                }
+            }
+            sample.Sort();
+            medians[phase] = sample.Count == 0 ? 0 : sample[sample.Count / 2];
+        }
+        var floor = Math.Min(Math.Min(medians[0], medians[1]), Math.Min(medians[2], medians[3]));
+        if (medians[0] == floor && medians[1] == floor && medians[2] == floor && medians[3] == floor) {
+            return pixels;
+        }
+        var output = new ushort[pixels.Length];
+        for (var y = 0; y < height; y++) {
+            var row = y * width;
+            var shiftEven = medians[(y & 1) << 1] - floor;
+            var shiftOdd = medians[((y & 1) << 1) | 1] - floor;
+            for (var x = 0; x < width; x++) {
+                var v = pixels[row + x] - ((x & 1) == 0 ? shiftEven : shiftOdd);
+                output[row + x] = (ushort)(v < 0 ? 0 : v);
+            }
+        }
+        return output;
     }
 
     /// <summary>One blob per this many native pixels is the densest field the fine probe believes
@@ -250,6 +308,9 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
                 points.Clear();
                 probeStars.Clear();
                 probeFeatures.Clear();
+                var tooDefocused = 0;
+                // Binned HFR per kept point (NaN where none was measured), for the end-of-sweep veto below.
+                var pointBinned = new List<double>(totalProbes);
                 _tracker?.BeginSweepAttempt();
                 // Outermost-first, stepping DOWN through every position: one approach direction means
                 // backlash biases every sample identically instead of splitting the curve in two.
@@ -278,6 +339,14 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
                     var hfr = result.AverageHFR;
                     var stars = result.DetectedStars;
                     var kept = !(stars < MinStarsPerProbe || hfr <= 0 || double.IsNaN(hfr) || result.NoiseFlooded);
+                    var probeBinned = double.NaN;
+                    if (kept && _coarseMetric is not null) {
+                        // Full resolution cannot see a badly defocused star field (the reason the coarse pass
+                        // exists), yet it can still find a few small blobs there and report a low HFR. The binned
+                        // measurement of the same frame does see the defocus; keep it for the veto after the sweep.
+                        probeBinned = _coarseMetric(frame, token);
+                        LogProbeBinned(reached, probeBinned);
+                    }
                     if (kept) {
                         LogProbe(reached, hfr, stars);
                     } else if (result.NoiseFlooded) {
@@ -292,15 +361,32 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
                         continue;
                     }
                     points.Add(new FocusPoint(reached, hfr, stars));
+                    pointBinned.Add(probeBinned);
                     probeStars.Add((reached, result.StarList));
                     probeFeatures.Add((reached, FocusFeatureExtractor.Extract(result)));
                     frameWidth = frame.Width;
                     frameHeight = frame.Height;
                 }
 
-                var minTrustworthy = Math.Max(FocusCurveFit.MinPoints, (totalProbes + 1) / 2);
+                // Veto the probes where the two measurements disagree (see FalsePlateauProbes).
+                var bestBinned = BestFinite(pointBinned);
+                foreach (var k in FalsePlateauProbes(points, pointBinned)) {
+                    var dropped = points[k];
+                    var droppedAt = (int)Math.Round(dropped.Position);
+                    LogProbeTooDefocused(droppedAt, pointBinned[k], CoarseGateRatio, bestBinned, dropped.Hfr, dropped.StarCount);
+                    points.RemoveAt(k);
+                    probeStars.RemoveAt(k);
+                    probeFeatures.RemoveAt(k);
+                    pointBinned.RemoveAt(k);
+                    tooDefocused++;
+                }
+
+                // Probes the binned frame placed far from focus were measured fine, just outside the V: they
+                // say nothing about clouds, so the half-the-sweep floor counts only the others.
+                var nearFocusProbes = totalProbes - tooDefocused;
+                var minTrustworthy = Math.Max(FocusCurveFit.MinPoints, (nearFocusProbes + 1) / 2);
                 if (points.Count < minTrustworthy) {
-                    return await FailAsync($"only {points.Count} of {totalProbes} probes had measurable stars (need {minTrustworthy}) — clouds, a slew smear, or focus far outside the sweep",
+                    return await FailAsync($"only {points.Count} of {nearFocusProbes} probes near focus had measurable stars (need {minTrustworthy}; {tooDefocused} more were too defocused to measure) — clouds, a slew smear, or focus far outside the sweep",
                         restoreOnFailure, startPosition).ConfigureAwait(false);
                 }
 
@@ -316,20 +402,40 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
                 if (fit is not null) {
                     await RecordFitAsync(fit, fitPoints).ConfigureAwait(false);
                 }
-                if (fit is { IsUsable: true, WithinSampledRange: true }) {
+                if (fit is { IsUsable: true, WithinSampledRange: true } && fit.RSquared >= MinFitRSquared) {
                     break;
                 }
                 // The curve still falls toward one edge: focus lies just beyond the sampled range.
-                // Re-centre on that edge and sweep again rather than give up.
-                if (attempt < MaxSweepRecentres && EdgeMinimum(points) is int edge
+                // Re-centre on that edge and sweep again rather than give up. Judged on the probes the fit
+                // used: a thin-wing probe the fit already distrusts must not steer the re-sweep either.
+                if (attempt < MaxSweepRecentres && EdgeMinimum(fitPoints) is int edge
                         && ClampSweepCentre(edge, settings, travel) is var recentred && recentred != centre) {
                     LogSweepRecentred(recentred, attempt + 1);
                     centre = recentred;
                     continue;
                 }
+                // Automatic sizing that overshot the V (a stored width dragged wide by flat wings) puts half the
+                // probes on the flat and the fit fails, and a failed run stores nothing, so it would stay stuck.
+                // Re-sweep at the step the probes themselves measure, centred on the sharpest probe.
+                if (attempt < MaxSweepRecentres && stepSource != "manual" && MeasuredHalfWidth(fitPoints) is double measuredWidth) {
+                    var resized = Math.Clamp((int)Math.Round(HalfWidthSweepFactor * measuredWidth / settings.Steps), MinAutoStepSize, MaxAutoStepSize);
+                    if (resized < settings.StepSize * 3 / 4) {
+                        var sharpestAt = 0;
+                        for (var k = 1; k < fitPoints.Count; k++) {
+                            if (fitPoints[k].Hfr < fitPoints[sharpestAt].Hfr) {
+                                sharpestAt = k;
+                            }
+                        }
+                        LogStepResized(settings.StepSize, resized, measuredWidth, attempt + 1);
+                        settings = settings with { StepSize = resized };
+                        _tracker?.SetStepSize(resized, "measured");
+                        centre = ClampSweepCentre((int)Math.Round(fitPoints[sharpestAt].Position), settings, travel);
+                        continue;
+                    }
+                }
                 return await FailAsync(fit is null
                     ? "curve fit produced no result"
-                    : $"curve fit unusable (usable={fit.IsUsable}, inRange={fit.WithinSampledRange}, R²={fit.RSquared:0.###}) — widen the sweep or re-centre focus manually",
+                    : $"curve fit unusable (usable={fit.IsUsable}, inRange={fit.WithinSampledRange}, R²={fit.RSquared:0.###}, need ≥ {MinFitRSquared}) — widen the sweep or re-centre focus manually",
                     restoreOnFailure, startPosition).ConfigureAwait(false);
             }
 
@@ -498,6 +604,12 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
 
     // §64's renderer (auto-stretch + star rings, ≤1024 px) gives the Smart Focus pane its picture. Frames too
     // small to carry stars (unit-test stubs) are skipped; a render fault never touches the sweep.
+    /// <summary>The Bayer pattern a preview of <paramref name="frame"/> should debayer by, or null for mono.
+    /// Previews used to pass null always, so a colour camera's autofocus frame showed the raw colour-filter
+    /// grid (2026-10-17, ASI533MC Pro + L-eNhance: a checkerboard with the stars lost in it).</summary>
+    internal static OpenAstroAra.Stretch.BayerPattern? PreviewBayer(AnalysisFrame frame) =>
+        OpenAstroAra.Stretch.Debayer.TryParse(frame.BayerPattern, out var pattern) ? pattern : null;
+
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Cosmetic: a failed JPEG render must never fail or stall the sweep. Log-and-recover boundary.")]
     private void RenderFrameQuietly(AnalysisFrame frame, int position, double hfr) {
@@ -505,7 +617,7 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
             return;
         }
         try {
-            var (jpeg, _, _) = CameraService.RenderLiveFrame(frame.Pixels.ToArray(), frame.Width, frame.Height, bayerPattern: null, annotate: true);
+            var (jpeg, _, _) = CameraService.RenderLiveFrame(frame.Pixels.ToArray(), frame.Width, frame.Height, PreviewBayer(frame), annotate: true);
             _tracker.SetFrame(jpeg, position, hfr);
         } catch (Exception ex) {
             LogRenderFailed(ex);
@@ -568,7 +680,14 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
                 min = Math.Min(min, p.Position);
                 max = Math.Max(max, p.Position);
             }
-            var halfWidth = CurveHalfWidth(fit, min, max);
+            // Both estimates only err wide (flat wings drag the model out; interpolating between coarse probes on
+            // a convex V overshoots), so the narrower one is the better width.
+            var modelWidth = CurveHalfWidth(fit, min, max);
+            var halfWidth = (MeasuredHalfWidth(points), modelWidth) switch {
+                (double probeWidth, double model) => Math.Min(probeWidth, model),
+                (double probeWidth, null) => probeWidth,
+                _ => modelWidth,
+            };
             if (halfWidth is { } hw) {
                 LogCurveHalfWidth(hw);
             }
@@ -715,6 +834,74 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
     /// probes that measured a star field rather than a few fragments of doughnuts.</summary>
     internal const double ThinWingStarFraction = 0.1;
 
+    private static double BestFinite(IReadOnlyList<double> values) {
+        var best = double.PositiveInfinity;
+        foreach (var v in values) {
+            if (double.IsFinite(v) && v < best) {
+                best = v;
+            }
+        }
+        return best;
+    }
+
+    /// <summary>
+    /// Indices (descending, so they can be removed in order) of the probes whose two measurements disagree:
+    /// the binned frame puts them far from focus (over <see cref="CoarseGateRatio"/> × the sweep's best binned
+    /// HFR) while full resolution reads an HFR no worse than <see cref="FineGateRatio"/> × the sharpest probe
+    /// near focus. Near focus means a binned HFR within the gate, or a binned frame that lost its stars
+    /// (+∞, faint sharp stars averaged away), which is where the real minimum sits. A genuine wing reads high
+    /// on both measurements and stays, even where full-resolution HFR stops growing (the 2026-10-17 10 s run:
+    /// wings at 2.5-3.7 around a 1.22 minimum); the false plateau reads at or below the minimum (1.14-1.45
+    /// there, 1.2 on the first run) and goes. <paramref name="binned"/> is NaN where none was measured.
+    /// </summary>
+    internal static List<int> FalsePlateauProbes(IReadOnlyList<FocusPoint> points, IReadOnlyList<double> binned) {
+        var dropped = new List<int>();
+        var bestBinned = BestFinite(binned);
+        if (!double.IsFinite(bestBinned)) {
+            return dropped;
+        }
+        var sharpest = double.PositiveInfinity;
+        for (var k = 0; k < points.Count; k++) {
+            var nearFocus = double.IsPositiveInfinity(binned[k]) || (double.IsFinite(binned[k]) && binned[k] <= CoarseGateRatio * bestBinned);
+            if (nearFocus) {
+                sharpest = Math.Min(sharpest, points[k].Hfr);
+            }
+        }
+        if (!double.IsFinite(sharpest)) {
+            return dropped;
+        }
+        bool Far(int k) => double.IsFinite(binned[k]) && binned[k] > CoarseGateRatio * bestBinned;
+        var sharpestAt = 0.0;
+        for (var k = 0; k < points.Count; k++) {
+            var nearFocus = double.IsPositiveInfinity(binned[k]) || (double.IsFinite(binned[k]) && binned[k] <= CoarseGateRatio * bestBinned);
+            if (nearFocus && points[k].Hfr == sharpest) {
+                sharpestAt = points[k].Position;
+                break;
+            }
+        }
+        for (var k = points.Count - 1; k >= 0; k--) {
+            if (!Far(k) || points[k].Hfr >= FineGateRatio * sharpest) {
+                continue;
+            }
+            // The plateau runs out to the sweep edge. A far binned reading with an in-gate one beyond it, on
+            // the same side of focus, is a spike where binning starts losing stars near focus (22:24: 11.8
+            // at 261 with 4.5 at 301), not the plateau.
+            var side = Math.Sign(points[k].Position - sharpestAt);
+            var contiguous = true;
+            for (var j = 0; j < points.Count; j++) {
+                var beyond = Math.Sign(points[j].Position - points[k].Position) == side && side != 0;
+                if (beyond && !Far(j)) {
+                    contiguous = false;
+                    break;
+                }
+            }
+            if (contiguous) {
+                dropped.Add(k);
+            }
+        }
+        return dropped;
+    }
+
     internal static List<FocusPoint> TrimThinWings(IReadOnlyList<FocusPoint> points, int keepAtLeast) {
         var kept = new List<FocusPoint>(points);
         if (kept.Count == 0) {
@@ -744,6 +931,9 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
 
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Information, Message = "Autofocus: {Dropped} of {Total} probes saw too few stars to trust far from focus — fitting the V on the rest")]
     private partial void LogThinWingsDropped(int dropped, int total);
+
+    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Information, Message = "Autofocus: the probes say the V doubles {Width:0} steps out, so step {Old} overshot it — re-sweeping at step {New} (re-sweep {Attempt})")]
+    private partial void LogStepResized(int old, int @new, double width, int attempt);
 
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Information, Message = "Autofocus probe: position {Position} HFR {Hfr} ({Stars} stars)")]
     private partial void LogProbe(int position, double hfr, int stars);

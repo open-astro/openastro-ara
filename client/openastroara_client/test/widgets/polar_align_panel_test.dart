@@ -107,6 +107,24 @@ void main() {
       expect(clamped.distance, closeTo(1.0, 1e-9));
     });
 
+    test('south of the equator the bullseye is mirrored to the view facing the south pole', () {
+      // Facing the SCP, east is on the LEFT: an axis east of the pole draws left of center.
+      final south = bullseyeDotFraction(15, -15, 30, southern: true);
+      expect(south.dx, closeTo(-0.5, 1e-9));
+      expect(south.dy, closeTo(0.5, 1e-9));
+    });
+
+    test('azimuth arrows point the way the words say, for the pole the user faces', () {
+      // 2026-10-17, southern site: "Move east" came with an arrow to the right, but facing the
+      // south pole east is on the left. The words were right; the arrows assumed the NCP.
+      expect(polarAzHint(5, southern: false), (Icons.arrow_back, 'Move west'));
+      expect(polarAzHint(-5, southern: false), (Icons.arrow_forward, 'Move east'));
+      expect(polarAzHint(5, southern: true), (Icons.arrow_forward, 'Move west'));
+      expect(polarAzHint(-5, southern: true), (Icons.arrow_back, 'Move east'));
+      expect(polarAzHint(0.01, southern: true), (Icons.check, 'On target'));
+      expect(polarAzHint(null, southern: true), (Icons.remove, '—'));
+    });
+
     test('RA/Dec render as sexagesimal', () {
       expect(formatRaHms(138.6667), '09h14m40s');
       expect(formatRaHms(359.9999), '00h00m00s');

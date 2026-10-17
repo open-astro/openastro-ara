@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/polar_align.dart';
 import '../../state/night_mode_state.dart';
 import '../../state/polar_align/polar_align_state.dart';
+import '../../state/settings/site_settings_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
 import '../../util/friendly_error.dart';
@@ -27,16 +28,32 @@ double bullseyeRangeArcmin(double? totalErrorArcmin) {
   return 5.0;
 }
 
-/// Fractional dot offset inside the bullseye for the current error —
-/// x = azimuth (east positive → right), y = altitude (above pole → up),
-/// clamped to the ring edge so an off-scale dot stays visible. Pure —
-/// unit-tested.
-Offset bullseyeDotFraction(double? azErrArcmin, double? altErrArcmin, double rangeArcmin) {
-  final az = (azErrArcmin ?? 0) / rangeArcmin;
+/// Fractional dot offset inside the bullseye for the current error, drawn as
+/// seen by someone facing the pole: x = azimuth, east of the pole to the right
+/// facing the NCP and to the LEFT facing the SCP ([southern]); y = altitude
+/// (above pole → up). Clamped to the ring edge so an off-scale dot stays
+/// visible. Pure — unit-tested.
+Offset bullseyeDotFraction(double? azErrArcmin, double? altErrArcmin, double rangeArcmin,
+    {bool southern = false}) {
+  final az = (azErrArcmin ?? 0) / rangeArcmin * (southern ? -1 : 1);
   final alt = (altErrArcmin ?? 0) / rangeArcmin;
   final len = math.sqrt(az * az + alt * alt);
   if (len <= 1.0) return Offset(az, -alt);
   return Offset(az / len, -alt / len);
+}
+
+/// Azimuth knob direction for the current error: positive = axis east of the
+/// pole → move west. The arrow points the way that direction lies for someone
+/// facing the pole: west is on the LEFT facing the NCP and on the RIGHT facing
+/// the SCP ([southern]). 2026-10-17: a southern site read "Move east" beside an
+/// arrow to the right. Pure — unit-tested.
+(IconData, String) polarAzHint(double? az, {required bool southern}) {
+  if (az == null) return (Icons.remove, '—');
+  if (az.abs() <= 0.05) return (Icons.check, 'On target');
+  final westIsLeft = !southern;
+  return az > 0
+      ? (westIsLeft ? Icons.arrow_back : Icons.arrow_forward, 'Move west')
+      : (westIsLeft ? Icons.arrow_forward : Icons.arrow_back, 'Move east');
 }
 
 /// Format a signed arcminute value like `+14.2′` / `−23.4′`.
@@ -286,6 +303,9 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
       ),
     );
   }
+
+  /// Facing the south celestial pole: east and west swap sides on screen.
+  bool get _southern => ref.watch(siteSettingsProvider).latitudeDeg < 0;
 
   @override
   Widget build(BuildContext context) {
@@ -656,7 +676,7 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
         aspectRatio: 1,
         child: CustomPaint(
           painter: BullseyePainter(
-            dotFraction: bullseyeDotFraction(live.azErrorArcmin, live.altErrorArcmin, range),
+            dotFraction: bullseyeDotFraction(live.azErrorArcmin, live.altErrorArcmin, range, southern: _southern),
             zoneColor: color,
           ),
         ),
@@ -711,7 +731,7 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
                   children: [
                     Expanded(child: _axisStat('Altitude', live.altErrorArcmin, _altHint(live.altErrorArcmin), color)),
                     const VerticalDivider(width: 1, color: Color(0x1FFFFFFF)),
-                    Expanded(child: _axisStat('Azimuth', live.azErrorArcmin, _azHint(live.azErrorArcmin), color)),
+                    Expanded(child: _axisStat('Azimuth', live.azErrorArcmin, polarAzHint(live.azErrorArcmin, southern: _southern), color)),
                   ],
                 ),
               ),
@@ -769,7 +789,7 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
             ),
           ),
           Expanded(child: _axisStat('Altitude', live.altErrorArcmin, _altHint(live.altErrorArcmin), color)),
-          Expanded(child: _axisStat('Azimuth', live.azErrorArcmin, _azHint(live.azErrorArcmin), color)),
+          Expanded(child: _axisStat('Azimuth', live.azErrorArcmin, polarAzHint(live.azErrorArcmin, southern: _southern), color)),
         ],
       ),
     );
@@ -934,11 +954,6 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
     return alt > 0 ? (Icons.arrow_downward, 'Lower') : (Icons.arrow_upward, 'Raise');
   }
 
-  static (IconData, String) _azHint(double? az) {
-    if (az == null) return (Icons.remove, '—');
-    if (az.abs() <= 0.05) return (Icons.check, 'On target');
-    return az > 0 ? (Icons.arrow_back, 'Move west') : (Icons.arrow_forward, 'Move east');
-  }
 
   /// Exposure box + Loop/Single switch. Saved to the profile; a running
   /// routine picks the change up on its next frame.

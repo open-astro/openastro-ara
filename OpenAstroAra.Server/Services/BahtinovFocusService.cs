@@ -580,7 +580,7 @@ public sealed partial class BahtinovFocusService : IBahtinovFocusService, IDispo
                 && segment.Offset == 0 && segment.Array is { } array && array.Length == segment.Count
                 ? array
                 : frame.Pixels.ToArray();
-            var (jpeg, _, _) = CameraService.RenderLiveFrame(pixels, frame.Width, frame.Height, bayerPattern: null, annotate: true);
+            var (jpeg, _, _) = CameraService.RenderLiveFrame(pixels, frame.Width, frame.Height, AutofocusSweepService.PreviewBayer(frame), annotate: true);
             return jpeg;
         } catch (Exception ex) {
             LogRenderFailed(ex);

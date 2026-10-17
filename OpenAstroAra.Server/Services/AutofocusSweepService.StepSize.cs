@@ -116,6 +116,43 @@ public sealed partial class AutofocusSweepService {
         };
     }
 
+    /// <summary>The HFR-doubling distance read straight off the probes: from the sharpest probe, walk out on
+    /// each side to where the measured HFR first reaches twice the minimum, interpolate, and average the sides
+    /// found. Unlike <see cref="CurveHalfWidth"/> it cannot be dragged wide by wings where full-resolution HFR
+    /// stops growing (2026-10-17: the model said 192 steps, the probes ≈ 111, and the wide step that followed
+    /// put half of every sweep on the flat). Null when no side reaches twice the minimum.</summary>
+    internal static double? MeasuredHalfWidth(IReadOnlyList<FocusPoint> points) {
+        if (points.Count < 3) {
+            return null;
+        }
+        var sorted = new List<FocusPoint>(points);
+        sorted.Sort((a, b) => a.Position.CompareTo(b.Position));
+        var m = 0;
+        for (var i = 1; i < sorted.Count; i++) {
+            if (sorted[i].Hfr < sorted[m].Hfr) {
+                m = i;
+            }
+        }
+        var target = 2 * sorted[m].Hfr;
+        double? Side(int step) {
+            for (var i = m + step; i >= 0 && i < sorted.Count; i += step) {
+                if (sorted[i].Hfr >= target) {
+                    var inner = sorted[i - step];
+                    var t = (target - inner.Hfr) / (sorted[i].Hfr - inner.Hfr);
+                    var cross = inner.Position + t * (sorted[i].Position - inner.Position);
+                    return Math.Abs(cross - sorted[m].Position);
+                }
+            }
+            return null;
+        }
+        return (Side(+1), Side(-1)) switch {
+            (null, null) => null,
+            (double up, null) => up,
+            (null, double down) => down,
+            (double up, double down) => (up + down) / 2,
+        };
+    }
+
     // Both fitted models are upward curves with their vertex at the best position, so HFR is monotone in the
     // offset on each side — a bisection finds the crossing. Null when the model hasn't doubled by `limit`.
     private static double? DoublingOffset(Func<double, double> model, double best, int direction, double limit, double target) {

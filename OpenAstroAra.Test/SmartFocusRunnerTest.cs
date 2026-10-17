@@ -116,7 +116,9 @@ namespace OpenAstroAra.Test {
                 Func<int, int>? skyStars = null,
                 string telescopeType = "other",
                 Func<int, double>? skySkew = null,
-                Func<int, bool>? noiseFlooded = null) {
+                Func<int, bool>? noiseFlooded = null,
+                int upwardBacklash = 0,
+                (int Min, int Max)? travel = null) {
             var store = new InMemoryProfileStore();
             store.PutAutofocusSettings(Settings(restoreOnFailure, telescopeType));
             if (calibration is not null) {
@@ -125,12 +127,20 @@ namespace OpenAstroAra.Test {
 
             var moves = new List<int>();
             var position = StartPosition;
+            // Where the optics really are: an upward move stops `upwardBacklash` short of the counter, a
+            // downward move lands on it (the sky answers from here, the counter reports `position`).
+            var physical = StartPosition;
             var focuser = new Mock<IFocuserMediator>();
             focuser.Setup(f => f.GetInfo()).Returns(() => new FocuserInfo {
                 Connected = true, Position = position, Temperature = focuserTemperature,
             });
             focuser.Setup(f => f.MoveFocuser(It.IsAny<int>(), It.IsAny<CancellationToken>()))
-                .Returns<int, CancellationToken>((p, _) => { position = p; moves.Add(p); return Task.FromResult(p); });
+                .Returns<int, CancellationToken>((p, _) => {
+                    physical = p > position ? Math.Max(physical, p - upwardBacklash) : p;
+                    position = p;
+                    moves.Add(p);
+                    return Task.FromResult(p);
+                });
 
             var frames = new Mock<IAnalysisFrameSource>();
             frames.Setup(f => f.CaptureForAnalysisAsync(It.IsAny<double>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
@@ -154,13 +164,14 @@ namespace OpenAstroAra.Test {
                 ws: ws.Object,
                 notifications: notifications.Object,
                 tracker: tracker,
+                travelRange: travel is null ? null : _ => Task.FromResult<(int Min, int Max)?>(travel),
                 metric: (_, _) => {
                     captures++;
-                    var hfr = skyHfr is null ? VCurveHfr(position, realBest) : skyHfr(captures, position);
+                    var hfr = skyHfr is null ? VCurveHfr(physical, realBest) : skyHfr(captures, physical);
                     var stars = skyStars is null ? starCount : skyStars(captures);
                     // The physical §59.3 side signal: the sky's skew depends on which side of the REAL
                     // best focus the focuser currently sits (0 when the rig carries no aberration).
-                    var skew = skySkew?.Invoke(position) ?? 0.0;
+                    var skew = skySkew?.Invoke(physical) ?? 0.0;
                     return new StarDetectionResult {
                         AverageHFR = hfr, DetectedStars = stars, StarList = Stars(stars, hfr, skew),
                         NoiseFlooded = noiseFlooded?.Invoke(captures) ?? false,
@@ -315,9 +326,10 @@ namespace OpenAstroAra.Test {
             Assert.That(ok, Is.True);
             Assert.That(rig.CaptureCount(), Is.EqualTo(4), "the in-focus shot, one bracket shot each side (a symmetric V puts the vertex at the centre, so no vertex shot), one confirmation at the centre");
             // No half-width in this calibration → half the classic span: 100 × 4 / 2. The − side first
-            // (moving down like every calibration sample), the + side, then the centre from above
-            // through the sweep's overshoot (one step size) so backlash matches the calibration.
-            Assert.That(rig.Moves, Is.EqualTo(new[] { StartPosition - 200, StartPosition + 200, StartPosition + 100, StartPosition }));
+            // (moving down like every calibration sample), the + side entered from above through an
+            // overshoot of one bracket (moving down too, so backlash cannot shorten it), then the centre
+            // from above through the sweep's overshoot (one step size).
+            Assert.That(rig.Moves, Is.EqualTo(ThreeShotMoves));
             AssertSmartRunRecorded(rig.Tracker, rig.Events, StartPosition);
             var record = rig.Tracker.Snapshot();
             Assert.That(record.Probes.Count(p => p.Phase == "smart"), Is.EqualTo(3));
@@ -327,29 +339,66 @@ namespace OpenAstroAra.Test {
             Assert.That(record.Fit.PredictedHfr, Is.EqualTo(1.5).Within(0.05), "the curve bottoms on the measured dots");
         }
 
+        private static readonly int[] LopsidedMoves = { StartPosition - 200, StartPosition + 400, StartPosition + 200, StartPosition + 38 + 100, StartPosition + 38 };
+        private static readonly int[] ThreeShotMoves = { StartPosition - 200, StartPosition + 400, StartPosition + 200, StartPosition + 100, StartPosition };
+
         [Test]
-        public async Task The_bracket_plus_side_overshoots_by_the_calibrations_verified_backlash() {
-            // §59.7 (#1139) — the + side is the bracket's one upward move. With a verified 30-step upward
-            // backlash on the calibration, the COUNTER is commanded 30 past +bracket so the optics land on it;
-            // the vertex math still sees the physical +200. Unverified backlash is ignored.
-            var calibration = Calibration(bestPosition: StartPosition) with { BacklashUpSteps = 30, BacklashVerified = true };
-            // The sky answers from the PHYSICAL position: the compensated command lands the optics at +200.
-            var rig = Build(realBest: StartPosition, calibration: calibration,
-                skyHfr: (_, position) => VCurveHfr(position == StartPosition + 230 ? StartPosition + 200 : position, StartPosition));
+        public async Task The_bracket_plus_side_is_entered_from_above_so_backlash_cannot_shorten_it() {
+            // 2026-10-17, ZWO EAF: the + bracket was reached by an upward move and landed ≈ 40 steps short
+            // (1.27 where the downward sweep read 1.8), the backlash probe at the flat bottom of the V had
+            // measured 0 "verified", and the bracket saw "no clear rise". Entered from above, the + side
+            // lands where commanded whatever the backlash, verified or not.
+            var rig = Build(realBest: StartPosition, calibration: Calibration(bestPosition: StartPosition), upwardBacklash: 80);
             using var _ = rig.Service;
 
             var ok = await rig.Service.RunAutofocusAsync(NoProgress, CancellationToken.None);
 
             Assert.That(ok, Is.True);
-            Assert.That(rig.Moves, Is.EqualTo(new[] { StartPosition - 200, StartPosition + 230, StartPosition + 100, StartPosition }));
-            Assert.That(rig.CaptureCount(), Is.EqualTo(4), "a symmetric V: no vertex shot");
+            Assert.That(rig.Moves, Is.EqualTo(ThreeShotMoves));
+            Assert.That(rig.CaptureCount(), Is.EqualTo(4), "a symmetric V: no vertex shot, no fallback");
+        }
 
-            var unverified = Build(realBest: StartPosition, calibration: calibration with { BacklashVerified = false });
-            using var __ = unverified.Service;
-            Assert.That(await unverified.Service.RunAutofocusAsync(NoProgress, CancellationToken.None), Is.True);
-            Assert.That(unverified.Moves[1], Is.EqualTo(StartPosition + 200), "an unverified backlash is never applied");
-            Assert.That(AutofocusSweepService.BacklashCompensation(calibration), Is.EqualTo(30));
-            Assert.That(AutofocusSweepService.BacklashCompensation(calibration with { BacklashUpSteps = null }), Is.EqualTo(0));
+        [Test]
+        public async Task The_bracket_overshoot_stays_inside_the_focuser_travel() {
+            // Focus 250 steps below the top of the travel: a bare start + 2 × 200 overshoot would be refused or
+            // clamped onto the + side itself. The overshoot stops at the top, the + side sits one step below it
+            // (still entered from above), and the vertex is judged on the offsets actually reached.
+            var rig = Build(realBest: StartPosition, calibration: Calibration(bestPosition: StartPosition), upwardBacklash: 80,
+                travel: (0, StartPosition + 250));
+            using var _ = rig.Service;
+
+            var ok = await rig.Service.RunAutofocusAsync(NoProgress, CancellationToken.None);
+
+            Assert.That(ok, Is.True);
+            Assert.That(rig.Moves, Is.EqualTo(new[] { StartPosition - 200, StartPosition + 250, StartPosition + 150, StartPosition + 100, StartPosition }));
+            Assert.That(rig.Moves.Max(), Is.LessThanOrEqualTo(StartPosition + 250), "never past the travel");
+        }
+
+        [Test]
+        public async Task A_bracket_with_no_room_inside_the_travel_falls_back_to_the_classic_sweep() {
+            // Focus 50 steps below the top of the travel: the + side would have to sit at or below the centre.
+            // Rather than judge a degenerate bracket, Smart hands over to the Classic sweep at once.
+            var rig = Build(realBest: StartPosition, calibration: Calibration(bestPosition: StartPosition),
+                travel: (0, StartPosition + 50));
+            using var _ = rig.Service;
+
+            // Whether the Classic sweep then succeeds in 50 steps of headroom is its own business (a 4 × 100 sweep
+            // there mostly cannot); this test is about the hand-over.
+            await rig.Service.RunAutofocusAsync(NoProgress, CancellationToken.None);
+
+            var fallback = rig.Events.Where(e => e.Type == WsEventCatalog.AutofocusFallbackClassic).ToList();
+            Assert.That(fallback, Has.Count.EqualTo(1));
+            Assert.That(fallback[0].Payload.GetProperty("reason").GetString(), Is.EqualTo("bracket_failed"));
+            Assert.That(rig.Moves.Take(2), Does.Not.Contain(StartPosition - 200), "no bracket shot was taken");
+            Assert.That(rig.Moves.Max(), Is.LessThanOrEqualTo(StartPosition + 50), "never past the travel");
+        }
+
+        [Test]
+        public void BracketMoves_clamp_to_the_travel() {
+            Assert.That(AutofocusSweepService.BracketMoves(1000, 200, 100, (0, int.MaxValue)), Is.EqualTo((800, 1200, 1400)), "unbounded: ± bracket, overshoot one bracket further");
+            Assert.That(AutofocusSweepService.BracketMoves(1000, 200, 100, (0, 1250)), Is.EqualTo((800, 1150, 1250)), "near the top: + side one step below the stop, overshoot at the stop");
+            Assert.That(AutofocusSweepService.BracketMoves(1000, 200, 100, (0, 1300)), Is.EqualTo((800, 1200, 1300)), "room for the + side but not the full overshoot");
+            Assert.That(AutofocusSweepService.BracketMoves(100, 200, 100, (0, 5000)), Is.EqualTo((0, 300, 500)), "the − side stops at the bottom");
         }
 
         [Test]
@@ -389,7 +438,7 @@ namespace OpenAstroAra.Test {
 
             Assert.That(ok, Is.True);
             Assert.That(rig.CaptureCount(), Is.EqualTo(5));
-            Assert.That(rig.Moves, Is.EqualTo(new[] { StartPosition - 200, StartPosition + 200, StartPosition + 38 + 100, StartPosition + 38 }),
+            Assert.That(rig.Moves, Is.EqualTo(LopsidedMoves),
                 "the vertex is landed from above like every other position");
             var record = rig.Tracker.Snapshot();
             Assert.That(record.FinalPosition, Is.EqualTo(StartPosition + 38));

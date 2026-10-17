@@ -630,9 +630,11 @@ The run state carries `frames_captured` (int, default 0): the count of frames fi
 
 **Reasoning:** the playbook's layer 1 steps up through OUT corrections until HFR snaps back; inverting the sweep's own fitted V turns the one return shot into the distance directly, so the probe costs two or three frames instead of eight to ten. Backlash lives on `focus_calibration` rather than in the autofocus settings because it is derived data tied to the calibration's rig, invalidated by the same recalibrate. Layers 2 (passive refinement) and 3 (device-signature invalidation) are not in this change.
 
-**Spec ref:** `OpenAstroAra.Server/openapi.yaml#/components/schemas/FocusCalibrationDto`; `Services/AutofocusSweepService.Backlash.cs`, `Services/AutofocusSweepService.Smart.cs` (`BacklashCompensation`).
+**Spec ref:** `OpenAstroAra.Server/openapi.yaml#/components/schemas/FocusCalibrationDto`; `Services/AutofocusSweepService.Backlash.cs` (the probe that writes the pair).
 
 **Related:** #1139, §59.7, §59.2; tests `AutofocusBacklashProbeTest`, `SmartFocusRunnerTest`.
+
+**Addendum 2026-10-17 (#1385):** the fields are still measured and stored, but nothing compensates by them any more. The Smart bracket's + side, the one upward move, is now entered from above through an overshoot of one bracket (`AutofocusSweepService.Smart.cs`, `BracketMoves`), so no move depends on a measured backlash. The probe measures at the V's flat bottom, where it cannot see a shortfall: on 2026-10-17 it verified 0 on a ZWO EAF whose upward move then landed ≈ 40 steps short and the bracket read "no clear rise". `backlash_up_steps` / `backlash_verified` are informational (run record, client readout) until a later layer uses them.
 
 ---
 
