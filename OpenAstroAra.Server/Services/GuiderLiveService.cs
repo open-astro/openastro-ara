@@ -374,8 +374,9 @@ public sealed partial class GuiderLiveService : IGuiderLiveService {
             var messages = new List<GuidingAssistantMessageDto>();
             if (r["messages"] is JArray msgs) {
                 foreach (var m in msgs) {
-                    if (Str(m["text"]) is string text) {
-                        messages.Add(new GuidingAssistantMessageDto(Str(m["id"]) ?? "", text));
+                    // A bare string in the array would throw on indexing a JValue; skip it.
+                    if (m is JObject mo && Str(mo["text"]) is string text) {
+                        messages.Add(new GuidingAssistantMessageDto(Str(mo["id"]) ?? "", text));
                     }
                 }
             }

@@ -37,23 +37,17 @@ public static partial class EquipmentEndpoints {
     /// <summary>#1364 — one live-view action: 204 on success; 409 when no guider is connected
     /// (InvalidOperationException), 400 for a bad position (ArgumentOutOfRangeException), 422 when the
     /// guider refused (GuiderRpcException — no image yet, no star near the tap, not looping).</summary>
-    internal static async Task<IResult> GuiderLiveActionAsync(Func<Task> action) {
-        try {
-            await action();
-            return Results.NoContent();
-        } catch (ArgumentOutOfRangeException ex) {
-            return Results.Problem(ex.Message, statusCode: StatusCodes.Status400BadRequest);
-        } catch (InvalidOperationException ex) when (ex is not ObjectDisposedException) {
-            return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict);
-        } catch (OpenAstroAra.Equipment.Equipment.MyGuider.PHD2.GuiderRpcException ex) {
-            return Results.Problem(ex.Message, statusCode: StatusCodes.Status422UnprocessableEntity);
-        }
-    }
+    internal static Task<IResult> GuiderLiveActionAsync(Func<Task> action) =>
+        GuiderLiveResultAsync<IResult>(async () => { await action(); return Results.NoContent(); });
 
-    /// <summary>Same refusal mapping as <see cref="GuiderLiveActionAsync"/> for an action that answers a body.</summary>
+    /// <summary>The one refusal mapping for every live-view action: 400 ArgumentOutOfRange, 409
+    /// InvalidOperation (no guider), 422 GuiderRpcException (the guider refused). An action that
+    /// answers a body gets it wrapped in 200; <see cref="GuiderLiveActionAsync"/> answers 204
+    /// through the same catch list, so the two cannot drift apart.</summary>
     internal static async Task<IResult> GuiderLiveResultAsync<T>(Func<Task<T>> action) {
         try {
-            return Results.Ok(await action());
+            var result = await action();
+            return result is IResult r ? r : Results.Ok(result);
         } catch (ArgumentOutOfRangeException ex) {
             return Results.Problem(ex.Message, statusCode: StatusCodes.Status400BadRequest);
         } catch (InvalidOperationException ex) when (ex is not ObjectDisposedException) {
