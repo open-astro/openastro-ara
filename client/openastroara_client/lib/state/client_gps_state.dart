@@ -187,7 +187,11 @@ class ClientGpsNotifier extends AsyncNotifier<ClientGpsStatus> {
     // macOS names a USB serial port after the socket it is plugged into, so the
     // dongle moved to another socket comes back as a different /dev/cu.usbmodem…
     // and the saved one no longer exists (2026-10-16: saved usbmodem1101, dongle
-    // on usbmodem101, every read failed). Follow it when the choice is obvious.
+    // on usbmodem101, every read failed). Follow it when the choice is obvious —
+    // on a manual read only (gen == null), like probeAndAdopt: opening a port runs
+    // `stty` on it and toggles DTR, which resets an Arduino focuser or OnStep board
+    // that happens to be the lone usbmodem port, so the background loop never opens
+    // a port the user did not choose. The loop's failure names the candidate.
     final source = ref.read(serialGpsSourceProvider);
     final ports = await _ports(source);
     if (!ref.mounted) return null;
@@ -196,7 +200,7 @@ class ClientGpsNotifier extends AsyncNotifier<ClientGpsStatus> {
     var port = saved;
     // Only while the saved port is still the user's choice: a port picked during the
     // enumeration wins, and the newer generation reads it once this read ends.
-    if (savedGone && _current.prefs.port == saved) {
+    if (gen == null && savedGone && _current.prefs.port == saved) {
       final moved = replacementPort(saved, ports);
       if (moved != null) {
         debugPrint('[client-gps] $saved is gone; trying the dongle on $moved');
@@ -214,9 +218,14 @@ class ClientGpsNotifier extends AsyncNotifier<ClientGpsStatus> {
       if (fix != null && port != saved && ref.mounted && _current.prefs.port == saved) {
         // Remembered only once it spoke NMEA: a lone usbmodem/ttyACM port can just as
         // well be an Arduino focuser or an OnStep mount, which must never become the
-        // saved GPS port (probeAndAdopt keeps the same rule).
+        // saved GPS port.
         final prefs = _current.prefs.copyWith(port: port);
-        await ref.read(clientGpsPrefsServiceProvider).save(prefs);
+        try {
+          await ref.read(clientGpsPrefsServiceProvider).save(prefs);
+        } catch (e) {
+          // Not the read and not the rig: keep the fix and the port for this session.
+          debugPrint('[client-gps] could not remember $port: $e');
+        }
         if (ref.mounted) state = AsyncData(_current.copyWith(prefs: prefs));
       }
       if (fix == null) {

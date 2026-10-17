@@ -34,6 +34,7 @@ class _FakeSource implements SerialGpsSource {
   final Set<String> unopenable;
   int opens = 0;
   String? lastPort;
+  final opened = <String>[];
   /// When set, every enumeration after the first (build's) waits on it, like a slow `mode`.
   Completer<void>? slowPorts;
   int _portCalls = 0;
@@ -49,6 +50,7 @@ class _FakeSource implements SerialGpsSource {
   Stream<String> lines(String port) {
     opens++;
     lastPort = port;
+    opened.add(port);
     if (unopenable.contains(port)) return Stream<String>.error(StateError('could not open $port'));
     // Like the real port: emits its lines and then stays open until cancelled.
     final c = StreamController<String>();
@@ -225,14 +227,16 @@ void main() {
       expect(source.opens, greaterThan(opensAfterManual), reason: 'the loop is still alive');
     });
 
-    test('a dongle moved to another USB socket is followed and the new port remembered', () async {
+    test('Read now follows a dongle moved to another USB socket and remembers the new port', () async {
       // 2026-10-16: saved /dev/cu.usbmodem1101, the dongle came back as /dev/cu.usbmodem101.
-      final source = _FakeSource([_rmc], ports: const ['/dev/cu.RW403B', '/dev/cu.usbmodem101']);
+      final source = _FakeSource([_rmc],
+          ports: const ['/dev/cu.RW403B', '/dev/cu.usbmodem101'], unopenable: const {'/dev/cu.usbmodem1101'});
       final api = _FakeApi();
       final c = await container(source, api, const ClientGpsPrefs(enabled: true, port: '/dev/cu.usbmodem1101'));
       await c.read(clientGpsProvider.future);
-      // The loop's own first read follows the dongle and pushes.
-      await Future<void>.delayed(const Duration(milliseconds: 400));
+      await Future<void>.delayed(const Duration(milliseconds: 400)); // the loop's own read fails on the saved port
+      c.listen(activeServerProvider, (_, _) {}); // connected to the rig (the failed loop read never asked)
+      await c.read(savedServersProvider.future);
       final fix = await c.read(clientGpsProvider.notifier).syncNow();
       expect(fix, isNotNull);
       expect(source.lastPort, '/dev/cu.usbmodem101');
@@ -252,6 +256,18 @@ void main() {
       final status = c.read(clientGpsProvider).value!;
       expect(status.prefs.port, '/dev/cu.usbmodem1101', reason: 'never guess between two dongles');
       expect(status.lastError, contains('/dev/cu.usbmodem101 or /dev/cu.usbserial-9'));
+    });
+
+    test('the background loop never opens a port the user did not choose', () async {
+      // Opening runs stty and toggles DTR: the lone usbmodem port may be a focuser or OnStep board.
+      final source = _FakeSource([_rmc], ports: const ['/dev/cu.usbmodem101'], unopenable: const {'/dev/cu.usbmodem1101'});
+      final c = await container(source, _FakeApi(), const ClientGpsPrefs(enabled: true, port: '/dev/cu.usbmodem1101'));
+      await c.read(clientGpsProvider.future);
+      await Future<void>.delayed(const Duration(milliseconds: 400)); // the loop's own read
+      expect(source.opened, isNot(contains('/dev/cu.usbmodem101')));
+      final status = c.read(clientGpsProvider).value!;
+      expect(status.prefs.port, '/dev/cu.usbmodem1101');
+      expect(status.lastError, contains('the GPS may be on /dev/cu.usbmodem101'));
     });
 
     test('a followed port that gives no fix is never remembered', () async {
