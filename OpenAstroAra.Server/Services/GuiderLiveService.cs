@@ -391,7 +391,7 @@ public sealed partial class GuiderLiveService : IGuiderLiveService {
             DurationSec: Num(raw?["duration_s"]),
             MeasureBacklash: Flag(raw?["measure_backlash"]),
             ElapsedSec: Num(raw?["elapsed_s"]),
-            Samples: Num(raw?["samples"]) is double n ? (int)n : null,
+            Samples: Num(raw?["samples"]) is double n ? (int)Math.Clamp(n, 0, int.MaxValue) : null,
             PixelScale: Num(raw?["pixel_scale"]),
             RaDriftPxMin: Num(raw?["ra_drift_px_min"]),
             DecDriftPxMin: Num(raw?["dec_drift_px_min"]),

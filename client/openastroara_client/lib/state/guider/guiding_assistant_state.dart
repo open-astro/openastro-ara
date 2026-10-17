@@ -103,6 +103,10 @@ class GuidingAssistantNotifier extends Notifier<GuidingAssistantState> {
   ) async {
     final api = ref.read(guidingAssistantApiProvider);
     if (api == null || state.busy) return;
+    // A timer poll already in flight must not land after the action's status
+    // and show the old state (idle right after Start) or re-arm the idle timer.
+    _generation++;
+    _timer?.cancel();
     state = state.copyWith(busy: true, clearError: true);
     try {
       final status = await op(api);
