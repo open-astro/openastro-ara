@@ -198,9 +198,11 @@ class ActiveFaultsAccumulator {
     // Worst-standing wins: an advisory arriving while a recovery-tracked red
     // fault is mid-episode must not soften the chip — the red one still owns
     // the clear signal. Equal severity → the newer fault replaces (fresher
-    // details + timestamp).
-    if (existing != null &&
-        statusLevelRank(existing.level) > statusLevelRank(level)) {
+    // details + timestamp), EXCEPT that a standing entry is never swapped for
+    // a one-shot of the same rank: a degraded wheel whose filter change then
+    // fails with op_error must stay degraded, or the TTL prune would turn the
+    // chip green ten minutes into the outage (review on #1384).
+    if (existing != null && !_mayReplace(existing, kind, level)) {
       return false;
     }
     if (existing == null && _active.length >= maxDevices) {
@@ -215,6 +217,17 @@ class ActiveFaultsAccumulator {
       level: level,
     );
     return true;
+  }
+
+  /// Whether an incoming fault of [kind] / [level] takes over a device's
+  /// standing entry: a worse one always; an equal one only when the existing
+  /// entry is not standing, or the incoming one is standing too.
+  static bool _mayReplace(ActiveFault existing, String kind, StatusLevel level) {
+    final existingRank = statusLevelRank(existing.level);
+    final rank = statusLevelRank(level);
+    if (rank > existingRank) return true;
+    if (rank < existingRank) return false;
+    return !isStandingFaultKind(existing.kind) || isStandingFaultKind(kind);
   }
 
   bool _applyAction(WsEvent event) {
@@ -269,8 +282,13 @@ class ActiveFaultsAccumulator {
         continue;
       }
       final existing = _active[row.equipmentType];
+      // Live state wins on a tie, and a standing live entry wins over any
+      // seeded one-shot of the same rank (the same rule as _applyFault).
       if (existing != null &&
-          statusLevelRank(existing.level) >= statusLevelRank(level)) {
+          (statusLevelRank(existing.level) >= statusLevelRank(level) &&
+              !(statusLevelRank(existing.level) == statusLevelRank(level) &&
+                  !isStandingFaultKind(existing.kind) &&
+                  isStandingFaultKind(row.faultType)))) {
         continue;
       }
       if (existing == null && _active.length >= maxDevices) continue;

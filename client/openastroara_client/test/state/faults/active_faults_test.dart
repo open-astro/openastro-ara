@@ -57,6 +57,22 @@ void main() {
       expect(recovered, isNotNull);
       expect(acc.snapshot.byDeviceType, isNot(contains('filterwheel')));
 
+      // A same-rank one-shot on the same device does not displace the standing
+      // entry: a filter change failing with op_error mid-outage must not let the
+      // TTL prune turn the chip green while the wheel is still broken.
+      acc.apply(_fault('filterwheel', 'degraded', ts: t0));
+      expect(acc.apply(_fault('filterwheel', 'op_error', ts: t0.add(const Duration(minutes: 1)))), isNull);
+      expect(acc.snapshot.byDeviceType['filterwheel']!.kind, 'degraded');
+      expect(acc.prune(t0.add(const Duration(minutes: 30))), isNull, reason: 'still standing');
+      // A worse fault still takes over, and a standing kind replaces a one-shot of equal rank.
+      acc.apply(_fault('filterwheel', 'disconnected', ts: t0.add(const Duration(minutes: 2))));
+      expect(acc.snapshot.byDeviceType['filterwheel']!.kind, 'disconnected');
+      acc.apply(_event(FaultWsEvents.actionTaken, {'device_type': 'filterwheel', 'action': 'recovered'}, ts: t0.add(const Duration(minutes: 3))));
+      acc.apply(_fault('filterwheel', 'op_error', ts: t0.add(const Duration(minutes: 4))));
+      expect(acc.apply(_fault('filterwheel', 'degraded', ts: t0.add(const Duration(minutes: 5)))), isNotNull);
+      expect(acc.snapshot.byDeviceType['filterwheel']!.kind, 'degraded');
+      acc.apply(_event(FaultWsEvents.actionTaken, {'device_type': 'filterwheel', 'action': 'recovered'}, ts: t0.add(const Duration(minutes: 6))));
+
       // ...and so does a fresh connect (the user reconnected it by hand).
       acc.apply(_fault('camera', 'degraded', ts: t0));
       final connected = acc.apply(_event(FaultWsEvents.connected, {
