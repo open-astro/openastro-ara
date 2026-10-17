@@ -78,10 +78,15 @@
        (Server, Test) the way External\JPLEPH is. Before this, a fresh checkout or worktree ran
        `dotnet test` with 30-odd astrometry, refraction and sequencer-target failures until someone
        ran the script by hand into the test bin dir (2026-10-17). Incremental: rebuilt only when a
-       vendored source or the script changes. Skipped when a RuntimeIdentifier is set — a
-       cross-publish (linux-arm64 from an x64 runner) must not carry host-arch libraries; CI stages
-       its own arm64 build after publish. A host without a C compiler gets a warning and the
-       un-staged behaviour it had before (the transform tests self-Ignore).
+       vendored source or the script changes. They are build-output only, never publish output
+       (CopyToPublishDirectory=Never): a cross-publish (linux-arm64 from an x64 runner or a Mac)
+       must not carry host-arch libraries, and CI stages its own arm64 build after publish. The
+       RuntimeIdentifier guard alone does not achieve that — this is a RID-agnostic library, so the
+       SDK undefines RuntimeIdentifier for it inside a Server publish and the target runs anyway
+       (review of #1388; repro: `dotnet publish OpenAstroAra.Server -r linux-arm64` carried
+       host-built libsofa/libnovas31). A host without a C compiler gets a warning and the
+       un-staged behaviour it had before (the transform tests self-Ignore); Directory.Build.props'
+       TreatWarningsAsErrors is the C# compiler's, not MSBuild's, so the build still succeeds.
        The output dir is computed inside the targets: IntermediateOutputPath is not defined until
        the SDK targets import, after the project body. -->
   <Target Name="_AstrometryNativeProps">
@@ -115,11 +120,13 @@
       <Content Include="$(_AstrometrySofa)" Condition="Exists('$(_AstrometrySofa)') and Exists('$(_AstrometryNovas)')">
         <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         <Link>libsofa.$(AstrometryNativeExt)</Link>
+        <CopyToPublishDirectory>Never</CopyToPublishDirectory>
         <Visible>false</Visible>
       </Content>
       <Content Include="$(_AstrometryNovas)" Condition="Exists('$(_AstrometrySofa)') and Exists('$(_AstrometryNovas)')">
         <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         <Link>libnovas31.$(AstrometryNativeExt)</Link>
+        <CopyToPublishDirectory>Never</CopyToPublishDirectory>
         <Visible>false</Visible>
       </Content>
     </ItemGroup>
