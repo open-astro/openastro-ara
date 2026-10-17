@@ -438,6 +438,7 @@ public sealed partial class FilterWheelService : IFilterWheelService, IRetainedD
                 // First slot read for this connection: import the device's filter list into the
                 // active profile (outside the lock — it walks an observable collection).
                 ImportProfileFilters(slots!);
+                MirrorSlotLabels(slots!);
             }
         } catch (Exception ex) {
             LogRuntimeReadFailed(ex);

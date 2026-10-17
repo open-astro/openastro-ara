@@ -111,5 +111,60 @@ void main() {
       // Token matching: substrings inside ordinary words don't trigger lines.
       expect(FilterSetNotifier.guessKind('Chandra'), FilterKind.l);
     });
+
+    test('recognizedKind covers the AlpacaBridge presets and their aliases',
+        () {
+      FilterKind? k(String s) => FilterSetNotifier.recognizedKind(s);
+      for (final s in ['Luminance', 'L', 'lum']) {
+        expect(k(s), FilterKind.l, reason: s);
+      }
+      expect(k('R'), FilterKind.r);
+      expect(k('G'), FilterKind.g);
+      expect(k('B'), FilterKind.b);
+      for (final s in ['Ha', 'H', 'Hα', 'halpha', 'H-alpha', 'Ha7nm',
+          'Antlia Ha 3nm']) {
+        expect(k(s), FilterKind.ha, reason: s);
+      }
+      for (final s in ['OIII', 'O', 'o3', 'O-III']) {
+        expect(k(s), FilterKind.oiii, reason: s);
+      }
+      for (final s in ['SII', 'S', 's2', 'S-II']) {
+        expect(k(s), FilterKind.sii, reason: s);
+      }
+      // No planning kind: Sloan, clear, dark, UV/IR and the bridge's default
+      // "Filter N" names. 'UHC-S' must not read its lone S as SII.
+      for (final s in ["U'", "G'", "R'", "I'", "Z'", 'Clear', 'CLR', 'Dark',
+          'UV', 'IR', 'Filter 1', 'UHC-S', '']) {
+        expect(k(s), isNull, reason: s);
+      }
+    });
+
+    group('FilterSetSettings.lookup', () {
+      const set = FilterSetSettings(filters: [
+        PlanningFilter(name: 'Luminance', kind: FilterKind.l),
+        PlanningFilter(name: 'Red', kind: FilterKind.r),
+        PlanningFilter(name: 'Ha', kind: FilterKind.ha),
+        PlanningFilter(name: 'Baader OIII 6.5nm', kind: FilterKind.oiii),
+        PlanningFilter(name: 'My Filter', kind: FilterKind.l),
+      ]);
+
+      test('exact name first, case-insensitive', () {
+        expect(set.lookup('ha')?.name, 'Ha');
+        expect(set.lookup(' My Filter ')?.name, 'My Filter');
+      });
+
+      test('a recognised wheel name finds the one entry of its kind', () {
+        expect(set.lookup('Hα')?.name, 'Ha');
+        expect(set.lookup('R')?.name, 'Red');
+        expect(set.lookup('O3')?.name, 'Baader OIII 6.5nm');
+      });
+
+      test('ambiguous or unrecognised names stay unknown', () {
+        // Two L-kind entries: 'Lum' could be either.
+        expect(set.lookup('Lum'), isNull);
+        expect(set.lookup('Filter 7'), isNull);
+        expect(set.lookup('SII'), isNull);
+      });
+    });
   });
 }

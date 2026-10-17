@@ -21,7 +21,7 @@ import '../../models/sequence/nina_dom.dart';
 import '../../models/sequence/instruction_style.dart';
 import '../../models/sequence/node_display.dart' show nodeLabel, nodeIcon, shortTypeName;
 import '../../models/sequence/trigger_catalog.dart';
-import '../../state/settings/filter_wheel_labels_state.dart';
+import '../../state/equipment/filter_choices_state.dart';
 import '../../state/sequencer/sequence_editor_state.dart';
 import '../../theme/ara_colors.dart';
 import 'optimal_sub_advisor.dart';
@@ -833,9 +833,9 @@ class _FieldControl extends StatelessWidget {
   );
 }
 
-/// `SwitchFilter.Filter` picker. Sources the filter names from the configured
-/// filter-wheel slot labels ([filterWheelLabelsProvider]) — the user's filter
-/// set from Settings → Filter Wheel — and writes a minimal `FilterInfo`
+/// `SwitchFilter.Filter` picker. Sources the filter names from
+/// [filterChoicesProvider] — the connected wheel's (Alpaca) names, else the
+/// profile's slot labels from Settings → Filter Wheel — and writes a minimal `FilterInfo`
 /// (`{$type, _name, _position}`) on pick. The daemon's `SwitchFilter.MatchFilter`
 /// re-resolves the stored filter to the active profile's full `FilterInfo` by
 /// name (then position), so only the identifying fields need to be written.
@@ -857,19 +857,11 @@ class _FilterEditor extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final labels = ref.watch(filterWheelLabelsProvider);
-    // Configured slots → (name, 0-based position) for the dropdown + write-back.
-    // Dedupe by name, keep-first (r1, shared with the Imaging picker): the
-    // daemon's MatchFilter resolves by name first anyway, and a duplicate name
-    // would crash the dropdown's exactly-one-item-per-value assertion.
-    final seenNames = <String>{};
-    final slots = <({String name, int position})>[];
-    for (var slot = 1; slot <= labels.slotCount; slot++) {
-      final name = labels.labelAt(slot);
-      if (name.isNotEmpty && seenNames.add(name)) {
-        slots.add((name: name, position: slot - 1));
-      }
-    }
+    // Slots → (name, 0-based position) for the dropdown + write-back, deduped
+    // keep-first (shared with the Imaging picker): the daemon's MatchFilter
+    // resolves by name first anyway, and a duplicate name would crash the
+    // dropdown's exactly-one-item-per-value assertion.
+    final slots = ref.watch(filterChoicesProvider);
     final stored = value is Map ? (value as Map)['_name'] : null;
     final storedName = stored is String && stored.isNotEmpty ? stored : null;
 
