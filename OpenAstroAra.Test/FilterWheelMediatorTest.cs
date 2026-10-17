@@ -144,6 +144,21 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void MirrorSlotLabels_keeps_the_profile_label_for_an_unnamed_device_slot() {
+            var store = new InMemoryProfileStore();
+            store.PutFilterWheelLabels(new FilterWheelLabelsDto(new List<string> { "L", "Ha", "OIII" }));
+            using var svc = new FilterWheelService(profileStore: store);
+            svc.MirrorSlotLabels(new List<FilterSlotDto> {
+                new(Position: 0, Name: "Lum", FocusOffset: 0),
+                new(Position: 1, Name: "  ", FocusOffset: 0),
+                new(Position: 2, Name: "OIII", FocusOffset: 0),
+                new(Position: 3, Name: "", FocusOffset: 0),
+            });
+            Assert.That(store.GetFilterWheelLabels().Labels, Is.EqualTo(new List<string> { "Lum", "Ha", "OIII", "" }),
+                "a slot the wheel leaves unnamed keeps the profile's label; one with no label stays blank");
+        }
+
+        [Test]
         public void SyncProfileFilters_removes_entries_beyond_the_device_slot_count() {
             var profile = new List<FilterInfo> {
                 new FilterInfo("L", 0, 0),

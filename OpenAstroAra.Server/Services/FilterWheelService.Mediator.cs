@@ -349,8 +349,9 @@ public sealed partial class FilterWheelService : IFilterWheelMediator {
         if (_profileStore is null) {
             return;
         }
-        var labels = SlotLabels(slots);
-        if (labels is null || labels.SequenceEqual(_profileStore.GetFilterWheelLabels().Labels)) {
+        var current = _profileStore.GetFilterWheelLabels().Labels;
+        var labels = SlotLabels(slots, current);
+        if (labels is null || labels.SequenceEqual(current)) {
             return;
         }
         _profileStore.PutFilterWheelLabels(new FilterWheelLabelsDto(labels));
@@ -358,14 +359,19 @@ public sealed partial class FilterWheelService : IFilterWheelMediator {
     }
 
     /// <summary>The slot labels for a device's slots, inside the labels endpoint's limits (1–32
-    /// entries, 64 characters each); null when the wheel reported no slots. Pure.</summary>
-    internal static List<string>? SlotLabels(List<FilterSlotDto> slots) {
+    /// entries, 64 characters each); null when the wheel reported no slots. A slot the device leaves
+    /// unnamed keeps its <paramref name="current"/> label, as <see cref="SyncProfileFilters"/> keeps
+    /// the profile's filter name. Pure.</summary>
+    internal static List<string>? SlotLabels(List<FilterSlotDto> slots, IReadOnlyList<string>? current = null) {
         if (slots.Count == 0) {
             return null;
         }
         var labels = new List<string>(Math.Min(slots.Count, 32));
         foreach (var slot in slots.OrderBy(s => s.Position).Take(32)) {
             var name = slot.Name.Trim();
+            if (name.Length == 0 && current is not null && slot.Position >= 0 && slot.Position < current.Count) {
+                name = current[slot.Position];
+            }
             labels.Add(name.Length > 64 ? name[..64] : name);
         }
         return labels;
