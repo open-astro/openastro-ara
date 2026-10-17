@@ -6,8 +6,10 @@ import '../../services/profile_api.dart';
 import '../../state/guider/guider_equipment_state.dart';
 import '../../state/guider/guider_state.dart';
 import '../../state/profile_management_state.dart';
+import '../../state/settings/optics_settings_state.dart';
 import '../../state/settings/phd2_settings_state.dart';
 import '../../theme/ara_colors.dart';
+import '../../util/guide_units.dart';
 import '../profile/profile_import_flow.dart' show friendlyDaemonError;
 import '../settings/editable_field.dart';
 import 'guider_advanced_dialog.dart';
@@ -349,6 +351,34 @@ class _GuidingTuneDialogState extends ConsumerState<GuidingTuneDialog> {
                           }
                         },
                       ),
+                      // The same figure on the sky and on the imaging sensor, once
+                      // the guider has reported its scale (see the Guider panel).
+                      Builder(builder: (context) {
+                        final guideScale = ref
+                            .watch(guiderStatusProvider)
+                            .value
+                            ?.pixelScaleArcsec;
+                        final optics = ref.watch(opticsSettingsProvider);
+                        final text = describeGuidePixels(
+                            phd2.ditherPixels,
+                            guideScale,
+                            imagingPixelScaleArcsec(
+                                focalLengthMm: optics.focalLengthMm,
+                                reducerFactor: optics.reducerFactor,
+                                pixelSizeUm: optics.pixelSizeUm));
+                        if (text == null) return const SizedBox.shrink();
+                        return Padding(
+                          key: const ValueKey('tune-dither-units'),
+                          padding: const EdgeInsets.only(left: 4, bottom: 4),
+                          child: Text(
+                            'Dither $text · settle ${describeGuidePixels(phd2.settlePixels, guideScale, null) ?? ''}',
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodySmall
+                                ?.copyWith(color: AraColors.textSecondary),
+                          ),
+                        );
+                      }),
                     ],
                   ),
                 ),

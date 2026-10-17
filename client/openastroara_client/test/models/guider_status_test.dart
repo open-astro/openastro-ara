@@ -28,6 +28,23 @@ void main() {
       expect(s.rmsTotalArcsec, isNull);
     });
 
+    test('parses the guider pixel scale, and tolerates its absence', () {
+      final s = GuiderStatus.fromJson(<String, dynamic>{
+        'device_id': 'phd2',
+        'name': 'PHD2',
+        'state': 'connected',
+        'runtime': <String, dynamic>{'state': 'guiding', 'pixel_scale_arcsec': 2.99},
+      });
+      expect(s.pixelScaleArcsec, 2.99);
+      final older = GuiderStatus.fromJson(<String, dynamic>{
+        'device_id': 'phd2',
+        'name': 'PHD2',
+        'state': 'connected',
+        'runtime': <String, dynamic>{'state': 'guiding'},
+      });
+      expect(older.pixelScaleArcsec, isNull);
+    });
+
     test('parses the daemon arcsec RMS alongside the pixel figures', () {
       final s = GuiderStatus.fromJson(<String, dynamic>{
         'name': 'PHD2',

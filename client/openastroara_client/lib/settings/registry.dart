@@ -1726,7 +1726,7 @@ const List<Setting> settingsRegistry = [
   Setting(
     id: 'eq.guider.settle_pixels',
     label: 'Settle threshold (pixels)',
-    description: 'OpenAstro Guider considers the guider settled once RMS error stays under this many pixels for `settle_time` seconds.',
+    description: 'OpenAstro Guider considers the guider settled once RMS error stays under this many guide-camera pixels for `settle_time` seconds. The panel shows the same threshold in arcsec and accepts it in arcsec.',
     keywords: ['settle', 'threshold', 'pixels', 'rms', 'phd2', 'tolerance'],
     path: ['Settings', 'Equipment', 'Guider'],
     type: SettingType.doubleRange(min: 0, max: 10, step: 0.1),

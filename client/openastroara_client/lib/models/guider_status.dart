@@ -115,6 +115,9 @@ class GuiderStatus {
   final double? rmsTotalArcsec;
   final double? rmsRaArcsec;
   final double? rmsDecArcsec;
+
+  /// Arcsec per guide-camera pixel, once the guider has reported it.
+  final double? pixelScaleArcsec;
   final String? currentProfile;
   /// #1311 — the polar alignment residual from guiding (`runtime.pa_residual`),
   /// so a client that (re)connects mid-run shows it before the next WS event.
@@ -135,6 +138,7 @@ class GuiderStatus {
     this.rmsRa,
     this.rmsDec,
     this.rmsTotalArcsec,
+    this.pixelScaleArcsec,
     this.rmsRaArcsec,
     this.rmsDecArcsec,
     this.currentProfile,
@@ -186,6 +190,7 @@ class GuiderStatus {
       rmsTotalArcsec: _asDouble(runtimeMap['rms_total_arcsec']),
       rmsRaArcsec: _asDouble(runtimeMap['rms_ra_arcsec']),
       rmsDecArcsec: _asDouble(runtimeMap['rms_dec_arcsec']),
+      pixelScaleArcsec: _asDouble(runtimeMap['pixel_scale_arcsec']),
       currentProfile: _str(runtimeMap['current_profile']),
       paResidual: PaResidual.fromJson(runtimeMap['pa_residual']),
       calibrationDirection: _str(runtimeMap['calibration_direction']),
@@ -231,6 +236,7 @@ class GuiderStatus {
       other.rmsRa == rmsRa &&
       other.rmsDec == rmsDec &&
       other.rmsTotalArcsec == rmsTotalArcsec &&
+      other.pixelScaleArcsec == pixelScaleArcsec &&
       other.rmsRaArcsec == rmsRaArcsec &&
       other.rmsDecArcsec == rmsDecArcsec &&
       other.currentProfile == currentProfile &&
@@ -238,6 +244,6 @@ class GuiderStatus {
 
   @override
   int get hashCode => Object.hash(deviceId, name, connectionState, runtimeState,
-      rmsTotal, rmsRa, rmsDec, rmsTotalArcsec, rmsRaArcsec, rmsDecArcsec,
+      rmsTotal, rmsRa, rmsDec, rmsTotalArcsec, rmsRaArcsec, rmsDecArcsec, pixelScaleArcsec,
       currentProfile, paResidual);
 }
