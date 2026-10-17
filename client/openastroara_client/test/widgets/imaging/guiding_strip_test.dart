@@ -246,6 +246,20 @@ void main() {
     await _teardownPanel(tester, container);
   });
 
+  testWidgets('a strip opened while the guider settles waits for frames, not "Not guiding" (#1364)',
+      (tester) async {
+    final container = await _pump(tester,
+        status: const GuiderStatus(
+          name: 'OpenAstro Guider',
+          connectionState: GuiderConnectionState.connected,
+          runtimeState: GuiderRuntimeState.settling,
+        ));
+    expect(find.text('settling'), findsOneWidget);
+    expect(find.text('Waiting for guide frames…'), findsOneWidget,
+        reason: 'a post-dither settle is still guiding');
+    await _teardownPanel(tester, container);
+  });
+
   testWidgets('pixel-only steps plot and read in px until a scale is known, '
       'then in arcsec from the guide train', (tester) async {
     final ws = StreamController<WsEvent>.broadcast();
