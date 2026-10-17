@@ -176,17 +176,39 @@ class ClientGpsNotifier extends AsyncNotifier<ClientGpsStatus> {
       if (gen != null && gen == _gen) _schedule(ref.read(clientGpsBusyRetryProvider));
       return s.lastFix;
     }
-    final port = s.prefs.port;
+    var port = s.prefs.port;
     if (port == null || port.isEmpty) {
       state = AsyncData(s.copyWith(lastError: 'Choose the serial port the GPS dongle is on.'));
       return null;
     }
-    state = AsyncData(s.copyWith(busy: true, clearError: true));
+    // macOS names a USB serial port after the socket it is plugged into, so the
+    // dongle moved to another socket comes back as a different /dev/cu.usbmodem…
+    // and the saved one no longer exists (2026-10-16: saved usbmodem1101, dongle
+    // on usbmodem101, every read failed). Follow it when the choice is obvious.
+    final source = ref.read(serialGpsSourceProvider);
+    final ports = await _ports(source);
+    if (!ref.mounted) return null;
+    if (ports.isNotEmpty && !ports.contains(port)) {
+      final moved = replacementPort(port, ports);
+      if (moved != null) {
+        debugPrint('[client-gps] $port is gone; following the dongle to $moved');
+        final prefs = _current.prefs.copyWith(port: moved);
+        await ref.read(clientGpsPrefsServiceProvider).save(prefs);
+        if (!ref.mounted) return null;
+        state = AsyncData(_current.copyWith(prefs: prefs, ports: ports));
+        port = moved;
+      }
+      // Otherwise read the saved port as before: a port the enumeration misses may
+      // still open (a COM port `mode` does not list), and two candidates are the
+      // user's choice — the failure message below names them.
+    }
+    final s2 = _current;
+    state = AsyncData(s2.copyWith(busy: true, clearError: true));
     NmeaFix? fix;
     String? error;
     var pushed = false;
     try {
-      fix = await acquireFix(ref.read(serialGpsSourceProvider), port, ref.read(clientGpsListenWindowProvider));
+      fix = await acquireFix(source, port, ref.read(clientGpsListenWindowProvider));
       if (fix == null) {
         error = 'No GPS fix on $port yet — the receiver needs a clear view of the sky.';
       } else if ((gen != null && gen != _gen) || !ref.mounted || !_current.enabled) {
@@ -203,8 +225,10 @@ class ClientGpsNotifier extends AsyncNotifier<ClientGpsStatus> {
         }
       }
     } catch (e) {
+      final others = ports.where((p) => p != port && looksLikeGpsPort(p)).toList();
       error = fix == null
           ? 'GPS read failed on $port: $e'
+              '${others.isEmpty ? '' : ' — the GPS may be on ${others.join(' or ')}; choose it in GPS on this computer.'}'
           // The read worked; the daemon refused the push. A 422 here is a rig running a
           // daemon that predates client-side GPS (it does not know source gps-client).
           : 'Fix read, but the rig refused it: ${friendlyError(e, action: 'push the GPS fix')}'
@@ -270,6 +294,16 @@ class ClientGpsNotifier extends AsyncNotifier<ClientGpsStatus> {
     } finally {
       if (ref.mounted && _current.busy) state = AsyncData(_current.copyWith(busy: false));
     }
+  }
+
+  /// The port to follow when [saved] is no longer present: the one GPS-like
+  /// port in [ports], or null when there is none or more than one (the user
+  /// must choose — never guess between two dongles or grab a mount's line).
+  /// Pure — tested.
+  static String? replacementPort(String saved, List<String> ports) {
+    if (ports.contains(saved)) return saved;
+    final candidates = ports.where(looksLikeGpsPort).toList();
+    return candidates.length == 1 ? candidates.single : null;
   }
 
   /// The names a USB GPS dongle presents under; anything else (Bluetooth ports,
