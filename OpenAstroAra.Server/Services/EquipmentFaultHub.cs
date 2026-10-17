@@ -159,9 +159,12 @@ public sealed partial class EquipmentFaultHub : IEquipmentFaultSink {
         try {
             await _faultLog!.ResolveAsync(fault, DateTimeOffset.UtcNow, System.Threading.CancellationToken.None).ConfigureAwait(false);
         } catch (Exception ex) {
-            LogPersistFailed(ex);
+            LogResolveFailed(ex);
         }
     }
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Equipment fault hub: failed to resolve the §42.5 fault-log row on recovery — the recovery is still logged/broadcast")]
+    private partial void LogResolveFailed(Exception ex);
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Equipment recovered: {DeviceType} {Kind} on '{Device}' — the device's reads are back")]
     private partial void LogRecovered(DeviceType deviceType, EquipmentFaultKind kind, string device);

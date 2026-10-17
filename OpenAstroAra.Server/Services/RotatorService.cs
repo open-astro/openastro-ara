@@ -54,11 +54,10 @@ public sealed partial class RotatorService : IRotatorService, IRetainedDeviceSou
     private readonly DeviceConnectionProbe _probe = new();
     // §42.3 second channel — the essential runtime read's health (the probe alone misses a bridge
     // that answers Connected while every read fails, 2026-10-16). Mutated under _gate like _probe.
-    // Built lazily: the fault sink is assigned in the constructor after this field initializer.
-    private DeviceHealthWatch? _healthWatch;
-    private DeviceHealthWatch Health => _healthWatch ??= new DeviceHealthWatch(DeviceType.Rotator, _faults);
-    private void ObserveRuntimeReadLocked(bool ok, string? reason, DiscoveredDeviceDto? device) => Health.Observe(ok, reason, device);
-    private void ResetHealthLocked() => Health.Reset();
+    // Built in the constructor, once the fault sink is known.
+    private readonly DeviceHealthWatch _health;
+    private void ObserveRuntimeReadLocked(bool ok, string? reason, DiscoveredDeviceDto? device) => _health.Observe(ok, reason, device);
+    private void ResetHealthLocked() => _health.Reset();
 
     private readonly RotatorDriftWatch _drift = new();
     private readonly object _gate = new();
@@ -81,6 +80,7 @@ public sealed partial class RotatorService : IRotatorService, IRetainedDeviceSou
         _logger = logger ?? NullLogger<RotatorService>.Instance;
         _events = events;
         _faults = faults;
+        _health = new DeviceHealthWatch(DeviceType.Rotator, faults);
         _refreshTimer = new Timer(RefreshTick, state: null, dueTime: RefreshInterval, period: RefreshInterval);
     }
 
