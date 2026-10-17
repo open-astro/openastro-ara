@@ -20,6 +20,7 @@ using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Profile.Interfaces;
 using OpenAstroAra.Sequencer.Container;
 using OpenAstroAra.Sequencer.SequenceItem.Guider;
+using OpenAstroAra.Sequencer.Trigger.Guider;
 using OpenAstroAra.Sequencer.Utility;
 using System;
 using System.Collections.Generic;
@@ -39,6 +40,15 @@ namespace OpenAstroAra.Test {
 
         private sealed class SyncProgress(Action<ApplicationStatus> report) : IProgress<ApplicationStatus> {
             public void Report(ApplicationStatus value) => report(value);
+        }
+
+        /// <summary>Polls for the pause request instead of sleeping a fixed time (a loaded CI runner
+        /// makes a fixed delay flaky).</summary>
+        private static async Task<bool> PauseRequested(PauseGate gate) {
+            for (var i = 0; i < 100 && !gate.IsPauseRequested; i++) {
+                await Task.Delay(20);
+            }
+            return gate.IsPauseRequested;
         }
 
         /// <summary>A guider whose successive Dither calls play out the given verdicts: null = settled,
@@ -97,9 +107,8 @@ namespace OpenAstroAra.Test {
             string? status = null;
 
             var execute = item.Execute(new SyncProgress(s => status = s.Status), CancellationToken.None);
-            await Task.Delay(50);
+            Assert.That(await PauseRequested(gate), Is.True);
             Assert.That(execute.IsCompleted, Is.False, "parked inside the pause, not failed and not exposing");
-            Assert.That(gate.IsPauseRequested, Is.True);
             Assert.That(gate.PendingKind, Is.EqualTo(PauseKind.AwaitingUser));
             Assert.That(calls, Has.Count.EqualTo(2));
             Assert.That(status, Does.Contain("did not settle twice"));
@@ -119,14 +128,36 @@ namespace OpenAstroAra.Test {
             string? status = null;
 
             var execute = item.Execute(new SyncProgress(s => status = s.Status), CancellationToken.None);
-            await Task.Delay(50);
-            Assert.That(gate.IsPauseRequested, Is.True);
+            Assert.That(await PauseRequested(gate), Is.True);
             Assert.That(calls, Has.Count.EqualTo(1), "no retry on a refusal");
             Assert.That(status, Does.Contain("not guiding"));
 
             gate.Resume();
             await execute.WaitAsync(TimeSpan.FromSeconds(5));
             Assert.That(calls, Has.Count.EqualTo(2));
+        }
+
+        [Test]
+        public async Task A_dither_fired_by_the_dither_after_exposures_trigger_pauses_the_run_too() {
+            // Real plans dither through the trigger, whose TriggerRunner used to hang off nothing: the
+            // Dither inside it could not find the root's pause gate, threw, and the trigger merely logged
+            // FAILED while the next frame started on the swinging star.
+            var (guider, calls) = Guider(connected: true, "timed out", "timed out", null);
+            var gate = new PauseGate();
+            var root = new SequenceRootContainer { PauseGate = gate };
+            var trigger = new DitherAfterExposures { AfterExposures = 1 };
+            trigger.TriggerRunner.Add(new Dither(guider.Object, Mock.Of<IProfileService>()));
+            trigger.AttachNewParent(root);
+
+            var run = trigger.Run(root, NoProgress, CancellationToken.None);
+            Assert.That(await PauseRequested(gate), Is.True, "the Dither inside the trigger must reach the root's pause gate");
+            Assert.That(run.IsCompleted, Is.False);
+            Assert.That(calls, Has.Count.EqualTo(2));
+
+            gate.Resume();
+            await run.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.That(calls, Has.Count.EqualTo(3));
+            Assert.That(trigger.Status, Is.Not.EqualTo(OpenAstroAra.Core.Enums.SequenceEntityStatus.FAILED));
         }
 
         [Test]
@@ -147,8 +178,7 @@ namespace OpenAstroAra.Test {
             using var cts = new CancellationTokenSource();
 
             var execute = item.Execute(NoProgress, cts.Token);
-            await Task.Delay(50);
-            Assert.That(gate.IsPauseRequested, Is.True);
+            Assert.That(await PauseRequested(gate), Is.True);
             await cts.CancelAsync();
 
             await Assert.CatchAsync<OperationCanceledException>(() => execute.WaitAsync(TimeSpan.FromSeconds(5)));

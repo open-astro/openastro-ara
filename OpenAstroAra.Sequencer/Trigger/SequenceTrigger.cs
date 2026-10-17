@@ -152,6 +152,12 @@ namespace OpenAstroAra.Sequencer.Trigger {
 
         public void AttachNewParent(ISequenceContainer? newParent) {
             Parent = newParent;
+            // The runner's instructions must find the tree they fire into: a Dither inside the
+            // Dither-after-exposures trigger looks up the root's pause gate through its parents, and
+            // a runner hanging off nothing made that lookup null (the Dither then failed the trigger
+            // and the next frame started on an unsettled star — 2026-10-16). The runner is never an
+            // item of the parent; this only gives it the back-pointer.
+            TriggerRunner?.AttachNewParent(newParent);
 
             AfterParentChanged();
         }
