@@ -152,6 +152,11 @@ namespace OpenAstroAra.Sequencer.Trigger {
                 Logger.Error(ex);
                 root?.RaiseFailureEvent(this, ex);
                 //Todo Error policy - e.g. Continue; Throw and cancel; Retry;
+            } finally {
+                // The gate is lent for this run only; a cloned or standalone runner must not keep it.
+                if (this.TriggerRunner is IPauseGateHost lent) {
+                    lent.PauseGate = null;
+                }
             }
         }
 

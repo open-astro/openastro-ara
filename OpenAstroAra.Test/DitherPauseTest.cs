@@ -141,6 +141,29 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_guider_that_disconnects_while_the_run_is_parked_keeps_it_parked_on_resume() {
+            // The CHANGELOG promise: Resume with the guider gone pauses again, named as "not connected",
+            // and never lets the frame start.
+            var (guider, calls) = Guider(connected: true, "refused", "refused");
+            var connected = true;
+            guider.Setup(g => g.GetInfo()).Returns(() => new GuiderInfo { Connected = Volatile.Read(ref connected) });
+            var (item, gate) = Rig(guider.Object);
+            string? status = null;
+
+            var execute = item.Execute(new SyncProgress(s => status = s.Status), CancellationToken.None);
+            Assert.That(await PauseRequested(gate), Is.True);
+            Assert.That(status, Does.Contain("not guiding"), "connected at the first dither");
+
+            Volatile.Write(ref connected, false); // the guider drops while the run is parked
+            gate.Resume();
+            await Task.Delay(50);
+            Assert.That(await PauseRequested(gate), Is.True, "parked again: the guider is gone");
+            Assert.That(execute.IsCompleted, Is.False, "the frame must not start");
+            Assert.That(calls, Has.Count.EqualTo(2));
+            Assert.That(status, Does.Contain("not connected"));
+        }
+
+        [Test]
         public async Task A_dither_the_guider_rejected_pauses_with_the_guiders_own_reason() {
             var (guider, calls) = Guider(connected: true, "refused: dither amount out of range", null);
             var (item, gate) = Rig(guider.Object);
@@ -210,7 +233,7 @@ namespace OpenAstroAra.Test {
             Assert.That(trigger.TriggerRunner.Parent, Is.Null, "the runner hangs off nothing");
             Assert.That(sibling.Asked, Is.EqualTo(0), "the runner's Dither must not evaluate the block's other triggers");
             Assert.That(calls, Has.Count.EqualTo(1));
-            Assert.That(trigger.TriggerRunner.PauseGate, Is.SameAs(gate), "the gate reached the runner by value");
+            Assert.That(trigger.TriggerRunner.PauseGate, Is.Null, "the gate is lent for the run only and handed back after it");
         }
 
         [Test]
