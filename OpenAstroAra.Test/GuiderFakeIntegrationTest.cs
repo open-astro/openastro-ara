@@ -826,6 +826,54 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Profile_push_sends_the_camera_gain_after_the_equipment_reconnects() {
+            // Settings → Guider → Save runs the full push: selections in a disconnected window, then a
+            // reconnect. The gain must follow the reconnect (the daemon refuses it from a camera that is
+            // off) and be reported in guider.profile_pushed.
+            await using var fake = FakeGuider.Start();
+            fake.SetOnConnectEvents(PhdEvents.Version(subver: "openastroara-fake"), PhdEvents.AppState("Stopped"));
+            fake.OnRpc("get_profile", _ => new JsonObject { ["id"] = 1, ["name"] = "My Equipment" });
+            fake.OnRpc("get_profiles", _ => new JsonArray(new JsonObject { ["id"] = 1, ["name"] = "My Equipment" }));
+            fake.OnRpc("create_profile", _ => new JsonObject { ["id"] = 5, ["name"] = "Ara", ["selected"] = true });
+            var connected = false;
+            fake.OnRpc("get_connected", _ => JsonValue.Create(connected));
+            fake.OnRpc("set_connected", req => { connected = (bool?)req["params"]?[0] ?? connected; return JsonValue.Create(0); });
+            var gains = new System.Collections.Concurrent.ConcurrentQueue<(int Gain, bool Connected)>();
+            fake.OnRpc("set_camera_gain", req => {
+                gains.Enqueue(((int?)req["params"]?[0] ?? -1, connected));
+                return JsonValue.Create(0);
+            });
+            var events = new System.Collections.Concurrent.ConcurrentQueue<(string Type, System.Text.Json.JsonElement Payload)>();
+            var ws = new Mock<IWsBroadcaster>();
+            ws.Setup(w => w.PublishAsync(It.IsAny<string>(), It.IsAny<System.Text.Json.JsonElement>(), It.IsAny<CancellationToken>()))
+                .Callback<string, System.Text.Json.JsonElement, CancellationToken>((t, p, _) => events.Enqueue((t, p.Clone())))
+                .Returns(Task.CompletedTask);
+            var profiles = new HeadlessProfileService();
+            var settings = profiles.ActiveProfile.GuiderSettings;
+            settings.GuiderCamera = "Alpaca Camera [192.168.1.20:11111/0]"; // a selection opens the disconnect window
+            settings.GuideCameraGain = 35;
+            using var svc = new GuiderService(profiles, NewRecovery(),
+                NullLogger<GuiderService>.Instance, Mock.Of<IGuiderProcessSupervisor>(), ws.Object);
+            await svc.ConnectAsync(new GuiderConnectRequestDto("127.0.0.1", fake.Port), idempotencyKey: null, CancellationToken.None)
+                .ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => !gains.IsEmpty).ConfigureAwait(false), Is.True,
+                "precondition: the connect pushed the gain");
+            gains.Clear();
+            events.Clear();
+            var disconnectsBefore = fake.ReceivedMethods.Count(m => m == "set_connected");
+
+            await svc.PushGuiderProfileAsync("push-gain", CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(fake.ReceivedMethods.Count(m => m == "set_connected"), Is.GreaterThan(disconnectsBefore),
+                "precondition: the full push opened the disconnect window");
+            Assert.That(gains, Is.EqualTo(new[] { (35, true) }), "one gain push, sent with the camera reconnected");
+            var pushed = events.Where(e => e.Type == "guider.profile_pushed").ToList();
+            Assert.That(pushed, Has.Count.EqualTo(1));
+            Assert.That(pushed[0].Payload.GetProperty("methods").EnumerateArray().Select(m => m.GetString()),
+                Does.Contain("set_camera_gain"));
+        }
+
+        [Test]
         public async Task Profile_push_refuses_a_bare_alpaca_selection_before_anything_reaches_the_guider() {
             // #1306 — the field case: bare "Alpaca Camera"/"Alpaca Mount" with no stored host/port. The
             // push must throw the typed refusal (→ 422) and send NOTHING, rather than leave the guider on
