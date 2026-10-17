@@ -71,8 +71,10 @@ RigCapabilities rigCapabilitiesFromSettings(Phd2Settings phd2) =>
 
 /// A guider is part of the rig when the daemon reports one (whatever its link
 /// state right now — a dropped link is still a guider) or the profile names
-/// the guide camera (§63.17). Pure — unit-tested.
+/// the guide camera (§63.17); the guider's "None" camera choice names none.
+/// Pure — unit-tested.
 bool guiderConfigured(GuiderStatus? status, Phd2Settings phd2) =>
     status != null ||
-    phd2.guiderCamera.trim().isNotEmpty ||
+    (phd2.guiderCamera.trim().isNotEmpty &&
+        phd2.guiderCamera.trim().toLowerCase() != 'none') ||
     phd2.guiderCameraId.trim().isNotEmpty;

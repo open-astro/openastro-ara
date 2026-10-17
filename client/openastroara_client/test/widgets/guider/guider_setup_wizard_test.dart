@@ -509,5 +509,19 @@ void main() {
             of: find.byKey(const ValueKey('wiz-Guide camera')),
             matching: find.text('ZWO ASI290MM Mini (rc91.lan:6800/0)')),
         findsNothing);
+    // A fresh guider has no camera to fall back on: Next waits for a pick.
+    expect(find.byKey(const ValueKey('wiz-no-guide-camera')), findsOneWidget);
+    expect(
+        tester
+            .widget<FilledButton>(find.widgetWithText(FilledButton, 'Next'))
+            .onPressed,
+        isNull);
+    await tester.tap(find.byKey(const ValueKey('wiz-Guide camera')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('ZWO ASI290MM Mini (rc91.lan:6800/0)').last);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('wiz-no-guide-camera')), findsNothing);
+    await _next(tester); // optics
+    expect(find.text('Guider setup — Guide optics'), findsOneWidget);
   });
 }

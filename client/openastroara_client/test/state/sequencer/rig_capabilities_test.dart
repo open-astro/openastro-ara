@@ -35,6 +35,12 @@ void main() {
         isFalse,
       );
     });
+    test("the guider's None camera choice is no guider", () {
+      expect(
+        guiderConfigured(null, const Phd2Settings(guiderCamera: 'None')),
+        isFalse,
+      );
+    });
   });
 
   test(

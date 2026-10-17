@@ -312,12 +312,10 @@ class _ConnectPane extends ConsumerWidget {
 class _GuiderSection extends ConsumerStatefulWidget {
   const _GuiderSection();
 
-  /// Unconfigured = nothing gear-specific has ever been chosen. The daemon
-  /// host/port alone don't count — they carry defaults out of the box.
-  static bool looksUnconfigured(Phd2Settings s) =>
-      s.guiderCamera.isEmpty &&
-      s.guideFocalLength == 0 &&
-      s.guidePixelSize == 0;
+  /// Unconfigured = no guide camera picked. Guide optics alone don't count:
+  /// a profile can carry a focal length and pixel size yet name no camera,
+  /// and a fresh guider has none of its own, so nothing would ever connect.
+  static bool looksUnconfigured(Phd2Settings s) => s.guiderCamera.trim().isEmpty;
 
   @override
   ConsumerState<_GuiderSection> createState() => _GuiderSectionState();
