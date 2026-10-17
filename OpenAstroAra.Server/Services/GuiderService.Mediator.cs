@@ -199,6 +199,9 @@ public sealed partial class GuiderService : IGuiderMediator {
     public async Task<bool> Dither(CancellationToken token) {
         var guider = MediatorGuider();
         if (guider is null) {
+            // No connected guider: a plain refusal, so the previous dither's verdict can't be read as
+            // this one's (the Dither instruction then reports "not connected").
+            LastDitherError = "refused";
             return false;
         }
         var sent = await guider.Dither(_noProgress, token).ConfigureAwait(false);
