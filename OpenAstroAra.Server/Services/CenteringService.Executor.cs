@@ -89,7 +89,7 @@ public sealed partial class CenteringService : ICenteringExecutor {
         if (await telescopeMediator.SlewToCoordinatesAsync(target, token)) {
             return true;
         }
-        Logger.Warning($"Centering: the slew to {target} failed (mount not connected or parked) — not solving off target");
+        Logger.Warning($"Centering: the slew to {target} was refused (mount not connected, parked, at a limit or the target below the horizon) — not solving off target");
         return false;
     }
 
