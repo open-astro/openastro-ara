@@ -162,6 +162,7 @@ public sealed partial class FocuserService : IFocuserService, IRetainedDeviceSou
             _connectGeneration++;
             client = _client;
             _client = null;
+            ResetHealthLocked(); // a standing degraded episode ends with the session (resolved, not left to seed)
             if (_device is not null) {
                 SetState(EquipmentConnectionState.Disconnected);
             }

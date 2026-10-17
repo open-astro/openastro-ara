@@ -195,6 +195,7 @@ public sealed partial class FilterWheelService : IFilterWheelService, IRetainedD
             _connectGeneration++;
             client = _client;
             _client = null;
+            ResetHealthLocked(); // a standing degraded episode ends with the session (resolved, not left to seed)
             neverDecided = TakePendingHomeNeverDecidedLocked();
             _homeGeneration++; // #1079
             // Clear the slot list too: it must not outlive the connection, so a ChangeFilterAsync

@@ -333,6 +333,7 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
             _connectGeneration++;
             client = _client;
             _client = null;
+            ResetHealthLocked(); // a standing degraded episode ends with the session (resolved, not left to seed)
             _deviceBaseAddress = null;
             if (_device is not null) {
                 SetState(EquipmentConnectionState.Disconnected);

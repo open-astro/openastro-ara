@@ -110,6 +110,38 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_user_disconnect_ends_a_degraded_episode_as_recovered() {
+            // Review r4: the docs promised a disconnect resolves the standing fault; only connect and trip
+            // reset the watch. Without this the chip blends amber over a disconnected wheel and the
+            // §42.5 row seeds it amber again on every relaunch for a day.
+            var position = "2";
+            await using var box = ScriptedAlpacaDevice.Start(Wheel(() => Volatile.Read(ref position)));
+            var ws = new Mock<IWsBroadcaster>();
+            var actions = new List<JsonElement>();
+            ws.Setup(w => w.PublishAsync(It.IsAny<string>(), It.IsAny<JsonElement>(), It.IsAny<CancellationToken>()))
+                .Callback<string, JsonElement, CancellationToken>((t, e, _) => {
+                    if (t == WsEventCatalog.EquipmentFaultActionTaken) { lock (actions) { actions.Add(e); } }
+                })
+                .Returns(Task.CompletedTask);
+            var hub = new EquipmentFaultHub(ws.Object);
+            var faults = new List<EquipmentFaultEvent>();
+            hub.Subscribe(f => { lock (faults) { faults.Add(f); } });
+            using var svc = new FilterWheelService(faults: hub) { RefreshPeriod = Tick };
+            await svc.ConnectAsync(new ConnectRequestDto(Device(box)), null, CancellationToken.None);
+            await WaitForAsync(() => svc.GetAsync(CancellationToken.None).Result?.Runtime.CurrentSlot == 2, "the position never read");
+            Volatile.Write(ref position, ScriptedAlpacaDevice.Error(Removed));
+            await WaitForAsync(() => { lock (faults) { return faults.Count >= 1; } }, "no degraded fault");
+
+            await svc.DisconnectAsync(null, CancellationToken.None);
+
+            await WaitForAsync(() => { lock (actions) { return actions.Count >= 1; } }, "the disconnect did not resolve the degraded episode");
+            JsonElement recovered;
+            lock (actions) { recovered = actions[0]; }
+            Assert.That(recovered.GetProperty("action").GetString(), Is.EqualTo("recovered"));
+            Assert.That(recovered.GetProperty("kind").GetString(), Is.EqualTo("degraded"));
+        }
+
+        [Test]
         public async Task A_single_failed_read_is_a_blip_not_a_fault() {
             var position = "1";
             await using var box = ScriptedAlpacaDevice.Start(Wheel(() => Volatile.Read(ref position)));
