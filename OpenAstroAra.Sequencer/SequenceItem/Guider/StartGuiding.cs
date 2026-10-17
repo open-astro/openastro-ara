@@ -75,7 +75,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Guider {
             // Resume tries again. Only a run with no pause gate (validation, standalone execution)
             // still fails the instruction outright. Night of 2026-10-03: Start Guiding failed once,
             // the run carried on unguided for an hour and every dither was skipped.
-            var gate = (ItemUtility.GetRootContainer(this.Parent) as IPauseGateHost)?.PauseGate;
+            var gate = ItemUtility.GetPauseGate(this.Parent);
             var attempt = 0;
             while (true) {
                 attempt++;

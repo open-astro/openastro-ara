@@ -83,6 +83,18 @@ namespace OpenAstroAra.Sequencer.Utility {
             return GetRootContainer(parent) != null;
         }
 
+        /// <summary>The run's pause gate for an instruction: the nearest ancestor that hosts one. The root
+        /// hosts it for items in the tree; a trigger's runner hosts a copy for the items it fires (it hangs
+        /// off nothing, so the walk would otherwise end at null). Null when pause is not wired.</summary>
+        public static PauseGate? GetPauseGate(ISequenceContainer? parent) {
+            for (var c = parent; c != null; c = c.Parent) {
+                if (c is IPauseGateHost { PauseGate: { } gate }) {
+                    return gate;
+                }
+            }
+            return null;
+        }
+
         public static ISequenceRootContainer? GetRootContainer(ISequenceContainer? parent) {
             if (parent != null) {
                 if (parent is ISequenceRootContainer rootContainer) {

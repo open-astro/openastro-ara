@@ -19,6 +19,8 @@ using OpenAstroAra.Equipment.Equipment.MyGuider;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Profile.Interfaces;
 using OpenAstroAra.Sequencer.Container;
+using OpenAstroAra.Sequencer.Interfaces;
+using OpenAstroAra.Sequencer.SequenceItem;
 using OpenAstroAra.Sequencer.SequenceItem.Guider;
 using OpenAstroAra.Sequencer.Trigger.Guider;
 using OpenAstroAra.Sequencer.Utility;
@@ -158,6 +160,41 @@ namespace OpenAstroAra.Test {
             await run.WaitAsync(TimeSpan.FromSeconds(5));
             Assert.That(calls, Has.Count.EqualTo(3));
             Assert.That(trigger.Status, Is.Not.EqualTo(OpenAstroAra.Core.Enums.SequenceEntityStatus.FAILED));
+        }
+
+        /// <summary>A trigger that would fire on anything, counting how often the strategy asks it.</summary>
+        private sealed class AlwaysTrigger : OpenAstroAra.Sequencer.Trigger.SequenceTrigger {
+            public int Asked;
+            public override bool ShouldTrigger(ISequenceItem? previousItem, ISequenceItem? nextItem) { Asked++; return false; }
+            public override Task Execute(ISequenceContainer context, IProgress<ApplicationStatus> progress, CancellationToken token) => Task.CompletedTask;
+            public override object Clone() => new AlwaysTrigger();
+        }
+
+        [Test]
+        public async Task A_runner_item_never_walks_the_enclosing_containers_triggers() {
+            // The runner must stay detached from the tree: with a parent, SequentialStrategy would run
+            // every enclosing trigger around each runner item — a Reconnect trigger for a device that
+            // stays offline would then re-fire inside its own runner without end (review r2). The gate
+            // reaches the runner by value instead.
+            var (guider, calls) = Guider(connected: true, new string?[] { null });
+            var gate = new PauseGate();
+            var root = new SequenceRootContainer { PauseGate = gate };
+            var block = new SequentialContainer();
+            block.AttachNewParent(root);
+            var sibling = new AlwaysTrigger();
+            block.Triggers.Add(sibling);
+            sibling.AttachNewParent(block);
+            var trigger = new DitherAfterExposures { AfterExposures = 1 };
+            trigger.TriggerRunner.Add(new Dither(guider.Object, Mock.Of<IProfileService>()));
+            block.Triggers.Add(trigger);
+            trigger.AttachNewParent(block);
+
+            await trigger.Run(block, NoProgress, CancellationToken.None);
+
+            Assert.That(trigger.TriggerRunner.Parent, Is.Null, "the runner hangs off nothing");
+            Assert.That(sibling.Asked, Is.EqualTo(0), "the runner's Dither must not evaluate the block's other triggers");
+            Assert.That(calls, Has.Count.EqualTo(1));
+            Assert.That(trigger.TriggerRunner.PauseGate, Is.SameAs(gate), "the gate reached the runner by value");
         }
 
         [Test]

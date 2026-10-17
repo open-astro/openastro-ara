@@ -76,7 +76,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Guider {
                 await guiderMediator.Dither(token);
                 return;
             }
-            var gate = (ItemUtility.GetRootContainer(this.Parent) as IPauseGateHost)?.PauseGate;
+            var gate = ItemUtility.GetPauseGate(this.Parent);
             var settleRetried = false;
             while (true) {
                 var sent = await guiderMediator.Dither(token);

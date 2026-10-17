@@ -16,6 +16,7 @@ using Newtonsoft.Json;
 using OpenAstroAra.Sequencer.Conditions;
 using OpenAstroAra.Sequencer.Container.ExecutionStrategy;
 using OpenAstroAra.Sequencer.SequenceItem;
+using OpenAstroAra.Sequencer.Utility;
 using OpenAstroAra.Sequencer.Trigger;
 using System;
 using System.Collections.Generic;
@@ -35,11 +36,18 @@ namespace OpenAstroAra.Sequencer.Container {
     [Export(typeof(ISequenceItem))]
     [Export(typeof(ISequenceContainer))]
     [JsonObject(MemberSerialization.OptIn)]
-    public class SequentialContainer : SequenceContainer {
+    public class SequentialContainer : SequenceContainer, IPauseGateHost {
 
         [ImportingConstructor]
         public SequentialContainer() : base(new SequentialStrategy()) {
         }
+
+        /// <summary>Set only on a trigger's runner, by <c>SequenceTrigger.Run</c>: the run's pause gate for
+        /// instructions that cannot reach the root through their parents because the runner hangs off
+        /// nothing. Null everywhere else (an ordinary container's items find the root's gate). Not
+        /// serialized.</summary>
+        [Newtonsoft.Json.JsonIgnore]
+        public PauseGate? PauseGate { get; set; }
 
         public override object Clone() {
             var clone = new SequentialContainer() {
