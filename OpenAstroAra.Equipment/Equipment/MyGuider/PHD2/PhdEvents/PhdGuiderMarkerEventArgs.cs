@@ -25,8 +25,9 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2.PhdEvents {
         /// <summary>
         /// <c>dithered</c> | <c>settling</c> | <c>settle_done</c> | <c>star_lost</c> |
         /// <c>calibration_started</c> | <c>calibration_complete</c> | <c>calibration_failed</c> |
-        /// <c>guiding_started</c> | <c>guiding_stopped</c> | <c>paused</c> | <c>resumed</c> |
-        /// <c>lock_position_lost</c>.
+        /// <c>calibrating</c> | <c>guiding_started</c> | <c>guiding_stopped</c> | <c>paused</c> |
+        /// <c>resumed</c> | <c>lock_position_lost</c> | <c>guiding_assistant_progress</c> |
+        /// <c>guiding_assistant_done</c>.
         /// </summary>
         public required string Kind { get; init; }
 
