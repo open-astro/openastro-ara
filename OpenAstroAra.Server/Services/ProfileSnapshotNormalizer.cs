@@ -97,6 +97,7 @@ public static class ProfileSnapshotNormalizer {
             // §45.12 — a pre-§45 file back-fills to the all-defaults section.
             PolarAlign = (PolarAlignSettingsDto?)snap.PolarAlign ?? new PolarAlignSettingsDto(),
             Unguided = (UnguidedSettingsDto?)snap.Unguided ?? new UnguidedSettingsDto(),
+            GuiderAdvanced = (GuiderAdvancedSettingsDto?)snap.GuiderAdvanced ?? new GuiderAdvancedSettingsDto(),
             FilterWheelPolicy = (FilterWheelPolicyDto?)snap.FilterWheelPolicy ?? FilterWheelPolicyDto.Default,
         };
     }

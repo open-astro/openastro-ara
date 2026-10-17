@@ -125,6 +125,16 @@ void main() {
       expect(coords['DecMinutes'], 24);
     });
 
+    test('a failed go-to skips the rest of the target, not just itself', () {
+      for (final pa in [null, 137.5]) {
+        final goTo = childrenOf(targetBlockOf(build(positionAngleDeg: pa)))
+            .first;
+        expect(goTo['ErrorBehavior'], skipInstructionSetOnError,
+            reason: 'filter/focus/frames after a failed go-to would shoot '
+                'the wrong sky (PA $pa)');
+      }
+    });
+
     test('a negative framing angle is normalized into [0, 360)', () {
       final root = build(positionAngleDeg: -10);
       final car = childrenOf(targetBlockOf(root))

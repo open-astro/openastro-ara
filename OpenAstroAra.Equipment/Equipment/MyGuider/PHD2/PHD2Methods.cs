@@ -305,10 +305,21 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
 
         [JsonProperty(PropertyName = "calibration_distance", NullValueHandling = NullValueHandling.Ignore)]
         public int? CalibrationDistance { get; set; }
+
+        /// <summary>#1364 - the guider's multi-star tracking; part of the profile setup, so it lands only
+        /// in the disconnected window.</summary>
+        [JsonProperty(PropertyName = "multistar_enabled", NullValueHandling = NullValueHandling.Ignore)]
+        public bool? MultiStarEnabled { get; set; }
     }
 
     public class Phd2SetExposure : Phd2Method<Array> {
         public override string Method => "set_exposure";
+    }
+
+    /// <summary><c>set_camera_gain [0..100]</c> - the guide camera's gain as a percent of its range. The
+    /// daemon refuses it until the camera is connected (gain control is only known after connect).</summary>
+    public class Phd2SetCameraGain : Phd2Method<Array> {
+        public override string Method => "set_camera_gain";
     }
 
     public class Phd2SetGuideOutputEnabled : Phd2Method<Array> {

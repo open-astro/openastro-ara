@@ -179,6 +179,7 @@ namespace OpenAstroAra.Test {
             Assert.That(marker.Direction, Is.EqualTo("North"));
             Assert.That(marker.Frame, Is.EqualTo(7), "the step rides in Frame");
             Assert.That(marker.Distance, Is.EqualTo(11.9));
+            Assert.That((marker.Dx, marker.Dy), Is.EqualTo(((double?)-4.7, (double?)13.4)), "dx/dy ride the calibrating marker (#1364 item 2)");
             var step = _guider!.Calibration;
             Assert.That(step, Is.Not.Null, "the latest step is kept for the guider state");
             Assert.That((step!.Direction, step.Step, step.Distance), Is.EqualTo(("North", 7, 11.9)));
@@ -203,6 +204,48 @@ namespace OpenAstroAra.Test {
             }
             Assert.That(_guider.Calibration, Is.Null, $"{phdEvent} must clear the calibration step");
             DrainQueue();
+        }
+
+        [Test]
+        public async Task A_calibration_run_keeps_its_steps_and_ends_complete() {
+            // #1364 item 2 — the run behind Ara's calibration plot.
+            await PushAndReceive(Event("StartCalibration")).ConfigureAwait(false);
+            Assert.That(_guider!.CalibrationRun.State, Is.EqualTo("running"));
+            await PushAndReceive(Event("Calibrating", e => { e["dir"] = "West"; e["step"] = 1; e["dist"] = 1.3; e["dx"] = -1.3; e["dy"] = -0.1; })).ConfigureAwait(false);
+            await PushAndReceive(Event("Calibrating", e => { e["dir"] = "West"; e["step"] = 2; e["dist"] = 2.6; e["dx"] = -2.5; e["dy"] = -0.6; })).ConfigureAwait(false);
+            var run = _guider.CalibrationRun;
+            Assert.That(run.Steps, Has.Count.EqualTo(2));
+            Assert.That((run.Steps[1].Dx, run.Steps[1].Dy), Is.EqualTo((-2.5, -0.6)), "dx/dy are what the plot draws");
+            await PushAndReceive(Event("CalibrationComplete")).ConfigureAwait(false);
+            run = _guider.CalibrationRun;
+            Assert.That(run.State, Is.EqualTo("complete"));
+            Assert.That(run.Steps, Has.Count.EqualTo(2), "kept after completion for review");
+            await PushAndReceive(Event("StartCalibration")).ConfigureAwait(false);
+            Assert.That(_guider.CalibrationRun.Steps, Is.Empty, "the next calibration starts a fresh run");
+        }
+
+        [TestCase("GuidingStopped")]
+        [TestCase("LoopingExposuresStopped")]
+        public async Task A_calibration_run_stopped_midway_ends_failed_not_running(string phdEvent) {
+            await PushAndReceive(Event("StartCalibration")).ConfigureAwait(false);
+            var noDxDy = await PushAndReceive(Event("Calibrating", e => { e["dir"] = "North"; e["step"] = 3; e["dist"] = 4.0; })).ConfigureAwait(false);
+            Assert.That((noDxDy.Dx, noDxDy.Dy), Is.EqualTo(((double?)null, (double?)null)), "missing dx/dy stay absent, never 0");
+            await _fake.BroadcastAsync(Event(phdEvent)).ConfigureAwait(false);
+            var deadline = DateTime.UtcNow + MarkerTimeout;
+            while (_guider!.CalibrationRun.State == "running" && DateTime.UtcNow < deadline) {
+                await Task.Delay(20).ConfigureAwait(false);
+            }
+            Assert.That(_guider.CalibrationRun.State, Is.EqualTo("failed"), $"{phdEvent} sends no CalibrationFailed");
+            Assert.That(_guider.CalibrationRun.Error, Does.Contain("stopped"));
+            DrainQueue();
+        }
+
+        [Test]
+        public async Task Stopping_after_a_finished_calibration_keeps_it_complete() {
+            await PushAndReceive(Event("StartCalibration")).ConfigureAwait(false);
+            await PushAndReceive(Event("CalibrationComplete")).ConfigureAwait(false);
+            await PushAndReceive(Event("GuidingStopped")).ConfigureAwait(false);
+            Assert.That(_guider!.CalibrationRun.State, Is.EqualTo("complete"));
         }
 
         [Test]

@@ -30,25 +30,8 @@ String guiderConnectionLabel(GuiderConnectionState state) {
   }
 }
 
-/// Human-readable runtime-phase label.
-String guiderRuntimeLabel(GuiderRuntimeState state) {
-  switch (state) {
-    case GuiderRuntimeState.stopped:
-      return 'Stopped';
-    case GuiderRuntimeState.calibrating:
-      return 'Calibrating';
-    case GuiderRuntimeState.guiding:
-      return 'Guiding';
-    case GuiderRuntimeState.paused:
-      return 'Paused';
-    case GuiderRuntimeState.starLost:
-      return 'Star lost';
-    case GuiderRuntimeState.dithering:
-      return 'Dithering';
-    case GuiderRuntimeState.unknown:
-      return 'Unknown';
-  }
-}
+/// Human-readable runtime-phase label (one wording for every screen, #1364).
+String guiderRuntimeLabel(GuiderRuntimeState state) => guiderRuntimeText(state);
 
 class _GuiderDialog extends ConsumerStatefulWidget {
   const _GuiderDialog();

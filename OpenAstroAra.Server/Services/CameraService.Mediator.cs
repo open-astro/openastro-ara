@@ -98,6 +98,12 @@ public sealed partial class CameraService : ICameraMediator, IImagingMediator {
     /// </summary>
     public async Task<IExposureData> CaptureImage(CaptureSequence sequence, CancellationToken token, IProgress<ApplicationStatus>? progress, string targetName = "") {
         ArgumentNullException.ThrowIfNull(sequence);
+        // A store that fell off mid-run is a reason to stop and ask, not a failed frame: the typed
+        // refusal parks the run awaiting the user (TakeExposure) — 2026-10-16 every frame failed in an
+        // instant and still fired the dither, a loop the user saw as the guider settling for minutes.
+        if (StoreEjected(out var ejectedDir)) {
+            throw new StoreUnavailableException(StoreMissingMessage(ejectedDir));
+        }
         AlpacaCamera? client;
         lock (_gate) {
             client = !_disposed && _state == EquipmentConnectionState.Connected ? _client : null;
@@ -147,6 +153,10 @@ public sealed partial class CameraService : ICameraMediator, IImagingMediator {
             // IProgress reporter, which has no subscriber in the server.
             var ok = await CaptureCoreAsync(client, frameId, request, imageType, MapFrameType(imageType), effectiveTarget, token).ConfigureAwait(false);
             if (!ok) {
+                // The store can drop while this capture waited its turn: still a pause, not a failed frame.
+                if (StoreEjected(out var lostDir)) {
+                    throw new StoreUnavailableException(StoreMissingMessage(lostDir));
+                }
                 throw new InvalidOperationException(
                     $"capture of '{effectiveTarget}' failed — see the daemon log for the cause (device timeout, disconnect, or storage failure)");
             }

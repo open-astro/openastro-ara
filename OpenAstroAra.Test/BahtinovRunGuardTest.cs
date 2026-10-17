@@ -69,7 +69,7 @@ namespace OpenAstroAra.Test {
         public async Task A_sequence_start_is_refused_while_the_readout_runs() {
             var sequencer = new Mock<ISequencerService>(MockBehavior.Strict);
             var result = await SequenceEndpoints.StartSequenceAsync(Guid.NewGuid(), new SequenceStartRequestDto(DryRun: false, StartFromInstructionIndex: null, ContinueOnRecoverableErrors: false), null,
-                sequencer.Object, Readout(active: true).Object, CancellationToken.None);
+                sequencer.Object, Readout(active: true).Object, new Mock<ICameraService>().Object, CancellationToken.None);
             AssertMaskOn(result, "starting a sequence");
             sequencer.VerifyNoOtherCalls();
         }
@@ -82,7 +82,7 @@ namespace OpenAstroAra.Test {
             sequencer.Setup(s => s.StartAsync(id, It.IsAny<SequenceStartRequestDto>(), null, It.IsAny<CancellationToken>()))
                 .ReturnsAsync(accepted);
             var result = await SequenceEndpoints.StartSequenceAsync(id, new SequenceStartRequestDto(DryRun: false, StartFromInstructionIndex: null, ContinueOnRecoverableErrors: false), null,
-                sequencer.Object, Readout(active: false).Object, CancellationToken.None);
+                sequencer.Object, Readout(active: false).Object, new Mock<ICameraService>().Object, CancellationToken.None);
             Assert.That((result as Accepted<OperationAcceptedDto>)?.Value, Is.SameAs(accepted));
         }
     }

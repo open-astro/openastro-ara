@@ -4,10 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../models/profile_draft.dart';
-import '../../../services/profile_api.dart';
 import '../../../state/guider/guider_equipment_state.dart';
 import '../../../state/guider/guider_state.dart';
-import '../../../state/saved_server_state.dart';
+import '../../../state/profile_management_state.dart';
 import '../../../state/wizard_state.dart';
 import '../../../theme/ara_colors.dart';
 import '../../../util/guide_optics.dart';
@@ -16,6 +15,7 @@ import '../../../widgets/guider/guider_setup_wizard.dart'
     show
         alpacaDeviceNamesApiProvider,
         friendlyAlpacaChoiceLabel,
+        kNoGuideCameraWarning,
         mergedAlpacaOptions,
         parseAlpacaChoiceEndpoint;
 import '../../../widgets/profile/profile_import_flow.dart'
@@ -59,6 +59,22 @@ String guideExposureLabel(int ms) => ms < 1000
     ? '${(ms / 1000).toStringAsFixed(2)} s'
     : '${(ms / 1000).toStringAsFixed(1)} s';
 
+/// The guiding step needs a guide-camera pick: the base profile names none,
+/// the draft has none, and the guider offers cameras to pick from. A fresh
+/// guider has no camera of its own, so a blank pick saves a profile whose
+/// guiding, guide focus and polar alignment can never work. Offline (base
+/// unread, no choices) never blocks. Pure — unit-tested.
+bool guideCameraPickNeeded({
+  required bool baseLoaded,
+  required String? baseCamera,
+  required String? draftCamera,
+  required List<String>? cameraChoices,
+}) {
+  if (!baseLoaded || (baseCamera?.trim().isNotEmpty ?? false)) return false;
+  if (draftCamera?.trim().isNotEmpty ?? false) return false;
+  return cameraChoices != null && cameraChoices.isNotEmpty;
+}
+
 /// §76.2 Screen 4 — Guiding: the wizard's only REAL guiding decisions (guide
 /// scope vs OAG, the guide exposure range, build-darks-now), with everything
 /// tunable-but-defaultable in an Advanced disclosure. The exposure range is
@@ -87,6 +103,9 @@ class _ScreenGuiderState extends ConsumerState<ScreenGuider> {
   // mount/rotator server restriction holds without re-picking the camera
   // (review r4 — a cross-server pick would silently no-op on Save).
   String? _baseGuiderCamera;
+  // True once the base profile was read: only then is "no base camera" known
+  // rather than "offline", and only then does the camera gate apply.
+  bool _baseLoaded = false;
 
   bool _testing = false;
   String? _testStatus;
@@ -200,8 +219,23 @@ class _ScreenGuiderState extends ConsumerState<ScreenGuider> {
     return e == null ? null : '${e.host}:${e.port}';
   }
 
+  bool get _cameraPickNeeded => guideCameraPickNeeded(
+        baseLoaded: _baseLoaded,
+        baseCamera: _baseGuiderCamera,
+        draftCamera: _g.guiderCamera,
+        cameraChoices: ref.read(guiderEquipmentProvider).value?.choices?.cameras,
+      );
+
+  /// Publish the step's validity to the shell's Next gate: an inverted
+  /// exposure range or a missing guide camera both hold Next.
+  void _publishValid() {
+    ref.read(wizardStepValidProvider.notifier).setValid(
+        _g.darkMinExposureMs <= _g.darkMaxExposureMs && !_cameraPickNeeded);
+  }
+
   /// Shared picker over daemon choice strings + synthesized Alpaca devices,
-  /// labeled with real device names. Blank = keep the guider's current pick.
+  /// labeled with real device names. Blank = keep the base profile's pick
+  /// ([blankLabel] says what that is).
   ///
   /// [onPick] receives the RAW selection — '' for the blank entry — because
   /// the draft fields distinguish '' (explicit "keep guider's current",
@@ -214,6 +248,8 @@ class _ScreenGuiderState extends ConsumerState<ScreenGuider> {
     required List<String> options,
     required String alpacaType,
     required void Function(String) onPick,
+    String blankLabel = "(keep guider's current)",
+    String? helperText,
   }) {
     final values = <String>{
       '',
@@ -222,13 +258,14 @@ class _ScreenGuiderState extends ConsumerState<ScreenGuider> {
     };
     return WizardDropdown<String>(
       label: label,
+      helperText: helperText,
       value: values.contains(current ?? '') ? (current ?? '') : '',
       entries: [
         for (final v in values)
           DropdownMenuEntry(
               value: v,
               label: v.isEmpty
-                  ? "(keep guider's current)"
+                  ? blankLabel
                   : friendlyAlpacaChoiceLabel(v, alpacaType, _alpacaNames)),
       ],
       onChanged: (v) {
@@ -238,9 +275,8 @@ class _ScreenGuiderState extends ConsumerState<ScreenGuider> {
   }
 
   Future<void> _loadBaseGuideSetup() async {
-    final server = ref.read(activeServerProvider);
-    if (server == null) return;
-    final api = ProfileApi(server);
+    final api = ref.read(profileApiProvider);
+    if (api == null) return;
     try {
       final phd2 = await api.getPhd2Settings();
       final optics = await api.getOptics();
@@ -250,7 +286,9 @@ class _ScreenGuiderState extends ConsumerState<ScreenGuider> {
         _baseReducerFactor = optics.reducerFactor;
         _baseGuiderCamera =
             phd2.guiderCamera.isEmpty ? null : phd2.guiderCamera;
+        _baseLoaded = true;
       });
+      _publishValid();
     } catch (_) {
       // Offline / no daemon — keep the guide_scope / 1.0 fallbacks.
     }
@@ -338,13 +376,13 @@ class _ScreenGuiderState extends ConsumerState<ScreenGuider> {
       if (minMs != null) _g.darkMinExposureMs = minMs;
       if (maxMs != null) _g.darkMaxExposureMs = maxMs;
     });
-    ref
-        .read(wizardStepValidProvider.notifier)
-        .setValid(_g.darkMinExposureMs <= _g.darkMaxExposureMs);
+    _publishValid();
   }
 
   @override
   Widget build(BuildContext context) {
+    // Choices arriving (or vanishing) can flip the camera gate.
+    ref.listen(guiderEquipmentProvider, (_, _) => _publishValid());
     final rangeInvalid = _g.darkMinExposureMs > _g.darkMaxExposureMs;
     return WizardScreenScaffold(
       step: 4,
@@ -395,6 +433,7 @@ class _ScreenGuiderState extends ConsumerState<ScreenGuider> {
         Builder(builder: (context) {
           final equipment = ref.watch(guiderEquipmentProvider);
           final choices = equipment.value?.choices;
+          final base = _baseGuiderCamera;
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -405,6 +444,10 @@ class _ScreenGuiderState extends ConsumerState<ScreenGuider> {
                     choices?.cameras ?? const [], 'camera', 'Camera',
                     _alpacaNames),
                 alpacaType: 'camera',
+                blankLabel: base == null
+                    ? 'Pick a guide camera'
+                    : '(keep ${friendlyAlpacaChoiceLabel(base, 'camera', _alpacaNames)})',
+                helperText: _cameraPickNeeded ? kNoGuideCameraWarning : null,
                 onPick: (v) {
                   // Camera has no ''-vs-null distinction: blank = untouched.
                   final sel = v.isEmpty ? null : v;
@@ -412,6 +455,7 @@ class _ScreenGuiderState extends ConsumerState<ScreenGuider> {
                     _g.guiderCamera = sel;
                     _pixelSizeFromDriver = false;
                   });
+                  _publishValid();
                   if (sel != null) unawaited(_autofillPixelSize(sel));
                 },
               ),

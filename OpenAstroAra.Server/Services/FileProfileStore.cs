@@ -119,6 +119,8 @@ public sealed partial class FileProfileStore : IProfileStore {
 
     public UnguidedSettingsDto GetUnguidedSettings() { lock (_lock) { return _snapshot.Unguided ?? new UnguidedSettingsDto(); } }
     public void PutUnguidedSettings(UnguidedSettingsDto value) => UpdateAndPersist(s => s with { Unguided = value });
+    public GuiderAdvancedSettingsDto GetGuiderAdvancedSettings() { lock (_lock) { return _snapshot.GuiderAdvanced ?? new GuiderAdvancedSettingsDto(); } }
+    public void PutGuiderAdvancedSettings(GuiderAdvancedSettingsDto value) => UpdateAndPersist(s => s with { GuiderAdvanced = value });
     public void PutPolarAlignSettings(PolarAlignSettingsDto value) => UpdateAndPersist(s => s with { PolarAlign = value });
 
     public PlateSolveSettingsDto GetPlateSolveSettings() { lock (_lock) { return _snapshot.PlateSolve; } }

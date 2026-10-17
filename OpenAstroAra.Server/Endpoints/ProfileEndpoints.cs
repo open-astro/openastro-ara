@@ -220,6 +220,31 @@ public static class ProfileEndpoints {
             .WithName("PutUnguidedSettings")
             .WithSummary("Replace the active profile's unguided-imaging settings.");
 
+        // #1364 — the guider's settings beyond Tune Guiding. Apply = PUT here, then
+        // POST /equipment/guider/profile/push?scope=tuning (multi-star lands on the next connect).
+        profile.MapGet("/guider-advanced", (IProfileStore store) =>
+                Results.Ok(store.GetGuiderAdvancedSettings()))
+            .Produces<GuiderAdvancedSettingsDto>(StatusCodes.Status200OK)
+            .WithName("GetGuiderAdvancedSettings")
+            .WithSummary("Get the active profile's guider-advanced settings (null fields keep the guider's own).");
+
+        profile.MapPut("/guider-advanced", (GuiderAdvancedSettingsDto body, IProfileStore store) => {
+            if (GuiderAdvancedSettingsMapping.Validate(body) is { } problem) {
+                return Results.Problem(detail: problem, statusCode: StatusCodes.Status400BadRequest);
+            }
+            var normalized = body with {
+                RaAlgorithm = body.RaAlgorithm?.Trim(),
+                DecAlgorithm = body.DecAlgorithm?.Trim(),
+            };
+            store.PutGuiderAdvancedSettings(normalized);
+            return Results.Ok(normalized);
+        })
+            .Accepts<GuiderAdvancedSettingsDto>("application/json")
+            .Produces<GuiderAdvancedSettingsDto>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .WithName("PutGuiderAdvancedSettings")
+            .WithSummary("Replace the active profile's guider-advanced settings.");
+
         profile.MapGet("/plate-solve", (IProfileStore store) =>
                 Results.Ok(store.GetPlateSolveSettings()))
             .Produces<PlateSolveSettingsDto>(StatusCodes.Status200OK)
@@ -258,7 +283,7 @@ public static class ProfileEndpoints {
             // arbitrary token (#885 review): unknown → the guide_scope default, matching the client's read-side
             // coercion. Other fields keep the store's existing store-verbatim posture.
             var normalized = body with { GuiderSetupType = NormalizeGuiderSetupType(body.GuiderSetupType) };
-            var rangeError = ValidateGuideExposureRange(normalized);
+            var rangeError = ValidateGuideExposureRange(normalized) ?? ValidateGuideCameraGain(normalized);
             if (rangeError is not null) {
                 return Results.Problem(detail: rangeError, statusCode: StatusCodes.Status400BadRequest);
             }
@@ -591,4 +616,8 @@ public static class ProfileEndpoints {
             : body.GuideExposureMs < 0
                 ? "guide_exposure_ms must be >= 0 (0 = leave the guider's own exposure)."
                 : null;
+
+    /// <summary>The guider refuses a gain outside 0..100 (percent of the camera's range).</summary>
+    internal static string? ValidateGuideCameraGain(Phd2SettingsDto body) =>
+        body.GuideCameraGain is < 0 or > 100 ? "guide_camera_gain must be 0..100 (percent of the camera's gain range)." : null;
 }

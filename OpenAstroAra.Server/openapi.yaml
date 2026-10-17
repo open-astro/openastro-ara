@@ -1311,6 +1311,195 @@ paths:
           description: OK
         '204':
           description: No Content
+  /api/v1/equipment/guider/live:
+    get:
+      tags:
+        - Equipment
+      summary: 'The live guide-camera view: guider state, frame size, locked star, search box, SNR, multi-star, stars.'
+      operationId: GetGuiderLive
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GuiderLiveDto'
+  /api/v1/equipment/guider/live/frame:
+    get:
+      tags:
+        - Equipment
+      summary: The guider's latest frame as JPEG (204 until it has one).
+      operationId: GetGuiderLiveFrame
+      responses:
+        '200':
+          description: OK
+        '204':
+          description: No Content
+  /api/v1/equipment/guider/live/loop:
+    post:
+      tags:
+        - Equipment
+      summary: Start looping guide exposures so the live view has a picture.
+      operationId: GuiderLiveLoop
+      responses:
+        '204':
+          description: No Content
+        '409':
+          description: Conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '422':
+          description: Unprocessable Entity
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  /api/v1/equipment/guider/live/stop:
+    post:
+      tags:
+        - Equipment
+      summary: Stop looping or guiding.
+      operationId: GuiderLiveStop
+      responses:
+        '204':
+          description: No Content
+        '409':
+          description: Conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '422':
+          description: Unprocessable Entity
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  /api/v1/equipment/guider/live/select:
+    post:
+      tags:
+        - Equipment
+      summary: 'Lock the guider on the star nearest (x, y) guide pixels.'
+      operationId: GuiderLiveSelectStar
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GuiderLiveSelectRequestDto'
+        required: true
+      responses:
+        '204':
+          description: No Content
+        '400':
+          description: Bad Request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '409':
+          description: Conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '422':
+          description: Unprocessable Entity
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  /api/v1/equipment/guider/live/calibration:
+    get:
+      tags:
+        - Equipment
+      summary: 'This session''s calibration run (steps, outcome), the stored calibration and Ara''s verdict.'
+      operationId: GetGuiderCalibrationView
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GuiderCalibrationViewDto'
+  /api/v1/equipment/guider/live/calibration/clear:
+    post:
+      tags:
+        - Equipment
+      summary: Drop the stored calibration; the next guide start calibrates again.
+      operationId: ClearGuiderCalibration
+      responses:
+        '204':
+          description: No Content
+        '409':
+          description: Conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '422':
+          description: Unprocessable Entity
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  /api/v1/equipment/guider/history:
+    get:
+      tags:
+        - Equipment
+      summary: 'The guider''s recent guide steps (oldest first, with ages) — max_points 1..400, default 400.'
+      operationId: GetGuiderHistory
+      parameters:
+        - name: max_points
+          in: query
+          schema:
+            pattern: '^-?(?:0|[1-9]\d*)$'
+            type:
+              - integer
+              - string
+            format: int32
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GuiderHistoryDto'
+  /api/v1/equipment/guider/advanced:
+    get:
+      tags:
+        - Equipment
+      summary: The guider's current advanced settings and its guide algorithms per axis.
+      operationId: GetGuiderAdvanced
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GuiderAdvancedViewDto'
+  /api/v1/equipment/guider/live/deselect:
+    post:
+      tags:
+        - Equipment
+      summary: Drop the guider's selected star.
+      operationId: GuiderLiveDeselectStar
+      responses:
+        '204':
+          description: No Content
+        '409':
+          description: Conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '422':
+          description: Unprocessable Entity
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/equipment/guider/darklibrary/build:
     post:
       tags:
@@ -5575,6 +5764,43 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
+  /api/v1/profile/guider-advanced:
+    get:
+      tags:
+        - Profile
+      summary: Get the active profile's guider-advanced settings (null fields keep the guider's own).
+      operationId: GetGuiderAdvancedSettings
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GuiderAdvancedSettingsDto'
+    put:
+      tags:
+        - Profile
+      summary: Replace the active profile's guider-advanced settings.
+      operationId: PutGuiderAdvancedSettings
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GuiderAdvancedSettingsDto'
+        required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GuiderAdvancedSettingsDto'
+        '400':
+          description: Bad Request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/profile/plate-solve:
     get:
       tags:
@@ -9356,6 +9582,269 @@ components:
           type:
             - 'null'
             - string
+    GuiderAdvancedSettingsDto:
+      type: object
+      properties:
+        multi_star_enabled:
+          type:
+            - 'null'
+            - boolean
+        fast_recenter:
+          type:
+            - 'null'
+            - boolean
+        tolerate_jumps:
+          type:
+            - 'null'
+            - boolean
+        tolerate_jumps_threshold_px:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        min_star_hfd:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        max_star_hfd:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        min_star_snr:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        mass_change_threshold_enabled:
+          type:
+            - 'null'
+            - boolean
+        mass_change_threshold:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        search_region_px:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - 'null'
+            - integer
+            - string
+          format: int32
+        auto_exposure_min_ms:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - 'null'
+            - integer
+            - string
+          format: int32
+        auto_exposure_max_ms:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - 'null'
+            - integer
+            - string
+          format: int32
+        auto_exposure_target_snr:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        noise_reduction:
+          type:
+            - 'null'
+            - string
+        use_subframes:
+          type:
+            - 'null'
+            - boolean
+        max_ra_duration_ms:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - 'null'
+            - integer
+            - string
+          format: int32
+        max_dec_duration_ms:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - 'null'
+            - integer
+            - string
+          format: int32
+        backlash_enabled:
+          type:
+            - 'null'
+            - boolean
+        backlash_pulse_ms:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - 'null'
+            - integer
+            - string
+          format: int32
+        backlash_floor_ms:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - 'null'
+            - integer
+            - string
+          format: int32
+        backlash_ceiling_ms:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - 'null'
+            - integer
+            - string
+          format: int32
+        assume_orthogonal:
+          type:
+            - 'null'
+            - boolean
+        stop_guiding_when_slewing:
+          type:
+            - 'null'
+            - boolean
+        cal_flip_requires_dec_flip:
+          type:
+            - 'null'
+            - boolean
+        variable_delay_enabled:
+          type:
+            - 'null'
+            - boolean
+        variable_delay_short_s:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        variable_delay_long_s:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        dither_scale_factor:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        dither_ra_only:
+          type:
+            - 'null'
+            - boolean
+        ra_algorithm:
+          type:
+            - 'null'
+            - string
+        dec_algorithm:
+          type:
+            - 'null'
+            - string
+    GuiderAdvancedViewDto:
+      required:
+        - connected
+        - current
+        - ra_algorithms
+        - dec_algorithms
+      type: object
+      properties:
+        connected:
+          type: boolean
+        current:
+          $ref: '#/components/schemas/GuiderAdvancedSettingsDto'
+        ra_algorithms:
+          type: array
+          items:
+            type: string
+        dec_algorithms:
+          type: array
+          items:
+            type: string
+    GuiderCalibrationDataDto:
+      required:
+        - calibrated
+        - x_angle_deg
+        - y_angle_deg
+        - x_rate_px_per_sec
+        - y_rate_px_per_sec
+        - x_parity
+        - y_parity
+        - declination_deg
+        - orthogonality_error_deg
+      type: object
+      properties:
+        calibrated:
+          type: boolean
+        x_angle_deg:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        y_angle_deg:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        x_rate_px_per_sec:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        y_rate_px_per_sec:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        x_parity:
+          type:
+            - 'null'
+            - string
+        y_parity:
+          type:
+            - 'null'
+            - string
+        declination_deg:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        orthogonality_error_deg:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
     GuiderCalibrationEntryDto:
       type: object
       properties:
@@ -9367,6 +9856,74 @@ components:
             - 'null'
             - string
           format: date-time
+    GuiderCalibrationStepDto:
+      required:
+        - direction
+        - step
+        - dx
+        - dy
+        - dist
+      type: object
+      properties:
+        direction:
+          type: string
+        step:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+        dx:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+        dy:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+        dist:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+    GuiderCalibrationViewDto:
+      required:
+        - connected
+        - run_state
+        - steps
+        - error
+        - data
+        - verdict
+        - verdict_reason
+      type: object
+      properties:
+        connected:
+          type: boolean
+        run_state:
+          type: string
+        steps:
+          type: array
+          items:
+            $ref: '#/components/schemas/GuiderCalibrationStepDto'
+        error:
+          type:
+            - 'null'
+            - string
+        data:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/GuiderCalibrationDataDto'
+        verdict:
+          type: string
+        verdict_reason:
+          type:
+            - 'null'
+            - string
     GuiderConnectRequestDto:
       type: object
       properties:
@@ -9381,6 +9938,240 @@ components:
             - integer
             - string
           format: int32
+    GuiderHistoryDto:
+      required:
+        - connected
+        - steps
+      type: object
+      properties:
+        connected:
+          type: boolean
+        steps:
+          type: array
+          items:
+            $ref: '#/components/schemas/GuiderHistoryStepDto'
+    GuiderHistoryStepDto:
+      required:
+        - age_sec
+        - ra_raw_px
+        - dec_raw_px
+        - ra_arcsec
+        - dec_arcsec
+        - ra_duration_ms
+        - dec_duration_ms
+        - pixel_scale_arcsec
+        - snr
+        - star_mass
+      type: object
+      properties:
+        age_sec:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+        ra_raw_px:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        dec_raw_px:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        ra_arcsec:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        dec_arcsec:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        ra_duration_ms:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+        dec_duration_ms:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+        pixel_scale_arcsec:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        snr:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        star_mass:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+    GuiderLiveDto:
+      required:
+        - connected
+        - app_state
+        - frame_width
+        - frame_height
+        - lock_x
+        - lock_y
+        - search_region
+        - snr
+        - star_mass
+        - multi_star_enabled
+        - stars
+        - has_frame
+      type: object
+      properties:
+        connected:
+          type: boolean
+        app_state:
+          type:
+            - 'null'
+            - string
+        frame_width:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - 'null'
+            - integer
+            - string
+          format: int32
+        frame_height:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - 'null'
+            - integer
+            - string
+          format: int32
+        lock_x:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        lock_y:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        search_region:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - 'null'
+            - integer
+            - string
+          format: int32
+        snr:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        star_mass:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        multi_star_enabled:
+          type:
+            - 'null'
+            - boolean
+        stars:
+          type: array
+          items:
+            $ref: '#/components/schemas/GuiderLiveStarDto'
+        has_frame:
+          type: boolean
+    GuiderLiveSelectRequestDto:
+      required:
+        - x
+        - y
+      type: object
+      properties:
+        x:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+        y:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+    GuiderLiveStarDto:
+      required:
+        - x
+        - y
+        - snr
+        - mass
+        - hfd
+      type: object
+      properties:
+        x:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+        y:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+        snr:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        mass:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        hfd:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
     GuidingRmsPointDto:
       required:
         - timestamp
@@ -10465,6 +11256,13 @@ components:
             - number
             - string
           format: double
+        guide_camera_gain:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+          default: 50
     PlanningFilterDto:
       required:
         - name
@@ -11041,6 +11839,10 @@ components:
           oneOf:
             - type: 'null'
             - $ref: '#/components/schemas/UnguidedSettingsDto'
+        guider_advanced:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/GuiderAdvancedSettingsDto'
         filter_wheel_policy:
           oneOf:
             - type: 'null'

@@ -63,6 +63,29 @@ namespace OpenAstroAra.Test {
             Assert.That(PHD2Guider.RequiresDisconnectedEquipment(exposure), Is.False);
         }
 
+        [TestCase(50, 50)]
+        [TestCase(0, 0)]
+        [TestCase(100, 100)]
+        [TestCase(-5, 0)]
+        [TestCase(250, 100)]
+        public void Camera_gain_message_carries_the_profile_gain_clamped_to_the_daemon_range(int gain, int expected) {
+            var s = new Mock<IGuiderSettings>();
+            s.SetupGet(x => x.GuideCameraGain).Returns(gain);
+            var msg = PHD2Guider.BuildCameraGainMessage(s.Object);
+            Assert.That(msg.Method, Is.EqualTo("set_camera_gain"));
+            Assert.That(msg.Parameters, Is.EqualTo(new[] { expected }));
+        }
+
+        [Test]
+        public void Camera_gain_never_rides_the_disconnected_engine_config_window() {
+            // The daemon refuses set_camera_gain while the camera is off ("camera has no gain control"), so the
+            // gain is pushed after the reconnect, not in the engine-config list.
+            var s = new Mock<IGuiderSettings>();
+            s.SetupGet(x => x.GuiderCamera).Returns("Alpaca Camera [localhost:6800/0]");
+            s.SetupGet(x => x.GuideCameraGain).Returns(50);
+            Assert.That(PHD2Guider.BuildGuiderEngineConfigMessages(s.Object).OfType<Phd2SetCameraGain>(), Is.Empty);
+        }
+
         [Test]
         public void Tuning_messages_keep_runtime_safe_setters_and_drop_setup_and_selections() {
             // A configured profile always carries selections + set_profile_setup, which the full push sends

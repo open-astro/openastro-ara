@@ -24,6 +24,7 @@ using OpenAstroAra.PlateSolving.Interfaces;
 using OpenAstroAra.Profile.Interfaces;
 using OpenAstroAra.Server.Services;
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -139,6 +140,8 @@ namespace OpenAstroAra.Test {
 
         private static readonly Coordinates Target = new(Angle.ByHours(5), Angle.ByDegree(20), Epoch.J2000);
         private static readonly IProgress<ApplicationStatus> NoProgress = new Progress<ApplicationStatus>();
+        private static readonly string[] SlewRotateCentre = { "slew", "rotation solve", "rotation solve", "centre" };
+        private static readonly string[] SlewCentre = { "slew", "centre" };
 
         private sealed class RotateHarness {
             public Mock<IProfileService> ProfileService { get; } = new();
@@ -146,6 +149,8 @@ namespace OpenAstroAra.Test {
             public Mock<ICaptureSolver> CaptureSolver { get; } = new();
             public Mock<ICenteringSolver> CenteringSolver { get; } = new();
             public Mock<IRotatorMediator> Rotator { get; } = new();
+            public Mock<ITelescopeMediator> Telescope { get; } = new();
+            public List<string> Calls { get; } = new();
 
             // solvedAngles yields each rotation solve's PositionAngle in turn (the last repeats).
             public RotateHarness(double rotationTolerance, params double[] solvedAngles) {
@@ -158,10 +163,15 @@ namespace OpenAstroAra.Test {
                 ProfileService.SetupGet(p => p.ActiveProfile.TelescopeSettings.FocalLength).Returns(800);
                 ProfileService.SetupGet(p => p.ActiveProfile.CameraSettings.PixelSize).Returns(3.8);
 
+                Telescope.Setup(t => t.SlewToCoordinatesAsync(It.IsAny<Coordinates>(), It.IsAny<CancellationToken>()))
+                    .Callback(() => Calls.Add("slew"))
+                    .ReturnsAsync(true);
+
                 var call = 0;
                 CaptureSolver
                     .Setup(s => s.Solve(It.IsAny<CaptureSequence>(), It.IsAny<CaptureSolverParameter>(),
                         It.IsAny<IProgress<PlateSolveProgress>>(), It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()))
+                    .Callback(() => Calls.Add("rotation solve"))
                     .ReturnsAsync(() => new PlateSolveResult {
                         Success = true,
                         PositionAngle = solvedAngles[Math.Min(call++, solvedAngles.Length - 1)],
@@ -169,6 +179,7 @@ namespace OpenAstroAra.Test {
                 CenteringSolver
                     .Setup(s => s.Center(It.IsAny<CaptureSequence>(), It.IsAny<CenterSolveParameter>(),
                         It.IsAny<IProgress<PlateSolveProgress>>(), It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()))
+                    .Callback(() => Calls.Add("centre"))
                     .ReturnsAsync(new PlateSolveResult { Success = true });
 
                 Factory.Setup(f => f.GetPlateSolver(It.IsAny<IPlateSolveSettings>())).Returns(Mock.Of<IPlateSolver>());
@@ -183,8 +194,64 @@ namespace OpenAstroAra.Test {
             }
 
             public CenteringService CreateSUT() =>
-                new(ProfileService.Object, Factory.Object, Mock.Of<IImagingMediator>(), Mock.Of<ITelescopeMediator>(),
+                new(ProfileService.Object, Factory.Object, Mock.Of<IImagingMediator>(), Telescope.Object,
                     Mock.Of<IFilterWheelMediator>(), Mock.Of<IDomeMediator>(), Mock.Of<IDomeFollower>(), Rotator.Object);
+        }
+
+        [Test]
+        public async Task CenterAndRotate_slews_to_the_target_before_the_first_solve() {
+            // Rig night 2026-10-17: the rotation solve ran at the pole after unpark and the mount
+            // never left it. The slew must come first, to the plan's own coordinates.
+            var h = new RotateHarness(rotationTolerance: 0.5, 350.0, 10.0);
+            Coordinates? slewedTo = null;
+            h.Telescope.Setup(t => t.SlewToCoordinatesAsync(It.IsAny<Coordinates>(), It.IsAny<CancellationToken>()))
+                .Callback<Coordinates, CancellationToken>((c, _) => { slewedTo = c; h.Calls.Add("slew"); })
+                .ReturnsAsync(true);
+            using var sut = h.CreateSUT();
+
+            var ok = await sut.CenterAndRotateAsync(Target, 10.0, NoProgress, CancellationToken.None);
+
+            Assert.That(ok, Is.True);
+            Assert.That(h.Calls, Is.EqualTo(SlewRotateCentre));
+            Assert.That(slewedTo, Is.SameAs(Target));
+        }
+
+        [Test]
+        public async Task CenterAndRotate_fails_without_solving_when_the_slew_fails() {
+            var h = new RotateHarness(rotationTolerance: 0.5, solvedAngles: 0.0);
+            h.Telescope.Setup(t => t.SlewToCoordinatesAsync(It.IsAny<Coordinates>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(false);
+            using var sut = h.CreateSUT();
+
+            var ok = await sut.CenterAndRotateAsync(Target, 0.0, NoProgress, CancellationToken.None);
+
+            Assert.That(ok, Is.False);
+            Assert.That(h.Calls, Is.Empty, "no solve, rotation or centre off target");
+            h.Rotator.VerifyNoOtherCalls();
+        }
+
+        [Test]
+        public async Task Center_slews_to_the_target_before_centering() {
+            var h = new RotateHarness(rotationTolerance: 0.5, solvedAngles: 0.0);
+            using var sut = h.CreateSUT();
+
+            var ok = await sut.CenterAsync(Target, NoProgress, CancellationToken.None);
+
+            Assert.That(ok, Is.True);
+            Assert.That(h.Calls, Is.EqualTo(SlewCentre));
+        }
+
+        [Test]
+        public async Task Center_fails_without_solving_when_the_slew_fails() {
+            var h = new RotateHarness(rotationTolerance: 0.5, solvedAngles: 0.0);
+            h.Telescope.Setup(t => t.SlewToCoordinatesAsync(It.IsAny<Coordinates>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(false);
+            using var sut = h.CreateSUT();
+
+            var ok = await sut.CenterAsync(Target, NoProgress, CancellationToken.None);
+
+            Assert.That(ok, Is.False);
+            Assert.That(h.Calls, Is.Empty);
         }
 
         [Test]

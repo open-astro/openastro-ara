@@ -226,6 +226,18 @@ public sealed class InMemoryProfileStore : IProfileStore {
         RaiseChanged();
     }
 
+    // #1364 — all-null: the guider keeps its own values.
+    private GuiderAdvancedSettingsDto _guiderAdvanced = new();
+
+    public GuiderAdvancedSettingsDto GetGuiderAdvancedSettings() {
+        lock (_lock) { return _guiderAdvanced; }
+    }
+
+    public void PutGuiderAdvancedSettings(GuiderAdvancedSettingsDto value) {
+        lock (_lock) { _guiderAdvanced = value; }
+        RaiseChanged();
+    }
+
     // Defaults match PlateSolveSettings() constructor.
     private PlateSolveSettingsDto _plateSolve = new(
         Engine: "astap",

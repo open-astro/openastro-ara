@@ -1,17 +1,22 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/guider_equipment_choices.dart';
+import 'package:openastroara/models/guider_calibration_view.dart';
+import 'package:openastroara/models/guider_live.dart';
 import 'package:openastroara/models/guider_status.dart';
 import 'package:openastroara/models/pa_residual.dart';
 import 'package:openastroara/models/server.dart';
 import 'package:openastroara/services/guider_api.dart';
 import 'package:openastroara/services/guider_equipment_api.dart';
+import 'package:openastroara/services/guider_live_api.dart';
 import 'package:openastroara/services/profile_api.dart';
 import 'package:openastroara/services/saved_server_service.dart';
 import 'package:openastroara/state/guider/guider_equipment_state.dart';
+import 'package:openastroara/state/guider/guider_live_state.dart';
 import 'package:openastroara/state/guider/guider_state.dart';
 import 'package:openastroara/state/guider/pa_residual_state.dart';
 import 'package:openastroara/state/profile_management_state.dart';
@@ -137,6 +142,8 @@ Future<ProviderContainer> _pump(WidgetTester tester,
     profileApiProvider.overrideWithValue(profileApi ?? _FakeProfileApi()),
     // Apply's push goes to a pure fake, never the real Dio client.
     guiderEquipmentApiFactoryProvider.overrideWithValue((_) => equipmentClient),
+    // #1364 — the step buffer seeds from the guider's history on connect.
+    guiderLiveApiFactoryProvider.overrideWithValue((_) => _NoHistoryLive()),
   ]);
   addTearDown(container.dispose);
   // Steps and markers are stamped on arrival. On Windows (~15 ms clock) three
@@ -243,6 +250,20 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(find.text('RMS RA'), findsOneWidget);
     expect(find.text('RA Osc'), findsOneWidget);
+    await _teardownPanel(tester, container);
+  });
+
+  testWidgets('a strip opened while the guider settles waits for frames, not "Not guiding" (#1364)',
+      (tester) async {
+    final container = await _pump(tester,
+        status: const GuiderStatus(
+          name: 'OpenAstro Guider',
+          connectionState: GuiderConnectionState.connected,
+          runtimeState: GuiderRuntimeState.settling,
+        ));
+    expect(find.text('settling'), findsOneWidget);
+    expect(find.text('Waiting for guide frames…'), findsOneWidget,
+        reason: 'a post-dither settle is still guiding');
     await _teardownPanel(tester, container);
   });
 
@@ -611,6 +632,7 @@ void main() {
       guiderApiFactoryProvider.overrideWithValue((_) => api),
       wsEventsProvider.overrideWith((ref) => const Stream<WsEvent>.empty()),
       profileApiProvider.overrideWith((ref) => ref.watch(_apiSwitchProvider)),
+      guiderLiveApiFactoryProvider.overrideWithValue((_) => _NoHistoryLive()),
     ]);
     addTearDown(container.dispose);
     await tester.pumpWidget(UncontrolledProviderScope(
@@ -657,6 +679,7 @@ void main() {
         reason: 'provider unchanged until Apply');
 
     // Done discards the draft; reopening shows the provider values again.
+    await tester.ensureVisible(find.text('Done'));
     await tester.tap(find.text('Done'));
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Tune guiding…'));
@@ -688,6 +711,7 @@ void main() {
     // tuning fields in the provider — the staged host edit survives.
     await tester.drag(find.byType(Slider).first, const Offset(400, 0));
     await tester.pump();
+    await tester.ensureVisible(find.text('Apply'));
     await tester.tap(find.text('Apply'));
     await tester.pumpAndSettle();
     expect(container.read(phd2SettingsProvider).host, 'edited.local');
@@ -744,6 +768,11 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('2 s').last);
     await tester.pumpAndSettle();
+    // Lower the guide camera gain from its 50 % default.
+    await tester.enterText(find.widgetWithText(TextField, '50'), '30');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Apply'));
     await tester.tap(find.text('Apply'));
     await tester.pumpAndSettle();
     expect(container.read(phd2SettingsProvider).raAggressiveness, 1.0,
@@ -752,6 +781,8 @@ void main() {
     // The PUT carries the chosen guide exposure…
     expect(profileApi.puts, hasLength(1));
     expect(profileApi.puts.single.guideExposureMs, 2000);
+    expect(profileApi.puts.single.guideCameraGain, 30);
+    expect(container.read(phd2SettingsProvider).guideCameraGain, 30);
     expect(profileApi.puts.single.raAggressiveness, 1.0);
     // …and the re-push is the tuning-only one: the full push re-sends the
     // equipment selections and stops guiding mid-run.
@@ -814,6 +845,27 @@ void main() {
     expect(applyButton(tester).onPressed, isNull);
 
     await _teardownPanel(tester, container);
+  });
+
+  test('the strip labels every guider phase in the shared wording, lower case (#1364)', () {
+    GuiderStatus st(GuiderRuntimeState r, {Map<String, dynamic>? cal}) => cal == null
+        ? GuiderStatus(name: 'G', connectionState: GuiderConnectionState.connected, runtimeState: r)
+        : GuiderStatus.fromJson(<String, dynamic>{'state': 'connected', 'runtime': cal});
+    expect(GuidingStrip.stateLabel(st(GuiderRuntimeState.looping)), 'looping');
+    expect(GuidingStrip.stateLabel(st(GuiderRuntimeState.starSelected)), 'star selected');
+    expect(GuidingStrip.stateLabel(st(GuiderRuntimeState.settling)), 'settling');
+    expect(GuidingStrip.stateLabel(st(GuiderRuntimeState.starLost)), 'star lost');
+    expect(GuidingStrip.stateLabel(st(GuiderRuntimeState.unknown)), 'connected', reason: 'not yet polled');
+    expect(GuidingStrip.stateLabel(null), 'disconnected');
+    expect(
+      GuidingStrip.stateLabel(st(GuiderRuntimeState.calibrating, cal: {
+        'state': 'calibrating', 'calibration_direction': 'East', 'calibration_step': 4, 'calibration_distance_px': 6.0,
+      })),
+      'calibrating · East step 4 · 6.0 px',
+    );
+    for (final r in GuiderRuntimeState.values.where((r) => r != GuiderRuntimeState.unknown)) {
+      expect(GuidingStrip.stateLabel(st(r)), guiderRuntimeText(r).toLowerCase(), reason: '$r drifts from the shared wording');
+    }
   });
 
   group('#1311 PA residual chip', () {
@@ -887,4 +939,29 @@ void main() {
       await _teardownPanel(tester, container);
     });
   });
+}
+
+/// #1364 — a live-view client with no history, so the step buffer's seed
+/// never reaches the network.
+class _NoHistoryLive implements GuiderLiveClient {
+  @override
+  Future<List<Map<String, dynamic>>> getHistory() async => const [];
+  @override
+  Future<GuiderLive> getLive() async => GuiderLive.disconnected;
+  @override
+  Future<Uint8List?> getFrame() async => null;
+  @override
+  Future<void> loop() async {}
+  @override
+  Future<void> stop() async {}
+  @override
+  Future<void> selectStar(double x, double y) async {}
+  @override
+  Future<void> deselectStar() async {}
+  @override
+  Future<GuiderCalibrationView> getCalibration() async => GuiderCalibrationView.disconnected;
+  @override
+  Future<void> clearCalibration() async {}
+  @override
+  void close() {}
 }

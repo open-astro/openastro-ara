@@ -34,6 +34,28 @@ namespace OpenAstroAra.Server.Endpoints;
 /// </summary>
 public static partial class EquipmentEndpoints {
 
+    /// <summary>#1364 — one live-view action: 204 on success; 409 when no guider is connected
+    /// (InvalidOperationException), 400 for a bad position (ArgumentOutOfRangeException), 422 when the
+    /// guider refused (GuiderRpcException — no image yet, no star near the tap, not looping).</summary>
+    internal static async Task<IResult> GuiderLiveActionAsync(Func<Task> action) {
+        try {
+            await action();
+            return Results.NoContent();
+        } catch (ArgumentOutOfRangeException ex) {
+            return Results.Problem(ex.Message, statusCode: StatusCodes.Status400BadRequest);
+        } catch (InvalidOperationException ex) when (ex is not ObjectDisposedException) {
+            return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict);
+        } catch (OpenAstroAra.Equipment.Equipment.MyGuider.PHD2.GuiderRpcException ex) {
+            return Results.Problem(ex.Message, statusCode: StatusCodes.Status422UnprocessableEntity);
+        }
+    }
+
+    /// <summary>#1364 item 5 — <c>GET /equipment/guider/history</c>: the guider's recent guide steps,
+    /// default 400 points. The query name is the contract's snake-case <c>max_points</c>: without the
+    /// explicit name minimal APIs bind only <c>?maxPoints=</c> and the documented one was ignored.</summary>
+    internal static async Task<IResult> GetGuiderHistoryAsync([FromQuery(Name = "max_points")] int? maxPoints, IGuiderLiveService live, CancellationToken ct) =>
+        Results.Ok(await live.GetHistoryAsync(maxPoints ?? 400, ct));
+
     /// <summary>POST /equipment/filterwheel/change. Out of range is the caller's mistake (400);
     /// not connected, or a manual wheel with no filters, is a state conflict (409). Both used to
     /// surface as 500. A disposed service is the daemon shutting down and stays a 5xx.</summary>
@@ -480,6 +502,61 @@ public static partial class EquipmentEndpoints {
             .Produces(StatusCodes.Status200OK, contentType: "image/jpeg")
             .Produces(StatusCodes.Status204NoContent)
             .WithName("GetGuideFocusFrame");
+
+        // #1364 — the live guide-camera view: what the guider sees and holds, its picture, and the
+        // star pick. The status is always 200 (Connected false when no guider); the frame is 204 until
+        // the guider has one (and when its fetch fails or takes over 5 s). Loop/stop/select/deselect:
+        // 409 when no guider is connected (InvalidOperationException), 400 for a negative or non-finite
+        // position or one outside the frame the guider reports, 422 when the guider refuses
+        // (GuiderRpcException: no image yet, no star near the tap, could not connect its equipment).
+        guider.MapGet("/live", async (IGuiderLiveService live, CancellationToken ct) => Results.Ok(await live.GetAsync(ct)))
+            .Produces<GuiderLiveDto>(StatusCodes.Status200OK)
+            .WithName("GetGuiderLive")
+            .WithSummary("The live guide-camera view: guider state, frame size, locked star, search box, SNR, multi-star, stars.");
+        guider.MapGet("/live/frame", async (IGuiderLiveService live, HttpContext http, CancellationToken ct) => {
+            var jpeg = await live.GetFrameJpegAsync(ct);
+            if (jpeg is null) {
+                return Results.NoContent();
+            }
+            http.Response.Headers.CacheControl = "no-store";
+            return Results.Bytes(jpeg, "image/jpeg");
+        })
+            .Produces(StatusCodes.Status200OK, contentType: "image/jpeg")
+            .Produces(StatusCodes.Status204NoContent)
+            .WithName("GetGuiderLiveFrame")
+            .WithSummary("The guider's latest frame as JPEG (204 until it has one).");
+        guider.MapPost("/live/loop", (IGuiderLiveService live, CancellationToken ct) => GuiderLiveActionAsync(() => live.LoopAsync(ct)))
+            .Produces(StatusCodes.Status204NoContent).ProducesProblem(StatusCodes.Status409Conflict).ProducesProblem(StatusCodes.Status422UnprocessableEntity)
+            .WithName("GuiderLiveLoop").WithSummary("Start looping guide exposures so the live view has a picture.");
+        guider.MapPost("/live/stop", (IGuiderLiveService live, CancellationToken ct) => GuiderLiveActionAsync(() => live.StopAsync(ct)))
+            .Produces(StatusCodes.Status204NoContent).ProducesProblem(StatusCodes.Status409Conflict).ProducesProblem(StatusCodes.Status422UnprocessableEntity)
+            .WithName("GuiderLiveStop").WithSummary("Stop looping or guiding.");
+        guider.MapPost("/live/select", ([FromBody] GuiderLiveSelectRequestDto request, IGuiderLiveService live, CancellationToken ct) =>
+                GuiderLiveActionAsync(() => live.SelectStarAsync(request.X, request.Y, ct)))
+            .Accepts<GuiderLiveSelectRequestDto>("application/json")
+            .Produces(StatusCodes.Status204NoContent).ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status409Conflict).ProducesProblem(StatusCodes.Status422UnprocessableEntity)
+            .WithName("GuiderLiveSelectStar").WithSummary("Lock the guider on the star nearest (x, y) guide pixels.");
+        guider.MapGet("/live/calibration", async (IGuiderLiveService live, CancellationToken ct) => Results.Ok(await live.GetCalibrationAsync(ct)))
+            .Produces<GuiderCalibrationViewDto>(StatusCodes.Status200OK)
+            .WithName("GetGuiderCalibrationView")
+            .WithSummary("This session's calibration run (steps, outcome), the stored calibration and Ara's verdict.");
+        guider.MapPost("/live/calibration/clear", (IGuiderLiveService live, CancellationToken ct) => GuiderLiveActionAsync(() => live.ClearCalibrationAsync(ct)))
+            .Produces(StatusCodes.Status204NoContent).ProducesProblem(StatusCodes.Status409Conflict).ProducesProblem(StatusCodes.Status422UnprocessableEntity)
+            .WithName("ClearGuiderCalibration").WithSummary("Drop the stored calibration; the next guide start calibrates again.");
+        // #1364 item 5 — the guider's recent guide steps for a client that connects mid-session.
+        guider.MapGet("/history", GetGuiderHistoryAsync)
+            .Produces<GuiderHistoryDto>(StatusCodes.Status200OK)
+            .WithName("GetGuiderHistory")
+            .WithSummary("The guider's recent guide steps (oldest first, with ages) — max_points 1..400, default 400.");
+        // #1364 item 3 — the guider's current settings beside the profile's guider-advanced block.
+        guider.MapGet("/advanced", async (IGuiderLiveService live, CancellationToken ct) => Results.Ok(await live.GetAdvancedAsync(ct)))
+            .Produces<GuiderAdvancedViewDto>(StatusCodes.Status200OK)
+            .WithName("GetGuiderAdvanced")
+            .WithSummary("The guider's current advanced settings and its guide algorithms per axis.");
+        guider.MapPost("/live/deselect", (IGuiderLiveService live, CancellationToken ct) => GuiderLiveActionAsync(() => live.DeselectStarAsync(ct)))
+            .Produces(StatusCodes.Status204NoContent).ProducesProblem(StatusCodes.Status409Conflict).ProducesProblem(StatusCodes.Status422UnprocessableEntity)
+            .WithName("GuiderLiveDeselectStar").WithSummary("Drop the guider's selected star.");
 
         // §63.6 dark library: build (202, long-running ~minutes; WS reports guider.dark_library.started, then
         // §63.8 guider.dark_library.progress ticks during the build, then complete/failed) and a status read for

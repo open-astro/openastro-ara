@@ -79,6 +79,8 @@ public sealed record ProfileSnapshotDto(
     PolarAlignSettingsDto? PolarAlign = null,
     // #1264 — Imaging → Unguided; a pre-#1264 file back-fills to the ctor defaults.
     UnguidedSettingsDto? Unguided = null,
+    // #1364 — the guider's settings beyond Tune Guiding; a pre-#1364 file back-fills to all-null (keep the guider's own).
+    GuiderAdvancedSettingsDto? GuiderAdvanced = null,
     // #1075 filter-wheel policy (home on first connect). Optional so older profile.json keeps
     // deserializing; the normalizer back-fills null to the default (home on).
     FilterWheelPolicyDto? FilterWheelPolicy = null,

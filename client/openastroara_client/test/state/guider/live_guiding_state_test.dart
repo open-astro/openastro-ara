@@ -227,6 +227,51 @@ void main() {
       expect(sub.read().single.total, 0.9);
     });
 
+    test('settling statuses ARE folded (#1364: the daemon reports settling while it guides)',
+        () async {
+      final api = _FakeGuiderApi()
+        ..status = const GuiderStatus(
+          deviceId: 'phd2',
+          name: 'OpenAstro Guider',
+          connectionState: GuiderConnectionState.connected,
+          runtimeState: GuiderRuntimeState.settling,
+          rmsTotal: 1.1,
+        );
+      final c = container(api);
+      await c.read(savedServersProvider.future);
+      await c.read(guiderStatusProvider.future);
+      final sub = c.listen(liveGuidingRmsProvider, (_, _) {});
+      addTearDown(sub.close);
+      expect(sub.read().single.total, 1.1,
+          reason: 'a post-dither settle is still guiding — the trend keeps sampling');
+    });
+
+    test('looping and star-selected statuses are not folded', () async {
+      final api = _FakeGuiderApi()
+        ..status = const GuiderStatus(
+          deviceId: 'phd2',
+          name: 'OpenAstro Guider',
+          connectionState: GuiderConnectionState.connected,
+          runtimeState: GuiderRuntimeState.looping,
+          rmsTotal: 0.5,
+        );
+      final c = container(api);
+      await c.read(savedServersProvider.future);
+      await c.read(guiderStatusProvider.future);
+      final sub = c.listen(liveGuidingRmsProvider, (_, _) {});
+      addTearDown(sub.close);
+      expect(sub.read(), isEmpty);
+      api.status = const GuiderStatus(
+        deviceId: 'phd2',
+        name: 'OpenAstro Guider',
+        connectionState: GuiderConnectionState.connected,
+        runtimeState: GuiderRuntimeState.starSelected,
+        rmsTotal: 0.5,
+      );
+      await c.read(liveGuidingRmsProvider.notifier).pollTick();
+      expect(sub.read(), isEmpty, reason: 'not guiding yet — no RMS to trend');
+    });
+
     test('a guiding status without an RMS yet is skipped', () async {
       final api = _FakeGuiderApi()
         ..status = const GuiderStatus(

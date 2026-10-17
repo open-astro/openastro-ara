@@ -408,6 +408,90 @@ The card now keeps a known device's card while it is not live: name, state chip,
 
 ---
 
+### 2026-10-16 — No storage disk, no run: `POST /sequences/{id}/start` refuses without one (#1374)
+
+**Endpoint(s) or area:** `POST /api/v1/sequences/{id}/start` gains a second 409.
+
+**Decision:** when the save directory sits under the store mount (`/media/openastroara`) and nothing is mounted there, or the save volume is critically low under an `OnDiskSpaceCritical` policy of `abort` or `pause`, the start answers 409 Problem `title: store_unavailable` with `detail` in words for the user ("No storage disk: nothing is mounted at …"). The client shows that text in a dialog with a jump to Options → Storage. A host whose mount table cannot be read (no `/proc`) never refuses. Mid-run, a sequence capture into an ejected store parks the run `paused_awaiting_user` (Resume retakes the frame) instead of failing it, and a failed, skipped or disabled exposure no longer counts toward Dither or Autofocus after N exposures.
+
+**Reasoning:** 2026-10-16 the store drive fell off mid-run; every frame was refused at once by the §29 pre-capture check, the run carried on under ContinueOnError, and each refused frame still fired the dither — half an hour of "settling" with nothing saved. Asking the same question once before the run (and stopping when it turns false) costs nothing and tells the user while they are still at the rig.
+
+**Spec ref:** `OpenAstroAra.Server/Endpoints/SequenceEndpoints.cs` (`StartSequenceAsync`), `ICameraService.StoreRefusal`, `OpenAstroAra.Core/Model/StoreUnavailableException.cs`, `TakeExposure.Execute`, `ItemUtility.ExposureTaken`.
+
+**Related:** #1374; tests `NoStorageDiskTest`, client `sequencer_run_controls_test`. The auto-flats run started at the end of a session goes through `StartAsync` directly, not the endpoint, so it meets the mid-run pause rather than the start refusal.
+
+---
+
+### 2026-10-16 — The guider's graph history for a client that connects mid-session (#1364 item 5)
+
+**Endpoint(s) or area:** new `GET /api/v1/equipment/guider/history?max_points=` (`GuiderHistoryDto`).
+
+**Decision:** always 200: `{connected, steps[{age_sec, ra_raw_px?, dec_raw_px?, ra_arcsec?, dec_arcsec?, ra_duration_ms, dec_duration_ms, pixel_scale_arcsec?, snr?, star_mass?}]}`, oldest first, from the guider's own graph history (`get_guide_history`). `max_points` (snake-case query name) is 1–400, default 400; a value outside that range is clamped into it, not refused. The step fields match `guider.step` (pulse durations negative = East / South). `age_sec` is how long ago the step was taken, measured on the daemon's clock — the guider's own when they run on the same host, as on the SBC (a remote guider whose clock differs skews the ages) — so a client places history on its own time axis without the SBC's and the client's clocks having to agree; a point without a plausible Unix-millisecond stamp (an older guider build) is spaced 2 s back from the newest. `connected` false or no history → `steps` empty. The client fills an empty guiding graph from it at start-up and when the guider connects, once, never over live steps.
+
+**Reasoning:** a client that connects (or reconnects) mid-run started with an empty graph and no RMS for minutes, though the guider had the whole session.
+
+**Spec ref:** `OpenAstroAra.Server/openapi.yaml#/paths/~1api~1v1~1equipment~1guider~1history`; `Contracts/EquipmentDtos.cs` (`GuiderHistoryDto`, `GuiderHistoryStepDto`), `Endpoints/EquipmentEndpoints.cs` (`GetGuiderHistoryAsync`), `Services/GuiderLiveService.cs` (`GetHistoryAsync`, `MapHistory`), `Equipment/MyGuider/PHD2/PHD2Guider.LiveView.cs` (`GetGuideHistoryAsync`); client `state/guider/guide_step_state.dart` (`seedFromHistory`, `historySteps`).
+
+**Related:** #1364; tests `GuiderLiveServiceTest` (`History_maps_to_guide_steps_with_ages_and_signed_pulses`), `GuiderLiveFakeIntegrationTest` (over the wire, silent refusal), `EquipmentEndpointsGuiderHistoryTest` (the `max_points` binding over HTTP), client `guide_step_history_test`.
+
+---
+
+### 2026-10-16 — One guider state everywhere: `looping`, `star_selected`, `settling` (#1364 item 6)
+
+**Endpoint(s) or area:** `GET /api/v1/equipment/guider` — `runtime.state` (`GuiderStateDto.State`).
+
+**Decision:** `runtime.state` is one of `stopped` | `looping` | `star_selected` | `calibrating` | `guiding` | `settling` | `paused` | `star_lost`. `looping` (exposures looping, no star chosen) and `star_selected` (looping with a star chosen) used to read `stopped`; `settling` is `guiding` while the guider settles after a dither or a start. `dithering`, listed before, was never sent and still is not. A token a client does not know is read as an unknown phase — the Ara client shows *Unknown* (the guiding strip, *connected*) — never as `stopped`. Clients use one wording for every phase (the Live strip in lower case, the guider dialog and the Run tab) and, while `calibrating`, append the leg from `calibration_*`.
+
+**Reasoning:** field night 2026-10-16: the strip said "stopped" while the guide camera was looping (and refused a single frame for guide-camera focus), and the Run tab said nothing while the guider calibrated for five minutes.
+
+**Spec ref:** `Services/GuiderService.cs` (`MapGuidingState`), `Contracts/EquipmentDtos.cs` (`GuiderStateDto`); client `models/guider_status.dart` (`GuiderRuntimeState`, `guiderRuntimeText`, `runtimeSummary`), `widgets/sequencer/run_dashboard_band.dart` (`RunGuiderLine`), `widgets/imaging/guiding_strip.dart`.
+
+**Related:** #1364; tests `GuiderServiceTest` (`Every_guider_phase_has_its_own_state_token`), client `guider_status_test`, `run_guider_line_test`.
+
+---
+
+### 2026-10-16 — Every guider setting from Ara, kept in the profile (`/api/v1/profile/guider-advanced`) (#1364 item 3)
+
+**Endpoint(s) or area:** new `GET`/`PUT /api/v1/profile/guider-advanced` (`GuiderAdvancedSettingsDto`), profile JSON `guider_advanced`; new `GET /api/v1/equipment/guider/advanced` (`GuiderAdvancedViewDto`); the guider push (`POST /api/v1/equipment/guider/profile/push`, both scopes, and the connect-time push) carries the section; profile select and clone (`ProfileStoreSnapshot`) now carry `unguided` and `guider_advanced`.
+
+**Decision:** the guider's settings beyond Tune Guiding become a profile section with every field optional — null keeps the guider's own value, so a profile never overwrites a setting it did not set: `{multi_star_enabled, fast_recenter, tolerate_jumps, tolerate_jumps_threshold_px, min_star_hfd, max_star_hfd, min_star_snr, mass_change_threshold_enabled, mass_change_threshold, search_region_px, auto_exposure_min_ms, auto_exposure_max_ms, auto_exposure_target_snr, noise_reduction ("None" | "2x2 Mean" | "3x3 Median"), use_subframes, max_ra_duration_ms, max_dec_duration_ms, backlash_enabled, backlash_pulse_ms, backlash_floor_ms, backlash_ceiling_ms, assume_orthogonal, stop_guiding_when_slewing, cal_flip_requires_dec_flip, variable_delay_enabled, variable_delay_short_s, variable_delay_long_s, dither_scale_factor, dither_ra_only, ra_algorithm, dec_algorithm}`. It is kept apart from `phd2` so a client that PUTs that section without these fields cannot wipe them. A PUT replaces the whole section: a field left out of the body is cleared to null (back to the guider's own value), so a client sends every field it wants kept — GET, change, PUT. The PUT validates at the write boundary (400) with the guider's own ranges: every set number positive except the max RA/Dec pulse (0–1,000,000 ms; 0 = no correction on that axis), the backlash pulse 20–8000 ms, min ≤ max for HFD, auto exposure, backlash and the variable delay, a known noise method, the variable delay as all three values or none, algorithm names non-blank (trimmed). Only set keys reach the guider, grouped as its setters take them (`set_guider_options`, `set_star_detection`, `set_auto_exposure`, `set_noise_reduction`, `set_use_subframes`, `set_guide_limits`, `set_backlash_comp`, `set_mount_options`, `set_variable_delay_settings`, `set_dither_settings`, `set_algo` per axis) on the tuning push — guiding continues; `set_algo` goes before Tune Guiding's `set_algo_param` aggression / minimum move, so those land on the newly chosen algorithm rather than on the one it replaces; `multi_star_enabled` rides `set_profile_setup`, which the guider accepts only with its equipment disconnected, so it lands on the next connect or full push. `GET /equipment/guider/advanced` is always 200: `{connected, current: GuiderAdvancedSettingsDto (the guider's values now, null where it did not answer), ra_algorithms[], dec_algorithms[]}`; its reads all run in parallel and a refused one posts no inbox error. Profile select and clone previously skipped `unguided` (#1264), so selecting a profile kept the previous rig's unguided values; both sections now follow the profile, and a profile without them reads the defaults (all-null for `guider_advanced`).
+
+**Reasoning:** field night 2026-10-16: multi-star, star detection and the algorithms were reachable only on the guider's own page; the epic (#1364) puts the guider inside Ara, and the values belong to the rig, so they live in its profile.
+
+**Spec ref:** `OpenAstroAra.Server/openapi.yaml#/paths/~1api~1v1~1profile~1guider-advanced`, `…~1equipment~1guider~1advanced`; `Contracts/ProfileDtos.cs` (`GuiderAdvancedSettingsDto`), `Contracts/EquipmentDtos.cs` (`GuiderAdvancedViewDto`), `Services/GuiderAdvancedSettingsMapping.cs`, `Services/ProfileStoreSnapshot.cs`, `Endpoints/ProfileEndpoints.cs`, `Equipment/MyGuider/PHD2/PHD2Guider.AdvancedSettings.cs`, `PHD2Guider.GuiderEngineConfig.cs`; client `widgets/imaging/guider_advanced_dialog.dart`, `models/guider_advanced_settings.dart`, `services/guider_advanced_api.dart`.
+
+**Related:** #1364, #1264; tests `GuiderAdvancedSettingsTest`, `ProfileStoreNullSectionTest` (`Unguided_and_guider_advanced_follow_the_profile_through_select`), client `guider_advanced_dialog_test`.
+
+---
+
+### 2026-10-16 — Guider calibration in Ara: step plot, stored result, verdict, clear (#1364 item 2)
+
+**Endpoint(s) or area:** new `GET /api/v1/equipment/guider/live/calibration`, `POST …/live/calibration/clear`; WS `guider.event` kind `calibrating` gains `dx_px`, `dy_px`.
+
+**Decision:** `GET …/live/calibration` is always 200 with `GuiderCalibrationViewDto { connected, run_state, steps[{direction, step, dx, dy, dist}], error?, data?, verdict, verdict_reason? }`. `run_state` is this session's calibration run: `none` | `running` | `complete` | `failed`; `steps` are every `Calibrating` event of the run (the star's displacement from the leg's start, guide px — PHD2's calibration plot; a step where the guider sent no `dx`/`dy` is left out of `steps`, and `guider.event` omits `dx_px`/`dy_px` for it), kept after completion and cleared when the next calibration starts; a run that stops before it finishes (loop stopped, guiding stopped, guider link lost — the guider sends no `CalibrationFailed` for these) ends `failed` with the reason in `error`. `data` is the guider's stored calibration (`get_calibration_data`): `calibrated`, `x_angle_deg`, `y_angle_deg`, `x_rate_px_per_sec`, `y_rate_px_per_sec`, `x_parity`, `y_parity`, `declination_deg`, and `orthogonality_error_deg` (how far the axes are from 90° apart); null when the guider does not answer. `verdict`: `redo` when the run failed (the reason adds that an earlier stored calibration stays in use, when the guider still holds one) or nothing is stored; `check` while running, when the axes are more than 10° from square, or when the Dec rate is more than 2× off the RA rate corrected for declination (checked only when the declination is known and within ±80°, where the cos(dec) correction is trustworthy); `good` otherwise — `verdict_reason` says why. `connected` false → `run_state` `none`, `verdict` `redo`. `POST …/clear` drops the stored calibration (`clear_calibration Mount`) so the next guide start calibrates, and resets the run (`none`, no steps): 204; 409 no guider; 422 the guider refused.
+
+**Reasoning:** field night 2026-10-16: a five-minute calibration ran with nothing in Ara to show it, and no way to judge or redo the result without the guider's page.
+
+**Spec ref:** `OpenAstroAra.Server/openapi.yaml#/paths/~1api~1v1~1equipment~1guider~1live~1calibration` (…`~1clear`); `Contracts/EquipmentDtos.cs` (`GuiderCalibrationViewDto`, `GuiderCalibrationStepDto`, `GuiderCalibrationDataDto`), `Services/GuiderLiveService.cs` (`GetCalibrationAsync`, `Judge`, `ToDto`), `Equipment/MyGuider/PHD2/PHD2Guider.Calibration.cs`, `PHD2Guider.cs` (`CalibrationRun`); client `widgets/imaging/guide_calibration_panel.dart`, `models/guider_calibration_view.dart`.
+
+**Related:** #1364; tests `GuiderLiveServiceTest` (verdict, orthogonality), `PHD2GuiderMarkerEventTest` (run bookkeeping), client `guide_camera_panel_test`.
+
+---
+
+### 2026-10-16 — Live guide-camera view: the guider's picture, locked star, stars, star pick (#1364 item 1)
+
+**Endpoint(s) or area:** new `GET /api/v1/equipment/guider/live`, `GET …/live/frame`, `POST …/live/loop`, `POST …/live/stop`, `POST …/live/select {x, y}`, `POST …/live/deselect`.
+
+**Decision:** `GET …/live` is always 200 with `GuiderLiveDto { connected, app_state, frame_width?, frame_height?, lock_x?, lock_y?, search_region?, snr?, star_mass?, multi_star_enabled?, stars[{x, y, snr?, mass?, hfd?}], has_frame }`: `connected` false with nulls and no stars when no guider is connected; `app_state` is the guider's own phase (`Stopped` | `Looping` | `Selected` | `Calibrating` | `Guiding` | `LostLock` | `Paused`); coordinates are guide-camera pixels; `snr`/`star_mass` are the last guide frame's, reported only while `app_state` is `Guiding` (null otherwise); `stars` are the guider's detected stars, brightest first, at most 12. Each field is read best-effort: one the guider refuses (no camera, no image yet) is null — never an inbox notification or an Error log line, since the dialog polls it — and the rest still answer. `GET …/live/frame` is the guider's own live JPEG fetched daemon-side (the client never talks to the guider, §63.20) — 204 until it has one, and 204 when the fetch fails or takes over 5 s (never a 500). The five reads behind `GET …/live` run in parallel. `loop` connects the guider's camera and mount first when they are not, then starts looping exposures; `stop` stops looping or guiding; `select {x, y}` locks the guider on the star nearest that guide-pixel position (`set_lock_position`, exact = false); `deselect` drops the star. Each action: 204; 409 when no guider is connected; 400 for a negative or non-finite position, or one outside the frame once the guider reports its frame size (without a size the guider judges the position); 422 when the guider refuses (no image, no star near the tap, could not connect its equipment).
+
+**Reasoning:** field night 2026-10-16: choosing a guide star, watching it and seeing what the guider was doing all meant opening the guider's own web page; the epic (#1364) makes the guider part of Ara.
+
+**Spec ref:** `OpenAstroAra.Server/openapi.yaml#/paths/~1api~1v1~1equipment~1guider~1live` (…`~1frame`, `~1loop`, `~1stop`, `~1select`, `~1deselect`); `Contracts/EquipmentDtos.cs` (`GuiderLiveDto`, `GuiderLiveStarDto`, `GuiderLiveSelectRequestDto`), `Services/GuiderLiveService.cs`, `Endpoints/EquipmentEndpoints.cs` (`GuiderLiveActionAsync`), `Equipment/MyGuider/PHD2/PHD2Guider.LiveView.cs`; client `widgets/imaging/guide_camera_panel.dart`, `state/guider/guider_live_state.dart`, `services/guider_live_api.dart`, `models/guider_live.dart`.
+
+**Related:** #1364; tests `GuiderLiveServiceTest`, client `guide_camera_panel_test`.
+
+---
+
 ### 2026-10-16 — Bahtinov star pick, cropped picture while locked, short-spike detector; guider calibration leg
 
 **Endpoint(s) or area:** new `POST /api/v1/bahtinov-focus/pick {x, y}` and `DELETE …/pick`; `GET …/state` gains `frame_width`, `frame_height`, `frame_crop {left, top, size}?`, `pick_x?`, `pick_y?`; `GET …/frame` semantics; `GET /api/v1/equipment/guider` runtime gains `calibration_direction?`, `calibration_step?`, `calibration_distance_px?`; WS `guider.event` gains kind `calibrating`.
@@ -856,7 +940,7 @@ is connected, straight from its GuideStep events):
         settle_done         { status (0 = ok), error? }
         star_lost           { frame?, star_mass?, snr?, distance_px?, status?, error? }
         calibration_started | calibration_complete | calibration_failed { error? }
-        calibrating         { direction, frame (= step), distance_px }  one per step
+        calibrating         { direction, frame (= step), distance_px, dx_px, dy_px }  one per step
         guiding_started | guiding_stopped | paused | resumed | lock_position_lost
       A dither is drawn as dithered → (settling …) → settle_done; the client
       shades the settle window and marks the dither, exactly as PHD2 does.

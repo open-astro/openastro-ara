@@ -1,0 +1,97 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/models/guider_status.dart';
+import 'package:openastroara/services/guider_api.dart';
+import 'package:openastroara/state/guider/guider_state.dart';
+import 'package:openastroara/theme/ara_colors.dart';
+import 'package:openastroara/widgets/sequencer/run_dashboard_band.dart';
+
+class _Stub extends GuiderStatusNotifier {
+  final GuiderStatus? status;
+  int refreshes = 0;
+  _Stub(this.status);
+  @override
+  Future<GuiderStatus?> build() async => status;
+  @override
+  Future<void> refresh([GuiderClient? client]) async => refreshes++;
+}
+
+Future<_Stub> _pump(WidgetTester t, GuiderStatus? status) async {
+  final stub = _Stub(status);
+  await t.pumpWidget(
+    ProviderScope(
+      overrides: [guiderStatusProvider.overrideWith(() => stub)],
+      child: const MaterialApp(home: Scaffold(body: RunGuiderLine())),
+    ),
+  );
+  await t.pump();
+  return stub;
+}
+
+void main() {
+  testWidgets('the run shows the guider calibrating with its leg', (t) async {
+    final stub = await _pump(
+      t,
+      GuiderStatus.fromJson(<String, dynamic>{
+        'state': 'connected',
+        'runtime': <String, dynamic>{
+          'state': 'calibrating',
+          'calibration_direction': 'North',
+          'calibration_step': 7,
+          'calibration_distance_px': 11.9,
+        },
+      }),
+    );
+    expect(
+      find.text('Guider · Calibrating · North step 7 · 11.9 px'),
+      findsOneWidget,
+    );
+    // It polls while the run band is up.
+    await t.pump(RunGuiderLine.pollInterval);
+    expect(stub.refreshes, greaterThanOrEqualTo(1));
+    await t.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('the line is coloured by phase: green guiding, red lost, amber busy, grey idle', (t) async {
+    final expected = {
+      GuiderRuntimeState.guiding: AraColors.accentConnected,
+      GuiderRuntimeState.starLost: AraColors.accentError,
+      GuiderRuntimeState.settling: AraColors.accentBusy,
+      GuiderRuntimeState.calibrating: AraColors.accentBusy,
+      GuiderRuntimeState.looping: AraColors.accentBusy,
+      GuiderRuntimeState.stopped: AraColors.textSecondary,
+      GuiderRuntimeState.paused: AraColors.textSecondary,
+    };
+    for (final e in expected.entries) {
+      await _pump(
+        t,
+        GuiderStatus(name: 'G', connectionState: GuiderConnectionState.connected, runtimeState: e.key),
+      );
+      final text = t.widget<Text>(find.byKey(const Key('run-guider-line')));
+      expect(text.style?.color, e.value, reason: '${e.key}');
+      await t.pumpWidget(const SizedBox());
+    }
+  });
+
+  testWidgets('an offstage line does not poll', (t) async {
+    final stub = _Stub(GuiderStatus.fromJson(<String, dynamic>{'state': 'connected', 'runtime': <String, dynamic>{'state': 'guiding'}}));
+    await t.pumpWidget(ProviderScope(
+      overrides: [guiderStatusProvider.overrideWith(() => stub)],
+      child: const MaterialApp(home: Scaffold(body: TickerMode(enabled: false, child: RunGuiderLine()))),
+    ));
+    await t.pump();
+    await t.pump(RunGuiderLine.pollInterval * 2);
+    expect(stub.refreshes, 0, reason: 'hidden behind another tab: no request');
+    await t.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('nothing shows without a connected guider', (t) async {
+    await _pump(
+      t,
+      GuiderStatus.fromJson(<String, dynamic>{'state': 'disconnected'}),
+    );
+    expect(find.byKey(const Key('run-guider-line')), findsNothing);
+    await t.pumpWidget(const SizedBox());
+  });
+}

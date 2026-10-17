@@ -854,6 +854,9 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
             LogPreCaptureDiskBlocked(frameId, freeBytes);
             return false;
         }
+        // The sequencer's CaptureImage refuses an ejected store before it queues, and again after a failed
+        // capture (a typed refusal that pauses the run); this check stays for the REST capture, which
+        // comes straight here, and is what turns a store lost in the queue into that failed capture.
         // §29 — an ejected store must fail capture LOUDLY. After eject the
         // mount point still exists as an empty directory on the root disk;
         // writing there would silently misdirect the night's frames onto the
@@ -1554,6 +1557,24 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
             return false;
         }
     }
+
+    /// <inheritdoc />
+    public string? StoreRefusal() {
+        if (StoreEjected(out var ejectedDir)) {
+            return StoreMissingMessage(ejectedDir) + " Plug in the storage drive (Settings → Storage) before imaging.";
+        }
+        if (PreCaptureDiskBlocked(out var freeBytes)) {
+            var dir = _profileStore?.GetStorageSettings().SaveDirectory;
+            return string.Create(CultureInfo.InvariantCulture,
+                $"The storage disk is full: {freeBytes / 1e9:F1} GB free on {dir}. Free some space or plug in another drive before imaging.");
+        }
+        return null;
+    }
+
+    /// <summary>The user's words for an ejected store — the run-start refusal and the mid-run pause
+    /// both open with it.</summary>
+    internal static string StoreMissingMessage(string saveDirectory) =>
+        $"No storage disk: nothing is mounted at {saveDirectory}, so there is nowhere to save frames.";
 
     // §29 pre-capture gate — true only when the CONFIGURED save volume is critically low and the
     // profile policy says abort. Best-effort by design: no profile store, an unprobeable volume,

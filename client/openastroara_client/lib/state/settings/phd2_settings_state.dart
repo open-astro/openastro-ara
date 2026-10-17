@@ -85,6 +85,11 @@ class Phd2Settings {
   // Imaging → Guiding → Tune Guiding.
   final int guideExposureMs;
 
+  // Guide camera gain, percent of the camera's range (0..100), sent with the
+  // guider's `set_camera_gain` once its camera is connected. 50 by default:
+  // the guider's own 95% buries stars in read noise on many guide cameras.
+  final int guideCameraGain;
+
   const Phd2Settings({
     this.host = 'localhost',
     this.port = 4400,
@@ -115,6 +120,7 @@ class Phd2Settings {
     this.guideExposureMinMs = 1000,
     this.guideExposureMaxMs = 6000,
     this.guideExposureMs = 0,
+    this.guideCameraGain = 50,
   });
 
   Phd2Settings copyWith({
@@ -147,6 +153,7 @@ class Phd2Settings {
     int? guideExposureMinMs,
     int? guideExposureMaxMs,
     int? guideExposureMs,
+    int? guideCameraGain,
   }) =>
       Phd2Settings(
         host: host ?? this.host,
@@ -180,6 +187,7 @@ class Phd2Settings {
         guideExposureMinMs: guideExposureMinMs ?? this.guideExposureMinMs,
         guideExposureMaxMs: guideExposureMaxMs ?? this.guideExposureMaxMs,
         guideExposureMs: guideExposureMs ?? this.guideExposureMs,
+        guideCameraGain: guideCameraGain ?? this.guideCameraGain,
       );
 }
 
@@ -296,6 +304,13 @@ class Phd2SettingsNotifier extends Notifier<Phd2Settings>
   void setGuideExposureMs(int v) {
     if (v < 0) return;
     state = state.copyWith(guideExposureMs: v);
+  }
+
+  /// Guide camera gain, 0..100 % of the camera's range (the guider's own
+  /// scale); anything outside is rejected, mirroring the server's 400.
+  void setGuideCameraGain(int v) {
+    if (v < 0 || v > 100) return;
+    state = state.copyWith(guideCameraGain: v);
   }
 
   // §63.17 — guider equipment selection. "" / 0 mean unset (the daemon keeps

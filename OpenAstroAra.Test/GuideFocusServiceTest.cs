@@ -17,6 +17,7 @@ using Moq;
 using NUnit.Framework;
 using OpenAstroAra.Image.ImageAnalysis;
 using OpenAstroAra.Core.Enums;
+using OpenAstroAra.Equipment.Equipment.MyGuider.PHD2;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Endpoints;
 using OpenAstroAra.Server.Services;
@@ -78,6 +79,22 @@ namespace OpenAstroAra.Test {
             Assert.Throws<ArgumentOutOfRangeException>(() => GuideFocusService.Validate(new GuideFocusStartRequestDto(31)));
             Assert.Throws<ArgumentOutOfRangeException>(() => GuideFocusService.Validate(new GuideFocusStartRequestDto(double.NaN)));
             Assert.Throws<ArgumentOutOfRangeException>(() => GuideFocusService.Validate(new GuideFocusStartRequestDto(1, 0)));
+        }
+
+        [Test]
+        public void A_guider_without_its_camera_gives_up_naming_both_fixes() {
+            // A dropped camera and a profile that never picked one read the same from the daemon, so the
+            // error names the cable/power AND the pick; the loop keeps its retry budget for the first case.
+            var noCamera = new GuiderRpcException("capture_single_frame", 1, "cannot capture single frame when camera is not connected");
+            var error = GuideFocusService.GaveUpError(5, noCamera);
+            Assert.That(error, Does.StartWith("gave up after 5 failed frames"));
+            Assert.That(error, Does.Contain("cable and power"));
+            Assert.That(error, Does.Contain("pick the guide camera"));
+            Assert.That(GuideFocusService.GaveUpError(5, new GuiderRpcException("capture_single_frame", 1, "exposure timed out")),
+                Is.EqualTo("gave up after 5 failed frames — last: capture_single_frame failed (code 1): exposure timed out"),
+                "other daemon errors keep the plain message");
+            Assert.That(GuideFocusService.GaveUpError(5, new InvalidOperationException("camera is not connected")),
+                Does.Not.Contain("pick the guide camera"), "only the daemon's own refusal counts");
         }
 
         [Test]

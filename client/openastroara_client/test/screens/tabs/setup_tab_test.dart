@@ -58,7 +58,16 @@ class _ConfiguredPhd2Notifier extends Phd2SettingsNotifier {
       guidePixelSize: 2.9);
 }
 
+// Guide optics entered but no camera picked: the profile a fresh-install
+// field night saved, whose guider never connected a camera.
+class _OpticsOnlyPhd2Notifier extends Phd2SettingsNotifier {
+  @override
+  Phd2Settings build() =>
+      const Phd2Settings(guideFocalLength: 200, guidePixelSize: 2.9);
+}
+
 Widget _harness({
+  bool opticsOnly = false,
   PolarAlignLive live = const PolarAlignLive(),
   bool guiderConfigured = false,
   AutofocusLive autofocus = AutofocusLive.idle,
@@ -73,6 +82,8 @@ Widget _harness({
       guideFocusProvider.overrideWith(_StubGuideFocus.new),
       if (guiderConfigured)
         phd2SettingsProvider.overrideWith(_ConfiguredPhd2Notifier.new),
+      if (opticsOnly)
+        phd2SettingsProvider.overrideWith(_OpticsOnlyPhd2Notifier.new),
     ],
     child: const MaterialApp(home: Scaffold(body: SetupTab())),
   );
@@ -156,6 +167,13 @@ void main() {
     await t.pump();
     expect(find.text('Set up the guider…'), findsOneWidget);
     expect(find.text('Re-run guider wizard…'), findsNothing);
+  });
+
+  testWidgets('guide optics without a guide camera still get the callout',
+      (t) async {
+    await t.pumpWidget(_harness(opticsOnly: true));
+    await t.pump();
+    expect(find.text('Set up the guider…'), findsOneWidget);
   });
 
   testWidgets('configured guider demotes the wizard to a re-run link',
