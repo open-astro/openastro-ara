@@ -1555,6 +1555,24 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
         }
     }
 
+    /// <inheritdoc />
+    public string? StoreRefusal() {
+        if (StoreEjected(out var ejectedDir)) {
+            return StoreMissingMessage(ejectedDir) + " Plug in the storage drive (Settings → Storage) before imaging.";
+        }
+        if (PreCaptureDiskBlocked(out var freeBytes)) {
+            var dir = _profileStore?.GetStorageSettings().SaveDirectory;
+            return string.Create(CultureInfo.InvariantCulture,
+                $"The storage disk is full: {freeBytes / 1e9:F1} GB free on {dir}. Free some space or plug in another drive before imaging.");
+        }
+        return null;
+    }
+
+    /// <summary>The user's words for an ejected store — the run-start refusal and the mid-run pause
+    /// both open with it.</summary>
+    internal static string StoreMissingMessage(string saveDirectory) =>
+        $"No storage disk: nothing is mounted at {saveDirectory}, so there is nowhere to save frames.";
+
     // §29 pre-capture gate — true only when the CONFIGURED save volume is critically low and the
     // profile policy says abort. Best-effort by design: no profile store, an unprobeable volume,
     // or any probe fault means "don't block" — the §29 monitor owns reporting those conditions,

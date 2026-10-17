@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -7,7 +8,9 @@ import 'package:openastroara/models/sequence/sequence_share_export.dart';
 import 'package:openastroara/services/sequence_api.dart';
 import 'package:openastroara/models/polar_align.dart';
 import 'package:openastroara/state/polar_align/polar_align_state.dart';
+import 'package:openastroara/state/app_shell_state.dart';
 import 'package:openastroara/state/sequencer/sequence_list_state.dart';
+import 'package:openastroara/state/settings/settings_nav.dart';
 import 'package:openastroara/widgets/sequencer/sequencer_toolbar.dart';
 
 import 'toolbar_surface.dart';
@@ -37,9 +40,11 @@ class _FakeClient implements SequenceClient {
   @override
   Future<SequenceValidationResult> validate(Map<String, dynamic> body) async =>
       const SequenceValidationResult(valid: true);
-  _FakeClient({this.runState, this.throwOnStart = false});
+  _FakeClient({this.runState, this.throwOnStart = false, this.startRefusal});
   final SequenceRunStateInfo? runState;
   final bool throwOnStart;
+  /// The daemon's Problem body for a refused start (409), when set.
+  final Map<String, dynamic>? startRefusal;
   final List<String> calls = [];
 
   @override
@@ -61,6 +66,13 @@ class _FakeClient implements SequenceClient {
     calls.add('start');
     if (throwOnStart) {
       throw const FormatException('start accepted but no operation_id');
+    }
+    if (startRefusal case final body?) {
+      final req = RequestOptions(path: '/api/v1/sequences/$id/start');
+      throw DioException(
+          requestOptions: req,
+          type: DioExceptionType.badResponse,
+          response: Response(requestOptions: req, statusCode: 409, data: body));
     }
     return 'op';
   }
@@ -379,6 +391,58 @@ void main() {
       await tester.pump(const Duration(milliseconds: 400)); // SnackBar entrance
       expect(find.text('Sequence command failed.'), findsOneWidget);
       expect(tester.takeException(), isNull);
+    });
+
+    Future<ProviderContainer> pumpRefusing(
+        WidgetTester tester, Map<String, dynamic> refusal) async {
+      final container = ProviderContainer(overrides: [
+        sequenceApiProvider.overrideWithValue(_FakeClient(startRefusal: refusal)),
+        sequenceRunStateProvider.overrideWith(() => _FakeRunNotifier(null)),
+        polarAlignLiveProvider.overrideWith(() => _AlignedLiveNotifier()),
+      ]);
+      addTearDown(container.dispose);
+      await tester.pumpWidget(UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: Scaffold(body: SequencerToolbar())),
+      ));
+      container.read(selectedSequenceIdProvider.notifier).select('seq-1');
+      await tester.pumpAndSettle();
+      return container;
+    }
+
+    testWidgets('no storage disk: a dialog says so and opens Storage',
+        (tester) async {
+      // 2026-10-16: a run started without its drive and failed every frame.
+      await wideSurface(tester);
+      final container = await pumpRefusing(tester, const {
+        'title': 'store_unavailable',
+        'detail': 'No storage disk: nothing is mounted at /media/openastroara, '
+            'so there is nowhere to save frames.',
+      });
+      btn(tester, 'Run').onPressed!();
+      await tester.pumpAndSettle();
+      expect(find.text('No storage disk'), findsOneWidget);
+      expect(find.textContaining('nothing is mounted at /media/openastroara'),
+          findsOneWidget);
+      await tester.tap(find.text('Open Storage'));
+      await tester.pumpAndSettle();
+      expect(container.read(selectedTabIndexProvider), kOptionsTabIndex);
+      expect(container.read(selectedSettingsPanelProvider), 'session.storage');
+    });
+
+    testWidgets("any other refusal shows the daemon's words", (tester) async {
+      await wideSurface(tester);
+      await pumpRefusing(tester, const {
+        'title': 'bahtinov_focus_active',
+        'detail': 'The Bahtinov focus readout is running. Finish it and remove '
+            'the mask before starting a sequence.',
+      });
+      btn(tester, 'Run').onPressed!();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400)); // SnackBar entrance
+      expect(find.textContaining('remove the mask'), findsOneWidget);
+      expect(find.text("Command not valid in the sequence's current state."),
+          findsNothing);
     });
 
     testWidgets('Abort asks for confirmation; Keep running cancels', (tester) async {

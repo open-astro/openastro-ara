@@ -43,6 +43,12 @@ public interface ICameraService {
     // True when no exposure (sequenced, one-off REST, or live-view frame) holds
     // the shared in-flight gate — storage maintenance must not run otherwise.
     bool IsFreeToCapture(object consumer);
+    /// <summary>Why a run must not start for want of somewhere to save its frames — the store drive is
+    /// not mounted, or the save volume is critically low under an abort/pause policy — in words for the
+    /// user; null when frames can be saved (and on a host that cannot tell). The same checks every
+    /// frame passes before the shutter opens, asked once before the run instead of failing each
+    /// frame of it.</summary>
+    string? StoreRefusal() => null;
     Task<OperationAcceptedDto> ConnectAsync(ConnectRequestDto request, string? idempotencyKey, CancellationToken ct);
     Task<OperationAcceptedDto> DisconnectAsync(string? idempotencyKey, CancellationToken ct);
 

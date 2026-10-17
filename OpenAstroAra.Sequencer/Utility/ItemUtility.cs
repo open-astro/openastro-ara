@@ -30,6 +30,13 @@ namespace OpenAstroAra.Sequencer.Utility {
 
     public static class ItemUtility {
 
+        /// <summary>Was this exposure actually taken? A failed, skipped or disabled one was not: the
+        /// exposure-counting triggers (dither, autofocus after N) must not count it — 2026-10-16 a
+        /// missing disk failed every frame at once and each one still dithered. An item that has not
+        /// run reads as taken, so a trigger evaluated outside a run counts as before.</summary>
+        public static bool ExposureTaken(ISequenceItem item) =>
+            item.Status is not (SequenceEntityStatus.FAILED or SequenceEntityStatus.SKIPPED or SequenceEntityStatus.DISABLED);
+
         public static ContextCoordinates? RetrieveContextCoordinates(ISequenceContainer? parent) {
             if (parent != null) {
                 var container = parent as IDeepSkyObjectContainer;

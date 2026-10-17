@@ -16,6 +16,7 @@ using Newtonsoft.Json;
 using OpenAstroAra.Core.Locale;
 using OpenAstroAra.Core.Model;
 using OpenAstroAra.Core.Model.Equipment;
+using OpenAstroAra.Core.Utility;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Equipment.Model;
 using OpenAstroAra.Sequencer.Interfaces;
@@ -143,12 +144,30 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Imaging {
                 Gain = Gain,
                 Offset = Offset,
             };
-            // The capture pipeline persists the frame server-side; the in-memory exposure data is
-            // deliberately discarded (see class doc).
-            // The TARGET's name, not the imaging loop's ("Imaging"): frames file under the target folder
-            // and the catalog's target_name (the night of 2026-10-02 they all landed under "Imaging").
-            _ = await imagingMediator.CaptureImage(sequence, token, progress,
-                ItemUtility.ResolveTargetName(this) ?? Parent?.Name ?? string.Empty);
+            // A missing storage disk parks the run awaiting the user and Resume takes the frame again —
+            // never a failed frame per exposure (2026-10-16: the drive fell off, every frame failed at
+            // once and the run dithered between them for half an hour). No pause gate (validation,
+            // standalone execution) fails the instruction as before.
+            var gate = (ItemUtility.GetRootContainer(this.Parent) as IPauseGateHost)?.PauseGate;
+            while (true) {
+                try {
+                    // The capture pipeline persists the frame server-side; the in-memory exposure data is
+                    // deliberately discarded (see class doc).
+                    // The TARGET's name, not the imaging loop's ("Imaging"): frames file under the target folder
+                    // and the catalog's target_name (the night of 2026-10-02 they all landed under "Imaging").
+                    _ = await imagingMediator.CaptureImage(sequence, token, progress,
+                        ItemUtility.ResolveTargetName(this) ?? Parent?.Name ?? string.Empty);
+                    break;
+                } catch (StoreUnavailableException ex) when (gate is not null) {
+                    Logger.Warning($"Take exposure: {ex.Message} — pausing the run awaiting the user");
+                    progress?.Report(new ApplicationStatus() {
+                        Status = $"{ex.Message} Plug the drive back in, then press Resume"
+                    });
+                    gate.RequestPause(PauseKind.AwaitingUser);
+                    await gate.WaitWhilePausedAsync(token);
+                    Logger.Info("Take exposure: resumed — taking the frame again");
+                }
+            }
             // Atomic: a ParallelContainer can drive concurrent executions, and a lost update would
             // persist a wrong count through the [JsonProperty] backing field.
             Interlocked.Increment(ref exposureCount);

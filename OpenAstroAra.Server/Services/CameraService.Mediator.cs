@@ -98,6 +98,12 @@ public sealed partial class CameraService : ICameraMediator, IImagingMediator {
     /// </summary>
     public async Task<IExposureData> CaptureImage(CaptureSequence sequence, CancellationToken token, IProgress<ApplicationStatus>? progress, string targetName = "") {
         ArgumentNullException.ThrowIfNull(sequence);
+        // A store that fell off mid-run is a reason to stop and ask, not a failed frame: the typed
+        // refusal parks the run awaiting the user (TakeExposure) — 2026-10-16 every frame failed in an
+        // instant and still fired the dither, a loop the user saw as the guider settling for minutes.
+        if (StoreEjected(out var ejectedDir)) {
+            throw new StoreUnavailableException(StoreMissingMessage(ejectedDir));
+        }
         AlpacaCamera? client;
         lock (_gate) {
             client = !_disposed && _state == EquipmentConnectionState.Connected ? _client : null;

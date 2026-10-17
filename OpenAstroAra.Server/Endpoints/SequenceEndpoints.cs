@@ -95,12 +95,20 @@ public static class SequenceEndpoints {
         return result;
     }
 
+    /// <summary>Problem title (the wire token) of a run refused for want of a storage disk.</summary>
+    internal const string NoStoreProblemTitle = "store_unavailable";
+
     /// <summary>The body of <c>POST /sequences/{id}/start</c>: 409 while the Bahtinov readout runs (#1299 — never
-    /// image through the mask), else the run starts (202).</summary>
+    /// image through the mask), 409 when there is nowhere to save the frames (the store drive is not
+    /// mounted, or the disk is full under an abort/pause policy — 2026-10-16 a run started without its
+    /// drive and failed every frame), else the run starts (202).</summary>
     internal static async Task<IResult> StartSequenceAsync(Guid id, SequenceStartRequestDto request, string? key,
-            ISequencerService svc, IBahtinovFocusService bahtinov, CancellationToken ct) {
+            ISequencerService svc, IBahtinovFocusService bahtinov, ICameraService camera, CancellationToken ct) {
         if (BahtinovFocusEndpoints.MaskOnConflict(bahtinov, "starting a sequence") is { } refused) {
             return refused;
+        }
+        if (camera.StoreRefusal() is { } noStore) {
+            return Results.Problem(title: NoStoreProblemTitle, detail: noStore, statusCode: StatusCodes.Status409Conflict);
         }
         return Results.Accepted(value: await svc.StartAsync(id, request, key, ct));
     }
@@ -189,8 +197,8 @@ public static class SequenceEndpoints {
            .WithName("GetSequenceState");
 
         seq.MapPost("/{id:guid}/start",
-                (Guid id, [FromBody] SequenceStartRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, ISequencerService svc, IBahtinovFocusService bahtinov, CancellationToken ct) =>
-                    StartSequenceAsync(id, request, key, svc, bahtinov, ct))
+                (Guid id, [FromBody] SequenceStartRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, ISequencerService svc, IBahtinovFocusService bahtinov, ICameraService camera, CancellationToken ct) =>
+                    StartSequenceAsync(id, request, key, svc, bahtinov, camera, ct))
            .Accepts<SequenceStartRequestDto>("application/json")
            .Produces<OperationAcceptedDto>(StatusCodes.Status202Accepted)
            .ProducesProblem(StatusCodes.Status409Conflict)

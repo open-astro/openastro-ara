@@ -17,6 +17,7 @@ using OpenAstroAra.Core.Model;
 using OpenAstroAra.Sequencer.Container;
 using OpenAstroAra.Sequencer.Interfaces;
 using OpenAstroAra.Sequencer.SequenceItem;
+using OpenAstroAra.Sequencer.Utility;
 using System;
 using System.ComponentModel.Composition;
 using System.Threading;
@@ -90,7 +91,9 @@ namespace OpenAstroAra.Sequencer.Trigger.Guider {
             // Capture AfterExposures once: re-reading it for the modulo would risk a
             // DivideByZeroException if another thread set it to 0 between the guard and the modulo.
             var after = AfterExposures;
-            if (previousItem is not IExposureItem || after <= 0) {
+            // A frame that failed or was skipped was not taken: it neither counts nor dithers (2026-10-16
+            // a missing disk failed every frame at once and each one still dithered).
+            if (previousItem is not IExposureItem || !ItemUtility.ExposureTaken(previousItem) || after <= 0) {
                 return false;
             }
             var count = Interlocked.Increment(ref exposureCount);
