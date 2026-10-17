@@ -14,7 +14,11 @@ import 'package:openastroara/state/guider/guider_live_state.dart';
 import 'package:openastroara/state/guider/guider_state.dart';
 import 'package:openastroara/state/saved_server_state.dart';
 import 'package:openastroara/widgets/imaging/guide_calibration_panel.dart';
+import 'package:openastroara/models/guiding_assistant.dart';
+import 'package:openastroara/services/guiding_assistant_api.dart';
+import 'package:openastroara/state/guider/guiding_assistant_state.dart';
 import 'package:openastroara/widgets/imaging/guide_camera_panel.dart';
+import 'package:openastroara/widgets/imaging/guiding_assistant_dialog.dart';
 
 /// Serves one live view; records the actions.
 class _FakeLive implements GuiderLiveClient {
@@ -72,7 +76,29 @@ class _FakeGuider implements GuiderClient {
       throw UnimplementedError('${invocation.memberName}');
 }
 
-Future<void> _pumpPanel(WidgetTester t, _FakeLive fake, {_FakeGuider? guider}) async {
+class _FakeAssistant implements GuidingAssistantClient {
+  @override
+  Future<GuidingAssistantStatus> getStatus() async =>
+      const GuidingAssistantStatus(connected: true, state: 'idle');
+  @override
+  Future<GuidingAssistantStatus> start({
+    double? durationSec,
+    required bool measureBacklash,
+  }) async => throw UnimplementedError();
+  @override
+  Future<GuidingAssistantStatus> stop() async => throw UnimplementedError();
+  @override
+  Future<List<String>> apply(List<String> which) async =>
+      throw UnimplementedError();
+  @override
+  void close() {}
+}
+
+Future<void> _pumpPanel(
+  WidgetTester t,
+  _FakeLive fake, {
+  _FakeGuider? guider,
+}) async {
   await t.pumpWidget(
     ProviderScope(
       overrides: [
@@ -80,7 +106,12 @@ Future<void> _pumpPanel(WidgetTester t, _FakeLive fake, {_FakeGuider? guider}) a
           const AraServer(hostname: 'localhost', port: 5555),
         ),
         guiderLiveApiFactoryProvider.overrideWithValue((_) => fake),
-        guiderApiFactoryProvider.overrideWithValue((_) => guider ?? _FakeGuider()),
+        guiderApiFactoryProvider.overrideWithValue(
+          (_) => guider ?? _FakeGuider(),
+        ),
+        guidingAssistantApiFactoryProvider.overrideWithValue(
+          (_) => _FakeAssistant(),
+        ),
       ],
       child: const MaterialApp(
         home: Scaffold(
@@ -172,7 +203,9 @@ void main() {
     );
     expect(
       t
-          .widget<FilledButton>(find.widgetWithText(FilledButton, 'Stop guiding'))
+          .widget<FilledButton>(
+            find.widgetWithText(FilledButton, 'Stop guiding'),
+          )
           .onPressed,
       isNotNull,
     );
@@ -180,17 +213,24 @@ void main() {
 
   // 2026-10-17: the panel's "Stop" quietly ended a run's guiding, and
   // nothing in the client could start it again.
-  testWidgets('while guiding, Stop says Stop guiding and Guide is off', (t) async {
+  testWidgets('while guiding, Stop says Stop guiding and Guide is off', (
+    t,
+  ) async {
     final fake = _FakeLive(
       GuiderLive.fromJson({'connected': true, 'app_state': 'Guiding'}),
     );
     await _pumpPanel(t, fake);
-    expect(find.descendant(
-      of: find.byKey(const Key('guide-camera-stop')),
-      matching: find.text('Stop guiding'),
-    ), findsOneWidget);
     expect(
-      t.widget<FilledButton>(find.byKey(const Key('guide-camera-guide'))).onPressed,
+      find.descendant(
+        of: find.byKey(const Key('guide-camera-stop')),
+        matching: find.text('Stop guiding'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      t
+          .widget<FilledButton>(find.byKey(const Key('guide-camera-guide')))
+          .onPressed,
       isNull,
     );
   });
@@ -203,12 +243,17 @@ void main() {
     );
     final guider = _FakeGuider();
     await _pumpPanel(t, fake, guider: guider);
-    expect(find.descendant(
-      of: find.byKey(const Key('guide-camera-stop')),
-      matching: find.text('Stop guiding'),
-    ), findsOneWidget);
     expect(
-      t.widget<FilledButton>(find.byKey(const Key('guide-camera-guide'))).onPressed,
+      find.descendant(
+        of: find.byKey(const Key('guide-camera-stop')),
+        matching: find.text('Stop guiding'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      t
+          .widget<FilledButton>(find.byKey(const Key('guide-camera-guide')))
+          .onPressed,
       isNotNull,
     );
 
@@ -225,10 +270,13 @@ void main() {
     );
     final guider = _FakeGuider();
     await _pumpPanel(t, fake, guider: guider);
-    expect(find.descendant(
-      of: find.byKey(const Key('guide-camera-stop')),
-      matching: find.text('Stop'),
-    ), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('guide-camera-stop')),
+        matching: find.text('Stop'),
+      ),
+      findsOneWidget,
+    );
 
     await t.tap(find.byKey(const Key('guide-camera-guide')));
     await t.pump();
@@ -432,6 +480,22 @@ void main() {
       find.textContaining('calibration read failed'),
       findsNothing,
       reason: 'no error for the side column',
+    );
+  });
+
+  // #1364 item 4 — the header's assistant button opens the Guiding Assistant.
+  testWidgets('the assistant button opens the Guiding Assistant dialog', (
+    t,
+  ) async {
+    final fake = _FakeLive(GuiderLive.disconnected);
+    await _pumpPanel(t, fake);
+    await t.tap(find.byKey(const Key('guide-camera-assistant')));
+    await t.pump();
+    await t.pump();
+    expect(find.byType(GuidingAssistantPanel), findsOneWidget);
+    expect(
+      t.widget<Text>(find.byKey(const Key('guiding-assistant-headline'))).data,
+      startsWith('Ready.'),
     );
   });
 }

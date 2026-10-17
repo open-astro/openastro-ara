@@ -6,6 +6,7 @@ import 'package:openastroara/state/focus/autofocus_live_state.dart';
 import 'package:openastroara/state/focus/guide_focus_state.dart';
 import 'package:openastroara/state/guider/guider_state.dart';
 import 'package:openastroara/widgets/focus/guide_focus_card.dart';
+import 'package:openastroara/widgets/imaging/guiding_assistant_dialog.dart';
 
 class _StubAutofocus extends AutofocusLiveNotifier {
   @override
@@ -23,22 +24,29 @@ class _StubGuideFocus extends GuideFocusNotifier {
 
 class _Guider extends GuiderStatusNotifier {
   final GuiderRuntimeState runtime;
-  _Guider(this.runtime);
+  final GuiderConnectionState connection;
+  _Guider(this.runtime, {this.connection = GuiderConnectionState.connected});
   @override
   Future<GuiderStatus?> build() async => GuiderStatus(
     name: 'Guider',
-    connectionState: GuiderConnectionState.connected,
+    connectionState: connection,
     runtimeState: runtime,
   );
 }
 
-Future<void> _pump(WidgetTester t, GuiderRuntimeState runtime) async {
+Future<void> _pump(
+  WidgetTester t,
+  GuiderRuntimeState runtime, {
+  GuiderConnectionState connection = GuiderConnectionState.connected,
+}) async {
   await t.pumpWidget(
     ProviderScope(
       overrides: [
         autofocusLiveProvider.overrideWith(_StubAutofocus.new),
         guideFocusProvider.overrideWith(_StubGuideFocus.new),
-        guiderStatusProvider.overrideWith(() => _Guider(runtime)),
+        guiderStatusProvider.overrideWith(
+          () => _Guider(runtime, connection: connection),
+        ),
       ],
       child: const MaterialApp(
         home: Scaffold(
@@ -78,5 +86,26 @@ void main() {
     await _pump(t, GuiderRuntimeState.stopped);
     expect(_start(t).onPressed, isNotNull);
     expect(find.textContaining('Stop the guider first'), findsNothing);
+  });
+
+  // #1364 item 4 — the Guiding Assistant entry under Setup → Smart Focus →
+  // Guide camera: only with a connected guider, and it opens the dialog.
+  testWidgets('a connected guider offers the Guiding Assistant and it opens', (
+    t,
+  ) async {
+    await _pump(t, GuiderRuntimeState.stopped);
+    await t.tap(find.byKey(const Key('guide-focus-assistant')));
+    await t.pump();
+    await t.pump();
+    expect(find.byType(GuidingAssistantPanel), findsOneWidget);
+  });
+
+  testWidgets('no guider connected, no Guiding Assistant entry', (t) async {
+    await _pump(
+      t,
+      GuiderRuntimeState.stopped,
+      connection: GuiderConnectionState.disconnected,
+    );
+    expect(find.byKey(const Key('guide-focus-assistant')), findsNothing);
   });
 }
