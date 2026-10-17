@@ -405,7 +405,10 @@ class _RunGuiderLineState extends ConsumerState<RunGuiderLine> {
   void initState() {
     super.initState();
     _timer = Timer.periodic(RunGuiderLine.pollInterval, (_) {
-      if (mounted) unawaited(ref.read(guiderStatusProvider.notifier).refresh());
+      // Offstage (another tab in an IndexedStack) the line is not seen: no request.
+      if (mounted && TickerMode.valuesOf(context).enabled) {
+        unawaited(ref.read(guiderStatusProvider.notifier).refresh());
+      }
     });
   }
 

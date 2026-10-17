@@ -74,6 +74,18 @@ void main() {
     }
   });
 
+  testWidgets('an offstage line does not poll', (t) async {
+    final stub = _Stub(GuiderStatus.fromJson(<String, dynamic>{'state': 'connected', 'runtime': <String, dynamic>{'state': 'guiding'}}));
+    await t.pumpWidget(ProviderScope(
+      overrides: [guiderStatusProvider.overrideWith(() => stub)],
+      child: const MaterialApp(home: Scaffold(body: TickerMode(enabled: false, child: RunGuiderLine()))),
+    ));
+    await t.pump();
+    await t.pump(RunGuiderLine.pollInterval * 2);
+    expect(stub.refreshes, 0, reason: 'hidden behind another tab: no request');
+    await t.pumpWidget(const SizedBox());
+  });
+
   testWidgets('nothing shows without a connected guider', (t) async {
     await _pump(
       t,
