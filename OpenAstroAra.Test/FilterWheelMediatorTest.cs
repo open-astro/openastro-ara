@@ -102,8 +102,17 @@ namespace OpenAstroAra.Test {
             Assert.That(profile, Does.Contain(userEdited),
                 "an existing profile entry at a still-valid position keeps its settings");
             Assert.That(userEdited.AutoFocusExposureTime, Is.EqualTo(3.5));
-            Assert.That(userEdited.FocusOffset, Is.EqualTo(5));
+            Assert.That(userEdited.FocusOffset, Is.EqualTo(0), "the wheel's (Alpaca) focus offset is the truth");
             Assert.That(userEdited.Name, Is.EqualTo("L"), "the wheel's (Alpaca) name is the truth");
+        }
+
+        [Test]
+        public void SyncProfileFilters_takes_the_device_focus_offset_for_a_known_slot() {
+            var stale = new FilterInfo("R", 99, 1);
+            var profile = new List<FilterInfo> { stale };
+            FilterWheelService.SyncProfileFilters(profile, SampleSlots());
+
+            Assert.That(stale.FocusOffset, Is.EqualTo(10));
         }
 
         [Test]

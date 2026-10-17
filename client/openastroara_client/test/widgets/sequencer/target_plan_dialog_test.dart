@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/models/equipment_device_status.dart';
+import 'package:openastroara/models/filter_wheel_status.dart';
 import 'package:openastroara/models/sky_model_calibration.dart';
+import 'package:openastroara/state/equipment/filter_wheel_state.dart';
 import 'package:openastroara/state/planning/sky_model_calibration_state.dart';
 import 'package:openastroara/state/settings/camera_electronics_state.dart';
 import 'package:openastroara/state/settings/filter_set_state.dart';
@@ -35,6 +38,22 @@ class _SeededSkyModel extends SkyModelCalibrationNotifier {
   final SkyModelCalibration? _v;
   @override
   Future<SkyModelCalibration?> build() async => _v;
+}
+
+/// A connected wheel whose AlpacaBridge names differ from the planning set's.
+class _ConnectedWheel extends FilterWheelNotifier {
+  @override
+  Future<FilterWheelStatus?> build() async => FilterWheelStatus(
+        deviceId: 'ZWO_EFW_0',
+        name: 'ZWO EFW',
+        connectionState: EquipmentConnectionState.connected,
+        runtimeState: 'idle',
+        currentSlot: 0,
+        slots: [
+          for (final (i, n) in ['Luminance', 'Red', 'Ha', 'O3', 'S2'].indexed)
+            FilterSlot(position: i, name: n, focusOffset: 0),
+        ],
+      );
 }
 
 void main() {
@@ -71,6 +90,7 @@ void main() {
       required Future<void> Function(WidgetTester) interact,
       bool guider = true,
       List<Object> overrides = const [],
+      Future<void> Function(ProviderContainer)? prime,
     }) async {
       TargetPlanChoice? result;
       final container = ProviderContainer(overrides: overrides.cast());
@@ -78,6 +98,7 @@ void main() {
       for (final f in filters) {
         container.read(filterSetProvider.notifier).addFilter(f);
       }
+      if (prime != null) await prime(container);
       await tester.pumpWidget(UncontrolledProviderScope(
         container: container,
         child: MaterialApp(
@@ -145,11 +166,36 @@ void main() {
       });
       expect(choice, isNotNull);
       expect(choice!.guide, isTrue); // the rig has a guider → guide by default
-      expect(choice.filterPlan!.map((s) => s.filterName), ['Ha', 'OIII', 'SII']);
+      // No wheel connected: the steps carry the profile's slot labels (the
+      // daemon mirrors the wheel's names into them), whose default spells Hα.
+      expect(choice.filterPlan!.map((s) => s.filterName), ['Hα', 'OIII', 'SII']);
       for (final step in choice.filterPlan!) {
         expect(step.exposureSeconds, greaterThan(0));
         expect(step.frameCount, greaterThanOrEqualTo(12));
       }
+    });
+
+    testWidgets("the plan's Switch Filter steps carry the connected wheel's names",
+        (tester) async {
+      final choice = await open(
+        tester,
+        filters: const [
+          PlanningFilter(name: 'Hα', kind: FilterKind.ha),
+          PlanningFilter(name: 'OIII', kind: FilterKind.oiii),
+          PlanningFilter(name: 'SII', kind: FilterKind.sii),
+        ],
+        overrides: [filterWheelProvider.overrideWith(_ConnectedWheel.new)],
+        // In the app the wheel is long-lived and already loaded; here it must
+        // resolve before the dialog builds its options.
+        prime: (c) => c.read(filterWheelProvider.future),
+        interact: (t) async {
+          await t.tap(find.text('Narrowband · SHO'));
+          await t.pump();
+          await t.tap(find.text('Create run'));
+        },
+      );
+      expect(choice!.filterPlan!.map((s) => s.filterName), ['Ha', 'O3', 'S2'],
+          reason: "a 'Hα' step would be skipped: the run matches the wheel's names");
     });
 
     testWidgets('#1140 P2 a fitted sky-model k for Hα lengthens the Hα step\'s exposure only', (tester) async {
@@ -173,7 +219,11 @@ void main() {
           await t.tap(find.text('Create run'));
         });
         await tester.pumpWidget(const SizedBox());
-        return {for (final s in choice!.filterPlan!) s.filterName: s.exposureSeconds};
+        // Keyed by the plan's SET name; the step carries the label's spelling.
+        return {
+          for (final (i, s) in choice!.filterPlan!.indexed)
+            shoSet[i].name: s.exposureSeconds,
+        };
       }
       final halfHa = SkyModelCalibration(
         fittedUtc: DateTime.utc(2026, 10, 13), framesConsidered: 9,

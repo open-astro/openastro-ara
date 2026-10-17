@@ -702,12 +702,12 @@ class _FilterDropdownState extends ConsumerState<_FilterDropdown>
     );
   }
 
-  /// Maps a picked dropdown name to a physical wheel slot. The dropdown's
-  /// items are the profile's LOCAL labels, while the wheel reports the
-  /// DRIVER's names — two independently editable lists. Prefer an exact name
-  /// match on the driver's slots; otherwise resolve the label to its position
-  /// in the profile labels and take the wheel slot at that position. Returns
-  /// null when neither matches (no physical filter behind the picked name).
+  /// Maps a picked dropdown name to a physical wheel slot. The dropdown lists
+  /// the connected wheel's (driver's) names, so an exact name match on its
+  /// slots is the normal case; a name the driver left blank came from the
+  /// profile's labels, so it resolves to its position in those labels and the
+  /// wheel slot at that position. Returns null when neither matches (no
+  /// physical filter behind the picked name).
   FilterSlot? _resolveSlot(WidgetRef ref, FilterWheelStatus wheel, String name) {
     for (final s in wheel.slots) {
       if (s.name == name) return s;
