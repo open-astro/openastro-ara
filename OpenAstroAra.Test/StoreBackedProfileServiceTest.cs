@@ -14,6 +14,7 @@
 
 using NUnit.Framework;
 using OpenAstroAra.Core.Enums;
+using OpenAstroAra.Profile;
 using OpenAstroAra.Server;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Services;
@@ -110,6 +111,39 @@ namespace OpenAstroAra.Test {
             Assert.That(svc.ActiveProfile.GuiderSettings.DecMinimumMove, Is.EqualTo(0.0));
             Assert.That(guider.GuideExposureMs, Is.EqualTo(500));
             Assert.That(guider.DecGuideMode, Is.EqualTo("north"));
+        }
+
+        [Test]
+        public void Phd2_section_maps_the_guide_train_and_keeps_the_rotator_only_on_an_oag() {
+            // §63.19 — the push reads IGuiderSettings, so the store → profile hop must carry the setup type
+            // and apply the rotator rule: PHD2 turns its calibration by the rotator it is given, which is
+            // only right when the guide camera turns with it (OAG). Without this mapping an OAG's rotator
+            // would never reach the guider (setup type stuck at the guide-scope default → "None" pushed),
+            // and a guide-scope profile written before the rule would keep steering by the imaging CAA.
+            var store = new InMemoryProfileStore();
+            using var svc = new StoreBackedProfileService(store);
+            const string Rotator = "Alpaca Rotator [localhost:6800/0]";
+            var dto = new Phd2SettingsDto(
+                Host: "localhost", Port: 4400, Phd2Profile: "main",
+                DitherEnabled: true, DitherEveryNFrames: 1, DitherPixels: 5.0,
+                SettlePixels: 1.5, SettleTimeSec: 10, SettleTimeoutSec: 60,
+                ForceCalibrationEachSession: false,
+                GuiderCamera: "Alpaca Camera [localhost:6800/1]", GuiderRotator: Rotator);
+
+            store.PutPhd2Settings(dto with { GuiderSetupType = "oag" });
+            var guider = svc.ActiveProfile.GuiderSettings;
+            Assert.That(guider.GuiderSetupType, Is.EqualTo(GuiderSettings.OagSetupType));
+            Assert.That(guider.GuiderRotator, Is.EqualTo(Rotator), "an off-axis guider keeps its rotator");
+
+            store.PutPhd2Settings(dto with { GuiderSetupType = "guide_scope" });
+            guider = svc.ActiveProfile.GuiderSettings;
+            Assert.That(guider.GuiderSetupType, Is.EqualTo(GuiderSettings.GuideScopeSetupType));
+            Assert.That(guider.GuiderRotator, Is.EqualTo(string.Empty), "a separate guide scope never carries a rotator");
+
+            // A junk token (hand-edited profile.json) reads as a guide scope, rotator included.
+            store.PutPhd2Settings(dto with { GuiderSetupType = "banana" });
+            Assert.That(svc.ActiveProfile.GuiderSettings.GuiderSetupType, Is.EqualTo(GuiderSettings.GuideScopeSetupType));
+            Assert.That(svc.ActiveProfile.GuiderSettings.GuiderRotator, Is.EqualTo(string.Empty));
         }
 
         [Test]
