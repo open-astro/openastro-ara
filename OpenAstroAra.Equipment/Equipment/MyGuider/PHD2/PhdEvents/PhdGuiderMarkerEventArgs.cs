@@ -53,5 +53,9 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2.PhdEvents {
         /// <summary>The calibration leg (<c>West</c>, <c>East</c>, <c>North</c>, <c>South</c>…) of a
         /// <c>calibrating</c> marker; <see cref="Frame"/> carries its step, <see cref="Distance"/> its px.</summary>
         public string? Direction { get; init; }
+
+        /// <summary>#1364 item 4 — the Guiding Assistant's state on <c>guiding_assistant_progress</c> /
+        /// <c>guiding_assistant_done</c>: <c>measuring</c>, <c>measuring_backlash</c>, <c>done</c>, <c>failed</c>.</summary>
+        public string? State { get; init; }
     }
 }

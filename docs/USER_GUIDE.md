@@ -185,6 +185,16 @@ framing/focus loop when you need to point or focus by eye.
   guiding continues (multi-star takes effect the next time the guider connects). Setting a row back
   to the guider's (or **All guider's**) only stops Ara sending it: the guider keeps whatever value it has,
   including one Ara sent before.
+- **Guiding Assistant.** The Guide camera dialog's assistant button (also under Setup → Smart Focus →
+  Guide camera) runs PHD2's Guiding Assistant from Ara. Loop, pick a star and calibrate once (start
+  guiding, or let a run do it), then choose how long to sample (two minutes is plenty) and whether to
+  measure Dec backlash, and press **Start**. Guiding is held off while the star drifts; the dialog shows
+  the RA and Dec drift, the RMS, the high-frequency RMS (your seeing), the polar-alignment error it
+  implies and, after the backlash test, how much Dec backlash the mount has. When it is done, the
+  suggested guide exposure, RA and Dec minimum move and Dec backlash compensation are listed, ticked,
+  with PHD2's own notes; untick anything you want to keep and press **Accept ticked** to write the rest to
+  the guider's profile. Run it on a calm night after polar alignment, and again after you change the
+  guide camera, scope or mount.
 - **Starting guiding ends Polar Align.** Polar Align holds the guide camera while it runs. If guiding
   is started while it is still open (a run's Start Guiding after the Polar Align step was left
   without **Done**, a re-guide after a meridian flip, or Guide pressed by hand in the guider panel), Ara stops the

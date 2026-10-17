@@ -1479,6 +1479,118 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/GuiderAdvancedViewDto'
+  /api/v1/equipment/guider/live/assistant:
+    get:
+      tags:
+        - Equipment
+      summary: 'The Guiding Assistant''s state, drift / seeing / backlash figures and recommendations.'
+      operationId: GetGuidingAssistant
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GuidingAssistantStatusDto'
+  /api/v1/equipment/guider/live/assistant/start:
+    post:
+      tags:
+        - Equipment
+      summary: 'Measure unguided drift, seeing and (optionally) Dec backlash for duration_sec (10–3600, default 120).'
+      operationId: StartGuidingAssistant
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GuidingAssistantStartRequestDto'
+        required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GuidingAssistantStatusDto'
+        '400':
+          description: Bad Request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '409':
+          description: Conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '422':
+          description: Unprocessable Entity
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  /api/v1/equipment/guider/live/assistant/stop:
+    post:
+      tags:
+        - Equipment
+      summary: End the measurement early; the figures so far stay readable.
+      operationId: StopGuidingAssistant
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GuidingAssistantStatusDto'
+        '409':
+          description: Conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '422':
+          description: Unprocessable Entity
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  /api/v1/equipment/guider/live/assistant/apply:
+    post:
+      tags:
+        - Equipment
+      summary: 'Write the chosen recommendations (exposure, min_move_ra, min_move_dec, dec_backlash, dec_guide_mode, dec_algorithm) to the guider''s profile.'
+      operationId: ApplyGuidingAssistant
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GuidingAssistantApplyRequestDto'
+        required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GuidingAssistantApplyResultDto'
+        '400':
+          description: Bad Request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '409':
+          description: Conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '422':
+          description: Unprocessable Entity
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/equipment/guider/live/deselect:
     post:
       tags:
@@ -10172,6 +10284,313 @@ components:
             - number
             - string
           format: double
+    GuidingAssistantApplyRequestDto:
+      required:
+        - which
+      type: object
+      properties:
+        which:
+          type: array
+          items:
+            type: string
+    GuidingAssistantApplyResultDto:
+      required:
+        - applied
+      type: object
+      properties:
+        applied:
+          type: array
+          items:
+            type: string
+    GuidingAssistantMessageDto:
+      required:
+        - id
+        - text
+      type: object
+      properties:
+        id:
+          type: string
+        text:
+          type: string
+    GuidingAssistantRecommendationsDto:
+      required:
+        - min_move_ra_px
+        - min_move_dec_px
+        - min_move_seeing_based
+        - exposure_sec
+        - exposure_max_sec
+        - drift_limiting_exposure_sec
+        - dec_backlash_ms
+        - dec_guide_mode
+        - dec_algorithm
+        - messages
+      type: object
+      properties:
+        min_move_ra_px:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        min_move_dec_px:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        min_move_seeing_based:
+          type:
+            - 'null'
+            - boolean
+        exposure_sec:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        exposure_max_sec:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        drift_limiting_exposure_sec:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        dec_backlash_ms:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        dec_guide_mode:
+          type:
+            - 'null'
+            - string
+        dec_algorithm:
+          type:
+            - 'null'
+            - string
+        messages:
+          type: array
+          items:
+            $ref: '#/components/schemas/GuidingAssistantMessageDto'
+    GuidingAssistantStartRequestDto:
+      required:
+        - duration_sec
+        - measure_backlash
+      type: object
+      properties:
+        duration_sec:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        measure_backlash:
+          type: boolean
+    GuidingAssistantStatusDto:
+      required:
+        - connected
+        - state
+        - duration_sec
+        - measure_backlash
+        - elapsed_sec
+        - samples
+        - pixel_scale
+        - ra_drift_px_min
+        - dec_drift_px_min
+        - ra_rms_px
+        - dec_rms_px
+        - high_freq_rms_px
+        - ra_peak_px
+        - dec_peak_px
+        - ra_peak_peak_px
+        - ra_max_drift_px_sec
+        - snr
+        - star_mass
+        - polar_align_error_arcmin
+        - polar_align_error_is_lower_bound
+        - backlash_status
+        - backlash_result
+        - backlash_ms
+        - backlash_sigma_ms
+        - backlash_px
+        - recommendations
+        - error
+      type: object
+      properties:
+        connected:
+          type: boolean
+        state:
+          type: string
+        duration_sec:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        measure_backlash:
+          type:
+            - 'null'
+            - boolean
+        elapsed_sec:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        samples:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - 'null'
+            - integer
+            - string
+          format: int32
+        pixel_scale:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        ra_drift_px_min:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        dec_drift_px_min:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        ra_rms_px:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        dec_rms_px:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        high_freq_rms_px:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        ra_peak_px:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        dec_peak_px:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        ra_peak_peak_px:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        ra_max_drift_px_sec:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        snr:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        star_mass:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        polar_align_error_arcmin:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        polar_align_error_is_lower_bound:
+          type:
+            - 'null'
+            - boolean
+        backlash_status:
+          type:
+            - 'null'
+            - string
+        backlash_result:
+          type:
+            - 'null'
+            - string
+        backlash_ms:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        backlash_sigma_ms:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        backlash_px:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        recommendations:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/GuidingAssistantRecommendationsDto'
+        error:
+          type:
+            - 'null'
+            - string
     GuidingRmsPointDto:
       required:
         - timestamp

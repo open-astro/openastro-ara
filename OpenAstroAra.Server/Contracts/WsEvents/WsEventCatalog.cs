@@ -101,7 +101,9 @@ public static class WsEventCatalog {
     // star_lost {frame?, star_mass?, snr?, distance_px?, status?, error?} | calibration_started |
     // calibrating {direction, frame = step, distance_px, dx_px, dy_px} (one per calibration step) |
     // calibration_complete | calibration_failed {error?} | guiding_started | guiding_stopped |
-    // paused | resumed | lock_position_lost. Detail fields are omitted when PHD2 sent none.
+    // paused | resumed | lock_position_lost | guiding_assistant_progress {state} |
+    // guiding_assistant_done {state, error?} (#1364 item 4 — re-read GET /equipment/guider/live/assistant
+    // for the figures). Detail fields are omitted when PHD2 sent none.
     public const string GuiderEvent = "guider.event";
     // #1311 — the polar alignment residual measured from the first minutes of each guided run:
     // payload = PaResidualDto (status measuring → done | unavailable; a dropped measurement

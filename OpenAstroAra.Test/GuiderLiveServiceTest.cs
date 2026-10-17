@@ -170,5 +170,61 @@ namespace OpenAstroAra.Test {
 
         private static int? StatusOf(Microsoft.AspNetCore.Http.IResult result) =>
             (result as Microsoft.AspNetCore.Http.IStatusCodeHttpResult)?.StatusCode;
+
+        // ── #1364 item 4 — the Guiding Assistant's status mapping ──
+
+        [Test]
+        public void Guiding_assistant_idle_and_missing_fields_map_to_nulls() {
+            var idle = GuiderLiveService.MapGuidingAssistant(Newtonsoft.Json.Linq.JObject.Parse("{\"state\":\"idle\"}"), connected: true);
+            Assert.That(idle.Connected, Is.True);
+            Assert.That(idle.State, Is.EqualTo("idle"));
+            Assert.That(idle.ElapsedSec, Is.Null);
+            Assert.That(idle.RaDriftPxMin, Is.Null, "no statistics before two samples: null, never 0");
+            Assert.That(idle.Recommendations, Is.Null);
+
+            var none = GuiderLiveService.AssistantDisconnected;
+            Assert.That(none.Connected, Is.False);
+            Assert.That(none.State, Is.EqualTo("idle"));
+        }
+
+        [Test]
+        public void Guiding_assistant_done_maps_every_figure_and_the_recommendations() {
+            var raw = Newtonsoft.Json.Linq.JObject.Parse(@"{
+                ""state"": ""done"", ""duration_s"": 120, ""measure_backlash"": true, ""elapsed_s"": 121.3, ""samples"": 60,
+                ""pixel_scale"": 3.93, ""ra_drift_px_min"": 0.42, ""dec_drift_px_min"": -1.1, ""ra_rms_px"": 0.31,
+                ""dec_rms_px"": 0.22, ""high_freq_rms_px"": 0.18, ""ra_peak_px"": 0.9, ""dec_peak_px"": 0.7,
+                ""ra_peak_peak_px"": 1.6, ""ra_max_drift_px_s"": 0.02, ""snr"": 41.5, ""star_mass"": 12000,
+                ""polar_align_error_arcmin"": 4.2, ""polar_align_error_is_lower_bound"": false,
+                ""backlash_status"": ""done"", ""backlash_result"": ""Backlash is 350 ms"", ""backlash_ms"": 350, ""backlash_sigma_ms"": 40, ""backlash_px"": 2.1,
+                ""recommendations"": { ""min_move_ra_px"": 0.15, ""min_move_dec_px"": 0.2, ""min_move_seeing_based"": true,
+                    ""exposure_s"": 2, ""exposure_max_s"": 4, ""dec_backlash_ms"": 350, ""dec_guide_mode"": ""North"",
+                    ""messages"": [ { ""id"": ""dec_backlash"", ""text"": ""Dec backlash is large"" }, { ""id"": ""no_text"" } ] }
+            }");
+            var dto = GuiderLiveService.MapGuidingAssistant(raw, connected: true);
+            Assert.That(dto.State, Is.EqualTo("done"));
+            Assert.That((dto.DurationSec, dto.MeasureBacklash, dto.ElapsedSec, dto.Samples), Is.EqualTo((120.0, true, 121.3, 60)));
+            Assert.That((dto.RaDriftPxMin, dto.DecDriftPxMin, dto.HighFreqRmsPx), Is.EqualTo((0.42, -1.1, 0.18)));
+            Assert.That((dto.PolarAlignErrorArcmin, dto.PolarAlignErrorIsLowerBound), Is.EqualTo((4.2, false)));
+            Assert.That((dto.BacklashMs, dto.BacklashSigmaMs, dto.BacklashPx), Is.EqualTo((350.0, 40.0, 2.1)));
+            Assert.That(dto.BacklashResult, Is.EqualTo("Backlash is 350 ms"));
+            var r = dto.Recommendations!;
+            Assert.That((r.MinMoveRaPx, r.MinMoveDecPx, r.MinMoveSeeingBased), Is.EqualTo((0.15, 0.2, true)));
+            Assert.That((r.ExposureSec, r.ExposureMaxSec, r.DriftLimitingExposureSec), Is.EqualTo((2.0, 4.0, (double?)null)));
+            Assert.That((r.DecBacklashMs, r.DecGuideMode, r.DecAlgorithm), Is.EqualTo((350.0, "North", (string?)null)));
+            Assert.That(r.Messages.Select(m => (m.Id, m.Text)), Is.EqualTo(new[] { ("dec_backlash", "Dec backlash is large") }), "a message without text is dropped");
+            Assert.That(dto.Error, Is.Null);
+        }
+
+        [Test]
+        public async Task Guiding_assistant_without_a_guider_refuses_start_stop_apply_and_reads_disconnected() {
+            using var svc = NewGuiderService();
+            var live = new GuiderLiveService(svc, new NoFrames());
+            Assert.That((await live.GetGuidingAssistantAsync(CancellationToken.None).ConfigureAwait(false)).Connected, Is.False);
+            await Assert.ThatAsync(() => live.StartGuidingAssistantAsync(null, false, CancellationToken.None), Throws.InvalidOperationException);
+            await Assert.ThatAsync(() => live.StopGuidingAssistantAsync(CancellationToken.None), Throws.InvalidOperationException);
+            await Assert.ThatAsync(() => live.ApplyGuidingAssistantAsync(JustExposure, CancellationToken.None), Throws.InvalidOperationException);
+        }
+
+        private static readonly string[] JustExposure = ["exposure"];
     }
 }
