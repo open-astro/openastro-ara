@@ -155,7 +155,7 @@ public sealed partial class GuiderService {
             await NotifyQuietlyAsync(NotificationSeverity.Info, "Guide star back — sequence resumed",
                 resumed > 0
                     ? "The guider is guiding again, so the run paused by the lost star continues on its own."
-                    : "The guider is guiding again. The run it paused was not resumed automatically (it may have been stopped, or it is waiting on you) — press Resume if you want it to continue.")
+                    : "The guider is guiding again. The run it had paused was not released by this (it had already been resumed, is stopped, or waits on you).")
                 .ConfigureAwait(false);
         } catch (Exception ex) {
             LogStarRecoveryFailed(ex);

@@ -252,6 +252,9 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         // the engine ACTUALLY suspends, never on the mere request. Idempotent, and
         // harmless for terminal/aborting runs (a cancelled token wins the gate).
         if (_runs.TryGetValue(id, out var run) && IsAbortableRun(run.State)) {
+            // The user owns this pause: no daemon resume (safety, star-lost watch) may release it.
+            run.DaemonPaused = false;
+            run.AdoptablePause = false;
             run.Gate.RequestPause();
         }
         return Task.FromResult(PlaceholderEquipmentHelpers.Accepted("sequencer.pause", idempotencyKey));
@@ -277,6 +280,9 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
     public Task<OperationAcceptedDto> ResumeAsync(Guid id, SequenceResumeRequestDto? request, string? idempotencyKey, CancellationToken ct) {
         _unattendedShutdown?.NotifyUserActivity("sequencer.resume");
         if (_runs.TryGetValue(id, out var run)) {
+            // The user settles whatever pause stood: daemon custody (and adoptability) ends here.
+            run.DaemonPaused = false;
+            run.AdoptablePause = false;
             // CAS BEFORE releasing the gate: while the engine is suspended it
             // cannot advance, so a successful Paused→Running here always gets its
             // sequence.resumed out — the resumed run can't race to Completed/
@@ -415,12 +421,13 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
             // watch): that owner's release depends on guide steps a parked, stopped guider will
             // never send, so a later daemon pause takes it over, and both may release it.
             if (state == SequenceRunState.Paused) {
-                if (run.AdoptablePause) {
+                if (run.DaemonPaused && run.AdoptablePause) {
                     paused.Add(id);
                 }
                 continue;
             }
             run.Gate.RequestPause();
+            run.DaemonPaused = true;
             run.AdoptablePause = adoptable;
             paused.Add(id);
         }
@@ -441,8 +448,14 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
             if (run.State == SequenceRunState.PausedAwaitingUser) {
                 continue;
             }
+            if (!run.DaemonPaused) {
+                // The user paused this run (or already settled the daemon's pause): a daemon resume
+                // never releases a pause it does not own.
+                continue;
+            }
             var released = false;
-            run.AdoptablePause = false; // custody ends with the release, whoever releases
+            run.DaemonPaused = false; // custody ends with the release, whoever releases
+            run.AdoptablePause = false;
             if (run.TryTransition(SequenceRunState.Paused, SequenceRunState.Running)) {
                 _ = EmitAsync("sequence.resumed", id, run);
                 WriteCheckpointIfOwner(run, id);
@@ -1170,8 +1183,11 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
 
         public Guid RunId { get; } = Guid.NewGuid();
 
-        /// <summary>§42.2 — this run's current daemon pause may be adopted by a later daemon pause
-        /// (set by PauseActiveRunsAsync(adoptable: true), cleared on any daemon resume).</summary>
+        /// <summary>§35/§42.2 custody of the current pause. DaemonPaused: a daemon reaction armed it
+        /// (PauseActiveRunsAsync), so a daemon resume may release it; the user's Pause and Resume clear
+        /// it, and a daemon resume never releases a pause the user owns. AdoptablePause: that daemon pause
+        /// may also be reported by a later daemon pause (the star-lost watch's). Both clear on release.</summary>
+        public volatile bool DaemonPaused;
         public volatile bool AdoptablePause;
 
         public SequenceRunState State {
