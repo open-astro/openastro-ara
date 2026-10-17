@@ -372,9 +372,10 @@ public sealed partial class FilterWheelService : IFilterWheelMediator {
     }
 
     // NINA import-on-connect semantics: the device is the truth for slot COUNT and for every slot's
-    // NAME; entries the profile already has at a still-valid position keep everything else (they may
-    // carry user-edited autofocus exposure/binning/offsets). A slot the device leaves unnamed keeps
-    // the profile's name. Extracted (internal, static) for direct sim-free unit testing.
+    // NAME and FOCUS OFFSET (AlpacaBridge carries the user's offsets as it carries their names);
+    // entries the profile already has at a still-valid position keep everything else (they may
+    // carry user-edited autofocus exposure/binning). A slot the device leaves unnamed keeps the
+    // profile's name. Extracted (internal, static) for direct sim-free unit testing.
     internal static void SyncProfileFilters(IList<FilterInfo> profileFilters, List<FilterSlotDto> slots) {
         for (var i = profileFilters.Count - 1; i >= 0; i--) {
             if (profileFilters[i].Position >= slots.Count || profileFilters[i].Position < 0) {
@@ -388,6 +389,9 @@ public sealed partial class FilterWheelService : IFilterWheelMediator {
                     known = true;
                     if (!string.IsNullOrWhiteSpace(slot.Name) && filter.Name != slot.Name) {
                         filter.Name = slot.Name;
+                    }
+                    if (filter.FocusOffset != slot.FocusOffset) {
+                        filter.FocusOffset = slot.FocusOffset;
                     }
                     break;
                 }

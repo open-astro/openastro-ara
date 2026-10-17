@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/equipment_device_status.dart';
+import '../settings/filter_set_state.dart';
 import '../settings/filter_wheel_labels_state.dart';
 import 'filter_wheel_state.dart';
 
@@ -38,3 +39,22 @@ final filterChoicesProvider = Provider<List<FilterChoice>>((ref) {
         (name: labels.labelAt(slot), position: slot - 1),
   ];
 });
+
+/// The wheel name a run must write for planning filter [filter]: the choice
+/// with the same name (case-insensitive), else the one choice of the filter's
+/// kind (set 'Hα' → wheel 'Ha', set 'R' → wheel 'Red'), else the set's own
+/// name (no wheel to disagree, or an ambiguous / unknown kind — the daemon's
+/// Switch Filter does the same kind match again at run time). A Switch Filter
+/// matches the wheel's names, so a plan that wrote the set's spelling instead
+/// would be skipped with "No Filter was selected".
+String wheelNameFor(List<FilterChoice> choices, PlanningFilter filter) {
+  final key = filter.name.trim().toLowerCase();
+  for (final c in choices) {
+    if (c.name.trim().toLowerCase() == key) return c.name;
+  }
+  final sameKind = [
+    for (final c in choices)
+      if (FilterSetNotifier.recognizedKind(c.name) == filter.kind) c.name,
+  ];
+  return sameKind.length == 1 ? sameKind.single : filter.name;
+}

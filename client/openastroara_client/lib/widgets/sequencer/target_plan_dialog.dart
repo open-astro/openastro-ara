@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/sequence/imaging_run_body.dart';
 import '../../state/settings/camera_electronics_state.dart';
+import '../../state/equipment/filter_choices_state.dart';
 import '../../state/settings/filter_set_state.dart';
 import '../../state/settings/filter_wheel_labels_state.dart';
 import '../../state/settings/imaging_defaults_state.dart';
@@ -197,12 +198,15 @@ class _TargetPlanDialogState extends ConsumerState<_TargetPlanDialog> {
     final hoursEach = widget.remainingDarkHours != null
         ? widget.remainingDarkHours! / picked.length
         : null;
+    // The run's Switch Filter steps carry the WHEEL's name for each planning
+    // filter; the exposure advice keys on the set's name.
+    final choices = ref.read(filterChoicesProvider);
     return [
       for (final f in picked)
         () {
           final exp = _suggestedExposure(f.name, defaultExposure);
           return FilterPlanStep(
-            filterName: f.name,
+            filterName: wheelNameFor(choices, f),
             exposureSeconds: exp,
             frameCount: defaultFrameCount(
               exp,

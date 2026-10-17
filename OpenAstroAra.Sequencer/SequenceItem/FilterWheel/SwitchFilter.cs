@@ -62,14 +62,24 @@ namespace OpenAstroAra.Sequencer.SequenceItem.FilterWheel {
             Justification = "Profile-changed event boundary: re-resolving the selected filter against the freshly-loaded profile may transiently fault while the profile is being swapped. The failure is logged and ignored so a profile change cannot crash; the filter is simply left unresolved. CA1031 sanctions general catches at such event-driven defensive boundaries.")]
         private void MatchFilter() {
             try {
-                var idx = this.Filter?.Position ?? -1;
-                this.Filter = this.profileService.ActiveProfile.FilterWheelSettings.FilterWheelFilters?.FirstOrDefault(x => x.Name == this.Filter?.Name);
-                if (this.Filter == null && idx >= 0) {
-                    this.Filter = this.profileService.ActiveProfile.FilterWheelSettings.FilterWheelFilters?.FirstOrDefault(x => x.Position == idx);
-                }
+                this.Filter = Resolve(this.Filter, this.profileService.ActiveProfile.FilterWheelSettings.FilterWheelFilters);
             } catch (Exception ex) {
                 Logger.Error(ex);
             }
+        }
+
+        /// <summary>The profile filter a saved <paramref name="requested"/> filter means: the same name,
+        /// else the same wheel position, else — the profile's names are the connected wheel's Alpaca
+        /// names, while a target plan saves the planning set's name with no position — the one profile
+        /// filter of the same recognised kind ('Hα' → 'Ha', 'R' → 'Red'). Null when nothing matches, so
+        /// the step is skipped rather than switching to a guess. Pure; internal for unit tests.</summary>
+        internal static FilterInfo? Resolve(FilterInfo? requested, IList<FilterInfo>? profileFilters) {
+            if (requested == null || profileFilters == null) {
+                return null;
+            }
+            return profileFilters.FirstOrDefault(x => x.Name == requested.Name)
+                ?? (requested.Position >= 0 ? profileFilters.FirstOrDefault(x => x.Position == requested.Position) : null)
+                ?? FilterNameKind.SingleOfSameKind(requested.Name, profileFilters, x => x.Name);
         }
 
         private void ProfileService_ProfileChanged(object? sender, EventArgs e) {

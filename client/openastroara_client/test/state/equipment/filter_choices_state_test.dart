@@ -4,6 +4,7 @@ import 'package:openastroara/models/equipment_device_status.dart';
 import 'package:openastroara/models/filter_wheel_status.dart';
 import 'package:openastroara/state/equipment/filter_choices_state.dart';
 import 'package:openastroara/state/equipment/filter_wheel_state.dart';
+import 'package:openastroara/state/settings/filter_set_state.dart';
 import 'package:openastroara/state/settings/filter_wheel_labels_state.dart';
 
 class _Wheel extends FilterWheelNotifier {
@@ -98,5 +99,34 @@ void main() {
     expect((await _choices()).map((c) => c.name), ['L', 'R', 'G', 'B', 'Hα']);
     _Wheel.status = null;
     expect((await _choices()).map((c) => c.name), ['L', 'R', 'G', 'B', 'Hα']);
+  });
+
+  group('wheelNameFor', () {
+    const wheel = <FilterChoice>[
+      (name: 'Luminance', position: 0),
+      (name: 'Red', position: 1),
+      (name: 'Ha', position: 4),
+      (name: 'OIII', position: 5),
+    ];
+
+    test('the same name (any case) wins, then the one slot of the kind', () {
+      expect(wheelNameFor(wheel, const PlanningFilter(name: 'ha', kind: FilterKind.ha)), 'Ha');
+      expect(wheelNameFor(wheel, const PlanningFilter(name: 'Hα', kind: FilterKind.ha)), 'Ha');
+      expect(wheelNameFor(wheel, const PlanningFilter(name: 'R', kind: FilterKind.r)), 'Red');
+      expect(wheelNameFor(wheel, const PlanningFilter(name: 'L', kind: FilterKind.l)), 'Luminance');
+    });
+
+    test("keeps the set's name when no wheel slot or two slots match the kind",
+        () {
+      expect(wheelNameFor(wheel, const PlanningFilter(name: 'SII', kind: FilterKind.sii)), 'SII');
+      expect(wheelNameFor(const [], const PlanningFilter(name: 'Hα', kind: FilterKind.ha)), 'Hα');
+      expect(
+        wheelNameFor(
+          [...wheel, (name: 'Ha 3nm', position: 6)],
+          const PlanningFilter(name: 'Hα', kind: FilterKind.ha),
+        ),
+        'Hα',
+      );
+    });
   });
 }
