@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/guider_status.dart';
 import 'package:openastroara/services/guider_api.dart';
 import 'package:openastroara/state/guider/guider_state.dart';
+import 'package:openastroara/theme/ara_colors.dart';
 import 'package:openastroara/widgets/sequencer/run_dashboard_band.dart';
 
 class _Stub extends GuiderStatusNotifier {
@@ -50,6 +51,27 @@ void main() {
     await t.pump(RunGuiderLine.pollInterval);
     expect(stub.refreshes, greaterThanOrEqualTo(1));
     await t.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('the line is coloured by phase: green guiding, red lost, amber busy, grey idle', (t) async {
+    final expected = {
+      GuiderRuntimeState.guiding: AraColors.accentConnected,
+      GuiderRuntimeState.starLost: AraColors.accentError,
+      GuiderRuntimeState.settling: AraColors.accentBusy,
+      GuiderRuntimeState.calibrating: AraColors.accentBusy,
+      GuiderRuntimeState.looping: AraColors.accentBusy,
+      GuiderRuntimeState.stopped: AraColors.textSecondary,
+      GuiderRuntimeState.paused: AraColors.textSecondary,
+    };
+    for (final e in expected.entries) {
+      await _pump(
+        t,
+        GuiderStatus(name: 'G', connectionState: GuiderConnectionState.connected, runtimeState: e.key),
+      );
+      final text = t.widget<Text>(find.byKey(const Key('run-guider-line')));
+      expect(text.style?.color, e.value, reason: '${e.key}');
+      await t.pumpWidget(const SizedBox());
+    }
   });
 
   testWidgets('nothing shows without a connected guider', (t) async {
