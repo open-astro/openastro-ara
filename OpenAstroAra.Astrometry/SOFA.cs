@@ -27,6 +27,10 @@ namespace OpenAstroAra.Astrometry {
     public static class SOFA {
         private const string DLLNAME = "erfa";
 
+        static SOFA() {
+            AstrometryNativeResolver.Register(); // load liberfa from the assembly directory (Linux)
+        }
+
         #region "Public Methods"
 
         /// <summary>

@@ -43,6 +43,7 @@ namespace OpenAstroAra.Astrometry {
         public static readonly string EphemerisLocation = Path.Combine(System.AppDomain.CurrentDomain.BaseDirectory, "External", "JPLEPH");
 
         static NOVAS() {
+            AstrometryNativeResolver.Register(); // load libsupernovas from the assembly directory (Linux)
             short a = 0;
             if (File.Exists(EphemerisLocation)) {
                 var code = EphemOpen(EphemerisLocation, ref JPL_EPHEM_START_DATE, ref JPL_EPHEM_END_DATE, ref a);
