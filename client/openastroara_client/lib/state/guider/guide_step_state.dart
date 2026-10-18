@@ -246,6 +246,10 @@ class GuideStepNotifier extends Notifier<List<GuideStep>> {
     ref.listen(activeServerProvider, (prev, next) {
       if (prev == next) return;
       clear();
+      // An old server's seed still in flight must not satisfy the single-flight
+      // guard: its result is dropped by clear(), so the new server needs its
+      // own fetch.
+      _seeding = null;
       Future<void>.microtask(seedFromHistory);
     });
     Future<void>.microtask(seedFromHistory);

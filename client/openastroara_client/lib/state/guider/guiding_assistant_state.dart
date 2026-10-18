@@ -100,6 +100,11 @@ class GuidingAssistantNotifier extends Notifier<GuidingAssistantState> {
     try {
       final status = await api.getStatus();
       if (!ref.mounted || gen != _generation) return;
+      // A run seen in progress is a new run, whoever started it (another
+      // client, the guider's page): what Accept wrote belongs to the last one.
+      if (status.isRunning) {
+        ref.read(guidingAssistantAppliedProvider.notifier).clear();
+      }
       state = state.copyWith(status: status, loaded: true, clearError: true);
     } catch (e) {
       if (!ref.mounted || gen != _generation) return;
