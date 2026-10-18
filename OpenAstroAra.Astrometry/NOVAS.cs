@@ -452,8 +452,9 @@ namespace OpenAstroAra.Astrometry {
 
         #region "NOVAS helper enums"
 
-        // These enums mirror the NOVAS C ABI: Body/GstType are deliberately backed by short to
-        // match the native parameter width. They are internal, so the externally-visible-only
+        // These enums mirror the SuperNOVAS C ABI: Body is deliberately backed by short because
+        // solarsystem_hp takes short body/origin; every other enum is an int-sized C enum. They
+        // are internal, so the externally-visible-only
         // design rules (CA1028 Int32 storage, CA1008 zero value, CA1724 name vs namespace) do
         // not apply.
 
