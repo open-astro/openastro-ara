@@ -403,6 +403,13 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
                 }
                 SetStateLocked(ok ? EquipmentConnectionState.Connected : EquipmentConnectionState.Error);
             }
+            if (ok) {
+                // #1362 — after the state is Connected and outside this try's failure path: the reconcile
+                // contains its own errors and can never turn a good connect into Error.
+                ReconcileTask = ReconcileGuideCameraAsync(guider, ct);
+                Interlocked.Increment(ref _reconcileStarts);
+                await ReconcileTask.ConfigureAwait(false);
+            }
         } catch (OperationCanceledException) {
             // Superseded by a newer connect/disconnect — that operation already owns the state;
             // this attempt just stops quietly (not a connect failure).
