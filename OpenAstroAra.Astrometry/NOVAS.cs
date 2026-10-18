@@ -259,7 +259,9 @@ namespace OpenAstroAra.Astrometry {
 
         #region "NOVAS Structs"
 
-        // These are P/Invoke marshaling structs that mirror the NOVAS C 3.1 ABI byte-for-byte.
+        // These are P/Invoke marshaling structs that mirror the SuperNOVAS ABI byte-for-byte on an
+        // LP64 host (NOT NOVAS 3.1: enum-typed and long fields, an orbit block, humidity —
+        // NovasAbiTest pins the sizes against SuperNOVAS novas.h).
         // They are internal (not part of the public API) so the design rules for externally
         // visible types (CA1034 nested, CA1815/CA1066 value-equality, CA1051 public fields) do
         // not apply — the only one that crosses the assembly boundary, SkyPosition, is a
@@ -512,7 +514,7 @@ namespace OpenAstroAra.Astrometry {
             LocationRefraction = 2
         }
 
-        internal enum SolarSystemOrigin  {
+        internal enum SolarSystemOrigin  { // passed to solarsystem_hp's short origin; the callee reads the low 16 bits
             Barycenter = 0,
             SolarCenterOfMass = 1
         }
