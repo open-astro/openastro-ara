@@ -345,7 +345,7 @@ Delete unconditionally:
 - `nikoncswrapper/`
 - All per-vendor folders under `OpenAstroAra.Equipment/SDK/CameraSDKs/` (Canon, Nikon, ZWO/ASI, QHY, Atik, PlayerOne, Altair, Touptek, FLI, SBIG, Omegon, Meade DSI, DirectShow webcams)
 - All `NINA/External/<vendor>/` folders containing bundled DLLs
-- `Accord.Imaging/` — audit first; if anything kept truly references it, vendor only the specific source files needed and delete the rest
+- `Accord.Imaging/` — audit first; if anything kept truly references it, vendor only the specific source files needed and delete the rest. *(Audited and deleted in #1386: nothing referenced it; the three Accord.Math/Statistics calls were replaced by System.Numerics, a twelve-line interpolation and Box-Muller.)*
 
 For each deleted equipment device class, **leave the abstraction interface** (`ICamera`, `ITelescope`, `IFocuser`, `IFilterWheel`, `IRotator`, `IFlatPanel`, `ISwitch`, `IWeatherData`, `IDome`, `ISafetyMonitor`, `IGuider`) intact in `OpenAstroAra.Equipment` — only concrete implementations are deleted.
 

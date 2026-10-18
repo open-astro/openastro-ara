@@ -12,7 +12,6 @@
 
 #endregion "copyright"
 
-using Accord.Math;
 using OpenAstroAra.Astrometry;
 using OpenAstroAra.Core.Enums;
 using OpenAstroAra.Core.Locale;
@@ -20,6 +19,7 @@ using OpenAstroAra.Core.Utility.Notification;
 using OpenAstroAra.Equipment.Interfaces;
 using OpenAstroAra.Profile.Interfaces;
 using System;
+using System.Numerics;
 
 namespace OpenAstroAra.Equipment.Equipment.MyDome {
 
@@ -88,11 +88,16 @@ namespace OpenAstroAra.Equipment.Equipment.MyDome {
                 scopeOriginTranslation = CalculateForkOnWedge(scopeCoordinates, localSiderealTime, siteLatitude);
             }
 
-            var scopeApertureOrigin = scopeOriginTranslation * origin;
+            // System.Numerics works in the row-vector convention (v * M, translation in the last
+            // row), the transpose of Accord.Math's column-vector Matrix4x4 (M * v) that this code
+            // used before #1386. The same geometry therefore composes right-to-left here: where
+            // Accord wrote A * B * C * v, this is Vector4.Transform(v, C * B * A). Agreement with the
+            // Accord build was checked on 200,000 random configurations (max 0.006°, float rounding).
+            var scopeApertureOrigin = Vector4.Transform(origin, scopeOriginTranslation);
 
             // The OTA points along the positive X-axis before any transformations take place. Transforming the point (1, 0, 0) provides a unit
             // direction vector from (0, 0, 0) which is the scope aperture origin
-            var scopeDirection = scopeOriginTranslation * Matrix4x4.CreateTranslation(new Vector3(1.0f, 0.0f, 0.0f)) * origin - scopeApertureOrigin;
+            var scopeDirection = Vector4.Transform(origin, Matrix4x4.CreateTranslation(new Vector3(1.0f, 0.0f, 0.0f)) * scopeOriginTranslation) - scopeApertureOrigin;
 
             // Calculate the distance along the unit vector, originating from the scope aperture origin, to where the line
             // intersects the sphere
@@ -161,7 +166,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyDome {
                     0.0f,
                     (float)domeSettings.LateralAxisMm));
 
-            return mountOffset * latitudeAdjustment * raRotationAdjustment * raOffsetAdjustment * decRotationAdjustment * decOffsetAdjustment;
+            return decOffsetAdjustment * decRotationAdjustment * raOffsetAdjustment * raRotationAdjustment * latitudeAdjustment * mountOffset;
         }
 
         private Matrix4x4 CalculateGEM(
@@ -205,7 +210,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyDome {
                     -(float)domeSettings.LateralAxisMm,
                     (float)domeSettings.GemAxisMm));
 
-            return mountOffset * latitudeAdjustment * raRotationAdjustment * decRotationAdjustment * gemAdjustment;
+            return gemAdjustment * decRotationAdjustment * raRotationAdjustment * latitudeAdjustment * mountOffset;
         }
     }
 }

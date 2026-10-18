@@ -36,7 +36,6 @@
     </None>
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\Accord.Imaging\Accord.Imaging (NETStandard).csproj" />
     <ProjectReference Include="..\OpenAstroAra.Astrometry\OpenAstroAra.Astrometry.csproj" />
     <ProjectReference Include="..\OpenAstroAra.Core\OpenAstroAra.Core.csproj" />
     <ProjectReference Include="..\OpenAstroAra.Profile\OpenAstroAra.Profile.csproj" />

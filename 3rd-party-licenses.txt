@@ -55,11 +55,6 @@ here so this file's --check gate flags any drift):
     Unlicense). Compiled into libsupernovas with its legacy JPL ephemeris
     reader, which scripts/build-astrometry-natives.sh patches on one line at
     build time (remainder -> fmod in interpolate()) until upstream fixes it.
-  * Accord.Imaging — part of the Accord.NET Framework, LGPL-2.1
-    (Accord.Imaging/). Vendored in source form with all upstream LGPL headers
-    intact; the only change from upstream is a whole-solution `dotnet format`
-    reformat (commit 7c66a58f0) — style only, no functional changes.
-    https://spdx.org/licenses/LGPL-2.1.html
   * IERS Bulletin A UT1-UTC series — IERS Rapid Service/Prediction Center,
     U.S. Naval Observatory (OpenAstroAra.Astrometry/External/iers-dut1.tsv, a
     snapshot of finals2000A.all + the bulletin's prediction formula taken by
@@ -74,39 +69,17 @@ them: the Stellarium Web Engine (AGPL-3.0,
 client/.../assets/stellarium/README.md + the open-astro/stellarium-web-engine
 fork).
 
-License summary (109 packages):
-    MIT: 74 packages
+License summary (104 packages):
+    MIT: 72 packages
     Apache-2.0: 20 packages
     BSD-3-Clause: 8 packages
-    LGPL-2.1: 3 packages
     Microsoft .NET Library License: 2 packages
     BSD-2-Clause: 1 package
     MIT AND Ms-PL: 1 package
 
 
-SERVER — OpenAstroAra.Server NuGet dependency graph (90 packages, transitive closure)
+SERVER — OpenAstroAra.Server NuGet dependency graph (85 packages, transitive closure)
 =====================================================================================
-
-------------------------------------------------------------------------
-Package:        Accord 3.8.2-alpha
-Authors:        Accord.NET
-License:        LGPL-2.1
-License source: http://accord-framework.net/license.txt (Accord.NET framework license)
-Project:        http://accord-framework.net/
-
-------------------------------------------------------------------------
-Package:        Accord.Math 3.8.2-alpha
-Authors:        Accord.NET
-License:        LGPL-2.1
-License source: http://accord-framework.net/license.txt (Accord.NET framework license)
-Project:        http://accord-framework.net/
-
-------------------------------------------------------------------------
-Package:        Accord.Statistics 3.8.2-alpha
-Authors:        Accord.NET
-License:        LGPL-2.1
-License source: http://accord-framework.net/license.txt (Accord.NET framework license)
-Project:        http://accord-framework.net/
 
 ------------------------------------------------------------------------
 Package:        ASCOM.Alpaca.Components 4.0.0
@@ -318,14 +291,6 @@ Copyright:      © Microsoft Corporation. All rights reserved.
 License:        MIT
 License source: https://licenses.nuget.org/MIT
 Project:        https://github.com/Microsoft/OpenAPI.NET
-
-------------------------------------------------------------------------
-Package:        Microsoft.Win32.SystemEvents 10.0.13
-Authors:        Microsoft
-Copyright:      © Microsoft Corporation. All rights reserved.
-License:        MIT
-License source: https://licenses.nuget.org/MIT
-Project:        https://dot.net/
 
 ------------------------------------------------------------------------
 Package:        Namotion.Reflection 3.5.0
@@ -721,14 +686,6 @@ Copyright:      © Microsoft Corporation. All rights reserved.
 License:        MIT
 License source: https://licenses.nuget.org/MIT
 Project:        https://dot.net/
-
-------------------------------------------------------------------------
-Package:        System.Drawing.Common 10.0.13
-Authors:        Microsoft
-Copyright:      © Microsoft Corporation. All rights reserved.
-License:        MIT
-License source: https://licenses.nuget.org/MIT
-Project:        https://github.com/dotnet/winforms
 
 ------------------------------------------------------------------------
 Package:        System.IO.Ports 10.0.13

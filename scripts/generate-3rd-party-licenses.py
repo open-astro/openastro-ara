@@ -59,13 +59,8 @@ OUTPUT = REPO_ROOT / "3rd-party-licenses.txt"
 # (upstream project checked 2026-07-01; `source` records where) — a version
 # bump of a curated package fails the run until a human re-verifies the
 # license and updates the pin. The repo-wide audit (PORT_TODO
-# §15/§17.2, 2026-06-10) found the same set: everything permissive except
-# Accord.NET (LGPL-2.1, dynamically linked).
-_ACCORD = {
-    "license": "LGPL-2.1",
-    "source": "http://accord-framework.net/license.txt (Accord.NET framework license)",
-    "version": "3.8.2-alpha",
-}
+# §15/§17.2, 2026-06-10) found everything permissive; the one LGPL
+# dependency it found, Accord.NET, was retired in #1386.
 _COMMON_LOGGING = {
     "license": "Apache-2.0",
     "source": "https://github.com/net-commons/common-logging (README: Apache Software License)",
@@ -76,9 +71,6 @@ _MS_DOTNET_EULA = {
     "source": "http://go.microsoft.com/fwlink/?LinkId=329770 (redistributable EULA)",
 }
 NUGET_OVERRIDES: dict[str, dict[str, str]] = {
-    "Accord": _ACCORD,
-    "Accord.Math": _ACCORD,
-    "Accord.Statistics": _ACCORD,
     "Common.Logging": _COMMON_LOGGING,
     "Common.Logging.Core": _COMMON_LOGGING,
     "IPNetwork2": {
@@ -307,11 +299,6 @@ here so this file's --check gate flags any drift):
     Unlicense). Compiled into libsupernovas with its legacy JPL ephemeris
     reader, which scripts/build-astrometry-natives.sh patches on one line at
     build time (remainder -> fmod in interpolate()) until upstream fixes it.
-  * Accord.Imaging — part of the Accord.NET Framework, LGPL-2.1
-    (Accord.Imaging/). Vendored in source form with all upstream LGPL headers
-    intact; the only change from upstream is a whole-solution `dotnet format`
-    reformat (commit 7c66a58f0) — style only, no functional changes.
-    https://spdx.org/licenses/LGPL-2.1.html
   * IERS Bulletin A UT1-UTC series — IERS Rapid Service/Prediction Center,
     U.S. Naval Observatory (OpenAstroAra.Astrometry/External/iers-dut1.tsv, a
     snapshot of finals2000A.all + the bulletin's prediction formula taken by

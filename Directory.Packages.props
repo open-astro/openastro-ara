@@ -8,11 +8,7 @@
 
     The ranges are deliberate: SharpGIS.NmeaParser and Microsoft.OpenApi are pinned to
     the exact version their call sites were verified against; FluentAssertions stays
-    on the last Apache-licensed line. Accord.Math is a prerelease (NU5104 is allowed in
-    Directory.Build.props for that reason).
-
-    The vendored Accord.Imaging project follows this file too, so a package it shares
-    with the daemon cannot be on a different version.
+    on the last Apache-licensed line.
 
     xunit 2.9.3 is NuGet-deprecated as "legacy" (superseded by xunit.v3), not vulnerable.
     xunit.v3 runs only on Microsoft.Testing.Platform, which the .NET 10 SDK's `dotnet test`
@@ -27,9 +23,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageVersion Include="Accord" Version="3.8.2-alpha" />
-    <PackageVersion Include="Accord.Math" Version="3.8.2-alpha" />
-    <PackageVersion Include="Accord.Statistics" Version="3.8.2-alpha" />
     <PackageVersion Include="ASCOM.Alpaca.Components" Version="4.0.0" />
     <PackageVersion Include="ASCOM.Alpaca.Device" Version="4.0.0" />
     <PackageVersion Include="ASCOM.Tools" Version="4.0.0" />
