@@ -39,8 +39,9 @@ namespace OpenAstroAra.Test {
     public class NovasEphemerisAgreementTest {
 
         private static bool NativesAvailable() {
-            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) return true;
-            return NativeLibrary.TryLoad("supernovas", typeof(NOVAS).Assembly, null, out _);
+            // Same probe the daemon logs at boot: nothing builds the natives on Windows, so
+            // there the test self-Ignores like everywhere else instead of failing on load.
+            return AstrometryNatives.Probe().Novas;
         }
 
         [Test]

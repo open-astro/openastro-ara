@@ -58,7 +58,7 @@ namespace OpenAstroAra.Astrometry.Body {
 
                 var obj = new NOVAS.CelestialObject() {
                     Name = Name,
-                    Number = (short)BodyNumber,
+                    Number = (long)BodyNumber,
                     Star = new NOVAS.CatalogueEntry(),
                     Type = NOVAS.ObjectType.MajorPlanetSunOrMoon
                 };
