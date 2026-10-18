@@ -2160,7 +2160,7 @@ Major version bumps (4.x → 5.x) intentionally NOT automated — those typicall
 | `ImageUtility.ConvertBitmap` (BitmapSource ↔ Bitmap conversions) | **Rewrite** — pipeline operates on `Mat` end-to-end |
 | FITS reader (custom format, doesn't depend on System.Drawing) | **Keep as-is** — outputs `ushort[]` or `byte[]` buffers, fed into `Mat` |
 | Stretch / histogram code (operates on raw buffers) | **Keep as-is** — just feeds Mat instead of Bitmap |
-| Star detection (`HocusFocus`, `HFR`, etc.) | **Audit** — uses Accord.Math + raw arrays; should port cleanly. Some Accord types depend on System.Drawing; replace with OpenCV equivalents (`Cv2.HoughCircles`, `Cv2.FindContours`, etc.) where present. |
+| Star detection (`HocusFocus`, `HFR`, etc.) | **Done** — replaced by Ara's own `StarDetector` (no Accord; Accord.NET itself retired in #1386). The original audit note: uses Accord.Math + raw arrays; should port cleanly. Some Accord types depend on System.Drawing; replace with OpenCV equivalents (`Cv2.HoughCircles`, `Cv2.FindContours`, etc.) where present. |
 
 ### 26.5 Phase 5 (Image) task order
 
