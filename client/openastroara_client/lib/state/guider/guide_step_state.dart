@@ -265,7 +265,16 @@ class GuideStepNotifier extends Notifier<List<GuideStep>> {
   /// steps: if any arrived first, the history is not needed. Single-flight —
   /// the start-up seed and the on-connect seed can both ask at once.
   /// Best-effort.
-  Future<void> seedFromHistory() => _seeding ??= _seed().whenComplete(() => _seeding = null);
+  Future<void> seedFromHistory() {
+    if (_seeding case final pending?) return pending;
+    late final Future<void> run;
+    // Clears only its own slot: a server switch may have replaced it with the
+    // new server's seed, which must stay single-flight (review of #1389).
+    run = _seed().whenComplete(() {
+      if (identical(_seeding, run)) _seeding = null;
+    });
+    return _seeding = run;
+  }
 
   Future<void> _seed() async {
     final api = ref.read(guiderLiveApiProvider);
