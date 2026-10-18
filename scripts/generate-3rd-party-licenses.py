@@ -121,14 +121,6 @@ NUGET_OVERRIDES: dict[str, dict[str, str]] = {
         "source": "https://github.com/ssg/SimpleBase (README: Apache-2.0)",
         "version": "1.3.1",
     },
-    "runtime.native.System.Data.SqlClient.sni": {
-        "license": "MIT",
-        "source": "https://github.com/dotnet/corefx/blob/master/LICENSE.TXT (corefx, MIT)",
-        "version": "4.4.0",
-    },
-    "runtime.win-arm64.runtime.native.System.Data.SqlClient.sni": {**_MS_DOTNET_EULA, "version": "4.4.0"},
-    "runtime.win-x64.runtime.native.System.Data.SqlClient.sni": {**_MS_DOTNET_EULA, "version": "4.4.0"},
-    "runtime.win-x86.runtime.native.System.Data.SqlClient.sni": {**_MS_DOTNET_EULA, "version": "4.4.0"},
 }
 # Case-insensitive lookup (NuGet ids are case-insensitive; `dotnet package
 # list` reports whatever casing the declaring project used).
@@ -281,9 +273,8 @@ package predates SPDX metadata, the "License source" line records where its
 terms were verified.
 
 The server list is the full RESOLVED graph, which deliberately over-discloses:
-RID-specific native packages for other platforms (e.g. the runtime.win-*
-SqlClient shims) appear even though the linux-arm64 self-contained publish
-does not ship their binaries.
+RID-specific native packages for other platforms appear even though the
+linux-arm64 self-contained publish does not ship their binaries.
 
 BUNDLED PLATFORMS (not reported by either package graph):
 

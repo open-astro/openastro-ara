@@ -23,22 +23,15 @@ using OpenAstroAra.Core.Utility;
 using OpenAstroAra.Profile.Interfaces;
 using OpenAstroAra.Sequencer.Validations;
 using System;
-using System.ComponentModel.Composition;
 using System.Globalization;
 using System.Threading;
 using System.Threading.Tasks;
 
 namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
 
-    [ExportMetadata("Name", "Lbl_SequenceItem_Utility_WaitForMoonAltitude_Name")]
-    [ExportMetadata("Description", "Lbl_SequenceItem_Utility_WaitForMoonAltitude_Description")]
-    [ExportMetadata("Icon", "WaningGibbousMoonSVG")]
-    [ExportMetadata("Category", "Lbl_SequenceCategory_Utility")]
-    [Export(typeof(ISequenceItem))]
     [JsonObject(MemberSerialization.OptIn)]
     public class WaitForMoonAltitude : WaitForAltitudeBase, IValidatable {
 
-        [ImportingConstructor]
         public WaitForMoonAltitude(IProfileService profileService) : base(profileService, useCustomHorizon: false) {
             Data.Offset = 0d;
         }

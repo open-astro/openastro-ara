@@ -20,7 +20,6 @@ using OpenAstroAra.Sequencer.Utility;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.ComponentModel.Composition;
 using System.Globalization;
 using System.Linq;
 using System.Threading;
@@ -41,15 +40,9 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Telescope {
     /// (applied as the ceiling when known) and says so; a first rung that already trails is itself the
     /// ceiling. The run builder emits this only when the rig has no guider; with a guider it never appears.
     /// </summary>
-    [ExportMetadata("Name", "Lbl_SequenceItem_Telescope_TrackingProbe_Name")]
-    [ExportMetadata("Description", "Lbl_SequenceItem_Telescope_TrackingProbe_Description")]
-    [ExportMetadata("Icon", "TelescopeSVG")]
-    [ExportMetadata("Category", "Lbl_SequenceCategory_Telescope")]
-    [Export(typeof(ISequenceItem))]
     [JsonObject(MemberSerialization.OptIn)]
     public class TrackingProbe : SequenceItem, IEstimatesOwnDuration {
 
-        [ImportingConstructor]
         public TrackingProbe(ITrackingProbeExecutor? executor = null) {
             this.executor = executor;
         }

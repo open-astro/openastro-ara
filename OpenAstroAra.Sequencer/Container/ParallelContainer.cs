@@ -20,23 +20,15 @@ using OpenAstroAra.Sequencer.Trigger;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.ComponentModel.Composition;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
 namespace OpenAstroAra.Sequencer.Container {
 
-    [ExportMetadata("Name", "Lbl_SequenceContainer_ParallelContainer_Name")]
-    [ExportMetadata("Description", "Lbl_SequenceContainer_ParallelContainer_Description")]
-    [ExportMetadata("Icon", "ParallelSVG")]
-    [ExportMetadata("Category", "Lbl_SequenceCategory_Container")]
-    [Export(typeof(ISequenceItem))]
-    [Export(typeof(ISequenceContainer))]
     [JsonObject(MemberSerialization.OptIn)]
     public class ParallelContainer : SequenceContainer {
 
-        [ImportingConstructor]
         public ParallelContainer() : base(new ParallelStrategy()) {
         }
 

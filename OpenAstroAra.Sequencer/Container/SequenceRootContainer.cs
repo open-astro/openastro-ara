@@ -24,7 +24,6 @@ using OpenAstroAra.Sequencer.Utility;
 using System;
 using System.Diagnostics.CodeAnalysis;
 using System.Collections.Generic;
-using System.ComponentModel.Composition;
 using System.Linq;
 using System.Runtime.Serialization;
 using System.Text;
@@ -34,11 +33,6 @@ using System.Windows.Input;
 
 namespace OpenAstroAra.Sequencer.Container {
 
-    [ExportMetadata("Name", "Lbl_SequenceContainer_SequenceRootContainer_Name")]
-    [ExportMetadata("Description", "Lbl_SequenceContainer_SequentialContainer_Description")]
-    [ExportMetadata("Icon", "BoxSVG")]
-    [ExportMetadata("Category", "Lbl_SequenceCategory_Container")]
-    [Export(typeof(ISequenceContainer))]
     [JsonObject(MemberSerialization.OptIn)]
     public class SequenceRootContainer : SequenceContainer, ISequenceRootContainer, IImmutableContainer, IPauseGateHost {
 
@@ -56,7 +50,6 @@ namespace OpenAstroAra.Sequencer.Container {
             this.Items.Clear();
         }
 
-        [ImportingConstructor]
         public SequenceRootContainer() : base(new SequentialStrategy()) {
         }
 

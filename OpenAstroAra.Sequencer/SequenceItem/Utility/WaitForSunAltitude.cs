@@ -23,22 +23,15 @@ using OpenAstroAra.Core.Utility;
 using OpenAstroAra.Profile.Interfaces;
 using OpenAstroAra.Sequencer.Validations;
 using System;
-using System.ComponentModel.Composition;
 using System.Globalization;
 using System.Threading;
 using System.Threading.Tasks;
 
 namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
 
-    [ExportMetadata("Name", "Lbl_SequenceItem_Utility_WaitForSunAltitude_Name")]
-    [ExportMetadata("Description", "Lbl_SequenceItem_Utility_WaitForSunAltitude_Description")]
-    [ExportMetadata("Icon", "SunriseSVG")]
-    [ExportMetadata("Category", "Lbl_SequenceCategory_Utility")]
-    [Export(typeof(ISequenceItem))]
     [JsonObject(MemberSerialization.OptIn)]
     public class WaitForSunAltitude : WaitForAltitudeBase, IValidatable {
 
-        [ImportingConstructor]
         public WaitForSunAltitude(IProfileService profileService) : base(profileService, useCustomHorizon: false) {
         }
 

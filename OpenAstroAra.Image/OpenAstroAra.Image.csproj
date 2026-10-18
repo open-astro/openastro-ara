@@ -49,7 +49,6 @@
   <ItemGroup>
     <PackageReference Include="K4os.Compression.LZ4" />
     <PackageReference Include="Nito.AsyncEx" />
-    <PackageReference Include="System.Data.SqlClient" />
     <PackageReference Include="ZstdSharp.Port" />
   </ItemGroup>
   <PropertyGroup>

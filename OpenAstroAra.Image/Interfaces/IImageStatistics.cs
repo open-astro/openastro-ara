@@ -12,6 +12,7 @@
 
 #endregion "copyright"
 
+using OpenAstroAra.Core.Utility;
 using System.Collections.Immutable;
 
 namespace OpenAstroAra.Image.Interfaces {
@@ -26,6 +27,6 @@ namespace OpenAstroAra.Image.Interfaces {
         long MaxOccurrences { get; }
         int Min { get; }
         long MinOccurrences { get; }
-        ImmutableList<OxyPlot.DataPoint> Histogram { get; }
+        ImmutableList<DataPoint> Histogram { get; }
     }
 }

@@ -12,19 +12,35 @@
 
 #endregion "copyright"
 
-using CommunityToolkit.Mvvm.ComponentModel;
 using System;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Runtime.Serialization;
 
 namespace OpenAstroAra.Core.Utility {
 
-    public abstract class BaseINPC : ObservableObject {
+    public abstract class BaseINPC : INotifyPropertyChanged {
+
+        public event PropertyChangedEventHandler? PropertyChanged;
+
+        /// <summary>
+        /// Assigns <paramref name="value"/> to <paramref name="field"/> and raises
+        /// <see cref="PropertyChanged"/> when it differs. The hand-written counterpart of the
+        /// CommunityToolkit.Mvvm [ObservableProperty] generator this type used to inherit from.
+        /// </summary>
+        protected bool SetProperty<T>(ref T field, T value, [CallerMemberName] string? propertyName = null) {
+            if (EqualityComparer<T>.Default.Equals(field, value)) {
+                return false;
+            }
+            field = value;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+            return true;
+        }
 
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1030:Use events where appropriate", Justification = "Standard INotifyPropertyChanged raise helper for the existing PropertyChanged event; it is not itself a candidate to become an event.")]
         protected void RaisePropertyChanged([CallerMemberName] string? propertyName = null) {
-            OnPropertyChanged(new PropertyChangedEventArgs(propertyName));
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
         }
 
         protected void ChildChanged(object? sender, PropertyChangedEventArgs e) {
@@ -53,15 +69,14 @@ namespace OpenAstroAra.Core.Utility {
 
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1030:Use events where appropriate", Justification = "Raises the existing PropertyChanged event for all properties (null name); not a candidate to become an event.")]
         protected void RaiseAllPropertiesChanged() {
-            OnPropertyChanged(new PropertyChangedEventArgs(null));
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(null));
         }
     }
 
     /// <remarks>
     /// Migration base for legacy model/settings types that require the
     /// <see cref="System.SerializableAttribute"/> / XML/DataContract serialization
-    /// shape, which is incompatible with the CommunityToolkit ObservableObject.
-    /// New types should derive from <see cref="BaseINPC"/>/ObservableObject instead;
+    /// shape. New types should derive from <see cref="BaseINPC"/> instead;
     /// this exists only so previously-serialized profiles/models keep deserializing.
     /// </remarks>
     [System.Serializable()]

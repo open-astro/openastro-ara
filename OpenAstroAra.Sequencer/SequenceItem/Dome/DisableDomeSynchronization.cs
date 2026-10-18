@@ -20,7 +20,6 @@ using OpenAstroAra.Sequencer.Validations;
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
-using System.ComponentModel.Composition;
 using System.Linq;
 using System.Text;
 using System.Threading;
@@ -28,15 +27,9 @@ using System.Threading.Tasks;
 
 namespace OpenAstroAra.Sequencer.SequenceItem.Dome {
 
-    [ExportMetadata("Name", "Lbl_SequenceItem_Dome_DisableDomeSynchronization_Name")]
-    [ExportMetadata("Description", "Lbl_SequenceItem_Dome_DisableDomeSynchronization_Description")]
-    [ExportMetadata("Icon", "CancelSVG")]
-    [ExportMetadata("Category", "Lbl_SequenceCategory_Dome")]
-    [Export(typeof(ISequenceItem))]
     [JsonObject(MemberSerialization.OptIn)]
     public class DisableDomeSynchronization : SequenceItem, IValidatable {
 
-        [ImportingConstructor]
         public DisableDomeSynchronization(IDomeMediator domeMediator, ITelescopeMediator telescopeMediator) {
             this.domeMediator = domeMediator;
             this.telescopeMediator = telescopeMediator;

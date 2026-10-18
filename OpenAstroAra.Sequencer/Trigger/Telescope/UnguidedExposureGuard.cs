@@ -22,7 +22,6 @@ using OpenAstroAra.Sequencer.Utility;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.ComponentModel.Composition;
 using System.Globalization;
 using System.Linq;
 using System.Threading;
@@ -40,15 +39,9 @@ namespace OpenAstroAra.Sequencer.Trigger.Telescope {
     /// one rung. The loop's frame count is re-derived each time so the planned integration holds. Emitted
     /// by the run builder only when the rig has no guider.
     /// </summary>
-    [ExportMetadata("Name", "Lbl_SequenceTrigger_Telescope_UnguidedExposureGuard_Name")]
-    [ExportMetadata("Description", "Lbl_SequenceTrigger_Telescope_UnguidedExposureGuard_Description")]
-    [ExportMetadata("Icon", "TelescopeSVG")]
-    [ExportMetadata("Category", "Lbl_SequenceCategory_Telescope")]
-    [Export(typeof(ISequenceTrigger))]
     [JsonObject(MemberSerialization.OptIn)]
     public class UnguidedExposureGuard : SequenceTrigger {
 
-        [ImportingConstructor]
         public UnguidedExposureGuard(IFrameQualityFeed? feed = null) : base() {
             this.feed = feed;
         }

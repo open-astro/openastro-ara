@@ -16,7 +16,6 @@ using OpenAstroAra.Astrometry;
 using OpenAstroAra.Core.Model;
 using OpenAstroAra.Core.Utility;
 using System;
-using System.ComponentModel.Composition;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -29,7 +28,6 @@ namespace OpenAstroAra.Sequencer.Trigger.MeridianFlip {
     /// sequence that actually reaches a flip with no real executor wired must fail loudly, not continue as if
     /// the flip succeeded.
     /// </summary>
-    [Export(typeof(IMeridianFlipExecutor))]
     public class PlaceholderMeridianFlipExecutor : IMeridianFlipExecutor {
 
         public Task<bool> MeridianFlip(Coordinates targetCoordinates, TimeSpan timeToFlip, IProgress<ApplicationStatus> progress, CancellationToken token) {

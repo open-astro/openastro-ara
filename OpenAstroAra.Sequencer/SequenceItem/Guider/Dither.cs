@@ -23,7 +23,6 @@ using OpenAstroAra.Sequencer.Validations;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.ComponentModel.Composition;
 using System.Linq;
 using System.Text;
 using System.Threading;
@@ -31,17 +30,11 @@ using System.Threading.Tasks;
 
 namespace OpenAstroAra.Sequencer.SequenceItem.Guider {
 
-    [ExportMetadata("Name", "Lbl_SequenceItem_Guider_Dither_Name")]
-    [ExportMetadata("Description", "Lbl_SequenceItem_Guider_Dither_Description")]
-    [ExportMetadata("Icon", "DitherSVG")]
-    [ExportMetadata("Category", "Lbl_SequenceCategory_Guider")]
-    [Export(typeof(ISequenceItem))]
     [JsonObject(MemberSerialization.OptIn)]
     public class Dither : SequenceItem, IValidatable, IEstimatesOwnDuration {
         private readonly IGuiderMediator guiderMediator;
         private readonly IProfileService profileService;
 
-        [ImportingConstructor]
         public Dither(IGuiderMediator guiderMediator, IProfileService profileService) {
             this.guiderMediator = guiderMediator;
             this.profileService = profileService;

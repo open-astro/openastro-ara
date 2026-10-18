@@ -37,7 +37,7 @@ namespace OpenAstroAra.Image.ImageData {
         public long MaxOccurrences { get; private set; }
         public int Min { get; private set; }
         public long MinOccurrences { get; private set; }
-        public ImmutableList<OxyPlot.DataPoint> Histogram { get; private set; } = ImmutableList<OxyPlot.DataPoint>.Empty;
+        public ImmutableList<DataPoint> Histogram { get; private set; } = ImmutableList<DataPoint>.Empty;
 
         public static IImageStatistics Create(IImageData imageData) {
             return Create(imageData.Properties, imageData.Data.FlatArray);
@@ -151,7 +151,7 @@ namespace OpenAstroAra.Image.ImageData {
                     .GroupBy(
                         x => Math.Floor((double)Math.Min(maxPossibleValue, x.Index) * factor),
                         x => x.Value)
-                    .Select(g => new OxyPlot.DataPoint(g.Key, g.Sum()))
+                    .Select(g => new DataPoint(g.Key, g.Sum()))
                     .OrderBy(item => item.X).ToImmutableList();
 
                 var statistics = new ImageStatistics();

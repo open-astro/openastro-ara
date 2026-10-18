@@ -42,7 +42,6 @@
     <ProjectReference Include="..\OpenAstroAra.Profile\OpenAstroAra.Profile.csproj" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="System.Data.SqlClient" />
   </ItemGroup>
   <PropertyGroup>
     <GeneratePackageOnBuild>True</GeneratePackageOnBuild>

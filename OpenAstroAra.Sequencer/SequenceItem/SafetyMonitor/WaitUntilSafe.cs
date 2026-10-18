@@ -19,7 +19,6 @@ using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Sequencer.Validations;
 using System;
 using System.Collections.Generic;
-using System.ComponentModel.Composition;
 using System.Linq;
 using System.Text;
 using System.Threading;
@@ -27,15 +26,9 @@ using System.Threading.Tasks;
 
 namespace OpenAstroAra.Sequencer.SequenceItem.SafetyMonitor {
 
-    [ExportMetadata("Name", "Lbl_SequenceItem_SafetyMonitor_WaitUntilSafe_Name")]
-    [ExportMetadata("Description", "Lbl_SequenceItem_SafetyMonitor_WaitUntilSafe_Description")]
-    [ExportMetadata("Icon", "ShieldSVG")]
-    [ExportMetadata("Category", "Lbl_SequenceCategory_SafetyMonitor")]
-    [Export(typeof(ISequenceItem))]
     public class WaitUntilSafe : SequenceItem, IValidatable {
         private ISafetyMonitorMediator safetyMonitorMediator;
 
-        [ImportingConstructor]
         public WaitUntilSafe(ISafetyMonitorMediator safetyMonitorMediator) {
             this.safetyMonitorMediator = safetyMonitorMediator;
         }

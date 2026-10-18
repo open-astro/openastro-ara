@@ -21,7 +21,6 @@ using OpenAstroAra.Sequencer.Interfaces;
 using OpenAstroAra.Sequencer.SequenceItem;
 using OpenAstroAra.Sequencer.Utility;
 using System;
-using System.ComponentModel.Composition;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -41,15 +40,9 @@ namespace OpenAstroAra.Sequencer.Trigger.Autofocus {
     /// least-squares line (NINA used Accord's SimpleLinearRegression; two-variable OLS is
     /// small enough to carry inline and keeps Accord out of this project).
     /// </summary>
-    [ExportMetadata("Name", "Lbl_SequenceTrigger_AutofocusAfterHFRIncreaseTrigger_Name")]
-    [ExportMetadata("Description", "Lbl_SequenceTrigger_AutofocusAfterHFRIncreaseTrigger_Description")]
-    [ExportMetadata("Icon", "AutoFocusAfterHFRSVG")]
-    [ExportMetadata("Category", "Lbl_SequenceCategory_Focuser")]
-    [Export(typeof(ISequenceTrigger))]
     [JsonObject(MemberSerialization.OptIn)]
     public class AutofocusAfterHFRIncreaseTrigger : SequenceTrigger {
 
-        [ImportingConstructor]
         public AutofocusAfterHFRIncreaseTrigger(IImageHistory? history = null, IFilterWheelMediator? filterWheelMediator = null, IAutofocusConditionGate? conditionGate = null) : base() {
             this.history = history;
             this.filterWheelMediator = filterWheelMediator;

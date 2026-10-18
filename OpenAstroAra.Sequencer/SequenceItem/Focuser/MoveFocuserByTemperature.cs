@@ -20,7 +20,6 @@ using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Sequencer.Validations;
 using System;
 using System.Collections.Generic;
-using System.ComponentModel.Composition;
 using System.Linq;
 using System.Text;
 using System.Threading;
@@ -28,15 +27,9 @@ using System.Threading.Tasks;
 
 namespace OpenAstroAra.Sequencer.SequenceItem.Focuser {
 
-    [ExportMetadata("Name", "Lbl_SequenceItem_Focuser_MoveFocuserByTemperature_Name")]
-    [ExportMetadata("Description", "Lbl_SequenceItem_Focuser_MoveFocuserByTemperature_Description")]
-    [ExportMetadata("Icon", "MoveFocuserByTemperatureSVG")]
-    [ExportMetadata("Category", "Lbl_SequenceCategory_Focuser")]
-    [Export(typeof(ISequenceItem))]
     [JsonObject(MemberSerialization.OptIn)]
     public sealed class MoveFocuserByTemperature : SequenceItem, IValidatable, IFocuserConsumer {
 
-        [ImportingConstructor]
         public MoveFocuserByTemperature(IFocuserMediator focuserMediator) {
             this.focuserMediator = focuserMediator;
         }

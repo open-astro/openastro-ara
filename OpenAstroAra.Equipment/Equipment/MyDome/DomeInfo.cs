@@ -12,7 +12,6 @@
 
 #endregion "copyright"
 
-using CommunityToolkit.Mvvm.ComponentModel;
 using OpenAstroAra.Astrometry;
 using OpenAstroAra.Core.Locale;
 using OpenAstroAra.Equipment.Interfaces;
@@ -20,44 +19,98 @@ using System.Collections.Generic;
 
 namespace OpenAstroAra.Equipment.Equipment.MyDome {
 
-    public partial class DomeInfo : DeviceInfo {
-        [ObservableProperty]
+    public class DomeInfo : DeviceInfo {
         private ShutterState shutterStatus = ShutterState.ShutterNone;
 
-        [ObservableProperty]
-        private bool driverCanFollow = false;
+        public ShutterState ShutterStatus {
+            get => shutterStatus;
+            set => SetProperty(ref shutterStatus, value);
+        }
 
-        [ObservableProperty]
-        private bool canSetShutter = false;
+        private bool driverCanFollow;
 
-        [ObservableProperty]
-        private bool canSetPark = false;
+        public bool DriverCanFollow {
+            get => driverCanFollow;
+            set => SetProperty(ref driverCanFollow, value);
+        }
 
-        [ObservableProperty]
-        private bool canSetAzimuth = false;
+        private bool canSetShutter;
 
-        [ObservableProperty]
-        private bool canSyncAzimuth = false;
+        public bool CanSetShutter {
+            get => canSetShutter;
+            set => SetProperty(ref canSetShutter, value);
+        }
 
-        [ObservableProperty]
-        private bool canPark = false;
+        private bool canSetPark;
 
-        [ObservableProperty]
-        private bool canFindHome = false;
+        public bool CanSetPark {
+            get => canSetPark;
+            set => SetProperty(ref canSetPark, value);
+        }
 
-        [ObservableProperty]
-        private bool atPark = false;
+        private bool canSetAzimuth;
 
-        [ObservableProperty]
-        private bool atHome = false;
+        public bool CanSetAzimuth {
+            get => canSetAzimuth;
+            set => SetProperty(ref canSetAzimuth, value);
+        }
 
-        [ObservableProperty]
-        [NotifyPropertyChangedFor(nameof(FollowingType))]
-        private bool driverFollowing = false;
+        private bool canSyncAzimuth;
 
-        [ObservableProperty]
-        [NotifyPropertyChangedFor(nameof(FollowingType))]
-        private bool applicationFollowing = false;
+        public bool CanSyncAzimuth {
+            get => canSyncAzimuth;
+            set => SetProperty(ref canSyncAzimuth, value);
+        }
+
+        private bool canPark;
+
+        public bool CanPark {
+            get => canPark;
+            set => SetProperty(ref canPark, value);
+        }
+
+        private bool canFindHome;
+
+        public bool CanFindHome {
+            get => canFindHome;
+            set => SetProperty(ref canFindHome, value);
+        }
+
+        private bool atPark;
+
+        public bool AtPark {
+            get => atPark;
+            set => SetProperty(ref atPark, value);
+        }
+
+        private bool atHome;
+
+        public bool AtHome {
+            get => atHome;
+            set => SetProperty(ref atHome, value);
+        }
+
+        private bool driverFollowing;
+
+        public bool DriverFollowing {
+            get => driverFollowing;
+            set {
+                if (SetProperty(ref driverFollowing, value)) {
+                    RaisePropertyChanged(nameof(FollowingType));
+                }
+            }
+        }
+
+        private bool applicationFollowing;
+
+        public bool ApplicationFollowing {
+            get => applicationFollowing;
+            set {
+                if (SetProperty(ref applicationFollowing, value)) {
+                    RaisePropertyChanged(nameof(FollowingType));
+                }
+            }
+        }
 
         public string FollowingType {
             get {
@@ -71,22 +124,39 @@ namespace OpenAstroAra.Equipment.Equipment.MyDome {
             }
         }
 
-        [ObservableProperty]
-        private bool slewing = false;
+        private bool slewing;
 
-        [ObservableProperty]
-        [NotifyPropertyChangedFor(nameof(AzimuthDMS))]
+        public bool Slewing {
+            get => slewing;
+            set => SetProperty(ref slewing, value);
+        }
+
         private double azimuth = double.NaN;
+
+        public double Azimuth {
+            get => azimuth;
+            set {
+                if (SetProperty(ref azimuth, value)) {
+                    RaisePropertyChanged(nameof(AzimuthDMS));
+                }
+            }
+        }
         public string AzimuthDMS => double.IsNaN(Azimuth) ? "" : AstroUtil.DegreesToDMS(Azimuth);
 
-        [ObservableProperty]
-        [NotifyPropertyChangedFor(nameof(AltitudeDMS))]
         private double altitude = double.NaN;
+
+        public double Altitude {
+            get => altitude;
+            set {
+                if (SetProperty(ref altitude, value)) {
+                    RaisePropertyChanged(nameof(AltitudeDMS));
+                }
+            }
+        }
 
         public string AltitudeDMS => double.IsNaN(Altitude) ? "" : AstroUtil.DegreesToDMS(Altitude);
 
-        [ObservableProperty]
-        private IList<string> supportedActions = [];
+        public IReadOnlyList<string> SupportedActions { get; } = [];
 
     }
 }

@@ -21,7 +21,6 @@ using OpenAstroAra.Profile.Interfaces;
 using OpenAstroAra.Sequencer.Validations;
 using System;
 using System.Collections.Generic;
-using System.ComponentModel.Composition;
 using System.Globalization;
 using System.Threading;
 using System.Threading.Tasks;
@@ -29,17 +28,11 @@ using static OpenAstroAra.Sequencer.Utility.ItemUtility;
 
 namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
 
-    [ExportMetadata("Name", "Lbl_SequenceItem_Utility_WaitForAltitude_Name")]
-    [ExportMetadata("Description", "Lbl_SequenceItem_Utility_WaitForAltitude_Description")]
-    [ExportMetadata("Icon", "WaitForAltitudeSVG")]
-    [ExportMetadata("Category", "Lbl_SequenceCategory_Utility")]
-    [Export(typeof(ISequenceItem))]
     [JsonObject(MemberSerialization.OptIn)]
     public class WaitForAltitude : WaitForAltitudeBase, IValidatable {
         private bool hasDsoParent;
         private string aboveOrBelow = string.Empty;
 
-        [ImportingConstructor]
         public WaitForAltitude(IProfileService profileService) : base(profileService, useCustomHorizon: false) {
             AboveOrBelow = ">";
             Data.Offset = 30;

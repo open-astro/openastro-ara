@@ -41,7 +41,6 @@
     <PackageReference Include="Fastenshtein" />
     <PackageReference Include="Nito.AsyncEx.Context" />
     <PackageReference Include="Nito.Disposables" />
-    <PackageReference Include="System.Data.SqlClient" />
   </ItemGroup>
   <PropertyGroup>
     <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
