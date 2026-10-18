@@ -23,9 +23,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageVersion Include="ASCOM.Alpaca.Components" Version="4.0.0" />
-    <PackageVersion Include="ASCOM.Alpaca.Device" Version="4.0.0" />
-    <PackageVersion Include="ASCOM.Tools" Version="4.0.0" />
+    <PackageVersion Include="ASCOM.Alpaca.Components" Version="4.1.0" />
+    <PackageVersion Include="ASCOM.Alpaca.Device" Version="4.1.0" />
+    <PackageVersion Include="ASCOM.Tools" Version="4.1.0" />
     <PackageVersion Include="Castle.Core" Version="5.2.1" />
     <PackageVersion Include="Castle.Core.AsyncInterceptor" Version="2.1.0" />
     <PackageVersion Include="CommandLineParser" Version="2.9.1" />
