@@ -844,7 +844,7 @@ jobs:
           # Capture first, then grep: under pipefail, `docker logs | grep -q` could turn a passing
           # probe into exit 141 if the log ever outgrew the pipe buffer (grep exits on first match).
           E2E_LOG="$(docker logs oara-e2e 2>&1 || true)"
-          if ! grep -qm1 'Astrometry natives loaded (SOFA + NOVAS31)' <<<"$E2E_LOG"; then
+          if ! grep -qm1 'Astrometry natives loaded (ERFA + SuperNOVAS)' <<<"$E2E_LOG"; then
             echo "✗ astrometry natives did not load in the arm64 container:"
             grep -i 'astrometry natives' <<<"$E2E_LOG" || true
             exit 1
