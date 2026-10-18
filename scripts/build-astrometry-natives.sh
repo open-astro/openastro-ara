@@ -63,12 +63,18 @@ echo "building liberfa.$EXT (ERFA $ERFA_VERSION, SOFA $SOFA_VERSION)"
 # ephemeris-file reader (solsys1 + eph_manager, USER_SOLSYS=1) that NOVAS.cs's ephem_open /
 # solarsystem_hp expect for External/JPLEPH. WITHOUT_CURL: no network fetch of IERS data —
 # the daemon is offline-first and Dut1Table carries its own snapshot.
+# The core list is read from upstream's config.mk (SOURCES = a.c b.c \ ... continued lines), so a
+# submodule bump that adds or renames a file is picked up, and an unreadable list stops here
+# with the cause named instead of a missing-symbol link error.
 SNOVAS_SRC=()
-for f in target observer earth equator system transform cio orbital spectral grav nutation \
-         timescale frames place calendar refract naif parse util planets itrf ephemeris \
-         solsys3 solsys-ephem moon cmp iers; do
-    SNOVAS_SRC+=("$SNOVAS/src/c99/$f.c")
+for f in $(sed -n '/^SOURCES = /,/[^\\]$/p' "$SNOVAS/config.mk" | sed 's/^SOURCES = //; s/\\$//'); do
+    [ -f "$SNOVAS/src/c99/$f" ] || { echo "error: $SNOVAS/config.mk lists $f but src/c99/$f does not exist" >&2; exit 2; }
+    SNOVAS_SRC+=("$SNOVAS/src/c99/$f")
 done
+if [ "${#SNOVAS_SRC[@]}" -lt 10 ]; then
+    echo "error: could not read the SOURCES list from $SNOVAS/config.mk (got ${#SNOVAS_SRC[@]} files)" >&2
+    exit 2
+fi
 # Upstream bug in the legacy reader (SuperNOVAS v1.7.2, legacy/eph_manager.c interpolate()):
 # the sub-interval Chebyshev time uses C99 remainder(), which rounds to nearest and goes
 # negative for fractions above one half, where NOVAS 3.1 used fmod(). Any body stored in more

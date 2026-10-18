@@ -28,6 +28,7 @@ namespace OpenAstroAra.Test {
     /// at a user's first altitude condition.
     /// </summary>
     [TestFixture]
+    [Platform(Exclude = "Win", Reason = "sizes are LP64; Windows is LLP64 and gets no natives")]
     public class NovasAbiTest {
 
         [Test]
