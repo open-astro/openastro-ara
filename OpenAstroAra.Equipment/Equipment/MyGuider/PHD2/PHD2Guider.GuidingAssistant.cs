@@ -32,6 +32,13 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
         public const double GuidingAssistantMinDurationSec = 10;
         public const double GuidingAssistantMaxDurationSec = 3600;
 
+        /// <summary>The start RPC's bound. Unlike a status poll, a start makes the guider check the star
+        /// and the calibration and park its guide output before it answers, which a slow build or a
+        /// busy SBC can stretch past the live view's 5 s; with that bound the daemon reported a run that
+        /// had in fact begun as failed (review of #1389). Under the client's 30 s receive timeout for
+        /// the start, so the daemon's own refusal, not the client's, is what the user reads.</summary>
+        public const int GuidingAssistantStartTimeoutMs = 25000;
+
         /// <summary>Start the measurement. <paramref name="durationSec"/> null = the guider's default
         /// (two minutes, what the dialog asks for).</summary>
         public async Task<JObject?> StartGuidingAssistantAsync(double? durationSec, bool measureBacklash, CancellationToken ct) {
@@ -43,7 +50,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             var request = new Phd2GuidingAssistantStart {
                 Parameters = new Phd2GuidingAssistantStartParameters { DurationSec = durationSec, MeasureBacklash = measureBacklash }
             };
-            var response = await SendMessage<GenericPhdMethodResponse>(request, LiveRpcTimeoutMs).ConfigureAwait(false);
+            var response = await SendMessage<GenericPhdMethodResponse>(request, GuidingAssistantStartTimeoutMs).ConfigureAwait(false);
             ThrowOnError("guiding_assistant_start", response);
             return response.result as JObject;
         }
