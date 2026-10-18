@@ -84,7 +84,7 @@ fi
 # a fixed upstream fail this script so the patch is removed rather than silently skipped.
 PATCHED=$(mktemp -d)
 trap 'rm -rf "$PATCHED"' EXIT
-if [ "$(grep -c 'remainder(temp, 1.0)' "$SNOVAS/legacy/eph_manager.c")" != 1 ]; then
+if [ "$(grep -o 'remainder(temp, 1.0)' "$SNOVAS/legacy/eph_manager.c" | wc -l | tr -d ' ')" != 1 ]; then
     echo "error: $SNOVAS/legacy/eph_manager.c no longer has the remainder() line this script patches — drop the patch" >&2
     exit 2
 fi

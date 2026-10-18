@@ -218,8 +218,8 @@ namespace OpenAstroAra.Astrometry {
         [DefaultDllImportSearchPaths(DllImportSearchPath.SafeDirectories)]
         [DllImport(DLLNAME, EntryPoint = "make_cat_entry", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi, BestFitMapping = false, ThrowOnUnmappableChar = true)]
         private static extern short NOVAS_make_cat_entry(
-            [MarshalAs(UnmanagedType.LPTStr, SizeConst = SIZE_OF_OBJ_NAME)] string star_name,
-            [MarshalAs(UnmanagedType.LPTStr, SizeConst = SIZE_OF_CAT_NAME)] string catalog,
+            [MarshalAs(UnmanagedType.LPStr, SizeConst = SIZE_OF_OBJ_NAME)] string star_name,
+            [MarshalAs(UnmanagedType.LPStr, SizeConst = SIZE_OF_CAT_NAME)] string catalog,
             long star_num,
             double ra,
             double dec,
@@ -234,7 +234,7 @@ namespace OpenAstroAra.Astrometry {
         private static extern short NOVAS_make_object(
             ObjectType type,
             long number,
-            [MarshalAs(UnmanagedType.LPTStr, SizeConst = SIZE_OF_OBJ_NAME)] string name,
+            [MarshalAs(UnmanagedType.LPStr, SizeConst = SIZE_OF_OBJ_NAME)] string name,
             in CatalogueEntry star_data,
             [Out] out CelestialObject cel_obj);
 

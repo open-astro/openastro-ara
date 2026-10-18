@@ -58,6 +58,7 @@ Mac, compiles the astrometry natives and assembles the `.deb` inside the
 VM exactly as `packaging/build-deb.sh` does in CI, then installs it:
 
 ```bash
+git -C /path/to/worktree submodule update --init   # a fresh worktree has an empty third_party/ (#1386)
 vm.sh build-pr /path/to/worktree            # version defaults to 0.0.0-dev-<sha>
 vm.sh deploy ~/Downloads/some.deb           # or any .deb you already have
 vm.sh deploy --run 36028793716              # or a specific CI run's artifact
