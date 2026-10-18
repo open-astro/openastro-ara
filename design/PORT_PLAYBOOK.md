@@ -850,7 +850,7 @@ The consolidated `AraWsEvent` type catalog lives in `OpenAstroAra.Server/Contrac
 > `packaging/build-deb.sh` (which refuses a publish dir without the §14e natives)
 > installed per `docs/DEPLOY.md`; the Docker image is the CI end-to-end probe
 > only (`Dockerfile`, `ci.yml` "Build Docker image (arm64)"), built from the
-> `publish/arm64/` tree **plus** `libsofa.so`/`libnovas31.so`. The base image is
+> `publish/arm64/` tree **plus** `liberfa.so`/`libsupernovas.so`. The base image is
 > `runtime-deps:10.0-noble-chiseled-arm64v8`, not the `bookworm-slim` shown
 > below. Do not copy `publish/arm64/` to `/opt/openastroara/` by hand on a Pi:
 > the `.deb` owns that tree, the unit and the storage helpers.
