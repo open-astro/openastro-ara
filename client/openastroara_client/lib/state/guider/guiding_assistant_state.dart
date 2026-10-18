@@ -26,7 +26,13 @@ class GuidingAssistantAppliedNotifier extends Notifier<List<String>> {
     return const [];
   }
 
-  void set(List<String> keys) => state = keys;
+  /// Record what Accept wrote, unless the active server changed while the
+  /// write was in flight: server A's keys must not mark server B's run.
+  void set(List<String> keys, {required AraServer? writtenTo}) {
+    if (writtenTo != ref.read(activeServerProvider)) return;
+    state = keys;
+  }
+
   void clear() => state = const [];
 }
 
@@ -162,7 +168,8 @@ class GuidingAssistantNotifier extends Notifier<GuidingAssistantState> {
     // dialog closed while Accept is in flight still records what was written
     // (this notifier is gone by then, its ref unusable).
     final marks = ref.read(guidingAssistantAppliedProvider.notifier);
-    marks.set(await api.apply(which));
+    final server = ref.read(activeServerProvider);
+    marks.set(await api.apply(which), writtenTo: server);
     return null;
   });
 }

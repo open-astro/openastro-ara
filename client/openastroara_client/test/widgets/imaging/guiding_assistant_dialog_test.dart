@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/legacy.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/guider_status.dart';
 import 'package:openastroara/models/guiding_assistant.dart';
@@ -133,9 +134,7 @@ Future<_Fake> _pump(
       // A fresh scope per pump (new overrides), one shared scope on request.
       key: shared ? _scope : UniqueKey(),
       overrides: [
-        activeServerProvider.overrideWithValue(
-          const AraServer(hostname: 'localhost', port: 5555),
-        ),
+        activeServerProvider.overrideWith((ref) => ref.watch(_server)),
         guidingAssistantApiFactoryProvider.overrideWithValue((_) => fake!),
         guiderStatusProvider.overrideWith(() => _GuiderAt(guider)),
       ],
@@ -156,6 +155,14 @@ Future<_Fake> _pump(
 }
 
 final _scope = GlobalKey();
+
+/// The active server, switchable from a test through the scope's container.
+final _server = StateProvider<AraServer?>(
+  (_) => const AraServer(hostname: 'localhost', port: 5555),
+);
+
+ProviderContainer _container(WidgetTester t) =>
+    ProviderScope.containerOf(t.element(find.byType(MaterialApp)));
 
 String _text(WidgetTester t, Key key) => t.widget<Text>(find.byKey(key)).data!;
 
@@ -375,6 +382,87 @@ void main() {
     await t.pump();
     await _pump(t, _done(), fake: fake, shared: true);
     expect(find.text('2–4 s · applied'), findsOneWidget);
+  });
+
+  testWidgets('a run another client started clears the applied marks', (
+    t,
+  ) async {
+    final fake = await _pump(t, _done(), shared: true);
+    await t.ensureVisible(find.byKey(const Key('guiding-assistant-apply')));
+    await t.tap(find.byKey(const Key('guiding-assistant-apply')));
+    await t.pump();
+    await t.pump();
+    expect(find.text('2–4 s · applied'), findsOneWidget);
+    await _pump(t, _done(), fake: fake, open: false, shared: true);
+    // No Start from here: the guider's page (or another client) ran it.
+    fake.status = GuidingAssistantStatus.fromJson({
+      'connected': true,
+      'state': 'measuring',
+      'duration_sec': 120,
+      'elapsed_sec': 5,
+      'samples': 2,
+    });
+    await _pump(t, fake.status, fake: fake, shared: true);
+    expect(
+      _text(t, const Key('guiding-assistant-headline')),
+      'Measuring drift…',
+    );
+    fake.finish();
+    await t.pump(GuidingAssistantNotifier.runningPollInterval);
+    await t.pump();
+    await t.pump();
+    expect(find.byKey(const Key('guiding-assistant-apply')), findsOneWidget);
+    expect(find.textContaining('· applied'), findsNothing);
+    expect(
+      t
+          .widget<CheckboxListTile>(find.byKey(const Key('ga-suggest-exposure')))
+          .value,
+      isTrue,
+      reason: 'the new run offers everything again',
+    );
+  });
+
+  testWidgets('switching servers drops the applied marks', (t) async {
+    final fake = await _pump(t, _done(), shared: true);
+    await t.ensureVisible(find.byKey(const Key('guiding-assistant-apply')));
+    await t.tap(find.byKey(const Key('guiding-assistant-apply')));
+    await t.pump();
+    await t.pump();
+    expect(find.text('2–4 s · applied'), findsOneWidget);
+    await _pump(t, _done(), fake: fake, open: false, shared: true);
+    _container(t).read(_server.notifier).state = const AraServer(
+      hostname: 'other',
+      port: 5555,
+    );
+    await t.pump();
+    await _pump(t, _done(), fake: fake, shared: true);
+    expect(find.textContaining('· applied'), findsNothing);
+    expect(
+      t
+          .widget<CheckboxListTile>(find.byKey(const Key('ga-suggest-exposure')))
+          .value,
+      isTrue,
+    );
+  });
+
+  testWidgets('an Accept that lands after a server switch marks nothing', (
+    t,
+  ) async {
+    final fake = await _pump(t, _done(), shared: true);
+    final gate = Completer<void>();
+    fake.applyGate = gate;
+    await t.ensureVisible(find.byKey(const Key('guiding-assistant-apply')));
+    await t.tap(find.byKey(const Key('guiding-assistant-apply')));
+    await t.pump();
+    _container(t).read(_server.notifier).state = const AraServer(
+      hostname: 'other',
+      port: 5555,
+    );
+    await t.pump();
+    gate.complete();
+    await t.pump();
+    await t.pump();
+    expect(_container(t).read(guidingAssistantAppliedProvider), isEmpty);
   });
 
   testWidgets('a missing drift reads a bare dash', (t) async {
