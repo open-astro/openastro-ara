@@ -158,10 +158,11 @@ class GuidingAssistantNotifier extends Notifier<GuidingAssistantState> {
   Future<void> stop() => _act((api) => api.stop());
 
   Future<void> apply(List<String> which) => _act((api) async {
-    final applied = await api.apply(which);
-    if (ref.mounted) {
-      ref.read(guidingAssistantAppliedProvider.notifier).set(applied);
-    }
+    // Taken before the await: the marks belong to the root provider, so a
+    // dialog closed while Accept is in flight still records what was written
+    // (this notifier is gone by then, its ref unusable).
+    final marks = ref.read(guidingAssistantAppliedProvider.notifier);
+    marks.set(await api.apply(which));
     return null;
   });
 }

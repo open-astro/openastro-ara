@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -50,9 +52,13 @@ class _Fake implements GuidingAssistantClient {
     return status;
   }
 
+  /// When set, apply waits for it — a write still in flight.
+  Completer<void>? applyGate;
+
   @override
   Future<List<String>> apply(List<String> which) async {
     calls.add('apply ${which.join(',')}');
+    if (applyGate != null) await applyGate!.future;
     return which;
   }
 
@@ -352,6 +358,23 @@ void main() {
       _text(t, const Key('guiding-assistant-headline')),
       'Measuring drift…',
     );
+  });
+
+  testWidgets('Accept finished after the dialog closed still marks applied', (
+    t,
+  ) async {
+    final fake = await _pump(t, _done(), shared: true);
+    final gate = Completer<void>();
+    fake.applyGate = gate;
+    await t.ensureVisible(find.byKey(const Key('guiding-assistant-apply')));
+    await t.tap(find.byKey(const Key('guiding-assistant-apply')));
+    await t.pump();
+    // Close while the write is in flight, then let it finish.
+    await _pump(t, _done(), fake: fake, open: false, shared: true);
+    gate.complete();
+    await t.pump();
+    await _pump(t, _done(), fake: fake, shared: true);
+    expect(find.text('2–4 s · applied'), findsOneWidget);
   });
 
   testWidgets('a missing drift reads a bare dash', (t) async {
