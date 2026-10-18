@@ -23,14 +23,16 @@ namespace OpenAstroAra.Core.Utility {
     public readonly record struct DataPoint(double X, double Y);
 
     /// <summary>
-    /// The chart time axis OxyPlot's DateTimeAxis defined: fractional days since
-    /// 1899-12-30 00:00 (the OLE Automation date origin), ignoring <see cref="DateTimeKind"/>.
-    /// Kept bit-identical so clients reading the altitude series see the same numbers.
+    /// The chart time axis OxyPlot's DateTimeAxis defined: fractional days since 1899-12-30
+    /// 00:00 (the OLE Automation date origin), ignoring <see cref="DateTimeKind"/>. The
+    /// arithmetic is OxyPlot's own (days since 1899-12-31, plus one), not the equivalent
+    /// subtraction from 1899-12-30: the two differ in the last bit for about one input in
+    /// 60,000, and clients reading the altitude series must keep seeing the same doubles.
     /// </summary>
     public static class PlotTime {
-        private static readonly DateTime Origin = new(1899, 12, 30, 0, 0, 0, DateTimeKind.Unspecified);
+        private static readonly DateTime TimeOrigin = new(1899, 12, 31, 0, 0, 0, DateTimeKind.Unspecified);
 
-        public static double ToDouble(DateTime value) => (value - Origin).TotalDays;
+        public static double ToDouble(DateTime value) => (value - TimeOrigin).TotalDays + 1;
 
         /// <summary>
         /// For the rise/set series, whose event times are nullable. Every caller checks
