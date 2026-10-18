@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../ws/ws_providers.dart';
+import '../saved_server_state.dart';
 import 'guider_live_state.dart';
 import 'guider_state.dart';
 
@@ -236,6 +237,16 @@ class GuideStepNotifier extends Notifier<List<GuideStep>> {
       final was = prev?.asData?.value?.isConnected ?? false;
       final isNow = next.asData?.value?.isConnected ?? false;
       if (!was && isNow) unawaited(seedFromHistory());
+    });
+    // Review of #1387: another server's graph is another guider's night. The
+    // steps are dropped and the new server's history asked for; a seed that
+    // was in flight for the old server lands on nothing (clear() bumps the
+    // generation it checks). The seed waits a microtask: inside the change
+    // notification the live API provider still answers for the old server.
+    ref.listen(activeServerProvider, (prev, next) {
+      if (prev == next) return;
+      clear();
+      Future<void>.microtask(seedFromHistory);
     });
     Future<void>.microtask(seedFromHistory);
     return const [];

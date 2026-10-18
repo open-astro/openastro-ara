@@ -9,7 +9,10 @@ abstract interface class GuidingAssistantClient {
   Future<GuidingAssistantStatus> getStatus();
 
   /// Start the measurement: `durationSec` null = the guider's default
-  /// (two minutes); the status returned is the run's first.
+  /// (two minutes); the status returned is the run's first. A slow guider
+  /// can take longer than the other calls to answer (it checks the star and
+  /// the calibration, then switches guide output off), so the client allows
+  /// it [GuidingAssistantApi.startTimeout] rather than the usual 10 s.
   Future<GuidingAssistantStatus> start({
     double? durationSec,
     required bool measureBacklash,
@@ -36,6 +39,10 @@ class GuidingAssistantApi implements GuidingAssistantClient {
 
   static const _base = '/api/v1/equipment/guider/live/assistant';
 
+  /// Review of #1387: a Start that passed the 10 s receive timeout showed an
+  /// error while the run had in fact begun.
+  static const startTimeout = Duration(seconds: 30);
+
   static GuidingAssistantStatus _parse(dynamic data) =>
       data is Map<String, dynamic>
       ? GuidingAssistantStatus.fromJson(data)
@@ -53,6 +60,7 @@ class GuidingAssistantApi implements GuidingAssistantClient {
     (await _dio.post<dynamic>(
       '$_base/start',
       data: {'duration_sec': durationSec, 'measure_backlash': measureBacklash},
+      options: Options(receiveTimeout: startTimeout),
     )).data,
   );
 

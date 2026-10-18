@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/legacy.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/guider_calibration_view.dart';
 import 'package:openastroara/models/guider_live.dart';
@@ -254,6 +255,46 @@ void main() {
     c.read(guideStepsProvider);
     await Future<void>.delayed(Duration.zero);
     expect(c.read(guideStepsProvider), isEmpty);
+  });
+
+  test('switching servers drops the graph and seeds from the new one', () async {
+    // Review of #1387: the root-scoped graph kept the old server's steps and,
+    // being non-empty, never asked the new server for its history.
+    final old = _History([_p(4, 0.2), _p(2, 0.3)]);
+    final fresh = _History([_p(3, 0.5), _p(2, 0.6), _p(1, 0.7)]);
+    final server = StateProvider<AraServer?>(
+      (_) => const AraServer(hostname: 'a', port: 1),
+    );
+    final ws = StreamController<WsEvent>.broadcast();
+    addTearDown(() => unawaited(ws.close()));
+    final c = ProviderContainer(
+      overrides: [
+        activeServerProvider.overrideWith((ref) => ref.watch(server)),
+        guiderLiveApiFactoryProvider.overrideWithValue(
+          (s) => s.hostname == 'a' ? old : fresh,
+        ),
+        guiderStatusProvider.overrideWith(_Connected.new),
+        wsEventsProvider.overrideWith((ref) => ws.stream),
+      ],
+    );
+    addTearDown(c.dispose);
+    // The app shell always watches the active server; without a watcher the
+    // derived provider is lazy and its listeners never hear the change.
+    c.listen(activeServerProvider, (_, _) {});
+    c.read(guideStepsProvider);
+    await c.read(guiderStatusProvider.future);
+    await Future<void>.delayed(Duration.zero);
+    await Future<void>.delayed(Duration.zero);
+    expect(c.read(guideStepsProvider), hasLength(2));
+
+    c.read(server.notifier).state = const AraServer(hostname: 'b', port: 1);
+    await Future<void>.delayed(Duration.zero);
+    await Future<void>.delayed(Duration.zero);
+    await Future<void>.delayed(Duration.zero);
+    expect(old.calls, 1, reason: 'the old server is not asked again');
+    expect(fresh.calls, 1);
+    expect(c.read(guideStepsProvider), hasLength(3));
+    expect(c.read(guideStepsProvider).last.raPx, 0.7);
   });
 }
 

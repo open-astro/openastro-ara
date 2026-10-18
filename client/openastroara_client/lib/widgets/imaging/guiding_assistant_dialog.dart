@@ -3,7 +3,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../models/guider_status.dart';
 import '../../models/guiding_assistant.dart';
+import '../../state/guider/guider_state.dart';
 import '../../state/guider/guiding_assistant_state.dart';
 import '../../theme/ara_colors.dart';
 
@@ -52,6 +54,13 @@ class _GuidingAssistantPanelState extends ConsumerState<GuidingAssistantPanel> {
   Widget build(BuildContext context) {
     final state = ref.watch(guidingAssistantProvider);
     final notifier = ref.read(guidingAssistantProvider.notifier);
+    final applied = ref.watch(guidingAssistantAppliedProvider);
+    // The guider refuses the assistant while it guides (the star must drift
+    // freely); Ara says so up front instead of letting a run's guiding be
+    // interrupted by a Start that only fails (review of #1387).
+    final guiderState = ref.watch(guiderStatusProvider).asData?.value;
+    final guiding =
+        guiderState != null && guiderIsGuiding(guiderState.runtimeState);
     final status = state.status;
     final text = Theme.of(context).textTheme;
     final recs = status.recommendations;
@@ -59,9 +68,14 @@ class _GuidingAssistantPanelState extends ConsumerState<GuidingAssistantPanel> {
       _retickOnDone = true;
     } else if (status.isDone && recs != null && _retickOnDone) {
       _retickOnDone = false;
+      // A reopened dialog finds the last run's results: what Accept already
+      // wrote stays unticked (and marked applied) rather than being offered
+      // again.
       _accept
         ..clear()
-        ..addAll(recs.suggestions.map((s) => s.key));
+        ..addAll(
+          recs.suggestions.map((s) => s.key).where((k) => !applied.contains(k)),
+        );
     }
     return Padding(
       padding: const EdgeInsets.all(16),
@@ -80,10 +94,12 @@ class _GuidingAssistantPanelState extends ConsumerState<GuidingAssistantPanel> {
               const SizedBox(width: 12),
               Flexible(
                 child: Text(
-                  _headline(state),
+                  _headline(state, guiding: guiding),
                   key: const Key('guiding-assistant-headline'),
                   overflow: TextOverflow.ellipsis,
-                  style: text.bodySmall?.copyWith(color: _headlineColor(state)),
+                  style: text.bodySmall?.copyWith(
+                    color: _headlineColor(state, guiding: guiding),
+                  ),
                 ),
               ),
               const Spacer(),
@@ -117,7 +133,7 @@ class _GuidingAssistantPanelState extends ConsumerState<GuidingAssistantPanel> {
                     _Suggestions(
                       recs: recs,
                       accepted: _accept,
-                      applied: state.applied,
+                      applied: applied,
                       enabled: !state.busy,
                       onToggle: (key, on) => setState(
                         () => on ? _accept.add(key) : _accept.remove(key),
@@ -180,7 +196,7 @@ class _GuidingAssistantPanelState extends ConsumerState<GuidingAssistantPanel> {
                 ),
                 FilledButton.icon(
                   key: const Key('guiding-assistant-start'),
-                  onPressed: !status.connected || state.busy
+                  onPressed: !status.connected || state.busy || guiding
                       ? null
                       : () => unawaited(
                           notifier.start(
@@ -235,7 +251,7 @@ class _GuidingAssistantPanelState extends ConsumerState<GuidingAssistantPanel> {
     );
   }
 
-  static String _headline(GuidingAssistantState state) {
+  static String _headline(GuidingAssistantState state, {required bool guiding}) {
     final s = state.status;
     if (!state.loaded) return 'Reading…';
     if (!s.connected) {
@@ -246,14 +262,20 @@ class _GuidingAssistantPanelState extends ConsumerState<GuidingAssistantPanel> {
       'measuring_backlash' => 'Measuring Dec backlash…',
       'done' => 'Done — review the suggestions.',
       'failed' => 'Failed.',
+      _ when guiding =>
+        'Stop guiding first — the star must drift freely while it measures.',
       _ => 'Ready. Loop, pick a star, calibrate once, then Start.',
     };
   }
 
-  static Color _headlineColor(GuidingAssistantState state) {
+  static Color _headlineColor(
+    GuidingAssistantState state, {
+    required bool guiding,
+  }) {
     final s = state.status;
     if (!s.connected) return AraColors.accentDisconnected;
     if (s.isRunning) return AraColors.accentBusy;
+    if (guiding && !s.isDone && !s.isFailed) return AraColors.accentBusy;
     if (s.isDone) return AraColors.accentConnected;
     if (s.isFailed) return AraColors.accentError;
     return AraColors.textSecondary;
@@ -301,12 +323,15 @@ class _Figures extends StatelessWidget {
     return arc == null ? '$p px' : '$p px (${arc.toStringAsFixed(digits)}″)';
   }
 
+  /// A missing drift reads '—', not '—/min'.
+  String _perMin(double? px) => px == null ? '—' : '${_pxArc(px)}/min';
+
   @override
   Widget build(BuildContext context) {
     final pa = status.polarAlignErrorArcmin;
     final rows = <(String, String)>[
-      ('RA drift', '${_pxArc(status.raDriftPxMin)}/min'),
-      ('Dec drift', '${_pxArc(status.decDriftPxMin)}/min'),
+      ('RA drift', _perMin(status.raDriftPxMin)),
+      ('Dec drift', _perMin(status.decDriftPxMin)),
       ('RA RMS', _pxArc(status.raRmsPx)),
       ('Dec RMS', _pxArc(status.decRmsPx)),
       ('High-frequency RMS (seeing)', _pxArc(status.highFreqRmsPx)),
