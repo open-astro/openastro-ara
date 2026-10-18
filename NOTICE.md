@@ -83,15 +83,13 @@ disclosure fresh):
   an unmodified upstream release; `scripts/build-astrometry-natives.sh` compiles
   it into `liberfa` on every build.
 
-- **SuperNOVAS** (**v1.7.2**; git submodule `third_party/supernovas`, upstream
+- **SuperNOVAS** (**v1.8.0-rc2+**; git submodule `third_party/supernovas`, upstream
   https://github.com/Smithsonian/SuperNOVAS) — the Smithsonian Astrophysical
   Observatory's maintained fork of the U.S. Naval Observatory's NOVAS C 3.1
   positional-astronomy library. Released into the **public domain** (The
   Unlicense). The build compiles it into `libsupernovas` together with its
-  legacy JPL ephemeris reader (`legacy/solsys1.c`, `legacy/eph_manager.c`), which
-  `scripts/build-astrometry-natives.sh` patches on one line at build time
-  (`remainder` → `fmod` in `interpolate()`; see the script) until upstream fixes
-  it.
+  legacy JPL ephemeris reader (`legacy/solsys1.c`, `legacy/eph_manager.c`),
+  unmodified.
 
 ## Trademarks
 
