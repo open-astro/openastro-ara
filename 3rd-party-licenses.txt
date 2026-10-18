@@ -43,19 +43,19 @@ components live as source in the tree rather than as resolved packages; the
 authoritative disclosure is NOTICE.md "Bundled / vendored source", mirrored
 here so this file's --check gate flags any drift):
 
-  * IAU SOFA — Standards Of Fundamental Astronomy, release 2020-07-21
-    (SOFA/SOFA/src/*.c). Copyright (C) 2020 IAU SOFA Board. The six-clause
-    SOFA Software License is reproduced verbatim in every source file. The
-    vendored copies are INTACT AND UNCHANGED (no modifications). Per the SOFA
-    license acknowledgement: ARA uses routines/computations provided by SOFA
-    under license; ARA does NOT itself constitute software provided by and/or
-    endorsed by SOFA; and no ARA routine uses the "iau"/"sofa" name prefix.
-    http://www.iausofa.org
-  * NOVAS C3.1 — Naval Observatory Vector Astrometry Software, C Edition
-    v3.1 (NOVAS31/NOVAS31/). U.S. Naval Observatory, Astronomical Applications
-    Dept. Work of the U.S. Government — PUBLIC DOMAIN ("Approved for Public
-    Release"). Cited as a courtesy to the USNO.
-    http://www.usno.navy.mil/USNO/astronomical-applications
+  * ERFA — Essential Routines for Fundamental Astronomy v2.0.1 (SOFA release
+    2023-10-11), git submodule third_party/erfa, https://github.com/liberfa/erfa.
+    BSD-3-Clause, Copyright (C) 2013-2021 NumFOCUS Foundation, with the
+    SOFA-derived terms in its LICENSE: ARA uses routines/computations derived
+    from SOFA under license; ARA does NOT itself constitute software provided
+    by and/or endorsed by SOFA; and no ARA routine uses the "iau"/"sofa" name
+    prefix. Unmodified upstream release, compiled into liberfa on every build.
+  * SuperNOVAS — v1.7.2, git submodule third_party/supernovas,
+    https://github.com/Smithsonian/SuperNOVAS. Smithsonian Astrophysical
+    Observatory's maintained fork of USNO NOVAS C 3.1. PUBLIC DOMAIN (The
+    Unlicense). Compiled into libsupernovas with its legacy JPL ephemeris
+    reader, which scripts/build-astrometry-natives.sh patches on one line at
+    build time (remainder -> fmod in interpolate()) until upstream fixes it.
   * Accord.Imaging — part of the Accord.NET Framework, LGPL-2.1
     (Accord.Imaging/). Vendored in source form with all upstream LGPL headers
     intact; the only change from upstream is a whole-solution `dotnet format`

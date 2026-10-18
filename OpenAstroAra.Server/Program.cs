@@ -1378,23 +1378,18 @@ public partial class Program {
             LogPlateSolverWarning(app.Logger, solverWarning);
         }
 
-        // §14e — say up front whether the SOFA/NOVAS31 astrometry natives are next to the binary.
+        // §14e — say up front whether the ERFA/SuperNOVAS astrometry natives are next to the binary.
         // Without them the slew epoch transform degrades quietly, but altitude/sun/moon conditions,
         // the meridian-flip projection and polar-align solving fault on first use. A package built
         // without `scripts/build-astrometry-natives.sh` must be obvious in the first log lines.
-        // Windows keeps the inherited External/x64 DllLoader+SetDllDirectory path, which this probe
-        // does not mirror — a working Windows box would log a false "MISSING". Untested platform
-        // (RUNNING.md points at WSL2); say so instead of crying wolf.
-        if (OperatingSystem.IsWindows()) {
-            LogAstrometryNativesNotProbed(app.Logger);
-        } else {
-            var (sofaOk, novasOk) = OpenAstroAra.Astrometry.AstrometryNatives.Probe();
-            if (sofaOk && novasOk) {
+        {
+            var (erfaOk, novasOk) = OpenAstroAra.Astrometry.AstrometryNatives.Probe();
+            if (erfaOk && novasOk) {
                 LogAstrometryNativesPresent(app.Logger);
             } else {
-                var (sofaName, novasName) = OpenAstroAra.Astrometry.AstrometryNatives.ExpectedFileNames;
+                var (erfaName, novasName) = OpenAstroAra.Astrometry.AstrometryNatives.ExpectedFileNames;
                 LogAstrometryNativesMissing(app.Logger,
-                    sofaOk ? "present" : $"MISSING ({sofaName})",
+                    erfaOk ? "present" : $"MISSING ({erfaName})",
                     novasOk ? "present" : $"MISSING ({novasName})",
                     AppContext.BaseDirectory);
             }
@@ -1494,14 +1489,11 @@ public partial class Program {
     [LoggerMessage(Level = LogLevel.Error, Message = "Cannot load libcfitsio. Install via: {Hint}. Tried: {Tried}. Every capture will fail at the FITS write until it loads. Loader: {Error}")]
     private static partial void LogCfitsioMissing(ILogger logger, string hint, string tried, string error);
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "Astrometry natives loaded (SOFA + NOVAS31)")]
+    [LoggerMessage(Level = LogLevel.Information, Message = "Astrometry natives loaded (ERFA + SuperNOVAS)")]
     private static partial void LogAstrometryNativesPresent(ILogger logger);
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "Astrometry natives not probed on Windows (inherited External/x64 SOFAlib.dll / NOVAS31lib.dll loader path; untested platform)")]
-    private static partial void LogAstrometryNativesNotProbed(ILogger logger);
-
-    [LoggerMessage(Level = LogLevel.Warning, Message = "Astrometry natives incomplete: SOFA {Sofa}, NOVAS31 {Novas}. Expected next to the daemon in {BaseDir}; build them with scripts/build-astrometry-natives.sh. Cross-epoch slews fall back to untransformed coordinates; altitude/sun/moon conditions, the meridian-flip projection and polar-align solving will fail until they are installed.")]
-    private static partial void LogAstrometryNativesMissing(ILogger logger, string sofa, string novas, string baseDir);
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Astrometry natives incomplete: ERFA {Erfa}, SuperNOVAS {Novas}. Expected next to the daemon in {BaseDir}; build them with scripts/build-astrometry-natives.sh. Cross-epoch slews fall back to untransformed coordinates; altitude/sun/moon conditions, the meridian-flip projection and polar-align solving will fail until they are installed.")]
+    private static partial void LogAstrometryNativesMissing(ILogger logger, string erfa, string novas, string baseDir);
 
     /// <summary>
     /// Resolve listen port. Order of precedence (per playbook §2.1):

@@ -61,6 +61,42 @@ updates:
         patterns:
           - "*"
 
+  # The ERFA + SuperNOVAS astrometry sources (third_party/, built into the daemon's
+  # natives on every build). Dependabot moves a submodule to the tracked branch's
+  # head, not to a release tag, so each bump PR is gated by the astrometry tests
+  # (NovasEphemerisAgreementTest, NovasAbiTest, AstrometryNativeTransformTest).
+  - package-ecosystem: gitsubmodule
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: build
+    groups:
+      astrometry-sources:
+        patterns:
+          - "*"
+
+  # The .NET SDK pin in global.json (feature-band roll-forward is in the file;
+  # this bumps the pinned version itself).
+  - package-ecosystem: dotnet-sdk
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: build
+
+  # Android Gradle plugin, Kotlin and the Gradle wrapper for the Flutter client.
+  - package-ecosystem: gradle
+    directory: /client/openastroara_client/android
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: build
+    groups:
+      gradle:
+        patterns:
+          - "*"
+
   # Base image in the arm64 server Dockerfile.
   - package-ecosystem: docker
     directory: /

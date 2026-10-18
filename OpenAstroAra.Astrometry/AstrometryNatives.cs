@@ -18,7 +18,7 @@ using System.Runtime.InteropServices;
 namespace OpenAstroAra.Astrometry {
 
     /// <summary>
-    /// Boot-time presence check for the SOFA + NOVAS31 natives the cross-epoch transforms,
+    /// Boot-time presence check for the ERFA + SuperNOVAS natives the cross-epoch transforms,
     /// rise/set bodies and Julian-date helpers P/Invoke. The daemon logs the result at startup so
     /// a package that shipped without them (they are built by <c>scripts/build-astrometry-natives.sh</c>
     /// and staged next to the binary by CI) is obvious in the first lines of the log rather than
@@ -29,23 +29,20 @@ namespace OpenAstroAra.Astrometry {
     public static class AstrometryNatives {
 
         /// <summary>The on-disk names the runtime probes, per OS, for log messages.</summary>
-        public static (string Sofa, string Novas) ExpectedFileNames =>
-            OperatingSystem.IsWindows() ? ("SOFAlib.dll", "NOVAS31lib.dll")
-            : OperatingSystem.IsMacOS() ? ("libsofa.dylib", "libnovas31.dylib")
-            : ("libsofa.so", "libnovas31.so");
+        public static (string Erfa, string Novas) ExpectedFileNames =>
+            OperatingSystem.IsWindows() ? ("erfa.dll", "supernovas.dll")
+            : OperatingSystem.IsMacOS() ? ("liberfa.dylib", "libsupernovas.dylib")
+            : ("liberfa.so", "libsupernovas.so");
 
         /// <summary>True for each library that loads from the assembly's directory or the
         /// platform's default probe path AND exports the entry point the managed side calls first
         /// (a library built from a partial source set would dlopen fine and fail on first use).
         /// Never throws.</summary>
-        public static (bool Sofa, bool Novas) Probe() {
-            var (sofaName, novasName) = OperatingSystem.IsWindows()
-                ? ("SOFAlib.dll", "NOVAS31lib.dll")
-                : ("sofa", "novas31");
-            // iauAtci13: the J2000→JNOW transform (Coordinates.TransformToJNOW); julian_date: what
+        public static (bool Erfa, bool Novas) Probe() {
+            // eraAtci13: the J2000→JNOW transform (Coordinates.TransformToJNOW); julian_date: what
             // every transform's TT date goes through (AstroUtil.GetJulianDate). Names match the
             // DllImport EntryPoints in SOFA.cs / NOVAS.cs.
-            return (TryLoad(sofaName, "iauAtci13"), TryLoad(novasName, "julian_date"));
+            return (TryLoad("erfa", "eraAtci13"), TryLoad("supernovas", "julian_date"));
         }
 
         private static bool TryLoad(string name, string export) {

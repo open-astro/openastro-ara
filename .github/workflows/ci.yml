@@ -339,6 +339,7 @@ jobs:
       - name: Checkout (no LFS)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4.x — pinned per zizmor + CodeRabbit security finding on PR #12
         with:
+          submodules: true  # third_party/erfa + supernovas: the astrometry natives build from them (§14e)
           lfs: false
           persist-credentials: false
 
@@ -412,6 +413,7 @@ jobs:
       - name: Checkout (no LFS)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4.x — pinned per zizmor + CodeRabbit security finding on PR #12
         with:
+          submodules: true  # third_party/erfa + supernovas: the astrometry natives build from them (§14e)
           lfs: false
           persist-credentials: false
 
@@ -450,13 +452,13 @@ jobs:
       - name: dotnet build (solution, Release) — warnings are errors
         run: dotnet build OpenAstroAra.sln -c Release --no-restore
 
-      # §14e — the SOFA/NOVAS31 astrometry natives are built from the vendored C sources by
+      # §14e — the ERFA/SuperNOVAS astrometry natives are built from the third_party/ submodules by
       # OpenAstroAra.Astrometry.csproj during the solution build above and staged next to the
       # test binary, so AstrometryNativeTransformTest exercises the REAL cross-epoch transforms
       # (it self-Ignores when the natives are absent). This step only asserts the build did
       # that: a regression in the csproj target must fail CI here, not be masked by a manual
       # staging step (as the old one did) or by a test that quietly Ignores itself.
-      - name: Assert the build staged the astrometry natives (SOFA + NOVAS31)
+      - name: Assert the build staged the astrometry natives (ERFA + SuperNOVAS)
         run: |
           # Derive the TFM dir instead of hardcoding net10.0 (a TFM bump must not silently
           # stop staging the natives — the transform tests would self-Ignore, masking it).
@@ -466,7 +468,7 @@ jobs:
             echo "expected exactly one test output TFM dir, found: ${dirs[*]:-none}" >&2
             exit 1
           fi
-          for lib in libsofa.so libnovas31.so; do
+          for lib in liberfa.so libsupernovas.so; do
             if [ ! -f "${dirs[0]}$lib" ]; then
               echo "::error::dotnet build did not stage ${dirs[0]}$lib — the BuildAstrometryNatives target in OpenAstroAra.Astrometry.csproj regressed" >&2
               exit 1
@@ -494,6 +496,7 @@ jobs:
       - name: Checkout (no LFS)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4.x — pinned per zizmor + CodeRabbit security finding on PR #12
         with:
+          submodules: true  # third_party/erfa + supernovas: the astrometry natives build from them (§14e)
           lfs: false
           persist-credentials: false
 
@@ -535,6 +538,7 @@ jobs:
       - name: Checkout (no LFS)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4.x — pinned per zizmor + CodeRabbit security finding on PR #12
         with:
+          submodules: true  # third_party/erfa + supernovas: the astrometry natives build from them (§14e)
           lfs: false
           persist-credentials: false
           fetch-depth: 0  # need full history + tags so `git describe --tags --exact-match HEAD` can find the release tag for the .deb version step
@@ -754,7 +758,7 @@ jobs:
           set -e
           file ./publish/arm64/OpenAstroAra.Server | tee /dev/stderr | grep -q 'aarch64'
 
-      # §14e — the SOFA/NOVAS31 astrometry natives ship WITH the daemon. The test job's
+      # §14e — the ERFA/SuperNOVAS astrometry natives ship WITH the daemon. The test job's
       # solution build stages host-arch ones next to the test binary (and asserts it did) to
       # exercise the real transforms; dotnet publish never carries those. This builds them for the Pi (arm64
       # cross-compiler on the x64 runner) and stages them next to the published binary, so the
@@ -762,13 +766,13 @@ jobs:
       # degrades, but altitude/sun/moon conditions, the flip projection and polar-align solving
       # fault on first use. Program.cs logs their presence at boot; build-deb.sh refuses a
       # publish dir that lacks them.
-      - name: Build astrometry natives (SOFA + NOVAS31) for linux-arm64
+      - name: Build astrometry natives (ERFA + SuperNOVAS) for linux-arm64
         run: |
           set -e
           sudo apt-get update
           sudo apt-get install -y gcc-aarch64-linux-gnu
           CC=aarch64-linux-gnu-gcc ./scripts/build-astrometry-natives.sh ./publish/arm64
-          for lib in libsofa.so libnovas31.so; do
+          for lib in liberfa.so libsupernovas.so; do
             file "./publish/arm64/$lib" | tee /dev/stderr | grep -q 'ARM aarch64'
           done
 

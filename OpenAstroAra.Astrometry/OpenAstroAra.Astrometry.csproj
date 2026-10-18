@@ -58,7 +58,7 @@
     <PackageLicenseFile>LICENSE.txt</PackageLicenseFile>
   </PropertyGroup>
   <ItemGroup>
-    <!-- §14e — the JPL DE421 planetary ephemeris (1900-2053) NOVAS' eph_manager
+    <!-- §14e — the JPL DE421 planetary ephemeris (1900-2053) SuperNOVAS' legacy eph_manager
          reads. NINA's Windows installer shipped this file; the port has to carry
          it itself or every NOVAS body position is confidently wrong on a host
          without it (found on rc91: sun at -73° in mid-morning). Copied next to
@@ -73,18 +73,18 @@
          daemon has it wherever the assembly runs, offline included. -->
     <EmbeddedResource Include="External\iers-dut1.tsv" LogicalName="OpenAstroAra.Astrometry.External.iers-dut1.tsv" />
   </ItemGroup>
-  <!-- §14e — the SOFA + NOVAS31 natives on Linux/macOS, built once from the vendored C sources
-       by scripts/build-astrometry-natives.sh into obj/ and copied to every consumer's output
+  <!-- §14e — the ERFA + SuperNOVAS natives on Linux/macOS, built once from the third_party/
+       submodules by scripts/build-astrometry-natives.sh into obj/ and copied to every consumer's output
        (Server, Test) the way External\JPLEPH is. Before this, a fresh checkout or worktree ran
        `dotnet test` with 34 astrometry, refraction and sequencer-target failures until someone
        ran the script by hand into the test bin dir (2026-10-17). Incremental: rebuilt only when a
-       vendored source or the script changes. They are build-output only, never publish output
+       submodule source or the script changes. They are build-output only, never publish output
        (CopyToPublishDirectory=Never): a cross-publish (linux-arm64 from an x64 runner or a Mac)
        must not carry host-arch libraries, and CI stages its own arm64 build after publish. The
        RuntimeIdentifier guard alone does not achieve that — this is a RID-agnostic library, so the
        SDK undefines RuntimeIdentifier for it inside a Server publish and the target runs anyway
        (review of #1388; repro: `dotnet publish OpenAstroAra.Server -r linux-arm64` carried
-       host-built libsofa/libnovas31). A host without a C compiler gets a warning and the
+       host-built natives). A host without a C compiler gets a warning and the
        un-staged behaviour it had before (the transform tests self-Ignore); Directory.Build.props'
        TreatWarningsAsErrors is the C# compiler's, not MSBuild's, so the build still succeeds.
        The output dir is computed inside the targets: IntermediateOutputPath is not defined until
@@ -96,21 +96,26 @@
       <AstrometryNativesDir>$([MSBuild]::NormalizeDirectory('$(MSBuildProjectDirectory)', '$(IntermediateOutputPath)', 'natives'))</AstrometryNativesDir>
       <AstrometryNativeExt Condition="$([MSBuild]::IsOSPlatform('OSX'))">dylib</AstrometryNativeExt>
       <AstrometryNativeExt Condition="'$(AstrometryNativeExt)' == ''">so</AstrometryNativeExt>
-      <_AstrometrySofa>$(AstrometryNativesDir)libsofa.$(AstrometryNativeExt)</_AstrometrySofa>
-      <_AstrometryNovas>$(AstrometryNativesDir)libnovas31.$(AstrometryNativeExt)</_AstrometryNovas>
+      <_AstrometryErfa>$(AstrometryNativesDir)liberfa.$(AstrometryNativeExt)</_AstrometryErfa>
+      <_AstrometryNovas>$(AstrometryNativesDir)libsupernovas.$(AstrometryNativeExt)</_AstrometryNovas>
+      <_AstrometrySubmodules>$(MSBuildProjectDirectory)/../third_party</_AstrometrySubmodules>
     </PropertyGroup>
     <ItemGroup>
-      <_AstrometryNativeSource Include="$(MSBuildProjectDirectory)/../scripts/build-astrometry-natives.sh;$(MSBuildProjectDirectory)/../NOVAS31/NOVAS31/*.c;$(MSBuildProjectDirectory)/../NOVAS31/NOVAS31/*.h;$(MSBuildProjectDirectory)/../SOFA/SOFA/src/*.c;$(MSBuildProjectDirectory)/../SOFA/SOFA/src/*.h" />
+      <_AstrometryNativeSource Include="$(MSBuildProjectDirectory)/../scripts/build-astrometry-natives.sh;$(_AstrometrySubmodules)/erfa/src/*.c;$(_AstrometrySubmodules)/erfa/src/*.h;$(_AstrometrySubmodules)/erfa/configure.ac;$(_AstrometrySubmodules)/supernovas/src/c99/*.c;$(_AstrometrySubmodules)/supernovas/include/*.h;$(_AstrometrySubmodules)/supernovas/include/**/*.c;$(_AstrometrySubmodules)/supernovas/legacy/*.c;$(_AstrometrySubmodules)/supernovas/legacy/*.h" />
     </ItemGroup>
   </Target>
   <Target Name="_CompileAstrometryNatives"
           DependsOnTargets="_AstrometryNativeProps"
           Inputs="@(_AstrometryNativeSource)"
-          Outputs="$(_AstrometrySofa);$(_AstrometryNovas)">
+          Outputs="$(_AstrometryErfa);$(_AstrometryNovas)">
+    <!-- An un-initialised submodule is a checkout error, not a missing compiler: say so and
+         stop, rather than warn and build a daemon without transforms. -->
+    <Error Condition="!Exists('$(_AstrometrySubmodules)/erfa/src/erfa.h') or !Exists('$(_AstrometrySubmodules)/supernovas/include/novas.h')"
+           Text="third_party/erfa or third_party/supernovas is empty — the astrometry sources are git submodules. Run: git submodule update --init" />
     <!-- Drop the previous pair first: a rebuild that fails (a source edit that does not
          compile) must leave nothing for the Exists checks to stage, so the warning fires
          instead of a stale library shipping quietly. -->
-    <Delete Files="$(_AstrometrySofa);$(_AstrometryNovas)" />
+    <Delete Files="$(_AstrometryErfa);$(_AstrometryNovas)" />
     <Exec Command="bash scripts/build-astrometry-natives.sh &quot;$(AstrometryNativesDir)&quot;"
           WorkingDirectory="$(MSBuildProjectDirectory)/.."
           ContinueOnError="true"
@@ -123,20 +128,20 @@
     <ItemGroup>
       <!-- Literal Link values: a %(Filename) transform here batches against the JPLEPH
            Content item above and copied the library out as "JPLEPH". -->
-      <Content Include="$(_AstrometrySofa)" Condition="Exists('$(_AstrometrySofa)') and Exists('$(_AstrometryNovas)')">
+      <Content Include="$(_AstrometryErfa)" Condition="Exists('$(_AstrometryErfa)') and Exists('$(_AstrometryNovas)')">
         <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-        <Link>libsofa.$(AstrometryNativeExt)</Link>
+        <Link>liberfa.$(AstrometryNativeExt)</Link>
         <CopyToPublishDirectory>Never</CopyToPublishDirectory>
         <Visible>false</Visible>
       </Content>
-      <Content Include="$(_AstrometryNovas)" Condition="Exists('$(_AstrometrySofa)') and Exists('$(_AstrometryNovas)')">
+      <Content Include="$(_AstrometryNovas)" Condition="Exists('$(_AstrometryErfa)') and Exists('$(_AstrometryNovas)')">
         <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-        <Link>libnovas31.$(AstrometryNativeExt)</Link>
+        <Link>libsupernovas.$(AstrometryNativeExt)</Link>
         <CopyToPublishDirectory>Never</CopyToPublishDirectory>
         <Visible>false</Visible>
       </Content>
     </ItemGroup>
-    <Warning Condition="!Exists('$(_AstrometrySofa)') or !Exists('$(_AstrometryNovas)')"
-             Text="SOFA/NOVAS31 astrometry natives were not built (no C compiler?) — cross-epoch transforms and the tests that need them will not work on this host. See scripts/build-astrometry-natives.sh." />
+    <Warning Condition="!Exists('$(_AstrometryErfa)') or !Exists('$(_AstrometryNovas)')"
+             Text="ERFA/SuperNOVAS astrometry natives were not built (no C compiler?) — cross-epoch transforms and the tests that need them will not work on this host. See scripts/build-astrometry-natives.sh." />
   </Target>
 </Project>

@@ -5,7 +5,7 @@ Run from the repo root:
 
     python3 -m unittest discover -s scripts/tests -v
 
-libsofa.so / libnovas31.so are cross-built on ubuntu-latest (glibc 2.39) and
+liberfa.so / libsupernovas.so are cross-built on ubuntu-latest (glibc 2.39) and
 need `fmod@GLIBC_2.38`. Debian Bookworm ships glibc 2.36: the .deb installs,
 dlopen fails, and the boot probe reports the file MISSING although it is on
 disk. The package therefore has to refuse to install there, and every artifact
@@ -23,7 +23,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 CONTROL = REPO_ROOT / "packaging" / "debian" / "DEBIAN" / "control.template"
 BUILD_DEB = REPO_ROOT / "packaging" / "build-deb.sh"
 DOCKERFILE = REPO_ROOT / "Dockerfile"
-NATIVES = ("libsofa.so", "libnovas31.so")
+NATIVES = ("liberfa.so", "libsupernovas.so")
 
 
 class Libc6Dependency(unittest.TestCase):

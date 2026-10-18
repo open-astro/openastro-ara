@@ -35,6 +35,9 @@ at the top. This happens in the same commit that pushes the release tag.
 
 ## [Unreleased]
 
+### Changed
+- **The astrometry natives come from maintained upstreams (#1386).** The daemon's fundamental-astronomy and positional-astronomy routines are now built from [ERFA](https://github.com/liberfa/erfa) 2.0.1 (the BSD fork of IAU SOFA, 2023 release) and [SuperNOVAS](https://github.com/Smithsonian/SuperNOVAS) 1.7.2 (the maintained fork of NOVAS C 3.1), pulled in as git submodules under `third_party/` and bumped by Dependabot, instead of the SOFA 2020 and NOVAS 3.1 copies that had been vendored since the N.I.N.A. port. The libraries are `liberfa` and `libsupernovas`; the P/Invoke structs follow SuperNOVAS's layout (a size test pins them) and a one-line build-time patch corrects SuperNOVAS's legacy JPL ephemeris reader, which placed the Sun 14° off. Clone with `--recurse-submodules` (or run `git submodule update --init` once); a build on an empty `third_party/` says so. Dependabot also now watches the .NET SDK pin and the Android Gradle plugins.
+
 ### Security
 - **API hardening (#1194).** While another client holds the control slot, a command that carries the session id of a client that was taken over is refused with 409 until that client re-claims the slot; with the slot free, and for requests without a session header, nothing changes. The daemon serves at most 16 WebSocket subscribers at once and answers the next with 503 and a retry hint instead of running out of memory to a reconnect storm. Frame downloads, previews, exports and deletes only ever touch files under the capture roots (the save directory, the storage drive, the daemon's fallback folder); a catalog row pointing anywhere else is treated as a missing file and logged.
 

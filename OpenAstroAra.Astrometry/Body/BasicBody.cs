@@ -53,14 +53,14 @@ namespace OpenAstroAra.Astrometry.Body {
 
                 var observer = new NOVAS.Observer() {
                     OnSurf = location,
-                    Where = (short)NOVAS.ObserverLocation.EarthSurface
+                    Where = NOVAS.ObserverLocation.EarthSurface
                 };
 
                 var obj = new NOVAS.CelestialObject() {
                     Name = Name,
                     Number = (short)BodyNumber,
                     Star = new NOVAS.CatalogueEntry(),
-                    Type = (short)NOVAS.ObjectType.MajorPlanetSunOrMoon
+                    Type = NOVAS.ObjectType.MajorPlanetSunOrMoon
                 };
 
                 var objPosition = new SkyPosition();

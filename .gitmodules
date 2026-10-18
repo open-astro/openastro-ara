@@ -1,0 +1,6 @@
+[submodule "third_party/erfa"]
+	path = third_party/erfa
+	url = https://github.com/liberfa/erfa.git
+[submodule "third_party/supernovas"]
+	path = third_party/supernovas
+	url = https://github.com/Smithsonian/SuperNOVAS.git

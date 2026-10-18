@@ -19,12 +19,16 @@ using System.IO;
 using System.Runtime.InteropServices;
 
 namespace OpenAstroAra.Astrometry {
-    /* https://aa.usno.navy.mil/software/novas/novas_c/novasc_info.php
-     * https://aa.usno.navy.mil/software/novas/novas_c/NOVAS_C3.1_Guide.pdf
+    /* NOVAS C 3.1 entry points (https://aa.usno.navy.mil/software/novas_info), P/Invoked from
+     * SuperNOVAS (https://github.com/Smithsonian/SuperNOVAS), the maintained fork that keeps the
+     * NOVAS C API. SuperNOVAS changed the struct layouts (enum-typed and long fields, an orbit
+     * block on object, humidity on on_surface), so the marshaling structs below mirror SuperNOVAS,
+     * not NOVAS 3.1 — NovasAbiTest pins their sizes. The library is libsupernovas, built from the
+     * third_party/supernovas submodule by scripts/build-astrometry-natives.sh (§14e).
      */
 
     public static class NOVAS {
-        private const string DLLNAME = "NOVAS31lib.dll";
+        private const string DLLNAME = "supernovas";
 
         private static double JPL_EPHEM_START_DATE = 2305424.5; // First date of data in the ephemerides file
         private static double JPL_EPHEM_END_DATE = 2525008.5; // Last date of data in the ephemerides file
@@ -39,9 +43,6 @@ namespace OpenAstroAra.Astrometry {
         public static readonly string EphemerisLocation = Path.Combine(System.AppDomain.CurrentDomain.BaseDirectory, "External", "JPLEPH");
 
         static NOVAS() {
-            AstrometryNativeResolver.Register(); // map the Windows DLL name to libnovas31 off-Windows
-            DllLoader.LoadDll(Path.Combine("NOVAS", DLLNAME));
-
             short a = 0;
             if (File.Exists(EphemerisLocation)) {
                 var code = EphemOpen(EphemerisLocation, ref JPL_EPHEM_START_DATE, ref JPL_EPHEM_END_DATE, ref a);
@@ -73,7 +74,7 @@ namespace OpenAstroAra.Astrometry {
         }
 
         public static void CalDate(double jtd, ref short year, ref short month, ref short day, ref double hour) {
-            NOVAS_CalDate(jtd, ref year, ref month, ref day, ref hour);
+            _ = NOVAS_CalDate(jtd, ref year, ref month, ref day, ref hour); // SuperNOVAS: non-zero only for a NaN date; the outputs are set regardless
         }
 
         /// <summary>
@@ -101,7 +102,7 @@ namespace OpenAstroAra.Astrometry {
         /// <returns></returns>
         internal static short Place(double jdTt, CelestialObject celestialObject, Observer observer, double deltaT, CoordinateSystem coordinateSystem, Accuracy accuracy, ref SkyPosition position) {
             lock (lockObj) {
-                var err = NOVAS_Place(jdTt, ref celestialObject, ref observer, deltaT, (short)coordinateSystem, (short)accuracy, ref position);
+                var err = NOVAS_Place(jdTt, ref celestialObject, ref observer, deltaT, coordinateSystem, accuracy, ref position);
                 return err;
             }
         }
@@ -114,7 +115,7 @@ namespace OpenAstroAra.Astrometry {
         /// <param name="accuracy">Requested level of accuracy. Full by default</param>
         /// <returns>Apparent equatorial coordinates from an earth-based geocentric observer</returns>
         internal static Coordinates PlanetApparentCoordinates(double jdTt, Body body, Accuracy accuracy = Accuracy.Full) {
-            var result = NOVAS_make_object(ObjectType.MajorPlanetSunOrMoon, (short)body, body.ToString(), dummy_star.Value, out var celestialObject);
+            var result = NOVAS_make_object(ObjectType.MajorPlanetSunOrMoon, (long)body, body.ToString(), dummy_star.Value, out var celestialObject);
             if (result != 0) {
                 throw new InvalidOperationException($"Failed MakeObject for {body}. Result={result}");
             }
@@ -151,7 +152,7 @@ namespace OpenAstroAra.Astrometry {
 
         public static RectangularPV GetPositionOnEarthSurface(double jdtt, double deltaT, Angle latitude, Angle longitude, double elevation) {
             var observer = new NOVAS.Observer() {
-                Where = 1,
+                Where = ObserverLocation.EarthSurface,
                 OnSurf = new NOVAS.OnSurface() {
                     Latitude = latitude.Degree,
                     Longitude = longitude.Degree,
@@ -178,7 +179,7 @@ namespace OpenAstroAra.Astrometry {
 
         [DefaultDllImportSearchPaths(DllImportSearchPath.SafeDirectories)]
         [DllImport(DLLNAME, EntryPoint = "cal_date", CallingConvention = CallingConvention.Cdecl)]
-        private static extern void NOVAS_CalDate(double tjd, ref short year, ref short month, ref short day, ref double hour);
+        private static extern int NOVAS_CalDate(double tjd, ref short year, ref short month, ref short day, ref double hour);
 
         [DefaultDllImportSearchPaths(DllImportSearchPath.SafeDirectories)]
         [DllImport(DLLNAME, EntryPoint = "julian_date", CallingConvention = CallingConvention.Cdecl)]
@@ -190,11 +191,7 @@ namespace OpenAstroAra.Astrometry {
 
         [DefaultDllImportSearchPaths(DllImportSearchPath.SafeDirectories)]
         [DllImport(DLLNAME, EntryPoint = "place", CallingConvention = CallingConvention.Cdecl)]
-        private static extern short NOVAS_Place(double jdTt, ref CelestialObject celObject, ref Observer observer, double deltaT, short coordinateSystem, short accuracy, ref SkyPosition position);
-
-        [DefaultDllImportSearchPaths(DllImportSearchPath.SafeDirectories)]
-        [DllImport(DLLNAME, EntryPoint = "set_racio_file", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi, BestFitMapping = false, ThrowOnUnmappableChar = true)]
-        private static extern void SetRACIOFile([MarshalAs(UnmanagedType.LPStr)] string Name);
+        private static extern short NOVAS_Place(double jdTt, ref CelestialObject celObject, ref Observer observer, double deltaT, CoordinateSystem coordinateSystem, Accuracy accuracy, ref SkyPosition position);
 
         [DefaultDllImportSearchPaths(DllImportSearchPath.SafeDirectories)]
         [DllImport(DLLNAME, EntryPoint = "ephem_open", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi, BestFitMapping = false, ThrowOnUnmappableChar = true)]
@@ -235,7 +232,7 @@ namespace OpenAstroAra.Astrometry {
         [DllImport(DLLNAME, EntryPoint = "make_object", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi, BestFitMapping = false, ThrowOnUnmappableChar = true)]
         private static extern short NOVAS_make_object(
             ObjectType type,
-            short number,
+            long number,
             [MarshalAs(UnmanagedType.LPTStr, SizeConst = SIZE_OF_OBJ_NAME)] string name,
             in CatalogueEntry star_data,
             [Out] out CelestialObject cel_obj);
@@ -268,8 +265,9 @@ namespace OpenAstroAra.Astrometry {
         // not apply — the only one that crosses the assembly boundary, SkyPosition, is a
         // top-level public type below.
 
-        private const int SIZE_OF_OBJ_NAME = 51;
-        private const int SIZE_OF_CAT_NAME = 4;
+        // SuperNOVAS novas.h: SIZE_OF_OBJ_NAME 50, SIZE_OF_CAT_NAME 6 (NOVAS 3.1 had 51 / 4).
+        private const int SIZE_OF_OBJ_NAME = 50;
+        private const int SIZE_OF_CAT_NAME = 6;
 
         /// <summary>
         /// Represents "cat_entry". contains the astrometric catalog data for a celestial object; equator and
@@ -292,7 +290,8 @@ namespace OpenAstroAra.Astrometry {
             /// <summary>
             /// integer identifier assigned to object
             /// </summary>
-            public int StarNumber;
+            /// <summary>C <c>long</c>: 8 bytes on every platform the daemon runs on (LP64 Linux/macOS).</summary>
+            public long StarNumber;
 
             public double RA;
             public double Dec;
@@ -330,8 +329,9 @@ namespace OpenAstroAra.Astrometry {
             /// = 1 ... minor planet
             /// = 2... object located outside the solar system
             /// (star, nebula, galaxy, etc.)
+            /// C <c>enum novas_object_type</c> (int-sized).
             /// </summary>
-            public short Type;
+            public ObjectType Type;
 
             /// <summary>
             ///  object number
@@ -340,8 +340,9 @@ namespace OpenAstroAra.Astrometry {
             ///  For 'type' = 1: minor planet number
             ///  For 'type' = 2: set to 0 (object is
             ///  fully specified in 'struct cat_entry')
+            ///  C <c>long</c> (LP64).
             /// </summary>
-            public short Number;
+            public long Number;
 
             [MarshalAsAttribute(UnmanagedType.ByValTStr, SizeConst = SIZE_OF_OBJ_NAME)]
             public string Name;
@@ -350,6 +351,38 @@ namespace OpenAstroAra.Astrometry {
             /// basic astrometric data for any celestial object located outside the solar system; the catalog data for a star
             /// </summary>
             public CatalogueEntry Star;
+
+            /// <summary>
+            /// SuperNOVAS 1.2+ orbital elements for an orbital object; unused here, but part of the
+            /// struct the library reads and writes, so it must be in the layout.
+            /// </summary>
+            public OrbitalElements Orbit;
+        }
+
+        /// <summary>Mirrors SuperNOVAS <c>novas_orbital_system</c> (three int-sized enums, two doubles).</summary>
+        [StructLayout(LayoutKind.Sequential)]
+        internal struct OrbitalSystem {
+            public int Center;
+            public int Plane;
+            public int Type;
+            public double Obl;
+            public double Omega;
+        }
+
+        /// <summary>Mirrors SuperNOVAS <c>novas_orbital</c>.</summary>
+        [StructLayout(LayoutKind.Sequential)]
+        internal struct OrbitalElements {
+            public OrbitalSystem System;
+            public double JdTdb;
+            public double A;
+            public double E;
+            public double OmegaLower;
+            public double OmegaUpper;
+            public double I;
+            public double M0;
+            public double N;
+            public double ApsisPeriod;
+            public double NodePeriod;
         }
 
         /// <summary>
@@ -365,6 +398,8 @@ namespace OpenAstroAra.Astrometry {
             public double Height;
             public double Temperature;
             public double Pressure;
+            /// <summary>[%] relative humidity, SuperNOVAS 1.1+.</summary>
+            public double Humidity;
         }
 
         /// <summary>
@@ -399,7 +434,8 @@ namespace OpenAstroAra.Astrometry {
             /// = 1: observer on surface of earth
             /// = 2: observer on near-earth spacecraft
             /// </summary>
-            public short Where;
+            /// <summary>C <c>enum novas_observer_place</c> (int-sized).</summary>
+            public ObserverLocation Where;
 
             /// <summary>
             /// structure containing data for an observer's location on the surface of the Earth(where = 1)
@@ -427,7 +463,7 @@ namespace OpenAstroAra.Astrometry {
             ObjectLocatedOutsideSolarSystem = 2
         }
 
-        internal enum Body : short {
+        internal enum Body : short { // solarsystem_hp takes short body/origin
             Mercury = 1,
             Venus = 2,
             Earth = 3,
@@ -454,7 +490,7 @@ namespace OpenAstroAra.Astrometry {
             SpaceNearEarth = 2
         }
 
-        internal enum GstType : short {
+        internal enum GstType { // enum novas_equinox_type: int-sized (NOVAS 3.1 took a short)
             GreenwichMeanSiderealTime = 0,
             GreenwichApparentSiderealTime = 1
         }

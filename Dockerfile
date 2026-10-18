@@ -2,8 +2,8 @@
 # Per design/PORT_PLAYBOOK.md §11.2 + §13 deployment target.
 #
 # Build context expects ./publish/arm64/ to already contain the self-contained
-# .NET publish output PLUS the SOFA/NOVAS31 astrometry natives (libsofa.so /
-# libnovas31.so, cross-built by scripts/build-astrometry-natives.sh — §14e). CI's
+# .NET publish output PLUS the ERFA/SuperNOVAS astrometry natives (liberfa.so /
+# libsupernovas.so, cross-built by scripts/build-astrometry-natives.sh — §14e). CI's
 # `publish` step produces that via:
 #   dotnet publish OpenAstroAra.Server -c Release -r linux-arm64 \
 #     --self-contained -p:PublishAot=false -o ./publish/arm64
@@ -33,7 +33,7 @@ WORKDIR /app
 COPY publish/arm64/ ./
 # Natives guard — see the header. Re-copying the same files is a no-op in the
 # image; a publish dir that skipped scripts/build-astrometry-natives.sh fails here.
-COPY publish/arm64/libsofa.so publish/arm64/libnovas31.so ./
+COPY publish/arm64/liberfa.so publish/arm64/libsupernovas.so ./
 
 # Default Kestrel port per OpenAstroAra.Server/Program.cs ResolvePort:
 # env OPENASTROARA_PORT > appsettings OpenAstroAra:Port > 5555 default.

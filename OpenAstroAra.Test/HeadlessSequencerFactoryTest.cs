@@ -256,12 +256,12 @@ namespace OpenAstroAra.Test {
             // TypeInitializationException the first time and a DllNotFoundException underneath.
             var conditions = new System.Collections.Generic.List<ISequenceCondition>();
             Assert.That(HeadlessSequencerFactory.TryAddCondition(conditions,
-                () => throw new System.TypeInitializationException("NOVAS", new System.DllNotFoundException("libnovas31.so"))), Is.False);
+                () => throw new System.TypeInitializationException("NOVAS", new System.DllNotFoundException("libsupernovas.so"))), Is.False);
             Assert.That(HeadlessSequencerFactory.TryAddCondition(conditions,
-                () => throw new System.DllNotFoundException("libnovas31.so")), Is.False);
+                () => throw new System.DllNotFoundException("libsupernovas.so")), Is.False);
             // A mismatched library: wrong architecture, or an older build missing an export.
             Assert.That(HeadlessSequencerFactory.TryAddCondition(conditions,
-                () => throw new System.BadImageFormatException("libnovas31.so")), Is.False);
+                () => throw new System.BadImageFormatException("libsupernovas.so")), Is.False);
             Assert.That(HeadlessSequencerFactory.TryAddCondition(conditions,
                 () => throw new System.EntryPointNotFoundException("novas_transform")), Is.False);
             Assert.That(conditions, Is.Empty);

@@ -73,26 +73,26 @@ so they are disclosed here (and mirrored in the static header of
 `scripts/generate-3rd-party-licenses.py`, whose `--check` CI gate keeps that
 disclosure fresh):
 
-- **IAU SOFA** (Standards Of Fundamental Astronomy, **release 2020-07-21**;
-  `SOFA/SOFA/src/*.c`) — the reference C implementation of IAU astronomy
-  standards. Copyright (C) 2020 IAU SOFA Board. The full six-clause SOFA
-  Software License is reproduced verbatim at the foot of every `.c` source
-  file. The vendored sources are **intact and unchanged** copies of the
-  upstream SOFA release (no modifications), so no "derived work" obligations
-  under License clause 3 are triggered. Nevertheless, per the SOFA license
-  acknowledgement requirements: this product uses routines and computations
-  provided by SOFA under license; it **does not itself constitute software
-  provided by and/or endorsed by SOFA**; and no routine in ARA uses the `iau`
-  or `sofa` name prefix (or trivial case variants thereof). SOFA does not
-  warrant the software and is not liable for results obtained through its use.
+- **ERFA** (Essential Routines for Fundamental Astronomy, **v2.0.1**, based on
+  SOFA release 2023-10-11; git submodule `third_party/erfa`, upstream
+  https://github.com/liberfa/erfa) — the NumFOCUS-maintained fork of the IAU SOFA
+  C library with the routines renamed `era*`. **BSD-3-Clause** (Copyright (C)
+  2013-2021 NumFOCUS Foundation), with the SOFA-derived terms in its `LICENSE`:
+  this product uses routines and computations derived from SOFA under license;
+  it does not itself constitute software provided by and/or endorsed by SOFA;
+  and no routine in ARA uses the `iau` or `sofa` name prefix. The submodule is
+  an unmodified upstream release; `scripts/build-astrometry-natives.sh` compiles
+  it into `liberfa` on every build.
 
-- **NOVAS C3.1** (Naval Observatory Vector Astrometry Software, C Edition,
-  Version 3.1, March 2011; `NOVAS31/NOVAS31/`) — positional-astronomy library
-  from the U.S. Naval Observatory, Astronomical Applications Department. NOVAS
-  is a work of the U.S. Government and is **in the public domain** ("Approved
-  for Public Release", per `NOVAS31/NOVAS31/README.txt`); no license terms
-  restrict its use or redistribution. Cited here as a courtesy to the USNO.
-  See [USNO Astronomical Applications](http://www.usno.navy.mil/USNO/astronomical-applications).
+- **SuperNOVAS** (**v1.7.2**; git submodule `third_party/supernovas`, upstream
+  https://github.com/Smithsonian/SuperNOVAS) — the Smithsonian Astrophysical
+  Observatory's maintained fork of the U.S. Naval Observatory's NOVAS C 3.1
+  positional-astronomy library. Released into the **public domain** (The
+  Unlicense). The build compiles it into `libsupernovas` together with its
+  legacy JPL ephemeris reader (`legacy/solsys1.c`, `legacy/eph_manager.c`), which
+  `scripts/build-astrometry-natives.sh` patches on one line at build time
+  (`remainder` → `fmod` in `interpolate()`; see the script) until upstream fixes
+  it.
 
 - **Accord.Imaging** (part of the Accord.NET Framework, **LGPL-2.1**;
   `Accord.Imaging/`) — imaging algorithms vendored in source form. All original

@@ -118,11 +118,13 @@ class ClassifyTest(unittest.TestCase):
                 self.assertTrue(self.c(f)["dotnet"], f)
 
     def test_vendored_native_sources_run_the_dotnet_jobs(self):
-        # SOFA/NOVAS31 are compiled by build-astrometry-natives.sh and staged
-        # next to the test binary; the transform tests self-Ignore without
-        # them, so a change here that skipped the analyzer would be invisible.
-        self.assertTrue(self.c("SOFA/src/iauAtci13.c")["dotnet"])
-        self.assertTrue(self.c("NOVAS31/novas.c")["dotnet"])
+        # The ERFA/SuperNOVAS submodules are compiled by build-astrometry-natives.sh
+        # and staged next to the test binary; the transform tests self-Ignore
+        # without them, so a submodule bump (Dependabot moves the gitlink and
+        # .gitmodules) that skipped the analyzer would be invisible.
+        self.assertTrue(self.c("third_party/erfa")["dotnet"])
+        self.assertTrue(self.c("third_party/supernovas")["dotnet"])
+        self.assertTrue(self.c(".gitmodules")["dotnet"])
         self.assertTrue(self.c("scripts/build-astrometry-natives.sh")["dotnet"])
 
     def test_the_simulator_pin_fixture_runs_the_dotnet_jobs(self):

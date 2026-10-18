@@ -24,7 +24,7 @@ namespace OpenAstroAra.Test {
 
     /// <summary>
     /// The NOVAS bodies and the pure-C# SiteAstrometry must tell the same
-    /// story. On rc91 they didn't: without libnovas31 + the JPL ephemeris
+    /// story. On rc91 they didn't: without libsupernovas + the JPL ephemeris
     /// file, NOVAS produced confidently WRONG positions (sun at -73° in
     /// mid-morning, "New Moon" during a waning gibbous) rather than failing
     /// cleanly. JPLEPH now ships with every publish; this pins that when the
@@ -40,13 +40,13 @@ namespace OpenAstroAra.Test {
 
         private static bool NativesAvailable() {
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) return true;
-            return NativeLibrary.TryLoad("novas31", typeof(NOVAS).Assembly, null, out _);
+            return NativeLibrary.TryLoad("supernovas", typeof(NOVAS).Assembly, null, out _);
         }
 
         [Test]
         public async Task Novas_and_SiteAstrometry_agree_on_the_sky() {
             if (!NativesAvailable()) {
-                Assert.Ignore("libnovas31 not present — install a C compiler (cc) and build again; dotnet build stages it.");
+                Assert.Ignore("libsupernovas not present — install a C compiler (cc) and build again; dotnet build stages it.");
             }
             if (!File.Exists(NOVAS.EphemerisLocation)) {
                 Assert.Ignore($"JPLEPH not found at {NOVAS.EphemerisLocation}");

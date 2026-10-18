@@ -12,23 +12,20 @@
 
 #endregion "copyright"
 
-using OpenAstroAra.Core.Utility;
 using System;
-using System.IO;
 using System.Runtime.InteropServices;
 
 namespace OpenAstroAra.Astrometry {
 
     /// <summary>
-    /// http://www.iausofa.org/current_C.html#Downloads
+    /// Fundamental-astronomy routines, P/Invoked from ERFA (https://github.com/liberfa/erfa), the
+    /// BSD-licensed, maintained fork of IAU SOFA with the same routines under an <c>era</c> prefix.
+    /// The class keeps its historical name: callers read as <c>SOFA.Atci13</c> and the algorithms
+    /// are SOFA's. The library is <c>liberfa</c>, built from the third_party/erfa submodule by
+    /// scripts/build-astrometry-natives.sh and staged next to the assembly (§14e).
     /// </summary>
     public static class SOFA {
-        private const string DLLNAME = "SOFAlib.dll";
-
-        static SOFA() {
-            AstrometryNativeResolver.Register(); // map the Windows DLL name to libsofa off-Windows
-            DllLoader.LoadDll(Path.Combine("SOFA", DLLNAME));
-        }
+        private const string DLLNAME = "erfa";
 
         #region "Public Methods"
 
@@ -278,7 +275,7 @@ namespace OpenAstroAra.Astrometry {
         /// <param name="d1">2−part Julian Date (Notes 3,4)</param>
         /// <param name="d2">2−part Julian Date (Notes 3,4)</param>
         /// <returns></returns>
-        public static short Dtf2d(string scale, int iy, int im, int id, int ihr, int imn, double sec, ref double d1, ref double d2) {
+        public static int Dtf2d(string scale, int iy, int im, int id, int ihr, int imn, double sec, ref double d1, ref double d2) {
             return SOFA_Dtf2d(scale, iy, im, id, ihr, imn, sec, ref d1, ref d2);
         }
 
@@ -316,7 +313,7 @@ namespace OpenAstroAra.Astrometry {
         /// <param name="tai1">TAI as a 2−part Julian Date (Note 5)</param>
         /// <param name="tai2">TAI as a 2−part Julian Date (Note 5)</param>
         /// <returns>int status: +1 = dubious year (Note 3); 0 = OK; −1 = unacceptable date</returns>
-        public static short UtcTai(double utc1, double utc2, ref double tai1, ref double tai2) {
+        public static int UtcTai(double utc1, double utc2, ref double tai1, ref double tai2) {
             return SOFA_Utctai(utc1, utc2, ref tai1, ref tai2);
         }
 
@@ -336,7 +333,7 @@ namespace OpenAstroAra.Astrometry {
         /// <param name="tt1">TT as a 2−part Julian Date</param>
         /// <param name="tt2">TT as a 2−part Julian Date</param>
         /// <returns>status 0 = ok</returns>
-        public static short TaiTt(double tai1, double tai2, ref double tt1, ref double tt2) {
+        public static int TaiTt(double tai1, double tai2, ref double tt1, ref double tt2) {
             return SOFA_Taitt(tai1, tai2, ref tt1, ref tt2);
         }
 
@@ -397,8 +394,8 @@ namespace OpenAstroAra.Astrometry {
         /// <param name="hourAngle">hour angle (local)</param>
         /// <param name="declination">declination</param>
         /// <returns></returns>
-        public static short Ae2hd(double azimuth, double altitude, double latitude, ref double hourAngle, ref double declination) {
-            return SOFA_Ae2hd(azimuth, altitude, latitude, ref hourAngle, ref declination);
+        public static void Ae2hd(double azimuth, double altitude, double latitude, ref double hourAngle, ref double declination) {
+            SOFA_Ae2hd(azimuth, altitude, latitude, ref hourAngle, ref declination);
         }
 
         /// <summary>
@@ -462,8 +459,8 @@ namespace OpenAstroAra.Astrometry {
         /// <param name="azimuth">azimuth</param>
         /// <param name="altitude">altitude</param>
         /// <returns></returns>
-        public static short Hd2ae(double hourAngle, double declination, double latitude, ref double azimuth, ref double altitude) {
-            return SOFA_Hd2ae(hourAngle, declination, latitude, ref azimuth, ref altitude);
+        public static void Hd2ae(double hourAngle, double declination, double latitude, ref double azimuth, ref double altitude) {
+            SOFA_Hd2ae(hourAngle, declination, latitude, ref azimuth, ref altitude);
         }
 
         /// <summary>
@@ -631,7 +628,7 @@ namespace OpenAstroAra.Astrometry {
         /// <param name="rob">returned observed right ascension (CIO−based, radians)</param>
         /// <param name="eo">returned equation of the origins (ERA−GST)</param>
         /// <returns></returns>
-        public static short CelestialToTopocentric(double rc, double dc, double pr, double pd, double px, double rv, double utc1, double utc2, double dut1, double elong, double phi, double hm, double xp, double yp, double phpa, double tc, double rh, double wl, ref double aob, ref double zob, ref double hob, ref double dob, ref double rob, ref double eo) {
+        public static int CelestialToTopocentric(double rc, double dc, double pr, double pd, double px, double rv, double utc1, double utc2, double dut1, double elong, double phi, double hm, double xp, double yp, double phpa, double tc, double rh, double wl, ref double aob, ref double zob, ref double hob, ref double dob, ref double rob, ref double eo) {
             return SOFA_Atco13(rc, dc, pr, pd, px, rv, utc1, utc2, dut1, elong, phi, hm, xp, yp, phpa, tc, rh, wl, ref aob, ref zob, ref hob, ref dob, ref rob, ref eo);
         }
 
@@ -785,7 +782,7 @@ namespace OpenAstroAra.Astrometry {
         /// <param name="rc">ICRS astrometric RA (radians)</param>
         /// <param name="dc">ICRS astrometric Dec (radians)</param>
         /// <returns></returns>
-        public static short TopocentricToCelestial(string type, double ob1, double ob2, double utc1, double utc2, double dut1, double elong, double phi, double hm, double xp, double yp, double phpa, double tc, double rh, double wl, ref double rc, ref double dc) {
+        public static int TopocentricToCelestial(string type, double ob1, double ob2, double utc1, double utc2, double dut1, double elong, double phi, double hm, double xp, double yp, double phpa, double tc, double rh, double wl, ref double rc, ref double dc) {
             return SOFA_Atoc13(type, ob1, ob2, utc1, utc2, dut1, elong, phi, hm, xp, yp, phpa, tc, rh, wl, ref rc, ref dc);
         }
 
@@ -814,8 +811,8 @@ namespace OpenAstroAra.Astrometry {
         /// <returns>obliquity of the ecliptic (radians, Note 2)</returns>
         public static Angle MeanEcclipticObliquity(double utc1, double utc2) {
             double tai1 = 0, tai2 = 0, tt1 = 0, tt2 = 0;
-            SOFA_Utctai(utc1, utc2, ref tai1, ref tai2);
-            SOFA_Taitt(tai1, tai2, ref tt1, ref tt2);
+            _ = SOFA_Utctai(utc1, utc2, ref tai1, ref tai2);
+            _ = SOFA_Taitt(tai1, tai2, ref tt1, ref tt2);
 
             var meanObliquity = SOFA_iauObl80(tt1, tt2);
             return Angle.ByRadians(meanObliquity);
@@ -946,59 +943,59 @@ namespace OpenAstroAra.Astrometry {
         #region "External DLL calls"
 
         [DefaultDllImportSearchPaths(DllImportSearchPath.SafeDirectories)]
-        [DllImport(DLLNAME, EntryPoint = "iauAtci13", CallingConvention = CallingConvention.Cdecl)]
+        [DllImport(DLLNAME, EntryPoint = "eraAtci13", CallingConvention = CallingConvention.Cdecl)]
         private static extern void SOFA_Atci13(double rc, double dc, double pr, double pd, double px, double rv, double date1, double date2, ref double ri, ref double di, ref double eo);
 
         [DefaultDllImportSearchPaths(DllImportSearchPath.SafeDirectories)]
-        [DllImport(DLLNAME, EntryPoint = "iauAtic13", CallingConvention = CallingConvention.Cdecl)]
+        [DllImport(DLLNAME, EntryPoint = "eraAtic13", CallingConvention = CallingConvention.Cdecl)]
         private static extern void SOFA_Atic13(double ri, double di, double date1, double date2, ref double rc, ref double dc, ref double eo);
 
         [DefaultDllImportSearchPaths(DllImportSearchPath.SafeDirectories)]
-        [DllImport(DLLNAME, EntryPoint = "iauAnp", CallingConvention = CallingConvention.Cdecl)]
+        [DllImport(DLLNAME, EntryPoint = "eraAnp", CallingConvention = CallingConvention.Cdecl)]
         private static extern double SOFA_Anp(double a);
 
         [DefaultDllImportSearchPaths(DllImportSearchPath.SafeDirectories)]
-        [DllImport(DLLNAME, EntryPoint = "iauEo06a", CallingConvention = CallingConvention.Cdecl)]
+        [DllImport(DLLNAME, EntryPoint = "eraEo06a", CallingConvention = CallingConvention.Cdecl)]
         private static extern double SOFA_Eo06a(double date1, double date2);
 
         [DefaultDllImportSearchPaths(DllImportSearchPath.SafeDirectories)]
-        [DllImport(DLLNAME, EntryPoint = "iauDtf2d", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi, BestFitMapping = false, ThrowOnUnmappableChar = true)]
-        private static extern short SOFA_Dtf2d(string scale, int iy, int im, int id, int ihr, int imn, double sec, ref double d1, ref double d2);
+        [DllImport(DLLNAME, EntryPoint = "eraDtf2d", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi, BestFitMapping = false, ThrowOnUnmappableChar = true)]
+        private static extern int SOFA_Dtf2d(string scale, int iy, int im, int id, int ihr, int imn, double sec, ref double d1, ref double d2);
 
         [DefaultDllImportSearchPaths(DllImportSearchPath.SafeDirectories)]
-        [DllImport(DLLNAME, EntryPoint = "iauUtctai", CallingConvention = CallingConvention.Cdecl)]
-        private static extern short SOFA_Utctai(double utc1, double utc2, ref double tai1, ref double tai2);
+        [DllImport(DLLNAME, EntryPoint = "eraUtctai", CallingConvention = CallingConvention.Cdecl)]
+        private static extern int SOFA_Utctai(double utc1, double utc2, ref double tai1, ref double tai2);
 
         [DefaultDllImportSearchPaths(DllImportSearchPath.SafeDirectories)]
-        [DllImport(DLLNAME, EntryPoint = "iauTaitt", CallingConvention = CallingConvention.Cdecl)]
-        private static extern short SOFA_Taitt(double tai1, double tai2, ref double tt1, ref double tt2);
+        [DllImport(DLLNAME, EntryPoint = "eraTaitt", CallingConvention = CallingConvention.Cdecl)]
+        private static extern int SOFA_Taitt(double tai1, double tai2, ref double tt1, ref double tt2);
 
         [DefaultDllImportSearchPaths(DllImportSearchPath.SafeDirectories)]
-        [DllImport(DLLNAME, EntryPoint = "iauAe2hd", CallingConvention = CallingConvention.Cdecl)]
-        private static extern short SOFA_Ae2hd(double az, double el, double phi, ref double ha, ref double dec);
+        [DllImport(DLLNAME, EntryPoint = "eraAe2hd", CallingConvention = CallingConvention.Cdecl)]
+        private static extern void SOFA_Ae2hd(double az, double el, double phi, ref double ha, ref double dec);
 
         [DefaultDllImportSearchPaths(DllImportSearchPath.SafeDirectories)]
-        [DllImport(DLLNAME, EntryPoint = "iauHd2ae", CallingConvention = CallingConvention.Cdecl)]
-        private static extern short SOFA_Hd2ae(double ha, double dec, double phi, ref double az, ref double el);
+        [DllImport(DLLNAME, EntryPoint = "eraHd2ae", CallingConvention = CallingConvention.Cdecl)]
+        private static extern void SOFA_Hd2ae(double ha, double dec, double phi, ref double az, ref double el);
 
         [DefaultDllImportSearchPaths(DllImportSearchPath.SafeDirectories)]
-        [DllImport(DLLNAME, EntryPoint = "iauAtco13", CallingConvention = CallingConvention.Cdecl)]
-        private static extern short SOFA_Atco13(double rc, double dc, double pr, double pd, double px, double rv, double utc1, double utc2, double dut1, double elong, double phi, double hm, double xp, double yp, double phpa, double tc, double rh, double wl, ref double aob, ref double zob, ref double hob, ref double dob, ref double rob, ref double eo);
+        [DllImport(DLLNAME, EntryPoint = "eraAtco13", CallingConvention = CallingConvention.Cdecl)]
+        private static extern int SOFA_Atco13(double rc, double dc, double pr, double pd, double px, double rv, double utc1, double utc2, double dut1, double elong, double phi, double hm, double xp, double yp, double phpa, double tc, double rh, double wl, ref double aob, ref double zob, ref double hob, ref double dob, ref double rob, ref double eo);
 
         [DefaultDllImportSearchPaths(DllImportSearchPath.SafeDirectories)]
-        [DllImport(DLLNAME, EntryPoint = "iauAtoc13", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi, BestFitMapping = false, ThrowOnUnmappableChar = true)]
-        private static extern short SOFA_Atoc13(string type, double ob1, double ob2, double utc1, double utc2, double dut1, double elong, double phi, double hm, double xp, double yp, double phpa, double tc, double rh, double wl, ref double rc, ref double dc);
+        [DllImport(DLLNAME, EntryPoint = "eraAtoc13", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi, BestFitMapping = false, ThrowOnUnmappableChar = true)]
+        private static extern int SOFA_Atoc13(string type, double ob1, double ob2, double utc1, double utc2, double dut1, double elong, double phi, double hm, double xp, double yp, double phpa, double tc, double rh, double wl, ref double rc, ref double dc);
 
         [DefaultDllImportSearchPaths(DllImportSearchPath.SafeDirectories)]
-        [DllImport(DLLNAME, EntryPoint = "iauSeps", CallingConvention = CallingConvention.Cdecl)]
+        [DllImport(DLLNAME, EntryPoint = "eraSeps", CallingConvention = CallingConvention.Cdecl)]
         private static extern double SOFA_Seps(double al, double ap, double bl, double bp);
 
         [DefaultDllImportSearchPaths(DllImportSearchPath.SafeDirectories)]
-        [DllImport(DLLNAME, EntryPoint = "iauObl80", CallingConvention = CallingConvention.Cdecl)]
+        [DllImport(DLLNAME, EntryPoint = "eraObl80", CallingConvention = CallingConvention.Cdecl)]
         private static extern double SOFA_iauObl80(double date1, double date2);
 
         [DefaultDllImportSearchPaths(DllImportSearchPath.SafeDirectories)]
-        [DllImport(DLLNAME, EntryPoint = "iauRefco", CallingConvention = CallingConvention.Cdecl)]
+        [DllImport(DLLNAME, EntryPoint = "eraRefco", CallingConvention = CallingConvention.Cdecl)]
         private static extern void SOFA_iauRefco(double phpa, double tc, double rh, double wl, ref double refa, ref double refb);
 
         #endregion "External DLL calls"

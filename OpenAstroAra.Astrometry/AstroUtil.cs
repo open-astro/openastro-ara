@@ -579,14 +579,14 @@ namespace OpenAstroAra.Astrometry {
 
             var obs = new NOVAS.Observer() {
                 OnSurf = onSurface,
-                Where = (short)NOVAS.ObserverLocation.EarthSurface
+                Where = NOVAS.ObserverLocation.EarthSurface
             };
 
             var celestialObject = new NOVAS.CelestialObject() {
                 Name = "Moon",
-                Number = (short)NOVAS.Body.Moon,
+                Number = (long)NOVAS.Body.Moon,
                 Star = new NOVAS.CatalogueEntry(),
-                Type = (short)NOVAS.ObjectType.MajorPlanetSunOrMoon
+                Type = NOVAS.ObjectType.MajorPlanetSunOrMoon
             };
 
             var skyPosition = new SkyPosition();
@@ -616,14 +616,14 @@ namespace OpenAstroAra.Astrometry {
 
             var obs = new NOVAS.Observer() {
                 OnSurf = onSurface,
-                Where = (short)NOVAS.ObserverLocation.EarthSurface
+                Where = NOVAS.ObserverLocation.EarthSurface
             };
 
             var celestialObject = new NOVAS.CelestialObject() {
                 Name = "Sun",
-                Number = (short)NOVAS.Body.Sun,
+                Number = (long)NOVAS.Body.Sun,
                 Star = new NOVAS.CatalogueEntry(),
-                Type = (short)NOVAS.ObjectType.MajorPlanetSunOrMoon
+                Type = NOVAS.ObjectType.MajorPlanetSunOrMoon
             };
 
             var skyPosition = new SkyPosition();
