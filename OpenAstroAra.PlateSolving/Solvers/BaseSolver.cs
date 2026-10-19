@@ -40,6 +40,9 @@ namespace OpenAstroAra.PlateSolving.Solvers {
         /// <summary>Test seam: the directory the solvers actually write to.</summary>
         internal static string WorkingDirectory => WORKING_DIRECTORY;
 
+        /// <summary>Test seam: where a failed run's frame is kept.</summary>
+        internal static string FailedDirectory => FAILED_DIRECTORY;
+
         internal static string ResolveWorkingDirectory() {
             var disk = Path.Combine(CoreUtil.APPLICATIONTEMPPATH, "PlateSolver");
             var shm = SharedMemoryRoot;
@@ -59,6 +62,11 @@ namespace OpenAstroAra.PlateSolving.Solvers {
                 var probe = Path.Combine(candidate, $".probe-{Environment.ProcessId}");
                 File.WriteAllBytes(probe, Array.Empty<byte>());
                 File.Delete(probe);
+                // A frame left behind by a crash or a kill would sit in RAM until reboot; nothing in
+                // here outlives a solve, so sweep it at startup.
+                foreach (var stale in Directory.EnumerateFiles(candidate)) {
+                    try { File.Delete(stale); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+                }
                 return candidate;
             } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
                 return disk;
