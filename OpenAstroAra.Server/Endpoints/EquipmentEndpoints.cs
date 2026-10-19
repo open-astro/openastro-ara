@@ -274,6 +274,7 @@ public static partial class EquipmentEndpoints {
             Results.Accepted(value: await svc.DisconnectAsync(key, ct)));
         telescope.MapPost("/slew", ([FromBody] SlewRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, ITelescopeService svc, ISequencerService sequencer, CancellationToken ct) =>
                 SlewAsync(request, key, svc, sequencer, ct))
+            .Produces<OperationAcceptedDto>(StatusCodes.Status202Accepted)
             .ProducesProblem(StatusCodes.Status409Conflict); // run_in_progress: a slew during a sequence run that was neither a sync nor forced
         // Park's body (an optional Reason) is nullable so a bodyless POST works — the panel's
         // Park button sends no body, and a required [FromBody] would 400/415 it (the bug where

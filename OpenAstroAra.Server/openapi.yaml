@@ -265,6 +265,12 @@ paths:
               $ref: '#/components/schemas/SlewRequestDto'
         required: true
       responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationAcceptedDto'
         '409':
           description: Conflict
           content:
