@@ -125,6 +125,26 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Active_run_ids_name_a_running_or_paused_run_and_nothing_once_it_ends() {
+            var id = Guid.NewGuid();
+            var svc = BuildService(id, BuildBody(c => {
+                c.Items.Add(new WaitForTimeSpan { Time = 2 });
+            }));
+            Assert.That(await svc.ActiveRunIdsAsync(CancellationToken.None), Is.Empty, "nothing started yet");
+
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            await WaitForInstructionInFlightAsync(svc, id, 0);
+            Assert.That(await svc.ActiveRunIdsAsync(CancellationToken.None), Is.EqualTo(new[] { id }));
+
+            await svc.PauseAsync(id, null, CancellationToken.None);
+            Assert.That(await svc.ActiveRunIdsAsync(CancellationToken.None), Is.EqualTo(new[] { id }), "a paused run is still a run in progress");
+
+            await svc.ResumeAsync(id, null, null, CancellationToken.None);
+            await WaitForTerminalAsync(svc, id);
+            Assert.That(await svc.ActiveRunIdsAsync(CancellationToken.None), Is.Empty, "a finished run is retained for its state but is not active");
+        }
+
+        [Test]
         public async Task Progress_frames_carry_the_current_instructions_description() {
             // Rig night 2026-10-18: the camera cooled for 4.7 min and the Run tab read "Run started"
             // throughout, because the description was only on GET /state, which the client re-reads

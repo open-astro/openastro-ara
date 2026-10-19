@@ -139,9 +139,10 @@ public interface ISequencerService {
     /// </summary>
     Task<IReadOnlyList<Guid>> PauseActiveRunsAsync(bool adoptable, CancellationToken ct);
 
-    /// <summary>The sequences whose run is in progress (running, paused or starting; not terminal and
-    /// not already aborting): a read-only look for callers that would disturb a run, such as a manual
-    /// slew. Empty when nothing runs.</summary>
+    /// <summary>The sequences whose run is in progress (starting, running, paused, or parked awaiting the
+    /// user; not terminal and not already aborting): a read-only look for callers that would disturb a
+    /// run, such as a manual slew. A parked run counts on purpose: moving the mount under it changes what
+    /// Resume continues into. Empty when nothing runs.</summary>
     Task<IReadOnlyList<Guid>> ActiveRunIdsAsync(CancellationToken ct);
 
     /// <summary>

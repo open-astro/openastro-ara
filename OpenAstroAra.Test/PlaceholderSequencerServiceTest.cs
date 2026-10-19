@@ -43,6 +43,23 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task ActiveRunIds_follow_the_placeholder_runs_lifecycle() {
+            var svc = new PlaceholderSequencerService();
+            var id = Guid.NewGuid();
+            Assert.That(await svc.ActiveRunIdsAsync(CancellationToken.None), Is.Empty);
+            await svc.StartAsync(id,
+                new SequenceStartRequestDto(DryRun: false, StartFromInstructionIndex: null, ContinueOnRecoverableErrors: false),
+                idempotencyKey: null, CancellationToken.None);
+            Assert.That(await svc.ActiveRunIdsAsync(CancellationToken.None), Is.EqualTo(new[] { id }));
+            await svc.AbortAsync(id, idempotencyKey: null, CancellationToken.None);
+            // The placeholder's abort is immediate or near-immediate; either way an aborting run is not active.
+            for (var i = 0; i < 50 && (await svc.ActiveRunIdsAsync(CancellationToken.None)).Count > 0; i++) {
+                await Task.Delay(20);
+            }
+            Assert.That(await svc.ActiveRunIdsAsync(CancellationToken.None), Is.Empty);
+        }
+
+        [Test]
         public async Task StartAsync_uses_default_count_without_sequences_resolver() {
             var svc = new PlaceholderSequencerService();
             var id = Guid.NewGuid();

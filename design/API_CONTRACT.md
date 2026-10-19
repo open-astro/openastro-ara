@@ -780,6 +780,18 @@ and dragged the fitted minimum up and sideways. Dropped probes stay in `probes` 
 1.62 px while the same sweep's confirmation frame measured 0.96, so every Smart shot under 1.70 px
 "was in focus" (2026-10-03) and the drawn calibration curve bottomed well above the measured points.
 
+### 2026-10-18 — A manual slew during a sequence run is refused until the caller says so
+
+**Endpoint(s) or area:** `POST /api/v1/equipment/telescope/slew` (`SlewRequestDto` gains `force?: bool`, default false; new 409 refusal); `ISequencerService.ActiveRunIdsAsync`.
+
+**Decision:** while a sequence run is in progress (starting, running, paused, or parked awaiting the user; not terminal, not already aborting) a slew that is neither a sync nor forced is refused with 409, problem title `run_in_progress`, and a detail sentence naming the consequence and the way out ("… slewing now stops guiding and pauses the run awaiting you. Repeat with force to slew anyway."). A repeat with `force: true` is accepted as before (202). A sync never moves the mount and is never refused. Clients ask the user on that title and repeat forced on yes (the mount panel's dialog; the Planning page asks before it unparks, since its unpark is not gated). The refused request never reaches the telescope service.
+
+**Reasoning:** rig night 2026-10-18: a Planning GoTo was accepted mid-dither, the guider stopped (stop-guiding-when-slewing) and the run parked awaiting the user, with nothing to say a run was active. Pausing is the safe outcome; the user should be told first.
+
+**Spec ref:** `OpenAstroAra.Server/openapi.yaml#/paths/~1api~1v1~1equipment~1telescope~1slew`; `Endpoints/EquipmentEndpoints.cs` (`SlewAsync`, `SlewDuringRunRefusal`), `Services/SequencerService.cs` / `PlaceholderSequenceServices.cs` (`ActiveRunIdsAsync`); tests `EquipmentEndpointsSlewTest`, `SequencerServiceTest`, client `equipment_mount_panel_test`.
+
+**Related:** CHANGELOG [Unreleased]; #1364 rig checklist.
+
 ### 2026-10-03 — Smart Focus: a reads-as-focused shot is bracketed before it counts
 
 **Where:** the `autofocus.*` WebSocket events (`fallback_classic` reasons) and the run record's `probes`.
