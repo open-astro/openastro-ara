@@ -502,13 +502,27 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             _lastSettleError = null;
             if (Connected) {
                 var state = await GetAppState();
+                if (state == PhdAppState.LOSTLOCK) {
+                    // A star lost for a frame or two (a cloud wisp, a seeing dip, the guider's own
+                    // min-HFD) is back before the dither would have settled; PHD2 re-acquires it on
+                    // its own. Waiting here keeps a 2-frame loss from parking the run (2026-10-18,
+                    // 21:54: "No star found" twice, the dither refused, the run paused for the user).
+                    state = await WaitForStarBackAsync(progress, ct);
+                }
                 if (state != PhdAppState.GUIDING) {
                     if (state == PhdAppState.LOSTLOCK) {
                         Notifier.ShowWarning(Loc.Instance["LblDitherSkippedBecauseNotLostLock"]);
                     } else {
                         Notifier.ShowWarning(Loc.Instance["LblDitherSkippedBecauseNotGuiding"]);
                     }
-
+                    // A calibration in progress or a pause someone asked for is not a stopped guider:
+                    // the sequencer must not restart guiding over it. The verdict names the state, so
+                    // the Dither item parks the run with that reason instead of sending `guide`.
+                    if (state == PhdAppState.CALIBRATING) {
+                        _lastSettleError = "the guider is calibrating";
+                    } else if (state == PhdAppState.PAUSED) {
+                        _lastSettleError = "the guider is paused";
+                    }
                     return false;
                 }
 
@@ -544,6 +558,29 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                 await WaitForSettling(progress, ct);
             }
             return true;
+        }
+
+        /// <summary>How long a dither waits for a lost guide star to come back before refusing. Static
+        /// so tests can shorten it; the default covers the few frames PHD2 needs to re-acquire.</summary>
+        public static TimeSpan LostStarDitherWait { get; set; } = TimeSpan.FromSeconds(20);
+
+        /// <summary>Polls the guider while it reports LostLock, up to <see cref="LostStarDitherWait"/>;
+        /// returns the state it ended in (Guiding when the star came back).</summary>
+        private async Task<string> WaitForStarBackAsync(IProgress<ApplicationStatus> progress, CancellationToken ct) {
+            var deadline = DateTime.UtcNow + LostStarDitherWait;
+            var state = PhdAppState.LOSTLOCK;
+            Logger.Info($"Phd2 - the guide star is lost; waiting up to {LostStarDitherWait.TotalSeconds:F0} s for it before dithering");
+            try {
+                while (state == PhdAppState.LOSTLOCK && DateTime.UtcNow < deadline) {
+                    progress?.Report(new ApplicationStatus { Status = "Guide star lost — waiting for the guider to find it again" });
+                    await CoreUtil.Delay(500, ct);
+                    state = await GetAppState();
+                }
+            } finally {
+                progress?.Report(new ApplicationStatus { Status = string.Empty });
+            }
+            Logger.Info(state == PhdAppState.GUIDING ? "Phd2 - the guide star is back; dithering" : $"Phd2 - the guide star did not come back (state {(string.IsNullOrEmpty(state) ? "unknown: the guider did not answer" : state)})");
+            return state;
         }
 
         private async Task WaitForSettling(IProgress<ApplicationStatus> progress, CancellationToken ct) {

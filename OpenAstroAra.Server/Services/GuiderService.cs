@@ -332,8 +332,9 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
             error = ditherGuider.LastSettleError;
             ok = error is null;
         } else if (!ok) {
-            // A false return is the guider saying no (not guiding, already stopped, RPC refused).
-            error ??= "refused";
+            // A false return is the guider saying no (not guiding, already stopped, RPC refused); a
+            // refusal that names its reason (calibrating, paused) keeps it, as the sequencer's path does.
+            error ??= ditherGuider?.LastSettleError ?? "refused";
         }
         await PublishOperationCompleteAsync(accepted, ok, error).ConfigureAwait(false);
         if (ditherGuider is not null) {
