@@ -4963,7 +4963,7 @@ Server enumerates Alpaca devices, groups by type. User assigns each device-type 
 - ASTAP binary path — auto-detect on the **server** per its OS (Pi/Linux: `which astap`; macOS dev: `/Applications/ASTAP.app/...`; Windows dev: `%PROGRAMFILES%\astap\astap.exe`), editable
 - Star databases — **list, not a single path** (add/remove multiple; browse the **server's** filesystem, default under the §29 USB data root e.g. `<usb-root>/astap/databases/`). Each entry shows its FOV suitability (wide / general / narrow) so the user can cover the full span from wide field to tiny galaxies per §18.I. Recommended set (wide `W08`, general `V50`, narrow `H17`/`H18`) offered as **server-side downloads** — the client triggers the fetch and shows background progress while the Pi downloads from astap.nl straight onto its USB storage. At least one database is required to proceed.
 - Search radius (deg, default 30)
-- Downsample factor (default 2)
+- Downsample factor (default 0 = automatic: the daemon derives it per solve from the image scale, at least 2× for a frame over 3000 px high; 1–8 override, #1136)
 - Test button: "Solve a test image" — runs **on the server**, feeding **two** bundled known images (one wide-field, one narrow-field) and verifying ASTAP solves both, confirming the installed databases cover the FOV span
 
 **Screen 12 — Autofocus**
