@@ -5772,8 +5772,8 @@ Per-fault action is configurable in profile safety policies (§35 extension), wi
 | **EFW (filter wheel) jam / position not reached** | Commanded slot not reached within timeout | Retry → Notify | User must intervene physically |
 | Rotator (CAA) runaway / position drift | Reported angle differs from commanded > tolerance (default 0.5°) | Re-issue → Notify | Mechanical issues |
 | Guider (PHD2): loses calibration | PHD2 calibration-failed event | Recalibrate → Pause if persistent | Common after meridian flip |
-| Guider (PHD2): loses guide star | PHD2 star-lost event for > 30s | Pause → wait for recovery (clouds passing) | Often transient |
-| Guider (PHD2): dither timeout | Dither not settled within the settle timeout | Dither once more → Pause awaiting user | A frame never starts on an unsettled star (2026-10-16); Resume dithers again. A refused dither (not guiding) pauses at once |
+| Guider (PHD2): loses guide star | PHD2 star-lost event for > 30s | Pause → wait for recovery (clouds passing) | Often transient. This is the safety-policy fault for a guided run; a dither that meets the lost star has its own handling in the dither row below |
+| Guider (PHD2): dither timeout | Dither not settled within the settle timeout | Dither once more → Pause awaiting user | A frame never starts on an unsettled star (2026-10-16); Resume dithers again. A dither refused with the star lost waits up to 20 s for it (2026-10-18); one refused because the guider is stopped restarts guiding once and dithers when that works, and parks the run only when the restart fails; Resume restarts guiding itself. A guider that is calibrating or deliberately paused is never restarted: the run parks with that reason |
 | Plate solve failure | After §28.2 retries (3 attempts) | Pause + notify | User can re-frame target or skip |
 | ASTAP / Astrometry.net executable crash | Process exit code != 0 | Retry once → Notify | Re-invoke; bad images usually cause this |
 | **External dew heater (Alpaca Switch) commanded ON but reporting OFF** (boolean switch) | Switch read-back mismatch | Re-command → Notify if still off | Power-port dew straps |
