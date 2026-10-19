@@ -23,7 +23,6 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Collections.ObjectModel;
-using System.ComponentModel.Composition;
 using System.Linq;
 
 namespace OpenAstroAra.Sequencer.Container {
@@ -38,17 +37,11 @@ namespace OpenAstroAra.Sequencer.Container {
     /// <c>NINA.Sequencer.Container.DeepSkyObjectContainer</c> remaps to this class and
     /// deserializes intact instead of degrading to an <see cref="UnknownSequenceContainer"/>.
     /// </summary>
-    [ExportMetadata("Name", "Lbl_SequenceItem_Container_DeepSkyObjectContainer_Name")]
-    [ExportMetadata("Description", "Lbl_SequenceItem_Container_DeepSkyObjectContainer_Description")]
-    [ExportMetadata("Icon", "TelescopeSVG")]
-    [ExportMetadata("Category", "Lbl_SequenceCategory_Container")]
-    [Export(typeof(ISequenceContainer))]
     [JsonObject(MemberSerialization.OptIn)]
     public class DeepSkyObjectContainer : SequentialContainer, IDeepSkyObjectContainer {
         private readonly IProfileService profileService;
         private readonly Lazy<NighttimeData> nighttimeData;
 
-        [ImportingConstructor]
         public DeepSkyObjectContainer(IProfileService profileService) : base() {
             this.profileService = profileService;
             Target = NewTargetFromProfile();

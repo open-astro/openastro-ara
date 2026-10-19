@@ -23,7 +23,6 @@ using OpenAstroAra.Sequencer.SequenceItem.Utility;
 using OpenAstroAra.Sequencer.Utility;
 using System;
 using System.Collections.Generic;
-using System.ComponentModel.Composition;
 using System.Linq;
 using System.Runtime.Serialization;
 using System.Threading;
@@ -31,18 +30,12 @@ using System.Threading.Tasks;
 
 namespace OpenAstroAra.Sequencer.Conditions {
 
-    [ExportMetadata("Name", "Lbl_SequenceCondition_MoonIlluminationCondition_Name")]
-    [ExportMetadata("Description", "Lbl_SequenceCondition_MoonIlluminationCondition_Description")]
-    [ExportMetadata("Icon", "BrightnessSVG")]
-    [ExportMetadata("Category", "Lbl_SequenceCategory_Condition")]
-    [Export(typeof(ISequenceCondition))]
     [JsonObject(MemberSerialization.OptIn)]
     public class MoonIlluminationCondition : SequenceCondition {
         private double userMoonIllumination;
         private double currentMoonIllumination;
         private ComparisonOperator comparator;
 
-        [ImportingConstructor]
         public MoonIlluminationCondition() {
             UserMoonIllumination = 0d;
             Comparator = ComparisonOperator.GreaterThan;

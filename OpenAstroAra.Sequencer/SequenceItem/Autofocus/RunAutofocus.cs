@@ -15,7 +15,6 @@
 using Newtonsoft.Json;
 using OpenAstroAra.Core.Model;
 using System;
-using System.ComponentModel.Composition;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -31,15 +30,9 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Autofocus {
     /// failed or unwired sweep fails this step loudly rather than silently skipping focus
     /// (which would quietly ruin the subsequent frames).
     /// </summary>
-    [ExportMetadata("Name", "Lbl_SequenceItem_Autofocus_RunAutofocus_Name")]
-    [ExportMetadata("Description", "Lbl_SequenceItem_Autofocus_RunAutofocus_Description")]
-    [ExportMetadata("Icon", "AutoFocusSVG")]
-    [ExportMetadata("Category", "Lbl_SequenceCategory_Focuser")]
-    [Export(typeof(ISequenceItem))]
     [JsonObject(MemberSerialization.OptIn)]
     public class RunAutofocus : SequenceItem {
 
-        [ImportingConstructor]
         public RunAutofocus(IAutofocusExecutor? autofocusExecutor = null) {
             this.autofocusExecutor = autofocusExecutor;
         }

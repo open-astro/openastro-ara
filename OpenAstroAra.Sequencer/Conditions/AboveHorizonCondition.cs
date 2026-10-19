@@ -21,22 +21,15 @@ using OpenAstroAra.Sequencer.SequenceItem;
 using OpenAstroAra.Sequencer.SequenceItem.Utility;
 using OpenAstroAra.Sequencer.Utility;
 using System;
-using System.ComponentModel.Composition;
 using static OpenAstroAra.Sequencer.Utility.ItemUtility;
 
 namespace OpenAstroAra.Sequencer.Conditions {
 
-    [ExportMetadata("Name", "Lbl_SequenceCondition_AboveHorizonCondition_Name")]
-    [ExportMetadata("Description", "Lbl_SequenceCondition_AboveHorizonCondition_Description")]
-    [ExportMetadata("Icon", "WaitForAltitudeSVG")]
-    [ExportMetadata("Category", "Lbl_SequenceCategory_Condition")]
-    [Export(typeof(ISequenceCondition))]
     [JsonObject(MemberSerialization.OptIn)]
     public class AboveHorizonCondition : LoopForAltitudeBase {
 
         private bool hasDsoParent;
 
-        [ImportingConstructor]
         public AboveHorizonCondition(IProfileService profileService) : base(profileService, useCustomHorizon: true) {
             this.DateTime = new SystemDateTime();
             Data.Offset = 0;

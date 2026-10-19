@@ -60,6 +60,10 @@ class TonightSkyObject {
   final String name;
   final String type;
 
+  /// The object's other designations (#1267 item 4: NGC 7000 lists once,
+  /// with Sh2-117 and C 20 as aliases). Empty on older wire rows.
+  final List<String> aliases;
+
   /// Visual magnitude, or null when the server omits/mangles it — kept nullable
   /// so a bad value can't masquerade as a genuine `mag 0.0` (≈ Vega).
   final double? magnitude;
@@ -151,6 +155,7 @@ class TonightSkyObject {
     required this.decDeg,
     required this.altitudeDeg,
     required this.maxAltitudeDeg,
+    this.aliases = const [],
     this.sizeMajArcmin,
     this.sizeMinArcmin,
     this.posAngleDeg,
@@ -205,6 +210,7 @@ class TonightSkyObject {
       decDeg: dec.toDouble(),
       altitudeDeg: alt.toDouble(),
       maxAltitudeDeg: maxAlt.toDouble(),
+      aliases: _optStringList(json['aliases']) ?? const [],
       sizeMajArcmin: _optDouble(json['size_maj_arcmin']),
       sizeMinArcmin: _optDouble(json['size_min_arcmin']),
       posAngleDeg: _optDouble(json['pos_angle_deg']),

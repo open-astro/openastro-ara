@@ -20,7 +20,6 @@ using OpenAstroAra.Sequencer.Interfaces;
 using OpenAstroAra.Sequencer.SequenceItem;
 using OpenAstroAra.Sequencer.Utility;
 using System;
-using System.ComponentModel.Composition;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -41,15 +40,9 @@ namespace OpenAstroAra.Sequencer.Trigger.Autofocus {
     /// the playbook's 90-minute recommendation is a profile-level default applied when ARA
     /// builds plans.
     /// </summary>
-    [ExportMetadata("Name", "Lbl_SequenceTrigger_AutofocusAfterTimeTrigger_Name")]
-    [ExportMetadata("Description", "Lbl_SequenceTrigger_AutofocusAfterTimeTrigger_Description")]
-    [ExportMetadata("Icon", "AutoFocusAfterTimeSVG")]
-    [ExportMetadata("Category", "Lbl_SequenceCategory_Focuser")]
-    [Export(typeof(ISequenceTrigger))]
     [JsonObject(MemberSerialization.OptIn)]
     public class AutofocusAfterTimeTrigger : SequenceTrigger {
 
-        [ImportingConstructor]
         public AutofocusAfterTimeTrigger(IImageHistory? history = null, IAutofocusConditionGate? conditionGate = null) : base() {
             this.history = history;
             this.conditionGate = conditionGate;

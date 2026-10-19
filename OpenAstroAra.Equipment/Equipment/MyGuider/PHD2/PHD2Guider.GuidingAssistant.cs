@@ -39,6 +39,21 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
         /// the start, so the daemon's own refusal, not the client's, is what the user reads.</summary>
         public const int GuidingAssistantStartTimeoutMs = 25000;
 
+        /// <summary>True while the Guiding Assistant is measuring (drift phase or backlash test). PHD2
+        /// reports "Guiding" for the whole run although nothing is being corrected, so the services that
+        /// act on guiding (the PA residual, the star-lost watch, the state on the wire) read this first.
+        /// Set from each assistant RPC's returned state; cleared on Disconnect.</summary>
+        public bool GuidingAssistantActive { get; private set; }
+
+        /// <summary>The guider's assistant states that mean a run is in progress (the contract's
+        /// <c>measuring</c> and <c>measuring_backlash</c>); anything else (idle, done, failed, or no state)
+        /// means it is not. Pure — unit-tested.</summary>
+        public static bool IsGuidingAssistantRunning(string? state) =>
+            state is "measuring" or "measuring_backlash";
+
+        private void NoteGuidingAssistantState(JObject? result) =>
+            GuidingAssistantActive = IsGuidingAssistantRunning(result?["state"]?.Type == JTokenType.String ? result["state"]!.Value<string>() : null);
+
         /// <summary>Start the measurement. <paramref name="durationSec"/> null = the guider's default
         /// (two minutes, what the dialog asks for).</summary>
         public async Task<JObject?> StartGuidingAssistantAsync(double? durationSec, bool measureBacklash, CancellationToken ct) {
@@ -52,7 +67,12 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             };
             var response = await SendMessage<GenericPhdMethodResponse>(request, GuidingAssistantStartTimeoutMs).ConfigureAwait(false);
             ThrowOnError("guiding_assistant_start", response);
-            return response.result as JObject;
+            var result = response.result as JObject;
+            // Asymmetry on purpose: a start that answered without a state has still started a run (the
+            // guider said yes), whereas a get_status without a state is an idle guider (nothing running
+            // to report). The Progress/Done events correct either way within a sample.
+            GuidingAssistantActive = result?["state"] is null || IsGuidingAssistantRunning(result["state"]?.Value<string>());
+            return result;
         }
 
         public async Task<JObject?> StopGuidingAssistantAsync(CancellationToken ct) {
@@ -60,6 +80,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             RequireConnectedForLive();
             var response = await SendMessage<GenericPhdMethodResponse>(new Phd2GuidingAssistantStop(), LiveRpcTimeoutMs).ConfigureAwait(false);
             ThrowOnError("guiding_assistant_stop", response);
+            GuidingAssistantActive = false;
             return response.result as JObject;
         }
 
@@ -71,7 +92,12 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                 return null;
             }
             var response = await SendMessage<GenericPhdMethodResponse>(new Phd2GuidingAssistantGetStatus(), LiveRpcTimeoutMs, notifyOnError: false).ConfigureAwait(false);
-            return response?.error != null ? null : response?.result as JObject;
+            if (response?.error != null) {
+                return null;
+            }
+            var result = response?.result as JObject;
+            NoteGuidingAssistantState(result);
+            return result;
         }
 
         /// <summary>Write the named recommendations (<c>exposure</c>, <c>min_move_ra</c>, <c>min_move_dec</c>,

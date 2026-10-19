@@ -86,6 +86,8 @@ class _GuideFocusCardState extends ConsumerState<GuideFocusCard> {
           GuiderRuntimeState.starSelected,
           GuiderRuntimeState.starLost,
           GuiderRuntimeState.paused,
+          // The Guiding Assistant owns the guide camera for its whole run.
+          GuiderRuntimeState.assistant,
         }.contains(guider.runtimeState);
     final gated = isOag && !mainFocused;
 

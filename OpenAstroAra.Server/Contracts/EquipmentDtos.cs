@@ -258,10 +258,14 @@ public sealed record TelescopeStateDto(
     double? TargetRightAscensionHours = null,
     double? TargetDeclinationDegrees = null);
 
+/// <param name="Force">A slew while a sequence run is in progress stops guiding and pauses the run,
+/// so it is refused (409) unless the caller says it knows: the client asks, then repeats with
+/// <c>force: true</c>. A sync never moves the mount and is never refused.</param>
 public sealed record SlewRequestDto(
     double RightAscensionHours,
     double DeclinationDegrees,
-    bool? Sync = false);
+    bool? Sync = false,
+    bool? Force = false);
 
 public sealed record ParkRequestDto(string? Reason = null);
 
@@ -450,7 +454,7 @@ public sealed record GuiderDto(
 /// the pixel RMS is null or the guider hasn't reported a positive pixel scale yet (§63 guider-a
 /// follow-up: "also expose arcsec via PixelScale").</summary>
 public sealed record GuiderStateDto(
-    string State,    // "stopped" | "looping" | "star_selected" | "calibrating" | "guiding" | "settling" | "paused" | "star_lost" (#1364; "dithering" is never sent)
+    string State,    // "stopped" | "looping" | "star_selected" | "calibrating" | "guiding" | "settling" | "paused" | "star_lost" | "assistant" (#1364; "dithering" is never sent; "assistant" = the Guiding Assistant is measuring)
     double? RmsTotal,
     double? RmsRa,
     double? RmsDec,
@@ -470,7 +474,8 @@ public sealed record GuiderStateDto(
 /// #1364 — the live guide-camera view (<c>GET /equipment/guider/live</c>): what the guider is doing
 /// (<c>AppState</c>: Stopped | Looping | Selected | Calibrating | Guiding | LostLock | Paused), the frame
 /// size the picture at <c>GET …/live/frame</c> covers, the locked star and the search box around it, the
-/// latest guide frame's star SNR and mass (only while <c>AppState</c> is Guiding), whether multi-star tracking is on, and the other stars the
+/// star's SNR and mass (the latest guide frame's while <c>AppState</c> is Guiding; the chosen star's detected
+/// centroid under the lock position while it is Selected; null otherwise), whether multi-star tracking is on, and the other stars the
 /// guider found (<c>Stars</c>, brightest first; empty when it has no image). Coordinates are guide-camera
 /// pixels. Fields the guider could not answer are null, never an error — the picture still shows.
 /// </summary>

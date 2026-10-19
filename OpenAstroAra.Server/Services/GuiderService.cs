@@ -104,7 +104,8 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
             Func<(Guid Id, string? Name)?>? araProfileResolver = null,
             IDiagnosticsService? diagnostics = null,
             IAlpacaManagementClient? alpaca = null,
-            Func<DiscoveredDeviceDto?>? mainCameraResolver = null) {
+            Func<DiscoveredDeviceDto?>? mainCameraResolver = null,
+            IEquipmentIdentityReconciler? identity = null) {
         _profileService = profileService ?? throw new ArgumentNullException(nameof(profileService));
         _recovery = recovery ?? throw new ArgumentNullException(nameof(recovery));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -119,7 +120,12 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
         _diagnostics = diagnostics;
         _alpaca = alpaca;
         _mainCameraResolver = mainCameraResolver;
+        _identity = identity;
     }
+
+    // #1362 — records the guide camera's identity per connect and posts the gear-change notice on a swap.
+    // Null in benches/tests → the pin is still re-read and corrected, nobody is told.
+    private readonly IEquipmentIdentityReconciler? _identity;
 
     // #1308 — the Alpaca management reader and the imaging camera the daemon holds, for the guide-camera
     // pin check before a full profile push. Null in benches/tests → the check is skipped.
@@ -147,7 +153,7 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
             }
             var (rmsTotal, rmsRa, rmsDec) = ComputeRms(_guideSteps);
             var pixelScale = _guider.PixelScale;
-            var state = MapGuidingState(_guider.State, _guider.Settling);
+            var state = MapGuidingState(_guider.State, _guider.Settling, _guider.GuidingAssistantActive);
             // The leg is reported only while calibrating: after a link drop the guider can come back
             // already guiding, with no CalibrationComplete this client saw (review of #1365).
             var calibration = state == "calibrating" ? _guider.Calibration : null;
@@ -326,8 +332,9 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
             error = ditherGuider.LastSettleError;
             ok = error is null;
         } else if (!ok) {
-            // A false return is the guider saying no (not guiding, already stopped, RPC refused).
-            error ??= "refused";
+            // A false return is the guider saying no (not guiding, already stopped, RPC refused); a
+            // refusal that names its reason (calibrating, paused) keeps it, as the sequencer's path does.
+            error ??= ditherGuider?.LastSettleError ?? "refused";
         }
         await PublishOperationCompleteAsync(accepted, ok, error).ConfigureAwait(false);
         if (ditherGuider is not null) {
@@ -573,7 +580,10 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
             pixelScale = guider.PixelScale;
         }
         // #1311 — the first minutes of each guided run also measure the polar alignment residual.
-        FeedPaResidualStep(guider, step);
+        // Not during the Guiding Assistant: its frames are deliberately uncorrected drift.
+        if (!guider.GuidingAssistantActive) {
+            FeedPaResidualStep(guider, step);
+        }
         // §63.18 — the Live tab's guide graph is drawn from these, one point per guide frame
         // (the REST status only carries the windowed RMS). Fire-and-forget off the guider's
         // listener thread; a publish fault is logged, never thrown back into the socket reader.
@@ -598,6 +608,13 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
         }
         if (_ws is not null) {
             _ = PublishGuiderEventAsync(BuildGuiderEventPayload(marker));
+        }
+        if (guider.GuidingAssistantActive) {
+            // The assistant's own "guiding" is a drift measurement: not a PA residual (its frames are
+            // uncorrected drift, which the estimator would read as a polar error) and not a guided
+            // run whose lost star should pause anything. Rig night 2026-10-18 at 22:03: a new PA
+            // residual began at the assistant's start and the strip read "Guiding".
+            return;
         }
         FeedPaResidualMarker(guider, marker.Kind);
         NoteStarLostMarker(marker.Kind);
@@ -733,7 +750,10 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
     // looping and a selected star are their own states (they used to read "stopped", so the strip said
     // "stopped" while the guide camera was busy and refused a single frame), and a guiding session that
     // is settling after a dither or a start reads "settling". Unknown tokens still read "stopped".
-    internal static string MapGuidingState(string? phdState, bool settling = false) => phdState switch {
+    internal static string MapGuidingState(string? phdState, bool settling = false, bool assistant = false) => phdState switch {
+        // The Guiding Assistant runs with corrections off: PHD2 says "Guiding", nothing is guided, and
+        // the run must not look guided to the user or to the services below (#1364 ga-side).
+        "Guiding" or "Looping" or "Selected" when assistant => "assistant",
         "Calibrating" => "calibrating",
         "Guiding" => settling ? "settling" : "guiding",
         "Paused" => "paused",

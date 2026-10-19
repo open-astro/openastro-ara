@@ -17,21 +17,14 @@ using OpenAstroAra.Core.Utility;
 using OpenAstroAra.Sequencer.SequenceItem;
 using System;
 using System.Collections.Generic;
-using System.ComponentModel.Composition;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 namespace OpenAstroAra.Sequencer.Conditions {
 
-    [ExportMetadata("Name", "Lbl_SequenceCondition_LoopCondition_Name")]
-    [ExportMetadata("Description", "Lbl_SequenceCondition_LoopCondition_Description")]
-    [ExportMetadata("Icon", "LoopSVG")]
-    [ExportMetadata("Category", "Lbl_SequenceCategory_Condition")]
-    [Export(typeof(ISequenceCondition))]
     [JsonObject(MemberSerialization.OptIn)]
     public class LoopCondition : SequenceCondition {
 
-        [ImportingConstructor]
         public LoopCondition() {
             Iterations = 2;
         }

@@ -12,23 +12,17 @@
     The whole-solution cleanup is complete: every project builds with zero CA/CS/
     SYSLIB analyzer warnings, so TreatWarningsAsErrors is now ON to keep it that way.
     Any new warning fails the build; fix it (or add a justified [SuppressMessage]).
-
-    The vendored Accord.Imaging project is excluded: it's upstream third-party
-    code we re-vendor rather than patch, so analyzing it is pure noise.
   -->
-  <PropertyGroup Condition="'$(MSBuildProjectName)' != 'Accord.Imaging (NETStandard)'">
+  <PropertyGroup>
     <EnableNETAnalyzers>true</EnableNETAnalyzers>
     <AnalysisLevel>latest</AnalysisLevel>
     <AnalysisMode>All</AnalysisMode>
     <Nullable>enable</Nullable>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
-    <!-- NuGet restore notice that can't be fixed without replacing the package stays
-         a visible warning but does not fail the build: NU5104 (Accord.Math prerelease).
-         (NU1701 used to be allowlisted for VVVV.FreeImage — a .NETFramework package on
-         net10.0 — but that dead dependency was removed, so the build emits no NU1701 at
-         all now; leaving it out means a NEW framework-package dep surfaces as an error
-         and gets a conscious decision rather than slipping in silently.) -->
-    <WarningsNotAsErrors>NU5104</WarningsNotAsErrors>
+    <!-- No NuGet notices are allowlisted. NU1701 (VVVV.FreeImage, a .NETFramework package)
+         and NU5104 (the Accord.Math prerelease) used to be, but both dependencies are gone
+         (#1386), so a NEW framework or prerelease package surfaces as an error and gets a
+         conscious decision rather than slipping in silently. -->
   </PropertyGroup>
 
 </Project>

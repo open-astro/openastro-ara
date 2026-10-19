@@ -62,5 +62,25 @@ void main() {
       expect(SequenceRunStateInfo.fromJson(const {}).estimatedTotalSeconds,
           isNull, reason: 'null until the run tree has loaded');
     });
+
+    test('a progress frame carries the current instruction and target', () {
+      // Rig night 2026-10-18: the Run tab read "Run started" for the 4.7 min
+      // the camera cooled, because the description only came by REST.
+      const info = SequenceRunStateInfo(
+        state: SequenceRunState.running,
+        currentInstructionDescription: 'Run started',
+        currentTargetName: null,
+      );
+      final cooling = info.applyWsProgress({
+        'current_instruction_description': 'Cooling camera to -10 °C',
+        'current_target_name': 'Helix Nebula',
+      });
+      expect(cooling.currentInstructionDescription, 'Cooling camera to -10 °C');
+      expect(cooling.currentTargetName, 'Helix Nebula');
+      final older = cooling.applyWsProgress({'instructions_completed': 1});
+      expect(older.currentInstructionDescription, 'Cooling camera to -10 °C',
+          reason: 'an older daemon omits it: keep the last known');
+      expect(older.currentTargetName, 'Helix Nebula');
+    });
   });
 }

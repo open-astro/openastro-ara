@@ -45,6 +45,47 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Stop_cancels_a_hung_weather_read_and_returns_inside_the_hosts_budget() {
+            // 2026-10-18 19:21: systemctl restart took the full 30 s, then the old process died with
+            // SIGABRT — StopAsync's wait for the tick's gate was cancelled and the exception escaped.
+            var weather = new Mock<IObservingConditionsService>();
+            CancellationToken seen = default;
+            weather.Setup(w => w.GetAsync(It.IsAny<CancellationToken>()))
+                .Returns<CancellationToken>(async ct => { seen = ct; await Task.Delay(Timeout.Infinite, ct); return null; });
+            var history = new ImageHistoryService();
+            using var advisor = new DewFormationAdvisor(weather.Object, history, Mock.Of<IDiagnosticsService>(), Mock.Of<INotificationService>()) {
+                PollInterval = TimeSpan.FromMilliseconds(20),
+            };
+            await advisor.StartAsync(CancellationToken.None);
+            for (var i = 0; i < 100 && !seen.CanBeCanceled; i++) {
+                await Task.Delay(10);
+            }
+            Assert.That(seen.CanBeCanceled, Is.True, "a tick is in flight, hung on the weather read");
+
+            using var budget = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            var stop = advisor.StopAsync(budget.Token);
+            Assert.That(await Task.WhenAny(stop, Task.Delay(TimeSpan.FromSeconds(4))), Is.SameAs(stop), "Stop returned well inside the budget");
+            await stop;
+            Assert.That(seen.IsCancellationRequested, Is.True, "the hung read was told to stop");
+        }
+
+        [Test]
+        public async Task Stop_whose_budget_runs_out_returns_instead_of_throwing() {
+            var weather = new Mock<IObservingConditionsService>();
+            var hang = new TaskCompletionSource<ObservingConditionsDto?>();
+            // Ignores its token on purpose: a read that cannot be cancelled.
+            weather.Setup(w => w.GetAsync(It.IsAny<CancellationToken>())).Returns(hang.Task);
+            using var advisor = new DewFormationAdvisor(weather.Object, new ImageHistoryService(), Mock.Of<IDiagnosticsService>(), Mock.Of<INotificationService>());
+            var tick = advisor.CheckOnceAsync(CancellationToken.None);
+            await Task.Delay(50);
+
+            using var budget = new CancellationTokenSource(TimeSpan.FromMilliseconds(200));
+            await advisor.StopAsync(budget.Token); // returns instead of throwing TaskCanceledException
+            hang.SetResult(null);
+            await tick;
+        }
+
+        [Test]
         public async Task One_episode_opens_the_diagnostic_and_posts_once_then_clears_when_the_pattern_breaks() {
             var weather = new Mock<IObservingConditionsService>();
             var dto = new ObservingConditionsDto("w", "Station", EquipmentConnectionState.Connected, 8.0, 97, 7.6, null, null, null, null, null, null, true, "now");

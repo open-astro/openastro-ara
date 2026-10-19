@@ -12,7 +12,6 @@
 
 #endregion "copyright"
 
-using CommunityToolkit.Mvvm.ComponentModel;
 using Newtonsoft.Json;
 using OpenAstroAra.Astrometry;
 using OpenAstroAra.Core.Locale;
@@ -24,7 +23,6 @@ using System;
 using System.Diagnostics.CodeAnalysis;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.ComponentModel.Composition;
 using System.Diagnostics;
 using System.Linq;
 using System.Text;
@@ -33,13 +31,8 @@ using System.Threading.Tasks;
 
 namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
 
-    [ExportMetadata("Name", "Lbl_SequenceItem_Utility_WaitForTime_Name")]
-    [ExportMetadata("Description", "Lbl_SequenceItem_Utility_WaitForTime_Description")]
-    [ExportMetadata("Icon", "ClockSVG")]
-    [ExportMetadata("Category", "Lbl_SequenceCategory_Utility")]
-    [Export(typeof(ISequenceItem))]
     [JsonObject(MemberSerialization.OptIn)]
-    public partial class WaitForTime : SequenceItem, IValidatable, IEstimatesOwnDuration {
+    public class WaitForTime : SequenceItem, IValidatable, IEstimatesOwnDuration {
         private IList<IDateTimeProvider> dateTimeProviders;
         private int hours;
         private int minutes;
@@ -47,7 +40,6 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
         private int seconds;
         private IDateTimeProvider? selectedProvider;
 
-        [ImportingConstructor]
         public WaitForTime(IList<IDateTimeProvider> dateTimeProviders) {
             DateTime = new SystemDateTime();
             this.dateTimeProviders = dateTimeProviders;
@@ -153,8 +145,12 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
             }
         }
 
-        [ObservableProperty]
         private TimeOnly rolloverTime;
+
+        public TimeOnly RolloverTime {
+            get => rolloverTime;
+            set => SetProperty(ref rolloverTime, value);
+        }
 
         private bool timeDeterminedSuccessfully;
         private string failureReason = string.Empty;

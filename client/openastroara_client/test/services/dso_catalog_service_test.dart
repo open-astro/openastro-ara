@@ -115,4 +115,15 @@ void main() {
     expect(why, isNot(contains('size unknown')));
     expect(why, contains('Bortle 6 sky'));
   });
+
+  test('PlanningDso aliases round-trip through the mirror JSON (#1267 item 4)', () {
+    const d = PlanningDso(
+        id: 'NGC7000', name: 'North America Nebula', type: 'Neb', magnitude: null,
+        raDeg: 314.8, decDeg: 44.5, aliases: ['Sh2-117', 'C 020']);
+    final back = PlanningDso.fromJson(d.toJson())!;
+    expect(back.aliases, ['Sh2-117', 'C 020']);
+    expect(PlanningDso.fromJson({...d.toJson(), 'aliases': ['x', 1]})!.aliases, ['x']);
+    expect(PlanningDso.fromJson({...d.toJson()}..remove('aliases'))!.aliases, isEmpty);
+    expect(const PlanningDso(id: 'a', name: 'a', type: 'G', magnitude: null, raDeg: 1, decDeg: 1).toJson().containsKey('aliases'), isFalse);
+  });
 }

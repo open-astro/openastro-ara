@@ -1,4 +1,3 @@
-using CommunityToolkit.Mvvm.ComponentModel;
 using Newtonsoft.Json;
 using OpenAstroAra.Core.Model;
 using OpenAstroAra.Core.Utility;
@@ -8,20 +7,14 @@ using OpenAstroAra.Profile.Interfaces;
 using OpenAstroAra.Sequencer.Validations;
 using System;
 using System.Collections.Generic;
-using System.ComponentModel.Composition;
 using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
 namespace OpenAstroAra.Sequencer.SequenceItem.Connect {
-    [ExportMetadata("Name", "Lbl_SequenceItem_Connector_SwitchProfile_Name")]
-    [ExportMetadata("Description", "Lbl_SequenceItem_Connector_SwitchProfile_Description")]
-    [ExportMetadata("Icon", "EquipmentSVG")]
-    [ExportMetadata("Category", "Lbl_SequenceCategory_Connect")]
-    [Export(typeof(ISequenceItem))]
     [JsonObject(MemberSerialization.OptIn)]
-    public partial class SwitchProfile : SequenceItem, IValidatable {
+    public class SwitchProfile : SequenceItem, IValidatable {
         private IProfileService profileService;
         private ICameraMediator cameraMediator;
         private IFilterWheelMediator fwMediator;
@@ -35,7 +28,6 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Connect {
         private IDomeMediator domeMediator;
         private ISafetyMonitorMediator safetyMonitorMediator;
 
-        [ImportingConstructor]
         public SwitchProfile(IProfileService profileService,
                                 ICameraMediator cameraMediator,
                                 IFilterWheelMediator fwMediator,
@@ -79,13 +71,21 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Connect {
 
         public IProfileService ProfileService => profileService;
 
-        [ObservableProperty]
-        [property: JsonProperty]
         private Guid selectedProfileId;
 
-        [ObservableProperty]
-        [property: JsonProperty]
+        [JsonProperty]
+        public Guid SelectedProfileId {
+            get => selectedProfileId;
+            set => SetProperty(ref selectedProfileId, value);
+        }
+
         private bool reconnect;
+
+        [JsonProperty]
+        public bool Reconnect {
+            get => reconnect;
+            set => SetProperty(ref reconnect, value);
+        }
 
         public IReadOnlyList<string> Devices { get; }
 

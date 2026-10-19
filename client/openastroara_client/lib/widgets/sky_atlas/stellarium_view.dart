@@ -24,11 +24,12 @@ import '../../state/settings/optics_settings_state.dart';
 import '../../state/settings/site_settings_state.dart';
 import '../../state/sky_atlas/site_location_state.dart';
 import '../../state/sky_atlas/sky_atlas_state.dart';
+import '../../state/sky_atlas/target_resolve_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../util/imaging_regions.dart';
 import '../../util/planetarium_seed.dart';
-import '../../util/coord_parse.dart';
 import '../../util/gps_site_fill.dart' show clientPlatform, isTouchPlatform;
+import '../../util/search_route.dart';
 import 'custom_target_dialog.dart';
 import 'linux_planetarium_overlay.dart';
 import 'rotation_assist_panel.dart';
@@ -371,24 +372,26 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
   void _pushCmd(Map<String, Object?> cmd) =>
       _server?.pushCommand(jsonEncode(cmd));
 
-  void _submitSearch() {
+  Future<void> _submitSearch() async {
     final q = _searchCtrl.text.trim();
     if (q.isEmpty) return;
-    // A pasted position ("05 35 17 -05 23 28", "83.82 -5.39") is a target,
-    // not a name: open the coordinate entry with it filled in, where the
-    // epoch can be chosen and it can be added to the plan (#1267 item 1).
-    if (looksLikeCoordinates(q)) {
-      showCustomTargetDialog(context, initialText: q);
-      return;
-    }
-    // Our planning catalogs first: the Stellarium engine only knows its own
-    // built-in names, so Sh2/LDN/Barnard/vdB/Abell/Arp designations (and
-    // OpenNGC common names) must resolve against the local mirror — a hit
-    // centres by coordinates, the same channel as Tonight's Sky recentre.
-    // The curated imaging-regions layer rides on top (its names — "WR 134
-    // ring", "Thor's Helmet", "Crescent" — are what people type, and the
-    // standalone regions have no mirror row at all). Empty mirror → the
-    // regions alone still resolve.
+    // The decision is pure and unit-tested (routeSearch). In short: a pasted
+    // position opens the coordinate entry (#1267 item 1); our planning
+    // catalogs resolve first (the Stellarium engine only knows its own
+    // built-in names, so Sh2/LDN/Barnard/vdB/Abell/Arp designations and
+    // OpenNGC common names must hit the local mirror, and the curated
+    // imaging-regions layer rides on top); a solar-system name goes to the
+    // engine's own search at once (a moving body has no J2000 position to
+    // resolve); anything else asks the daemon (#1267): its offline index
+    // knows every identifier HYG and OpenNGC carry ("AB Cas", "HIP 12235",
+    // "M 31"), a miss goes to Simbad through the daemon and is cached there,
+    // so a name resolved at home still answers at the dark site. A resolved
+    // name the bundle already lists is that row (a goto, #1267 item 4); any
+    // other resolved name opens the target dialog filled in (frame it, add
+    // it to the plan);
+    // a miss falls through to the engine search as before, with the daemon's
+    // reason shown when the name needs internet, so an offline miss is not a
+    // spinner.
     // The FULL bundled set (no magnitude cull) — a 15th-magnitude WR star or
     // a faint Arp galaxy is exactly what someone types into a search box.
     // A hit's goto carries the object's NAME (planetariumSearchCommand):
@@ -398,7 +401,38 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
     final catalog = ref.read(bundledCatalogProvider).value ??
         ref.read(dsoCatalogProvider).value ??
         const <PlanningDso>[];
-    _pushCmd(planetariumSearchCommand(applyImagingRegions(catalog), q));
+    final route = routeSearch(applyImagingRegions(catalog), q);
+    switch (route.kind) {
+      case SearchRouteKind.coordinates:
+        await showCustomTargetDialog(context, initialText: q);
+      case SearchRouteKind.catalog:
+      case SearchRouteKind.engine:
+        _pushCmd(route.command!);
+      case SearchRouteKind.resolve:
+        final api = ref.read(targetResolveApiProvider);
+        if (api == null) {
+          _pushCmd(route.command!);
+          return;
+        }
+        final messenger = ScaffoldMessenger.of(context);
+        final r = await api.resolve(q);
+        if (!mounted) return;
+        // A resolved object the bundle already lists is that row (#1267
+        // item 4), not a second nameless position beside it.
+        if (routeResolved(applyImagingRegions(catalog), r) case final goto?) {
+          _pushCmd(goto);
+          return;
+        }
+        if (r.resolved) {
+          await showCustomTargetDialog(context, resolved: r);
+          return;
+        }
+        _pushCmd(route.command!);
+        final m = searchFallbackMessage(r);
+        if (m != null) {
+          messenger.showSnackBar(SnackBar(content: Text(m)));
+        }
+    }
   }
 
   // Show/hide the docked Tonight's Sky panel by flipping the shared mode. We do

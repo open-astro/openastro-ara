@@ -20,7 +20,6 @@ using OpenAstroAra.Sequencer.Validations;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.ComponentModel.Composition;
 using System.Linq;
 using System.Text;
 using System.Threading;
@@ -28,15 +27,9 @@ using System.Threading.Tasks;
 
 namespace OpenAstroAra.Sequencer.SequenceItem.Telescope {
 
-    [ExportMetadata("Name", "Lbl_SequenceItem_Telescope_UnparkScope_Name")]
-    [ExportMetadata("Description", "Lbl_SequenceItem_Telescope_UnparkScope_Description")]
-    [ExportMetadata("Icon", "UnparkSVG")]
-    [ExportMetadata("Category", "Lbl_SequenceCategory_Telescope")]
-    [Export(typeof(ISequenceItem))]
     [JsonObject(MemberSerialization.OptIn)]
     public class UnparkScope : SequenceItem, IValidatable {
 
-        [ImportingConstructor]
         public UnparkScope(ITelescopeMediator telescopeMediator) {
             this.telescopeMediator = telescopeMediator;
         }

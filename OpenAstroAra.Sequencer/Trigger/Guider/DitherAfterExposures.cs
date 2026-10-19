@@ -19,7 +19,6 @@ using OpenAstroAra.Sequencer.Interfaces;
 using OpenAstroAra.Sequencer.SequenceItem;
 using OpenAstroAra.Sequencer.Utility;
 using System;
-using System.ComponentModel.Composition;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -35,15 +34,9 @@ namespace OpenAstroAra.Sequencer.Trigger.Guider {
     /// nested <c>TriggerRunner</c> deserialize intact instead of degrading to an
     /// <see cref="UnknownSequenceTrigger"/>.
     /// </summary>
-    [ExportMetadata("Name", "Lbl_SequenceTrigger_Guider_DitherAfterExposures_Name")]
-    [ExportMetadata("Description", "Lbl_SequenceTrigger_Guider_DitherAfterExposures_Description")]
-    [ExportMetadata("Icon", "DitherSVG")]
-    [ExportMetadata("Category", "Lbl_SequenceCategory_Guider")]
-    [Export(typeof(ISequenceTrigger))]
     [JsonObject(MemberSerialization.OptIn)]
     public class DitherAfterExposures : SequenceTrigger {
 
-        [ImportingConstructor]
         public DitherAfterExposures() : base() {
         }
 

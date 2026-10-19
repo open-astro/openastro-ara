@@ -125,6 +125,48 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Active_run_ids_name_a_running_or_paused_run_and_nothing_once_it_ends() {
+            var id = Guid.NewGuid();
+            var svc = BuildService(id, BuildBody(c => {
+                c.Items.Add(new WaitForTimeSpan { Time = 2 });
+            }));
+            Assert.That(await svc.ActiveRunIdsAsync(CancellationToken.None), Is.Empty, "nothing started yet");
+
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            await WaitForInstructionInFlightAsync(svc, id, 0);
+            Assert.That(await svc.ActiveRunIdsAsync(CancellationToken.None), Is.EqualTo(new[] { id }));
+
+            await svc.PauseAsync(id, null, CancellationToken.None);
+            Assert.That(await svc.ActiveRunIdsAsync(CancellationToken.None), Is.EqualTo(new[] { id }), "a paused run is still a run in progress");
+
+            await svc.ResumeAsync(id, null, null, CancellationToken.None);
+            await WaitForTerminalAsync(svc, id);
+            Assert.That(await svc.ActiveRunIdsAsync(CancellationToken.None), Is.Empty, "a finished run is retained for its state but is not active");
+        }
+
+        [Test]
+        public async Task Progress_frames_carry_the_current_instructions_description() {
+            // Rig night 2026-10-18: the camera cooled for 4.7 min and the Run tab read "Run started"
+            // throughout, because the description was only on GET /state, which the client re-reads
+            // on lifecycle events alone. A step that reports no frames must still describe itself.
+            var id = Guid.NewGuid();
+            var ws = new RecordingWsBroadcaster();
+            var svc = BuildService(id, BuildBody(c => {
+                c.Items.Add(new WaitForTimeSpan { Time = 2 });
+            }), ws: ws);
+
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            await WaitForTerminalAsync(svc, id);
+
+            var progress = ws.Records.Where(e => e.Type == "sequence.progress").ToList();
+            Assert.That(progress, Is.Not.Empty, "the live-status poll publishes while the wait runs");
+            var described = progress.Where(e => e.Payload.TryGetProperty("current_instruction_description", out var d)
+                                                && d.ValueKind == JsonValueKind.String && d.GetString()!.Length > 0).ToList();
+            Assert.That(described, Is.Not.Empty, "the running wait is described on the wire, not only on GET /state");
+            Assert.That(progress.All(e => e.Payload.TryGetProperty("current_target_name", out _)), Is.True, "the target rides every frame (null before a target)");
+        }
+
+        [Test]
         public async Task Run_state_and_progress_frames_carry_the_sequencers_estimated_seconds() {
             // #1068 — the wiring, not the estimator: the DTO and the WS payloads must actually
             // carry the numbers (delete the EstimatedSeconds() calls and this fails).

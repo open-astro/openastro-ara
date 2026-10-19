@@ -28,7 +28,6 @@ using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
-using System.ComponentModel.Composition;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -40,11 +39,6 @@ namespace OpenAstroAra.Sequencer.Trigger.MeridianFlip {
     /// <c>MeridianFlipSettings</c>; the WPF <c>MeridianFlipVM</c> orchestration it used to call is replaced by
     /// the headless <see cref="IMeridianFlipExecutor"/> seam (the §58.4 recovery sequence, its own sub-PR).
     /// </summary>
-    [ExportMetadata("Name", "Lbl_SequenceTrigger_MeridianFlipTrigger_Name")]
-    [ExportMetadata("Description", "Lbl_SequenceTrigger_MeridianFlipTrigger_Description")]
-    [ExportMetadata("Icon", "MeridianFlipSVG")]
-    [ExportMetadata("Category", "Lbl_SequenceCategory_Telescope")]
-    [Export(typeof(ISequenceTrigger))]
     [JsonObject(MemberSerialization.OptIn)]
     public class MeridianFlipTrigger : SequenceTrigger, IMeridianFlipTrigger, IValidatable {
         private readonly IProfileService profileService;
@@ -57,7 +51,6 @@ namespace OpenAstroAra.Sequencer.Trigger.MeridianFlip {
         private DateTime lastFlipTime = DateTime.MinValue;
         private Coordinates? lastFlipCoordinates;
 
-        [ImportingConstructor]
         public MeridianFlipTrigger(IProfileService profileService, ITelescopeMediator telescopeMediator, IMeridianFlipExecutor executor) : base() {
             this.profileService = profileService;
             this.telescopeMediator = telescopeMediator;

@@ -17,7 +17,9 @@ using System.IO;
 using System.Linq;
 using FluentAssertions;
 using NUnit.Framework;
+using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Services;
+using System.Collections.Generic;
 
 namespace OpenAstroAra.Test;
 
@@ -84,9 +86,15 @@ public class FileProfileRepositoryTest {
             var store = new FileProfileStore(dir);
             store.PutSiteSettings(store.GetSiteSettings() with { LatitudeDeg = 42 });
             using var repo = new FileProfileRepository(dir, store);
+            store.PutEquipmentIdentity(new EquipmentIdentityDto(new Dictionary<string, DeviceIdentityDto> {
+                ["camera"] = new("ZWO_SN_1", "ZWO ASI533MC Pro", DateTimeOffset.UtcNow),
+            }));
             var meta = repo.Create("My Rig", settings: null, makeActive: true);
             repo.ActiveId.Should().Be(meta.Id, "the first profile becomes active");
             repo.GetProfile(meta.Id)!.Settings.Site.LatitudeDeg.Should().Be(42);
+            // #1362 — the clone is for a rig whose devices are unknown: no inherited serials, so its first
+            // connect is a quiet sighting rather than a swap notice.
+            repo.GetProfile(meta.Id)!.Settings.EquipmentIdentity!.Devices.Should().BeEmpty();
         } finally {
             try { Directory.Delete(dir, recursive: true); } catch (IOException) { /* best effort */ }
         }

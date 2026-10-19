@@ -12,7 +12,6 @@
 
 #endregion "copyright"
 
-using Accord.Statistics.Distributions.Univariate;
 using OpenAstroAra.Astrometry;
 using OpenAstroAra.Core.Enums;
 using OpenAstroAra.Core.Interfaces;
@@ -286,7 +285,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider {
             var expectedDitherPixels = ditherPixels;
 
             // Generate a normally distributed distance from 0 with standard deviation equal to the configured "Dither Pixels", and clamped to +- 3 standard deviations
-            double targetDistancePixels = NormalDistribution.Random(mean: 0.0, stdDev: expectedDitherPixels);
+            double targetDistancePixels = random.NextGaussian(mean: 0.0, stdDev: expectedDitherPixels);
             targetDistancePixels = Math.Min(3.0d * expectedDitherPixels, Math.Max(-3.0d * expectedDitherPixels, targetDistancePixels));
 
             double targetWestEastOffsetPixels = targetDistancePixels * cosAngle;

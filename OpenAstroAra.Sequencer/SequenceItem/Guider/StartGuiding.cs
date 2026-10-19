@@ -22,7 +22,6 @@ using OpenAstroAra.Sequencer.Validations;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.ComponentModel.Composition;
 using System.Linq;
 using System.Text;
 using System.Threading;
@@ -30,16 +29,10 @@ using System.Threading.Tasks;
 
 namespace OpenAstroAra.Sequencer.SequenceItem.Guider {
 
-    [ExportMetadata("Name", "Lbl_SequenceItem_Guider_StartGuiding_Name")]
-    [ExportMetadata("Description", "Lbl_SequenceItem_Guider_StartGuiding_Description")]
-    [ExportMetadata("Icon", "GuiderSVG")]
-    [ExportMetadata("Category", "Lbl_SequenceCategory_Guider")]
-    [Export(typeof(ISequenceItem))]
     [JsonObject(MemberSerialization.OptIn)]
     public class StartGuiding : SequenceItem, IValidatable {
         private IGuiderMediator guiderMediator;
 
-        [ImportingConstructor]
         public StartGuiding(IGuiderMediator guiderMediator) {
             this.guiderMediator = guiderMediator;
         }

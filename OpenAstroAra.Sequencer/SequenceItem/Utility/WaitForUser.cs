@@ -18,7 +18,6 @@ using OpenAstroAra.Core.Utility;
 using OpenAstroAra.Sequencer.Utility;
 using System;
 using System.Collections.Generic;
-using System.ComponentModel.Composition;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -38,15 +37,9 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
     /// the instruction deliberately no-ops rather than blocking a headless
     /// run forever.
     /// </summary>
-    [ExportMetadata("Name", "Lbl_SequenceItem_Utility_WaitForUser_Name")]
-    [ExportMetadata("Description", "Lbl_SequenceItem_Utility_WaitForUser_Description")]
-    [ExportMetadata("Icon", "HandStop_SVG")]
-    [ExportMetadata("Category", "Lbl_SequenceCategory_Utility")]
-    [Export(typeof(ISequenceItem))]
     [JsonObject(MemberSerialization.OptIn)]
     public class WaitForUser : SequenceItem {
 
-        [ImportingConstructor]
         public WaitForUser() { }
 
         private WaitForUser(WaitForUser cloneMe) : base(cloneMe) {

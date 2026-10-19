@@ -24,7 +24,6 @@ using OpenAstroAra.Sequencer.Utility;
 using OpenAstroAra.Sequencer.Validations;
 using System;
 using System.Collections.Generic;
-using System.ComponentModel.Composition;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -40,18 +39,12 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Imaging {
     /// §28 catalog) — the returned <c>IExposureData</c> is deliberately ignored (the frame is
     /// already persisted server-side; the WPF-era in-memory image pipeline is not ported).
     /// </summary>
-    [ExportMetadata("Name", "Lbl_SequenceItem_Imaging_TakeExposure_Name")]
-    [ExportMetadata("Description", "Lbl_SequenceItem_Imaging_TakeExposure_Description")]
-    [ExportMetadata("Icon", "CameraSVG")]
-    [ExportMetadata("Category", "Lbl_SequenceCategory_Camera")]
-    [Export(typeof(ISequenceItem))]
     [JsonObject(MemberSerialization.OptIn)]
     public class TakeExposure : SequenceItem, IValidatable, IExposureItem, IEstimatesOwnDuration {
 
         private readonly ICameraMediator cameraMediator;
         private readonly IImagingMediator imagingMediator;
 
-        [ImportingConstructor]
         public TakeExposure(ICameraMediator cameraMediator, IImagingMediator imagingMediator) {
             this.cameraMediator = cameraMediator;
             this.imagingMediator = imagingMediator;

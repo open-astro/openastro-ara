@@ -23,7 +23,6 @@ using System;
 using System.Globalization;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.ComponentModel.Composition;
 using System.Linq;
 using System.Text;
 using System.Threading;
@@ -32,11 +31,6 @@ using System.Windows.Input;
 
 namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
 
-    [ExportMetadata("Name", "Lbl_SequenceItem_Utility_ExternalScript_Name")]
-    [ExportMetadata("Description", "Lbl_SequenceItem_Utility_ExternalScript_Description")]
-    [ExportMetadata("Icon", "ScriptSVG")]
-    [ExportMetadata("Category", "Lbl_SequenceCategory_Utility")]
-    [Export(typeof(ISequenceItem))]
     [JsonObject(MemberSerialization.OptIn)]
     public class ExternalScript : SequenceItem, IValidatable {
         public System.Windows.Input.ICommand OpenDialogCommand { get; private set; }

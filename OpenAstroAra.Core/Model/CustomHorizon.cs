@@ -36,7 +36,26 @@ namespace OpenAstroAra.Core.Model {
 
         public double GetAltitude(double azimuth) {
             if (azimuth < 0 || azimuth > 359) { azimuth = Utility.CoreUtil.EuclidianModulus(azimuth, 360); }
-            return Accord.Math.Tools.Interpolate1D(azimuth, azimuths, altitudes, 0, 0);
+            return Interpolate(azimuth, azimuths, altitudes);
+        }
+
+        /// <summary>
+        /// Piece-wise linear interpolation over the groomed horizon (sorted azimuths that always
+        /// include 0 and 360). Outside the table the altitude is 0, as Accord.Math's
+        /// Interpolate1D(…, lower: 0, upper: 0) returned before #1386 retired it; an azimuth
+        /// that lands on a knot returns that knot's altitude.
+        /// </summary>
+        private static double Interpolate(double x, double[] xs, double[] ys) {
+            if (x < xs[0] || x > xs[^1]) {
+                return 0;
+            }
+            var i = Array.BinarySearch(xs, x);
+            if (i >= 0) {
+                return ys[i];
+            }
+            i = ~i; // first knot above x; i >= 1 because x >= xs[0]
+            var t = (x - xs[i - 1]) / (xs[i] - xs[i - 1]);
+            return ys[i - 1] + t * (ys[i] - ys[i - 1]);
         }
 
         public double GetMaxAltitude() {

@@ -265,8 +265,18 @@ paths:
               $ref: '#/components/schemas/SlewRequestDto'
         required: true
       responses:
-        '200':
-          description: OK
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationAcceptedDto'
+        '409':
+          description: Conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/equipment/telescope/park:
     post:
       tags:
@@ -1960,6 +1970,30 @@ paths:
       responses:
         '204':
           description: No Content
+  /api/v1/targets/resolve:
+    get:
+      tags:
+        - Targets
+      summary: 'Resolve a target name (any identifier: AB Cas, HIP 12235, M 31, Wolf 359) to a J2000 position: the offline index first, then the cached or live Simbad answer; status says resolved / not_found / offline.'
+      operationId: ResolveTarget
+      parameters:
+        - name: name
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TargetResolveResponseDto'
+        '400':
+          description: Bad Request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/rotation-assist/start:
     post:
       tags:
@@ -5696,6 +5730,56 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CalibrationStateDto'
+  /api/v1/profile/saved-targets:
+    get:
+      tags:
+        - Profile
+      summary: 'Get the active profile''s recent and saved targets (name, aliases, J2000 position, source), newest first.'
+      operationId: GetSavedTargets
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SavedTargetsDto'
+    put:
+      tags:
+        - Profile
+      summary: Replace the active profile's recent and saved targets (newest first; one entry per name; at most 200; finite J2000 positions).
+      operationId: PutSavedTargets
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SavedTargetsDto'
+        required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SavedTargetsDto'
+        '422':
+          description: Unprocessable Entity
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  /api/v1/profile/equipment-identity:
+    get:
+      tags:
+        - Profile
+      summary: 'Get the active profile''s last-seen Alpaca identity (UniqueID, name, seen time) per gear slot.'
+      operationId: GetEquipmentIdentity
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EquipmentIdentityDto'
   /api/v1/profile/filenames:
     get:
       tags:
@@ -8244,6 +8328,20 @@ components:
         recommended:
           type: boolean
           default: false
+    DeviceIdentityDto:
+      required:
+        - unique_id
+        - name
+        - seen_utc
+      type: object
+      properties:
+        unique_id:
+          type: string
+        name:
+          type: string
+        seen_utc:
+          type: string
+          format: date-time
     DeviceType:
       enum:
         - camera
@@ -8597,6 +8695,15 @@ components:
         switch:
           type: boolean
           default: true
+    EquipmentIdentityDto:
+      required:
+        - devices
+      type: object
+      properties:
+        devices:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/DeviceIdentityDto'
     ExposureRequestDto:
       required:
         - exposure_sec
@@ -12274,6 +12381,14 @@ components:
           oneOf:
             - type: 'null'
             - $ref: '#/components/schemas/SkyModelCalibrationDto'
+        equipment_identity:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/EquipmentIdentityDto'
+        saved_targets:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/SavedTargetsDto'
     QualityScoreBreakdownDto:
       required:
         - composite
@@ -12892,6 +13007,51 @@ components:
           type:
             - 'null'
             - string
+    SavedTargetDto:
+      required:
+        - name
+        - aliases
+        - ra_deg
+        - dec_deg
+        - source
+        - saved_utc
+      type: object
+      properties:
+        name:
+          type: string
+        aliases:
+          type: array
+          items:
+            type: string
+        ra_deg:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+        dec_deg:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+        source:
+          type: string
+        saved_utc:
+          type: string
+          format: date-time
+        typed_as_j_now:
+          type: boolean
+          default: false
+    SavedTargetsDto:
+      required:
+        - targets
+      type: object
+      properties:
+        targets:
+          type: array
+          items:
+            $ref: '#/components/schemas/SavedTargetDto'
     SequenceCreateRequestDto:
       required:
         - name
@@ -13670,6 +13830,11 @@ components:
             - 'null'
             - boolean
           default: false
+        force:
+          type:
+            - 'null'
+            - boolean
+          default: false
     StatsAchievementsDto:
       required:
         - total_nights_imaged
@@ -14389,6 +14554,63 @@ components:
             - number
             - string
           format: double
+    TargetResolveResponseDto:
+      required:
+        - query
+        - status
+        - source
+        - main_id
+        - aliases
+        - ra_deg
+        - dec_deg
+        - object_type
+        - magnitude
+        - message
+      type: object
+      properties:
+        query:
+          type: string
+        status:
+          type: string
+        source:
+          type: string
+        main_id:
+          type:
+            - 'null'
+            - string
+        aliases:
+          type: array
+          items:
+            type: string
+        ra_deg:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        dec_deg:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        object_type:
+          type:
+            - 'null'
+            - string
+        magnitude:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        message:
+          type:
+            - 'null'
+            - string
     TelescopeTrackingRequestDto:
       required:
         - enabled
@@ -14834,6 +15056,7 @@ tags:
   - name: Equipment
   - name: Autofocus
   - name: Tracking
+  - name: Targets
   - name: Rotation assist
   - name: Bahtinov focus
   - name: Sequences

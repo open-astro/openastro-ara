@@ -15,7 +15,6 @@
 using Newtonsoft.Json;
 using OpenAstroAra.Core.Model;
 using System;
-using System.ComponentModel.Composition;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -32,15 +31,9 @@ namespace OpenAstroAra.Sequencer.SequenceItem.FlatDevice {
     /// A missing executor or a failed set fails this step loudly — silently continuing would
     /// produce a calibration library the user believes exists and doesn't.
     /// </summary>
-    [ExportMetadata("Name", "Lbl_SequenceItem_FlatDevice_FlatPanelFlats_Name")]
-    [ExportMetadata("Description", "Lbl_SequenceItem_FlatDevice_FlatPanelFlats_Description")]
-    [ExportMetadata("Icon", "FlatWizardSVG")]
-    [ExportMetadata("Category", "Lbl_SequenceCategory_FlatDevice")]
-    [Export(typeof(ISequenceItem))]
     [JsonObject(MemberSerialization.OptIn)]
     public class FlatPanelFlats : SequenceItem, IEstimatesOwnDuration {
 
-        [ImportingConstructor]
         public FlatPanelFlats(IFlatCaptureExecutor? flatCaptureExecutor = null) {
             this.flatCaptureExecutor = flatCaptureExecutor;
         }

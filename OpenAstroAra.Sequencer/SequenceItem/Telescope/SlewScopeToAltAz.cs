@@ -23,7 +23,6 @@ using OpenAstroAra.Sequencer.Validations;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.ComponentModel.Composition;
 using System.Linq;
 using System.Text;
 using System.Threading;
@@ -32,15 +31,9 @@ using System.Windows;
 
 namespace OpenAstroAra.Sequencer.SequenceItem.Telescope {
 
-    [ExportMetadata("Name", "Lbl_SequenceItem_Telescope_SlewScopeToAltAz_Name")]
-    [ExportMetadata("Description", "Lbl_SequenceItem_Telescope_SlewScopeToAltAz_Description")]
-    [ExportMetadata("Icon", "SlewToAltAzSVG")]
-    [ExportMetadata("Category", "Lbl_SequenceCategory_Telescope")]
-    [Export(typeof(ISequenceItem))]
     [JsonObject(MemberSerialization.OptIn)]
     public class SlewScopeToAltAz : SequenceItem, IValidatable {
 
-        [ImportingConstructor]
         public SlewScopeToAltAz(IProfileService profileService, ITelescopeMediator telescopeMediator, IGuiderMediator guiderMediator) {
             this.profileService = profileService;
             this.telescopeMediator = telescopeMediator;
