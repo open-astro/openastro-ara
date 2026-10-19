@@ -176,6 +176,14 @@ namespace OpenAstroAra.Test {
             Assert.That(await WaitUntilAsync(() => State() == "Guiding").ConfigureAwait(false), Is.True);
             await LoopFrame(3);
             Assert.That(await WaitUntilAsync(() => State() == "Looping").ConfigureAwait(false), Is.True, "a guide step clears the flag: a later loop frame is plain looping");
+
+            // A deselect on the guider's own page: LockPositionLost and no StarLost.
+            await fake.BroadcastAsync(new JsonObject { ["Event"] = "StarSelected", ["X"] = 640.1, ["Y"] = 480.5 }).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => State() == "Selected").ConfigureAwait(false), Is.True);
+            await fake.BroadcastAsync(new JsonObject { ["Event"] = "LockPositionLost" }).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => State() == "LostLock").ConfigureAwait(false), Is.True);
+            await LoopFrame(4);
+            Assert.That(await WaitUntilAsync(() => State() == "Looping").ConfigureAwait(false), Is.True, "LockPositionLost clears the flag");
         }
 
         [Test]

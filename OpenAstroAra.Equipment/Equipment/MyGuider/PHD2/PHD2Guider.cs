@@ -1446,6 +1446,9 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                     }
                 case "LockPositionLost": {
                         Logger.Debug($"PHD2 - Lock position lost!");
+                        // A deselect made on the guider's own page sends this and no StarLost: the chosen
+                        // star is gone, so the next loop frame must read Looping, not Selected.
+                        _starSelectedWhileLooping = false;
                         AppState = new PhdEventAppState() { State = "LostLock" };
                         RaiseMarker(new PhdGuiderMarkerEventArgs { Kind = "lock_position_lost" });
                         break;
@@ -1651,6 +1654,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                 Calibration = null;
                 AbandonCalibrationRun("guider connection lost during calibration");
                 AppState = new PhdEventAppState() { State = "" };
+                _starSelectedWhileLooping = false; // a reconnect starts from what the guider then says
                 PixelScale = 0.0d;
                 Connected = false;
                 _tcs.TrySetResult(false);

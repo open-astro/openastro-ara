@@ -365,10 +365,13 @@ public sealed partial class GuiderLiveService : IGuiderLiveService {
     public Task<IReadOnlyList<string>> ApplyGuidingAssistantAsync(IReadOnlyList<string> which, CancellationToken ct) =>
         _guider.RequireConnectedGuider().ApplyGuidingAssistantAsync(which, ct);
 
+    /// <summary>PHD2's own default search region, used when the guider did not answer with one.</summary>
+    private const int DefaultSearchRegionPx = 15;
+
     /// <summary>The detected star under the lock position (within the search region, nearest wins):
     /// its SNR and mass are the chosen star's while the guider is looping with a star selected. Pure.</summary>
     internal static (double? Snr, double? Mass) SelectedStarStats(IReadOnlyList<GuiderLiveStarDto> stars, double lockX, double lockY, int? searchRegion) {
-        var radius = searchRegion is int r && r > 0 ? r : 15;
+        var radius = searchRegion is int r && r > 0 ? r : DefaultSearchRegionPx;
         GuiderLiveStarDto? best = null;
         var bestD2 = double.MaxValue;
         foreach (var s in stars) {
