@@ -6425,11 +6425,11 @@ Failure events:
 
 Polar Alignment section of profile (default values shown):
 
-- Exposure time: 0.5 sec
+- Exposure time: 1 s (the 0.5 s first planned was too little signal for a guide scope at the pole)
 - Binning: auto (`0`, per §45.4; 1–4 overrides)
 - Target tolerance: 1 arcmin (controls when [Done] enables)
 - Initial RA rotation for seed: 30°
-- Loop cadence (target): 500 ms
+- Loop cadence (target): 1000 ms (a 500 ms loop never fit a capture + fetch + solve on the Pi 4, §45.7)
 - Save PA dark to library: off
 
 Configurable in Settings → Polar Align AND in the profile wizard (could go as a brief screen, or as part of the mount config screen — TBD per wizard design).
@@ -6477,7 +6477,7 @@ which is the number the bullseye should agree with to within its budget).
 
 **Per-frame solve noise.** A guide-scope solve returns the frame centre to about **0.1–0.2 px**
 (ASTAP, 30–100 stars, ≥ 10 s of exposure-equivalent signal at bin 1): at a typical guide-scope
-scale of 3–4″/px that is **≈ 0.5″ per axis**, far below everything else here. The terms that matter:
+scale of 3–4″/px that is **≈ 1″ per axis**, far below everything else here. The terms that matter:
 
 | Term | Size | Where it goes |
 |---|---|---|

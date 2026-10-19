@@ -905,6 +905,7 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
   /// a bolt-direction nudge for a few frames. Called from build on every
   /// new adjust-loop iteration; a seed or a new run resets the baseline.
   void _trackNudge(PolarAlignLive live) {
+    if (live.phase == PolarAlignStates.paused) return; // no solve: hold the baseline
     if (live.phase != PolarAlignStates.adjusting) {
       // Leaving adjust (stopped, failed, a new run's seed): the next adjust
       // frame starts a new baseline, so a new run whose first iteration
