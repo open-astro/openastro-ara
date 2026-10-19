@@ -13734,6 +13734,11 @@ components:
             - 'null'
             - boolean
           default: false
+        force:
+          type:
+            - 'null'
+            - boolean
+          default: false
     StatsAchievementsDto:
       required:
         - total_nights_imaged

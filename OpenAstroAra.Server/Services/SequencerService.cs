@@ -375,6 +375,17 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         return PlaceholderEquipmentHelpers.Accepted("sequencer.stop", idempotencyKey);
     }
 
+    public Task<IReadOnlyList<Guid>> ActiveRunIdsAsync(CancellationToken ct) {
+        var active = new List<Guid>();
+        foreach (var id in _runs.Keys) {
+            ct.ThrowIfCancellationRequested();
+            if (_runs.TryGetValue(id, out var run) && IsAbortableRun(run.State)) {
+                active.Add(id);
+            }
+        }
+        return Task.FromResult<IReadOnlyList<Guid>>(active);
+    }
+
     public async Task<int> AbortActiveRunsAsync(CancellationToken ct) {
         var aborted = 0;
         // Snapshot the keys (ConcurrentDictionary.Keys copies) so a worker removing itself mid-iteration — while

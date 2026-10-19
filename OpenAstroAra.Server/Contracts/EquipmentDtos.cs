@@ -258,10 +258,14 @@ public sealed record TelescopeStateDto(
     double? TargetRightAscensionHours = null,
     double? TargetDeclinationDegrees = null);
 
+/// <param name="Force">A slew while a sequence run is in progress stops guiding and pauses the run,
+/// so it is refused (409) unless the caller says it knows: the client asks, then repeats with
+/// <c>force: true</c>. A sync never moves the mount and is never refused.</param>
 public sealed record SlewRequestDto(
     double RightAscensionHours,
     double DeclinationDegrees,
-    bool? Sync = false);
+    bool? Sync = false,
+    bool? Force = false);
 
 public sealed record ParkRequestDto(string? Reason = null);
 

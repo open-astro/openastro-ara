@@ -139,6 +139,11 @@ public interface ISequencerService {
     /// </summary>
     Task<IReadOnlyList<Guid>> PauseActiveRunsAsync(bool adoptable, CancellationToken ct);
 
+    /// <summary>The sequences whose run is in progress (running, paused or starting; not terminal and
+    /// not already aborting): a read-only look for callers that would disturb a run, such as a manual
+    /// slew. Empty when nothing runs.</summary>
+    Task<IReadOnlyList<Guid>> ActiveRunIdsAsync(CancellationToken ct);
+
     /// <summary>
     /// §35 — resume the given runs (the safety engine's auto-resume when conditions turn safe again). Same
     /// CAS + gate-release semantics as <see cref="ResumeAsync"/> but daemon-automated (no §58.12 user-activity

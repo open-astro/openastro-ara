@@ -151,6 +151,9 @@ public sealed class PlaceholderSequencerService : ISequencerService {
 
     public Task<IReadOnlyList<Guid>> PauseActiveRunsAsync(bool adoptable, CancellationToken ct) => PauseActiveRunsAsync(ct);
 
+    public Task<IReadOnlyList<Guid>> ActiveRunIdsAsync(CancellationToken ct) =>
+        Task.FromResult<IReadOnlyList<Guid>>(_runs.Where(kv => SequencerService.IsAbortableRun(kv.Value.State)).Select(kv => kv.Key).ToList());
+
     public Task<IReadOnlyList<Guid>> PauseActiveRunsAsync(CancellationToken ct) {
         var paused = new List<Guid>();
         foreach (var (id, run) in _runs) {

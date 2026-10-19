@@ -37,6 +37,19 @@ public static partial class EquipmentEndpoints {
     /// <summary>#1364 — one live-view action: 204 on success; 409 when no guider is connected
     /// (InvalidOperationException), 400 for a bad position (ArgumentOutOfRangeException), 422 when the
     /// guider refused (GuiderRpcException — no image yet, no star near the tap, not looping).</summary>
+    /// <summary>The refusal text for a manual slew while a run is in progress, or null when it may go
+    /// ahead: no run, a sync (the mount does not move), or the caller forced it. Pure — unit-tested.</summary>
+    internal static string? SlewDuringRunRefusal(SlewRequestDto request, IReadOnlyList<Guid> activeRuns) {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(activeRuns);
+        if (activeRuns.Count == 0 || request.Sync == true || request.Force == true) {
+            return null;
+        }
+        return activeRuns.Count == 1
+            ? "a sequence run is in progress: slewing now stops guiding and pauses the run awaiting you. Repeat with force to slew anyway."
+            : $"{activeRuns.Count} sequence runs are in progress: slewing now stops guiding and pauses them awaiting you. Repeat with force to slew anyway.";
+    }
+
     internal static Task<IResult> GuiderLiveActionAsync(Func<Task> action) =>
         GuiderLiveResultAsync<IResult>(async () => { await action(); return Results.NoContent(); });
 
@@ -246,8 +259,15 @@ public static partial class EquipmentEndpoints {
             await ConnectAndRememberAsync(request, selectionStore, () => svc.ConnectAsync(request, key, ct), ct));
         telescope.MapPost("/disconnect", async ([FromHeader(Name = "Idempotency-Key")] string? key, ITelescopeService svc, CancellationToken ct) =>
             Results.Accepted(value: await svc.DisconnectAsync(key, ct)));
-        telescope.MapPost("/slew", async ([FromBody] SlewRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, ITelescopeService svc, CancellationToken ct) =>
-            Results.Accepted(value: await svc.SlewAsync(request, key, ct)));
+        telescope.MapPost("/slew", async ([FromBody] SlewRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, ITelescopeService svc, ISequencerService sequencer, CancellationToken ct) => {
+            // Rig night 2026-10-18: a Planning GoTo mid-dither was accepted without a word, the guider
+            // stopped (stop-guiding-when-slewing) and the run parked awaiting the user. The caller is
+            // told first; a repeat with force: true goes ahead.
+            if (SlewDuringRunRefusal(request, await sequencer.ActiveRunIdsAsync(ct)) is { } refusal) {
+                return Results.Problem(refusal, statusCode: StatusCodes.Status409Conflict, title: "run_in_progress");
+            }
+            return Results.Accepted(value: await svc.SlewAsync(request, key, ct));
+        });
         // Park's body (an optional Reason) is nullable so a bodyless POST works — the panel's
         // Park button sends no body, and a required [FromBody] would 400/415 it (the bug where
         // "Park does nothing"). Reason defaults to null when absent.
