@@ -245,12 +245,12 @@ List<PlanningDso> mergeDuplicates(
       return null;
     }
 
-    double? firstDouble(double? Function(PlanningDso) f) {
-      for (final m in [best, ...members]) {
-        final v = f(rows[m]);
-        if (v != null) return v;
+    PlanningDso? sized;
+    for (final m in [best, ...members]) {
+      if (rows[m].sizeMajArcmin != null) {
+        sized = rows[m];
+        break;
       }
-      return null;
     }
 
     out.add(
@@ -261,9 +261,11 @@ List<PlanningDso> mergeDuplicates(
         magnitude: primary.magnitude,
         raDeg: primary.raDeg,
         decDeg: primary.decDeg,
-        sizeMajArcmin: firstDouble((d) => d.sizeMajArcmin),
-        sizeMinArcmin: firstDouble((d) => d.sizeMinArcmin),
-        posAngleDeg: firstDouble((d) => d.posAngleDeg),
+        // The extent comes from ONE row (the best with a major axis), never
+        // one row's major axis with another's minor axis and angle.
+        sizeMajArcmin: sized?.sizeMajArcmin,
+        sizeMinArcmin: sized?.sizeMinArcmin,
+        posAngleDeg: sized?.posAngleDeg,
         surfaceBrightness: primary.surfaceBrightness,
         messierNum: firstInt((d) => d.messierNum),
         caldwellNum: firstInt((d) => d.caldwellNum),

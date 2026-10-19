@@ -343,9 +343,17 @@ List<PlanningDso> applyImagingRegions(List<PlanningDso> catalog) {
     for (final a in sharplessAnchors)
       if (_standaloneIds.contains(a.$1) || present.contains(a.$1)) a.$2,
   };
+  // A row that absorbed a Sharpless twin of a STANDALONE region (one with no
+  // catalog row of its own, so nothing else stands in for it) is covered by
+  // that region too; a row that absorbed the twin of an NGC/IC anchor is the
+  // anchor row itself and stays (review r4).
+  final coveredByRegion = {
+    for (final a in sharplessAnchors)
+      if (_standaloneIds.contains(a.$1)) a.$2,
+  };
   final merged = [
     for (final o in catalog)
-      if (!covered.contains(o.id))
+      if (!covered.contains(o.id) && !o.aliases.any(coveredByRegion.contains))
       switch (overrideFor(o)) {
         null => o,
         final r => PlanningDso(

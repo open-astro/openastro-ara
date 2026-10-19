@@ -95,6 +95,35 @@ void main() {
         120,
         reason: 'a missing size is taken from a member',
       );
+      // ...and the whole extent comes from that one member.
+      final ext = mergeDuplicates([
+        _row('A', mag: 5, ra: 1, dec: 1, aliases: ['B']),
+        const PlanningDso(
+          id: 'B',
+          name: 'B',
+          type: 'HII',
+          magnitude: null,
+          raDeg: 1,
+          decDeg: 1,
+          sizeMajArcmin: 10,
+          sizeMinArcmin: 4,
+          posAngleDeg: 30,
+        ),
+        const PlanningDso(
+          id: 'C',
+          name: 'C',
+          type: 'HII',
+          magnitude: null,
+          raDeg: 1,
+          decDeg: 1,
+          sizeMinArcmin: 99,
+          aliases: ['A'],
+        ),
+      ]).single;
+      expect(
+        (ext.sizeMajArcmin, ext.sizeMinArcmin, ext.posAngleDeg),
+        (10, 4, 30),
+      );
       expect(
         nam.aliases,
         containsAll(['C 020', 'LBN 373', 'Sh2-117', 'C 020-like']),
@@ -150,14 +179,40 @@ void main() {
     // Arp 281 lists NGC 4627 and NGC 4631: the pair is the Arp object; the
     // two galaxies are their own rows and keep their own data (review r2).
     final merged = mergeDuplicates([
-      _row('NGC4627', type: 'G', mag: 12.5, ra: 190.65, dec: 32.57, caldwell: null),
-      _row('NGC4631', name: 'Whale Galaxy', type: 'G', mag: 9.2, ra: 190.53, dec: 32.54, caldwell: 32),
-      _row('Arp 281', type: 'G', ra: 190.60, dec: 32.55, aliases: ['NGC 4627', 'NGC 4631']),
+      _row(
+        'NGC4627',
+        type: 'G',
+        mag: 12.5,
+        ra: 190.65,
+        dec: 32.57,
+        caldwell: null,
+      ),
+      _row(
+        'NGC4631',
+        name: 'Whale Galaxy',
+        type: 'G',
+        mag: 9.2,
+        ra: 190.53,
+        dec: 32.54,
+        caldwell: 32,
+      ),
+      _row(
+        'Arp 281',
+        type: 'G',
+        ra: 190.60,
+        dec: 32.55,
+        aliases: ['NGC 4627', 'NGC 4631'],
+      ),
       // A row naming ONE other row is still an identity (Arp 1 = NGC 2857).
       _row('Arp 1', type: 'G', ra: 10, dec: 10, aliases: ['NGC 2857']),
       _row('NGC2857', type: 'G', mag: 12.4, ra: 10, dec: 10),
     ]);
-    expect(merged.map((d) => d.id), ['NGC4627', 'NGC4631', 'Arp 281', 'NGC2857']);
+    expect(merged.map((d) => d.id), [
+      'NGC4627',
+      'NGC4631',
+      'Arp 281',
+      'NGC2857',
+    ]);
     expect(merged[1].caldwellNum, 32);
     expect(merged.last.aliases, ['Arp 1']);
   });
@@ -187,21 +242,24 @@ void main() {
     expect(catalogTwinLinks.where((l) => l.$1.startsWith('REGION-')), isEmpty);
   });
 
-  test('a dashed designation never resolves to a dashless key, and RA wraps at 0h', () {
-    final merged = mergeDuplicates([
-      _row('WR 2-1', type: 'WR*', ra: 1, dec: 1),
-      _row('WR 21', type: 'WR*', ra: 50, dec: 1),
-      _row('HD 1', type: '*', ra: 90, dec: 1, aliases: ['WR 21']),
-      // 0.2″ either side of 0h: one object.
-      _row('vdB 9', type: 'RfN', ra: 359.99995, dec: 10),
-      _row('NGC0009', type: 'RfN', ra: 0.00005, dec: 10),
-    ]);
-    // Dashes stay in the key, so "WR 21" and "WR 2-1" never collide and the
-    // HD row that names WR 21 folds into that star, not the other (r3).
-    expect(merged.map((d) => d.id), ['WR 2-1', 'WR 21', 'NGC0009']);
-    expect(merged[1].aliases, ['HD 1']);
-    expect(merged.last.aliases, ['vdB 9']);
-  });
+  test(
+    'a dashed designation never resolves to a dashless key, and RA wraps at 0h',
+    () {
+      final merged = mergeDuplicates([
+        _row('WR 2-1', type: 'WR*', ra: 1, dec: 1),
+        _row('WR 21', type: 'WR*', ra: 50, dec: 1),
+        _row('HD 1', type: '*', ra: 90, dec: 1, aliases: ['WR 21']),
+        // 0.2″ either side of 0h: one object.
+        _row('vdB 9', type: 'RfN', ra: 359.99995, dec: 10),
+        _row('NGC0009', type: 'RfN', ra: 0.00005, dec: 10),
+      ]);
+      // Dashes stay in the key, so "WR 21" and "WR 2-1" never collide and the
+      // HD row that names WR 21 folds into that star, not the other (r3).
+      expect(merged.map((d) => d.id), ['WR 2-1', 'WR 21', 'NGC0009']);
+      expect(merged[1].aliases, ['HD 1']);
+      expect(merged.last.aliases, ['vdB 9']);
+    },
+  );
 
   test('a single row and an empty list pass through', () {
     expect(mergeDuplicates(const []), isEmpty);

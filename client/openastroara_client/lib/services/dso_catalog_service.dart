@@ -226,10 +226,13 @@ Map<String, Object?> planetariumSearchCommand(
 /// is not "WR 21" (review #1107, r3). Shared by the search and the
 /// one-row-per-object merge (#1267).
 String designationKey(String s) {
-  final up = s.trim().toUpperCase().replaceAll(RegExp(r'[\s_]'), '');
-  return up.replaceAllMapped(
-      RegExp(r'([A-Z])0+(\d)'), (m) => '${m[1]}${m[2]}');
+  final up = s.trim().toUpperCase().replaceAll(_spaces, '');
+  return up.replaceAllMapped(_zeroPad, (m) => '${m[1]}${m[2]}');
 }
+
+// Built once: the search keys every id and alias of the bundle on a miss.
+final RegExp _spaces = RegExp(r'[\s_]');
+final RegExp _zeroPad = RegExp(r'([A-Z])0+(\d)');
 
 /// The key without dashes, for a query typed WITHOUT one ("sh2 117" finds
 /// Sh2-117). A query that carries a dash is never matched loosely.
