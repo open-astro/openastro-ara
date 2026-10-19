@@ -72,6 +72,8 @@ void main() {
     GuiderRuntimeState.looping,
     GuiderRuntimeState.starSelected,
     GuiderRuntimeState.guiding,
+    // The Guiding Assistant owns the guide camera for its whole run (2026-10-18).
+    GuiderRuntimeState.assistant,
   ]) {
     testWidgets('a guider that is ${busy.name} blocks Start live focus', (
       t,

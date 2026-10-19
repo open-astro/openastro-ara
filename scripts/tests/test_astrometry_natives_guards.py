@@ -64,8 +64,8 @@ class NativesGuards(unittest.TestCase):
 
 
 class SubmoduleBuildGuards(unittest.TestCase):
-    """#1386: the natives build from third_party/ submodules; three guards keep a
-    checkout without them, or a silently-dropped upstream patch, from producing a
+    """#1386: the natives build from third_party/ submodules; two guards keep a
+    checkout without them from producing a
     daemon with wrong or missing transforms."""
 
     SCRIPT = REPO_ROOT / "scripts" / "build-astrometry-natives.sh"
@@ -76,11 +76,13 @@ class SubmoduleBuildGuards(unittest.TestCase):
         self.assertIn('for dir in "$ERFA/src" "$SNOVAS/src/c99"; do', text)
         self.assertRegex(text, r"git submodule update --init[^\n]*\n\s*exit 2")
 
-    def test_script_patches_remainder_and_fails_when_upstream_fixed_it(self) -> None:
+    def test_script_builds_the_unpatched_legacy_reader(self) -> None:
+        # The remainder()->fmod() build-time patch went away once upstream merged the fix
+        # (Sigmyne/SuperNOVAS#394); the reader compiles straight from the submodule.
         text = self.SCRIPT.read_text()
-        self.assertIn("grep -o 'remainder(temp, 1.0)'", text)
-        self.assertIn("sed 's/remainder(temp, 1.0)/fmod(temp, 1.0)/'", text)
-        self.assertRegex(text, r"no longer has the remainder\(\) line[^\n]*\n\s*exit 2")
+        self.assertIn('"$SNOVAS/legacy/eph_manager.c")', text)
+        self.assertNotIn("sed 's/remainder", text)
+        self.assertNotIn("mktemp", text)
 
     def test_csproj_errors_on_a_missing_submodule(self) -> None:
         text = self.CSPROJ.read_text()

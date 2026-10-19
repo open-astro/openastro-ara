@@ -293,12 +293,11 @@ here so this file's --check gate flags any drift):
     from SOFA under license; ARA does NOT itself constitute software provided
     by and/or endorsed by SOFA; and no ARA routine uses the "iau"/"sofa" name
     prefix. Unmodified upstream release, compiled into liberfa on every build.
-  * SuperNOVAS — v1.7.2, git submodule third_party/supernovas,
+  * SuperNOVAS — v1.8.0-rc2+, git submodule third_party/supernovas,
     https://github.com/Smithsonian/SuperNOVAS. Smithsonian Astrophysical
     Observatory's maintained fork of USNO NOVAS C 3.1. PUBLIC DOMAIN (The
-    Unlicense). Compiled into libsupernovas with its legacy JPL ephemeris
-    reader, which scripts/build-astrometry-natives.sh patches on one line at
-    build time (remainder -> fmod in interpolate()) until upstream fixes it.
+    Unlicense). Compiled unmodified into libsupernovas with its legacy JPL
+    ephemeris reader.
   * IERS Bulletin A UT1-UTC series — IERS Rapid Service/Prediction Center,
     U.S. Naval Observatory (OpenAstroAra.Astrometry/External/iers-dut1.tsv, a
     snapshot of finals2000A.all + the bulletin's prediction formula taken by

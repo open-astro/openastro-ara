@@ -6,6 +6,7 @@ import '../models/profile_meta.dart';
 import '../models/profile_share_export.dart';
 import '../models/profile_share_import_preview.dart';
 import '../models/server.dart';
+import 'custom_targets_service.dart';
 import '../state/imaging/exposure_state.dart' show FrameKind;
 import '../state/settings/autofocus_settings_state.dart';
 import '../state/settings/unguided_settings_state.dart';
@@ -203,6 +204,38 @@ class ProfileApi {
       data: cameraElectronicsToJson(value),
     );
     return cameraElectronicsFromJson(res.data ?? const {});
+  }
+
+  /// GET the active profile's recent and saved targets (#1267 item 5),
+  /// newest first. A daemon predating the section (404) answers empty.
+  Future<List<CustomTarget>> getSavedTargets() async {
+    try {
+      final res = await _dio.get<Map<String, dynamic>>(
+        '/api/v1/profile/saved-targets',
+      );
+      return savedTargetsFromJson(res.data ?? const {});
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 404) return const [];
+      rethrow;
+    }
+  }
+
+  /// PUT the whole list; the daemon canonicalizes (one per name, newest
+  /// first, capped) and echoes it.
+  Future<List<CustomTarget>> putSavedTargets(List<CustomTarget> targets) async {
+    final res = await _dio.put<Map<String, dynamic>>(
+      '/api/v1/profile/saved-targets',
+      data: {
+        'targets': [for (final t in targets) t.toWire()],
+      },
+    );
+    return savedTargetsFromJson(res.data ?? const {});
+  }
+
+  static List<CustomTarget> savedTargetsFromJson(Map<String, dynamic> j) {
+    final list = j['targets'];
+    if (list is! List) return const [];
+    return [for (final e in list) ?CustomTarget.fromWire(e)];
   }
 
   /// GET the active profile's §36 custom terrain horizon (empty = none entered).

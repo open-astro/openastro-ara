@@ -75,21 +75,11 @@ if [ "${#SNOVAS_SRC[@]}" -lt 10 ]; then
     echo "error: could not read the SOURCES list from $SNOVAS/config.mk (got ${#SNOVAS_SRC[@]} files)" >&2
     exit 2
 fi
-# Upstream bug in the legacy reader (SuperNOVAS v1.7.2, legacy/eph_manager.c interpolate()):
-# the sub-interval Chebyshev time uses C99 remainder(), which rounds to nearest and goes
-# negative for fractions above one half, where NOVAS 3.1 used fmod(). Any body stored in more
-# than one sub-interval per record (Earth-Moon barycenter: 2 in DE421) comes back from the wrong
-# half of the record — the Sun was 14° off in altitude (NovasEphemerisAgreementTest). Patched
-# here into a temporary copy (never under $OUT: that is the publish dir CI ships); the grep makes
-# a fixed upstream fail this script so the patch is removed rather than silently skipped.
-PATCHED=$(mktemp -d)
-trap 'rm -rf "$PATCHED"' EXIT
-if [ "$(grep -o 'remainder(temp, 1.0)' "$SNOVAS/legacy/eph_manager.c" | wc -l | tr -d ' ')" != 1 ]; then
-    echo "error: $SNOVAS/legacy/eph_manager.c no longer has the remainder() line this script patches — drop the patch" >&2
-    exit 2
-fi
-sed 's/remainder(temp, 1.0)/fmod(temp, 1.0)/' "$SNOVAS/legacy/eph_manager.c" > "$PATCHED/eph_manager.c"
-SNOVAS_SRC+=("$SNOVAS/legacy/solsys1.c" "$PATCHED/eph_manager.c")
+# The legacy reader's interpolate() used C99 remainder() instead of fmod() for the sub-interval
+# Chebyshev time from v0.9 to v1.8.0-rc2 (the Sun came back 14 deg off; Sigmyne/SuperNOVAS#393).
+# The submodule is pinned past the fix (upstream PR #394), and NovasEphemerisAgreementTest fails
+# the build if a bump ever brings it back.
+SNOVAS_SRC+=("$SNOVAS/legacy/solsys1.c" "$SNOVAS/legacy/eph_manager.c")
 echo "building libsupernovas.$EXT"
 "$CC" "${CFLAGS[@]}" $SHARED -I"$SNOVAS/include" -I"$SNOVAS/legacy" -DWITHOUT_CURL -DUSER_SOLSYS=1 \
     -o "$OUT/libsupernovas.$EXT" "${SNOVAS_SRC[@]}" -lm

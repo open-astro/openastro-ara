@@ -114,8 +114,10 @@ class _GuidingAssistantPanelState extends ConsumerState<GuidingAssistantPanel> {
           Text(
             'Guiding is held off while the guider watches the star drift, so it can '
             'measure your mount and seeing and suggest min-move, exposure and Dec '
-            'backlash settings. Needs a selected star and a calibrated mount; takes '
-            'the chosen time plus a minute or two for backlash.',
+            'backlash settings. Needs a selected star and a calibrated mount. The '
+            'drift phase takes the chosen time; the backlash test that follows runs '
+            'until the backlash is measured, which can be ten minutes on a mount '
+            'with a lot of it.',
             style: text.bodySmall?.copyWith(color: AraColors.textSecondary),
           ),
           const SizedBox(height: 12),

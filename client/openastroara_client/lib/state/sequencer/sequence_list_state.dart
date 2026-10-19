@@ -148,15 +148,71 @@ final selectedSequenceIdProvider =
 /// no server, or no active run for it). Rebuilds when the selection or server
 /// changes; [refresh] re-reads after a lifecycle action (start/pause/abort).
 class SequenceRunStateNotifier extends AsyncNotifier<SequenceRunStateInfo?> {
-  Future<SequenceRunStateInfo?> _read() {
-    final id = ref.read(selectedSequenceIdProvider);
+  // Adoption happens once per notifier and server: a selection cleared on
+  // purpose (a delete, the editor giving up on a body it cannot load) must not
+  // pull the same run straight back. The editor's load-failure path clears the
+  // selection and shows a SnackBar; re-adopting there would loop list, detail
+  // and run-state reads until the run ended. The provider is autoDispose, so a
+  // torn-down notifier (nothing watched it during a tab switch) adopts once
+  // more when it comes back: a single retry, never a loop. A server change
+  // resets it, so switching to a rig that is mid-run adopts that rig's run.
+  bool _adopted = false;
+  SequenceClient? _adoptedFor;
+
+  Future<SequenceRunStateInfo?> _read() async {
+    var id = ref.read(selectedSequenceIdProvider);
     final api = ref.read(sequenceApiProvider);
+    if (api == null) return null;
+    if (!identical(api, _adoptedFor)) {
+      _adopted = false;
+      _adoptedFor = api;
+    }
+    if (id == null && !_adopted) {
+      _adopted = true;
+      // Nothing picked yet (a fresh launch, or a relaunch while the daemon is
+      // mid-run): adopt the daemon's active run instead of showing nothing.
+      // Rig night 2026-10-18: the client was relaunched with a run paused
+      // awaiting the user, the Run tab came up empty, and the only way to
+      // Resume or Abort was the API over ssh while the unattended-shutdown
+      // countdown ran. Selecting the run here rebuilds this notifier with the
+      // id and loads it into the editor, exactly as a Load-dialog pick would.
+      id = await _activeRunId();
+      if (id == null || !ref.mounted) return null;
+      // A pick made while the list was loading (the Load dialog, a new draft)
+      // wins: an explicit selection is never overridden.
+      if (ref.read(selectedSequenceIdProvider) != null) return null;
+      // Selecting rebuilds this notifier with the id; that build does the read.
+      ref.read(selectedSequenceIdProvider.notifier).select(id);
+      return null;
+    }
     // A local draft (§2 offline planning) has no daemon run state — never send
     // its client-side id to the run-state endpoint.
-    if (id == null || api == null || isDraftSequenceId(id)) {
-      return Future.value(null);
-    }
+    if (id == null || isDraftSequenceId(id)) return null;
     return api.getRunState(id);
+  }
+
+  /// The id of the daemon sequence whose run is in progress, or null when none
+  /// is (or the list could not be read — a transport failure here must not
+  /// take the run state down with it). The daemon runs one sequence at a time;
+  /// if the list ever names several, the most recently modified one wins.
+  Future<String?> _activeRunId() async {
+    List<SequenceListItem>? list;
+    try {
+      list = await ref.read(sequenceListProvider.future);
+    } catch (e) {
+      debugPrint('[sequencer] could not look for an active run: $e');
+      return null;
+    }
+    SequenceListItem? active;
+    for (final s in list ?? const <SequenceListItem>[]) {
+      if (s.currentRunState?.isActive != true) continue;
+      if (active == null ||
+          (s.modifiedUtc ?? DateTime(0))
+              .isAfter(active.modifiedUtc ?? DateTime(0))) {
+        active = s;
+      }
+    }
+    return active?.id;
   }
 
   @override

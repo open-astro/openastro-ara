@@ -57,13 +57,18 @@ class MountNotifier extends EquipmentDeviceNotifier<MountStatus> {
   Future<bool> findHome() => performAction((api) => api.command('home'));
 
   /// GoTo: slew to the given RA (hours) / Dec (degrees), or sync the pointing
-  /// model to them when [sync] is true. Gated on canSlew / canSync.
-  Future<bool> slewTo(double raHours, double decDegrees, {bool sync = false}) =>
+  /// model to them when [sync] is true. Gated on canSlew / canSync. While a
+  /// sequence run is in progress the daemon refuses a slew (409
+  /// `run_in_progress`, see [isRunInProgressRefusal]) until the caller has asked
+  /// the user and repeats with [force].
+  Future<bool> slewTo(double raHours, double decDegrees,
+          {bool sync = false, bool force = false}) =>
       performAction(
         (api) => api.command('slew', {
           'right_ascension_hours': raHours,
           'declination_degrees': decDegrees,
           'sync': sync,
+          if (force) 'force': true,
         }),
         pollAfter: true,
       );

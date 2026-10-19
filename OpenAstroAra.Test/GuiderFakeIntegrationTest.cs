@@ -346,6 +346,35 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task The_guiding_assistant_is_not_a_guided_run_no_pa_residual_and_the_state_reads_assistant() {
+            // Rig night 2026-10-18, 22:03: PHD2 says "Guiding" for the whole assistant run (corrections off),
+            // so a PA residual began on uncorrected drift and the strip read "Guiding".
+            await using var rig = await StartPaRigAsync().ConfigureAwait(false);
+            rig.Fake.OnRpc("guiding_assistant_start", _ => new JsonObject { ["state"] = "measuring", ["duration_s"] = 60, ["measure_backlash"] = true });
+            rig.Fake.OnRpc("guiding_assistant_stop", _ => new JsonObject { ["state"] = "done" });
+            rig.Fake.OnRpc("get_app_state", JsonValue.Create("Guiding"));
+
+            await rig.Svc.RequireConnectedGuider().StartGuidingAssistantAsync(60, measureBacklash: true, CancellationToken.None).ConfigureAwait(false);
+            await rig.Fake.BroadcastAsync(PhdEvents.AppState("Guiding")).ConfigureAwait(false);
+            await rig.Fake.BroadcastAsync(PhdEvents.StartGuiding()).ConfigureAwait(false);
+            await rig.GuideAsync(firstFrame: 1, frames: 20).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => rig.Svc.GetAsync(CancellationToken.None).Result?.Runtime.State == "assistant").ConfigureAwait(false),
+                Is.True, "the state on the wire is the assistant, not guiding");
+            await Task.Delay(300).ConfigureAwait(false);
+            Assert.That(rig.Events, Is.Empty, "no PA residual from the assistant's uncorrected drift");
+
+            // The assistant ends on its own (the dialog may be closed, nothing polls get_status): the
+            // guider's Done event alone clears the flag, and a real guided run afterwards measures as before.
+            await rig.Fake.BroadcastAsync(new JsonObject { ["Event"] = "GuidingAssistantDone", ["state"] = "done" }).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => !rig.Svc.RequireConnectedGuider().GuidingAssistantActive).ConfigureAwait(false), Is.True, "Done clears the run flag without an RPC");
+            await rig.Fake.BroadcastAsync(PhdEvents.GuidingStopped()).ConfigureAwait(false);
+            await rig.Fake.BroadcastAsync(PhdEvents.StartGuiding()).ConfigureAwait(false);
+            await rig.GuideAsync(firstFrame: 1, frames: 20).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => rig.Statuses.Contains("done")).ConfigureAwait(false), Is.True, "the guided run's residual was published");
+            Assert.That((await rig.Svc.GetAsync(CancellationToken.None).ConfigureAwait(false))!.Runtime.State, Is.EqualTo("guiding"));
+        }
+
+        [Test]
         public async Task A_guided_run_reports_the_polar_alignment_residual_from_its_dec_drift() {
             // #1311 — end to end through the real PHD2Guider: guiding starts, the guider corrects a steady
             // Dec drift, and the daemon rebuilds that drift from the offsets plus the pulses (the
@@ -1741,12 +1770,86 @@ namespace OpenAstroAra.Test {
             Assert.That(ws.Of("guider.dither_complete")[0].GetProperty("error").GetString(), Is.EqualTo("lost the star"));
 
             appState = "LostLock";
-            await svc.DitherAsync(2.0, idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
-            Assert.That(await WaitUntilAsync(() => ws.Of("guider.dither_complete").Count == 2).ConfigureAwait(false), Is.True);
+            // The lost-star wait is a separate test; here the star stays lost, so keep the wait short.
+            var saved = PHD2Guider.LostStarDitherWait;
+            PHD2Guider.LostStarDitherWait = TimeSpan.FromSeconds(1);
+            try {
+                await svc.DitherAsync(2.0, idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
+                Assert.That(await WaitUntilAsync(() => ws.Of("guider.dither_complete").Count == 2).ConfigureAwait(false), Is.True);
+            } finally {
+                PHD2Guider.LostStarDitherWait = saved;
+            }
             Assert.That(dithers, Is.EqualTo(1), "the second dither was refused before any RPC");
             var refused = ws.Of("guider.dither_complete")[1];
             Assert.That(refused.GetProperty("ok").GetBoolean(), Is.False);
             Assert.That(refused.GetProperty("error").GetString(), Is.EqualTo("refused"), "not the stale 'lost the star'");
+        }
+
+        [Test]
+        public async Task A_dither_waits_for_a_briefly_lost_star_and_goes_ahead_when_it_is_back() {
+            // 2026-10-18 21:54: "No star found" on two frames, the dither was refused at once and the run
+            // parked awaiting the user although the guider had its star back three seconds later.
+            await using var fake = FakeGuider.Start();
+            _ = new ProfileDaemon(fake);
+            var appState = "LostLock";
+            fake.OnRpc("get_app_state", _ => JsonValue.Create(appState));
+            var dithers = 0;
+            fake.OnRpc("dither", _ => { Interlocked.Increment(ref dithers); return JsonValue.Create(0); });
+            var ws = new RecordingBroadcaster();
+            using var svc = await ConnectedAgainstAsync(fake, "Rig A", ws).ConfigureAwait(false);
+            var saved = PHD2Guider.LostStarDitherWait;
+            PHD2Guider.LostStarDitherWait = TimeSpan.FromSeconds(10);
+            try {
+                await svc.DitherAsync(2.0, idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
+                await Task.Delay(1200).ConfigureAwait(false);
+                Assert.That(dithers, Is.EqualTo(0), "no dither while the star is lost");
+                appState = "Guiding";
+                Assert.That(await WaitUntilAsync(() => dithers == 1).ConfigureAwait(false), Is.True, "the dither went ahead once the star was back");
+            } finally {
+                PHD2Guider.LostStarDitherWait = saved;
+            }
+        }
+
+        [Test]
+        public async Task A_dither_on_a_calibrating_or_paused_guider_is_refused_with_that_reason() {
+            // The sequencer restarts guiding only on a plain refusal; these two name themselves so the
+            // run parks on them instead of sending `guide` over a calibration or a deliberate pause.
+            await using var fake = FakeGuider.Start();
+            _ = new ProfileDaemon(fake);
+            var appState = "Calibrating";
+            fake.OnRpc("get_app_state", _ => JsonValue.Create(appState));
+            var ws = new RecordingBroadcaster();
+            using var svc = await ConnectedAgainstAsync(fake, "Rig A", ws).ConfigureAwait(false);
+
+            await svc.DitherAsync(2.0, idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => ws.Of("guider.dither_complete").Count == 1).ConfigureAwait(false), Is.True);
+            Assert.That(ws.Of("guider.dither_complete")[0].GetProperty("error").GetString(), Is.EqualTo("the guider is calibrating"));
+
+            appState = "Paused";
+            await svc.DitherAsync(2.0, idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => ws.Of("guider.dither_complete").Count == 2).ConfigureAwait(false), Is.True);
+            Assert.That(ws.Of("guider.dither_complete")[1].GetProperty("error").GetString(), Is.EqualTo("the guider is paused"));
+        }
+
+        [Test]
+        public async Task A_dither_whose_star_stays_lost_is_refused_after_the_wait() {
+            await using var fake = FakeGuider.Start();
+            _ = new ProfileDaemon(fake);
+            fake.OnRpc("get_app_state", JsonValue.Create("LostLock"));
+            var dithers = 0;
+            fake.OnRpc("dither", _ => { Interlocked.Increment(ref dithers); return JsonValue.Create(0); });
+            var ws = new RecordingBroadcaster();
+            using var svc = await ConnectedAgainstAsync(fake, "Rig A", ws).ConfigureAwait(false);
+            var saved = PHD2Guider.LostStarDitherWait;
+            PHD2Guider.LostStarDitherWait = TimeSpan.FromSeconds(1.5);
+            try {
+                await svc.DitherAsync(2.0, idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
+                Assert.That(await WaitUntilAsync(() => ws.Of("guider.dither_complete").Count == 1).ConfigureAwait(false), Is.True);
+                Assert.That(dithers, Is.EqualTo(0));
+                Assert.That(ws.Of("guider.dither_complete")[0].GetProperty("error").GetString(), Is.EqualTo("refused"));
+            } finally {
+                PHD2Guider.LostStarDitherWait = saved;
+            }
         }
 
         [Test]

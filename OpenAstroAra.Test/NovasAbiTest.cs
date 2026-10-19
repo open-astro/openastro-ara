@@ -23,7 +23,7 @@ namespace OpenAstroAra.Test {
     /// reads and writes them by its own layout. A field of the wrong width is silent memory
     /// corruption, not an exception (the NOVAS 3.1 layout had <c>short</c> type/number and no
     /// orbit block, and its <c>int</c> StarNumber was already 4 bytes short of C's LP64 long).
-    /// The expected sizes are sizeof() from SuperNOVAS v1.7.2's novas.h on an LP64 host, which
+    /// The expected sizes are sizeof() from SuperNOVAS v1.8.0-rc2's novas.h (unchanged since v1.7.2) on an LP64 host, which
     /// is every host the daemon runs on. A Dependabot bump that changes a struct fails here, not
     /// at a user's first altitude condition.
     /// </summary>

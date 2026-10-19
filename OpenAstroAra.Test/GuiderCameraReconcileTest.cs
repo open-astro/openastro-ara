@@ -22,8 +22,9 @@ using System.Text.Json.Nodes;
 
 namespace OpenAstroAra.Test {
 
-    /// <summary>#1362 — the guide camera's pixel size and UniqueID are re-read when the guider connects (§63.20),
-    /// and the #1308 pin is never overwritten.</summary>
+    /// <summary>#1362 — the guide camera's pixel size and UniqueID are re-read when the guider connects (§63.20).
+    /// A different camera in the slot is a swap: it is re-pinned and its size read, and the identity reconciler
+    /// is told; a slot that is the main imaging camera keeps the #1308 pin and is never read.</summary>
     [TestFixture]
     public class GuiderCameraReconcileTest {
         private const string Selection = "Alpaca Camera [192.0.2.10:6800/1]";
@@ -96,6 +97,7 @@ namespace OpenAstroAra.Test {
             public GuiderService Svc = null!;
             public StoreBackedProfileService Profiles = null!;
             public Mock<IAlpacaManagementClient> Alpaca = new();
+            public RecordingIdentity Identity = new();
 
             public static async Task<Rig> StartAsync(string pinnedId, double pixelSize, Func<JsonNode?, JsonNode?>? pixelRpc,
                     IReadOnlyDictionary<string, AlpacaConfiguredDevice>? devices,
@@ -118,7 +120,7 @@ namespace OpenAstroAra.Test {
                 rig.Svc = new GuiderService(rig.Profiles, new GuiderRecoveryCoordinator(Mock.Of<IGuiderProcessSupervisor>(),
                         Mock.Of<INotificationService>(), Mock.Of<IDiagnosticsService>(), NullLogger<GuiderRecoveryCoordinator>.Instance),
                     rig.Log, Mock.Of<IGuiderProcessSupervisor>(), profileStore: rig.Store, alpaca: rig.Alpaca.Object,
-                    mainCameraResolver: () => mainCamera);
+                    mainCameraResolver: () => mainCamera, identity: rig.Identity);
                 await rig.Svc.ConnectAsync(new GuiderConnectRequestDto("localhost", rig.Fake.Port), null, CancellationToken.None).ConfigureAwait(false);
                 // The connect and the reconcile run on one background task; wait for the reconcile to start
                 // (by count: a synchronous one returns the cached completed task), then for it to end.
@@ -154,6 +156,18 @@ namespace OpenAstroAra.Test {
             public string[] ReconcileAt(LogLevel level) { lock (Lines) { return Lines.Where(l => l.Level == level && l.Text.Contains("#1362", StringComparison.Ordinal)).Select(l => l.Text).ToArray(); } }
         }
 
+        private sealed class RecordingIdentity : IEquipmentIdentityReconciler {
+            public List<(GearSlot Slot, string UniqueId)> Observed { get; } = new();
+            public List<string?> Previous { get; } = new();
+            public Task ReconcileConnectedAsync(CancellationToken ct) => Task.CompletedTask;
+            public Task<EquipmentIdentityOutcome> ObserveAsync(GearSlot slot, AlpacaConfiguredDevice live, CancellationToken ct, DeviceIdentityDto? previous = null) {
+                lock (Observed) { Observed.Add((slot, live.UniqueId)); Previous.Add(previous?.UniqueId); }
+                return Task.FromResult(EquipmentIdentityOutcome.FirstSeen);
+            }
+        }
+
+        private static readonly string?[] OldPinOnly = { "TEST_GUIDE_0001" };
+
         private static JsonObject Size(double v) => new JsonObject { ["pixel_size"] = v };
 
         [Test]
@@ -188,34 +202,76 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public async Task Connect_never_overwrites_a_different_non_empty_pinned_id() {
+        public async Task Connect_repins_a_swapped_guide_camera_and_reads_its_size() {
+            // The 2026-10-15 field case: a QHY5III585M replaced the old camera at the same slot.
             await using var rig = await Rig.StartAsync("TEST_GUIDE_0001", 3.75, _ => Size(2.9), Slot("TEST_GUIDE_0002")).ConfigureAwait(false);
-            Assert.That(rig.Stored.GuidePixelSize, Is.EqualTo(3.75));
-            Assert.That(rig.Stored.GuiderCameraAlpacaUniqueId, Is.EqualTo("TEST_GUIDE_0001"));
-            var lines = rig.Log.Reconcile();
-            Assert.That(lines, Has.Length.EqualTo(1));
-            Assert.That(lines[0], Does.Contain("reports UniqueID 'TEST_GUIDE_0002' but the profile pins 'TEST_GUIDE_0001'"));
-            Assert.That(rig.Fake.ReceivedMethods, Does.Not.Contain("get_alpaca_camera_pixelsize"), "a mismatched slot is never read");
+            Assert.That(rig.Stored.GuidePixelSize, Is.EqualTo(2.9));
+            Assert.That(rig.Stored.GuiderCameraAlpacaUniqueId, Is.EqualTo("TEST_GUIDE_0002"));
+            var warnings = rig.Log.ReconcileAt(LogLevel.Warning);
+            Assert.That(warnings, Has.Length.EqualTo(1));
+            Assert.That(warnings[0], Does.Contain("pinned 'TEST_GUIDE_0001'").And.Contain("swapped"));
+            Assert.That(rig.Log.Reconcile(), Has.Length.EqualTo(2), "the swap warning and the re-read line");
+            Assert.That(rig.Fake.ReceivedMethods, Does.Contain("get_alpaca_camera_pixelsize"), "the new camera is read");
+            Assert.That(rig.Identity.Observed, Is.EqualTo(new[] { (GearSlot.GuideCamera, "TEST_GUIDE_0002") }));
+            Assert.That(rig.Identity.Previous, Is.EqualTo(OldPinOnly), "the old pin is handed over as the previous identity");
             Assert.That(rig.State, Is.EqualTo(EquipmentConnectionState.Connected));
         }
 
         [Test]
-        public async Task Connect_logs_a_pin_mismatch_while_a_main_camera_is_held() {
+        public async Task Connect_keeps_the_pin_when_the_mismatched_slot_is_the_main_camera() {
+            // A renumber put the imaging camera where the guide camera was: the pin stands, nothing is read.
             var main = new DiscoveredDeviceDto("TEST_MAIN_0001", "Test Imaging Camera", DeviceType.Camera,
-                "192.0.2.10", "192.0.2.10", 6800, 0, false);
+                "192.0.2.10", "192.0.2.10", 6800, 1, false);
             var devices = new Dictionary<string, AlpacaConfiguredDevice> {
-                ["camera/0"] = new("Test Imaging Camera", "TEST_MAIN_0001"),
-                ["camera/1"] = new("Test Guide Camera", "TEST_GUIDE_0002"),
+                ["camera/0"] = new("Test Guide Camera", "TEST_GUIDE_0001"),
+                ["camera/1"] = new("Test Imaging Camera", "TEST_MAIN_0001"),
             };
             await using var rig = await Rig.StartAsync("TEST_GUIDE_0001", 3.75, _ => Size(2.9), devices, main).ConfigureAwait(false);
             Assert.That(rig.Stored.GuidePixelSize, Is.EqualTo(3.75));
             Assert.That(rig.Stored.GuiderCameraAlpacaUniqueId, Is.EqualTo("TEST_GUIDE_0001"));
             var warnings = rig.Log.ReconcileAt(LogLevel.Warning);
             Assert.That(warnings, Has.Length.EqualTo(1));
-            Assert.That(warnings[0], Does.Contain("reports UniqueID 'TEST_GUIDE_0002' but the profile pins 'TEST_GUIDE_0001'"));
+            Assert.That(warnings[0], Does.Contain("reports UniqueID 'TEST_MAIN_0001' but the profile pins 'TEST_GUIDE_0001'"));
             Assert.That(rig.Log.Reconcile(), Has.Length.EqualTo(1));
-            Assert.That(rig.Fake.ReceivedMethods, Does.Not.Contain("get_alpaca_camera_pixelsize"), "a mismatched slot is never read");
+            Assert.That(rig.Fake.ReceivedMethods, Does.Not.Contain("get_alpaca_camera_pixelsize"), "the main camera is never read");
+            Assert.That(rig.Identity.Observed, Is.Empty);
             Assert.That(rig.State, Is.EqualTo(EquipmentConnectionState.Connected));
+        }
+
+        [Test]
+        public async Task Connect_keeps_the_pin_when_the_guide_camera_moved_to_another_number() {
+            // A bridge restart renumbered: the pinned camera is now camera/2 and a third camera sits at camera/1.
+            // That is the #1308 "has moved" case (the user picks again), not a swap: nothing is re-pinned or read.
+            var devices = new Dictionary<string, AlpacaConfiguredDevice> {
+                ["camera/0"] = new("Test Imaging Camera", "TEST_MAIN_0001"),
+                ["camera/1"] = new("Some Other Camera", "TEST_OTHER_0003"),
+                ["camera/2"] = new("Test Guide Camera", "TEST_GUIDE_0001"),
+            };
+            await using var rig = await Rig.StartAsync("TEST_GUIDE_0001", 3.75, _ => Size(2.9), devices).ConfigureAwait(false);
+            Assert.That(rig.Stored.GuidePixelSize, Is.EqualTo(3.75));
+            Assert.That(rig.Stored.GuiderCameraAlpacaUniqueId, Is.EqualTo("TEST_GUIDE_0001"));
+            var warnings = rig.Log.ReconcileAt(LogLevel.Warning);
+            Assert.That(warnings, Has.Length.EqualTo(1));
+            Assert.That(warnings[0], Does.Contain("moved to camera/2").And.Not.Contain("swapped"));
+            Assert.That(rig.Fake.ReceivedMethods, Does.Not.Contain("get_alpaca_camera_pixelsize"), "a moved pin is never read");
+            Assert.That(rig.Identity.Observed, Is.Empty);
+            Assert.That(rig.State, Is.EqualTo(EquipmentConnectionState.Connected));
+        }
+
+        [Test]
+        public async Task Connect_learns_nothing_from_a_blank_id_under_a_non_empty_pin() {
+            await using var rig = await Rig.StartAsync("TEST_GUIDE_0001", 3.75, _ => Size(2.9), Slot("")).ConfigureAwait(false);
+            Assert.That(rig.Stored.GuidePixelSize, Is.EqualTo(3.75));
+            Assert.That(rig.Stored.GuiderCameraAlpacaUniqueId, Is.EqualTo("TEST_GUIDE_0001"));
+            Assert.That(rig.Fake.ReceivedMethods, Does.Not.Contain("get_alpaca_camera_pixelsize"));
+            Assert.That(rig.Identity.Observed, Is.Empty);
+        }
+
+        [Test]
+        public async Task Connect_records_the_guide_camera_identity_on_a_quiet_connect() {
+            await using var rig = await Rig.StartAsync("TEST_GUIDE_0001", 2.9, _ => Size(2.9), Slot("TEST_GUIDE_0001")).ConfigureAwait(false);
+            Assert.That(rig.Identity.Observed, Is.EqualTo(new[] { (GearSlot.GuideCamera, "TEST_GUIDE_0001") }));
+            Assert.That(rig.Identity.Previous, Is.EqualTo(new string?[] { null }));
         }
 
         [Test]

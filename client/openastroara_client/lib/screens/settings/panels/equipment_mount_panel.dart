@@ -352,7 +352,7 @@ class _ManualControlState extends ConsumerState<_ManualControl> {
       return;
     }
     try {
-      final performed = await ref.read(mountProvider.notifier).slewTo(ra, dec);
+      final performed = await _slew(ra, dec);
       if (!performed) {
         messenger.showSnackBar(
           const SnackBar(content: Text('Another action is still in progress.')),
@@ -365,6 +365,41 @@ class _ManualControlState extends ConsumerState<_ManualControl> {
           backgroundColor: AraColors.accentError,
         ),
       );
+    }
+  }
+
+  /// A slew the daemon refuses because a run is in progress is put to the
+  /// user: slewing now stops guiding and parks the run. Yes repeats it forced;
+  /// No leaves the run alone (and counts as performed: nothing else is wrong).
+  Future<bool> _slew(double ra, double dec) async {
+    final mount = ref.read(mountProvider.notifier);
+    try {
+      return await mount.slewTo(ra, dec);
+    } catch (e) {
+      if (!isRunInProgressRefusal(e) || !mounted) rethrow;
+      final go = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('A run is in progress'),
+          content: const Text(
+            'Slewing now stops guiding and pauses the run; it waits for you '
+            'to resume it afterwards.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Leave the run'),
+            ),
+            FilledButton(
+              key: const Key('mount-goto-anyway'),
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Slew anyway'),
+            ),
+          ],
+        ),
+      );
+      if (go != true) return true;
+      return await mount.slewTo(ra, dec, force: true);
     }
   }
 }

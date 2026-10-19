@@ -5,6 +5,23 @@ import 'package:dio/dio.dart';
 import '../models/discovered_device.dart';
 import '../models/server.dart';
 
+/// True when the daemon refused a command because a sequence run is in
+/// progress (409, problem title `run_in_progress`): the caller may ask the user
+/// and repeat with `force: true`. Rig night 2026-10-18: a GoTo mid-dither
+/// stopped guiding and parked the run with no warning.
+bool isRunInProgressRefusal(Object? e) {
+  if (e is! DioException || e.response?.statusCode != 409) return false;
+  var data = e.response?.data;
+  if (data is String) {
+    try {
+      data = jsonDecode(data);
+    } catch (_) {
+      return false;
+    }
+  }
+  return data is Map && data['title'] == 'run_in_progress';
+}
+
 /// A short, user-facing message for an equipment API error. A [DioException]'s
 /// `toString()` dumps the request URL + headers + body (a multi-line paragraph in
 /// a SnackBar), so extract just the gist. Shared by every equipment panel.

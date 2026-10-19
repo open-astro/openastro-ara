@@ -103,12 +103,18 @@ public static class SequenceEndpoints {
     /// mounted, or the disk is full under an abort/pause policy — 2026-10-16 a run started without its
     /// drive and failed every frame), else the run starts (202).</summary>
     internal static async Task<IResult> StartSequenceAsync(Guid id, SequenceStartRequestDto request, string? key,
-            ISequencerService svc, IBahtinovFocusService bahtinov, ICameraService camera, CancellationToken ct) {
+            ISequencerService svc, IBahtinovFocusService bahtinov, ICameraService camera, CancellationToken ct,
+            IEquipmentIdentityReconciler? identity = null) {
         if (BahtinovFocusEndpoints.MaskOnConflict(bahtinov, "starting a sequence") is { } refused) {
             return refused;
         }
         if (camera.StoreRefusal() is { } noStore) {
             return Results.Problem(title: NoStoreProblemTitle, detail: noStore, statusCode: StatusCodes.Status409Conflict);
+        }
+        // #1362 — a swap made since the devices connected is caught before the first frame: the profile's
+        // driver-reported facts and the derived calibrations are current when the run reads them.
+        if (identity is not null) {
+            await identity.ReconcileConnectedAsync(ct).ConfigureAwait(false);
         }
         return Results.Accepted(value: await svc.StartAsync(id, request, key, ct));
     }
@@ -197,8 +203,8 @@ public static class SequenceEndpoints {
            .WithName("GetSequenceState");
 
         seq.MapPost("/{id:guid}/start",
-                (Guid id, [FromBody] SequenceStartRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, ISequencerService svc, IBahtinovFocusService bahtinov, ICameraService camera, CancellationToken ct) =>
-                    StartSequenceAsync(id, request, key, svc, bahtinov, camera, ct))
+                (Guid id, [FromBody] SequenceStartRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, ISequencerService svc, IBahtinovFocusService bahtinov, ICameraService camera, IEquipmentIdentityReconciler identity, CancellationToken ct) =>
+                    StartSequenceAsync(id, request, key, svc, bahtinov, camera, ct, identity))
            .Accepts<SequenceStartRequestDto>("application/json")
            .Produces<OperationAcceptedDto>(StatusCodes.Status202Accepted)
            .ProducesProblem(StatusCodes.Status409Conflict)
