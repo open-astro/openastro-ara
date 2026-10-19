@@ -526,13 +526,16 @@ function horizonBlockReason() {
 // below so a refused GoTo never touches the mount (rig night 2026-10-18: a
 // Planning GoTo mid-dither stopped guiding and parked the run with no warning).
 // Mirrors the daemon's own test: a run that is starting, running, paused or
-// parked awaiting the user counts; anything else (or no daemon) does not.
+// parked awaiting the user counts; an aborting one, anything else, or no
+// daemon does not. Reads the first page of sequences (newest first); a run on
+// a sequence past it is caught by the daemon's own 409, which arms the button
+// the same way (see the GoTo handler).
 function runInProgress(cb) {
   fetch(API + '/api/v1/sequences?limit=50')
     .then(function (r) { return r.ok ? r.json() : null; })
     .then(function (page) {
       var items = page && page.items ? page.items : [];
-      var active = { starting: 1, running: 1, paused: 1, pausedawaitinguser: 1, aborting: 1 };
+      var active = { starting: 1, running: 1, paused: 1, pausedawaitinguser: 1 };
       cb(items.some(function (s) { return active[s.current_run_state] === 1; }));
     })
     .catch(function () { cb(false); });
@@ -552,7 +555,7 @@ function slewMount(raHours, decDeg, cb, force) {
         body: JSON.stringify({ right_ascension_hours: raHours, declination_degrees: decDeg, sync: false, force: !!force }),
       });
     }).then(function (r) {
-      if (r.status === 409) { cb('Run in progress', true); return; }
+      if (r.status === 409) { cb('Run in progress', true, true); return; }
       if (!r.ok) { cb(r.status === 500 ? 'No mount' : 'Slew failed', true); return; }
       // The daemon answers 202 the moment the slew is QUEUED (TelescopeService
       // runs it in the background), so "✓" here would claim a slew that hasn't
@@ -680,9 +683,17 @@ function wireSelection() {
     if (block) { showSearchMsg(block, 6000); return; }
     var btn = document.getElementById('i-goto');
     var forced = Date.now() < gotoArmedUntil;
+    function arm() {
+      showSearchMsg('⚠ A sequence run is in progress: slewing now stops guiding and pauses the run awaiting you. Press "Slew anyway" within 10 s to go ahead.', 10000);
+      gotoArmedUntil = Date.now() + 10000;
+      btn.textContent = 'Slew anyway'; btn.disabled = false;
+      gotoArmTimer = setTimeout(function () { disarmGoto(btn); }, 10000);
+    }
     function go(force) {
       btn.textContent = 'Slewing…'; btn.disabled = true;
-      slewMount(selRaHours, selDecDeg, function (text, done) {
+      slewMount(selRaHours, selDecDeg, function (text, done, refusedForRun) {
+        // The daemon's own 409 (a run the pre-check did not see) arms the button the same way.
+        if (refusedForRun) { arm(); return; }
         btn.textContent = text;
         if (!done) return; // interim "Slewing…": the button stays disabled until the mount settles
         setTimeout(function () { disarmGoto(btn); }, 2200);
@@ -690,11 +701,8 @@ function wireSelection() {
     }
     if (forced) { disarmGoto(btn); go(true); return; }
     runInProgress(function (running) {
-      if (!running) { go(false); return; }
-      showSearchMsg('⚠ A sequence run is in progress: slewing now stops guiding and pauses the run awaiting you. Press "Slew anyway" within 10 s to go ahead.', 10000);
-      gotoArmedUntil = Date.now() + 10000;
-      btn.textContent = 'Slew anyway';
-      gotoArmTimer = setTimeout(function () { disarmGoto(btn); }, 10000);
+      if (running) { arm(); return; }
+      go(false);
     });
   };
 

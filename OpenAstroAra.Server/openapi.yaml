@@ -265,8 +265,12 @@ paths:
               $ref: '#/components/schemas/SlewRequestDto'
         required: true
       responses:
-        '200':
-          description: OK
+        '409':
+          description: Conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/equipment/telescope/park:
     post:
       tags:
