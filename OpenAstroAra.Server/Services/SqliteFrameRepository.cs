@@ -84,12 +84,18 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
     /// </summary>
     internal string? ConfinedExistingPath(string? filePath) => ConfinedPath(filePath, mustExist: true);
 
+    /// <summary>Whether a download of this catalogued path would succeed: the same confinement the
+    /// download endpoint applies, for callers that hand frames out (the backup stream's queue). Quiet:
+    /// a queue asked every 15 s must not write the "Frame file refused" warning per poll; the caller
+    /// says once what it left out.</summary>
+    public bool IsServableFile(string? filePath) => ConfinedPath(filePath, mustExist: true, log: false) is not null;
+
     /// <summary>The confinement check alone (<paramref name="mustExist"/> false): a FITS the user
     /// already removed by hand still has sidecars (previews, thumbnail, histogram cache) beside it
     /// that a delete-from-disk must sweep, so the delete path confines the catalogued path but does
     /// not require the FITS itself to be present. A missing file cannot be a symlink, so the
     /// link check is skipped for it.</summary>
-    internal string? ConfinedPath(string? filePath, bool mustExist) {
+    internal string? ConfinedPath(string? filePath, bool mustExist, bool log = true) {
         if (string.IsNullOrWhiteSpace(filePath)) {
             return null;
         }
@@ -97,11 +103,11 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
         try {
             full = Path.GetFullPath(filePath);
         } catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException) {
-            LogPathRefused(filePath, "not a valid path");
+            if (log) { LogPathRefused(filePath, "not a valid path"); }
             return null;
         }
         if (!IsUnderCaptureRoot(full)) {
-            LogPathRefused(filePath, "outside the capture roots");
+            if (log) { LogPathRefused(filePath, "outside the capture roots"); }
             return null;
         }
         if (!File.Exists(full)) {
@@ -110,7 +116,7 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
         try {
             // A symlink planted inside a root must not reach outside it either.
             if (File.ResolveLinkTarget(full, returnFinalTarget: true) is { } target && !IsUnderCaptureRoot(target.FullName)) {
-                LogPathRefused(filePath, "a link that leaves the capture roots");
+                if (log) { LogPathRefused(filePath, "a link that leaves the capture roots"); }
                 return null;
             }
         } catch (IOException) {
