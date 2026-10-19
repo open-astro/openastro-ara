@@ -18,6 +18,7 @@ using NUnit.Framework;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Services;
 using System;
+using System.Collections.Generic;
 using System.Threading;
 
 namespace OpenAstroAra.Test {
@@ -130,6 +131,19 @@ namespace OpenAstroAra.Test {
             svc.ReleaseGuideCameraAsync = () => { released++; return System.Threading.Tasks.Task.CompletedTask; };
             Assert.That(await svc.StartGuiding(false, null!, CancellationToken.None), Is.False);
             Assert.That(released, Is.Zero);
+        }
+
+        [Test]
+        public void The_selected_stars_stats_come_from_the_centroid_under_the_lock_within_the_search_region() {
+            var stars = new List<GuiderLiveStarDto> {
+                new(100, 100, 11, 500, 2.0),
+                new(640.5, 480.2, 42, 12000, 2.1),
+                new(645, 486, 30, 9000, 2.4),
+            };
+            Assert.That(GuiderLiveService.SelectedStarStats(stars, 640.12, 480.46, 15), Is.EqualTo(((double?)42.0, (double?)12000.0)), "nearest within the region");
+            Assert.That(GuiderLiveService.SelectedStarStats(stars, 300, 300, 15), Is.EqualTo(((double?)null, (double?)null)), "nothing under the lock");
+            Assert.That(GuiderLiveService.SelectedStarStats(stars, 646, 487, 2), Is.EqualTo(((double?)30.0, (double?)9000.0)), "a small region still finds the star it covers");
+            Assert.That(GuiderLiveService.SelectedStarStats(new List<GuiderLiveStarDto>(), 640, 480, null), Is.EqualTo(((double?)null, (double?)null)));
         }
 
         [Test]

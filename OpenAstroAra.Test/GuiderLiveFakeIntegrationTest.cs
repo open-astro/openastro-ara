@@ -115,6 +115,107 @@ namespace OpenAstroAra.Test {
             Assert.That((looping.Snr, looping.StarMass), Is.EqualTo(((double?)null, (double?)null)));
         }
 
+        [Test]
+        public async Task A_star_chosen_while_looping_reads_selected_with_its_own_snr_until_the_star_is_lost_or_deselected() {
+            // #1364 tap item (2026-10-18): the client's lock box moved but the status stayed "Looping" and
+            // no SNR showed, because every LoopingExposures frame overwrote the state and the SNR was
+            // gated on Guiding.
+            var (fake, svc) = await ConnectedAsync(LiveRpcs).ConfigureAwait(false);
+            await using var _ = fake;
+            using var __ = svc;
+            await fake.BroadcastAsync(PhdEvents.AppState("Looping")).ConfigureAwait(false);
+            await fake.BroadcastAsync(new JsonObject { ["Event"] = "StarSelected", ["X"] = 640.1, ["Y"] = 480.5 }).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => svc.ConnectedGuiderOrNull()?.AppState?.State == "Selected").ConfigureAwait(false), Is.True);
+            await fake.BroadcastAsync(new JsonObject { ["Event"] = "LoopingExposures", ["Frame"] = 12 }).ConfigureAwait(false);
+            await Task.Delay(100).ConfigureAwait(false);
+            Assert.That(svc.ConnectedGuiderOrNull()?.AppState?.State, Is.EqualTo("Selected"), "the next frame keeps the chosen star");
+
+            var view = await new GuiderLiveService(svc, new NoFrames()).GetAsync(CancellationToken.None).ConfigureAwait(false);
+            Assert.That(view.AppState, Is.EqualTo("Selected"));
+            Assert.That((view.Snr, view.StarMass), Is.EqualTo(((double?)42.0, (double?)12000.0)), "the centroid under the lock position");
+
+            await fake.BroadcastAsync(new JsonObject { ["Event"] = "StarLost", ["Status"] = "low SNR" }).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => svc.ConnectedGuiderOrNull()?.AppState?.State == "LostLock").ConfigureAwait(false), Is.True);
+            await fake.BroadcastAsync(new JsonObject { ["Event"] = "LoopingExposures", ["Frame"] = 13 }).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => svc.ConnectedGuiderOrNull()?.AppState?.State == "Looping").ConfigureAwait(false), Is.True, "lost: plain looping again");
+
+            await fake.BroadcastAsync(new JsonObject { ["Event"] = "StarSelected", ["X"] = 640.1, ["Y"] = 480.5 }).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => svc.ConnectedGuiderOrNull()?.AppState?.State == "Selected").ConfigureAwait(false), Is.True);
+            fake.OnRpc("deselect_star", JsonValue.Create(0));
+            await svc.ConnectedGuiderOrNull()!.DeselectStarAsync(CancellationToken.None).ConfigureAwait(false);
+            Assert.That(svc.ConnectedGuiderOrNull()?.AppState?.State, Is.EqualTo("Looping"), "deselect sends no event; the state follows the RPC");
+            await fake.BroadcastAsync(new JsonObject { ["Event"] = "LoopingExposures", ["Frame"] = 14 }).ConfigureAwait(false);
+            await Task.Delay(100).ConfigureAwait(false);
+            Assert.That(svc.ConnectedGuiderOrNull()?.AppState?.State, Is.EqualTo("Looping"), "the flag is cleared too: the next frame stays Looping");
+
+            // A StarSelected mid-guiding (PHD2 re-picks on a dither) does not turn a guided run into "star selected".
+            await fake.BroadcastAsync(PhdEvents.GuideStep(0.1, -0.2)).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => svc.ConnectedGuiderOrNull()?.AppState?.State == "Guiding").ConfigureAwait(false), Is.True);
+            await fake.BroadcastAsync(new JsonObject { ["Event"] = "StarSelected", ["X"] = 640.1, ["Y"] = 480.5 }).ConfigureAwait(false);
+            await Task.Delay(100).ConfigureAwait(false);
+            Assert.That(svc.ConnectedGuiderOrNull()?.AppState?.State, Is.EqualTo("Guiding"), "StarSelected only applies from a looping state");
+        }
+
+        [Test]
+        public async Task The_selected_flag_follows_an_app_state_of_selected_a_stopped_loop_and_a_guide_step() {
+            // Review bot: the three transitions the description names, each pinned by the next
+            // LoopingExposures frame, which is the only event that reads the flag.
+            var (fake, svc) = await ConnectedAsync(LiveRpcs).ConfigureAwait(false);
+            await using var _ = fake;
+            using var __ = svc;
+            string? State() => svc.ConnectedGuiderOrNull()?.AppState?.State;
+            async Task LoopFrame(int n) => await fake.BroadcastAsync(new JsonObject { ["Event"] = "LoopingExposures", ["Frame"] = n }).ConfigureAwait(false);
+
+            // Connected while the guider already loops with a star chosen: the first word is AppState Selected.
+            await fake.BroadcastAsync(PhdEvents.AppState("Selected")).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => State() == "Selected").ConfigureAwait(false), Is.True);
+            await LoopFrame(1);
+            await Task.Delay(100).ConfigureAwait(false);
+            Assert.That(State(), Is.EqualTo("Selected"), "an AppState of Selected sets the flag");
+
+            // The loop stops and starts again: the chosen star is gone with it.
+            await fake.BroadcastAsync(new JsonObject { ["Event"] = "LoopingExposuresStopped" }).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => State() == "Stopped").ConfigureAwait(false), Is.True);
+            await LoopFrame(2);
+            Assert.That(await WaitUntilAsync(() => State() == "Looping").ConfigureAwait(false), Is.True, "LoopingExposuresStopped clears the flag");
+
+            // Chosen again, then guiding: a guide step ends the looping-with-a-star phase.
+            await fake.BroadcastAsync(new JsonObject { ["Event"] = "StarSelected", ["X"] = 640.1, ["Y"] = 480.5 }).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => State() == "Selected").ConfigureAwait(false), Is.True);
+            await fake.BroadcastAsync(PhdEvents.GuideStep(0.1, -0.2)).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => State() == "Guiding").ConfigureAwait(false), Is.True);
+            await LoopFrame(3);
+            Assert.That(await WaitUntilAsync(() => State() == "Looping").ConfigureAwait(false), Is.True, "a guide step clears the flag: a later loop frame is plain looping");
+
+            // A deselect on the guider's own page: LockPositionLost and no StarLost.
+            await fake.BroadcastAsync(new JsonObject { ["Event"] = "StarSelected", ["X"] = 640.1, ["Y"] = 480.5 }).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => State() == "Selected").ConfigureAwait(false), Is.True);
+            await fake.BroadcastAsync(new JsonObject { ["Event"] = "LockPositionLost" }).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => State() == "LostLock").ConfigureAwait(false), Is.True);
+            await LoopFrame(4);
+            Assert.That(await WaitUntilAsync(() => State() == "Looping").ConfigureAwait(false), Is.True, "LockPositionLost clears the flag");
+        }
+
+        [Test]
+        public async Task Multi_star_falls_back_to_the_profile_setup_when_guider_options_lack_it() {
+            // openastro-guider 2.1.0's get_guider_options has no multistar_enabled; the flag is in
+            // get_profile_setup. Without the fallback the dialog's Multi-star chip never showed.
+            var (fake, svc) = await ConnectedAsync(f => {
+                LiveRpcs(f);
+                f.OnRpc("get_guider_options", _ => new JsonObject { ["FastRecenter"] = true, ["TolerateJumps"] = false });
+                f.OnRpc("get_profile_setup", _ => new JsonObject { ["multistar_enabled"] = true, ["dither_scale"] = 1.0 });
+            }).ConfigureAwait(false);
+            await using var _ = fake;
+            using var __ = svc;
+            await fake.BroadcastAsync(PhdEvents.AppState("Looping")).ConfigureAwait(false);
+            var view = await new GuiderLiveService(svc, new NoFrames()).GetAsync(CancellationToken.None).ConfigureAwait(false);
+            Assert.That(view.MultiStarEnabled, Is.True);
+
+            fake.OnRpc("get_profile_setup", _ => new JsonObject { ["dither_scale"] = 1.0 });
+            var unknown = await new GuiderLiveService(svc, new NoFrames()).GetAsync(CancellationToken.None).ConfigureAwait(false);
+            Assert.That(unknown.MultiStarEnabled, Is.Null, "neither answer carries it: unknown, never a guess");
+        }
+
         private sealed class RecordingSink : OpenAstroAra.Core.Utility.Notification.INotifierSink {
             public readonly ConcurrentQueue<string> Messages = new();
             public void Notify(bool isError, string? header, string message) => Messages.Enqueue(message);

@@ -245,6 +245,10 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
 
         public string State => AppState?.State ?? string.Empty;
 
+        // A star chosen while looping (StarSelected, or an AppState of Selected): LoopingExposures keeps
+        // reporting Selected until the star is lost, deselected, guiding starts or the loop stops.
+        private volatile bool _starSelectedWhileLooping;
+
         public bool HasSetupDialog => !Connected;
 
         public string Category => "Guiders";
@@ -1280,9 +1284,11 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                         if (AppState?.State == PhdAppState.STOPPED) {
                             GuidingAssistantActive = false;
                         }
+                        _starSelectedWhileLooping = AppState?.State == PhdAppState.SELECTED;
                         break;
                     }
                 case "GuideStep": {
+                        _starSelectedWhileLooping = false;
                         AppState = new PhdEventAppState() { State = "Guiding" };
                         var step = message.ToObject<PhdEventGuideStep>();
                         GuideEvent?.Invoke(this, step);
@@ -1372,10 +1378,15 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                         break;
                     }
                 case "LoopingExposures": {
-                        AppState = new PhdEventAppState() { State = "Looping" };
+                        // PHD2's own get_app_state says "Selected" while looping with a star chosen; its
+                        // per-frame LoopingExposures event carries no such distinction, so without the flag
+                        // every frame put the state back to "Looping" and a tap never read "Star selected"
+                        // (#1364 tap item, 2026-10-18).
+                        AppState = new PhdEventAppState() { State = _starSelectedWhileLooping ? PhdAppState.SELECTED : PhdAppState.LOOPING };
                         break;
                     }
                 case "LoopingExposuresStopped": {
+                        _starSelectedWhileLooping = false;
                         AppState = new PhdEventAppState() { State = "Stopped" };
                         // Nothing runs with the loop stopped: an assistant run that ended without its Done
                         // event (a link blip, a guider-side abort) must not keep the flag for the night.
@@ -1406,11 +1417,19 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                     }
                 case "StarSelected": {
                         Logger.Debug($"PHD2 - Star selected");
+                        // Only a looping (or just-lost) guider becomes "Selected": PHD2 also sends StarSelected
+                        // when it re-picks a star mid-guiding or during a calibration, and those phases stay
+                        // what they are until their own events say otherwise.
+                        if (AppState?.State is null or "" || AppState.State == PhdAppState.LOOPING || AppState.State == PhdAppState.SELECTED || AppState.State == PhdAppState.LOSTLOCK) {
+                            _starSelectedWhileLooping = true;
+                            AppState = new PhdEventAppState() { State = PhdAppState.SELECTED };
+                        }
                         break;
                     }
                 case "StarLost": {
                         var starlost = message.ToObject<PhdEventStarLost>();
                         Logger.Debug($"PHD2 - Star lost! Status: {starlost.Status}");
+                        _starSelectedWhileLooping = false;
                         AppState = new PhdEventAppState() { State = "LostLock" };
                         RaiseMarker(new PhdGuiderMarkerEventArgs {
                             Kind = "star_lost", Frame = starlost?.Frame, StarMass = starlost?.StarMass, Snr = starlost?.SNR,
@@ -1430,6 +1449,9 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                     }
                 case "LockPositionLost": {
                         Logger.Debug($"PHD2 - Lock position lost!");
+                        // A deselect made on the guider's own page sends this and no StarLost: the chosen
+                        // star is gone, so the next loop frame must read Looping, not Selected.
+                        _starSelectedWhileLooping = false;
                         AppState = new PhdEventAppState() { State = "LostLock" };
                         RaiseMarker(new PhdGuiderMarkerEventArgs { Kind = "lock_position_lost" });
                         break;
@@ -1635,6 +1657,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                 Calibration = null;
                 AbandonCalibrationRun("guider connection lost during calibration");
                 AppState = new PhdEventAppState() { State = "" };
+                _starSelectedWhileLooping = false; // a reconnect starts from what the guider then says
                 PixelScale = 0.0d;
                 Connected = false;
                 _tcs.TrySetResult(false);
