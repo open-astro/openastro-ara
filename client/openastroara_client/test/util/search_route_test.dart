@@ -190,4 +190,26 @@ void main() {
     );
     expect(routeResolved(catalog, r2)!['name'], 'North America Nebula');
   });
+
+  test('a PN G designation keeps its prefix when joined to the bundle', () {
+    const pn = PlanningDso(
+      id: 'Abell 21',
+      name: 'Medusa Nebula',
+      type: 'PN',
+      magnitude: null,
+      raDeg: 112.3,
+      decDeg: 13.2,
+      aliases: ['PN G205.1+14.2'],
+    );
+    final goto = routeResolved(
+      [pn],
+      const TargetResolution(
+        status: 'resolved',
+        mainId: 'PN G205.1+14.2',
+        raDeg: 1,
+        decDeg: 2,
+      ),
+    );
+    expect(goto!['name'], 'Medusa Nebula');
+  });
 }

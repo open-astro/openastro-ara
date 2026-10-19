@@ -44,6 +44,10 @@ void main() {
           // The bundle folded Sh2-117 into NGC 7000: the mirror's own
           // Sh2-117 row rejoins it through the alias (#1267 item 4).
           row('Sh2-117', 'HII').toJson(),
+          // ...and a second absorbed twin returning with it: neither is a
+          // row again (a bundled row that absorbed two would otherwise read
+          // as a group and keep both).
+          row('LBN 373', 'HII').toJson(),
         ]),
       );
       final container = ProviderContainer(
@@ -58,7 +62,7 @@ void main() {
                 magnitude: null,
                 raDeg: 314.8,
                 decDeg: 44.5,
-                aliases: ['Sh2-117'],
+                aliases: ['Sh2-117', 'LBN 373'],
               ),
             ],
           ),

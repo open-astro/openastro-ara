@@ -54,7 +54,15 @@ final bundledCatalogProvider =
 final dsoCatalogProvider = FutureProvider<List<PlanningDso>>((ref) async {
   ref.watch(dsoCatalogSyncProvider); // re-read after a refresh lands
   final bundled = planningCull(await ref.watch(bundledCatalogProvider.future));
-  final ids = {for (final d in bundled) d.id};
+  // Every designation the bundle already stands for, ids and the aliases the
+  // merge folded in (Sh2-117 lives on NGC 7000's row): a mirror row under any
+  // of them is the bundled object and is not appended (#1267 item 4).
+  final known = {
+    for (final d in bundled) ...[
+      designationKey(d.id),
+      for (final a in d.aliases) designationKey(a),
+    ],
+  };
   final mirror = await ref.watch(dsoCatalogServiceProvider).loadCached();
   // Mirror rows bypass planningCull (a server-side package the bundle doesn't
   // know ships uncut), so repeat the star gate here: a star has no field to
@@ -65,6 +73,6 @@ final dsoCatalogProvider = FutureProvider<List<PlanningDso>>((ref) async {
   return mergeDuplicates([
     ...bundled,
     for (final d in mirror)
-      if (!ids.contains(d.id) && !isStarType(d.type)) d,
+      if (!known.contains(designationKey(d.id)) && !isStarType(d.type)) d,
   ]);
 });

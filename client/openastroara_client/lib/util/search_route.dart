@@ -141,7 +141,8 @@ const int maxResolvedAliasesTried = 64;
 
 /// Simbad prefixes its main ids ("NAME Wolf 359", "V* AB Cas", "* alf CMa").
 String _stripSimbadPrefix(String s) {
-  const prefixes = ['NAME ', 'V* ', '* ', 'Cl ', 'EM* ', 'PN '];
+  // Not "PN ": "PN G010.1+00.7" is the designation itself.
+  const prefixes = ['NAME ', 'V* ', '* ', 'Cl ', 'EM* '];
   for (final p in prefixes) {
     if (s.startsWith(p)) return s.substring(p.length).trim();
   }

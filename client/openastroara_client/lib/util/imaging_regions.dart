@@ -316,9 +316,6 @@ final List<PlanningDso> standaloneRegions = [
   ),
 ];
 
-/// Apply the curated layer: replace matching rows' display name / size / type
-/// and append the standalone regions. Pure + cheap — runs inside the ranking
-/// isolate on every recompute.
 /// The override for a row: keyed by its id, else by any of its designations
 /// (NGC 2244 is a Dup designation of the Rosette cluster row NGC 2239, so
 /// the 'NGC2244' override reaches that row through its alias; #1267 item 4).
@@ -337,6 +334,9 @@ final Map<String, ImagingRegion> _overridesByKey = {
   for (final e in overrides.entries) designationKey(e.key): e.value,
 };
 
+/// Apply the curated layer: replace matching rows' display name / size / type
+/// and append the standalone regions. Pure + cheap — runs inside the ranking
+/// isolate on every recompute.
 List<PlanningDso> applyImagingRegions(List<PlanningDso> catalog) {
   final present = {for (final o in catalog) o.id};
   final covered = {
