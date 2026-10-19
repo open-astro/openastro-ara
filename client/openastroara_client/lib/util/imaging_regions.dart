@@ -325,9 +325,10 @@ final List<PlanningDso> standaloneRegions = [
 ImagingRegion? overrideFor(PlanningDso o) {
   final direct = overrides[o.id];
   if (direct != null) return direct;
-  for (final a in o.aliases) {
-    final r = overrides[a.replaceAll(' ', '')];
-    if (r != null) return r;
+  if (o.aliases.isEmpty) return null;
+  final keys = {for (final a in o.aliases) designationKey(a)};
+  for (final entry in overrides.entries) {
+    if (keys.contains(designationKey(entry.key))) return entry.value;
   }
   return null;
 }
