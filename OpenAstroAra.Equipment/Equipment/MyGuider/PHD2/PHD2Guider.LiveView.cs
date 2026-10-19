@@ -90,7 +90,8 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             if (setup.error != null || setup.result is null) {
                 return null;
             }
-            var token = JToken.FromObject(setup.result)["multistar_enabled"];
+            // The result is an object on every guider that has the method; anything else is not an answer.
+            var token = (JToken.FromObject(setup.result) as JObject)?["multistar_enabled"];
             return token?.Type == JTokenType.Boolean ? token.Value<bool>() : null;
         }
 

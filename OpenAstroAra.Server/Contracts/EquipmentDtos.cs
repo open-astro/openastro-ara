@@ -470,7 +470,8 @@ public sealed record GuiderStateDto(
 /// #1364 — the live guide-camera view (<c>GET /equipment/guider/live</c>): what the guider is doing
 /// (<c>AppState</c>: Stopped | Looping | Selected | Calibrating | Guiding | LostLock | Paused), the frame
 /// size the picture at <c>GET …/live/frame</c> covers, the locked star and the search box around it, the
-/// latest guide frame's star SNR and mass (only while <c>AppState</c> is Guiding), whether multi-star tracking is on, and the other stars the
+/// star's SNR and mass (the latest guide frame's while <c>AppState</c> is Guiding; the chosen star's detected
+/// centroid under the lock position while it is Selected; null otherwise), whether multi-star tracking is on, and the other stars the
 /// guider found (<c>Stars</c>, brightest first; empty when it has no image). Coordinates are guide-camera
 /// pixels. Fields the guider could not answer are null, never an error — the picture still shows.
 /// </summary>
