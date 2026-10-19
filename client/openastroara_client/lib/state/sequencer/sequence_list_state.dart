@@ -148,11 +148,19 @@ final selectedSequenceIdProvider =
 /// no server, or no active run for it). Rebuilds when the selection or server
 /// changes; [refresh] re-reads after a lifecycle action (start/pause/abort).
 class SequenceRunStateNotifier extends AsyncNotifier<SequenceRunStateInfo?> {
+  // Adoption happens once per notifier: a selection cleared on purpose (a
+  // delete, the editor giving up on a body it cannot load) must not pull the
+  // same run straight back. The editor's load-failure path clears the
+  // selection and shows a SnackBar; re-adopting there would loop list, detail
+  // and run-state reads until the run ended.
+  bool _adopted = false;
+
   Future<SequenceRunStateInfo?> _read() async {
     var id = ref.read(selectedSequenceIdProvider);
     final api = ref.read(sequenceApiProvider);
     if (api == null) return null;
-    if (id == null) {
+    if (id == null && !_adopted) {
+      _adopted = true;
       // Nothing picked yet (a fresh launch, or a relaunch while the daemon is
       // mid-run): adopt the daemon's active run instead of showing nothing.
       // Rig night 2026-10-18: the client was relaunched with a run paused
@@ -162,11 +170,13 @@ class SequenceRunStateNotifier extends AsyncNotifier<SequenceRunStateInfo?> {
       // id and loads it into the editor, exactly as a Load-dialog pick would.
       id = await _activeRunId();
       if (id == null || !ref.mounted) return null;
+      // Selecting rebuilds this notifier with the id; that build does the read.
       ref.read(selectedSequenceIdProvider.notifier).select(id);
+      return null;
     }
     // A local draft (§2 offline planning) has no daemon run state — never send
     // its client-side id to the run-state endpoint.
-    if (isDraftSequenceId(id)) return null;
+    if (id == null || isDraftSequenceId(id)) return null;
     return api.getRunState(id);
   }
 

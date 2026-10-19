@@ -178,6 +178,35 @@ void main() {
           SequenceRunState.pausedAwaitingUser);
     });
 
+    test('a selection cleared after adoption is not adopted again', () async {
+      // The editor clears the selection when it cannot load the body; adopting
+      // the same run again would loop list, detail and run-state reads.
+      final fake = _FakeSeqClient()
+        ..runStateById = {
+          'paused-run': const SequenceRunStateInfo(
+              state: SequenceRunState.pausedAwaitingUser, runId: 'run-1'),
+        };
+      final container = setup(fake);
+      await pumpEventQueue();
+      fake.calls.single.complete(SequencePage(items: [
+        const SequenceListItem(
+            id: 'paused-run',
+            currentRunState: SequenceRunState.pausedAwaitingUser),
+      ]));
+      await pumpEventQueue();
+      await container.read(sequenceRunStateProvider.future);
+      expect(container.read(selectedSequenceIdProvider), 'paused-run');
+
+      container.read(selectedSequenceIdProvider.notifier).select(null);
+      await pumpEventQueue();
+      await container.read(sequenceRunStateProvider.future);
+      await pumpEventQueue();
+
+      expect(container.read(selectedSequenceIdProvider), isNull);
+      expect(fake.calls, hasLength(1), reason: 'the list is not read again');
+      expect(container.read(sequenceRunStateProvider).value, isNull);
+    });
+
     test('with nothing selected and no active run, nothing is selected',
         () async {
       final fake = _FakeSeqClient();
