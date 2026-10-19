@@ -61,8 +61,12 @@ namespace OpenAstroAra.Test {
             + "32263,32349,48915,2491,\"GJ 244\",\"9Alp CMa\",\"Sirius\",6.752477,-16.716116,2.6371,-1.44,Alp,9,CMa,\"\"\n";
 
         private const string NgcHeader = "Name;Type;RA;Dec;V-Mag;B-Mag;M;NGC;IC;Identifiers;Common names\n";
+        // In file order, as OpenNGC ships it: IC rows (including IC Dup rows) come BEFORE the NGC rows they
+        // point at (IC0011 is line 12, NGC0281 line 5894 of the real NGC.csv).
         private const string NgcRows =
-            "NGC0224;G;00:42:44.33;+41:16:07.5;3.44;4.36;031;;;C 017,UGC 00454;Andromeda Galaxy,Messier 31\n"
+            "IC0011;Dup;00:52:59.35;+56:37:18.8;;;;0281;;;\n"
+            + "NGC0224;G;00:42:44.33;+41:16:07.5;3.44;4.36;031;;;C 017,UGC 00454;Andromeda Galaxy,Messier 31\n"
+            + "NGC0281;HII;00:52:59.35;+56:37:18.8;;;;;;LBN 616;Pacman Nebula\n"
             + "NGC7000;Neb;20:59:17.14;+44:31:43.6;;;;;;C 020,LBN 373;North America Nebula\n"
             + "IC0434;HII;05:41:00.00;-02:27:00.0;;;;2023;;LBN 954;\n"
             + "NGC0001;G;00:07:15.84;+27:42:29.1;13.6;;;;;;\n"
@@ -134,10 +138,17 @@ namespace OpenAstroAra.Test {
             Assert.That(idx.Find("NGC 2023", CancellationToken.None)!.MainId, Is.EqualTo("IC0434"), "the NGC cross-reference on an IC row");
             Assert.That(idx.Find("NGC 1", CancellationToken.None)!.MainId, Is.EqualTo("NGC0001"));
             Assert.That(idx.Find("NGC 2", CancellationToken.None), Is.Null);
-            // A Dup row resolves by its own name to the object it duplicates.
+            // A Dup row resolves by its own name to the object it duplicates, whichever comes first in the
+            // file, and the canonical row keeps its own metadata (review r4: IC Dup rows precede their NGC rows).
+            var pacman = idx.Find("NGC 281", CancellationToken.None);
+            Assert.That(pacman, Is.Not.Null);
+            Assert.That(pacman!.MainId, Is.EqualTo("NGC0281"));
+            Assert.That(pacman.ObjectType, Is.EqualTo("HII"));
+            Assert.That(pacman.Aliases, Does.Contain("LBN 616").And.Contain("Pacman Nebula").And.Contain("IC0011"));
+            Assert.That(idx.Find("IC 11", CancellationToken.None), Is.SameAs(pacman));
             var dup = idx.Find("NGC 651", CancellationToken.None);
             Assert.That(dup, Is.Not.Null);
-            Assert.That(dup!.MainId, Is.EqualTo("M 76"));
+            Assert.That(dup!.MainId, Is.EqualTo("M 76"), "a Dup whose canonical row is not in the file stands alone under its canonical name");
             Assert.That(dup.Aliases, Does.Contain("NGC0651").And.Contain("NGC 0650"));
             Assert.That(dup.ObjectType, Is.Null, "a Dup row's type is not its own");
         }

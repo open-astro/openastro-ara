@@ -297,6 +297,10 @@ public sealed partial class TargetNameIndex {
         var count = 0;
         string? line;
         var aliases = new List<string>(8);
+        // Dup rows are applied AFTER every real row: OpenNGC lists IC rows (Dup ones included) before the
+        // NGC rows they point at, and the first claim on a key wins, so a Dup read in file order would take
+        // "NGC 281" from the real NGC0281 and the endpoint would answer with no type or magnitude (review r4).
+        var dups = new List<(string Name, string Canonical, string[] Extra, double Ra, double Dec)>();
         while ((line = reader.ReadLine()) is not null) {
             ct.ThrowIfCancellationRequested();
             var f = line.Split(';');
@@ -319,18 +323,18 @@ public sealed partial class TargetNameIndex {
             // A Dup row is a second designation of an object listed under another name (NGC 651 is M 76's
             // second half): its own name must still resolve offline, so it is indexed with the canonical
             // designation (the M / NGC / IC it points at) as the main id, and its type is not its own.
-            var isDup = t == "Dup";
-            if (isDup) {
+            if (t == "Dup") {
                 var canonical = m.Length > 0 ? $"M {m.TrimStart('0')}" : g.Length > 0 ? $"NGC {g}" : i.Length > 0 ? $"IC {i}" : n;
-                aliases.Add(canonical);
-                if (canonical != n) aliases.Add(n);
-                t = string.Empty;
-            } else {
-                aliases.Add(n);
-                if (m.Length > 0) aliases.Add($"M {m.TrimStart('0')}");
+                var extra = new List<string>();
+                if (g.Length > 0) extra.Add($"NGC {g}");
+                if (i.Length > 0) extra.Add($"IC {i}");
+                dups.Add((n, canonical, extra.ToArray(), (raHours * 15.0) % 360.0, decDeg));
+                continue;
             }
-            if (g.Length > 0 && (isDup || !n.StartsWith("NGC", StringComparison.Ordinal))) aliases.Add($"NGC {g}");
-            if (i.Length > 0 && (isDup || !n.StartsWith("IC", StringComparison.Ordinal))) aliases.Add($"IC {i}");
+            aliases.Add(n);
+            if (m.Length > 0) aliases.Add($"M {m.TrimStart('0')}");
+            if (g.Length > 0 && !n.StartsWith("NGC", StringComparison.Ordinal)) aliases.Add($"NGC {g}");
+            if (i.Length > 0 && !n.StartsWith("IC", StringComparison.Ordinal)) aliases.Add($"IC {i}");
             foreach (var id in Field(f, ids).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)) {
                 aliases.Add(id);
             }
@@ -340,6 +344,33 @@ public sealed partial class TargetNameIndex {
             double? mag = Num(f, vMag, out var mv) ? mv : Num(f, bMag, out var mb) ? mb : null;
             var entry = new TargetIndexEntry(aliases[0], aliases.ToArray(), (raHours * 15.0) % 360.0, decDeg, t.Length > 0 ? t : null, mag);
             Add(tight, loose, entry);
+            count++;
+        }
+        foreach (var dup in dups) {
+            // The canonical object is in the index: the Dup's own name becomes one more of its aliases, and
+            // every key of that object now answers with the enlarged entry. Otherwise the Dup stands alone
+            // under its canonical name (M 76 for NGC 651 when only the Dup row is installed), with no type.
+            if (tight.TryGetValue(TightKey(dup.Canonical), out var canonicalEntry)
+                    || (dup.Extra.Length > 0 && tight.TryGetValue(TightKey(dup.Extra[0]), out canonicalEntry))) {
+                if (canonicalEntry.Aliases.Contains(dup.Name, StringComparer.Ordinal)) {
+                    continue;
+                }
+                var merged = canonicalEntry with { Aliases = canonicalEntry.Aliases.Append(dup.Name).ToArray() };
+                foreach (var alias in merged.Aliases) {
+                    var k = TightKey(alias);
+                    if (k.Length == 0) continue;
+                    if (!tight.TryGetValue(k, out var owner) || ReferenceEquals(owner, canonicalEntry)) tight[k] = merged;
+                    var lk = LooseKey(k);
+                    if (!loose.TryGetValue(lk, out owner) || ReferenceEquals(owner, canonicalEntry)) loose[lk] = merged;
+                }
+                continue;
+            }
+            var names = new List<string> { dup.Canonical };
+            if (dup.Canonical != dup.Name) names.Add(dup.Name);
+            foreach (var e in dup.Extra) {
+                if (!names.Contains(e, StringComparer.Ordinal)) names.Add(e);
+            }
+            Add(tight, loose, new TargetIndexEntry(dup.Canonical, names.ToArray(), dup.Ra, dup.Dec, null, null));
             count++;
         }
         return count;
