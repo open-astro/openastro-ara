@@ -5,6 +5,7 @@ import 'package:openastroara/services/bundled_catalogs.dart';
 import 'package:openastroara/services/dso_catalog_service.dart';
 import 'package:openastroara/util/dedupe_catalog.dart';
 import 'package:openastroara/util/imaging_regions.dart';
+import 'package:openastroara/widgets/sky_atlas/tonight_sky_panel.dart';
 
 /// Parses the REAL bundled asset from disk (rootBundle needs a widget
 /// binding; the parser is pure, so read the file directly).
@@ -175,6 +176,11 @@ void main() {
     expect(merged.where((d) => d.id == 'Arp 281'), hasLength(1));
     expect(findCatalogObject(merged, 'NGC 4038')!.id, 'NGC4038', reason: 'the Antennae stay two');
     expect(findCatalogObject(merged, 'NGC 4039')!.id, 'NGC4039');
+    // The Tonight's Sky subtitle shows catalogue designations, best-known
+    // first, never survey ids (review r4).
+    expect(aliasSuffix(nam.aliases), ' · also Sh2-117, C 020, LBN 373');
+    final m31 = merged.where((d) => d.id == 'NGC0224').single;
+    expect(aliasSuffix(m31.aliases), ' · also M 31');
     // Merging the merged bundle again changes nothing (the provider does).
     final again = mergeDuplicates(merged);
     expect(again.map((d) => d.id), merged.map((d) => d.id));

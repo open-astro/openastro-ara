@@ -974,7 +974,15 @@ void _budgetTests() {
 
   test('aliasSuffix lists up to three other designations (#1267 item 4)', () {
     expect(aliasSuffix(const []), '');
-    expect(aliasSuffix(const ['Sh2-117', 'C 020']), ' · also Sh2-117, C 020');
-    expect(aliasSuffix(const ['a', 'b', 'c', 'd']), ' · also a, b, c, …');
+    expect(aliasSuffix(const ['C 020', 'Sh2-117']), ' · also Sh2-117, C 020');
+    expect(
+      aliasSuffix(const ['2MASX J00424433+4116074', 'Messier 31', 'UGC 00454', 'M 31']),
+      ' · also M 31',
+    );
+    expect(
+      aliasSuffix(const ['LBN 1', 'Arp 2', 'IC 3', 'NGC 4', 'M 5']),
+      ' · also M 5, NGC 4, IC 3, …',
+    );
+    expect(aliasSuffix(const ['2MASX J1', 'PGC 2']), '');
   });
 }

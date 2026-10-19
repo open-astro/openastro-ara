@@ -436,6 +436,8 @@ class _ObjectRowState extends ConsumerState<_ObjectRow> {
                         const SizedBox(height: 2),
                         Text(
                           subtitle,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: theme.textTheme.bodySmall?.copyWith(
                             color: AraColors.textSecondary,
                           ),
@@ -1188,10 +1190,40 @@ class _Message extends StatelessWidget {
   }
 }
 
-/// " · also Sh2-117, C 20" for a merged row (#1267 item 4): the designations
-/// the row stands for, at most three, so the subtitle stays one line.
+/// " · also Sh2-117, C 020, LBN 373" for a merged row (#1267 item 4): the
+/// catalogue designations the row stands for, best-known catalogues first
+/// (Messier, NGC/IC, Sharpless, Caldwell, …), at most three. Survey ids
+/// (2MASX, IRAS, PGC, UGC, …) and further common names are not shown: they
+/// filled every slot on a galaxy row and wrapped the line (review r4).
 String aliasSuffix(List<String> aliases) {
-  if (aliases.isEmpty) return '';
-  final shown = aliases.take(3).join(', ');
-  return ' · also ${aliases.length > 3 ? '$shown, …' : shown}';
+  final ranked = <(int, String)>[
+    for (final a in aliases)
+      if (designationRank(a) case final r?) (r, a),
+  ];
+  if (ranked.isEmpty) return '';
+  ranked.sort((x, y) => x.$1.compareTo(y.$1));
+  final shown = ranked.take(3).map((e) => e.$2).join(', ');
+  return ' · also ${ranked.length > 3 ? '$shown, …' : shown}';
+}
+
+/// The display rank of a designation by its catalogue, or null for one the
+/// row's subtitle should not show (survey ids, common names).
+int? designationRank(String designation) => _rankOf(designation.trim());
+
+final List<(RegExp, int)> _designationFamilies = [
+  (RegExp(r'^M \d+$'), 0),
+  (RegExp(r'^NGC ?\d+'), 1),
+  (RegExp(r'^IC ?\d+'), 2),
+  (RegExp(r'^Sh2-\d+'), 3),
+  (RegExp(r'^C \d+$'), 4),
+  (RegExp(r'^(Abell|Arp|vdB|LDN|LBN|Cr|Mel|Tr|Stock|Berkeley|King|Ced|RCW|Gum|Mi|Hen|PK|PN G) '), 5),
+  (RegExp(r'^B\d+$'), 5),
+  (RegExp(r'^WR \d+'), 5),
+];
+
+int? _rankOf(String d) {
+  for (final (re, rank) in _designationFamilies) {
+    if (re.hasMatch(d)) return rank;
+  }
+  return null;
 }
