@@ -71,10 +71,14 @@ class GuiderLive {
         'Paused' => 'Paused',
         final other => other,
       },
-      // SNR and mass are the last guide frame's: shown only while guiding,
-      // so a stopped or looping guider never shows a stale reading.
-      if (isGuidingNow && snr != null) 'SNR ${snr!.toStringAsFixed(0)}',
-      if (isGuidingNow && starMass != null) 'mass ${_k(starMass!)}',
+      // SNR and mass are the last guide frame's while guiding, and the chosen
+      // star's own detection while looping with a star selected (the daemon
+      // sends neither otherwise), so a stopped or looping guider never shows a
+      // stale reading.
+      if ((isGuidingNow || appState == 'Selected') && snr != null)
+        'SNR ${snr!.toStringAsFixed(0)}',
+      if ((isGuidingNow || appState == 'Selected') && starMass != null)
+        'mass ${_k(starMass!)}',
     ];
     return parts.join(' · ');
   }

@@ -14,8 +14,6 @@
 
 using OpenAstroAra.Core.Model;
 using OpenAstroAra.Core.Utility;
-using OxyPlot;
-using OxyPlot.Axes;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -174,11 +172,11 @@ namespace OpenAstroAra.Astrometry {
                 var altitude = AstroUtil.GetAltitude(degAngle, Latitude, Coordinates.Dec);
                 var azimuth = AstroUtil.GetAzimuth(degAngle, altitude, Latitude, Coordinates.Dec);
 
-                Altitudes.Add(new DataPoint(DateTimeAxis.ToDouble(start), altitude));
+                Altitudes.Add(new DataPoint(PlotTime.ToDouble(start), altitude));
 
                 if (CustomHorizon != null) {
                     var horizonAltitude = CustomHorizon.GetAltitude(azimuth);
-                    Horizon.Add(new DataPoint(DateTimeAxis.ToDouble(start), horizonAltitude));
+                    Horizon.Add(new DataPoint(PlotTime.ToDouble(start), horizonAltitude));
                 }
 
                 start = start.AddHours(0.1);

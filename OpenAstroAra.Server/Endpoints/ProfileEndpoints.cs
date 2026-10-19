@@ -128,6 +128,38 @@ public static class ProfileEndpoints {
             .WithName("GetCalibrationState")
             .WithSummary("Get the active profile's calibration-state block (guider dark library / defect map validity + last-built timestamps).");
 
+        // #1267 item 5 — the recent and saved targets: client-authored, replaced as a whole list.
+        profile.MapGet("/saved-targets", (IProfileStore store) =>
+                Results.Ok(store.GetSavedTargets()))
+            .Produces<SavedTargetsDto>(StatusCodes.Status200OK)
+            .WithName("GetSavedTargets")
+            .WithSummary("Get the active profile's recent and saved targets (name, aliases, J2000 position, source), newest first.");
+
+        profile.MapPut("/saved-targets", (SavedTargetsDto body, IProfileStore store) => {
+            var (normalized, error) = SavedTargetsValidator.Normalize(body);
+            if (error is not null) {
+                return Results.Problem(
+                    type: "https://openastro.net/errors/validation",
+                    title: "Invalid saved targets",
+                    statusCode: StatusCodes.Status422UnprocessableEntity,
+                    detail: error);
+            }
+            store.PutSavedTargets(normalized!);
+            return Results.Ok(normalized);
+        })
+            .Accepts<SavedTargetsDto>("application/json")
+            .Produces<SavedTargetsDto>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
+            .WithName("PutSavedTargets")
+            .WithSummary("Replace the active profile's recent and saved targets (newest first; one entry per name; at most 200; finite J2000 positions).");
+
+        // #1362 — read-only: the connect-time reconcile records each gear slot's last-seen Alpaca identity.
+        profile.MapGet("/equipment-identity", (IProfileStore store) =>
+                Results.Ok(store.GetEquipmentIdentity()))
+            .Produces<EquipmentIdentityDto>(StatusCodes.Status200OK)
+            .WithName("GetEquipmentIdentity")
+            .WithSummary("Get the active profile's last-seen Alpaca identity (UniqueID, name, seen time) per gear slot.");
+
         profile.MapGet("/filenames", (IProfileStore store) =>
                 Results.Ok(store.GetFilenamesSettings()))
             .Produces<FilenamesSettingsDto>(StatusCodes.Status200OK)

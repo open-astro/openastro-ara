@@ -25,7 +25,6 @@ using OpenAstroAra.Sequencer.Validations;
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
-using System.ComponentModel.Composition;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -46,15 +45,9 @@ namespace OpenAstroAra.Sequencer.Trigger.Autofocus {
     /// <see cref="Amount"/> keeps NINA's class default (5) for import fidelity; the playbook's
     /// 1.5 °C recommendation is a profile-level default applied when ARA builds plans.
     /// </summary>
-    [ExportMetadata("Name", "Lbl_SequenceTrigger_AutofocusAfterTemperatureChangeTrigger_Name")]
-    [ExportMetadata("Description", "Lbl_SequenceTrigger_AutofocusAfterTemperatureChangeTrigger_Description")]
-    [ExportMetadata("Icon", "AutoFocusAfterTemperatureSVG")]
-    [ExportMetadata("Category", "Lbl_SequenceCategory_Focuser")]
-    [Export(typeof(ISequenceTrigger))]
     [JsonObject(MemberSerialization.OptIn)]
     public class AutofocusAfterTemperatureChangeTrigger : SequenceTrigger, IValidatable {
 
-        [ImportingConstructor]
         public AutofocusAfterTemperatureChangeTrigger(IFocuserMediator? focuserMediator = null, IImageHistory? history = null, IAutofocusConditionGate? conditionGate = null) : base() {
             this.focuserMediator = focuserMediator;
             this.history = history;

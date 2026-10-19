@@ -29,6 +29,12 @@ class PlanningDso {
   final int? messierNum;
   final int? caldwellNum;
 
+  /// The object's other designations and names (#1267 item 4): the
+  /// catalog's cross-identifications, further common names, and the ids of
+  /// rows folded into this one by [mergeDuplicates]. Any of them finds the
+  /// object in search; Tonight's Sky lists them under the row.
+  final List<String> aliases;
+
   const PlanningDso({
     required this.id,
     required this.name,
@@ -42,7 +48,39 @@ class PlanningDso {
     this.surfaceBrightness,
     this.messierNum,
     this.caldwellNum,
+    this.aliases = const [],
   });
+
+  /// Whether [id] or any alias starts with [prefix] (an overlay's family).
+  bool hasDesignationPrefix(String prefix) {
+    if (id.startsWith(prefix)) return true;
+    for (final a in aliases) {
+      if (a.startsWith(prefix)) return true;
+    }
+    return false;
+  }
+
+  /// A Barnard id is "B" + digits ("B33"), which no other family shares.
+  bool get hasBarnardDesignation => barnardDesignation != null;
+  String? get barnardDesignation {
+    bool isB(String s) =>
+        s.length > 1 && s[0] == 'B' && s.codeUnitAt(1) >= 48 && s.codeUnitAt(1) <= 57;
+    if (isB(id)) return id;
+    for (final a in aliases) {
+      if (isB(a)) return a;
+    }
+    return null;
+  }
+
+  /// The designation starting with [prefix]: the id when it matches, else
+  /// the first such alias, else null.
+  String? designationWithPrefix(String prefix) {
+    if (id.startsWith(prefix)) return id;
+    for (final a in aliases) {
+      if (a.startsWith(prefix)) return a;
+    }
+    return null;
+  }
 
   /// Wire shape is the daemon's snake_case DsoEntryDto. Null on a malformed
   /// row (skipped, never a crash).
@@ -58,6 +96,7 @@ class PlanningDso {
     double? opt(String key) =>
         json[key] is num ? (json[key] as num).toDouble() : null;
     final common = json['common_name'];
+    final aliases = json['aliases'];
     return PlanningDso(
       id: name,
       name: common is String && common.isNotEmpty ? common : name,
@@ -69,6 +108,9 @@ class PlanningDso {
       sizeMinArcmin: opt('min_ax_arcmin'),
       posAngleDeg: opt('pos_angle_deg'),
       surfaceBrightness: opt('surface_brightness'),
+      aliases: aliases is List
+          ? aliases.whereType<String>().toList(growable: false)
+          : const [],
     );
   }
 
@@ -83,6 +125,7 @@ class PlanningDso {
     'min_ax_arcmin': sizeMinArcmin,
     'pos_angle_deg': posAngleDeg,
     'surface_brightness': surfaceBrightness,
+    if (aliases.isNotEmpty) 'aliases': aliases,
   };
 }
 
@@ -177,6 +220,85 @@ Map<String, Object?> planetariumSearchCommand(
   return {'type': 'search', 'q': q};
 }
 
+/// A designation's lookup key: upper-case, no spaces, no zero padding
+/// ("NGC 0224", "ngc224", "NGC0224" and "C 020" / "C 20" are one key).
+/// Dashes STAY: "M 2-9" (Minkowski's Twin Jet) is not "M 29", and "WR 2-1"
+/// is not "WR 21" (review #1107, r3). Shared by the search and the
+/// one-row-per-object merge (#1267).
+String designationKey(String s) {
+  final up = s.trim().toUpperCase().replaceAll(_spaces, '');
+  return up.replaceAllMapped(_zeroPad, (m) => '${m[1]}${m[2]}');
+}
+
+// Built once: the search keys every id and alias of the bundle on a miss.
+final RegExp _spaces = RegExp(r'[\s_]');
+final RegExp _zeroPad = RegExp(r'([A-Z])0+(\d)');
+
+/// The key without dashes, for a query typed WITHOUT one ("sh2 117" finds
+/// Sh2-117). A query that carries a dash is never matched loosely.
+String looseDesignationKey(String s) =>
+    designationKey(s).replaceAll('-', '');
+
+/// Whether [query] matches [designation] by key: dash-preserving first; the
+/// dashless form only when the query itself has no dash.
+bool designationMatches(String query, String designation) {
+  final qk = designationKey(query);
+  if (qk.isEmpty) return false;
+  if (qk == designationKey(designation)) return true;
+  return !qk.contains('-') && qk == looseDesignationKey(designation);
+}
+
+/// A one-pass lookup index over a catalog (#1267 item 4): designation key
+/// → row for every id, display name and alias, with the dashless form as a
+/// fallback for a query without a dash. Built once per catalog list, so a
+/// Simbad answer's whole alias list resolves in O(1) each instead of a full
+/// scan per name (review r5).
+class CatalogNameIndex {
+  final Map<String, PlanningDso> _exact = {};
+  final Map<String, PlanningDso> _loose = {};
+  // A dashless key two different rows share answers nothing, as in the
+  // merge ("WR 2-1" and "WR 21" are two stars; review r8).
+  final Set<String> _looseAmbiguous = {};
+
+  CatalogNameIndex(List<PlanningDso> catalog) {
+    void add(String designation, PlanningDso o) {
+      final k = designationKey(designation);
+      if (k.isEmpty) return;
+      _exact.putIfAbsent(k, () => o);
+      final lk = k.replaceAll('-', '');
+      final owner = _loose[lk];
+      if (owner == null) {
+        _loose[lk] = o;
+      } else if (!identical(owner, o)) {
+        _looseAmbiguous.add(lk);
+      }
+    }
+    // Ids first, then names, then aliases: an id claim always wins.
+    for (final o in catalog) {
+      add(o.id, o);
+    }
+    for (final o in catalog) {
+      add(o.name, o);
+    }
+    for (final o in catalog) {
+      for (final a in o.aliases) {
+        add(a, o);
+      }
+    }
+  }
+
+  /// The row [query] names exactly (dash-preserving; the dashless form only
+  /// for a query without a dash), or null.
+  PlanningDso? lookup(String query) {
+    final k = designationKey(query);
+    if (k.isEmpty) return null;
+    final hit = _exact[k];
+    if (hit != null || k.contains('-')) return hit;
+    return _looseAmbiguous.contains(k) ? null : _loose[k];
+  }
+}
+
+
 /// Case/space/dash-insensitive lookup over the planning mirror: "sh2 129",
 /// "SH2-129", "b 33", "ldn1235" and common names ("horsehead") all resolve.
 /// Exact normalized id/name match wins; otherwise the first object whose
@@ -196,6 +318,20 @@ PlanningDso? findCatalogObject(List<PlanningDso> catalog, String query) {
   }
   for (final o in catalog) {
     if (loose(o.id) == q || loose(o.name) == q) return o;
+  }
+  // Zero padding is not part of a designation ("NGC 224" is NGC0224), and
+  // any other designation the object answers to selects it (#1267 item 4):
+  // "Sh2-117", "C 20" and "LBN 373" all select the North America Nebula's
+  // one row.
+  if (designationKey(query).isNotEmpty) {
+    for (final o in catalog) {
+      if (designationMatches(query, o.id)) return o;
+    }
+    for (final o in catalog) {
+      for (final a in o.aliases) {
+        if (designationMatches(query, a)) return o;
+      }
+    }
   }
   for (final o in catalog) {
     if (loose(o.name).contains(q)) return o;

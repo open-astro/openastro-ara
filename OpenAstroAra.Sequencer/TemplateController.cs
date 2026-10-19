@@ -12,7 +12,6 @@
 
 #endregion "copyright"
 
-using CommunityToolkit.Mvvm.ComponentModel;
 using OpenAstroAra.Astrometry;
 using OpenAstroAra.Core.Locale;
 using OpenAstroAra.Core.Model;
@@ -35,7 +34,7 @@ using System.Windows.Input;
 
 namespace OpenAstroAra.Sequencer {
 
-    public sealed partial class TemplateController : BaseINPC, IDisposable {
+    public sealed class TemplateController : BaseINPC, IDisposable {
         private readonly SequenceJsonConverter sequenceJsonConverter;
         private readonly IProfileService profileService;
         private readonly string defaultTemplatePath;
@@ -65,12 +64,24 @@ namespace OpenAstroAra.Sequencer {
             }
         }
 
-        [ObservableProperty]
         private bool templatesLoading = true;
-        [ObservableProperty]
+
+        public bool TemplatesLoading {
+            get => templatesLoading;
+            set => SetProperty(ref templatesLoading, value);
+        }
         private int templatesLoadingProgress;
-        [ObservableProperty]
+
+        public int TemplatesLoadingProgress {
+            get => templatesLoadingProgress;
+            set => SetProperty(ref templatesLoadingProgress, value);
+        }
         private int templatesLoadingTotalCount;
+
+        public int TemplatesLoadingTotalCount {
+            get => templatesLoadingTotalCount;
+            set => SetProperty(ref templatesLoadingTotalCount, value);
+        }
 
         public TemplateController(SequenceJsonConverter sequenceJsonConverter, IProfileService profileService) {
             this.sequenceJsonConverter = sequenceJsonConverter;

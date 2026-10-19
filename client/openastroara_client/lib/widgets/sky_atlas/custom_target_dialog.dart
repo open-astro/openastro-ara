@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../services/custom_targets_service.dart';
+import '../../services/target_resolve_api.dart';
 import '../../state/sequencer/create_imaging_run.dart';
 import '../../state/sky_atlas/custom_targets_state.dart';
 import '../../state/sky_atlas/sky_atlas_state.dart';
@@ -24,13 +25,19 @@ import '../../util/coord_parse.dart';
 /// in the client (offline-first). The preview line shows both so the user can
 /// check the conversion against where they copied the numbers from.
 ///
-/// Recent targets persist on this device ([customTargetsProvider]) so a
-/// position prepared at home is one tap away at the dark site.
+/// Recent targets live in the profile ([customTargetsProvider], #1267 item
+/// 5) with a per-rig mirror on this device, so a position prepared at home
+/// is one tap away at the dark site on any client, with or without a server.
 class CustomTargetDialog extends ConsumerStatefulWidget {
   /// Text to pre-fill from the search box when it looked like coordinates.
   final String? initialText;
 
-  const CustomTargetDialog({super.key, this.initialText});
+  /// A name the daemon resolved (#1267): the dialog opens filled with its
+  /// main identifier and J2000 position, and shows where the answer came
+  /// from and the other names it answers to.
+  final TargetResolution? resolved;
+
+  const CustomTargetDialog({super.key, this.initialText, this.resolved});
 
   @override
   ConsumerState<CustomTargetDialog> createState() => _CustomTargetDialogState();
@@ -51,6 +58,17 @@ class _CustomTargetDialogState extends ConsumerState<CustomTargetDialog> {
     super.initState();
     final t = widget.initialText?.trim();
     if (t != null && t.isNotEmpty) _fillFromLine(t);
+    final r = widget.resolved;
+    if (r != null && r.resolved) {
+      // Decimal degrees keep the resolver's precision (the sexagesimal
+      // formatter rounds to whole seconds) and parse unambiguously as
+      // degrees, the chooser's default.
+      _name.text = r.mainId!;
+      _ra.text = r.raDeg!.toStringAsFixed(5);
+      _lastRa = _ra.text;
+      _dec.text = r.decDeg!.toStringAsFixed(5);
+      _raUnit = RaUnit.degrees;
+    }
     _ra.addListener(_onRaChanged);
   }
 
@@ -134,13 +152,22 @@ class _CustomTargetDialogState extends ConsumerState<CustomTargetDialog> {
     return '${formatRaHms(c.raDeg / 15)} ${formatDecDms(c.decDeg)}';
   }
 
-  CustomTarget _asCustomTarget(ParsedCoordinates c) => CustomTarget(
-        name: _targetName,
-        raDeg: c.raDeg,
-        decDeg: c.decDeg,
-        typedAsJNow: _epoch == _Epoch.jnow,
-        savedUtc: DateTime.now().toUtc(),
-      );
+  CustomTarget _asCustomTarget(ParsedCoordinates c) {
+    // A resolved target keeps its other names and where it came from, as
+    // long as the name is still the resolver's (an edited name is the
+    // user's own target). #1267 item 5.
+    final r = widget.resolved;
+    final resolved = r != null && r.resolved && _targetName == r.mainId;
+    return CustomTarget(
+      name: _targetName,
+      raDeg: c.raDeg,
+      decDeg: c.decDeg,
+      typedAsJNow: _epoch == _Epoch.jnow,
+      savedUtc: DateTime.now().toUtc(),
+      aliases: resolved ? r.aliases : const [],
+      source: resolved && r.source.isNotEmpty ? r.source : 'typed',
+    );
+  }
 
   Future<void> _showOnSky() async {
     final c = _j2000;
@@ -209,8 +236,11 @@ class _CustomTargetDialogState extends ConsumerState<CustomTargetDialog> {
       color: AraColors.textSecondary,
     );
 
+    final resolved = widget.resolved;
     return AlertDialog(
-      title: const Text('Target by coordinates'),
+      title: Text(resolved != null && resolved.resolved
+          ? 'Resolved target'
+          : 'Target by coordinates'),
       content: SizedBox(
         width: 440,
         child: SingleChildScrollView(
@@ -228,6 +258,14 @@ class _CustomTargetDialogState extends ConsumerState<CustomTargetDialog> {
                   hintText: 'AB Cas, TOI-700 field, …',
                 ),
               ),
+              if (resolved != null && resolved.resolved) ...[
+                const SizedBox(height: 4),
+                Text(
+                  resolved.provenance,
+                  key: const Key('custom-target-provenance'),
+                  style: hint,
+                ),
+              ],
               const SizedBox(height: 12),
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -355,7 +393,8 @@ class _CustomTargetDialogState extends ConsumerState<CustomTargetDialog> {
                     title: Text(t.name),
                     subtitle: Text(
                       '${formatRaHms(t.raDeg / 15)}  '
-                      '${formatDecDms(t.decDeg)}',
+                      '${formatDecDms(t.decDeg)}'
+                      '${savedTargetProvenance(t)}',
                       style: hint,
                     ),
                     onTap: () => _fillFromRecent(t),
@@ -398,10 +437,30 @@ class _CustomTargetDialogState extends ConsumerState<CustomTargetDialog> {
   }
 }
 
-/// Open the dialog; [initialText] pre-fills a pasted "RA Dec" line.
+/// Open the dialog; [initialText] pre-fills a pasted "RA Dec" line and
+/// [resolved] a name the daemon resolved (#1267).
 Future<void> showCustomTargetDialog(BuildContext context,
-        {String? initialText}) =>
+        {String? initialText, TargetResolution? resolved}) =>
     showDialog<void>(
       context: context,
-      builder: (_) => CustomTargetDialog(initialText: initialText),
+      builder: (_) =>
+          CustomTargetDialog(initialText: initialText, resolved: resolved),
     );
+
+/// " · Simbad · also HIP 12235, TYC 4320-505-1" for a resolved recent target,
+/// nothing for a typed one (#1267 item 5).
+String savedTargetProvenance(CustomTarget t) {
+  final parts = <String>[
+    switch (t.source) {
+      'index' => 'Offline index',
+      'cache' || 'simbad' => 'Simbad',
+      _ => '',
+    },
+  ];
+  if (t.aliases.isNotEmpty) {
+    final shown = t.aliases.take(2).join(', ');
+    parts.add('also ${t.aliases.length > 2 ? '$shown, …' : shown}');
+  }
+  final text = parts.where((p) => p.isNotEmpty).join(' · ');
+  return text.isEmpty ? '' : ' · $text';
+}

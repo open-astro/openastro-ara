@@ -1,8 +1,6 @@
 using OpenAstroAra.Astrometry.Interfaces;
 using OpenAstroAra.Core.Model;
 using OpenAstroAra.Core.Utility;
-using OxyPlot;
-using OxyPlot.Axes;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;

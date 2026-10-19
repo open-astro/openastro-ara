@@ -18,7 +18,6 @@ using OpenAstroAra.Sequencer.Container;
 using OpenAstroAra.Sequencer.SequenceItem;
 using OpenAstroAra.Sequencer.Trigger;
 using System.Collections.ObjectModel;
-using System.ComponentModel.Composition;
 using System.Linq;
 
 namespace OpenAstroAra.Sequencer.SequenceItem.Imaging {
@@ -33,15 +32,9 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Imaging {
     /// <c>Strategy.$type</c>). Ported as a first-class type so NINA exports round-trip
     /// instead of degrading the bulk of every plan to <see cref="UnknownSequenceContainer"/>.
     /// </summary>
-    [ExportMetadata("Name", "Lbl_SequenceItem_Imaging_SmartExposure_Name")]
-    [ExportMetadata("Description", "Lbl_SequenceItem_Imaging_SmartExposure_Description")]
-    [ExportMetadata("Icon", "CameraSVG")]
-    [ExportMetadata("Category", "Lbl_SequenceCategory_Imaging")]
-    [Export(typeof(ISequenceContainer))]
     [JsonObject(MemberSerialization.OptIn)]
     public class SmartExposure : SequentialContainer {
 
-        [ImportingConstructor]
         public SmartExposure() : base() {
         }
 

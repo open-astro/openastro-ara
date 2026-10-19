@@ -46,6 +46,9 @@ public sealed partial class DewFormationAdvisor : IHostedService, IDisposable {
     private readonly INotificationService? _notifications;
     private readonly ILogger<DewFormationAdvisor> _logger;
     private readonly SemaphoreSlim _tick = new(1, 1);
+    // Cancels the tick in flight when the host stops: a weather read that hangs (an Alpaca station
+    // that stopped answering) must not hold the daemon's shutdown.
+    private readonly CancellationTokenSource _ticks = new();
     private Timer? _timer;
     private bool _episodeOpen;
     private bool _disposed;
@@ -81,14 +84,23 @@ public sealed partial class DewFormationAdvisor : IHostedService, IDisposable {
             }
         }
         if (_weather is not null && _history is not null) {
-            _timer = new Timer(_ => _ = CheckOnceAsync(CancellationToken.None), null, PollInterval, PollInterval);
+            _timer = new Timer(_ => _ = CheckOnceAsync(_ticks.Token), null, PollInterval, PollInterval);
         }
     }
 
     public async Task StopAsync(CancellationToken cancellationToken) {
         _timer?.Change(Timeout.Infinite, Timeout.Infinite);
-        // Let a tick in flight finish before Dispose frees the gate it will release.
-        await _tick.WaitAsync(cancellationToken).ConfigureAwait(false);
+        // Let a tick in flight finish before Dispose frees the gate it will release. The tick is told
+        // to stop first, and the host's own shutdown budget bounds the wait: on 2026-10-18 a check
+        // still held the gate when the 30 s limit ran out, the cancellation escaped as an unhandled
+        // TaskCanceledException and the old daemon process died with SIGABRT instead of exiting.
+        await _ticks.CancelAsync().ConfigureAwait(false);
+        try {
+            await _tick.WaitAsync(cancellationToken).ConfigureAwait(false);
+        } catch (OperationCanceledException) {
+            LogStopGaveUp();
+            return;
+        }
         _tick.Release();
     }
 
@@ -124,6 +136,9 @@ public sealed partial class DewFormationAdvisor : IHostedService, IDisposable {
             }
         } catch (ObjectDisposedException) {
             // A timer callback queued just before Dispose: nothing to do.
+            return;
+        } catch (OperationCanceledException) {
+            // StopAsync cancelled the tick: the host is shutting down, nothing to report.
             return;
         } catch (Exception ex) when (ex is not OperationCanceledException) {
             LogTickFailed(ex);
@@ -184,6 +199,7 @@ public sealed partial class DewFormationAdvisor : IHostedService, IDisposable {
     public void Dispose() {
         _disposed = true;
         _timer?.Dispose();
+        _ticks.Dispose();
         _tick.Dispose();
     }
 
@@ -195,6 +211,9 @@ public sealed partial class DewFormationAdvisor : IHostedService, IDisposable {
     private partial void LogWeatherReadFailed(Exception ex);
     [LoggerMessage(Level = LogLevel.Warning, Message = "Dew advisor tick failed.")]
     private partial void LogTickFailed(Exception ex);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Dew advisor: a check was still running when the host's shutdown budget ran out; stopping without it")]
+    private partial void LogStopGaveUp();
     [LoggerMessage(Level = LogLevel.Warning, Message = "Dew advisory notification could not be posted; the dew_formation diagnostic is open.")]
     private partial void LogNotifyFailed(Exception ex);
 }

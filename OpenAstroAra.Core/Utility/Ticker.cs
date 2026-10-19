@@ -12,7 +12,7 @@
 
 #endregion "copyright"
 
-using OxyPlot.Axes;
+using OpenAstroAra.Core.Utility;
 using System;
 using System.Timers;
 
@@ -37,7 +37,7 @@ namespace OpenAstroAra.Core.Utility {
         public DateTime Now => DateTime.Now;
 
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822:Mark members as static", Justification = "INotifyPropertyChanged change-notified property; must be an instance member to drive bindings via this Ticker's PropertyChanged.")]
-        public double OxyNow => DateTimeAxis.ToDouble(DateTime.Now);
+        public double OxyNow => PlotTime.ToDouble(DateTime.Now);
 
         private void Timer_Elapsed(object? sender, ElapsedEventArgs e) {
             RaisePropertyChanged(nameof(Now));

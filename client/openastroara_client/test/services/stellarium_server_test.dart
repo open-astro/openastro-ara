@@ -818,9 +818,14 @@ void main() {
       expect(page, contains("frameTargetName = name || '';"));
       expect(page, isNot(contains('if (name) frameTargetName = name;')));
       expect(page, contains('pointRaDec(c.ra, c.dec, c.name);'));
+      // The decision moved into routeSearch (#1267): the view must route
+      // through it, and the router must build the goto with
+      // planetariumSearchCommand, which carries the name.
       final dart = File('lib/widgets/sky_atlas/stellarium_view.dart')
           .readAsStringSync();
-      expect(dart, contains('planetariumSearchCommand('));
+      expect(dart, contains('routeSearch('));
+      final route = File('lib/util/search_route.dart').readAsStringSync();
+      expect(route, contains('planetariumSearchCommand('));
     });
   });
 

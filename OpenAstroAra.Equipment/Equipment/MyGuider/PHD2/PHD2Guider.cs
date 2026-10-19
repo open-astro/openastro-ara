@@ -245,6 +245,10 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
 
         public string State => AppState?.State ?? string.Empty;
 
+        // A star chosen while looping (StarSelected, or an AppState of Selected): LoopingExposures keeps
+        // reporting Selected until the star is lost, deselected, guiding starts or the loop stops.
+        private volatile bool _starSelectedWhileLooping;
+
         public bool HasSetupDialog => !Connected;
 
         public string Category => "Guiders";
@@ -502,13 +506,27 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             _lastSettleError = null;
             if (Connected) {
                 var state = await GetAppState();
+                if (state == PhdAppState.LOSTLOCK) {
+                    // A star lost for a frame or two (a cloud wisp, a seeing dip, the guider's own
+                    // min-HFD) is back before the dither would have settled; PHD2 re-acquires it on
+                    // its own. Waiting here keeps a 2-frame loss from parking the run (2026-10-18,
+                    // 21:54: "No star found" twice, the dither refused, the run paused for the user).
+                    state = await WaitForStarBackAsync(progress, ct);
+                }
                 if (state != PhdAppState.GUIDING) {
                     if (state == PhdAppState.LOSTLOCK) {
                         Notifier.ShowWarning(Loc.Instance["LblDitherSkippedBecauseNotLostLock"]);
                     } else {
                         Notifier.ShowWarning(Loc.Instance["LblDitherSkippedBecauseNotGuiding"]);
                     }
-
+                    // A calibration in progress or a pause someone asked for is not a stopped guider:
+                    // the sequencer must not restart guiding over it. The verdict names the state, so
+                    // the Dither item parks the run with that reason instead of sending `guide`.
+                    if (state == PhdAppState.CALIBRATING) {
+                        _lastSettleError = "the guider is calibrating";
+                    } else if (state == PhdAppState.PAUSED) {
+                        _lastSettleError = "the guider is paused";
+                    }
                     return false;
                 }
 
@@ -544,6 +562,29 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                 await WaitForSettling(progress, ct);
             }
             return true;
+        }
+
+        /// <summary>How long a dither waits for a lost guide star to come back before refusing. Static
+        /// so tests can shorten it; the default covers the few frames PHD2 needs to re-acquire.</summary>
+        public static TimeSpan LostStarDitherWait { get; set; } = TimeSpan.FromSeconds(20);
+
+        /// <summary>Polls the guider while it reports LostLock, up to <see cref="LostStarDitherWait"/>;
+        /// returns the state it ended in (Guiding when the star came back).</summary>
+        private async Task<string> WaitForStarBackAsync(IProgress<ApplicationStatus> progress, CancellationToken ct) {
+            var deadline = DateTime.UtcNow + LostStarDitherWait;
+            var state = PhdAppState.LOSTLOCK;
+            Logger.Info($"Phd2 - the guide star is lost; waiting up to {LostStarDitherWait.TotalSeconds:F0} s for it before dithering");
+            try {
+                while (state == PhdAppState.LOSTLOCK && DateTime.UtcNow < deadline) {
+                    progress?.Report(new ApplicationStatus { Status = "Guide star lost — waiting for the guider to find it again" });
+                    await CoreUtil.Delay(500, ct);
+                    state = await GetAppState();
+                }
+            } finally {
+                progress?.Report(new ApplicationStatus { Status = string.Empty });
+            }
+            Logger.Info(state == PhdAppState.GUIDING ? "Phd2 - the guide star is back; dithering" : $"Phd2 - the guide star did not come back (state {(string.IsNullOrEmpty(state) ? "unknown: the guider did not answer" : state)})");
+            return state;
         }
 
         private async Task WaitForSettling(IProgress<ApplicationStatus> progress, CancellationToken ct) {
@@ -1104,7 +1145,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                 using var cts = new CancellationTokenSource(receiveTimeout > 0 ? receiveTimeout : 60000);
 
                 while ((line = await reader.ReadLineAsync(cts.Token).ConfigureAwait(false)) != null) {
-                    var o = JObject.Parse(line);
+                    var o = ParseGuiderLine(line);
                     string phdevent = "";
                     var t = o.GetValue("id", StringComparison.Ordinal);
                     if (t != null) {
@@ -1130,6 +1171,32 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             genericError.error = new PhdError() { code = -1, message = "Unable to get response from phd2" };
             return genericError;
         }
+
+        /// <summary>A reply line as JSON, repairing the one malformation a shipped guider is known to
+        /// produce: openastro-guider 2.1.0 answers <c>guiding_assistant_apply</c> with bare names in the
+        /// array (<c>{"applied":[exposure,min_move_ra]}</c>). Left alone, the parse failed and Ara
+        /// reported "Unable to get response from phd2" although the guider had applied every value
+        /// (2026-10-18), so the profile fell out of step with the guider. The repair runs only after a
+        /// strict parse has failed.</summary>
+        private static JObject ParseGuiderLine(string line) {
+            try {
+                return JObject.Parse(line);
+            } catch (Newtonsoft.Json.JsonReaderException) {
+                var repaired = QuoteBareNames(line);
+                if (repaired == line) {
+                    throw;
+                }
+                Logger.Warning("Phd2 - reply was not valid JSON; parsed after quoting bare names: " + line);
+                return JObject.Parse(repaired);
+            }
+        }
+
+        private static readonly System.Text.RegularExpressions.Regex BareName = new(
+            @"(?<=[\[,]\s*)(?!(?:true|false|null)\b)([A-Za-z_][A-Za-z0-9_]*)(?=\s*[,\]])",
+            System.Text.RegularExpressions.RegexOptions.CultureInvariant | System.Text.RegularExpressions.RegexOptions.Compiled);
+
+        /// <summary>Quotes bare identifiers that stand as array elements. Pure — unit-tested.</summary>
+        public static string QuoteBareNames(string line) => BareName.Replace(line, "\"$1\"");
 
         public async Task<bool> SetShiftRate(SiderealShiftTrackingRate shiftTrackingRate, CancellationToken ct) {
             if (!shiftTrackingRate.Enabled) {
@@ -1198,6 +1265,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
         public void Disconnect() {
             initialized = false;
             phd2Ip = null;
+            GuidingAssistantActive = false;
             try { _clientCTS?.Cancel(); } catch { }
         }
 
@@ -1213,9 +1281,14 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                     }
                 case "AppState": {
                         AppState = message.ToObject<PhdEventAppState>();
+                        if (AppState?.State == PhdAppState.STOPPED) {
+                            GuidingAssistantActive = false;
+                        }
+                        _starSelectedWhileLooping = AppState?.State == PhdAppState.SELECTED;
                         break;
                     }
                 case "GuideStep": {
+                        _starSelectedWhileLooping = false;
                         AppState = new PhdEventAppState() { State = "Guiding" };
                         var step = message.ToObject<PhdEventGuideStep>();
                         GuideEvent?.Invoke(this, step);
@@ -1270,6 +1343,11 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                         // polls it; a WS subscriber can use these kinds as its cue to re-read).
                         var state = message["state"]?.ToString();
                         var error = message["error"]?.ToString();
+                        // The guider's own events keep the run flag honest when nothing polls get_status
+                        // (the dialog closed mid-run, or a run started from the guider's page): Progress
+                        // means running, Done means over, whatever the RPCs last said.
+                        GuidingAssistantActive = phdevent == "GuidingAssistantProgress"
+                            && (string.IsNullOrEmpty(state) || IsGuidingAssistantRunning(state));
                         RaiseMarker(new PhdGuiderMarkerEventArgs {
                             Kind = phdevent == "GuidingAssistantDone" ? "guiding_assistant_done" : "guiding_assistant_progress",
                             State = string.IsNullOrEmpty(state) ? null : state,
@@ -1300,11 +1378,19 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                         break;
                     }
                 case "LoopingExposures": {
-                        AppState = new PhdEventAppState() { State = "Looping" };
+                        // PHD2's own get_app_state says "Selected" while looping with a star chosen; its
+                        // per-frame LoopingExposures event carries no such distinction, so without the flag
+                        // every frame put the state back to "Looping" and a tap never read "Star selected"
+                        // (#1364 tap item, 2026-10-18).
+                        AppState = new PhdEventAppState() { State = _starSelectedWhileLooping ? PhdAppState.SELECTED : PhdAppState.LOOPING };
                         break;
                     }
                 case "LoopingExposuresStopped": {
+                        _starSelectedWhileLooping = false;
                         AppState = new PhdEventAppState() { State = "Stopped" };
+                        // Nothing runs with the loop stopped: an assistant run that ended without its Done
+                        // event (a link blip, a guider-side abort) must not keep the flag for the night.
+                        GuidingAssistantActive = false;
                         // A calibration abandoned by stopping the loop sends no CalibrationFailed.
                         Calibration = null;
                         AbandonCalibrationRun("stopped before calibration finished");
@@ -1331,11 +1417,19 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                     }
                 case "StarSelected": {
                         Logger.Debug($"PHD2 - Star selected");
+                        // Only a looping (or just-lost) guider becomes "Selected": PHD2 also sends StarSelected
+                        // when it re-picks a star mid-guiding or during a calibration, and those phases stay
+                        // what they are until their own events say otherwise.
+                        if (AppState?.State is null or "" || AppState.State == PhdAppState.LOOPING || AppState.State == PhdAppState.SELECTED || AppState.State == PhdAppState.LOSTLOCK) {
+                            _starSelectedWhileLooping = true;
+                            AppState = new PhdEventAppState() { State = PhdAppState.SELECTED };
+                        }
                         break;
                     }
                 case "StarLost": {
                         var starlost = message.ToObject<PhdEventStarLost>();
                         Logger.Debug($"PHD2 - Star lost! Status: {starlost.Status}");
+                        _starSelectedWhileLooping = false;
                         AppState = new PhdEventAppState() { State = "LostLock" };
                         RaiseMarker(new PhdGuiderMarkerEventArgs {
                             Kind = "star_lost", Frame = starlost?.Frame, StarMass = starlost?.StarMass, Snr = starlost?.SNR,
@@ -1355,6 +1449,9 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                     }
                 case "LockPositionLost": {
                         Logger.Debug($"PHD2 - Lock position lost!");
+                        // A deselect made on the guider's own page sends this and no StarLost: the chosen
+                        // star is gone, so the next loop frame must read Looping, not Selected.
+                        _starSelectedWhileLooping = false;
                         AppState = new PhdEventAppState() { State = "LostLock" };
                         RaiseMarker(new PhdGuiderMarkerEventArgs { Kind = "lock_position_lost" });
                         break;
@@ -1560,6 +1657,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                 Calibration = null;
                 AbandonCalibrationRun("guider connection lost during calibration");
                 AppState = new PhdEventAppState() { State = "" };
+                _starSelectedWhileLooping = false; // a reconnect starts from what the guider then says
                 PixelScale = 0.0d;
                 Connected = false;
                 _tcs.TrySetResult(false);

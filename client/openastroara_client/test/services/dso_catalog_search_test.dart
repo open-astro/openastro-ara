@@ -97,4 +97,44 @@ void main() {
     expect(findCatalogObject(withRow, "thor's helmet"), isNull,
         reason: 'no NGC 2359 row in this mirror — nothing to rename');
   });
+
+  test('zero padding and aliases find the object (#1267 item 4)', () {
+    const nam = PlanningDso(
+      id: 'NGC7000',
+      name: 'North America Nebula',
+      type: 'Neb',
+      magnitude: null,
+      raDeg: 314.8,
+      decDeg: 44.5,
+      aliases: ['Sh2-117', 'C 020', 'LBN 373'],
+    );
+    final cat = [nam, _dso('NGC0224', common: 'Andromeda Galaxy')];
+    expect(findCatalogObject(cat, 'NGC 224')!.id, 'NGC0224');
+    expect(findCatalogObject(cat, 'sh2 117')!.id, 'NGC7000');
+    expect(findCatalogObject(cat, 'C 20')!.id, 'NGC7000');
+    expect(findCatalogObject(cat, 'lbn373')!.id, 'NGC7000');
+    expect(designationKey('C 020'), designationKey('c20'));
+    expect(CatalogNameIndex(cat).lookup('c 20')!.id, 'NGC7000');
+    // A dashed designation never lands on a dashless alias (review r3):
+    // "M 2-9" is Minkowski's Twin Jet, not M 29.
+    final m29 = [
+      const PlanningDso(
+        id: 'NGC6913',
+        name: 'NGC6913',
+        type: 'OCl',
+        magnitude: 6.6,
+        raDeg: 305.98,
+        decDeg: 38.5,
+        aliases: ['M 29'],
+      ),
+    ];
+    expect(findCatalogObject(m29, 'M 29')!.id, 'NGC6913');
+    expect(findCatalogObject(m29, 'm29')!.id, 'NGC6913');
+    expect(findCatalogObject(m29, 'M 2-9'), isNull);
+    final idx = CatalogNameIndex(m29);
+    expect(idx.lookup('M 2-9'), isNull);
+    expect(idx.lookup('M 1-7'), isNull);
+    expect(CatalogNameIndex(cat).lookup('north'), isNull, reason: 'no substring');
+    expect(findCatalogObject(cat, 'north')!.id, 'NGC7000');
+  });
 }

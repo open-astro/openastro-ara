@@ -36,7 +36,6 @@
     </None>
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\Accord.Imaging\Accord.Imaging (NETStandard).csproj" />
     <ProjectReference Include="..\OpenAstroAra.Astrometry\OpenAstroAra.Astrometry.csproj" />
     <ProjectReference Include="..\OpenAstroAra.Core\OpenAstroAra.Core.csproj" />
     <ProjectReference Include="..\OpenAstroAra.Profile\OpenAstroAra.Profile.csproj" />
@@ -49,7 +48,6 @@
   <ItemGroup>
     <PackageReference Include="K4os.Compression.LZ4" />
     <PackageReference Include="Nito.AsyncEx" />
-    <PackageReference Include="System.Data.SqlClient" />
     <PackageReference Include="ZstdSharp.Port" />
   </ItemGroup>
   <PropertyGroup>

@@ -21,17 +21,11 @@ using OpenAstroAra.Sequencer.Validations;
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
-using System.ComponentModel.Composition;
 using System.Threading;
 using System.Threading.Tasks;
 
 namespace OpenAstroAra.Sequencer.SequenceItem.Telescope {
 
-    [ExportMetadata("Name", "Lbl_SequenceItem_Telescope_SetTracking_Name")]
-    [ExportMetadata("Description", "Lbl_SequenceItem_Telescope_SetTracking_Description")]
-    [ExportMetadata("Icon", "SpeedometerSVG")]
-    [ExportMetadata("Category", "Lbl_SequenceCategory_Telescope")]
-    [Export(typeof(ISequenceItem))]
     [JsonObject(MemberSerialization.OptIn)]
     public class SetTracking : SequenceItem, IValidatable {
         private static readonly IList<TrackingMode> trackingModeChoices = ImmutableList.Create(
@@ -41,7 +35,6 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Telescope {
             TrackingMode.Lunar,
             TrackingMode.Stopped);
 
-        [ImportingConstructor]
         public SetTracking(ITelescopeMediator telescopeMediator) {
             this.telescopeMediator = telescopeMediator;
         }

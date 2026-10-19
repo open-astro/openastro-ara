@@ -12,8 +12,6 @@
 
 #endregion "copyright"
 
-using CommunityToolkit.Mvvm.ComponentModel;
-using CommunityToolkit.Mvvm.Input;
 using OpenAstroAra.Core.Locale;
 using OpenAstroAra.Core.Model;
 using OpenAstroAra.Core.Utility;
@@ -22,7 +20,6 @@ using OpenAstroAra.Profile.Interfaces;
 using OpenAstroAra.Sequencer.Container;
 using OpenAstroAra.Sequencer.DragDrop;
 using OpenAstroAra.Sequencer.Serialization;
-using OxyPlot.Axes;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -36,7 +33,7 @@ using System.Windows.Input;
 
 namespace OpenAstroAra.Sequencer {
 
-    public sealed partial class TargetController : BaseINPC, IDisposable {
+    public sealed class TargetController : BaseINPC, IDisposable {
         private readonly SequenceJsonConverter sequenceJsonConverter;
         private readonly IProfileService profileService;
         private string targetPath = string.Empty;
@@ -61,23 +58,53 @@ namespace OpenAstroAra.Sequencer {
             }
         }
 
-        [ObservableProperty]
         private bool targetsLoading = true;
-        [ObservableProperty]
+
+        public bool TargetsLoading {
+            get => targetsLoading;
+            set => SetProperty(ref targetsLoading, value);
+        }
         private int targetsLoadingProgress;
-        [ObservableProperty]
+
+        public int TargetsLoadingProgress {
+            get => targetsLoadingProgress;
+            set => SetProperty(ref targetsLoadingProgress, value);
+        }
         private int targetsLoadingTotalCount;
-        [ObservableProperty]
+
+        public int TargetsLoadingTotalCount {
+            get => targetsLoadingTotalCount;
+            set => SetProperty(ref targetsLoadingTotalCount, value);
+        }
         private bool sortByRelevance;
-        partial void OnSortByRelevanceChanged(bool oldValue, bool newValue) {
+
+        public bool SortByRelevance {
+            get => sortByRelevance;
+            set {
+                var oldValue = sortByRelevance;
+                if (SetProperty(ref sortByRelevance, value)) {
+                    OnSortByRelevanceChanged(oldValue, value);
+                }
+            }
+        }
+        private void OnSortByRelevanceChanged(bool oldValue, bool newValue) {
             if (newValue) {
                 SortByName = false;
             }
         }
 
-        [ObservableProperty]
         private bool sortByName;
-        partial void OnSortByNameChanged(bool oldValue, bool newValue) {
+
+        public bool SortByName {
+            get => sortByName;
+            set {
+                var oldValue = sortByName;
+                if (SetProperty(ref sortByName, value)) {
+                    OnSortByNameChanged(oldValue, value);
+                }
+            }
+        }
+        private void OnSortByNameChanged(bool oldValue, bool newValue) {
             if (newValue) {
                 SortByRelevance = false;
             }
@@ -88,6 +115,7 @@ namespace OpenAstroAra.Sequencer {
             this.profileService = profileService;
 
             Targets = new List<TargetSequenceContainer>();
+            ToggleSortCommand = new GalaSoft.MvvmLight.Command.RelayCommand(ToggleSort);
 
             targetsView = new CollectionViewSource { Source = Targets };
             targetsView.GroupDescriptions.Add(new PropertyGroupDescription(nameof(TargetSequenceContainer.Grouping)));
@@ -120,7 +148,8 @@ namespace OpenAstroAra.Sequencer {
             sequenceTargetsFolderWatcher?.Dispose();
         }
 
-        [RelayCommand]
+        public ICommand ToggleSortCommand { get; }
+
         private void ToggleSort() {
             if (SortByRelevance) {
                 TargetsView.SortDescriptions.RemoveAt(0);
@@ -294,7 +323,7 @@ namespace OpenAstroAra.Sequencer {
                     var substract = sunRise.Value - sunSet.Value;
                     var middle = sunSet.Value.AddSeconds(substract.TotalSeconds / 2d);
 
-                    var middleNight = DateTimeAxis.ToDouble(middle);
+                    var middleNight = PlotTime.ToDouble(middle);
                     var maxAlt = Container.Target.DeepSkyObject.MaxAltitude;
 
                     var timeAtMax = maxAlt.X;

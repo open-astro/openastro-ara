@@ -65,14 +65,35 @@ class _FakeMountApi implements EquipmentDeviceClient<MountStatus> {
       calls.add('connect:${device.name}');
   @override
   Future<void> disconnect() async => calls.add('disconnect');
+  /// When set, an unforced slew is refused the way the daemon refuses one
+  /// while a run is in progress (409, problem title run_in_progress).
+  bool refuseSlewDuringRun = false;
   @override
   Future<void> command(String subpath, [Map<String, dynamic>? body]) async {
     // moveaxis carries axis/rate; everything else carries (or omits) `enabled`.
     calls.add(
       body != null && body.containsKey('rate')
           ? 'command:$subpath:axis=${body['axis']}:rate=${body['rate']}'
-          : 'command:$subpath:enabled=${body?['enabled']}',
+          : subpath == 'slew'
+              ? 'command:slew:force=${body?['force'] == true}'
+              : 'command:$subpath:enabled=${body?['enabled']}',
     );
+    if (subpath == 'slew' && refuseSlewDuringRun && body?['force'] != true) {
+      final request = RequestOptions(path: '/slew');
+      throw DioException.badResponse(
+        statusCode: 409,
+        requestOptions: request,
+        response: Response(
+          requestOptions: request,
+          statusCode: 409,
+          data: {
+            'title': 'run_in_progress',
+            'detail': 'a sequence run is in progress: slewing now stops guiding '
+                'and pauses the run awaiting you. Repeat with force to slew anyway.',
+          },
+        ),
+      );
+    }
     if (subpath == 'moveaxis') {
       final stopping = (body?['rate'] ?? 0) == 0;
       final err = stopping ? moveAxisStopError : moveAxisError;
@@ -389,6 +410,50 @@ void main() {
     await tester.tap(find.widgetWithText(FilledButton, 'GoTo'));
     await tester.pumpAndSettle();
     expect(api.calls.any((c) => c.startsWith('command:slew')), isTrue);
+  });
+
+  testWidgets('a GoTo during a run asks first and slews forced on Slew anyway', (
+    tester,
+  ) async {
+    // Rig night 2026-10-18: a Planning GoTo mid-dither was accepted without a
+    // word; the guider stopped and the run parked awaiting the user.
+    final api = await _pump(
+      tester,
+      _status(canMoveAxis: true, axisRates: const [4.0]),
+    );
+    api.refuseSlewDuringRun = true;
+    await tester.enterText(find.widgetWithText(TextField, 'RA (h)'), '5.5');
+    await tester.enterText(find.widgetWithText(TextField, 'Dec (°)'), '-12.25');
+    await tester.tap(find.widgetWithText(FilledButton, 'GoTo'));
+    await tester.pumpAndSettle();
+    expect(find.text('A run is in progress'), findsOneWidget);
+    expect(api.calls.where((c) => c.startsWith('command:slew')).toList(),
+        ['command:slew:force=false']);
+
+    await tester.tap(find.byKey(const Key('mount-goto-anyway')));
+    await tester.pumpAndSettle();
+    expect(api.calls.where((c) => c.startsWith('command:slew')).toList(),
+        ['command:slew:force=false', 'command:slew:force=true']);
+    expect(find.text('A run is in progress'), findsNothing);
+  });
+
+  testWidgets('a GoTo during a run left alone sends nothing more', (
+    tester,
+  ) async {
+    final api = await _pump(
+      tester,
+      _status(canMoveAxis: true, axisRates: const [4.0]),
+    );
+    api.refuseSlewDuringRun = true;
+    await tester.enterText(find.widgetWithText(TextField, 'RA (h)'), '5.5');
+    await tester.enterText(find.widgetWithText(TextField, 'Dec (°)'), '-12.25');
+    await tester.tap(find.widgetWithText(FilledButton, 'GoTo'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Leave the run'));
+    await tester.pumpAndSettle();
+    expect(api.calls.where((c) => c.startsWith('command:slew')).toList(),
+        ['command:slew:force=false']);
+    expect(find.textContaining("Couldn't slew"), findsNothing);
   });
 
   testWidgets('a held direction button stops the axis if the mount goes busy', (

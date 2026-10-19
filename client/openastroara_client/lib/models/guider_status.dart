@@ -41,6 +41,9 @@ enum GuiderRuntimeState {
   paused,
   starLost,
   dithering,
+  /// The Guiding Assistant is measuring drift or Dec backlash: PHD2 reports
+  /// "Guiding" for the whole run, but nothing is being corrected.
+  assistant,
   unknown,
 }
 
@@ -68,6 +71,7 @@ String guiderRuntimeText(GuiderRuntimeState state) => switch (state) {
       GuiderRuntimeState.paused => 'Paused',
       GuiderRuntimeState.starLost => 'Star lost',
       GuiderRuntimeState.dithering => 'Dithering',
+      GuiderRuntimeState.assistant => 'Guiding Assistant',
       GuiderRuntimeState.unknown => 'Unknown',
     };
 
@@ -91,6 +95,8 @@ GuiderRuntimeState _runtimeFromWire(String? token) {
       return GuiderRuntimeState.starSelected;
     case 'settling':
       return GuiderRuntimeState.settling;
+    case 'assistant':
+      return GuiderRuntimeState.assistant;
     default:
       return GuiderRuntimeState.unknown;
   }

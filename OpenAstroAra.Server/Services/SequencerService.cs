@@ -375,6 +375,17 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         return PlaceholderEquipmentHelpers.Accepted("sequencer.stop", idempotencyKey);
     }
 
+    public Task<IReadOnlyList<Guid>> ActiveRunIdsAsync(CancellationToken ct) {
+        var active = new List<Guid>();
+        foreach (var id in _runs.Keys) {
+            ct.ThrowIfCancellationRequested();
+            if (_runs.TryGetValue(id, out var run) && IsAbortableRun(run.State)) {
+                active.Add(id);
+            }
+        }
+        return Task.FromResult<IReadOnlyList<Guid>>(active);
+    }
+
     public async Task<int> AbortActiveRunsAsync(CancellationToken ct) {
         var aborted = 0;
         // Snapshot the keys (ConcurrentDictionary.Keys copies) so a worker removing itself mid-iteration — while
@@ -1044,6 +1055,12 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
                 ["current_instruction_index"] = run.CurrentInstructionIndex,
                 ["instructions_completed"] = run.InstructionsCompleted,
                 ["instructions_total"] = run.InstructionCount,
+                // What the run is doing right now, as GET /sequences/{id}/state says it. The client
+                // re-reads that endpoint only on lifecycle events, so without these on the progress
+                // frame a step that reports no frames (cooling the camera for 4.7 min on 2026-10-18)
+                // left the Run tab on "Run started" until the first exposure.
+                ["current_instruction_description"] = run.CurrentInstructionDescription,
+                ["current_target_name"] = run.CurrentTargetName,
             };
             var (estimatedTotal, estimatedRemaining) = run.EstimatedSeconds();
             payload["estimated_total_seconds"] = estimatedTotal;

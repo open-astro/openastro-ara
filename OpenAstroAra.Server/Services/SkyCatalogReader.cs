@@ -197,11 +197,11 @@ namespace OpenAstroAra.Server.Services {
         }
 
         // Sexagesimal "HH:MM:SS.ss" → decimal hours. Empty / malformed / out-of-range → false.
-        private static bool TryParseSexagesimalHours(string raw, out double hours) =>
+        internal static bool TryParseSexagesimalHours(string raw, out double hours) =>
             TryParseSexagesimal(raw, maxFirst: 24, upperInclusive: false, out hours); // RA: 0 ≤ hours < 24
 
         // Sexagesimal "±DD:MM:SS.s" → signed decimal degrees. Empty / malformed / out-of-range → false.
-        private static bool TryParseSexagesimalDegrees(string raw, out double degrees) =>
+        internal static bool TryParseSexagesimalDegrees(string raw, out double degrees) =>
             TryParseSexagesimal(raw, maxFirst: 90, upperInclusive: true, out degrees); // Dec: |deg| ≤ 90 (poles valid)
 
         // Parse "A:B:C" → A + B/60 + C/3600, with a leading sign. Rejects out-of-range components (B/C must be in
@@ -251,7 +251,7 @@ namespace OpenAstroAra.Server.Services {
         // A minimal RFC-4180-ish field splitter: handles double-quoted fields (with "" escapes) so a quoted value
         // containing the delimiter stays intact. HYG quotes its string columns; OpenNGC isn't quoted but this is safe
         // for it too. The caller passes a reusable StringBuilder so a ~120k-row catalog doesn't allocate one per line.
-        private static string[] SplitCsv(string line, char delimiter, System.Text.StringBuilder sb) {
+        internal static string[] SplitCsv(string line, char delimiter, System.Text.StringBuilder sb) {
             var fields = new List<string>();
             sb.Clear();
             var inQuotes = false;

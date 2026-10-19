@@ -12,7 +12,7 @@
   -->
   <!--
     Analyzer escalation + TreatWarningsAsErrors are inherited from the repo-root
-    Directory.Build.props (applies to every project except Accord.Imaging), so this
+    Directory.Build.props (applies to every project), so this
     project is held to the same warnings-as-errors gate as the rest of the solution.
   -->
   <PropertyGroup>

@@ -7,18 +7,12 @@ using OpenAstroAra.Profile.Interfaces;
 using OpenAstroAra.Sequencer.Validations;
 using System;
 using System.Collections.Generic;
-using System.ComponentModel.Composition;
 using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
 namespace OpenAstroAra.Sequencer.SequenceItem.Connect {
-    [ExportMetadata("Name", "Lbl_SequenceItem_Connector_ConnectAllEquipment_Name")]
-    [ExportMetadata("Description", "Lbl_SequenceItem_Connector_ConnectAllEquipment_Description")]
-    [ExportMetadata("Icon", "ConnectAllSVG")]
-    [ExportMetadata("Category", "Lbl_SequenceCategory_Connect")]
-    [Export(typeof(ISequenceItem))]
     [JsonObject(MemberSerialization.OptIn)]
     public class ConnectAllEquipment : SequenceItem, IValidatable {
         private IProfileService profileService;
@@ -34,7 +28,6 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Connect {
         private IDomeMediator domeMediator;
         private ISafetyMonitorMediator safetyMonitorMediator;
 
-        [ImportingConstructor]
         public ConnectAllEquipment(IProfileService profileService,
                                 ICameraMediator cameraMediator,
                                 IFilterWheelMediator fwMediator,

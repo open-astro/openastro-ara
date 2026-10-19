@@ -18,6 +18,7 @@
 
 #endregion "copyright"
 
+using OpenAstroAra.Core.Utility;
 using ASCOM.Alpaca.Clients;
 using Microsoft.Extensions.Logging;
 using OpenAstroAra.Core.Model;
@@ -25,7 +26,6 @@ using OpenAstroAra.Equipment.Equipment.MyFocuser;
 using OpenAstroAra.Equipment.Interfaces;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Server.Contracts;
-using OxyPlot;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;

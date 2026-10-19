@@ -19,7 +19,6 @@ using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Sequencer.Validations;
 using System;
 using System.Collections.Generic;
-using System.ComponentModel.Composition;
 using System.Linq;
 using System.Text;
 using System.Threading;
@@ -27,15 +26,9 @@ using System.Threading.Tasks;
 
 namespace OpenAstroAra.Sequencer.SequenceItem.Dome {
 
-    [ExportMetadata("Name", "Lbl_SequenceItem_Dome_SetDomeAzimuth_Name")]
-    [ExportMetadata("Description", "Lbl_SequenceItem_Dome_SetDomeAzimuth_Description")]
-    [ExportMetadata("Icon", "RotatorSVG")]
-    [ExportMetadata("Category", "Lbl_SequenceCategory_Dome")]
-    [Export(typeof(ISequenceItem))]
     [JsonObject(MemberSerialization.OptIn)]
     public class SlewDomeAzimuth : SequenceItem, IValidatable {
 
-        [ImportingConstructor]
         public SlewDomeAzimuth(IDomeMediator domeMediator) {
             this.domeMediator = domeMediator;
         }

@@ -15,7 +15,6 @@
 using Newtonsoft.Json;
 using OpenAstroAra.Core.Model;
 using System;
-using System.ComponentModel.Composition;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -31,15 +30,9 @@ namespace OpenAstroAra.Sequencer.SequenceItem.FlatDevice {
     /// concern — the §39.5 generator composes [WaitForSunAltitude → SlewScopeToAltAz → per-filter
     /// SkyFlats], and a hand-built plan does the same. No flat panel is involved.
     /// </summary>
-    [ExportMetadata("Name", "Lbl_SequenceItem_FlatDevice_SkyFlats_Name")]
-    [ExportMetadata("Description", "Lbl_SequenceItem_FlatDevice_SkyFlats_Description")]
-    [ExportMetadata("Icon", "FlatWizardSVG")]
-    [ExportMetadata("Category", "Lbl_SequenceCategory_FlatDevice")]
-    [Export(typeof(ISequenceItem))]
     [JsonObject(MemberSerialization.OptIn)]
     public class SkyFlats : SequenceItem, IEstimatesOwnDuration {
 
-        [ImportingConstructor]
         public SkyFlats(IFlatCaptureExecutor? flatCaptureExecutor = null) {
             this.flatCaptureExecutor = flatCaptureExecutor;
         }

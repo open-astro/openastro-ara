@@ -9,7 +9,6 @@ using OpenAstroAra.Sequencer.SequenceItem.Connect;
 using OpenAstroAra.Sequencer.Validations;
 using System;
 using System.Collections.Generic;
-using System.ComponentModel.Composition;
 using System.Linq;
 using System.Runtime.Serialization;
 using System.Text;
@@ -17,11 +16,6 @@ using System.Threading;
 using System.Threading.Tasks;
 
 namespace OpenAstroAra.Sequencer.Trigger.Connect {
-    [ExportMetadata("Name", "Lbl_SequenceTrigger_Connector_ReconnectTrigger_Name")]
-    [ExportMetadata("Description", "Lbl_SequenceTrigger_Connector_ReconnectTrigger_Description")]
-    [ExportMetadata("Icon", "ConnectSVG")]
-    [ExportMetadata("Category", "Lbl_SequenceCategory_Connect")]
-    [Export(typeof(ISequenceTrigger))]
     [JsonObject(MemberSerialization.OptIn)]
     public class ReconnectTrigger : SequenceTrigger, IValidatable {
         private IProfileService profileService;
@@ -57,7 +51,6 @@ namespace OpenAstroAra.Sequencer.Trigger.Connect {
             }
         }
 
-        [ImportingConstructor]
         public ReconnectTrigger(IProfileService profileService,
                 ICameraMediator cameraMediator,
                 IFilterWheelMediator fwMediator,

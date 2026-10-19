@@ -20,7 +20,6 @@ using OpenAstroAra.Sequencer.Validations;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.ComponentModel.Composition;
 using System.Linq;
 using System.Text;
 using System.Threading;
@@ -28,15 +27,9 @@ using System.Threading.Tasks;
 
 namespace OpenAstroAra.Sequencer.SequenceItem.Focuser {
 
-    [ExportMetadata("Name", "Lbl_SequenceItem_Focuser_MoveFocuserRelative_Name")]
-    [ExportMetadata("Description", "Lbl_SequenceItem_Focuser_MoveFocuserRelative_Description")]
-    [ExportMetadata("Icon", "MoveFocuserRelativeSVG")]
-    [ExportMetadata("Category", "Lbl_SequenceCategory_Focuser")]
-    [Export(typeof(ISequenceItem))]
     [JsonObject(MemberSerialization.OptIn)]
     public class MoveFocuserRelative : SequenceItem, IValidatable {
 
-        [ImportingConstructor]
         public MoveFocuserRelative(IFocuserMediator focuserMediator) {
             this.focuserMediator = focuserMediator;
         }

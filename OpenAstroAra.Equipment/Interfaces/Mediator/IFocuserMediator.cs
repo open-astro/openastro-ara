@@ -12,8 +12,8 @@
 
 #endregion "copyright"
 
+using OpenAstroAra.Core.Utility;
 using OpenAstroAra.Equipment.Equipment.MyFocuser;
-using OxyPlot;
 using System.Threading;
 using System.Threading.Tasks;
 

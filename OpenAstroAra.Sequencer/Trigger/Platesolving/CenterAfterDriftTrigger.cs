@@ -27,7 +27,6 @@ using OpenAstroAra.Sequencer.Validations;
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
-using System.ComponentModel.Composition;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Threading;
@@ -48,15 +47,9 @@ namespace OpenAstroAra.Sequencer.Trigger.Platesolving {
     /// it never fails the run for want of a measurement. Removed in the §0.5 conversion (#242) and
     /// re-ported here so imported plans no longer load it as <c>UnknownSequenceTrigger</c>.
     /// </summary>
-    [ExportMetadata("Name", "Lbl_SequenceTrigger_CenterAfterDriftTrigger_Name")]
-    [ExportMetadata("Description", "Lbl_SequenceTrigger_CenterAfterDriftTrigger_Description")]
-    [ExportMetadata("Icon", "TargetWithArrowSVG")]
-    [ExportMetadata("Category", "Lbl_SequenceCategory_Telescope")]
-    [Export(typeof(ISequenceTrigger))]
     [JsonObject(MemberSerialization.OptIn)]
     public class CenterAfterDriftTrigger : SequenceTrigger, IValidatable {
 
-        [ImportingConstructor]
         public CenterAfterDriftTrigger(IFrameSolveFeed? feed = null, ICenteringExecutor? centeringExecutor = null,
                 ITelescopeMediator? telescopeMediator = null, ICameraMediator? cameraMediator = null) : base() {
             this.feed = feed;

@@ -19,21 +19,14 @@ using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Sequencer.Validations;
 using System;
 using System.Collections.Generic;
-using System.ComponentModel.Composition;
 using System.Threading;
 using System.Threading.Tasks;
 
 namespace OpenAstroAra.Sequencer.SequenceItem.Camera {
 
-    [ExportMetadata("Name", "Lbl_SequenceItem_Camera_DewHeater_Name")]
-    [ExportMetadata("Description", "Lbl_SequenceItem_Camera_DewHeater_Description")]
-    [ExportMetadata("Icon", "AntiDropsSVG")]
-    [ExportMetadata("Category", "Lbl_SequenceCategory_Camera")]
-    [Export(typeof(ISequenceItem))]
     [JsonObject(MemberSerialization.OptIn)]
     public class DewHeater : SequenceItem, IValidatable {
 
-        [ImportingConstructor]
         public DewHeater(ICameraMediator cameraMediator) {
             this.cameraMediator = cameraMediator;
         }
