@@ -54,8 +54,10 @@ const double polarSolveNoiseArcmin = 0.5;
 /// grew by more than the solve noise (and by more than 10 % of what it was)
 /// while the other stayed put, the user turned that bolt the wrong way:
 /// name the axis and say to turn it the other way. Both axes moving is a
-/// bump or a re-seat, not a bolt direction, and says nothing. Pure —
-/// unit-tested.
+/// bump or a re-seat, not a bolt direction, and says nothing; nor does an
+/// axis that crossed zero (the right way, too far — an overshoot, however
+/// large), since "turn it back past where you started" would be wrong.
+/// Pure — unit-tested.
 String? boltDirectionNudge({
   required double? prevAlt,
   required double? prevAz,
@@ -65,6 +67,7 @@ String? boltDirectionNudge({
 }) {
   if (prevAlt == null || prevAz == null || alt == null || az == null) return null;
   bool grew(double before, double after) =>
+      before.sign == after.sign &&
       after.abs() - before.abs() > math.max(noiseArcmin, before.abs() * 0.1);
   bool still(double before, double after) => (after - before).abs() <= noiseArcmin;
   if (grew(prevAlt, alt) && still(prevAz, az)) {
@@ -228,6 +231,7 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
   @override
   void initState() {
     super.initState();
+    _trackNudge(ref.read(polarAlignLiveProvider)); // the first frame is the nudge baseline
     WidgetsBinding.instance.addPostFrameCallback((_) => _hydrate());
   }
 
@@ -372,7 +376,9 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
     final live = ref.watch(polarAlignLiveProvider);
     final api = ref.watch(polarAlignApiProvider);
     _syncTicker(live.frameInProgress);
-    _trackNudge(live);
+    // §45.16 the bolt-direction nudge is tracked on each state change, not
+    // in build: it mutates the baseline fields.
+    ref.listen(polarAlignLiveProvider, (prev, next) => setState(() => _trackNudge(next)));
     // Each finished frame (solved or not) replaces lastFrame — fetch its image.
     ref.listen(polarAlignLiveProvider, (prev, next) {
       if (next.lastFrame != null && !identical(prev?.lastFrame, next.lastFrame)) {

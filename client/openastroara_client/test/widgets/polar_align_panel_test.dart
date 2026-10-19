@@ -115,8 +115,12 @@ void main() {
       expect(boltDirectionNudge(prevAlt: 100.0, prevAz: 0.0, alt: 108.0, az: 0.0), isNull);
       // Both axes moved: a bump, not a bolt direction.
       expect(boltDirectionNudge(prevAlt: 10.0, prevAz: -4.0, alt: 14.0, az: -8.0), isNull);
-      // Crossing zero (overshoot) is progress, not a wrong direction.
+      // Crossing zero (overshoot) is progress, not a wrong direction — even
+      // when the new magnitude is larger (review r2: 1.0 → −3.0 fired the nudge
+      // and "turn it back past where you started" would have been wrong).
       expect(boltDirectionNudge(prevAlt: 1.0, prevAz: 0.0, alt: -0.8, az: 0.0), isNull);
+      expect(boltDirectionNudge(prevAlt: 1.0, prevAz: 0.0, alt: -3.0, az: 0.0), isNull);
+      expect(boltDirectionNudge(prevAlt: 0.0, prevAz: 2.0, alt: 0.0, az: -5.0), isNull);
       // No baseline (first adjust frame) says nothing.
       expect(boltDirectionNudge(prevAlt: null, prevAz: null, alt: 13.0, az: -4.0), isNull);
     });
