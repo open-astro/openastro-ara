@@ -6269,7 +6269,16 @@ This gives ARA users iPolar-quality alignment WITHOUT requiring a dedicated PA c
 
 ### 45.4 Binning per camera
 
-Server queries the camera's `MaxBinX` / `MaxBinY` (Alpaca) to pick a sensible PA binning:
+**As built (#1133, 2026-10-19):** the PA frames come from the **guide camera through the guider
+daemon** (§45.14's dedicated-camera path, which is what shipped — the main camera is never opened),
+so the capability the server has is the daemon's `get_camera_frame_size`, not Alpaca `MaxBinX`.
+The profile's `binning` is **0 = auto** by default: the server reads the frame size once per run and
+picks the tier below by sensor area (`PolarAlignBinning`); 1–4 is the user's override. The guider
+saves the binned frame, so the solver is told the binning (pixel scale × bin) — before #1133 a 2×2
+frame was solved at half its true scale. Every guide camera in use (ASI120/290/174, ≤ 2.5 MP) lands
+on 1×1, which is also what an unknown frame size (older daemon) falls back to.
+
+The original plan, kept for the tiers:
 
 | Camera sensor size | Recommended bin | Resulting frame | Transfer time (USB 3.0) |
 |---|---|---|---|
@@ -6414,7 +6423,7 @@ Failure events:
 Polar Alignment section of profile (default values shown):
 
 - Exposure time: 0.5 sec
-- Binning: auto (per §45.4)
+- Binning: auto (`0`, per §45.4; 1–4 overrides)
 - Target tolerance: 1 arcmin (controls when [Done] enables)
 - Initial RA rotation for seed: 30°
 - Loop cadence (target): 500 ms
@@ -6452,9 +6461,56 @@ When support is added for an iPolar / PoleMaster / dedicated PA camera attached 
 
 ### 45.15 What we're explicitly NOT doing
 
-- Three-point polar alignment (TPPA) — dropped per §45.1
+- Three-point polar alignment (TPPA) — dropped per §45.1, re-affirmed with numbers in §45.16
 - Drift-alignment method (the historical hour-of-RA-drift technique) — too slow + obsolete given plate-solve approach
 - Pre-canned "well-known star" alignments (Polaris reticle patterns) — manual workflows, replaced by automated continuous loop
+
+### 45.16 Solve-error budget and the 2-point call (2026-10-19, #1133)
+
+Written down after the on-sky nights of 2026-10-04 (41″ final on the HAE29C / ASI120MM Mini guide
+scope, +1.9° residual confirmed by the rotate-by-hand readout) and 2026-10-16/18 (CM4 rig; the
+§63 residual-from-guiding cross-check read ≥ 7.1′ ± 1.8′ on the first guided run of the night,
+which is the number the bullseye should agree with to within its budget).
+
+**Per-frame solve noise.** A guide-scope solve returns the frame centre to about **0.1–0.2 px**
+(ASTAP, 30–100 stars, ≥ 10 s of exposure-equivalent signal at bin 1): at a typical guide-scope
+scale of 3–4″/px that is **≈ 0.5″ per axis**, far below everything else here. The terms that matter:
+
+| Term | Size | Where it goes |
+|---|---|---|
+| Solver centroid (above) | ≈ 1″ | Negligible |
+| **Mount pointing jitter / flexure between frames** (the camera is the mount's RA axis stand-in) | 5–30″ | Every frame |
+| **Seed RA rotation Δ read back from the mount** (encoder / driver rounding) | 1–5′ of RA → amplified below | Seed only |
+| Refraction model (Bennett, no pressure/temperature) | ≤ 10″ at pole altitudes 30–60° | Fixed bias, under 0.2′ |
+| Site latitude/longitude (§31, phone GPS) | 1″ per 30 m | Negligible |
+| Clock (§31) | 15″ of RA per second, only through the seed's LST | Fixed bias |
+
+**Why the 2-point seed amplifies.** `FitAxisTwoPoint` (§45.8) reads the axis off the chord of two
+pointings Δ apart. A pointing error ε on either frame moves the axis by ≈ `ε / (2·sin(Δ/2))`, and an
+error δ in the commanded/reported Δ moves it by ≈ `θ·δ / (2·tan(Δ/2))` for a pointing θ from the
+axis. At the default **Δ = 30°** the factor is **1.9×**; at 10° it is 5.8×, at 60° 1.0×. With 30″ of
+pointing jitter and a 2′ read-back error on a 5°-off seed that is **≈ 1′ + 0.3′** of seed error —
+and the seed is a one-off: the live loop (§45.8 reverse-projection) does not re-fit it, so a seed
+bias stays in the readout until Done. That is the number to compare with the §63 residual (above).
+
+**Live-adjust noise.** After the seed, each frame's alt/az delta is a single solve against a
+stationary camera (tracking off), so the per-frame scatter is the pointing jitter: **≈ 0.5′ 1σ**
+(`polarSolveNoiseArcmin` in the client). This fixes two UI numbers:
+- the **near-pole reticle** turns on under **2′** total (≈ 4σ): below that one zoom ring spanning
+  the whole error would mostly show noise, so the bullseye becomes a 2′ reticle with 30″ rings and
+  15″ ticks, and the dot is read against ticks a frame can resolve;
+- the **bolt-direction nudge** fires only when one axis's error grew by more than max(0.5′, 10 %)
+  while the other held within 0.5′ — a knob turned the wrong way, not scatter and not a bump.
+
+**The 2-point vs 3-point call: stay 2-point.** A 3-point fit (two rotations, three solves) would
+cut the seed's amplification from 1.9× to ≈ 1.2× and remove the read-back-Δ term. It costs a
+second slew + settle + solve (≈ 20–40 s on the Pi 4), doubles the ways a seed can fail (§45.11),
+and does nothing for the live loop, where all the time is spent. The seed error it would remove
+(≈ 1′) is already inside the §45.12 1′ Done tolerance and under the §63 cross-check's own
+uncertainty (± 1.8′ on 2026-10-18). Decision: keep the 2-point seed with **Δ = 30° default**;
+users with a jittery mount raise `seed_rotation_deg` (60° halves the amplification) rather than
+wait for a third point. Revisit only if a rig shows the bullseye and the §63 residual disagreeing
+by more than 2′ with the seed at 60°.
 
 ---
 

@@ -20,12 +20,61 @@ export 'polar_error_rating.dart';
 /// §45.10 dynamic bullseye zoom: the outer ring's radius in arcminutes for the
 /// current total error — ~5° while far off, 30′ once under 1°, 5′ once under
 /// 5′ (spec says 1′ under 5′; 5′ keeps the dot on-screen while the user
-/// overshoots around zero). Pure — unit-tested.
+/// overshoots around zero), and the 2′ near-pole reticle under 2′
+/// ([nearPoleReticle]). Pure — unit-tested.
 double bullseyeRangeArcmin(double? totalErrorArcmin) {
   final total = totalErrorArcmin;
   if (total == null || total >= 60.0) return 300.0;
   if (total >= 5.0) return 30.0;
-  return 5.0;
+  if (total >= nearPoleReticleArcmin) return 5.0;
+  return nearPoleReticleArcmin;
+}
+
+/// §45.16 near-pole reticle mode: inside this total error the bullseye
+/// becomes a polar-scope reticle — a 2′ field with a ring every 30″ — so the
+/// last arcminute is worked against ticks a solve can resolve, not against
+/// one ring that spans the whole remaining error. 2′ is ~4× the per-frame
+/// solve noise (§45.16 budget), so the dot moves between rings, not within
+/// the noise.
+const double nearPoleReticleArcmin = 2.0;
+
+/// True when the bullseye draws the near-pole reticle.
+bool nearPoleReticle(double? totalErrorArcmin) =>
+    totalErrorArcmin != null && totalErrorArcmin < nearPoleReticleArcmin;
+
+/// §45.16 per-frame solve noise, arcminutes: the floor under which a change
+/// between two frames is scatter, not a knob turn. Half an arcminute covers
+/// a guide-scope solve (~30″ 1σ at 4″/px) with margin.
+const double polarSolveNoiseArcmin = 0.5;
+
+/// §45.16 bolt-direction calibration nudge. Mounts differ in which way a
+/// bolt moves the axis, and the panel's Raise/Lower/Move east/west words
+/// assume the user finds the right one. After a frame, if ONE axis's error
+/// grew by more than the solve noise (and by more than 10 % of what it was)
+/// while the other stayed put, the user turned that bolt the wrong way:
+/// name the axis and say to turn it the other way. Both axes moving is a
+/// bump or a re-seat, not a bolt direction, and says nothing. Pure —
+/// unit-tested.
+String? boltDirectionNudge({
+  required double? prevAlt,
+  required double? prevAz,
+  required double? alt,
+  required double? az,
+  double noiseArcmin = polarSolveNoiseArcmin,
+}) {
+  if (prevAlt == null || prevAz == null || alt == null || az == null) return null;
+  bool grew(double before, double after) =>
+      after.abs() - before.abs() > math.max(noiseArcmin, before.abs() * 0.1);
+  bool still(double before, double after) => (after - before).abs() <= noiseArcmin;
+  if (grew(prevAlt, alt) && still(prevAz, az)) {
+    return 'Altitude got worse after that turn — the altitude bolt moves the '
+        'axis the other way on this mount. Turn it back past where you started.';
+  }
+  if (grew(prevAz, az) && still(prevAlt, alt)) {
+    return 'Azimuth got worse after that turn — the azimuth bolt moves the '
+        'axis the other way on this mount. Turn it back past where you started.';
+  }
+  return null;
 }
 
 /// Fractional dot offset inside the bullseye for the current error, drawn as
@@ -142,6 +191,15 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
   bool _busy = false;
   String? _status;
   double _toleranceArcmin = 1.0;
+
+  // §45.16 bolt-direction nudge: the previous frame's errors, the iteration
+  // they came from, the nudge in force and the iteration it expires after.
+  double? _prevAlt;
+  double? _prevAz;
+  int _nudgeIteration = 0;
+  String? _nudge;
+  int _nudgeUntilIteration = 0;
+  static const _nudgeFrames = 3;
   PolarAlignSettings _settings = const PolarAlignSettings();
   final _exposureCtrl = TextEditingController(text: _exposureText(1.0));
 
@@ -312,6 +370,7 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
     final live = ref.watch(polarAlignLiveProvider);
     final api = ref.watch(polarAlignApiProvider);
     _syncTicker(live.frameInProgress);
+    _trackNudge(live);
     // Each finished frame (solved or not) replaces lastFrame — fetch its image.
     ref.listen(polarAlignLiveProvider, (prev, next) {
       if (next.lastFrame != null && !identical(prev?.lastFrame, next.lastFrame)) {
@@ -667,7 +726,10 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
   /// [_readoutStrip].
   Widget _alignmentCard(PolarAlignLive live, Color color, bool single, {bool fill = false, bool readout = true}) {
     final range = bullseyeRangeArcmin(live.totalErrorArcmin);
-    final ring = range >= 60 ? '${(range / 60).toStringAsFixed(0)}°' : '${range.toStringAsFixed(0)}′';
+    final reticle = nearPoleReticle(live.totalErrorArcmin);
+    final ring = reticle
+        ? 'Reticle ${range.toStringAsFixed(0)}′ · rings 30″'
+        : 'Ring ${range >= 60 ? '${(range / 60).toStringAsFixed(0)}°' : '${range.toStringAsFixed(0)}′'}';
     // Square, as large as the spare room allows up to a size that still reads
     // as an instrument rather than a poster.
     final bullseye = ConstrainedBox(
@@ -678,6 +740,7 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
           painter: BullseyePainter(
             dotFraction: bullseyeDotFraction(live.azErrorArcmin, live.altErrorArcmin, range, southern: _southern),
             zoneColor: color,
+            reticle: reticle,
           ),
         ),
       ),
@@ -687,8 +750,16 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
             children: [
               _sectionLabel('Alignment'),
               const Spacer(),
-              Text('Ring $ring',
-                  style: const TextStyle(fontSize: _smallFont, color: AraColors.textSecondary, fontFeatures: _tabular)),
+              // The reticle label is the long one: scale it down in a narrow
+              // column rather than overflow the header.
+              Flexible(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(ring,
+                      key: const Key('polar-align-ring'),
+                      style: const TextStyle(fontSize: _smallFont, color: AraColors.textSecondary, fontFeatures: _tabular)),
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 12),
@@ -735,6 +806,10 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
                   ],
                 ),
               ),
+              if (_nudge case final nudge?) ...[
+                const SizedBox(height: 12),
+                _nudgeLine(nudge),
+              ],
             ],
           ),
           ],
@@ -757,9 +832,7 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
   Widget _readoutStrip(PolarAlignLive live, Color color) {
     final total = live.totalErrorArcmin;
     final rating = total == null ? null : polarErrorRating(total);
-    return _card(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: Row(
+    final row = Row(
         key: const Key('polar-align-readout'),
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -791,8 +864,57 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
           Expanded(child: _axisStat('Altitude', live.altErrorArcmin, _altHint(live.altErrorArcmin), color)),
           Expanded(child: _axisStat('Azimuth', live.azErrorArcmin, polarAzHint(live.azErrorArcmin, southern: _southern), color)),
         ],
+      );
+    return _card(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Column(
+        children: [
+          row,
+          if (_nudge case final nudge?) ...[
+            const SizedBox(height: 8),
+            _nudgeLine(nudge),
+          ],
+        ],
       ),
     );
+  }
+
+  /// §45.16 the bolt-direction nudge, amber, under the knob directions.
+  Widget _nudgeLine(String nudge) => Row(
+        key: const Key('polar-align-nudge'),
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.u_turn_left, size: 18, color: AraColors.accentBusy),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(nudge,
+                style: const TextStyle(fontSize: _smallFont, color: AraColors.accentBusy, height: 1.3)),
+          ),
+        ],
+      );
+
+  /// §45.16 — compare this frame's errors with the previous frame's and keep
+  /// a bolt-direction nudge for a few frames. Called from build on every
+  /// new adjust-loop iteration; a seed or a new run resets the baseline.
+  void _trackNudge(PolarAlignLive live) {
+    if (live.phase != PolarAlignStates.adjusting || live.iteration == _nudgeIteration) return;
+    if (live.iteration < _nudgeIteration) {
+      // A new run: no baseline, no stale nudge.
+      _prevAlt = null;
+      _prevAz = null;
+      _nudge = null;
+    }
+    _nudgeIteration = live.iteration;
+    final nudge = boltDirectionNudge(
+        prevAlt: _prevAlt, prevAz: _prevAz, alt: live.altErrorArcmin, az: live.azErrorArcmin);
+    if (nudge != null) {
+      _nudge = nudge;
+      _nudgeUntilIteration = live.iteration + _nudgeFrames;
+    } else if (live.iteration > _nudgeUntilIteration) {
+      _nudge = null;
+    }
+    _prevAlt = live.altErrorArcmin;
+    _prevAz = live.azErrorArcmin;
   }
 
   /// The total error translated for people who don't think in arcminutes:
@@ -1232,7 +1354,12 @@ class BullseyePainter extends CustomPainter {
   final Offset dotFraction;
   final Color zoneColor;
 
-  const BullseyePainter({required this.dotFraction, required this.zoneColor});
+  /// §45.16 near-pole reticle: four rings 30″ apart over a 2′ field with
+  /// 15″ ticks on the cross-hairs, and a smaller dot, instead of the three
+  /// zoom rings.
+  final bool reticle;
+
+  const BullseyePainter({required this.dotFraction, required this.zoneColor, this.reticle = false});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -1242,15 +1369,27 @@ class BullseyePainter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1
       ..color = AraColors.textSecondary.withValues(alpha: 0.5);
-    for (final f in const [1.0, 2 / 3, 1 / 3]) {
+    final rings = reticle ? const [1.0, 0.75, 0.5, 0.25] : const [1.0, 2 / 3, 1 / 3];
+    for (final f in rings) {
       canvas.drawCircle(center, radius * f, ring);
     }
     canvas.drawLine(center - Offset(radius, 0), center + Offset(radius, 0), ring);
     canvas.drawLine(center - Offset(0, radius), center + Offset(0, radius), ring);
+    if (reticle) {
+      // 15″ ticks (every eighth of the field) on both cross-hairs.
+      final tick = math.max(4.0, radius * 0.04);
+      for (var i = 1; i < 8; i++) {
+        final d = radius * i / 8;
+        for (final s in const [-1.0, 1.0]) {
+          canvas.drawLine(center + Offset(s * d, -tick), center + Offset(s * d, tick), ring);
+          canvas.drawLine(center + Offset(-tick, s * d), center + Offset(tick, s * d), ring);
+        }
+      }
+    }
 
     final dot = Paint()..color = zoneColor;
     final pos = center + Offset(dotFraction.dx * radius, dotFraction.dy * radius);
-    canvas.drawCircle(pos, math.max(10.0, radius * 0.06), dot);
+    canvas.drawCircle(pos, reticle ? math.max(6.0, radius * 0.035) : math.max(10.0, radius * 0.06), dot);
     // A subtle line from the dot back to the pole — the direction to drive it.
     final tether = Paint()
       ..strokeWidth = math.max(2.5, radius * 0.015)
@@ -1260,5 +1399,5 @@ class BullseyePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant BullseyePainter old) =>
-      old.dotFraction != dotFraction || old.zoneColor != zoneColor;
+      old.dotFraction != dotFraction || old.zoneColor != zoneColor || old.reticle != reticle;
 }

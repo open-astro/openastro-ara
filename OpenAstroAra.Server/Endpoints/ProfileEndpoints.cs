@@ -646,6 +646,10 @@ public static class ProfileEndpoints {
             return Results.Problem(detail: "exposure_seconds must be greater than 0 and at most 60",
                 statusCode: StatusCodes.Status400BadRequest);
         }
+        if (body.Binning is < PolarAlignBinning.Auto or > PolarAlignBinning.Max) {
+            return Results.Problem(detail: $"binning must be 0 (auto) or 1 to {PolarAlignBinning.Max}",
+                statusCode: StatusCodes.Status400BadRequest);
+        }
         if (body.LoopMode is not (PolarAlignLoopModes.Loop or PolarAlignLoopModes.SingleFrame)) {
             return Results.Problem(detail: "loop_mode must be \"loop\" or \"single\"",
                 statusCode: StatusCodes.Status400BadRequest);

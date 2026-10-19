@@ -70,8 +70,11 @@ namespace OpenAstroAra.Test {
                     _script.Enqueue(o);
                 }
             }
-            public Task<PolarAlignSolveOutcome> SolveAsync(string fitsPath, double? hintRa, double? hintDec, CancellationToken ct)
-                => Task.FromResult(_script.TryDequeue(out var o) ? o : Fallback);
+            public ConcurrentQueue<int> Binnings { get; } = new();
+            public Task<PolarAlignSolveOutcome> SolveAsync(string fitsPath, int binning, double? hintRa, double? hintDec, CancellationToken ct) {
+                Binnings.Enqueue(binning);
+                return Task.FromResult(_script.TryDequeue(out var o) ? o : Fallback);
+            }
         }
 
         private sealed class WsRecorder : IWsBroadcaster {
@@ -97,9 +100,17 @@ namespace OpenAstroAra.Test {
         // save, the §45 capture-fetch contract). Asserted from TEST bodies — never inside
         // the fake's handler, which runs on a socket thread with no NUnit context.
         private static readonly ConcurrentQueue<string?> CaptureRequestPaths = new();
+        // §45.4 — the binning each capture_single_frame carried (null = the daemon's 1×1 default).
+        private static readonly ConcurrentQueue<int?> CaptureRequestBinnings = new();
 
-        private static FakeGuider StartFake(ConcurrentQueue<bool> paSessionActiveCalls, bool answerCaptures = true) {
+        // §45.4 — an ASI120-class guide camera unless the test says otherwise; noFrameSize = a daemon
+        // without get_camera_frame_size (the RPC errors).
+        private static FakeGuider StartFake(ConcurrentQueue<bool> paSessionActiveCalls, bool answerCaptures = true,
+                int frameWidth = 1280, int frameHeight = 960, bool noFrameSize = false) {
             var fake = FakeGuider.Start();
+            if (!noFrameSize) {
+                fake.OnRpc("get_camera_frame_size", new JsonArray(frameWidth, frameHeight));
+            }
             fake.SetOnConnectEvents(PhdEvents.Version(subver: "openastroara-fake"), PhdEvents.AppState("Stopped"));
             fake.OnRpc("get_pixel_scale", JsonValue.Create(1.5));
             fake.OnRpc("set_pa_session", req => {
@@ -112,6 +123,7 @@ namespace OpenAstroAra.Test {
                     // §45 capture-fetch: the request must carry NO path (daemon-side default
                     // save) — recorded here, asserted from test bodies.
                     CaptureRequestPaths.Enqueue(req["params"]?["path"]?.GetValue<string>());
+                    CaptureRequestBinnings.Enqueue(req["params"]?["binning"]?.GetValue<int>());
                     _ = Task.Run(async () => {
                         await Task.Delay(20).ConfigureAwait(false);
                         await fake.BroadcastAsync(new JsonObject {
@@ -612,6 +624,67 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Auto_binning_follows_the_guide_camera_frame_size_and_reaches_capture_and_solver() {
+            // §45.4 — profile binning 0 (auto) + a 12 MP guide camera → 3×3 on the capture RPC AND
+            // on the solver (the guider saves the binned frame, so the solver's scale must carry it).
+            var paCalls = new ConcurrentQueue<bool>();
+            await using var fake = StartFake(paCalls, frameWidth: 4144, frameHeight: 2822);
+            using var guider = await ConnectGuiderAsync(fake).ConfigureAwait(false);
+            var solver = new ScriptedSolver();
+            solver.Enqueue(SolveA, SolveB);
+            CaptureRequestBinnings.Clear();
+            using var svc = NewService(guider, solver);
+
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
+            await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+            Assert.That(CaptureRequestBinnings, Is.Not.Empty.And.All.EqualTo(3),
+                "a 12 MP sensor is the §45.4 3×3 tier");
+            Assert.That(solver.Binnings, Is.Not.Empty.And.All.EqualTo(3),
+                "the solver must be told the frame's binning or it searches at the wrong scale");
+        }
+
+        [TestCase(false, TestName = "Auto binning stays 1x1 for a 1.2 MP guide camera")]
+        [TestCase(true, TestName = "Auto binning stays 1x1 when the daemon has no get_camera_frame_size")]
+        public async Task Auto_binning_stays_at_one_for_a_guide_camera_or_an_unknown_frame_size(bool noFrameSize) {
+            // §45.4 — a 1.2 MP ASI120 (the StartFake default) stays 1×1, and so does a daemon that
+            // has no get_camera_frame_size (the RPC errors → fallback, never a failed routine).
+            var paCalls = new ConcurrentQueue<bool>();
+            await using var fake = StartFake(paCalls, noFrameSize: noFrameSize);
+            using var guider = await ConnectGuiderAsync(fake).ConfigureAwait(false);
+            var solver = new ScriptedSolver();
+            solver.Enqueue(SolveA, SolveB);
+            CaptureRequestBinnings.Clear();
+            using var svc = NewService(guider, solver);
+
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
+            var status = await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+            Assert.That(status.State, Is.EqualTo("adjusting"), "a missing size never fails the routine");
+            Assert.That(CaptureRequestBinnings, Is.Not.Empty.And.All.Null, "1×1 is the daemon default, not sent");
+            Assert.That(solver.Binnings, Is.Not.Empty.And.All.EqualTo(1));
+        }
+
+        [Test]
+        public async Task A_profile_binning_overrides_auto() {
+            var paCalls = new ConcurrentQueue<bool>();
+            await using var fake = StartFake(paCalls, frameWidth: 4144, frameHeight: 2822);
+            using var guider = await ConnectGuiderAsync(fake).ConfigureAwait(false);
+            var store = NewStore();
+            store.PutPolarAlignSettings(store.GetPolarAlignSettings() with { Binning = 2 });
+            var solver = new ScriptedSolver();
+            solver.Enqueue(SolveA, SolveB);
+            CaptureRequestBinnings.Clear();
+            using var svc = NewService(guider, solver, store: store);
+
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
+            await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+            Assert.That(CaptureRequestBinnings, Is.Not.Empty.And.All.EqualTo(2), "the user's 2×2 wins over the 3×3 tier");
+            Assert.That(solver.Binnings, Is.Not.Empty.And.All.EqualTo(2));
+        }
+
+        [Test]
         public async Task A_stale_completion_from_a_timed_out_capture_is_swallowed_not_adopted() {
             // Review r1 on the capture-fetch PR: with path correlation gone, the event a TIMED-OUT
             // capture still owes must not resolve the NEXT capture's wait — adopting it would
@@ -922,7 +995,7 @@ namespace OpenAstroAra.Test {
             private readonly SemaphoreSlim _gate;
             public volatile bool Entered;
             public BlockingSolver(SemaphoreSlim gate) => _gate = gate;
-            public async Task<PolarAlignSolveOutcome> SolveAsync(string fitsPath, double? hintRa, double? hintDec, CancellationToken ct) {
+            public async Task<PolarAlignSolveOutcome> SolveAsync(string fitsPath, int binning, double? hintRa, double? hintDec, CancellationToken ct) {
                 Entered = true;
                 await _gate.WaitAsync(CancellationToken.None).ConfigureAwait(false);
                 throw new InvalidOperationException("late zombie failure");
@@ -1340,7 +1413,7 @@ namespace OpenAstroAra.Test {
             var store = new InMemoryProfileStore();
             var defaults = store.GetPolarAlignSettings();
             Assert.That(defaults.ExposureSeconds, Is.EqualTo(1.0));
-            Assert.That(defaults.Binning, Is.EqualTo(1));
+            Assert.That(defaults.Binning, Is.EqualTo(PolarAlignBinning.Auto), "§45.12: binning is auto by default");
             Assert.That(defaults.TargetToleranceArcmin, Is.EqualTo(1.0));
             Assert.That(defaults.SeedRotationDeg, Is.EqualTo(30.0));
             Assert.That(defaults.LoopCadenceMs, Is.EqualTo(1000));

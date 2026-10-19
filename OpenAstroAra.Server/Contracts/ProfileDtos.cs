@@ -487,6 +487,8 @@ public sealed record Phd2SettingsDto(
 /// <summary>
 /// §45.12 polar-alignment settings — the routine's knobs. Every field carries its playbook default
 /// so a profile.json written before this section deserializes to the documented behavior.
+/// <c>Binning</c> 0 = auto (§45.4: the tier for the guide camera's frame size, see
+/// <see cref="OpenAstroAra.Server.Services.PolarAlignBinning"/>), 1–4 = the user's override.
 /// <c>TargetToleranceArcmin</c> gates the client's [Done] button (the server reports errors
 /// regardless); <c>SeedRotationDeg</c> is the 2-point measurement's RA slew;
 /// <c>LoopCadenceMs</c> is the live loop's target period (capture+solve time is inside it).
@@ -496,7 +498,7 @@ public sealed record Phd2SettingsDto(
 /// </summary>
 public sealed record PolarAlignSettingsDto(
     double ExposureSeconds = 1.0,
-    int Binning = 1,
+    int Binning = 0,
     double TargetToleranceArcmin = 1.0,
     double SeedRotationDeg = 30.0,
     int LoopCadenceMs = 1000,

@@ -91,6 +91,10 @@ namespace OpenAstroAra.Server.Services {
         private bool _waitingForCapture;
         private PolarAlignLastFrameDto? _lastFrame;
 
+        // §45.4 — the guide camera's frame size as the daemon reported it at this run's start; null
+        // when it could not (auto binning then stays at 1×1). Written by the run task only.
+        private (int Width, int Height)? _runFrameSize;
+
         // Run-generation token: Stop abandons a run task that won't unwind within the grace period
         // (a hung guider RPC), and a new Start may then launch a fresh run while the zombie is still
         // draining. Every state write / WS publish from a run checks its generation first, so a
@@ -415,6 +419,14 @@ namespace OpenAstroAra.Server.Services {
                 // routine that moves the mount, so unpark it here, before anything else.
                 await UnparkIfParkedAsync(ct).ConfigureAwait(false);
 
+                // ── §45.4 binning from the camera: ask the daemon for the guide camera's frame once per
+                // run. A daemon without the RPC (or a refused call) is not a failure — auto falls back
+                // to 1×1, the right answer for every guide camera anyway.
+                _runFrameSize = await ReadGuideFrameSizeAsync(guiderClient, ct).ConfigureAwait(false);
+                var chosenBinning = PolarAlignBinning.Resolve(settings.Binning, _runFrameSize);
+                var binningSource = settings.Binning == PolarAlignBinning.Auto ? "auto" : "profile";
+                LogBinningChosen(chosenBinning, binningSource, _runFrameSize?.Width ?? 0, _runFrameSize?.Height ?? 0);
+
                 // ── seed: frame A at the current pointing ──
                 var hintA = CurrentMountPointingJnow();
                 var a = await SolveSeedFrameAsync(guiderClient, workDir, "seed-a", hintA, settings, gen, ct).ConfigureAwait(false);
@@ -497,6 +509,26 @@ namespace OpenAstroAra.Server.Services {
                     RestoreTrackingBestEffort(priorTracking);
                 }
                 TryDeleteWorkDir(workDir);
+            }
+        }
+
+        /// <summary>§45.4 — the guide camera's frame size from the daemon, or null when it has no
+        /// answer (older daemon, refused RPC, dropped connection). Never fails the routine.</summary>
+        private async Task<(int Width, int Height)?> ReadGuideFrameSizeAsync(PHD2Guider guiderClient, CancellationToken ct) {
+            try {
+                var size = await guiderClient.GetCameraFrameSizeAsync(ct).ConfigureAwait(false);
+                if (size is null) {
+                    LogFrameSizeUnavailable("the RPC returned no size");
+                }
+                return size;
+            } catch (OperationCanceledException) {
+                throw;
+            } catch (GuiderRpcException ex) {
+                LogFrameSizeUnavailable(ex.Message);
+                return null;
+            } catch (InvalidOperationException ex) {
+                LogFrameSizeUnavailable(ex.Message);
+                return null;
             }
         }
 
@@ -702,6 +734,7 @@ namespace OpenAstroAra.Server.Services {
                 PHD2Guider guiderClient, string workDir, string frameId,
                 (double RaDeg, double DecDeg)? hint, PolarAlignSettingsDto settings, int gen, FrameTiming timing, CancellationToken ct) {
             var localPath = Path.Combine(workDir, frameId + ".fits");
+            var binning = PolarAlignBinning.Resolve(settings.Binning, _runFrameSize);
             var captureStart = Stopwatch.GetTimestamp();
             timing.ExposureSeconds = settings.ExposureSeconds;
             await PublishFrameStartedAsync(gen, frameId, settings.ExposureSeconds).ConfigureAwait(false);
@@ -744,7 +777,7 @@ namespace OpenAstroAra.Server.Services {
                 try {
                     var exposureMs = Math.Max(1, (int)Math.Round(settings.ExposureSeconds * 1000.0));
                     await guiderClient.CaptureSolverFrameAsync(
-                        exposureMs: exposureMs, binning: settings.Binning > 1 ? settings.Binning : null,
+                        exposureMs: exposureMs, binning: binning > 1 ? binning : null,
                         gain: null, subframe: null, path: null, save: true, ct).ConfigureAwait(false);
                 } catch (GuiderRpcException ex) {
                     RecordCaptureFault(gen, frameId, ex.Message);
@@ -805,7 +838,7 @@ namespace OpenAstroAra.Server.Services {
                 timing.Capture = Stopwatch.GetElapsedTime(captureStart);
                 var solveStart = Stopwatch.GetTimestamp();
                 try {
-                    return await _solver.SolveAsync(localPath, hint?.RaDeg, hint?.DecDeg, ct).ConfigureAwait(false);
+                    return await _solver.SolveAsync(localPath, binning, hint?.RaDeg, hint?.DecDeg, ct).ConfigureAwait(false);
                 } catch (OperationCanceledException) {
                     throw;
                 } catch (OpenAstroAra.PlateSolving.PlateSolverConfigurationException) {
@@ -1162,6 +1195,12 @@ namespace OpenAstroAra.Server.Services {
 
         [LoggerMessage(EventId = 4522, Level = LogLevel.Information, Message = "§45 live frame fetch from the guider failed")]
         private partial void LogLiveFrameFetchFailed(Exception exception);
+
+        [LoggerMessage(EventId = 4524, Level = LogLevel.Information, Message = "§45.4 polar-align binning {Binning}×{Binning} ({Source}; guide camera frame {Width}×{Height})")]
+        private partial void LogBinningChosen(int binning, string source, int width, int height);
+
+        [LoggerMessage(EventId = 4525, Level = LogLevel.Information, Message = "§45.4 the guider did not report the guide camera's frame size — auto binning stays at 1×1: {Reason}")]
+        private partial void LogFrameSizeUnavailable(string reason);
 
         [LoggerMessage(EventId = 4523, Level = LogLevel.Information, Message = "§45 polar alignment: the mount is parked — unparking it before the seed slew")]
         private partial void LogUnparking();

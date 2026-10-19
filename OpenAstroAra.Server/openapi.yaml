@@ -11973,7 +11973,7 @@ components:
             - integer
             - string
           format: int32
-          default: 1
+          default: 0
         target_tolerance_arcmin:
           pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
           type:

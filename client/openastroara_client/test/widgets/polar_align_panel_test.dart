@@ -53,6 +53,7 @@ class _StubLiveNotifier extends PolarAlignLiveNotifier {
   _StubLiveNotifier(this.initial);
   @override
   PolarAlignLive build() => initial;
+  void set(PolarAlignLive live) => state = live;
 }
 
 class _NightOn extends NightModeController {
@@ -86,7 +87,38 @@ void main() {
       expect(bullseyeRangeArcmin(59.9), 30.0);
       expect(bullseyeRangeArcmin(5.0), 30.0);
       expect(bullseyeRangeArcmin(4.9), 5.0);
-      expect(bullseyeRangeArcmin(0.2), 5.0);
+      expect(bullseyeRangeArcmin(2.0), 5.0);
+      expect(bullseyeRangeArcmin(1.9), 2.0, reason: 'the §45.16 near-pole reticle');
+      expect(bullseyeRangeArcmin(0.2), 2.0);
+    });
+
+    test('the near-pole reticle takes over under 2′', () {
+      expect(nearPoleReticle(null), isFalse);
+      expect(nearPoleReticle(2.0), isFalse);
+      expect(nearPoleReticle(1.99), isTrue);
+      expect(nearPoleReticle(0.0), isTrue);
+    });
+
+    test('a bolt turned the wrong way is named after one frame', () {
+      // Altitude grew by 3′ (well over the 0.5′ noise), azimuth held.
+      expect(
+          boltDirectionNudge(prevAlt: 10.0, prevAz: -4.0, alt: 13.0, az: -4.2),
+          contains('altitude bolt'));
+      // Azimuth grew (more negative = further east), altitude held.
+      expect(
+          boltDirectionNudge(prevAlt: 10.0, prevAz: -4.0, alt: 10.3, az: -7.0),
+          contains('azimuth bolt'));
+      // Improvement, or growth inside the solve noise, says nothing.
+      expect(boltDirectionNudge(prevAlt: 10.0, prevAz: -4.0, alt: 7.0, az: -4.0), isNull);
+      expect(boltDirectionNudge(prevAlt: 10.0, prevAz: -4.0, alt: 10.4, az: -4.0), isNull);
+      // Growth under 10 % of a large error is scatter at that scale.
+      expect(boltDirectionNudge(prevAlt: 100.0, prevAz: 0.0, alt: 108.0, az: 0.0), isNull);
+      // Both axes moved: a bump, not a bolt direction.
+      expect(boltDirectionNudge(prevAlt: 10.0, prevAz: -4.0, alt: 14.0, az: -8.0), isNull);
+      // Crossing zero (overshoot) is progress, not a wrong direction.
+      expect(boltDirectionNudge(prevAlt: 1.0, prevAz: 0.0, alt: -0.8, az: 0.0), isNull);
+      // No baseline (first adjust frame) says nothing.
+      expect(boltDirectionNudge(prevAlt: null, prevAz: null, alt: 13.0, az: -4.0), isNull);
     });
 
     test('zone colors follow the §45.10 thresholds', () {
@@ -503,6 +535,85 @@ void main() {
       await _expand(tester);
       expect(find.byKey(const Key('polar-align-error-banner')), findsOneWidget);
       expect(find.textContaining('seed_solve_failed'), findsOneWidget);
+    });
+
+    testWidgets('under 2′ the bullseye becomes the near-pole reticle', (tester) async {
+      final api = _FakePolarAlignClient();
+      await tester.pumpWidget(_harness(
+          api,
+          const PolarAlignLive(
+            phase: PolarAlignStates.adjusting,
+            iteration: 9,
+            altErrorArcmin: 0.9,
+            azErrorArcmin: -0.6,
+            totalErrorArcmin: 1.1,
+            zone: 'green',
+          )));
+      await tester.pumpAndSettle();
+      final ring = tester.widget<Text>(find.byKey(const Key('polar-align-ring')));
+      expect(ring.data, 'Reticle 2′ · rings 30″');
+      final painter = tester
+          .widgetList<CustomPaint>(find.byType(CustomPaint))
+          .map((p) => p.painter)
+          .whereType<BullseyePainter>()
+          .single;
+      expect(painter.reticle, isTrue);
+    });
+
+    testWidgets('a bolt turned the wrong way shows the nudge, which clears once it improves',
+        (tester) async {
+      final api = _FakePolarAlignClient();
+      const first = PolarAlignLive(
+        phase: PolarAlignStates.adjusting,
+        iteration: 1,
+        altErrorArcmin: 10.0,
+        azErrorArcmin: -4.0,
+        totalErrorArcmin: 10.8,
+        zone: 'yellow',
+      );
+      await tester.pumpWidget(_harness(api, first));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('polar-align-nudge')), findsNothing, reason: 'no baseline yet');
+
+      final notifier = ProviderScope.containerOf(tester.element(find.byType(PolarAlignPanel)))
+          .read(polarAlignLiveProvider.notifier) as _StubLiveNotifier;
+      notifier.set(const PolarAlignLive(
+        phase: PolarAlignStates.adjusting,
+        iteration: 2,
+        altErrorArcmin: 13.0,
+        azErrorArcmin: -4.1,
+        totalErrorArcmin: 13.6,
+        zone: 'yellow',
+      ));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('polar-align-nudge')), findsOneWidget);
+      expect(find.textContaining('altitude bolt'), findsOneWidget);
+
+      // The nudge stays while the next frames are within noise …
+      notifier.set(const PolarAlignLive(
+        phase: PolarAlignStates.adjusting,
+        iteration: 3,
+        altErrorArcmin: 13.1,
+        azErrorArcmin: -4.0,
+        totalErrorArcmin: 13.7,
+        zone: 'yellow',
+      ));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('polar-align-nudge')), findsOneWidget);
+
+      // … and goes after its three frames once nothing is wrong any more.
+      for (var i = 4; i <= 6; i++) {
+        notifier.set(PolarAlignLive(
+          phase: PolarAlignStates.adjusting,
+          iteration: i,
+          altErrorArcmin: 13.0 - i,
+          azErrorArcmin: -4.0,
+          totalErrorArcmin: 13.0 - i + 0.5,
+          zone: 'yellow',
+        ));
+        await tester.pumpAndSettle();
+      }
+      expect(find.byKey(const Key('polar-align-nudge')), findsNothing);
     });
   });
 }

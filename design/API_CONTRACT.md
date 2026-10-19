@@ -1039,3 +1039,15 @@ is connected, straight from its GuideStep events):
       { status: "idle" }. The same object is runtime.pa_residual on
       GET /equipment/guider.
 ```
+
+## 2026-10-19 — polar-align `binning` 0 = auto (#1133)
+
+`PolarAlignSettingsDto.binning` (`GET`/`PUT /profile/polar-align`) gains the
+value **0 = auto**, now the default (§45.12 "Binning: auto"): the server reads
+the guide camera's frame size from the guider daemon once per run and picks the
+§45.4 tier (≤ 2.5 MP → 1, ≤ 8 MP → 2, ≤ 16 MP → 3, else 4). 1–4 remain the
+user's fixed override; `PUT` refuses anything else with 400. A profile.json
+written before this keeps its explicit `1`. Nothing else on the wire changes:
+the chosen binning is logged, not reported, because a run's binning is fixed at
+its start and the client has nothing to do with it.
+

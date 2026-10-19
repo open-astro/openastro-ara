@@ -108,6 +108,9 @@ class PolarAlignStatus {
 /// the server's ctor defaults for a missing key.
 class PolarAlignSettings {
   final double exposureSeconds;
+
+  /// 0 = auto (§45.4: the server picks the tier for the guide camera's
+  /// sensor), 1–4 = a fixed override.
   final int binning;
   final double targetToleranceArcmin;
   final double seedRotationDeg;
@@ -119,7 +122,7 @@ class PolarAlignSettings {
 
   const PolarAlignSettings({
     this.exposureSeconds = 1.0,
-    this.binning = 1,
+    this.binning = 0,
     this.targetToleranceArcmin = 1.0,
     this.seedRotationDeg = 30.0,
     this.loopCadenceMs = 1000,
@@ -130,7 +133,7 @@ class PolarAlignSettings {
   factory PolarAlignSettings.fromJson(Map<String, dynamic> json) =>
       PolarAlignSettings(
         exposureSeconds: (json['exposure_seconds'] as num?)?.toDouble() ?? 1.0,
-        binning: (json['binning'] as num?)?.toInt() ?? 1,
+        binning: (json['binning'] as num?)?.toInt() ?? 0,
         targetToleranceArcmin:
             (json['target_tolerance_arcmin'] as num?)?.toDouble() ?? 1.0,
         seedRotationDeg: (json['seed_rotation_deg'] as num?)?.toDouble() ?? 30.0,

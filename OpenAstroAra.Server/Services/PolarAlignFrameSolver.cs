@@ -38,7 +38,10 @@ public interface IPolarAlignFrameSolver {
     /// essential for the small guide-cam FOV. Returns apparent-of-date degrees (precessed from the
     /// solver's J2000 output — precession is arcmin-scale since J2000 and may not be skipped, §45.8).
     /// </summary>
-    Task<PolarAlignSolveOutcome> SolveAsync(string fitsPath, double? hintRaDegJnow, double? hintDecDegJnow, CancellationToken ct);
+    /// <param name="binning">The binning the frame was captured at (§45.4). The guider saves the
+    /// binned frame, so its pixel scale is the guide pixel size × this; the solver must be told, or a
+    /// 2×2 frame is searched at half its true scale and never solves.</param>
+    Task<PolarAlignSolveOutcome> SolveAsync(string fitsPath, int binning, double? hintRaDegJnow, double? hintDecDegJnow, CancellationToken ct);
 }
 
 /// <summary>One solved (or unsolved) §45 frame. Coordinates are apparent-of-date degrees, valid only
@@ -64,8 +67,9 @@ public sealed class PolarAlignFrameSolver : IPolarAlignFrameSolver {
     }
 
     public async Task<PolarAlignSolveOutcome> SolveAsync(
-            string fitsPath, double? hintRaDegJnow, double? hintDecDegJnow, CancellationToken ct) {
+            string fitsPath, int binning, double? hintRaDegJnow, double? hintDecDegJnow, CancellationToken ct) {
         ArgumentException.ThrowIfNullOrWhiteSpace(fitsPath);
+        ArgumentOutOfRangeException.ThrowIfLessThan(binning, 1);
 
         // ARA store → legacy settings first (same rule and reason as PlateSolveService).
         LegacyProfileBridge.SyncPlateSolve(_profileService, _store);
@@ -105,7 +109,8 @@ public sealed class PolarAlignFrameSolver : IPolarAlignFrameSolver {
             Regions = settings.Regions,
             DownSampleFactor = settings.DownSampleFactor,
             MaxObjects = settings.MaxObjects,
-            Binning = 1, // the guider saves the frame at its native (already-binned) scale
+            // The guider saves the binned frame: the solver's scale is pixel size × binning.
+            Binning = binning,
             Coordinates = hint,
             // No blind fallback — it defaults to TRUE and would turn every cloudy frame into a
             // whole-sky solve that stalls the ~1s loop (and the lease-renew cadence) for its full
