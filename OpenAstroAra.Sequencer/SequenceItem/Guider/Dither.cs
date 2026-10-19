@@ -62,8 +62,9 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Guider {
             // A frame is never started on a star that is still swinging. The night of 2026-10-16: two
             // dithers failed to settle (a rotated calibration spiralled every correction) and the next
             // exposure started anyway — both frames trailed. A settle failure gets ONE more dither (the
-            // guider settles again from wherever it is); a second failure, or a dither the guider refused
-            // because it is not guiding, parks the run awaiting the user, and Resume dithers again. A rig
+            // guider settles again from wherever it is); a second failure parks the run awaiting the user,
+            // and Resume dithers again. A dither the guider refused because it is not guiding restarts
+            // guiding once and parks only when that fails (2026-10-18); Resume restarts it again. A rig
             // whose guider is not connected keeps the old behaviour: nothing to wait for.
             if (!guiderMediator.GetInfo().Connected) {
                 await guiderMediator.Dither(token);
@@ -94,13 +95,18 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Guider {
                     // than the dither waits) is restarted here, the way an ASIAIR carries on: the guider
                     // picks a star, guides on its stored calibration (calibrating first when it has none)
                     // and settles, then the dither goes ahead. A calibrating or deliberately paused guider
-                    // answers with that reason instead of "refused" and is parked on, never restarted. The user is only asked when that restart fails. Rig night 2026-10-18: a
+                    // answers with that reason instead of "refused" and is parked on, never restarted. The
+                    // user is only asked when that restart fails. Rig night 2026-10-18: a
                     // 2-frame star loss and a Planning GoTo each parked the run, and every Resume parked
                     // it again within 2 ms because guiding had to be restarted by hand first.
                     restartTried = true;
                     Logger.Warning("Dither: the guider is not guiding — restarting guiding before the dither");
                     progress?.Report(new ApplicationStatus { Status = "Guider is not guiding — restarting guiding, then dithering" });
-                    if (await TryRestartGuidingAsync(progress, token)) {
+                    var restarted = await TryRestartGuidingAsync(progress, token);
+                    // An abort during the restart makes StartGuiding return false rather than throw: leave
+                    // without a brief "paused awaiting user" on the way out.
+                    token.ThrowIfCancellationRequested();
+                    if (restarted) {
                         continue;
                     }
                     error = "the guider is not guiding and restarting it did not help";
