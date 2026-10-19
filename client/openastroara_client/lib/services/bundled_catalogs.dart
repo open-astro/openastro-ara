@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show rootBundle;
 
+import '../util/dedupe_catalog.dart';
+import '../util/imaging_regions.dart';
 import 'dso_catalog_service.dart';
 
 /// Offline-first sky catalogs, BUNDLED with the client.
@@ -39,8 +41,19 @@ Future<List<PlanningDso>> loadBundledCatalogs() async {
   return compute(_parseAll, texts);
 }
 
-List<PlanningDso> _parseAll(List<String> texts) => [
-      for (final t in texts) ...parseOpenNgcCsv(t),
+List<PlanningDso> _parseAll(List<String> texts) => mergeDuplicates(
+      [for (final t in texts) ...parseOpenNgcCsv(t)],
+      links: catalogTwinLinks,
+    );
+
+/// The NGC/IC-keyed Sharpless anchors as merge links (#1267 item 4): the
+/// curated layer already knew those pairs are one object (it hid the
+/// Sharpless row); the merge now folds the row in, so the Sharpless
+/// designation becomes an alias of the NGC/IC row instead of disappearing.
+/// Standalone REGION-* anchors have no catalog row to link.
+List<(String, String)> get catalogTwinLinks => [
+      for (final a in sharplessAnchors)
+        if (!a.$1.startsWith('REGION-')) a,
     ];
 
 /// Parse one OpenNGC-layout CSV (semicolon-separated). Port of the daemon's
@@ -56,8 +69,13 @@ List<PlanningDso> parseOpenNgcCsv(String text) {
   final iV = idx('V-Mag'), iB = idx('B-Mag'), iM = idx('M'), iId = idx('Identifiers');
   final iMaj = idx('MajAx'), iMin = idx('MinAx'), iPa = idx('PosAng'), iSb = idx('SurfBr');
   final iCommon = idx('Common names');
+  final iNgc = idx('NGC'), iIc = idx('IC');
   if (iName < 0 || iRa < 0 || iDec < 0) return const [];
   final out = <PlanningDso>[];
+  // Dup rows: a second designation of an object listed under another name
+  // (NGC 2244 is the Rosette cluster NGC 2239; 651 rows). Kept as aliases
+  // of the canonical row so "NGC 2244" still finds it (#1267 item 4).
+  final dupAliases = <String, List<String>>{};
   for (final line in lines.skip(1)) {
     if (line.isEmpty) continue;
     final f = line.split(';');
@@ -66,7 +84,19 @@ List<PlanningDso> parseOpenNgcCsv(String text) {
     final dec = decToDeg(f[iDec]);
     if (ra == null || dec == null) continue;
     final type = iType >= 0 && f.length > iType ? f[iType] : '';
-    if (type == 'Dup' || type == 'NonEx') continue;
+    if (type == 'NonEx') continue;
+    if (type == 'Dup') {
+      String cell(int i) => i >= 0 && f.length > i ? f[i].trim() : '';
+      final canonical = cell(iNgc).isNotEmpty
+          ? 'NGC${cell(iNgc)}'
+          : cell(iIc).isNotEmpty
+              ? 'IC${cell(iIc)}'
+              : '';
+      if (canonical.isNotEmpty) {
+        dupAliases.putIfAbsent(designationKey(canonical), () => []).add(f[iName]);
+      }
+      continue;
+    }
     double? num(int i) => i >= 0 && f.length > i ? double.tryParse(f[i].trim()) : null;
     final name = f[iName];
     // vdB's "V-Mag" column is the illuminating star's magnitude (vdB 1 =
@@ -77,8 +107,47 @@ List<PlanningDso> parseOpenNgcCsv(String text) {
     final messier = iM >= 0 && f.length > iM ? int.tryParse(f[iM].trim()) : null;
     final caldwell = iId >= 0 && f.length > iId ? caldwellNumOf(f[iId]) : null;
     String? common;
+    final aliases = <String>[];
     if (iCommon >= 0 && f.length > iCommon) {
       common = firstCommonName(f[iCommon]);
+      for (final c in f[iCommon].split(',')) {
+        final t = c.trim();
+        if (t.isNotEmpty && t != common) {
+          aliases.add(t);
+        }
+      }
+    }
+    // The cross-identifications the row carries (#1267 item 4): Messier,
+    // the NGC/IC counterpart, and the Identifiers column (Caldwell, LBN,
+    // UGC, PK, …). mergeDuplicates folds rows that share one.
+    if (messier != null) {
+      aliases.add('M $messier');
+    }
+    // On Arp/WR rows the cell can hold a list ("4038,4039"): one alias each.
+    if (iNgc >= 0 && f.length > iNgc && !name.startsWith('NGC')) {
+      for (final n in f[iNgc].split(',')) {
+        if (n.trim().isNotEmpty) {
+          aliases.add('NGC ${n.trim()}');
+        }
+      }
+    }
+    if (iIc >= 0 && f.length > iIc && !name.startsWith('IC')) {
+      for (final n in f[iIc].split(',')) {
+        if (n.trim().isNotEmpty) {
+          aliases.add('IC ${n.trim()}');
+        }
+      }
+    }
+    if (iId >= 0 && f.length > iId) {
+      // A row's Identifiers often repeat its own designation ("ARP 047" on
+      // Arp 47): an alias is another name, never the row's own.
+      final self = designationKey(name);
+      for (final c in f[iId].split(',')) {
+        final t = c.trim();
+        if (t.isNotEmpty && designationKey(t) != self) {
+          aliases.add(t);
+        }
+      }
     }
     out.add(PlanningDso(
       id: name,
@@ -93,9 +162,31 @@ List<PlanningDso> parseOpenNgcCsv(String text) {
       surfaceBrightness: num(iSb),
       messierNum: messier,
       caldwellNum: caldwell,
+      aliases: aliases,
     ));
   }
-  return out;
+  if (dupAliases.isEmpty) return out;
+  return [
+    for (final d in out)
+      switch (dupAliases[designationKey(d.id)]) {
+        null => d,
+        final dups => PlanningDso(
+            id: d.id,
+            name: d.name,
+            type: d.type,
+            magnitude: d.magnitude,
+            raDeg: d.raDeg,
+            decDeg: d.decDeg,
+            sizeMajArcmin: d.sizeMajArcmin,
+            sizeMinArcmin: d.sizeMinArcmin,
+            posAngleDeg: d.posAngleDeg,
+            surfaceBrightness: d.surfaceBrightness,
+            messierNum: d.messierNum,
+            caldwellNum: d.caldwellNum,
+            aliases: [...d.aliases, ...dups],
+          ),
+      },
+  ];
 }
 
 /// "C 020" in the comma-separated identifiers → 20; null otherwise.
@@ -174,33 +265,33 @@ bool isMagnitudelessImagingType(String type) => const {
 
 // ── Catalogs overlays (the planetarium's dots) ─────────────────────────────
 
-typedef CatalogOverlay = ({String id, String name, String group, bool Function(PlanningDso) match});
+typedef CatalogOverlay = ({String id, String name, String group, bool Function(PlanningDso) match, String? prefix});
 
 /// Mirror of the daemon's CatalogDef table, so the Catalogs panel offers the
 /// same sets online and off.
 final List<CatalogOverlay> catalogOverlays = [
-  (id: 'messier', name: 'Messier', group: 'Catalogs', match: (r) => r.messierNum != null),
-  (id: 'caldwell', name: 'Caldwell', group: 'Catalogs', match: (r) => r.caldwellNum != null),
-  (id: 'ngc', name: 'NGC', group: 'Catalogs', match: (r) => r.id.startsWith('NGC')),
-  (id: 'ic', name: 'IC', group: 'Catalogs', match: (r) => r.id.startsWith('IC')),
-  (id: 'sharpless', name: 'Sharpless (Sh2)', group: 'Catalogs', match: (r) => r.id.startsWith('Sh2-')),
+  (id: 'messier', name: 'Messier', group: 'Catalogs', match: (r) => r.messierNum != null, prefix: null),
+  (id: 'caldwell', name: 'Caldwell', group: 'Catalogs', match: (r) => r.caldwellNum != null, prefix: null),
+  (id: 'ngc', name: 'NGC', group: 'Catalogs', match: (r) => r.hasDesignationPrefix('NGC'), prefix: 'NGC'),
+  (id: 'ic', name: 'IC', group: 'Catalogs', match: (r) => r.hasDesignationPrefix('IC'), prefix: 'IC'),
+  (id: 'sharpless', name: 'Sharpless (Sh2)', group: 'Catalogs', match: (r) => r.hasDesignationPrefix('Sh2-'), prefix: 'Sh2-'),
   (id: 'barnard', name: 'Barnard dark nebulae', group: 'Catalogs',
-      match: (r) => r.id.length > 1 && r.id[0] == 'B' && _isDigit(r.id[1])),
-  (id: 'ldn', name: 'Lynds dark nebulae (LDN)', group: 'Catalogs', match: (r) => r.id.startsWith('LDN ')),
-  (id: 'vdb', name: 'van den Bergh (vdB)', group: 'Catalogs', match: (r) => r.id.startsWith('vdB ')),
-  (id: 'abell-pn', name: 'Abell planetary nebulae', group: 'Catalogs', match: (r) => r.id.startsWith('Abell ')),
-  (id: 'arp', name: 'Arp peculiar galaxies', group: 'Catalogs', match: (r) => r.id.startsWith('Arp ')),
-  (id: 'wolf-rayet', name: 'Wolf-Rayet stars (WR)', group: 'Catalogs', match: (r) => r.id.startsWith('WR ')),
+      match: (r) => r.hasBarnardDesignation, prefix: null),
+  (id: 'ldn', name: 'Lynds dark nebulae (LDN)', group: 'Catalogs', match: (r) => r.hasDesignationPrefix('LDN '), prefix: 'LDN '),
+  (id: 'vdb', name: 'van den Bergh (vdB)', group: 'Catalogs', match: (r) => r.hasDesignationPrefix('vdB '), prefix: 'vdB '),
+  (id: 'abell-pn', name: 'Abell planetary nebulae', group: 'Catalogs', match: (r) => r.hasDesignationPrefix('Abell '), prefix: 'Abell '),
+  (id: 'arp', name: 'Arp peculiar galaxies', group: 'Catalogs', match: (r) => r.hasDesignationPrefix('Arp '), prefix: 'Arp '),
+  (id: 'wolf-rayet', name: 'Wolf-Rayet stars (WR)', group: 'Catalogs', match: (r) => r.hasDesignationPrefix('WR '), prefix: 'WR '),
   (id: 'galaxies', name: 'Galaxies', group: 'Types',
-      match: (r) => const {'G', 'GPair', 'GTrpl', 'GGroup'}.contains(r.type)),
-  (id: 'open-clusters', name: 'Open clusters', group: 'Types', match: (r) => r.type == 'OCl'),
-  (id: 'globular-clusters', name: 'Globular clusters', group: 'Types', match: (r) => r.type == 'GCl'),
-  (id: 'planetary-nebulae', name: 'Planetary nebulae', group: 'Types', match: (r) => r.type == 'PN'),
+      match: (r) => const {'G', 'GPair', 'GTrpl', 'GGroup'}.contains(r.type), prefix: null),
+  (id: 'open-clusters', name: 'Open clusters', group: 'Types', match: (r) => r.type == 'OCl', prefix: null),
+  (id: 'globular-clusters', name: 'Globular clusters', group: 'Types', match: (r) => r.type == 'GCl', prefix: null),
+  (id: 'planetary-nebulae', name: 'Planetary nebulae', group: 'Types', match: (r) => r.type == 'PN', prefix: null),
   (id: 'emission-nebulae', name: 'Emission nebulae', group: 'Types',
-      match: (r) => r.type == 'HII' || r.type == 'EmN'),
-  (id: 'reflection-nebulae', name: 'Reflection nebulae', group: 'Types', match: (r) => r.type == 'RfN'),
-  (id: 'nebulae', name: 'Nebulae', group: 'Types', match: (r) => r.type == 'Neb' || r.type == 'Cl+N'),
-  (id: 'supernova-remnants', name: 'Supernova remnants', group: 'Types', match: (r) => r.type == 'SNR'),
+      match: (r) => r.type == 'HII' || r.type == 'EmN', prefix: null),
+  (id: 'reflection-nebulae', name: 'Reflection nebulae', group: 'Types', match: (r) => r.type == 'RfN', prefix: null),
+  (id: 'nebulae', name: 'Nebulae', group: 'Types', match: (r) => r.type == 'Neb' || r.type == 'Cl+N', prefix: null),
+  (id: 'supernova-remnants', name: 'Supernova remnants', group: 'Types', match: (r) => r.type == 'SNR', prefix: null),
 ];
 
 bool _isDigit(String c) => c.codeUnitAt(0) >= 48 && c.codeUnitAt(0) <= 57;
@@ -223,13 +314,53 @@ List<Map<String, Object?>>? catalogOverlayObjects(
     }
   }
   if (def == null) return null;
-  final rows = [for (final r in all) if (def.match(r)) r]
-    ..sort((a, b) => (a.magnitude ?? double.infinity)
-        .compareTo(b.magnitude ?? double.infinity));
+  // A group row (Arp 72 names NGC 5994 and NGC 5996) carries its members'
+  // designations as aliases while the members are rows of their own: for a
+  // family overlay those designations belong to the member rows, so a row
+  // joins the overlay by its own id, or by an alias that is nobody's id.
+  // ...and a designation two rows both carry (IC 1559 on NGC 169, through
+  // Arp 282, and on NGC 169A, its own) plots once, on the first row.
+  final ids = {for (final r in all) designationKey(r.id)};
+  final taken = <String>{};
+  String? ownDesignation(PlanningDso r, String prefix) {
+    if (r.id.startsWith(prefix)) return r.id;
+    for (final a in r.aliases) {
+      if (!a.startsWith(prefix)) continue;
+      final k = designationKey(a);
+      if (ids.contains(k)) continue;
+      if (taken.add(k)) return a;
+    }
+    return null;
+  }
+  final prefix = def.prefix;
+  final labels = <PlanningDso, String>{};
+  final rows = <PlanningDso>[];
+  for (final r in all) {
+    if (id == 'barnard') {
+      // "B33" has no space prefix: its own designation path (a Barnard row
+      // folded into an LDN row still reads "B…" on this overlay).
+      if (r.barnardDesignation case final d?) {
+        final k = designationKey(d);
+        if (d == r.id || (!ids.contains(k) && taken.add(k))) {
+          labels[r] = d;
+          rows.add(r);
+        }
+      }
+    } else if (prefix == null) {
+      if (def.match(r)) rows.add(r);
+    } else if (ownDesignation(r, prefix) case final d?) {
+      labels[r] = d;
+      rows.add(r);
+    }
+  }
+  rows.sort((a, b) => (a.magnitude ?? double.infinity)
+      .compareTo(b.magnitude ?? double.infinity));
   return [
     for (final r in rows.take(limit < 0 ? 0 : limit))
       {
-        'name': overlayDisplayName(id, r),
+        'name': labels[r] is String
+            ? prettyDsoName(labels[r]!)
+            : overlayDisplayName(id, r),
         'ra_deg': r.raDeg,
         'dec_deg': r.decDeg,
         'magnitude': r.magnitude,
@@ -237,6 +368,9 @@ List<Map<String, Object?>>? catalogOverlayObjects(
   ];
 }
 
+/// The label for a Messier / Caldwell / type overlay; a family overlay
+/// (NGC, Sharpless, …) labels its rows in [catalogOverlayObjects] with the
+/// designation that qualified the row (#1267 item 4).
 String overlayDisplayName(String catalogId, PlanningDso r) => switch (catalogId) {
       'messier' => 'M ${r.messierNum}',
       'caldwell' => 'C ${r.caldwellNum}',
