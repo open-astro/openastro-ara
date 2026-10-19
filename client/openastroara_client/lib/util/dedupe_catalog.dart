@@ -83,26 +83,69 @@ List<PlanningDso> mergeDuplicates(
     if (ra != rb) parent[rb] = ra;
   }
 
+  // A star row and a non-star row are never one object: a nebula's row
+  // linked to the star it surrounds (Sh2-108 ↔ IC 1318, gam Cyg) must stay a
+  // nebula row, or the planning cull drops the nebula with the star
+  // (review r1). Two star rows (a WR entry and its HD id) still merge.
+  bool compatible(int i, int j) =>
+      (typeClass(rows[i].type) == 'star') ==
+      (typeClass(rows[j].type) == 'star');
+
   // 1. Cross-identifications: a row whose id is another row's alias (or id).
+  // An id key two rows share (WR 2-1 / WR 21 once dashes go, review #1107)
+  // is ambiguous and resolves nothing.
   final byKey = <String, int>{};
+  final ambiguous = <String>{};
+  final ownedById = <String>{};
   for (var i = 0; i < rows.length; i++) {
-    byKey.putIfAbsent(designationKey(rows[i].id), () => i);
+    final k = designationKey(rows[i].id);
+    if (k.isEmpty) continue;
+    if (byKey.containsKey(k)) {
+      ambiguous.add(k);
+    } else {
+      byKey[k] = i;
+      ownedById.add(k);
+    }
   }
+  // A row's own aliases also answer for it (a Dup designation such as
+  // NGC 2244 names the Rosette cluster row NGC 2239). An id is
+  // authoritative: an alias that names another row's id is a link to that
+  // row, not a rival claim; two rows claiming one key by alias alone is
+  // ambiguous and resolves nothing.
   for (var i = 0; i < rows.length; i++) {
     for (final a in rows[i].aliases) {
-      final j = byKey[designationKey(a)];
-      if (j != null && j != i) union(i, j);
+      final k = designationKey(a);
+      if (k.isEmpty || ownedById.contains(k)) continue;
+      final owner = byKey[k];
+      if (owner == null) {
+        byKey[k] = i;
+      } else if (owner != i) {
+        ambiguous.add(k);
+      }
+    }
+  }
+  int? lookup(String designation) {
+    final k = designationKey(designation);
+    return ambiguous.contains(k) ? null : byKey[k];
+  }
+
+  for (var i = 0; i < rows.length; i++) {
+    for (final a in rows[i].aliases) {
+      final j = lookup(a);
+      if (j != null && j != i && compatible(i, j)) union(i, j);
     }
   }
   for (final (a, b) in links) {
-    final i = byKey[designationKey(a)], j = byKey[designationKey(b)];
-    if (i != null && j != null && i != j) union(i, j);
+    final i = lookup(a), j = lookup(b);
+    if (i != null && j != null && i != j && compatible(i, j)) union(i, j);
   }
 
   // 2. Position: different families, same type class, within the tolerance.
+  // 0.1° cells; the RA axis wraps at 360° so a twin on either side of 0h
+  // still meets its neighbour.
   final cell = <(int, int), List<int>>{};
   (int, int) cellOf(PlanningDso d) =>
-      ((d.raDeg * 10).floor(), (d.decDeg * 10).floor());
+      (((d.raDeg % 360) * 10).floor() % 3600, (d.decDeg * 10).floor());
   for (var i = 0; i < rows.length; i++) {
     cell.putIfAbsent(cellOf(rows[i]), () => []).add(i);
   }
@@ -113,7 +156,7 @@ List<PlanningDso> mergeDuplicates(
     final (cx, cy) = cellOf(d);
     for (var dx = -1; dx <= 1; dx++) {
       for (var dy = -1; dy <= 1; dy++) {
-        for (final j in cell[(cx + dx, cy + dy)] ?? const <int>[]) {
+        for (final j in cell[((cx + dx) % 3600, cy + dy)] ?? const <int>[]) {
           if (j <= i) continue;
           final e = rows[j];
           if (catalogFamily(e.id) == fam || typeClass(e.type) != cls) continue;

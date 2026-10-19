@@ -145,9 +145,42 @@ void main() {
     ], reason: "the primary's own designation is not an alias");
   });
 
+  test('a star row never wins a merge and a link to a star is ignored', () {
+    // IC 1318 is a star row (gam Cyg, V 2.2) in OpenNGC; the anchor links it
+    // to Sh2-108. The nebula must stay a nebula row (review r1).
+    final merged = mergeDuplicates(
+      links: [('IC1318', 'Sh2-108')],
+      [
+        _row('IC1318', type: '*', mag: 2.23, ra: 305.56, dec: 40.26),
+        _row('Sh2-108', ra: 305.5, dec: 40.5, maj: 120),
+      ],
+    );
+    expect(merged.map((d) => d.id), ['IC1318', 'Sh2-108']);
+    // Two star rows that ARE one star (a WR row and its HD identifier) merge,
+    // and the one with photometry wins as usual.
+    final stars = mergeDuplicates([
+      _row('WR 1', type: 'WR*', mag: 10.1, ra: 1, dec: 1, aliases: ['HD 4004']),
+      _row('HD 4004', type: '*', ra: 1, dec: 1),
+    ]);
+    expect(stars.single.id, 'WR 1');
+  });
+
   test('the real twin list links NGC/IC rows to their Sharpless names', () {
     expect(catalogTwinLinks, contains(('NGC7000', 'Sh2-117')));
     expect(catalogTwinLinks.where((l) => l.$1.startsWith('REGION-')), isEmpty);
+  });
+
+  test('an id key two rows share resolves no alias, and RA wraps at 0h', () {
+    final merged = mergeDuplicates([
+      _row('WR 2-1', type: 'WR*', ra: 1, dec: 1),
+      _row('WR 21', type: 'WR*', ra: 50, dec: 1),
+      _row('HD 1', type: '*', ra: 90, dec: 1, aliases: ['WR 21']),
+      // 0.2″ either side of 0h: one object.
+      _row('vdB 9', type: 'RfN', ra: 359.99995, dec: 10),
+      _row('NGC0009', type: 'RfN', ra: 0.00005, dec: 10),
+    ]);
+    expect(merged.map((d) => d.id), ['WR 2-1', 'WR 21', 'HD 1', 'NGC0009']);
+    expect(merged.last.aliases, ['vdB 9']);
   });
 
   test('a single row and an empty list pass through', () {
