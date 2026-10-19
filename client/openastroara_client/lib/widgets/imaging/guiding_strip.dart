@@ -231,6 +231,7 @@ class GuidingStrip extends ConsumerWidget {
       case GuiderRuntimeState.settling:
       case GuiderRuntimeState.looping:
       case GuiderRuntimeState.starSelected:
+      case GuiderRuntimeState.assistant:
         return AraColors.accentBusy;
       case GuiderRuntimeState.stopped:
       case GuiderRuntimeState.paused:

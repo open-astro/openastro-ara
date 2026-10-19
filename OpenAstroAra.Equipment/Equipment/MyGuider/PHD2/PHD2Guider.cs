@@ -1141,7 +1141,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                 using var cts = new CancellationTokenSource(receiveTimeout > 0 ? receiveTimeout : 60000);
 
                 while ((line = await reader.ReadLineAsync(cts.Token).ConfigureAwait(false)) != null) {
-                    var o = JObject.Parse(line);
+                    var o = ParseGuiderLine(line);
                     string phdevent = "";
                     var t = o.GetValue("id", StringComparison.Ordinal);
                     if (t != null) {
@@ -1167,6 +1167,32 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             genericError.error = new PhdError() { code = -1, message = "Unable to get response from phd2" };
             return genericError;
         }
+
+        /// <summary>A reply line as JSON, repairing the one malformation a shipped guider is known to
+        /// produce: openastro-guider 2.1.0 answers <c>guiding_assistant_apply</c> with bare names in the
+        /// array (<c>{"applied":[exposure,min_move_ra]}</c>). Left alone, the parse failed and Ara
+        /// reported "Unable to get response from phd2" although the guider had applied every value
+        /// (2026-10-18), so the profile fell out of step with the guider. The repair runs only after a
+        /// strict parse has failed.</summary>
+        private static JObject ParseGuiderLine(string line) {
+            try {
+                return JObject.Parse(line);
+            } catch (Newtonsoft.Json.JsonReaderException) {
+                var repaired = QuoteBareNames(line);
+                if (repaired == line) {
+                    throw;
+                }
+                Logger.Warning("Phd2 - reply was not valid JSON; parsed after quoting bare names: " + line);
+                return JObject.Parse(repaired);
+            }
+        }
+
+        private static readonly System.Text.RegularExpressions.Regex BareName = new(
+            @"(?<=[\[,]\s*)(?!(?:true|false|null)\b)([A-Za-z_][A-Za-z0-9_]*)(?=\s*[,\]])",
+            System.Text.RegularExpressions.RegexOptions.CultureInvariant | System.Text.RegularExpressions.RegexOptions.Compiled);
+
+        /// <summary>Quotes bare identifiers that stand as array elements. Pure — unit-tested.</summary>
+        public static string QuoteBareNames(string line) => BareName.Replace(line, "\"$1\"");
 
         public async Task<bool> SetShiftRate(SiderealShiftTrackingRate shiftTrackingRate, CancellationToken ct) {
             if (!shiftTrackingRate.Enabled) {
@@ -1235,6 +1261,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
         public void Disconnect() {
             initialized = false;
             phd2Ip = null;
+            GuidingAssistantActive = false;
             try { _clientCTS?.Cancel(); } catch { }
         }
 
