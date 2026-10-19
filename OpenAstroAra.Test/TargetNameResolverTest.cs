@@ -52,11 +52,13 @@ namespace OpenAstroAra.Test {
             File.WriteAllText(Path.Combine(_root, package, "catalog.csv"), body);
         }
 
-        private const string HygHeader = "\"id\",\"hip\",\"hd\",\"hr\",\"gl\",\"bf\",\"proper\",\"ra\",\"dec\",\"mag\",\"bayer\",\"flam\",\"con\",\"var\"\n";
-        // AB Cas as the real HYG v4.0 row carries it (hip 12235, var AB, con Cas); Sirius with every designation.
+        private const string HygHeader = "\"id\",\"hip\",\"hd\",\"hr\",\"gl\",\"bf\",\"proper\",\"ra\",\"dec\",\"dist\",\"mag\",\"bayer\",\"flam\",\"con\",\"var\"\n";
+        // HYG v4.0's first data row is the Sun (no HIP, proper Sol, RA 0 Dec 0, dist 0): not a fixed star, never
+        // indexed. Then AB Cas as the real row carries it (hip 12235, var AB, con Cas); Sirius with every designation.
         private const string HygRows =
-            "12203,12235,,,\"\",\"\",\"\",2.625431,71.304515,10.21,\"\",\"\",Cas,AB\n"
-            + "32263,32349,48915,2491,\"GJ 244\",\"9Alp CMa\",\"Sirius\",6.752477,-16.716116,-1.44,Alp,9,CMa,\"\"\n";
+            "0,,,,\"\",\"\",\"Sol\",0.000000,0.000000,0.0000,-26.70,\"\",\"\",,\"\"\n"
+            + "12203,12235,,,\"\",\"\",\"\",2.625431,71.304515,272.4796,10.21,\"\",\"\",Cas,AB\n"
+            + "32263,32349,48915,2491,\"GJ 244\",\"9Alp CMa\",\"Sirius\",6.752477,-16.716116,2.6371,-1.44,Alp,9,CMa,\"\"\n";
 
         private const string NgcHeader = "Name;Type;RA;Dec;V-Mag;B-Mag;M;NGC;IC;Identifiers;Common names\n";
         private const string NgcRows =
@@ -71,6 +73,10 @@ namespace OpenAstroAra.Test {
             Assert.That(TargetNameIndex.TightKey("M031"), Is.EqualTo("M31"));
             Assert.That(TargetNameIndex.TightKey("V* AB Cas"), Is.EqualTo("ABCAS"));
             Assert.That(TargetNameIndex.TightKey("v* ab cas"), Is.EqualTo("ABCAS"));
+            Assert.That(TargetNameIndex.TightKey("V* alpha Cas"), Is.EqualTo("ALPCAS"), "trimmed after the prefix strip");
+            Assert.That(TargetNameIndex.TightKey("* tet Ori"), Is.EqualTo("THEORI"), "Simbad's star prefix and Greek forms");
+            Assert.That(TargetNameIndex.TightKey("alf CMa"), Is.EqualTo("ALPCMA"));
+            Assert.That(TargetNameIndex.TightKey("ksi UMa"), Is.EqualTo("XIUMA"));
             Assert.That(TargetNameIndex.TightKey("Sh2-117"), Is.EqualTo("SH2-117"), "dashes stay");
             Assert.That(TargetNameIndex.LooseKey("SH2-117"), Is.EqualTo("SH2117"));
             Assert.That(TargetNameIndex.TightKey("HIP 012235"), Is.EqualTo("HIP12235"));
@@ -100,13 +106,15 @@ namespace OpenAstroAra.Test {
                 Assert.That(e.ObjectType, Is.EqualTo("V*"));
                 Assert.That(e.Magnitude, Is.EqualTo(10.21));
             }
-            foreach (var q in new[] { "Sirius", "SIRIUS", "alp CMa", "Alpha CMa", "α CMa", "9 CMa", "HIP 32349", "HD 48915", "HR 2491", "GJ 244", "Gliese 244" }) {
+            foreach (var q in new[] { "Sirius", "SIRIUS", "alp CMa", "Alpha CMa", "α CMa", "alf CMa", "* alf CMa", "9 CMa", "HIP 32349", "HD 48915", "HR 2491", "GJ 244", "Gliese 244" }) {
                 var e = idx.Find(q, CancellationToken.None);
                 Assert.That(e, Is.Not.Null, q);
                 Assert.That(e!.MainId, Is.EqualTo("Sirius"), q);
             }
             Assert.That(idx.Find("Sirius", CancellationToken.None)!.Aliases, Does.Contain("HIP 32349").And.Contain("Alp CMa").And.Contain("9 CMa"));
             Assert.That(idx.Count, Is.EqualTo(2));
+            Assert.That(idx.Find("Sol", CancellationToken.None), Is.Null, "the Sun is a moving body, not a fixed star at 0,0");
+            Assert.That(idx.Find("Sun", CancellationToken.None), Is.Null);
         }
 
         [Test]
@@ -240,6 +248,14 @@ namespace OpenAstroAra.Test {
             Assert.That(SesameClient.Parse("<Sesame><Target><Resolver name=\"S=Simbad\"><INFO>*** Nothing found ***</INFO></Resolver></Target></Sesame>"), Is.Null);
             Assert.That(SesameClient.Parse("<Sesame><Target><Resolver><oname>x</oname><jradeg>1</jradeg><jdedeg>95</jdedeg></Resolver></Target></Sesame>"), Is.Null);
             Assert.That(SesameClient.Parse("<Sesame/>"), Is.Null);
+        }
+
+        [Test]
+        public void A_resolver_that_reports_a_backend_problem_is_unavailable_not_nothing_found() {
+            var down = "<Sesame><Target><Resolver name=\"S=Simbad\"><INFO>Simbad timeout: connection refused</INFO></Resolver></Target></Sesame>";
+            Assert.Throws<SesameUnavailableException>(() => SesameClient.Parse(down));
+            var none = "<Sesame><Target><Resolver name=\"S=Simbad\"><INFO>*** Nothing found ***</INFO></Resolver><Resolver name=\"N=NED\"><INFO> *** NNNothing found *** </INFO></Resolver></Target></Sesame>";
+            Assert.That(SesameClient.Parse(none), Is.Null);
         }
 
         [Test]

@@ -36,6 +36,7 @@ class SearchRoute {
 /// whole, ignoring case and surrounding space.
 const solarSystemNames = {
   'sun',
+  'sol',
   'moon',
   'mercury',
   'venus',

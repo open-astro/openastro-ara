@@ -73,13 +73,15 @@ public sealed partial class TargetNameIndex {
 
     // ---- keys ----
 
-    /// <summary>Upper-case, no whitespace or underscores, "V*" prefix dropped, Greek letters and their
-    /// spelled-out / three-letter forms unified, leading zeros after a letter prefix dropped. Dashes stay
-    /// ("WR 2-1" and "WR 21" are different stars).</summary>
+    /// <summary>Upper-case, no whitespace or underscores, Simbad's "V*" / "*" prefixes dropped, Greek letters
+    /// and their spelled-out / HYG three-letter / Simbad three-letter forms unified, leading zeros after a
+    /// letter prefix dropped. Dashes stay ("WR 2-1" and "WR 21" are different stars).</summary>
     public static string TightKey(string? name) {
         var s = (name ?? string.Empty).Trim();
         if (s.StartsWith("V*", StringComparison.OrdinalIgnoreCase)) {
-            s = s[2..];
+            s = s[2..].Trim();
+        } else if (s.StartsWith("* ", StringComparison.Ordinal)) {
+            s = s[2..].Trim();
         }
         s = GreekToAbbrev(s.ToUpperInvariant());
         var sb = new StringBuilder(s.Length);
@@ -98,7 +100,10 @@ public sealed partial class TargetNameIndex {
     private static partial Regex LeadingZeros();
 
     // HYG's three-letter Bayer abbreviations, the full Greek names and the Unicode letters all map to the
-    // abbreviation, so "alp Cas", "alpha Cas", "α Cas" and "Alp Cas" share one key.
+    // abbreviation, so "alp Cas", "alpha Cas", "α Cas" and "Alp Cas" share one key. Simbad spells a few
+    // differently ("alf", "tet", "ksi"); those map to HYG's form.
+    private static readonly (string Simbad, string Abbrev)[] SimbadGreek = { ("ALF", "ALP"), ("TET", "THE"), ("KSI", "XI") };
+
     private static readonly (string Abbrev, string Full, char Letter)[] Greek = {
         ("ALP", "ALPHA", 'Α'), ("BET", "BETA", 'Β'), ("GAM", "GAMMA", 'Γ'), ("DEL", "DELTA", 'Δ'), ("EPS", "EPSILON", 'Ε'),
         ("ZET", "ZETA", 'Ζ'), ("ETA", "ETA", 'Η'), ("THE", "THETA", 'Θ'), ("IOT", "IOTA", 'Ι'), ("KAP", "KAPPA", 'Κ'),
@@ -128,6 +133,11 @@ public sealed partial class TargetNameIndex {
             if (full.Length > abbrev.Length && s.StartsWith(full, StringComparison.Ordinal)
                     && (s.Length == full.Length || !char.IsLetter(s[full.Length]))) {
                 return abbrev + s[full.Length..];
+            }
+        }
+        foreach (var (simbad, abbrev) in SimbadGreek) {
+            if (s.StartsWith(simbad, StringComparison.Ordinal) && (s.Length == simbad.Length || !char.IsLetter(s[simbad.Length]))) {
+                return abbrev + s[simbad.Length..];
             }
         }
         return s;
@@ -217,7 +227,7 @@ public sealed partial class TargetNameIndex {
         int gl = cols.GetValueOrDefault("gl", -1), proper = cols.GetValueOrDefault("proper", -1);
         int ra = cols.GetValueOrDefault("ra", -1), dec = cols.GetValueOrDefault("dec", -1), mag = cols.GetValueOrDefault("mag", -1);
         int bayer = cols.GetValueOrDefault("bayer", -1), flam = cols.GetValueOrDefault("flam", -1), con = cols.GetValueOrDefault("con", -1);
-        int variable = cols.GetValueOrDefault("var", -1), spect = cols.GetValueOrDefault("spect", -1);
+        int variable = cols.GetValueOrDefault("var", -1), dist = cols.GetValueOrDefault("dist", -1);
         if (ra < 0 || dec < 0 || hip < 0) {
             return 0;
         }
@@ -230,9 +240,14 @@ public sealed partial class TargetNameIndex {
             if (!Num(f, ra, out var raHours) || !Num(f, dec, out var decDeg) || raHours < 0 || raHours >= 24 || decDeg is < -90 or > 90) {
                 continue;
             }
+            var p = Field(f, proper);
+            // HYG's first data row is the Sun (no HIP, proper "Sol", distance 0, RA 0 Dec 0): a moving body, not
+            // a fixed star; the planetarium owns it (review r2).
+            if (Field(f, hip).Length == 0 && (string.Equals(p, "Sol", StringComparison.OrdinalIgnoreCase) || (Num(f, dist, out var dd) && dd == 0))) {
+                continue;
+            }
             aliases.Clear();
             var c = Field(f, con);
-            var p = Field(f, proper);
             if (p.Length > 0) aliases.Add(p);
             var v = Field(f, variable);
             if (v.Length > 0 && c.Length > 0) aliases.Add($"{v} {c}");
