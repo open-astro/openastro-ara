@@ -148,17 +148,25 @@ final selectedSequenceIdProvider =
 /// no server, or no active run for it). Rebuilds when the selection or server
 /// changes; [refresh] re-reads after a lifecycle action (start/pause/abort).
 class SequenceRunStateNotifier extends AsyncNotifier<SequenceRunStateInfo?> {
-  // Adoption happens once per notifier: a selection cleared on purpose (a
-  // delete, the editor giving up on a body it cannot load) must not pull the
-  // same run straight back. The editor's load-failure path clears the
+  // Adoption happens once per notifier and server: a selection cleared on
+  // purpose (a delete, the editor giving up on a body it cannot load) must not
+  // pull the same run straight back. The editor's load-failure path clears the
   // selection and shows a SnackBar; re-adopting there would loop list, detail
-  // and run-state reads until the run ended.
+  // and run-state reads until the run ended. The provider is autoDispose, so a
+  // torn-down notifier (nothing watched it during a tab switch) adopts once
+  // more when it comes back: a single retry, never a loop. A server change
+  // resets it, so switching to a rig that is mid-run adopts that rig's run.
   bool _adopted = false;
+  SequenceClient? _adoptedFor;
 
   Future<SequenceRunStateInfo?> _read() async {
     var id = ref.read(selectedSequenceIdProvider);
     final api = ref.read(sequenceApiProvider);
     if (api == null) return null;
+    if (!identical(api, _adoptedFor)) {
+      _adopted = false;
+      _adoptedFor = api;
+    }
     if (id == null && !_adopted) {
       _adopted = true;
       // Nothing picked yet (a fresh launch, or a relaunch while the daemon is
@@ -170,6 +178,9 @@ class SequenceRunStateNotifier extends AsyncNotifier<SequenceRunStateInfo?> {
       // id and loads it into the editor, exactly as a Load-dialog pick would.
       id = await _activeRunId();
       if (id == null || !ref.mounted) return null;
+      // A pick made while the list was loading (the Load dialog, a new draft)
+      // wins: an explicit selection is never overridden.
+      if (ref.read(selectedSequenceIdProvider) != null) return null;
       // Selecting rebuilds this notifier with the id; that build does the read.
       ref.read(selectedSequenceIdProvider.notifier).select(id);
       return null;

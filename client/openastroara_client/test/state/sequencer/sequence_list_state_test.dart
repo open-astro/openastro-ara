@@ -207,6 +207,26 @@ void main() {
       expect(container.read(sequenceRunStateProvider).value, isNull);
     });
 
+    test('a pick made while the list is still loading is not overridden',
+        () async {
+      final fake = _FakeSeqClient();
+      final container = setup(fake);
+      await pumpEventQueue();
+      // The list read is in flight; the user picks a sequence meanwhile.
+      container.read(selectedSequenceIdProvider.notifier).select('mine');
+      await pumpEventQueue();
+      fake.calls.single.complete(SequencePage(items: [
+        const SequenceListItem(
+            id: 'paused-run',
+            currentRunState: SequenceRunState.pausedAwaitingUser),
+      ]));
+      await pumpEventQueue();
+      await container.read(sequenceRunStateProvider.future);
+      await pumpEventQueue();
+
+      expect(container.read(selectedSequenceIdProvider), 'mine');
+    });
+
     test('with nothing selected and no active run, nothing is selected',
         () async {
       final fake = _FakeSeqClient();
