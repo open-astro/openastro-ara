@@ -22,15 +22,25 @@ namespace OpenAstroAra.PlateSolving {
 
         public const int MaxDownsample = 4;
 
+        /// <summary>A frame taller than this is binned at least 2× whatever its scale: ASTAP's star
+        /// detection on a 26 MP frame at full resolution is the slow part, and it says so ("Warning,
+        /// increase downsampling!!" on a 6248×4176 frame at 1.73″/px, CM4 rig 2026-10-19).</summary>
+        public const double TallFrameHeightPx = 3000;
+
         /// <summary>Downsample factor for a frame at <paramref name="arcsecPerPixel"/> native scale: the
-        /// largest factor that keeps the downsampled scale at or under <see cref="TargetArcsecPerPixel"/>
-        /// and the height at or over <see cref="MinimumHeightPx"/>, clamped to 1..<see cref="MaxDownsample"/>.
-        /// A RedCat (3.1"/px) solves at 1, a 1000 mm refractor (0.8"/px) at 2, a C11 (0.3"/px) at 4.</summary>
+        /// largest factor that keeps the downsampled scale at or under <see cref="TargetArcsecPerPixel"/>,
+        /// at least 2 for a frame over <see cref="TallFrameHeightPx"/> high, and never so much that the
+        /// height drops under <see cref="MinimumHeightPx"/>; clamped to 1..<see cref="MaxDownsample"/>.
+        /// A RedCat on a small sensor (3.1"/px) solves at 1, the same lens on a 26 MP sensor at 2, a
+        /// 1000 mm refractor (0.8"/px) at 2, a C11 (0.3"/px) at 4.</summary>
         public static int DownsampleFor(double arcsecPerPixel, double imageHeightPx) {
             if (!(arcsecPerPixel > 0) || double.IsNaN(arcsecPerPixel) || double.IsInfinity(arcsecPerPixel)) {
-                return 1;
+                return imageHeightPx > TallFrameHeightPx ? 2 : 1;
             }
             var factor = (int)Math.Floor(TargetArcsecPerPixel / arcsecPerPixel);
+            if (imageHeightPx > TallFrameHeightPx) {
+                factor = Math.Max(factor, 2);
+            }
             factor = Math.Clamp(factor, 1, MaxDownsample);
             if (imageHeightPx > 0) {
                 while (factor > 1 && imageHeightPx / factor < MinimumHeightPx) {

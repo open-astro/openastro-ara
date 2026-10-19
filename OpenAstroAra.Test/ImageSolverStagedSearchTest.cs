@@ -21,7 +21,7 @@ namespace OpenAstroAra.Test {
     [TestFixture]
     public class ImageSolverStagedSearchTest {
 
-        private sealed class RecordingSolver : IPlateSolver {
+        private class RecordingSolver : IPlateSolver {
             public readonly List<PlateSolveParameter> Calls = new();
             public int SucceedOnCall = int.MaxValue;
             public double Pixscale = 1.46;
@@ -35,6 +35,10 @@ namespace OpenAstroAra.Test {
                     Pixscale = Pixscale,
                 });
             }
+        }
+
+        /// <summary>ASTAP-like: honours SearchScale, so the staged search runs its scale stage.</summary>
+        private sealed class ScaleSearchingSolver : RecordingSolver, IScaleSearchSolver {
         }
 
         private static PlateSolveParameter Hinted(double radius = 15, bool blind = true) => new() {
@@ -53,7 +57,7 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public async Task Hint_then_scale_then_wider_radii_then_blind() {
-            var near = new RecordingSolver();
+            var near = new ScaleSearchingSolver();
             var blind = new RecordingSolver();
             var sut = new ImageSolver(near, blind);
 
@@ -63,6 +67,16 @@ namespace OpenAstroAra.Test {
             Assert.That(Joined(near.Calls.Select(Describe)), Is.EqualTo(
                 "hint r=15 scale=known t=60 | hint r=15 scale=searched t=60 | hint r=30 scale=known t=60 | hint r=90 scale=known t=120"));
             Assert.That(Joined(blind.Calls.Select(Describe)), Is.EqualTo("blind r=15 scale=known t=300"));
+        }
+
+        [Test]
+        public async Task Stages_run_without_their_own_failure_notices() {
+            // CM4 rig 2026-10-19: every failed stage posted "ASTAP - Plate solve failed." to the inbox
+            // although the next stage solved.
+            var near = new ScaleSearchingSolver();
+            var sut = new ImageSolver(near, new RecordingSolver());
+            await sut.Solve(Mock.Of<IImageData>(), Hinted(), null, CancellationToken.None);
+            Assert.That(near.Calls.All(c => c.DisableNotifications), Is.True);
         }
 
         [Test]
@@ -83,15 +97,22 @@ namespace OpenAstroAra.Test {
         [Test]
         public async Task The_last_good_solve_is_tried_when_it_lies_outside_the_hinted_radius() {
             SolveMemory.Remember(new Coordinates(Angle.ByDegree(140), Angle.ByDegree(20), Epoch.J2000)); // ~37° away
-            var near = new RecordingSolver { SucceedOnCall = 3 };
+            var near = new ScaleSearchingSolver { SucceedOnCall = 2 };
             var sut = new ImageSolver(near, new RecordingSolver());
 
             var result = await sut.Solve(Mock.Of<IImageData>(), Hinted(), null, CancellationToken.None);
 
             Assert.That(result.Success, Is.True);
-            Assert.That(near.Calls, Has.Count.EqualTo(3));
-            Assert.That(near.Calls[2].Coordinates!.RADegrees, Is.EqualTo(140).Within(1e-6), "third stage searches around the remembered position");
-            Assert.That(near.Calls[2].SearchRadius, Is.EqualTo(15));
+            Assert.That(near.Calls, Has.Count.EqualTo(2));
+            Assert.That(near.Calls[1].Coordinates!.RADegrees, Is.EqualTo(140).Within(1e-6), "the remembered position is tried right after the hint, before the scale search");
+            Assert.That(near.Calls[1].SearchRadius, Is.EqualTo(15));
+            Assert.That(near.Calls[1].SearchScale, Is.False);
+        }
+
+        [Test]
+        public void A_remembered_position_outside_the_hinted_radius_comes_before_the_scale_search() {
+            SolveMemory.Remember(new Coordinates(Angle.ByDegree(140), Angle.ByDegree(20), Epoch.J2000)); // ~37° away
+            Assert.That(Names(Hinted()), Is.EqualTo("last good solve | scale search | radius 30° | radius 90° | blind"));
         }
 
         [Test]
@@ -129,26 +150,42 @@ namespace OpenAstroAra.Test {
             p.StagedSearchEnabled = false;
             Assert.That(Names(p), Is.EqualTo("blind"));
             p.BlindFailoverEnabled = false;
-            Assert.That(ImageSolver.Stages(p), Is.Empty);
+            Assert.That(ImageSolver.Stages(p, scaleSearch: true), Is.Empty);
+        }
+
+        [Test]
+        public void A_solver_that_cannot_search_the_scale_skips_that_stage() {
+            // Bot round 1 — astrometry.net / PlateSolve2 ignore SearchScale, so the stage would re-run the
+            // identical hinted solve and burn a timeout.
+            Assert.That(Names(Hinted(), scaleSearch: false), Is.EqualTo("radius 30° | radius 90° | blind"));
+        }
+
+        [Test]
+        public async Task A_plain_solver_never_sees_a_scale_search() {
+            var near = new RecordingSolver();
+            var sut = new ImageSolver(near, new RecordingSolver());
+            await sut.Solve(Mock.Of<IImageData>(), Hinted(), null, CancellationToken.None);
+            Assert.That(near.Calls.All(c => !c.SearchScale), Is.True);
+            Assert.That(near.Calls, Has.Count.EqualTo(3), "hint, 30°, 90°");
         }
 
         [Test]
         public void A_blind_parameter_has_no_stages() {
             var p = Hinted();
             p.Coordinates = null;
-            Assert.That(ImageSolver.Stages(p), Is.Empty);
+            Assert.That(ImageSolver.Stages(p, scaleSearch: true), Is.Empty);
         }
 
         [Test]
         public void No_timeout_in_the_parameter_leaves_the_stages_without_one() {
             var p = Hinted();
             p.Timeout = null;
-            Assert.That(ImageSolver.Stages(p).All(s => s.Parameter.Timeout is null), Is.True);
+            Assert.That(ImageSolver.Stages(p, scaleSearch: true).All(s => s.Parameter.Timeout is null), Is.True);
         }
 
         private static string Joined(IEnumerable<string> items) => string.Join(" | ", items);
 
-        private static string Names(PlateSolveParameter p) => Joined(ImageSolver.Stages(p).Select(s => s.Name));
+        private static string Names(PlateSolveParameter p, bool scaleSearch = true) => Joined(ImageSolver.Stages(p, scaleSearch).Select(s => s.Name));
 
         private static string Describe(PlateSolveParameter p) =>
             $"{(p.Coordinates is null ? "blind" : "hint")} r={p.SearchRadius} scale={(p.SearchScale ? "searched" : "known")} t={p.Timeout?.TotalSeconds:0}";

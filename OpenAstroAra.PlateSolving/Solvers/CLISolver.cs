@@ -74,10 +74,13 @@ namespace OpenAstroAra.PlateSolving.Solvers {
 
                 using (var cts = CancellationTokenSource.CreateLinkedTokenSource(cancelToken)) {
                     cts.CancelAfter(timeout);
-                    // Pass the linked token so the timeout actually cancels the solve.
-                    await StartCLI(imagePath, outputPath, parameter, imageProperties, progress, cts.Token);
+                    try {
+                        // Pass the linked token so the timeout actually cancels the solve.
+                        await StartCLI(imagePath, outputPath, parameter, imageProperties, progress, cts.Token);
+                    } finally {
+                        solverMs = total.ElapsedMilliseconds - saveMs;
+                    }
                 }
-                solverMs = total.ElapsedMilliseconds - saveMs;
 
                 //Extract solution coordinates
                 result = ReadResult(outputPath, parameter, imageProperties);

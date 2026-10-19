@@ -23,6 +23,30 @@ namespace OpenAstroAra.Test {
         private static string Flag(string args, string flag) => Regex.Match(args, $@"{flag} (\S+)").Groups[1].Value;
 
         [Test]
+        public async System.Threading.Tasks.Task Automatic_downsample_passes_validation_on_an_executable_without_a_file_version() {
+            // #1136 rig check — a Linux ELF has no Windows file version; the port's legacy guard then
+            // threw "ASTAP version below 0.9.1.0 does not allow auto downsample factor value of 0".
+            var exe = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "astap-" + System.Guid.NewGuid().ToString("N"));
+            await System.IO.File.WriteAllTextAsync(exe, "#!/bin/sh\nexit 1\n");
+            try {
+                var solver = new ASTAPSolver(exe);
+                var parameter = new PlateSolveParameter { FocalLength = 448, PixelSize = 3.76, DownSampleFactor = 0, MaxObjects = 500 };
+                var image = new OpenAstroAra.Image.ImageData.BaseImageData(new ushort[8 * 8], 8, 8, bitDepth: 16, isBayered: false,
+                    new OpenAstroAra.Image.ImageData.ImageMetaData(), new OpenAstroAra.Server.Services.HeadlessProfileService(), null!, null!);
+                // Validation runs first; a failure to launch or a no-solution afterwards is fine here.
+                PlateSolveResult? result = null;
+                try {
+                    result = await solver.SolveAsync(image, parameter, null, System.Threading.CancellationToken.None);
+                } catch (System.ComponentModel.Win32Exception) {
+                    // not executable on this host — validation already passed
+                }
+                Assert.That(result is null || !result.Success, Is.True);
+            } finally {
+                System.IO.File.Delete(exe);
+            }
+        }
+
+        [Test]
         public void Fixed_downsample_is_passed_through() {
             var args = Args(new PlateSolveParameter { FocalLength = 530, PixelSize = 3.76, DownSampleFactor = 3, MaxObjects = 500 });
             Assert.That(Flag(args, "-z"), Is.EqualTo("3"));

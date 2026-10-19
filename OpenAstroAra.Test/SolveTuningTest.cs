@@ -10,6 +10,8 @@ namespace OpenAstroAra.Test {
     public class SolveTuningTest {
 
         [TestCase(3.1, 3000, 1, TestName = "RedCat at 3.1\"/px solves at full resolution")]
+        [TestCase(1.73, 4176, 2, TestName = "RedCat on a 26 MP sensor (CM4 rig) bins 2x for the tall frame")]
+        [TestCase(3.1, 4176, 2, TestName = "a tall frame bins at least 2x whatever its scale")]
         [TestCase(1.0, 3000, 2, TestName = "1\"/px downsamples 2x")]
         [TestCase(0.78, 3000, 2, TestName = "1000 mm refractor at 0.78\"/px downsamples 2x")]
         [TestCase(0.5, 3000, 4, TestName = "0.5\"/px downsamples 4x")]
@@ -17,6 +19,7 @@ namespace OpenAstroAra.Test {
         [TestCase(0.3, 1500, 2, TestName = "a short frame keeps at least 600 px of height")]
         [TestCase(0.3, 800, 1, TestName = "a tiny frame is never downsampled")]
         [TestCase(0, 3000, 1, TestName = "no scale means no downsample")]
+        [TestCase(0, 4000, 2, TestName = "no scale on a tall frame still bins 2x")]
         [TestCase(double.NaN, 3000, 1, TestName = "NaN scale means no downsample")]
         public void Downsample_follows_the_pixel_scale(double arcsecPerPixel, double heightPx, int expected) {
             Assert.That(SolveTuning.DownsampleFor(arcsecPerPixel, heightPx), Is.EqualTo(expected));

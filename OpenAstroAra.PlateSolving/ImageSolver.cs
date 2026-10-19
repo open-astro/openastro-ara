@@ -16,6 +16,7 @@ using OpenAstroAra.Astrometry;
 using OpenAstroAra.Core.Locale;
 using OpenAstroAra.Core.Model;
 using OpenAstroAra.Core.Utility;
+using OpenAstroAra.Core.Utility.Notification;
 using OpenAstroAra.Image.Interfaces;
 using OpenAstroAra.PlateSolving.Interfaces;
 using OpenAstroAra.Profile.Interfaces;
@@ -41,16 +42,22 @@ namespace OpenAstroAra.PlateSolving {
             Logger.Info($"Platesolving with parameters: {parameter}");
             progress?.Report(new ApplicationStatus() { Status = Loc.Instance["LblPlateSolving"] });
 
+            // Stages never post their own "solve failed" notice: a hint that fails and a later stage
+            // that solves is a success, and the rig inbox showed an error per failed stage. The one
+            // notice for a solve that fails outright is posted below, when the caller allows it.
+            var quiet = parameter.Clone();
+            quiet.DisableNotifications = true;
+
             PlateSolveResult result;
             if (parameter.Coordinates == null) {
-                result = await RunStage("blind", parameter, source, progress, ct);
+                result = await RunStage("blind", quiet, source, progress, ct);
             } else {
-                result = await RunStage("hint", parameter, source, progress, ct);
+                result = await RunStage("hint", quiet, source, progress, ct);
                 // #1136 — staged search. A hinted solve fails for one of three reasons, each with a
                 // cheaper fix than a whole-sky search: the profile's optics are wrong (search the scale),
                 // the mount lost sync but the scope hasn't moved far (search around the last good solve),
                 // or the mount is further off than the radius (widen it). Only then go blind.
-                foreach (var stage in Stages(parameter)) {
+                foreach (var stage in Stages(quiet, plateSolver is IScaleSearchSolver)) {
                     if (result.Success) {
                         break;
                     }
@@ -64,6 +71,9 @@ namespace OpenAstroAra.PlateSolving {
                 ReportScaleMismatch(parameter, result);
             } else {
                 Logger.Info($"Platesolve failed");
+                if (!parameter.DisableNotifications) {
+                    Notifier.ShowError("Plate solve failed: no solution from the hint, the widened search or the whole sky.");
+                }
             }
 
             progress?.Report(new ApplicationStatus() { Status = string.Empty });
@@ -75,24 +85,29 @@ namespace OpenAstroAra.PlateSolving {
         internal readonly record struct SearchStage(string Name, PlateSolveParameter Parameter);
 
         /// <summary>The stages that follow a failed hinted solve, in order. Pure, so tests can pin the
-        /// plan without a solver: scale search at the hinted radius → the remembered position (when it
-        /// is outside the hinted radius) → 30° → 90° (each only when wider than the last) → blind.</summary>
-        internal static IEnumerable<SearchStage> Stages(PlateSolveParameter parameter) {
+        /// plan without a solver: the remembered position (when it is outside the hinted radius; a
+        /// known-scale solve there costs a few seconds) → scale search at the hinted radius (only for a
+        /// solver that honours it, <paramref name="scaleSearch"/>; with a hint that is simply wrong it
+        /// runs to its timeout, which is why it comes second — CM4 rig, 2026-10-19: 61 s) → 30° → 90°
+        /// (each only when wider than the last) → blind.</summary>
+        internal static IEnumerable<SearchStage> Stages(PlateSolveParameter parameter, bool scaleSearch) {
             if (parameter.Coordinates == null) {
                 yield break;
             }
             var radius = parameter.SearchRadius;
             if (parameter.StagedSearchEnabled) {
-                var scale = parameter.Clone();
-                scale.SearchScale = true;
-                yield return new SearchStage("scale search", scale);
-
                 var fallback = parameter.FallbackCoordinates ?? SolveMemory.Recall();
                 if (fallback != null && SolveTuning.SeparationDeg(fallback, parameter.Coordinates) > radius) {
                     var near = parameter.Clone();
                     near.Coordinates = fallback;
                     near.FallbackCoordinates = null;
                     yield return new SearchStage("last good solve", near);
+                }
+
+                if (scaleSearch) {
+                    var scale = parameter.Clone();
+                    scale.SearchScale = true;
+                    yield return new SearchStage("scale search", scale);
                 }
 
                 foreach (var wider in SolveTuning.WidenedRadiiDeg) {
