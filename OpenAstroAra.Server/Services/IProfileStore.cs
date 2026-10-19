@@ -153,4 +153,10 @@ public interface IProfileStore {
     /// the guider build tasks (serialized by their own calibration-build gate), so plain Get/Put.</summary>
     CalibrationStateDto GetCalibrationState();
     void PutCalibrationState(CalibrationStateDto value);
+
+    /// <summary>#1362 equipment identity — the last-seen Alpaca UniqueID per gear slot, written by the
+    /// connect-time reconcile only (one writer per slot; writers of different slots never race on the
+    /// same key, and the reconciler serializes its own writes), so plain Get/Put.</summary>
+    EquipmentIdentityDto GetEquipmentIdentity();
+    void PutEquipmentIdentity(EquipmentIdentityDto value);
 }

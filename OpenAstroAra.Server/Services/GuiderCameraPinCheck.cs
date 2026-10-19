@@ -66,15 +66,32 @@ public static class GuiderCameraPinCheck {
                         + $"{moved.Key} on {ep.Host}:{ep.Port}, and {key} is {(atNumber is null ? "not offered" : $"'{atNumber.Name}'")}. "
                         + "Pick the guide camera again before applying.";
                 }
-                return $"The guide camera '{selection}' is no longer offered by {ep.Host}:{ep.Port}: the camera you picked "
-                    + $"({pinned}) is not in its device list{(atNumber is null ? "" : $" and {key} is now '{atNumber.Name}'")}. "
-                    + "Pick the guide camera again before applying.";
+                if (atNumber is null) {
+                    return $"The guide camera '{selection}' is no longer offered by {ep.Host}:{ep.Port}: the camera you picked "
+                        + $"({pinned}) is not in its device list. Pick the guide camera again before applying.";
+                }
+                // #1362 — the picked camera is gone and another answers at its number: a swap behind the same
+                // connection. Not refused (the main-camera check below still applies): the connect-time
+                // reconcile re-pins the slot's camera, re-reads its pixel size and tells the user.
             }
         }
 
-        if (mainCamera is null) {
-            return null;
+        return IsMainCamera(settings, devices, mainCamera)
+            ? $"The guide camera '{selection}' is the main imaging camera ({mainCamera!.Name}). "
+                + "The guider must not open the camera the sequence images with; pick the guide camera instead."
+            : null;
+    }
+
+    /// <summary>The main-camera half of <see cref="Describe"/> alone: whether the picked slot is the imaging
+    /// camera the daemon holds, by identity when the server told us ids, else by address.</summary>
+    public static bool IsMainCamera(IGuiderSettings settings,
+            IReadOnlyDictionary<string, AlpacaConfiguredDevice> devices, DiscoveredDeviceDto? mainCamera) {
+        ArgumentNullException.ThrowIfNull(settings);
+        ArgumentNullException.ThrowIfNull(devices);
+        if (mainCamera is null || CameraEndpoint(settings) is not { } ep) {
+            return false;
         }
+        var key = $"camera/{ep.Device.ToString(CultureInfo.InvariantCulture)}";
         // The main imaging camera, by identity when the server told us ids, else by address.
         var sameServer = ep.Port == mainCamera.IpPort
             && (string.Equals(ep.Host, mainCamera.IpAddress, StringComparison.OrdinalIgnoreCase)
@@ -90,11 +107,7 @@ public static class GuiderCameraPinCheck {
         // (review r2), so the same string on another AlpacaBridge host is a different camera.
         var byId = idsKnown && sameServer && string.Equals(picked!.UniqueId, mainCamera.UniqueId, StringComparison.Ordinal);
         var byNumber = !idsKnown && sameServer && ep.Device == mainCamera.AlpacaDeviceNumber;
-        if (byId || byNumber) {
-            return $"The guide camera '{selection}' is the main imaging camera ({mainCamera.Name}). "
-                + "The guider must not open the camera the sequence images with; pick the guide camera instead.";
-        }
-        return null;
+        return byId || byNumber;
     }
 
     private static bool IsLoopback(string? host) =>

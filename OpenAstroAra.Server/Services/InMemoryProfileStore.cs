@@ -501,6 +501,18 @@ public sealed class InMemoryProfileStore : IProfileStore {
         RaiseChanged();
     }
 
+    // #1362 equipment identity — nothing observed until a device connects.
+    private EquipmentIdentityDto _equipmentIdentity = EquipmentIdentityDto.Empty;
+
+    public EquipmentIdentityDto GetEquipmentIdentity() {
+        lock (_lock) { return _equipmentIdentity; }
+    }
+
+    public void PutEquipmentIdentity(EquipmentIdentityDto value) {
+        lock (_lock) { _equipmentIdentity = value ?? EquipmentIdentityDto.Empty; }
+        RaiseChanged();
+    }
+
     // §65.2 stretch defaults — auto_stf for Lights, calibration frames
     // always render linear via the frame-type auto-override.
     private StretchDefaultsDto _stretchDefaults = new(

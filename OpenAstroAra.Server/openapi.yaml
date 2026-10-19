@@ -5696,6 +5696,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CalibrationStateDto'
+  /api/v1/profile/equipment-identity:
+    get:
+      tags:
+        - Profile
+      summary: 'Get the active profile''s last-seen Alpaca identity (UniqueID, name, seen time) per gear slot.'
+      operationId: GetEquipmentIdentity
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EquipmentIdentityDto'
   /api/v1/profile/filenames:
     get:
       tags:
@@ -8244,6 +8257,20 @@ components:
         recommended:
           type: boolean
           default: false
+    DeviceIdentityDto:
+      required:
+        - unique_id
+        - name
+        - seen_utc
+      type: object
+      properties:
+        unique_id:
+          type: string
+        name:
+          type: string
+        seen_utc:
+          type: string
+          format: date-time
     DeviceType:
       enum:
         - camera
@@ -8597,6 +8624,15 @@ components:
         switch:
           type: boolean
           default: true
+    EquipmentIdentityDto:
+      required:
+        - devices
+      type: object
+      properties:
+        devices:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/DeviceIdentityDto'
     ExposureRequestDto:
       required:
         - exposure_sec
@@ -12274,6 +12310,10 @@ components:
           oneOf:
             - type: 'null'
             - $ref: '#/components/schemas/SkyModelCalibrationDto'
+        equipment_identity:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/EquipmentIdentityDto'
     QualityScoreBreakdownDto:
       required:
         - composite

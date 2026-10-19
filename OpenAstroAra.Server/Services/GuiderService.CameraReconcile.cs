@@ -13,6 +13,7 @@
 #endregion "copyright"
 
 using OpenAstroAra.Equipment.Equipment.MyGuider.PHD2;
+using OpenAstroAra.Server.Contracts;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 
@@ -31,6 +32,19 @@ public sealed partial class GuiderService {
     private int _reconcileStarts;
     internal Task ReconcileTask { get; private set; } = Task.CompletedTask;
     internal int ReconcileStarts => Volatile.Read(ref _reconcileStarts);
+
+    /// <summary>The on-demand entry point (a sequence start, #1362): the same reconcile as the connect hook,
+    /// a no-op while the guider is not connected.</summary>
+    internal Task ReconcileGuideCameraIfConnectedAsync(CancellationToken ct) {
+        PHD2Guider guider;
+        lock (_gate) {
+            if (_disposed || _guider is null || _state != EquipmentConnectionState.Connected) {
+                return Task.CompletedTask;
+            }
+            guider = _guider;
+        }
+        return ReconcileGuideCameraAsync(guider, ct);
+    }
 
     /// <summary>The connect hook: called by <c>ConnectInBackground</c> after the guider reached Connected.
     /// Also runs on a §63.3 recovery reconnect, which is the same event for the camera.</summary>
@@ -56,21 +70,25 @@ public sealed partial class GuiderService {
                 // The client already maps failures to an empty map; a throwing stand-in means the same: unknown.
             }
             var endpoint = $"{GuiderCameraReconcile.ForLog(ep.Host)}:{ep.Port.ToString(CultureInfo.InvariantCulture)}/{ep.Device.ToString(CultureInfo.InvariantCulture)}";
-            // Identity first: a pin mismatch is logged whatever else holds the slot, even the main camera,
-            // and the slot is not read because its size may belong to the other camera.
-            if (GuiderCameraReconcile.Decide(pinnedId, oldPixelSize, ep.Device, devices, readPixelSize: null).Outcome
-                    == GuiderCameraReconcileOutcome.PinMismatch) {
-                var slotId = devices.TryGetValue(GuiderCameraReconcile.SlotKey(ep.Device), out var d) ? d.UniqueId : "";
-                var pinText = GuiderCameraReconcile.ForLog(pinnedId);
-                var slotText = GuiderCameraReconcile.ForLog(slotId);
-                LogGuideCameraPinMismatch(endpoint, slotText, pinText);
+            devices.TryGetValue(GuiderCameraReconcile.SlotKey(ep.Device), out var atSlot);
+            // Identity first. The slot resolving to the main imaging camera (a renumber) is never learned
+            // from: its id and pixel size are not the guide camera's, and the push refuses it (#1308).
+            var isMain = _mainCameraResolver?.Invoke() is { } main
+                && GuiderCameraPinCheck.IsMainCamera(settings, devices, main);
+            var mismatch = GuiderCameraReconcile.Decide(pinnedId, oldPixelSize, ep.Device, devices, readPixelSize: null).Outcome
+                == GuiderCameraReconcileOutcome.PinMismatch;
+            if (mismatch && isMain) {
+                LogGuideCameraPinMismatch(endpoint, GuiderCameraReconcile.ForLog(atSlot?.UniqueId), GuiderCameraReconcile.ForLog(pinnedId));
                 return;
             }
-            // The slot resolves to the main imaging camera (a renumber): its id and pixel size are not the
-            // guide camera's, so learn nothing. The push refuses this selection with its own reason (#1308).
-            if (_mainCameraResolver?.Invoke() is { } main
-                && GuiderCameraPinCheck.Describe(settings, devices, main) is not null) {
+            if (isMain) {
                 return;
+            }
+            if (mismatch) {
+                // #1362 — a different camera answers in the slot and it is not the imaging camera: the gear was
+                // swapped behind the same connection. The slot is now the guide camera, so its id is pinned and
+                // its pixel size read; the identity reconciler tells the user and clears the darks and calibration.
+                LogGuideCameraSwapped(endpoint, GuiderCameraReconcile.ForLog(atSlot?.UniqueId), GuiderCameraReconcile.ForLog(pinnedId));
             }
             double? read = null;
             try {
@@ -79,13 +97,19 @@ public sealed partial class GuiderService {
                 // Unreadable: no size to learn; an id can still be filled below.
             }
 
-            var decision = GuiderCameraReconcile.Decide(pinnedId,
+            // A swap decides as if unpinned (the old pin is the previous camera's); the apply below still
+            // demands the stored pin is the one this reconcile started from.
+            var decision = GuiderCameraReconcile.Decide(mismatch ? string.Empty : pinnedId,
                 oldPixelSize, ep.Device, devices, read);
+            if (decision.Outcome == GuiderCameraReconcileOutcome.Update
+                    && !TryApplyGuideCameraProfile(camera, pinnedId, decision)) {
+                return; // the selection or the pin changed while we read: do not overwrite the newer edit
+            }
+            if (_identity is not null && atSlot is not null) {
+                await _identity.ObserveAsync(GearSlot.GuideCamera, atSlot, cts.Token).ConfigureAwait(false);
+            }
             if (decision.Outcome != GuiderCameraReconcileOutcome.Update) {
                 return;
-            }
-            if (!TryApplyGuideCameraProfile(camera, pinnedId, decision)) {
-                return; // the selection or the pin changed while we read: do not overwrite the newer edit
             }
             var oldSizeText = oldPixelSize.ToString("R", CultureInfo.InvariantCulture);
             var newSizeText = (decision.NewPixelSize ?? oldPixelSize).ToString("R", CultureInfo.InvariantCulture);
@@ -128,8 +152,12 @@ public sealed partial class GuiderService {
     private partial void LogGuideCameraReconciled(string endpoint, string oldPixelSize, string newPixelSize, string oldUniqueId, string newUniqueId);
 
     [LoggerMessage(Level = LogLevel.Warning,
-        Message = "Guide camera {Endpoint} reports UniqueID '{SlotUniqueId}' but the profile pins '{PinnedUniqueId}': profile left unchanged, pick the guide camera again (#1308, #1362)")]
+        Message = "Guide camera {Endpoint} reports UniqueID '{SlotUniqueId}' but the profile pins '{PinnedUniqueId}' and the slot is the main imaging camera: profile left unchanged, pick the guide camera again (#1308, #1362)")]
     private partial void LogGuideCameraPinMismatch(string endpoint, string slotUniqueId, string pinnedUniqueId);
+
+    [LoggerMessage(Level = LogLevel.Warning,
+        Message = "Guide camera {Endpoint} reports UniqueID '{SlotUniqueId}' but the profile pinned '{PinnedUniqueId}': the guide camera was swapped, re-pinning to the camera in the slot (#1362)")]
+    private partial void LogGuideCameraSwapped(string endpoint, string slotUniqueId, string pinnedUniqueId);
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "Guide camera re-read on connect failed; profile left unchanged (#1362)")]
     private partial void LogGuideCameraReconcileFailed(Exception ex);

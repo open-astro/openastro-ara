@@ -204,6 +204,9 @@ public sealed class ProfileShareService : IProfileShareService {
         // Strip the §30.7.4 calibration-state stamps — the donor's dark library / defect map live
         // on the donor's guider host; "valid" on the recipient's rig would be a lie.
         CalibrationState = CalibrationStateDto.Empty,
+        // Strip the #1362 equipment identities — the donor's serial numbers; on the recipient's rig
+        // every slot would otherwise read as a gear change on first connect.
+        EquipmentIdentity = EquipmentIdentityDto.Empty,
     };
 
     private static ProfileShareRigDescriptionDto BuildRigDescription(ProfileSnapshotDto s) =>

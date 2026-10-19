@@ -128,6 +128,13 @@ public static class ProfileEndpoints {
             .WithName("GetCalibrationState")
             .WithSummary("Get the active profile's calibration-state block (guider dark library / defect map validity + last-built timestamps).");
 
+        // #1362 — read-only: the connect-time reconcile records each gear slot's last-seen Alpaca identity.
+        profile.MapGet("/equipment-identity", (IProfileStore store) =>
+                Results.Ok(store.GetEquipmentIdentity()))
+            .Produces<EquipmentIdentityDto>(StatusCodes.Status200OK)
+            .WithName("GetEquipmentIdentity")
+            .WithSummary("Get the active profile's last-seen Alpaca identity (UniqueID, name, seen time) per gear slot.");
+
         profile.MapGet("/filenames", (IProfileStore store) =>
                 Results.Ok(store.GetFilenamesSettings()))
             .Produces<FilenamesSettingsDto>(StatusCodes.Status200OK)

@@ -160,6 +160,24 @@ public sealed record CalibrationStateDto(
     public static CalibrationStateDto Empty { get; } = new(new GuiderCalibrationEntryDto(), new GuiderCalibrationEntryDto());
 }
 
+/// <summary>#1362 — one Alpaca device the profile last saw in a gear slot: its <c>UniqueID</c> and name
+/// from the server's <c>configureddevices</c>, and when it was last observed. Daemon-owned, written by the
+/// connect-time reconcile; the client never writes it.</summary>
+public sealed record DeviceIdentityDto(
+    string UniqueId,
+    string Name,
+    DateTimeOffset SeenUtc);
+
+/// <summary>#1362 equipment-identity block: the last-seen Alpaca identity per gear slot, keyed by the slot
+/// token (<c>camera</c>, <c>guidecamera</c>, <c>telescope</c>, <c>focuser</c>, <c>filterwheel</c>,
+/// <c>rotator</c>, …). A connect whose <c>UniqueID</c> differs from the stored one is a gear change: the
+/// user is told in the inbox and the derived calibrations that depended on the old device are cleared.</summary>
+public sealed record EquipmentIdentityDto(IReadOnlyDictionary<string, DeviceIdentityDto> Devices) {
+
+    /// <summary>Nothing observed yet.</summary>
+    public static EquipmentIdentityDto Empty { get; } = new(new Dictionary<string, DeviceIdentityDto>());
+}
+
 /// <summary>
 /// §29.2 filenames settings — date-token separator + dark/bias
 /// compression toggle. (The main filename template + format live in

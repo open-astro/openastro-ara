@@ -99,7 +99,25 @@ public static class ProfileSnapshotNormalizer {
             Unguided = (UnguidedSettingsDto?)snap.Unguided ?? new UnguidedSettingsDto(),
             GuiderAdvanced = (GuiderAdvancedSettingsDto?)snap.GuiderAdvanced ?? new GuiderAdvancedSettingsDto(),
             FilterWheelPolicy = (FilterWheelPolicyDto?)snap.FilterWheelPolicy ?? FilterWheelPolicyDto.Default,
+            EquipmentIdentity = NormalizeEquipmentIdentity(snap.EquipmentIdentity),
         };
+    }
+
+    // #1362 — a missing block, a null map or a null entry all read as "not observed".
+    private static EquipmentIdentityDto NormalizeEquipmentIdentity(EquipmentIdentityDto? identity) {
+        if (identity is null || (IReadOnlyDictionary<string, DeviceIdentityDto>?)identity.Devices is null) {
+            return EquipmentIdentityDto.Empty;
+        }
+        if (identity.Devices.All(kv => kv.Value is not null && kv.Value.UniqueId is not null && kv.Value.Name is not null)) {
+            return identity;
+        }
+        var clean = new Dictionary<string, DeviceIdentityDto>();
+        foreach (var (slot, entry) in identity.Devices) {
+            if (entry is not null) {
+                clean[slot] = entry with { UniqueId = entry.UniqueId ?? string.Empty, Name = entry.Name ?? string.Empty };
+            }
+        }
+        return new EquipmentIdentityDto(clean);
     }
 
     private static CalibrationStateDto NormalizeCalibrationState(CalibrationStateDto? state) {

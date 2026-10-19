@@ -104,7 +104,8 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
             Func<(Guid Id, string? Name)?>? araProfileResolver = null,
             IDiagnosticsService? diagnostics = null,
             IAlpacaManagementClient? alpaca = null,
-            Func<DiscoveredDeviceDto?>? mainCameraResolver = null) {
+            Func<DiscoveredDeviceDto?>? mainCameraResolver = null,
+            IEquipmentIdentityReconciler? identity = null) {
         _profileService = profileService ?? throw new ArgumentNullException(nameof(profileService));
         _recovery = recovery ?? throw new ArgumentNullException(nameof(recovery));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -119,7 +120,12 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
         _diagnostics = diagnostics;
         _alpaca = alpaca;
         _mainCameraResolver = mainCameraResolver;
+        _identity = identity;
     }
+
+    // #1362 — records the guide camera's identity per connect and posts the gear-change notice on a swap.
+    // Null in benches/tests → the pin is still re-read and corrected, nobody is told.
+    private readonly IEquipmentIdentityReconciler? _identity;
 
     // #1308 — the Alpaca management reader and the imaging camera the daemon holds, for the guide-camera
     // pin check before a full profile push. Null in benches/tests → the check is skipped.

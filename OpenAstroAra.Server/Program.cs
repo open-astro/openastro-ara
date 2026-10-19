@@ -262,6 +262,18 @@ public partial class Program {
         // service below takes this via its optional ctor param and publishes
         // from its SetState choke point.
         builder.Services.AddSingleton<EquipmentEventPublisher>();
+        // #1362 — re-reads each device's Alpaca UniqueID on connect and before a sequence starts; a changed
+        // id posts the gear-change notice and clears the calibrations measured through the old device.
+        // Subscribes to the publisher's transitions in its ctor, so it is resolved eagerly after build.
+        builder.Services.AddSingleton<IEquipmentIdentityReconciler>(sp => new EquipmentIdentityReconciler(
+            sp.GetRequiredService<IProfileStore>(),
+            sp.GetRequiredService<IAlpacaManagementClient>(),
+            type => (RetainedSourceFor(sp, type) as IRetainedDeviceSource)?.RetainedDevice,
+            sp.GetService<INotificationService>(),
+            () => sp.GetService<IGuiderLiveService>(),
+            ct => sp.GetService<GuiderService>()?.ReconcileGuideCameraIfConnectedAsync(ct) ?? Task.CompletedTask,
+            sp.GetRequiredService<EquipmentEventPublisher>(),
+            sp.GetService<ILogger<EquipmentIdentityReconciler>>()));
         // §42.2 — the one place detected equipment faults converge (log + equipment.fault WS
         // broadcast). The §42.3 connection probes in the device services below publish into it via
         // their optional IEquipmentFaultSink ctor param — injected by constructor activation
@@ -404,7 +416,9 @@ public partial class Program {
                 // #1308 — the guide-camera pin check: re-resolve the stored UniqueID against the
                 // Alpaca server before a full push, and never hand the guider the imaging camera.
                 sp.GetService<IAlpacaManagementClient>(),
-                () => (sp.GetService<ICameraService>() as IRetainedDeviceSource)?.RetainedDevice);
+                () => (sp.GetService<ICameraService>() as IRetainedDeviceSource)?.RetainedDevice,
+                // #1362 — the gear-change notice and invalidation when the guide camera's UniqueID changes.
+                sp.GetService<IEquipmentIdentityReconciler>());
             // A sequence's Start Guiding takes the guide camera back from a running live-focus loop
             // (Setup → Smart Focus → Guide camera) — the loop holds the guider's polar-align lease
             // and the guider refuses to guide under it. Resolved lazily: the focus service needs
@@ -1268,6 +1282,8 @@ public partial class Program {
         // Stats dashboard then reports a night they did not have: a target
         // they never shot, integration hours they never earned, a "best
         // frame" score for an image that does not exist. Opt in explicitly.
+        // #1362 — the identity reconciler listens to the publisher's transitions; DI is lazy, so wake it here.
+        _ = app.Services.GetRequiredService<IEquipmentIdentityReconciler>();
         var notificationSvc = app.Services.GetRequiredService<INotificationService>();
         var diagnosticsSvc = app.Services.GetRequiredService<IDiagnosticsService>();
         var frameRepo = app.Services.GetRequiredService<IFrameRepository>();
@@ -1578,4 +1594,19 @@ public partial class Program {
         }
         return defaultPort;
     }
+
+    /// <summary>#1362 — the Ara device service that retains a selection for a type, for the identity reconciler.</summary>
+    private static object? RetainedSourceFor(IServiceProvider sp, DeviceType type) => type.Canonical() switch {
+        DeviceType.Camera => sp.GetService<ICameraService>(),
+        DeviceType.Telescope => sp.GetService<ITelescopeService>(),
+        DeviceType.Focuser => sp.GetService<IFocuserService>(),
+        DeviceType.FilterWheel => sp.GetService<IFilterWheelService>(),
+        DeviceType.Rotator => sp.GetService<IRotatorService>(),
+        DeviceType.Dome => sp.GetService<IDomeService>(),
+        DeviceType.Switch => sp.GetService<ISwitchService>(),
+        DeviceType.SafetyMonitor => sp.GetService<ISafetyMonitorService>(),
+        DeviceType.ObservingConditions => sp.GetService<IObservingConditionsService>(),
+        DeviceType.CoverCalibrator => sp.GetService<IFlatDeviceService>(),
+        _ => null,
+    };
 }

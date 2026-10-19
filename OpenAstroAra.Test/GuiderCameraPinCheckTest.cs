@@ -72,6 +72,21 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void A_swapped_camera_in_the_same_slot_passes_unless_it_is_the_main_camera() {
+            // #1362 — the picked camera is gone and another answers at its number: the connect-time reconcile
+            // re-pins it. The same slot holding the imaging camera is still refused.
+            var swapped = new Dictionary<string, AlpacaConfiguredDevice> {
+                ["camera/0"] = new("ZWO ASI533MC Pro", Pro),
+                ["camera/1"] = new("QHY5III585M", "QHY_585_0042"),
+            };
+            Assert.That(GuiderCameraPinCheck.Describe(Settings("Alpaca Camera [127.0.0.1:6800/1]", Mini), swapped, MainCamera(0)), Is.Null);
+            Assert.That(GuiderCameraPinCheck.IsMainCamera(Settings("Alpaca Camera [127.0.0.1:6800/1]", Mini), swapped, MainCamera(0)), Is.False);
+            var toMain = new Dictionary<string, AlpacaConfiguredDevice> { ["camera/1"] = new("ZWO ASI533MC Pro", Pro) };
+            Assert.That(GuiderCameraPinCheck.Describe(Settings("Alpaca Camera [127.0.0.1:6800/1]", Mini), toMain, MainCamera(1)), Does.Contain("is the main imaging camera"));
+            Assert.That(GuiderCameraPinCheck.IsMainCamera(Settings("Alpaca Camera [127.0.0.1:6800/1]", Mini), toMain, MainCamera(1)), Is.True);
+        }
+
+        [Test]
         public void The_main_imaging_camera_is_refused_by_identity_and_by_address() {
             // By UniqueID: the pin is fine but the device at that number IS the imaging camera.
             var byId = GuiderCameraPinCheck.Describe(Settings("Alpaca Camera [127.0.0.1:6800/0]", Pro), Before(), MainCamera(0));

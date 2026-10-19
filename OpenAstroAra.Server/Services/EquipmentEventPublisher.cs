@@ -45,6 +45,16 @@ namespace OpenAstroAra.Server.Services;
 /// holding their service lock (the synchronous part only builds a small
 /// payload and hands off to the channel).</para>
 /// </summary>
+/// <summary>#1362 — one connection-state transition as seen by in-process listeners.</summary>
+public sealed class EquipmentTransitionEventArgs : EventArgs {
+    public EquipmentTransitionEventArgs(DeviceType deviceType, EquipmentConnectionState state) {
+        DeviceType = deviceType;
+        State = state;
+    }
+    public DeviceType DeviceType { get; }
+    public EquipmentConnectionState State { get; }
+}
+
 public sealed partial class EquipmentEventPublisher {
 
     private readonly IWsBroadcaster _broadcaster;
@@ -57,6 +67,10 @@ public sealed partial class EquipmentEventPublisher {
         _logger = logger ?? NullLogger<EquipmentEventPublisher>.Instance;
         _faultLog = faultLog;
     }
+
+    /// <summary>#1362 — every connection-state transition, for in-process listeners (the identity
+    /// reconciler). Raised synchronously under the caller's service lock: handlers must hand off.</summary>
+    public event EventHandler<EquipmentTransitionEventArgs>? Transition;
 
     /// <summary>Publish a device's connection-state transition. Callers gate on an
     /// ACTUAL change (previous != next) so poll-refresh re-assertions don't spam the
@@ -91,6 +105,11 @@ public sealed partial class EquipmentEventPublisher {
             if (alias is not null) {
                 Publish(alias, element);
             }
+        } catch (Exception ex) {
+            LogPublishFailed(ex, WsEventCatalog.EquipmentStateChanged);
+        }
+        try {
+            Transition?.Invoke(this, new EquipmentTransitionEventArgs(deviceType, state));
         } catch (Exception ex) {
             LogPublishFailed(ex, WsEventCatalog.EquipmentStateChanged);
         }

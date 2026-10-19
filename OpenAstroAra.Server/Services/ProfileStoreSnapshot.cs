@@ -49,7 +49,8 @@ public static class ProfileStoreSnapshot {
         GuiderAdvanced: s.GetGuiderAdvancedSettings(),
         FilterWheelPolicy: s.GetFilterWheelPolicy(),
         TrackingCalibration: s.GetTrackingCalibration(),
-        SkyModelCalibration: s.GetSkyModelCalibration());
+        SkyModelCalibration: s.GetSkyModelCalibration(),
+        EquipmentIdentity: s.GetEquipmentIdentity());
 
     /// <summary>Push every section of <paramref name="snap"/> into the live store.
     /// Each Put raises <see cref="IProfileStore.Changed"/>, so callers that don't want
@@ -85,6 +86,9 @@ public static class ProfileStoreSnapshot {
         // §30.7.4 — same reasoning as focus calibration: a profile that never built darks must read
         // everything-invalid after select, not inherit the previous profile's validity stamps.
         s.PutCalibrationState(snap.CalibrationState ?? CalibrationStateDto.Empty);
+        // #1362 — a profile that never saw a device must read nothing-observed after select, so its
+        // first connect records the gear quietly instead of inheriting the previous profile's identities.
+        s.PutEquipmentIdentity(snap.EquipmentIdentity ?? EquipmentIdentityDto.Empty);
         // §45.12 — all fields carry their playbook defaults; a pre-§45 snapshot back-fills to them.
         s.PutPolarAlignSettings(snap.PolarAlign ?? new PolarAlignSettingsDto());
         // #1264 — the unguided-imaging block was missing here, so selecting a profile kept the previous
