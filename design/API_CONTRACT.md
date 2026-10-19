@@ -408,6 +408,22 @@ The card now keeps a known device's card while it is not live: name, state chip,
 
 ---
 
+### 2026-10-18 — Every device's Alpaca identity is re-read on connect and before a run; a swap is re-pinned, not refused (#1362)
+
+**Endpoint(s) or area:** new read-only `GET /api/v1/profile/equipment-identity` (`equipment_identity` profile section: the last-seen `unique_id`, `name` and `seen_utc` per gear slot `camera`, `guidecamera`, `telescope`, `focuser`, `filterwheel`, `rotator`, `dome`, `switch`, `safetymonitor`, `observingconditions`, `covercalibrator`). `POST /api/v1/sequences/{id}/start` re-reads every connected device's identity before starting. `POST /guider/profile/push`'s #1308 refusal narrows (below).
+
+**Decision:** on every Connected transition the daemon reads that device's `UniqueID` from its server's `configureddevices` and compares it with the slot's stored one. A first sighting is recorded quietly. A different id posts an Equipment inbox notice ("Guide camera changed: A → B", with what to re-check) and clears the calibrations measured through the old device: camera → focus, tracking and sky-model calibrations; focuser → focus; mount → tracking and the guider's calibration; guide camera → dark library / defect map `valid: false` and the guider's calibration. An unreachable management API, a server that does not list the device, or a blank id leaves the profile as it is. The section is carried on profile select, reset on profile create from the live store, and stripped from a share export.
+
+**Supersedes part of 2026-10-11 #1308:** "a pinned camera at another number or missing is refused (422)" now reads: a pinned camera **at another number** is refused (it moved; the user picks again), and so is one whose number **nothing answers at**; a pinned camera that is gone while a **different, non-main camera answers at its number** is a swap and is **not** refused — the push goes ahead, and the connect-time reconcile re-pins the slot's camera, re-reads its pixel size and tells the user. The main-camera refusal stands unchanged.
+
+**Reasoning:** 2026-10-15 a QHY5III585M replaced the guide camera in the same slot; the profile kept 3.75 µm and an empty pin because the wizard was never re-run. The wizard's autofill is a one-off; the driver's facts have to be re-read each time the gear comes up, and the one thing the driver cannot tell us (focal length, offsets, backlash) is what the notice asks the user to check.
+
+**Spec ref:** `OpenAstroAra.Server/Services/EquipmentIdentityReconciler.cs`, `EquipmentIdentityReconcile.cs` (pure decision + invalidation advice), `GuiderService.CameraReconcile.cs`, `GuiderCameraPinCheck.cs` (`IsMainCamera`), `EquipmentEventPublisher.Transition`.
+
+**Related:** #1362, #1391 (the guide-camera half), #1308; tests `EquipmentIdentityReconcilerTest`, `EquipmentIdentityStoreTest`, `GuiderCameraReconcileTest`, `GuiderCameraPinCheckTest`.
+
+---
+
 ### 2026-10-16 — No storage disk, no run: `POST /sequences/{id}/start` refuses without one (#1374)
 
 **Endpoint(s) or area:** `POST /api/v1/sequences/{id}/start` gains a second 409.
