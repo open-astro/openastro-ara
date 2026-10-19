@@ -45,8 +45,13 @@ class CustomTargetsNotifier extends AsyncNotifier<List<CustomTarget>> {
       debugPrint('[custom-targets] profile list unavailable, using the mirror: $e');
     }
     if (id == null) return (await svc.loadScope(null)).targets;
-    _scope = customTargetsScope(server, id);
-    return _sync(api, svc, _scope!);
+    final scope = customTargetsScope(server, id);
+    _scope = scope;
+    // On the same chain as the pushes: a remember made while this sync's
+    // read is in flight cannot be undone by the sync's later PUT and commit.
+    final task = _pushes.then((_) => _sync(api, svc, scope));
+    _pushes = task.then((_) {});
+    return task;
   }
 
   Future<List<CustomTarget>> _sync(
