@@ -1741,12 +1741,65 @@ namespace OpenAstroAra.Test {
             Assert.That(ws.Of("guider.dither_complete")[0].GetProperty("error").GetString(), Is.EqualTo("lost the star"));
 
             appState = "LostLock";
-            await svc.DitherAsync(2.0, idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
-            Assert.That(await WaitUntilAsync(() => ws.Of("guider.dither_complete").Count == 2).ConfigureAwait(false), Is.True);
+            // The lost-star wait is a separate test; here the star stays lost, so keep the wait short.
+            var saved = PHD2Guider.LostStarDitherWait;
+            PHD2Guider.LostStarDitherWait = TimeSpan.FromSeconds(1);
+            try {
+                await svc.DitherAsync(2.0, idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
+                Assert.That(await WaitUntilAsync(() => ws.Of("guider.dither_complete").Count == 2).ConfigureAwait(false), Is.True);
+            } finally {
+                PHD2Guider.LostStarDitherWait = saved;
+            }
             Assert.That(dithers, Is.EqualTo(1), "the second dither was refused before any RPC");
             var refused = ws.Of("guider.dither_complete")[1];
             Assert.That(refused.GetProperty("ok").GetBoolean(), Is.False);
             Assert.That(refused.GetProperty("error").GetString(), Is.EqualTo("refused"), "not the stale 'lost the star'");
+        }
+
+        [Test]
+        public async Task A_dither_waits_for_a_briefly_lost_star_and_goes_ahead_when_it_is_back() {
+            // 2026-10-18 21:54: "No star found" on two frames, the dither was refused at once and the run
+            // parked awaiting the user although the guider had its star back three seconds later.
+            await using var fake = FakeGuider.Start();
+            _ = new ProfileDaemon(fake);
+            var appState = "LostLock";
+            fake.OnRpc("get_app_state", _ => JsonValue.Create(appState));
+            var dithers = 0;
+            fake.OnRpc("dither", _ => { Interlocked.Increment(ref dithers); return JsonValue.Create(0); });
+            var ws = new RecordingBroadcaster();
+            using var svc = await ConnectedAgainstAsync(fake, "Rig A", ws).ConfigureAwait(false);
+            var saved = PHD2Guider.LostStarDitherWait;
+            PHD2Guider.LostStarDitherWait = TimeSpan.FromSeconds(10);
+            try {
+                await svc.DitherAsync(2.0, idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
+                await Task.Delay(1200).ConfigureAwait(false);
+                Assert.That(dithers, Is.EqualTo(0), "no dither while the star is lost");
+                appState = "Guiding";
+                Assert.That(await WaitUntilAsync(() => dithers == 1).ConfigureAwait(false), Is.True, "the dither went ahead once the star was back");
+            } finally {
+                PHD2Guider.LostStarDitherWait = saved;
+            }
+        }
+
+        [Test]
+        public async Task A_dither_whose_star_stays_lost_is_refused_after_the_wait() {
+            await using var fake = FakeGuider.Start();
+            _ = new ProfileDaemon(fake);
+            fake.OnRpc("get_app_state", JsonValue.Create("LostLock"));
+            var dithers = 0;
+            fake.OnRpc("dither", _ => { Interlocked.Increment(ref dithers); return JsonValue.Create(0); });
+            var ws = new RecordingBroadcaster();
+            using var svc = await ConnectedAgainstAsync(fake, "Rig A", ws).ConfigureAwait(false);
+            var saved = PHD2Guider.LostStarDitherWait;
+            PHD2Guider.LostStarDitherWait = TimeSpan.FromSeconds(1.5);
+            try {
+                await svc.DitherAsync(2.0, idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
+                Assert.That(await WaitUntilAsync(() => ws.Of("guider.dither_complete").Count == 1).ConfigureAwait(false), Is.True);
+                Assert.That(dithers, Is.EqualTo(0));
+                Assert.That(ws.Of("guider.dither_complete")[0].GetProperty("error").GetString(), Is.EqualTo("refused"));
+            } finally {
+                PHD2Guider.LostStarDitherWait = saved;
+            }
         }
 
         [Test]

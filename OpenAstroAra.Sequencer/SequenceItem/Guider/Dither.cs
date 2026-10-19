@@ -71,10 +71,12 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Guider {
             }
             var gate = ItemUtility.GetPauseGate(this.Parent);
             var settleRetried = false;
+            var restartTried = false;
             while (true) {
                 var sent = await guiderMediator.Dither(token);
                 token.ThrowIfCancellationRequested();
                 var verdict = guiderMediator.LastDitherError;
+                var notGuiding = !sent && (verdict is null or "refused") && guiderMediator.GetInfo().Connected;
                 var error = sent ? verdict
                     : verdict is not (null or "refused") ? verdict
                     : guiderMediator.GetInfo().Connected ? "the guider is not guiding" : "the guider is not connected";
@@ -86,6 +88,21 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Guider {
                     Logger.Warning($"Dither: the guider did not settle ({error}) — dithering once more before pausing");
                     progress?.Report(new ApplicationStatus { Status = $"Guider did not settle ({error}) — trying once more" });
                     continue;
+                }
+                if (notGuiding && !restartTried) {
+                    // A guider that is merely not guiding (it stopped on a slew, or lost its star for longer
+                    // than the dither waits) is restarted here, the way an ASIAIR carries on: the guider
+                    // picks a star, guides on its stored calibration and settles, then the dither goes
+                    // ahead. The user is only asked when that restart fails. Rig night 2026-10-18: a
+                    // 2-frame star loss and a Planning GoTo each parked the run, and every Resume parked
+                    // it again within 2 ms because guiding had to be restarted by hand first.
+                    restartTried = true;
+                    Logger.Warning("Dither: the guider is not guiding — restarting guiding before the dither");
+                    progress?.Report(new ApplicationStatus { Status = "Guider is not guiding — restarting guiding, then dithering" });
+                    if (await TryRestartGuidingAsync(progress, token)) {
+                        continue;
+                    }
+                    error = "the guider is not guiding and restarting it did not help";
                 }
                 var why = sent ? $"the guider did not settle twice ({error})" : error;
                 if (gate is null) {
@@ -99,6 +116,20 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Guider {
                 await gate.WaitWhilePausedAsync(token);
                 Logger.Info("Dither: resumed — dithering again");
                 settleRetried = false;
+                restartTried = false; // Resume restarts guiding itself if the guider is still stopped
+            }
+        }
+
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
+            Justification = "A guider fault while restarting is the reason to park the run awaiting the user, with its message; cancellation is rethrown.")]
+        private async Task<bool> TryRestartGuidingAsync(IProgress<ApplicationStatus>? progress, CancellationToken token) {
+            try {
+                return await guiderMediator.StartGuiding(false, progress ?? new Progress<ApplicationStatus>(), token);
+            } catch (OperationCanceledException) {
+                throw;
+            } catch (Exception ex) {
+                Logger.Warning($"Dither: restarting guiding failed — {ex.Message}");
+                return false;
             }
         }
 

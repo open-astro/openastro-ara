@@ -124,20 +124,59 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public async Task A_refused_dither_parks_the_run_at_once() {
-            // Not guiding is not a settle problem: a second dither would be refused too.
+        public async Task A_refused_dither_restarts_guiding_and_dithers_again_when_that_works() {
+            // Rig night 2026-10-18: a guider stopped by a Planning GoTo parked the run; like an ASIAIR,
+            // Ara now restarts guiding itself (stored calibration, auto-selected star) and carries on.
             var (guider, calls) = Guider(connected: true, "refused", null);
+            var starts = 0;
+            guider.Setup(g => g.StartGuiding(false, It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(() => { starts++; return true; });
+            var (item, gate) = Rig(guider.Object);
+            string? status = null;
+
+            await item.Execute(new SyncProgress(s => status = s.Status), CancellationToken.None);
+
+            Assert.That(starts, Is.EqualTo(1), "guiding restarted once");
+            Assert.That(calls, Has.Count.EqualTo(2), "the dither after the restart settled, so the frame may start");
+            Assert.That(gate.IsPauseRequested, Is.False);
+        }
+
+        [Test]
+        public async Task A_refused_dither_parks_the_run_when_restarting_guiding_fails_and_resume_tries_again() {
+            // Not guiding is not a settle problem: a second dither would be refused too. With the restart
+            // failing (no star, guider refused) the run parks; Resume restarts guiding itself before dithering.
+            var (guider, calls) = Guider(connected: true, "refused", "refused", null);
+            var starts = 0;
+            guider.Setup(g => g.StartGuiding(false, It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(() => ++starts > 1);
             var (item, gate) = Rig(guider.Object);
             string? status = null;
 
             var execute = item.Execute(new SyncProgress(s => status = s.Status), CancellationToken.None);
             Assert.That(await PauseRequested(gate), Is.True);
-            Assert.That(calls, Has.Count.EqualTo(1), "no retry on a refusal");
+            Assert.That(calls, Has.Count.EqualTo(1), "no second dither while the guider is not guiding");
+            Assert.That(starts, Is.EqualTo(1));
             Assert.That(status, Does.Contain("not guiding"));
+            Assert.That(status, Does.Contain("restarting it did not help"));
 
             gate.Resume();
             await execute.WaitAsync(TimeSpan.FromSeconds(5));
-            Assert.That(calls, Has.Count.EqualTo(2));
+            Assert.That(starts, Is.EqualTo(2), "Resume restarted guiding again instead of asking for a manual Guide");
+            Assert.That(calls, Has.Count.EqualTo(3), "refused again on Resume, then settled after the restart");
+        }
+
+        [Test]
+        public async Task A_restart_that_throws_parks_the_run_with_the_guiders_message() {
+            var (guider, calls) = Guider(connected: true, "refused", null);
+            guider.Setup(g => g.StartGuiding(false, It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()))
+                .ThrowsAsync(new InvalidOperationException("no star selected"));
+            var (item, gate) = Rig(guider.Object);
+
+            var execute = item.Execute(NoProgress, CancellationToken.None);
+            Assert.That(await PauseRequested(gate), Is.True, "a throwing restart parks the run instead of failing the item");
+            Assert.That(calls, Has.Count.EqualTo(1));
+            gate.Resume();
+            await execute.WaitAsync(TimeSpan.FromSeconds(5));
         }
 
         [Test]
