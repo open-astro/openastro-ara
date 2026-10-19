@@ -358,21 +358,12 @@ List<Map<String, Object?>>? catalogOverlayObjects(
   ];
 }
 
-/// The overlay's own designation for a merged row (#1267 item 4): the
-/// Sharpless overlay labels the North America Nebula's row "Sh2-117", the
-/// NGC overlay "NGC 7000".
+/// The label for a Messier / Caldwell / type overlay; a family overlay
+/// (NGC, Sharpless, …) labels its rows in [catalogOverlayObjects] with the
+/// designation that qualified the row (#1267 item 4).
 String overlayDisplayName(String catalogId, PlanningDso r) => switch (catalogId) {
       'messier' => 'M ${r.messierNum}',
       'caldwell' => 'C ${r.caldwellNum}',
-      'ngc' => prettyDsoName(r.designationWithPrefix('NGC') ?? r.id),
-      'ic' => prettyDsoName(r.designationWithPrefix('IC') ?? r.id),
-      'sharpless' => r.designationWithPrefix('Sh2-') ?? r.id,
-      'barnard' => r.barnardDesignation ?? r.id,
-      'ldn' => r.designationWithPrefix('LDN ') ?? r.id,
-      'vdb' => r.designationWithPrefix('vdB ') ?? r.id,
-      'abell-pn' => r.designationWithPrefix('Abell ') ?? r.id,
-      'arp' => r.designationWithPrefix('Arp ') ?? r.id,
-      'wolf-rayet' => r.designationWithPrefix('WR ') ?? r.id,
       _ => prettyDsoName(r.id),
     };
 

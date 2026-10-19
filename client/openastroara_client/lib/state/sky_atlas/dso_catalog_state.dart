@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show compute;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../services/bundled_catalogs.dart';
@@ -70,9 +71,11 @@ final dsoCatalogProvider = FutureProvider<List<PlanningDso>>((ref) async {
   // The bundle is already one-row-per-object; a mirror row the bundle does
   // not know may still be a bundled object under another id, so the merge
   // runs once more over the union (#1267 item 4).
-  return mergeDuplicates([
+  final union = [
     ...bundled,
     for (final d in mirror)
       if (!known.contains(designationKey(d.id)) && !isStarType(d.type)) d,
-  ]);
+  ];
+  // Off the UI isolate, like the bundled parse: ~16k rows keyed per alias.
+  return compute(mergeDuplicates, union);
 });

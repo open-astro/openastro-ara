@@ -212,4 +212,27 @@ void main() {
     );
     expect(goto!['name'], 'Medusa Nebula');
   });
+
+  test('the name index treats a shared dashless key as ambiguous', () {
+    PlanningDso wr(String id) => PlanningDso(
+      id: id,
+      name: id,
+      type: 'WR*',
+      magnitude: null,
+      raDeg: 1,
+      decDeg: 1,
+    );
+    final index = CatalogNameIndex([wr('WR 2-1'), wr('WR 21')]);
+    expect(index.lookup('WR 2-1')!.id, 'WR 2-1');
+    expect(index.lookup('WR 21')!.id, 'WR 21');
+    expect(index.lookup('wr21')!.id, 'WR 21', reason: 'an exact key wins');
+    final only = CatalogNameIndex([wr('WR 2-1'), wr('WR 3-1')]);
+    expect(only.lookup('WR 21')!.id, 'WR 2-1', reason: 'one loose owner');
+    final two = CatalogNameIndex([wr('WR 2-1'), wr('WR-21')]);
+    expect(
+      two.lookup('wr21'),
+      isNull,
+      reason: 'two rows share the dashless key',
+    );
+  });
 }

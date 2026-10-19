@@ -256,13 +256,22 @@ bool designationMatches(String query, String designation) {
 class CatalogNameIndex {
   final Map<String, PlanningDso> _exact = {};
   final Map<String, PlanningDso> _loose = {};
+  // A dashless key two different rows share answers nothing, as in the
+  // merge ("WR 2-1" and "WR 21" are two stars; review r8).
+  final Set<String> _looseAmbiguous = {};
 
   CatalogNameIndex(List<PlanningDso> catalog) {
     void add(String designation, PlanningDso o) {
       final k = designationKey(designation);
       if (k.isEmpty) return;
       _exact.putIfAbsent(k, () => o);
-      _loose.putIfAbsent(k.replaceAll('-', ''), () => o);
+      final lk = k.replaceAll('-', '');
+      final owner = _loose[lk];
+      if (owner == null) {
+        _loose[lk] = o;
+      } else if (!identical(owner, o)) {
+        _looseAmbiguous.add(lk);
+      }
     }
     // Ids first, then names, then aliases: an id claim always wins.
     for (final o in catalog) {
@@ -285,27 +294,10 @@ class CatalogNameIndex {
     if (k.isEmpty) return null;
     final hit = _exact[k];
     if (hit != null || k.contains('-')) return hit;
-    return _loose[k];
+    return _looseAmbiguous.contains(k) ? null : _loose[k];
   }
 }
 
-/// Exact lookup only (#1267 item 4): the id, display name or any alias, by
-/// [designationKey]; no substring fallback. For a Simbad answer's main id
-/// and aliases, where a loose substring could land on an unrelated row.
-PlanningDso? findCatalogObjectExact(List<PlanningDso> catalog, String query) {
-  if (designationKey(query).isEmpty) return null;
-  for (final o in catalog) {
-    if (designationMatches(query, o.id) || designationMatches(query, o.name)) {
-      return o;
-    }
-  }
-  for (final o in catalog) {
-    for (final a in o.aliases) {
-      if (designationMatches(query, a)) return o;
-    }
-  }
-  return null;
-}
 
 /// Case/space/dash-insensitive lookup over the planning mirror: "sh2 129",
 /// "SH2-129", "b 33", "ldn1235" and common names ("horsehead") all resolve.

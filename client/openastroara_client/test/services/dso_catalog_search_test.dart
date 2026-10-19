@@ -114,7 +114,7 @@ void main() {
     expect(findCatalogObject(cat, 'C 20')!.id, 'NGC7000');
     expect(findCatalogObject(cat, 'lbn373')!.id, 'NGC7000');
     expect(designationKey('C 020'), designationKey('c20'));
-    expect(findCatalogObjectExact(cat, 'c 20')!.id, 'NGC7000');
+    expect(CatalogNameIndex(cat).lookup('c 20')!.id, 'NGC7000');
     // A dashed designation never lands on a dashless alias (review r3):
     // "M 2-9" is Minkowski's Twin Jet, not M 29.
     final m29 = [
@@ -131,9 +131,10 @@ void main() {
     expect(findCatalogObject(m29, 'M 29')!.id, 'NGC6913');
     expect(findCatalogObject(m29, 'm29')!.id, 'NGC6913');
     expect(findCatalogObject(m29, 'M 2-9'), isNull);
-    expect(findCatalogObjectExact(m29, 'M 2-9'), isNull);
-    expect(findCatalogObjectExact(m29, 'M 1-7'), isNull);
-    expect(findCatalogObjectExact(cat, 'north'), isNull, reason: 'no substring');
+    final idx = CatalogNameIndex(m29);
+    expect(idx.lookup('M 2-9'), isNull);
+    expect(idx.lookup('M 1-7'), isNull);
+    expect(CatalogNameIndex(cat).lookup('north'), isNull, reason: 'no substring');
     expect(findCatalogObject(cat, 'north')!.id, 'NGC7000');
   });
 }
