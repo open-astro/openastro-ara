@@ -1044,6 +1044,12 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
                 ["current_instruction_index"] = run.CurrentInstructionIndex,
                 ["instructions_completed"] = run.InstructionsCompleted,
                 ["instructions_total"] = run.InstructionCount,
+                // What the run is doing right now, as GET /sequences/{id}/state says it. The client
+                // re-reads that endpoint only on lifecycle events, so without these on the progress
+                // frame a step that reports no frames (cooling the camera for 4.7 min on 2026-10-18)
+                // left the Run tab on "Run started" until the first exposure.
+                ["current_instruction_description"] = run.CurrentInstructionDescription,
+                ["current_target_name"] = run.CurrentTargetName,
             };
             var (estimatedTotal, estimatedRemaining) = run.EstimatedSeconds();
             payload["estimated_total_seconds"] = estimatedTotal;
