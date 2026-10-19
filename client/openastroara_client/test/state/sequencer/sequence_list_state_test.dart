@@ -131,6 +131,79 @@ void main() {
     expect(container.read(sequenceListProvider).value, [_item('newer')]);
   });
 
+  group('sequenceRunStateProvider adopts the active run', () {
+    // Rig night 2026-10-18: a client relaunched mid-run showed an empty Run
+    // tab because nothing was selected, so the paused run could not be
+    // resumed or aborted from the client.
+    ProviderContainer setup(_FakeSeqClient fake, {String? selectFirst}) {
+      final controller = StreamController<WsEvent>.broadcast();
+      addTearDown(controller.close);
+      final container = ProviderContainer(overrides: [
+        sequenceApiProvider.overrideWithValue(fake),
+        wsEventsProvider.overrideWith((ref) => controller.stream),
+      ]);
+      addTearDown(container.dispose);
+      if (selectFirst != null) {
+        container.read(selectedSequenceIdProvider.notifier).select(selectFirst);
+      }
+      final sub = container.listen(sequenceRunStateProvider, (_, _) {});
+      addTearDown(sub.close);
+      return container;
+    }
+
+    test('with nothing selected, the daemon\'s active run is selected and read',
+        () async {
+      final fake = _FakeSeqClient()
+        ..runStateById = {
+          'paused-run': const SequenceRunStateInfo(
+              state: SequenceRunState.pausedAwaitingUser, runId: 'run-1'),
+        };
+      final container = setup(fake);
+      await pumpEventQueue();
+      fake.calls.single.complete(SequencePage(items: [
+        const SequenceListItem(
+            id: 'done', currentRunState: SequenceRunState.completed),
+        const SequenceListItem(
+            id: 'paused-run',
+            currentRunState: SequenceRunState.pausedAwaitingUser),
+        const SequenceListItem(id: 'idle'),
+      ]));
+      await pumpEventQueue();
+      // The selection rebuilds the notifier; wait for the read keyed on it.
+      await container.read(sequenceRunStateProvider.future);
+      await pumpEventQueue();
+
+      expect(container.read(selectedSequenceIdProvider), 'paused-run');
+      expect(container.read(sequenceRunStateProvider).value?.state,
+          SequenceRunState.pausedAwaitingUser);
+    });
+
+    test('with nothing selected and no active run, nothing is selected',
+        () async {
+      final fake = _FakeSeqClient();
+      final container = setup(fake);
+      await pumpEventQueue();
+      fake.calls.single.complete(SequencePage(items: [
+        const SequenceListItem(
+            id: 'done', currentRunState: SequenceRunState.completed),
+      ]));
+      await container.read(sequenceRunStateProvider.future);
+
+      expect(container.read(selectedSequenceIdProvider), isNull);
+      expect(container.read(sequenceRunStateProvider).value, isNull);
+    });
+
+    test('an explicit selection is never overridden by an active run',
+        () async {
+      final fake = _FakeSeqClient();
+      final container = setup(fake, selectFirst: 'mine');
+      await container.read(sequenceRunStateProvider.future);
+
+      expect(fake.calls, isEmpty, reason: 'the list is not consulted');
+      expect(container.read(selectedSequenceIdProvider), 'mine');
+    });
+  });
+
   group('sequenceRunStateProvider live WS updates', () {
     WsEvent event(String type, Map<String, dynamic> payload) =>
         WsEvent(type: type, ts: DateTime.utc(2026), seq: 1, payload: payload);
