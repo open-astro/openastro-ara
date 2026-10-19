@@ -112,7 +112,9 @@ public sealed partial class FileProfileRepository : IProfileRepository, IDisposa
         lock (_lock) {
             var now = DateTimeOffset.UtcNow;
             var meta = new ProfileMetaDto(Guid.NewGuid(), NormalizeName(name), now, now);
-            var snap = settings ?? ProfileStoreSnapshot.Capture(_liveStore);
+            // A profile cloned from the live store is usually for another rig (#1362 review): its devices are
+            // unknown until they connect, so its first connect must be a quiet sighting, not a swap notice.
+            var snap = settings ?? ProfileStoreSnapshot.Capture(_liveStore) with { EquipmentIdentity = EquipmentIdentityDto.Empty };
             if (!WriteFile(new StoredProfileDto(meta, snap))) {
                 // Don't register a profile we couldn't persist — it would vanish on restart.
                 throw new IOException($"Failed to write profile file for '{meta.Name}'.");

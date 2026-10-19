@@ -238,6 +238,20 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task The_notice_is_posted_even_when_the_callers_bound_fires_after_the_store_write() {
+            // The identity is stored before the clear and the notice; a bound that fires in between must not
+            // leave a swap that nobody hears about (the next connect reads Unchanged).
+            using var rig = Rig.Start();
+            using var bound = new CancellationTokenSource();
+            rig.GuiderLive.Setup(g => g.ClearCalibrationAsync(It.IsAny<CancellationToken>()))
+                .Returns<CancellationToken>(ct => bound.CancelAsync());
+            await rig.Svc.ObserveAsync(GearSlot.Telescope, new("EQMOD", "EQMOD_1"), CancellationToken.None).ConfigureAwait(false);
+            await rig.Svc.ObserveAsync(GearSlot.Telescope, new("OnStep", "ONSTEP_9"), bound.Token).ConfigureAwait(false);
+            Assert.That(rig.Posted, Has.Count.EqualTo(1));
+            rig.Notifications.Verify(n => n.CreateAsync(It.IsAny<NotificationDto>(), CancellationToken.None), Times.Once);
+        }
+
+        [Test]
         public async Task A_guider_that_refuses_to_clear_does_not_block_the_notice() {
             using var rig = Rig.Start();
             rig.GuiderLive.Setup(g => g.ClearCalibrationAsync(It.IsAny<CancellationToken>())).ThrowsAsync(new InvalidOperationException("guider is not connected"));

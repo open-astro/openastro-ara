@@ -183,8 +183,11 @@ public sealed partial class EquipmentIdentityReconciler : IEquipmentIdentityReco
             return outcome;
         }
         LogChanged(key, oldName, oldId, newName, newId);
-        await ClearGuiderCalibrationAsync(slot, ct).ConfigureAwait(false);
-        await NotifyAsync(slot, oldName, newName, ct).ConfigureAwait(false);
+        // The identity is already stored, so the next connect reads Unchanged: the user has to hear about
+        // this one. The clear and the notice run past the caller's bound (the inbox write is local and the
+        // guider's clear is one RPC); a disposed guider or store still just logs.
+        await ClearGuiderCalibrationAsync(slot, CancellationToken.None).ConfigureAwait(false);
+        await NotifyAsync(slot, oldName, newName, CancellationToken.None).ConfigureAwait(false);
         return outcome;
     }
 

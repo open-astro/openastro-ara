@@ -111,7 +111,7 @@ public sealed partial class EquipmentEventPublisher {
         try {
             Transition?.Invoke(this, new EquipmentTransitionEventArgs(deviceType, state));
         } catch (Exception ex) {
-            LogPublishFailed(ex, WsEventCatalog.EquipmentStateChanged);
+            LogTransitionHandlerFailed(ex, deviceType, state);
         }
         if (state == EquipmentConnectionState.Connected && _faultLog is not null) {
             // §42.5 — a connected transition ends any standing disconnect fault
@@ -262,6 +262,9 @@ public sealed partial class EquipmentEventPublisher {
                 TaskScheduler.Default);
         }
     }
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "an in-process Transition handler threw on {DeviceType} -> {State}; the device's state is unaffected (#1362)")]
+    private partial void LogTransitionHandlerFailed(Exception ex, DeviceType deviceType, EquipmentConnectionState state);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "equipment event {EventType} could not be published")]
     private partial void LogPublishFailed(Exception ex, string eventType);
