@@ -112,6 +112,12 @@ public static class GuiderAdvancedSettingsMapping {
         if (d.BacklashPulseMs is int pulse && pulse is < BacklashPulseMinMs or > BacklashPulseMaxMs) {
             return $"backlash_pulse_ms must be {BacklashPulseMinMs}–{BacklashPulseMaxMs} ms";
         }
+        // The guider takes the enable only with a pulse width: an enable alone made it range-check the
+        // pulse it already held (0) against its floor (20) and refuse the whole group on every push
+        // (2026-10-18, "Floor must be in [20, 0 (PulseWidth)]"), with nothing to show for it in the client.
+        if (d.BacklashEnabled == true && d.BacklashPulseMs is null) {
+            return $"backlash_pulse_ms ({BacklashPulseMinMs}–{BacklashPulseMaxMs} ms) is required to turn backlash compensation on";
+        }
         if (d.MinStarHfd is double minHfd && d.MaxStarHfd is double maxHfd && minHfd > maxHfd) {
             return "min_star_hfd must not exceed max_star_hfd";
         }
