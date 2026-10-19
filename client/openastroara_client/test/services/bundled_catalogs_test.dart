@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/services/bundled_catalogs.dart';
 import 'package:openastroara/services/dso_catalog_service.dart';
+import 'package:openastroara/util/dedupe_catalog.dart';
 
 /// Parses the REAL bundled asset from disk (rootBundle needs a widget
 /// binding; the parser is pure, so read the file directly).
@@ -127,5 +128,41 @@ void main() {
     expect(prettyDsoName('NGC0224'), 'NGC 224');
     expect(prettyDsoName('IC0080 NED01'), 'IC 80 NED01');
     expect(prettyDsoName('Sh2-101'), 'Sh2-101');
+  });
+
+  test('one object, one row: the real bundle folds its twins (#1267 item 4)', () {
+    final all = [for (final f in bundledCatalogAssets) ...load(f.split('/').last)];
+    final merged = mergeDuplicates(all, links: catalogTwinLinks);
+    expect(merged.length, lessThan(all.length));
+    // The North America Nebula: NGC 7000 once, Sh2-117 and C 20 as aliases.
+    final nam = merged.where((d) => d.id == 'NGC7000').single;
+    expect(nam.aliases, containsAll(['Sh2-117', 'C 020']));
+    expect(merged.where((d) => d.id == 'Sh2-117'), isEmpty);
+    expect(findCatalogObject(merged, 'sh2 117')!.id, 'NGC7000');
+    expect(findCatalogObject(merged, 'C 20')!.id, 'NGC7000');
+    // The Sharpless overlay still shows the nebula, under its own name.
+    final sh2 = catalogOverlayObjects('sharpless', merged, limit: 100000)!;
+    expect(sh2.map((m) => m['name']), contains('Sh2-117'));
+    // Arp 1 is NGC 2857 by its identifier; vdB 21 sits on NGC 1432 by position.
+    expect(findCatalogObject(merged, 'Arp 1')!.id, 'NGC2857');
+    expect(findCatalogObject(merged, 'vdB 21')!.id, 'NGC1432');
+    // Two NGC rows at one spot stay two objects.
+    expect(merged.where((d) => d.id == 'NGC4567' || d.id == 'NGC4568'), hasLength(2));
+    // No row lists another surviving row's id as an alias.
+    final ids = {for (final d in merged) designationKey(d.id)};
+    for (final d in merged) {
+      for (final a in d.aliases) {
+        expect(ids.contains(designationKey(a)), isFalse, reason: '${d.id} aliases $a');
+      }
+    }
+  });
+
+  test('aliases are parsed from identifiers, cross columns and further common names', () {
+    final rows = parseOpenNgcCsv(
+        'Name;Type;RA;Dec;V-Mag;B-Mag;M;NGC;IC;Identifiers;Common names\n'
+        'NGC0224;G;00:42:44.33;+41:16:07.5;3.44;;031;;;C 017,UGC 00454;Andromeda Galaxy,Messier 31\n'
+        'IC0434;HII;05:41:00.00;-02:27:00.0;;;;2023;;LBN 954;\n');
+    expect(rows[0].aliases, ['Messier 31', 'M 31', 'C 017', 'UGC 00454']);
+    expect(rows[1].aliases, ['NGC 2023', 'LBN 954']);
   });
 }

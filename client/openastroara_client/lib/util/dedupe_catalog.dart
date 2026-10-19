@@ -1,0 +1,212 @@
+import 'dart:math' as math;
+
+import '../services/dso_catalog_service.dart';
+
+/// #1267 item 4 — one object, one row. The bundled catalogs each list their
+/// own designations, so one nebula sits in the list three times (NGC 7000,
+/// Sh2-117 and C 20 of the North America Nebula). [mergeDuplicates] folds
+/// those into one row keyed on the cross-identifications the catalogs carry
+/// first (OpenNGC's Identifiers / NGC / IC / M columns), and on position as
+/// the fallback: rows from DIFFERENT catalog families, of the same type
+/// class, within [positionToleranceArcmin]. Rows of one family are never
+/// merged by position: a galaxy pair, two WR stars in one cluster or the
+/// halves of the Rosette are distinct objects with distinct ids.
+///
+/// The surviving row keeps its id, name and photometry; the others become
+/// its [PlanningDso.aliases], so picking any alias selects the same target
+/// and search still finds it. Pure; unit-tested.
+
+/// Same-class rows from different families closer than this are one object.
+/// 30″: catalog positions of one object differ by a few arcseconds to a few
+/// tens; two real objects a full arcminute apart are not the same thing.
+const double positionToleranceArcmin = 0.5;
+
+/// The catalog a designation belongs to, by prefix. Rows of one family are
+/// never merged with each other by position.
+String catalogFamily(String id) {
+  if (id.startsWith('NGC') || id.startsWith('IC')) return 'openngc';
+  if (id.startsWith('Sh2-')) return 'sharpless';
+  if (id.startsWith('LDN ')) return 'ldn';
+  if (id.startsWith('vdB ')) return 'vdb';
+  if (id.startsWith('Abell ')) return 'abell';
+  if (id.startsWith('Arp ')) return 'arp';
+  if (id.startsWith('WR ')) return 'wr';
+  if (id.startsWith('REGION-')) return 'region';
+  if (id.length > 1 && id[0] == 'B' && _isDigit(id[1])) return 'barnard';
+  return 'other';
+}
+
+/// What kind of thing a row is, for the position fallback: two rows at the
+/// same spot are only one object when they are the same kind.
+String typeClass(String type) => switch (type) {
+  'HII' || 'EmN' || 'RfN' || 'Neb' || 'Cl+N' || 'SNR' => 'nebula',
+  'DrkN' => 'dark',
+  'G' || 'GPair' || 'GTrpl' || 'GGroup' => 'galaxy',
+  'OCl' || 'GCl' => 'cluster',
+  'PN' => 'planetary',
+  '*' || '**' || 'WR*' => 'star',
+  _ => type,
+};
+
+bool _isDigit(String c) => c.codeUnitAt(0) >= 48 && c.codeUnitAt(0) <= 57;
+
+/// Which row of a group survives: the one with photometry (a magnitude or a
+/// surface brightness), then an NGC/IC designation, then the first listed.
+int _rank(PlanningDso d) {
+  var r = 0;
+  if (d.magnitude != null) r += 4;
+  if (d.surfaceBrightness != null) r += 2;
+  if (catalogFamily(d.id) == 'openngc') r += 1;
+  return r;
+}
+
+/// [links] are extra "these two ids are one object" pairs for twins the
+/// catalogs do not cross-identify (OpenNGC's Sharpless twins carry no
+/// identifier either way: NGC 7000 and Sh2-117 are the North America Nebula
+/// 12′ apart as catalogued), the curated [sharplessAnchors] list.
+List<PlanningDso> mergeDuplicates(
+  List<PlanningDso> rows, {
+  List<(String, String)> links = const [],
+}) {
+  if (rows.length < 2) return rows;
+  final parent = List<int>.generate(rows.length, (i) => i);
+  int find(int i) {
+    while (parent[i] != i) {
+      parent[i] = parent[parent[i]];
+      i = parent[i];
+    }
+    return i;
+  }
+
+  void union(int a, int b) {
+    final ra = find(a), rb = find(b);
+    if (ra != rb) parent[rb] = ra;
+  }
+
+  // 1. Cross-identifications: a row whose id is another row's alias (or id).
+  final byKey = <String, int>{};
+  for (var i = 0; i < rows.length; i++) {
+    byKey.putIfAbsent(designationKey(rows[i].id), () => i);
+  }
+  for (var i = 0; i < rows.length; i++) {
+    for (final a in rows[i].aliases) {
+      final j = byKey[designationKey(a)];
+      if (j != null && j != i) union(i, j);
+    }
+  }
+  for (final (a, b) in links) {
+    final i = byKey[designationKey(a)], j = byKey[designationKey(b)];
+    if (i != null && j != null && i != j) union(i, j);
+  }
+
+  // 2. Position: different families, same type class, within the tolerance.
+  final cell = <(int, int), List<int>>{};
+  (int, int) cellOf(PlanningDso d) =>
+      ((d.raDeg * 10).floor(), (d.decDeg * 10).floor());
+  for (var i = 0; i < rows.length; i++) {
+    cell.putIfAbsent(cellOf(rows[i]), () => []).add(i);
+  }
+  for (var i = 0; i < rows.length; i++) {
+    final d = rows[i];
+    final fam = catalogFamily(d.id);
+    final cls = typeClass(d.type);
+    final (cx, cy) = cellOf(d);
+    for (var dx = -1; dx <= 1; dx++) {
+      for (var dy = -1; dy <= 1; dy++) {
+        for (final j in cell[(cx + dx, cy + dy)] ?? const <int>[]) {
+          if (j <= i) continue;
+          final e = rows[j];
+          if (catalogFamily(e.id) == fam || typeClass(e.type) != cls) continue;
+          if (separationArcmin(d.raDeg, d.decDeg, e.raDeg, e.decDeg) <=
+              positionToleranceArcmin) {
+            union(i, j);
+          }
+        }
+      }
+    }
+  }
+
+  // 3. Fold each group into its best row, in the input order of that row.
+  final groups = <int, List<int>>{};
+  for (var i = 0; i < rows.length; i++) {
+    groups.putIfAbsent(find(i), () => []).add(i);
+  }
+  final out = <PlanningDso>[];
+  final emitted = <int>{};
+  for (var i = 0; i < rows.length; i++) {
+    final root = find(i);
+    if (!emitted.add(root)) continue;
+    final members = groups[root]!;
+    if (members.length == 1) {
+      out.add(rows[i]);
+      continue;
+    }
+    var best = members.first;
+    for (final m in members) {
+      if (_rank(rows[m]) > _rank(rows[best])) best = m;
+    }
+    final primary = rows[best];
+    final seen = {designationKey(primary.id), designationKey(primary.name)};
+    final aliases = <String>[];
+    void add(String s) {
+      if (s.trim().isEmpty) return;
+      if (seen.add(designationKey(s))) aliases.add(s.trim());
+    }
+
+    for (final a in primary.aliases) {
+      add(a);
+    }
+    for (final m in members) {
+      if (m == best) continue;
+      add(rows[m].id);
+      add(rows[m].name);
+      for (final a in rows[m].aliases) {
+        add(a);
+      }
+    }
+    int? firstInt(int? Function(PlanningDso) f) {
+      for (final m in members) {
+        final v = f(rows[m]);
+        if (v != null) return v;
+      }
+      return null;
+    }
+
+    double? firstDouble(double? Function(PlanningDso) f) {
+      for (final m in [best, ...members]) {
+        final v = f(rows[m]);
+        if (v != null) return v;
+      }
+      return null;
+    }
+
+    out.add(
+      PlanningDso(
+        id: primary.id,
+        name: primary.name,
+        type: primary.type,
+        magnitude: primary.magnitude,
+        raDeg: primary.raDeg,
+        decDeg: primary.decDeg,
+        sizeMajArcmin: firstDouble((d) => d.sizeMajArcmin),
+        sizeMinArcmin: firstDouble((d) => d.sizeMinArcmin),
+        posAngleDeg: firstDouble((d) => d.posAngleDeg),
+        surfaceBrightness: primary.surfaceBrightness,
+        messierNum: firstInt((d) => d.messierNum),
+        caldwellNum: firstInt((d) => d.caldwellNum),
+        aliases: aliases,
+      ),
+    );
+  }
+  return out;
+}
+
+/// Angular separation in arcminutes (haversine).
+double separationArcmin(double ra1, double dec1, double ra2, double dec2) {
+  const r = math.pi / 180;
+  final dRa = (ra2 - ra1) * r, dDec = (dec2 - dec1) * r;
+  final a =
+      math.pow(math.sin(dDec / 2), 2) +
+      math.cos(dec1 * r) * math.cos(dec2 * r) * math.pow(math.sin(dRa / 2), 2);
+  return 2 * math.asin(math.sqrt(a.clamp(0.0, 1.0))) / r * 60;
+}

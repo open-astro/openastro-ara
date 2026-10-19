@@ -14,12 +14,15 @@ void main() {
   setUp(() => dir = Directory.systemTemp.createTempSync('dso-mirror-'));
   tearDown(() => dir.deleteSync(recursive: true));
 
+  // Distinct positions: two rows at one spot of one class are one object
+  // (#1267 item 4) and would fold together, which is not what these test.
+  var nextRa = 10.0;
   PlanningDso row(String id, String type, {double? mag}) => PlanningDso(
     id: id,
     name: id,
     type: type,
     magnitude: mag,
-    raDeg: 10,
+    raDeg: nextRa += 1,
     decDeg: 20,
   );
 

@@ -622,6 +622,7 @@ List<TonightSkyObject> computeTonightSkyLocal({
         id: o.id,
         name: o.name,
         type: o.type,
+        aliases: o.aliases,
         magnitude: o.magnitude,
         raDeg: o.raDeg,
         decDeg: o.decDeg,

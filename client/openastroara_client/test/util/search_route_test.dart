@@ -34,7 +34,16 @@ void main() {
   });
 
   test('solar-system names go to the engine at once, never the daemon', () {
-    for (final q in ['Moon', ' jupiter ', 'MARS', 'Sun', 'Sol', 'Titan', 'Miranda', 'Eris']) {
+    for (final q in [
+      'Moon',
+      ' jupiter ',
+      'MARS',
+      'Sun',
+      'Sol',
+      'Titan',
+      'Miranda',
+      'Eris',
+    ]) {
       final r = routeSearch(catalog, q);
       expect(r.kind, SearchRouteKind.engine, reason: q);
       expect(r.command!['type'], 'search');
@@ -79,4 +88,38 @@ void main() {
       'Needs internet. If the sky map does not find it either, try again with internet.',
     );
   });
+
+  test(
+    'a resolved object the bundle lists goes to that row, by main id or alias',
+    () {
+      const r = TargetResolution(
+        status: 'resolved',
+        source: 'simbad',
+        mainId: 'NAME North America Nebula',
+        aliases: ['NGC 7000', 'LBN 373'],
+        raDeg: 314.8,
+        decDeg: 44.5,
+      );
+      final goto = routeResolved(catalog, r);
+      expect(goto, isNotNull);
+      expect(goto!['type'], 'goto');
+      expect(goto['name'], 'North America Nebula');
+      expect(
+        routeResolved(
+          catalog,
+          const TargetResolution(
+            status: 'resolved',
+            mainId: 'V* AB Cas',
+            raDeg: 1,
+            decDeg: 2,
+          ),
+        ),
+        isNull,
+      );
+      expect(
+        routeResolved(catalog, const TargetResolution(status: 'offline')),
+        isNull,
+      );
+    },
+  );
 }

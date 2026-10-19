@@ -1,0 +1,163 @@
+import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/services/bundled_catalogs.dart';
+import 'package:openastroara/services/dso_catalog_service.dart';
+import 'package:openastroara/util/dedupe_catalog.dart';
+
+PlanningDso _row(
+  String id, {
+  String? name,
+  String type = 'HII',
+  double? mag,
+  double? sb,
+  double ra = 314.70,
+  double dec = 44.52,
+  double? maj,
+  List<String> aliases = const [],
+  int? messier,
+  int? caldwell,
+}) => PlanningDso(
+  id: id,
+  name: name ?? id,
+  type: type,
+  magnitude: mag,
+  raDeg: ra,
+  decDeg: dec,
+  sizeMajArcmin: maj,
+  surfaceBrightness: sb,
+  messierNum: messier,
+  caldwellNum: caldwell,
+  aliases: aliases,
+);
+
+void main() {
+  test('designation keys ignore case, spacing, dashes and zero padding', () {
+    expect(designationKey('NGC 0224'), 'NGC224');
+    expect(designationKey('ngc0224'), 'NGC224');
+    expect(designationKey('Sh2-117'), 'SH2117');
+    expect(designationKey('C 020'), 'C20');
+    expect(designationKey('NGC 1000'), 'NGC1000');
+  });
+
+  test('families and type classes', () {
+    expect(catalogFamily('NGC7000'), 'openngc');
+    expect(catalogFamily('IC0434'), 'openngc');
+    expect(catalogFamily('Sh2-117'), 'sharpless');
+    expect(catalogFamily('B33'), 'barnard');
+    expect(catalogFamily('LDN 1235'), 'ldn');
+    expect(catalogFamily('vdB 28'), 'vdb');
+    expect(catalogFamily('REGION-SH2-101'), 'region');
+    expect(typeClass('HII'), typeClass('Neb'));
+    expect(typeClass('G'), typeClass('GPair'));
+    expect(typeClass('DrkN'), isNot(typeClass('HII')));
+    expect(typeClass('WR*'), 'star');
+  });
+
+  test(
+    'rows sharing a cross-identification fold into one, keyed on the NGC row',
+    () {
+      // NGC 7000 (Identifiers "C 020,LBN 373"); Sh2-117 12′ away with no
+      // cross-ids, linked by the curated twin list; an LBN row that names
+      // NGC 7000 as its own alias; and a vdB row 2° away that stays separate.
+      final merged = mergeDuplicates(
+        links: [('NGC7000', 'Sh2-117')],
+        [
+          _row('Sh2-117', ra: 314.75, dec: 44.37, maj: 120),
+          _row(
+            'NGC7000',
+            name: 'North America Nebula',
+            type: 'Neb',
+            sb: 22.0,
+            aliases: ['C 020', 'LBN 373'],
+            caldwell: 20,
+          ),
+          _row('vdB 1', type: 'RfN', ra: 316.7, dec: 44.5),
+          _row(
+            'C 020-like',
+            type: 'Neb',
+            ra: 10,
+            dec: 10,
+            aliases: ['NGC 7000'],
+          ),
+        ],
+      );
+      expect(merged.map((d) => d.id), ['NGC7000', 'vdB 1']);
+      final nam = merged.first;
+      expect(nam.name, 'North America Nebula');
+      expect(
+        nam.surfaceBrightness,
+        22.0,
+        reason: 'the primary keeps its photometry',
+      );
+      expect(nam.caldwellNum, 20);
+      expect(
+        nam.sizeMajArcmin,
+        120,
+        reason: 'a missing size is taken from a member',
+      );
+      expect(
+        nam.aliases,
+        containsAll(['C 020', 'LBN 373', 'Sh2-117', 'C 020-like']),
+      );
+      expect(nam.aliases, isNot(contains('NGC7000')));
+      expect(nam.aliases, isNot(contains('North America Nebula')));
+    },
+  );
+
+  test('position merges only across families and within the same class', () {
+    final merged = mergeDuplicates([
+      _row('vdB 21', type: 'RfN', ra: 56.1670, dec: 24.1130),
+      _row('NGC1432', type: 'HII', mag: 4.2, ra: 56.1668, dec: 24.1131),
+      // Two NGC rows at one spot are two objects (a galaxy pair).
+      _row('NGC4567', type: 'G', mag: 11.3, ra: 189.08, dec: 11.26),
+      _row('NGC4568', type: 'G', mag: 10.8, ra: 189.08, dec: 11.26),
+      // A dark nebula on top of an emission nebula is not the same thing.
+      _row('LDN 1', type: 'DrkN', ra: 100.0, dec: 10.0),
+      _row('Sh2-1', type: 'HII', ra: 100.0, dec: 10.0),
+      // Same family, same class, same spot: never merged by position.
+      _row('WR 1', type: 'WR*', ra: 200.0, dec: 20.0),
+      _row('WR 2', type: 'WR*', ra: 200.0, dec: 20.0),
+    ]);
+    expect(merged.map((d) => d.id), [
+      'NGC1432',
+      'NGC4567',
+      'NGC4568',
+      'LDN 1',
+      'Sh2-1',
+      'WR 1',
+      'WR 2',
+    ]);
+    expect(merged.first.aliases, ['vdB 21']);
+  });
+
+  test('the row with photometry wins, then the NGC/IC designation', () {
+    final a = mergeDuplicates([
+      _row('Sh2-25', mag: 6.0, ra: 1, dec: 1, aliases: ['NGC 6523']),
+      _row('NGC6523', name: 'Lagoon Nebula', ra: 1, dec: 1),
+    ]);
+    expect(a.single.id, 'Sh2-25', reason: 'the magnitude wins');
+    final b = mergeDuplicates([
+      _row('Sh2-25', ra: 1, dec: 1, aliases: ['NGC 6523']),
+      _row('NGC6523', name: 'Lagoon Nebula', ra: 1, dec: 1),
+    ]);
+    expect(b.single.id, 'NGC6523');
+    expect(b.single.aliases, [
+      'Sh2-25',
+    ], reason: "the primary's own designation is not an alias");
+  });
+
+  test('the real twin list links NGC/IC rows to their Sharpless names', () {
+    expect(catalogTwinLinks, contains(('NGC7000', 'Sh2-117')));
+    expect(catalogTwinLinks.where((l) => l.$1.startsWith('REGION-')), isEmpty);
+  });
+
+  test('a single row and an empty list pass through', () {
+    expect(mergeDuplicates(const []), isEmpty);
+    final one = [_row('NGC1')];
+    expect(mergeDuplicates(one), same(one));
+  });
+
+  test('separation is haversine, in arcminutes', () {
+    expect(separationArcmin(0, 0, 0.5, 0), closeTo(30, 1e-9));
+    expect(separationArcmin(10, 60, 11, 60), closeTo(30.0, 0.1));
+  });
+}

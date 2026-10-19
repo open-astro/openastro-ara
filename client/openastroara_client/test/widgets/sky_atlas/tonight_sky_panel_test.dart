@@ -971,4 +971,10 @@ void _budgetTests() {
     expect(row('Aperture (mm)'), '91');
     expect(find.textContaining('Suggested exposure:'), findsOneWidget);
   });
+
+  test('aliasSuffix lists up to three other designations (#1267 item 4)', () {
+    expect(aliasSuffix(const []), '');
+    expect(aliasSuffix(const ['Sh2-117', 'C 020']), ' · also Sh2-117, C 020');
+    expect(aliasSuffix(const ['a', 'b', 'c', 'd']), ' · also a, b, c, …');
+  });
 }

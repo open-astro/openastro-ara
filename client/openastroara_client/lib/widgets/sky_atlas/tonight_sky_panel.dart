@@ -360,7 +360,8 @@ class _ObjectRowState extends ConsumerState<_ObjectRow> {
     final magText = mag == null ? 'mag —' : 'mag ${mag.toStringAsFixed(1)}';
     final subtitle =
         '${_typeLabel(_object.type)} · $magText · '
-        'max ${_object.maxAltitudeDeg.toStringAsFixed(0)}°';
+        'max ${_object.maxAltitudeDeg.toStringAsFixed(0)}°'
+        '${aliasSuffix(_object.aliases)}';
     final timing = _timingLine(_object);
     // Best-window highlight (slice 4): advise-don't-dictate — the row is never
     // hidden or re-ranked, the timing line just reads green "now · …" while the
@@ -1185,4 +1186,12 @@ class _Message extends StatelessWidget {
       ),
     );
   }
+}
+
+/// " · also Sh2-117, C 20" for a merged row (#1267 item 4): the designations
+/// the row stands for, at most three, so the subtitle stays one line.
+String aliasSuffix(List<String> aliases) {
+  if (aliases.isEmpty) return '';
+  final shown = aliases.take(3).join(', ');
+  return ' · also ${aliases.length > 3 ? '$shown, …' : shown}';
 }

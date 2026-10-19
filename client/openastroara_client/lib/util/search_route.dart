@@ -108,3 +108,36 @@ String? searchFallbackMessage(TargetResolution r) {
       ? '$m If the sky map does not find it either, try again with internet.'
       : m;
 }
+
+/// A resolved Simbad / index answer joins the one-row-per-object rule (#1267
+/// item 4): when its main id or any alias is a bundled catalog object, the
+/// catalog's own row is the target (a `goto` carrying the row's name), so a
+/// resolved "NGC 7000" lands on the bundled North America Nebula instead of
+/// a second, nameless position. Null when nothing in the catalog matches.
+Map<String, Object?>? routeResolved(
+  List<PlanningDso> catalog,
+  TargetResolution r,
+) {
+  if (!r.resolved) return null;
+  for (final name in [r.mainId!, ...r.aliases]) {
+    final hit = findCatalogObject(catalog, _stripSimbadPrefix(name));
+    if (hit != null) {
+      return {
+        'type': 'goto',
+        'ra': hit.raDeg,
+        'dec': hit.decDeg,
+        'name': hit.name.trim().isEmpty ? hit.id : hit.name,
+      };
+    }
+  }
+  return null;
+}
+
+/// Simbad prefixes its main ids ("NAME Wolf 359", "V* AB Cas", "* alf CMa").
+String _stripSimbadPrefix(String s) {
+  const prefixes = ['NAME ', 'V* ', '* ', 'Cl ', 'EM* ', 'PN '];
+  for (final p in prefixes) {
+    if (s.startsWith(p)) return s.substring(p.length).trim();
+  }
+  return s;
+}

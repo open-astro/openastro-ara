@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../services/bundled_catalogs.dart';
 import '../../services/dso_catalog_service.dart';
+import '../../util/dedupe_catalog.dart';
 import '../saved_server_state.dart';
 
 final dsoCatalogServiceProvider =
@@ -58,9 +59,12 @@ final dsoCatalogProvider = FutureProvider<List<PlanningDso>>((ref) async {
   // Mirror rows bypass planningCull (a server-side package the bundle doesn't
   // know ships uncut), so repeat the star gate here: a star has no field to
   // frame and would score "size unknown" neutral (#1198, review #1105).
-  return [
+  // The bundle is already one-row-per-object; a mirror row the bundle does
+  // not know may still be a bundled object under another id, so the merge
+  // runs once more over the union (#1267 item 4).
+  return mergeDuplicates([
     ...bundled,
     for (final d in mirror)
       if (!ids.contains(d.id) && !isStarType(d.type)) d,
-  ];
+  ]);
 });

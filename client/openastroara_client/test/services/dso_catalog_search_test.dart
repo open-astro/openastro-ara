@@ -97,4 +97,22 @@ void main() {
     expect(findCatalogObject(withRow, "thor's helmet"), isNull,
         reason: 'no NGC 2359 row in this mirror — nothing to rename');
   });
+
+  test('zero padding and aliases find the object (#1267 item 4)', () {
+    const nam = PlanningDso(
+      id: 'NGC7000',
+      name: 'North America Nebula',
+      type: 'Neb',
+      magnitude: null,
+      raDeg: 314.8,
+      decDeg: 44.5,
+      aliases: ['Sh2-117', 'C 020', 'LBN 373'],
+    );
+    final cat = [nam, _dso('NGC0224', common: 'Andromeda Galaxy')];
+    expect(findCatalogObject(cat, 'NGC 224')!.id, 'NGC0224');
+    expect(findCatalogObject(cat, 'sh2 117')!.id, 'NGC7000');
+    expect(findCatalogObject(cat, 'C 20')!.id, 'NGC7000');
+    expect(findCatalogObject(cat, 'lbn373')!.id, 'NGC7000');
+    expect(designationKey('C 020'), designationKey('c20'));
+  });
 }
