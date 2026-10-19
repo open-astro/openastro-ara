@@ -163,69 +163,89 @@ public sealed partial class BackupStreamService : IBackupStreamService {
         }
         limit = Math.Clamp(limit, 1, 500);
 
-        var entries = new List<(Guid Id, string? Sha, long Size, string Captured, Guid Session, string Path)>();
-        await using (var conn = _db.OpenConnection()) {
-            await using var cmd = conn.CreateCommand();
-            // Pending = not yet acked BY THE ACTIVE TARGET: a frame synced to some
-            // earlier target still needs to reach this one (§44.1 — the mirror is
-            // per-desktop). NULL-safe compare because sync_target is null pre-ack.
-            cmd.CommandText = """
-                SELECT id, sha256, file_size_bytes, captured_utc, session_id, file_path
-                FROM frames
-                WHERE synced_at IS NULL OR sync_target IS NULL OR sync_target <> $target
-                ORDER BY captured_utc ASC
-                LIMIT $limit;
-                """;
-            cmd.Parameters.AddWithValue("$target", active);
-            cmd.Parameters.AddWithValue("$limit", limit);
-            await using var reader = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
-            while (await reader.ReadAsync(ct).ConfigureAwait(false)) {
-                entries.Add((
-                    Guid.Parse(reader.GetString(0)),
-                    await reader.IsDBNullAsync(1, ct).ConfigureAwait(false) ? null : reader.GetString(1),
-                    await reader.IsDBNullAsync(2, ct).ConfigureAwait(false) ? 0 : reader.GetInt64(2),
-                    reader.GetString(3),
-                    Guid.Parse(reader.GetString(4)),
-                    await reader.IsDBNullAsync(5, ct).ConfigureAwait(false) ? string.Empty : reader.GetString(5)));
-            }
-        }
-
-        var result = new List<BackupStreamQueueEntryDto>(entries.Count);
+        // Rows are read oldest-first in pages and the unservable ones skipped INSIDE the paging: a
+        // pre-store catalog with `limit` or more rows the download would refuse must not hand back an
+        // empty page for ever while newer frames wait behind them (review of #1409).
+        var result = new List<BackupStreamQueueEntryDto>(limit);
         var hashed = 0;
-        foreach (var e in entries) {
-            ct.ThrowIfCancellationRequested();
-            if (!_isServable(e.Path)) {
-                bool first;
-                lock (_unservableNoted) {
-                    first = _unservableNoted.Add(e.Id);
-                }
-                if (first) {
-                    LogUnservableSkipped(e.Id, e.Path);
-                }
-                continue;
+        var offset = 0;
+        while (result.Count < limit) {
+            var entries = await ReadPendingAsync(active, limit, offset, ct).ConfigureAwait(false);
+            if (entries.Count == 0) {
+                break;
             }
-            var sha = e.Sha;
-            // Bound the per-page hash work: a first-time backfill over a big
-            // historical catalog must not pin one request hashing hundreds of
-            // multi-hundred-MB files (#734 review). Entries past the budget are
-            // served with a null sha; the client skips them and the next poll
-            // hashes the next batch.
-            if (sha is null && hashed < MaxHashesPerPage) {
-                sha = await ComputeAndCacheShaAsync(e.Id, e.Path, ct).ConfigureAwait(false);
-                hashed++;
+            offset += entries.Count;
+            foreach (var e in entries) {
+                ct.ThrowIfCancellationRequested();
+                if (result.Count >= limit) {
+                    break;
+                }
+                if (!_isServable(e.Path)) {
+                    bool first;
+                    lock (_unservableNoted) {
+                        first = _unservableNoted.Add(e.Id);
+                    }
+                    if (first) {
+                        LogUnservableSkipped(e.Id, e.Path);
+                    }
+                    continue;
+                }
+                var sha = e.Sha;
+                // Bound the per-page hash work: a first-time backfill over a big
+                // historical catalog must not pin one request hashing hundreds of
+                // multi-hundred-MB files (#734 review). Entries past the budget are
+                // served with a null sha; the client skips them and the next poll
+                // hashes the next batch.
+                if (sha is null && hashed < MaxHashesPerPage) {
+                    sha = await ComputeAndCacheShaAsync(e.Id, e.Path, ct).ConfigureAwait(false);
+                    hashed++;
+                }
+                result.Add(new BackupStreamQueueEntryDto(
+                    Id: e.Id,
+                    Sha256: sha,
+                    SizeBytes: e.Size,
+                    CapturedAt: DateTimeOffset.Parse(e.Captured, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind),
+                    SessionId: e.Session,
+                    RelativePath: StoreRelativePath(e.Path)));
             }
-            result.Add(new BackupStreamQueueEntryDto(
-                Id: e.Id,
-                Sha256: sha,
-                SizeBytes: e.Size,
-                CapturedAt: DateTimeOffset.Parse(e.Captured, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind),
-                SessionId: e.Session,
-                RelativePath: StoreRelativePath(e.Path)));
+            if (entries.Count < limit) {
+                break; // the catalog is exhausted
+            }
         }
         // Hashing can take real time; re-stamp so a slow page never counts as
         // holder silence toward the stale-takeover window.
         TouchAndGetHolder(active);
         return result;
+    }
+
+    private async Task<List<(Guid Id, string? Sha, long Size, string Captured, Guid Session, string Path)>> ReadPendingAsync(string active, int limit, int offset, CancellationToken ct) {
+        var entries = new List<(Guid Id, string? Sha, long Size, string Captured, Guid Session, string Path)>();
+        await using var conn = _db.OpenConnection();
+        await using var cmd = conn.CreateCommand();
+        // Pending = not yet acked BY THE ACTIVE TARGET: a frame synced to some
+        // earlier target still needs to reach this one (§44.1 — the mirror is
+        // per-desktop). NULL-safe compare because sync_target is null pre-ack.
+        cmd.CommandText = """
+            SELECT id, sha256, file_size_bytes, captured_utc, session_id, file_path
+            FROM frames
+            WHERE synced_at IS NULL OR sync_target IS NULL OR sync_target <> $target
+            ORDER BY captured_utc ASC
+            LIMIT $limit OFFSET $offset;
+            """;
+        cmd.Parameters.AddWithValue("$target", active);
+        cmd.Parameters.AddWithValue("$limit", limit);
+        cmd.Parameters.AddWithValue("$offset", offset);
+        await using var reader = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
+        while (await reader.ReadAsync(ct).ConfigureAwait(false)) {
+            entries.Add((
+                Guid.Parse(reader.GetString(0)),
+                await reader.IsDBNullAsync(1, ct).ConfigureAwait(false) ? null : reader.GetString(1),
+                await reader.IsDBNullAsync(2, ct).ConfigureAwait(false) ? 0 : reader.GetInt64(2),
+                reader.GetString(3),
+                Guid.Parse(reader.GetString(4)),
+                await reader.IsDBNullAsync(5, ct).ConfigureAwait(false) ? string.Empty : reader.GetString(5)));
+        }
+        return entries;
     }
 
     public async Task<BackupStreamAckResult> AckAsync(string hostname, BackupStreamAckRequestDto request, CancellationToken ct) {
