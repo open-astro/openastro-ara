@@ -51,6 +51,30 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task The_unattended_solve_entry_point_never_rewrites_the_optics_only_the_interactive_one_does() {
+            // Bot round 1 — FrameSolveFeed (center after drift, mid-sequence, nobody watching) calls
+            // SolveImage; only the REST solve the user triggers may learn the focal length.
+            var store = new InMemoryProfileStore();
+            store.PutOpticsSettings(store.GetOpticsSettings() with { FocalLengthMm = 530, ReducerFactor = 1, PixelSizeUm = 3.76 });
+            var profileService = new HeadlessProfileService();
+            var imageSolver = new Mock<IImageSolver>();
+            imageSolver
+                .Setup(s => s.Solve(It.IsAny<IImageData>(), It.IsAny<PlateSolveParameter>(), It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new PlateSolveResult { Success = true, Pixscale = 2.93 }); // the 2x2-binned case: twice the expected 1.46"/px
+            var factory = new Mock<IPlateSolverFactory>();
+            factory.Setup(f => f.GetPlateSolver(It.IsAny<IPlateSolveSettings>())).Returns(Mock.Of<IPlateSolver>());
+            factory.Setup(f => f.GetBlindSolver(It.IsAny<IPlateSolveSettings>())).Returns(Mock.Of<IPlateSolver>());
+            factory.Setup(f => f.GetImageSolver(It.IsAny<IPlateSolver>(), It.IsAny<IPlateSolver>())).Returns(imageSolver.Object);
+            var sut = new PlateSolveService(profileService, factory.Object, store);
+
+            await sut.SolveImage(Mock.Of<IImageData>(), null, null, CancellationToken.None);
+            Assert.That(store.GetOpticsSettings().FocalLengthMm, Is.EqualTo(530), "the unattended entry point leaves the optics alone");
+
+            await sut.SolveImageAndLearnOptics(Mock.Of<IImageData>(), null, null, CancellationToken.None);
+            Assert.That(store.GetOpticsSettings().FocalLengthMm, Is.EqualTo(265).Within(0.5), "the interactive entry point learns");
+        }
+
+        [Test]
         public void A_solved_scale_within_tolerance_leaves_the_profile_alone() {
             var store = new InMemoryProfileStore();
             store.PutOpticsSettings(store.GetOpticsSettings() with { FocalLengthMm = 530, ReducerFactor = 1, PixelSizeUm = 3.76 });

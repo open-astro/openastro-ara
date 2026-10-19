@@ -203,7 +203,7 @@ namespace OpenAstroAra.Test {
                 new Mock<OpenAstroAra.Profile.Interfaces.IProfileService>().Object, CancellationToken.None);
 
             Assert.That(result, Is.InstanceOf<Microsoft.AspNetCore.Http.HttpResults.NotFound>());
-            solver.Verify(s => s.SolveImage(It.IsAny<IImageData>(), It.IsAny<Coordinates?>(), It.IsAny<IProgress<ApplicationStatus>?>(), It.IsAny<CancellationToken>()), Times.Never);
+            solver.Verify(s => s.SolveImageAndLearnOptics(It.IsAny<IImageData>(), It.IsAny<Coordinates?>(), It.IsAny<IProgress<ApplicationStatus>?>(), It.IsAny<CancellationToken>()), Times.Never);
         }
 
         [Test]
@@ -215,7 +215,7 @@ namespace OpenAstroAra.Test {
                 .ReturnsAsync(((double, double)?)null);
             Coordinates? seen = null;
             var solver = new Mock<IPlateSolveService>();
-            solver.Setup(s => s.SolveImage(It.IsAny<IImageData>(), It.IsAny<Coordinates?>(), It.IsAny<IProgress<ApplicationStatus>?>(), It.IsAny<CancellationToken>()))
+            solver.Setup(s => s.SolveImageAndLearnOptics(It.IsAny<IImageData>(), It.IsAny<Coordinates?>(), It.IsAny<IProgress<ApplicationStatus>?>(), It.IsAny<CancellationToken>()))
                 .Callback((IImageData _, Coordinates? c, IProgress<ApplicationStatus>? _, CancellationToken _) => seen = c)
                 .ReturnsAsync(new PlateSolveResult { Success = false });
 

@@ -59,7 +59,13 @@ public class PlateSolveService : IPlateSolveService {
         return (focal, pixel);
     }
 
-    public Task<PlateSolveResult> SolveImage(IImageData image, Coordinates? approxCoordinates, IProgress<ApplicationStatus>? progress, CancellationToken token) {
+    public Task<PlateSolveResult> SolveImage(IImageData image, Coordinates? approxCoordinates, IProgress<ApplicationStatus>? progress, CancellationToken token) =>
+        Solve(image, approxCoordinates, progress, learnOptics: false, token);
+
+    public Task<PlateSolveResult> SolveImageAndLearnOptics(IImageData image, Coordinates? approxCoordinates, IProgress<ApplicationStatus>? progress, CancellationToken token) =>
+        Solve(image, approxCoordinates, progress, learnOptics: true, token);
+
+    private Task<PlateSolveResult> Solve(IImageData image, Coordinates? approxCoordinates, IProgress<ApplicationStatus>? progress, bool learnOptics, CancellationToken token) {
         ArgumentNullException.ThrowIfNull(image);
 
         // ARA store → legacy settings first: the solver stack below reads the legacy profile.
@@ -97,7 +103,9 @@ public class PlateSolveService : IPlateSolveService {
             Timeout = TimeoutFrom(settings),
         };
 
-        return SolveAndLearnScale(imageSolver, image, parameter, progress, token);
+        return learnOptics
+            ? SolveAndLearnScale(imageSolver, image, parameter, progress, token)
+            : imageSolver.Solve(image, parameter, progress, token);
     }
 
     private async Task<PlateSolveResult> SolveAndLearnScale(IImageSolver imageSolver, IImageData image, PlateSolveParameter parameter,
@@ -113,8 +121,9 @@ public class PlateSolveService : IPlateSolveService {
     /// <see cref="SolveTuning.ScaleMismatchTolerance"/> away from the profile's means the optics are
     /// wrong (a reducer or a typo); every hinted solve after it would start from a wrong field of view.
     /// Write the sky-measured focal length back to the profile (reducer factored out, so the user's
-    /// reducer entry stays) and say so. Only here, on the user-driven solve, never from the
-    /// centering/rotation loops: those run unattended.</summary>
+    /// reducer entry stays) and say so. Reached only through <see cref="SolveImageAndLearnOptics"/>
+    /// (the REST solve the user triggers); <see cref="SolveImage"/>, which the center-after-drift feed
+    /// calls mid-sequence, and the centering/rotation loops never get here.</summary>
     internal void LearnFocalLength(PlateSolveParameter parameter, PlateSolveResult result) {
         if (profileStore is null) {
             return;

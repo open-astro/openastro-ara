@@ -209,7 +209,8 @@ public static class PlateSolveEndpoints {
         }
         var approx = await ResolveApproxCoordinatesAsync(id, request, frames, ct);
         try {
-            var result = await solver.SolveImage(image, approx, progress: null, ct);
+            // The user-driven solve: the one entry point that may learn the optics (#1136).
+            var result = await solver.SolveImageAndLearnOptics(image, approx, progress: null, ct);
             return Results.Ok(ToDto(result));
         } catch (System.IO.FileNotFoundException) {
             // Framework message embeds the full server-side path; return a fixed, helpful string instead of
