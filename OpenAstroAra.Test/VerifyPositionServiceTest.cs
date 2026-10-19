@@ -91,6 +91,7 @@ namespace OpenAstroAra.Test {
             settings.SetupGet(s => s.Regions).Returns(2);
             settings.SetupGet(s => s.DownSampleFactor).Returns(2);
             settings.SetupGet(s => s.MaxObjects).Returns(500);
+            settings.SetupGet(s => s.SolveTimeoutSeconds).Returns(45);
             settings.SetupGet(s => s.NumberOfAttempts).Returns(3);
             var profileService = new Mock<IProfileService>();
             profileService.SetupGet(p => p.ActiveProfile.PlateSolveSettings).Returns(settings.Object);
@@ -124,6 +125,7 @@ namespace OpenAstroAra.Test {
             Assert.That(param!.Attempts, Is.EqualTo(1), "one look");
             Assert.That(param.Coordinates!.Dec, Is.EqualTo(69.57).Within(1e-9), "the hint is where the mount thinks it is");
             Assert.That(param.FocalLength, Is.EqualTo(800));
+            Assert.That(param.Timeout, Is.EqualTo(TimeSpan.FromSeconds(45)), "#1136 — the profile's timeout reaches the solver");
             Assert.That(dto.Success, Is.True);
             Assert.That(dto.SolvedToMountArcmin, Is.EqualTo(30).Within(0.05));
             Assert.That(dto.SolvedToIntendedArcmin, Is.EqualTo(0).Within(0.05));

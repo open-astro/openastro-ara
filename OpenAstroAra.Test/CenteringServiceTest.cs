@@ -162,6 +162,7 @@ namespace OpenAstroAra.Test {
                 settings.SetupGet(s => s.Binning).Returns((short)1);
                 settings.SetupGet(s => s.NumberOfAttempts).Returns(1); // deliberately low — must NOT bound rotation moves
                 settings.SetupGet(s => s.RotationTolerance).Returns(rotationTolerance);
+                settings.SetupGet(s => s.SolveTimeoutSeconds).Returns(45);
                 ProfileService.SetupGet(p => p.ActiveProfile.PlateSolveSettings).Returns(settings.Object);
                 ProfileService.SetupGet(p => p.ActiveProfile.TelescopeSettings.FocalLength).Returns(800);
                 ProfileService.SetupGet(p => p.ActiveProfile.CameraSettings.PixelSize).Returns(3.8);
@@ -226,6 +227,7 @@ namespace OpenAstroAra.Test {
             Assert.That(seen, Is.Not.Null);
             Assert.That(seen!.FocalLength, Is.EqualTo(448 * 0.8).Within(1e-9), "reducer folded in, as for the centre solve");
             Assert.That(seen.PixelSize, Is.EqualTo(3.76));
+            Assert.That(seen.Timeout, Is.EqualTo(TimeSpan.FromSeconds(45)), "#1136 — the profile's timeout reaches the rotation solve");
         }
 
         [Test]
