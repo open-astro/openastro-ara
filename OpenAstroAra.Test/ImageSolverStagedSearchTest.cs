@@ -19,6 +19,7 @@ namespace OpenAstroAra.Test {
     /// a recorded parameter; the solver is a recorder that fails until a chosen stage.
     /// </summary>
     [TestFixture]
+    [NonParallelizable] // SolveMemory is process-wide: any ImageSolver success elsewhere adds a stage here
     public class ImageSolverStagedSearchTest {
 
         private class RecordingSolver : IPlateSolver {

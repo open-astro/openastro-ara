@@ -28,11 +28,17 @@ namespace OpenAstroAra.PlateSolving.Solvers {
         // #1136 — the frame the solver reads is written once per solve; on an SBC booting from an SD
         // card that write is a measurable slice of a hinted solve, so the working directory prefers the
         // host's RAM-backed /dev/shm when it is there and writable. Failed frames still land on disk.
+        // SharedMemoryRoot is declared BEFORE WORKING_DIRECTORY on purpose: static initializers run in
+        // textual order, and the first cut had it after, so the directory was resolved with a null root
+        // and every solve on the CM4 rig still wrote its frame to the SD card (2026-10-19).
+        /// <summary>Candidate RAM-backed root, overridable for tests; null disables the tmpfs preference.</summary>
+        internal static string? SharedMemoryRoot { get; set; } = OperatingSystem.IsLinux() ? "/dev/shm" : null;
+
         protected static readonly string WORKING_DIRECTORY = ResolveWorkingDirectory();
         protected static readonly string FAILED_DIRECTORY = Path.Combine(CoreUtil.APPLICATIONTEMPPATH, "PlateSolver", "Failed");
 
-        /// <summary>Candidate RAM-backed root, overridable for tests; null disables the tmpfs preference.</summary>
-        internal static string? SharedMemoryRoot { get; set; } = OperatingSystem.IsLinux() ? "/dev/shm" : null;
+        /// <summary>Test seam: the directory the solvers actually write to.</summary>
+        internal static string WorkingDirectory => WORKING_DIRECTORY;
 
         internal static string ResolveWorkingDirectory() {
             var disk = Path.Combine(CoreUtil.APPLICATIONTEMPPATH, "PlateSolver");

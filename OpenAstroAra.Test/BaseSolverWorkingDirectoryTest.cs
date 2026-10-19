@@ -18,6 +18,17 @@ namespace OpenAstroAra.Test {
         public void Restore() => BaseSolver.SharedMemoryRoot = saved;
 
         [Test]
+        public void The_static_working_directory_was_resolved_with_the_default_root() {
+            // CM4 rig 2026-10-19: with SharedMemoryRoot declared after WORKING_DIRECTORY the static
+            // initializer ran with a null root and nothing was ever written to /dev/shm. On Linux both
+            // sides land under /dev/shm; on macOS/Windows both are the disk directory.
+            Assert.That(BaseSolver.WorkingDirectory, Is.EqualTo(BaseSolver.ResolveWorkingDirectory()));
+            if (OperatingSystem.IsLinux() && Directory.Exists("/dev/shm")) {
+                Assert.That(BaseSolver.WorkingDirectory, Does.StartWith("/dev/shm/"));
+            }
+        }
+
+        [Test]
         public void A_writable_shared_memory_root_is_used() {
             var root = Path.Combine(Path.GetTempPath(), "ara-shm-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(root);
