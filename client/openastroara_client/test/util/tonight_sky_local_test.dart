@@ -753,6 +753,25 @@ void main() {
     expect(at5.optimalSubS, isNotNull);
     expect(at2.optimalSubS!, greaterThan(at5.optimalSubS!), reason: 'a tighter tolerance wants longer subs');
   });
+
+  test('a row that absorbed a standalone region\'s Sharpless twin is covered; an anchor row stays (#1267)', () {
+    // Sh2-155 is the Cave, stood in for by REGION-SH2-155 (no catalog row of
+    // its own): a row that folded Sh2-155 in is covered by the region. The
+    // North America Nebula absorbed Sh2-117, the twin of its OWN anchor
+    // (NGC 7000): it stays, renamed by the override.
+    const cave = PlanningDso(
+        id: 'vdB 999', name: 'vdB 999', type: 'RfN', magnitude: null,
+        raDeg: 344.3, decDeg: 62.6, aliases: ['Sh2-155']);
+    const nam = PlanningDso(
+        id: 'NGC7000', name: 'North America Nebula', type: 'Neb',
+        magnitude: null, raDeg: 314.8, decDeg: 44.5, aliases: ['Sh2-117']);
+    final out = applyImagingRegions(const [cave, nam]);
+    final ids = out.map((o) => o.id).toList();
+    expect(ids, isNot(contains('vdB 999')));
+    expect(ids, contains('REGION-SH2-155'));
+    expect(ids, contains('NGC7000'));
+    expect(out.firstWhere((o) => o.id == 'NGC7000').aliases, ['Sh2-117']);
+  });
 }
 
 class _SeededSite extends SiteSettingsNotifier {
@@ -760,4 +779,5 @@ class _SeededSite extends SiteSettingsNotifier {
   final SiteSettings _seed;
   @override
   SiteSettings build() => _seed;
+
 }
