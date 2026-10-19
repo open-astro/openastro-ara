@@ -1334,6 +1334,11 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                         // polls it; a WS subscriber can use these kinds as its cue to re-read).
                         var state = message["state"]?.ToString();
                         var error = message["error"]?.ToString();
+                        // The guider's own events keep the run flag honest when nothing polls get_status
+                        // (the dialog closed mid-run, or a run started from the guider's page): Progress
+                        // means running, Done means over, whatever the RPCs last said.
+                        GuidingAssistantActive = phdevent == "GuidingAssistantProgress"
+                            && (string.IsNullOrEmpty(state) || IsGuidingAssistantRunning(state));
                         RaiseMarker(new PhdGuiderMarkerEventArgs {
                             Kind = phdevent == "GuidingAssistantDone" ? "guiding_assistant_done" : "guiding_assistant_progress",
                             State = string.IsNullOrEmpty(state) ? null : state,

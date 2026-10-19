@@ -363,8 +363,10 @@ namespace OpenAstroAra.Test {
             await Task.Delay(300).ConfigureAwait(false);
             Assert.That(rig.Events, Is.Empty, "no PA residual from the assistant's uncorrected drift");
 
-            // The assistant ends; a real guided run afterwards measures as before.
-            await rig.Svc.RequireConnectedGuider().StopGuidingAssistantAsync(CancellationToken.None).ConfigureAwait(false);
+            // The assistant ends on its own (the dialog may be closed, nothing polls get_status): the
+            // guider's Done event alone clears the flag, and a real guided run afterwards measures as before.
+            await rig.Fake.BroadcastAsync(new JsonObject { ["Event"] = "GuidingAssistantDone", ["state"] = "done" }).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => !rig.Svc.RequireConnectedGuider().GuidingAssistantActive).ConfigureAwait(false), Is.True, "Done clears the run flag without an RPC");
             await rig.Fake.BroadcastAsync(PhdEvents.GuidingStopped()).ConfigureAwait(false);
             await rig.Fake.BroadcastAsync(PhdEvents.StartGuiding()).ConfigureAwait(false);
             await rig.GuideAsync(firstFrame: 1, frames: 20).ConfigureAwait(false);

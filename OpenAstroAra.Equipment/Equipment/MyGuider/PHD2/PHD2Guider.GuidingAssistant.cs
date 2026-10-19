@@ -45,10 +45,11 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
         /// Set from each assistant RPC's returned state; cleared on Disconnect.</summary>
         public bool GuidingAssistantActive { get; private set; }
 
-        /// <summary>The guider's assistant states that mean a run is in progress; anything else (idle,
-        /// done, failed, stopped, cancelled, or no state) means it is not. Pure — unit-tested.</summary>
+        /// <summary>The guider's assistant states that mean a run is in progress (the contract's
+        /// <c>measuring</c> and <c>measuring_backlash</c>); anything else (idle, done, failed, or no state)
+        /// means it is not. Pure — unit-tested.</summary>
         public static bool IsGuidingAssistantRunning(string? state) =>
-            state is "measuring" or "running" or "backlash" or "measuring_backlash" or "testing_backlash" or "starting";
+            state is "measuring" or "measuring_backlash";
 
         private void NoteGuidingAssistantState(JObject? result) =>
             GuidingAssistantActive = IsGuidingAssistantRunning(result?["state"]?.Type == JTokenType.String ? result["state"]!.Value<string>() : null);
@@ -67,7 +68,9 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             var response = await SendMessage<GenericPhdMethodResponse>(request, GuidingAssistantStartTimeoutMs).ConfigureAwait(false);
             ThrowOnError("guiding_assistant_start", response);
             var result = response.result as JObject;
-            // A start that answered without a state is still a run in progress.
+            // Asymmetry on purpose: a start that answered without a state has still started a run (the
+            // guider said yes), whereas a get_status without a state is an idle guider (nothing running
+            // to report). The Progress/Done events correct either way within a sample.
             GuidingAssistantActive = result?["state"] is null || IsGuidingAssistantRunning(result["state"]?.Value<string>());
             return result;
         }

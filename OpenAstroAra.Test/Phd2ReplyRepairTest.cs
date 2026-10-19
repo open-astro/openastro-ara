@@ -59,8 +59,8 @@ namespace OpenAstroAra.Test {
         [Test]
         public void Assistant_states_that_mean_a_run_is_in_progress() {
             Assert.That(PHD2Guider.IsGuidingAssistantRunning("measuring"), Is.True);
-            Assert.That(PHD2Guider.IsGuidingAssistantRunning("backlash"), Is.True);
-            foreach (var idle in new[] { "idle", "done", "failed", "stopped", "cancelled", "", null }) {
+            Assert.That(PHD2Guider.IsGuidingAssistantRunning("measuring_backlash"), Is.True);
+            foreach (var idle in new[] { "idle", "done", "failed", "", null }) {
                 Assert.That(PHD2Guider.IsGuidingAssistantRunning(idle), Is.False, idle ?? "null");
             }
         }
