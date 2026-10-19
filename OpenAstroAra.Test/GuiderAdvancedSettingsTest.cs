@@ -44,6 +44,17 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void A_backlash_enable_without_a_pulse_width_is_not_sent() {
+            // The guider range-checks the pulse it already holds (0) against its floor (20) and refuses an
+            // enable-only group, so an older profile in that state must not poison every push.
+            var msgs = PHD2Guider.BuildAdvancedSettingsMessages(new GuiderAdvancedSettings { BacklashEnabled = true, SearchRegionPx = 15 });
+            Assert.That(msgs.OfType<Phd2NamedSetter>().Select(m => m.Method), Does.Not.Contain("set_backlash_comp"));
+            Assert.That(Params(msgs, "set_star_detection"), Is.EquivalentTo(new Dictionary<string, object> { ["SearchRegion"] = 15 }), "the rest of the push is unaffected");
+            var off = PHD2Guider.BuildAdvancedSettingsMessages(new GuiderAdvancedSettings { BacklashEnabled = false });
+            Assert.That(Params(off, "set_backlash_comp"), Is.EquivalentTo(new Dictionary<string, object> { ["Enabled"] = false }), "turning it off needs no pulse");
+        }
+
+        [Test]
         public void Only_the_keys_Ara_set_are_sent_in_their_guider_groups() {
             var msgs = PHD2Guider.BuildAdvancedSettingsMessages(new GuiderAdvancedSettings {
                 MinStarSnr = 8, SearchRegionPx = 20,
@@ -120,6 +131,10 @@ namespace OpenAstroAra.Test {
             Assert.That(GuiderAdvancedSettingsMapping.Validate(new GuiderAdvancedSettingsDto(BacklashPulseMs: 10)), Does.Contain("backlash_pulse_ms"));
             Assert.That(GuiderAdvancedSettingsMapping.Validate(new GuiderAdvancedSettingsDto(BacklashPulseMs: 9000)), Does.Contain("backlash_pulse_ms"));
             Assert.That(GuiderAdvancedSettingsMapping.Validate(new GuiderAdvancedSettingsDto(BacklashPulseMs: 450)), Is.Null);
+            // 2026-10-18: an enable with no pulse made the guider refuse the whole group on every push.
+            Assert.That(GuiderAdvancedSettingsMapping.Validate(new GuiderAdvancedSettingsDto(BacklashEnabled: true)), Does.Contain("backlash_pulse_ms"));
+            Assert.That(GuiderAdvancedSettingsMapping.Validate(new GuiderAdvancedSettingsDto(BacklashEnabled: true, BacklashPulseMs: 450)), Is.Null);
+            Assert.That(GuiderAdvancedSettingsMapping.Validate(new GuiderAdvancedSettingsDto(BacklashEnabled: false)), Is.Null, "off needs no pulse");
             Assert.That(GuiderAdvancedSettingsMapping.Validate(new GuiderAdvancedSettingsDto(MinStarHfd: 9, MaxStarHfd: 3)), Does.Contain("min_star_hfd"));
             Assert.That(GuiderAdvancedSettingsMapping.Validate(new GuiderAdvancedSettingsDto(AutoExposureMinMs: 4000, AutoExposureMaxMs: 1000)), Does.Contain("auto_exposure_min_ms"));
             Assert.That(GuiderAdvancedSettingsMapping.Validate(new GuiderAdvancedSettingsDto(NoiseReduction: "median")), Does.Contain("noise_reduction"));

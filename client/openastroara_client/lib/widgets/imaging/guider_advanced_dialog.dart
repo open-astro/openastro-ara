@@ -152,6 +152,11 @@ class _GuiderAdvancedPanelState extends ConsumerState<GuiderAdvancedPanel> {
     if (delay == 1 || delay == 2) {
       return 'Variable delay needs all three: on/off, short and long delay.';
     }
+    // The guider takes the enable only with a pulse width; an enable alone made
+    // it refuse the whole backlash group on every push (rig night 2026-10-18).
+    if (d['backlash_enabled'] == true && d['backlash_pulse_ms'] == null) {
+      return 'Backlash compensation needs a pulse width (20–8000 ms) to turn on.';
+    }
     String? order(String min, String max, String what) {
       final lo = d[min], hi = d[max];
       return lo is num && hi is num && lo > hi
