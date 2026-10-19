@@ -14,9 +14,10 @@ using System.Threading.Tasks;
 namespace OpenAstroAra.Test {
 
     /// <summary>
-    /// #1136 — the staged search between a failed hinted solve and the blind failover: scale search at
-    /// the hinted radius, the last good solve, 30°, 90°, then blind. Each stage is one solver call with
-    /// a recorded parameter; the solver is a recorder that fails until a chosen stage.
+    /// #1136 — the staged search between a failed hinted solve and the blind failover: the last good
+    /// solve (when outside the hinted radius), scale search at the hinted radius (ASTAP only), 30°, 90°,
+    /// then blind. Each stage is one solver call with a recorded parameter; the solver is a recorder
+    /// that fails until a chosen stage.
     /// </summary>
     [TestFixture]
     [NonParallelizable] // SolveMemory is process-wide: any ImageSolver success elsewhere adds a stage here
@@ -71,13 +72,29 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public async Task Stages_run_without_their_own_failure_notices() {
+        public async Task Only_the_last_stage_may_post_the_solvers_own_failure_notice() {
             // CM4 rig 2026-10-19: every failed stage posted "ASTAP - Plate solve failed." to the inbox
-            // although the next stage solved.
+            // although the next stage solved. Bot round 2: the last stage keeps the solver's specific
+            // notice (a missing star database must still read as one).
             var near = new ScaleSearchingSolver();
-            var sut = new ImageSolver(near, new RecordingSolver());
+            var blind = new RecordingSolver();
+            var sut = new ImageSolver(near, blind);
             await sut.Solve(Mock.Of<IImageData>(), Hinted(), null, CancellationToken.None);
-            Assert.That(near.Calls.All(c => c.DisableNotifications), Is.True);
+            Assert.That(near.Calls.All(c => c.DisableNotifications), Is.True, "every non-final stage is quiet");
+            Assert.That(blind.Calls.Single().DisableNotifications, Is.False, "the final (blind) stage keeps the caller's setting");
+        }
+
+        [Test]
+        public async Task A_solve_with_no_further_stages_keeps_the_callers_notification_setting() {
+            var only = new RecordingSolver();
+            var p = Hinted(blind: false);
+            p.StagedSearchEnabled = false;
+            await new ImageSolver(only, new RecordingSolver()).Solve(Mock.Of<IImageData>(), p, null, CancellationToken.None);
+            Assert.That(only.Calls.Single().DisableNotifications, Is.False);
+            var blindOnly = new RecordingSolver();
+            p.Coordinates = null;
+            await new ImageSolver(new RecordingSolver(), blindOnly).Solve(Mock.Of<IImageData>(), p, null, CancellationToken.None);
+            Assert.That(blindOnly.Calls.Single().DisableNotifications, Is.False);
         }
 
         [Test]
