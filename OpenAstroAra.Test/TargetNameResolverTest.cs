@@ -65,7 +65,8 @@ namespace OpenAstroAra.Test {
             "NGC0224;G;00:42:44.33;+41:16:07.5;3.44;4.36;031;;;C 017,UGC 00454;Andromeda Galaxy,Messier 31\n"
             + "NGC7000;Neb;20:59:17.14;+44:31:43.6;;;;;;C 020,LBN 373;North America Nebula\n"
             + "IC0434;HII;05:41:00.00;-02:27:00.0;;;;2023;;LBN 954;\n"
-            + "NGC0001;G;00:07:15.84;+27:42:29.1;13.6;;;;;;\n";
+            + "NGC0001;G;00:07:15.84;+27:42:29.1;13.6;;;;;;\n"
+            + "NGC0651;Dup;01:42:19.95;+51:34:31.2;;;076;0650;;;\n";
 
         [Test]
         public void Keys_ignore_case_space_leading_zeros_and_the_variable_prefix() {
@@ -133,6 +134,12 @@ namespace OpenAstroAra.Test {
             Assert.That(idx.Find("NGC 2023", CancellationToken.None)!.MainId, Is.EqualTo("IC0434"), "the NGC cross-reference on an IC row");
             Assert.That(idx.Find("NGC 1", CancellationToken.None)!.MainId, Is.EqualTo("NGC0001"));
             Assert.That(idx.Find("NGC 2", CancellationToken.None), Is.Null);
+            // A Dup row resolves by its own name to the object it duplicates.
+            var dup = idx.Find("NGC 651", CancellationToken.None);
+            Assert.That(dup, Is.Not.Null);
+            Assert.That(dup!.MainId, Is.EqualTo("M 76"));
+            Assert.That(dup.Aliases, Does.Contain("NGC0651").And.Contain("NGC 0650"));
+            Assert.That(dup.ObjectType, Is.Null, "a Dup row's type is not its own");
         }
 
         [Test]

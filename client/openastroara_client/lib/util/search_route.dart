@@ -68,6 +68,13 @@ const solarSystemNames = {
   'charon',
   'titania',
   'oberon',
+  'miranda',
+  'ariel',
+  'umbriel',
+  'hyperion',
+  'eris',
+  'makemake',
+  'haumea',
 };
 
 bool isSolarSystemName(String query) =>
@@ -89,10 +96,10 @@ SearchRoute routeSearch(List<PlanningDso> catalog, String query) {
 }
 
 /// What to tell the user when the daemon did not resolve a name and the
-/// search went to the planetarium's own engine instead: null when nothing is
-/// worth saying (the engine may well find it), the daemon's reason when the
-/// name is not in the offline index and Simbad could not be reached, so an
-/// offline miss is explained rather than left spinning.
+/// search went to the planetarium's own engine instead: the daemon's reason
+/// (not found, or not in the offline index with Simbad unreachable), worded
+/// so it still reads right if the engine then finds the name; null when the
+/// daemon gave none.
 String? searchFallbackMessage(TargetResolution r) {
   if (r.resolved) return null;
   final m = r.message;

@@ -195,7 +195,7 @@ public sealed partial class TargetNameIndex {
                 entries += package == "hyg-stars"
                     ? ReadHyg(reader, tight, loose, ct)
                     : ReadOpenNgc(reader, tight, loose, ct);
-            } catch (Exception ex) when (ex is IOException or FormatException or InvalidDataException) {
+            } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or FormatException or InvalidDataException) {
                 LogFileSkipped(ex, package);
             }
         }
@@ -301,7 +301,7 @@ public sealed partial class TargetNameIndex {
             ct.ThrowIfCancellationRequested();
             var f = line.Split(';');
             var t = Field(f, type);
-            if (t is "Dup" or "NonEx") {
+            if (t == "NonEx") {
                 continue;
             }
             if (!SkyCatalogReader.TryParseSexagesimalHours(Field(f, ra), out var raHours)
@@ -313,13 +313,24 @@ public sealed partial class TargetNameIndex {
             if (n.Length == 0) {
                 continue;
             }
-            aliases.Add(n);
             var m = Field(f, messier);
-            if (m.Length > 0) aliases.Add($"M {m.TrimStart('0')}");
             var g = Field(f, ngc);
-            if (g.Length > 0 && !n.StartsWith("NGC", StringComparison.Ordinal)) aliases.Add($"NGC {g}");
             var i = Field(f, ic);
-            if (i.Length > 0 && !n.StartsWith("IC", StringComparison.Ordinal)) aliases.Add($"IC {i}");
+            // A Dup row is a second designation of an object listed under another name (NGC 651 is M 76's
+            // second half): its own name must still resolve offline, so it is indexed with the canonical
+            // designation (the M / NGC / IC it points at) as the main id, and its type is not its own.
+            var isDup = t == "Dup";
+            if (isDup) {
+                var canonical = m.Length > 0 ? $"M {m.TrimStart('0')}" : g.Length > 0 ? $"NGC {g}" : i.Length > 0 ? $"IC {i}" : n;
+                aliases.Add(canonical);
+                if (canonical != n) aliases.Add(n);
+                t = string.Empty;
+            } else {
+                aliases.Add(n);
+                if (m.Length > 0) aliases.Add($"M {m.TrimStart('0')}");
+            }
+            if (g.Length > 0 && (isDup || !n.StartsWith("NGC", StringComparison.Ordinal))) aliases.Add($"NGC {g}");
+            if (i.Length > 0 && (isDup || !n.StartsWith("IC", StringComparison.Ordinal))) aliases.Add($"IC {i}");
             foreach (var id in Field(f, ids).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)) {
                 aliases.Add(id);
             }
@@ -327,7 +338,7 @@ public sealed partial class TargetNameIndex {
                 aliases.Add(cn);
             }
             double? mag = Num(f, vMag, out var mv) ? mv : Num(f, bMag, out var mb) ? mb : null;
-            var entry = new TargetIndexEntry(n, aliases.ToArray(), (raHours * 15.0) % 360.0, decDeg, t.Length > 0 ? t : null, mag);
+            var entry = new TargetIndexEntry(aliases[0], aliases.ToArray(), (raHours * 15.0) % 360.0, decDeg, t.Length > 0 ? t : null, mag);
             Add(tight, loose, entry);
             count++;
         }

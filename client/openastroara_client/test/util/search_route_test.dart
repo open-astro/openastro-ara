@@ -34,7 +34,7 @@ void main() {
   });
 
   test('solar-system names go to the engine at once, never the daemon', () {
-    for (final q in ['Moon', ' jupiter ', 'MARS', 'Sun', 'Sol', 'Titan']) {
+    for (final q in ['Moon', ' jupiter ', 'MARS', 'Sun', 'Sol', 'Titan', 'Miranda', 'Eris']) {
       final r = routeSearch(catalog, q);
       expect(r.kind, SearchRouteKind.engine, reason: q);
       expect(r.command!['type'], 'search');

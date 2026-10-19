@@ -108,8 +108,10 @@ class TargetResolveApi implements TargetResolveClient {
             BaseOptions(
               baseUrl: server.baseUrl,
               connectTimeout: const Duration(seconds: 3),
-              // The daemon bounds its own Simbad call at 5 s; this covers it.
-              receiveTimeout: const Duration(seconds: 10),
+              // The daemon bounds its own Simbad call at 5 s, and the first
+              // lookup after a catalog install builds the offline index on a
+              // Pi (seconds): this covers both back to back.
+              receiveTimeout: const Duration(seconds: 20),
             ),
           );
 
