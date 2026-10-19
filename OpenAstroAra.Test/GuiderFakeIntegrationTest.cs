@@ -346,6 +346,35 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task The_guiding_assistant_is_not_a_guided_run_no_pa_residual_and_the_state_reads_assistant() {
+            // Rig night 2026-10-18, 22:03: PHD2 says "Guiding" for the whole assistant run (corrections off),
+            // so a PA residual began on uncorrected drift and the strip read "Guiding".
+            await using var rig = await StartPaRigAsync().ConfigureAwait(false);
+            rig.Fake.OnRpc("guiding_assistant_start", _ => new JsonObject { ["state"] = "measuring", ["duration_s"] = 60, ["measure_backlash"] = true });
+            rig.Fake.OnRpc("guiding_assistant_stop", _ => new JsonObject { ["state"] = "done" });
+            rig.Fake.OnRpc("get_app_state", JsonValue.Create("Guiding"));
+
+            await rig.Svc.RequireConnectedGuider().StartGuidingAssistantAsync(60, measureBacklash: true, CancellationToken.None).ConfigureAwait(false);
+            await rig.Fake.BroadcastAsync(PhdEvents.AppState("Guiding")).ConfigureAwait(false);
+            await rig.Fake.BroadcastAsync(PhdEvents.StartGuiding()).ConfigureAwait(false);
+            await rig.GuideAsync(firstFrame: 1, frames: 20).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => rig.Svc.GetAsync(CancellationToken.None).Result?.Runtime.State == "assistant").ConfigureAwait(false),
+                Is.True, "the state on the wire is the assistant, not guiding");
+            await Task.Delay(300).ConfigureAwait(false);
+            Assert.That(rig.Events, Is.Empty, "no PA residual from the assistant's uncorrected drift");
+
+            // The assistant ends on its own (the dialog may be closed, nothing polls get_status): the
+            // guider's Done event alone clears the flag, and a real guided run afterwards measures as before.
+            await rig.Fake.BroadcastAsync(new JsonObject { ["Event"] = "GuidingAssistantDone", ["state"] = "done" }).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => !rig.Svc.RequireConnectedGuider().GuidingAssistantActive).ConfigureAwait(false), Is.True, "Done clears the run flag without an RPC");
+            await rig.Fake.BroadcastAsync(PhdEvents.GuidingStopped()).ConfigureAwait(false);
+            await rig.Fake.BroadcastAsync(PhdEvents.StartGuiding()).ConfigureAwait(false);
+            await rig.GuideAsync(firstFrame: 1, frames: 20).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => rig.Statuses.Contains("done")).ConfigureAwait(false), Is.True, "the guided run's residual was published");
+            Assert.That((await rig.Svc.GetAsync(CancellationToken.None).ConfigureAwait(false))!.Runtime.State, Is.EqualTo("guiding"));
+        }
+
+        [Test]
         public async Task A_guided_run_reports_the_polar_alignment_residual_from_its_dec_drift() {
             // #1311 — end to end through the real PHD2Guider: guiding starts, the guider corrects a steady
             // Dec drift, and the daemon rebuilds that drift from the offsets plus the pulses (the

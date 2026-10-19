@@ -142,6 +142,13 @@ namespace OpenAstroAra.Test {
             Assert.That(GuiderService.MapGuidingState("Guiding"), Is.EqualTo("guiding"));
             Assert.That(GuiderService.MapGuidingState("Guiding", settling: true), Is.EqualTo("settling"));
             Assert.That(GuiderService.MapGuidingState("Calibrating", settling: true), Is.EqualTo("calibrating"), "settling only qualifies guiding");
+            // The Guiding Assistant: PHD2 says Guiding (or Looping/Selected between phases) while nothing is corrected.
+            Assert.That(GuiderService.MapGuidingState("Guiding", assistant: true), Is.EqualTo("assistant"));
+            Assert.That(GuiderService.MapGuidingState("Guiding", settling: true, assistant: true), Is.EqualTo("assistant"));
+            Assert.That(GuiderService.MapGuidingState("Selected", assistant: true), Is.EqualTo("assistant"));
+            Assert.That(GuiderService.MapGuidingState("Looping", assistant: true), Is.EqualTo("assistant"));
+            Assert.That(GuiderService.MapGuidingState("Calibrating", assistant: true), Is.EqualTo("calibrating"), "a calibration is still a calibration");
+            Assert.That(GuiderService.MapGuidingState("Stopped", assistant: true), Is.EqualTo("stopped"), "a stale flag never invents a run");
             Assert.That(GuiderService.MapGuidingState("LostLock"), Is.EqualTo("star_lost"));
             Assert.That(GuiderService.MapGuidingState("Paused"), Is.EqualTo("paused"));
             Assert.That(GuiderService.MapGuidingState("Stopped"), Is.EqualTo("stopped"));
