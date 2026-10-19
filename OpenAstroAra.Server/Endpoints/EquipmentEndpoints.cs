@@ -34,6 +34,32 @@ namespace OpenAstroAra.Server.Endpoints;
 /// </summary>
 public static partial class EquipmentEndpoints {
 
+    /// <summary>The refusal text for a manual slew while a run is in progress, or null when it may go
+    /// ahead: no run, a sync (the mount does not move), or the caller forced it. Pure — unit-tested.</summary>
+    internal static string? SlewDuringRunRefusal(SlewRequestDto request, IReadOnlyList<Guid> activeRuns) {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(activeRuns);
+        if (activeRuns.Count == 0 || request.Sync == true || request.Force == true) {
+            return null;
+        }
+        return activeRuns.Count == 1
+            ? "a sequence run is in progress: slewing now stops guiding and pauses the run awaiting you. Repeat with force to slew anyway."
+            : $"{activeRuns.Count} sequence runs are in progress: slewing now stops guiding and pauses them awaiting you. Repeat with force to slew anyway.";
+    }
+
+    /// <summary><c>POST /equipment/telescope/slew</c>: 409 <c>run_in_progress</c> while a sequence run is
+    /// active unless the request is a sync or forced (rig night 2026-10-18: a Planning GoTo mid-dither was
+    /// accepted without a word, the guider stopped and the run parked); otherwise the 202 the telescope
+    /// service answers. Testable without the host.</summary>
+    internal static async Task<IResult> SlewAsync(SlewRequestDto request, string? idempotencyKey, ITelescopeService telescope, ISequencerService sequencer, CancellationToken ct) {
+        ArgumentNullException.ThrowIfNull(telescope);
+        ArgumentNullException.ThrowIfNull(sequencer);
+        if (SlewDuringRunRefusal(request, await sequencer.ActiveRunIdsAsync(ct)) is { } refusal) {
+            return Results.Problem(refusal, statusCode: StatusCodes.Status409Conflict, title: "run_in_progress");
+        }
+        return Results.Accepted(value: await telescope.SlewAsync(request, idempotencyKey, ct));
+    }
+
     /// <summary>#1364 — one live-view action: 204 on success; 409 when no guider is connected
     /// (InvalidOperationException), 400 for a bad position (ArgumentOutOfRangeException), 422 when the
     /// guider refused (GuiderRpcException — no image yet, no star near the tap, not looping).</summary>
@@ -246,8 +272,10 @@ public static partial class EquipmentEndpoints {
             await ConnectAndRememberAsync(request, selectionStore, () => svc.ConnectAsync(request, key, ct), ct));
         telescope.MapPost("/disconnect", async ([FromHeader(Name = "Idempotency-Key")] string? key, ITelescopeService svc, CancellationToken ct) =>
             Results.Accepted(value: await svc.DisconnectAsync(key, ct)));
-        telescope.MapPost("/slew", async ([FromBody] SlewRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, ITelescopeService svc, CancellationToken ct) =>
-            Results.Accepted(value: await svc.SlewAsync(request, key, ct)));
+        telescope.MapPost("/slew", ([FromBody] SlewRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, ITelescopeService svc, ISequencerService sequencer, CancellationToken ct) =>
+                SlewAsync(request, key, svc, sequencer, ct))
+            .Produces<OperationAcceptedDto>(StatusCodes.Status202Accepted)
+            .ProducesProblem(StatusCodes.Status409Conflict); // run_in_progress: a slew during a sequence run that was neither a sync nor forced
         // Park's body (an optional Reason) is nullable so a bodyless POST works — the panel's
         // Park button sends no body, and a required [FromBody] would 400/415 it (the bug where
         // "Park does nothing"). Reason defaults to null when absent.

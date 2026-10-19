@@ -12,14 +12,13 @@
 
 #endregion "copyright"
 
-using CommunityToolkit.Mvvm.ComponentModel;
 using OpenAstroAra.Astrometry;
 using OpenAstroAra.Core.Utility;
 using System;
 
 namespace OpenAstroAra.PlateSolving {
 
-    public partial class PlateSolveResult : BaseINPC {
+    public class PlateSolveResult : BaseINPC {
 
         public PlateSolveResult() {
             Success = true;
@@ -60,12 +59,19 @@ namespace OpenAstroAra.PlateSolving {
 
         public bool Success { get; set; }
 
-        [ObservableProperty]
-        [NotifyPropertyChangedFor(nameof(RaErrorString))]
-        [NotifyPropertyChangedFor(nameof(RaPixError))]
-        [NotifyPropertyChangedFor(nameof(DecPixError))]
-        [NotifyPropertyChangedFor(nameof(DecErrorString))]
         private Separation? separation;
+
+        public Separation? Separation {
+            get => separation;
+            set {
+                if (SetProperty(ref separation, value)) {
+                    RaisePropertyChanged(nameof(RaErrorString));
+                    RaisePropertyChanged(nameof(RaPixError));
+                    RaisePropertyChanged(nameof(DecPixError));
+                    RaisePropertyChanged(nameof(DecErrorString));
+                }
+            }
+        }
 
         public string RaErrorString => Separation == null ? "--" : AstroUtil.DegreesToHMS(Separation.RA.Degree);
 

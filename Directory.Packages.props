@@ -8,11 +8,7 @@
 
     The ranges are deliberate: SharpGIS.NmeaParser and Microsoft.OpenApi are pinned to
     the exact version their call sites were verified against; FluentAssertions stays
-    on the last Apache-licensed line. Accord.Math is a prerelease (NU5104 is allowed in
-    Directory.Build.props for that reason).
-
-    The vendored Accord.Imaging project and the dormant StarDataImport tool follow this
-    file too, so a package they share with the daemon cannot be on a different version.
+    on the last Apache-licensed line.
 
     xunit 2.9.3 is NuGet-deprecated as "legacy" (superseded by xunit.v3), not vulnerable.
     xunit.v3 runs only on Microsoft.Testing.Platform, which the .NET 10 SDK's `dotnet test`
@@ -27,30 +23,22 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageVersion Include="Accord" Version="3.8.2-alpha" />
-    <PackageVersion Include="Accord.Math" Version="3.8.2-alpha" />
-    <PackageVersion Include="Accord.Statistics" Version="3.8.2-alpha" />
     <PackageVersion Include="ASCOM.Alpaca.Components" Version="4.0.0" />
     <PackageVersion Include="ASCOM.Alpaca.Device" Version="4.0.0" />
     <PackageVersion Include="ASCOM.Tools" Version="4.0.0" />
     <PackageVersion Include="Castle.Core" Version="5.2.1" />
     <PackageVersion Include="Castle.Core.AsyncInterceptor" Version="2.1.0" />
     <PackageVersion Include="CommandLineParser" Version="2.9.1" />
-    <PackageVersion Include="CommunityToolkit.Mvvm" Version="8.4.2" />
     <PackageVersion Include="Fastenshtein" Version="1.0.12" />
     <PackageVersion Include="FluentAssertions" Version="[7.2.2]" />
     <PackageVersion Include="Iconic.Zlib.Netstandard" Version="1.0.0" />
     <PackageVersion Include="K4os.Compression.LZ4" Version="1.3.8" />
     <PackageVersion Include="Makaretu.Dns.Multicast" Version="0.27.0" />
     <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="10.0.13" />
-    <PackageVersion Include="Microsoft.CSharp" Version="4.7.0" />
     <PackageVersion Include="Microsoft.Data.Sqlite" Version="10.0.13" />
-    <PackageVersion Include="Microsoft.DotNet.UpgradeAssistant.Extensions.Default.Analyzers" Version="0.4.346202" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.13" />
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.11.0" />
-    <PackageVersion Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" />
     <PackageVersion Include="Microsoft.OpenApi" Version="[2.12.2]" />
-    <PackageVersion Include="Microsoft.VisualBasic" Version="10.3.0" />
     <PackageVersion Include="Moq" Version="4.21.0" />
     <PackageVersion Include="Newtonsoft.Json" Version="13.0.4" />
     <PackageVersion Include="Nito.AsyncEx" Version="5.1.2" />
@@ -60,7 +48,6 @@
     <PackageVersion Include="NUnit" Version="5.0.0" />
     <PackageVersion Include="NUnit.Analyzers" Version="4.15.0" />
     <PackageVersion Include="NUnit3TestAdapter" Version="6.3.1" />
-    <PackageVersion Include="OxyPlot.Core" Version="2.2.0" />
     <PackageVersion Include="Scalar.AspNetCore" Version="2.18.0" />
     <PackageVersion Include="Serilog.AspNetCore" Version="10.0.0" />
     <PackageVersion Include="Serilog.Formatting.Compact" Version="3.0.0" />
@@ -71,13 +58,9 @@
     <PackageVersion Include="SkiaSharp.NativeAssets.Linux" Version="4.153.1" />
     <PackageVersion Include="SQLitePCLRaw.lib.e_sqlite3" Version="3.53.3" />
     <PackageVersion Include="System.ComponentModel.Annotations" Version="5.0.0" />
-    <PackageVersion Include="System.ComponentModel.Composition" Version="10.0.13" />
-    <PackageVersion Include="System.Data.DataSetExtensions" Version="4.5.0" />
-    <PackageVersion Include="System.Data.SqlClient" Version="4.9.1" />
-    <PackageVersion Include="System.Data.SQLite" Version="1.0.116" />
+    <PackageVersion Include="System.Configuration.ConfigurationManager" Version="10.0.13" />
     <PackageVersion Include="System.Drawing.Common" Version="10.0.13" />
     <PackageVersion Include="System.IO.Ports" Version="10.0.13" />
-    <PackageVersion Include="System.Runtime.Caching" Version="10.0.13" />
     <PackageVersion Include="xunit.runner.visualstudio" Version="4.0.1" />
     <PackageVersion Include="xunit" Version="2.9.3" />
     <PackageVersion Include="Zeroconf" Version="3.7.16" />

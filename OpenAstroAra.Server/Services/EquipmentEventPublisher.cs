@@ -45,6 +45,16 @@ namespace OpenAstroAra.Server.Services;
 /// holding their service lock (the synchronous part only builds a small
 /// payload and hands off to the channel).</para>
 /// </summary>
+/// <summary>#1362 — one connection-state transition as seen by in-process listeners.</summary>
+public sealed class EquipmentTransitionEventArgs : EventArgs {
+    public EquipmentTransitionEventArgs(DeviceType deviceType, EquipmentConnectionState state) {
+        DeviceType = deviceType;
+        State = state;
+    }
+    public DeviceType DeviceType { get; }
+    public EquipmentConnectionState State { get; }
+}
+
 public sealed partial class EquipmentEventPublisher {
 
     private readonly IWsBroadcaster _broadcaster;
@@ -57,6 +67,10 @@ public sealed partial class EquipmentEventPublisher {
         _logger = logger ?? NullLogger<EquipmentEventPublisher>.Instance;
         _faultLog = faultLog;
     }
+
+    /// <summary>#1362 — every connection-state transition, for in-process listeners (the identity
+    /// reconciler). Raised synchronously under the caller's service lock: handlers must hand off.</summary>
+    public event EventHandler<EquipmentTransitionEventArgs>? Transition;
 
     /// <summary>Publish a device's connection-state transition. Callers gate on an
     /// ACTUAL change (previous != next) so poll-refresh re-assertions don't spam the
@@ -93,6 +107,11 @@ public sealed partial class EquipmentEventPublisher {
             }
         } catch (Exception ex) {
             LogPublishFailed(ex, WsEventCatalog.EquipmentStateChanged);
+        }
+        try {
+            Transition?.Invoke(this, new EquipmentTransitionEventArgs(deviceType, state));
+        } catch (Exception ex) {
+            LogTransitionHandlerFailed(ex, deviceType, state);
         }
         if (state == EquipmentConnectionState.Connected && _faultLog is not null) {
             // §42.5 — a connected transition ends any standing disconnect fault
@@ -243,6 +262,9 @@ public sealed partial class EquipmentEventPublisher {
                 TaskScheduler.Default);
         }
     }
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "an in-process Transition handler threw on {DeviceType} -> {State}; the device's state is unaffected (#1362)")]
+    private partial void LogTransitionHandlerFailed(Exception ex, DeviceType deviceType, EquipmentConnectionState state);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "equipment event {EventType} could not be published")]
     private partial void LogPublishFailed(Exception ex, string eventType);

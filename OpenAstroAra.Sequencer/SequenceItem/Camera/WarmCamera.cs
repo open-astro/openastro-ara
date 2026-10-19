@@ -20,7 +20,6 @@ using OpenAstroAra.Sequencer.Validations;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.ComponentModel.Composition;
 using System.Linq;
 using System.Text;
 using System.Threading;
@@ -28,15 +27,9 @@ using System.Threading.Tasks;
 
 namespace OpenAstroAra.Sequencer.SequenceItem.Camera {
 
-    [ExportMetadata("Name", "Lbl_SequenceItem_Camera_WarmCamera_Name")]
-    [ExportMetadata("Description", "Lbl_SequenceItem_Camera_WarmCamera_Description")]
-    [ExportMetadata("Icon", "Fire_NoFill_SVG")]
-    [ExportMetadata("Category", "Lbl_SequenceCategory_Camera")]
-    [Export(typeof(ISequenceItem))]
     [JsonObject(MemberSerialization.OptIn)]
     public class WarmCamera : SequenceItem, IValidatable, IEstimatesOwnDuration {
 
-        [ImportingConstructor]
         public WarmCamera(ICameraMediator cameraMediator) {
             this.cameraMediator = cameraMediator;
         }

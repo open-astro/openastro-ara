@@ -25,7 +25,6 @@ using System.Globalization;
 using System.Diagnostics.CodeAnalysis;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.ComponentModel.Composition;
 using System.Linq;
 using System.Text;
 using System.Threading;
@@ -33,16 +32,10 @@ using System.Threading.Tasks;
 
 namespace OpenAstroAra.Sequencer.SequenceItem.Switch {
 
-    [ExportMetadata("Name", "Lbl_SequenceItem_Switch_SetSwitchValue_Name")]
-    [ExportMetadata("Description", "Lbl_SequenceItem_Switch_SetSwitchValue_Description")]
-    [ExportMetadata("Icon", "ButtonSVG")]
-    [ExportMetadata("Category", "Lbl_SequenceCategory_Switch")]
-    [Export(typeof(ISequenceItem))]
     [JsonObject(MemberSerialization.OptIn)]
     public class SetSwitchValue : SequenceItem, IValidatable {
         private ISwitchMediator switchMediator;
 
-        [ImportingConstructor]
         public SetSwitchValue(ISwitchMediator switchMediator) {
             this.switchMediator = switchMediator;
 

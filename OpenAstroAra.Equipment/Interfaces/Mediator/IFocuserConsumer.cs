@@ -12,8 +12,8 @@
 
 #endregion "copyright"
 
+using OpenAstroAra.Core.Utility;
 using OpenAstroAra.Equipment.Equipment.MyFocuser;
-using OxyPlot;
 using System;
 
 namespace OpenAstroAra.Equipment.Interfaces.Mediator {

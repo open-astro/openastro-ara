@@ -18,10 +18,10 @@
 
 #endregion "copyright"
 
+using OpenAstroAra.Core.Utility;
 using OpenAstroAra.Equipment.Equipment.MyFocuser;
 using OpenAstroAra.Equipment.Interfaces;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
-using OxyPlot;
 
 namespace OpenAstroAra.Server.Services.Equipment;
 

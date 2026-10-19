@@ -15,22 +15,15 @@
 using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
-using System.ComponentModel.Composition;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
 namespace OpenAstroAra.Sequencer.Container {
 
-    [ExportMetadata("Name", "Lbl_SequenceContainer_EndAreaContainer_Name")]
-    [ExportMetadata("Description", "")]
-    [ExportMetadata("Icon", "SubstractSVG")]
-    [ExportMetadata("Category", "Lbl_SequenceCategory_Container")]
-    [Export(typeof(ISequenceContainer))]
     [JsonObject(MemberSerialization.OptIn)]
     public class EndAreaContainer : SequentialContainer {
 
-        [ImportingConstructor]
         public EndAreaContainer() : base() {
         }
 

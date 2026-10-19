@@ -16,7 +16,6 @@ using Newtonsoft.Json;
 using OpenAstroAra.Core.Model;
 using System;
 using System.Collections.Generic;
-using System.ComponentModel.Composition;
 using System.Linq;
 using System.Text;
 using System.Threading;
@@ -24,15 +23,9 @@ using System.Threading.Tasks;
 
 namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
 
-    [ExportMetadata("Name", "Lbl_SequenceItem_Utility_WaitForTimeSpan_Name")]
-    [ExportMetadata("Description", "Lbl_SequenceItem_Utility_WaitForTimeSpan_Description")]
-    [ExportMetadata("Icon", "HourglassSVG")]
-    [ExportMetadata("Category", "Lbl_SequenceCategory_Utility")]
-    [Export(typeof(ISequenceItem))]
     [JsonObject(MemberSerialization.OptIn)]
     public class WaitForTimeSpan : SequenceItem, IEstimatesOwnDuration {
 
-        [ImportingConstructor]
         public WaitForTimeSpan() {
             Time = 1;
         }

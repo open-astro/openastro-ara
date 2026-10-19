@@ -18,7 +18,6 @@ using OpenAstroAra.Core.Model;
 using OpenAstroAra.Core.Utility;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
 using System;
-using System.ComponentModel.Composition;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -39,15 +38,9 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Platesolving {
     /// applied, matching NINA's no-rotator behaviour. Originally tracked in PORT_TODO
     /// alongside the framing position-angle item.
     /// </summary>
-    [ExportMetadata("Name", "Lbl_SequenceItem_Platesolving_CenterAndRotate_Name")]
-    [ExportMetadata("Description", "Lbl_SequenceItem_Platesolving_CenterAndRotate_Description")]
-    [ExportMetadata("Icon", "PlatesolveAndRotateSVG")]
-    [ExportMetadata("Category", "Lbl_SequenceCategory_Telescope")]
-    [Export(typeof(ISequenceItem))]
     [JsonObject(MemberSerialization.OptIn)]
     public class CenterAndRotate : SequenceItem {
 
-        [ImportingConstructor]
         public CenterAndRotate(ICenteringExecutor? centeringExecutor = null, IRotatorMediator? rotatorMediator = null) {
             this.centeringExecutor = centeringExecutor;
             this.rotatorMediator = rotatorMediator;

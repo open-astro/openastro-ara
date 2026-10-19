@@ -88,6 +88,8 @@ void main() {
       expect(withState('looping').runtimeState, GuiderRuntimeState.looping);
       expect(withState('star_selected').runtimeState, GuiderRuntimeState.starSelected);
       expect(withState('settling').runtimeState, GuiderRuntimeState.settling);
+      expect(withState('assistant').runtimeState, GuiderRuntimeState.assistant);
+      expect(withState('assistant').runtimeSummary, 'Guiding Assistant');
       expect(withState('looping').runtimeSummary, 'Looping');
       expect(withState('settling').runtimeSummary, 'Settling');
       expect(withState('settling').isGuiding, isFalse, reason: 'isGuiding stays the plain guiding phase');

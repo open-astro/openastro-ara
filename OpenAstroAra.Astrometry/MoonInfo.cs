@@ -1,6 +1,4 @@
 using OpenAstroAra.Core.Utility;
-using OxyPlot;
-using OxyPlot.Axes;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -110,7 +108,7 @@ namespace OpenAstroAra.Astrometry {
                     DateTime start = _referenceDate;
 
                     for (int i = 0; i < 24 * 10 /*24 hours x 10/hr*/; i++) {
-                        list.Add(new DataPoint(DateTimeAxis.ToDouble(start), AstroUtil.GetMoonAltitude(start, _observer)));
+                        list.Add(new DataPoint(PlotTime.ToDouble(start), AstroUtil.GetMoonAltitude(start, _observer)));
                         start = start.AddHours(0.1);
                     }
                     Points.Add(_referenceDate, list);

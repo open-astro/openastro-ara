@@ -12,11 +12,11 @@
 
 #endregion "copyright"
 
+using OpenAstroAra.Core.Utility;
 using NUnit.Framework;
 using NUnit.Framework.Legacy;
 using OpenAstroAra.Astrometry;
 using OpenAstroAra.Astrometry.RiseAndSet;
-using OxyPlot.Axes;
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
@@ -61,34 +61,34 @@ namespace OpenAstroAra.Test {
         public NighttimeData Data =>
             new NighttimeData(date, referenceDate, moonPhase, illumination, twilightRiseAndSet, nauticalTwilightRiseAndSet, sunRiseAndSet, moonRiseAndSet, civilTwilightRiseAndSet);
 
-        public IReadOnlyList<OxyPlot.DataPoint> GetExpectedTwilightDuration() {
+        public IReadOnlyList<DataPoint> GetExpectedTwilightDuration() {
             if (twilightRiseAndSet == null) {
-                return new List<OxyPlot.DataPoint>();
+                return new List<DataPoint>();
             }
             var twilightSet = twilightRiseAndSet.SetTime!.Value > twilightRiseAndSet.Rise!.Value ? twilightRiseAndSet.SetTime.Value.AddDays(-1) : twilightRiseAndSet.SetTime.Value;
             if (sunRiseAndSet == null) {
-                return new List<OxyPlot.DataPoint>() {
-                    new OxyPlot.DataPoint(Axis.ToDouble(twilightSet), 90),
-                    new OxyPlot.DataPoint(Axis.ToDouble(twilightRiseAndSet.Rise), 90) };
+                return new List<DataPoint>() {
+                    new DataPoint(PlotTime.ToDouble(twilightSet), 90),
+                    new DataPoint(PlotTime.ToDouble(twilightRiseAndSet.Rise), 90) };
             }
             var sunRiseSet = sunRiseAndSet.SetTime!.Value > sunRiseAndSet.Rise!.Value ? sunRiseAndSet.SetTime.Value.AddDays(-1) : sunRiseAndSet.SetTime.Value;
-            return new List<OxyPlot.DataPoint>() {
-                new OxyPlot.DataPoint(Axis.ToDouble(twilightSet), 90),
-                new OxyPlot.DataPoint(Axis.ToDouble(sunRiseSet), 90),
-                new OxyPlot.DataPoint(Axis.ToDouble(sunRiseSet), 0),
-                new OxyPlot.DataPoint(Axis.ToDouble(sunRiseAndSet.Rise), 0),
-                new OxyPlot.DataPoint(Axis.ToDouble(sunRiseAndSet.Rise), 90),
-                new OxyPlot.DataPoint(Axis.ToDouble(twilightRiseAndSet.Rise), 90) };
+            return new List<DataPoint>() {
+                new DataPoint(PlotTime.ToDouble(twilightSet), 90),
+                new DataPoint(PlotTime.ToDouble(sunRiseSet), 90),
+                new DataPoint(PlotTime.ToDouble(sunRiseSet), 0),
+                new DataPoint(PlotTime.ToDouble(sunRiseAndSet.Rise), 0),
+                new DataPoint(PlotTime.ToDouble(sunRiseAndSet.Rise), 90),
+                new DataPoint(PlotTime.ToDouble(twilightRiseAndSet.Rise), 90) };
         }
 
-        public IReadOnlyList<OxyPlot.DataPoint> GetExpectedNightDuration() {
+        public IReadOnlyList<DataPoint> GetExpectedNightDuration() {
             if (twilightRiseAndSet == null) {
-                return new List<OxyPlot.DataPoint>();
+                return new List<DataPoint>();
             }
             var twilightSet = twilightRiseAndSet.SetTime!.Value > twilightRiseAndSet.Rise!.Value ? twilightRiseAndSet.SetTime.Value.AddDays(-1) : twilightRiseAndSet.SetTime.Value;
-            return new List<OxyPlot.DataPoint>() {
-                new OxyPlot.DataPoint(Axis.ToDouble(twilightRiseAndSet.Rise), 90),
-                new OxyPlot.DataPoint(Axis.ToDouble(twilightSet), 90) };
+            return new List<DataPoint>() {
+                new DataPoint(PlotTime.ToDouble(twilightRiseAndSet.Rise), 90),
+                new DataPoint(PlotTime.ToDouble(twilightSet), 90) };
         }
 
         [Test]

@@ -20,7 +20,6 @@ using OpenAstroAra.Sequencer.Interfaces;
 using OpenAstroAra.Sequencer.SequenceItem;
 using OpenAstroAra.Sequencer.Utility;
 using System;
-using System.ComponentModel.Composition;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -35,15 +34,9 @@ namespace OpenAstroAra.Sequencer.Trigger.Autofocus {
     /// nested <c>TriggerRunner</c> deserialize intact instead of degrading to an
     /// <see cref="UnknownSequenceTrigger"/>.
     /// </summary>
-    [ExportMetadata("Name", "Lbl_SequenceTrigger_Autofocus_AutofocusAfterExposures_Name")]
-    [ExportMetadata("Description", "Lbl_SequenceTrigger_Autofocus_AutofocusAfterExposures_Description")]
-    [ExportMetadata("Icon", "AutoFocusSVG")]
-    [ExportMetadata("Category", "Lbl_SequenceCategory_Focuser")]
-    [Export(typeof(ISequenceTrigger))]
     [JsonObject(MemberSerialization.OptIn)]
     public class AutofocusAfterExposures : SequenceTrigger {
 
-        [ImportingConstructor]
         public AutofocusAfterExposures(IAutofocusConditionGate? conditionGate = null) : base() {
             this.conditionGate = conditionGate;
         }

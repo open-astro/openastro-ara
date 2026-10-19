@@ -391,9 +391,10 @@ class SequenceRunStateInfo {
   static double? _doubleOrNull(Object? v) => v is num ? v.toDouble() : null;
 
   /// Fold a live `sequence.*` WS frame onto this snapshot. The WS payload carries
-  /// only the fast-changing fields (state, instruction index, frame counts, run
-  /// id); the slower fields the REST `getRunState` provides — target name,
-  /// start/complete times, instruction description — are preserved so a live
+  /// the fast-changing fields (state, instruction index, frame counts, run id,
+  /// and since the 2026-10-18 rig night the current instruction's description
+  /// and target name); the slower fields the REST `getRunState` provides —
+  /// start/complete times — and anything a frame omits are preserved so a live
   /// update doesn't blank them. An unparseable/absent `state` keeps the current
   /// one rather than degrading a running sequence to "no state".
   SequenceRunStateInfo applyWsProgress(Map<String, dynamic> payload) {
@@ -406,13 +407,15 @@ class SequenceRunStateInfo {
       currentInstructionIndex:
           _intOrNull(payload['current_instruction_index']) ??
               currentInstructionIndex,
-      currentTargetName: currentTargetName,
+      currentTargetName: _str(payload['current_target_name']) ?? currentTargetName,
       startedUtc: startedUtc,
       completedUtc: completedUtc,
       instructionsCompleted:
           _intOrNull(payload['instructions_completed']) ?? instructionsCompleted,
       instructionsTotal: _intOrNull(payload['instructions_total']) ?? instructionsTotal,
-      currentInstructionDescription: currentInstructionDescription,
+      // Older daemons send no description: keep the REST-read one.
+      currentInstructionDescription: _str(payload['current_instruction_description']) ??
+          currentInstructionDescription,
       // Present on every progress frame; keep the last-known value if a frame
       // ever omits them.
       estimatedTotalSeconds:

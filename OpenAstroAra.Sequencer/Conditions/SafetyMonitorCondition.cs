@@ -22,7 +22,6 @@ using OpenAstroAra.Sequencer.Utility;
 using OpenAstroAra.Sequencer.Validations;
 using System;
 using System.Collections.Generic;
-using System.ComponentModel.Composition;
 using System.Linq;
 using System.Text;
 using System.Threading;
@@ -30,15 +29,9 @@ using System.Threading.Tasks;
 
 namespace OpenAstroAra.Sequencer.Conditions {
 
-    [ExportMetadata("Name", "Lbl_SequenceCondition_SafetyMonitorCondition_Name")]
-    [ExportMetadata("Description", "Lbl_SequenceCondition_SafetyMonitorCondition_Description")]
-    [ExportMetadata("Icon", "ShieldSVG")]
-    [ExportMetadata("Category", "Lbl_SequenceCategory_Condition")]
-    [Export(typeof(ISequenceCondition))]
     public class SafetyMonitorCondition : SequenceCondition, IValidatable {
         private protected readonly ISafetyMonitorMediator safetyMonitorMediator;
 
-        [ImportingConstructor]
         public SafetyMonitorCondition(ISafetyMonitorMediator safetyMonitorMediator) {
             this.safetyMonitorMediator = safetyMonitorMediator;
             ConditionWatchdog = new ConditionWatchdog(InterruptWhenUnsafe, TimeSpan.FromSeconds(5));
@@ -132,14 +125,8 @@ namespace OpenAstroAra.Sequencer.Conditions {
         }
     }
 
-    [ExportMetadata("Name", "Lbl_SequenceCondition_LoopWhileUnsafe_Name")]
-    [ExportMetadata("Description", "Lbl_SequenceCondition_LoopWhileUnsafe_Description")]
-    [ExportMetadata("Icon", "UnshieldSVG")]
-    [ExportMetadata("Category", "Lbl_SequenceCategory_Condition")]
-    [Export(typeof(ISequenceCondition))]
     public class LoopWhileUnsafe : SafetyMonitorCondition {
 
-        [ImportingConstructor]
         public LoopWhileUnsafe(ISafetyMonitorMediator safetyMonitorMediator) : base(safetyMonitorMediator) {
         }
 

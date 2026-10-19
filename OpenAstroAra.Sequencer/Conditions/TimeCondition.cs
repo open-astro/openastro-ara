@@ -12,7 +12,6 @@
 
 #endregion "copyright"
 
-using CommunityToolkit.Mvvm.ComponentModel;
 using Newtonsoft.Json;
 using OpenAstroAra.Astrometry;
 using OpenAstroAra.Core.Enums;
@@ -25,19 +24,13 @@ using OpenAstroAra.Sequencer.Validations;
 using System;
 using System.Diagnostics.CodeAnalysis;
 using System.Collections.Generic;
-using System.ComponentModel.Composition;
 using System.Linq;
 using System.Threading.Tasks;
 
 namespace OpenAstroAra.Sequencer.Conditions {
 
-    [ExportMetadata("Name", "Lbl_SequenceCondition_TimeCondition_Name")]
-    [ExportMetadata("Description", "Lbl_SequenceCondition_TimeCondition_Description")]
-    [ExportMetadata("Icon", "ClockSVG")]
-    [ExportMetadata("Category", "Lbl_SequenceCategory_Condition")]
-    [Export(typeof(ISequenceCondition))]
     [JsonObject(MemberSerialization.OptIn)]
-    public partial class TimeCondition : SequenceCondition, IValidatable {
+    public class TimeCondition : SequenceCondition, IValidatable {
         private IList<IDateTimeProvider> dateTimeProviders;
         private int hours;
         private int minutes;
@@ -45,7 +38,6 @@ namespace OpenAstroAra.Sequencer.Conditions {
         private int seconds;
         private IDateTimeProvider? selectedProvider;
 
-        [ImportingConstructor]
         public TimeCondition(IList<IDateTimeProvider> dateTimeProviders) : this(dateTimeProviders, dateTimeProviders?.FirstOrDefault()) {
         }
 
@@ -177,8 +169,12 @@ namespace OpenAstroAra.Sequencer.Conditions {
             }
         }
 
-        [ObservableProperty]
         private TimeOnly rolloverTime;
+
+        public TimeOnly RolloverTime {
+            get => rolloverTime;
+            set => SetProperty(ref rolloverTime, value);
+        }
 
         private DateTime CalculateRemainingTime() {
             var now = DateTime.Now;

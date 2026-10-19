@@ -24,7 +24,6 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Collections.ObjectModel;
-using System.ComponentModel.Composition;
 using System.Linq;
 using System.Runtime.Serialization;
 using System.Text;
@@ -34,11 +33,6 @@ using System.Windows;
 
 namespace OpenAstroAra.Sequencer.SequenceItem.FilterWheel {
 
-    [ExportMetadata("Name", "Lbl_SequenceItem_FilterWheel_SwitchFilter_Name")]
-    [ExportMetadata("Description", "Lbl_SequenceItem_FilterWheel_SwitchFilter_Description")]
-    [ExportMetadata("Icon", "FW_NoFill_SVG")]
-    [ExportMetadata("Category", "Lbl_SequenceCategory_FilterWheel")]
-    [Export(typeof(ISequenceItem))]
     [JsonObject(MemberSerialization.OptIn)]
     public class SwitchFilter : SequenceItem, IValidatable {
 
@@ -47,7 +41,6 @@ namespace OpenAstroAra.Sequencer.SequenceItem.FilterWheel {
             MatchFilter();
         }
 
-        [ImportingConstructor]
         public SwitchFilter(IProfileService profileservice, IFilterWheelMediator filterWheelMediator) {
             this.profileService = profileservice;
             this.filterWheelMediator = filterWheelMediator;

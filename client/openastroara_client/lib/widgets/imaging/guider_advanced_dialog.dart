@@ -141,7 +141,8 @@ class _GuiderAdvancedPanelState extends ConsumerState<GuiderAdvancedPanel> {
 
   /// The server's rules across fields, checked before Apply so the user sees
   /// them by the fields rather than as a 400: the variable delay is all three
-  /// values or none (the guider takes them together), and each min ≤ max.
+  /// values or none (the guider takes them together), backlash compensation
+  /// turns on only with a pulse width, and each min ≤ max.
   /// Pure — tested.
   static String? crossFieldProblem(GuiderAdvancedSettings d) {
     final delay = [
@@ -151,6 +152,11 @@ class _GuiderAdvancedPanelState extends ConsumerState<GuiderAdvancedPanel> {
     ].where((v) => v != null).length;
     if (delay == 1 || delay == 2) {
       return 'Variable delay needs all three: on/off, short and long delay.';
+    }
+    // The guider takes the enable only with a pulse width; an enable alone made
+    // it refuse the whole backlash group on every push (rig night 2026-10-18).
+    if (d['backlash_enabled'] == true && d['backlash_pulse_ms'] == null) {
+      return 'Backlash compensation needs a pulse width (20–8000 ms) to turn on.';
     }
     String? order(String min, String max, String what) {
       final lo = d[min], hi = d[max];

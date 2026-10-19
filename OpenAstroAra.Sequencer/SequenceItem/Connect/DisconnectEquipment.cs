@@ -6,7 +6,6 @@ using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Sequencer.Validations;
 using System;
 using System.Collections.Generic;
-using System.ComponentModel.Composition;
 using System.Linq;
 using System.Runtime.Serialization;
 using System.Text;
@@ -14,11 +13,6 @@ using System.Threading;
 using System.Threading.Tasks;
 
 namespace OpenAstroAra.Sequencer.SequenceItem.Connect {
-    [ExportMetadata("Name", "Lbl_SequenceItem_Connector_DisconnectEquipment_Name")]
-    [ExportMetadata("Description", "Lbl_SequenceItem_Connector_DisconnectEquipment_Description")]
-    [ExportMetadata("Icon", "DisconnectSVG")]
-    [ExportMetadata("Category", "Lbl_SequenceCategory_Connect")]
-    [Export(typeof(ISequenceItem))]
     [JsonObject(MemberSerialization.OptIn)]
     public sealed class DisconnectEquipment : SequenceItem, IValidatable {
         private ICameraMediator cameraMediator;
@@ -40,7 +34,6 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Connect {
             }
         }
 
-        [ImportingConstructor]
         public DisconnectEquipment(ICameraMediator cameraMediator,
                                 IFilterWheelMediator fwMediator,
                                 IFocuserMediator focuserMediator,

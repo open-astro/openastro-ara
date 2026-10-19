@@ -18,22 +18,15 @@ using OpenAstroAra.Profile.Interfaces;
 using OpenAstroAra.Sequencer.SequenceItem;
 using OpenAstroAra.Sequencer.SequenceItem.Utility;
 using System;
-using System.ComponentModel.Composition;
 using static OpenAstroAra.Sequencer.Utility.ItemUtility;
 
 namespace OpenAstroAra.Sequencer.Conditions {
 
-    [ExportMetadata("Name", "Lbl_SequenceCondition_AltitudeCondition_Name")]
-    [ExportMetadata("Description", "Lbl_SequenceCondition_AltitudeCondition_Description")]
-    [ExportMetadata("Icon", "WaitForAltitudeSVG")]
-    [ExportMetadata("Category", "Lbl_SequenceCategory_Condition")]
-    [Export(typeof(ISequenceCondition))]
     [JsonObject(MemberSerialization.OptIn)]
     public class AltitudeCondition : LoopForAltitudeBase {
 
         private bool hasDsoParent;
 
-        [ImportingConstructor]
         public AltitudeCondition(IProfileService profileService) : base(profileService, useCustomHorizon: false) {
             Data.Offset = 30;
             Data.Comparator = Core.Enums.ComparisonOperator.LessThan;

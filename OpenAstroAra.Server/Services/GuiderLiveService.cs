@@ -112,8 +112,12 @@ public sealed partial class GuiderLiveService : IGuiderLiveService {
         }
         var state = guider.AppState?.State;
         // The last guide frame's SNR and mass describe the guide star only while guiding; a stopped or
-        // looping guider would otherwise report a previous session's values to every consumer.
-        var (snr, mass) = state == "Guiding" ? _guider.LatestStarStats : default;
+        // looping guider would otherwise report a previous session's values to every consumer. With a
+        // star chosen but not guided there is no guide frame: the chosen star's own detection (the
+        // centroid at the lock position) stands in, so a tap shows an SNR at once (#1364 tap item).
+        var (snr, mass) = state == "Guiding" ? _guider.LatestStarStats
+            : state == "Selected" && lockPos is not null ? SelectedStarStats(stars, lockPos.X, lockPos.Y, region)
+            : default;
         return new GuiderLiveDto(
             Connected: true,
             AppState: state,
@@ -360,6 +364,27 @@ public sealed partial class GuiderLiveService : IGuiderLiveService {
 
     public Task<IReadOnlyList<string>> ApplyGuidingAssistantAsync(IReadOnlyList<string> which, CancellationToken ct) =>
         _guider.RequireConnectedGuider().ApplyGuidingAssistantAsync(which, ct);
+
+    /// <summary>PHD2's own default search region, used when the guider did not answer with one.</summary>
+    private const int DefaultSearchRegionPx = 15;
+
+    /// <summary>The detected star under the lock position (within the search region, nearest wins):
+    /// its SNR and mass are the chosen star's while the guider is looping with a star selected. Pure.</summary>
+    internal static (double? Snr, double? Mass) SelectedStarStats(IReadOnlyList<GuiderLiveStarDto> stars, double lockX, double lockY, int? searchRegion) {
+        var radius = searchRegion is int r && r > 0 ? r : DefaultSearchRegionPx;
+        GuiderLiveStarDto? best = null;
+        var bestD2 = double.MaxValue;
+        foreach (var s in stars) {
+            var dx = s.X - lockX;
+            var dy = s.Y - lockY;
+            var d2 = dx * dx + dy * dy;
+            if (d2 <= radius * (double)radius && d2 < bestD2) {
+                best = s;
+                bestD2 = d2;
+            }
+        }
+        return best is null ? default : (best.Snr, best.Mass);
+    }
 
     /// <summary>The guider's <c>guiding_assistant_get_status</c> result → DTO. Fields the guider left
     /// out (idle; fewer than two samples; no backlash test; not done) are null, never 0. Pure — unit-tested.</summary>

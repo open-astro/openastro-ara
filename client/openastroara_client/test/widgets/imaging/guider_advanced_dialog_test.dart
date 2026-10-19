@@ -195,6 +195,9 @@ void main() {
       p({'auto_exposure_min_ms': 4000, 'auto_exposure_max_ms': 1000}),
       contains('Auto exposure'),
     );
+    expect(p({'backlash_enabled': true}), contains('pulse width'));
+    expect(p({'backlash_enabled': true, 'backlash_pulse_ms': 450}), isNull);
+    expect(p({'backlash_enabled': false}), isNull);
     expect(
       p({'backlash_floor_ms': 300, 'backlash_ceiling_ms': 100}),
       contains('Backlash'),

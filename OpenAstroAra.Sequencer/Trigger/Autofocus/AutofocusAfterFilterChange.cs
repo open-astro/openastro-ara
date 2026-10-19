@@ -26,7 +26,6 @@ using OpenAstroAra.Sequencer.Validations;
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
-using System.ComponentModel.Composition;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -46,15 +45,9 @@ namespace OpenAstroAra.Sequencer.Trigger.Autofocus {
     /// filter, in which case the locally-tracked filter stands), and the runner content
     /// deserializes from the plan JSON.
     /// </summary>
-    [ExportMetadata("Name", "Lbl_SequenceTrigger_AutofocusAfterFilterChangeTrigger_Name")]
-    [ExportMetadata("Description", "Lbl_SequenceTrigger_AutofocusAfterFilterChangeTrigger_Description")]
-    [ExportMetadata("Icon", "AutoFocusAfterFilterSVG")]
-    [ExportMetadata("Category", "Lbl_SequenceCategory_Focuser")]
-    [Export(typeof(ISequenceTrigger))]
     [JsonObject(MemberSerialization.OptIn)]
     public class AutofocusAfterFilterChange : SequenceTrigger, IValidatable {
 
-        [ImportingConstructor]
         public AutofocusAfterFilterChange(IFilterWheelMediator? filterWheelMediator = null, IImageHistory? history = null, IProfileService? profileService = null, IAutofocusConditionGate? conditionGate = null) : base() {
             this.filterWheelMediator = filterWheelMediator;
             this.history = history;

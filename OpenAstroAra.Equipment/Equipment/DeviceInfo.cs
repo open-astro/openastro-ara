@@ -12,7 +12,6 @@
 
 #endregion "copyright"
 
-using CommunityToolkit.Mvvm.ComponentModel;
 using OpenAstroAra.Core.Utility;
 using System;
 using System.Linq;
@@ -20,27 +19,55 @@ using System.Reflection;
 
 namespace OpenAstroAra.Equipment.Equipment {
 
-    public partial class DeviceInfo : BaseINPC {
-        [ObservableProperty]
+    public class DeviceInfo : BaseINPC {
         private bool connected;
 
-        [ObservableProperty]
+        public bool Connected {
+            get => connected;
+            set => SetProperty(ref connected, value);
+        }
+
         private string name = string.Empty;
 
-        [ObservableProperty]
+        public string Name {
+            get => name;
+            set => SetProperty(ref name, value);
+        }
+
         private string displayName = string.Empty;
 
-        [ObservableProperty]
+        public string DisplayName {
+            get => displayName;
+            set => SetProperty(ref displayName, value);
+        }
+
         private string description = string.Empty;
 
-        [ObservableProperty]
+        public string Description {
+            get => description;
+            set => SetProperty(ref description, value);
+        }
+
         private string driverInfo = string.Empty;
 
-        [ObservableProperty]
+        public string DriverInfo {
+            get => driverInfo;
+            set => SetProperty(ref driverInfo, value);
+        }
+
         private string driverVersion = string.Empty;
 
-        [ObservableProperty]
+        public string DriverVersion {
+            get => driverVersion;
+            set => SetProperty(ref driverVersion, value);
+        }
+
         private string deviceId = string.Empty;
+
+        public string DeviceId {
+            get => deviceId;
+            set => SetProperty(ref deviceId, value);
+        }
 
         public static T CreateDefaultInstance<T>() where T : DeviceInfo, new() {
             return new T() {

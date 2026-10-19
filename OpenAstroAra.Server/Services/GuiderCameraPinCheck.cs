@@ -59,22 +59,50 @@ public static class GuiderCameraPinCheck {
         if (devices.Count > 0 && pinned.Length > 0) {
             devices.TryGetValue(key, out var atNumber);
             if (atNumber is null || !string.Equals(atNumber.UniqueId, pinned, StringComparison.Ordinal)) {
-                var moved = devices.FirstOrDefault(d => d.Key.StartsWith("camera/", StringComparison.Ordinal)
-                    && string.Equals(d.Value.UniqueId, pinned, StringComparison.Ordinal));
-                if (moved.Key is not null) {
-                    return $"The guide camera '{selection}' has moved: the camera you picked ({moved.Value.Name}, {pinned}) is now "
-                        + $"{moved.Key} on {ep.Host}:{ep.Port}, and {key} is {(atNumber is null ? "not offered" : $"'{atNumber.Name}'")}. "
+                if (MovedTo(pinned, devices) is { } movedKey) {
+                    return $"The guide camera '{selection}' has moved: the camera you picked ({devices[movedKey].Name}, {pinned}) is now "
+                        + $"{movedKey} on {ep.Host}:{ep.Port}, and {key} is {(atNumber is null ? "not offered" : $"'{atNumber.Name}'")}. "
                         + "Pick the guide camera again before applying.";
                 }
-                return $"The guide camera '{selection}' is no longer offered by {ep.Host}:{ep.Port}: the camera you picked "
-                    + $"({pinned}) is not in its device list{(atNumber is null ? "" : $" and {key} is now '{atNumber.Name}'")}. "
-                    + "Pick the guide camera again before applying.";
+                if (atNumber is null) {
+                    return $"The guide camera '{selection}' is no longer offered by {ep.Host}:{ep.Port}: the camera you picked "
+                        + $"({pinned}) is not in its device list. Pick the guide camera again before applying.";
+                }
+                // #1362 — the picked camera is gone and another answers at its number: a swap behind the same
+                // connection. Not refused (the main-camera check below still applies): the connect-time
+                // reconcile re-pins the slot's camera, re-reads its pixel size and tells the user.
             }
         }
 
-        if (mainCamera is null) {
+        return IsMainCamera(settings, devices, mainCamera)
+            ? $"The guide camera '{selection}' is the main imaging camera ({mainCamera!.Name}). "
+                + "The guider must not open the camera the sequence images with; pick the guide camera instead."
+            : null;
+    }
+
+    /// <summary>The <c>camera/N</c> key the pinned id answers under, or null when it is not on the server (or
+    /// nothing is pinned). A non-null answer is the "has moved" case, which the connect-time reconcile must not
+    /// re-pin over (#1362 review).</summary>
+    public static string? MovedTo(string? pinnedUniqueId, IReadOnlyDictionary<string, AlpacaConfiguredDevice> devices) {
+        ArgumentNullException.ThrowIfNull(devices);
+        var pinned = (pinnedUniqueId ?? string.Empty).Trim();
+        if (pinned.Length == 0) {
             return null;
         }
+        return devices.FirstOrDefault(d => d.Key.StartsWith("camera/", StringComparison.Ordinal)
+            && string.Equals(d.Value.UniqueId, pinned, StringComparison.Ordinal)).Key;
+    }
+
+    /// <summary>The main-camera half of <see cref="Describe"/> alone: whether the picked slot is the imaging
+    /// camera the daemon holds, by identity when the server told us ids, else by address.</summary>
+    public static bool IsMainCamera(IGuiderSettings settings,
+            IReadOnlyDictionary<string, AlpacaConfiguredDevice> devices, DiscoveredDeviceDto? mainCamera) {
+        ArgumentNullException.ThrowIfNull(settings);
+        ArgumentNullException.ThrowIfNull(devices);
+        if (mainCamera is null || CameraEndpoint(settings) is not { } ep) {
+            return false;
+        }
+        var key = $"camera/{ep.Device.ToString(CultureInfo.InvariantCulture)}";
         // The main imaging camera, by identity when the server told us ids, else by address.
         var sameServer = ep.Port == mainCamera.IpPort
             && (string.Equals(ep.Host, mainCamera.IpAddress, StringComparison.OrdinalIgnoreCase)
@@ -90,11 +118,7 @@ public static class GuiderCameraPinCheck {
         // (review r2), so the same string on another AlpacaBridge host is a different camera.
         var byId = idsKnown && sameServer && string.Equals(picked!.UniqueId, mainCamera.UniqueId, StringComparison.Ordinal);
         var byNumber = !idsKnown && sameServer && ep.Device == mainCamera.AlpacaDeviceNumber;
-        if (byId || byNumber) {
-            return $"The guide camera '{selection}' is the main imaging camera ({mainCamera.Name}). "
-                + "The guider must not open the camera the sequence images with; pick the guide camera instead.";
-        }
-        return null;
+        return byId || byNumber;
     }
 
     private static bool IsLoopback(string? host) =>

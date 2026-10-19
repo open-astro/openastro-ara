@@ -19,18 +19,12 @@ using OpenAstroAra.Sequencer.SequenceItem;
 using OpenAstroAra.Sequencer.Utility;
 using System;
 using System.Collections.Generic;
-using System.ComponentModel.Composition;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
 namespace OpenAstroAra.Sequencer.Conditions {
 
-    [ExportMetadata("Name", "Lbl_SequenceCondition_TimeSpanCondition_Name")]
-    [ExportMetadata("Description", "Lbl_SequenceCondition_TimeSpanCondition_Description")]
-    [ExportMetadata("Icon", "HourglassSVG")]
-    [ExportMetadata("Category", "Lbl_SequenceCategory_Condition")]
-    [Export(typeof(ISequenceCondition))]
     [JsonObject(MemberSerialization.OptIn)]
     public class TimeSpanCondition : SequenceCondition {
         private int hours;
@@ -39,7 +33,6 @@ namespace OpenAstroAra.Sequencer.Conditions {
 
         private int seconds;
 
-        [ImportingConstructor]
         public TimeSpanCondition() {
             DateTime = new SystemDateTime();
             Minutes = 1;

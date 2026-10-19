@@ -14,8 +14,6 @@
 
 using OpenAstroAra.Astrometry.RiseAndSet;
 using OpenAstroAra.Core.Utility;
-using OxyPlot;
-using OxyPlot.Axes;
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
@@ -44,8 +42,8 @@ namespace OpenAstroAra.Astrometry {
             this.SunRiseAndSet = sunRiseAndSet;
             this.MoonRiseAndSet = moonRiseAndSet;
             this.ReferenceDateSpan = new List<DataPoint>() {
-                new DataPoint(Axis.ToDouble(referenceDate), 0),
-                new DataPoint(Axis.ToDouble(referenceDate.AddDays(1)), 0)
+                new DataPoint(PlotTime.ToDouble(referenceDate), 0),
+                new DataPoint(PlotTime.ToDouble(referenceDate.AddDays(1)), 0)
             };
             this.NightDuration = new AsyncObservableCollection<DataPoint>(CalculateNightDuration(twilightRiseAndSet));
             this.TwilightDuration = new AsyncObservableCollection<DataPoint>(CalculateTwilightDuration(twilightRiseAndSet, sunRiseAndSet));
@@ -64,7 +62,7 @@ namespace OpenAstroAra.Astrometry {
                     twilightSet = twilightSet?.AddDays(-1);
                 }
                 var dataPointsBuilder = ImmutableList.CreateBuilder<DataPoint>();
-                dataPointsBuilder.Add(new DataPoint(Axis.ToDouble(twilightSet), 90));
+                dataPointsBuilder.Add(new DataPoint(PlotTime.ToDouble(twilightSet), 90));
                 if (sunRiseAndSet != null) {
                     var rise = sunRiseAndSet.Rise;
                     var set = sunRiseAndSet.SetTime;
@@ -72,13 +70,13 @@ namespace OpenAstroAra.Astrometry {
                         if (set.Value > rise.Value) {
                             set = set?.AddDays(-1);
                         }
-                        dataPointsBuilder.Add(new DataPoint(Axis.ToDouble(set), 90));
-                        dataPointsBuilder.Add(new DataPoint(Axis.ToDouble(set), 0));
-                        dataPointsBuilder.Add(new DataPoint(Axis.ToDouble(rise), 0));
-                        dataPointsBuilder.Add(new DataPoint(Axis.ToDouble(rise), 90));
+                        dataPointsBuilder.Add(new DataPoint(PlotTime.ToDouble(set), 90));
+                        dataPointsBuilder.Add(new DataPoint(PlotTime.ToDouble(set), 0));
+                        dataPointsBuilder.Add(new DataPoint(PlotTime.ToDouble(rise), 0));
+                        dataPointsBuilder.Add(new DataPoint(PlotTime.ToDouble(rise), 90));
                     }
                 }
-                dataPointsBuilder.Add(new DataPoint(Axis.ToDouble(twilightRise), 90));
+                dataPointsBuilder.Add(new DataPoint(PlotTime.ToDouble(twilightRise), 90));
                 return dataPointsBuilder.ToImmutable();
             }
             return ImmutableList.Create<DataPoint>();
@@ -92,7 +90,7 @@ namespace OpenAstroAra.Astrometry {
                     nauticalTwilightSet = nauticalTwilightSet?.AddDays(-1);
                 }
                 var dataPointsBuilder = ImmutableList.CreateBuilder<DataPoint>();
-                dataPointsBuilder.Add(new DataPoint(Axis.ToDouble(nauticalTwilightSet), 90));
+                dataPointsBuilder.Add(new DataPoint(PlotTime.ToDouble(nauticalTwilightSet), 90));
                 if (sunRiseAndSet != null) {
                     var rise = sunRiseAndSet.Rise;
                     var set = sunRiseAndSet.SetTime;
@@ -100,13 +98,13 @@ namespace OpenAstroAra.Astrometry {
                         if (set.Value > rise.Value) {
                             set = set?.AddDays(-1);
                         }
-                        dataPointsBuilder.Add(new DataPoint(Axis.ToDouble(set), 90));
-                        dataPointsBuilder.Add(new DataPoint(Axis.ToDouble(set), 0));
-                        dataPointsBuilder.Add(new DataPoint(Axis.ToDouble(rise), 0));
-                        dataPointsBuilder.Add(new DataPoint(Axis.ToDouble(rise), 90));
+                        dataPointsBuilder.Add(new DataPoint(PlotTime.ToDouble(set), 90));
+                        dataPointsBuilder.Add(new DataPoint(PlotTime.ToDouble(set), 0));
+                        dataPointsBuilder.Add(new DataPoint(PlotTime.ToDouble(rise), 0));
+                        dataPointsBuilder.Add(new DataPoint(PlotTime.ToDouble(rise), 90));
                     }
                 }
-                dataPointsBuilder.Add(new DataPoint(Axis.ToDouble(nauticalTwilightRise), 90));
+                dataPointsBuilder.Add(new DataPoint(PlotTime.ToDouble(nauticalTwilightRise), 90));
                 return dataPointsBuilder.ToImmutable();
             }
             return ImmutableList.Create<DataPoint>();
@@ -120,8 +118,8 @@ namespace OpenAstroAra.Astrometry {
                     set = set?.AddDays(-1);
                 }
                 return ImmutableList.Create(
-                    new DataPoint(Axis.ToDouble(rise), 90),
-                    new DataPoint(Axis.ToDouble(set), 90));
+                    new DataPoint(PlotTime.ToDouble(rise), 90),
+                    new DataPoint(PlotTime.ToDouble(set), 90));
             }
 
             return ImmutableList.Create<DataPoint>();

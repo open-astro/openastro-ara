@@ -183,6 +183,19 @@ final _m31 = TonightSkyObject(
 );
 
 // A low-scoring, oversized target — must still appear (advise, don't dictate).
+final _nam = TonightSkyObject(
+  id: 'NGC7000',
+  name: 'North America Nebula',
+  type: 'Neb',
+  magnitude: null,
+  raDeg: 314.8,
+  decDeg: 44.5,
+  altitudeDeg: 50,
+  maxAltitudeDeg: 70,
+  aliases: const ['C 020', 'LBN 373', 'Sh2-117'],
+  score: 70,
+);
+
 const _ngc = TonightSkyObject(
   id: 'NGC1976',
   name: 'Orion Nebula',
@@ -334,6 +347,13 @@ void main() {
         findsOneWidget);
     // S8: flush the confirmation card's auto-dismiss timer.
     await tester.pump(const Duration(seconds: 7));
+  });
+
+  testWidgets('a merged row lists its other designations under the name (#1267)',
+      (tester) async {
+    await tester.pumpWidget(_host(_RecordingClient(), objects: [_nam]));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('also Sh2-117, C 020, LBN 373'), findsOneWidget);
   });
 
   testWidgets('tapping the row sends a framing goto and highlights the row',
@@ -970,5 +990,19 @@ void _budgetTests() {
     expect(row('Full well (e⁻)'), defaultFullWellE.toStringAsFixed(0));
     expect(row('Aperture (mm)'), '91');
     expect(find.textContaining('Suggested exposure:'), findsOneWidget);
+  });
+
+  test('aliasSuffix lists up to three other designations (#1267 item 4)', () {
+    expect(aliasSuffix(const []), '');
+    expect(aliasSuffix(const ['C 020', 'Sh2-117']), ' · also Sh2-117, C 020');
+    expect(
+      aliasSuffix(const ['2MASX J00424433+4116074', 'Messier 31', 'UGC 00454', 'M 31']),
+      ' · also M 31',
+    );
+    expect(
+      aliasSuffix(const ['LBN 1', 'Arp 2', 'IC 3', 'NGC 4', 'M 5']),
+      ' · also M 5, NGC 4, IC 3, …',
+    );
+    expect(aliasSuffix(const ['2MASX J1', 'PGC 2']), '');
   });
 }

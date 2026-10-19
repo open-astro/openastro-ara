@@ -19,21 +19,14 @@ using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Sequencer.Validations;
 using System;
 using System.Collections.Generic;
-using System.ComponentModel.Composition;
 using System.Threading;
 using System.Threading.Tasks;
 
 namespace OpenAstroAra.Sequencer.SequenceItem.Dome {
 
-    [ExportMetadata("Name", "Lbl_SequenceItem_Dome_CloseDomeShutter_Name")]
-    [ExportMetadata("Description", "Lbl_SequenceItem_Dome_CloseDomeShutter_Description")]
-    [ExportMetadata("Icon", "ObservatoryClosedSVG")]
-    [ExportMetadata("Category", "Lbl_SequenceCategory_Dome")]
-    [Export(typeof(ISequenceItem))]
     [JsonObject(MemberSerialization.OptIn)]
     public class CloseDomeShutter : SequenceItem, IValidatable {
 
-        [ImportingConstructor]
         public CloseDomeShutter(IDomeMediator domeMediator) {
             this.domeMediator = domeMediator;
         }

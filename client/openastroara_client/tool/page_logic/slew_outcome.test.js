@@ -111,6 +111,7 @@ test('a failed telescope poll never invents a result', async () => {
 
 test('HTTP outcomes: 500 is No mount, other errors are Slew failed, a network error is No mount', async () => {
   assert.deepEqual(await goTo(daemon({ states: ['idle'], post: { ok: false, status: 500 } })), ['No mount']);
-  assert.deepEqual(await goTo(daemon({ states: ['idle'], post: { ok: false, status: 409 } })), ['Slew failed']);
+  assert.deepEqual(await goTo(daemon({ states: ['idle'], post: { ok: false, status: 422 } })), ['Slew failed']);
+  // 409 is the daemon's run_in_progress refusal: reported as such (goto_run_guard.test.js), never "Slew failed".
   assert.deepEqual(await goTo(daemon({ states: ['idle'], post: new Error('ECONNREFUSED') })), ['No mount']);
 });

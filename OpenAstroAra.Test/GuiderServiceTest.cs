@@ -18,6 +18,7 @@ using NUnit.Framework;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Services;
 using System;
+using System.Collections.Generic;
 using System.Threading;
 
 namespace OpenAstroAra.Test {
@@ -133,6 +134,19 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void The_selected_stars_stats_come_from_the_centroid_under_the_lock_within_the_search_region() {
+            var stars = new List<GuiderLiveStarDto> {
+                new(100, 100, 11, 500, 2.0),
+                new(640.5, 480.2, 42, 12000, 2.1),
+                new(645, 486, 30, 9000, 2.4),
+            };
+            Assert.That(GuiderLiveService.SelectedStarStats(stars, 640.12, 480.46, 15), Is.EqualTo(((double?)42.0, (double?)12000.0)), "nearest within the region");
+            Assert.That(GuiderLiveService.SelectedStarStats(stars, 300, 300, 15), Is.EqualTo(((double?)null, (double?)null)), "nothing under the lock");
+            Assert.That(GuiderLiveService.SelectedStarStats(stars, 646, 487, 2), Is.EqualTo(((double?)30.0, (double?)9000.0)), "a small region still finds the star it covers");
+            Assert.That(GuiderLiveService.SelectedStarStats(new List<GuiderLiveStarDto>(), 640, 480, null), Is.EqualTo(((double?)null, (double?)null)));
+        }
+
+        [Test]
         public void Every_guider_phase_has_its_own_state_token() {
             // #1364 item 6 — looping and a selected star used to read "stopped" while the guide camera was
             // busy; a guiding session that settles reads "settling".
@@ -142,6 +156,13 @@ namespace OpenAstroAra.Test {
             Assert.That(GuiderService.MapGuidingState("Guiding"), Is.EqualTo("guiding"));
             Assert.That(GuiderService.MapGuidingState("Guiding", settling: true), Is.EqualTo("settling"));
             Assert.That(GuiderService.MapGuidingState("Calibrating", settling: true), Is.EqualTo("calibrating"), "settling only qualifies guiding");
+            // The Guiding Assistant: PHD2 says Guiding (or Looping/Selected between phases) while nothing is corrected.
+            Assert.That(GuiderService.MapGuidingState("Guiding", assistant: true), Is.EqualTo("assistant"));
+            Assert.That(GuiderService.MapGuidingState("Guiding", settling: true, assistant: true), Is.EqualTo("assistant"));
+            Assert.That(GuiderService.MapGuidingState("Selected", assistant: true), Is.EqualTo("assistant"));
+            Assert.That(GuiderService.MapGuidingState("Looping", assistant: true), Is.EqualTo("assistant"));
+            Assert.That(GuiderService.MapGuidingState("Calibrating", assistant: true), Is.EqualTo("calibrating"), "a calibration is still a calibration");
+            Assert.That(GuiderService.MapGuidingState("Stopped", assistant: true), Is.EqualTo("stopped"), "a stale flag never invents a run");
             Assert.That(GuiderService.MapGuidingState("LostLock"), Is.EqualTo("star_lost"));
             Assert.That(GuiderService.MapGuidingState("Paused"), Is.EqualTo("paused"));
             Assert.That(GuiderService.MapGuidingState("Stopped"), Is.EqualTo("stopped"));

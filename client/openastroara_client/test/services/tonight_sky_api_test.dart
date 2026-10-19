@@ -43,6 +43,12 @@ void main() {
       expect(o.maxAltitudeDeg, 89.0);
     });
 
+    test('parses the aliases, tolerating a missing or mixed list (#1267)', () {
+      expect(TonightSkyObject.fromJson(body())!.aliases, isEmpty);
+      final o = TonightSkyObject.fromJson({...body(), 'aliases': ['Sh2-117', 3, 'C 020']})!;
+      expect(o.aliases, ['Sh2-117', 'C 020']);
+    });
+
     test('parses the §36.8 planner fields', () {
       final o = TonightSkyObject.fromJson(body())!;
       expect(o.sizeMajArcmin, 190.0);

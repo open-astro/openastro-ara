@@ -209,6 +209,12 @@ public sealed partial class FileProfileStore : IProfileStore {
     public CalibrationStateDto GetCalibrationState() { lock (_lock) { return _snapshot.CalibrationState!; } }
     public void PutCalibrationState(CalibrationStateDto value) => UpdateAndPersist(s => s with { CalibrationState = value });
 
+    public EquipmentIdentityDto GetEquipmentIdentity() { lock (_lock) { return _snapshot.EquipmentIdentity!; } }
+    public void PutEquipmentIdentity(EquipmentIdentityDto value) => UpdateAndPersist(s => s with { EquipmentIdentity = value });
+
+    public SavedTargetsDto GetSavedTargets() { lock (_lock) { return _snapshot.SavedTargets!; } }
+    public void PutSavedTargets(SavedTargetsDto value) => UpdateAndPersist(s => s with { SavedTargets = value });
+
     public event EventHandler? Changed;
 
     private void UpdateAndPersist(Func<ProfileSnapshotDto, ProfileSnapshotDto> mutate) {

@@ -19,21 +19,14 @@ using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Sequencer.Validations;
 using System;
 using System.Collections.Generic;
-using System.ComponentModel.Composition;
 using System.Threading;
 using System.Threading.Tasks;
 
 namespace OpenAstroAra.Sequencer.SequenceItem.Telescope {
 
-    [ExportMetadata("Name", "Lbl_SequenceItem_Telescope_FindHome_Name")]
-    [ExportMetadata("Description", "Lbl_SequenceItem_Telescope_FindHome_Description")]
-    [ExportMetadata("Icon", "HomeSVG")]
-    [ExportMetadata("Category", "Lbl_SequenceCategory_Telescope")]
-    [Export(typeof(ISequenceItem))]
     [JsonObject(MemberSerialization.OptIn)]
     public class FindHome : SequenceItem, IValidatable {
 
-        [ImportingConstructor]
         public FindHome(ITelescopeMediator telescopeMediator, IGuiderMediator guiderMediator) {
             this.telescopeMediator = telescopeMediator;
             this.guiderMediator = guiderMediator;
