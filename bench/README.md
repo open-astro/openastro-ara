@@ -7,8 +7,9 @@ Raspberry Pi deployment targets — not just the developer's macOS host.
 
 ## What it runs
 
-The three hardware-free bench suites, all driving in-process stubs (no OmniSim, no
-PHD2 daemon, no devices):
+Every fixture tagged `[Category("bench")]` in `OpenAstroAra.Test` (25 files as of
+2026-10-19: `grep -rl 'Category("bench")' OpenAstroAra.Test`), all driving in-process
+stubs (no OmniSim, no PHD2 daemon, no devices). The three founding suites:
 
 - **`AlpacaFaultProxyTest`** — the loopback Alpaca fault proxy (bench-1) in front of
   an in-process `StubAlpaca`.
@@ -16,6 +17,14 @@ PHD2 daemon, no devices):
 - **`GuiderFakeIntegrationTest`** — the real `GuiderService`/`PHD2Guider` driven
   through the connect→guiding→RMS lifecycle (bench-3) and the star-lost / link-drop
   fault scenarios (bench-4).
+
+The rest grew around them: the guider's live, advanced-settings, dark-library,
+host-gating, reconnect and active-poll fixtures; the telescope's meridian, latched-fault
+and equatorial-system fixtures; camera cooling and exposure events; the cooling-fan
+interlock; switch readback; filter-wheel first-connect homing; slew and state-channel
+fault watches; polar alignment; equipment fault detection; the storage exchange round
+trip. The lane runs them all by category, so a new `[Category("bench")]` fixture joins
+automatically.
 
 ## Why a dedicated Linux lane
 
