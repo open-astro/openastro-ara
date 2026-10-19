@@ -579,7 +579,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             } finally {
                 progress?.Report(new ApplicationStatus { Status = string.Empty });
             }
-            Logger.Info(state == PhdAppState.GUIDING ? "Phd2 - the guide star is back; dithering" : $"Phd2 - the guide star did not come back (state {state})");
+            Logger.Info(state == PhdAppState.GUIDING ? "Phd2 - the guide star is back; dithering" : $"Phd2 - the guide star did not come back (state {(string.IsNullOrEmpty(state) ? "unknown: the guider did not answer" : state)})");
             return state;
         }
 

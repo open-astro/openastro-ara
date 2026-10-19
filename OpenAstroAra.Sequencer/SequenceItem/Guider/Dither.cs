@@ -102,14 +102,16 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Guider {
                     restartTried = true;
                     Logger.Warning("Dither: the guider is not guiding — restarting guiding before the dither");
                     progress?.Report(new ApplicationStatus { Status = "Guider is not guiding — restarting guiding, then dithering" });
-                    var restarted = await TryRestartGuidingAsync(progress, token);
+                    var (restarted, fault) = await TryRestartGuidingAsync(progress, token);
                     // An abort during the restart makes StartGuiding return false rather than throw: leave
                     // without a brief "paused awaiting user" on the way out.
                     token.ThrowIfCancellationRequested();
                     if (restarted) {
                         continue;
                     }
-                    error = "the guider is not guiding and restarting it did not help";
+                    error = fault is null
+                        ? "the guider is not guiding and restarting it did not help"
+                        : $"the guider is not guiding and restarting it failed: {fault}";
                 }
                 var why = sent ? $"the guider did not settle twice ({error})" : error;
                 if (gate is null) {
@@ -129,14 +131,16 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Guider {
 
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
             Justification = "A guider fault while restarting is the reason to park the run awaiting the user, with its message; cancellation is rethrown.")]
-        private async Task<bool> TryRestartGuidingAsync(IProgress<ApplicationStatus>? progress, CancellationToken token) {
+        /// <summary>Started, or not and why: a guider fault's message rides into the park reason so the
+        /// user reads "no star selected" rather than a generic "did not help".</summary>
+        private async Task<(bool Started, string? Fault)> TryRestartGuidingAsync(IProgress<ApplicationStatus>? progress, CancellationToken token) {
             try {
-                return await guiderMediator.StartGuiding(false, progress ?? new Progress<ApplicationStatus>(), token);
+                return (await guiderMediator.StartGuiding(false, progress ?? new Progress<ApplicationStatus>(), token), null);
             } catch (OperationCanceledException) {
                 throw;
             } catch (Exception ex) {
                 Logger.Warning($"Dither: restarting guiding failed — {ex.Message}");
-                return false;
+                return (false, string.IsNullOrWhiteSpace(ex.Message) ? ex.GetType().Name : ex.Message);
             }
         }
 

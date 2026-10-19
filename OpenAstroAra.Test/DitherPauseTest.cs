@@ -171,10 +171,12 @@ namespace OpenAstroAra.Test {
             guider.Setup(g => g.StartGuiding(false, It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()))
                 .ThrowsAsync(new InvalidOperationException("no star selected"));
             var (item, gate) = Rig(guider.Object);
+            string? status = null;
 
-            var execute = item.Execute(NoProgress, CancellationToken.None);
+            var execute = item.Execute(new SyncProgress(s => status = s.Status), CancellationToken.None);
             Assert.That(await PauseRequested(gate), Is.True, "a throwing restart parks the run instead of failing the item");
             Assert.That(calls, Has.Count.EqualTo(1));
+            Assert.That(status, Does.Contain("no star selected"), "the guider's own words reach the user");
             gate.Resume();
             await execute.WaitAsync(TimeSpan.FromSeconds(5));
         }
