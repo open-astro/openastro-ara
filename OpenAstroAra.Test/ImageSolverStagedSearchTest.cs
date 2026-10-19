@@ -190,6 +190,21 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_solve_that_starts_blind_gets_the_blind_budget() {
+            // Bot round 6 — a frame with no pointing header and no body hint solved whole-sky with the
+            // hinted 60 s budget, ten times less than before this PR.
+            var blind = new RecordingSolver();
+            var p = Hinted();
+            p.Coordinates = null;
+            await new ImageSolver(new RecordingSolver(), blind).Solve(Mock.Of<IImageData>(), p, null, CancellationToken.None);
+            Assert.That(blind.Calls.Single().Timeout, Is.EqualTo(TimeSpan.FromSeconds(300)), "x5 of the profile's 60 s");
+            p.Timeout = null;
+            blind.Calls.Clear();
+            await new ImageSolver(new RecordingSolver(), blind).Solve(Mock.Of<IImageData>(), p, null, CancellationToken.None);
+            Assert.That(blind.Calls.Single().Timeout, Is.Null, "no profile timeout: the solver's own cap");
+        }
+
+        [Test]
         public void A_blind_parameter_has_no_stages() {
             var p = Hinted();
             p.Coordinates = null;

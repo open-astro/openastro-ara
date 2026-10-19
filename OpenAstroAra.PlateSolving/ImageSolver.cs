@@ -49,7 +49,8 @@ namespace OpenAstroAra.PlateSolving {
             // stage and keeps the caller's setting.
             PlateSolveResult result;
             if (parameter.Coordinates == null) {
-                result = await RunStage("blind", parameter, source, progress, ct);
+                // A solve that starts blind gets the blind budget too (x5), not the hinted one.
+                result = await RunStage("blind", BlindBudget(parameter), source, progress, ct);
             } else {
                 // #1136 — staged search. A hinted solve fails for one of three reasons, each with a
                 // cheaper fix than a whole-sky search: the mount lost sync but the scope hasn't moved
@@ -73,6 +74,16 @@ namespace OpenAstroAra.PlateSolving {
             progress?.Report(new ApplicationStatus() { Status = string.Empty });
 
             return result;
+        }
+
+        /// <summary>A copy of <paramref name="parameter"/> with the whole-sky budget
+        /// (<see cref="SolveTuning.TimeoutFor"/> at 180°) when a timeout is set.</summary>
+        private static PlateSolveParameter BlindBudget(PlateSolveParameter parameter) {
+            var blind = parameter.Clone();
+            if (parameter.Timeout is TimeSpan t) {
+                blind.Timeout = SolveTuning.TimeoutFor(t, 180);
+            }
+            return blind;
         }
 
         /// <summary>The parameter for one stage: notifications off unless it is the last stage.</summary>
@@ -129,11 +140,8 @@ namespace OpenAstroAra.PlateSolving {
                 }
             }
             if (parameter.BlindFailoverEnabled) {
-                var blind = parameter.Clone();
+                var blind = BlindBudget(parameter);
                 blind.Coordinates = null;
-                if (parameter.Timeout is TimeSpan t) {
-                    blind.Timeout = SolveTuning.TimeoutFor(t, 180);
-                }
                 yield return new SearchStage("blind", blind);
             }
         }
@@ -159,11 +167,24 @@ namespace OpenAstroAra.PlateSolving {
             if (!SolveTuning.ScaleMismatch(expected, result.Pixscale)) {
                 return;
             }
+            // Once per ten minutes: on a rig whose optics are wrong every center-after-drift solve
+            // would otherwise log it, one warning per light frame.
+            var now = DateTime.UtcNow;
+            lock (MismatchGate) {
+                if (now - lastMismatchWarningUtc < MismatchWarningInterval) {
+                    return;
+                }
+                lastMismatchWarningUtc = now;
+            }
             var measured = SolveTuning.FocalLengthFromScale(parameter.PixelSize, result.Pixscale);
             Logger.Warning($"Plate solve - the solved scale {result.Pixscale:0.00}\"/px disagrees with the profile's {expected:0.00}\"/px: the optics imply a focal length of about {measured:0} mm, the profile says {parameter.FocalLength:0} mm (binning {parameter.Binning}). Fix Options → Imaging → Optics so hinted solves start from the right field.");
         }
         private IPlateSolver plateSolver;
         private IPlateSolver blindSolver;
+
+        private static readonly object MismatchGate = new();
+        private static DateTime lastMismatchWarningUtc = DateTime.MinValue;
+        private static readonly TimeSpan MismatchWarningInterval = TimeSpan.FromMinutes(10);
 
         protected IPlateSolver GetSolver(PlateSolveParameter parameter) {
             if (parameter.Coordinates == null) {
