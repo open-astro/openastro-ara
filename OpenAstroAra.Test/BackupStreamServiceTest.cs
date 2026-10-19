@@ -111,6 +111,77 @@ namespace OpenAstroAra.Test {
             Assert.That(byDefault!.Single(q => q.Id == missing.Id).Sha256, Is.Null);
         }
 
+        private sealed class RecordingLogger<T> : Microsoft.Extensions.Logging.ILogger<T> {
+            public List<(Microsoft.Extensions.Logging.LogLevel Level, string Message)> Lines { get; } = new();
+            public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+            public bool IsEnabled(Microsoft.Extensions.Logging.LogLevel logLevel) => true;
+            public void Log<TState>(Microsoft.Extensions.Logging.LogLevel logLevel, Microsoft.Extensions.Logging.EventId eventId,
+                TState state, Exception? exception, Func<TState, Exception?, string> formatter) {
+                lock (Lines) { Lines.Add((logLevel, formatter(state, exception))); }
+            }
+        }
+
+        [Test]
+        public async Task The_repositorys_confinement_leaves_out_an_out_of_roots_row_quietly_and_says_so_once() {
+            // The production wiring: a real SqliteFrameRepository with the test dir as the only capture
+            // root. A row catalogued elsewhere (the 2026-10-18 pre-store rows) is left out, the
+            // repository's per-poll "Frame file refused" warning is NOT written, and the queue says so once.
+            var inside = await InsertFrameAsync("inside", DateTimeOffset.UtcNow.AddMinutes(-2));
+            var elsewhere = Path.Combine(Path.GetTempPath(), $"oara-elsewhere-{Guid.NewGuid():N}");
+            Directory.CreateDirectory(elsewhere);
+            var outsidePath = Path.Combine(elsewhere, "old.fits");
+            await File.WriteAllTextAsync(outsidePath, "FITS-old");
+            Guid outsideId;
+            await using (var conn = _db.OpenConnection()) {
+                await using var cmd = conn.CreateCommand();
+                outsideId = Guid.NewGuid();
+                cmd.CommandText = """
+                    INSERT INTO frames (id, session_id, target_name, frame_type, filter_name, exposure_seconds, captured_utc, file_path, file_size_bytes, width, height, bit_depth)
+                    VALUES ($id, $sid, 'M31', 'light', 'L', 300, $t, $path, 8, 100, 100, 16);
+                    """;
+                cmd.Parameters.AddWithValue("$id", outsideId.ToString());
+                cmd.Parameters.AddWithValue("$sid", Session.ToString());
+                cmd.Parameters.AddWithValue("$t", DateTimeOffset.UtcNow.AddMinutes(-3).ToString("O"));
+                cmd.Parameters.AddWithValue("$path", outsidePath);
+                await cmd.ExecuteNonQueryAsync();
+            }
+            var repoLog = new RecordingLogger<SqliteFrameRepository>();
+            var repo = new SqliteFrameRepository(_db, new InMemoryProfileStore(), logger: repoLog, captureRoots: () => new[] { _dir });
+            var queueLog = new RecordingLogger<BackupStreamService>();
+            var svc = new BackupStreamService(_db, logger: queueLog, isServable: repo.IsServableFile);
+            await svc.ClaimAsync(new BackupStreamClaimRequestDto("wilma-desk"), CancellationToken.None);
+            try {
+                var first = await svc.GetQueueAsync("wilma-desk", 50, CancellationToken.None);
+                var second = await svc.GetQueueAsync("wilma-desk", 50, CancellationToken.None);
+
+                Assert.That(first!.Select(q => q.Id), Is.EqualTo(new[] { inside.Id }));
+                Assert.That(second!.Select(q => q.Id), Is.EqualTo(new[] { inside.Id }));
+                Assert.That(repoLog.Lines.Where(l => l.Level == Microsoft.Extensions.Logging.LogLevel.Warning), Is.Empty,
+                    "the queue's check never writes the per-poll 'Frame file refused' warning");
+                Assert.That(queueLog.Lines.Count(l => l.Message.Contains(outsideId.ToString(), StringComparison.Ordinal)), Is.EqualTo(1),
+                    "left out of the queue is said once, not per poll");
+            } finally {
+                try { Directory.Delete(elsewhere, recursive: true); } catch (IOException) { }
+            }
+        }
+
+        [Test]
+        public async Task Unservable_rows_are_skipped_inside_the_paging_so_a_small_page_still_carries_newer_frames() {
+            // Three refused rows older than the one good frame, page size 2: the old queue returned an
+            // empty page for ever; the page is now filled past the skipped rows.
+            for (var i = 0; i < 3; i++) {
+                var f = await InsertFrameAsync($"gone-{i}", DateTimeOffset.UtcNow.AddMinutes(-10 + i));
+                File.Delete(f.Path);
+            }
+            var good = await InsertFrameAsync("good", DateTimeOffset.UtcNow.AddMinutes(-1));
+            var svc = new BackupStreamService(_db, isServable: File.Exists);
+            await svc.ClaimAsync(new BackupStreamClaimRequestDto("wilma-desk"), CancellationToken.None);
+
+            var page = await svc.GetQueueAsync("wilma-desk", 2, CancellationToken.None);
+
+            Assert.That(page!.Select(q => q.Id), Is.EqualTo(new[] { good.Id }));
+        }
+
         [Test]
         public async Task Claim_is_single_target_with_idempotent_reclaim_and_stale_takeover() {
             var first = await _svc.ClaimAsync(new BackupStreamClaimRequestDto("wilma-desk"), CancellationToken.None);
