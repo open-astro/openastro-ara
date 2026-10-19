@@ -143,7 +143,8 @@ List<CustomTarget> threeWayMergeSavedTargets({
   // daemon's, so equal-time entries never read as a difference to push.
   out.sort((a, b) {
     final byTime = b.savedUtc.compareTo(a.savedUtc);
-    return byTime != 0 ? byTime : a.name.toLowerCase().compareTo(b.name.toLowerCase());
+    // OrdinalIgnoreCase on the daemon compares upper-cased text.
+    return byTime != 0 ? byTime : a.name.toUpperCase().compareTo(b.name.toUpperCase());
   });
   return out.take(CustomTargetsService.maxEntries).toList();
 }
