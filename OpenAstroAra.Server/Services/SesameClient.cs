@@ -108,7 +108,8 @@ public sealed partial class SesameClient : ISesameClient, IDisposable {
         var settings = new XmlReaderSettings { DtdProcessing = DtdProcessing.Prohibit, XmlResolver = null };
         using var reader = XmlReader.Create(new StringReader(xml), settings);
         var doc = XDocument.Load(reader);
-        foreach (var resolver in doc.Descendants("Resolver")) {
+        var resolvers = doc.Descendants("Resolver").ToList();
+        foreach (var resolver in resolvers) {
             var ra = Number(Text(resolver, "jradeg"));
             var dec = Number(Text(resolver, "jdedeg"));
             if (ra is not { } r || dec is not { } d || d is < -90 or > 90) {
@@ -130,6 +131,15 @@ public sealed partial class SesameClient : ISesameClient, IDisposable {
             return new SesameResult(main,
                 aliases.Where(a => !string.Equals(a, main, StringComparison.Ordinal)).Distinct(StringComparer.Ordinal).ToArray(),
                 ((r % 360.0) + 360.0) % 360.0, d, otype.Length == 0 ? null : otype, mag);
+        }
+        // No resolver answered. "Nothing found" from at least one is a clean miss; anything else in <INFO>
+        // (a Simbad timeout, a backend error) means the service did not do its job: unavailable, so the user
+        // hears "needs internet / try again", not "no such object".
+        if (resolvers.Count > 0 && !resolvers.Any(x => x.Elements("INFO").Any(i => (i.Value ?? string.Empty).Contains("othing found", StringComparison.Ordinal)))) {
+            var info = resolvers.SelectMany(x => x.Elements("INFO")).Select(i => (i.Value ?? string.Empty).Trim()).FirstOrDefault(v => v.Length > 0);
+            if (info is not null) {
+                throw new SesameUnavailableException("Sesame reported a problem: " + info);
+            }
         }
         return null;
     }
