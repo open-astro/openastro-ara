@@ -231,6 +231,23 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task An_apply_reply_with_bare_names_still_yields_the_applied_list() {
+            // openastro-guider 2.1.0 answers guiding_assistant_apply with {"applied":[exposure,min_move_ra]}
+            // (bare names, invalid JSON). Before the repair in SendMessage this surfaced as "Unable to get
+            // response from phd2" although the guider had applied every value (2026-10-18, four presses).
+            var (fake, svc) = await ConnectedAsync(f => {
+                f.OnRawRpc("guiding_assistant_apply", id => "{\"jsonrpc\":\"2.0\",\"result\":{\"applied\":[exposure,min_move_ra]},\"id\":" + id + "}");
+            }).ConfigureAwait(false);
+            await using var _ = fake;
+            using var __ = svc;
+            var live = new GuiderLiveService(svc, new NoFrames());
+
+            var applied = await live.ApplyGuidingAssistantAsync(ExposureAndMinMoveRa, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(applied, Is.EqualTo(ExposureAndMinMoveRa), "the names the guider applied, parsed after quoting them");
+        }
+
+        [Test]
         public async Task Guiding_assistant_on_a_guider_without_the_method_reads_disconnected_and_stays_quiet() {
             var sink = new RecordingSink();
             var previous = OpenAstroAra.Core.Utility.Notification.Notifier.Current;

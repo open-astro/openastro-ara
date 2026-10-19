@@ -95,6 +95,20 @@ public sealed class FakeGuider : IAsyncDisposable {
         }
     }
 
+    /// <summary>Answers <paramref name="method"/> with a raw line instead of a well-formed reply: the
+    /// factory gets the request's id (already JSON-serialized, e.g. <c>"7"</c> or <c>7</c>) and returns the
+    /// whole line to send, newline added here. For replies a shipped guider gets wrong (openastro-guider
+    /// 2.1.0's bare names in <c>guiding_assistant_apply</c>); the line need not be valid JSON.</summary>
+    public void OnRawRpc(string method, Func<string, string> rawLineFactory) {
+        ArgumentNullException.ThrowIfNull(method);
+        ArgumentNullException.ThrowIfNull(rawLineFactory);
+        lock (_gate) {
+            _rawRpcLines[method] = rawLineFactory;
+        }
+    }
+
+    private readonly Dictionary<string, Func<string, string>> _rawRpcLines = new(StringComparer.OrdinalIgnoreCase);
+
     /// <summary>Convenience overload: a constant result value for <paramref name="method"/>.</summary>
     // DeepClone per call — a JsonNode can only be parented once, so each response needs a fresh copy.
     public void OnRpc(string method, JsonNode? result) => OnRpc(method, _ => result?.DeepClone());
@@ -237,9 +251,16 @@ public sealed class FakeGuider : IAsyncDisposable {
         var id = request["id"];
 
         Func<JsonObject, JsonNode?>? factory;
+        Func<string, string>? raw;
         lock (_gate) {
             _receivedMethods.Add(method);
             _rpcResults.TryGetValue(method, out factory);
+            _rawRpcLines.TryGetValue(method, out raw);
+        }
+        if (raw is not null) {
+            var rawLine = raw(id?.ToJsonString() ?? "null");
+            await WriteAsync(conn, Encoding.ASCII.GetBytes(rawLine + Environment.NewLine), _cts.Token).ConfigureAwait(false);
+            return;
         }
 
         // PHD2 returns integer 0 from most successful calls; getters are overridden via OnRpc.

@@ -1277,6 +1277,9 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                     }
                 case "AppState": {
                         AppState = message.ToObject<PhdEventAppState>();
+                        if (AppState?.State == PhdAppState.STOPPED) {
+                            GuidingAssistantActive = false;
+                        }
                         break;
                     }
                 case "GuideStep": {
@@ -1374,6 +1377,9 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                     }
                 case "LoopingExposuresStopped": {
                         AppState = new PhdEventAppState() { State = "Stopped" };
+                        // Nothing runs with the loop stopped: an assistant run that ended without its Done
+                        // event (a link blip, a guider-side abort) must not keep the flag for the night.
+                        GuidingAssistantActive = false;
                         // A calibration abandoned by stopping the loop sends no CalibrationFailed.
                         Calibration = null;
                         AbandonCalibrationRun("stopped before calibration finished");

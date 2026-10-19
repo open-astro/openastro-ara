@@ -108,6 +108,25 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task The_watch_stands_down_while_the_guiding_assistant_runs_and_returns_after_it() {
+            // The assistant's "Guiding" has corrections off and loses its star on purpose now and then;
+            // a run must not be paused for it (2026-10-18 ga-side). After Done the watch works as before.
+            using var rig = new Rig(runActive: true);
+            await using var fake = await GuidingFakeAsync(rig).ConfigureAwait(false);
+            fake.OnRpc("guiding_assistant_start", _ => new JsonObject { ["state"] = "measuring", ["duration_s"] = 60 });
+            await rig.Service.RequireConnectedGuider().StartGuidingAssistantAsync(60, measureBacklash: false, CancellationToken.None).ConfigureAwait(false);
+
+            await fake.BroadcastAsync(PhdEvents.StarLost(status: "low SNR")).ConfigureAwait(false);
+            await Task.Delay(Grace * 4).ConfigureAwait(false);
+            Assert.That(rig.Paused(), Is.EqualTo(0), "a star lost during the assistant pauses nothing");
+
+            await fake.BroadcastAsync(new JsonObject { ["Event"] = "GuidingAssistantDone", ["state"] = "done" }).ConfigureAwait(false);
+            await fake.BroadcastAsync(PhdEvents.GuideStep(0.05, 0.05)).ConfigureAwait(false);
+            await fake.BroadcastAsync(PhdEvents.StarLost(status: "low SNR")).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => rig.Paused() == 1).ConfigureAwait(false), Is.True, "after the assistant the watch pauses the run again");
+        }
+
+        [Test]
         public async Task A_star_lost_past_the_grace_pauses_the_run_and_the_next_guide_step_resumes_it() {
             using var rig = new Rig(runActive: true);
             await using var fake = await GuidingFakeAsync(rig).ConfigureAwait(false);
