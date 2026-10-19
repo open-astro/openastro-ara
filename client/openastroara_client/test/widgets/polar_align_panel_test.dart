@@ -601,18 +601,49 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('polar-align-nudge')), findsOneWidget);
 
-      // … and goes after its three frames once nothing is wrong any more.
-      for (var i = 4; i <= 6; i++) {
-        notifier.set(PolarAlignLive(
-          phase: PolarAlignStates.adjusting,
-          iteration: i,
-          altErrorArcmin: 13.0 - i,
-          azErrorArcmin: -4.0,
-          totalErrorArcmin: 13.0 - i + 0.5,
-          zone: 'yellow',
-        ));
+      // … and goes the moment altitude actually improves by more than the noise.
+      notifier.set(const PolarAlignLive(
+        phase: PolarAlignStates.adjusting,
+        iteration: 4,
+        altErrorArcmin: 11.0,
+        azErrorArcmin: -4.0,
+        totalErrorArcmin: 11.7,
+        zone: 'yellow',
+      ));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('polar-align-nudge')), findsNothing);
+    });
+
+    testWidgets('the nudge expires after a few frames of no change, and a new run starts clean',
+        (tester) async {
+      final api = _FakePolarAlignClient();
+      PolarAlignLive at(int i, double alt, {String phase = PolarAlignStates.adjusting}) => PolarAlignLive(
+          phase: phase, iteration: i, altErrorArcmin: alt, azErrorArcmin: -4.0, totalErrorArcmin: alt.abs() + 0.5);
+      await tester.pumpWidget(_harness(api, at(1, 10.0)));
+      await tester.pumpAndSettle();
+      final notifier = ProviderScope.containerOf(tester.element(find.byType(PolarAlignPanel)))
+          .read(polarAlignLiveProvider.notifier) as _StubLiveNotifier;
+      notifier.set(at(2, 13.0));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('polar-align-nudge')), findsOneWidget);
+      for (var i = 3; i <= 5; i++) {
+        notifier.set(at(i, 13.0 + 0.1 * i));
         await tester.pumpAndSettle();
+        expect(find.byKey(const Key('polar-align-nudge')), findsOneWidget, reason: 'frame $i');
       }
+      notifier.set(at(6, 13.6));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('polar-align-nudge')), findsNothing, reason: 'expired');
+
+      // Stop, then a new run whose first adjust frame is iteration 1 again, then a
+      // frame 2 that is worse than the OLD run's last frame but not than frame 1:
+      // no cross-run comparison, no false nudge.
+      notifier.set(at(0, 13.6, phase: PolarAlignStates.stopped));
+      await tester.pumpAndSettle();
+      notifier.set(at(1, 20.0));
+      await tester.pumpAndSettle();
+      notifier.set(at(2, 20.2));
+      await tester.pumpAndSettle();
       expect(find.byKey(const Key('polar-align-nudge')), findsNothing);
     });
   });

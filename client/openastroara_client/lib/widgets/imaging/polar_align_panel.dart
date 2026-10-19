@@ -42,9 +42,10 @@ const double nearPoleReticleArcmin = 2.0;
 bool nearPoleReticle(double? totalErrorArcmin) =>
     totalErrorArcmin != null && totalErrorArcmin < nearPoleReticleArcmin;
 
-/// §45.16 per-frame solve noise, arcminutes: the floor under which a change
-/// between two frames is scatter, not a knob turn. Half an arcminute covers
-/// a guide-scope solve (~30″ 1σ at 4″/px) with margin.
+/// §45.16 per-frame noise, arcminutes: the floor under which a change
+/// between two frames is scatter, not a knob turn. The solver's centroid is
+/// ~1″; the 0.5′ is the mount's pointing jitter and flexure between frames
+/// (5–30″), which is what a solve of a stationary camera actually sees.
 const double polarSolveNoiseArcmin = 0.5;
 
 /// §45.16 bolt-direction calibration nudge. Mounts differ in which way a
@@ -198,6 +199,7 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
   double? _prevAz;
   int _nudgeIteration = 0;
   String? _nudge;
+  bool _nudgeAxisAlt = true;
   int _nudgeUntilIteration = 0;
   static const _nudgeFrames = 3;
   PolarAlignSettings _settings = const PolarAlignSettings();
@@ -897,21 +899,33 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
   /// a bolt-direction nudge for a few frames. Called from build on every
   /// new adjust-loop iteration; a seed or a new run resets the baseline.
   void _trackNudge(PolarAlignLive live) {
-    if (live.phase != PolarAlignStates.adjusting || live.iteration == _nudgeIteration) return;
-    if (live.iteration < _nudgeIteration) {
-      // A new run: no baseline, no stale nudge.
+    if (live.phase != PolarAlignStates.adjusting) {
+      // Leaving adjust (stopped, failed, a new run's seed): the next adjust
+      // frame starts a new baseline, so a new run whose first iteration
+      // number matches the old run's is never compared across runs.
+      _nudgeIteration = 0;
       _prevAlt = null;
       _prevAz = null;
       _nudge = null;
+      return;
     }
+    if (live.iteration == _nudgeIteration) return;
     _nudgeIteration = live.iteration;
     final nudge = boltDirectionNudge(
         prevAlt: _prevAlt, prevAz: _prevAz, alt: live.altErrorArcmin, az: live.azErrorArcmin);
     if (nudge != null) {
       _nudge = nudge;
+      _nudgeAxisAlt = nudge.startsWith('Altitude');
       _nudgeUntilIteration = live.iteration + _nudgeFrames;
-    } else if (live.iteration > _nudgeUntilIteration) {
-      _nudge = null;
+    } else if (_nudge != null) {
+      // Cleared as soon as the named axis actually improves by more than the
+      // noise (the user turned the bolt back), else after a few frames.
+      final before = _nudgeAxisAlt ? _prevAlt : _prevAz;
+      final after = _nudgeAxisAlt ? live.altErrorArcmin : live.azErrorArcmin;
+      final improved = before != null &&
+          after != null &&
+          before.abs() - after.abs() > polarSolveNoiseArcmin;
+      if (improved || live.iteration > _nudgeUntilIteration) _nudge = null;
     }
     _prevAlt = live.altErrorArcmin;
     _prevAz = live.azErrorArcmin;
