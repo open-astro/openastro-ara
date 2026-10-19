@@ -44,11 +44,15 @@ class CustomTarget {
         'source': source,
       };
 
+  /// RA in 0..360 as the daemon stores it, so an entry typed at 360.0 or a
+  /// negative RA does not read as a difference to push on every build.
+  double get raDegWrapped => ((raDeg % 360) + 360) % 360;
+
   /// The profile section's wire shape (`PUT /profile/saved-targets`).
   Map<String, Object?> toWire() => {
         'name': name,
         'aliases': aliases,
-        'ra_deg': raDeg,
+        'ra_deg': raDegWrapped,
         'dec_deg': decDeg,
         'source': source,
         'saved_utc': savedUtc.toUtc().toIso8601String(),

@@ -153,6 +153,39 @@ void main() {
     expect(merged[1].aliases, ['HIP 12235'], reason: 'the profile entry stands');
   });
 
+  test('threeWayMerge: a shared name takes the newer entry, the profile on a tie', () {
+    final merged = threeWayMergeSavedTargets(
+      remote: [_t('Field 1', 1, source: 'typed'), _t('Tie', 3, source: 'index')],
+      mirror: [_t('field 1', 5, source: 'simbad', aliases: ['NGC 1']), _t('Tie', 3)],
+      base: {'field 1', 'tie'},
+    );
+    expect(merged.map((t) => t.name), ['field 1', 'Tie']);
+    expect(merged[0].source, 'simbad', reason: 'the newer re-save wins');
+    expect(merged[1].source, 'index', reason: 'a tie keeps the profile entry');
+  });
+
+  test('re-saving a name the profile already holds pushes the new entry to the top', () async {
+    final mirror = _MemoryTargets(seed: {_scopeA: [_t('Field 1', 1), _t('Other', 2)]}, base: {_scopeA: {'field 1', 'other'}});
+    final adapter = _ProfileAdapter([_t('Other', 2), _t('Field 1', 1)]);
+    final c = _container(mirror, adapter);
+    addTearDown(c.dispose);
+    await c.read(customTargetsProvider.future);
+    final again = CustomTarget(name: 'Field 1', raDeg: 99, decDeg: 9, typedAsJNow: false,
+        savedUtc: DateTime.utc(2026, 10, 18, 22, 30), source: 'simbad', aliases: const ['NGC 9']);
+    await c.read(customTargetsProvider.notifier).remember(again);
+    expect(adapter.stored.map((t) => t.name), ['Field 1', 'Other']);
+    expect(adapter.stored.first.raDeg, 99);
+    expect(adapter.stored.first.aliases, ['NGC 9']);
+    expect(c.read(customTargetsProvider).value!.first.raDeg, 99);
+  });
+
+  test('an RA typed as 360 or negative does not read as a difference', () {
+    final a = CustomTarget(name: 'x', raDeg: 360.0, decDeg: 1, typedAsJNow: false, savedUtc: DateTime.utc(2026));
+    final b = CustomTarget(name: 'x', raDeg: 0.0, decDeg: 1, typedAsJNow: false, savedUtc: DateTime.utc(2026));
+    expect(sameSavedTarget(a, b), isTrue);
+    expect(CustomTarget(name: 'y', raDeg: -10, decDeg: 1, typedAsJNow: false, savedUtc: DateTime.utc(2026)).toWire()['ra_deg'], 350.0);
+  });
+
   test('threeWayMerge orders equal times by name, like the daemon', () {
     final same = DateTime.utc(2026, 10, 18, 22);
     CustomTarget at(String n) => CustomTarget(name: n, raDeg: 1, decDeg: 1, typedAsJNow: false, savedUtc: same);

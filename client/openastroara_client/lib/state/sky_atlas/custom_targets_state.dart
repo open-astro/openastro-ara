@@ -121,11 +121,12 @@ class CustomTargetsNotifier extends AsyncNotifier<List<CustomTarget>> {
 }
 
 /// Three-way merge of the profile's list, the scope's mirror and the names the
-/// profile held at the last sync ([base]): a name both have takes the
-/// profile's entry; a name only the profile has is new there unless the mirror
-/// forgot it since the sync (then it goes); a name only the mirror has is new
-/// here unless the profile forgot it since the sync (then it goes). Newest
-/// first, capped. Pure; unit-tested.
+/// profile held at the last sync ([base]): a name both have takes the newer
+/// entry (a re-save here with a new position or a fresh resolve wins over the
+/// profile's older copy; a tie goes to the profile); a name only the profile
+/// has is new there unless the mirror forgot it since the sync (then it goes);
+/// a name only the mirror has is new here unless the profile forgot it since
+/// the sync (then it goes). Newest first, capped. Pure; unit-tested.
 List<CustomTarget> threeWayMergeSavedTargets({
   required List<CustomTarget> remote,
   required List<CustomTarget> mirror,
@@ -137,7 +138,7 @@ List<CustomTarget> threeWayMergeSavedTargets({
   for (final key in {...r.keys, ...m.keys}) {
     final inR = r[key], inM = m[key];
     if (inR != null && inM != null) {
-      out.add(inR);
+      out.add(inM.savedUtc.isAfter(inR.savedUtc) ? inM : inR);
     } else if (inR != null) {
       if (!base.contains(key)) out.add(inR);
     } else if (inM != null) {
@@ -164,7 +165,7 @@ bool sameSavedTargets(List<CustomTarget> a, List<CustomTarget> b) {
 
 bool sameSavedTarget(CustomTarget a, CustomTarget b) =>
     a.name == b.name &&
-    a.raDeg == b.raDeg &&
+    a.raDegWrapped == b.raDegWrapped &&
     a.decDeg == b.decDeg &&
     a.source == b.source &&
     a.typedAsJNow == b.typedAsJNow &&
