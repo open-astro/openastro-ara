@@ -81,21 +81,21 @@ SERVER — OpenAstroAra.Server NuGet dependency graph (85 packages, transitive c
 =====================================================================================
 
 ------------------------------------------------------------------------
-Package:        ASCOM.Alpaca.Components 4.0.0
+Package:        ASCOM.Alpaca.Components 4.1.0
 Authors:        Daniel Van Noord and Peter Simpson
 Copyright:      Copyright (c) ASCOM Initiative 2019-2026
 License:        MIT
 License source: https://licenses.nuget.org/MIT
 
 ------------------------------------------------------------------------
-Package:        ASCOM.Alpaca.Device 4.0.0
+Package:        ASCOM.Alpaca.Device 4.1.0
 Authors:        Daniel Van Noord and Peter Simpson
 Copyright:      Copyright (c) ASCOM Initiative 2019-2026
 License:        MIT
 License source: https://licenses.nuget.org/MIT
 
 ------------------------------------------------------------------------
-Package:        ASCOM.Common.Components 4.0.0
+Package:        ASCOM.Common.Components 4.1.0
 Authors:        Daniel Van Noord and Peter Simpson
 Copyright:      Copyright (c) ASCOM Initiative 2019-2026
 License:        MIT
@@ -111,7 +111,7 @@ License source: https://licenses.nuget.org/MIT
 Project:        https://ascom-standards.org/
 
 ------------------------------------------------------------------------
-Package:        ASCOM.Tools 4.0.0
+Package:        ASCOM.Tools 4.1.0
 Authors:        Daniel Van Noord and Peter Simpson
 Copyright:      Copyright (c) ASCOM Initiative 2019-2026
 License:        MIT
