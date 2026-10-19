@@ -1782,6 +1782,27 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_dither_on_a_calibrating_or_paused_guider_is_refused_with_that_reason() {
+            // The sequencer restarts guiding only on a plain refusal; these two name themselves so the
+            // run parks on them instead of sending `guide` over a calibration or a deliberate pause.
+            await using var fake = FakeGuider.Start();
+            _ = new ProfileDaemon(fake);
+            var appState = "Calibrating";
+            fake.OnRpc("get_app_state", _ => JsonValue.Create(appState));
+            var ws = new RecordingBroadcaster();
+            using var svc = await ConnectedAgainstAsync(fake, "Rig A", ws).ConfigureAwait(false);
+
+            await svc.DitherAsync(2.0, idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => ws.Of("guider.dither_complete").Count == 1).ConfigureAwait(false), Is.True);
+            Assert.That(ws.Of("guider.dither_complete")[0].GetProperty("error").GetString(), Is.EqualTo("the guider is calibrating"));
+
+            appState = "Paused";
+            await svc.DitherAsync(2.0, idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => ws.Of("guider.dither_complete").Count == 2).ConfigureAwait(false), Is.True);
+            Assert.That(ws.Of("guider.dither_complete")[1].GetProperty("error").GetString(), Is.EqualTo("the guider is paused"));
+        }
+
+        [Test]
         public async Task A_dither_whose_star_stays_lost_is_refused_after_the_wait() {
             await using var fake = FakeGuider.Start();
             _ = new ProfileDaemon(fake);

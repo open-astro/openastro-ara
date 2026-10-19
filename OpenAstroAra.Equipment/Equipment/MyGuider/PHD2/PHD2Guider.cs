@@ -515,7 +515,14 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                     } else {
                         Notifier.ShowWarning(Loc.Instance["LblDitherSkippedBecauseNotGuiding"]);
                     }
-
+                    // A calibration in progress or a pause someone asked for is not a stopped guider:
+                    // the sequencer must not restart guiding over it. The verdict names the state, so
+                    // the Dither item parks the run with that reason instead of sending `guide`.
+                    if (state == PhdAppState.CALIBRATING) {
+                        _lastSettleError = "the guider is calibrating";
+                    } else if (state == PhdAppState.PAUSED) {
+                        _lastSettleError = "the guider is paused";
+                    }
                     return false;
                 }
 

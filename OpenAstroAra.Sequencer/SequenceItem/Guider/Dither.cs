@@ -92,8 +92,9 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Guider {
                 if (notGuiding && !restartTried) {
                     // A guider that is merely not guiding (it stopped on a slew, or lost its star for longer
                     // than the dither waits) is restarted here, the way an ASIAIR carries on: the guider
-                    // picks a star, guides on its stored calibration and settles, then the dither goes
-                    // ahead. The user is only asked when that restart fails. Rig night 2026-10-18: a
+                    // picks a star, guides on its stored calibration (calibrating first when it has none)
+                    // and settles, then the dither goes ahead. A calibrating or deliberately paused guider
+                    // answers with that reason instead of "refused" and is parked on, never restarted. The user is only asked when that restart fails. Rig night 2026-10-18: a
                     // 2-frame star loss and a Planning GoTo each parked the run, and every Resume parked
                     // it again within 2 ms because guiding had to be restarted by hand first.
                     restartTried = true;
