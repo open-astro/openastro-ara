@@ -250,7 +250,13 @@ public partial class Program {
         builder.Services.AddSingleton<IProfileShareService, ProfileShareService>();
         // §44 — real backup stream: single-target slot + pending queue + ack over the
         // frames catalog (sha256 lazily cached per frame on first queue serve).
-        builder.Services.AddSingleton<IBackupStreamService, BackupStreamService>();
+        // The queue hands out only frames the download endpoint will serve (the repository's #1194
+        // confinement); a row the client could never fetch would otherwise be retried every poll.
+        builder.Services.AddSingleton<IBackupStreamService>(sp => new BackupStreamService(
+            sp.GetRequiredService<IAraDatabase>(),
+            sp.GetRequiredService<IProfileStore>(),
+            sp.GetRequiredService<ILogger<BackupStreamService>>(),
+            isServable: sp.GetRequiredService<IFrameRepository>() is SqliteFrameRepository repo ? repo.IsServableFile : null));
         // §43 IBackupService is registered below, after profileDir is resolved (the real BackupService is
         // disk-backed: snapshots live under {profileDir}/backups).
         // Phase 13.12 — placeholder equipment services for all 12 device

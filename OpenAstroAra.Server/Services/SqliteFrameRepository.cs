@@ -84,6 +84,10 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
     /// </summary>
     internal string? ConfinedExistingPath(string? filePath) => ConfinedPath(filePath, mustExist: true);
 
+    /// <summary>Whether a download of this catalogued path would succeed: the same confinement the
+    /// download endpoint applies, for callers that hand frames out (the backup stream's queue).</summary>
+    public bool IsServableFile(string? filePath) => ConfinedExistingPath(filePath) is not null;
+
     /// <summary>The confinement check alone (<paramref name="mustExist"/> false): a FITS the user
     /// already removed by hand still has sidecars (previews, thumbnail, histogram cache) beside it
     /// that a delete-from-disk must sweep, so the delete path confines the catalogued path but does

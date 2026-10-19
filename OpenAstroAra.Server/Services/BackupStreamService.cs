@@ -53,11 +53,23 @@ public sealed partial class BackupStreamService : IBackupStreamService {
     /// backfill must not pin one request hashing hundreds of large files).</summary>
     internal int MaxHashesPerPage { get; set; } = 25;
 
-    public BackupStreamService(IAraDatabase db, IProfileStore? profile = null, ILogger<BackupStreamService>? logger = null) {
+    public BackupStreamService(IAraDatabase db, IProfileStore? profile = null, ILogger<BackupStreamService>? logger = null,
+                               Func<string, bool>? isServable = null) {
         _db = db ?? throw new ArgumentNullException(nameof(db));
         _profile = profile;
         _logger = logger ?? NullLogger<BackupStreamService>.Instance;
+        _isServable = isServable ?? (_ => true);
     }
+
+    // Whether GET /frames/{id}/download would serve the catalogued path: the frame repository's
+    // #1194 confinement (under a capture root, present, not a link that leaves the roots), wired in
+    // Program.cs. A frame that fails it is left out of the queue: the client would fetch it every
+    // poll and get 404 forever. Rig night 2026-10-18: two frames catalogued under the pre-store root
+    // were pulled every 15 s all night, 404 each time, with a "Frame file refused" warning per
+    // attempt. Without a hook (tests) every row is queued, as before: a missing file still rides
+    // with a null sha, which the client skips until it hashes.
+    private readonly Func<string, bool> _isServable;
+    private readonly HashSet<Guid> _unservableNoted = new();
 
     // Optional: without it (some tests) queue entries simply carry no
     // relative path and the client keeps its id-based layout.
@@ -182,6 +194,16 @@ public sealed partial class BackupStreamService : IBackupStreamService {
         var hashed = 0;
         foreach (var e in entries) {
             ct.ThrowIfCancellationRequested();
+            if (!_isServable(e.Path)) {
+                bool first;
+                lock (_unservableNoted) {
+                    first = _unservableNoted.Add(e.Id);
+                }
+                if (first) {
+                    LogUnservableSkipped(e.Id, e.Path);
+                }
+                continue;
+            }
             var sha = e.Sha;
             // Bound the per-page hash work: a first-time backfill over a big
             // historical catalog must not pin one request hashing hundreds of
@@ -318,4 +340,7 @@ public sealed partial class BackupStreamService : IBackupStreamService {
 
     [LoggerMessage(EventId = 4406, Level = LogLevel.Warning, Message = "§44 sha256 backfill failed for frame {FrameId} (served with null sha; retried next page)")]
     private partial void LogShaFailed(Guid frameId, Exception exception);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Backup stream: frame {FrameId} at '{FilePath}' cannot be served (missing, or outside the capture roots); left out of the mirror queue")]
+    private partial void LogUnservableSkipped(Guid frameId, string filePath);
 }

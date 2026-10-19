@@ -85,6 +85,33 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_frame_the_download_endpoint_would_refuse_is_left_out_of_the_queue() {
+            // 2026-10-18: two frames catalogued under the pre-store root were fetched every 15 s all
+            // night and 404'd each time. The queue now applies the same servability test as the download.
+            var good = await InsertFrameAsync("good", DateTimeOffset.UtcNow.AddMinutes(-3));
+            var outside = await InsertFrameAsync("outside-roots", DateTimeOffset.UtcNow.AddMinutes(-2));
+            var missing = await InsertFrameAsync("missing", DateTimeOffset.UtcNow.AddMinutes(-1));
+            File.Delete(missing.Path);
+            // The production hook is the frame repository's confinement; here a stand-in that refuses
+            // one path by name and anything missing on disk.
+            var svc = new BackupStreamService(_db, isServable: p => File.Exists(p) && !p.Contains("outside-roots", StringComparison.Ordinal));
+            await svc.ClaimAsync(new BackupStreamClaimRequestDto("wilma-desk"), CancellationToken.None);
+
+            var queue = await svc.GetQueueAsync("wilma-desk", 50, CancellationToken.None);
+
+            Assert.That(queue!.Select(q => q.Id), Is.EqualTo(new[] { good.Id }), "only the frame a download would serve");
+            Assert.That(outside.Id, Is.Not.EqualTo(good.Id));
+
+            // Without a servability hook (no repository wired) every row is queued, as before: the
+            // missing file rides with a null sha, which the client skips.
+            var plain = await _svc.ClaimAsync(new BackupStreamClaimRequestDto("wilma-desk"), CancellationToken.None);
+            Assert.That(plain, Is.Not.Null);
+            var byDefault = await _svc.GetQueueAsync("wilma-desk", 50, CancellationToken.None);
+            Assert.That(byDefault!.Select(q => q.Id), Is.EquivalentTo(new[] { good.Id, outside.Id, missing.Id }));
+            Assert.That(byDefault!.Single(q => q.Id == missing.Id).Sha256, Is.Null);
+        }
+
+        [Test]
         public async Task Claim_is_single_target_with_idempotent_reclaim_and_stale_takeover() {
             var first = await _svc.ClaimAsync(new BackupStreamClaimRequestDto("wilma-desk"), CancellationToken.None);
             Assert.That(first, Is.Not.Null);
