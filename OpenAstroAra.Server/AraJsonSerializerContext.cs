@@ -245,6 +245,8 @@ namespace OpenAstroAra.Server;
 [JsonSerializable(typeof(SessionRestretchRequestDto))]
 [JsonSerializable(typeof(CustomHorizonDto))]
 [JsonSerializable(typeof(CustomHorizonPointDto))]
+// #1267 — target name resolution.
+[JsonSerializable(typeof(TargetResolveResponseDto))]
 [JsonSerializable(typeof(CalibrationStateDto))]
 // #1362 — equipment identity per gear slot.
 [JsonSerializable(typeof(EquipmentIdentityDto))]

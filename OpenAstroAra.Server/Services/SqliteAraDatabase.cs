@@ -317,6 +317,22 @@ public sealed partial class SqliteAraDatabase : IAraDatabase {
             """, ct);
         await ExecAsync(conn, "CREATE INDEX IF NOT EXISTS idx_mosaics_created_at ON mosaics(created_at);", ct);
 
+        // #1267 — Simbad answers kept for the dark site: keyed by the normalized query so "ab cas" and
+        // "V* AB Cas" share one row. Only found objects are stored; a miss is asked again next time.
+        await ExecAsync(conn, """
+            CREATE TABLE IF NOT EXISTS target_resolutions (
+                query_key    TEXT PRIMARY KEY NOT NULL,
+                query        TEXT NOT NULL,
+                main_id      TEXT NOT NULL,
+                aliases_json TEXT NOT NULL,
+                ra_deg       REAL NOT NULL,
+                dec_deg      REAL NOT NULL,
+                object_type  TEXT,
+                magnitude    REAL,
+                resolved_at  TEXT NOT NULL
+            );
+            """, ct);
+
         LogCatalogInitialized(DatabasePath);
     }
 

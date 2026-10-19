@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../services/custom_targets_service.dart';
+import '../../services/target_resolve_api.dart';
 import '../../state/sequencer/create_imaging_run.dart';
 import '../../state/sky_atlas/custom_targets_state.dart';
 import '../../state/sky_atlas/sky_atlas_state.dart';
@@ -30,7 +31,12 @@ class CustomTargetDialog extends ConsumerStatefulWidget {
   /// Text to pre-fill from the search box when it looked like coordinates.
   final String? initialText;
 
-  const CustomTargetDialog({super.key, this.initialText});
+  /// A name the daemon resolved (#1267): the dialog opens filled with its
+  /// main identifier and J2000 position, and shows where the answer came
+  /// from and the other names it answers to.
+  final TargetResolution? resolved;
+
+  const CustomTargetDialog({super.key, this.initialText, this.resolved});
 
   @override
   ConsumerState<CustomTargetDialog> createState() => _CustomTargetDialogState();
@@ -51,6 +57,17 @@ class _CustomTargetDialogState extends ConsumerState<CustomTargetDialog> {
     super.initState();
     final t = widget.initialText?.trim();
     if (t != null && t.isNotEmpty) _fillFromLine(t);
+    final r = widget.resolved;
+    if (r != null && r.resolved) {
+      // Decimal degrees keep the resolver's precision (the sexagesimal
+      // formatter rounds to whole seconds) and parse unambiguously as
+      // degrees, the chooser's default.
+      _name.text = r.mainId!;
+      _ra.text = r.raDeg!.toStringAsFixed(5);
+      _lastRa = _ra.text;
+      _dec.text = r.decDeg!.toStringAsFixed(5);
+      _raUnit = RaUnit.degrees;
+    }
     _ra.addListener(_onRaChanged);
   }
 
@@ -209,8 +226,11 @@ class _CustomTargetDialogState extends ConsumerState<CustomTargetDialog> {
       color: AraColors.textSecondary,
     );
 
+    final resolved = widget.resolved;
     return AlertDialog(
-      title: const Text('Target by coordinates'),
+      title: Text(resolved != null && resolved.resolved
+          ? 'Resolved target'
+          : 'Target by coordinates'),
       content: SizedBox(
         width: 440,
         child: SingleChildScrollView(
@@ -228,6 +248,14 @@ class _CustomTargetDialogState extends ConsumerState<CustomTargetDialog> {
                   hintText: 'AB Cas, TOI-700 field, …',
                 ),
               ),
+              if (resolved != null && resolved.resolved) ...[
+                const SizedBox(height: 4),
+                Text(
+                  resolved.provenance,
+                  key: const Key('custom-target-provenance'),
+                  style: hint,
+                ),
+              ],
               const SizedBox(height: 12),
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -398,10 +426,12 @@ class _CustomTargetDialogState extends ConsumerState<CustomTargetDialog> {
   }
 }
 
-/// Open the dialog; [initialText] pre-fills a pasted "RA Dec" line.
+/// Open the dialog; [initialText] pre-fills a pasted "RA Dec" line and
+/// [resolved] a name the daemon resolved (#1267).
 Future<void> showCustomTargetDialog(BuildContext context,
-        {String? initialText}) =>
+        {String? initialText, TargetResolution? resolved}) =>
     showDialog<void>(
       context: context,
-      builder: (_) => CustomTargetDialog(initialText: initialText),
+      builder: (_) =>
+          CustomTargetDialog(initialText: initialText, resolved: resolved),
     );

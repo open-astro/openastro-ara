@@ -24,6 +24,7 @@ import '../../state/settings/optics_settings_state.dart';
 import '../../state/settings/site_settings_state.dart';
 import '../../state/sky_atlas/site_location_state.dart';
 import '../../state/sky_atlas/sky_atlas_state.dart';
+import '../../state/sky_atlas/target_resolve_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../util/imaging_regions.dart';
 import '../../util/planetarium_seed.dart';
@@ -371,7 +372,7 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
   void _pushCmd(Map<String, Object?> cmd) =>
       _server?.pushCommand(jsonEncode(cmd));
 
-  void _submitSearch() {
+  Future<void> _submitSearch() async {
     final q = _searchCtrl.text.trim();
     if (q.isEmpty) return;
     // A pasted position ("05 35 17 -05 23 28", "83.82 -5.39") is a target,
@@ -398,7 +399,35 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
     final catalog = ref.read(bundledCatalogProvider).value ??
         ref.read(dsoCatalogProvider).value ??
         const <PlanningDso>[];
-    _pushCmd(planetariumSearchCommand(applyImagingRegions(catalog), q));
+    final cmd = planetariumSearchCommand(applyImagingRegions(catalog), q);
+    if (cmd['type'] == 'goto') {
+      _pushCmd(cmd);
+      return;
+    }
+    // Not one of ours: ask the daemon (#1267). Its offline index knows every
+    // identifier HYG and OpenNGC carry ("AB Cas", "HIP 12235", "M 31"); a
+    // miss goes to Simbad through the daemon and is cached there, so a name
+    // resolved at home still answers at the dark site. A resolved name opens
+    // the target dialog filled in (frame it, add it to the plan); anything
+    // else falls through to the planetarium's own engine search as before,
+    // with the daemon's reason shown so an offline miss is not a spinner.
+    final api = ref.read(targetResolveApiProvider);
+    if (api == null) {
+      _pushCmd(cmd);
+      return;
+    }
+    final messenger = ScaffoldMessenger.of(context);
+    final r = await api.resolve(q);
+    if (!mounted) return;
+    if (r.resolved) {
+      await showCustomTargetDialog(context, resolved: r);
+      return;
+    }
+    _pushCmd(cmd);
+    final m = r.message;
+    if (m != null && m.isNotEmpty) {
+      messenger.showSnackBar(SnackBar(content: Text(m)));
+    }
   }
 
   // Show/hide the docked Tonight's Sky panel by flipping the shared mode. We do
