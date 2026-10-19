@@ -319,6 +319,19 @@ final List<PlanningDso> standaloneRegions = [
 /// Apply the curated layer: replace matching rows' display name / size / type
 /// and append the standalone regions. Pure + cheap — runs inside the ranking
 /// isolate on every recompute.
+/// The override for a row: keyed by its id, else by any of its designations
+/// (NGC 2244 is a Dup designation of the Rosette cluster row NGC 2239, so
+/// the 'NGC2244' override reaches that row through its alias; #1267 item 4).
+ImagingRegion? overrideFor(PlanningDso o) {
+  final direct = overrides[o.id];
+  if (direct != null) return direct;
+  for (final a in o.aliases) {
+    final r = overrides[a.replaceAll(' ', '')];
+    if (r != null) return r;
+  }
+  return null;
+}
+
 List<PlanningDso> applyImagingRegions(List<PlanningDso> catalog) {
   final present = {for (final o in catalog) o.id};
   final covered = {
@@ -328,7 +341,7 @@ List<PlanningDso> applyImagingRegions(List<PlanningDso> catalog) {
   final merged = [
     for (final o in catalog)
       if (!covered.contains(o.id))
-      switch (overrides[o.id]) {
+      switch (overrideFor(o)) {
         null => o,
         final r => PlanningDso(
             id: o.id,
@@ -345,6 +358,12 @@ List<PlanningDso> applyImagingRegions(List<PlanningDso> catalog) {
             // integration-budget line, review #1104).
             posAngleDeg: o.posAngleDeg,
             surfaceBrightness: o.surfaceBrightness,
+            // The overlay memberships and the merged designations travel
+            // with the row (#1267 item 4: "Sh2-25" still finds the Lagoon
+            // after the override renames it; review r1).
+            messierNum: o.messierNum,
+            caldwellNum: o.caldwellNum,
+            aliases: o.aliases,
           ),
       },
     ...standaloneRegions,

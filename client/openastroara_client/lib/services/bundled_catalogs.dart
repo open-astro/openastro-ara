@@ -72,6 +72,10 @@ List<PlanningDso> parseOpenNgcCsv(String text) {
   final iNgc = idx('NGC'), iIc = idx('IC');
   if (iName < 0 || iRa < 0 || iDec < 0) return const [];
   final out = <PlanningDso>[];
+  // Dup rows: a second designation of an object listed under another name
+  // (NGC 2244 is the Rosette cluster NGC 2239; 651 rows). Kept as aliases
+  // of the canonical row so "NGC 2244" still finds it (#1267 item 4).
+  final dupAliases = <String, List<String>>{};
   for (final line in lines.skip(1)) {
     if (line.isEmpty) continue;
     final f = line.split(';');
@@ -80,7 +84,19 @@ List<PlanningDso> parseOpenNgcCsv(String text) {
     final dec = decToDeg(f[iDec]);
     if (ra == null || dec == null) continue;
     final type = iType >= 0 && f.length > iType ? f[iType] : '';
-    if (type == 'Dup' || type == 'NonEx') continue;
+    if (type == 'NonEx') continue;
+    if (type == 'Dup') {
+      String cell(int i) => i >= 0 && f.length > i ? f[i].trim() : '';
+      final canonical = cell(iNgc).isNotEmpty
+          ? 'NGC${cell(iNgc)}'
+          : cell(iIc).isNotEmpty
+              ? 'IC${cell(iIc)}'
+              : '';
+      if (canonical.isNotEmpty) {
+        dupAliases.putIfAbsent(designationKey(canonical), () => []).add(f[iName]);
+      }
+      continue;
+    }
     double? num(int i) => i >= 0 && f.length > i ? double.tryParse(f[i].trim()) : null;
     final name = f[iName];
     // vdB's "V-Mag" column is the illuminating star's magnitude (vdB 1 =
@@ -140,7 +156,28 @@ List<PlanningDso> parseOpenNgcCsv(String text) {
       aliases: aliases,
     ));
   }
-  return out;
+  if (dupAliases.isEmpty) return out;
+  return [
+    for (final d in out)
+      switch (dupAliases[designationKey(d.id)]) {
+        null => d,
+        final dups => PlanningDso(
+            id: d.id,
+            name: d.name,
+            type: d.type,
+            magnitude: d.magnitude,
+            raDeg: d.raDeg,
+            decDeg: d.decDeg,
+            sizeMajArcmin: d.sizeMajArcmin,
+            sizeMinArcmin: d.sizeMinArcmin,
+            posAngleDeg: d.posAngleDeg,
+            surfaceBrightness: d.surfaceBrightness,
+            messierNum: d.messierNum,
+            caldwellNum: d.caldwellNum,
+            aliases: [...d.aliases, ...dups],
+          ),
+      },
+  ];
 }
 
 /// "C 020" in the comma-separated identifiers → 20; null otherwise.

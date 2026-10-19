@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/services/bundled_catalogs.dart';
 import 'package:openastroara/services/dso_catalog_service.dart';
 import 'package:openastroara/util/dedupe_catalog.dart';
+import 'package:openastroara/util/imaging_regions.dart';
 
 /// Parses the REAL bundled asset from disk (rootBundle needs a widget
 /// binding; the parser is pure, so read the file directly).
@@ -146,13 +147,36 @@ void main() {
     // Arp 1 is NGC 2857 by its identifier; vdB 21 sits on NGC 1432 by position.
     expect(findCatalogObject(merged, 'Arp 1')!.id, 'NGC2857');
     expect(findCatalogObject(merged, 'vdB 21')!.id, 'NGC1432');
+    // Sh2-108 (Sadr's nebula) is linked to IC 1318, which OpenNGC lists as
+    // a STAR row (gam Cyg): the star must not swallow the nebula, or the
+    // planning cull drops it (review r1).
+    final planning = planningCull(merged);
+    expect(planning.where((d) => d.id == 'Sh2-108'), hasLength(1));
+    // The curated override keeps the merged aliases: the Lagoon's row still
+    // answers to Sh2-25 after applyImagingRegions, as does the Rosette to
+    // Sh2-275, and the Messier membership survives too.
+    final curated = applyImagingRegions(merged);
+    expect(findCatalogObject(curated, 'Sh2-25')!.id, 'NGC6523');
+    expect(curated.where((d) => d.id == 'NGC6523').single.messierNum, 8);
+    // NGC 2244 is a Dup designation of the Rosette cluster row NGC 2239: the
+    // name still finds the row, the Sharpless twin folds into it, and the
+    // curated 'NGC2244' override (dead before: no such row) renames it.
+    final rosette = findCatalogObject(curated, 'NGC 2244')!;
+    expect(rosette.id, 'NGC2239');
+    expect(findCatalogObject(curated, 'Sh2-275')!.id, 'NGC2239');
+    expect(rosette.name, 'Rosette Nebula (NGC 2244)');
     // Two NGC rows at one spot stay two objects.
     expect(merged.where((d) => d.id == 'NGC4567' || d.id == 'NGC4568'), hasLength(2));
-    // No row lists another surviving row's id as an alias.
-    final ids = {for (final d in merged) designationKey(d.id)};
+    // No row lists another surviving row's id as an alias, except across the
+    // star guard: Arp 65's identifiers name NGC 90 and NGC 91, and OpenNGC
+    // types NGC 91 as a star, so that row rightly stays its own.
+    final byId = {for (final d in merged) designationKey(d.id): d};
     for (final d in merged) {
       for (final a in d.aliases) {
-        expect(ids.contains(designationKey(a)), isFalse, reason: '${d.id} aliases $a');
+        final other = byId[designationKey(a)];
+        if (other == null) continue;
+        expect(typeClass(other.type) == 'star', isNot(typeClass(d.type) == 'star'),
+            reason: '${d.id} aliases $a');
       }
     }
   });
@@ -164,5 +188,11 @@ void main() {
         'IC0434;HII;05:41:00.00;-02:27:00.0;;;;2023;;LBN 954;\n');
     expect(rows[0].aliases, ['Messier 31', 'M 31', 'C 017', 'UGC 00454']);
     expect(rows[1].aliases, ['NGC 2023', 'LBN 954']);
+    final dup = parseOpenNgcCsv(
+        'Name;Type;RA;Dec;V-Mag;B-Mag;M;NGC;IC;Identifiers;Common names\n'
+        'NGC2244;Dup;06:31:55.56;+04:56:34.6;;;;2239;;;\n'
+        'NGC2239;Cl+N;06:31:55.56;+04:56:34.6;4.8;;;;;C 050;\n');
+    expect(dup.map((d) => d.id), ['NGC2239']);
+    expect(dup.single.aliases, ['C 050', 'NGC2244']);
   });
 }
