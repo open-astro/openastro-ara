@@ -49,8 +49,9 @@ namespace OpenAstroAra.Test {
         [TestCase(-1)]
         [TestCase(5)]
         public void Out_of_range_binning_is_400_and_not_stored(int binning) {
-            // §45.4 — 0 = auto, 1–4 = override; a negative value would otherwise reach
-            // PolarAlignBinning.Resolve and be taken as auto, 5 would be clamped to 4.
+            // §45.4 — 0 = auto, 1–4 = override. Without this check a negative value reaches
+            // PolarAlignBinning.Resolve and is taken as auto; a hand-edited profile.json above 4
+            // is clamped by Resolve, but the API says no.
             var store = new Mock<IProfileStore>();
 
             var result = ProfileEndpoints.PutPolarAlignSettings(

@@ -523,10 +523,9 @@ namespace OpenAstroAra.Server.Services {
                 return size;
             } catch (OperationCanceledException) {
                 throw;
-            } catch (GuiderRpcException ex) {
-                LogFrameSizeUnavailable(ex.Message);
-                return null;
             } catch (InvalidOperationException ex) {
+                // Not connected. A refused RPC never throws: SendMessage turns it into an error
+                // response and GetCameraFrameSizeAsync into null (handled above).
                 LogFrameSizeUnavailable(ex.Message);
                 return null;
             }

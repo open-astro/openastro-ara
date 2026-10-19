@@ -6276,7 +6276,10 @@ The profile's `binning` is **0 = auto** by default: the server reads the frame s
 picks the tier below by sensor area (`PolarAlignBinning`); 1–4 is the user's override. The guider
 saves the binned frame, so the solver is told the binning (pixel scale × bin) — before #1133 a 2×2
 frame was solved at half its true scale. Every guide camera in use (ASI120/290/174, ≤ 2.5 MP) lands
-on 1×1, which is also what an unknown frame size (older daemon) falls back to.
+on 1×1, which is also what an unknown frame size (older daemon) falls back to. Caveat: the daemon
+reports its *current* frame, so a guider already running binned reports the binned size and auto
+picks a tier for that smaller frame (a lower one than the native sensor would get) — harmless for
+every guide camera in use, and the override exists for the rest.
 
 The original plan, kept for the tiers:
 
@@ -6488,7 +6491,7 @@ scale of 3–4″/px that is **≈ 0.5″ per axis**, far below everything else 
 **Why the 2-point seed amplifies.** `FitAxisTwoPoint` (§45.8) reads the axis off the chord of two
 pointings Δ apart. A pointing error ε on either frame moves the axis by ≈ `ε / (2·sin(Δ/2))`, and an
 error δ in the commanded/reported Δ moves it by ≈ `θ·δ / (2·tan(Δ/2))` for a pointing θ from the
-axis. At the default **Δ = 30°** the factor is **1.9×**; at 10° it is 5.8×, at 60° 1.0×. With 30″ of
+axis. At the default **Δ = 30°** the factor is **1.9×**; at 10° it is 5.7×, at 60° 1.0×. With 30″ of
 pointing jitter and a 2′ read-back error on a 5°-off seed that is **≈ 1′ + 0.3′** of seed error —
 and the seed is a one-off: the live loop (§45.8 reverse-projection) does not re-fit it, so a seed
 bias stays in the readout until Done. That is the number to compare with the §63 residual (above).
