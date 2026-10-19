@@ -958,12 +958,19 @@ is connected, straight from its GuideStep events):
   guider.operation_complete { operation_id, operation, ok, error? }
       #1156 — the terminal status behind every guider 202 (operation =
       guider.start | guider.stop | guider.dither), bound to the 202's
-      operation_id. ok:false with error "refused" is the guider saying no
-      (not guiding, already stopped); any other error is the fault's text.
+      operation_id. ok:false is the guider saying no or a fault; error is
+      "refused" (not guiding, already stopped), a named refusal — "the
+      guider is calibrating", "the guider is paused" (2026-10-18: the
+      sequencer parks on these instead of restarting guiding) — or the
+      guider's own message when the dither RPC errored; anything else is
+      the fault's text.
   guider.dither_complete { ok, operation_id?, error? }
       #1156 — one per dither, REST (operation_id set) or sequencer-driven
       (no id), published after SettleDone or the settle failsafe: ok is the
-      SETTLE verdict, error the daemon's text or the timeout sentence.
+      SETTLE verdict, error the daemon's text or the timeout sentence, or
+      the refusal text above when no dither was sent. A dither met by a
+      lost star waits up to 20 s for it before it is sent or refused, so
+      the terminal event can follow the 202 by that long.
   guider.event { kind, ... }   one per PHD2 session event other than a step —
       the things PHD2's own graph annotates. kind and its detail fields
       (omitted when PHD2 sent none):
