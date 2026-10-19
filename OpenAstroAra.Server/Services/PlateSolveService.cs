@@ -154,7 +154,7 @@ public class PlateSolveService : IPlateSolveService {
         }
         Logger.Warning($"Plate solve - profile focal length {before.FocalLengthMm:0.#} mm updated to the sky-measured {after.FocalLengthMm:0.#} mm (solved scale {result.Pixscale:0.00}\"/px, expected {expected:0.00}\"/px). Check Options → Imaging → Optics.");
         Notifier.ShowWarning(string.Format(CultureInfo.InvariantCulture,
-            "Plate solve measured a focal length of {0:0} mm; the profile said {1:0} mm. Optics updated — check Options → Imaging → Optics.",
+            "Plate solve measured a focal length of {0:0} mm; the profile said {1:0} mm. Optics updated — check Options → Imaging → Optics (if the pixel size there is wrong, fix that and put the focal length back).",
             after.FocalLengthMm, before.FocalLengthMm));
     }
 
