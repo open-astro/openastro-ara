@@ -183,6 +183,19 @@ final _m31 = TonightSkyObject(
 );
 
 // A low-scoring, oversized target — must still appear (advise, don't dictate).
+final _nam = TonightSkyObject(
+  id: 'NGC7000',
+  name: 'North America Nebula',
+  type: 'Neb',
+  magnitude: null,
+  raDeg: 314.8,
+  decDeg: 44.5,
+  altitudeDeg: 50,
+  maxAltitudeDeg: 70,
+  aliases: const ['C 020', 'LBN 373', 'Sh2-117'],
+  score: 70,
+);
+
 const _ngc = TonightSkyObject(
   id: 'NGC1976',
   name: 'Orion Nebula',
@@ -334,6 +347,13 @@ void main() {
         findsOneWidget);
     // S8: flush the confirmation card's auto-dismiss timer.
     await tester.pump(const Duration(seconds: 7));
+  });
+
+  testWidgets('a merged row lists its other designations under the name (#1267)',
+      (tester) async {
+    await tester.pumpWidget(_host(_RecordingClient(), objects: [_nam]));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('also Sh2-117, C 020, LBN 373'), findsOneWidget);
   });
 
   testWidgets('tapping the row sends a framing goto and highlights the row',

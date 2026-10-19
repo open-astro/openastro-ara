@@ -754,6 +754,18 @@ void main() {
     expect(at2.optimalSubS!, greaterThan(at5.optimalSubS!), reason: 'a tighter tolerance wants longer subs');
   });
 
+  test('a ranked row carries its catalog aliases (#1267 item 4)', () {
+    const nam = PlanningDso(
+        id: 'NGC7000', name: 'North America Nebula', type: 'Neb',
+        magnitude: null, raDeg: 314.8, decDeg: 44.5, sizeMajArcmin: 120,
+        surfaceBrightness: 22.0, aliases: ['Sh2-117', 'C 020', 'LBN 373']);
+    final list = computeTonightSkyLocal(
+        site: site, optics: optics, atUtc: DateTime.utc(2026, 10, 15, 3),
+        catalog: const [nam], limit: 5);
+    final row = list.where((o) => o.id == 'NGC7000').single;
+    expect(row.aliases, ['Sh2-117', 'C 020', 'LBN 373']);
+  });
+
   test('a row that absorbed a standalone region\'s Sharpless twin is covered; an anchor row stays (#1267)', () {
     // Sh2-155 is the Cave, stood in for by REGION-SH2-155 (no catalog row of
     // its own): a row that folded Sh2-155 in is covered by the region. The
