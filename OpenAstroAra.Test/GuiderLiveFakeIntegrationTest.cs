@@ -147,6 +147,38 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task The_selected_flag_follows_an_app_state_of_selected_a_stopped_loop_and_a_guide_step() {
+            // Review bot: the three transitions the description names, each pinned by the next
+            // LoopingExposures frame, which is the only event that reads the flag.
+            var (fake, svc) = await ConnectedAsync(LiveRpcs).ConfigureAwait(false);
+            await using var _ = fake;
+            using var __ = svc;
+            string? State() => svc.ConnectedGuiderOrNull()?.AppState?.State;
+            async Task LoopFrame(int n) => await fake.BroadcastAsync(new JsonObject { ["Event"] = "LoopingExposures", ["Frame"] = n }).ConfigureAwait(false);
+
+            // Connected while the guider already loops with a star chosen: the first word is AppState Selected.
+            await fake.BroadcastAsync(PhdEvents.AppState("Selected")).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => State() == "Selected").ConfigureAwait(false), Is.True);
+            await LoopFrame(1);
+            await Task.Delay(100).ConfigureAwait(false);
+            Assert.That(State(), Is.EqualTo("Selected"), "an AppState of Selected sets the flag");
+
+            // The loop stops and starts again: the chosen star is gone with it.
+            await fake.BroadcastAsync(new JsonObject { ["Event"] = "LoopingExposuresStopped" }).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => State() == "Stopped").ConfigureAwait(false), Is.True);
+            await LoopFrame(2);
+            Assert.That(await WaitUntilAsync(() => State() == "Looping").ConfigureAwait(false), Is.True, "LoopingExposuresStopped clears the flag");
+
+            // Chosen again, then guiding: a guide step ends the looping-with-a-star phase.
+            await fake.BroadcastAsync(new JsonObject { ["Event"] = "StarSelected", ["X"] = 640.1, ["Y"] = 480.5 }).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => State() == "Selected").ConfigureAwait(false), Is.True);
+            await fake.BroadcastAsync(PhdEvents.GuideStep(0.1, -0.2)).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => State() == "Guiding").ConfigureAwait(false), Is.True);
+            await LoopFrame(3);
+            Assert.That(await WaitUntilAsync(() => State() == "Looping").ConfigureAwait(false), Is.True, "a guide step clears the flag: a later loop frame is plain looping");
+        }
+
+        [Test]
         public async Task Multi_star_falls_back_to_the_profile_setup_when_guider_options_lack_it() {
             // openastro-guider 2.1.0's get_guider_options has no multistar_enabled; the flag is in
             // get_profile_setup. Without the fallback the dialog's Multi-star chip never showed.
