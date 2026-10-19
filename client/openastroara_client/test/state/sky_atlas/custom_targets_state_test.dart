@@ -38,6 +38,7 @@ class _MemoryTargets extends CustomTargetsService {
     last = k;
     items(k).removeWhere((t) => CustomTargetsService.nameKey(t) == CustomTargetsService.nameKey(target));
     items(k).insert(0, target);
+    bases[k]?.remove(CustomTargetsService.nameKey(target));
     return List.of(items(k));
   }
 
@@ -170,6 +171,18 @@ void main() {
     await c.read(customTargetsProvider.notifier).remember(_t('New here', 6));
     expect(adapter.stored.map((t) => t.name), ['New here', 'Theirs', 'Mine']);
     expect(c.read(customTargetsProvider).value!.map((t) => t.name), ['New here', 'Theirs', 'Mine']);
+  });
+
+  test('a target re-added here after another client forgot it survives the push', () async {
+    // Both synced M 31; the other client forgot it; this client re-adds it.
+    final mirror = _MemoryTargets(seed: {_scopeA: [_t('Keep', 1)]}, base: {_scopeA: {'m 31', 'keep'}});
+    final adapter = _ProfileAdapter([_t('Keep', 1)]);
+    final c = _container(mirror, adapter);
+    addTearDown(c.dispose);
+    await c.read(customTargetsProvider.future);
+    await c.read(customTargetsProvider.notifier).remember(_t('M 31', 9));
+    expect(adapter.stored.map((t) => t.name), ['M 31', 'Keep']);
+    expect(c.read(customTargetsProvider).value!.map((t) => t.name), ['M 31', 'Keep']);
   });
 
   test('with no server the last scope\'s mirror is the list and nothing is pushed', () async {

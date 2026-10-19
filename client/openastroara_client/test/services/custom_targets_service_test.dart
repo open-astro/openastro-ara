@@ -132,6 +132,18 @@ void main() {
     final after = await svc.loadScope('http://a|p1');
     expect(after.targets.map((t) => t.name), ['A1']);
     expect(after.base, {'a1', 'a2'}, reason: 'the base is what the profile held at the last sync');
+    await svc.remember(_t('A2', 4, 4), scope: 'http://a|p1');
+    expect((await svc.loadScope('http://a|p1')).base, {'a1'}, reason: 'a re-add is a fresh local add');
+    // Targets saved before this device had a server and profile live in
+    // 'local' and are adopted by the first real scope.
+    final freshDir = await Directory.systemTemp.createTemp('ct-local');
+    addTearDown(() => freshDir.delete(recursive: true));
+    final fresh = CustomTargetsService(supportDir: () async => freshDir);
+    await fresh.remember(_t('Offline first', 1, 1));
+    expect((await fresh.loadScope(null)).targets.map((t) => t.name), ['Offline first']);
+    expect((await fresh.loadScope('http://c|p1')).targets.map((t) => t.name), ['Offline first']);
+    await fresh.commitSync('http://c|p1', [_t('Offline first', 1, 1)]);
+    expect((await fresh.loadScope('http://d|p2')).targets, isEmpty, reason: 'adopted once, then gone');
   });
 
   test('isAcceptableSavedTarget mirrors the daemon rules', () {

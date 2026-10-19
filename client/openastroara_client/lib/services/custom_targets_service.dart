@@ -87,11 +87,6 @@ class CustomTarget {
   }
 }
 
-/// Persists the recent custom targets as a small JSON list in the app-support
-/// directory (the same home as the planetarium display prefs), newest first,
-/// capped at [maxEntries]. Offline-first: a target prepared at home is on the
-/// list at the dark site. Best effort — a read or write error degrades to an
-/// empty list, never a crash.
 /// One scope of the mirror: a (server, profile) pair's targets and the names
 /// the profile held at the last successful sync (the three-way merge base).
 class ScopedTargets {
@@ -175,6 +170,11 @@ class CustomTargetsService {
         b is List ? {for (final e in b) if (e is String) e} : const {},
       );
     }
+    // A scope with nothing yet adopts what was saved before this device had a
+    // server and profile (the 'local' scope), or a pre-#1267 device-wide list.
+    if (scope != null && scope != 'local' && scopes['local'] is Map) {
+      return _scopeOf(doc, 'local');
+    }
     final legacy = doc['legacy'];
     if (legacy is List) {
       return ScopedTargets([for (final e in legacy) ?CustomTarget.fromJson(e)], const {});
@@ -184,6 +184,9 @@ class CustomTargetsService {
 
   static Map<String, Object?> _withScope(Map<String, Object?> doc, String scope, ScopedTargets s) {
     final scopes = Map<String, Object?>.from(doc['scopes'] as Map<String, Object?>);
+    if (scope != 'local' && !scopes.containsKey(scope)) {
+      scopes.remove('local'); // adopted into this scope (see _scopeOf)
+    }
     scopes[scope] = {
       'targets': [for (final t in s.targets) t.toJson()],
       'base': s.base.toList(),
@@ -217,11 +220,18 @@ class CustomTargetsService {
     return task;
   }
 
+  /// A remembered target is a fresh local add: its name leaves the base, so
+  /// the merge treats it as new even when another client forgot that name
+  /// since the last sync (otherwise the re-add would be dropped as "the
+  /// profile forgot it"; review r3).
   Future<List<CustomTarget>> remember(CustomTarget target, {String? scope}) async =>
-      (await _mutate(scope, (cur) => ScopedTargets([
-            target,
-            ...cur.targets.where((t) => nameKey(t) != nameKey(target)),
-          ].take(maxEntries).toList(), cur.base)))
+      (await _mutate(scope, (cur) => ScopedTargets(
+            [
+              target,
+              ...cur.targets.where((t) => nameKey(t) != nameKey(target)),
+            ].take(maxEntries).toList(),
+            cur.base.difference({nameKey(target)}),
+          )))
           .targets;
 
   Future<List<CustomTarget>> forget(CustomTarget target, {String? scope}) async =>
