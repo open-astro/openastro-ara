@@ -59,11 +59,9 @@ public static class GuiderCameraPinCheck {
         if (devices.Count > 0 && pinned.Length > 0) {
             devices.TryGetValue(key, out var atNumber);
             if (atNumber is null || !string.Equals(atNumber.UniqueId, pinned, StringComparison.Ordinal)) {
-                var moved = devices.FirstOrDefault(d => d.Key.StartsWith("camera/", StringComparison.Ordinal)
-                    && string.Equals(d.Value.UniqueId, pinned, StringComparison.Ordinal));
-                if (moved.Key is not null) {
-                    return $"The guide camera '{selection}' has moved: the camera you picked ({moved.Value.Name}, {pinned}) is now "
-                        + $"{moved.Key} on {ep.Host}:{ep.Port}, and {key} is {(atNumber is null ? "not offered" : $"'{atNumber.Name}'")}. "
+                if (MovedTo(pinned, devices) is { } movedKey) {
+                    return $"The guide camera '{selection}' has moved: the camera you picked ({devices[movedKey].Name}, {pinned}) is now "
+                        + $"{movedKey} on {ep.Host}:{ep.Port}, and {key} is {(atNumber is null ? "not offered" : $"'{atNumber.Name}'")}. "
                         + "Pick the guide camera again before applying.";
                 }
                 if (atNumber is null) {
@@ -80,6 +78,19 @@ public static class GuiderCameraPinCheck {
             ? $"The guide camera '{selection}' is the main imaging camera ({mainCamera!.Name}). "
                 + "The guider must not open the camera the sequence images with; pick the guide camera instead."
             : null;
+    }
+
+    /// <summary>The <c>camera/N</c> key the pinned id answers under, or null when it is not on the server (or
+    /// nothing is pinned). A non-null answer is the "has moved" case, which the connect-time reconcile must not
+    /// re-pin over (#1362 review).</summary>
+    public static string? MovedTo(string? pinnedUniqueId, IReadOnlyDictionary<string, AlpacaConfiguredDevice> devices) {
+        ArgumentNullException.ThrowIfNull(devices);
+        var pinned = (pinnedUniqueId ?? string.Empty).Trim();
+        if (pinned.Length == 0) {
+            return null;
+        }
+        return devices.FirstOrDefault(d => d.Key.StartsWith("camera/", StringComparison.Ordinal)
+            && string.Equals(d.Value.UniqueId, pinned, StringComparison.Ordinal)).Key;
     }
 
     /// <summary>The main-camera half of <see cref="Describe"/> alone: whether the picked slot is the imaging

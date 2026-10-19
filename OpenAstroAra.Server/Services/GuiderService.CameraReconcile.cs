@@ -84,11 +84,21 @@ public sealed partial class GuiderService {
             if (isMain) {
                 return;
             }
+            if (mismatch && GuiderCameraPinCheck.MovedTo(pinnedId, devices) is { } movedTo) {
+                // The pinned camera is still on the server at another number (a bridge renumber): #1308's
+                // "has moved" case. The push refuses it and the user picks again; re-pinning whatever sits at
+                // the old number would follow the wrong camera and silence that refusal for good.
+                LogGuideCameraMoved(endpoint, GuiderCameraReconcile.ForLog(pinnedId), movedTo, GuiderCameraReconcile.ForLog(atSlot?.UniqueId));
+                return;
+            }
+            if (mismatch && atSlot is null) {
+                return; // the pinned camera is gone and nothing answers at its number: nothing to learn from
+            }
             if (mismatch) {
                 // #1362 — a different camera answers in the slot and it is not the imaging camera: the gear was
                 // swapped behind the same connection. The slot is now the guide camera, so its id is pinned and
                 // its pixel size read; the identity reconciler tells the user and clears the darks and calibration.
-                LogGuideCameraSwapped(endpoint, GuiderCameraReconcile.ForLog(atSlot?.UniqueId), GuiderCameraReconcile.ForLog(pinnedId));
+                LogGuideCameraSwapped(endpoint, GuiderCameraReconcile.ForLog(atSlot!.UniqueId), GuiderCameraReconcile.ForLog(pinnedId));
             }
             double? read = null;
             try {
@@ -106,7 +116,10 @@ public sealed partial class GuiderService {
                 return; // the selection or the pin changed while we read: do not overwrite the newer edit
             }
             if (_identity is not null && atSlot is not null) {
-                await _identity.ObserveAsync(GearSlot.GuideCamera, atSlot, cts.Token).ConfigureAwait(false);
+                // On a swap the old pin is the previous camera's identity: a pre-#1362 profile has no stored
+                // guidecamera entry, and the notice and invalidation must not be lost to a "first sighting".
+                var previous = mismatch ? new DeviceIdentityDto(pinnedId, string.Empty, DateTimeOffset.MinValue) : null;
+                await _identity.ObserveAsync(GearSlot.GuideCamera, atSlot, cts.Token, previous).ConfigureAwait(false);
             }
             if (decision.Outcome != GuiderCameraReconcileOutcome.Update) {
                 return;
@@ -154,6 +167,10 @@ public sealed partial class GuiderService {
     [LoggerMessage(Level = LogLevel.Warning,
         Message = "Guide camera {Endpoint} reports UniqueID '{SlotUniqueId}' but the profile pins '{PinnedUniqueId}' and the slot is the main imaging camera: profile left unchanged, pick the guide camera again (#1308, #1362)")]
     private partial void LogGuideCameraPinMismatch(string endpoint, string slotUniqueId, string pinnedUniqueId);
+
+    [LoggerMessage(Level = LogLevel.Warning,
+        Message = "Guide camera {Endpoint}: the pinned camera '{PinnedUniqueId}' moved to {MovedTo} and the slot now reports '{SlotUniqueId}': profile left unchanged, pick the guide camera again (#1308, #1362)")]
+    private partial void LogGuideCameraMoved(string endpoint, string pinnedUniqueId, string movedTo, string slotUniqueId);
 
     [LoggerMessage(Level = LogLevel.Warning,
         Message = "Guide camera {Endpoint} reports UniqueID '{SlotUniqueId}' but the profile pinned '{PinnedUniqueId}': the guide camera was swapped, re-pinning to the camera in the slot (#1362)")]

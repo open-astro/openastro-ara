@@ -252,6 +252,23 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_known_previous_identity_turns_a_first_sighting_into_a_change() {
+            // A pre-#1362 profile has no guidecamera entry but does carry the old #1308 pin: a swap on the
+            // first post-upgrade connect must still be told and invalidated, not recorded as a first sighting.
+            using var rig = Rig.Start();
+            rig.Store.PutCalibrationState(new CalibrationStateDto(new GuiderCalibrationEntryDto(true, Now), new GuiderCalibrationEntryDto(true, Now)));
+            var outcome = await rig.Svc.ObserveAsync(GearSlot.GuideCamera, new("QHY5III585M", "QHY_585_42"), CancellationToken.None,
+                previous: new DeviceIdentityDto("ZWO_MINI_1", "", DateTimeOffset.MinValue)).ConfigureAwait(false);
+            Assert.That(outcome, Is.EqualTo(EquipmentIdentityOutcome.Changed));
+            Assert.That(rig.Store.GetCalibrationState().DarkLibrary.Valid, Is.False);
+            Assert.That(rig.Posted.Single().Title, Is.EqualTo("Guide camera changed: the previous device → QHY5III585M"));
+            // ...and the stored entry wins over the hint once there is one.
+            var again = await rig.Svc.ObserveAsync(GearSlot.GuideCamera, new("QHY5III585M", "QHY_585_42"), CancellationToken.None,
+                previous: new DeviceIdentityDto("SOMETHING_ELSE", "", DateTimeOffset.MinValue)).ConfigureAwait(false);
+            Assert.That(again, Is.EqualTo(EquipmentIdentityOutcome.Unchanged));
+        }
+
+        [Test]
         public async Task A_guider_that_refuses_to_clear_does_not_block_the_notice() {
             using var rig = Rig.Start();
             rig.GuiderLive.Setup(g => g.ClearCalibrationAsync(It.IsAny<CancellationToken>())).ThrowsAsync(new InvalidOperationException("guider is not connected"));

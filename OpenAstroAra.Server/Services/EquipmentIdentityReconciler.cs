@@ -26,8 +26,10 @@ public interface IEquipmentIdentityReconciler {
     Task ReconcileConnectedAsync(CancellationToken ct);
 
     /// <summary>Record what a slot answers now: a first sighting is stored quietly, a changed UniqueID posts
-    /// the gear-change notice and clears the derived values measured through the old device.</summary>
-    Task<EquipmentIdentityOutcome> ObserveAsync(GearSlot slot, AlpacaConfiguredDevice live, CancellationToken ct);
+    /// the gear-change notice and clears the derived values measured through the old device.
+    /// <paramref name="previous"/> stands in for the stored identity when the profile has none for the slot
+    /// but the caller knows what was there (the guide camera's old #1308 pin on a pre-#1362 profile).</summary>
+    Task<EquipmentIdentityOutcome> ObserveAsync(GearSlot slot, AlpacaConfiguredDevice live, CancellationToken ct, DeviceIdentityDto? previous = null);
 }
 
 /// <summary>
@@ -151,7 +153,7 @@ public sealed partial class EquipmentIdentityReconciler : IEquipmentIdentityReco
         }
     }
 
-    public async Task<EquipmentIdentityOutcome> ObserveAsync(GearSlot slot, AlpacaConfiguredDevice live, CancellationToken ct) {
+    public async Task<EquipmentIdentityOutcome> ObserveAsync(GearSlot slot, AlpacaConfiguredDevice live, CancellationToken ct, DeviceIdentityDto? previous = null) {
         ArgumentNullException.ThrowIfNull(live);
         var key = EquipmentIdentityReconcile.Key(slot);
         DeviceIdentityDto? stored;
@@ -159,7 +161,9 @@ public sealed partial class EquipmentIdentityReconciler : IEquipmentIdentityReco
         await _writeGate.WaitAsync(ct).ConfigureAwait(false);
         try {
             var identity = _store.GetEquipmentIdentity();
-            identity.Devices.TryGetValue(key, out stored);
+            if (!identity.Devices.TryGetValue(key, out stored)) {
+                stored = previous;
+            }
             outcome = EquipmentIdentityReconcile.Decide(stored, live);
             if (outcome == EquipmentIdentityOutcome.Unchanged) {
                 return outcome;

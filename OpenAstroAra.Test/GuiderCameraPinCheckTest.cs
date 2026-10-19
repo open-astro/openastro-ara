@@ -72,6 +72,14 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void MovedTo_names_the_number_the_pinned_camera_answers_under() {
+            Assert.That(GuiderCameraPinCheck.MovedTo(Mini, AfterReboot()), Is.EqualTo("camera/0"));
+            Assert.That(GuiderCameraPinCheck.MovedTo(Mini, Before()), Is.EqualTo("camera/1"));
+            Assert.That(GuiderCameraPinCheck.MovedTo("QHY_585_0042", Before()), Is.Null);
+            Assert.That(GuiderCameraPinCheck.MovedTo("", Before()), Is.Null);
+        }
+
+        [Test]
         public void A_swapped_camera_in_the_same_slot_passes_unless_it_is_the_main_camera() {
             // #1362 — the picked camera is gone and another answers at its number: the connect-time reconcile
             // re-pins it. The same slot holding the imaging camera is still refused.
