@@ -87,7 +87,9 @@ public sealed partial class SesameClient : ISesameClient, IDisposable {
                 throw new SesameUnavailableException($"Sesame answered HTTP {(int)response.StatusCode}");
             }
             body = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
-        } catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException && !ct.IsCancellationRequested) {
+        } catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException) {
+            // The caller gave up: say so as a cancellation, whatever the transport threw meanwhile.
+            ct.ThrowIfCancellationRequested();
             // A timeout surfaces as TaskCanceledException while the caller's token is still live.
             LogUnreachable(ex);
             throw new SesameUnavailableException("Sesame could not be reached", ex);

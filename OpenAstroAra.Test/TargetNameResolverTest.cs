@@ -70,6 +70,7 @@ namespace OpenAstroAra.Test {
             Assert.That(TargetNameIndex.TightKey("ngc 0224"), Is.EqualTo("NGC224"));
             Assert.That(TargetNameIndex.TightKey("M031"), Is.EqualTo("M31"));
             Assert.That(TargetNameIndex.TightKey("V* AB Cas"), Is.EqualTo("ABCAS"));
+            Assert.That(TargetNameIndex.TightKey("v* ab cas"), Is.EqualTo("ABCAS"));
             Assert.That(TargetNameIndex.TightKey("Sh2-117"), Is.EqualTo("SH2-117"), "dashes stay");
             Assert.That(TargetNameIndex.LooseKey("SH2-117"), Is.EqualTo("SH2117"));
             Assert.That(TargetNameIndex.TightKey("HIP 012235"), Is.EqualTo("HIP12235"));

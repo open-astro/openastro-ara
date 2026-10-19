@@ -78,7 +78,7 @@ public sealed partial class TargetNameIndex {
     /// ("WR 2-1" and "WR 21" are different stars).</summary>
     public static string TightKey(string? name) {
         var s = (name ?? string.Empty).Trim();
-        if (s.StartsWith("V*", StringComparison.Ordinal)) {
+        if (s.StartsWith("V*", StringComparison.OrdinalIgnoreCase)) {
             s = s[2..];
         }
         s = GreekToAbbrev(s.ToUpperInvariant());
