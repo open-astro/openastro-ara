@@ -188,8 +188,7 @@ void main() {
     final byId = {for (final d in merged) designationKey(d.id): d};
     for (final d in merged) {
       final named = [
-        for (final a in d.aliases)
-          if (byId[designationKey(a)] case final o?) o,
+        for (final a in d.aliases) ?byId[designationKey(a)],
       ];
       if (named.length > 1) continue; // a group designation
       for (final other in named) {

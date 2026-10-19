@@ -16,13 +16,13 @@ void main() {
 
   // Distinct positions: two rows at one spot of one class are one object
   // (#1267 item 4) and would fold together, which is not what these test.
-  var nextRa = 10.0;
   PlanningDso row(String id, String type, {double? mag}) => PlanningDso(
     id: id,
     name: id,
     type: type,
     magnitude: mag,
-    raDeg: nextRa += 1,
+    // A position of its own per id, so no two rows fold together.
+    raDeg: (id.hashCode % 3000) / 10,
     decDeg: 20,
   );
 

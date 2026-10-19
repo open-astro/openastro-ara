@@ -325,13 +325,17 @@ final List<PlanningDso> standaloneRegions = [
 ImagingRegion? overrideFor(PlanningDso o) {
   final direct = overrides[o.id];
   if (direct != null) return direct;
-  if (o.aliases.isEmpty) return null;
-  final keys = {for (final a in o.aliases) designationKey(a)};
-  for (final entry in overrides.entries) {
-    if (keys.contains(designationKey(entry.key))) return entry.value;
+  for (final a in o.aliases) {
+    final r = _overridesByKey[designationKey(a)];
+    if (r != null) return r;
   }
   return null;
 }
+
+/// [overrides] keyed by designation key, built once (review r3).
+final Map<String, ImagingRegion> _overridesByKey = {
+  for (final e in overrides.entries) designationKey(e.key): e.value,
+};
 
 List<PlanningDso> applyImagingRegions(List<PlanningDso> catalog) {
   final present = {for (final o in catalog) o.id};
