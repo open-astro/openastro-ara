@@ -78,31 +78,29 @@ List<PlanningDso> mergeDuplicates(
     return i;
   }
 
-  void union(int a, int b) {
-    final ra = find(a), rb = find(b);
-    if (ra != rb) parent[rb] = ra;
-  }
-
-  // Whether a group already holds an NGC/IC row: a position union must never
-  // join two of those through a third-party row sitting between them (union
-  // is transitive; review r5).
-  // An NGC/IC designation counts whether it is the row's id or an alias it
-  // absorbed earlier (Arp 147 holds IC 298), so a second pass over merged
-  // rows decides the same way as the first.
-  final rowHasOpenNgc = [
+  // Per-root: whether the group holds an NGC/IC designation (by id, or by an
+  // alias absorbed earlier: Arp 147 holds IC 298, so a second pass over
+  // merged rows decides the same way as the first). Kept by union, O(1).
+  final rootHasOpenNgc = [
     for (final r in rows)
       catalogFamily(r.id) == 'openngc' ||
           r.aliases.any(
             (a) => catalogFamily(a.replaceAll(' ', '')) == 'openngc',
           ),
   ];
-  bool groupHasOpenNgc(int root) {
-    for (var i = 0; i < rows.length; i++) {
-      if (rowHasOpenNgc[i] && find(i) == root) return true;
+  void union(int a, int b) {
+    final ra = find(a), rb = find(b);
+    if (ra != rb) {
+      parent[rb] = ra;
+      rootHasOpenNgc[ra] = rootHasOpenNgc[ra] || rootHasOpenNgc[rb];
     }
-    return false;
   }
 
+  bool groupHasOpenNgc(int root) => rootHasOpenNgc[root];
+
+  // Whether a group already holds an NGC/IC row: a position union must never
+  // join two of those through a third-party row sitting between them (union
+  // is transitive; review r5).
   // A star row and a non-star row are never one object: a nebula's row
   // linked to the star it surrounds (Sh2-108 ↔ IC 1318, gam Cyg) must stay a
   // nebula row, or the planning cull drops the nebula with the star
