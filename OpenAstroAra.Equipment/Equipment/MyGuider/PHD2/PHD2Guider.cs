@@ -1417,6 +1417,9 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                     }
                 case "StarSelected": {
                         Logger.Debug($"PHD2 - Star selected");
+                        // Only a looping (or just-lost) guider becomes "Selected": PHD2 also sends StarSelected
+                        // when it re-picks a star mid-guiding or during a calibration, and those phases stay
+                        // what they are until their own events say otherwise.
                         if (AppState?.State is null or "" || AppState.State == PhdAppState.LOOPING || AppState.State == PhdAppState.SELECTED || AppState.State == PhdAppState.LOSTLOCK) {
                             _starSelectedWhileLooping = true;
                             AppState = new PhdEventAppState() { State = PhdAppState.SELECTED };

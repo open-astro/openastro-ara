@@ -144,6 +144,16 @@ namespace OpenAstroAra.Test {
             fake.OnRpc("deselect_star", JsonValue.Create(0));
             await svc.ConnectedGuiderOrNull()!.DeselectStarAsync(CancellationToken.None).ConfigureAwait(false);
             Assert.That(svc.ConnectedGuiderOrNull()?.AppState?.State, Is.EqualTo("Looping"), "deselect sends no event; the state follows the RPC");
+            await fake.BroadcastAsync(new JsonObject { ["Event"] = "LoopingExposures", ["Frame"] = 14 }).ConfigureAwait(false);
+            await Task.Delay(100).ConfigureAwait(false);
+            Assert.That(svc.ConnectedGuiderOrNull()?.AppState?.State, Is.EqualTo("Looping"), "the flag is cleared too: the next frame stays Looping");
+
+            // A StarSelected mid-guiding (PHD2 re-picks on a dither) does not turn a guided run into "star selected".
+            await fake.BroadcastAsync(PhdEvents.GuideStep(0.1, -0.2)).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => svc.ConnectedGuiderOrNull()?.AppState?.State == "Guiding").ConfigureAwait(false), Is.True);
+            await fake.BroadcastAsync(new JsonObject { ["Event"] = "StarSelected", ["X"] = 640.1, ["Y"] = 480.5 }).ConfigureAwait(false);
+            await Task.Delay(100).ConfigureAwait(false);
+            Assert.That(svc.ConnectedGuiderOrNull()?.AppState?.State, Is.EqualTo("Guiding"), "StarSelected only applies from a looping state");
         }
 
         [Test]
