@@ -176,6 +176,16 @@ void main() {
     expect(merged.where((d) => d.id == 'Arp 281'), hasLength(1));
     expect(findCatalogObject(merged, 'NGC 4038')!.id, 'NGC4038', reason: 'the Antennae stay two');
     expect(findCatalogObject(merged, 'NGC 4039')!.id, 'NGC4039');
+    // Family overlays never plot one designation twice: a group row (Arp 72
+    // names NGC 5994 and NGC 5996) keeps those names as aliases, but they are
+    // the member rows' own and never pull the group row into the NGC overlay.
+    for (final overlay in ['ngc', 'ic', 'sharpless', 'arp', 'vdb']) {
+      final names = catalogOverlayObjects(overlay, merged, limit: 1000000)!
+          .map((m) => m['name'] as String)
+          .toList();
+      expect(names.toSet().length, names.length, reason: '$overlay has duplicates');
+    }
+    expect(merged.where((d) => d.id == 'Arp 72').single.aliases, contains('NGC 5994'));
     // The Tonight's Sky subtitle shows catalogue designations, best-known
     // first, never survey ids (review r4).
     expect(aliasSuffix(nam.aliases), ' · also Sh2-117, C 020, LBN 373');

@@ -215,6 +215,10 @@ void main() {
     ]);
     expect(merged[1].caldwellNum, 32);
     expect(merged.last.aliases, ['Arp 1']);
+    // The group row keeps its members' names (they are what it is), and is
+    // still a group on a second pass.
+    expect(merged[2].aliases, ['NGC 4627', 'NGC 4631']);
+    expect(mergeDuplicates(merged).map((d) => d.id), merged.map((d) => d.id));
   });
 
   test('a star row never wins a merge and a link to a star is ignored', () {

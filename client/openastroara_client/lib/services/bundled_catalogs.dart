@@ -265,33 +265,33 @@ bool isMagnitudelessImagingType(String type) => const {
 
 // ── Catalogs overlays (the planetarium's dots) ─────────────────────────────
 
-typedef CatalogOverlay = ({String id, String name, String group, bool Function(PlanningDso) match});
+typedef CatalogOverlay = ({String id, String name, String group, bool Function(PlanningDso) match, String? prefix});
 
 /// Mirror of the daemon's CatalogDef table, so the Catalogs panel offers the
 /// same sets online and off.
 final List<CatalogOverlay> catalogOverlays = [
-  (id: 'messier', name: 'Messier', group: 'Catalogs', match: (r) => r.messierNum != null),
-  (id: 'caldwell', name: 'Caldwell', group: 'Catalogs', match: (r) => r.caldwellNum != null),
-  (id: 'ngc', name: 'NGC', group: 'Catalogs', match: (r) => r.hasDesignationPrefix('NGC')),
-  (id: 'ic', name: 'IC', group: 'Catalogs', match: (r) => r.hasDesignationPrefix('IC')),
-  (id: 'sharpless', name: 'Sharpless (Sh2)', group: 'Catalogs', match: (r) => r.hasDesignationPrefix('Sh2-')),
+  (id: 'messier', name: 'Messier', group: 'Catalogs', match: (r) => r.messierNum != null, prefix: null),
+  (id: 'caldwell', name: 'Caldwell', group: 'Catalogs', match: (r) => r.caldwellNum != null, prefix: null),
+  (id: 'ngc', name: 'NGC', group: 'Catalogs', match: (r) => r.hasDesignationPrefix('NGC'), prefix: 'NGC'),
+  (id: 'ic', name: 'IC', group: 'Catalogs', match: (r) => r.hasDesignationPrefix('IC'), prefix: 'IC'),
+  (id: 'sharpless', name: 'Sharpless (Sh2)', group: 'Catalogs', match: (r) => r.hasDesignationPrefix('Sh2-'), prefix: 'Sh2-'),
   (id: 'barnard', name: 'Barnard dark nebulae', group: 'Catalogs',
-      match: (r) => r.hasBarnardDesignation),
-  (id: 'ldn', name: 'Lynds dark nebulae (LDN)', group: 'Catalogs', match: (r) => r.hasDesignationPrefix('LDN ')),
-  (id: 'vdb', name: 'van den Bergh (vdB)', group: 'Catalogs', match: (r) => r.hasDesignationPrefix('vdB ')),
-  (id: 'abell-pn', name: 'Abell planetary nebulae', group: 'Catalogs', match: (r) => r.hasDesignationPrefix('Abell ')),
-  (id: 'arp', name: 'Arp peculiar galaxies', group: 'Catalogs', match: (r) => r.hasDesignationPrefix('Arp ')),
-  (id: 'wolf-rayet', name: 'Wolf-Rayet stars (WR)', group: 'Catalogs', match: (r) => r.hasDesignationPrefix('WR ')),
+      match: (r) => r.hasBarnardDesignation, prefix: null),
+  (id: 'ldn', name: 'Lynds dark nebulae (LDN)', group: 'Catalogs', match: (r) => r.hasDesignationPrefix('LDN '), prefix: 'LDN '),
+  (id: 'vdb', name: 'van den Bergh (vdB)', group: 'Catalogs', match: (r) => r.hasDesignationPrefix('vdB '), prefix: 'vdB '),
+  (id: 'abell-pn', name: 'Abell planetary nebulae', group: 'Catalogs', match: (r) => r.hasDesignationPrefix('Abell '), prefix: 'Abell '),
+  (id: 'arp', name: 'Arp peculiar galaxies', group: 'Catalogs', match: (r) => r.hasDesignationPrefix('Arp '), prefix: 'Arp '),
+  (id: 'wolf-rayet', name: 'Wolf-Rayet stars (WR)', group: 'Catalogs', match: (r) => r.hasDesignationPrefix('WR '), prefix: 'WR '),
   (id: 'galaxies', name: 'Galaxies', group: 'Types',
-      match: (r) => const {'G', 'GPair', 'GTrpl', 'GGroup'}.contains(r.type)),
-  (id: 'open-clusters', name: 'Open clusters', group: 'Types', match: (r) => r.type == 'OCl'),
-  (id: 'globular-clusters', name: 'Globular clusters', group: 'Types', match: (r) => r.type == 'GCl'),
-  (id: 'planetary-nebulae', name: 'Planetary nebulae', group: 'Types', match: (r) => r.type == 'PN'),
+      match: (r) => const {'G', 'GPair', 'GTrpl', 'GGroup'}.contains(r.type), prefix: null),
+  (id: 'open-clusters', name: 'Open clusters', group: 'Types', match: (r) => r.type == 'OCl', prefix: null),
+  (id: 'globular-clusters', name: 'Globular clusters', group: 'Types', match: (r) => r.type == 'GCl', prefix: null),
+  (id: 'planetary-nebulae', name: 'Planetary nebulae', group: 'Types', match: (r) => r.type == 'PN', prefix: null),
   (id: 'emission-nebulae', name: 'Emission nebulae', group: 'Types',
-      match: (r) => r.type == 'HII' || r.type == 'EmN'),
-  (id: 'reflection-nebulae', name: 'Reflection nebulae', group: 'Types', match: (r) => r.type == 'RfN'),
-  (id: 'nebulae', name: 'Nebulae', group: 'Types', match: (r) => r.type == 'Neb' || r.type == 'Cl+N'),
-  (id: 'supernova-remnants', name: 'Supernova remnants', group: 'Types', match: (r) => r.type == 'SNR'),
+      match: (r) => r.type == 'HII' || r.type == 'EmN', prefix: null),
+  (id: 'reflection-nebulae', name: 'Reflection nebulae', group: 'Types', match: (r) => r.type == 'RfN', prefix: null),
+  (id: 'nebulae', name: 'Nebulae', group: 'Types', match: (r) => r.type == 'Neb' || r.type == 'Cl+N', prefix: null),
+  (id: 'supernova-remnants', name: 'Supernova remnants', group: 'Types', match: (r) => r.type == 'SNR', prefix: null),
 ];
 
 bool _isDigit(String c) => c.codeUnitAt(0) >= 48 && c.codeUnitAt(0) <= 57;
@@ -314,13 +314,43 @@ List<Map<String, Object?>>? catalogOverlayObjects(
     }
   }
   if (def == null) return null;
-  final rows = [for (final r in all) if (def.match(r)) r]
-    ..sort((a, b) => (a.magnitude ?? double.infinity)
-        .compareTo(b.magnitude ?? double.infinity));
+  // A group row (Arp 72 names NGC 5994 and NGC 5996) carries its members'
+  // designations as aliases while the members are rows of their own: for a
+  // family overlay those designations belong to the member rows, so a row
+  // joins the overlay by its own id, or by an alias that is nobody's id.
+  // ...and a designation two rows both carry (IC 1559 on NGC 169, through
+  // Arp 282, and on NGC 169A, its own) plots once, on the first row.
+  final ids = {for (final r in all) designationKey(r.id)};
+  final taken = <String>{};
+  String? ownDesignation(PlanningDso r, String prefix) {
+    if (r.id.startsWith(prefix)) return r.id;
+    for (final a in r.aliases) {
+      if (!a.startsWith(prefix)) continue;
+      final k = designationKey(a);
+      if (ids.contains(k)) continue;
+      if (taken.add(k)) return a;
+    }
+    return null;
+  }
+  final prefix = def.prefix;
+  final labels = <PlanningDso, String>{};
+  final rows = <PlanningDso>[];
+  for (final r in all) {
+    if (prefix == null) {
+      if (def.match(r)) rows.add(r);
+    } else if (ownDesignation(r, prefix) case final d?) {
+      labels[r] = d;
+      rows.add(r);
+    }
+  }
+  rows.sort((a, b) => (a.magnitude ?? double.infinity)
+      .compareTo(b.magnitude ?? double.infinity));
   return [
     for (final r in rows.take(limit < 0 ? 0 : limit))
       {
-        'name': overlayDisplayName(id, r),
+        'name': labels[r] is String
+            ? prettyDsoName(labels[r]!)
+            : overlayDisplayName(id, r),
         'ra_deg': r.raDeg,
         'dec_deg': r.decDeg,
         'magnitude': r.magnitude,
