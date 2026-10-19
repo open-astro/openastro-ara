@@ -720,7 +720,7 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
             await RenderGate.WaitAsync(ct).ConfigureAwait(false);
             byte[] seeded;
             try {
-                var (pixels, width, height, bayerPat) = LoadFitsPixels(filePath);
+                var (pixels, width, height, bayerPat, _) = LoadFitsPixels(filePath);
                 WarmHistogramCache(filePath, pixels);
                 stretchParams = OpenAstroAra.Stretch.Stretcher.DeriveStfParams(pixels);
                 appliedManual = stretchParams;
@@ -768,7 +768,7 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
         RenderGate.Wait();
         byte[] jpeg;
         try {
-            var (pixels, width, height, bayerPat) = LoadFitsPixels(filePath);
+            var (pixels, width, height, bayerPat, _) = LoadFitsPixels(filePath);
             // Free ride: the raw pixels are in hand, so the histogram cache warms
             // with the first (capture-time pre-warmed) preview render.
             WarmHistogramCache(filePath, pixels);
@@ -818,7 +818,7 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
             if (TryServeFromCache(thumbPath) is byte[] raced) {
                 return (raced, "image/jpeg");
             }
-            var (pixels, width, height, bayerPat) = LoadFitsPixels(filePath);
+            var (pixels, width, height, bayerPat, _) = LoadFitsPixels(filePath);
             // Thumbnail: §65.4 always uses the default stretch (re-stretch on
             // thumbnails is not supported in v0.0.1). Per-frame-type override
             // still applies — calibration frames get linear.
@@ -856,11 +856,15 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
         }
         // A corrupt/truncated FITS lets LoadFitsPixels throw → 500, consistent with GetPreviewAsync/
         // GetThumbnailAsync on the same file (a malformed catalogued frame is an exceptional, not user-input, case).
-        var (pixels, width, height, bayerPat) = LoadFitsPixels(filePath);
+        var (pixels, width, height, bayerPat, binning) = LoadFitsPixels(filePath);
         var metaData = new OpenAstroAra.Image.ImageData.ImageMetaData();
         // Through Debayer.TryParse, not Enum.TryParse: a FITS string card comes back quoted and padded
         // ("'RGGB    '") and some cameras write it lowercase; both must still name the mosaic.
         metaData.Camera.SensorType = SensorTypeFromBayerPat(bayerPat);
+        // #1136 — XBINNING sets the solve scale (pixel size × bin); without it every catalogued frame
+        // solved as 1×1, and a 2×2 light would have taught the profile half its focal length.
+        metaData.Camera.BinX = binning;
+        metaData.Camera.BinY = binning;
         return new OpenAstroAra.Image.ImageData.BaseImageData(
             pixels, width, height, bitDepth: 16, isBayered: !string.IsNullOrEmpty(bayerPat),
             metaData, profileService,
@@ -945,12 +949,24 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
         return (reader.GetString(0), ParseFrameType(reader.GetString(1)));
     }
 
-    private static (ushort[] Pixels, int Width, int Height, string? BayerPattern) LoadFitsPixels(string filePath) {
+    private static (ushort[] Pixels, int Width, int Height, string? BayerPattern, int Binning) LoadFitsPixels(string filePath) {
         using var fits = OpenAstroAra.Fits.FitsImage.Open(filePath);
         var (w, h) = fits.GetDimensions();
         var pixels = fits.ReadImageData16();
-        var bayer = fits.ReadHeaders().TryGetValue("BAYERPAT", out var bp) ? bp : null;
-        return (pixels, w, h, bayer);
+        var headers = fits.ReadHeaders();
+        var bayer = headers.TryGetValue("BAYERPAT", out var bp) ? bp : null;
+        return (pixels, w, h, bayer, BinningFromHeaders(headers));
+    }
+
+    /// <summary>The frame's <c>XBINNING</c> card as an integer, 1 when absent or unparsable (a frame
+    /// with no card is read as native; the capture path always writes one).</summary>
+    internal static int BinningFromHeaders(IReadOnlyDictionary<string, string> headers) {
+        if (headers.TryGetValue("XBINNING", out var raw)
+                && int.TryParse(raw.Trim().Trim('\''), System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var bin)
+                && bin > 0) {
+            return bin;
+        }
+        return 1;
     }
 
     // §65 OSC color — the mosaic→RGB preview recipe lives in Debayer.SuperPixelStretched, shared
@@ -1367,7 +1383,7 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
         }
         ushort[]? pixels = null;
         if (histogram is null) {
-            (pixels, _, _, _) = LoadFitsPixels(filePath);
+            (pixels, _, _, _, _) = LoadFitsPixels(filePath);
             histogram = ComputeHistogram(pixels);
             TryWriteCache(cachePath, System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(
                 histogram, AraJsonSerializerContext.Default.FrameHistogramDto));

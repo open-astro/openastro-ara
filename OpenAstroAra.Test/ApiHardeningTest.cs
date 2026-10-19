@@ -259,14 +259,37 @@ public class FrameFileConfinementTest {
             Assert.That(File.Exists(outsideVariant), Is.True, "a foreign directory is never enumerated or deleted from");
         }
 
-        private static void WriteRealFits(string path, ushort[]? pixels = null, int width = 4, int height = 4, string? bayerPat = null) {
+        private static void WriteRealFits(string path, ushort[]? pixels = null, int width = 4, int height = 4, string? bayerPat = null, int? binning = null) {
             File.Delete(path); // InsertAsync leaves a text stub; cfitsio must create the file itself
             using var fits = OpenAstroAra.Fits.FitsImage.Create(path, width, height, OpenAstroAra.Fits.FitsBitDepth.UnsignedShort);
             fits.WriteImageData(pixels ?? new ushort[width * height]);
             if (bayerPat is not null) {
                 fits.SetHeader("BAYERPAT", bayerPat);
             }
+            if (binning is int bin) {
+                fits.SetHeader("XBINNING", bin);
+                fits.SetHeader("YBINNING", bin);
+            }
             fits.Complete(); // renames the .tmp into place
+        }
+
+        [Test]
+        public async Task Loaded_image_data_carries_the_fits_binning_so_a_binned_frame_solves_at_its_true_scale() {
+            // #1136 bot round 1 — the REST solve read every catalogued frame as 1x1; a 2x2 light then solved
+            // at twice the expected scale, and the focal-length write-back would have halved the profile.
+            var binnedPath = Path.Combine(_root, "binned.fits");
+            var binned = await InsertAsync(binnedPath);
+            WriteRealFits(binnedPath, binning: 2);
+            var plainPath = Path.Combine(_root, "plain.fits");
+            var plain = await InsertAsync(plainPath);
+            WriteRealFits(plainPath);
+            var profile = new HeadlessProfileService();
+
+            var loaded = (await _repo.LoadImageDataAsync(binned, profile, CancellationToken.None))!;
+            Assert.That(loaded.MetaData.Camera.BinX, Is.EqualTo(2));
+            Assert.That(PlateSolveService.BinningOf(loaded), Is.EqualTo(2));
+            var unbinned = (await _repo.LoadImageDataAsync(plain, profile, CancellationToken.None))!;
+            Assert.That(PlateSolveService.BinningOf(unbinned), Is.EqualTo(1), "no card = native");
         }
 
         [Test]

@@ -356,7 +356,7 @@ namespace OpenAstroAra.Test {
             using var feed = new FrameSolveFeed(frames.Object, solver.Object, profileService: new HeadlessProfileService()) {
                 PixelLoader = (path, _) => {
                     Assert.That(path, Is.EqualTo("/captures/m42.fits"));
-                    return Task.FromResult((new ushort[16], 4, 4));
+                    return Task.FromResult((new ushort[16], 4, 4, 1));
                 },
             };
 
@@ -375,7 +375,7 @@ namespace OpenAstroAra.Test {
             solver.Setup(s => s.SolveImage(It.IsAny<OpenAstroAra.Image.Interfaces.IImageData>(), It.IsAny<Coordinates?>(), null, It.IsAny<CancellationToken>()))
                 .ReturnsAsync(new PlateSolveResult { Success = false });
             using var feed = new FrameSolveFeed(frames.Object, solver.Object, profileService: new HeadlessProfileService()) {
-                PixelLoader = (_, _) => Task.FromResult((new ushort[16], 4, 4)),
+                PixelLoader = (_, _) => Task.FromResult((new ushort[16], 4, 4, 1)),
             };
 
             Assert.That(await feed.SolveFrameAsync(id, CancellationToken.None), Is.Null, "solver said no");

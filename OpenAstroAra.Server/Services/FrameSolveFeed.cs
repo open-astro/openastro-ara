@@ -68,7 +68,7 @@ public sealed partial class FrameSolveFeed : IFrameSolveFeed, ISavedLightSink, I
     }
 
     /// <summary>Test seam: load a catalogued frame's pixels. Default reads the FITS at the catalog's path.</summary>
-    internal Func<string, CancellationToken, Task<(ushort[] Pixels, int Width, int Height)>>? PixelLoader { get; set; }
+    internal Func<string, CancellationToken, Task<(ushort[] Pixels, int Width, int Height, int Binning)>>? PixelLoader { get; set; }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Best-effort drift measurement: a missing file, a cfitsio fault or a solver failure must read as 'did not solve' (logged), never fail the trigger or the run. Log-and-recover boundary.")]
@@ -83,11 +83,15 @@ public sealed partial class FrameSolveFeed : IFrameSolveFeed, ISavedLightSink, I
                 LogFrameMissing(frameId);
                 return null;
             }
-            var (pixels, width, height) = await (PixelLoader ?? LoadFitsAsync)(frame.FilePath, ct).ConfigureAwait(false);
+            var (pixels, width, height, binning) = await (PixelLoader ?? LoadFitsAsync)(frame.FilePath, ct).ConfigureAwait(false);
             // The solver ignores the CFA; a one-shot-colour mosaic solves as luminance like every other path here.
+            // The frame's binning sets the solve scale (#1136): a 2x2 light is not a 1x1 one.
+            var metaData = new OpenAstroAra.Image.ImageData.ImageMetaData();
+            metaData.Camera.BinX = binning;
+            metaData.Camera.BinY = binning;
             var image = new OpenAstroAra.Image.ImageData.BaseImageData(
                 pixels, width, height, bitDepth: 16, isBayered: false,
-                new OpenAstroAra.Image.ImageData.ImageMetaData(), _profileService!, null!, null!);
+                metaData, _profileService!, null!, null!);
             Coordinates? hint = null;
             try {
                 var telescope = _telescope?.Invoke();
@@ -113,11 +117,11 @@ public sealed partial class FrameSolveFeed : IFrameSolveFeed, ISavedLightSink, I
 
     public void Dispose() => _solveGate.Dispose();
 
-    private static Task<(ushort[] Pixels, int Width, int Height)> LoadFitsAsync(string path, CancellationToken ct) =>
+    private static Task<(ushort[] Pixels, int Width, int Height, int Binning)> LoadFitsAsync(string path, CancellationToken ct) =>
         Task.Run(() => {
             using var fits = OpenAstroAra.Fits.FitsImage.Open(path);
             var (w, h) = fits.GetDimensions();
-            return (fits.ReadImageData16(), w, h);
+            return (fits.ReadImageData16(), w, h, SqliteFrameRepository.BinningFromHeaders(fits.ReadHeaders()));
         }, ct);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Center after drift: frame {FrameId} is not in the catalog (or has no file) — not solved")]
