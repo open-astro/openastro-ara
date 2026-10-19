@@ -381,9 +381,9 @@ class _ManualControlState extends ConsumerState<_ManualControl> {
         context: context,
         builder: (context) => AlertDialog(
           title: const Text('A run is in progress'),
-          content: Text(
-            '${describeEquipmentError(e).split('. ').first}. '
-            'Guiding stops and the run waits for you to resume it.',
+          content: const Text(
+            'Slewing now stops guiding and pauses the run; it waits for you '
+            'to resume it afterwards.',
           ),
           actions: [
             TextButton(
