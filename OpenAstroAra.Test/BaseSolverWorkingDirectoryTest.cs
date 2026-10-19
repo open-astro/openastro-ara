@@ -26,6 +26,10 @@ namespace OpenAstroAra.Test {
                 var dir = BaseSolver.ResolveWorkingDirectory();
                 Assert.That(dir, Is.EqualTo(Path.Combine(root, "openastroara", "PlateSolver")));
                 Assert.That(Directory.Exists(dir), Is.True);
+                if (!OperatingSystem.IsWindows()) {
+                    // Bot round 1 — /dev/shm is world-readable by default; the frames stay the service's.
+                    Assert.That(File.GetUnixFileMode(dir) & (UnixFileMode.GroupRead | UnixFileMode.OtherRead), Is.EqualTo(UnixFileMode.None));
+                }
             } finally {
                 Directory.Delete(root, recursive: true);
             }

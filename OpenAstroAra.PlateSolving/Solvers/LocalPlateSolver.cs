@@ -47,7 +47,11 @@ namespace OpenAstroAra.PlateSolving.Solvers {
             options.Add($"--objs {parameter.MaxObjects}");
             options.Add("--no-plots");
             options.Add("--resort");
-            options.Add($"--downsample {parameter.DownSampleFactor}");
+            // 0 = automatic from the pixel scale (#1136), the same rule as the ASTAP builder.
+            var downsample = parameter.DownSampleFactor > 0
+                ? parameter.DownSampleFactor
+                : SolveTuning.DownsampleFor(imageProperties.ArcSecPerPixel, imageProperties.ImageHeight);
+            options.Add($"--downsample {downsample}");
             var lowArcSecPerPix = imageProperties.ArcSecPerPixel - 0.2;
             var highArcSecPerPix = imageProperties.ArcSecPerPixel + 0.2;
             options.Add("--scale-units arcsecperpix");

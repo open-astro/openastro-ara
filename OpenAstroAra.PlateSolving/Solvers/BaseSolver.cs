@@ -42,7 +42,14 @@ namespace OpenAstroAra.PlateSolving.Solvers {
             }
             var candidate = Path.Combine(shm, "openastroara", "PlateSolver");
             try {
-                Directory.CreateDirectory(candidate);
+                // /dev/shm is shared between every local user; keep the frames private to the service.
+                if (OperatingSystem.IsWindows()) {
+                    Directory.CreateDirectory(candidate);
+                } else {
+                    const UnixFileMode ownerOnly = UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute;
+                    Directory.CreateDirectory(Path.Combine(shm, "openastroara"), ownerOnly);
+                    Directory.CreateDirectory(candidate, ownerOnly);
+                }
                 var probe = Path.Combine(candidate, $".probe-{Environment.ProcessId}");
                 File.WriteAllBytes(probe, Array.Empty<byte>());
                 File.Delete(probe);
