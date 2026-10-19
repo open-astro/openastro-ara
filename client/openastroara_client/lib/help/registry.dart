@@ -1241,15 +1241,15 @@ const Map<String, Help> helpRegistry = {
     title: 'Downsample factor',
     body:
         'Plate solvers don\'t need full resolution to find a match — they only need enough pixels to detect stars. Downsampling 2x quarters the input area and is roughly 4x faster, with negligible accuracy hit on most setups.\n\n'
-        'Bump to 3-4 for very large sensors (>30 MP). Drop to 1 if you have a small sensor (<5 MP) and solves are unreliable.',
+        '0 (the default) is automatic: the rig server picks the factor for each frame from its image scale (focal length and pixel size) and size, so a short lens solves at full resolution, a long scope at 2-4x, and any frame over 3000 px high at 2x or more. Set 1-8 to override; bump to 3-4 for very large sensors (>30 MP), drop to 1 if you have a small sensor (<5 MP) and solves are unreliable.',
     relatedSettings: ['img.platesolve.timeout_seconds'],
   ),
   'img.platesolve.use_blind_fallback': Help(
     key: 'img.platesolve.use_blind_fallback',
     title: 'Blind-solve fallback',
     body:
-        'If a hint-based solve times out (mount pointing way off, polar alignment wrong, hint coordinates stale), retry the same frame with no hint — let the solver search the entire sky.\n\n'
-        'Blind solves are slower (often 30-60s) but rescue most bad-pointing situations. Recommended on except for very large sensors where blind solves can run out of timeout.',
+        'If a hint-based solve fails (mount pointing way off, polar alignment wrong, hint coordinates stale), the rig server first tries the cheaper rescues on the same frame: the last position it solved this session, then the hint with the image scale searched (for a wrong focal length), then a 30° and a 90° search around the hint. With this on, a frame none of those solve is retried with no hint at all — the solver searches the entire sky.\n\n'
+        'Blind solves are slower (often 30-60s, up to 5x the timeout) but rescue most bad-pointing situations. Recommended on except for very large sensors where blind solves can run out of timeout.',
     relatedSettings: ['img.platesolve.search_radius_deg'],
   ),
   'img.platesolve.max_iterations': Help(

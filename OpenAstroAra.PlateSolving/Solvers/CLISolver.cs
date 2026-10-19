@@ -60,6 +60,7 @@ namespace OpenAstroAra.PlateSolving.Solvers {
             var total = System.Diagnostics.Stopwatch.StartNew();
             long saveMs = 0, solverMs = 0;
             var timeout = parameter.Timeout ?? DefaultTimeout;
+            LastExitCode = null; // instance state: a throw before the solver runs must not report the previous run's code
             try {
                 // Update target coordinates
                 if (source.MetaData.Target.Coordinates == null || double.IsNaN(source.MetaData.Target.Coordinates.RA))
@@ -100,16 +101,21 @@ namespace OpenAstroAra.PlateSolving.Solvers {
                     filePrefix += ".blind";
                 }
 
+                // A non-final stage of the staged search (#1136) never keeps its failed frame: the move
+                // from /dev/shm to the on-disk Failed/ directory is a 50 MB copy per stage that would
+                // cancel the tmpfs gain, and each copy overwrote the last (same prefix). Only the
+                // final failure is kept, which is the one worth looking at.
+                var keep = result.Success || parameter.KeepFailedFrame ? result : new PlateSolveResult { Success = true };
                 if (imagePath != null && File.Exists(imagePath)) {
-                    MoveOrDeleteFile(result, imagePath, filePrefix, cancelToken);
+                    MoveOrDeleteFile(keep, imagePath, filePrefix, cancelToken);
                 }
 
                 if (outputPath != null && File.Exists(outputPath)) {
-                    MoveOrDeleteFile(result, outputPath, filePrefix, cancelToken);
+                    MoveOrDeleteFile(keep, outputPath, filePrefix, cancelToken);
                 }
 
                 foreach (var file in GetSideCarFilePaths(imagePath ?? string.Empty)) {
-                    MoveOrDeleteFile(result, file, filePrefix, cancelToken);
+                    MoveOrDeleteFile(keep, file, filePrefix, cancelToken);
                 }
             }
             return result;

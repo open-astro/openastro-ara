@@ -1601,7 +1601,7 @@ const List<Setting> settingsRegistry = [
   Setting(
     id: 'img.platesolve.timeout_seconds',
     label: 'Timeout (s)',
-    description: 'How long to wait for a single solve attempt before giving up. 60s is generous for ASTAP local; bump for astrometry.net online.',
+    description: 'How long to wait for one hinted solve before giving up; the wider rescue stages get 2x (up to 90°) and a blind solve 5x. 60s is generous for ASTAP local; bump for astrometry.net online.',
     keywords: ['timeout', 'seconds', 'wait', 'limit'],
     path: ['Settings', 'Imaging', 'Plate Solving'],
     type: SettingType.intRange(min: 5, max: 600),

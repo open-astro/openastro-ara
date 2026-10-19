@@ -82,6 +82,7 @@ namespace OpenAstroAra.PlateSolving {
             }
             var quiet = parameter.Clone();
             quiet.DisableNotifications = true;
+            quiet.KeepFailedFrame = false;
             return quiet;
         }
 

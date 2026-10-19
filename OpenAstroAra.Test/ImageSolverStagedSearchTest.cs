@@ -81,7 +81,9 @@ namespace OpenAstroAra.Test {
             var sut = new ImageSolver(near, blind);
             await sut.Solve(Mock.Of<IImageData>(), Hinted(), null, CancellationToken.None);
             Assert.That(near.Calls.All(c => c.DisableNotifications), Is.True, "every non-final stage is quiet");
+            Assert.That(near.Calls.All(c => !c.KeepFailedFrame), Is.True, "and drops its failed frame instead of copying it to disk");
             Assert.That(blind.Calls.Single().DisableNotifications, Is.False, "the final (blind) stage keeps the caller's setting");
+            Assert.That(blind.Calls.Single().KeepFailedFrame, Is.True, "and keeps the final failure's frame");
         }
 
         [Test]

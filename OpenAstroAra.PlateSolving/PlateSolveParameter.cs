@@ -49,6 +49,10 @@ namespace OpenAstroAra.PlateSolving {
         /// (<see cref="SolveMemory"/>) or a caller-supplied position. Null = none.</summary>
         public Coordinates? FallbackCoordinates { get; set; }
 
+        /// <summary>Whether a failed run keeps its frame in the solver's Failed/ directory for diagnosis.
+        /// Off for a non-final stage of the staged search (only the last failure is worth keeping).</summary>
+        public bool KeepFailedFrame { get; set; } = true;
+
         /// <summary>Whether the staged search (scale search, fallback centre, widened radii) runs between
         /// the hinted solve and the blind failover. Off = the legacy hint → blind behaviour, for loops
         /// that must fail fast (polar alignment).</summary>
