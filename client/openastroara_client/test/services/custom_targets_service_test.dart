@@ -82,4 +82,31 @@ void main() {
     final list = await svc.load();
     expect(list.map((t) => t.name), ['ok']);
   });
+
+  test('aliases and source round-trip through the mirror and the wire shape (#1267 item 5)', () async {
+    final resolved = CustomTarget(
+      name: 'AB Cas',
+      raDeg: 39.38,
+      decDeg: 71.30,
+      typedAsJNow: false,
+      savedUtc: DateTime.utc(2026, 10, 18, 22),
+      aliases: const ['HIP 12235', 'TYC 4320-505-1'],
+      source: 'simbad',
+    );
+    await svc.remember(resolved);
+    final back = (await svc.load()).single;
+    expect(back.aliases, ['HIP 12235', 'TYC 4320-505-1']);
+    expect(back.source, 'simbad');
+    expect(CustomTarget.fromJson(_t('x', 1, 2).toJson())!.source, 'typed');
+    expect(CustomTarget.fromJson(_t('x', 1, 2).toJson())!.aliases, isEmpty);
+    final wire = resolved.toWire();
+    expect(wire['typed_as_j_now'], false);
+    expect(wire['source'], 'simbad');
+    final fromWire = CustomTarget.fromWire({...wire, 'typed_as_j_now': true})!;
+    expect(fromWire.typedAsJNow, isTrue);
+    expect(fromWire.aliases, resolved.aliases);
+    final replaced = await svc.replaceAll([_t('b', 1, 1), _t('a', 2, 2)]);
+    expect(replaced.map((t) => t.name), ['b', 'a']);
+    expect((await svc.load()).map((t) => t.name), ['b', 'a']);
+  });
 }

@@ -151,13 +151,22 @@ class _CustomTargetDialogState extends ConsumerState<CustomTargetDialog> {
     return '${formatRaHms(c.raDeg / 15)} ${formatDecDms(c.decDeg)}';
   }
 
-  CustomTarget _asCustomTarget(ParsedCoordinates c) => CustomTarget(
-        name: _targetName,
-        raDeg: c.raDeg,
-        decDeg: c.decDeg,
-        typedAsJNow: _epoch == _Epoch.jnow,
-        savedUtc: DateTime.now().toUtc(),
-      );
+  CustomTarget _asCustomTarget(ParsedCoordinates c) {
+    // A resolved target keeps its other names and where it came from, as
+    // long as the name is still the resolver's (an edited name is the
+    // user's own target). #1267 item 5.
+    final r = widget.resolved;
+    final resolved = r != null && r.resolved && _targetName == r.mainId;
+    return CustomTarget(
+      name: _targetName,
+      raDeg: c.raDeg,
+      decDeg: c.decDeg,
+      typedAsJNow: _epoch == _Epoch.jnow,
+      savedUtc: DateTime.now().toUtc(),
+      aliases: resolved ? r.aliases : const [],
+      source: resolved && r.source.isNotEmpty ? r.source : 'typed',
+    );
+  }
 
   Future<void> _showOnSky() async {
     final c = _j2000;
@@ -383,7 +392,8 @@ class _CustomTargetDialogState extends ConsumerState<CustomTargetDialog> {
                     title: Text(t.name),
                     subtitle: Text(
                       '${formatRaHms(t.raDeg / 15)}  '
-                      '${formatDecDms(t.decDeg)}',
+                      '${formatDecDms(t.decDeg)}'
+                      '${savedTargetProvenance(t)}',
                       style: hint,
                     ),
                     onTap: () => _fillFromRecent(t),
@@ -435,3 +445,21 @@ Future<void> showCustomTargetDialog(BuildContext context,
       builder: (_) =>
           CustomTargetDialog(initialText: initialText, resolved: resolved),
     );
+
+/// " · Simbad · also HIP 12235, TYC 4320-505-1" for a resolved recent target,
+/// nothing for a typed one (#1267 item 5).
+String savedTargetProvenance(CustomTarget t) {
+  final parts = <String>[
+    switch (t.source) {
+      'index' => 'Offline index',
+      'cache' || 'simbad' => 'Simbad',
+      _ => '',
+    },
+  ];
+  if (t.aliases.isNotEmpty) {
+    final shown = t.aliases.take(2).join(', ');
+    parts.add('also ${t.aliases.length > 2 ? '$shown, …' : shown}');
+  }
+  final text = parts.where((p) => p.isNotEmpty).join(' · ');
+  return text.isEmpty ? '' : ' · $text';
+}

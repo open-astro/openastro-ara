@@ -15,21 +15,50 @@ class CustomTarget {
   final bool typedAsJNow;
   final DateTime savedUtc;
 
+  /// The other names the target answers to (a resolved target's Simbad or
+  /// index aliases; empty for a typed position). #1267 item 5.
+  final List<String> aliases;
+
+  /// Where the target came from: `typed`, `index`, `cache` or `simbad`.
+  final String source;
+
   const CustomTarget({
     required this.name,
     required this.raDeg,
     required this.decDeg,
     required this.typedAsJNow,
     required this.savedUtc,
+    this.aliases = const [],
+    this.source = 'typed',
   });
 
+  /// The local mirror's JSON (and the profile's wire shape, which uses the
+  /// same keys but `typed_as_j_now`; [toWire] / [fromWire] handle that).
   Map<String, Object?> toJson() => {
         'name': name,
         'ra_deg': raDeg,
         'dec_deg': decDeg,
         'jnow': typedAsJNow,
         'saved_utc': savedUtc.toUtc().toIso8601String(),
+        if (aliases.isNotEmpty) 'aliases': aliases,
+        'source': source,
       };
+
+  /// The profile section's wire shape (`PUT /profile/saved-targets`).
+  Map<String, Object?> toWire() => {
+        'name': name,
+        'aliases': aliases,
+        'ra_deg': raDeg,
+        'dec_deg': decDeg,
+        'source': source,
+        'saved_utc': savedUtc.toUtc().toIso8601String(),
+        'typed_as_j_now': typedAsJNow,
+      };
+
+  static CustomTarget? fromWire(Object? raw) {
+    if (raw is! Map) return null;
+    return fromJson({...raw, 'jnow': raw['typed_as_j_now'] == true});
+  }
 
   static CustomTarget? fromJson(Object? raw) {
     if (raw is! Map) return null;
@@ -39,11 +68,17 @@ class CustomTarget {
     if (name is! String || ra is! num || dec is! num) return null;
     if (!ra.isFinite || !dec.isFinite || dec.abs() > 90) return null;
     final saved = raw['saved_utc'];
+    final aliases = raw['aliases'];
+    final source = raw['source'];
     return CustomTarget(
       name: name,
       raDeg: ra.toDouble(),
       decDeg: dec.toDouble(),
       typedAsJNow: raw['jnow'] == true,
+      aliases: aliases is List
+          ? aliases.whereType<String>().toList(growable: false)
+          : const [],
+      source: source is String && source.isNotEmpty ? source : 'typed',
       savedUtc: saved is String
           ? (DateTime.tryParse(saved)?.toUtc() ??
               DateTime.fromMillisecondsSinceEpoch(0, isUtc: true))
@@ -110,6 +145,17 @@ class CustomTargetsService {
       ].take(maxEntries).toList();
       await _write(merged);
       return merged;
+    });
+    _chain = task.then((_) {});
+    return task;
+  }
+
+  /// Replace the mirror with the profile's list (newest first, as given).
+  Future<List<CustomTarget>> replaceAll(List<CustomTarget> targets) {
+    final task = _chain.then((_) async {
+      final list = targets.take(maxEntries).toList();
+      await _write(list);
+      return list;
     });
     _chain = task.then((_) {});
     return task;

@@ -160,6 +160,26 @@ public sealed record CalibrationStateDto(
     public static CalibrationStateDto Empty { get; } = new(new GuiderCalibrationEntryDto(), new GuiderCalibrationEntryDto());
 }
 
+/// <summary>#1267 item 5 — one target the user prepared: typed by coordinates or resolved by name, with the
+/// J2000 position, the names it answers to and where it came from (<c>typed</c>, <c>index</c>, <c>cache</c>,
+/// <c>simbad</c>). Kept in the profile so a target prepared at home is on the list at the dark site.</summary>
+public sealed record SavedTargetDto(
+    string Name,
+    IReadOnlyList<string> Aliases,
+    double RaDeg,
+    double DecDeg,
+    string Source,
+    DateTimeOffset SavedUtc,
+    bool TypedAsJNow = false);
+
+/// <summary>#1267 item 5 — the profile's recent and saved targets, newest first. Client-authored: the client
+/// replaces the whole list (<c>PUT /profile/saved-targets</c>); the daemon validates and caps it.</summary>
+public sealed record SavedTargetsDto(IReadOnlyList<SavedTargetDto> Targets) {
+
+    /// <summary>Nothing saved.</summary>
+    public static SavedTargetsDto Empty { get; } = new([]);
+}
+
 /// <summary>#1362 — one Alpaca device the profile last saw in a gear slot: its <c>UniqueID</c> and name
 /// from the server's <c>configureddevices</c>, and when it was last observed. Daemon-owned, written by the
 /// connect-time reconcile; the client never writes it.</summary>

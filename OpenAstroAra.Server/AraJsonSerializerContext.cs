@@ -250,6 +250,10 @@ namespace OpenAstroAra.Server;
 [JsonSerializable(typeof(CalibrationStateDto))]
 // #1362 — equipment identity per gear slot.
 [JsonSerializable(typeof(EquipmentIdentityDto))]
+// #1267 item 5 — saved targets.
+[JsonSerializable(typeof(SavedTargetsDto))]
+[JsonSerializable(typeof(SavedTargetDto))]
+[JsonSerializable(typeof(IReadOnlyList<SavedTargetDto>))]
 [JsonSerializable(typeof(DeviceIdentityDto))]
 [JsonSerializable(typeof(IReadOnlyDictionary<string, DeviceIdentityDto>))]
 // §31 time-sync wire (GET state / POST push / push result).

@@ -5720,6 +5720,43 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CalibrationStateDto'
+  /api/v1/profile/saved-targets:
+    get:
+      tags:
+        - Profile
+      summary: 'Get the active profile''s recent and saved targets (name, aliases, J2000 position, source), newest first.'
+      operationId: GetSavedTargets
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SavedTargetsDto'
+    put:
+      tags:
+        - Profile
+      summary: Replace the active profile's recent and saved targets (newest first; one entry per name; at most 200; finite J2000 positions).
+      operationId: PutSavedTargets
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SavedTargetsDto'
+        required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SavedTargetsDto'
+        '422':
+          description: Unprocessable Entity
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/profile/equipment-identity:
     get:
       tags:
@@ -12338,6 +12375,10 @@ components:
           oneOf:
             - type: 'null'
             - $ref: '#/components/schemas/EquipmentIdentityDto'
+        saved_targets:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/SavedTargetsDto'
     QualityScoreBreakdownDto:
       required:
         - composite
@@ -12956,6 +12997,51 @@ components:
           type:
             - 'null'
             - string
+    SavedTargetDto:
+      required:
+        - name
+        - aliases
+        - ra_deg
+        - dec_deg
+        - source
+        - saved_utc
+      type: object
+      properties:
+        name:
+          type: string
+        aliases:
+          type: array
+          items:
+            type: string
+        ra_deg:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+        dec_deg:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+        source:
+          type: string
+        saved_utc:
+          type: string
+          format: date-time
+        typed_as_j_now:
+          type: boolean
+          default: false
+    SavedTargetsDto:
+      required:
+        - targets
+      type: object
+      properties:
+        targets:
+          type: array
+          items:
+            $ref: '#/components/schemas/SavedTargetDto'
     SequenceCreateRequestDto:
       required:
         - name

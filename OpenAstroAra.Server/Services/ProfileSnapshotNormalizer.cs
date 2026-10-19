@@ -100,6 +100,7 @@ public static class ProfileSnapshotNormalizer {
             GuiderAdvanced = (GuiderAdvancedSettingsDto?)snap.GuiderAdvanced ?? new GuiderAdvancedSettingsDto(),
             FilterWheelPolicy = (FilterWheelPolicyDto?)snap.FilterWheelPolicy ?? FilterWheelPolicyDto.Default,
             EquipmentIdentity = NormalizeEquipmentIdentity(snap.EquipmentIdentity),
+            SavedTargets = SavedTargetsValidator.NormalizeLenient(snap.SavedTargets),
         };
     }
 

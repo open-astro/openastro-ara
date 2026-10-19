@@ -159,4 +159,9 @@ public interface IProfileStore {
     /// same key, and the reconciler serializes its own writes), so plain Get/Put.</summary>
     EquipmentIdentityDto GetEquipmentIdentity();
     void PutEquipmentIdentity(EquipmentIdentityDto value);
+
+    /// <summary>#1267 item 5 — the recent and saved targets, written by the client as a whole list
+    /// (validated by <see cref="SavedTargetsValidator"/> at the endpoint), so plain Get/Put.</summary>
+    SavedTargetsDto GetSavedTargets();
+    void PutSavedTargets(SavedTargetsDto value);
 }

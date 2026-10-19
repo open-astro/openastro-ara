@@ -408,6 +408,20 @@ The card now keeps a known device's card while it is not live: name, state chip,
 
 ---
 
+### 2026-10-19 — Recent and saved targets live in the profile: `GET`/`PUT /api/v1/profile/saved-targets` (#1267 item 5)
+
+**Endpoint(s) or area:** new profile section `saved_targets` → `SavedTargetsDto` `{targets: [{name, aliases[], ra_deg, dec_deg, source, saved_utc, typed_as_j_now}]}`, newest first. `GET` reads it; `PUT` replaces the whole list and echoes the canonical form; 422 for a blank or over-long name, a non-finite or out-of-range position, an unknown `source` (`typed`, `index`, `cache`, `simbad`) or more than 200 entries. The daemon trims names, keeps one entry per name (case-insensitive, the newest), wraps RA into 0–360, trims and caps aliases at 32. Carried on profile select; kept in a share export (a target list is not rig-specific). A stored file is read leniently (a damaged entry is dropped, not the profile).
+
+**Decision:** the client's recent targets moved from a per-device file to the profile, so a target prepared at home (typed by coordinates, or resolved by name through `/targets/resolve`) is on the list at the dark site on any client. The client keeps its local file as the offline mirror: with a server it reads the profile's list, pushes entries only it has, and writes every change through `PUT`; without one it works from the mirror and pushes on the next connect.
+
+**Reasoning:** issue #1267 part 5; the dark-site rule (offline-first) means the list must be usable with no server, and the profile is where per-rig preparation already lives (custom horizon, filters).
+
+**Spec ref:** `OpenAstroAra.Server/Services/SavedTargetsValidator.cs`, `Endpoints/ProfileEndpoints.cs`; client `lib/services/custom_targets_service.dart`, `lib/state/sky_atlas/custom_targets_state.dart`, `lib/services/profile_api.dart`.
+
+**Related:** #1267 (closes the issue with parts 2–4), #1272 (the coordinate entry); tests `SavedTargetsValidatorTest`, `SavedTargetsStoreTest`, client `custom_targets_state_test`, `custom_targets_service_test`.
+
+---
+
 ### 2026-10-18 — Target search: `GET /api/v1/targets/resolve` (offline index, then Simbad through the daemon) (#1267)
 
 **Endpoint(s) or area:** new `GET /api/v1/targets/resolve?name=` → `TargetResolveResponseDto` `{query, status, source, main_id, aliases[], ra_deg, dec_deg, object_type, magnitude, message}`. Always 200 for a usable name; 400 for a blank name, one over 128 characters or one with control characters. `status` is `resolved`, `not_found` or `offline`; `source` is `index`, `cache` or `simbad` (empty on a miss). Positions are J2000 degrees.
