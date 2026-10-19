@@ -336,7 +336,17 @@ List<Map<String, Object?>>? catalogOverlayObjects(
   final labels = <PlanningDso, String>{};
   final rows = <PlanningDso>[];
   for (final r in all) {
-    if (prefix == null) {
+    if (id == 'barnard') {
+      // "B33" has no space prefix: its own designation path (a Barnard row
+      // folded into an LDN row still reads "B…" on this overlay).
+      if (r.barnardDesignation case final d?) {
+        final k = designationKey(d);
+        if (d == r.id || (!ids.contains(k) && taken.add(k))) {
+          labels[r] = d;
+          rows.add(r);
+        }
+      }
+    } else if (prefix == null) {
       if (def.match(r)) rows.add(r);
     } else if (ownDesignation(r, prefix) case final d?) {
       labels[r] = d;

@@ -157,6 +157,13 @@ void main() {
     // answers to Sh2-25 after applyImagingRegions, as does the Rosette to
     // Sh2-275, and the Messier membership survives too.
     final curated = applyImagingRegions(merged);
+    // The region cover hides no NGC/IC/Messier row on the real bundle.
+    final curatedIds = {for (final d in curated) d.id};
+    for (final d in merged) {
+      if (catalogFamily(d.id) == 'openngc' || d.messierNum != null) {
+        expect(curatedIds, contains(d.id), reason: '${d.id} hidden by a region');
+      }
+    }
     expect(findCatalogObject(curated, 'Sh2-25')!.id, 'NGC6523');
     expect(curated.where((d) => d.id == 'NGC6523').single.messierNum, 8);
     // NGC 2244 is a Dup designation of the Rosette cluster row NGC 2239: the

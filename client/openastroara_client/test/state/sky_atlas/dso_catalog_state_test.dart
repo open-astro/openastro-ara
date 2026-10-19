@@ -9,6 +9,15 @@ import 'package:openastroara/state/sky_atlas/dso_catalog_state.dart';
 /// #1198 (review on #1277): the server-mirror rows bypass planningCull, so
 /// dsoCatalogProvider repeats the star gate on them. Nothing read the
 /// provider before, so removing that gate left the suite green.
+const _raOf = {
+  'HD 1': 10.0,
+  'LBN 373': 20.0,
+  'NGC0224': 30.0,
+  'PGC 1': 40.0,
+  'Sh2-117': 50.0,
+  'WR 134': 60.0,
+};
+
 void main() {
   late Directory dir;
   setUp(() => dir = Directory.systemTemp.createTempSync('dso-mirror-'));
@@ -22,7 +31,7 @@ void main() {
     type: type,
     magnitude: mag,
     // A position of its own per id, so no two rows fold together.
-    raDeg: (id.hashCode % 3000) / 10,
+    raDeg: _raOf[id] ?? 100,
     decDeg: 20,
   );
 
