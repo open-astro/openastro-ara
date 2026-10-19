@@ -126,6 +126,7 @@ public sealed partial class CenteringService : ICenteringExecutor {
             Regions = settings.Regions,
             DownSampleFactor = settings.DownSampleFactor,
             MaxObjects = settings.MaxObjects,
+            Timeout = PlateSolveService.TimeoutFrom(settings),
             Binning = settings.Binning,
             Attempts = settings.NumberOfAttempts,
             ReattemptDelay = TimeSpan.FromMinutes(settings.ReattemptDelay),

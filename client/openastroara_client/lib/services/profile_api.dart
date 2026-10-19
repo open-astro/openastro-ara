@@ -945,7 +945,7 @@ class ProfileApi {
     indexDownloadPath:
         (j['index_download_path'] as String?) ?? '/var/lib/astap',
     searchRadiusDeg: (j['search_radius_deg'] as num?)?.toDouble() ?? 30,
-    downsampleFactor: (j['downsample_factor'] as num?)?.toInt() ?? 2,
+    downsampleFactor: (j['downsample_factor'] as num?)?.toInt() ?? 0,
     timeoutSeconds: (j['timeout_seconds'] as num?)?.toInt() ?? 60,
     useBlindFallback: (j['use_blind_fallback'] as bool?) ?? true,
     centerAfterSlew: (j['center_after_slew'] as bool?) ?? true,

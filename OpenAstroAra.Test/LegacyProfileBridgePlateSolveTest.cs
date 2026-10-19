@@ -54,6 +54,30 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void Downsample_zero_and_the_timeout_reach_the_legacy_settings() {
+            // #1136 — 0 = automatic from the pixel scale, so it must pass through rather than keep the
+            // legacy value; the per-solve timeout was in the store but never reached the solver.
+            var store = new InMemoryProfileStore();
+            store.PutPlateSolveSettings(store.GetPlateSolveSettings() with { DownsampleFactor = 0, TimeoutSeconds = 45 });
+            var legacy = new HeadlessProfileService();
+            legacy.ActiveProfile.PlateSolveSettings.DownSampleFactor = 2;
+
+            LegacyProfileBridge.SyncPlateSolve(legacy, store);
+
+            Assert.Multiple(() => {
+                Assert.That(legacy.ActiveProfile.PlateSolveSettings.DownSampleFactor, Is.EqualTo(0));
+                Assert.That(legacy.ActiveProfile.PlateSolveSettings.SolveTimeoutSeconds, Is.EqualTo(45));
+                Assert.That(PlateSolveService.TimeoutFrom(legacy.ActiveProfile.PlateSolveSettings), Is.EqualTo(System.TimeSpan.FromSeconds(45)));
+            });
+        }
+
+        [Test]
+        public void Fresh_defaults_solve_with_automatic_downsample() {
+            Assert.That(new InMemoryProfileStore().GetPlateSolveSettings().DownsampleFactor, Is.EqualTo(0));
+            Assert.That(ProfileSnapshotNormalizer.Defaults.PlateSolve.DownsampleFactor, Is.EqualTo(0));
+        }
+
+        [Test]
         public void Fresh_defaults_point_at_debians_astap_cli() {
             var store = new InMemoryProfileStore();
             Assert.That(store.GetPlateSolveSettings().PathOrEndpoint, Is.EqualTo("/usr/bin/astap_cli"));

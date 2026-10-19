@@ -230,31 +230,13 @@ PlateSolveSettings applyDraftToPlateSolve(PlateSolveSettings base, ProfileDraft 
     // pointing uncertainty, not optics — image scale says nothing about how
     // far off a goto lands, so the §37.8 default stands.
     searchRadiusDeg: ps.searchRadiusDeg,
-    // §76.1 derived-never-asked: the wizard no longer has a plate-solve
-    // screen, so an unset downsample is seeded from the rig's image scale —
-    // but only when the base is still at the section default: a cloned
-    // profile where the user hand-tuned the value keeps that tuning (null →
-    // copyWith keeps base).
-    downsampleFactor: ps.downsampleFactor ??
-        (base.downsampleFactor == defaults.downsampleFactor
-            ? derivedAstapDownsample(
-                d.camera.pixelSizeMicrons, d.telescope.focalLengthMm)
-            : null),
+    // §76.1 derived-never-asked: the wizard has no plate-solve screen and no
+    // longer seeds a downsample either — the section default 0 means the
+    // daemon derives it from the pixel scale of each frame it solves (#1136),
+    // which also follows a later optics edit. A cloned profile's hand-tuned
+    // value survives through copyWith (null keeps the base).
+    downsampleFactor: ps.downsampleFactor,
   );
-}
-
-/// §76 S5 — seed ASTAP's downsample from the imaging train's pixel scale
-/// (206.265 × µm ÷ mm arcsec/px): solvers want ~1.5–3″/px, so oversampled
-/// rigs bin down (scale < 0.75″ → 4, < 1.5″ → 2) and everything else runs
-/// full-res. Null when the scale isn't computable (either fact missing) —
-/// copyWith then keeps the base value, same as every unset field.
-int? derivedAstapDownsample(double? pixelSizeUm, double? focalLengthMm) {
-  if (pixelSizeUm == null || pixelSizeUm <= 0) return null;
-  if (focalLengthMm == null || focalLengthMm <= 0) return null;
-  final scale = 206.265 * pixelSizeUm / focalLengthMm;
-  if (scale >= 1.5) return 1;
-  if (scale >= 0.75) return 2;
-  return 4;
 }
 
 /// §37.4 screen 12 — map the draft's autofocus subset onto the profile's

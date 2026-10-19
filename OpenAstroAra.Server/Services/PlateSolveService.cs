@@ -17,6 +17,10 @@ using OpenAstroAra.Core.Model;
 using OpenAstroAra.Image.Interfaces;
 using OpenAstroAra.PlateSolving;
 using OpenAstroAra.PlateSolving.Interfaces;
+using OpenAstroAra.Core.Utility;
+using OpenAstroAra.Core.Utility.Notification;
+using OpenAstroAra.Server.Contracts;
+using System.Globalization;
 using OpenAstroAra.Profile.Interfaces;
 using System;
 using System.Threading;
@@ -86,10 +90,65 @@ public class PlateSolveService : IPlateSolveService {
             Regions = settings.Regions,
             DownSampleFactor = settings.DownSampleFactor,
             MaxObjects = settings.MaxObjects,
-            Binning = 1, // solve at native scale; the plate-solve capture path will set this once it owns the capture
+            // The frame's own binning when its metadata carries one (a binned capture solves at pixel
+            // size × bin), else native scale.
+            Binning = BinningOf(image),
             Coordinates = approxCoordinates,
+            Timeout = TimeoutFrom(settings),
         };
 
-        return imageSolver.Solve(image, parameter, progress, token);
+        return SolveAndLearnScale(imageSolver, image, parameter, progress, token);
     }
+
+    private async Task<PlateSolveResult> SolveAndLearnScale(IImageSolver imageSolver, IImageData image, PlateSolveParameter parameter,
+            IProgress<ApplicationStatus>? progress, CancellationToken token) {
+        var result = await imageSolver.Solve(image, parameter, progress, token).ConfigureAwait(false);
+        if (result?.Success == true) {
+            LearnFocalLength(parameter, result);
+        }
+        return result!;
+    }
+
+    /// <summary>#1136 — a manual solve that lands on a pixel scale more than
+    /// <see cref="SolveTuning.ScaleMismatchTolerance"/> away from the profile's means the optics are
+    /// wrong (a reducer or a typo); every hinted solve after it would start from a wrong field of view.
+    /// Write the sky-measured focal length back to the profile (reducer factored out, so the user's
+    /// reducer entry stays) and say so. Only here, on the user-driven solve, never from the
+    /// centering/rotation loops: those run unattended.</summary>
+    internal void LearnFocalLength(PlateSolveParameter parameter, PlateSolveResult result) {
+        if (profileStore is null) {
+            return;
+        }
+        var expected = AstroUtil.ArcsecPerPixel(parameter.PixelSize, parameter.FocalLength);
+        if (!SolveTuning.ScaleMismatch(expected, result.Pixscale)) {
+            return;
+        }
+        var measuredEffective = SolveTuning.FocalLengthFromScale(parameter.PixelSize, result.Pixscale);
+        if (double.IsNaN(measuredEffective)) {
+            return;
+        }
+        OpticsSettingsDto? before = null;
+        var after = profileStore.UpdateOpticsSettings(optics => {
+            before = optics;
+            var reducer = optics.ReducerFactor > 0 ? optics.ReducerFactor : 1.0;
+            return optics with { FocalLengthMm = Math.Round(measuredEffective / reducer, 1) };
+        });
+        if (before is null || after is null) {
+            return;
+        }
+        Logger.Warning($"Plate solve - profile focal length {before.FocalLengthMm:0.#} mm updated to the sky-measured {after.FocalLengthMm:0.#} mm (solved scale {result.Pixscale:0.00}\"/px, expected {expected:0.00}\"/px). Check Options → Imaging → Optics.");
+        Notifier.ShowWarning(string.Format(CultureInfo.InvariantCulture,
+            "Plate solve measured a focal length of {0:0} mm; the profile said {1:0} mm. Optics updated — check Options → Imaging → Optics.",
+            after.FocalLengthMm, before.FocalLengthMm));
+    }
+
+    internal static int BinningOf(IImageData image) {
+        var bin = image.MetaData?.Camera?.BinX ?? 1;
+        return bin > 0 ? bin : 1;
+    }
+
+    /// <summary>The per-solve budget from the profile's timeout, or null (the solver's legacy cap)
+    /// when the profile has none; shared by every PlateSolveParameter builder.</summary>
+    public static TimeSpan? TimeoutFrom(IPlateSolveSettings settings) =>
+        settings.SolveTimeoutSeconds > 0 ? TimeSpan.FromSeconds(settings.SolveTimeoutSeconds) : null;
 }

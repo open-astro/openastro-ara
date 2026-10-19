@@ -1591,11 +1591,11 @@ const List<Setting> settingsRegistry = [
   Setting(
     id: 'img.platesolve.downsample_factor',
     label: 'Downsample factor',
-    description: 'Pixel downsampling before solve. 2 = halve resolution → ~4x faster solve with negligible accuracy hit on most setups.',
-    keywords: ['downsample', 'factor', 'resolution', 'speed'],
+    description: 'Pixel downsampling before solve. 0 = automatic from the pixel scale (recommended); 2 = halve resolution → ~4x faster solve with negligible accuracy hit on most setups.',
+    keywords: ['downsample', 'factor', 'resolution', 'speed', 'auto'],
     path: ['Settings', 'Imaging', 'Plate Solving'],
-    type: SettingType.intRange(min: 1, max: 8),
-    defaultValue: 2,
+    type: SettingType.intRange(min: 0, max: 8),
+    defaultValue: 0,
     profilePath: 'platesolve.downsample_factor',
   ),
   Setting(

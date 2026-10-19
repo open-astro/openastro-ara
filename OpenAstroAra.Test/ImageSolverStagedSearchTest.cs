@@ -1,0 +1,156 @@
+using Moq;
+using NUnit.Framework;
+using OpenAstroAra.Astrometry;
+using OpenAstroAra.Core.Model;
+using OpenAstroAra.Image.Interfaces;
+using OpenAstroAra.PlateSolving;
+using OpenAstroAra.PlateSolving.Interfaces;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+
+namespace OpenAstroAra.Test {
+
+    /// <summary>
+    /// #1136 — the staged search between a failed hinted solve and the blind failover: scale search at
+    /// the hinted radius, the last good solve, 30°, 90°, then blind. Each stage is one solver call with
+    /// a recorded parameter; the solver is a recorder that fails until a chosen stage.
+    /// </summary>
+    [TestFixture]
+    public class ImageSolverStagedSearchTest {
+
+        private sealed class RecordingSolver : IPlateSolver {
+            public readonly List<PlateSolveParameter> Calls = new();
+            public int SucceedOnCall = int.MaxValue;
+            public double Pixscale = 1.46;
+
+            public Task<PlateSolveResult> SolveAsync(IImageData source, PlateSolveParameter parameter, IProgress<ApplicationStatus>? progress, CancellationToken canceltoken) {
+                Calls.Add(parameter.Clone());
+                var ok = Calls.Count >= SucceedOnCall;
+                return Task.FromResult(new PlateSolveResult {
+                    Success = ok,
+                    Coordinates = ok ? parameter.Coordinates ?? new Coordinates(Angle.ByDegree(0), Angle.ByDegree(0), Epoch.J2000) : null,
+                    Pixscale = Pixscale,
+                });
+            }
+        }
+
+        private static PlateSolveParameter Hinted(double radius = 15, bool blind = true) => new() {
+            FocalLength = 530,
+            PixelSize = 3.76,
+            SearchRadius = radius,
+            DownSampleFactor = 0,
+            MaxObjects = 500,
+            BlindFailoverEnabled = blind,
+            Timeout = TimeSpan.FromSeconds(60),
+            Coordinates = new Coordinates(Angle.ByDegree(100), Angle.ByDegree(20), Epoch.J2000),
+        };
+
+        [SetUp]
+        public void ClearMemory() => SolveMemory.Clear();
+
+        [Test]
+        public async Task Hint_then_scale_then_wider_radii_then_blind() {
+            var near = new RecordingSolver();
+            var blind = new RecordingSolver();
+            var sut = new ImageSolver(near, blind);
+
+            var result = await sut.Solve(Mock.Of<IImageData>(), Hinted(), null, CancellationToken.None);
+
+            Assert.That(result.Success, Is.False);
+            Assert.That(Joined(near.Calls.Select(Describe)), Is.EqualTo(
+                "hint r=15 scale=known t=60 | hint r=15 scale=searched t=60 | hint r=30 scale=known t=60 | hint r=90 scale=known t=120"));
+            Assert.That(Joined(blind.Calls.Select(Describe)), Is.EqualTo("blind r=15 scale=known t=300"));
+        }
+
+        [Test]
+        public async Task A_hinted_success_runs_one_stage_and_is_remembered() {
+            var near = new RecordingSolver { SucceedOnCall = 1 };
+            var blind = new RecordingSolver();
+            var sut = new ImageSolver(near, blind);
+
+            var result = await sut.Solve(Mock.Of<IImageData>(), Hinted(), null, CancellationToken.None);
+
+            Assert.That(result.Success, Is.True);
+            Assert.That(near.Calls, Has.Count.EqualTo(1));
+            Assert.That(blind.Calls, Is.Empty);
+            Assert.That(SolveMemory.Recall(), Is.Not.Null);
+            Assert.That(SolveMemory.Recall()!.RADegrees, Is.EqualTo(100).Within(1e-6));
+        }
+
+        [Test]
+        public async Task The_last_good_solve_is_tried_when_it_lies_outside_the_hinted_radius() {
+            SolveMemory.Remember(new Coordinates(Angle.ByDegree(140), Angle.ByDegree(20), Epoch.J2000)); // ~37° away
+            var near = new RecordingSolver { SucceedOnCall = 3 };
+            var sut = new ImageSolver(near, new RecordingSolver());
+
+            var result = await sut.Solve(Mock.Of<IImageData>(), Hinted(), null, CancellationToken.None);
+
+            Assert.That(result.Success, Is.True);
+            Assert.That(near.Calls, Has.Count.EqualTo(3));
+            Assert.That(near.Calls[2].Coordinates!.RADegrees, Is.EqualTo(140).Within(1e-6), "third stage searches around the remembered position");
+            Assert.That(near.Calls[2].SearchRadius, Is.EqualTo(15));
+        }
+
+        [Test]
+        public void A_remembered_position_inside_the_hinted_radius_adds_no_stage() {
+            SolveMemory.Remember(new Coordinates(Angle.ByDegree(105), Angle.ByDegree(20), Epoch.J2000)); // ~5° away
+            Assert.That(Names(Hinted()), Is.EqualTo("scale search | radius 30° | radius 90° | blind"));
+        }
+
+        [Test]
+        public void A_stale_memory_is_ignored() {
+            SolveMemory.UtcNow = () => new DateTime(2026, 10, 19, 0, 0, 0, DateTimeKind.Utc);
+            try {
+                SolveMemory.Remember(new Coordinates(Angle.ByDegree(140), Angle.ByDegree(20), Epoch.J2000));
+                SolveMemory.UtcNow = () => new DateTime(2026, 10, 19, 3, 0, 0, DateTimeKind.Utc);
+                Assert.That(SolveMemory.Recall(), Is.Null);
+            } finally {
+                SolveMemory.UtcNow = () => DateTime.UtcNow;
+            }
+        }
+
+        [Test]
+        public void Widened_stages_skip_radii_no_wider_than_the_hint() {
+            Assert.That(Names(Hinted(radius: 45)), Is.EqualTo("scale search | radius 90° | blind"));
+            Assert.That(Names(Hinted(radius: 120)), Is.EqualTo("scale search | blind"));
+        }
+
+        [Test]
+        public void No_blind_failover_ends_at_the_widest_radius() {
+            Assert.That(Names(Hinted(blind: false)), Is.EqualTo("scale search | radius 30° | radius 90°"));
+        }
+
+        [Test]
+        public void Staged_search_off_is_the_legacy_hint_then_blind() {
+            var p = Hinted();
+            p.StagedSearchEnabled = false;
+            Assert.That(Names(p), Is.EqualTo("blind"));
+            p.BlindFailoverEnabled = false;
+            Assert.That(ImageSolver.Stages(p), Is.Empty);
+        }
+
+        [Test]
+        public void A_blind_parameter_has_no_stages() {
+            var p = Hinted();
+            p.Coordinates = null;
+            Assert.That(ImageSolver.Stages(p), Is.Empty);
+        }
+
+        [Test]
+        public void No_timeout_in_the_parameter_leaves_the_stages_without_one() {
+            var p = Hinted();
+            p.Timeout = null;
+            Assert.That(ImageSolver.Stages(p).All(s => s.Parameter.Timeout is null), Is.True);
+        }
+
+        private static string Joined(IEnumerable<string> items) => string.Join(" | ", items);
+
+        private static string Names(PlateSolveParameter p) => Joined(ImageSolver.Stages(p).Select(s => s.Name));
+
+        private static string Describe(PlateSolveParameter p) =>
+            $"{(p.Coordinates is null ? "blind" : "hint")} r={p.SearchRadius} scale={(p.SearchScale ? "searched" : "known")} t={p.Timeout?.TotalSeconds:0}";
+    }
+}

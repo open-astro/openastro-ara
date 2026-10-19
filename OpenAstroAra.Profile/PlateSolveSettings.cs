@@ -332,6 +332,19 @@ namespace OpenAstroAra.Profile {
             }
         }
 
+        private int solveTimeoutSeconds;
+
+        [DataMember]
+        public int SolveTimeoutSeconds {
+            get => solveTimeoutSeconds;
+            set {
+                if (solveTimeoutSeconds != value) {
+                    solveTimeoutSeconds = value;
+                    RaisePropertyChanged();
+                }
+            }
+        }
+
         private int maxObjects;
 
         [DataMember]

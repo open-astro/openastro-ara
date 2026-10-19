@@ -135,37 +135,17 @@ void main() {
       expect(out.forceCalibrationEachSession, isFalse);
     });
 
-    test('§76 S5 derivations — ASTAP downsample from image scale', () {
-      // 3.76 µm on 530 mm → 1.46″/px → downsample 2.
-      expect(derivedAstapDownsample(3.76, 530), 2);
-      // 3.76 µm on 400 mm → 1.94″/px → full-res.
-      expect(derivedAstapDownsample(3.76, 400), 1);
-      // 2.4 µm on 2000 mm → 0.25″/px → 4.
-      expect(derivedAstapDownsample(2.4, 2000), 4);
-      // Either fact missing → null (keep base).
-      expect(derivedAstapDownsample(null, 530), isNull);
-      expect(derivedAstapDownsample(3.76, 0), isNull);
-
+    test('§76 S5 — ASTAP downsample stays automatic (0); the daemon derives it '
+        'per frame (#1136)', () {
       final d = ProfileDraft();
-      d.camera.pixelSizeMicrons = 3.76;
-      d.telescope.focalLengthMm = 530;
-      final out =
-          applyDraftToPlateSolve(const PlateSolveSettings(), d);
-      expect(out.downsampleFactor, 2);
+      d.camera.pixelSizeMicrons = 2.4;
+      d.telescope.focalLengthMm = 2000; // 0.25″/px: used to seed 4
+      final out = applyDraftToPlateSolve(const PlateSolveSettings(), d);
+      expect(out.downsampleFactor, 0,
+          reason: 'no client-side seeding: 0 = the daemon picks per solve');
       // Search radius is pointing-uncertainty-driven, never derived — the
       // §37.8 default survives untouched.
       expect(out.searchRadiusDeg, const PlateSolveSettings().searchRadiusDeg);
-
-      // Derive-branch proof (review r2): inputs whose derived value DIFFERS
-      // from the section default (2), through the full mapper — a regression
-      // that disconnects the derivation can't hide behind keep-the-base.
-      final longFl = ProfileDraft();
-      longFl.camera.pixelSizeMicrons = 2.4;
-      longFl.telescope.focalLengthMm = 2000; // 0.25″/px → 4
-      expect(
-          applyDraftToPlateSolve(const PlateSolveSettings(), longFl)
-              .downsampleFactor,
-          4);
     });
 
     test('§76 S5 — applyDraftToAutofocus derive branch runs when the base is '

@@ -60,6 +60,7 @@ and `sudo apt install ./openastroara-server_<version>_arm64.deb` on the Pi.
 | Path | Purpose | Owner |
 |---|---|---|
 | `/opt/openastroara/` | Self-contained .NET runtime + `OpenAstroAra.Server` binary + the `liberfa.so` / `libsupernovas.so` astrometry natives | `openastroara:openastroara` |
+| `/dev/shm/openastroara/PlateSolver/` | The frame handed to the solver, one per solve (RAM; falls back to the service's local app-data folder when `/dev/shm` is unavailable) | `openastroara:openastroara` |
 | `/var/lib/astap/` | ASTAP star database (you download it, step 3 above; the solver binary itself is the `astap-cli` package) | `openastroara:openastroara` |
 | `/etc/openastroara/server.env` | Environment overrides (`OPENASTROARA_PORT`, etc.) | `root:openastroara`, 640 |
 | `/var/lib/openastroara/` | Profile + SQLite catalog (`profile.json`, `openastroara.db`) | `openastroara:openastroara` |

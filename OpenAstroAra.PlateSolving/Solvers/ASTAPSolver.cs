@@ -199,12 +199,19 @@ namespace OpenAstroAra.PlateSolving.Solvers {
                 Logger.Warning($"Plate solve - ASTAP star database directory '{databaseLocation}' is missing or empty; leaving ASTAP to its default lookup. Download a database into it (see DEPLOY.md) or fix Options → Plate solving.");
             }
 
-            //Field height of image
-            var fov = Math.Round(imageProperties.FoVH, 6);
+            //Field height of image. -fov 0 asks ASTAP to search the scale itself: the staged search's
+            //"the profile's optics are wrong" stage (#1136).
+            var fov = parameter.SearchScale ? 0 : Math.Round(imageProperties.FoVH, 6);
             args.Add($"-fov {fov.ToString(CultureInfo.InvariantCulture)}");
 
-            //Downsample factor
-            args.Add($"-z {parameter.DownSampleFactor}");
+            //Downsample factor; 0 in the parameter = from the pixel scale (#1136)
+            var downsample = parameter.DownSampleFactor > 0
+                ? parameter.DownSampleFactor
+                : SolveTuning.DownsampleFor(imageProperties.ArcSecPerPixel, imageProperties.ImageHeight);
+            if (parameter.DownSampleFactor <= 0) {
+                Logger.Debug($"Plate solve - downsample {downsample} from {imageProperties.ArcSecPerPixel.ToString("0.00", CultureInfo.InvariantCulture)}\"/px native scale, {imageProperties.ImageHeight} px high");
+            }
+            args.Add($"-z {downsample}");
 
             //Max number of stars
             args.Add($"-s {parameter.MaxObjects}");

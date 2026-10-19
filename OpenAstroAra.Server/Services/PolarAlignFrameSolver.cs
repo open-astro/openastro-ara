@@ -109,6 +109,9 @@ public sealed class PolarAlignFrameSolver : IPolarAlignFrameSolver {
             Regions = settings.Regions,
             DownSampleFactor = settings.DownSampleFactor,
             MaxObjects = settings.MaxObjects,
+            Timeout = PlateSolveService.TimeoutFrom(settings),
+            // No staged search either (#1136): same fail-fast contract as the blind fallback below.
+            StagedSearchEnabled = false,
             // The guider saves the binned frame: the solver's scale is pixel size × binning.
             Binning = binning,
             Coordinates = hint,

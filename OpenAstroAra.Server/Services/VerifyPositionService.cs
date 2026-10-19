@@ -126,6 +126,7 @@ public sealed class VerifyPositionService : IVerifyPositionService, IDisposable 
             Regions = settings.Regions,
             DownSampleFactor = settings.DownSampleFactor,
             MaxObjects = settings.MaxObjects,
+            Timeout = PlateSolveService.TimeoutFrom(settings),
             Binning = settings.Binning,
             Attempts = 1,                    // one look; the user decides what to do next
             ReattemptDelay = TimeSpan.Zero,

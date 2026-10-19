@@ -25,8 +25,32 @@ using System.Threading.Tasks;
 namespace OpenAstroAra.PlateSolving.Solvers {
 
     internal abstract class BaseSolver : IPlateSolver {
-        protected static readonly string WORKING_DIRECTORY = Path.Combine(CoreUtil.APPLICATIONTEMPPATH, "PlateSolver");
+        // #1136 — the frame the solver reads is written once per solve; on an SBC booting from an SD
+        // card that write is a measurable slice of a hinted solve, so the working directory prefers the
+        // host's RAM-backed /dev/shm when it is there and writable. Failed frames still land on disk.
+        protected static readonly string WORKING_DIRECTORY = ResolveWorkingDirectory();
         protected static readonly string FAILED_DIRECTORY = Path.Combine(CoreUtil.APPLICATIONTEMPPATH, "PlateSolver", "Failed");
+
+        /// <summary>Candidate RAM-backed root, overridable for tests; null disables the tmpfs preference.</summary>
+        internal static string? SharedMemoryRoot { get; set; } = OperatingSystem.IsLinux() ? "/dev/shm" : null;
+
+        internal static string ResolveWorkingDirectory() {
+            var disk = Path.Combine(CoreUtil.APPLICATIONTEMPPATH, "PlateSolver");
+            var shm = SharedMemoryRoot;
+            if (shm is null || !Directory.Exists(shm)) {
+                return disk;
+            }
+            var candidate = Path.Combine(shm, "openastroara", "PlateSolver");
+            try {
+                Directory.CreateDirectory(candidate);
+                var probe = Path.Combine(candidate, $".probe-{Environment.ProcessId}");
+                File.WriteAllBytes(probe, Array.Empty<byte>());
+                File.Delete(probe);
+                return candidate;
+            } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
+                return disk;
+            }
+        }
         protected static readonly string FAILED_FILENAME =
             $"{DateTime.Now.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture)}.{Environment.ProcessId}";
 

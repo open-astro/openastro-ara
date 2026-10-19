@@ -28,7 +28,7 @@ class PlateSolveSettings {
     this.pathOrEndpoint = '/usr/bin/astap_cli',
     this.indexDownloadPath = '/var/lib/astap',
     this.searchRadiusDeg = 30,
-    this.downsampleFactor = 2,
+    this.downsampleFactor = 0,
     this.timeoutSeconds = 60,
     this.useBlindFallback = true,
     this.centerAfterSlew = true,
@@ -94,9 +94,10 @@ class PlateSolveSettingsNotifier extends Notifier<PlateSolveSettings>
   }
 
   void setDownsampleFactor(int v) {
+    // 0 = automatic (the daemon picks it from the pixel scale, #1136);
     // 1 = no downsampling; 8 is the practical upper limit before the
     // image is too coarse for star detection. Reject out-of-range.
-    if (v < 1 || v > 8) return;
+    if (v < 0 || v > 8) return;
     state = state.copyWith(downsampleFactor: v);
   }
 

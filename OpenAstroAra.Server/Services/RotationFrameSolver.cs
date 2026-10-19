@@ -118,6 +118,7 @@ public sealed class RotationFrameSolver : IPositionAngleSolver {
             Regions = settings.Regions,
             DownSampleFactor = settings.DownSampleFactor,
             MaxObjects = settings.MaxObjects,
+            Timeout = PlateSolveService.TimeoutFrom(settings),
             Binning = (short)Math.Clamp(binning, 1, short.MaxValue),
             Coordinates = _telescope.GetCurrentPosition(),
             BlindFailoverEnabled = settings.BlindFailoverEnabled,

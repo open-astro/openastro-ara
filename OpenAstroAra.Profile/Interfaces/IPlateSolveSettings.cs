@@ -40,7 +40,10 @@ namespace OpenAstroAra.Profile.Interfaces {
         string ASTAPLocation { get; set; }
         /// <summary>Directory holding the ASTAP star database files (passed as <c>-d</c>); empty = the solver's own default lookup.</summary>
         string ASTAPDatabaseLocation { get; set; }
+        /// <summary>0 = pick the downsample factor from the pixel scale per solve (#1136).</summary>
         int DownSampleFactor { get; set; }
+        /// <summary>Budget for one hinted solver run, seconds; wider stages scale it. 0 = the solver's legacy cap (#1136).</summary>
+        int SolveTimeoutSeconds { get; set; }
         int MaxObjects { get; set; }
         bool Sync { get; set; }
         bool SlewToTarget { get; set; }

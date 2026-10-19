@@ -113,6 +113,7 @@ public sealed partial class CenteringService : ICenteringService, IDisposable {
             Regions = settings.Regions,
             DownSampleFactor = settings.DownSampleFactor,
             MaxObjects = settings.MaxObjects,
+            Timeout = PlateSolveService.TimeoutFrom(settings),
             Binning = settings.Binning,
             Attempts = settings.NumberOfAttempts,
             // NINA's PlateSolveSettings.ReattemptDelay is in MINUTES (options "Reattempt delay [min]", default 2).

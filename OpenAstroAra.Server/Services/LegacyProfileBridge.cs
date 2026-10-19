@@ -15,6 +15,8 @@
 using OpenAstroAra.Core.Enums;
 using OpenAstroAra.Profile.Interfaces;
 
+using System;
+
 namespace OpenAstroAra.Server.Services;
 
 /// <summary>
@@ -69,9 +71,9 @@ public static class LegacyProfileBridge {
         if (ps.SearchRadiusDeg > 0) {
             s.SearchRadius = ps.SearchRadiusDeg;
         }
-        if (ps.DownsampleFactor > 0) {
-            s.DownSampleFactor = ps.DownsampleFactor;
-        }
+        // 0 = automatic from the pixel scale (#1136), so it passes through rather than keeping the legacy value.
+        s.DownSampleFactor = Math.Max(0, ps.DownsampleFactor);
+        s.SolveTimeoutSeconds = Math.Max(0, ps.TimeoutSeconds);
         s.BlindFailoverEnabled = ps.UseBlindFallback;
         s.Sync = ps.SyncToCoordinates;
 

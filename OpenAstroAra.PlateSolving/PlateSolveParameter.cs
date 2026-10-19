@@ -30,8 +30,29 @@ namespace OpenAstroAra.PlateSolving {
         public int Binning { get; set; }
         public double SearchRadius { get; set; }
         public double Regions { get; set; }
+
+        /// <summary>Solver downsample (binning) factor; 0 = pick it from the pixel scale per solve
+        /// (<see cref="SolveTuning.DownsampleFor"/>) instead of a fixed profile number (#1136).</summary>
         public int DownSampleFactor { get; set; }
         public int MaxObjects { get; set; }
+
+        /// <summary>Wall-clock budget for one solver run at <see cref="SearchRadius"/>; null keeps the
+        /// legacy 10-minute cap. Wider stages scale it (<see cref="SolveTuning.TimeoutFor"/>).</summary>
+        public TimeSpan? Timeout { get; set; }
+
+        /// <summary>Let the solver search the image scale itself (ASTAP <c>-fov 0</c>) instead of trusting
+        /// the focal length / pixel size — the staged search's second stage, for a profile whose optics
+        /// are wrong (#1136). Off for a normal solve: it is slower than a known scale.</summary>
+        public bool SearchScale { get; set; }
+
+        /// <summary>Second search centre when the hint fails: the last good solve of this process
+        /// (<see cref="SolveMemory"/>) or a caller-supplied position. Null = none.</summary>
+        public Coordinates? FallbackCoordinates { get; set; }
+
+        /// <summary>Whether the staged search (scale search, fallback centre, widened radii) runs between
+        /// the hinted solve and the blind failover. Off = the legacy hint → blind behaviour, for loops
+        /// that must fail fast (polar alignment).</summary>
+        public bool StagedSearchEnabled { get; set; } = true;
 
         public bool DisableNotifications { get; set; }
 
@@ -54,12 +75,16 @@ namespace OpenAstroAra.PlateSolving {
                 $"Regions: {Regions} " +
                 $"DownSampleFactor: {DownSampleFactor} " +
                 $"MaxObjects: {MaxObjects} " +
+                $"Timeout: {(Timeout is TimeSpan t ? t.TotalSeconds.ToString("0", System.Globalization.CultureInfo.InvariantCulture) + "s" : "default")} " +
+                $"SearchScale: {SearchScale} " +
+                $"StagedSearch: {StagedSearchEnabled} " +
                 $"{formatCoordinates}";
         }
 
         public PlateSolveParameter Clone() {
             var clone = (PlateSolveParameter)this.MemberwiseClone();
             clone.Coordinates = clone.Coordinates?.Transform(clone.Coordinates.Epoch);
+            clone.FallbackCoordinates = clone.FallbackCoordinates?.Transform(clone.FallbackCoordinates.Epoch);
             return clone;
         }
     }

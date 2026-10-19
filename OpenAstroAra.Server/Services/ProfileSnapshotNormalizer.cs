@@ -165,7 +165,8 @@ public static class ProfileSnapshotNormalizer {
         PlateSolve: new(
             Engine: "astap", PathOrEndpoint: "/usr/bin/astap_cli", // Debian's astap-cli package (a .deb Depends since #1094)
             IndexDownloadPath: "/var/lib/astap", SearchRadiusDeg: 30.0,
-            DownsampleFactor: 2, TimeoutSeconds: 60, UseBlindFallback: true,
+            DownsampleFactor: 0, // 0 = auto from the pixel scale (#1136)
+            TimeoutSeconds: 60, UseBlindFallback: true,
             CenterAfterSlew: true, SyncToCoordinates: true, MaxIterations: 5,
             ConvergenceToleranceArcsec: 60.0),
         DiagnosticsMode: new(Mode: "notify_only"),

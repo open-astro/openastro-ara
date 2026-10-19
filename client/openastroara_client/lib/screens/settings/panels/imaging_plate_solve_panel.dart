@@ -156,7 +156,7 @@ class _ImagingPlateSolvePanelState extends ConsumerState<ImagingPlateSolvePanel>
           },
         ),
         EditableNumberRow(
-          label: 'Downsample factor (1..8)',
+          label: 'Downsample factor (0 = auto, 1..8)',
           helpKey: 'img.platesolve.downsample_factor',
           currentValue: s.downsampleFactor.toString(),
           getCanonical: () =>

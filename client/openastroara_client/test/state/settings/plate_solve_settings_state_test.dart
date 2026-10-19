@@ -14,7 +14,7 @@ void main() {
       expect(s.pathOrEndpoint, '/usr/bin/astap_cli');
       expect(s.indexDownloadPath, '/var/lib/astap');
       expect(s.searchRadiusDeg, 30);
-      expect(s.downsampleFactor, 2);
+      expect(s.downsampleFactor, 0); // 0 = automatic (#1136)
       expect(s.timeoutSeconds, 60);
       expect(s.useBlindFallback, isTrue);
       expect(s.centerAfterSlew, isTrue);
@@ -63,13 +63,15 @@ void main() {
           180);
     });
 
-    test('downsampleFactor rejects outside [1, 8]', () {
+    test('downsampleFactor rejects outside [0, 8]; 0 = automatic', () {
       final n = container.read(plateSolveSettingsProvider.notifier);
-      n.setDownsampleFactor(0);
+      n.setDownsampleFactor(-1);
       n.setDownsampleFactor(9);
-      expect(container.read(plateSolveSettingsProvider).downsampleFactor, 2);
+      expect(container.read(plateSolveSettingsProvider).downsampleFactor, 0);
       n.setDownsampleFactor(4);
       expect(container.read(plateSolveSettingsProvider).downsampleFactor, 4);
+      n.setDownsampleFactor(0);
+      expect(container.read(plateSolveSettingsProvider).downsampleFactor, 0);
     });
 
     test('timeoutSeconds + convergenceTolerance reject non-positive', () {
