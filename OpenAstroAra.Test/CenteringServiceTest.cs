@@ -54,6 +54,7 @@ namespace OpenAstroAra.Test {
             settings.SetupGet(s => s.Regions).Returns(2);
             settings.SetupGet(s => s.DownSampleFactor).Returns(2);
             settings.SetupGet(s => s.MaxObjects).Returns(500);
+            settings.SetupGet(s => s.SolveTimeoutSeconds).Returns(45);
             settings.SetupGet(s => s.NumberOfAttempts).Returns(3);
             settings.SetupGet(s => s.ReattemptDelay).Returns(1.0);
 
@@ -96,6 +97,7 @@ namespace OpenAstroAra.Test {
             Assert.That(captured.Regions, Is.EqualTo(2));
             Assert.That(captured.DownSampleFactor, Is.EqualTo(2));
             Assert.That(captured.MaxObjects, Is.EqualTo(500));
+            Assert.That(captured.Timeout, Is.EqualTo(TimeSpan.FromSeconds(45))); // #1136 — the profile's timeout reaches the solver
             Assert.That(captured.Coordinates!.RA, Is.EqualTo(5).Within(1e-6)); // target threaded through
             // The solve exposure is built from the profile too.
             Assert.That(capturedSeq, Is.Not.Null);

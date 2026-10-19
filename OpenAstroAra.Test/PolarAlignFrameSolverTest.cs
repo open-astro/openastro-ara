@@ -86,6 +86,33 @@ namespace OpenAstroAra.Test {
                 "PlateSolveParameter scales the pixel size by the binning — the number the solver's field of view is built from");
         }
 
+        [Test]
+        public async Task Polar_alignment_solves_fail_fast_with_no_staged_search_and_the_profiles_timeout() {
+            // #1136 bot round 3 — the §45 loop's contract is fail-fast-and-retry: without this flag a
+            // failed frame would run the last-good-solve, 30° and 90° stages (minutes at the 60 s
+            // default) before the loop saw the failure. The timeout comes from the profile.
+            var store = new InMemoryProfileStore();
+            store.PutPhd2Settings(store.GetPhd2Settings() with { GuideFocalLength = 200, GuidePixelSize = 3.75 });
+            store.PutPlateSolveSettings(store.GetPlateSolveSettings() with { TimeoutSeconds = 25 });
+            PlateSolveParameter? seen = null;
+            var imageSolver = new Mock<IImageSolver>();
+            imageSolver.Setup(s => s.Solve(It.IsAny<IImageData>(), It.IsAny<PlateSolveParameter>(),
+                    It.IsAny<IProgress<ApplicationStatus>?>(), It.IsAny<CancellationToken>()))
+                .Callback<IImageData, PlateSolveParameter, IProgress<ApplicationStatus>?, CancellationToken>((_, p, _, _) => seen = p)
+                .ReturnsAsync(new PlateSolveResult { Success = false });
+            var factory = new Mock<IPlateSolverFactory>();
+            factory.Setup(f => f.GetPlateSolver(It.IsAny<IPlateSolveSettings>())).Returns(Mock.Of<IPlateSolver>());
+            factory.Setup(f => f.GetImageSolver(It.IsAny<IPlateSolver>(), It.IsAny<IPlateSolver>())).Returns(imageSolver.Object);
+            var sut = new PolarAlignFrameSolver(new HeadlessProfileService(), store, factory.Object);
+
+            await sut.SolveAsync(WriteFrame(), 1, null, null, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(seen, Is.Not.Null);
+            Assert.That(seen!.StagedSearchEnabled, Is.False, "no last-good-solve / scale / widened stages for a PA frame");
+            Assert.That(seen.BlindFailoverEnabled, Is.False, "and no blind failover either");
+            Assert.That(seen.Timeout, Is.EqualTo(TimeSpan.FromSeconds(25)), "the profile's timeout reaches the solver");
+        }
+
         [TestCase(0)]
         [TestCase(-1)]
         public async Task A_binning_below_one_is_refused(int binning) {
