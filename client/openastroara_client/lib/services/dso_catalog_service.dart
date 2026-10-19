@@ -220,27 +220,44 @@ Map<String, Object?> planetariumSearchCommand(
   return {'type': 'search', 'q': q};
 }
 
-/// A designation's lookup key: upper-case, no spaces, no dashes, no zero
-/// padding ("NGC 0224", "ngc224", "NGC0224" and "C 020" / "C 20" are one
-/// key). Shared by the search and the one-row-per-object merge (#1267).
+/// A designation's lookup key: upper-case, no spaces, no zero padding
+/// ("NGC 0224", "ngc224", "NGC0224" and "C 020" / "C 20" are one key).
+/// Dashes STAY: "M 2-9" (Minkowski's Twin Jet) is not "M 29", and "WR 2-1"
+/// is not "WR 21" (review #1107, r3). Shared by the search and the
+/// one-row-per-object merge (#1267).
 String designationKey(String s) {
-  final up = s.trim().toUpperCase().replaceAll(RegExp(r'[\s_\-]'), '');
+  final up = s.trim().toUpperCase().replaceAll(RegExp(r'[\s_]'), '');
   return up.replaceAllMapped(
       RegExp(r'([A-Z])0+(\d)'), (m) => '${m[1]}${m[2]}');
+}
+
+/// The key without dashes, for a query typed WITHOUT one ("sh2 117" finds
+/// Sh2-117). A query that carries a dash is never matched loosely.
+String looseDesignationKey(String s) =>
+    designationKey(s).replaceAll('-', '');
+
+/// Whether [query] matches [designation] by key: dash-preserving first; the
+/// dashless form only when the query itself has no dash.
+bool designationMatches(String query, String designation) {
+  final qk = designationKey(query);
+  if (qk.isEmpty) return false;
+  if (qk == designationKey(designation)) return true;
+  return !qk.contains('-') && qk == looseDesignationKey(designation);
 }
 
 /// Exact lookup only (#1267 item 4): the id, display name or any alias, by
 /// [designationKey]; no substring fallback. For a Simbad answer's main id
 /// and aliases, where a loose substring could land on an unrelated row.
 PlanningDso? findCatalogObjectExact(List<PlanningDso> catalog, String query) {
-  final key = designationKey(query);
-  if (key.isEmpty) return null;
+  if (designationKey(query).isEmpty) return null;
   for (final o in catalog) {
-    if (designationKey(o.id) == key || designationKey(o.name) == key) return o;
+    if (designationMatches(query, o.id) || designationMatches(query, o.name)) {
+      return o;
+    }
   }
   for (final o in catalog) {
     for (final a in o.aliases) {
-      if (designationKey(a) == key) return o;
+      if (designationMatches(query, a)) return o;
     }
   }
   return null;
@@ -270,14 +287,13 @@ PlanningDso? findCatalogObject(List<PlanningDso> catalog, String query) {
   // any other designation the object answers to selects it (#1267 item 4):
   // "Sh2-117", "C 20" and "LBN 373" all select the North America Nebula's
   // one row.
-  final key = designationKey(query);
-  if (key.isNotEmpty) {
+  if (designationKey(query).isNotEmpty) {
     for (final o in catalog) {
-      if (designationKey(o.id) == key) return o;
+      if (designationMatches(query, o.id)) return o;
     }
     for (final o in catalog) {
       for (final a in o.aliases) {
-        if (designationKey(a) == key) return o;
+        if (designationMatches(query, a)) return o;
       }
     }
   }

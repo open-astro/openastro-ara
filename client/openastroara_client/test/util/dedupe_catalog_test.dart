@@ -33,7 +33,8 @@ void main() {
   test('designation keys ignore case, spacing, dashes and zero padding', () {
     expect(designationKey('NGC 0224'), 'NGC224');
     expect(designationKey('ngc0224'), 'NGC224');
-    expect(designationKey('Sh2-117'), 'SH2117');
+    expect(designationKey('Sh2-117'), 'SH2-117', reason: 'dashes stay');
+    expect(looseDesignationKey('Sh2-117'), 'SH2117');
     expect(designationKey('C 020'), 'C20');
     expect(designationKey('NGC 1000'), 'NGC1000');
   });
@@ -186,7 +187,7 @@ void main() {
     expect(catalogTwinLinks.where((l) => l.$1.startsWith('REGION-')), isEmpty);
   });
 
-  test('an id key two rows share resolves no alias, and RA wraps at 0h', () {
+  test('a dashed designation never resolves to a dashless key, and RA wraps at 0h', () {
     final merged = mergeDuplicates([
       _row('WR 2-1', type: 'WR*', ra: 1, dec: 1),
       _row('WR 21', type: 'WR*', ra: 50, dec: 1),
@@ -195,7 +196,10 @@ void main() {
       _row('vdB 9', type: 'RfN', ra: 359.99995, dec: 10),
       _row('NGC0009', type: 'RfN', ra: 0.00005, dec: 10),
     ]);
-    expect(merged.map((d) => d.id), ['WR 2-1', 'WR 21', 'HD 1', 'NGC0009']);
+    // Dashes stay in the key, so "WR 21" and "WR 2-1" never collide and the
+    // HD row that names WR 21 folds into that star, not the other (r3).
+    expect(merged.map((d) => d.id), ['WR 2-1', 'WR 21', 'NGC0009']);
+    expect(merged[1].aliases, ['HD 1']);
     expect(merged.last.aliases, ['vdB 9']);
   });
 

@@ -120,6 +120,30 @@ void main() {
         routeResolved(catalog, const TargetResolution(status: 'offline')),
         isNull,
       );
+      // Simbad's "PN M 2-9" (the Twin Jet) is not M 29.
+      final m29 = [
+        const PlanningDso(
+          id: 'NGC6913',
+          name: 'NGC6913',
+          type: 'OCl',
+          magnitude: 6.6,
+          raDeg: 305.98,
+          decDeg: 38.5,
+          aliases: ['M 29'],
+        ),
+      ];
+      expect(
+        routeResolved(
+          m29,
+          const TargetResolution(
+            status: 'resolved',
+            mainId: 'PN M 2-9',
+            raDeg: 1,
+            decDeg: 2,
+          ),
+        ),
+        isNull,
+      );
       // Exact only: a Simbad alias that merely contains a bundled name's
       // text does not land on that row.
       expect(

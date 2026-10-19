@@ -124,9 +124,27 @@ List<PlanningDso> mergeDuplicates(
       }
     }
   }
+  // Dash-preserving first; a designation WITHOUT a dash may also meet a
+  // dashed key ("Sh2 117" ↔ "Sh2-117"), a dashed one never meets a
+  // dashless key ("M 2-9" is not "M 29").
+  final byLooseKey = <String, int>{};
+  final looseAmbiguous = <String>{};
+  for (final entry in byKey.entries) {
+    if (ambiguous.contains(entry.key)) continue;
+    final lk = entry.key.replaceAll('-', '');
+    if (byLooseKey.containsKey(lk) && byLooseKey[lk] != entry.value) {
+      looseAmbiguous.add(lk);
+    } else {
+      byLooseKey[lk] = entry.value;
+    }
+  }
   int? lookup(String designation) {
     final k = designationKey(designation);
-    return ambiguous.contains(k) ? null : byKey[k];
+    if (k.isEmpty) return null;
+    if (ambiguous.contains(k)) return null;
+    final exact = byKey[k];
+    if (exact != null || k.contains('-')) return exact;
+    return looseAmbiguous.contains(k) ? null : byLooseKey[k];
   }
 
   // A row whose designations name SEVERAL other rows is a group (Arp 281 is
