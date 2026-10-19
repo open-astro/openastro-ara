@@ -39,7 +39,10 @@ public static class SavedTargetsValidator {
         }
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var clean = new List<SavedTargetDto>(list.Count);
-        foreach (var t in list.OrderByDescending(t => t?.SavedUtc ?? DateTimeOffset.MinValue)) {
+        // Newest first, then by name: a deterministic order the client reproduces, so equal-time
+        // entries never read as a difference to push again.
+        foreach (var t in list.OrderByDescending(t => t?.SavedUtc ?? DateTimeOffset.MinValue)
+                .ThenBy(t => (t?.Name ?? string.Empty).Trim(), StringComparer.OrdinalIgnoreCase)) {
             if (t is null) {
                 return (null, "a saved target is null");
             }

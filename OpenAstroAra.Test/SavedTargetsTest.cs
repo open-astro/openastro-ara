@@ -29,6 +29,7 @@ namespace OpenAstroAra.Test {
         private static readonly DateTimeOffset T0 = new(2026, 10, 18, 22, 0, 0, TimeSpan.Zero);
 
         private static readonly string[] AbCasThenWolf = { "ab cas", "Wolf 359" };
+        private static readonly string[] AlphaMidZeta = { "Alpha", "mid", "zeta" };
         private static readonly string[] AB = { "a", "b" };
         private static readonly string[] OtherThenGood = { "other", "good" };
 
@@ -54,6 +55,12 @@ namespace OpenAstroAra.Test {
             Assert.That(n!.Targets.Select(t => t.Name), Is.EqualTo(AbCasThenWolf), "the newest AB Cas wins, newest first");
             Assert.That(n.Targets[1].RaDeg, Is.EqualTo(164.12).Within(1e-9), "RA wrapped into 0..360");
             Assert.That(n.Targets[0].Source, Is.EqualTo("index"));
+        }
+
+        [Test]
+        public void Equal_times_order_by_name() {
+            var n = SavedTargetsValidator.Normalize(new SavedTargetsDto([T("zeta"), T("Alpha"), T("mid")])).Normalized!;
+            Assert.That(n.Targets.Select(t => t.Name), Is.EqualTo(AlphaMidZeta));
         }
 
         [Test]

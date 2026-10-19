@@ -106,7 +106,10 @@ class ScopedTargets {
 bool isAcceptableSavedTarget(CustomTarget t) {
   final name = t.name.trim();
   if (name.isEmpty || name.length > 128) return false;
-  if (name.codeUnits.any((c) => c < 32 || c == 127)) return false;
+  // The daemon's char.IsControl: C0, DEL and the C1 range.
+  if (name.codeUnits.any((c) => c < 0x20 || (c >= 0x7F && c <= 0x9F))) {
+    return false;
+  }
   if (!t.raDeg.isFinite || !t.decDeg.isFinite || t.decDeg.abs() > 90) return false;
   return const {'typed', 'index', 'cache', 'simbad'}.contains(t.source);
 }

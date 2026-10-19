@@ -88,15 +88,22 @@ class CustomTargetsNotifier extends AsyncNotifier<List<CustomTarget>> {
   }
 
   // Pushes run one after another, so a remember cannot be overwritten by an
-  // earlier push's echo landing late.
+  // earlier push's echo landing late; each one re-merges against a fresh
+  // read, so a target another client added since this client's last build
+  // survives the push.
   Future<void> _push(String? scope, List<CustomTarget> list) {
     final api = ref.read(profileApiProvider);
     if (api == null || scope == null) return Future.value();
     final task = _pushes.then((_) async {
       try {
-        final echoed = await api.putSavedTargets(list.where(isAcceptableSavedTarget).toList());
+        final svc = ref.read(customTargetsServiceProvider);
+        final local = await svc.loadScope(scope);
+        final remote = await api.getSavedTargets();
+        final merged = threeWayMergeSavedTargets(
+            remote: remote, mirror: local.targets, base: local.base);
+        final echoed = await api.putSavedTargets(merged.where(isAcceptableSavedTarget).toList());
         if (!ref.mounted) return;
-        final committed = await ref.read(customTargetsServiceProvider).commitSync(scope, echoed);
+        final committed = await svc.commitSync(scope, echoed);
         if (ref.mounted) state = AsyncData(committed);
       } catch (e) {
         // Offline or an older daemon: the mirror holds it; the next build syncs.
@@ -132,7 +139,12 @@ List<CustomTarget> threeWayMergeSavedTargets({
       if (!base.contains(key)) out.add(inM);
     }
   }
-  out.sort((a, b) => b.savedUtc.compareTo(a.savedUtc));
+  // Newest first, then by name: a deterministic order that matches the
+  // daemon's, so equal-time entries never read as a difference to push.
+  out.sort((a, b) {
+    final byTime = b.savedUtc.compareTo(a.savedUtc);
+    return byTime != 0 ? byTime : a.name.toLowerCase().compareTo(b.name.toLowerCase());
+  });
   return out.take(CustomTargetsService.maxEntries).toList();
 }
 

@@ -138,6 +138,8 @@ void main() {
     expect(isAcceptableSavedTarget(_t('ok', 1, 2)), isTrue);
     expect(isAcceptableSavedTarget(_t('  ', 1, 2)), isFalse);
     expect(isAcceptableSavedTarget(_t('a\nb', 1, 2)), isFalse);
+    expect(isAcceptableSavedTarget(_t('a\u0085b', 1, 2)), isFalse, reason: 'C1 controls, like the daemon');
+    expect(isAcceptableSavedTarget(_t('Ünïcode', 1, 2)), isTrue);
     expect(isAcceptableSavedTarget(_t('x' * 129, 1, 2)), isFalse);
     expect(isAcceptableSavedTarget(_t('ok', 1, 91)), isFalse);
     expect(isAcceptableSavedTarget(_t('ok', double.nan, 2)), isFalse);

@@ -152,6 +152,26 @@ void main() {
     expect(merged[1].aliases, ['HIP 12235'], reason: 'the profile entry stands');
   });
 
+  test('threeWayMerge orders equal times by name, like the daemon', () {
+    final same = DateTime.utc(2026, 10, 18, 22);
+    CustomTarget at(String n) => CustomTarget(name: n, raDeg: 1, decDeg: 1, typedAsJNow: false, savedUtc: same);
+    final merged = threeWayMergeSavedTargets(remote: [at('zeta'), at('Alpha'), at('mid')], mirror: const [], base: const {});
+    expect(merged.map((t) => t.name), ['Alpha', 'mid', 'zeta']);
+  });
+
+  test('a push re-merges against a fresh read, so another client\'s new target survives', () async {
+    final mirror = _MemoryTargets(seed: {_scopeA: [_t('Mine', 1)]}, base: {_scopeA: {'mine'}});
+    final adapter = _ProfileAdapter([_t('Mine', 1)]);
+    final c = _container(mirror, adapter);
+    addTearDown(c.dispose);
+    await c.read(customTargetsProvider.future);
+    // Another client adds a target after this client's build.
+    adapter.stored = [_t('Theirs', 5), _t('Mine', 1)];
+    await c.read(customTargetsProvider.notifier).remember(_t('New here', 6));
+    expect(adapter.stored.map((t) => t.name), ['New here', 'Theirs', 'Mine']);
+    expect(c.read(customTargetsProvider).value!.map((t) => t.name), ['New here', 'Theirs', 'Mine']);
+  });
+
   test('with no server the last scope\'s mirror is the list and nothing is pushed', () async {
     final mirror = _MemoryTargets(seed: {_scopeA: [_t('Field', 1)]}, last: _scopeA);
     final c = _container(mirror, null);
