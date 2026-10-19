@@ -12,7 +12,10 @@
 
 #endregion "copyright"
 
+using Newtonsoft.Json.Linq;
+using OpenAstroAra.Equipment.Equipment.MyGuider.PHD2.PhdEvents;
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -76,7 +79,19 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             ct.ThrowIfCancellationRequested();
             RequireConnectedForLive();
             var response = await SendMessage<Phd2GuiderOptionsResponse>(new Phd2GetGuiderOptions(), LiveRpcTimeoutMs, notifyOnError: false).ConfigureAwait(false);
-            return response.error != null ? null : response.result?.MultiStarEnabled;
+            if (response.error == null && response.result?.MultiStarEnabled is bool fromOptions) {
+                return fromOptions;
+            }
+            // openastro-guider 2.1.0's get_guider_options answers FastRecenter, AutoSelDownsample and
+            // TolerateJumps only; the flag lives in get_profile_setup (multistar_enabled), which the
+            // guider answers whether or not its equipment is connected. Without this the dialog's
+            // Multi-star / Single star chip never showed (2026-10-18).
+            var setup = await SendMessage<GenericPhdMethodResponse>(new Phd2NamedGetter("get_profile_setup", new Dictionary<string, object>()), LiveRpcTimeoutMs, notifyOnError: false).ConfigureAwait(false);
+            if (setup.error != null || setup.result is null) {
+                return null;
+            }
+            var token = JToken.FromObject(setup.result)["multistar_enabled"];
+            return token?.Type == JTokenType.Boolean ? token.Value<bool>() : null;
         }
 
         /// <summary>Lock on the star nearest (<paramref name="x"/>, <paramref name="y"/>) frame pixels —
@@ -96,6 +111,11 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             RequireConnectedForLive();
             var response = await SendMessage<GenericPhdMethodResponse>(new Phd2DeselectStar(), LiveRpcTimeoutMs).ConfigureAwait(false);
             ThrowOnError("deselect_star", response);
+            // PHD2 sends no event for a deselect: the next LoopingExposures reads Looping again.
+            _starSelectedWhileLooping = false;
+            if (AppState?.State == PhdAppState.SELECTED) {
+                AppState = new PhdEventAppState() { State = PhdAppState.LOOPING };
+            }
         }
 
         /// <summary>Start looping exposures (no guiding) so the live view has frames to show and a star
