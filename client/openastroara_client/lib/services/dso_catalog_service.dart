@@ -248,6 +248,47 @@ bool designationMatches(String query, String designation) {
   return !qk.contains('-') && qk == looseDesignationKey(designation);
 }
 
+/// A one-pass lookup index over a catalog (#1267 item 4): designation key
+/// → row for every id, display name and alias, with the dashless form as a
+/// fallback for a query without a dash. Built once per catalog list, so a
+/// Simbad answer's whole alias list resolves in O(1) each instead of a full
+/// scan per name (review r5).
+class CatalogNameIndex {
+  final Map<String, PlanningDso> _exact = {};
+  final Map<String, PlanningDso> _loose = {};
+
+  CatalogNameIndex(List<PlanningDso> catalog) {
+    void add(String designation, PlanningDso o) {
+      final k = designationKey(designation);
+      if (k.isEmpty) return;
+      _exact.putIfAbsent(k, () => o);
+      _loose.putIfAbsent(k.replaceAll('-', ''), () => o);
+    }
+    // Ids first, then names, then aliases: an id claim always wins.
+    for (final o in catalog) {
+      add(o.id, o);
+    }
+    for (final o in catalog) {
+      add(o.name, o);
+    }
+    for (final o in catalog) {
+      for (final a in o.aliases) {
+        add(a, o);
+      }
+    }
+  }
+
+  /// The row [query] names exactly (dash-preserving; the dashless form only
+  /// for a query without a dash), or null.
+  PlanningDso? lookup(String query) {
+    final k = designationKey(query);
+    if (k.isEmpty) return null;
+    final hit = _exact[k];
+    if (hit != null || k.contains('-')) return hit;
+    return _loose[k];
+  }
+}
+
 /// Exact lookup only (#1267 item 4): the id, display name or any alias, by
 /// [designationKey]; no substring fallback. For a Simbad answer's main id
 /// and aliases, where a loose substring could land on an unrelated row.

@@ -160,4 +160,34 @@ void main() {
       );
     },
   );
+
+  test('the name index answers like the exact search, once per catalog', () {
+    final index = CatalogNameIndex(catalog);
+    expect(index.lookup('NGC 7000')!.id, 'NGC7000');
+    expect(index.lookup('north america nebula')!.id, 'NGC7000');
+    expect(index.lookup('nope'), isNull);
+    // A long alias list resolves without rescanning the catalog per name.
+    final r = TargetResolution(
+      status: 'resolved',
+      source: 'simbad',
+      mainId: 'NAME Something',
+      aliases: [for (var i = 0; i < 200; i++) 'ZZ $i', 'NGC 7000'],
+      raDeg: 1,
+      decDeg: 2,
+    );
+    expect(
+      routeResolved(catalog, r),
+      isNull,
+      reason: 'past the cap, the matching alias is not tried',
+    );
+    final r2 = TargetResolution(
+      status: 'resolved',
+      source: 'simbad',
+      mainId: 'NAME Something',
+      aliases: [for (var i = 0; i < 10; i++) 'ZZ $i', 'NGC 7000'],
+      raDeg: 1,
+      decDeg: 2,
+    );
+    expect(routeResolved(catalog, r2)!['name'], 'North America Nebula');
+  });
 }

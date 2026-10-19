@@ -119,8 +119,11 @@ Map<String, Object?>? routeResolved(
   TargetResolution r,
 ) {
   if (!r.resolved) return null;
-  for (final name in [r.mainId!, ...r.aliases]) {
-    final hit = findCatalogObjectExact(catalog, _stripSimbadPrefix(name));
+  // One index pass over the catalog, then O(1) per Simbad name; Simbad can
+  // list dozens of aliases and the bundle has ~16k rows (review r5).
+  final index = CatalogNameIndex(catalog);
+  for (final name in [r.mainId!, ...r.aliases.take(maxResolvedAliasesTried)]) {
+    final hit = index.lookup(_stripSimbadPrefix(name));
     if (hit != null) {
       return {
         'type': 'goto',
@@ -132,6 +135,9 @@ Map<String, Object?>? routeResolved(
   }
   return null;
 }
+
+/// How many of a Simbad answer's aliases are tried against the bundle.
+const int maxResolvedAliasesTried = 64;
 
 /// Simbad prefixes its main ids ("NAME Wolf 359", "V* AB Cas", "* alf CMa").
 String _stripSimbadPrefix(String s) {
