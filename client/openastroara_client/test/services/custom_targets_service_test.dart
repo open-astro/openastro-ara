@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -108,5 +109,41 @@ void main() {
     final replaced = await svc.replaceAll([_t('b', 1, 1), _t('a', 2, 2)]);
     expect(replaced.map((t) => t.name), ['b', 'a']);
     expect((await svc.load()).map((t) => t.name), ['b', 'a']);
+  });
+
+  test('scopes keep rigs apart, the last scope answers offline, a legacy list is adopted (#1267 item 5)', () async {
+    // A pre-#1267 device-wide list on disk.
+    final f = File('${dir.path}/custom_targets.json');
+    await f.writeAsString(jsonEncode([_t('Old field', 1, 2).toJson()]));
+    final legacy = await svc.loadScope('http://a|p1');
+    expect(legacy.targets.map((t) => t.name), ['Old field'], reason: 'adopted by the first scope');
+    expect(legacy.base, isEmpty);
+    await svc.remember(_t('A1', 1, 1), scope: 'http://a|p1');
+    await svc.remember(_t('B1', 2, 2), scope: 'http://b|p9');
+    expect((await svc.load(scope: 'http://a|p1')).map((t) => t.name), ['A1', 'Old field']);
+    expect((await svc.load(scope: 'http://b|p9')).map((t) => t.name), ['B1']);
+    expect((await svc.loadScope(null)).targets.map((t) => t.name), ['B1'], reason: 'offline: the scope used last');
+    // commitSync records the profile's names as the base; forget keeps it.
+    await svc.commitSync('http://a|p1', [_t('A1', 1, 1), _t('A2', 3, 3)]);
+    final synced = await svc.loadScope('http://a|p1');
+    expect(synced.targets.map((t) => t.name), ['A1', 'A2']);
+    expect(synced.base, {'a1', 'a2'});
+    await svc.forget(_t('A2', 3, 3), scope: 'http://a|p1');
+    final after = await svc.loadScope('http://a|p1');
+    expect(after.targets.map((t) => t.name), ['A1']);
+    expect(after.base, {'a1', 'a2'}, reason: 'the base is what the profile held at the last sync');
+  });
+
+  test('isAcceptableSavedTarget mirrors the daemon rules', () {
+    expect(isAcceptableSavedTarget(_t('ok', 1, 2)), isTrue);
+    expect(isAcceptableSavedTarget(_t('  ', 1, 2)), isFalse);
+    expect(isAcceptableSavedTarget(_t('a\nb', 1, 2)), isFalse);
+    expect(isAcceptableSavedTarget(_t('x' * 129, 1, 2)), isFalse);
+    expect(isAcceptableSavedTarget(_t('ok', 1, 91)), isFalse);
+    expect(isAcceptableSavedTarget(_t('ok', double.nan, 2)), isFalse);
+    expect(
+      isAcceptableSavedTarget(CustomTarget(name: 'ok', raDeg: 1, decDeg: 2, typedAsJNow: false, savedUtc: DateTime.utc(2026), source: 'gaia')),
+      isFalse,
+    );
   });
 }

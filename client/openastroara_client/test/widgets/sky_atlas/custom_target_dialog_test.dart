@@ -18,17 +18,21 @@ class _MemoryTargets extends CustomTargetsService {
   final List<CustomTarget> items = [];
 
   @override
-  Future<List<CustomTarget>> load() async => List.of(items);
+  Future<ScopedTargets> loadScope(String? scope) async =>
+      ScopedTargets(List.of(items), const {});
 
   @override
-  Future<List<CustomTarget>> remember(CustomTarget target) async {
+  Future<List<CustomTarget>> load({String? scope}) async => List.of(items);
+
+  @override
+  Future<List<CustomTarget>> remember(CustomTarget target, {String? scope}) async {
     items.removeWhere((t) => t.name == target.name);
     items.insert(0, target);
     return List.of(items);
   }
 
   @override
-  Future<List<CustomTarget>> forget(CustomTarget target) async {
+  Future<List<CustomTarget>> forget(CustomTarget target, {String? scope}) async {
     items.removeWhere((t) => t.name == target.name);
     return List.of(items);
   }
