@@ -408,6 +408,22 @@ The card now keeps a known device's card while it is not live: name, state chip,
 
 ---
 
+### 2026-10-18 — Target search: `GET /api/v1/targets/resolve` (offline index, then Simbad through the daemon) (#1267)
+
+**Endpoint(s) or area:** new `GET /api/v1/targets/resolve?name=` → `TargetResolveResponseDto` `{query, status, source, main_id, aliases[], ra_deg, dec_deg, object_type, magnitude, message}`. Always 200 for a usable name; 400 for a blank name, one over 128 characters or one with control characters. `status` is `resolved`, `not_found` or `offline`; `source` is `index`, `cache` or `simbad` (empty on a miss). Positions are J2000 degrees.
+
+**Decision:** the daemon resolves a name in three steps and stops at the first answer. (1) The **offline index**: built lazily from the sky-data the Data Manager has installed — HYG's HIP / HD / HR / Gliese / Bayer / Flamsteed / proper / variable-star columns ("AB Cas" is HYG's `var=AB con=Cas`) and the OpenNGC-layout files' Messier / NGC / IC / Identifiers / Common names columns — keyed case-, space-, leading-zero- and Greek-spelling-insensitively; rebuilt when a catalog lands. No internet. (2) The **cache** of earlier Simbad answers in the catalog database (`target_resolutions`), so a name resolved at home is still there at the dark site. (3) **CDS Sesame** (`-oxpIF/SNV`, Simbad then NED then VizieR), 5 s and 1 MB bound, HTTPS, no redirects, DTDs off; a found object is cached, a miss is `not_found` and never cached, an unreachable service is `offline` with a "needs internet" message. The client calls only the daemon: over the SBC's hotspot the lookup works whenever the SBC has an uplink, and the client keeps no internet dependency (the standing planning-compute rule is not touched: this is a data lookup, not planning).
+
+**Client:** the planetarium search box resolves its local catalogs first as before; a miss asks the daemon, and a resolved name opens the target dialog filled with the main identifier, the J2000 position and a provenance line (source, type, magnitude, aliases), from which it is framed or added to the plan like any catalog target. A `not_found` / `offline` answer falls through to the planetarium's own engine search with the daemon's reason in a snackbar.
+
+**Reasoning:** issue #1267 part 2/3: a star such as AB Cas (HIP 12235, TYC 4320-505-1, …) could not be found by any of its names, and an online-only resolver would be a defect at the dark site (offline-first).
+
+**Spec ref:** `OpenAstroAra.Server/Services/TargetNameIndex.cs`, `SesameClient.cs`, `TargetResolverService.cs`, `Endpoints/TargetEndpoints.cs`; client `lib/services/target_resolve_api.dart`, `lib/widgets/sky_atlas/custom_target_dialog.dart`.
+
+**Related:** #1267 (parts 4 and 5, one row per object and profile-backed saved targets, follow separately), playbook §36.8; tests `TargetNameIndexTest`, `SesameClientTest`, `TargetResolverServiceTest`, `TargetEndpointsTest`, client `target_resolve_api_test`, `custom_target_dialog_test`.
+
+---
+
 ### 2026-10-18 — Every device's Alpaca identity is re-read on connect and before a run; a swap is re-pinned, not refused (#1362)
 
 **Endpoint(s) or area:** new read-only `GET /api/v1/profile/equipment-identity` (`equipment_identity` profile section: the last-seen `unique_id`, `name` and `seen_utc` per gear slot `camera`, `guidecamera`, `telescope`, `focuser`, `filterwheel`, `rotator`, `dome`, `switch`, `safetymonitor`, `observingconditions`, `covercalibrator`). `POST /api/v1/sequences/{id}/start` re-reads every connected device's identity before starting. `POST /guider/profile/push`'s #1308 refusal narrows (below).

@@ -60,6 +60,10 @@ Credited here per their terms:
 
 - **IERS Bulletin A UT1-UTC series** (IERS Rapid Service/Prediction Center, U.S. Naval Observatory; `OpenAstroAra.Astrometry/External/iers-dut1.tsv`) — a snapshot of the daily UT1-UTC (DUT1) values and the bulletin's long-term prediction formula, extracted from `finals2000A.all` and `bulletinA.txt` at <https://datacenter.iers.org/> by `scripts/update-dut1-table.py` so sidereal time and topocentric transforms carry the real UT1 offset offline (#1190). IERS RS/PC products are a work of the U.S. Government, released with "Distribution statement A: Approved for public release: distribution unlimited"; no license terms restrict their use or redistribution. Cited as a courtesy to the IERS and USNO. Embedded in the daemon's astrometry assembly.
 
+## Online services (not bundled)
+
+- **CDS Sesame name resolver / SIMBAD** (`cds.unistra.fr`, Centre de Données astronomiques de Strasbourg) — target search asks Sesame for a name the daemon's offline index does not know, and keeps the answer in the daemon's database. Nothing is redistributed; each request is for the one name typed. This research has made use of the SIMBAD database, operated at CDS, Strasbourg, France (Wenger et al. 2000, A&AS 143, 9).
+
 ## Online imagery (not bundled)
 
 - **DSS2 colour sky survey via CDS hips2fits** (`alasky.u-strasbg.fr`, CDS Strasbourg Observatory; the Digitized Sky Survey is © AURA/STScI and the original observatories) — the target previews in Plan my night and Tonight's Sky are cutouts fetched on demand from this service and cached under app support; the planetarium's optional "DSS2 sky survey" layer fetches the same survey as HiPS tiles through the client's loopback server, and those tiles are likewise cached under app support (`stellarium-dss2`) and kept until the folder is deleted. Nothing is redistributed; each request is for the target being planned. Credit: "Digitized Sky Survey (DSS2), STScI/AURA, via CDS hips2fits". (A setting to disable the fetch is tracked as a follow-up.)

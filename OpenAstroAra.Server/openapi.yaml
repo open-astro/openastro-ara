@@ -1960,6 +1960,30 @@ paths:
       responses:
         '204':
           description: No Content
+  /api/v1/targets/resolve:
+    get:
+      tags:
+        - Targets
+      summary: 'Resolve a target name (any identifier: AB Cas, HIP 12235, M 31, Wolf 359) to a J2000 position: the offline index first, then the cached or live Simbad answer; status says resolved / not_found / offline.'
+      operationId: ResolveTarget
+      parameters:
+        - name: name
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TargetResolveResponseDto'
+        '400':
+          description: Bad Request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/rotation-assist/start:
     post:
       tags:
@@ -14429,6 +14453,63 @@ components:
             - number
             - string
           format: double
+    TargetResolveResponseDto:
+      required:
+        - query
+        - status
+        - source
+        - main_id
+        - aliases
+        - ra_deg
+        - dec_deg
+        - object_type
+        - magnitude
+        - message
+      type: object
+      properties:
+        query:
+          type: string
+        status:
+          type: string
+        source:
+          type: string
+        main_id:
+          type:
+            - 'null'
+            - string
+        aliases:
+          type: array
+          items:
+            type: string
+        ra_deg:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        dec_deg:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        object_type:
+          type:
+            - 'null'
+            - string
+        magnitude:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        message:
+          type:
+            - 'null'
+            - string
     TelescopeTrackingRequestDto:
       required:
         - enabled
@@ -14874,6 +14955,7 @@ tags:
   - name: Equipment
   - name: Autofocus
   - name: Tracking
+  - name: Targets
   - name: Rotation assist
   - name: Bahtinov focus
   - name: Sequences

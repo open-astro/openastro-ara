@@ -628,6 +628,13 @@ public partial class Program {
         builder.Services.AddHostedService(sp => sp.GetRequiredService<DataManagerService>());
         // §36 Catalogs — derives Messier/NGC/IC + type-filter overlays from the installed OpenNGC catalog.
         builder.Services.AddSingleton<ISkyCatalogService>(_ => new SkyCatalogService(skyDataRoot));
+        // #1267 — target search: the offline name index over the installed sky-data, Sesame (Simbad) through
+        // the daemon for a miss, and the cache of earlier answers in the catalog database.
+        builder.Services.AddSingleton(sp => new TargetNameIndex(skyDataRoot, sp.GetService<ILogger<TargetNameIndex>>()));
+        builder.Services.AddSingleton<ISesameClient>(sp => new SesameClient(sp.GetService<ILogger<SesameClient>>()));
+        builder.Services.AddSingleton<ITargetResolver>(sp => new TargetResolverService(
+            sp.GetRequiredService<TargetNameIndex>(), sp.GetRequiredService<ISesameClient>(),
+            sp.GetRequiredService<IAraDatabase>(), sp.GetService<ILogger<TargetResolverService>>()));
 
         // §43-1 backup — real disk-backed ZIP snapshots under {profileDir}/backups (replaces the placeholder).
         // Registered here (not at the §13.11 placeholder site) since it needs the resolved profileDir. The §43-2
@@ -1210,6 +1217,7 @@ public partial class Program {
         // §59.15 — Smart Focus calibration read + recalibrate (profile-state, not device ops).
         app.MapAutofocusEndpoints();
         app.MapTrackingEndpoints();
+        app.MapTargetEndpoints();
         app.MapRotationAssistEndpoints();
         app.MapBahtinovFocusEndpoints();
 

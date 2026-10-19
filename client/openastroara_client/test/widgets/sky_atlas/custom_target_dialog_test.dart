@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/services/custom_targets_service.dart';
 import 'package:openastroara/services/sequence_api.dart';
+import 'package:openastroara/services/target_resolve_api.dart';
 import 'package:openastroara/state/sequencer/sequence_list_state.dart';
 import 'package:openastroara/state/sky_atlas/custom_targets_state.dart';
 import 'package:openastroara/state/sky_atlas/sky_atlas_state.dart';
@@ -248,5 +249,48 @@ void main() {
     expect(find.text('10h 00m 00s'), findsOneWidget);
     expect(find.text('-20° 00\' 00"'), findsOneWidget);
     expect(find.byKey(const Key('custom-target-preview')), findsOneWidget);
+  });
+
+  testWidgets('a resolved name opens filled in with its provenance (#1267)',
+      (tester) async {
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: MaterialApp(
+        home: Scaffold(
+          body: Builder(
+            builder: (context) => TextButton(
+              onPressed: () => showCustomTargetDialog(
+                context,
+                resolved: const TargetResolution(
+                  status: 'resolved',
+                  source: 'simbad',
+                  mainId: 'V* AB Cas',
+                  aliases: ['HIP 12235', 'TYC 4320-505-1'],
+                  raDeg: 39.38129905,
+                  decDeg: 71.30452027,
+                  objectType: 'EB*',
+                  magnitude: 10.32,
+                ),
+              ),
+              child: const Text('open'),
+            ),
+          ),
+        ),
+      ),
+    ));
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+    expect(find.text('Resolved target'), findsOneWidget);
+    final name = tester.widget<TextField>(find.byWidgetPredicate(
+        (w) => w is TextField && w.decoration?.labelText == 'Name'));
+    expect(name.controller!.text, 'V* AB Cas');
+    final ra = tester.widget<TextField>(find.byKey(const Key('custom-target-ra')));
+    expect(ra.controller!.text, '39.38130');
+    final dec = tester.widget<TextField>(find.byKey(const Key('custom-target-dec')));
+    expect(dec.controller!.text, '71.30452');
+    expect(
+      tester.widget<Text>(find.byKey(const Key('custom-target-provenance'))).data,
+      'Simbad · EB* · mag 10.3 · also HIP 12235, TYC 4320-505-1',
+    );
   });
 }
