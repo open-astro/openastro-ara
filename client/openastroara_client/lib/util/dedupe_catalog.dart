@@ -129,10 +129,21 @@ List<PlanningDso> mergeDuplicates(
     return ambiguous.contains(k) ? null : byKey[k];
   }
 
+  // A row whose designations name SEVERAL other rows is a group (Arp 281 is
+  // NGC 4627 + NGC 4631, the Antennae are Arp 244 = NGC 4038 + 4039): its
+  // members stay their own rows and the group row stands on its own, out of
+  // the position pass too (its centre sits on one member). Review r2.
+  final groupRows = <int>{};
   for (var i = 0; i < rows.length; i++) {
+    final targets = <int>{};
     for (final a in rows[i].aliases) {
       final j = lookup(a);
-      if (j != null && j != i && compatible(i, j)) union(i, j);
+      if (j != null && j != i && compatible(i, j)) targets.add(j);
+    }
+    if (targets.length == 1) {
+      union(i, targets.single);
+    } else if (targets.length > 1) {
+      groupRows.add(i);
     }
   }
   for (final (a, b) in links) {
@@ -150,6 +161,7 @@ List<PlanningDso> mergeDuplicates(
     cell.putIfAbsent(cellOf(rows[i]), () => []).add(i);
   }
   for (var i = 0; i < rows.length; i++) {
+    if (groupRows.contains(i)) continue;
     final d = rows[i];
     final fam = catalogFamily(d.id);
     final cls = typeClass(d.type);
@@ -157,7 +169,7 @@ List<PlanningDso> mergeDuplicates(
     for (var dx = -1; dx <= 1; dx++) {
       for (var dy = -1; dy <= 1; dy++) {
         for (final j in cell[((cx + dx) % 3600, cy + dy)] ?? const <int>[]) {
-          if (j <= i) continue;
+          if (j <= i || groupRows.contains(j)) continue;
           final e = rows[j];
           if (catalogFamily(e.id) == fam || typeClass(e.type) != cls) continue;
           if (separationArcmin(d.raDeg, d.decDeg, e.raDeg, e.decDeg) <=

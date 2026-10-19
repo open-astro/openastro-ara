@@ -145,6 +145,22 @@ void main() {
     ], reason: "the primary's own designation is not an alias");
   });
 
+  test('a row naming several other rows is a group, not an identity', () {
+    // Arp 281 lists NGC 4627 and NGC 4631: the pair is the Arp object; the
+    // two galaxies are their own rows and keep their own data (review r2).
+    final merged = mergeDuplicates([
+      _row('NGC4627', type: 'G', mag: 12.5, ra: 190.65, dec: 32.57, caldwell: null),
+      _row('NGC4631', name: 'Whale Galaxy', type: 'G', mag: 9.2, ra: 190.53, dec: 32.54, caldwell: 32),
+      _row('Arp 281', type: 'G', ra: 190.60, dec: 32.55, aliases: ['NGC 4627', 'NGC 4631']),
+      // A row naming ONE other row is still an identity (Arp 1 = NGC 2857).
+      _row('Arp 1', type: 'G', ra: 10, dec: 10, aliases: ['NGC 2857']),
+      _row('NGC2857', type: 'G', mag: 12.4, ra: 10, dec: 10),
+    ]);
+    expect(merged.map((d) => d.id), ['NGC4627', 'NGC4631', 'Arp 281', 'NGC2857']);
+    expect(merged[1].caldwellNum, 32);
+    expect(merged.last.aliases, ['Arp 1']);
+  });
+
   test('a star row never wins a merge and a link to a star is ignored', () {
     // IC 1318 is a star row (gam Cyg, V 2.2) in OpenNGC; the anchor links it
     // to Sh2-108. The nebula must stay a nebula row (review r1).

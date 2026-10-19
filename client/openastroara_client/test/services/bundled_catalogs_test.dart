@@ -165,18 +165,36 @@ void main() {
     expect(rosette.id, 'NGC2239');
     expect(findCatalogObject(curated, 'Sh2-275')!.id, 'NGC2239');
     expect(rosette.name, 'Rosette Nebula (NGC 2244)');
+    // An Arp row naming a PAIR (Arp 281 = NGC 4627 + NGC 4631) is a group,
+    // not an identity: both galaxies survive, the Whale keeps its Caldwell
+    // number, and the Arp row stands on its own (review r2).
+    expect(merged.where((d) => d.id == 'NGC4631'), hasLength(1));
+    expect(merged.where((d) => d.id == 'NGC4627'), hasLength(1));
+    expect(merged.where((d) => d.id == 'NGC4631').single.caldwellNum, 32);
+    expect(findCatalogObject(merged, 'NGC 4631')!.id, 'NGC4631');
+    expect(merged.where((d) => d.id == 'Arp 281'), hasLength(1));
+    expect(findCatalogObject(merged, 'NGC 4038')!.id, 'NGC4038', reason: 'the Antennae stay two');
+    expect(findCatalogObject(merged, 'NGC 4039')!.id, 'NGC4039');
+    // Merging the merged bundle again changes nothing (the provider does).
+    final again = mergeDuplicates(merged);
+    expect(again.map((d) => d.id), merged.map((d) => d.id));
     // Two NGC rows at one spot stay two objects.
     expect(merged.where((d) => d.id == 'NGC4567' || d.id == 'NGC4568'), hasLength(2));
     // No row lists another surviving row's id as an alias, except across the
     // star guard: Arp 65's identifiers name NGC 90 and NGC 91, and OpenNGC
     // types NGC 91 as a star, so that row rightly stays its own.
+    // A group row (Arp 30 names NGC 6365 and its companions) also keeps its
+    // members' names while they stay their own rows.
     final byId = {for (final d in merged) designationKey(d.id): d};
     for (final d in merged) {
-      for (final a in d.aliases) {
-        final other = byId[designationKey(a)];
-        if (other == null) continue;
+      final named = [
+        for (final a in d.aliases)
+          if (byId[designationKey(a)] case final o?) o,
+      ];
+      if (named.length > 1) continue; // a group designation
+      for (final other in named) {
         expect(typeClass(other.type) == 'star', isNot(typeClass(d.type) == 'star'),
-            reason: '${d.id} aliases $a');
+            reason: '${d.id} aliases ${other.id}');
       }
     }
   });
