@@ -269,6 +269,17 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_guider_clear_that_hangs_is_abandoned_and_the_notice_still_posts() {
+            using var rig = Rig.Start();
+            rig.GuiderLive.Setup(g => g.ClearCalibrationAsync(It.IsAny<CancellationToken>()))
+                .Returns<CancellationToken>(ct => Task.Delay(Timeout.Infinite, ct));
+            await rig.Svc.ObserveAsync(GearSlot.Telescope, new("EQMOD", "EQMOD_1"), CancellationToken.None).ConfigureAwait(false);
+            var swap = rig.Svc.ObserveAsync(GearSlot.Telescope, new("OnStep", "ONSTEP_9"), CancellationToken.None);
+            await swap.WaitAsync(TimeSpan.FromSeconds(20)).ConfigureAwait(false);
+            Assert.That(rig.Posted, Has.Count.EqualTo(1));
+        }
+
+        [Test]
         public async Task A_guider_that_refuses_to_clear_does_not_block_the_notice() {
             using var rig = Rig.Start();
             rig.GuiderLive.Setup(g => g.ClearCalibrationAsync(It.IsAny<CancellationToken>())).ThrowsAsync(new InvalidOperationException("guider is not connected"));

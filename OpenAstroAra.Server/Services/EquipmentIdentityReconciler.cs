@@ -40,12 +40,15 @@ public interface IEquipmentIdentityReconciler {
 /// <c>UniqueID</c> per gear slot, tells the user in the inbox when it differs, and clears the calibrations
 /// that were measured through the old device so nothing stale feeds the next run.
 /// <para>Hooked on <see cref="EquipmentEventPublisher.Transition"/>: a Connected transition queues a
-/// reconcile off the service's lock; the connect's outcome never depends on it. Reads only the local
-/// Alpaca server's management API (offline-first), best effort, 5 s bounded.</para>
+/// reconcile off the service's lock; the connect's outcome never depends on it. Reads only the
+/// device's own Alpaca server (on the rig's LAN, no internet), best effort, 5 s bounded.</para>
 /// </summary>
 public sealed partial class EquipmentIdentityReconciler : IEquipmentIdentityReconciler, IDisposable {
 
     private static readonly TimeSpan ReconcileTimeout = TimeSpan.FromSeconds(5);
+    // The guider's clear runs past the caller's bound (the swap is already stored) but not for ever: a
+    // sequence start that found a swap must still answer in bounded time.
+    private static readonly TimeSpan GuiderClearTimeout = TimeSpan.FromSeconds(5);
 
     private readonly IProfileStore _store;
     private readonly IAlpacaManagementClient _alpaca;
@@ -227,8 +230,10 @@ public sealed partial class EquipmentIdentityReconciler : IEquipmentIdentityReco
             return;
         }
         try {
-            await live.ClearCalibrationAsync(ct).ConfigureAwait(false);
-        } catch (Exception ex) when (ex is not OperationCanceledException) {
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            cts.CancelAfter(GuiderClearTimeout);
+            await live.ClearCalibrationAsync(cts.Token).ConfigureAwait(false);
+        } catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested) {
             LogGuiderClearFailed(ex);
         }
     }
@@ -246,7 +251,7 @@ public sealed partial class EquipmentIdentityReconciler : IEquipmentIdentityReco
             await _notifications.CreateAsync(new NotificationDto(
                 Id: Guid.NewGuid(), PostedUtc: _clock(), Severity: NotificationSeverity.Warning,
                 Category: NotificationCategory.Equipment, Title: $"{label} changed: {from} → {to}",
-                Message: $"The {label.ToLowerInvariant()} behind the same connection is a different device than last time. "
+                Message: $"The {label.ToLowerInvariant()} in this slot is a different device from the one last seen. "
                     + EquipmentIdentityReconcile.ChangeAdvice(slot),
                 Read: false, Dismissed: false, DismissedUtc: null, Payload: null,
                 RelatedEntityType: "equipment", RelatedEntityId: EquipmentIdentityReconcile.Key(slot)), ct).ConfigureAwait(false);

@@ -91,8 +91,10 @@ public sealed partial class GuiderService {
                 LogGuideCameraMoved(endpoint, GuiderCameraReconcile.ForLog(pinnedId), movedTo, GuiderCameraReconcile.ForLog(atSlot?.UniqueId));
                 return;
             }
-            if (mismatch && atSlot is null) {
-                return; // the pinned camera is gone and nothing answers at its number: nothing to learn from
+            if (mismatch && string.IsNullOrWhiteSpace(atSlot?.UniqueId)) {
+                // The pinned camera is gone and nothing answers at its number, or the server stopped reporting
+                // ids: nothing safe to learn (a blank id must not re-pin, nor move the pixel size under the old pin).
+                return;
             }
             if (mismatch) {
                 // #1362 — a different camera answers in the slot and it is not the imaging camera: the gear was

@@ -259,6 +259,15 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Connect_learns_nothing_from_a_blank_id_under_a_non_empty_pin() {
+            await using var rig = await Rig.StartAsync("TEST_GUIDE_0001", 3.75, _ => Size(2.9), Slot("")).ConfigureAwait(false);
+            Assert.That(rig.Stored.GuidePixelSize, Is.EqualTo(3.75));
+            Assert.That(rig.Stored.GuiderCameraAlpacaUniqueId, Is.EqualTo("TEST_GUIDE_0001"));
+            Assert.That(rig.Fake.ReceivedMethods, Does.Not.Contain("get_alpaca_camera_pixelsize"));
+            Assert.That(rig.Identity.Observed, Is.Empty);
+        }
+
+        [Test]
         public async Task Connect_records_the_guide_camera_identity_on_a_quiet_connect() {
             await using var rig = await Rig.StartAsync("TEST_GUIDE_0001", 2.9, _ => Size(2.9), Slot("TEST_GUIDE_0001")).ConfigureAwait(false);
             Assert.That(rig.Identity.Observed, Is.EqualTo(new[] { (GearSlot.GuideCamera, "TEST_GUIDE_0001") }));
