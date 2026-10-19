@@ -25,8 +25,9 @@ import '../../util/coord_parse.dart';
 /// in the client (offline-first). The preview line shows both so the user can
 /// check the conversion against where they copied the numbers from.
 ///
-/// Recent targets persist on this device ([customTargetsProvider]) so a
-/// position prepared at home is one tap away at the dark site.
+/// Recent targets live in the profile ([customTargetsProvider], #1267 item
+/// 5) with a per-rig mirror on this device, so a position prepared at home
+/// is one tap away at the dark site on any client, with or without a server.
 class CustomTargetDialog extends ConsumerStatefulWidget {
   /// Text to pre-fill from the search box when it looked like coordinates.
   final String? initialText;
