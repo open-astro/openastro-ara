@@ -114,5 +114,8 @@ void main() {
     expect(findCatalogObject(cat, 'C 20')!.id, 'NGC7000');
     expect(findCatalogObject(cat, 'lbn373')!.id, 'NGC7000');
     expect(designationKey('C 020'), designationKey('c20'));
+    expect(findCatalogObjectExact(cat, 'c 20')!.id, 'NGC7000');
+    expect(findCatalogObjectExact(cat, 'north'), isNull, reason: 'no substring');
+    expect(findCatalogObject(cat, 'north')!.id, 'NGC7000');
   });
 }

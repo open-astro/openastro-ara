@@ -120,6 +120,20 @@ void main() {
         routeResolved(catalog, const TargetResolution(status: 'offline')),
         isNull,
       );
+      // Exact only: a Simbad alias that merely contains a bundled name's
+      // text does not land on that row.
+      expect(
+        routeResolved(
+          catalog,
+          const TargetResolution(
+            status: 'resolved',
+            mainId: 'NAME North',
+            raDeg: 1,
+            decDeg: 2,
+          ),
+        ),
+        isNull,
+      );
     },
   );
 }

@@ -120,7 +120,7 @@ Map<String, Object?>? routeResolved(
 ) {
   if (!r.resolved) return null;
   for (final name in [r.mainId!, ...r.aliases]) {
-    final hit = findCatalogObject(catalog, _stripSimbadPrefix(name));
+    final hit = findCatalogObjectExact(catalog, _stripSimbadPrefix(name));
     if (hit != null) {
       return {
         'type': 'goto',

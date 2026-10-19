@@ -229,6 +229,23 @@ String designationKey(String s) {
       RegExp(r'([A-Z])0+(\d)'), (m) => '${m[1]}${m[2]}');
 }
 
+/// Exact lookup only (#1267 item 4): the id, display name or any alias, by
+/// [designationKey]; no substring fallback. For a Simbad answer's main id
+/// and aliases, where a loose substring could land on an unrelated row.
+PlanningDso? findCatalogObjectExact(List<PlanningDso> catalog, String query) {
+  final key = designationKey(query);
+  if (key.isEmpty) return null;
+  for (final o in catalog) {
+    if (designationKey(o.id) == key || designationKey(o.name) == key) return o;
+  }
+  for (final o in catalog) {
+    for (final a in o.aliases) {
+      if (designationKey(a) == key) return o;
+    }
+  }
+  return null;
+}
+
 /// Case/space/dash-insensitive lookup over the planning mirror: "sh2 129",
 /// "SH2-129", "b 33", "ldn1235" and common names ("horsehead") all resolve.
 /// Exact normalized id/name match wins; otherwise the first object whose
