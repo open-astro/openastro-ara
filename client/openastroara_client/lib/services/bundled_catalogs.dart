@@ -123,11 +123,20 @@ List<PlanningDso> parseOpenNgcCsv(String text) {
     if (messier != null) {
       aliases.add('M $messier');
     }
-    if (iNgc >= 0 && f.length > iNgc && f[iNgc].trim().isNotEmpty && !name.startsWith('NGC')) {
-      aliases.add('NGC ${f[iNgc].trim()}');
+    // On Arp/WR rows the cell can hold a list ("4038,4039"): one alias each.
+    if (iNgc >= 0 && f.length > iNgc && !name.startsWith('NGC')) {
+      for (final n in f[iNgc].split(',')) {
+        if (n.trim().isNotEmpty) {
+          aliases.add('NGC ${n.trim()}');
+        }
+      }
     }
-    if (iIc >= 0 && f.length > iIc && f[iIc].trim().isNotEmpty && !name.startsWith('IC')) {
-      aliases.add('IC ${f[iIc].trim()}');
+    if (iIc >= 0 && f.length > iIc && !name.startsWith('IC')) {
+      for (final n in f[iIc].split(',')) {
+        if (n.trim().isNotEmpty) {
+          aliases.add('IC ${n.trim()}');
+        }
+      }
     }
     if (iId >= 0 && f.length > iId) {
       // A row's Identifiers often repeat its own designation ("ARP 047" on

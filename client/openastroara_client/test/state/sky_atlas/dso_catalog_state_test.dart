@@ -41,12 +41,26 @@ void main() {
             'G',
             mag: 3.4,
           ).toJson(), // also in the bundle: not doubled
+          // The bundle folded Sh2-117 into NGC 7000: the mirror's own
+          // Sh2-117 row rejoins it through the alias (#1267 item 4).
+          row('Sh2-117', 'HII').toJson(),
         ]),
       );
       final container = ProviderContainer(
         overrides: [
           bundledCatalogProvider.overrideWith(
-            (ref) async => [row('NGC0224', 'G', mag: 3.4)],
+            (ref) async => [
+              row('NGC0224', 'G', mag: 3.4),
+              const PlanningDso(
+                id: 'NGC7000',
+                name: 'North America Nebula',
+                type: 'Neb',
+                magnitude: null,
+                raDeg: 314.8,
+                decDeg: 44.5,
+                aliases: ['Sh2-117'],
+              ),
+            ],
           ),
           dsoCatalogServiceProvider.overrideWithValue(
             DsoCatalogService(supportDir: () async => dir),
@@ -59,7 +73,7 @@ void main() {
           .map((d) => d.id);
       expect(
         ids,
-        ['NGC0224', 'PGC 1'],
+        ['NGC0224', 'NGC7000', 'PGC 1'],
         reason:
             'a star has no field to frame; size-unknown would score it '
             'neutral ahead of real galaxies (review #1105)',

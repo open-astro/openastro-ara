@@ -261,6 +261,16 @@ void main() {
     },
   );
 
+  test('a third-party row between two NGC rows joins one, never both', () {
+    final merged = mergeDuplicates([
+      _row('NGC1', type: 'RfN', mag: 9, ra: 10.0, dec: 10.0),
+      _row('vdB 5', type: 'RfN', ra: 10.004, dec: 10.0),
+      _row('NGC2', type: 'RfN', mag: 10, ra: 10.008, dec: 10.0),
+    ]);
+    expect(merged.map((d) => d.id), ['NGC1', 'NGC2']);
+    expect(merged.first.aliases, ['vdB 5']);
+  });
+
   test('a single row and an empty list pass through', () {
     expect(mergeDuplicates(const []), isEmpty);
     final one = [_row('NGC1')];

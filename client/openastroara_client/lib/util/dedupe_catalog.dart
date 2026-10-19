@@ -83,6 +83,26 @@ List<PlanningDso> mergeDuplicates(
     if (ra != rb) parent[rb] = ra;
   }
 
+  // Whether a group already holds an NGC/IC row: a position union must never
+  // join two of those through a third-party row sitting between them (union
+  // is transitive; review r5).
+  // An NGC/IC designation counts whether it is the row's id or an alias it
+  // absorbed earlier (Arp 147 holds IC 298), so a second pass over merged
+  // rows decides the same way as the first.
+  final rowHasOpenNgc = [
+    for (final r in rows)
+      catalogFamily(r.id) == 'openngc' ||
+          r.aliases.any(
+            (a) => catalogFamily(a.replaceAll(' ', '')) == 'openngc',
+          ),
+  ];
+  bool groupHasOpenNgc(int root) {
+    for (var i = 0; i < rows.length; i++) {
+      if (rowHasOpenNgc[i] && find(i) == root) return true;
+    }
+    return false;
+  }
+
   // A star row and a non-star row are never one object: a nebula's row
   // linked to the star it surrounds (Sh2-108 ↔ IC 1318, gam Cyg) must stay a
   // nebula row, or the planning cull drops the nebula with the star
@@ -192,6 +212,10 @@ List<PlanningDso> mergeDuplicates(
           if (catalogFamily(e.id) == fam || typeClass(e.type) != cls) continue;
           if (separationArcmin(d.raDeg, d.decDeg, e.raDeg, e.decDeg) <=
               positionToleranceArcmin) {
+            final ri = find(i), rj = find(j);
+            if (ri != rj && groupHasOpenNgc(ri) && groupHasOpenNgc(rj)) {
+              continue;
+            }
             union(i, j);
           }
         }

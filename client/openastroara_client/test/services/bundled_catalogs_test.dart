@@ -211,6 +211,10 @@ void main() {
         'IC0434;HII;05:41:00.00;-02:27:00.0;;;;2023;;LBN 954;\n');
     expect(rows[0].aliases, ['Messier 31', 'M 31', 'C 017', 'UGC 00454']);
     expect(rows[1].aliases, ['NGC 2023', 'LBN 954']);
+    final list = parseOpenNgcCsv(
+        'Name;Type;RA;Dec;V-Mag;B-Mag;M;NGC;IC;Identifiers;Common names\n'
+        'Arp 244;G;12:01:53.00;-18:52:10.0;;;;4038,4039;;NGC 4038,NGC 4039;Antennae\n');
+    expect(list.single.aliases, ['NGC 4038', 'NGC 4039', 'NGC 4038', 'NGC 4039']);
     final dup = parseOpenNgcCsv(
         'Name;Type;RA;Dec;V-Mag;B-Mag;M;NGC;IC;Identifiers;Common names\n'
         'NGC2244;Dup;06:31:55.56;+04:56:34.6;;;;2239;;;\n'

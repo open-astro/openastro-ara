@@ -386,7 +386,9 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
     // knows every identifier HYG and OpenNGC carry ("AB Cas", "HIP 12235",
     // "M 31"), a miss goes to Simbad through the daemon and is cached there,
     // so a name resolved at home still answers at the dark site. A resolved
-    // name opens the target dialog filled in (frame it, add it to the plan);
+    // name the bundle already lists is that row (a goto, #1267 item 4); any
+    // other resolved name opens the target dialog filled in (frame it, add
+    // it to the plan);
     // a miss falls through to the engine search as before, with the daemon's
     // reason shown when the name needs internet, so an offline miss is not a
     // spinner.
