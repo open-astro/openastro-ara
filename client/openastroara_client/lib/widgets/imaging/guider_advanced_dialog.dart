@@ -141,7 +141,8 @@ class _GuiderAdvancedPanelState extends ConsumerState<GuiderAdvancedPanel> {
 
   /// The server's rules across fields, checked before Apply so the user sees
   /// them by the fields rather than as a 400: the variable delay is all three
-  /// values or none (the guider takes them together), and each min ≤ max.
+  /// values or none (the guider takes them together), backlash compensation
+  /// turns on only with a pulse width, and each min ≤ max.
   /// Pure — tested.
   static String? crossFieldProblem(GuiderAdvancedSettings d) {
     final delay = [
