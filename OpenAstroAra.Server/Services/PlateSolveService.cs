@@ -136,6 +136,13 @@ public class PlateSolveService : IPlateSolveService {
         if (double.IsNaN(measuredEffective)) {
             return;
         }
+        // Sanity band: one solve rewrites the profile, so a false match with a wild scale must not.
+        // A forgotten reducer or Barlow is 0.5x–3x; anything beyond is reported, not learned.
+        var ratio = measuredEffective / parameter.FocalLength;
+        if (ratio > MaxLearnedFocalLengthRatio || ratio < 1.0 / MaxLearnedFocalLengthRatio) {
+            Logger.Warning($"Plate solve - the solved scale {result.Pixscale:0.00}\"/px implies a focal length of about {measuredEffective:0} mm, {ratio:0.0}x the profile's {parameter.FocalLength:0} mm — too far off to learn from one solve; check Options → Imaging → Optics.");
+            return;
+        }
         OpticsSettingsDto? before = null;
         var after = profileStore.UpdateOpticsSettings(optics => {
             before = optics;
@@ -150,6 +157,9 @@ public class PlateSolveService : IPlateSolveService {
             "Plate solve measured a focal length of {0:0} mm; the profile said {1:0} mm. Optics updated — check Options → Imaging → Optics.",
             after.FocalLengthMm, before.FocalLengthMm));
     }
+
+    /// <summary>Largest focal-length change one solve may write back (and its inverse).</summary>
+    internal const double MaxLearnedFocalLengthRatio = 3.0;
 
     internal static int BinningOf(IImageData image) {
         var bin = image.MetaData?.Camera?.BinX ?? 1;

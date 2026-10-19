@@ -34,9 +34,8 @@ public interface IPlateSolveService {
     /// <summary>
     /// Solve <paramref name="image"/> astrometrically. <paramref name="approxCoordinates"/>, when supplied,
     /// seeds a near (non-blind) solve around the telescope's reported position; null requests a blind solve.
+    /// Safe to call unattended (the center-after-drift feed): it never changes the profile.
     /// </summary>
-    /// <summary>Solve a frame. Safe to call unattended (the center-after-drift feed): it never
-    /// changes the profile.</summary>
     Task<PlateSolveResult> SolveImage(IImageData image, Coordinates? approxCoordinates, IProgress<ApplicationStatus>? progress, CancellationToken token);
 
     /// <summary>#1136 — the user-driven solve (REST <c>POST /frames/{id}/solve</c>): as

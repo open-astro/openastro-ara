@@ -75,6 +75,23 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void A_wild_solved_scale_is_reported_not_learned() {
+            // Bot round 2 — a false match with a 5x scale would rewrite the profile from one solve.
+            var store = new InMemoryProfileStore();
+            store.PutOpticsSettings(store.GetOpticsSettings() with { FocalLengthMm = 530, ReducerFactor = 1, PixelSizeUm = 3.76 });
+            var sut = new PlateSolveService(Mock.Of<IProfileService>(), Mock.Of<IPlateSolverFactory>(), store);
+            var parameter = new PlateSolveParameter { FocalLength = 530, PixelSize = 3.76, Binning = 1 };
+            var scale = AstroUtil.ArcsecPerPixel(3.76, 530);
+
+            sut.LearnFocalLength(parameter, new PlateSolveResult { Success = true, Pixscale = scale * 5 });
+            Assert.That(store.GetOpticsSettings().FocalLengthMm, Is.EqualTo(530), "5x shorter: refused");
+            sut.LearnFocalLength(parameter, new PlateSolveResult { Success = true, Pixscale = scale / 4 });
+            Assert.That(store.GetOpticsSettings().FocalLengthMm, Is.EqualTo(530), "4x longer: refused");
+            sut.LearnFocalLength(parameter, new PlateSolveResult { Success = true, Pixscale = scale / 2 });
+            Assert.That(store.GetOpticsSettings().FocalLengthMm, Is.EqualTo(1060).Within(1), "2x (a Barlow): learned");
+        }
+
+        [Test]
         public void A_solved_scale_within_tolerance_leaves_the_profile_alone() {
             var store = new InMemoryProfileStore();
             store.PutOpticsSettings(store.GetOpticsSettings() with { FocalLengthMm = 530, ReducerFactor = 1, PixelSizeUm = 3.76 });

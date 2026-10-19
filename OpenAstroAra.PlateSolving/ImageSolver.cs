@@ -42,26 +42,23 @@ namespace OpenAstroAra.PlateSolving {
             Logger.Info($"Platesolving with parameters: {parameter}");
             progress?.Report(new ApplicationStatus() { Status = Loc.Instance["LblPlateSolving"] });
 
-            // Stages never post their own "solve failed" notice: a hint that fails and a later stage
-            // that solves is a success, and the rig inbox showed an error per failed stage. The one
-            // notice for a solve that fails outright is posted below, when the caller allows it.
-            var quiet = parameter.Clone();
-            quiet.DisableNotifications = true;
-
+            // Only the LAST stage may post the solver's own "solve failed" notice (a missing star
+            // database, exit 32/33, reads as that and not as a generic failure): a hint that fails and
+            // a later stage that solves is a success, and the rig inbox showed an error per failed
+            // stage. Every earlier stage runs quiet; a blind-only or staged-off solve is its own last
+            // stage and keeps the caller's setting.
             PlateSolveResult result;
             if (parameter.Coordinates == null) {
-                result = await RunStage("blind", quiet, source, progress, ct);
+                result = await RunStage("blind", parameter, source, progress, ct);
             } else {
-                result = await RunStage("hint", quiet, source, progress, ct);
                 // #1136 — staged search. A hinted solve fails for one of three reasons, each with a
-                // cheaper fix than a whole-sky search: the profile's optics are wrong (search the scale),
-                // the mount lost sync but the scope hasn't moved far (search around the last good solve),
-                // or the mount is further off than the radius (widen it). Only then go blind.
-                foreach (var stage in Stages(quiet, plateSolver is IScaleSearchSolver)) {
-                    if (result.Success) {
-                        break;
-                    }
-                    result = await RunStage(stage.Name, stage.Parameter, source, progress, ct);
+                // cheaper fix than a whole-sky search: the mount lost sync but the scope hasn't moved
+                // far (search around the last good solve), the profile's optics are wrong (search the
+                // scale), or the mount is further off than the radius (widen it). Only then go blind.
+                var stages = Stages(parameter, plateSolver is IScaleSearchSolver).ToList();
+                result = await RunStage("hint", Quiet(parameter, isLast: stages.Count == 0), source, progress, ct);
+                for (var i = 0; i < stages.Count && !result.Success; i++) {
+                    result = await RunStage(stages[i].Name, Quiet(stages[i].Parameter, isLast: i == stages.Count - 1), source, progress, ct);
                 }
             }
 
@@ -71,14 +68,21 @@ namespace OpenAstroAra.PlateSolving {
                 ReportScaleMismatch(parameter, result);
             } else {
                 Logger.Info($"Platesolve failed");
-                if (!parameter.DisableNotifications) {
-                    Notifier.ShowError("Plate solve failed: no solution from the hint, the widened search or the whole sky.");
-                }
             }
 
             progress?.Report(new ApplicationStatus() { Status = string.Empty });
 
             return result;
+        }
+
+        /// <summary>The parameter for one stage: notifications off unless it is the last stage.</summary>
+        private static PlateSolveParameter Quiet(PlateSolveParameter parameter, bool isLast) {
+            if (isLast) {
+                return parameter;
+            }
+            var quiet = parameter.Clone();
+            quiet.DisableNotifications = true;
+            return quiet;
         }
 
         /// <summary>One search stage of the staged search: a name for the log and the parameter it runs with.</summary>
