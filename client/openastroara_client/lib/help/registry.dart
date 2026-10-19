@@ -1249,7 +1249,7 @@ const Map<String, Help> helpRegistry = {
     title: 'Blind-solve fallback',
     body:
         'If a hint-based solve fails (mount pointing way off, polar alignment wrong, hint coordinates stale), the rig server first tries the cheaper rescues on the same frame: the last position it solved this session, then the hint with the image scale searched (for a wrong focal length), then a 30° and a 90° search around the hint. With this on, a frame none of those solve is retried with no hint at all — the solver searches the entire sky.\n\n'
-        'Blind solves are slower (often 30-60s, up to 5x the timeout) but rescue most bad-pointing situations. Recommended on except for very large sensors where blind solves can run out of timeout.',
+        'Blind solves are slower (often 30-60s; the 90° stage gets 2x the timeout, a blind solve 5x) but rescue most bad-pointing situations. Recommended on except for very large sensors where blind solves can run out of timeout.',
     relatedSettings: ['img.platesolve.search_radius_deg'],
   ),
   'img.platesolve.max_iterations': Help(

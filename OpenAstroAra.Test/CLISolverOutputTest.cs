@@ -112,8 +112,16 @@ namespace OpenAstroAra.Test {
 
         private static PlateSolveParameter Parameter() => new() { FocalLength = 448, PixelSize = 3.76, DownSampleFactor = 1, MaxObjects = 500, DisableNotifications = true };
 
-        private static int FailedFrames() =>
-            Directory.Exists(BaseSolver.FailedDirectory) ? Directory.GetFiles(BaseSolver.FailedDirectory).Length : 0;
+        // A failed frame is named after the frame's target, so a per-test target name keeps the count
+        // ours while other fixtures write Failed/ in parallel.
+        private static OpenAstroAra.Image.ImageData.BaseImageData Frame(string target) {
+            var frame = Frame();
+            frame.MetaData.Target.Name = target;
+            return frame;
+        }
+
+        private static int FailedFrames(string target) =>
+            Directory.Exists(BaseSolver.FailedDirectory) ? Directory.GetFiles(BaseSolver.FailedDirectory).Count(f => f.Contains(target, StringComparison.Ordinal)) : 0;
 
         [Test]
         public async Task The_parameters_timeout_cancels_a_hung_solve() {
@@ -133,18 +141,18 @@ namespace OpenAstroAra.Test {
         [Test]
         public async Task A_non_final_stage_leaves_no_failed_frame_on_disk_and_the_final_one_keeps_it() {
             var solver = new FakeSolver(Script("exit 1"));
-            var before = FailedFrames();
+            var target = "keepframe-" + Guid.NewGuid().ToString("N");
 
             var quiet = Parameter();
             quiet.KeepFailedFrame = false;
-            Assert.That((await solver.SolveAsync(Frame(), quiet, null, CancellationToken.None)).Success, Is.False);
-            Assert.That(FailedFrames(), Is.EqualTo(before), "a quiet stage deletes its frame instead of copying it to Failed/");
+            Assert.That((await solver.SolveAsync(Frame(target), quiet, null, CancellationToken.None)).Success, Is.False);
+            Assert.That(FailedFrames(target), Is.EqualTo(0), "a quiet stage deletes its frame instead of copying it to Failed/");
 
             var final = Parameter(); // KeepFailedFrame defaults to true
-            Assert.That((await solver.SolveAsync(Frame(), final, null, CancellationToken.None)).Success, Is.False);
-            Assert.That(FailedFrames(), Is.GreaterThan(before), "the final failure's frame is kept for diagnosis");
-            foreach (var f in Directory.GetFiles(BaseSolver.FailedDirectory)) {
-                if (File.GetLastWriteTimeUtc(f) > DateTime.UtcNow.AddMinutes(-5)) { File.Delete(f); }
+            Assert.That((await solver.SolveAsync(Frame(target), final, null, CancellationToken.None)).Success, Is.False);
+            Assert.That(FailedFrames(target), Is.GreaterThan(0), "the final failure's frame is kept for diagnosis");
+            foreach (var f in Directory.GetFiles(BaseSolver.FailedDirectory).Where(f => f.Contains(target, StringComparison.Ordinal))) {
+                File.Delete(f);
             }
         }
 

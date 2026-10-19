@@ -56,8 +56,20 @@ namespace OpenAstroAra.PlateSolving.Solvers {
                     Directory.CreateDirectory(candidate);
                 } else {
                     const UnixFileMode ownerOnly = UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute;
-                    Directory.CreateDirectory(Path.Combine(shm, "openastroara"), ownerOnly);
-                    Directory.CreateDirectory(candidate, ownerOnly);
+                    const UnixFileMode others = UnixFileMode.GroupRead | UnixFileMode.GroupWrite | UnixFileMode.GroupExecute
+                        | UnixFileMode.OtherRead | UnixFileMode.OtherWrite | UnixFileMode.OtherExecute;
+                    foreach (var dir in new[] { Path.Combine(shm, "openastroara"), candidate }) {
+                        // CreateDirectory leaves the mode of a directory that already exists: another local
+                        // user could pre-create it world-readable. Tighten it, and if that does not stick
+                        // (not ours), keep the frames on disk instead.
+                        Directory.CreateDirectory(dir, ownerOnly);
+                        if ((File.GetUnixFileMode(dir) & others) != 0) {
+                            File.SetUnixFileMode(dir, ownerOnly);
+                        }
+                        if ((File.GetUnixFileMode(dir) & others) != 0) {
+                            return disk;
+                        }
+                    }
                 }
                 var probe = Path.Combine(candidate, $".probe-{Environment.ProcessId}");
                 File.WriteAllBytes(probe, Array.Empty<byte>());
