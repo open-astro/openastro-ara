@@ -92,4 +92,7 @@ public sealed record ProfileSnapshotDto(
     SkyModelCalibrationDto? SkyModelCalibration = null,
     // #1362 — the last-seen Alpaca identity per gear slot. Daemon-owned; the normalizer back-fills null
     // (a pre-#1362 file) to the nothing-observed block, so the first connect records without a notice.
-    EquipmentIdentityDto? EquipmentIdentity = null);
+    EquipmentIdentityDto? EquipmentIdentity = null,
+    // #1267 item 5 — the recent and saved targets. Client-authored; the normalizer back-fills null (a
+    // pre-#1267 file) to the empty list and drops malformed entries.
+    SavedTargetsDto? SavedTargets = null);

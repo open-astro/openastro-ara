@@ -294,14 +294,14 @@ Phase 13  — Image preview pipeline end-to-end (server JPEG gen + client displa
 Phase 14  — Tests + GitHub Actions CI matrix
             §14, §14.3
 Phase 15  — TODO sweep + RPi smoke test + release v0.0.1-ara.1
-            §22, DEPLOY.md + README written, .deb published, .dmg/.exe/.AppImage on GitHub Releases (desktop only per §18.G; mobile deferred — see the `P1`–`P5` issue backlog)
+            §22, docs/DEPLOY.md + README written, .deb published, .dmg/.exe/.AppImage on GitHub Releases (desktop only per §18.G; mobile deferred — see the `P1`–`P5` issue backlog)
 ```
 
 **Sub-PR rhythm (Phase 0.5 + Phase 12):** Each sub-PR is opened as a separate GitHub PR targeting `master`. AI runs `scripts/pre-pr-check.sh` (§14.4) → opens PR with screenshots if user-visible UI changed → review poll-and-fix loop runs (per COMMIT-PR-RULES.md) → PR merges to `master` (branch deleted) → AI pulls updated `master` and starts the next sub-PR automatically.
 
 Do **not** start Phase N+1 until Phase N (and all its sub-PRs) passes the §15 gate AND has been merged into `master`.
 
-**Cross-cutting work:** distribution path (§34 .deb on apt.openastro.net) is set up during Phase 14 CI. Documentation (DEPLOY.md, NOTICE.md, README, MOUNT_TIPS.md) is written incrementally during the relevant phases — the AI updates docs as each feature lands, not at the end. Migration guide (§56) is written during Phase 15.
+**Cross-cutting work:** distribution path (§34 .deb on apt.openastro.net) is set up during Phase 14 CI. Documentation (docs/DEPLOY.md, NOTICE.md, README, MOUNT_TIPS.md) is written incrementally during the relevant phases — the AI updates docs as each feature lands, not at the end. Migration guide (§56) is written during Phase 15.
 
 ---
 
@@ -930,7 +930,7 @@ Configure `openapi_generator` to read `../../OpenAstroAra.Server/openapi.yaml`, 
 - If newer than the pin **in the same major series**, applies the bump, runs `flutter pub get` + `analyze` + `test` against the new SDK, regenerates the third-party notices, and opens a PR labelled `dependencies`
 - Verification runs *before* the PR opens, so a release that breaks the client fails the scheduled run rather than landing as a green-looking PR
 - Major version bumps (3.x → 4.x) NOT automated — those typically include breaking API changes; the workflow reports one and stops
-- Skips if a PR for that version is already open (safe to re-run)
+- Skips if a PR for that version is already open (safe to re-run); when a NEWER stable arrives while an older bump PR is still open, the workflow supersedes it: every older same-repo `ci/flutter-X.Y.Z` PR is commented and closed, its branch deleted only when it carries the single workflow commit (a branch with more commits, or one whose count cannot be read, is kept), and the new version's PR stands alone (#1017). Fork PRs of the same branch name are never touched (#1173)
 - User reviews + merges if green
 
 **Caveat:** a PR opened with `GITHUB_TOKEN` does not trigger `pull_request` CI (GitHub's recursion guard). The in-workflow verification above is the gate. Setting a `FLUTTER_BUMP_TOKEN` repo secret to a PAT makes the full matrix run automatically; otherwise close/reopen the PR once.
@@ -985,7 +985,7 @@ Commit per stage: `port(client): mDNS discovery + connect`, `port(client): app s
 
 ## 13. RPi deployment (Phase 10 + Phase 15)
 
-DEPLOY.md is the user-facing version of this section (Phase 15 deliverable per §22). The subsections below define what DEPLOY.md must cover; everything from §13.3 onward is engineering-side detail that doesn't need to surface to end users verbatim.
+docs/DEPLOY.md is the user-facing version of this section (Phase 15 deliverable per §22). The subsections below define what docs/DEPLOY.md must cover; everything from §13.3 onward is engineering-side detail that doesn't need to surface to end users verbatim.
 
 ### 13.1 Hardware support matrix
 
@@ -1011,7 +1011,7 @@ ARA Core targets the Raspberry Pi family on **64-bit Debian Trixie or newer**. T
 3. `/sys/devices/system/cpu/cpu0/of_node/compatible` → if it begins with `brcm,bcm2835` (Pi 1) or `brcm,bcm2836` (Pi 2) or `brcm,bcm2837` without `aarch64` confirmation, refuse with model name in the error
 4. CPU core count → must be ≥ 4 (Pi 3 and Pi 4 both have 4; this only fires on truly anemic boards mis-flashing the arm64 OS)
 
-Refusal is configurable via `ARA_SKIP_HARDWARE_CHECK=1` env var for advanced users testing on exotic boards (e.g., Pi 5 with externally-attached extra RAM, or a future SBC the CI hasn't validated). Documented in DEPLOY.md as "if you know what you're doing."
+Refusal is configurable via `ARA_SKIP_HARDWARE_CHECK=1` env var for advanced users testing on exotic boards (e.g., Pi 5 with externally-attached extra RAM, or a future SBC the CI hasn't validated). Documented in docs/DEPLOY.md as "if you know what you're doing."
 
 **Pi 5 vs Pi 4 trade-offs** (informs §66.10 SLO target picking — Pi 4 is the baseline-target column; Pi 5 numbers in parens):
 
@@ -1048,7 +1048,7 @@ Per-port USB current on the Pi 4/5 is capped at ~1.2 A total across all USB port
 | Flat panel (USB-controlled) | 0.5–1.0 A when lit |
 | Polar-align camera (if separate per §45.14) | 0.3 A |
 
-**Recommendation in DEPLOY.md**:
+**Recommendation in docs/DEPLOY.md**:
 
 1. **Use a powered USB3 hub** for any rig with ≥ 3 devices. Specs to look for: external 12V/4A+ PSU, individual port switches a plus, ≥ 4 USB3 ports.
 2. **Power the Pi directly from its own PSU** — do NOT power the Pi from the hub's upstream port (back-powering causes Pi reboots when peripheral current spikes).
@@ -1058,7 +1058,7 @@ Per-port USB current on the Pi 4/5 is capped at ~1.2 A total across all USB port
 
 **Recommended hubs**: maintained as a community wiki page at `wiki.openastro.org/usb-hubs` rather than embedded here. Page is community-curated and updated as products come and go. This section just states the requirements.
 
-**Troubleshooting cascade** (DEPLOY.md):
+**Troubleshooting cascade** (docs/DEPLOY.md):
 
 | Symptom | Likely cause |
 |---|---|
@@ -1070,7 +1070,7 @@ Per-port USB current on the Pi 4/5 is capped at ~1.2 A total across all USB port
 
 ### 13.3 Per-Pi setup (one-time)
 
-Per-Pi setup (one-time — AI documents in `DEPLOY.md`):
+Per-Pi setup (one-time — AI documents in `docs/DEPLOY.md`):
 
 ```bash
 sudo useradd -r -s /usr/sbin/nologin openastroara
@@ -1558,7 +1558,7 @@ If the gate fails and you cannot fix it within ~5 attempts, revert the last comm
 - `NOTICE.md`:
   > OpenAstro Ara (ARA) is a derivative work of [N.I.N.A. (Nighttime Imaging 'N' Astronomy)](https://github.com/isbeorn/nina) by Stefan Berg and contributors, used under the Mozilla Public License 2.0. Original copyrights are preserved in every source file. ARA is not affiliated with or endorsed by the N.I.N.A. project.
 - `README.md` rewrite (first paragraph mentions the lineage; links to `design/PORT_PLAYBOOK.md` for contributors curious about the port's planning)
-- `DEPLOY.md` (RPi server install)
+- `docs/DEPLOY.md` (RPi server install)
 
 **Add in `design/`** (working/design docs, not shipped):
 - `design/API_CONTRACT.md` (API design log)
@@ -1660,7 +1660,7 @@ Placeholders during port. Every icon/splash/logo reference carries `TODO(brandin
   - **General all-purpose** (typical FOVs) → `V50` / `D50` — covers the bulk of sessions.
   - **Narrow field / tiny galaxies** (long focal length, small FOV, few bright stars in frame) → dense deep database (e.g. `H17` / `H18`) — enough faint Gaia stars to get a match where shallow catalogs fail.
   - **Selection:** the server picks the appropriate installed database from the active rig's computed FOV / pixel scale (focal length + sensor + binning) and names it to ASTAP per-solve with `-D <abbrev>` alongside `-d <database_dir>` (only when more than one is installed; see Status). A lone database is used for every solve; a warning when the FOV falls outside its useful range is not built yet. Exact database names/magnitude limits track astap.nl and may evolve — config stores paths, not hard-coded catalog identifiers.
-  - **Status (2026-09-22, #1094):** `ASTAPSolver` now passes `-d <database_dir>` from the profile's plate-solve index path (`ASTAPDatabaseLocation`, bridged from `PlateSolveSettingsDto.IndexDownloadPath`, default `/var/lib/astap`); a configured directory that is missing or empty logs one warning per daemon run and falls back to ASTAP's own lookup. Since #1121, when more than one database sits in that directory the daemon names one with `-D <abbrev>` (`AstapStarDatabase.Select`: fields under 0.25° take the deepest, over 30° the shallowest, otherwise D80 first), a pre-#1094 `/usr/bin/astap` profile value migrates to `/usr/bin/astap_cli` when only the latter is installed, and Settings → Plate solving shows the directory's status (`GET /api/v1/platesolve/database`). Still open: the server-side download flow below — DEPLOY.md documents a manual one-time D80 download until then.
+  - **Status (2026-09-22, #1094):** `ASTAPSolver` now passes `-d <database_dir>` from the profile's plate-solve index path (`ASTAPDatabaseLocation`, bridged from `PlateSolveSettingsDto.IndexDownloadPath`, default `/var/lib/astap`); a configured directory that is missing or empty logs one warning per daemon run and falls back to ASTAP's own lookup. Since #1121, when more than one database sits in that directory the daemon names one with `-D <abbrev>` (`AstapStarDatabase.Select`: fields under 0.25° take the deepest, over 30° the shallowest, otherwise D80 first), a pre-#1094 `/usr/bin/astap` profile value migrates to `/usr/bin/astap_cli` when only the latter is installed, and Settings → Plate solving shows the directory's status (`GET /api/v1/platesolve/database`). Still open: the server-side download flow below — docs/DEPLOY.md documents a manual one-time D80 download until then.
 - **Where ASTAP + databases live: on the Pi (server side), not the client.** The solver runs on the Pi, so its binary and star databases are a **server-managed, Pi-side asset** — the same storage domain as FITS frames / profiles / calibration (§29, on the **mandatory USB drive**), and explicitly *not* the WILMA/client-side sky-data domain (§36 Aladin HiPS surveys / DE440, which download to the client). Consequences:
   - **Downloads execute server-side.** The wizard (running in WILMA) does not fetch databases to the client and copy them over — it calls a **server endpoint** that downloads the selected database(s) from astap.nl directly onto the Pi's USB storage, where ASTAP reads them. Client only triggers and shows progress (mirrors the §36.2 background-download UX, but the bytes land on the Pi).
   - **"Browse" = the Pi's filesystem.** Any path picker for binary/database location browses the **server's** filesystem via the server API, not WILMA's local disk.
@@ -2392,13 +2392,13 @@ Auto-recovery is **silent + notification-only** (per the bake decision): the use
 1. **At configure time** — the §29.1.4 helper script validates `blkid` reports ext4 before mounting; non-ext4 drives are rejected with `code: not_ext4`, surfaced to WILMA as the in-app reformat flow (§29.1.3).
 2. **At startup** — ARA refuses to start if the configured save path's filesystem is not ext4 (defense in depth against fstab edits, manual remounts of a different drive, or drives swapped while server was off).
 
-Rationale: NTFS / exFAT / FAT32 have weaker durability semantics (no journaling, weaker fsync guarantees, no proper Unix permissions), and Btrfs / ZFS while excellent are out of scope for the initial release (untested + larger DEPLOY.md surface area).
+Rationale: NTFS / exFAT / FAT32 have weaker durability semantics (no journaling, weaker fsync guarantees, no proper Unix permissions), and Btrfs / ZFS while excellent are out of scope for the initial release (untested + larger docs/DEPLOY.md surface area).
 
 Detection: server queries `stat -f -c %T <save-path>` at startup; rejects anything other than `ext2/ext3` (which is the ext4 family name returned by stat). exFAT returns `msdos`, NTFS returns `fuseblk` or `ntfs`, etc.
 
-If the FS is wrong: server logs the error, queues a critical notification for next WILMA connect ("Storage drive is formatted as exFAT — please reformat as ext4 per DEPLOY.md"), and exits with non-zero status (systemd restart loop will keep retrying every `RestartSec=3` per §63's pattern, but the storage error persists until the user fixes it).
+If the FS is wrong: server logs the error, queues a critical notification for next WILMA connect ("Storage drive is formatted as exFAT — please reformat as ext4 per docs/DEPLOY.md"), and exits with non-zero status (systemd restart loop will keep retrying every `RestartSec=3` per §63's pattern, but the storage error persists until the user fixes it).
 
-**Recommended mount options** (DEPLOY.md fstab guidance):
+**Recommended mount options** (docs/DEPLOY.md fstab guidance):
 
 ```
 UUID=<drive-uuid>  /media/openastroara  ext4  defaults,data=ordered,noatime,errors=remount-ro  0  2
@@ -2408,11 +2408,11 @@ UUID=<drive-uuid>  /media/openastroara  ext4  defaults,data=ordered,noatime,erro
 - `noatime` — skip access-time updates (reduces writes; access time isn't useful here)
 - `errors=remount-ro` — if FS corruption detected mid-session, remount read-only instead of allowing further damage. Server detects this and emits `storage.error` critical notification.
 
-### 28.10 UPS recommendation (DEPLOY.md, advisory)
+### 28.10 UPS recommendation (docs/DEPLOY.md, advisory)
 
 A USB-attached UPS keeps the Pi alive long enough on power loss to finish the in-flight FITS atomic-write, checkpoint WAL, pause the sequence, park the mount per §35's safety policy, and clean-shutdown. Without a UPS, in-flight exposures are lost (the §28.7 + §28.8 design ensures no corruption — but the active exposure is gone).
 
-DEPLOY.md adds a "Recommended hardware" section listing options (Geekworm X728, PiJuice, generic 12 V UPS HATs) with one-line summaries. ARA works fine without a UPS — this is a "for night-long unattended runs, strongly consider" recommendation, not a requirement.
+docs/DEPLOY.md adds a "Recommended hardware" section listing options (Geekworm X728, PiJuice, generic 12 V UPS HATs) with one-line summaries. ARA works fine without a UPS — this is a "for night-long unattended runs, strongly consider" recommendation, not a requirement.
 
 Future: UPS GPIO signal pin can trigger a proactive checkpoint + park sequence ahead of battery exhaustion. Out of scope for the initial release because every UPS exposes its signal differently and ARA would need device-specific shims.
 
@@ -2545,7 +2545,7 @@ Before applying any pending migration on startup, ARA always backs up the curren
    - Server re-checks `__EFMigrationsHistory` to confirm we're back at the source schema version
    - Server emits a startup-failure WS event (queued for next WILMA connect) with: source version, target version, failed migration name, exception summary
    - Server starts up on the **prior** schema version (old code paths still work because we haven't loaded the new binary's data-layer assumptions yet — caveat: this only works if the new binary's code is backward-compatible-readable on the old schema; see "Failure on mixed-version mismatch" below)
-   - WILMA shows critical notification with [Roll back server to v<previous>] action — which kicks the user to a manual `apt install openastroara-server=<previous version>` flow via DEPLOY.md
+   - WILMA shows critical notification with [Roll back server to v<previous>] action — which kicks the user to a manual `apt install openastroara-server=<previous version>` flow via docs/DEPLOY.md
 
 8. **Success path.** On clean migration, server logs `MIGRATION_APPLIED` per migration with timing, emits `server.migration_complete` WS event (`{from_version, to_version, migrations_applied: [...], backup_path, elapsed_ms}`), and proceeds with normal startup.
 
@@ -2566,7 +2566,7 @@ Server refuses to start if the DB's `__EFMigrationsHistory` contains migrations 
 - Server logs `DB_SCHEMA_AHEAD_OF_BINARY: db_max_migration=<name>, binary_max_migration=<name>` (critical)
 - Server exits with non-zero status; systemd restart loop keeps trying but failure persists
 - WILMA on next connect sees this via a `/healthz` (per Tier 2 health-check gap) or `/api/v1/server/state` 503 with `code: "schema_ahead_of_binary"`
-- User's path forward: re-install the newer server version (data is intact) OR restore a pre-migration backup from `.araback/migrations/` via `/api/v1/server/restore-from-backup {path}` (deferred — see the `P1`–`P5` issue backlog; for now this is a DEPLOY.md manual SSH instruction)
+- User's path forward: re-install the newer server version (data is intact) OR restore a pre-migration backup from `.araback/migrations/` via `/api/v1/server/restore-from-backup {path}` (deferred — see the `P1`–`P5` issue backlog; for now this is a docs/DEPLOY.md manual SSH instruction)
 
 ARA does **not** generate down-migrations in the initial release. EF Core supports `Down()` methods but maintaining them doubles the testing surface and the realistic recovery path is "restore backup, downgrade binary" — not "run a down-migration that the dev team only partially tested." If a user needs to roll back schema, they restore the pre-migration backup. A future release may reconsider for specific high-risk migration types.
 
@@ -2610,7 +2610,7 @@ On macOS/Windows dev machines where there's no USB drive, backups go to `~/Libra
 |---|---|---|
 | `/api/v1/server/migrations/history` | GET | Returns ordered list of applied migrations + timestamps from `__EFMigrationsHistory` + paths to corresponding backups still on disk |
 | `/api/v1/server/migrations/backups` | GET | Lists existing pre-migration backups in `/media/openastroara/.araback/migrations/` with size + timestamp + source/target versions |
-| `/api/v1/server/restore-from-backup` | POST | Future (ROADMAP) — pointer-only endpoint today returning 501 "use manual restore procedure in DEPLOY.md" |
+| `/api/v1/server/restore-from-backup` | POST | Future (ROADMAP) — pointer-only endpoint today returning 501 "use manual restore procedure in docs/DEPLOY.md" |
 
 **WebSocket events added:**
 
@@ -2635,7 +2635,7 @@ On macOS/Windows dev machines where there's no USB drive, backups go to `~/Libra
 
 **Future follow-ups (ROADMAP):**
 
-- WILMA UI for browsing backups + one-click restore (currently DEPLOY.md manual SSH path)
+- WILMA UI for browsing backups + one-click restore (currently docs/DEPLOY.md manual SSH path)
 - Server-side downgrade flow: when user explicitly requests rollback, server stops + binary swaps + DB restores from pre-migration backup atomically
 - Optional encrypted backups (`PRAGMA key`) for the future remote-access mode
 
@@ -2682,7 +2682,7 @@ The unifying principle: **never lose the user's data silently, but never block s
 │       └── <session-id>/session_meta.json.corrupt.<unix-ts>
 ```
 
-Quarantine is **append-only, never auto-pruned** in the initial release — a damaged DB is the kind of thing a user might want to ship to support 6 months later. DEPLOY.md notes the user can `rm -rf /media/openastroara/.quarantine/<subdir>/` when they're done with diagnostics. A future release may add Settings → Storage → Quarantine browser with size + age + one-click delete.
+Quarantine is **append-only, never auto-pruned** in the initial release — a damaged DB is the kind of thing a user might want to ship to support 6 months later. docs/DEPLOY.md notes the user can `rm -rf /media/openastroara/.quarantine/<subdir>/` when they're done with diagnostics. A future release may add Settings → Storage → Quarantine browser with size + age + one-click delete.
 
 **Cross-quarantine consistency check** runs at the end of every startup:
 - If `data.db` was just restored from backup AND there are FITS files newer than the backup's timestamp → run an unscheduled §28.8 orphan scan over just the post-backup FITS to recover them into the restored DB
@@ -2739,7 +2739,7 @@ Two distinct storage domains: **Pi side** (FITS frames + session state + profile
 - SD cards have limited write endurance (typically 1,000-10,000 P/E cycles on consumer cards). A typical astrophotography night writes 50-100+ GB of FITS data; on an SD card that's months-to-a-year of life before failure.
 - SD card failure during a session = lost imaging data plus a bricked Pi.
 - USB SSDs (or even quality USB 3.0 sticks) handle sustained writes orders of magnitude better.
-- DEPLOY.md recommends USB 3.0 SSDs or quality USB 3.0 sticks from reputable brands. Strongly discourages "free promotional" USB sticks of unknown provenance.
+- docs/DEPLOY.md recommends USB 3.0 SSDs or quality USB 3.0 sticks from reputable brands. Strongly discourages "free promotional" USB sticks of unknown provenance.
 
 The server refuses to enter "ready" state without a configured USB drive (§29.1.1).
 
@@ -2993,10 +2993,10 @@ Or if low / on SD card:
 - **Configured UUID** display (so user knows which drive is "the one")
 - "Switch storage drive" → re-runs the §29.1.1 configuration flow (warns about migrating data)
 - "Eject safely" → unmounts the drive cleanly so user can swap (sequence must not be running)
-- Link to DEPLOY.md USB hardware recommendations + backup instructions
+- Link to docs/DEPLOY.md USB hardware recommendations + backup instructions
 - Auto-prune policy editor (per §29.5): never / monthly / weekly with rating-based rules
 
-### 29.7 DEPLOY.md content (USB drive setup)
+### 29.7 docs/DEPLOY.md content (USB drive setup)
 
 **The default path is automatic.** Plug a USB drive in, then in WILMA: Settings → Storage → Configure → pick the drive. If the drive isn't ext4, WILMA offers in-app reformat (§29.1.3 with label-echo confirmation). If the drive is already ext4, the §29.1.4 helper mounts + chowns it and ARA starts using it. No terminal needed.
 
@@ -3095,7 +3095,7 @@ The §54 bug-report zip's "logs" tier already pulls from `/var/log/openastroara/
 
 **Journal (systemd) coexists:**
 
-systemd-journal captures stdout/stderr from the service unit; ARA Core writes structured logs to Serilog files for searchability + journal text logs as a backup. Journal rotation is system-managed (default `SystemMaxUse=4G` on Trixie); DEPLOY.md adds an optional `/etc/systemd/journald.conf.d/openastroara.conf` recommendation:
+systemd-journal captures stdout/stderr from the service unit; ARA Core writes structured logs to Serilog files for searchability + journal text logs as a backup. Journal rotation is system-managed (default `SystemMaxUse=4G` on Trixie); docs/DEPLOY.md adds an optional `/etc/systemd/journald.conf.d/openastroara.conf` recommendation:
 
 ```
 [Journal]
@@ -3443,7 +3443,7 @@ WILMA preferences that are *user-global* (theme, font size, reduce-motion, ⌘K 
 - Quiet hours (§46.5) apply globally regardless of source server
 - Emergency alarms (§35.5) from a watched server still fire the alarm modal — safety wins over context-switching cost
 
-**Current limitations (documented in DEPLOY.md):**
+**Current limitations (documented in docs/DEPLOY.md):**
 
 - One active server + one optional background watcher; no >2-server concurrent monitoring
 - No cross-rig stats rollups (§50 Stats are per-server only)
@@ -3583,9 +3583,9 @@ Response: {
 
 ### 31.4 Implementation notes
 
-- Server sets the system clock via a CAP_SYS_TIME-granted helper. DEPLOY.md adds `sudo setcap cap_sys_time+ep /opt/openastroara/OpenAstroAra.Server` post-install.
+- Server sets the system clock via a CAP_SYS_TIME-granted helper. docs/DEPLOY.md adds `sudo setcap cap_sys_time+ep /opt/openastroara/OpenAstroAra.Server` post-install.
 - USB GPS: the WILMA client reads the dongle (NMEA `$GPRMC` / `$GPGGA`) and relays the fix as `gps-client`. The server does NOT scan serial ports (#1305).
-- WILMA mobile GPS: `geolocator` Flutter plugin, permission-prompts on first use. Cached for the session.
+- WILMA mobile GPS: `geolocator` Flutter plugin, permission-prompts on first use. Cached for the session. **Status (2026-10-19):** the server accepts and ranks `gps-mobile` (medium), but no client sends it yet: the mobile client pushes its device clock as `client` and the dongle path (`gps-client`, high, #1095) is the only GPS source wired through. Whether the phone's own fix should be pushed as `gps-mobile` is undecided (#1152).
 - All astronomy computations use **UTC internally**; client displays in user's local TZ.
 - Time-sync state is cached per-session; doesn't re-prompt unless the Pi reboots or > 12 hours pass.
 
@@ -3595,7 +3595,7 @@ ARA Core does NOT install, configure, or rely on a local NTP daemon (chrony, ntp
 
 systemd-timesyncd ships enabled by default on Trixie and will keep the clock within a second of pool.ntp.org *when the Pi has internet* — ARA neither depends on it nor disables it. If the user has installed chrony or another daemon for their own reasons (observatory automation, multi-Pi sync, gpsd shared-memory ref-clock), ARA's waterfall happily coexists; WILMA push just becomes one more opportunistic time source on top.
 
-**What the user must know** (DEPLOY.md addition):
+**What the user must know** (docs/DEPLOY.md addition):
 
 > ARA's server gets its clock from (in priority order):
 > 1. A USB GPS dongle plugged into the computer running the client (Settings → Site → GPS on this computer) — the receiver's own UTC and position, relayed while the app is open
@@ -3608,7 +3608,7 @@ systemd-timesyncd ships enabled by default on Trixie and will keep the clock wit
 - 95% of users image at home with internet → systemd-timesyncd default is fine
 - Remote-observatory users typically already have GPS or PTP setups they prefer
 - Bundling chrony would replace systemd-timesyncd (user trust + diagnostic familiarity cost)
-- gpsd shared-memory ref-clock setup is a power-user workflow — wiki + DEPLOY.md document the path without ARA forcing the setup
+- gpsd shared-memory ref-clock setup is a power-user workflow — wiki + docs/DEPLOY.md document the path without ARA forcing the setup
 - ARA stays out of the OS-level time-sync stack; respects what the user (or distribution) chose
 
 **Future reconsideration:** if remote-observatory users (the future §67.4 remote-access mode) report systematic clock-drift issues, revisit. Possible path: ARA optionally installs + configures chrony with gpsd ref-clock when the user opts into "observatory mode" during the wizard.
@@ -3694,14 +3694,14 @@ Either way, the modal copy "Ara Core Wi-Fi network" works — it means whichever
 
 ### 32.7 Network stack reliability advisory
 
-Disconnect handling (§32.1–§32.5) is what WILMA does *after* the link breaks. This subsection is the **pre-failure** advisory — hardware + OS-level guidance that DEPLOY.md publishes so users avoid the failure modes in the first place.
+Disconnect handling (§32.1–§32.5) is what WILMA does *after* the link breaks. This subsection is the **pre-failure** advisory — hardware + OS-level guidance that docs/DEPLOY.md publishes so users avoid the failure modes in the first place.
 
 **Ethernet vs Wi-Fi for nightlong sessions:**
 
 | Link | Recommendation | Why |
 |---|---|---|
 | **Gigabit Ethernet (Pi ↔ router)** | **Strongly preferred** for any unattended session | Stable latency, no PHY-level power-save, no roaming events, no random AP firmware reboots, no neighbor congestion. Cheapest way to make §32 disconnect modals essentially never fire. |
-| **5 GHz Wi-Fi (Pi joined to home AP)** | Acceptable for indoor observatory if Ethernet impractical | Tune Wi-Fi power-save off (`iw dev wlan0 set power_save off` at boot via systemd unit; DEPLOY.md provides the snippet). Pin the channel away from neighbors. |
+| **5 GHz Wi-Fi (Pi joined to home AP)** | Acceptable for indoor observatory if Ethernet impractical | Tune Wi-Fi power-save off (`iw dev wlan0 set power_save off` at boot via systemd unit; docs/DEPLOY.md provides the snippet). Pin the channel away from neighbors. |
 | **2.4 GHz Wi-Fi (Pi joined to home AP)** | Last resort | Range OK, but congestion + Bluetooth + microwave + neighbor APs cause drops. Power-save off + channel-pin same as above. Expect more §32 modal fires. |
 | **Pi AP mode (§32.6)** with WILMA on phone/laptop | Standard for field rigs | Best when there's no other network. Phone Wi-Fi power-save can drop the connection even with the Pi rock-solid — phone-side §32 reconnect is what saves it. |
 | **USB tethering** (phone-to-Pi) | Untested | May work; ARA doesn't test against it; community-supported. |
@@ -3709,7 +3709,7 @@ Disconnect handling (§32.1–§32.5) is what WILMA does *after* the link breaks
 
 **Wi-Fi power-save on the Pi side** (the dominant cause of "WS heartbeat missed" on Wi-Fi):
 
-The Pi's onboard Wi-Fi chipset enters power-save by default; this delays packets up to 100 ms while waking the radio. The §60.9 WS heartbeat is 30 s with a 60 s pong timeout, so power-save alone doesn't drop the connection — but combined with AP firmware quirks or marginal RSSI it tips over. DEPLOY.md ships the disable snippet:
+The Pi's onboard Wi-Fi chipset enters power-save by default; this delays packets up to 100 ms while waking the radio. The §60.9 WS heartbeat is 30 s with a 60 s pong timeout, so power-save alone doesn't drop the connection — but combined with AP firmware quirks or marginal RSSI it tips over. docs/DEPLOY.md ships the disable snippet:
 
 ```bash
 # /etc/systemd/system/wifi-no-powersave.service
@@ -3726,7 +3726,7 @@ RemainAfterExit=yes
 WantedBy=multi-user.target
 ```
 
-This is **opt-in via DEPLOY.md**, not auto-installed by ARA Core's .deb (§13.3 keeps networking out of scope). Server logs a one-time `WIFI_POWERSAVE_ON` info entry at startup if it detects power-save active and the Pi is on Wi-Fi — so users see the advisory in the journal even if they skipped DEPLOY.md.
+This is **opt-in via docs/DEPLOY.md**, not auto-installed by ARA Core's .deb (§13.3 keeps networking out of scope). Server logs a one-time `WIFI_POWERSAVE_ON` info entry at startup if it detects power-save active and the Pi is on Wi-Fi — so users see the advisory in the journal even if they skipped docs/DEPLOY.md.
 
 **Pi-side wake-on-LAN:**
 
@@ -3738,7 +3738,7 @@ ARA does NOT advertise WoL support. A future release may add a Settings → Syst
 
 **DHCP behavior:**
 
-Since #1129 the client stores no address: every launch scans (mDNS plus the subnet sweep; the sweep alone on iOS), so a new DHCP lease (router reboot, lease expiration, manual ifdown/up) needs no client-side mitigation. For SSH and other by-hand access DEPLOY.md still suggests:
+Since #1129 the client stores no address: every launch scans (mDNS plus the subnet sweep; the sweep alone on iOS), so a new DHCP lease (router reboot, lease expiration, manual ifdown/up) needs no client-side mitigation. For SSH and other by-hand access docs/DEPLOY.md still suggests:
 
 1. **DHCP reservation by MAC** on the home router — the Pi keeps the same IP across reboots
 2. **mDNS hostname `araserver.local`** — `avahi-daemon` ships with Trixie; ARA Core publishes `_openastroara._tcp.local` per §30.7.1 + §32.3
@@ -3755,7 +3755,7 @@ Outbound HTTP/WS from WILMA to the Pi is normally allowed by default firewalls, 
 | **Windows** | Windows Defender Firewall prompts on first connect attempt | User clicks "Allow access" for "Private networks" (NOT public) |
 | **Linux (ufw/firewalld)** | Outbound usually unrestricted | If `ufw status` shows outgoing restricted: `sudo ufw allow out to <pi-ip> port 5555` |
 
-WILMA does NOT request "make me reachable from the LAN" firewall changes — it's strictly the client side of the connection. (Server-side firewall on the Pi: §67 trusted-LAN posture says no inbound restriction by default; DEPLOY.md notes how to add `ufw allow 5555/tcp` if user enabled ufw.)
+WILMA does NOT request "make me reachable from the LAN" firewall changes — it's strictly the client side of the connection. (Server-side firewall on the Pi: §67 trusted-LAN posture says no inbound restriction by default; docs/DEPLOY.md notes how to add `ufw allow 5555/tcp` if user enabled ufw.)
 
 **Network MTU + path-MTU-discovery quirks:**
 
@@ -3763,7 +3763,7 @@ LAN imaging is uniformly 1500-byte MTU; ARA assumes this. If a VPN / WireGuard i
 
 **The "midnight modem reboot" problem:**
 
-Consumer routers reboot for firmware updates at vendor-chosen times (often 02:00–04:00 local). Mid-session reboots are a real failure mode that no Pi-side change can prevent. Mitigations DEPLOY.md recommends:
+Consumer routers reboot for firmware updates at vendor-chosen times (often 02:00–04:00 local). Mid-session reboots are a real failure mode that no Pi-side change can prevent. Mitigations docs/DEPLOY.md recommends:
 
 - Schedule router firmware updates during the day if the router admin UI allows it
 - Use a separate Pi-only switch on a UPS so router reboots don't take the Pi-WILMA path down (only the Pi-WAN path)
@@ -3977,7 +3977,7 @@ Same push-from-WILMA mechanism extended to:
 - **AlpacaBridge** — bundled binary, `/opt/alpaca-bridge/`, restart via systemd
 - **openastro-phd2** — same pattern, `/opt/openastro-phd2/`
 - Endpoints: `POST /api/v1/server/components/{name}/update`
-- Server detects component versions via the component's own status API (AlpacaBridge `/version`, PHD2 `get_app_state` JSON-RPC)
+- Server detects component versions via the component's own status API where one exists (PHD2 `get_app_state` JSON-RPC). AlpacaBridge serves no `/version` endpoint (§68.1, 2026-07-09), so when this section ships its version must come from the installed package (the way `ServerUpdateService` reads the daemon's own with `dpkg-query`), never from a probe
 
 ### 33.7 "What's new" — in-app changelog viewer
 
@@ -4055,7 +4055,7 @@ WILMA persists `last_seen_server_version` in `flutter_secure_storage`, keyed per
 4. Render the modal (see below)
 5. On user dismiss (close, confirm, "don't show again"): write `last_seen_server_version = current`
 6. If `current == last_seen`: no modal
-7. If `current < last_seen` (downgrade): no modal (rare — DEPLOY.md / DB schema concerns dominate)
+7. If `current < last_seen` (downgrade): no modal (rare — docs/DEPLOY.md / DB schema concerns dominate)
 8. If `last_seen` is unset (fresh WILMA / first connect to this server): no modal; silently set `last_seen = current` (don't dump the full history on first connect — would be overwhelming)
 
 **Modal layout (Flutter):**
@@ -4203,9 +4203,9 @@ ARA Core's .deb does **only** these things. It does **not** touch:
 **Device permission philosophy (per fourth-pass Tier 1 #6):** ARA Core ships NO vendor-specific udev rules in the initial release. The split of responsibilities:
 - **AlpacaBridge** ships udev rules for the cameras it directly supports (or pulls them in via vendor-SDK .debs it depends on)
 - **ARA Core** ensures its `openastroara` user is in the standard device groups so it inherits access to whatever AlpacaBridge or the kernel exposes
-- **The user** can `sudo usermod -aG <group> openastroara` for non-standard devices; DEPLOY.md troubleshooting documents this
+- **The user** can `sudo usermod -aG <group> openastroara` for non-standard devices; docs/DEPLOY.md troubleshooting documents this
 
-If a camera doesn't enumerate, the troubleshooting flow in DEPLOY.md (§34.6) walks the user through:
+If a camera doesn't enumerate, the troubleshooting flow in docs/DEPLOY.md (§34.6) walks the user through:
 1. `apt list --installed alpaca-bridge` — confirm AlpacaBridge is installed
 2. `ls -la /dev/bus/usb/*/* | grep <vendor>` — confirm device is visible
 3. `groups openastroara` — confirm openastroara is in the expected groups
@@ -4244,9 +4244,9 @@ apt.openastro.net/
 
 GitHub Actions builds the .deb and publishes to the apt repo via `reprepro` (or `aptly`) on every `v0.0.1-*` tag push.
 
-### 34.6 DEPLOY.md becomes lean
+### 34.6 docs/DEPLOY.md becomes lean
 
-DEPLOY.md content:
+docs/DEPLOY.md content:
 1. Link to OpenAstro wiki for OS install + Wi-Fi/networking
 2. The 4 commands from §34.1
 3. How to connect WILMA (already covered in §30) — no token needed per §67
@@ -5887,7 +5887,7 @@ Four backup layers, in priority order:
 
 The recommended user workflow: every few weeks, clone the working USB drive to a second drive kept in a separate location.
 
-DEPLOY.md documents the procedure:
+docs/DEPLOY.md documents the procedure:
 
 ```bash
 # Identify both drives:
@@ -5975,7 +5975,7 @@ If validation in step 2 fails, the new snapshot is moved to `.quarantine/backups
 
 Setting a tier to `0` disables it for that tier. Setting `auto_snapshot_cadence: off` disables snapshots entirely (the GFS settings still apply if user manually invokes "Take snapshot now" from the Settings → Backup panel).
 
-**The FITS library is NOT auto-snapshotted** — too large for ZIP rotation. Explicit advice in DEPLOY.md + Settings → Backup panel:
+**The FITS library is NOT auto-snapshotted** — too large for ZIP rotation. Explicit advice in docs/DEPLOY.md + Settings → Backup panel:
 
 > Your FITS frames and calibration files are NOT included in these auto-snapshots — they would be too large (often hundreds of GB). Protect them by periodically cloning the USB drive to a second drive (§43.3 drive-to-drive clone) or copying the `captures/` and `calibration/` directories to a desktop/NAS via WILMA's real-time backup stream (§44).
 >
@@ -6065,7 +6065,7 @@ These are deliberately excluded:
 │  Backup                                              │
 │  ──────────────────────────────────────────────────  │
 │  Primary backup: clone the USB drive periodically    │
-│  → [Open DEPLOY.md instructions]                     │
+│  → [Open docs/DEPLOY.md instructions]                     │
 │                                                       │
 │  Server backup ZIP:                                   │
 │    Last created: 2 days ago (24 MB)                   │
@@ -7757,7 +7757,7 @@ Users with INDI or INDIGO equipment connect via a bridge that exposes the equipm
 - **AlpacaPi** ([github.com/msproul/AlpacaPi](https://github.com/msproul/AlpacaPi)) — INDI → Alpaca bridge. Runs alongside INDI on the same Pi.
 - **AlpacaBridge** ([github.com/AlpacaBridge](https://github.com/AlpacaBridge)) — bridges ASCOM COM (Windows) + USB drivers → Alpaca. Already the canonical equipment hub for ARA per §2.
 
-ARA documentation (DEPLOY.md + README) makes the bridge path explicit. Users coming from INDI ecosystems are pointed at these tools, not asked to wait for native ARA support that isn't coming.
+ARA documentation (docs/DEPLOY.md + README) makes the bridge path explicit. Users coming from INDI ecosystems are pointed at these tools, not asked to wait for native ARA support that isn't coming.
 
 ### 52.3 Feature detection — no brand-specific code in ARA
 
@@ -7829,7 +7829,7 @@ None of these change the core: **ARA stays Alpaca-only, trusts the standard, and
 - **§6 / §20.3** Equipment provider abstraction stays at one implementation (`AlpacaEquipmentProvider`); the `IEquipmentProvider` interface need never be re-implemented
 - **§37.2** Wizard's "Protocol choice" screen — drop INDI/INDIGO entirely (no "future support" placeholder). Just shows "ASCOM Alpaca" with a tooltip explaining the bridge path
 - **§24 done criteria** — confirms Alpaca-only-forever as the architectural baseline
-- **DEPLOY.md / README** — explicit "If you have INDI/INDIGO equipment, run a bridge" guidance; link to AlpacaBridge, AlpacaPi, INDIGO Sky options
+- **docs/DEPLOY.md / README** — explicit "If you have INDI/INDIGO equipment, run a bridge" guidance; link to AlpacaBridge, AlpacaPi, INDIGO Sky options
 
 ---
 
@@ -8334,9 +8334,9 @@ Profile setting:
 }
 ```
 
-### 57.7 Hardware kill switch — DEPLOY.md recommendation
+### 57.7 Hardware kill switch — docs/DEPLOY.md recommendation
 
-Software stop has Alpaca + network + mount-controller + mechanical latency in series. For expensive rigs, DEPLOY.md documents the recommendation: wire a physical e-stop button to cut mount power (mains-side or 12V-side). That's the gold standard. ARA does not implement this; ARA recommends it in user-facing docs.
+Software stop has Alpaca + network + mount-controller + mechanical latency in series. For expensive rigs, docs/DEPLOY.md documents the recommendation: wire a physical e-stop button to cut mount power (mains-side or 12V-side). That's the gold standard. ARA does not implement this; ARA recommends it in user-facing docs.
 
 ### 57.8 API endpoints
 
@@ -8529,7 +8529,7 @@ the initial release's "no push notifications" limitation (§46.9) means the prac
 
 **Keep a desktop or tablet running WILMA on a device that is audibly near where you sleep.** The bundled safety alarm (§35.5) loops at max volume on urgent notifications until acknowledged. A Mac in the bedroom, an iPad on the nightstand, or a Linux laptop downstairs — anything that can play audio and has WILMA running.
 
-DEPLOY.md adds explicit guidance: *"For unattended overnight sessions, keep at least one WILMA device running with audio enabled near where you sleep. The urgent-alarm pattern is your wake-up signal."*
+docs/DEPLOY.md adds explicit guidance: *"For unattended overnight sessions, keep at least one WILMA device running with audio enabled near where you sleep. The urgent-alarm pattern is your wake-up signal."*
 
 True push notifications (FCM/APNs to phone lock screen even with WILMA closed) are committed on the `P1`–`P5` issue backlog per §46.9.
 
@@ -9346,7 +9346,7 @@ Lightweight HTTP probes for external monitoring (uptime-kuma, Prometheus blackbo
 
 - `monitoring.health_endpoints` — keywords: `health check, healthz, readyz, uptime monitor, prometheus, monitoring, uptime kuma, pingdom, status endpoint`
 
-**DEPLOY.md addition** (in §34.6's content list, item 8):
+**docs/DEPLOY.md addition** (in §34.6's content list, item 8):
 
 8. Monitoring sidebar — for users running uptime monitors or observatory dashboards:
    - `GET http://<pi>:5555/healthz` — liveness, poll every 30–60 s
@@ -10443,7 +10443,7 @@ WebSocket events:
 - `guider.defect_map_build` — keywords: `PHD2 defect map, hot pixel map, bad pixel map, defect map`
 - `guider.restart` — keywords: `restart PHD2, restart guider, guider unresponsive, openastro-phd2 restart`
 
-### 63.14 DEPLOY.md updates
+### 63.14 docs/DEPLOY.md updates
 
 Replace any earlier wording about "one-time VNC setup of PHD2" with:
 
@@ -11045,7 +11045,7 @@ Updated 2026-05-23 per §71 Native AOT decision — runtime baseline dropped fro
 | **Estimated peak RSS** | **~600 MB** | Comfortable on 4 GB Pi; ~3.4 GB OS headroom |
 | **Estimated idle RSS** | **~50 MB** | Boots and stays small when nothing is happening |
 
-8 GB Pi 4 / Pi 5 has substantial additional comfort; 2 GB SBC variants (some Orange Pi / RockChip) now move from borderline to comfortable — DEPLOY.md still recommends 4 GB minimum for cooler-thermal-stable Pis but 2 GB works in a pinch.
+8 GB Pi 4 / Pi 5 has substantial additional comfort; 2 GB SBC variants (some Orange Pi / RockChip) now move from borderline to comfortable — docs/DEPLOY.md still recommends 4 GB minimum for cooler-thermal-stable Pis but 2 GB works in a pinch.
 
 ### 66.6 Storage I/O cascade
 
@@ -11228,7 +11228,7 @@ Several mechanisms reduce risk regardless of authentication:
 
 ### 67.3 User responsibility (deployment recommendations)
 
-DEPLOY.md (per §34.6) documents:
+docs/DEPLOY.md (per §34.6) documents:
 
 - **Home network**: trust your own LAN. Standard deployment.
 - **Star party / shared LAN**: same posture as ASIAir. Standard deployment is fine. If you want isolation, run the Pi in AP mode (§32.6) so only your devices connect, or use the Pi's Ethernet interface with a dedicated cable.
@@ -11995,7 +11995,7 @@ Depends: libc6 (>= 2.38), libgcc-s1, libstdc++6, libcfitsio10, exfatprogs, polki
 - **macOS dev:** `brew install cfitsio` — installs to `/opt/homebrew/lib/libcfitsio.dylib` (Apple Silicon) or `/usr/local/lib/libcfitsio.dylib` (Intel).
 - **Windows dev:** vcpkg recommended (`vcpkg install cfitsio:x64-windows`) or pre-built binary from heasarc. Set `OPENASTROARA_CFITSIO_PATH` to the full path of `cfitsio.dll`; the resolver tries it before the default search (§72.3). It works the same on Linux/macOS for a library outside the loader path.
 
-DEPLOY.md adds a "Development setup" section listing platform-specific install commands. README's developer-onboarding section links to it.
+docs/DEPLOY.md adds a "Development setup" section listing platform-specific install commands. README's developer-onboarding section links to it.
 
 **CI matrix (per §14.3):** every runner (Linux x64, Linux ARM64, macOS, Windows) installs cfitsio in the setup step. Add to `.github/workflows/ci.yml`:
 

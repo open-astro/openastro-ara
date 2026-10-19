@@ -212,6 +212,9 @@ public sealed partial class FileProfileStore : IProfileStore {
     public EquipmentIdentityDto GetEquipmentIdentity() { lock (_lock) { return _snapshot.EquipmentIdentity!; } }
     public void PutEquipmentIdentity(EquipmentIdentityDto value) => UpdateAndPersist(s => s with { EquipmentIdentity = value });
 
+    public SavedTargetsDto GetSavedTargets() { lock (_lock) { return _snapshot.SavedTargets!; } }
+    public void PutSavedTargets(SavedTargetsDto value) => UpdateAndPersist(s => s with { SavedTargets = value });
+
     public event EventHandler? Changed;
 
     private void UpdateAndPersist(Func<ProfileSnapshotDto, ProfileSnapshotDto> mutate) {

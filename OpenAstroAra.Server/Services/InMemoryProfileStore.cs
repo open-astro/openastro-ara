@@ -513,6 +513,18 @@ public sealed class InMemoryProfileStore : IProfileStore {
         RaiseChanged();
     }
 
+    // #1267 item 5 — nothing saved until the client writes the list.
+    private SavedTargetsDto _savedTargets = SavedTargetsDto.Empty;
+
+    public SavedTargetsDto GetSavedTargets() {
+        lock (_lock) { return _savedTargets; }
+    }
+
+    public void PutSavedTargets(SavedTargetsDto value) {
+        lock (_lock) { _savedTargets = value ?? SavedTargetsDto.Empty; }
+        RaiseChanged();
+    }
+
     // §65.2 stretch defaults — auto_stf for Lights, calibration frames
     // always render linear via the frame-type auto-override.
     private StretchDefaultsDto _stretchDefaults = new(

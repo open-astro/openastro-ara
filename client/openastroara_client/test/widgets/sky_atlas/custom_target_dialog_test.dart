@@ -18,17 +18,21 @@ class _MemoryTargets extends CustomTargetsService {
   final List<CustomTarget> items = [];
 
   @override
-  Future<List<CustomTarget>> load() async => List.of(items);
+  Future<ScopedTargets> loadScope(String? scope) async =>
+      ScopedTargets(List.of(items), const {});
 
   @override
-  Future<List<CustomTarget>> remember(CustomTarget target) async {
+  Future<List<CustomTarget>> load({String? scope}) async => List.of(items);
+
+  @override
+  Future<List<CustomTarget>> remember(CustomTarget target, {String? scope}) async {
     items.removeWhere((t) => t.name == target.name);
     items.insert(0, target);
     return List.of(items);
   }
 
   @override
-  Future<List<CustomTarget>> forget(CustomTarget target) async {
+  Future<List<CustomTarget>> forget(CustomTarget target, {String? scope}) async {
     items.removeWhere((t) => t.name == target.name);
     return List.of(items);
   }
@@ -292,5 +296,49 @@ void main() {
       tester.widget<Text>(find.byKey(const Key('custom-target-provenance'))).data,
       'Simbad · EB* · mag 10.3 · also HIP 12235, TYC 4320-505-1',
     );
+  });
+
+  testWidgets('a resolved target is remembered with its aliases and source; a recent shows them (#1267 item 5)',
+      (tester) async {
+    targets.items.add(CustomTarget(
+      name: 'Wolf 359',
+      raDeg: 164.12,
+      decDeg: 7.01,
+      typedAsJNow: false,
+      savedUtc: DateTime.utc(2026, 10, 18),
+      aliases: const ['CN Leo', 'GJ 406', 'LHS 36'],
+      source: 'simbad',
+    ));
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: MaterialApp(
+        home: Scaffold(
+          body: Builder(
+            builder: (context) => TextButton(
+              onPressed: () => showCustomTargetDialog(
+                context,
+                resolved: const TargetResolution(
+                  status: 'resolved',
+                  source: 'index',
+                  mainId: 'AB Cas',
+                  aliases: ['HIP 12235'],
+                  raDeg: 39.38,
+                  decDeg: 71.30,
+                ),
+              ),
+              child: const Text('open'),
+            ),
+          ),
+        ),
+      ),
+    ));
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Simbad · also CN Leo, GJ 406, …'), findsOneWidget);
+    await tester.tap(find.text('Show on sky'));
+    await tester.pumpAndSettle();
+    final saved = targets.items.firstWhere((t) => t.name == 'AB Cas');
+    expect(saved.aliases, ['HIP 12235']);
+    expect(saved.source, 'index');
   });
 }

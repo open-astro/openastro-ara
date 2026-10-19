@@ -50,7 +50,8 @@ public static class ProfileStoreSnapshot {
         FilterWheelPolicy: s.GetFilterWheelPolicy(),
         TrackingCalibration: s.GetTrackingCalibration(),
         SkyModelCalibration: s.GetSkyModelCalibration(),
-        EquipmentIdentity: s.GetEquipmentIdentity());
+        EquipmentIdentity: s.GetEquipmentIdentity(),
+        SavedTargets: s.GetSavedTargets());
 
     /// <summary>Push every section of <paramref name="snap"/> into the live store.
     /// Each Put raises <see cref="IProfileStore.Changed"/>, so callers that don't want
@@ -89,6 +90,8 @@ public static class ProfileStoreSnapshot {
         // #1362 — a profile that never saw a device must read nothing-observed after select, so its
         // first connect records the gear quietly instead of inheriting the previous profile's identities.
         s.PutEquipmentIdentity(snap.EquipmentIdentity ?? EquipmentIdentityDto.Empty);
+        // #1267 item 5 — a profile with no saved targets reads an empty list after select.
+        s.PutSavedTargets(snap.SavedTargets ?? SavedTargetsDto.Empty);
         // §45.12 — all fields carry their playbook defaults; a pre-§45 snapshot back-fills to them.
         s.PutPolarAlignSettings(snap.PolarAlign ?? new PolarAlignSettingsDto());
         // #1264 — the unguided-imaging block was missing here, so selecting a profile kept the previous
