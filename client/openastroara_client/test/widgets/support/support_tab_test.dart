@@ -153,7 +153,7 @@ void main() {
     expect(api.lastMinLevel, isNull);
   });
 
-  List<LogEntry> _fullPage({String prefix = 'entry'}) => List.generate(200, (i) => LogEntry(
+  List<LogEntry> fullPage({String prefix = 'entry'}) => List.generate(200, (i) => LogEntry(
         timestamp: DateTime.utc(2026, 6, 20, 10, 30, 0).subtract(Duration(seconds: i)),
         level: 'Information',
         source: 'OpenAstroAra.Server',
@@ -163,7 +163,7 @@ void main() {
   testWidgets('a refresh that starts while an older page loads owns the list; the stale page is dropped', (tester) async {
     // Review round 2: the gen guard in _loadOlder. The before call is held, a refresh runs to
     // completion with new entries, then the old page completes and must not be appended.
-    final api = _FakeLogsClient(entries: _fullPage())
+    final api = _FakeLogsClient(entries: fullPage())
       ..holdBefore = Completer<void>()
       ..olderEntries = [_entry('Warning', 'stale older page')];
     await tester.pumpWidget(_host(api));
@@ -191,7 +191,7 @@ void main() {
   testWidgets('the cursor skips an oldest entry whose timestamp fell back to the epoch', (tester) async {
     // Round 3: LogEntry.fromJson uses the epoch for an unparseable timestamp; paging from it would end
     // early with an empty page, so the cursor is the oldest entry with a real timestamp.
-    final page = _fullPage();
+    final page = fullPage();
     page[page.length - 1] = LogEntry(
       timestamp: DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
       level: 'Information',
@@ -211,7 +211,7 @@ void main() {
   });
 
   testWidgets('a failed older page keeps the list and shows the error banner', (tester) async {
-    final api = _FakeLogsClient(entries: _fullPage())..throwOnBefore = true;
+    final api = _FakeLogsClient(entries: fullPage())..throwOnBefore = true;
     await tester.pumpWidget(_host(api));
     await tester.pumpAndSettle();
 
