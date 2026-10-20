@@ -1051,3 +1051,15 @@ written before this keeps its explicit `1`. Nothing else on the wire changes:
 the chosen binning is logged, not reported, because a run's binning is fixed at
 its start and the client has nothing to do with it.
 
+## 2026-10-20 — §36.10 solver database recommendation per camera (#1136, PR #1423)
+
+**Endpoint(s) or area:** `POST /api/v1/data-manager/solver-recommendation` (new); `GET /api/v1/data-manager/packages` (two new solver ids `astap-d05`, `astap-d50`; `astap-d80` no longer `recommended` by default)
+
+**Decision:** the request carries whatever the setup draft knows (`focal_length_mm`, `reducer_factor`, `sensor_width_px`/`sensor_height_px`, `pixel_size_um`, `guide_focal_length_mm`, `guide_pixel_size_um`, `guide_sensor_width_px`/`guide_sensor_height_px`, `guide_setup_type` = `oag` | `guide_scope`); every missing field falls back to the active profile, and a missing guide sensor is read from the connected guider (null → main camera only). The answer is one `packages` row per camera whose field is known (`role` = `camera` | `guide camera`, `fov_deg`, `band`, `package_id`/`package_name`/`size_bytes`/`is_installed`, or `too_narrow` + `reason`), deduplicated by package, with the headline `band` for the narrowest field. The ladder: W08 > 20°, G05 6–20°, D05 1–6°, D50 0.5–1°, D80 < 0.5°, nothing under 0.15°.
+
+**Reasoning:** the profile does not hold the guide sensor and a draft is not yet a profile, so the client sends what it has and the daemon fills the rest; one row per camera lets the wizard queue two downloads for a guide scope and one for an OAG without the client knowing the ladder. `recommended` on the package list stays the main camera's pick (one flag per package, no camera context).
+
+**Spec ref:** `OpenAstroAra.Server/openapi.yaml#/paths/~1api~1v1~1data-manager~1solver-recommendation`
+
+**Related:** §36.10 of PORT_PLAYBOOK.md, PR #1423
+

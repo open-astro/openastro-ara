@@ -256,6 +256,20 @@ void main() {
       expect(out.guidePixelSize, 2.9);
     });
 
+    test('applyDraftToPhd2 §36.10 OAG uses the draft reducer over the base profile\'s', () {
+      final d = ProfileDraft();
+      d.telescope
+        ..focalLengthMm = 1480
+        ..reducerFactor = 0.63;
+      d.guider.setupType = 'oag';
+      final out = applyDraftToPhd2(
+        const Phd2Settings(),
+        d,
+        baseOptics: const OpticsSettings(reducerFactor: 0.8),
+      );
+      expect(out.guideFocalLength, 932, reason: '1480 × 0.63, not × the base 0.8');
+    });
+
     test('applyDraftToPhd2 §63.19 OAG falls back to reducer 1.0 when unset', () {
       final d = ProfileDraft();
       d.telescope.focalLengthMm = 1480;
@@ -307,6 +321,15 @@ void main() {
           applyDraftToPhd2(const Phd2Settings(), d, baseOptics: baseOptics);
       expect(preview, 1184);
       expect(saved.guideFocalLength, preview);
+      // §36.10 — a draft reducer wins in both places (the guiding screen's
+      // preview reads draft ?? base, exactly as applyDraftToPhd2 does).
+      d.telescope.reducerFactor = 0.63;
+      final previewDraft = derivedOagGuideFocalLength(
+          1480, effectiveOagReducerFactor(d.telescope.reducerFactor ?? baseOptics.reducerFactor));
+      final savedDraft =
+          applyDraftToPhd2(const Phd2Settings(), d, baseOptics: baseOptics);
+      expect(previewDraft, 932);
+      expect(savedDraft.guideFocalLength, previewDraft);
       // Unavailable base reducer → both fall back to 1.0.
       expect(effectiveOagReducerFactor(null), 1.0);
       expect(effectiveOagReducerFactor(0), 1.0);

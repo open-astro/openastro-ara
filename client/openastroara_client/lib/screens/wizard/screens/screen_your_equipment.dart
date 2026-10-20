@@ -990,9 +990,13 @@ class _ReducerFieldState extends ConsumerState<_ReducerField> {
   }
 
   Future<void> _seedField() async {
-    final seeded = await seedReducerFromBaseProfile(ref, widget.draft);
-    if (!mounted || seeded == null) return;
-    setState(() => _ctl.text = formatReducer(seeded));
+    await seedReducerFromBaseProfile(ref, widget.draft);
+    // Read the draft, not the return value: the screen-level seed may have
+    // landed first (Details opened mid round-trip), and the field must show
+    // whatever the draft now holds.
+    final r = widget.draft.telescope.reducerFactor;
+    if (!mounted || r == null || _ctl.text.isNotEmpty) return;
+    setState(() => _ctl.text = formatReducer(r));
   }
 
   // Out-of-range text stays visible in the field; say why the draft ignores it.

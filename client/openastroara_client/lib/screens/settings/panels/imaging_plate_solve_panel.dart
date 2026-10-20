@@ -280,8 +280,8 @@ class _StarDatabaseStatus extends ConsumerWidget {
                 padding: const EdgeInsets.only(bottom: 8),
                 child: Text(
                   'Every plate solve will fail until one is installed. '
-                  'Download the D80 database from Settings → Sky data '
-                  '(about 1.3 GB, installs into this folder on the rig), '
+                  'Download the Recommended star database from Settings → Sky data '
+                  '(the one for this profile\'s field of view; it installs into this folder on the rig), '
                   'or point the index path at a folder that has one.',
                   style: errorStyle,
                 ),

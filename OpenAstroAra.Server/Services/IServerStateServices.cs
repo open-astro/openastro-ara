@@ -68,11 +68,13 @@ public interface IStatsService {
     Task<(Stream Stream, string FileName)?> OpenAstrobinExportAsync(string targetName, CancellationToken ct);
 }
 
-/// <summary>Bug-report bundle preparation (§54).</summary>
+/// <summary>§36.10 — which ASTAP star database(s) a rig's cameras need.</summary>
 public interface ISolverRecommender {
-    /// <summary>§36.10 — the ASTAP database the ladder picks for the given (or the active profile's) optics.</summary>
+    /// <summary>The ladder pick per camera for the given (or the active profile's) optics.</summary>
     SolverRecommendationDto Recommend(SolverRecommendationRequestDto request, OpticsSettingsDto? optics, Phd2SettingsDto? guider);
 }
+
+/// <summary>Bug-report bundle preparation (§54).</summary>
 
 public interface IBugReportService {
     /// <param name="mode">§54.3 sharing mode applied while the bundle is built (default: everything).</param>
