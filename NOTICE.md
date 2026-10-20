@@ -106,10 +106,12 @@ disclosure fresh):
   with Free Pascal into `astap_cli` on every build. The star databases are not
   part of ARA's binaries: the Data Manager downloads them on demand from
   https://github.com/open-astro/sky-data/releases (release `astap-2026.10`),
-  flat repacks of Han Kleijn's SourceForge packages — **D80** and **G05**
-  (Gaia DR3 to 8000 and 500 stars per square degree; D80 "free if credit is
-  given", copyright ESA, compiled by Han Kleijn; G05 GPL-3+) and **W08**
-  (magnitude 8 wide-field, GPL-3+). This work has made use of data from the
+  flat repacks of Han Kleijn's SourceForge packages — **D80**, **D50**, **D05**
+  and **G05** (Gaia DR3 to 8000, 5000, 500 and 500 stars per square degree:
+  D80 "free if credit is given", copyright ESA, compiled by Han Kleijn; D50,
+  D05 and G05 GPL-3+, Han Kleijn) and **W08** (magnitude 8 wide-field, GPL-3+).
+  The setup wizard picks the one each camera's field needs; all five may be
+  installed. This work has made use of data from the
   European Space Agency (ESA) mission Gaia (https://www.cosmos.esa.int/gaia),
   processed by the Gaia Data Processing and Analysis Consortium (DPAC,
   https://www.cosmos.esa.int/web/gaia/dpac/consortium). Funding for the DPAC

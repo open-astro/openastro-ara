@@ -207,10 +207,6 @@ class GuiderSettings {
   String? setupType;
   int? guideFocalLengthMm;
   double? guidePixelSizeUm;
-  // §36.10 — the guide camera's frame size when the guider has reported it;
-  // null = unknown (the daemon asks the connected guider instead).
-  int? guideSensorWidthPx;
-  int? guideSensorHeightPx;
   double ditherPixels = 5.0;
   double settleThresholdPx = 1.5;
   Duration settleDuration = const Duration(seconds: 10);

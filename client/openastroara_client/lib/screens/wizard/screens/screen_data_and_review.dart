@@ -397,8 +397,8 @@ class _SolverDatabaseSectionState extends ConsumerState<_SolverDatabaseSection> 
         pixelSizeUm: c.pixelSizeMicrons,
         guideFocalLengthMm: g.guideFocalLengthMm?.toDouble(),
         guidePixelSizeUm: g.guidePixelSizeUm,
-        guideSensorWidthPx: g.guideSensorWidthPx,
-        guideSensorHeightPx: g.guideSensorHeightPx,
+        // No guide sensor here: the profile never holds it, the daemon reads
+        // it from the connected guider.
         guideSetupType: g.setupType,
       ));
       if (!mounted) return;

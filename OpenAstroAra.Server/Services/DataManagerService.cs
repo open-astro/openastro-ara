@@ -208,7 +208,8 @@ namespace OpenAstroAra.Server.Services {
             // AstapStarDatabase find them (DirectoryFor). Too large to ship as .deb seeds, so the seed manifest
             // exempts the "solver" category. Recommended is computed per profile from the field of view (Describe):
             // the §36.10 ladder (AstapStarDatabase.RecommendedFor): the smallest database that covers the
-            // rig's narrowest solved field — W08 above 20°, G05 above 6°, D05 from 1°, D50 from 0.5°, D80 below.
+            // profile's main-camera field — W08 above 20°, G05 above 6°, D05 from 1°, D50 from 0.5°, D80 below.
+            // (The wizard's per-camera picks, incl. the guide camera, come from Recommend instead.)
             new DataPackageDto(
                 Id: "astap-d80",
                 Name: "ASTAP D80 star database",
