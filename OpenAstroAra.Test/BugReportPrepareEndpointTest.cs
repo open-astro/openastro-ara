@@ -108,6 +108,19 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_post_with_no_body_and_no_content_type_is_full() {
+            // A pre-#1185 Dio client posts nothing at all: Kestrel reports no body, the parameter binds null.
+            svc.Setup(s => s.PrepareAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>(), BugReportSharingMode.Full))
+                .ReturnsAsync(Prepared(BugReportSharingMode.Full));
+
+            using var request = new HttpRequestMessage(HttpMethod.Post, new Uri("/api/v1/bugreport/prepare", UriKind.Relative));
+            using var resp = await http.SendAsync(request);
+
+            Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.Accepted), await resp.Content.ReadAsStringAsync());
+            svc.Verify(s => s.PrepareAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>(), BugReportSharingMode.Full), Times.Once);
+        }
+
+        [Test]
         public async Task An_empty_body_from_an_older_client_is_full() {
             svc.Setup(s => s.PrepareAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>(), BugReportSharingMode.Full))
                 .ReturnsAsync(Prepared(BugReportSharingMode.Full));

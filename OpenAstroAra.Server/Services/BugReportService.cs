@@ -278,7 +278,9 @@ public sealed partial class BugReportService : IBugReportService, IDisposable {
             var entry = archive.CreateEntry(entryName, CompressionLevel.Optimal);
             using var entryStream = entry.Open();
             // §54.6 credentials are stripped in EVERY mode and §54.4 items in redacted mode, line by
-            // line so a 50 MB log is never held whole in memory. A CLEF line carries a multi-line value
+            // line so a 50 MB log is never held whole in memory. This decodes the file as UTF-8 text:
+            // LogGlob matches only the sink's plain-text openastroara-*.log files; a compressed or
+            // binary log would have to bypass this path. A CLEF line carries a multi-line value
             // (a PEM block) with escaped newlines, so the per-line pass still sees it whole.
             using var reader = new StreamReader(source);
             using var writer = new StreamWriter(entryStream, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
