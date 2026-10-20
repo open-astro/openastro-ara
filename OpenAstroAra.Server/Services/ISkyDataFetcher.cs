@@ -223,7 +223,8 @@ namespace OpenAstroAra.Server.Services {
                 if (hop + 1 > MaxRedirects) {
                     throw new InvalidOperationException($"Sky-data source '{source}' redirected more than {MaxRedirects} times; giving up.");
                 }
-                OpenAstroAra.Core.Utility.Logger.Debug($"sky-data fetch of {source}: following redirect to {next}.");
+                // Host + path only: a GitHub asset-store Location carries a signed, short-lived token in its query.
+                OpenAstroAra.Core.Utility.Logger.Debug($"sky-data fetch of {source}: following redirect to {next!.GetLeftPart(UriPartial.Path)}.");
                 url = next!;
             }
         }

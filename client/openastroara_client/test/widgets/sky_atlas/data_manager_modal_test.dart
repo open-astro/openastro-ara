@@ -110,6 +110,31 @@ void main() {
     expect(find.widgetWithText(FilledButton, 'Download'), findsOneWidget, reason: 'not-installed package');
   });
 
+  testWidgets('removing a solver database warns that solves stop, a catalog that planning degrades', (tester) async {
+    // #1136 — the two Remove confirmations say different things.
+    final api = _FakeDataManagerClient(const [
+      DataPackage(id: 'astap-d80', name: 'ASTAP D80', category: 'solver', isInstalled: true),
+      DataPackage(id: 'tycho-2', name: 'Tycho-2', category: 'catalog', isInstalled: true),
+    ]);
+    await tester.pumpWidget(_host(api));
+    await tester.pumpAndSettle();
+
+    // Categories sort alphabetically: the catalog row comes first, the solver row last.
+    await tester.tap(find.widgetWithText(TextButton, 'Remove').last);
+    await tester.pumpAndSettle();
+    expect(find.text('Remove ASTAP D80?'), findsOneWidget);
+    expect(find.textContaining('centering, polar alignment and position checks fail'), findsOneWidget);
+    expect(find.textContaining("Tonight's Sky"), findsNothing, reason: 'the catalog wording is not shown for a solver database');
+    await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
+    await tester.pumpAndSettle();
+    expect(api.deleted, isEmpty);
+
+    await tester.tap(find.widgetWithText(TextButton, 'Remove').first);
+    await tester.pumpAndSettle();
+    expect(find.text('Remove Tycho-2?'), findsOneWidget);
+    expect(find.textContaining("Tonight's Sky"), findsOneWidget);
+  });
+
   testWidgets('tapping Download calls the client', (tester) async {
     final api = _FakeDataManagerClient(const [DataPackage(id: 'gaia-edr3-bright', name: 'Gaia', category: 'catalog')]);
     await tester.pumpWidget(_host(api));
