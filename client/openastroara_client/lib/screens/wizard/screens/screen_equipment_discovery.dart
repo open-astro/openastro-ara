@@ -162,7 +162,11 @@ class _ScreenAlpacaConnectState extends ConsumerState<ScreenAlpacaConnect> {
         for (final t in _summaryTypes.skip(1))
           api
               .discover(t, forceRefresh: true)
-              .catchError((Object _) => const <DiscoveredDevice>[]),
+              .catchError((Object e) {
+            debugPrint('[wizard] discovery of $t failed, left out of the '
+                'summary: $e');
+            return const <DiscoveredDevice>[];
+          }),
       ];
       final found = [await camera, ...await Future.wait(others)];
       if (!mounted) return;

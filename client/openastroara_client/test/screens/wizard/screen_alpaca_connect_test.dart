@@ -97,7 +97,8 @@ void main() {
     expect(api.scans, 1, reason: 'the probe runs automatically on entry');
     expect(api.closes, 1, reason: 'the one-shot probe client is closed (r3)');
     expect(container.read(wizardStepValidProvider), isTrue);
-    expect(find.textContaining('AlpacaBridge found'), findsOneWidget);
+    expect(find.textContaining('AlpacaBridge found — no devices yet'),
+        findsOneWidget);
     expect(find.text('AlpacaBridge not detected.'), findsNothing);
     // HIG: a clean reachability result renders as SUCCESS (green check).
     expect(find.byIcon(Icons.check_circle), findsOneWidget);
