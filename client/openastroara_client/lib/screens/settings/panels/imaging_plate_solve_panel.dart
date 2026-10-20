@@ -280,9 +280,9 @@ class _StarDatabaseStatus extends ConsumerWidget {
                 padding: const EdgeInsets.only(bottom: 8),
                 child: Text(
                   'Every plate solve will fail until one is installed. '
-                  'Download the Recommended star database from Settings → Sky data '
-                  '(the one for this profile\'s field of view; it installs into this folder on the rig), '
-                  'or point the index path at a folder that has one.',
+                  'Download a star database from Settings → Sky data (the Recommended one '
+                  'once the profile has its optics, else D05 for most rigs; it installs into '
+                  'this folder on the rig), or point the index path at a folder that has one.',
                   style: errorStyle,
                 ),
               ),

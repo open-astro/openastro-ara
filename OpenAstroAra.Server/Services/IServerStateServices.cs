@@ -75,7 +75,6 @@ public interface ISolverRecommender {
 }
 
 /// <summary>Bug-report bundle preparation (§54).</summary>
-
 public interface IBugReportService {
     /// <param name="mode">§54.3 sharing mode applied while the bundle is built (default: everything).</param>
     Task<BugReportPreparationDto> PrepareAsync(string? idempotencyKey, CancellationToken ct, BugReportSharingMode mode = BugReportSharingMode.Full);
