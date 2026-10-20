@@ -427,6 +427,28 @@ namespace OpenAstroAra.Test {
             if (!OperatingSystem.IsWindows() && Environment.UserName != "root") {
                 Assert.That(DataManagerService.ProbeWritable("/proc/openastroara-probe"), Is.Not.Null, "a directory that cannot be created names the reason");
             }
+            Assert.That(DataManagerService.ProbeWritable("x\0y"), Is.Not.Null, "a malformed path (NUL) reads as not writable, not as a 500");
+        }
+
+        [Test]
+        public async Task A_seeded_solver_package_installs_under_the_current_root_and_is_recorded() {
+            // Solver packages are not seeded today; this keeps the seed path honest if one ever is. The seed lives
+            // under {app}/seed-data/{id}/{file name of SourceUrl}.
+            var seedDir = Path.Combine(AppContext.BaseDirectory, "seed-data", "astap-w08");
+            Directory.CreateDirectory(seedDir);
+            var seedPath = Path.Combine(seedDir, "astap-w08.tar.gz");
+            await File.WriteAllBytesAsync(seedPath, TarGz(("w08_0101.001", new byte[] { 9 })));
+            try {
+                var svc = NewService(new UnusedFetcher(), new NullBroadcaster());
+                var seeded = await svc.SeedMissingPackagesAsync(CancellationToken.None);
+                Assert.That(seeded, Is.GreaterThanOrEqualTo(1));
+                Assert.That(File.Exists(Path.Combine(_solverRoot, "astap-w08", "w08_0101.001")), Is.True, "installed under the solver root, not the sky-data root");
+                Assert.That(Directory.Exists(Path.Combine(_root, "astap-w08")), Is.False);
+                Assert.That(svc.AllInstallDirs("astap-w08"), Is.EqualTo(new[] { Path.Combine(_solverRoot, "astap-w08") }));
+                Assert.That(await File.ReadAllTextAsync(Path.Combine(_root, SolverInstallRegistry.FileName)), Does.Contain("astap-w08"), "the seed install is recorded");
+            } finally {
+                Directory.Delete(seedDir, recursive: true);
+            }
         }
 
         [Test]

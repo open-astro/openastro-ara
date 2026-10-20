@@ -1377,7 +1377,11 @@ namespace OpenAstroAra.Server.Services {
                     obj[kv.Key] = arr;
                 }
                 Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
-                File.WriteAllText(_path, obj.ToJsonString());
+                // Temp file + rename: a crash mid-write must not leave a truncated registry that reads as empty
+                // (which would forget every earlier root).
+                var temp = _path + ".tmp";
+                File.WriteAllText(temp, obj.ToJsonString());
+                File.Move(temp, _path, overwrite: true);
             } catch (Exception) {
                 // see the justification
             }
