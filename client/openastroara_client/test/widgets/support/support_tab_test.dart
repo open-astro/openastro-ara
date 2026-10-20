@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -12,8 +14,11 @@ class _FakeLogsClient implements LogsClient {
   _FakeLogsClient({this.entries = const [], this.throwOnTail = false});
 
   List<LogEntry> entries;
-  // #1185 — what a `before` (page-back) call returns.
+  // #1185 — what a `before` (page-back) call returns; optionally held on a
+  // completer so a refresh can race it, or made to throw.
   List<LogEntry> olderEntries = const [];
+  Completer<void>? holdBefore;
+  bool throwOnBefore = false;
   bool throwOnTail;
   String? lastMinLevel;
   String? lastSubstring;
@@ -33,7 +38,10 @@ class _FakeLogsClient implements LogsClient {
     lastSubstring = containsSubstring;
     lastBefore = before;
     if (throwOnTail) throw Exception('boom');
-    return before == null ? entries : olderEntries;
+    if (before == null) return entries;
+    if (holdBefore != null) await holdBefore!.future;
+    if (throwOnBefore) throw Exception('older boom');
+    return olderEntries;
   }
 
   String? lastSavePath;
@@ -143,6 +151,57 @@ void main() {
     expect(api.tailCalls, 2);
     expect(api.lastSubstring, '', reason: 'the page-back call carries the applied filter');
     expect(api.lastMinLevel, isNull);
+  });
+
+  List<LogEntry> _fullPage({String prefix = 'entry'}) => List.generate(200, (i) => LogEntry(
+        timestamp: DateTime.utc(2026, 6, 20, 10, 30, 0).subtract(Duration(seconds: i)),
+        level: 'Information',
+        source: 'OpenAstroAra.Server',
+        message: '$prefix $i',
+      ));
+
+  testWidgets('a refresh that starts while an older page loads owns the list; the stale page is dropped', (tester) async {
+    // Review round 2: the gen guard in _loadOlder. The before call is held, a refresh runs to
+    // completion with new entries, then the old page completes and must not be appended.
+    final api = _FakeLogsClient(entries: _fullPage())
+      ..holdBefore = Completer<void>()
+      ..olderEntries = [_entry('Warning', 'stale older page')];
+    await tester.pumpWidget(_host(api));
+    await tester.pumpAndSettle();
+
+    final list = find.descendant(of: find.byType(ListView), matching: find.byType(Scrollable)).first;
+    await tester.scrollUntilVisible(find.text('Load older'), 400, scrollable: list);
+    await tester.tap(find.text('Load older'));
+    await tester.pump();
+    expect(find.byType(CircularProgressIndicator), findsOneWidget, reason: 'the page spinner shows');
+
+    api.entries = [_entry('Information', 'fresh after refresh')];
+    await tester.tap(find.byTooltip('Refresh'));
+    await tester.pumpAndSettle();
+    expect(find.text('fresh after refresh'), findsOneWidget);
+    expect(find.byType(CircularProgressIndicator), findsNothing, reason: 'the refresh clears the page spinner');
+
+    api.holdBefore!.complete();
+    await tester.pumpAndSettle();
+    expect(find.text('stale older page'), findsNothing, reason: 'the superseded page is dropped');
+    expect(find.text('fresh after refresh'), findsOneWidget);
+    expect(find.text('Load older'), findsNothing, reason: 'the refreshed list is a short page');
+  });
+
+  testWidgets('a failed older page keeps the list and shows the error banner', (tester) async {
+    final api = _FakeLogsClient(entries: _fullPage())..throwOnBefore = true;
+    await tester.pumpWidget(_host(api));
+    await tester.pumpAndSettle();
+
+    final list = find.descendant(of: find.byType(ListView), matching: find.byType(Scrollable)).first;
+    await tester.scrollUntilVisible(find.text('Load older'), 400, scrollable: list);
+    await tester.tap(find.text('Load older'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('load older logs'), findsOneWidget, reason: 'the banner names the action');
+    expect(find.text('entry 199'), findsOneWidget, reason: 'the held entries stay (the list is scrolled to its end)');
+    await tester.scrollUntilVisible(find.text('Load older'), 400, scrollable: list);
+    expect(find.text('Load older'), findsOneWidget, reason: 'the control stays for a retry');
   });
 
   testWidgets('a short first page never offers Load older', (tester) async {

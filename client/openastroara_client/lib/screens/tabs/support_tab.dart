@@ -73,7 +73,12 @@ class _SupportTabState extends ConsumerState<SupportTab> {
     final gen = ++_refreshGen;
     // Don't clear _error here — keep the last outcome until this call resolves,
     // so a failed refresh leaves the prior entries (and only updates the banner).
-    setState(() => _loading = true);
+    // A page-back in flight is superseded by this refresh: drop its spinner now
+    // rather than when the stale call returns.
+    setState(() {
+      _loading = true;
+      _loadingMore = false;
+    });
     final minLevel = _minLevel == 'All' ? null : _minLevel;
     final substring = _substringCtl.text;
     try {
@@ -105,13 +110,19 @@ class _SupportTabState extends ConsumerState<SupportTab> {
     final held = _entries;
     if (api == null || held == null || held.isEmpty || _loadingMore) return;
     final gen = _refreshGen;
+    // The cursor is the oldest entry with a real timestamp: LogEntry.fromJson
+    // falls back to the epoch for an unparseable one, and a 1970 cursor would
+    // end paging early with an empty page.
+    final cursor = held
+        .lastWhere((e) => e.timestamp.millisecondsSinceEpoch > 0, orElse: () => held.last)
+        .timestamp;
     setState(() => _loadingMore = true);
     try {
       final older = await api.tail(
         maxLines: _maxLines,
         minLevel: _appliedMinLevel,
         containsSubstring: _appliedSubstring,
-        before: held.last.timestamp,
+        before: cursor,
       );
       // A refresh that started meanwhile owns the list now; drop this page.
       if (!mounted || gen != _refreshGen) return;
@@ -124,7 +135,8 @@ class _SupportTabState extends ConsumerState<SupportTab> {
       if (!mounted || gen != _refreshGen) return;
       setState(() => _error = friendlyError(e, action: 'load older logs'));
     } finally {
-      if (mounted) setState(() => _loadingMore = false);
+      // Only this call's own spinner: a refresh that superseded it already cleared the flag.
+      if (mounted && gen == _refreshGen) setState(() => _loadingMore = false);
     }
   }
 
