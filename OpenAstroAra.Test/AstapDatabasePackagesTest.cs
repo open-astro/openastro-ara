@@ -452,10 +452,17 @@ namespace OpenAstroAra.Test {
             Assert.That(listed.IsInstalled, Is.True, "the earlier copy still counts");
             Assert.That(listed.InstallPath, Is.EqualTo(Path.Combine(oldRoot, "astap-d80")), "and says where it is");
             Assert.That(svc.InstallRootFor("astap-d80"), Is.EqualTo(newRoot), "a new download goes to the current path");
+            Assert.That(svc.AllInstallDirs("astap-d80"), Is.EqualTo(new[] { Path.Combine(oldRoot, "astap-d80") }));
 
             Assert.That(await svc.DeleteAsync("astap-d80", CancellationToken.None), Is.EqualTo(PackageDeleteResult.Deleted));
             Assert.That(Directory.Exists(Path.Combine(oldRoot, "astap-d80")), Is.False, "Remove reaches the earlier copy");
             Assert.That((await svc.ListPackagesAsync(CancellationToken.None)).Single(p => p.Id == "astap-d80").IsInstalled, Is.False);
+        }
+
+        [Test]
+        public void Roots_compare_by_normalised_full_path() {
+            Assert.That(SolverInstallRegistry.SameRoot(_solverRoot, _solverRoot + Path.DirectorySeparatorChar), Is.True, "a trailing separator is the same directory");
+            Assert.That(SolverInstallRegistry.SameRoot(_solverRoot, Path.Combine(_solverRoot, "x")), Is.False);
         }
 
         [Test]
@@ -473,14 +480,21 @@ namespace OpenAstroAra.Test {
             Assert.That(await Eventually(() => ws.Events.Count(e => e.EventType == WsEventCatalog.DataManagerDownloadComplete) == 1), Is.True);
 
             root = newRoot;
-            // Not "already installed": the current path has no copy, so a plain download (no force) is accepted.
-            await svc.DownloadAsync(new DownloadRequestDto("astap-w08", ForceReinstall: true), null, CancellationToken.None);
+            // Not "already installed": the current path has no copy, so a plain download (no force) is accepted —
+            // the earlier copy is not where the solver looks now.
+            await svc.DownloadAsync(new DownloadRequestDto("astap-w08", ForceReinstall: false), null, CancellationToken.None);
             Assert.That(await Eventually(() => ws.Events.Count(e => e.EventType == WsEventCatalog.DataManagerDownloadComplete) == 2), Is.True);
 
             Assert.That(File.Exists(Path.Combine(newRoot, "astap-w08", "w08_0101.001")), Is.True);
             var listed = (await svc.ListPackagesAsync(CancellationToken.None)).Single(p => p.Id == "astap-w08");
             Assert.That(listed.InstallPath, Is.EqualTo(Path.Combine(newRoot, "astap-w08")), "the current copy wins the listing");
-            Assert.That(Directory.Exists(Path.Combine(oldRoot, "astap-w08")), Is.True, "the earlier copy is left for the user to remove by hand (the registry now points at the new one)");
+            Assert.That(svc.AllInstallDirs("astap-w08"), Is.EquivalentTo(new[] { Path.Combine(newRoot, "astap-w08"), Path.Combine(oldRoot, "astap-w08") }), "both copies are remembered");
+
+            // Remove frees the disk everywhere: the current copy and the remembered earlier one.
+            Assert.That(await svc.DeleteAsync("astap-w08", CancellationToken.None), Is.EqualTo(PackageDeleteResult.Deleted));
+            Assert.That(Directory.Exists(Path.Combine(oldRoot, "astap-w08")), Is.False, "the earlier copy is freed too");
+            Assert.That(Directory.Exists(Path.Combine(newRoot, "astap-w08")), Is.False);
+            Assert.That(svc.AllInstallDirs("astap-w08"), Is.Empty);
         }
 
         [Test]

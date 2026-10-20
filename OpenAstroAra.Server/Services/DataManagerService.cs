@@ -527,6 +527,11 @@ namespace OpenAstroAra.Server.Services {
             try {
                 ForgetCatalog(dir);
                 Directory.Delete(dir, recursive: true);
+                // A solver package may have a copy under an earlier index path too: Remove means "free the disk",
+                // so every remembered copy goes with it.
+                foreach (var other in AllInstallDirs(packageId)) {
+                    Directory.Delete(other, recursive: true);
+                }
                 _solverInstalls.Forget(packageId);
                 LogDeleted(packageId);
                 return Task.FromResult(PackageDeleteResult.Deleted);
@@ -898,14 +903,36 @@ namespace OpenAstroAra.Server.Services {
             }
             // Not under the current index path: an install recorded under an earlier path still counts (it is
             // listed with its InstallPath and can be removed), so a path change never orphans a 1.3 GB copy.
-            if (_solverInstalls.RootFor(packageId) is { } recorded
-                    && !string.Equals(recorded, RootFor(pkg, solverRoot), StringComparison.Ordinal)) {
+            foreach (var recorded in _solverInstalls.RootsFor(packageId)) {
+                if (SolverInstallRegistry.SameRoot(recorded, RootFor(pkg, solverRoot))) {
+                    continue;
+                }
                 var older = Path.Combine(recorded, packageId);
                 if (File.Exists(Path.Combine(older, SkyDataInstaller.InstalledMarkerFileName))) {
                     return older;
                 }
             }
             return current;
+        }
+
+        /// <summary>Every directory holding a complete copy of a solver package: the current index path and any
+        /// earlier one the registry remembers. Remove frees them all (tests read this too).</summary>
+        internal IReadOnlyList<string> AllInstallDirs(string packageId) {
+            var dirs = new List<string>();
+            if (!_catalogById.TryGetValue(packageId, out var pkg)) {
+                return dirs;
+            }
+            var roots = new List<string> { RootFor(pkg) };
+            if (IsSolverPackage(pkg)) {
+                roots.AddRange(_solverInstalls.RootsFor(packageId));
+            }
+            foreach (var root in roots) {
+                var dir = Path.Combine(root, packageId);
+                if (File.Exists(Path.Combine(dir, SkyDataInstaller.InstalledMarkerFileName)) && !dirs.Any(d => SolverInstallRegistry.SameRoot(d, dir))) {
+                    dirs.Add(dir);
+                }
+            }
+            return dirs;
         }
 
         /// <summary>The directory a package installs under (tests).</summary>
@@ -920,8 +947,13 @@ namespace OpenAstroAra.Server.Services {
         // A package counts as installed once §36-2a's .installed sentinel is present (a bare dir from a torn install
         // does not). Used by the ForceReinstall skip.
         private bool IsInstalled(string packageId) {
-            var dir = PackageDir(packageId);
-            return dir is not null && File.Exists(Path.Combine(dir, SkyDataInstaller.InstalledMarkerFileName));
+            // The CURRENT root only: a solver package whose copy sits under an earlier index path is listed
+            // (PackageDir falls back to it) but a plain download must still be accepted, since that copy is not
+            // where the solver looks now.
+            if (!_catalogById.TryGetValue(packageId, out var pkg)) {
+                return false;
+            }
+            return File.Exists(Path.Combine(RootFor(pkg), packageId, SkyDataInstaller.InstalledMarkerFileName));
         }
 
         // Read a completed install's (size, install-stamp), or null if the package dir has no .installed sentinel
@@ -1010,7 +1042,9 @@ namespace OpenAstroAra.Server.Services {
         }
 
         private async Task InstallFromSeedAsync(DataPackageDto pkg, string seedPath, CancellationToken ct) {
-            var targetDir = PackageDir(pkg.Id)!;
+            // The current root, never a remembered earlier copy (solver packages are not seeded today; this keeps
+            // the seed path honest if one ever is).
+            var targetDir = Path.Combine(RootFor(pkg), pkg.Id);
             var ceiling = ExtractionCeiling(pkg);
             var expectedSha = _expectedDigests.GetValueOrDefault(pkg.Id);
             await using var source = new FileStream(seedPath, FileMode.Open, FileAccess.Read, FileShare.Read,
@@ -1020,7 +1054,10 @@ namespace OpenAstroAra.Server.Services {
             } else {
                 var gunzip = seedPath.EndsWith(".gz", StringComparison.OrdinalIgnoreCase);
                 await SkyDataInstaller.InstallFromFileAsync(source, targetDir, CatalogFileName, gunzip, ceiling, null, ct, expectedSha).ConfigureAwait(false);
+                        if (IsSolverPackage(pkg)) {
+                _solverInstalls.Record(pkg.Id, RootFor(pkg));
             }
+        }
         }
 
         [LoggerMessage(Level = LogLevel.Information, Message = "§36 seeded catalog package '{PackageId}' from the bundled copy")]
@@ -1240,16 +1277,29 @@ namespace OpenAstroAra.Server.Services {
 
         public SolverInstallRegistry(string path) => _path = path;
 
-        public string? RootFor(string packageId) {
+        /// <summary>Two roots are the same directory when they normalise to the same full path (a trailing
+        /// separator or a relative spelling in the profile must not read as a second location).</summary>
+        public static bool SameRoot(string a, string b) =>
+            string.Equals(Normalize(a), Normalize(b), StringComparison.Ordinal);
+
+        private static string Normalize(string root) => Path.TrimEndingDirectorySeparator(Path.GetFullPath(root));
+
+        /// <summary>Every root a package was installed under, newest first.</summary>
+        public IReadOnlyList<string> RootsFor(string packageId) {
             lock (_gate) {
-                return Load().TryGetValue(packageId, out var root) ? root : null;
+                return Load().TryGetValue(packageId, out var roots) ? roots : Array.Empty<string>();
             }
         }
 
+        /// <summary>Remember <paramref name="root"/> as the newest install of the package; earlier roots stay
+        /// (their copies are still on disk until Remove frees them).</summary>
         public void Record(string packageId, string root) {
             lock (_gate) {
                 var map = Load();
-                map[packageId] = root;
+                var roots = map.TryGetValue(packageId, out var existing) ? new List<string>(existing) : new List<string>();
+                roots.RemoveAll(r => SameRoot(r, root));
+                roots.Insert(0, Normalize(root));
+                map[packageId] = roots;
                 Save(map);
             }
         }
@@ -1265,33 +1315,48 @@ namespace OpenAstroAra.Server.Services {
 
         [SuppressMessage("Design", "CA1031:Do not catch general exception types",
             Justification = "An unreadable or corrupt registry must read as empty: it only remembers where older copies sit, and a fresh install rewrites it.")]
-        private Dictionary<string, string> Load() {
+        // {"astap-d80": ["/var/lib/astap", "/media/old/astap"], ...} — newest root first.
+        private Dictionary<string, List<string>> Load() {
             try {
                 if (!File.Exists(_path)) {
-                    return new Dictionary<string, string>(StringComparer.Ordinal);
+                    return new Dictionary<string, List<string>>(StringComparer.Ordinal);
                 }
                 var node = JsonNode.Parse(File.ReadAllText(_path)) as JsonObject;
-                var map = new Dictionary<string, string>(StringComparer.Ordinal);
+                var map = new Dictionary<string, List<string>>(StringComparer.Ordinal);
                 if (node is not null) {
                     foreach (var kv in node) {
-                        if (kv.Value is JsonValue v && v.TryGetValue<string>(out var root) && !string.IsNullOrWhiteSpace(root)) {
-                            map[kv.Key] = root;
+                        var roots = new List<string>();
+                        if (kv.Value is JsonArray arr) {
+                            foreach (var item in arr) {
+                                if (item is JsonValue v && v.TryGetValue<string>(out var root) && !string.IsNullOrWhiteSpace(root)) {
+                                    roots.Add(root);
+                                }
+                            }
+                        } else if (kv.Value is JsonValue single && single.TryGetValue<string>(out var one) && !string.IsNullOrWhiteSpace(one)) {
+                            roots.Add(one);
+                        }
+                        if (roots.Count > 0) {
+                            map[kv.Key] = roots;
                         }
                     }
                 }
                 return map;
             } catch (Exception) {
-                return new Dictionary<string, string>(StringComparer.Ordinal);
+                return new Dictionary<string, List<string>>(StringComparer.Ordinal);
             }
         }
 
         [SuppressMessage("Design", "CA1031:Do not catch general exception types",
             Justification = "Best-effort bookkeeping: a failed registry write must not fail an install that already succeeded on disk.")]
-        private void Save(Dictionary<string, string> map) {
+        private void Save(Dictionary<string, List<string>> map) {
             try {
                 var obj = new JsonObject();
                 foreach (var kv in map) {
-                    obj[kv.Key] = kv.Value;
+                    var arr = new JsonArray();
+                    foreach (var root in kv.Value) {
+                        arr.Add(root);
+                    }
+                    obj[kv.Key] = arr;
                 }
                 Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
                 File.WriteAllText(_path, obj.ToJsonString());
