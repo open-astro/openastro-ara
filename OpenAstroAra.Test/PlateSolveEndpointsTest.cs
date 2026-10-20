@@ -238,6 +238,15 @@ namespace OpenAstroAra.Test {
             ProfileSnapshotNormalizer.Defaults.PlateSolve with { IndexDownloadPath = indexPath, PathOrEndpoint = solverPath };
 
         [Test]
+        public void DatabaseStatus_reads_a_blank_index_path_as_the_default_directory() {
+            // #1136 (review round 4): a shared profile strips the path; the Data Manager installs under the default
+            // directory then, so the panel must report that directory rather than "no database" for a blank path.
+            var dto = PlateSolveEndpoints.BuildDatabaseStatus(Settings(""), _ => true);
+            Assert.That(dto.ConfiguredPath, Is.EqualTo(SolverPathMigration.DefaultDatabasePath));
+            Assert.That(PlateSolveEndpoints.BuildDatabaseStatus(Settings("  "), _ => true).ConfiguredPath, Is.EqualTo(SolverPathMigration.DefaultDatabasePath));
+        }
+
+        [Test]
         public void DatabaseStatus_counts_the_files_and_names_the_databases() {
             var dir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "ara-astap-" + Guid.NewGuid().ToString("N"));
             System.IO.Directory.CreateDirectory(dir);
