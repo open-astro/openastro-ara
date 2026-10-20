@@ -120,6 +120,31 @@ void main() {
     expect(find.text('Load older'), findsNothing, reason: 'a short page means nothing older is left');
   });
 
+  testWidgets('Load older reuses the applied filter, not unsubmitted field text', (tester) async {
+    // Review round 1: the substring field applies on submit only; text typed since must not leak
+    // into the page-back call, or the list would mix two filters.
+    final full = List.generate(200, (i) => LogEntry(
+          timestamp: DateTime.utc(2026, 6, 20, 10, 30, 0).subtract(Duration(seconds: i)),
+          level: 'Information',
+          source: 'OpenAstroAra.Server',
+          message: 'entry $i',
+        ));
+    final api = _FakeLogsClient(entries: full);
+    await tester.pumpWidget(_host(api));
+    await tester.pumpAndSettle();
+    expect(api.lastSubstring, '', reason: 'the list was loaded with no filter');
+
+    await tester.enterText(find.byType(TextField), 'focus'); // typed, never submitted
+    final list = find.descendant(of: find.byType(ListView), matching: find.byType(Scrollable)).first;
+    await tester.scrollUntilVisible(find.text('Load older'), 400, scrollable: list);
+    await tester.tap(find.text('Load older'));
+    await tester.pumpAndSettle();
+
+    expect(api.tailCalls, 2);
+    expect(api.lastSubstring, '', reason: 'the page-back call carries the applied filter');
+    expect(api.lastMinLevel, isNull);
+  });
+
   testWidgets('a short first page never offers Load older', (tester) async {
     final api = _FakeLogsClient(entries: [_entry('Information', 'only one')]);
     await tester.pumpWidget(_host(api));

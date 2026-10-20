@@ -43,6 +43,11 @@ class _SupportTabState extends ConsumerState<SupportTab> {
   // page came back short (nothing older to fetch).
   bool _loadingMore = false;
   bool _exhausted = false;
+  // The filters the current list was loaded with. The substring field only
+  // applies on submit, so paging back must reuse these, never the field's
+  // current text (review round 1).
+  String? _appliedMinLevel;
+  String _appliedSubstring = '';
   bool _downloading = false;
   String? _error;
   // Monotonic refresh id: only the latest call applies its result/error, so a
@@ -69,15 +74,19 @@ class _SupportTabState extends ConsumerState<SupportTab> {
     // Don't clear _error here — keep the last outcome until this call resolves,
     // so a failed refresh leaves the prior entries (and only updates the banner).
     setState(() => _loading = true);
+    final minLevel = _minLevel == 'All' ? null : _minLevel;
+    final substring = _substringCtl.text;
     try {
       final entries = await api.tail(
         maxLines: _maxLines,
-        minLevel: _minLevel == 'All' ? null : _minLevel,
-        containsSubstring: _substringCtl.text,
+        minLevel: minLevel,
+        containsSubstring: substring,
       );
       if (!mounted || gen != _refreshGen) return;
       setState(() {
         _entries = entries;
+        _appliedMinLevel = minLevel;
+        _appliedSubstring = substring;
         _exhausted = entries.length < _maxLines;
         _error = null;
       });
@@ -100,8 +109,8 @@ class _SupportTabState extends ConsumerState<SupportTab> {
     try {
       final older = await api.tail(
         maxLines: _maxLines,
-        minLevel: _minLevel == 'All' ? null : _minLevel,
-        containsSubstring: _substringCtl.text,
+        minLevel: _appliedMinLevel,
+        containsSubstring: _appliedSubstring,
         before: held.last.timestamp,
       );
       // A refresh that started meanwhile owns the list now; drop this page.
