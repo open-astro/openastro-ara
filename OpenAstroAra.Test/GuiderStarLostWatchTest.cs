@@ -51,6 +51,7 @@ namespace OpenAstroAra.Test {
             public readonly List<string> FaultActions = new();
             public int Restarts;
             public bool RestartSucceeds = true;
+            public Action? OnRestart; // the fake's side of a restart: app state Guiding, StartGuiding, a guide step
             public GuiderService Service = null!;
 
             public Rig(bool runActive) {
@@ -98,7 +99,7 @@ namespace OpenAstroAra.Test {
                     StarLostRecenterTimeout = TimeSpan.FromSeconds(5),
                 };
                 Service.Recenter = new TargetRecenter(() => Centering.Object, profiles.Object);
-                Service.RestartGuidingOverride = _ => { Interlocked.Increment(ref Restarts); return Task.FromResult(RestartSucceeds); };
+                Service.RestartGuidingOverride = _ => { Interlocked.Increment(ref Restarts); if (RestartSucceeds) { OnRestart?.Invoke(); } return Task.FromResult(RestartSucceeds); };
             }
 
             public static readonly Coordinates Target = new(ra: 83.8, dec: 0.0, Epoch.J2000, Coordinates.RAType.Degrees);
@@ -125,9 +126,31 @@ namespace OpenAstroAra.Test {
             fake.SetOnConnectEvents(PhdEvents.Version(subver: "openastroara-fake"), PhdEvents.AppState("Guiding"));
             fake.OnRpc("get_app_state", JsonValue.Create("Guiding"));
             fake.OnRpc("get_connected", JsonValue.Create(true));
-            // The guider's Stop button waits for the app state to read Stopped; the fake follows along.
-            fake.OnRpc("stop_capture", _ => { fake.OnRpc("get_app_state", JsonValue.Create("Stopped")); return JsonValue.Create(0); });
-            fake.OnRpc("loop", _ => { fake.OnRpc("get_app_state", JsonValue.Create("Looping")); return JsonValue.Create(0); });
+            // The guider's Stop button waits for the app state to read Stopped, and a stop from LostLock
+            // sends GuidingStopped (the marker the recovery must swallow exactly once); loop reports
+            // Looping. The fake follows real PHD2 on all three.
+            fake.OnRpc("stop_capture", req => {
+                fake.OnRpc("get_app_state", JsonValue.Create("Stopped"));
+                // Sent after the answer: the RPC must not wait for its own events.
+                _ = Task.Run(async () => {
+                    await fake.BroadcastAsync(PhdEvents.GuidingStopped()).ConfigureAwait(false);
+                    await fake.BroadcastAsync(PhdEvents.AppState("Stopped")).ConfigureAwait(false);
+                });
+                return JsonValue.Create(0);
+            });
+            fake.OnRpc("loop", req => {
+                fake.OnRpc("get_app_state", JsonValue.Create("Looping"));
+                _ = Task.Run(() => fake.BroadcastAsync(PhdEvents.AppState("Looping")));
+                return JsonValue.Create(0);
+            });
+            // A restart that worked: PHD2 is guiding again and its first guide step lands while the
+            // recovery is still in flight (the in-flight guard must not read it as a relock).
+            rig.OnRestart = () => {
+                fake.OnRpc("get_app_state", JsonValue.Create("Guiding"));
+                fake.BroadcastAsync(PhdEvents.AppState("Guiding")).GetAwaiter().GetResult();
+                fake.BroadcastAsync(PhdEvents.StartGuiding()).GetAwaiter().GetResult();
+                fake.BroadcastAsync(PhdEvents.GuideStep(0.02, 0.02)).GetAwaiter().GetResult();
+            };
             fake.OnRpc("get_star_centroids", _ => new JsonArray());
             await rig.Service.ConnectAsync(new GuiderConnectRequestDto("127.0.0.1", fake.Port), idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
             Assert.That(await WaitUntilAsync(() => rig.Service.GetAsync(CancellationToken.None).Result?.State == EquipmentConnectionState.Connected).ConfigureAwait(false),
@@ -408,10 +431,14 @@ namespace OpenAstroAra.Test {
             await using var fake = await LostStarPastTheGraceAsync(rig).ConfigureAwait(false);
             fake.OnRpc("get_star_centroids", _ => Stars());
 
-            Assert.That(await WaitUntilAsync(() => rig.Notifications.Count == 2).ConfigureAwait(false), Is.True);
+            Assert.That(await WaitUntilAsync(() => rig.Notifications.Count >= 2).ConfigureAwait(false), Is.True);
             Assert.That(rig.Notifications[1].Title, Does.Contain("target is low"));
             Assert.That(rig.Centered(), Is.Zero, "no slew to a target below the limit");
-            Assert.That(rig.Resumed(), Is.Zero);
+            // The guider was stopped for the attempt, so it is restarted on the give-up; the fake relocks
+            // at once and the old path resumes the run, with its own notice after the give-up's.
+            Assert.That(await WaitUntilAsync(() => rig.Resumed() == 1).ConfigureAwait(false), Is.True, "a relock after the give-up still resumes the run");
+            Assert.That(await WaitUntilAsync(() => rig.Notifications.Count == 3).ConfigureAwait(false), Is.True);
+            Assert.That(rig.Notifications[2].Title, Does.StartWith("Guide star back"));
         }
 
         [Test]
@@ -450,6 +477,45 @@ namespace OpenAstroAra.Test {
             Assert.That(await WaitUntilAsync(() => rig.Resumed() == 2).ConfigureAwait(false), Is.True);
 
             Assert.That(rig.Notifications.Count(n => n.Title.Contains("re-center failed", StringComparison.Ordinal)), Is.EqualTo(2), "one warning per episode: the latch resets with the episode");
+        }
+
+        [Test]
+        public async Task A_stop_by_the_user_during_the_wait_ends_the_probing() {
+            using var rig = new Rig(runActive: true);
+            await using var fake = await LostStarPastTheGraceAsync(rig).ConfigureAwait(false);
+            fake.OnRpc("get_star_centroids", _ => Stars());
+
+            await fake.BroadcastAsync(PhdEvents.GuidingStopped()).ConfigureAwait(false);
+            await Task.Delay(Grace * 4).ConfigureAwait(false);
+
+            Assert.That(fake.ReceivedMethods, Does.Not.Contain("get_star_centroids"), "the user stopped guiding: the pause is theirs");
+            Assert.That(rig.Centered(), Is.Zero);
+            Assert.That(rig.Resumed(), Is.Zero);
+        }
+
+        [Test]
+        public async Task The_guider_remembers_when_guiding_stopped_until_it_guides_again() {
+            // IGuiderMediator.GuidingStoppedUtc — the Dither's long-gap input, set from PHD2's own events.
+            using var rig = new Rig(runActive: true);
+            await using var fake = await GuidingFakeAsync(rig).ConfigureAwait(false);
+            Assert.That(rig.Service.GuidingStoppedUtc, Is.Null, "guiding: no stop on record");
+
+            await fake.BroadcastAsync(PhdEvents.GuidingStopped()).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => rig.Service.GuidingStoppedUtc is not null).ConfigureAwait(false), Is.True);
+            var stopped = rig.Service.GuidingStoppedUtc!.Value;
+            Assert.That(stopped, Is.EqualTo(DateTimeOffset.UtcNow).Within(TimeSpan.FromSeconds(5)));
+
+            await fake.BroadcastAsync(PhdEvents.GuidingStopped()).ConfigureAwait(false);
+            await Task.Delay(50).ConfigureAwait(false);
+            Assert.That(rig.Service.GuidingStoppedUtc, Is.EqualTo(stopped), "a second stop keeps the first time: the gap runs from the real stop");
+
+            await fake.BroadcastAsync(PhdEvents.GuideStep(0.1, -0.1)).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => rig.Service.GuidingStoppedUtc is null).ConfigureAwait(false), Is.True, "a guide step clears it");
+
+            await fake.BroadcastAsync(PhdEvents.GuidingStopped()).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => rig.Service.GuidingStoppedUtc is not null).ConfigureAwait(false), Is.True);
+            await fake.BroadcastAsync(PhdEvents.StartGuiding()).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => rig.Service.GuidingStoppedUtc is null).ConfigureAwait(false), Is.True, "guiding_started clears it");
         }
 
         [Test]
