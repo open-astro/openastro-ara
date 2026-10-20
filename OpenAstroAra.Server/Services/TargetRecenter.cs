@@ -68,6 +68,8 @@ public sealed partial class TargetRecenter {
 
     /// <summary>The first of <paramref name="runIds"/> whose live plan carries a coordinate target is
     /// centred on; with a single mount the other runs inherit whatever pointing results.</summary>
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "A coordinate read fault (including a timeout of the read's own, which is not the caller's cancellation) is logged and the next run is tried; only the caller's token ends the attempt.")]
     public async Task<TargetRecenterResult> RecenterActiveTargetAsync(ISequencerService? sequencer, IReadOnlyList<Guid> runIds, TimeSpan timeout, CancellationToken ct) {
         if (sequencer is null) {
             return TargetRecenterResult.Of(TargetRecenterOutcome.NotAttempted);
@@ -81,7 +83,7 @@ public sealed partial class TargetRecenter {
                 target = await sequencer.GetActiveTargetCoordinatesAsync(id, ct).ConfigureAwait(false);
             } catch (OperationCanceledException) when (ct.IsCancellationRequested) {
                 return TargetRecenterResult.Of(TargetRecenterOutcome.Cancelled);
-            } catch (Exception ex) when (ex is not OperationCanceledException) {
+            } catch (Exception ex) {
                 LogTargetReadFailed(ex, id);
             }
             if (target is not null) {

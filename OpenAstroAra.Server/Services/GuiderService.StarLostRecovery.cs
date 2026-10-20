@@ -278,8 +278,13 @@ public sealed partial class GuiderService {
             _recoveryStoppedGuiding = true;
             _recoveryStopPending = wasGuiding;
         }
-        await guider.StopGuiding(ct).ConfigureAwait(false);
+        var stopped = await guider.StopGuiding(ct).ConfigureAwait(false);
         ct.ThrowIfCancellationRequested();
+        if (wasGuiding && !stopped) {
+            // A guider that would not stop is still chasing: slewing under it would swallow a relock
+            // mid-slew and issue guide to a guider that may already be guiding.
+            return await OnAttemptFailedAsync(guider, "the guider did not stop").ConfigureAwait(false);
+        }
         // The stop takes seconds and the user may have pressed Resume meanwhile: never slew under a
         // run that is imaging again.
         still = await StillDaemonPausedAsync(sequencer, ct).ConfigureAwait(false);
@@ -405,7 +410,13 @@ public sealed partial class GuiderService {
             _recoveryStoppedGuiding = false;
         }
         LogStarLostRecoveryGaveUp(title);
+        if (fault is not null) {
+            await RecordActionQuietlyAsync(fault, "recenter_unavailable").ConfigureAwait(false);
+        }
+        await NotifyQuietlyAsync(NotificationSeverity.Warning, title, message).ConfigureAwait(false);
         if (restart) {
+            // After the notice: a relock from the restarted guider resumes the run the old way, with
+            // its own "Guide star back" notice, and that must read as the later event.
             try {
                 var started = RestartGuidingOverride is { } seam
                     ? await seam(CancellationToken.None).ConfigureAwait(false)
@@ -417,10 +428,6 @@ public sealed partial class GuiderService {
                 LogStarLostProbeFailed(ex);
             }
         }
-        if (fault is not null) {
-            await RecordActionQuietlyAsync(fault, "recenter_unavailable").ConfigureAwait(false);
-        }
-        await NotifyQuietlyAsync(NotificationSeverity.Warning, title, message).ConfigureAwait(false);
         return null;
     }
 
