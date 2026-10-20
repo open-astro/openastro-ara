@@ -46,7 +46,7 @@ namespace OpenAstroAra.Test {
             var dir = Path.Combine(Path.GetTempPath(), "ara-ps-put-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(dir);
             try {
-                // /usr/bin/astap is absent and /usr/bin/astap_cli present: the normalizer rewrites the path on write.
+                // Only the bundled /opt/openastroara/astap_cli is present: the normalizer rewrites a stock path on write.
                 var store = new FileProfileStore(dir, fileExists: p => p == SolverPathMigration.AstapCliPath);
 
                 var result = ProfileEndpoints.PutPlateSolveSettings(Settings(SolverPathMigration.LegacyAstapPath), store);

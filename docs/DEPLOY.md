@@ -191,6 +191,12 @@ sudo apt install libcfitsio10
 # from x86-64: `sudo apt install gcc-aarch64-linux-gnu` and prefix with `CC=aarch64-linux-gnu-gcc`).
 scripts/build-astrometry-natives.sh ./publish/arm64
 ls publish/arm64/liberfa.so publish/arm64/libsupernovas.so   # both must exist
+# The bundled ASTAP solver is not produced by `dotnet publish` either: the profile's default solver
+# path is /opt/openastroara/astap_cli, so build it into the same directory (`sudo apt install fpc`;
+# the submodule needs `git submodule update --init third_party/astap`; fpc has no cross units, so run
+# this on the Pi or in an arm64 container).
+scripts/build-astap-cli.sh ./publish/arm64
+ls publish/arm64/astap_cli   # must exist
 sudo cp -r publish/arm64/* /opt/openastroara/
 sudo chown -R openastroara:openastroara /opt/openastroara
 

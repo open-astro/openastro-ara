@@ -869,8 +869,10 @@ Both must succeed.
 `Dockerfile` at repo root:
 
 ```dockerfile
-FROM mcr.microsoft.com/dotnet/aspnet:10.0-bookworm-slim-arm64v8
-WORKDIR /app
+FROM mcr.microsoft.com/dotnet/runtime-deps:10.0-noble-chiseled-arm64v8
+# The daemon directory is /opt/openastroara in the image as in the .deb: the profile's default
+# solver path is the absolute /opt/openastroara/astap_cli (scripts/tests/test_astap_cli_bundle_guards.py).
+WORKDIR /opt/openastroara
 COPY publish/arm64/ ./
 EXPOSE 5555
 USER 1000

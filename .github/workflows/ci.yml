@@ -818,6 +818,12 @@ jobs:
       - name: Run arm64 container + health probe
         run: |
           set -euo pipefail
+          # The bundled solver is built on debian:trixie (glibc 2.41) and runs on the
+          # noble-chiseled base (glibc 2.39); exec it once so a symbol-version mismatch
+          # fails here, not on a user's first plate solve (/healthz never runs it).
+          docker run --rm --platform linux/arm64 --entrypoint ./astap_cli openastroara-server:arm64 -h \
+            | grep -q -- '-threads' || { echo "✗ bundled astap_cli does not run in the image"; exit 1; }
+          echo "✓ bundled astap_cli runs in the image"
           docker run -d --platform linux/arm64 \
             --name oara-e2e \
             -p 5555:5555 \
