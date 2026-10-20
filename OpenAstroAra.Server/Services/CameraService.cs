@@ -285,6 +285,7 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
             }
             DisposeClientLocked();
             _device = device;
+            Interlocked.Exchange(ref heatSinkUnsupported, 0); // a new driver may implement it (#1185)
             generation = ++_connectGeneration;
             SetState(EquipmentConnectionState.Connecting);
         }
@@ -1957,6 +1958,9 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
         };
     }
 
+    // 1 once the connected driver answered NotImplemented for HeatSinkTemperature (#1185); reset on connect.
+    private static int heatSinkUnsupported;
+
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Per-field read boundary: an unsupported/transiently-failing camera property falls back to its default rather than failing the whole runtime read. CA1031's log-and-recover boundary applies.")]
     private static CameraStateDto ReadRuntime(AlpacaCamera c, out string? readError) {
@@ -1987,12 +1991,33 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
                 readoutMode = modes[idx]?.ToString();
             }
         } catch (Exception) { }
-        // #1185 — the cooler's hot side; optional on most drivers, so a throw reads as "not reported".
-        double? heatSink;
-        try { heatSink = c.HeatSinkTemperature; } catch (Exception) { heatSink = null; }
+        // #1185 — the cooler's hot side; optional on most drivers. A NotImplemented answer is remembered
+        // for the connection (reset on connect) so the status tick does not spend a round-trip on it
+        // every pass; any other failure reads as "not reported" this pass only.
+        double? heatSink = null;
+        if (Volatile.Read(ref heatSinkUnsupported) == 0) {
+            try { heatSink = c.HeatSinkTemperature; }
+            catch (ASCOM.NotImplementedException) { Interlocked.Exchange(ref heatSinkUnsupported, 1); }
+            catch (Exception) { }
+        }
         return new CameraStateDto(MapState(state), temp, coolerPower, coolerOn, progress,
             CoolerSetpointC: setpoint, ReadoutMode: readoutMode, CoolerStateKnown: coolerStateKnown,
             HeatSinkTemperatureC: heatSink);
+    }
+
+    /// <summary>#1185 — the wire rule for ASCOM's discrete Gains / Offsets name lists: a null or empty
+    /// list means "the camera uses the Min..Max range" and goes out as null; a non-empty one goes out
+    /// as the names in driver index order (a null entry as ""). Extracted so the rule is testable
+    /// without a fake Alpaca camera.</summary>
+    internal static IReadOnlyList<string>? NamesOrNull<T>(IList<T>? list) {
+        if (list is not { Count: > 0 }) {
+            return null;
+        }
+        var names = new List<string>(list.Count);
+        foreach (var item in list) {
+            names.Add(item?.ToString() ?? "");
+        }
+        return names;
     }
 
     // Extracted (internal) for direct unit testing.
@@ -2072,19 +2097,9 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
         bool hasShutter = false;
         try { hasShutter = c.HasShutter; } catch (Exception) { }
         IReadOnlyList<string>? gains = null;
-        try {
-            var list = c.Gains;
-            if (list is { Count: > 0 }) {
-                gains = list.Select(g => g?.ToString() ?? "").ToList();
-            }
-        } catch (Exception) { }
+        try { gains = NamesOrNull(c.Gains); } catch (Exception) { }
         IReadOnlyList<string>? offsets = null;
-        try {
-            var list = c.Offsets;
-            if (list is { Count: > 0 }) {
-                offsets = list.Select(o => o?.ToString() ?? "").ToList();
-            }
-        } catch (Exception) { }
+        try { offsets = NamesOrNull(c.Offsets); } catch (Exception) { }
         double exposureResolution = 0;
         try { exposureResolution = c.ExposureResolution; } catch (Exception) { }
         return new CameraCapabilitiesDto(

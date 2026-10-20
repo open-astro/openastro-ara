@@ -32,6 +32,9 @@ namespace OpenAstroAra.Test {
     [TestFixture]
     [Category("IO")] // #1265 — real disk, loopback HTTP or a simulator: not part of the quick unit run
     public class CameraServiceTest {
+        private static readonly string[] IsoNames = { "ISO 100", "ISO 200" };
+        private static readonly string[] NumberAndBlank = { "100", "" };
+
 
         [Test]
         public async Task ForgetAsync_with_no_device_retained_returns_false() {
@@ -222,6 +225,12 @@ namespace OpenAstroAra.Test {
         [Test]
         public void MapState_covers_the_ascom_camera_states() {
             Assert.That(CameraService.MapState(CameraState.Idle), Is.EqualTo("idle"));
+            // #1185 — the discrete gain/offset name lists: null or empty from the driver → null on the wire
+            // ("use the range"); names otherwise, in driver order, a null entry as "".
+            Assert.That(CameraService.NamesOrNull<string>(null), Is.Null);
+            Assert.That(CameraService.NamesOrNull(new List<string>()), Is.Null);
+            Assert.That(CameraService.NamesOrNull(new List<string> { "ISO 100", "ISO 200" }), Is.EqualTo(IsoNames));
+            Assert.That(CameraService.NamesOrNull(new List<object?> { 100, null }), Is.EqualTo(NumberAndBlank));
             Assert.That(CameraService.MapState(CameraState.Waiting), Is.EqualTo("exposing"));
             Assert.That(CameraService.MapState(CameraState.Exposing), Is.EqualTo("exposing"));
             Assert.That(CameraService.MapState(CameraState.Reading), Is.EqualTo("downloading"));
