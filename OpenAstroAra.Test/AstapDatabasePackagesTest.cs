@@ -47,7 +47,9 @@ namespace OpenAstroAra.Test {
             _root = Path.Combine(Path.GetTempPath(), "ara-astap-pkg-" + Path.GetRandomFileName());
             _solverRoot = Path.Combine(_root, "astap");
             Directory.CreateDirectory(_solverRoot);
-            AstapStarDatabase.InvalidateCache();
+            // No InvalidateCache here: the scan cache is keyed by directory and every test uses a fresh one, and
+            // clearing the process-wide cache races AstapStarDatabaseTest's reference-equality check when the
+            // fixtures run in parallel.
         }
 
         [TearDown]
