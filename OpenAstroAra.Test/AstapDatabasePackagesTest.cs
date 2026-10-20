@@ -460,6 +460,26 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_copy_that_predates_the_registry_is_recorded_when_listed_and_survives_a_path_change() {
+            // #1417 shipped without the registry; a D80 installed then has no record. Seeing it under the current
+            // root records it, so a later path change still lists and removes it.
+            var oldRoot = Path.Combine(_root, "astap-old");
+            var newRoot = Path.Combine(_root, "astap-new");
+            Directory.CreateDirectory(newRoot);
+            Touch(Path.Combine(oldRoot, "astap-d80"), "d80_0101.1476");
+            Touch(Path.Combine(oldRoot, "astap-d80"), SkyDataInstaller.InstalledMarkerFileName);
+            var root = oldRoot;
+            var svc = new DataManagerService(_root, new UnusedFetcher(), new NullBroadcaster(), NullLogger<DataManagerService>.Instance,
+                catalog: TestCatalog, expectedDigests: NoDigests, solverDataRoot: () => root, writeProbe: _ => null, freeBytes: _ => null);
+            Assert.That((await svc.ListPackagesAsync(CancellationToken.None)).Single(p => p.Id == "astap-d80").IsInstalled, Is.True);
+
+            root = newRoot;
+            var listed = (await svc.ListPackagesAsync(CancellationToken.None)).Single(p => p.Id == "astap-d80");
+            Assert.That(listed.IsInstalled, Is.True);
+            Assert.That(listed.InstallPath, Is.EqualTo(Path.Combine(oldRoot, "astap-d80")));
+        }
+
+        [Test]
         public void Roots_compare_by_normalised_full_path() {
             Assert.That(SolverInstallRegistry.SameRoot(_solverRoot, _solverRoot + Path.DirectorySeparatorChar), Is.True, "a trailing separator is the same directory");
             Assert.That(SolverInstallRegistry.SameRoot(_solverRoot, Path.Combine(_solverRoot, "x")), Is.False);

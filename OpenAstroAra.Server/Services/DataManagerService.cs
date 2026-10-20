@@ -530,7 +530,14 @@ namespace OpenAstroAra.Server.Services {
                 // A solver package may have a copy under an earlier index path too: Remove means "free the disk",
                 // so every remembered copy goes with it.
                 foreach (var other in AllInstallDirs(packageId)) {
-                    Directory.Delete(other, recursive: true);
+                    try {
+                        Directory.Delete(other, recursive: true);
+                    } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
+                        // Name the copy that blocked (the old path may be read-only now, which is why the user
+                        // moved on); the registry keeps it so the row still shows it.
+                        LogDeleteFailed(packageId + " (" + other + ")", ex);
+                        return Task.FromResult(PackageDeleteResult.Blocked);
+                    }
                 }
                 _solverInstalls.Forget(packageId);
                 LogDeleted(packageId);
@@ -692,7 +699,11 @@ namespace OpenAstroAra.Server.Services {
 
                 if (fetch.NotModified) {
                     // The remote package is unchanged since the last install — there's nothing to download or extract,
-                    // and the existing install stays in place. Report it as a completed (up-to-date) download.
+                    // and the existing install stays in place. Report it as a completed (up-to-date) download. A copy
+                    // that predates the registry (installed before this release) gets recorded here.
+                    if (IsSolverPackage(pkg)) {
+                        _solverInstalls.Record(pkg.Id, RootFor(pkg));
+                    }
                     await EmitAsync(WsEventCatalog.DataManagerDownloadComplete, job, error: null).ConfigureAwait(false);
                     LogDownloadUpToDate(pkg.Id, job.Id);
                     return;
@@ -880,7 +891,12 @@ namespace OpenAstroAra.Server.Services {
                 return pkg with { IsInstalled = false, InstalledUtc = null, InstallPath = null };
             }
             // InstallPath says where the files are: for a solver package that may be an earlier index path
-            // (the profile's path changed after the install), which the solver no longer reads.
+            // (the profile's path changed after the install), which the solver no longer reads. A copy found under
+            // the current root that the registry does not know (installed before the registry existed) is
+            // recorded now, so a later path change still finds it.
+            if (IsSolverPackage(pkg) && !_solverInstalls.RootsFor(pkg.Id).Any(r => SolverInstallRegistry.SameRoot(r, Path.GetDirectoryName(dir)!))) {
+                _solverInstalls.Record(pkg.Id, Path.GetDirectoryName(dir)!);
+            }
             return pkg with { IsInstalled = true, InstalledUtc = info.InstalledUtc, SizeBytes = info.Size, InstallPath = dir };
         }
 
@@ -1054,10 +1070,10 @@ namespace OpenAstroAra.Server.Services {
             } else {
                 var gunzip = seedPath.EndsWith(".gz", StringComparison.OrdinalIgnoreCase);
                 await SkyDataInstaller.InstallFromFileAsync(source, targetDir, CatalogFileName, gunzip, ceiling, null, ct, expectedSha).ConfigureAwait(false);
-                        if (IsSolverPackage(pkg)) {
+            }
+            if (IsSolverPackage(pkg)) {
                 _solverInstalls.Record(pkg.Id, RootFor(pkg));
             }
-        }
         }
 
         [LoggerMessage(Level = LogLevel.Information, Message = "§36 seeded catalog package '{PackageId}' from the bundled copy")]
