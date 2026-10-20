@@ -110,6 +110,8 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
     }
     private CameraStateDto _runtime = IdleRuntime;
     private int _refreshing;
+    // #1185 — heat-sink read cadence + NotImplemented latch for the connected driver.
+    private readonly HeatSinkProbe _heatSink = new();
     private int _refreshPending;
     private long _connectGeneration;
     private int _captureInFlight;
@@ -285,7 +287,7 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
             }
             DisposeClientLocked();
             _device = device;
-            Interlocked.Exchange(ref heatSinkUnsupported, 0); // a new driver may implement it (#1185)
+            _heatSink.Reset(); // a new driver may implement HeatSinkTemperature (#1185)
             generation = ++_connectGeneration;
             SetState(EquipmentConnectionState.Connecting);
         }
@@ -1798,7 +1800,7 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
                 return; // the device didn't answer — skip this pass's reads
             }
             ObserveProbeIfLive(client, probeSucceeded: true);
-            var runtime = ReadRuntime(client, out var readError);
+            var runtime = ReadRuntime(client, _heatSink, out var readError);
             var caps = needCaps ? ReadCapabilities(client) : null;
             var capsCommitted = false;
             var driftVerdict = CoolingDriftVerdict.Idle;
@@ -1958,12 +1960,9 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
         };
     }
 
-    // 1 once the connected driver answered NotImplemented for HeatSinkTemperature (#1185); reset on connect.
-    private static int heatSinkUnsupported;
-
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Per-field read boundary: an unsupported/transiently-failing camera property falls back to its default rather than failing the whole runtime read. CA1031's log-and-recover boundary applies.")]
-    private static CameraStateDto ReadRuntime(AlpacaCamera c, out string? readError) {
+    private static CameraStateDto ReadRuntime(AlpacaCamera c, HeatSinkProbe heatSinkProbe, out string? readError) {
         CameraState state;
         readError = null;
         // CameraState is the essential read: a streak of failures is a degraded fault (§42.3 second channel).
@@ -1991,15 +1990,9 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
                 readoutMode = modes[idx]?.ToString();
             }
         } catch (Exception) { }
-        // #1185 — the cooler's hot side; optional on most drivers. A NotImplemented answer is remembered
-        // for the connection (reset on connect) so the status tick does not spend a round-trip on it
-        // every pass; any other failure reads as "not reported" this pass only.
-        double? heatSink = null;
-        if (Volatile.Read(ref heatSinkUnsupported) == 0) {
-            try { heatSink = c.HeatSinkTemperature; }
-            catch (ASCOM.NotImplementedException) { Interlocked.Exchange(ref heatSinkUnsupported, 1); }
-            catch (Exception) { }
-        }
+        // #1185 — the cooler's hot side: only while the cooler is on, every Nth pass, never again for a
+        // driver that answered NotImplemented (HeatSinkProbe has the rule and the test).
+        var heatSink = heatSinkProbe.Read(coolerOn, () => c.HeatSinkTemperature);
         return new CameraStateDto(MapState(state), temp, coolerPower, coolerOn, progress,
             CoolerSetpointC: setpoint, ReadoutMode: readoutMode, CoolerStateKnown: coolerStateKnown,
             HeatSinkTemperatureC: heatSink);
