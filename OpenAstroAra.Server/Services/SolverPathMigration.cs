@@ -45,7 +45,7 @@ public static class SolverPathMigration {
     /// unchanged (the same instance). Any other path is the user's own choice and is never touched.</summary>
     public static PlateSolveSettingsDto Migrate(PlateSolveSettingsDto ps, Func<string, bool> fileExists) {
         var path = ps.PathOrEndpoint?.Trim();
-        if (path == null || Array.IndexOf(StockPaths, path) < 0 || path == AstapCliPath || !fileExists(AstapCliPath)) {
+        if (path == null || Array.IndexOf(StockPaths, path) < 0 || !fileExists(AstapCliPath)) {
             return ps;
         }
         return ps with { PathOrEndpoint = AstapCliPath };
