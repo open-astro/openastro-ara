@@ -533,10 +533,13 @@ class _ScreenGuiderState extends ConsumerState<ScreenGuider> {
             'oag')
           Builder(builder: (context) {
             final mainFl = _draftOf(ref).telescope.focalLengthMm ?? 0;
-            // Same reducer rule as applyDraftToPhd2, so the previewed number
-            // is the persisted number.
+            // Same reducer rule as applyDraftToPhd2 (the draft's reducer when
+            // set, else the base profile's), so the previewed number is the
+            // persisted number.
             final derived = derivedOagGuideFocalLength(
-                mainFl, effectiveOagReducerFactor(_baseReducerFactor));
+                mainFl,
+                effectiveOagReducerFactor(
+                    _draftOf(ref).telescope.reducerFactor ?? _baseReducerFactor));
             return Padding(
               padding: const EdgeInsets.only(bottom: 12),
               child: Text(

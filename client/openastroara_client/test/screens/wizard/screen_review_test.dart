@@ -239,6 +239,23 @@ void main() {
       expect(container.read(wizardControllerProvider).draft.plateSolve.solverDatabasePackageIds, isEmpty);
     });
 
+    testWidgets('a failed recheck drops the ids of an earlier visit so Save queues nothing stale', (tester) async {
+      final (container, api) = await pump(tester);
+      final draft = container.read(wizardControllerProvider).draft;
+      expect(draft.plateSolve.solverDatabasePackageIds, ['astap-d05']);
+      api.throwOnRecommend = true;
+      await tester.ensureVisible(find.text('Recheck'));
+      await tester.tap(find.text('Recheck'));
+      await tester.pumpAndSettle();
+      expect(draft.plateSolve.solverDatabasePackageIds, isEmpty);
+      expect(find.text('rig unreachable'), findsOneWidget);
+    });
+
+    testWidgets('an untouched reducer with no rig reads as the profile\'s value, never 1×', (tester) async {
+      await pump(tester);
+      expect(find.text("Profile's value (not set here)"), findsOneWidget);
+    });
+
     testWidgets('no data manager (offline draft) explains the choice waits for a rig', (tester) async {
       final container = ProviderContainer(overrides: [
         dataManagerApiProvider.overrideWithValue(null),

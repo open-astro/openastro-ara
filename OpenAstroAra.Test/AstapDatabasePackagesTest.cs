@@ -175,7 +175,7 @@ namespace OpenAstroAra.Test {
         [TestCase(2.0, "d80")]   // general band: D05/D20/D50 first, none installed → D80
         [TestCase(6.0, "d80")]
         [TestCase(6.5, "g05")]   // above 6°: the 500 stars/deg² database
-        [TestCase(15.0, "g05")]  // a 135 mm lens on a full-frame sensor
+        [TestCase(15.0, "g05")]  // a 50 mm lens on an APS-C sensor
         [TestCase(20.0, "g05")]
         [TestCase(25.0, "w08")]  // above 20°: all-sky
         public void Wide_fields_pick_g05_then_w08(double fovDeg, string expected) {
@@ -330,14 +330,16 @@ namespace OpenAstroAra.Test {
                 Assert.That(r.Band, Is.EqualTo("general"));
                 Assert.That(r.TooNarrow, Is.False);
             });
-            // A 135 mm lens (15°, G05) with a 200 mm guide scope + ASI120 (1.0°, D05): two databases.
-            var two = svc.Recommend(new SolverRecommendationRequestDto(135, 1.0, 6248, 4176, 3.76, 200, 3.75, 1280, 960), null, null);
+            // A 50 mm lens (18°, well inside G05's 6–20° band) with a 200 mm guide scope + ASI120 (1.0°, D05): two databases.
+            var two = svc.Recommend(new SolverRecommendationRequestDto(50, 1.0, 6248, 4176, 3.76, 200, 3.75, 1280, 960), null, null);
+            Assert.That(two.MainFovDeg, Is.EqualTo(18.0).Within(0.1));
             Assert.That(two.Packages.Select(p => (p.Role, p.PackageId)), Is.EqualTo(TwoPicks));
-            // The same lens with an OAG: the guide camera looks through the 135 mm lens, 960 px tall at 3.75 µm → 1.53°,
-            // D05 again (the guide-scope focal length is ignored).
+            // A 135 mm lens with an OAG: the guide camera looks through the 135 mm lens, 960 px tall at 3.75 µm → 1.53°,
+            // D05 (the guide-scope focal length is ignored); the main field is 6.7°, G05.
             var oag = svc.Recommend(new SolverRecommendationRequestDto(135, 1.0, 6248, 4176, 3.76, 200, 3.75, 1280, 960, GuideSetupType: "oag"), null, null);
+            Assert.That(oag.MainFovDeg, Is.EqualTo(6.7).Within(0.05));
             Assert.That(oag.GuideFovDeg, Is.EqualTo(1.53).Within(0.02));
-            Assert.That(oag.Packages.Select(p => (p.Role, p.PackageId)), Is.EqualTo(TwoPicks), "15° main → G05, 1.5° OAG guide → D05");
+            Assert.That(oag.Packages.Select(p => (p.Role, p.PackageId)), Is.EqualTo(TwoPicks), "6.7° main → G05, 1.5° OAG guide → D05");
             // A C14 × 0.63 with an OAG and an ASI120: the guide field is 0.08° → too narrow; polar alignment cannot solve.
             var c14oag = svc.Recommend(new SolverRecommendationRequestDto(3910, 0.63, 6248, 4176, 3.76, null, 3.75, 1280, 960, GuideSetupType: "oag"), null, null);
             Assert.That(c14oag.Packages.Single(p => p.Role == "guide camera").TooNarrow, Is.True);

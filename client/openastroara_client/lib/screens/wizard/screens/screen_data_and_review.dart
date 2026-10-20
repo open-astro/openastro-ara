@@ -145,7 +145,9 @@ class ScreenReview extends ConsumerWidget {
           ('Name', reviewValue(t.name)),
           ('Focal length', _unit(t.focalLengthMm, 'mm')),
           ('Aperture', _unit(t.apertureMm, 'mm')),
-          ('Reducer / Barlow', t.reducerFactor == null ? 'none (1×)' : '${t.reducerFactor}× → ${t.effectiveFocalLengthMm?.toStringAsFixed(0) ?? '?'} mm'),
+          // Null = untouched with no rig to read the base profile from: Save
+          // then keeps the profile's own reducer, so never claim 1× here.
+          ('Reducer / Barlow', t.reducerFactor == null ? "Profile's value (not set here)" : '${t.reducerFactor}× → ${t.effectiveFocalLengthMm?.toStringAsFixed(0) ?? '?'} mm'),
           ('Focal ratio', fr),
         ]),
         _ReviewSection(title: 'Camera', step: 3, onEdit: edit, rows: [
@@ -414,6 +416,9 @@ class _SolverDatabaseSectionState extends ConsumerState<_SolverDatabaseSection> 
       });
     } catch (e) {
       if (!mounted) return;
+      // A failed recheck must not leave ids from an earlier visit (the optics
+      // may have changed since): Save queues nothing until a recheck succeeds.
+      draft.plateSolve.solverDatabasePackageIds = const [];
       setState(() {
         _loading = false;
         _error = friendlyError(e, action: 'work out which star database this rig needs');

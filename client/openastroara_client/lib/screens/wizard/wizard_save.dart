@@ -385,9 +385,10 @@ Future<void> saveWizardProfile(ProfileApi api, ProfileDraft d) async {
     _trySave(() async => api.putOptics(applyDraftToOptics(await api.getOptics(), d))),
     _trySave(() async =>
         api.putImagingDefaults(applyDraftToImaging(await api.getImagingDefaults(), d))),
-    // §63.19 — the OAG derivation needs the base optics reducer factor; the
-    // draft never writes the reducer, so reading it concurrently with the
-    // optics-section save above is race-free.
+    // §63.19 — the OAG derivation needs the base optics reducer factor only
+    // when the draft has none (§36.10: a set draft reducer wins), so reading
+    // it concurrently with the optics-section save above is race-free either
+    // way.
     _trySave(() async => api.putPhd2Settings(applyDraftToPhd2(
         await api.getPhd2Settings(), d,
         baseOptics: await api.getOptics()))),

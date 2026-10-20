@@ -14,6 +14,9 @@ import 'package:openastroara/services/focuser_props_api.dart';
 import 'package:openastroara/services/rotator_props_api.dart';
 import 'package:openastroara/services/saved_server_service.dart';
 import 'package:openastroara/services/telescope_optics_api.dart';
+import 'package:openastroara/services/profile_api.dart';
+import 'package:openastroara/state/profile_management_state.dart';
+import 'package:openastroara/state/settings/optics_settings_state.dart';
 import 'package:openastroara/state/saved_server_state.dart';
 import 'package:openastroara/state/settings/equipment_connection_state.dart';
 import 'package:openastroara/state/wizard/equipment_readiness_state.dart';
@@ -100,8 +103,11 @@ Future<ProviderContainer> _pump(
   CameraGeometry? camera,
   TelescopeOptics? optics,
   MountProps? mount,
+  OpticsSettings? baseOptics,
 }) async {
   final container = ProviderContainer(overrides: [
+    if (baseOptics != null)
+      profileApiProvider.overrideWithValue(_OpticsOnlyProfileApi(baseOptics)),
     savedServerServiceProvider.overrideWithValue(_FakeSavedServerService()),
     equipmentDiscoveryApiFactoryProvider
         .overrideWithValue((_) => _FakeDiscoveryApi(byType)),
@@ -186,6 +192,34 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.textContaining('Focal length (mm) — manual fallback'),
         findsOneWidget);
+  });
+
+  testWidgets('an untouched reducer field is seeded from the cloned profile, and blank means an explicit 1× (§36.10)',
+      (tester) async {
+    // New wizard profiles clone the active profile: with a 0.8× reducer there,
+    // an untouched field must show 0.8× (and Save keeps 0.8), never 1×.
+    final byType = {
+      EquipmentDeviceType.mount: [
+        _device(EquipmentDeviceType.mount, 'mnt-1', 'iOptron CEM70'),
+      ],
+    };
+    final container = await _pump(tester, byType: byType, mount: const MountProps(),
+        baseOptics: const OpticsSettings(reducerFactor: 0.8));
+    final draft = container.read(wizardControllerProvider).draft;
+    draft.telescope.focalLengthMm = 2032;
+    await tester.ensureVisible(find.text('Details').first);
+    await tester.tap(find.text('Details').first);
+    await tester.pumpAndSettle();
+
+    expect(draft.telescope.reducerFactor, 0.8, reason: 'seeded from the base profile');
+    expect(tester.widget<TextField>(find.byKey(const ValueKey('details-mount-reducer'))).controller!.text, '0.8');
+    expect(find.textContaining('1626 mm'), findsOneWidget, reason: '2032 × 0.8, what Save will write');
+
+    // Clearing the field means "no reducer": an explicit 1×, not "keep 0.8".
+    await tester.enterText(find.byKey(const ValueKey('details-mount-reducer')), '');
+    await tester.pumpAndSettle();
+    expect(draft.telescope.reducerFactor, 1.0);
+    expect(find.textContaining('2032 mm'), findsOneWidget);
   });
 
   testWidgets('the reducer field and its quick picks write the draft and show the effective focal length (§36.10)',
@@ -275,4 +309,18 @@ void main() {
     expect(draft.equipment.focuserDeviceId, isNull,
         reason: 'auto-assign runs once per wizard session');
   });
+}
+
+/// The base profile the wizard clones from, as far as the reducer field reads
+/// it (only `getOptics` is called; anything else is a test bug).
+class _OpticsOnlyProfileApi implements ProfileApi {
+  _OpticsOnlyProfileApi(this.optics);
+  final OpticsSettings optics;
+
+  @override
+  Future<OpticsSettings> getOptics() async => optics;
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) =>
+      throw UnimplementedError('${invocation.memberName} is not used by the reducer field');
 }

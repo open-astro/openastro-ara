@@ -42,6 +42,14 @@ namespace OpenAstroAra.Test {
                 Mock.Of<IDiagnosticsService>(),
                 NullLogger<GuiderRecoveryCoordinator>.Instance);
 
+        /// <summary>§36.10 — the wizard's recommendation endpoint asks for the guide frame size; without a connected
+        /// guider that is null (main camera only), never a throw that would fail the whole request.</summary>
+        [Test]
+        public async System.Threading.Tasks.Task Guide_frame_size_is_null_when_no_guider_is_connected() {
+            using var svc = NewService();
+            Assert.That(await svc.TryGetGuideFrameSizeAsync(CancellationToken.None), Is.Null);
+        }
+
         [Test]
         public async System.Threading.Tasks.Task GetAsync_returns_null_before_connect() {
             using var svc = NewService();

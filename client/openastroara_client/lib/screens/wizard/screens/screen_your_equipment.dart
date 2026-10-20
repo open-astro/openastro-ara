@@ -8,6 +8,7 @@ import '../../../models/equipment_readiness.dart';
 import '../../../models/profile_draft.dart';
 import '../../../models/solver_recommendation.dart';
 import '../../../services/equipment_discovery_api.dart';
+import '../../../state/profile_management_state.dart';
 import '../../../state/saved_server_state.dart';
 import '../../../state/settings/equipment_connection_state.dart';
 import '../../../state/wizard_state.dart';
@@ -965,15 +966,15 @@ class _StatefulDropdownState<T> extends State<_StatefulDropdown<T>> {
 /// focal length and the field of view live as the draft knows them (the camera's
 /// sensor and pixel size come from its driver on the camera card; the focal
 /// length from the mount's). Owns the text controller; the draft is the state.
-class _ReducerField extends StatefulWidget {
+class _ReducerField extends ConsumerStatefulWidget {
   const _ReducerField({required this.draft});
   final ProfileDraft draft;
 
   @override
-  State<_ReducerField> createState() => _ReducerFieldState();
+  ConsumerState<_ReducerField> createState() => _ReducerFieldState();
 }
 
-class _ReducerFieldState extends State<_ReducerField> {
+class _ReducerFieldState extends ConsumerState<_ReducerField> {
   static const _quickPicks = [0.63, 0.7, 0.8, 1.0, 2.0];
   late final TextEditingController _ctl;
 
@@ -982,6 +983,29 @@ class _ReducerFieldState extends State<_ReducerField> {
     super.initState();
     final r = widget.draft.telescope.reducerFactor;
     _ctl = TextEditingController(text: r == null ? '' : formatReducer(r));
+    if (r == null) _seedFromBaseProfile();
+  }
+
+  /// New wizard profiles clone the active profile, so an untouched field must
+  /// show (and Save must keep) that profile's reducer, not 1×. Seeding the draft
+  /// makes the helper, the review row, the recommendation and Save read the
+  /// same number. Offline there is no base: the draft stays null and Save keeps
+  /// whatever the profile has.
+  Future<void> _seedFromBaseProfile() async {
+    final api = ref.read(profileApiProvider);
+    if (api == null) return;
+    try {
+      final optics = await api.getOptics();
+      if (!mounted || widget.draft.telescope.reducerFactor != null) return;
+      final base = optics.reducerFactor;
+      if (base <= 0) return;
+      setState(() {
+        widget.draft.telescope.reducerFactor = base;
+        _ctl.text = formatReducer(base);
+      });
+    } catch (_) {
+      // Offline / no daemon — the field stays blank, Save keeps the profile's value.
+    }
   }
 
   @override
@@ -1018,13 +1042,14 @@ class _ReducerFieldState extends State<_ReducerField> {
   }
 
   // Any real reducer or Barlow lands in 0.1–5×; outside that the entry is a
-  // typo, so the last good value stays (blank or 0 means none, 1×).
+  // typo, so the last good value stays. Blank or 0 means none: that writes an
+  // explicit 1×, because null would mean "keep the cloned profile's reducer".
   static const double _minFactor = 0.1;
   static const double _maxFactor = 5;
 
   void _set(double? v) {
     if (v != null && v > 0 && (v < _minFactor || v > _maxFactor)) return;
-    setState(() => widget.draft.telescope.reducerFactor = (v != null && v > 0) ? v : null);
+    setState(() => widget.draft.telescope.reducerFactor = (v != null && v > 0) ? v : 1.0);
   }
 
   @override

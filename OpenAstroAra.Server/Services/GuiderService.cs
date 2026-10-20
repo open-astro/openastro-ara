@@ -53,14 +53,19 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
 
     /// <inheritdoc/>
     public async Task<(int Width, int Height)?> TryGetGuideFrameSizeAsync(CancellationToken ct) {
-        PHD2Guider guider;
         try {
-            guider = RequireConnectedGuider();
-        } catch (InvalidOperationException) {
-            return null; // not connected: the wizard then recommends from the main camera only
+            var guider = RequireConnectedGuider();
+            return await guider.GetCameraFrameSizeAsync(ct).ConfigureAwait(false);
+        } catch (Exception ex) when (ex is not OperationCanceledException) {
+            // Not connected, or PHD2 dropped between the check and the RPC: the wizard then recommends
+            // from the main camera only rather than failing the whole request.
+            LogGuideFrameSizeUnavailable(ex);
+            return null;
         }
-        return await guider.GetCameraFrameSizeAsync(ct).ConfigureAwait(false);
     }
+
+    [LoggerMessage(EventId = 6368, Level = LogLevel.Debug, Message = "§36.10 guide frame size unavailable; recommending from the main camera only")]
+    private partial void LogGuideFrameSizeUnavailable(Exception exception);
 
 
     private readonly ILogger<GuiderService> _logger;
