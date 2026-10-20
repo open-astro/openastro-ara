@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../models/guider_twin.dart';
 import '../models/profile_list.dart';
 import '../services/profile_api.dart';
 import 'profile_cache_state.dart';
@@ -107,9 +108,31 @@ class ProfileManagementNotifier extends AsyncNotifier<ProfileList> {
   /// Rename [id], then refresh. Throws on transport failure.
   Future<void> rename(String id, String name) => _mutate((api) => api.renameProfile(id, name));
 
-  /// Delete [id], then refresh. Throws on transport failure — notably the
-  /// daemon's 409 when [id] is the active or last-remaining profile.
-  Future<void> delete(String id) => _mutate((api) => api.deleteProfile(id));
+  /// Delete [id] (and, with [deleteGuiderProfile], its OpenAstro Guider
+  /// profile), then refresh. Returns what happened to the guider profile.
+  /// Throws on transport failure.
+  Future<ProfileDeleteResult> delete(String id,
+      {bool deleteGuiderProfile = false}) async {
+    var result = ProfileDeleteResult.kept;
+    await _mutate((api) async {
+      result = await api.deleteProfile(id,
+          deleteGuiderProfile: deleteGuiderProfile);
+    });
+    return result;
+  }
+
+  /// §63.4 — the guider-twin preview for the delete dialog; null when there
+  /// is no server, or the daemon could not answer (an older daemon has no such
+  /// route) — the dialog then offers nothing about the guider.
+  Future<GuiderTwinPreview?> guiderTwin(String id) async {
+    final api = _api;
+    if (api == null) return null;
+    try {
+      return await api.getGuiderTwin(id);
+    } catch (_) {
+      return null;
+    }
+  }
 }
 
 final profileManagementProvider =

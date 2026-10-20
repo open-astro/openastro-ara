@@ -6461,7 +6461,7 @@ paths:
     delete:
       tags:
         - Profiles
-      summary: Delete a profile. Deleting the active profile activates the newest remaining one; deleting the last profile returns to the zero-profile state.
+      summary: 'Delete a profile. Deleting the active profile activates the newest remaining one; deleting the last profile returns to the zero-profile state. ?guider_profile=delete also deletes its OpenAstro Guider profile (now, or queued until the guider is connected and idle); ?dark_library=keep spares the dark library. The body says what happened to the guider profile.'
       operationId: DeleteProfile
       parameters:
         - name: id
@@ -6470,9 +6470,53 @@ paths:
           schema:
             type: string
             format: uuid
+        - name: guider_profile
+          in: query
+          schema:
+            type: string
+        - name: dark_library
+          in: query
+          schema:
+            type: string
       responses:
-        '204':
-          description: No Content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfileDeleteResultDto'
+        '400':
+          description: Bad Request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '404':
+          description: Not Found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  '/api/v1/profiles/{id}/guider-twin':
+    get:
+      tags:
+        - Profiles
+      summary: 'Describe the profile''s OpenAstro Guider profile (its twin) for the delete dialog: whether it exists on the daemon, whether another profile shares it, and whether a delete could run now or would be queued.'
+      operationId: GetProfileGuiderTwin
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GuiderTwinPreviewDto'
         '404':
           description: Not Found
           content:
@@ -10443,6 +10487,39 @@ components:
             - number
             - string
           format: double
+    GuiderTwinPreviewDto:
+      required:
+        - twin_names
+        - exists
+        - shared
+        - shared_with
+        - selected_on_daemon
+        - can_delete_now
+        - reason
+      type: object
+      properties:
+        twin_names:
+          type: array
+          items:
+            type: string
+        exists:
+          type:
+            - 'null'
+            - boolean
+        shared:
+          type: boolean
+        shared_with:
+          type:
+            - 'null'
+            - string
+        selected_on_daemon:
+          type: boolean
+        can_delete_now:
+          type: boolean
+        reason:
+          type:
+            - 'null'
+            - string
     GuidingAssistantApplyRequestDto:
       required:
         - which
@@ -12256,6 +12333,18 @@ components:
             - integer
             - string
           format: int64
+    ProfileDeleteResultDto:
+      required:
+        - guider_profile
+        - reason
+      type: object
+      properties:
+        guider_profile:
+          type: string
+        reason:
+          type:
+            - 'null'
+            - string
     ProfileListDto:
       required:
         - active_id

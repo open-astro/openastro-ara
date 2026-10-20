@@ -23,6 +23,7 @@ using OpenAstroAra.Server.Services;
 using OpenAstroAra.TestHarness.Guider;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text.Json.Nodes;
 using System.Threading;
@@ -641,68 +642,6 @@ namespace OpenAstroAra.Test {
 
             Assert.That(created, Does.Contain("Rig B"),
                 "the push's ensure step must create the NEW profile's twin on the daemon");
-        }
-
-        [Test]
-        public async Task Deleting_an_ara_profile_deletes_its_guider_twin_with_dark_files() {
-            // §63.4 delete hook — the service tries the twin under BOTH the display name
-            // (current scheme) and the legacy ara-<slug>-<id8> name, dark files included.
-            await using var fake = FakeGuider.Start();
-            fake.SetOnConnectEvents(PhdEvents.Version(subver: "openastroara-fake"), PhdEvents.AppState("Stopped"));
-            var deletedNames = new List<string?>();
-            bool? darkFiles = null;
-            // The factory receives the WHOLE JSON-RPC request; params sit under "params".
-            fake.OnRpc("delete_profile", req => {
-                var p = req["params"]?.AsObject();
-                deletedNames.Add(p?["name"]?.GetValue<string>());
-                darkFiles = p?["delete_dark_files"]?.GetValue<bool>();
-                return JsonValue.Create(0);
-            });
-            using var svc = new GuiderService(new HeadlessProfileService(), NewRecovery(),
-                NullLogger<GuiderService>.Instance, Mock.Of<IGuiderProcessSupervisor>());
-            await svc.ConnectAsync(new GuiderConnectRequestDto("127.0.0.1", fake.Port), idempotencyKey: null, CancellationToken.None)
-                .ConfigureAwait(false);
-            Assert.That(await PollAsync(svc, d => d.State == EquipmentConnectionState.Connected).ConfigureAwait(false),
-                Is.Not.Null, "the guider never reached Connected against the fake");
-
-            var profileId = Guid.NewGuid();
-            var ok = await svc.TryDeleteAraGuiderProfileAsync("Old Rig C8", profileId, CancellationToken.None)
-                .ConfigureAwait(false);
-
-            Assert.That(ok, Is.True, "the fake accepted the delete, so the hook reports success");
-            Assert.That(deletedNames, Does.Contain("Old Rig C8"),
-                "the display-name twin — the same one the connect path now creates");
-            Assert.That(deletedNames, Does.Contain(PHD2Guider.AraGuiderProfileName("Old Rig C8", profileId)),
-                "the legacy id-suffixed twin is swept too (pre-migration daemons)");
-            Assert.That(darkFiles, Is.True, "§63.4: the twin's dark library goes with it");
-        }
-
-        [Test]
-        public void The_selected_twin_guard_blocks_only_an_exact_name_match() {
-            // The selected twin tracks the last guider CONNECT; an ARA profile switch alone
-            // doesn't re-map it, so a deletable (non-active) ARA profile's twin can still be
-            // the daemon's selected profile — the hook must refuse that delete client-side
-            // (round-2 review finding). The guard is Ordinal on the exact twin name; a
-            // daemon with no selected profile never blocks.
-            var id = Guid.NewGuid();
-            var twin = PHD2Guider.AraGuiderProfileName("Switched Rig", id);
-            Assert.That(GuiderService.IsTwinSelectedOnDaemon(twin, twin), Is.True,
-                "the connect-time twin still selected on the daemon blocks the delete");
-            Assert.That(GuiderService.IsTwinSelectedOnDaemon(twin, null), Is.False,
-                "no selected profile → nothing to protect");
-            Assert.That(GuiderService.IsTwinSelectedOnDaemon(twin, "ara-some-other-rig-12345678"), Is.False,
-                "a different selected twin doesn't block");
-            Assert.That(GuiderService.IsTwinSelectedOnDaemon(twin, twin.ToUpperInvariant()), Is.False,
-                "PHD2 profile names are exact identifiers — the comparison is Ordinal");
-        }
-
-        [Test]
-        public async Task Profile_delete_hook_is_a_quiet_noop_when_no_guider_is_connected() {
-            using var svc = new GuiderService(new HeadlessProfileService(), NewRecovery(),
-                NullLogger<GuiderService>.Instance, Mock.Of<IGuiderProcessSupervisor>());
-            var ok = await svc.TryDeleteAraGuiderProfileAsync("Ghost rig", Guid.NewGuid(), CancellationToken.None)
-                .ConfigureAwait(false);
-            Assert.That(ok, Is.False, "disconnected → false, never a throw (best-effort contract)");
         }
 
         [Test]
@@ -1567,8 +1506,13 @@ namespace OpenAstroAra.Test {
             public int SelectedId = 1;
             public readonly List<JsonObject> Created = new();
             public readonly List<JsonObject> Renamed = new();
+            public readonly List<JsonObject> Deleted = new();
             public readonly List<bool> SetConnected = new();
+            /// <summary>Every RPC method name in arrival order — for ordering assertions.</summary>
+            public readonly List<string> Calls = new();
             public bool EquipmentConnected = true;
+            /// <summary>Set to make delete_profile refuse with this text whatever the state.</summary>
+            public string? DeleteRefusal;
 
             public ProfileDaemon(FakeGuider fake) {
                 fake.SetOnConnectEvents(PhdEvents.Version(subver: "openastroara-fake"), PhdEvents.AppState("Stopped"));
@@ -1577,14 +1521,15 @@ namespace OpenAstroAra.Test {
                 fake.OnRpc("get_app_state", JsonValue.Create("Stopped"));
                 fake.OnRpc("get_connected", _ => JsonValue.Create(EquipmentConnected));
                 fake.OnRpc("set_connected", req => {
+                    Calls.Add("set_connected");
                     var on = req["params"]?[0]?.GetValue<bool>() ?? false;
                     SetConnected.Add(on);
                     EquipmentConnected = on;
                     return JsonValue.Create(0);
                 });
                 fake.OnRpc("get_profile", _ => {
-                    var sel = Profiles.First(p => p.Id == SelectedId);
-                    return new JsonObject { ["id"] = sel.Id, ["name"] = sel.Name };
+                    var sel = Profiles.FirstOrDefault(p => p.Id == SelectedId);
+                    return new JsonObject { ["id"] = sel.Id, ["name"] = sel.Name ?? string.Empty };
                 });
                 fake.OnRpc("get_profiles", _ => {
                     var arr = new JsonArray();
@@ -1594,14 +1539,40 @@ namespace OpenAstroAra.Test {
                     return arr;
                 });
                 fake.OnRpc("create_profile", req => {
+                    Calls.Add("create_profile");
                     var p = req["params"]!.AsObject();
                     Created.Add((JsonObject)p.DeepClone());
-                    var id = Profiles.Max(x => x.Id) + 1;
+                    var id = Profiles.Count == 0 ? 1 : Profiles.Max(x => x.Id) + 1; // the selected twin may just have been deleted
                     Profiles.Add((id, p["name"]!.GetValue<string>()));
                     if (p["select"]?.GetValue<bool>() ?? true) {
                         SelectedId = id;
                     }
                     return new JsonObject { ["id"] = id, ["name"] = p["name"]!.GetValue<string>(), ["selected"] = SelectedId == id };
+                });
+                fake.OnRpc("delete_profile", req => {
+                    Calls.Add("delete_profile");
+                    var p = req["params"]!.AsObject();
+                    Deleted.Add((JsonObject)p.DeepClone());
+                    // The real daemon (event_server.cpp delete_profile): refused while ANY equipment is
+                    // connected; the selected profile may go once it is released, the daemon then
+                    // falls back to another profile.
+                    if (DeleteRefusal is not null) {
+                        throw new InvalidOperationException(DeleteRefusal);
+                    }
+                    if (EquipmentConnected) {
+                        throw new InvalidOperationException("cannot delete profile while equipment is connected");
+                    }
+                    var name = p["name"]!.GetValue<string>();
+                    var i = Profiles.FindIndex(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
+                    if (i < 0) {
+                        throw new InvalidOperationException("profile not found");
+                    }
+                    var (id, _) = Profiles[i];
+                    Profiles.RemoveAt(i);
+                    if (SelectedId == id) {
+                        SelectedId = Profiles.Count > 0 ? Profiles[0].Id : 0;
+                    }
+                    return new JsonObject { ["deleted_id"] = id, ["deleted_name"] = name };
                 });
                 fake.OnRpc("rename_profile", req => {
                     var p = req["params"]!.AsObject();
@@ -1716,6 +1687,414 @@ namespace OpenAstroAra.Test {
                 NullLogger<GuiderService>.Instance, Mock.Of<IGuiderProcessSupervisor>());
             Assert.That(await svc.TryCloneAraGuiderProfileAsync("A", "B", CancellationToken.None).ConfigureAwait(false), Is.False);
             Assert.That(await svc.TryRenameAraGuiderProfileAsync("A", Guid.NewGuid(), "B", CancellationToken.None).ConfigureAwait(false), Is.False);
+        }
+
+        // ── §63.4 — twin delete on ARA profile delete ────────────────────────────────────────────
+
+        private static readonly bool[] ReleaseThenReconnect2 = { false, true };
+        private static readonly string[] OnlyRigA = { "Rig A" };
+        private static readonly string[] OnlyRigB = { "Rig B" };
+        private static readonly string[] RigAAndB = { "Rig A", "Rig B" };
+        private static readonly string[] DeleteThenCreate = { "delete_profile", "create_profile" };
+
+        private sealed class TempTwinStore : IDisposable {
+            public readonly string Dir = Path.Combine(Path.GetTempPath(), "ara-twin-q-" + Path.GetRandomFileName());
+            public readonly FileGuiderTwinDeleteStore Store;
+            public TempTwinStore() {
+                Directory.CreateDirectory(Dir);
+                Store = new FileGuiderTwinDeleteStore(Dir);
+            }
+            public void Dispose() {
+                try { Directory.Delete(Dir, recursive: true); } catch (IOException) { }
+            }
+        }
+
+        private static GuiderService NewTwinService(IGuiderTwinDeleteStore? store, Func<(Guid Id, string? Name)?> araProfile,
+                IReadOnlyList<(Guid Id, string? Name)>? liveProfiles = null) =>
+            new(new HeadlessProfileService(), NewRecovery(), NullLogger<GuiderService>.Instance, Mock.Of<IGuiderProcessSupervisor>(),
+                araProfileResolver: araProfile, twinDeleteQueue: store,
+                araProfilesResolver: () => liveProfiles ?? Array.Empty<(Guid, string?)>());
+
+        private static async Task ConnectAsync(GuiderService svc, FakeGuider fake) {
+            await svc.ConnectAsync(new GuiderConnectRequestDto("127.0.0.1", fake.Port), idempotencyKey: null, CancellationToken.None)
+                .ConfigureAwait(false);
+            Assert.That(await PollAsync(svc, d => d.State == EquipmentConnectionState.Connected).ConfigureAwait(false),
+                Is.Not.Null, "the guider never reached Connected against the fake");
+        }
+
+        [Test]
+        public async Task Deleting_an_idle_twin_releases_the_equipment_deletes_both_names_and_reconnects() {
+            await using var fake = FakeGuider.Start();
+            var daemon = new ProfileDaemon(fake);
+            var id = Guid.NewGuid();
+            daemon.Profiles.Add((2, "Old Rig"));
+            daemon.Profiles.Add((3, PHD2Guider.AraGuiderProfileName("Old Rig", id)));
+            using var svc = await ConnectedAgainstAsync(fake, "Rig A").ConfigureAwait(false);
+            daemon.SetConnected.Clear();
+
+            var outcome = await svc.DeleteAraGuiderProfileAsync("Old Rig", id, deleteDarkFiles: true, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(outcome.Status, Is.EqualTo(GuiderTwinDeleteStatus.Deleted));
+            Assert.That(daemon.SetConnected, Is.EqualTo(ReleaseThenReconnect2),
+                "the daemon refuses delete_profile while any equipment is connected: release, delete, reconnect");
+            Assert.That(daemon.Deleted.Select(d => d["name"]!.GetValue<string>()), Is.EquivalentTo(new[] { "Old Rig", PHD2Guider.AraGuiderProfileName("Old Rig", id) }),
+                "the display-name twin and the legacy ara-<slug>-<id8> twin both go");
+            Assert.That(daemon.Deleted.All(d => d["delete_dark_files"]!.GetValue<bool>()), Is.True, "§63.4: the dark library goes with it");
+            Assert.That(daemon.Profiles.Select(p => p.Name), Is.EqualTo(OnlyRigA));
+            Assert.That(daemon.EquipmentConnected, Is.True);
+        }
+
+        [Test]
+        public async Task The_dark_library_is_kept_when_the_caller_says_so() {
+            await using var fake = FakeGuider.Start();
+            var daemon = new ProfileDaemon(fake);
+            daemon.Profiles.Add((2, "Old Rig"));
+            using var svc = await ConnectedAgainstAsync(fake, "Rig A").ConfigureAwait(false);
+
+            var outcome = await svc.DeleteAraGuiderProfileAsync("Old Rig", Guid.NewGuid(), deleteDarkFiles: false, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(outcome.Status, Is.EqualTo(GuiderTwinDeleteStatus.Deleted));
+            Assert.That(daemon.Deleted.Single()["delete_dark_files"]!.GetValue<bool>(), Is.False);
+        }
+
+        [Test]
+        public async Task A_twin_that_is_not_on_the_daemon_reports_not_found_without_touching_the_equipment() {
+            await using var fake = FakeGuider.Start();
+            var daemon = new ProfileDaemon(fake);
+            using var svc = await ConnectedAgainstAsync(fake, "Rig A").ConfigureAwait(false);
+            daemon.SetConnected.Clear();
+
+            var outcome = await svc.DeleteAraGuiderProfileAsync("Ghost rig", Guid.NewGuid(), deleteDarkFiles: true, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(outcome.Status, Is.EqualTo(GuiderTwinDeleteStatus.NotFound));
+            Assert.That(daemon.SetConnected, Is.Empty);
+            Assert.That(daemon.Deleted, Is.Empty);
+        }
+
+        [Test]
+        public async Task A_delete_while_guiding_is_queued_and_the_equipment_is_left_alone() {
+            await using var fake = FakeGuider.Start();
+            var daemon = new ProfileDaemon(fake);
+            daemon.Profiles.Add((2, "Old Rig"));
+            using var q = new TempTwinStore();
+            using var svc = NewTwinService(q.Store, () => (Guid.NewGuid(), "Rig A"));
+            await ConnectAsync(svc, fake).ConfigureAwait(false);
+            fake.OnRpc("get_app_state", JsonValue.Create("Guiding"));
+            daemon.SetConnected.Clear();
+            var id = Guid.NewGuid();
+
+            var outcome = await svc.DeleteAraGuiderProfileAsync("Old Rig", id, deleteDarkFiles: true, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(outcome.Status, Is.EqualTo(GuiderTwinDeleteStatus.Queued));
+            Assert.That(outcome.Reason, Does.Contain("guiding"));
+            Assert.That(daemon.SetConnected, Is.Empty, "a guided run is never interrupted for a profile delete");
+            Assert.That(daemon.Deleted, Is.Empty);
+            var pending = q.Store.List();
+            Assert.That(pending, Has.Count.EqualTo(1));
+            Assert.That(pending[0].AraProfileId, Is.EqualTo(id));
+            Assert.That(pending[0].TwinNames, Does.Contain("Old Rig"));
+        }
+
+        [Test]
+        public async Task An_unanswered_app_state_reads_as_busy_for_a_delete() {
+            // IsIdleAppState(null) is true for the rename path; a delete must not release the
+            // equipment of a guider whose state it could not read.
+            await using var fake = FakeGuider.Start();
+            var daemon = new ProfileDaemon(fake);
+            daemon.Profiles.Add((2, "Old Rig"));
+            using var q = new TempTwinStore();
+            using var svc = NewTwinService(q.Store, () => (Guid.NewGuid(), "Rig A"));
+            await ConnectAsync(svc, fake).ConfigureAwait(false);
+            fake.OnRpc("get_app_state", _ => throw new InvalidOperationException("no app state for you"));
+            daemon.SetConnected.Clear();
+
+            var outcome = await svc.DeleteAraGuiderProfileAsync("Old Rig", Guid.NewGuid(), true, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(outcome.Status, Is.EqualTo(GuiderTwinDeleteStatus.Queued));
+            Assert.That(daemon.SetConnected, Is.Empty);
+            Assert.That(daemon.Deleted, Is.Empty);
+        }
+
+        [Test]
+        public async Task A_delete_whose_bound_ran_out_is_queued_not_lost() {
+            // The endpoint hands the service a 15 s token; past it the delete must still happen later.
+            await using var fake = FakeGuider.Start();
+            var daemon = new ProfileDaemon(fake);
+            daemon.Profiles.Add((2, "Old Rig"));
+            using var q = new TempTwinStore();
+            using var svc = NewTwinService(q.Store, () => (Guid.NewGuid(), "Rig A"));
+            await ConnectAsync(svc, fake).ConfigureAwait(false);
+            daemon.SetConnected.Clear();
+            using var expired = new CancellationTokenSource();
+            await expired.CancelAsync().ConfigureAwait(false);
+            var id = Guid.NewGuid();
+
+            var outcome = await svc.DeleteAraGuiderProfileAsync("Old Rig", id, true, expired.Token).ConfigureAwait(false);
+
+            Assert.That(outcome.Status, Is.EqualTo(GuiderTwinDeleteStatus.Queued));
+            Assert.That(outcome.Reason, Does.Contain("did not answer in time"));
+            Assert.That(q.Store.List().Single().AraProfileId, Is.EqualTo(id));
+            Assert.That(daemon.SetConnected, Is.Empty);
+        }
+
+        /// <summary>A store that counts the calls that take its lock.</summary>
+        private sealed class CountingTwinStore : IGuiderTwinDeleteStore {
+            private readonly List<PendingGuiderTwinDelete> _items = new();
+            public int ListCalls;
+            public int PendingCount => _items.Count;
+            public IReadOnlyList<PendingGuiderTwinDelete> List() { ListCalls++; return _items.ToArray(); }
+            public void Add(PendingGuiderTwinDelete entry) => _items.Add(entry);
+            public void Remove(Guid araProfileId) => _items.RemoveAll(e => e.AraProfileId == araProfileId);
+        }
+
+        [Test]
+        public async Task The_ping_tick_never_takes_the_store_lock_while_the_guider_is_held_or_busy() {
+            // Add/Remove write the file under the store's lock; a ping tick that waited on it would stall
+            // hang detection behind SD-card I/O. The tick's pre-check must be lock-free.
+            await using var fake = FakeGuider.Start();
+            var daemon = new ProfileDaemon(fake);
+            var store = new CountingTwinStore();
+            var oldId = Guid.NewGuid();
+            store.Add(new PendingGuiderTwinDelete(oldId, "Old Rig", GuiderService.TwinNames("Old Rig", oldId), true, DateTimeOffset.UtcNow));
+            using var svc = NewTwinService(store, () => (Guid.NewGuid(), "Rig A"));
+            svc.ActiveRunSession = () => Guid.NewGuid();
+            await ConnectAsync(svc, fake).ConfigureAwait(false);
+            daemon.Profiles.Add((2, "Old Rig")); // the connect drain took the first copy; re-arm
+            store.Add(new PendingGuiderTwinDelete(oldId, "Old Rig", GuiderService.TwinNames("Old Rig", oldId), true, DateTimeOffset.UtcNow));
+            store.ListCalls = 0;
+
+            for (var i = 0; i < 5; i++) {
+                svc.StartIdleTwinDrainIfDue(svc.ConnectedGuiderOrNull()!);
+            }
+
+            Assert.That(store.ListCalls, Is.Zero, "under a run the tick decides from the cached state and the count, never the list");
+            Assert.That(store.PendingCount, Is.EqualTo(1));
+        }
+
+        [Test]
+        public async Task A_delete_with_no_guider_connected_is_queued() {
+            using var q = new TempTwinStore();
+            using var svc = NewTwinService(q.Store, () => (Guid.NewGuid(), "Rig A"));
+
+            var outcome = await svc.DeleteAraGuiderProfileAsync("Old Rig", Guid.NewGuid(), deleteDarkFiles: true, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(outcome.Status, Is.EqualTo(GuiderTwinDeleteStatus.Queued));
+            Assert.That(q.Store.List(), Has.Count.EqualTo(1));
+        }
+
+        [Test]
+        public async Task A_queued_delete_drains_on_the_next_connect_before_the_twin_is_ensured() {
+            await using var fake = FakeGuider.Start();
+            var daemon = new ProfileDaemon(fake);
+            daemon.Profiles.Add((2, "Old Rig"));
+            using var q = new TempTwinStore();
+            var oldId = Guid.NewGuid();
+            q.Store.Add(new PendingGuiderTwinDelete(oldId, "Old Rig", GuiderService.TwinNames("Old Rig", oldId), true, DateTimeOffset.UtcNow));
+            // The active ARA profile has no twin yet, so the connect's ensure CREATES one — after the drain.
+            using var svc = NewTwinService(q.Store, () => (Guid.NewGuid(), "Rig B"));
+
+            await ConnectAsync(svc, fake).ConfigureAwait(false);
+
+            Assert.That(daemon.Profiles.Select(p => p.Name), Is.EquivalentTo(RigAAndB), "Old Rig is gone, Rig B was created");
+            Assert.That(q.Store.List(), Is.Empty, "the drained entry leaves the queue");
+            Assert.That(daemon.Calls.IndexOf("delete_profile"), Is.LessThan(daemon.Calls.IndexOf("create_profile")),
+                "the queued delete runs before the connect's twin ensure");
+            Assert.That(daemon.EquipmentConnected, Is.True, "the connect's own set_connected step reconnects");
+        }
+
+        [Test]
+        public async Task A_queued_name_that_a_live_profile_maps_to_again_is_dropped_not_deleted() {
+            await using var fake = FakeGuider.Start();
+            var daemon = new ProfileDaemon(fake);
+            using var q = new TempTwinStore();
+            var oldId = Guid.NewGuid();
+            q.Store.Add(new PendingGuiderTwinDelete(oldId, "Rig A", GuiderService.TwinNames("Rig A", oldId), true, DateTimeOffset.UtcNow));
+            var live = new List<(Guid, string?)> { (Guid.NewGuid(), "rig a") }; // recreated since, case differs
+            using var svc = NewTwinService(q.Store, () => (live[0].Item1, live[0].Item2), live);
+
+            await ConnectAsync(svc, fake).ConfigureAwait(false);
+
+            Assert.That(daemon.Deleted, Is.Empty, "the recreated profile's twin must survive");
+            Assert.That(daemon.Profiles.Select(p => p.Name), Does.Contain("Rig A"));
+            Assert.That(q.Store.List(), Is.Empty, "the stale entry is dropped");
+        }
+
+        [Test]
+        public async Task A_queued_delete_runs_once_the_guider_goes_idle() {
+            await using var fake = FakeGuider.Start();
+            var daemon = new ProfileDaemon(fake);
+            daemon.Profiles.Add((2, "Old Rig"));
+            using var q = new TempTwinStore();
+            using var svc = NewTwinService(q.Store, () => (Guid.NewGuid(), "Rig A"));
+            svc.PingIntervalIdle = TimeSpan.FromMilliseconds(30);
+            svc.PingIntervalGuiding = TimeSpan.FromMilliseconds(30);
+            await ConnectAsync(svc, fake).ConfigureAwait(false);
+            fake.OnRpc("get_app_state", JsonValue.Create("Guiding"));
+            Assert.That((await svc.DeleteAraGuiderProfileAsync("Old Rig", Guid.NewGuid(), true, CancellationToken.None).ConfigureAwait(false)).Status,
+                Is.EqualTo(GuiderTwinDeleteStatus.Queued));
+            Assert.That(daemon.Deleted, Is.Empty);
+
+            fake.OnRpc("get_app_state", JsonValue.Create("Stopped"));
+
+            var deadline = DateTime.UtcNow.AddSeconds(10);
+            while (q.Store.List().Count > 0 && DateTime.UtcNow < deadline) {
+                await Task.Delay(25).ConfigureAwait(false);
+            }
+            Assert.That(q.Store.List(), Is.Empty, "the idle ping tick drains the queue");
+            Assert.That(daemon.Profiles.Select(p => p.Name), Is.EqualTo(OnlyRigA));
+            Assert.That(daemon.EquipmentConnected, Is.True);
+        }
+
+        [Test]
+        public async Task The_idle_drain_waits_while_an_imaging_run_or_a_polar_alignment_holds_the_guider() {
+            // A sequence stops guiding for an autofocus, a slew or a flip and the guider reads Stopped;
+            // releasing the guider's equipment then would fail the run's next Start Guiding.
+            await using var fake = FakeGuider.Start();
+            var daemon = new ProfileDaemon(fake);
+            daemon.Profiles.Add((2, "Old Rig"));
+            using var q = new TempTwinStore();
+            using var svc = NewTwinService(q.Store, () => (Guid.NewGuid(), "Rig A"));
+            svc.PingIntervalIdle = TimeSpan.FromMilliseconds(30);
+            svc.PingIntervalGuiding = TimeSpan.FromMilliseconds(30);
+            Guid? session = Guid.NewGuid();
+            svc.ActiveRunSession = () => session;
+            var oldId = Guid.NewGuid();
+            q.Store.Add(new PendingGuiderTwinDelete(oldId, "Old Rig", GuiderService.TwinNames("Old Rig", oldId), true, DateTimeOffset.UtcNow));
+            await ConnectAsync(svc, fake).ConfigureAwait(false);
+            // The connect drain is deliberate (the connect re-selects anyway), so re-queue after it.
+            q.Store.Add(new PendingGuiderTwinDelete(oldId, "Old Rig", GuiderService.TwinNames("Old Rig", oldId), true, DateTimeOffset.UtcNow));
+            daemon.Profiles.Add((2, "Old Rig"));
+            daemon.Deleted.Clear();
+
+            await Task.Delay(400).ConfigureAwait(false); // a dozen idle ticks
+            Assert.That(daemon.Deleted, Is.Empty, "no release/delete/reconnect under a running imaging session");
+            Assert.That(q.Store.List(), Has.Count.EqualTo(1));
+
+            session = null;
+            var deadline = DateTime.UtcNow.AddSeconds(10);
+            while (q.Store.List().Count > 0 && DateTime.UtcNow < deadline) {
+                await Task.Delay(25).ConfigureAwait(false);
+            }
+            Assert.That(q.Store.List(), Is.Empty, "the run ended: the next idle tick drains");
+            Assert.That(daemon.Deleted, Has.Count.EqualTo(1));
+        }
+
+        [Test]
+        public async Task A_rest_delete_under_an_imaging_run_is_queued_and_the_preview_says_so() {
+            // Same reason as the idle drain: the run stops guiding for an autofocus and the guider reads
+            // Stopped, but its equipment is still the run's.
+            await using var fake = FakeGuider.Start();
+            var daemon = new ProfileDaemon(fake);
+            daemon.Profiles.Add((2, "Old Rig"));
+            using var q = new TempTwinStore();
+            using var svc = NewTwinService(q.Store, () => (Guid.NewGuid(), "Rig A"));
+            svc.ActiveRunSession = () => Guid.NewGuid();
+            await ConnectAsync(svc, fake).ConfigureAwait(false);
+            daemon.SetConnected.Clear();
+
+            var preview = await svc.DescribeAraGuiderTwinAsync("Old Rig", Guid.NewGuid(), CancellationToken.None).ConfigureAwait(false);
+            Assert.That(preview.CanDeleteNow, Is.False);
+            Assert.That(preview.Reason, Does.Contain("run"));
+
+            var outcome = await svc.DeleteAraGuiderProfileAsync("Old Rig", Guid.NewGuid(), true, CancellationToken.None).ConfigureAwait(false);
+            Assert.That(outcome.Status, Is.EqualTo(GuiderTwinDeleteStatus.Queued));
+            Assert.That(outcome.Reason, Does.Contain("run"));
+
+            // ...and an unreadable app state is "not now" for the preview too, as it is for the delete.
+            svc.ActiveRunSession = () => null;
+            fake.OnRpc("get_app_state", _ => throw new InvalidOperationException("no app state"));
+            var unknown = await svc.DescribeAraGuiderTwinAsync("Old Rig", Guid.NewGuid(), CancellationToken.None).ConfigureAwait(false);
+            Assert.That(unknown.Exists, Is.True);
+            Assert.That(unknown.CanDeleteNow, Is.False);
+            Assert.That(daemon.SetConnected, Is.Empty, "the run's equipment is never released");
+            Assert.That(daemon.Deleted, Is.Empty);
+            Assert.That(q.Store.List(), Has.Count.EqualTo(1));
+        }
+
+        [Test]
+        public async Task A_queued_delete_of_a_shared_twin_still_deletes_it_on_the_next_connect() {
+            // Two ARA profiles named "Rig" share one twin; the user deleted one with the box ticked
+            // while no guider was connected. The immediate path would have deleted the twin, so the
+            // queued one must too — the survivor's next connect recreates a blank twin, as documented.
+            await using var fake = FakeGuider.Start();
+            var daemon = new ProfileDaemon(fake);
+            daemon.Profiles.Add((2, "Rig"));
+            using var q = new TempTwinStore();
+            var survivor = (Guid.NewGuid(), (string?)"Rig");
+            using var svc = NewTwinService(q.Store, () => (Guid.NewGuid(), "Rig A"), new List<(Guid, string?)> { survivor });
+
+            var outcome = await svc.DeleteAraGuiderProfileAsync("Rig", Guid.NewGuid(), true, CancellationToken.None).ConfigureAwait(false);
+            Assert.That(outcome.Status, Is.EqualTo(GuiderTwinDeleteStatus.Queued));
+            Assert.That(q.Store.List().Single().Shared, Is.True, "the entry remembers the twin was shared when queued");
+
+            await ConnectAsync(svc, fake).ConfigureAwait(false);
+
+            Assert.That(daemon.Deleted.Select(d => d["name"]!.GetValue<string>()), Does.Contain("Rig"));
+            Assert.That(q.Store.List(), Is.Empty);
+        }
+
+        [Test]
+        public async Task Deleting_the_selected_twin_re_ensures_the_active_profiles_twin_before_reconnecting() {
+            await using var fake = FakeGuider.Start();
+            var daemon = new ProfileDaemon(fake);
+            var active = "Rig A";
+            using var svc = NewTwinService(null, () => (Guid.NewGuid(), active));
+            await ConnectAsync(svc, fake).ConfigureAwait(false);
+            // The ARA side already deleted "Rig A" and activated "Rig B".
+            active = "Rig B";
+            daemon.SetConnected.Clear();
+            daemon.Calls.Clear();
+
+            var outcome = await svc.DeleteAraGuiderProfileAsync("Rig A", Guid.NewGuid(), true, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(outcome.Status, Is.EqualTo(GuiderTwinDeleteStatus.Deleted));
+            Assert.That(daemon.Profiles.Select(p => p.Name), Is.EqualTo(OnlyRigB), "the selected twin went; the active profile's twin was created");
+            Assert.That(daemon.SelectedId, Is.EqualTo(daemon.Profiles[0].Id), "the daemon sits on the active ARA profile's twin, not a leftover");
+            // The ensure sends its own (idempotent) set_connected false before create_profile.
+            Assert.That(daemon.Calls.Where(c => c != "set_connected"), Is.EqualTo(DeleteThenCreate));
+            Assert.That(daemon.Calls[0], Is.EqualTo("set_connected"), "the equipment is released before the delete");
+            Assert.That(daemon.Calls[^1], Is.EqualTo("set_connected"), "...and reconnected after the new twin is in place");
+            Assert.That(daemon.EquipmentConnected, Is.True);
+        }
+
+        [Test]
+        public async Task A_daemon_refusal_reports_failed_with_the_daemons_text_and_reconnects() {
+            await using var fake = FakeGuider.Start();
+            var daemon = new ProfileDaemon(fake);
+            daemon.Profiles.Add((2, "Old Rig"));
+            daemon.DeleteRefusal = "profile is locked";
+            using var svc = await ConnectedAgainstAsync(fake, "Rig A").ConfigureAwait(false);
+
+            var outcome = await svc.DeleteAraGuiderProfileAsync("Old Rig", Guid.NewGuid(), true, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(outcome.Status, Is.EqualTo(GuiderTwinDeleteStatus.Failed));
+            Assert.That(outcome.Reason, Does.Contain("profile is locked"));
+            Assert.That(daemon.EquipmentConnected, Is.True, "the equipment was only released for the delete");
+        }
+
+        [Test]
+        public async Task The_twin_preview_reports_presence_selection_and_whether_a_delete_can_run_now() {
+            await using var fake = FakeGuider.Start();
+            var daemon = new ProfileDaemon(fake);
+            daemon.Profiles.Add((2, "Old Rig"));
+            using var svc = await ConnectedAgainstAsync(fake, "Rig A").ConfigureAwait(false);
+
+            var old = await svc.DescribeAraGuiderTwinAsync("Old Rig", Guid.NewGuid(), CancellationToken.None).ConfigureAwait(false);
+            Assert.That(old, Is.EqualTo(new GuiderTwinStatus(true, false, true, null)));
+            var selected = await svc.DescribeAraGuiderTwinAsync("Rig A", Guid.NewGuid(), CancellationToken.None).ConfigureAwait(false);
+            Assert.That(selected.SelectedOnDaemon, Is.True);
+            var ghost = await svc.DescribeAraGuiderTwinAsync("Ghost", Guid.NewGuid(), CancellationToken.None).ConfigureAwait(false);
+            Assert.That(ghost.Exists, Is.False);
+
+            fake.OnRpc("get_app_state", JsonValue.Create("Calibrating"));
+            var busy = await svc.DescribeAraGuiderTwinAsync("Old Rig", Guid.NewGuid(), CancellationToken.None).ConfigureAwait(false);
+            Assert.That(busy.CanDeleteNow, Is.False);
+            Assert.That(busy.Reason, Does.Contain("calibrating"));
+
+            using var offline = NewTwinService(null, () => (Guid.NewGuid(), "Rig A"));
+            var unknown = await offline.DescribeAraGuiderTwinAsync("Old Rig", Guid.NewGuid(), CancellationToken.None).ConfigureAwait(false);
+            Assert.That(unknown.Exists, Is.Null);
+            Assert.That(unknown.CanDeleteNow, Is.False);
         }
 
         // ── #1156 — terminal status behind the guider 202s ──────────────────────────────────────

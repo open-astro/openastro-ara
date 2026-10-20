@@ -231,8 +231,12 @@ public sealed class PlaceholderGuiderService : IGuiderService {
     public Task<OperationAcceptedDto> PushGuiderTuningAsync(string? idempotencyKey, CancellationToken ct) =>
         Task.FromException<OperationAcceptedDto>(new InvalidOperationException("guider is not connected"));
     // Best-effort by contract: the placeholder has no guider, so cleanup is a no-op false.
-    public Task<bool> TryDeleteAraGuiderProfileAsync(string? araProfileName, Guid araProfileId, CancellationToken ct) =>
-        Task.FromResult(false);
+    // No guider service at all: there is no twin to offer (the dialog hides the box) and nothing to
+    // delete — never an error snackbar for a profile delete that went fine.
+    public Task<GuiderTwinStatus> DescribeAraGuiderTwinAsync(string? araProfileName, Guid araProfileId, CancellationToken ct) =>
+        Task.FromResult(new GuiderTwinStatus(Exists: false, SelectedOnDaemon: false, CanDeleteNow: false, Reason: null));
+    public Task<GuiderTwinDeleteOutcome> DeleteAraGuiderProfileAsync(string? araProfileName, Guid araProfileId, bool deleteDarkFiles, CancellationToken ct) =>
+        Task.FromResult(new GuiderTwinDeleteOutcome(GuiderTwinDeleteStatus.NotFound, null));
     public Task<bool> TryCloneAraGuiderProfileAsync(string? sourceAraProfileName, string? newAraProfileName, CancellationToken ct) =>
         Task.FromResult(false);
     public Task<bool> TryRenameAraGuiderProfileAsync(string? oldAraProfileName, Guid araProfileId, string? newAraProfileName, CancellationToken ct) =>

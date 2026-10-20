@@ -34,9 +34,10 @@ using System.Threading.Tasks;
 namespace OpenAstroAra.Test {
 
     /// <summary>
-    /// #1156 — the profile routes' guider-twin hooks. Duplicate (POST without settings) clones
+    /// #1156 / §63.4 — the profile routes' guider-twin hooks. Duplicate (POST without settings) clones
     /// the ACTIVE profile's twin under the new name; rename carries the twin over, unless another
-    /// ARA profile still uses the old name (identically-named profiles share one twin).
+    /// ARA profile still uses the old name (identically-named profiles share one twin); delete asks
+    /// the guider for the twin only on <c>?guider_profile=delete</c> and reports what happened.
     /// </summary>
     [TestFixture]
     [Category("IO")]
@@ -59,6 +60,10 @@ namespace OpenAstroAra.Test {
                 .ReturnsAsync(true);
             guider.Setup(g => g.TryRenameAraGuiderProfileAsync(It.IsAny<string?>(), It.IsAny<Guid>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(true);
+            guider.Setup(g => g.DeleteAraGuiderProfileAsync(It.IsAny<string?>(), It.IsAny<Guid>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new GuiderTwinDeleteOutcome(GuiderTwinDeleteStatus.Deleted, null));
+            guider.Setup(g => g.DescribeAraGuiderTwinAsync(It.IsAny<string?>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new GuiderTwinStatus(Exists: true, SelectedOnDaemon: false, CanDeleteNow: true, Reason: null));
             var builder = WebApplication.CreateSlimBuilder();
             builder.WebHost.UseUrls("http://127.0.0.1:0");
             builder.Services.AddSingleton<IProfileRepository>(repo);
@@ -90,7 +95,19 @@ namespace OpenAstroAra.Test {
             }
             repo.Create("Rig A", settings: null, makeActive: true);
             guider.Invocations.Clear();
+            // Per-test Setup overrides (specific-argument setups) must not leak into the next test.
+            guider.Reset();
+            guider.Setup(g => g.TryCloneAraGuiderProfileAsync(It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(true);
+            guider.Setup(g => g.TryRenameAraGuiderProfileAsync(It.IsAny<string?>(), It.IsAny<Guid>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(true);
+            guider.Setup(g => g.DeleteAraGuiderProfileAsync(It.IsAny<string?>(), It.IsAny<Guid>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new GuiderTwinDeleteOutcome(GuiderTwinDeleteStatus.Deleted, null));
+            guider.Setup(g => g.DescribeAraGuiderTwinAsync(It.IsAny<string?>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new GuiderTwinStatus(Exists: true, SelectedOnDaemon: false, CanDeleteNow: true, Reason: null));
         }
+
+        private static readonly string[] OnlyRigA = { "Rig A" };
 
         private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web) { PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower };
 
@@ -144,6 +161,110 @@ namespace OpenAstroAra.Test {
 
             guider.Verify(g => g.TryRenameAraGuiderProfileAsync(It.IsAny<string?>(), It.IsAny<Guid>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never,
                 "identically-named ARA profiles share one twin — the survivor still needs it under the old name");
+        }
+
+        // ── §63.4 — delete asks about the twin ──────────────────────────────────────────────────
+
+        [Test]
+        public async Task Deleting_without_the_parameter_or_with_keep_never_touches_the_guider() {
+            var a = repo.Create("Rig B", settings: null, makeActive: false);
+            var b = repo.Create("Rig C", settings: null, makeActive: false);
+
+            var resp = await http.DeleteAsync(new Uri($"/api/v1/profiles/{a.Id}", UriKind.Relative));
+            Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+            var body = await resp.Content.ReadFromJsonAsync<ProfileDeleteResultDto>(Json);
+            Assert.That(body!.GuiderProfile, Is.EqualTo("kept"), "an old client that sends no parameter never deletes guider data");
+
+            resp = await http.DeleteAsync(new Uri($"/api/v1/profiles/{b.Id}?guider_profile=keep", UriKind.Relative));
+            Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+            Assert.That((await resp.Content.ReadFromJsonAsync<ProfileDeleteResultDto>(Json))!.GuiderProfile, Is.EqualTo("kept"));
+
+            guider.Verify(g => g.DeleteAraGuiderProfileAsync(It.IsAny<string?>(), It.IsAny<Guid>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()), Times.Never);
+            Assert.That(repo.List().Profiles.Select(p => p.Name), Is.EqualTo(OnlyRigA), "the ARA profiles themselves went");
+        }
+
+        [Test]
+        public async Task Deleting_with_delete_asks_the_guider_for_the_twin_and_reports_the_outcome() {
+            var b = repo.Create("Rig B", settings: null, makeActive: false);
+            guider.Setup(g => g.DeleteAraGuiderProfileAsync("Rig B", b.Id, true, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new GuiderTwinDeleteOutcome(GuiderTwinDeleteStatus.Queued, "The guider is guiding. It will be deleted once guiding stops."));
+
+            var resp = await http.DeleteAsync(new Uri($"/api/v1/profiles/{b.Id}?guider_profile=delete", UriKind.Relative));
+
+            Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+            var body = await resp.Content.ReadFromJsonAsync<ProfileDeleteResultDto>(Json);
+            Assert.That(body!.GuiderProfile, Is.EqualTo("queued"));
+            Assert.That(body.Reason, Does.Contain("guiding"));
+            guider.Verify(g => g.DeleteAraGuiderProfileAsync("Rig B", b.Id, true, It.IsAny<CancellationToken>()), Times.Once,
+                "the hook gets the profile's name (the twin's) and id, dark library included by default");
+        }
+
+        [Test]
+        public async Task The_dark_library_flag_and_the_failure_reason_pass_through() {
+            var b = repo.Create("Rig B", settings: null, makeActive: false);
+            guider.Setup(g => g.DeleteAraGuiderProfileAsync("Rig B", b.Id, false, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new GuiderTwinDeleteOutcome(GuiderTwinDeleteStatus.Failed, "profile is locked"));
+
+            var resp = await http.DeleteAsync(new Uri($"/api/v1/profiles/{b.Id}?guider_profile=delete&dark_library=keep", UriKind.Relative));
+
+            Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+            var body = await resp.Content.ReadFromJsonAsync<ProfileDeleteResultDto>(Json);
+            Assert.That(body!.GuiderProfile, Is.EqualTo("failed"));
+            Assert.That(body.Reason, Is.EqualTo("profile is locked"));
+        }
+
+        [Test]
+        public async Task An_unknown_choice_is_400_and_deletes_nothing() {
+            var b = repo.Create("Rig B", settings: null, makeActive: false);
+
+            var resp = await http.DeleteAsync(new Uri($"/api/v1/profiles/{b.Id}?guider_profile=maybe", UriKind.Relative));
+            Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+            resp = await http.DeleteAsync(new Uri($"/api/v1/profiles/{b.Id}?guider_profile=delete&dark_library=later", UriKind.Relative));
+            Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+
+            Assert.That(repo.List().Profiles.Select(p => p.Id), Does.Contain(b.Id), "a refused request leaves the ARA profile in place");
+            guider.Verify(g => g.DeleteAraGuiderProfileAsync(It.IsAny<string?>(), It.IsAny<Guid>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()), Times.Never);
+        }
+
+        [Test]
+        public async Task Deleting_an_unknown_profile_is_404_even_with_delete() {
+            var resp = await http.DeleteAsync(new Uri($"/api/v1/profiles/{Guid.NewGuid()}?guider_profile=delete", UriKind.Relative));
+            Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
+            guider.Verify(g => g.DeleteAraGuiderProfileAsync(It.IsAny<string?>(), It.IsAny<Guid>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()), Times.Never);
+        }
+
+        [Test]
+        public async Task The_twin_preview_names_both_twins_and_flags_a_shared_one() {
+            var second = repo.Create("rig a ", settings: null, makeActive: false); // same twin: trimmed, case-insensitive
+            var id = repo.List().ActiveId!.Value;
+
+            var preview = await http.GetFromJsonAsync<GuiderTwinPreviewDto>($"/api/v1/profiles/{id}/guider-twin", Json);
+
+            Assert.That(preview!.TwinNames, Is.EqualTo(new[] { "Rig A", OpenAstroAra.Equipment.Equipment.MyGuider.PHD2.PHD2Guider.AraGuiderProfileName("Rig A", id) }));
+            Assert.That(preview.Shared, Is.True, "identically named ARA profiles share one twin — deleting it takes the survivor's calibration");
+            Assert.That(preview.SharedWith, Is.EqualTo(repo.List().Profiles.Single(p => p.Id == second.Id).Name));
+            Assert.That(preview.Exists, Is.True);
+            Assert.That(preview.CanDeleteNow, Is.True);
+
+            repo.Delete(second.Id);
+            preview = await http.GetFromJsonAsync<GuiderTwinPreviewDto>($"/api/v1/profiles/{id}/guider-twin", Json);
+            Assert.That(preview!.Shared, Is.False);
+            Assert.That(preview.SharedWith, Is.Null);
+        }
+
+        [Test]
+        public async Task The_twin_preview_relays_the_guiders_answer_and_is_404_for_an_unknown_profile() {
+            var id = repo.List().ActiveId!.Value;
+            guider.Setup(g => g.DescribeAraGuiderTwinAsync("Rig A", id, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new GuiderTwinStatus(Exists: null, SelectedOnDaemon: false, CanDeleteNow: false, Reason: "No guider is connected."));
+
+            var preview = await http.GetFromJsonAsync<GuiderTwinPreviewDto>($"/api/v1/profiles/{id}/guider-twin", Json);
+            Assert.That(preview!.Exists, Is.Null);
+            Assert.That(preview.CanDeleteNow, Is.False);
+            Assert.That(preview.Reason, Does.Contain("No guider"));
+
+            var resp = await http.GetAsync(new Uri($"/api/v1/profiles/{Guid.NewGuid()}/guider-twin", UriKind.Relative));
+            Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
         }
 
         [Test]

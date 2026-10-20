@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart' show visibleForTesting;
 
+import '../models/guider_twin.dart';
 import '../models/profile_list.dart';
 import '../models/profile_meta.dart';
 import '../models/profile_share_export.dart';
@@ -69,11 +70,37 @@ class ProfileApi {
     await _dio.post<void>('/api/v1/profiles/${Uri.encodeComponent(id)}/select');
   }
 
-  /// §37 multi-profile — delete a profile (`DELETE /api/v1/profiles/{id}`). The
-  /// daemon refuses to delete the active or last-remaining profile (409); the
-  /// caller surfaces that to the user.
-  Future<void> deleteProfile(String id) async {
-    await _dio.delete<void>('/api/v1/profiles/${Uri.encodeComponent(id)}');
+  /// §63.4 — what the daemon knows about the profile's OpenAstro Guider profile
+  /// (`GET /api/v1/profiles/{id}/guider-twin`), for the delete dialog.
+  Future<GuiderTwinPreview> getGuiderTwin(String id) async {
+    final res = await _dio.get<Map<String, dynamic>>(
+        '/api/v1/profiles/${Uri.encodeComponent(id)}/guider-twin');
+    return GuiderTwinPreview.fromJson(res.data ?? const <String, dynamic>{});
+  }
+
+  /// §37 multi-profile — delete a profile (`DELETE /api/v1/profiles/{id}`).
+  /// With [deleteGuiderProfile] the daemon also deletes the profile's OpenAstro
+  /// Guider profile (calibration and dark library included) — now, or queued
+  /// until the guider is connected and idle — and the result says which. The
+  /// default never touches guider data.
+  Future<ProfileDeleteResult> deleteProfile(String id,
+      {bool deleteGuiderProfile = false}) async {
+    final res = await _dio.delete<dynamic>(
+      '/api/v1/profiles/${Uri.encodeComponent(id)}',
+      queryParameters: {
+        'guider_profile': deleteGuiderProfile ? 'delete' : 'keep',
+      },
+      // The daemon releases and reconnects the guider's equipment inside this
+      // request: 15 s before it queues the delete instead, plus the recovery
+      // steps (profile refresh, twin re-ensure, reconnect) which run to the end
+      // on their own 15 s RPC bounds. The 5 s default reported a failure for
+      // a profile that WAS deleted; a minute covers the slow-daemon case.
+      options: Options(receiveTimeout: const Duration(seconds: 60)),
+    );
+    final data = res.data;
+    return data is Map<String, dynamic>
+        ? ProfileDeleteResult.fromJson(data)
+        : ProfileDeleteResult.kept; // an older daemon answers 204
   }
 
   /// §37 multi-profile — create a new profile and make it active. The daemon

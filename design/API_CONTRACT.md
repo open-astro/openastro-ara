@@ -123,6 +123,20 @@ This file captures the *reasoning* behind each contract decision — DTO shapes,
 
 **Related:** #1068 (from the 2026-09-20 client/server separation audit), CHANGELOG [Unreleased]
 
+### 2026-10-20 — §63.4 deleting a profile asks about its guider twin
+
+**Endpoint(s) or area:** `DELETE /api/v1/profiles/{id}` gains `?guider_profile=keep|delete` (default `keep`) and `?dark_library=keep|delete` (default `delete`, meaningful only with `guider_profile=delete`) and answers **200** `ProfileDeleteResultDto { guider_profile: "deleted" | "queued" | "kept" | "not_found" | "failed", reason? }` instead of 204; an unknown value is 400. New `GET /api/v1/profiles/{id}/guider-twin` → `GuiderTwinPreviewDto { twin_names[], exists (bool|null), shared, shared_with?, selected_on_daemon, can_delete_now, reason? }`.
+
+**Decision:** the guider twin is deleted only on an explicit `guider_profile=delete`, so an older client (no parameter) never deletes guider data without the user being asked; the old fire-and-forget delete is gone. The delete is awaited (bounded at 15 s, not by the request's abort) and its outcome returned, so the dialog can say what happened. The daemon refuses `delete_profile` while any of its equipment is connected, so the service releases the equipment, deletes, re-ensures the active profile's twin when the selected one went, and reconnects — only from a Stopped guider; a guiding / calibrating / looping guider, no guider, or a timed-out daemon queues the delete in `{profileDir}/guider-twin-deletes.json`, drained on the next guider connect (after `get_profiles`, before the twin ensure, with no reconnect of its own) and on the first idle ping tick. A queued name a live ARA profile maps to again is dropped, unless the entry was queued as shared (the user ticked the box for a twin another profile shares), which deletes regardless, as the immediate path would. Under an imaging run or a polar alignment a delete never releases the guider's equipment: the preview answers `can_delete_now: false` with the reason and the delete is queued (the connect-path drain is exempt: a connect releases and reconnects the equipment itself, so a queued delete runs inside that window). `exists: null` means no guider is connected; `shared` is computed from the ARA profile list (trimmed, case-insensitive name match, the same rule the rename hook uses).
+
+**Reasoning:** the silent delete failed nearly every time (the guider's equipment is connected whenever the guider is) and told nobody; a user deleting a rig they spent a night calibrating deserves the question, and an answer.
+
+**Spec ref:** `Endpoints/ProfilesEndpoints.cs`, `Contracts/GuiderTwinDtos.cs`, `Services/GuiderService.ProfileLifecycle.cs` (`DescribeAraGuiderTwinAsync`, `DeleteAraGuiderProfileAsync`, `DrainPendingTwinDeletesAsync`), `Services/GuiderTwinDeleteStore.cs`, `PHD2Guider.GuiderProfile.cs` (`DescribeGuiderProfilesAsync`, `DeleteGuiderProfilesAsync`, `BeforeAraProfileEnsureAsync`); client `widgets/profile/delete_profile_dialog.dart`, `models/guider_twin.dart`, `services/profile_api.dart`.
+
+**Related:** PORT_PLAYBOOK §63.4 lifecycle table; tests `ProfilesEndpointsGuiderHooksTest` (§63.4 group), `GuiderFakeIntegrationTest` (§63.4 group), client `delete_profile_dialog_test.dart`, `launch_profile_screen_test.dart`.
+
+---
+
 ### 2026-10-13 — #1155 run ETA: the duration-model contract, the running-leaf credit, disabled leaves out of the count
 
 **Endpoint(s) or area:** `GET /api/v1/sequences/{id}/state` and WS `sequence.progress` (`estimated_total_seconds` / `estimated_remaining_seconds`, `instructions_total` / `instructions_completed`; no wire change); the client's run-header blend.

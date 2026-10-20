@@ -376,6 +376,9 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                     // `initialized`; the rest never does.
                     var profilesOk = await TryInitStepAsync("get_profiles", GetProfiles).ConfigureAwait(false);
                     if (profilesOk) {
+                        if (BeforeAraProfileEnsureAsync is { } drain) {
+                            await TryInitStepAsync("drain_twin_deletes", () => drain(token)).ConfigureAwait(false);
+                        }
                         await TryInitStepAsync("ensure_ara_profile", () => EnsureAraGuiderProfileAsync(token)).ConfigureAwait(false);
                         await TryInitStepAsync("push_engine_config", () => PushGuiderEngineConfigAsync(token)).ConfigureAwait(false);
                     }

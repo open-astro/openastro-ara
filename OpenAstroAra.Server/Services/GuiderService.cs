@@ -122,7 +122,9 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
             IDiagnosticsService? diagnostics = null,
             IAlpacaManagementClient? alpaca = null,
             Func<DiscoveredDeviceDto?>? mainCameraResolver = null,
-            IEquipmentIdentityReconciler? identity = null) {
+            IEquipmentIdentityReconciler? identity = null,
+            IGuiderTwinDeleteStore? twinDeleteQueue = null,
+            Func<IReadOnlyList<(Guid Id, string? Name)>>? araProfilesResolver = null) {
         _profileService = profileService ?? throw new ArgumentNullException(nameof(profileService));
         _recovery = recovery ?? throw new ArgumentNullException(nameof(recovery));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -138,6 +140,8 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
         _alpaca = alpaca;
         _mainCameraResolver = mainCameraResolver;
         _identity = identity;
+        _twinDeleteQueue = twinDeleteQueue;
+        _araProfilesResolver = araProfilesResolver;
     }
 
     // #1362 — records the guide camera's identity per connect and posts the gear-change notice on a swap.
@@ -256,6 +260,10 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
             // legacy single-profile store (whose name is a constant "Default"). Null resolver (benches)
             // → the guider falls back to the legacy store.
             guider.AraProfileResolver = _araProfileResolver;
+            // §63.4 — twin deletes queued while no guider was connected run before the connect's
+            // ensure re-selects (and would otherwise keep) the twin the user asked to delete.
+            var connecting = guider;
+            guider.BeforeAraProfileEnsureAsync = token => DrainPendingTwinDeletesAsync(connecting, reconnectEquipment: false, token);
             // Observe a mid-session socket drop: PHD2Guider raises PHD2ConnectionLost from its
             // listener's finally when the link dies. Without this, _state would stay Connected
             // forever and RequireConnectedGuider would keep dispatching to a dead guider.
@@ -824,6 +832,7 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
                 return;
             }
             _disposed = true;
+            _twinDeleteLock.Dispose(); // §63.4 — no drain can start past _disposed
             ResetStarLostRecoveryLocked();
             // Cancel + dispose the in-flight recovery pass (if any). RunRecoveryAsync's finally also
             // disposes under the gate; the null-check there makes either order safe, and disposing

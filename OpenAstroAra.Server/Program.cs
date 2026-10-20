@@ -424,7 +424,12 @@ public partial class Program {
                 sp.GetService<IAlpacaManagementClient>(),
                 () => (sp.GetService<ICameraService>() as IRetainedDeviceSource)?.RetainedDevice,
                 // #1362 — the gear-change notice and invalidation when the guide camera's UniqueID changes.
-                sp.GetService<IEquipmentIdentityReconciler>());
+                sp.GetService<IEquipmentIdentityReconciler>(),
+                // §63.4 — guider-twin deletes that wait for a connected, idle guider; and the live
+                // profile list a queued name is checked against before it is deleted.
+                sp.GetService<IGuiderTwinDeleteStore>(),
+                () => sp.GetService<IProfileRepository>()?.List().Profiles.Select(p => (p.Id, (string?)p.Name)).ToList()
+                    ?? new List<(Guid, string?)>());
             // A sequence's Start Guiding takes the guide camera back from a running live-focus loop
             // (Setup → Smart Focus → Guide camera) — the loop holds the guider's polar-align lease
             // and the guider refuses to guide under it. Resolved lazily: the focus service needs
@@ -598,6 +603,9 @@ public partial class Program {
 
         builder.Services.AddSingleton<IProfileStore>(sp =>
             new FileProfileStore(profileDir, sp.GetService<ILogger<FileProfileStore>>()));
+        // §63.4 — guider-twin deletes waiting for a connected, idle guider (survive a daemon restart).
+        builder.Services.AddSingleton<IGuiderTwinDeleteStore>(sp =>
+            new FileGuiderTwinDeleteStore(profileDir, sp.GetService<ILogger<FileGuiderTwinDeleteStore>>()));
         // §37 multi-profile repository — the known-profiles set (§30) layered over the
         // active-profile store. Seeds the legacy single profile.json as the initial
         // profile on first run and loads the active profile into the live store at boot.

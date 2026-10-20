@@ -41,7 +41,13 @@ safety policies, storage, and optional sky-data downloads. Notes:
   different one.
 - The wizard writes a **profile**; you can create more later (Settings → Profile) and export/import
   them. Exported profiles are stripped of paths, secrets, and location — the recipient re-runs the
-  wizard sections that need local values.
+  wizard sections that need local values. Each profile has a matching **OpenAstro Guider profile**
+  (same name) holding its guide calibration and dark library. Deleting a profile asks whether to
+  delete that guider profile too (on by default; off when another profile of the same name shares
+  it). The guider profile goes right away when the guider is connected and idle; with no guider
+  connected, or while it is guiding or calibrating, the delete waits and runs the next time the
+  guider connects or stops — the dialog says which, and a message after Delete reports what
+  happened.
 
 ## 3. Connecting equipment
 

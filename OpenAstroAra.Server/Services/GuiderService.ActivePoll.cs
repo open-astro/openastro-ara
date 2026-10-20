@@ -16,6 +16,7 @@ using System;
 using System.Diagnostics.CodeAnalysis;
 using System.Threading;
 using System.Threading.Tasks;
+using OpenAstroAra.Equipment.Equipment.MyGuider.PHD2;
 
 namespace OpenAstroAra.Server.Services;
 
@@ -93,6 +94,9 @@ public sealed partial class GuiderService {
             }
 
             var alive = await PingProbe(guider, (int)PingTimeout.TotalMilliseconds).ConfigureAwait(false);
+            if (alive) {
+                StartIdleTwinDrainIfDue(guider);
+            }
 
             var declareDown = false;
             lock (_gate) {

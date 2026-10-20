@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/models/guider_twin.dart';
 import 'package:openastroara/models/profile_list.dart';
 import 'package:openastroara/models/profile_meta.dart';
 import 'package:openastroara/models/server.dart';
@@ -36,13 +37,26 @@ class _FakeApi extends ProfileApi {
   }
 
   final List<String> deleteCalls = [];
+  final List<bool> deleteGuiderFlags = [];
   Object? deleteError;
+  ProfileDeleteResult deleteResult = ProfileDeleteResult.kept;
+  GuiderTwinPreview? twin;
 
   @override
-  Future<void> deleteProfile(String id) async {
+  Future<ProfileDeleteResult> deleteProfile(String id,
+      {bool deleteGuiderProfile = false}) async {
     deleteCalls.add(id);
+    deleteGuiderFlags.add(deleteGuiderProfile);
     if (deleteError != null) throw deleteError!;
     profiles = [for (final p in profiles) if (p.id != id) p];
+    return deleteResult;
+  }
+
+  @override
+  Future<GuiderTwinPreview> getGuiderTwin(String id) async {
+    final t = twin;
+    if (t == null) throw StateError('no twin preview (old daemon)');
+    return t;
   }
 }
 
@@ -186,6 +200,44 @@ void main() {
     // always-visible Add/Import actions are the way forward (§30.2).
     expect(find.textContaining('No profiles yet'), findsOneWidget);
     expect(find.text('Add a Profile'), findsOneWidget);
+  });
+
+  testWidgets('the guider checkbox passes the choice to the API and reports the outcome',
+      (tester) async {
+    final api = _FakeApi()
+      ..twin = const GuiderTwinPreview(
+          twinNames: ['Travel Rig', 'ara-travel-rig-deadbeef'],
+          exists: true,
+          shared: false,
+          canDeleteNow: true)
+      ..deleteResult =
+          const ProfileDeleteResult(guiderProfile: GuiderTwinOutcome.deleted);
+    await _pump(tester, api);
+    await tester.tap(find.text('My Backyard Rig'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Travel Rig').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithIcon(IconButton, Icons.delete_outline));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Also delete its OpenAstro Guider profile "Travel Rig"'),
+        findsOneWidget);
+    await tester.tap(find.widgetWithText(FilledButton, 'Delete'));
+    await tester.pumpAndSettle();
+    expect(api.deleteCalls, ['id-2']);
+    expect(api.deleteGuiderFlags, [true], reason: 'the checkbox defaults on');
+    expect(find.text('Guider profile deleted'), findsOneWidget);
+  });
+
+  testWidgets('an old daemon with no twin route offers nothing about the guider',
+      (tester) async {
+    final api = _FakeApi(); // twin stays null → getGuiderTwin throws
+    await _pump(tester, api);
+    await tester.tap(find.widgetWithIcon(IconButton, Icons.delete_outline));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('OpenAstro Guider profile'), findsNothing);
+    await tester.tap(find.widgetWithText(FilledButton, 'Delete'));
+    await tester.pumpAndSettle();
+    expect(api.deleteGuiderFlags, [false]);
   });
 
   testWidgets('cancel deletes nothing', (tester) async {

@@ -9,6 +9,7 @@ import '../state/profile_management_state.dart';
 import '../state/saved_server_state.dart';
 import '../theme/ara_colors.dart';
 import '../widgets/plan_offline_button.dart';
+import '../widgets/profile/delete_profile_dialog.dart';
 import '../widgets/profile/profile_import_flow.dart';
 import 'wizard/wizard_shell.dart';
 
@@ -244,38 +245,25 @@ class _LaunchProfileScreenState extends ConsumerState<LaunchProfileScreen> {
   }
 
   /// Delete a profile from the box. The confirm dialog spells out the daemon's
-  /// fallback when the active/last profile is going away; on success the
-  /// dropdown falls back to whatever the daemon now reports active.
+  /// fallback when the active/last profile is going away and asks about the
+  /// guider profile (§63.4); on success the dropdown falls back to whatever the
+  /// daemon now reports active and a snackbar says what the guider did.
   Future<void> _deleteProfile(String id, String name,
       {required bool isActive, required bool isLast}) async {
     final messenger = ScaffoldMessenger.of(context);
-    final consequence = isLast
-        ? " This is the last profile — you'll be taken back to profile setup."
-        : (isActive ? ' The most recent remaining profile becomes active.' : '');
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Delete profile?'),
-        content: Text('"$name" will be permanently removed. This can\'t be '
-            'undone.$consequence'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.of(ctx).pop(false),
-              child: const Text('Cancel')),
-          FilledButton(
-            style:
-                FilledButton.styleFrom(backgroundColor: AraColors.accentError),
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
-    );
-    if (ok != true || !mounted) return;
+    final notifier = ref.read(profileManagementProvider.notifier);
+    final choice = await showDeleteProfileDialog(context,
+        name: name,
+        isActive: isActive,
+        isLast: isLast,
+        preview: () => notifier.guiderTwin(id));
+    if (choice == null || !mounted) return;
     try {
-      await ref.read(profileManagementProvider.notifier).delete(id);
+      final result = await notifier.delete(id,
+          deleteGuiderProfile: choice.deleteGuiderProfile);
       // The deleted profile may be the local pick — fall back to active.
       if (mounted) setState(() => _pickedId = null);
+      showGuiderTwinOutcome(messenger, result);
     } catch (e) {
       messenger.showSnackBar(SnackBar(
         content:

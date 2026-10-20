@@ -13,6 +13,7 @@ import '../../models/profile_share_export.dart';
 import '../../services/profile_share_file.dart';
 import '../../state/profile_management_state.dart';
 import '../../theme/ara_colors.dart';
+import '../../widgets/profile/delete_profile_dialog.dart';
 import '../../widgets/profile/profile_import_flow.dart';
 import '../wizard/wizard_shell.dart';
 
@@ -134,10 +135,17 @@ class _ProfileListView extends ConsumerWidget {
         await _exportProfile(context, ref, p);
         break;
       case 'delete':
-        final ok = await _confirmDelete(context, p.name,
-            isActive: isActive, isLast: list.profiles.length == 1);
-        if (ok) {
-          await _run(messenger, () => notifier.delete(p.id), 'Couldn\'t delete profile');
+        final choice = await showDeleteProfileDialog(context,
+            name: p.name,
+            isActive: isActive,
+            isLast: list.profiles.length == 1,
+            preview: () => notifier.guiderTwin(p.id));
+        if (choice != null) {
+          await _run(messenger, () async {
+            final result = await notifier.delete(p.id,
+                deleteGuiderProfile: choice.deleteGuiderProfile);
+            showGuiderTwinOutcome(messenger, result);
+          }, 'Couldn\'t delete profile');
         }
         break;
     }
@@ -239,30 +247,6 @@ Future<String?> _promptName(BuildContext context, {required String initial}) {
       ],
     ),
   ).whenComplete(controller.dispose);
-}
-
-Future<bool> _confirmDelete(BuildContext context, String name,
-    {bool isActive = false, bool isLast = false}) async {
-  final consequence = isLast
-      ? " This is the last profile — you'll be taken back to profile setup."
-      : (isActive ? ' The most recent remaining profile becomes active.' : '');
-  final ok = await showDialog<bool>(
-    context: context,
-    builder: (ctx) => AlertDialog(
-      title: const Text('Delete profile?'),
-      content: Text(
-          '"$name" will be permanently removed. This can\'t be undone.$consequence'),
-      actions: [
-        TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Cancel')),
-        FilledButton(
-          style: FilledButton.styleFrom(backgroundColor: AraColors.accentError),
-          onPressed: () => Navigator.of(ctx).pop(true),
-          child: const Text('Delete'),
-        ),
-      ],
-    ),
-  );
-  return ok ?? false;
 }
 
 class _ErrorState extends StatelessWidget {

@@ -63,6 +63,14 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
         /// </summary>
         public Func<(System.Guid Id, string? Name)?>? AraProfileResolver { get; set; }
 
+        /// <summary>
+        /// §63.4 — runs on connect after <c>get_profiles</c> and BEFORE the twin ensure: the owning
+        /// service drains the guider-profile deletes it queued while no guider was connected (or the
+        /// guider was busy), so a twin the user asked to delete is gone before the ensure could
+        /// re-select it. Best-effort like every init step. Null in benches/tests.
+        /// </summary>
+        public Func<CancellationToken, Task>? BeforeAraProfileEnsureAsync { get; set; }
+
         private (System.Guid Id, string? Name) ResolveAraProfileIdentity() {
             var resolved = AraProfileResolver?.Invoke();
             return resolved ?? (profileService.ActiveProfile.Id, profileService.ActiveProfile.Name);
@@ -397,28 +405,137 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
         private Phd2Profile? FindProfile(string name) =>
             AvailableProfiles.FirstOrDefault(p => string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase));
 
-        /// <summary>
-        /// §63.4 delete hook — remove the named PHD2 profile (and its dark library / defect map,
-        /// <c>delete_dark_files=true</c> per the lifecycle table). Returns true when the daemon accepted the
-        /// delete, false on an RPC error response (e.g. the profile doesn't exist — already-gone is the
-        /// caller's success case to decide). Throws only on transport faults; the caller owns best-effort.
-        /// The daemon rejects deleting its SELECTED profile — callers must check
-        /// <see cref="SelectedProfile"/> first (the lifecycle hook does; the selected twin tracks the last
-        /// connect, not ARA's active-profile flag, so an ARA-side guard alone doesn't rule it out).
-        /// </summary>
-        public async Task<bool> DeleteGuiderProfileAsync(string name, CancellationToken ct) {
-            ArgumentException.ThrowIfNullOrEmpty(name);
+        /// <summary>What the daemon holds for an ARA profile's twin names: whether any of them exists,
+        /// whether one of them is the SELECTED profile, and the daemon's app state (null when the
+        /// state RPC failed). Refreshes the profile list first so the answer reflects the daemon now.</summary>
+        public async Task<GuiderProfilePresence> DescribeGuiderProfilesAsync(IReadOnlyList<string> names, CancellationToken ct) {
+            ArgumentNullException.ThrowIfNull(names);
             ct.ThrowIfCancellationRequested();
-            var msg = new Phd2DeleteProfile {
-                Parameters = new Phd2DeleteProfileParameter { Name = name, DeleteDarkFiles = true },
-            };
-            var resp = await SendMessage(msg);
-            if (resp?.error != null) {
-                Logger.Warning($"PHD2 §63.4 - delete_profile for '{name}' not applied: {resp.error}");
-                return false;
+            await GetProfiles().ConfigureAwait(false);
+            var found = names.Select(FindProfile).OfType<Phd2Profile>().DistinctBy(p => p.Id).ToList();
+            var selected = found.Any(p => SelectedProfile?.Id == p.Id);
+            string? state = null;
+            try {
+                state = await GetAppState(EquipmentRpcTimeoutMs).ConfigureAwait(false);
+            } catch (OperationCanceledException) {
+                throw;
+            } catch (Exception ex) when (ex is not OutOfMemoryException) {
+                Logger.Warning($"PHD2 §63.4 - get_app_state before the twin preview failed: {ex.Message}");
             }
-            Logger.Info($"PHD2 §63.4 - deleted guider profile '{name}' (dark files included).");
-            return true;
+            return new GuiderProfilePresence(found.Count > 0, selected, state);
+        }
+
+        /// <summary>
+        /// §63.4 delete hook — remove every daemon profile among <paramref name="names"/> (an ARA
+        /// profile's display-name twin and its legacy <c>ara-&lt;slug&gt;-&lt;id8&gt;</c> twin), the dark
+        /// library and defect map with it when <paramref name="deleteDarkFiles"/>. The daemon refuses
+        /// <c>delete_profile</c> while ANY of its equipment is connected, so this releases the equipment
+        /// first — but only from a guider that is sitting idle (Stopped): releasing it stops capture,
+        /// which would kill a guided run. A busy guider answers <see cref="GuiderProfileDeleteKind.Busy"/>
+        /// and the caller queues the delete. When the SELECTED profile goes, the daemon falls back to
+        /// whatever profile it keeps; the active ARA profile's twin is then re-ensured (select/create) and
+        /// its engine config pushed so the daemon is not left on a stranger's profile. With
+        /// <paramref name="reconnectEquipment"/> the equipment is connected again afterwards (the
+        /// connect path passes false: its own ensure/push/set_connected steps follow). Throws only on
+        /// transport faults.
+        /// </summary>
+        [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+            Justification = "The post-delete recovery steps (profile refresh, twin re-ensure, equipment reconnect) are best-effort: the delete itself already happened, and a fault there must be logged, not thrown over the delete's own result.")]
+        public async Task<GuiderProfileDeleteResult> DeleteGuiderProfilesAsync(
+                IReadOnlyList<string> names, bool deleteDarkFiles, bool reconnectEquipment, CancellationToken ct) {
+            ArgumentNullException.ThrowIfNull(names);
+            ct.ThrowIfCancellationRequested();
+            await GetProfiles().ConfigureAwait(false);
+            var targets = names.Select(FindProfile).OfType<Phd2Profile>().DistinctBy(p => p.Id).ToList();
+            if (targets.Count == 0) {
+                Logger.Info($"PHD2 §63.4 - delete of guider profile '{(names.Count > 0 ? names[0] : string.Empty)}' skipped: no such profile on the daemon.");
+                return new GuiderProfileDeleteResult(GuiderProfileDeleteKind.NotFound, null);
+            }
+            var state = await GetAppState(EquipmentRpcTimeoutMs).ConfigureAwait(false);
+            // An unanswered get_app_state reads as busy HERE (IsIdleAppState treats null as idle for
+            // the rename path): releasing the equipment of a guider that may be guiding is the one
+            // thing a delete must never do, so an unknown state waits for the next idle pass.
+            if (state is null || !IsIdleAppState(state)) {
+                Logger.Info($"PHD2 §63.4 - delete of guider profile '{targets[0].Name}' deferred: the guider is {state ?? "in an unknown state"}.");
+                return new GuiderProfileDeleteResult(GuiderProfileDeleteKind.Busy, state ?? "unknown");
+            }
+            var selectedInvolved = targets.Any(t => SelectedProfile?.Id == t.Id);
+            var wasConnected = await IsPHD2EquipmentConnectedAsync().ConfigureAwait(false);
+            if (wasConnected) {
+                // delete_profile is refused while any equipment is connected — for every profile,
+                // not only the selected one.
+                await DisconnectPHD2Equipment(ct).ConfigureAwait(false);
+            }
+            string? refusal = null;
+            var deletedAny = false;
+            try {
+                foreach (var target in targets) {
+                    ct.ThrowIfCancellationRequested();
+                    var resp = await SendMessage(new Phd2DeleteProfile {
+                        Parameters = new Phd2DeleteProfileParameter { Name = target.Name, DeleteDarkFiles = deleteDarkFiles },
+                    }, EquipmentRpcTimeoutMs).ConfigureAwait(false); // not the 60 s default: the caller's bound is 15 s
+                    if (resp?.error != null) {
+                        refusal = resp.error.message ?? $"error {resp.error.code}";
+                        Logger.Warning($"PHD2 §63.4 - delete_profile for '{target.Name}' not applied: {refusal}");
+                    } else {
+                        deletedAny = true;
+                        Logger.Info($"PHD2 §63.4 - deleted guider profile '{target.Name}'{(deleteDarkFiles ? " (dark files included)" : " (dark files kept)")}.");
+                    }
+                }
+            } finally {
+                // Recovery runs even when the delete was cancelled mid-way: the equipment was only
+                // released for it, and the daemon must not be left on a stranger's profile.
+                try {
+                    await GetProfiles().ConfigureAwait(false);
+                } catch (Exception ex) {
+                    Logger.Warning($"PHD2 §63.4 - profile refresh after delete failed: {ex.Message}");
+                }
+                if (reconnectEquipment) {
+                    try {
+                        if (selectedInvolved && deletedAny) {
+                            await EnsureAraGuiderProfileAsync(CancellationToken.None).ConfigureAwait(false);
+                            await PushGuiderEngineConfigAsync(CancellationToken.None).ConfigureAwait(false);
+                        }
+                        if (wasConnected || (selectedInvolved && deletedAny)) {
+                            await EnsurePHD2EquipmentConnected().ConfigureAwait(false);
+                        }
+                    } catch (Exception ex) {
+                        Logger.Warning($"PHD2 §63.4 - restoring the guider after the profile delete failed: {ex.Message}");
+                    }
+                }
+            }
+            return deletedAny
+                ? new GuiderProfileDeleteResult(GuiderProfileDeleteKind.Deleted, null)
+                : new GuiderProfileDeleteResult(GuiderProfileDeleteKind.Refused, refusal);
+        }
+
+        private async Task<bool> IsPHD2EquipmentConnectedAsync() {
+            var resp = await SendMessage(new Phd2GetConnected(), EquipmentRpcTimeoutMs).ConfigureAwait(false);
+            if (resp?.error != null || resp?.result is null) {
+                // Unknown reads as connected: a needless set_connected(false) on released equipment is
+                // harmless, while skipping the release on connected equipment makes the daemon refuse
+                // the delete (and a drained entry would be dropped as refused).
+                return true;
+            }
+            return resp.result is bool b ? b : !bool.TryParse(resp.result.ToString(), out var parsed) || parsed;
         }
     }
+
+    /// <summary>What <see cref="PHD2Guider.DescribeGuiderProfilesAsync"/> found on the daemon.</summary>
+    public readonly record struct GuiderProfilePresence(bool Exists, bool Selected, string? AppState);
+
+    /// <summary>How a <see cref="PHD2Guider.DeleteGuiderProfilesAsync"/> ended.</summary>
+    public enum GuiderProfileDeleteKind {
+        /// <summary>At least one of the names was deleted.</summary>
+        Deleted,
+        /// <summary>None of the names exists on the daemon (already gone, or never created).</summary>
+        NotFound,
+        /// <summary>The guider is not idle (looping, calibrating, guiding…); nothing was touched.</summary>
+        Busy,
+        /// <summary>The daemon refused every delete; <see cref="GuiderProfileDeleteResult.Detail"/> carries its text.</summary>
+        Refused,
+    }
+
+    /// <summary>Outcome of a twin delete: the kind plus the daemon's app state (Busy) or error text (Refused).</summary>
+    public readonly record struct GuiderProfileDeleteResult(GuiderProfileDeleteKind Kind, string? Detail);
 }
