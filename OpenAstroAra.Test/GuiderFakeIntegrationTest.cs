@@ -1870,6 +1870,40 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task The_idle_drain_waits_while_an_imaging_run_or_a_polar_alignment_holds_the_guider() {
+            // A sequence stops guiding for an autofocus, a slew or a flip and the guider reads Stopped;
+            // releasing the guider's equipment then would fail the run's next Start Guiding.
+            await using var fake = FakeGuider.Start();
+            var daemon = new ProfileDaemon(fake);
+            daemon.Profiles.Add((2, "Old Rig"));
+            using var q = new TempTwinStore();
+            using var svc = NewTwinService(q.Store, () => (Guid.NewGuid(), "Rig A"));
+            svc.PingIntervalIdle = TimeSpan.FromMilliseconds(30);
+            svc.PingIntervalGuiding = TimeSpan.FromMilliseconds(30);
+            Guid? session = Guid.NewGuid();
+            svc.ActiveRunSession = () => session;
+            var oldId = Guid.NewGuid();
+            q.Store.Add(new PendingGuiderTwinDelete(oldId, "Old Rig", GuiderService.TwinNames("Old Rig", oldId), true, DateTimeOffset.UtcNow));
+            await ConnectAsync(svc, fake).ConfigureAwait(false);
+            // The connect drain is deliberate (the connect re-selects anyway), so re-queue after it.
+            q.Store.Add(new PendingGuiderTwinDelete(oldId, "Old Rig", GuiderService.TwinNames("Old Rig", oldId), true, DateTimeOffset.UtcNow));
+            daemon.Profiles.Add((2, "Old Rig"));
+            daemon.Deleted.Clear();
+
+            await Task.Delay(400).ConfigureAwait(false); // a dozen idle ticks
+            Assert.That(daemon.Deleted, Is.Empty, "no release/delete/reconnect under a running imaging session");
+            Assert.That(q.Store.List(), Has.Count.EqualTo(1));
+
+            session = null;
+            var deadline = DateTime.UtcNow.AddSeconds(10);
+            while (q.Store.List().Count > 0 && DateTime.UtcNow < deadline) {
+                await Task.Delay(25).ConfigureAwait(false);
+            }
+            Assert.That(q.Store.List(), Is.Empty, "the run ended: the next idle tick drains");
+            Assert.That(daemon.Deleted, Has.Count.EqualTo(1));
+        }
+
+        [Test]
         public async Task Deleting_the_selected_twin_re_ensures_the_active_profiles_twin_before_reconnecting() {
             await using var fake = FakeGuider.Start();
             var daemon = new ProfileDaemon(fake);

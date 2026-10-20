@@ -151,8 +151,44 @@ public sealed partial class GuiderService {
         _twinDeleteQueue.Add(new PendingGuiderTwinDelete(araProfileId, araProfileName, names, deleteDarkFiles, DateTimeOffset.UtcNow));
     }
 
-    /// <summary>True when a queued twin delete is waiting — the ping loop's cheap pre-check.</summary>
+    /// <summary>True when a queued twin delete is waiting — the ping loop's cheap pre-check (the
+    /// store answers from memory).</summary>
     internal bool HasPendingTwinDeletes => _twinDeleteQueue is { } q && q.List().Count > 0;
+
+    private int _idleDrainInFlight;
+
+    /// <summary>
+    /// §63.4 — from the ping tick: start a queued-delete drain when the guider is idle and nobody
+    /// is relying on its equipment. Never under an imaging run (a sequence stops guiding for an
+    /// autofocus, a slew or a flip and the guider reads Stopped — releasing the equipment then
+    /// fails the run's next Start Guiding) nor under a polar alignment (it holds the guide camera).
+    /// Fire-and-forget off the ping path, so the hang-detection ping never stalls behind a
+    /// release → delete → reconnect cycle; one drain at a time.
+    /// </summary>
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Fire-and-forget boundary: the drain logs its own faults; anything escaping would be an unobserved task exception.")]
+    internal void StartIdleTwinDrainIfDue(PHD2Guider guider) {
+        if (!HasPendingTwinDeletes || !PHD2Guider.IsIdleAppState(guider.AppState?.State)) {
+            return;
+        }
+        if (ActiveRunSession?.Invoke() is not null || PolarAlignActive?.Invoke() == true) {
+            return; // the run or the alignment owns the guider; the next idle tick asks again
+        }
+        if (Interlocked.CompareExchange(ref _idleDrainInFlight, 1, 0) != 0) {
+            return;
+        }
+        _ = Task.Run(async () => {
+            try {
+                await DrainPendingTwinDeletesAsync(guider, reconnectEquipment: true, _shutdownCts.Token).ConfigureAwait(false);
+            } catch (OperationCanceledException) {
+                // shutdown
+            } catch (Exception ex) {
+                LogGuiderProfileDeleteFailed(ex, "(queued)");
+            } finally {
+                Interlocked.Exchange(ref _idleDrainInFlight, 0);
+            }
+        });
+    }
 
     /// <summary>
     /// §63.4 — run the queued twin deletes against <paramref name="guider"/>. Called from the connect

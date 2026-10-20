@@ -94,10 +94,8 @@ public sealed partial class GuiderService {
             }
 
             var alive = await PingProbe(guider, (int)PingTimeout.TotalMilliseconds).ConfigureAwait(false);
-            if (alive && HasPendingTwinDeletes && PHD2Guider.IsIdleAppState(guider.AppState?.State)) {
-                // §63.4 — a twin delete queued while the guider was busy runs on the first idle tick.
-                // The drain itself re-checks the app state over RPC before releasing any equipment.
-                await DrainPendingTwinDeletesAsync(guider, reconnectEquipment: true, _shutdownCts.Token).ConfigureAwait(false);
+            if (alive) {
+                StartIdleTwinDrainIfDue(guider);
             }
 
             var declareDown = false;
