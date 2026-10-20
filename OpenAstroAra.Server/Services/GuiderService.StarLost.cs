@@ -118,6 +118,9 @@ public sealed partial class GuiderService {
                 return; // the star came back (or guiding ended) before the grace ran out
             }
             _starLostReacted = true;
+            // A new episode starts clean: a give-up, the failure count, the one-warning latch and the
+            // own-stop flags all belong to the previous cloud (review round 3).
+            ResetStarLostRecoveryLocked();
             fault = new EquipmentFaultEvent(DeviceType.Guider, DeviceId: null, DeviceName: "PHD2",
                 EquipmentFaultKind.TrackingLost,
                 $"guide star lost for more than {(int) StarLostGrace.TotalSeconds} s — the guider is still looking for it",

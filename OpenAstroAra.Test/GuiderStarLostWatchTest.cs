@@ -415,6 +415,44 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_second_episode_after_a_given_up_one_starts_clean_and_recovers() {
+            // Episode 1 gives up (no way to re-center); the star comes back on its own. Episode 2 under
+            // the next cloud must probe and recover: the give-up belonged to the previous cloud.
+            using var rig = new Rig(runActive: true);
+            var recenter = rig.Service.Recenter;
+            rig.Service.Recenter = null;
+            await using var fake = await LostStarPastTheGraceAsync(rig).ConfigureAwait(false);
+            fake.OnRpc("get_star_centroids", _ => Stars());
+            Assert.That(await WaitUntilAsync(() => rig.Notifications.Count == 2).ConfigureAwait(false), Is.True);
+            Assert.That(rig.Notifications[1].Title, Does.Contain("cannot re-center"));
+            await fake.BroadcastAsync(PhdEvents.GuideStep(0.1, -0.1)).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => rig.Resumed() == 1).ConfigureAwait(false), Is.True, "the relock still resumes a given-up episode");
+
+            rig.Service.Recenter = recenter;
+            await fake.BroadcastAsync(PhdEvents.StarLost(status: "low SNR")).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => rig.Paused() == 2).ConfigureAwait(false), Is.True);
+            Assert.That(await WaitUntilAsync(() => rig.Resumed() == 2).ConfigureAwait(false), Is.True, "the second episode probed and recovered");
+            Assert.That(rig.Centered(), Is.EqualTo(1), "re-centered once, in the second episode");
+        }
+
+        [Test]
+        public async Task A_second_episode_after_a_failed_attempt_warns_again_from_a_fresh_backoff() {
+            using var rig = new Rig(runActive: true);
+            var solves = 0;
+            rig.Centering.Setup(c => c.CenterOnTarget(It.IsAny<Coordinates>(), It.IsAny<IProgress<PlateSolveProgress>?>(), It.IsAny<IProgress<ApplicationStatus>?>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(() => new PlateSolveResult { Success = ++solves % 2 == 0 }); // fail, succeed, fail, succeed
+            await using var fake = await LostStarPastTheGraceAsync(rig).ConfigureAwait(false);
+            fake.OnRpc("get_star_centroids", _ => Stars());
+            Assert.That(await WaitUntilAsync(() => rig.Resumed() == 1).ConfigureAwait(false), Is.True);
+
+            await fake.BroadcastAsync(PhdEvents.StarLost(status: "low SNR")).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => rig.Paused() == 2).ConfigureAwait(false), Is.True);
+            Assert.That(await WaitUntilAsync(() => rig.Resumed() == 2).ConfigureAwait(false), Is.True);
+
+            Assert.That(rig.Notifications.Count(n => n.Title.Contains("re-center failed", StringComparison.Ordinal)), Is.EqualTo(2), "one warning per episode: the latch resets with the episode");
+        }
+
+        [Test]
         public async Task A_disconnect_during_the_wait_disarms_the_recovery() {
             using var rig = new Rig(runActive: true);
             await using var fake = await LostStarPastTheGraceAsync(rig).ConfigureAwait(false);
