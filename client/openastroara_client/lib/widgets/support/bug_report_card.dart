@@ -113,11 +113,23 @@ class _BugReportCardState extends ConsumerState<BugReportCard> {
             const Text('The bundle contains:'),
             const SizedBox(height: 8),
             const Text('• Ara\'s recent log files'),
-            const Text(
+            Text(switch (prep.sharingMode) {
+              'redacted' =>
+                '• your profile with coordinates, serial numbers, hostnames, '
+                    'usernames in paths, private network addresses and tokens '
+                    'scrubbed',
+              'coarse_gps' =>
+                '• your profile with the site rounded to ~111 km — it may still '
+                    'include equipment credentials, API / notification tokens '
+                    'and network addresses',
+              _ =>
                 '• your full profile — which may include equipment credentials, '
-                'API / notification tokens, precise observatory coordinates, and '
-                'network addresses'),
-            const Text('• system info, including this device\'s filesystem path'),
+                    'API / notification tokens, precise observatory coordinates, and '
+                    'network addresses',
+            }),
+            Text(prep.sharingMode == 'redacted'
+                ? '• system info, with this device\'s username scrubbed from its path'
+                : '• system info, including this device\'s filesystem path'),
             const Text(
                 '• this app\'s own error log, saved as a separate file beside '
                 'the ZIP'),

@@ -221,7 +221,8 @@ public sealed partial class BugReportService : IBugReportService, IDisposable {
             // §54.3 — says which sharing mode built this bundle, so a reader knows what was scrubbed.
             ["sharing_mode"] = BugReportRedactor.ToWire(mode),
             // PII note: the absolute profile path can carry the OS username
-            // (e.g. /home/alice/.local/share/openastroara). Kept deliberately — it's
+            // (e.g. /home/alice/.local/share/openastroara). Kept in the full and coarse-GPS
+            // modes (the redacted mode scrubs the username, BugReportRedactor.RedactText) — it's
             // useful for "can't find the profile" diagnostics and the user downloads
             // the bundle themselves before choosing to share it — but don't surface it
             // anywhere it would be auto-published, and tell users it's in the bundle.

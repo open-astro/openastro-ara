@@ -110,10 +110,11 @@ public static class SystemEndpoints {
                             type: "https://openastro.net/errors/bugreport-pii-ack-required",
                             title: "Bug-report download requires PII acknowledgement",
                             statusCode: StatusCodes.Status403Forbidden,
-                            detail: "The bug-report bundle contains the daemon logs, the full profile.json " +
-                                "(which may include equipment credentials, API/notification tokens, precise " +
-                                "observatory coordinates, and network endpoints), and a system-info.json with " +
-                                "the local filesystem path. Show the user this disclosure, then re-request " +
+                            detail: "The bug-report bundle contains the daemon logs, profile.json and a " +
+                                "system-info.json. In the default (full) sharing mode that includes equipment " +
+                                "credentials, API/notification tokens, precise observatory coordinates, network " +
+                                "endpoints and the local filesystem path; the coarse_gps and redacted modes scrub " +
+                                "some or all of those (§54.5). Show the user this disclosure, then re-request " +
                                 "with ?acknowledge=pii to download.");
                     }
                     var result = await svc.OpenDownloadAsync(preparationId, ct);
