@@ -1904,6 +1904,53 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_rest_delete_under_an_imaging_run_is_queued_and_the_preview_says_so() {
+            // Same reason as the idle drain: the run stops guiding for an autofocus and the guider reads
+            // Stopped, but its equipment is still the run's.
+            await using var fake = FakeGuider.Start();
+            var daemon = new ProfileDaemon(fake);
+            daemon.Profiles.Add((2, "Old Rig"));
+            using var q = new TempTwinStore();
+            using var svc = NewTwinService(q.Store, () => (Guid.NewGuid(), "Rig A"));
+            svc.ActiveRunSession = () => Guid.NewGuid();
+            await ConnectAsync(svc, fake).ConfigureAwait(false);
+            daemon.SetConnected.Clear();
+
+            var preview = await svc.DescribeAraGuiderTwinAsync("Old Rig", Guid.NewGuid(), CancellationToken.None).ConfigureAwait(false);
+            Assert.That(preview.CanDeleteNow, Is.False);
+            Assert.That(preview.Reason, Does.Contain("run"));
+
+            var outcome = await svc.DeleteAraGuiderProfileAsync("Old Rig", Guid.NewGuid(), true, CancellationToken.None).ConfigureAwait(false);
+            Assert.That(outcome.Status, Is.EqualTo(GuiderTwinDeleteStatus.Queued));
+            Assert.That(outcome.Reason, Does.Contain("run"));
+            Assert.That(daemon.SetConnected, Is.Empty, "the run's equipment is never released");
+            Assert.That(daemon.Deleted, Is.Empty);
+            Assert.That(q.Store.List(), Has.Count.EqualTo(1));
+        }
+
+        [Test]
+        public async Task A_queued_delete_of_a_shared_twin_still_deletes_it_on_the_next_connect() {
+            // Two ARA profiles named "Rig" share one twin; the user deleted one with the box ticked
+            // while no guider was connected. The immediate path would have deleted the twin, so the
+            // queued one must too — the survivor's next connect recreates a blank twin, as documented.
+            await using var fake = FakeGuider.Start();
+            var daemon = new ProfileDaemon(fake);
+            daemon.Profiles.Add((2, "Rig"));
+            using var q = new TempTwinStore();
+            var survivor = (Guid.NewGuid(), (string?)"Rig");
+            using var svc = NewTwinService(q.Store, () => (Guid.NewGuid(), "Rig A"), new List<(Guid, string?)> { survivor });
+
+            var outcome = await svc.DeleteAraGuiderProfileAsync("Rig", Guid.NewGuid(), true, CancellationToken.None).ConfigureAwait(false);
+            Assert.That(outcome.Status, Is.EqualTo(GuiderTwinDeleteStatus.Queued));
+            Assert.That(q.Store.List().Single().Shared, Is.True, "the entry remembers the twin was shared when queued");
+
+            await ConnectAsync(svc, fake).ConfigureAwait(false);
+
+            Assert.That(daemon.Deleted.Select(d => d["name"]!.GetValue<string>()), Does.Contain("Rig"));
+            Assert.That(q.Store.List(), Is.Empty);
+        }
+
+        [Test]
         public async Task Deleting_the_selected_twin_re_ensures_the_active_profiles_twin_before_reconnecting() {
             await using var fake = FakeGuider.Start();
             var daemon = new ProfileDaemon(fake);

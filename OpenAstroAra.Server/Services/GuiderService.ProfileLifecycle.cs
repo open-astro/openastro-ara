@@ -65,6 +65,9 @@ public sealed partial class GuiderService {
             if (!PHD2Guider.IsIdleAppState(presence.AppState)) {
                 return new GuiderTwinStatus(Exists: true, presence.Selected, CanDeleteNow: false, Reason: BusyReason(presence.AppState));
             }
+            if (GuiderHeldReason() is { } held) {
+                return new GuiderTwinStatus(Exists: true, presence.Selected, CanDeleteNow: false, Reason: held);
+            }
             return new GuiderTwinStatus(Exists: true, presence.Selected, CanDeleteNow: true, Reason: null);
         } catch (OperationCanceledException) when (ct.IsCancellationRequested) {
             throw;
@@ -72,6 +75,20 @@ public sealed partial class GuiderService {
             LogGuiderTwinPreviewFailed(ex, araProfileName);
             return new GuiderTwinStatus(Exists: null, SelectedOnDaemon: false, CanDeleteNow: false, Reason: ex.Message);
         }
+    }
+
+    /// <summary>Why the guider's equipment must not be released right now, or null when it may be:
+    /// an imaging run owns it (a sequence stops guiding for an autofocus, a slew or a flip and the
+    /// guider reads Stopped, but its next Start Guiding needs the equipment) or a polar alignment holds
+    /// the guide camera. Shared by the preview, the REST delete and the idle drain.</summary>
+    private string? GuiderHeldReason() {
+        if (ActiveRunSession?.Invoke() is not null) {
+            return "An imaging run is in progress. It will be deleted once the run ends.";
+        }
+        if (PolarAlignActive?.Invoke() == true) {
+            return "A polar alignment is in progress. It will be deleted once it ends.";
+        }
+        return null;
     }
 
     private static string BusyReason(string? appState) =>
@@ -100,6 +117,12 @@ public sealed partial class GuiderService {
             Enqueue(araProfileId, araProfileName, names, deleteDarkFiles);
             LogGuiderProfileDeleteQueued(names[0], "no guider connected");
             return new GuiderTwinDeleteOutcome(GuiderTwinDeleteStatus.Queued, "No guider is connected. It will be deleted the next time the guider connects.");
+        }
+        if (GuiderHeldReason() is { } held) {
+            // Same rule as the idle drain: a Stopped guider under a run is still the run's.
+            Enqueue(araProfileId, araProfileName, names, deleteDarkFiles);
+            LogGuiderProfileDeleteQueued(names[0], "the guider's equipment is held by a run or an alignment");
+            return new GuiderTwinDeleteOutcome(GuiderTwinDeleteStatus.Queued, held);
         }
         try {
             await _twinDeleteLock.WaitAsync(ct).ConfigureAwait(false);
@@ -148,8 +171,15 @@ public sealed partial class GuiderService {
             LogGuiderProfileDeleteSkipped(names[0]);
             return;
         }
-        _twinDeleteQueue.Add(new PendingGuiderTwinDelete(araProfileId, araProfileName, names, deleteDarkFiles, DateTimeOffset.UtcNow));
+        // The user ticked the box knowing another ARA profile shares the twin (the dialog says so):
+        // the queued delete must do what the immediate one would have, so the drain must not read
+        // the survivor as "a live profile maps to it again".
+        var shared = LiveTwinNames().Any(l => SameTwin(l, names[0]));
+        _twinDeleteQueue.Add(new PendingGuiderTwinDelete(araProfileId, araProfileName, names, deleteDarkFiles, DateTimeOffset.UtcNow, shared));
     }
+
+    private List<string> LiveTwinNames() =>
+        (_araProfilesResolver?.Invoke() ?? Array.Empty<(Guid, string?)>()).SelectMany(p => TwinNames(p.Name, p.Id)).ToList();
 
     /// <summary>True when a queued twin delete is waiting — the ping loop's cheap pre-check (the
     /// store answers from memory).</summary>
@@ -171,7 +201,7 @@ public sealed partial class GuiderService {
         if (!HasPendingTwinDeletes || !PHD2Guider.IsIdleAppState(guider.AppState?.State)) {
             return;
         }
-        if (ActiveRunSession?.Invoke() is not null || PolarAlignActive?.Invoke() == true) {
+        if (GuiderHeldReason() is not null) {
             return; // the run or the alignment owns the guider; the next idle tick asks again
         }
         if (Interlocked.CompareExchange(ref _idleDrainInFlight, 1, 0) != 0) {
@@ -195,8 +225,9 @@ public sealed partial class GuiderService {
     /// path (after <c>get_profiles</c>, before the twin ensure; <paramref name="reconnectEquipment"/>
     /// false because the connect's own steps re-select and reconnect) and from the ping loop when the
     /// connected guider is idle. A queued name that a LIVE ARA profile maps to again (the user
-    /// recreated a profile with the same name since) is dropped, not deleted. A busy guider stops the
-    /// drain; the rest waits for the next pass. Never throws except on cancellation.
+    /// recreated a profile with the same name since) is dropped, not deleted — unless the entry was
+    /// queued as shared, which deletes regardless. A busy guider stops the drain; the rest waits for
+    /// the next pass. Never throws except on cancellation.
     /// </summary>
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Background drain: a transport fault ends this pass with a log line; the queue keeps the entry for the next connect or idle pass.")]
@@ -208,12 +239,15 @@ public sealed partial class GuiderService {
         if (pending.Count == 0) {
             return;
         }
-        var live = _araProfilesResolver?.Invoke() ?? Array.Empty<(Guid, string?)>();
-        var liveNames = live.SelectMany(p => TwinNames(p.Name, p.Id)).ToList();
+        var liveNames = LiveTwinNames();
         await _twinDeleteLock.WaitAsync(ct).ConfigureAwait(false);
         try {
             foreach (var entry in pending) {
-                var names = entry.TwinNames.Where(n => !liveNames.Any(l => SameTwin(l, n))).ToList();
+                // A twin queued as shared goes whatever the live list says (the user chose that); any
+                // other queued name a live profile maps to again was recreated since, and stays.
+                var names = entry.Shared
+                    ? entry.TwinNames.ToList()
+                    : entry.TwinNames.Where(n => !liveNames.Any(l => SameTwin(l, n))).ToList();
                 if (names.Count == 0) {
                     _twinDeleteQueue.Remove(entry.AraProfileId);
                     LogGuiderProfileDeleteDroppedLive(entry.TwinNames[0]);
