@@ -310,11 +310,19 @@ public interface IGuiderService {
     /// InvalidOperationException when disconnected (→ 409, typed).</summary>
     Task<OperationAcceptedDto> PushGuiderTuningAsync(string? idempotencyKey, CancellationToken ct);
 
-    /// <summary>§63.4 delete hook — best-effort removal of the PHD2 profile mapped to a just-deleted ARA
-    /// profile (its <c>ara-&lt;slug&gt;-&lt;id8&gt;</c> twin, dark files included). Never throws: returns
-    /// true when the daemon accepted the delete, false when no guider is connected, the profile wasn't
-    /// there, or the RPC failed (all logged) — a failed cleanup must never fail the ARA profile delete.</summary>
-    Task<bool> TryDeleteAraGuiderProfileAsync(string? araProfileName, Guid araProfileId, CancellationToken ct);
+    /// <summary>§63.4 — what the daemon holds for a profile's guider twin, for the delete dialog: whether
+    /// either twin name exists (null = no guider connected), whether it is the daemon's selected profile,
+    /// and whether a delete could run right now (idle guider) or would be queued, with the reason. Never
+    /// throws; a daemon fault reads as unknown (<c>Exists</c> null) with the fault's text as the reason.</summary>
+    Task<GuiderTwinStatus> DescribeAraGuiderTwinAsync(string? araProfileName, Guid araProfileId, CancellationToken ct);
+
+    /// <summary>§63.4 — delete the guider twin of a just-deleted ARA profile (its display-name twin and the
+    /// legacy <c>ara-&lt;slug&gt;-&lt;id8&gt;</c> twin), the dark library with it when
+    /// <paramref name="deleteDarkFiles"/>. Runs now when the guider is connected and idle (releasing and
+    /// reconnecting the daemon's equipment around the RPC, since the daemon refuses the delete while any
+    /// equipment is connected); otherwise — no guider, guider busy, or <paramref name="ct"/> ran out — the
+    /// delete is queued and drained on the next connect or the next idle moment. Never throws.</summary>
+    Task<GuiderTwinDeleteOutcome> DeleteAraGuiderProfileAsync(string? araProfileName, Guid araProfileId, bool deleteDarkFiles, CancellationToken ct);
 
     /// <summary>#1156 clone hook — best-effort <c>create_profile</c> + <c>copy_from</c> so a duplicated ARA
     /// profile's twin inherits the source twin's calibration. Never throws; false when no guider is
@@ -325,6 +333,20 @@ public interface IGuiderService {
     /// legacy id-suffixed name) so a renamed ARA profile keeps its calibration. Never throws.</summary>
     Task<bool> TryRenameAraGuiderProfileAsync(string? oldAraProfileName, Guid araProfileId, string? newAraProfileName, CancellationToken ct);
 }
+
+/// <summary>§63.4 — daemon-side half of the twin preview (see <see cref="Contracts.GuiderTwinPreviewDto"/>).</summary>
+public sealed record GuiderTwinStatus(bool? Exists, bool SelectedOnDaemon, bool CanDeleteNow, string? Reason);
+
+/// <summary>§63.4 — how a twin delete ended.</summary>
+public enum GuiderTwinDeleteStatus {
+    Deleted,
+    Queued,
+    NotFound,
+    Failed,
+}
+
+/// <summary>§63.4 — the twin delete's outcome plus a human sentence for Queued / Failed.</summary>
+public sealed record GuiderTwinDeleteOutcome(GuiderTwinDeleteStatus Status, string? Reason);
 
 public interface IPolarAlignService {
     Task<PolarAlignStateDto> GetStatusAsync(CancellationToken ct);

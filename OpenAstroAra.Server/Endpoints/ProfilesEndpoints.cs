@@ -18,6 +18,7 @@ using System.Threading;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.Logging;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Equipment.Equipment.MyGuider.PHD2;
@@ -97,32 +98,86 @@ public static partial class ProfilesEndpoints {
             .WithName("RenameProfile")
             .WithSummary("Rename a profile.");
 
-        profiles.MapDelete("/{id:guid}", (Guid id, IProfileRepository repo, IGuiderService guider) => {
-                // Snapshot the name BEFORE the delete — the §63.4 twin's PHD2 name derives
-                // from it, and the record is gone once Delete succeeds. Read-only, so the
-                // repository's atomic decide-under-lock (below) still owns TOCTOU.
-                var name = repo.GetProfile(id)?.Meta.Name;
-                // The repository decides atomically under its lock, so a concurrent select
-                // can't slip between an existence pre-check and the delete (TOCTOU).
-                var result = repo.Delete(id);
-                if (result == ProfileDeleteResult.Deleted) {
-                    // §63.4 lifecycle hook — drop the profile's PHD2 twin (dark files
-                    // included) so orphaned guider profiles don't accumulate. Fire-and-
-                    // forget: the service never throws (best-effort by contract), and the
-                    // DELETE response must not wait on a guider RPC.
-                    _ = guider.TryDeleteAraGuiderProfileAsync(name, id, CancellationToken.None);
+        profiles.MapGet("/{id:guid}/guider-twin", async (Guid id, IProfileRepository repo, IGuiderService guider, CancellationToken ct) => {
+                // §63.4 — what the delete dialog needs before it asks about the guider twin.
+                var all = repo.List().Profiles;
+                var me = all.FirstOrDefault(p => p.Id == id);
+                if (me is null) {
+                    return Results.NotFound();
                 }
-                return result switch {
-                    ProfileDeleteResult.Deleted => Results.NoContent(),
-                    ProfileDeleteResult.NotFound => Results.NotFound(),
-                    _ => Results.Problem(statusCode: StatusCodes.Status500InternalServerError),
-                };
+                var sharedWith = all.FirstOrDefault(p => p.Id != id && SameTwinName(p.Name, me.Name))?.Name;
+                var status = await guider.DescribeAraGuiderTwinAsync(me.Name, id, ct).ConfigureAwait(false);
+                return Results.Ok(new GuiderTwinPreviewDto(
+                    TwinNames: new[] { PHD2Guider.AraGuiderDisplayProfileName(me.Name), PHD2Guider.AraGuiderProfileName(me.Name, id) },
+                    Exists: status.Exists,
+                    Shared: sharedWith is not null,
+                    SharedWith: sharedWith,
+                    SelectedOnDaemon: status.SelectedOnDaemon,
+                    CanDeleteNow: status.CanDeleteNow,
+                    Reason: status.Reason));
             })
-            .Produces(StatusCodes.Status204NoContent)
+            .Produces<GuiderTwinPreviewDto>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithName("GetProfileGuiderTwin")
+            .WithSummary("Describe the profile's OpenAstro Guider profile (its twin) for the delete dialog: " +
+                "whether it exists on the daemon, whether another profile shares it, and whether a delete " +
+                "could run now or would be queued.");
+
+        profiles.MapDelete("/{id:guid}", async (Guid id,
+                [FromQuery(Name = "guider_profile")] string? guiderProfile,
+                [FromQuery(Name = "dark_library")] string? darkLibrary,
+                IProfileRepository repo, IGuiderService guider) => {
+                // §63.4 — the guider twin goes only on an explicit ask (default keep): an older client
+                // that sends no parameter never deletes guider data without the user being asked.
+                bool deleteTwin;
+                switch (guiderProfile) {
+                    case null or "" or "keep": deleteTwin = false; break;
+                    case "delete": deleteTwin = true; break;
+                    default: return Results.Problem("guider_profile must be 'keep' or 'delete'", statusCode: StatusCodes.Status400BadRequest);
+                }
+                bool deleteDarks;
+                switch (darkLibrary) {
+                    case null or "" or "delete": deleteDarks = true; break;
+                    case "keep": deleteDarks = false; break;
+                    default: return Results.Problem("dark_library must be 'keep' or 'delete'", statusCode: StatusCodes.Status400BadRequest);
+                }
+                // Snapshot the name BEFORE the delete — the §63.4 twin's name derives from it, and the
+                // record is gone once Delete succeeds. Read-only, so the repository's atomic
+                // decide-under-lock (below) still owns TOCTOU.
+                var name = repo.GetProfile(id)?.Meta.Name;
+                // The repository decides atomically under its lock, so a concurrent select can't
+                // slip between an existence pre-check and the delete (TOCTOU).
+                var result = repo.Delete(id);
+                if (result == ProfileDeleteResult.NotFound) {
+                    return Results.NotFound();
+                }
+                if (result != ProfileDeleteResult.Deleted) {
+                    return Results.Problem(statusCode: StatusCodes.Status500InternalServerError);
+                }
+                if (!deleteTwin) {
+                    return Results.Ok(new ProfileDeleteResultDto("kept", null));
+                }
+                // The response reports what happened to the twin, so the delete is awaited — bounded,
+                // and NOT by the request's own abort: a client that drops mid-way must not leave the
+                // daemon's equipment released. Past the bound the service queues the delete itself.
+                using var bound = new CancellationTokenSource(GuiderTwinDeleteBound);
+                var outcome = await guider.DeleteAraGuiderProfileAsync(name, id, deleteDarks, bound.Token).ConfigureAwait(false);
+                return Results.Ok(new ProfileDeleteResultDto(outcome.Status switch {
+                    GuiderTwinDeleteStatus.Deleted => "deleted",
+                    GuiderTwinDeleteStatus.Queued => "queued",
+                    GuiderTwinDeleteStatus.NotFound => "not_found",
+                    _ => "failed",
+                }, outcome.Reason));
+            })
+            .Produces<ProfileDeleteResultDto>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status400BadRequest)
             .ProducesProblem(StatusCodes.Status404NotFound)
             .WithName("DeleteProfile")
             .WithSummary("Delete a profile. Deleting the active profile activates the newest " +
-                "remaining one; deleting the last profile returns to the zero-profile state.");
+                "remaining one; deleting the last profile returns to the zero-profile state. " +
+                "?guider_profile=delete also deletes its OpenAstro Guider profile (now, or queued " +
+                "until the guider is connected and idle); ?dark_library=keep spares the dark library. " +
+                "The body says what happened to the guider profile.");
 
         profiles.MapPost("/{id:guid}/select", (Guid id, IProfileRepository repo, IGuiderService guider,
                 Microsoft.Extensions.Logging.ILoggerFactory loggerFactory) => {
@@ -147,6 +202,14 @@ public static partial class ProfilesEndpoints {
 
         return app;
     }
+
+    /// <summary>How long the delete response waits on the guider before the twin delete is queued instead.</summary>
+    internal static readonly TimeSpan GuiderTwinDeleteBound = TimeSpan.FromSeconds(15);
+
+    /// <summary>Two ARA profile names map to one guider twin when they match trimmed and case-insensitively
+    /// (AraGuiderDisplayProfileName trims; the daemon's name check ignores case).</summary>
+    private static bool SameTwinName(string? a, string? b) =>
+        string.Equals(a?.Trim(), b?.Trim(), StringComparison.OrdinalIgnoreCase);
 
     private static string? ActiveProfileName(IProfileRepository repo) {
         var list = repo.List();

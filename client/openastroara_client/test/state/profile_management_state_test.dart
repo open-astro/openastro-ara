@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/models/guider_twin.dart';
 import 'package:openastroara/models/profile_list.dart';
 import 'package:openastroara/models/profile_meta.dart';
 import 'package:openastroara/models/server.dart';
@@ -34,8 +35,14 @@ class _FakeApi extends ProfileApi {
 
   @override
   Future<void> renameProfile(String id, String name) async {}
+  final List<bool> deleteGuiderFlags = [];
   @override
-  Future<void> deleteProfile(String id) async {}
+  Future<ProfileDeleteResult> deleteProfile(String id,
+      {bool deleteGuiderProfile = false}) async {
+    deleteGuiderFlags.add(deleteGuiderProfile);
+    return const ProfileDeleteResult(
+        guiderProfile: GuiderTwinOutcome.queued, reason: 'busy');
+  }
 }
 
 ProviderContainer _container(_FakeApi api) =>
@@ -97,5 +104,18 @@ void main() {
     await expectLater(notifier.select('id-1'), throwsA(isA<StateError>()));
     // Not stranded on loading — the finally reconciled the list with the server.
     expect(c.read(profileManagementProvider).hasValue, isTrue);
+  });
+
+  test('delete passes the guider choice through and returns the outcome', () async {
+    final api = _FakeApi();
+    final c = _container(api);
+    addTearDown(c.dispose);
+    await c.read(profileManagementProvider.future);
+    final result = await c
+        .read(profileManagementProvider.notifier)
+        .delete('id-1', deleteGuiderProfile: true);
+    expect(api.deleteGuiderFlags, [true]);
+    expect(result.guiderProfile, GuiderTwinOutcome.queued);
+    expect(result.message, contains('when the guider is free'));
   });
 }
