@@ -266,16 +266,25 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public async Task A_blank_solver_index_path_falls_back_to_the_sky_data_root() {
+        public void A_blank_solver_index_path_means_the_deb_default_where_the_solver_looks() {
+            // Review round 3: a blank path (a shared profile strips it; a user can clear the field) used to
+            // install under the sky-data root, which no solve ever reads. Both sides now agree on the default.
             var svc = new DataManagerService(_root, new UnusedFetcher(), new NullBroadcaster(), NullLogger<DataManagerService>.Instance,
                 catalog: TestCatalog, expectedDigests: NoDigests, solverDataRoot: () => "  ");
-            var dir = Path.Combine(_root, "astap-w08");
-            Directory.CreateDirectory(dir);
-            await File.WriteAllBytesAsync(Path.Combine(dir, "w08_0101.001"), new byte[8]);
-            await File.WriteAllTextAsync(Path.Combine(dir, SkyDataInstaller.InstalledMarkerFileName), "stamp");
+            Assert.That(svc.InstallRootFor("astap-d80"), Is.EqualTo(SolverPathMigration.DefaultDatabasePath));
+            Assert.That(svc.InstallRootFor("hyg-stars"), Is.EqualTo(_root), "catalogs stay under the sky-data root");
+            Assert.That(SolverPathMigration.EffectiveIndexPath("  "), Is.EqualTo(SolverPathMigration.DefaultDatabasePath));
+            Assert.That(SolverPathMigration.EffectiveIndexPath(null), Is.EqualTo(SolverPathMigration.DefaultDatabasePath));
+            Assert.That(SolverPathMigration.EffectiveIndexPath(" /srv/astap "), Is.EqualTo("/srv/astap"));
+        }
 
-            var listed = await svc.ListPackagesAsync(CancellationToken.None);
-            Assert.That(listed.Single(p => p.Id == "astap-w08").IsInstalled, Is.True);
+        [Test]
+        public void The_unknown_size_ceiling_follows_the_largest_catalog_entry() {
+            // Pinned on purpose: with D80 in the catalog an unsized entry would be allowed ~1.66 GB of extraction.
+            // Every curated entry carries a size (the catalog test above), so the fallback is never used today.
+            var largest = DataManagerService.Catalog.Max(p => p.SizeBytes);
+            Assert.That(DataManagerService.UnknownSizeCeiling, Is.EqualTo(largest + largest / 4));
+            Assert.That(DataManagerService.UnknownSizeCeiling, Is.GreaterThan(1_600_000_000L));
         }
 
         [TestCase(null, true, false, false)]   // optics unknown: D80 only

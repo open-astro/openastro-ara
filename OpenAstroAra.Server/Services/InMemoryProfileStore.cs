@@ -242,7 +242,7 @@ public sealed class InMemoryProfileStore : IProfileStore {
     private PlateSolveSettingsDto _plateSolve = new(
         Engine: "astap",
         PathOrEndpoint: SolverPathMigration.AstapCliPath, // the multi-core solver bundled with the daemon
-        IndexDownloadPath: "/var/lib/astap",
+        IndexDownloadPath: SolverPathMigration.DefaultDatabasePath,
         SearchRadiusDeg: 30.0,
         DownsampleFactor: 0, // 0 = auto from the pixel scale (#1136)
         TimeoutSeconds: 60,

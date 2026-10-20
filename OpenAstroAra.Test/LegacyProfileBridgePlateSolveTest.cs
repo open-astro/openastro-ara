@@ -42,7 +42,10 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void Blank_index_path_keeps_the_legacy_value() {
+        public void Blank_index_path_means_the_deb_default_directory() {
+            // #1136 (review round 3): a shared profile strips the path and a user can clear the field; the Data
+            // Manager installs under the default directory in that case, so the solver must look there too
+            // rather than keep whatever the legacy object held.
             var store = new InMemoryProfileStore();
             store.PutPlateSolveSettings(store.GetPlateSolveSettings() with { IndexDownloadPath = "  " });
             var legacy = new HeadlessProfileService();
@@ -50,7 +53,7 @@ namespace OpenAstroAra.Test {
 
             LegacyProfileBridge.SyncPlateSolve(legacy, store);
 
-            Assert.That(legacy.ActiveProfile.PlateSolveSettings.ASTAPDatabaseLocation, Is.EqualTo("/opt/astap"));
+            Assert.That(legacy.ActiveProfile.PlateSolveSettings.ASTAPDatabaseLocation, Is.EqualTo(SolverPathMigration.DefaultDatabasePath));
         }
 
         [Test]

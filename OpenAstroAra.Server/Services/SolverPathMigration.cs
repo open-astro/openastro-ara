@@ -36,6 +36,18 @@ public static class SolverPathMigration {
     /// <summary>The bundled solver next to the daemon: the default and the migration target.</summary>
     public const string AstapCliPath = "/opt/openastroara/astap_cli";
 
+    /// <summary>The star-database directory the .deb creates (tmpfiles.d) and the unit lets the daemon
+    /// write (#1136): the profile default for <c>IndexDownloadPath</c>, and what a blank path means
+    /// everywhere that reads it, so the Data Manager installs where the solver looks.</summary>
+    public const string DefaultDatabasePath = "/var/lib/astap";
+
+    /// <summary>The index path a profile value means: itself, trimmed, or <see cref="DefaultDatabasePath"/>
+    /// when blank (a shared profile has the path stripped, and a user can clear the field). The solver,
+    /// the database-status endpoint and the Data Manager all go through this, so a blank path can never
+    /// install a database in one place and solve from another (#1136, review round 3).</summary>
+    public static string EffectiveIndexPath(string? configured) =>
+        string.IsNullOrWhiteSpace(configured) ? DefaultDatabasePath : configured.Trim();
+
     /// <summary>The stock solver paths earlier releases wrote; any of them moves to the bundled
     /// binary once it is on disk.</summary>
     public static readonly string[] StockPaths = { LegacyAstapPath, DebianAstapCliPath, AstapDebCliPath };

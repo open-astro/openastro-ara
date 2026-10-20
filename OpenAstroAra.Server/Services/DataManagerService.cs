@@ -332,7 +332,7 @@ namespace OpenAstroAra.Server.Services {
         private readonly Dictionary<string, DataPackageDto> _catalogById;
         private readonly IReadOnlyDictionary<string, string> _expectedDigests;
         // #1136 — where solver database packages install (the profile's plate-solve index path, read per call so a
-        // settings change applies without a restart; null/blank falls back to the sky-data root), the rig's frame
+        // settings change applies without a restart; null/blank means the .deb's default directory), the rig's frame
         // height for the Recommended flag, and the free bytes under a directory for the pre-download space check.
         private readonly Func<string?> _solverDataRoot;
         private readonly Func<double?> _fieldOfViewDeg;
@@ -554,9 +554,9 @@ namespace OpenAstroAra.Server.Services {
                     }
                     // #1136 — refuse up front when the volume cannot hold the extracted package: a 1.3 GB database
                     // that fails at 90% on a full SD card wasted the download and left the user guessing. Checked
-                    // under the claim, AFTER the in-flight lookup below has had its chance: a repeat request while
-                    // the same package is streaming must join that download, not read a 507 off the staging dir's
-                    // own usage. The staging dir is on the same volume as the install, so the ceiling (advertised
+                    // only once this request holds the claim: a repeat request while the same package is streaming
+                    // loses the TryAdd, joins that download below, and never reads a 507 off the staging dir's own
+                    // usage. The staging dir is on the same volume as the install, so the ceiling (advertised
                     // size + headroom) is the right bound. Unreadable free space (null) does not block.
                     var ceilingNeeded = ExtractionCeiling(pkg);
                     if (_freeBytes(RootFor(pkg)) is { } free && free < ceilingNeeded) {
@@ -725,7 +725,7 @@ namespace OpenAstroAra.Server.Services {
 
         // Fallback extraction cap for a catalog entry missing its size: the largest advertised package + 25% headroom
         // (≥16 MiB), so an unsized entry can't open a wider window than our biggest real package.
-        private static readonly long UnknownSizeCeiling = ComputeUnknownSizeCeiling();
+        internal static readonly long UnknownSizeCeiling = ComputeUnknownSizeCeiling();
 
         private static long ComputeUnknownSizeCeiling() {
             var max = Catalog.Max(p => p.SizeBytes);
@@ -841,17 +841,17 @@ namespace OpenAstroAra.Server.Services {
         // Per-package directory — ONLY for a known catalog id, so a caller-supplied packageId (Delete,
         // Download) can never traverse out of the data root. #1136: a solver database package lives under the
         // profile's solver index path instead (where astap_cli's -d points; AstapStarDatabase reads one level of
-        // subdirectories), falling back to the sky-data root when that path is blank.
+        // subdirectories). A blank path means the .deb's default directory, the same rule the solver side applies
+        // (SolverPathMigration.EffectiveIndexPath) — never the sky-data root, where no solve would ever look.
         private string? PackageDir(string packageId) =>
             _catalogById.TryGetValue(packageId, out var pkg) ? Path.Combine(RootFor(pkg), packageId) : null;
 
-        private string RootFor(DataPackageDto pkg) {
-            if (!IsSolverPackage(pkg)) {
-                return _dataRoot;
-            }
-            var root = _solverDataRoot()?.Trim();
-            return string.IsNullOrEmpty(root) ? _dataRoot : root;
-        }
+        /// <summary>The directory a package installs under (tests).</summary>
+        internal string InstallRootFor(string packageId) =>
+            _catalogById.TryGetValue(packageId, out var pkg) ? RootFor(pkg) : throw new KeyNotFoundException(packageId);
+
+        private string RootFor(DataPackageDto pkg) =>
+            IsSolverPackage(pkg) ? SolverPathMigration.EffectiveIndexPath(_solverDataRoot()) : _dataRoot;
 
         // A package counts as installed once §36-2a's .installed sentinel is present (a bare dir from a torn install
         // does not). Used by the ForceReinstall skip.
@@ -902,8 +902,8 @@ namespace OpenAstroAra.Server.Services {
         Task IHostedService.StartAsync(CancellationToken cancellationToken) {
             // #1136 — the solver index path gets download scratch dirs too; reclaim any a crash orphaned there
             // (Program.cs sweeps the sky-data root before the service exists; this root comes from the profile).
-            var solverRoot = _solverDataRoot()?.Trim();
-            if (!string.IsNullOrEmpty(solverRoot) && Directory.Exists(solverRoot)) {
+            var solverRoot = SolverPathMigration.EffectiveIndexPath(_solverDataRoot());
+            if (Directory.Exists(solverRoot)) {
                 SkyDataInstaller.SweepStaleScratch(solverRoot);
             }
             // §36 offline-first seeding: the .deb ships every curated catalog as a
