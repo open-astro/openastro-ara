@@ -188,6 +188,21 @@ void main() {
     expect(find.text('AlpacaBridge not detected.'), findsNothing);
   });
 
+  testWidgets('a failed camera handshake keeps Next locked even when other '
+      'types answer', (tester) async {
+    final api = _FakeDiscoveryApi(
+      devices: {
+        EquipmentDeviceType.mount: [device(EquipmentDeviceType.mount, 'eq6')],
+      },
+      failingTypes: {EquipmentDeviceType.camera},
+    );
+    final container = await _pump(tester, api);
+
+    expect(container.read(wizardStepValidProvider), isFalse);
+    expect(find.text('AlpacaBridge not detected.'), findsOneWidget);
+    expect(find.textContaining('AlpacaBridge found'), findsNothing);
+  });
+
   testWidgets('§68.2 missing bridge: Next stays blocked, the install command '
       'shows, and Retry detection recovers', (tester) async {
     final api = _FakeDiscoveryApi(failing: true);
