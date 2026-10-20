@@ -33,7 +33,11 @@ public sealed record DataPackageDto(
     // §37.6 — curator flag: the wizard's sky-data screen pre-checks recommended
     // (not-yet-installed) packages so a fresh profile starts with the useful set
     // ticked. Optional default so pre-slice serialized shapes still deserialize.
-    bool Recommended = false);
+    bool Recommended = false,
+    // #1136 — the directory the installed files sit in (null when not installed). For a solver
+    // package this can be an earlier index path the profile no longer points at: the files are
+    // still listed and removable, but the solver does not read them until the path matches.
+    string? InstallPath = null);
 
 /// <summary>POST /api/v1/data-manager/download body.</summary>
 /// <param name="PackageId">Catalog id of the package to download.</param>

@@ -27,6 +27,9 @@ class DataPackage {
   final bool recommended;
   final DateTime? installedUtc;
   final String? sourceUrl;
+  // #1136 — where the installed files are (null when not installed); for a
+  // solver database this may be an earlier index path the rig no longer reads.
+  final String? installPath;
 
   const DataPackage({
     required this.id,
@@ -39,6 +42,7 @@ class DataPackage {
     this.recommended = false,
     this.installedUtc,
     this.sourceUrl,
+    this.installPath,
   });
 
   factory DataPackage.fromJson(Map<String, dynamic> json) {
@@ -53,6 +57,7 @@ class DataPackage {
       recommended: _bool(json['recommended']),
       installedUtc: _dt(json['installed_utc']),
       sourceUrl: _str(json['source_url']),
+      installPath: _str(json['install_path']),
     );
   }
 
@@ -68,11 +73,12 @@ class DataPackage {
       other.isInstalled == isInstalled &&
       other.recommended == recommended &&
       other.installedUtc == installedUtc &&
-      other.sourceUrl == sourceUrl;
+      other.sourceUrl == sourceUrl &&
+      other.installPath == installPath;
 
   @override
   int get hashCode => Object.hash(
-      id, name, description, category, sizeBytes, version, isInstalled, installedUtc, sourceUrl, recommended);
+      id, name, description, category, sizeBytes, version, isInstalled, installedUtc, sourceUrl, recommended, installPath);
 }
 
 /// Where a tracked download is in its lifecycle (from the WS event subtype).

@@ -8357,6 +8357,10 @@ components:
         recommended:
           type: boolean
           default: false
+        install_path:
+          type:
+            - 'null'
+            - string
     DeviceIdentityDto:
       required:
         - unique_id

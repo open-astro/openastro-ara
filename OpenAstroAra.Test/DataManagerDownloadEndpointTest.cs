@@ -112,6 +112,18 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task An_unwritable_install_root_is_409_with_the_path_in_the_detail() {
+            svc.Setup(s => s.DownloadAsync(It.Is<DownloadRequestDto>(r => r.PackageId == "astap-g05"), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+                .ThrowsAsync(new InstallRootNotWritableException("astap-g05", "/srv/astap", "Read-only file system"));
+
+            using var resp = await Post("astap-g05");
+
+            Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.Conflict));
+            using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync());
+            Assert.That(doc.RootElement.GetProperty("detail").GetString(), Does.Contain("/srv/astap").And.Contain("Read-only file system"));
+        }
+
+        [Test]
         public async Task An_accepted_download_is_202_with_the_operation() {
             var accepted = new OperationAcceptedDto(Guid.NewGuid(), "data-manager.download", DateTimeOffset.UtcNow, null);
             svc.Setup(s => s.DownloadAsync(It.Is<DownloadRequestDto>(r => r.PackageId == "astap-w08"), It.IsAny<string?>(), It.IsAny<CancellationToken>()))

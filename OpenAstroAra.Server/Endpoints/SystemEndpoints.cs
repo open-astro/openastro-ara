@@ -150,6 +150,9 @@ public static class SystemEndpoints {
                     } catch (InsufficientDiskSpaceException ex) {
                         // #1136: the volume cannot hold the package; nothing was downloaded.
                         return Results.Problem(ex.Message, statusCode: StatusCodes.Status507InsufficientStorage);
+                    } catch (InstallRootNotWritableException ex) {
+                        // #1136: the daemon cannot write where the package would go; nothing was downloaded.
+                        return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict);
                     }
                 })
             .Accepts<DownloadRequestDto>("application/json")

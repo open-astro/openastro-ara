@@ -212,6 +212,15 @@ class _PackageRow extends ConsumerWidget {
                       color: AraColors.textSecondary,
                     ),
                   ),
+                // #1136 — a solver database says where it sits: after an index-path change
+                // the files may be under the old path, which the rig no longer solves from.
+                if (package.category == 'solver' && package.isInstalled && package.installPath != null)
+                  Text(
+                    'Installed in ${package.installPath}',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: AraColors.textDisabled,
+                    ),
+                  ),
                 if (progress != null && progress.phase == DownloadPhase.failed)
                   Text(
                     'Download ${progress.error ?? 'failed'}',

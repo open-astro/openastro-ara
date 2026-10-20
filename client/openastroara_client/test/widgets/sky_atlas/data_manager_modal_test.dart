@@ -98,6 +98,17 @@ void main() {
     expect(find.text('2.0 MB installed'), findsOneWidget, reason: 'header sums installed sizes');
   });
 
+  testWidgets('an installed solver database shows where it sits', (tester) async {
+    final api = _FakeDataManagerClient(const [
+      DataPackage(id: 'astap-d80', name: 'ASTAP D80', category: 'solver', isInstalled: true, installPath: '/media/old/astap/astap-d80'),
+      DataPackage(id: 'tycho-2', name: 'Tycho-2', category: 'catalog', isInstalled: true, installPath: '/var/lib/openastroara/sky-data/tycho-2'),
+    ]);
+    await tester.pumpWidget(_host(api));
+    await tester.pumpAndSettle();
+    expect(find.text('Installed in /media/old/astap/astap-d80'), findsOneWidget);
+    expect(find.textContaining('sky-data/tycho-2'), findsNothing, reason: 'catalogs do not show a path');
+  });
+
   testWidgets('not-installed → Download, installed → Remove', (tester) async {
     final api = _FakeDataManagerClient(const [
       DataPackage(id: 'tycho-2', name: 'Tycho-2', category: 'catalog', isInstalled: true),

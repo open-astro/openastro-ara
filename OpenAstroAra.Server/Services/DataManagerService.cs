@@ -337,6 +337,11 @@ namespace OpenAstroAra.Server.Services {
         private readonly Func<string?> _solverDataRoot;
         private readonly Func<double?> _fieldOfViewDeg;
         private readonly Func<string, long?> _freeBytes;
+        // #1136 leftovers — whether an install root can be written (null = yes, else why not), and the
+        // record of where each solver package was installed so a later index-path change neither hides
+        // nor orphans a 1.3 GB copy.
+        private readonly Func<string, string?> _writeProbe;
+        private readonly SolverInstallRegistry _solverInstalls;
 
         // In-flight downloads keyed by download id, plus a one-active-download-per-package guard.
         private readonly ConcurrentDictionary<Guid, DownloadJob> _downloads = new();
@@ -348,7 +353,8 @@ namespace OpenAstroAra.Server.Services {
             IReadOnlyDictionary<string, string>? expectedDigests = null,
             Func<string?>? solverDataRoot = null,
             Func<double?>? fieldOfViewDeg = null,
-            Func<string, long?>? freeBytes = null) {
+            Func<string, long?>? freeBytes = null,
+            Func<string, string?>? writeProbe = null) {
             _dataRoot = dataRootPath ?? throw new ArgumentNullException(nameof(dataRootPath));
             _fetcher = fetcher ?? throw new ArgumentNullException(nameof(fetcher));
             _ws = ws ?? throw new ArgumentNullException(nameof(ws));
@@ -360,6 +366,23 @@ namespace OpenAstroAra.Server.Services {
             _solverDataRoot = solverDataRoot ?? (() => null);
             _fieldOfViewDeg = fieldOfViewDeg ?? (() => null);
             _freeBytes = freeBytes ?? FreeBytesOnDisk;
+            _writeProbe = writeProbe ?? ProbeWritable;
+            _solverInstalls = new SolverInstallRegistry(Path.Combine(_dataRoot, SolverInstallRegistry.FileName));
+        }
+
+        /// <summary>Whether the daemon can create files under <paramref name="root"/>: null when it can, else the
+        /// reason. A profile index path outside the unit's writable set (ProtectSystem=strict) used to fail at the
+        /// staging mkdir, deep into a 1.3 GB download; this asks first.</summary>
+        internal static string? ProbeWritable(string root) {
+            try {
+                Directory.CreateDirectory(root);
+                var probe = Path.Combine(root, ".write-probe-" + Guid.NewGuid().ToString("N"));
+                File.WriteAllBytes(probe, Array.Empty<byte>());
+                File.Delete(probe);
+                return null;
+            } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
+                return ex.Message;
+            }
         }
 
         public Task<IReadOnlyList<DataPackageDto>> ListPackagesAsync(CancellationToken ct) {
@@ -504,6 +527,7 @@ namespace OpenAstroAra.Server.Services {
             try {
                 ForgetCatalog(dir);
                 Directory.Delete(dir, recursive: true);
+                _solverInstalls.Forget(packageId);
                 LogDeleted(packageId);
                 return Task.FromResult(PackageDeleteResult.Deleted);
             } catch (DirectoryNotFoundException) {
@@ -563,8 +587,13 @@ namespace OpenAstroAra.Server.Services {
                     // loses the TryAdd, joins that download below, and never reads a 507 off the staging dir's own
                     // usage. The staging dir is on the same volume as the install, so the ceiling (advertised
                     // size + headroom) is the right bound. Unreadable free space (null) does not block.
+                    var installRoot = RootFor(pkg);
+                    if (_writeProbe(installRoot) is { } reason) {
+                        _activeByPackage.TryRemove(new KeyValuePair<string, Guid>(pkg.Id, downloadId));
+                        return Task.FromException<OperationAcceptedDto>(new InstallRootNotWritableException(pkg.Id, installRoot, reason));
+                    }
                     var ceilingNeeded = ExtractionCeiling(pkg);
-                    if (_freeBytes(RootFor(pkg)) is { } free && free < ceilingNeeded) {
+                    if (_freeBytes(installRoot) is { } free && free < ceilingNeeded) {
                         _activeByPackage.TryRemove(new KeyValuePair<string, Guid>(pkg.Id, downloadId));
                         return Task.FromException<OperationAcceptedDto>(new InsufficientDiskSpaceException(pkg.Id, ceilingNeeded, free));
                     }
@@ -628,7 +657,9 @@ namespace OpenAstroAra.Server.Services {
                 // Arm BEFORE OpenAsync so the header-wait phase is bounded too — the infinite HttpClient.Timeout
                 // removes the header-receipt deadline, so a CDN that accepts the connection but never sends headers
                 // would otherwise hang forever (escapable only by POST /cancel). OpenAsync gets the linked token.
-                var targetDir = PackageDir(pkg.Id)!; // pkg came from the catalog, so this is non-null + in-root.
+                // Always the current root (a recorded older copy is not the target: a re-download replaces the
+                // package where the solver looks now, and the older copy stays listed until the user removes it).
+                var targetDir = Path.Combine(RootFor(pkg), pkg.Id);
                 // §36 incremental update: when re-fetching an already-installed package (a force reinstall), make the
                 // GET conditional on the validators the prior install recorded (Last-Modified and/or ETag, #1171). A
                 // 304 means nothing changed → keep the install untouched. Null for a fresh install, so the GET is
@@ -693,6 +724,9 @@ namespace OpenAstroAra.Server.Services {
                 }
 
                 ForgetCatalog(targetDir);
+                if (IsSolverPackage(pkg)) {
+                    _solverInstalls.Record(pkg.Id, RootFor(pkg));
+                }
                 await EmitAsync(WsEventCatalog.DataManagerDownloadComplete, job, error: null).ConfigureAwait(false);
                 LogDownloadComplete(pkg.Id, job.Id);
             } catch (OperationCanceledException) {
@@ -838,9 +872,11 @@ namespace OpenAstroAra.Server.Services {
             }
             var dir = PackageDir(pkg.Id, solverRoot);
             if (dir is null || ReadInstall(dir) is not { } info) {
-                return pkg with { IsInstalled = false, InstalledUtc = null };
+                return pkg with { IsInstalled = false, InstalledUtc = null, InstallPath = null };
             }
-            return pkg with { IsInstalled = true, InstalledUtc = info.InstalledUtc, SizeBytes = info.Size };
+            // InstallPath says where the files are: for a solver package that may be an earlier index path
+            // (the profile's path changed after the install), which the solver no longer reads.
+            return pkg with { IsInstalled = true, InstalledUtc = info.InstalledUtc, SizeBytes = info.Size, InstallPath = dir };
         }
 
         // Per-package directory — ONLY for a known catalog id, so a caller-supplied packageId (Delete,
@@ -852,8 +888,25 @@ namespace OpenAstroAra.Server.Services {
 
         // The solver root passed in: a listing reads the profile once and hands the same value to every package,
         // so a path change mid-listing cannot produce a mixed inventory.
-        private string? PackageDir(string packageId, string? solverRoot) =>
-            _catalogById.TryGetValue(packageId, out var pkg) ? Path.Combine(RootFor(pkg, solverRoot), packageId) : null;
+        private string? PackageDir(string packageId, string? solverRoot) {
+            if (!_catalogById.TryGetValue(packageId, out var pkg)) {
+                return null;
+            }
+            var current = Path.Combine(RootFor(pkg, solverRoot), packageId);
+            if (!IsSolverPackage(pkg) || File.Exists(Path.Combine(current, SkyDataInstaller.InstalledMarkerFileName))) {
+                return current;
+            }
+            // Not under the current index path: an install recorded under an earlier path still counts (it is
+            // listed with its InstallPath and can be removed), so a path change never orphans a 1.3 GB copy.
+            if (_solverInstalls.RootFor(packageId) is { } recorded
+                    && !string.Equals(recorded, RootFor(pkg, solverRoot), StringComparison.Ordinal)) {
+                var older = Path.Combine(recorded, packageId);
+                if (File.Exists(Path.Combine(older, SkyDataInstaller.InstalledMarkerFileName))) {
+                    return older;
+                }
+            }
+            return current;
+        }
 
         /// <summary>The directory a package installs under (tests).</summary>
         internal string InstallRootFor(string packageId) =>
@@ -1160,6 +1213,92 @@ namespace OpenAstroAra.Server.Services {
 
         public long NeededBytes { get; }
         public long FreeBytes { get; }
+    }
+
+    /// <summary>#1136 — thrown by <see cref="DataManagerService.DownloadAsync"/> when the directory a package would
+    /// install under cannot be written by the daemon (a profile index path outside the unit's writable set). The
+    /// endpoint maps it to a 409 so the user sees the path and the reason before any byte is downloaded.</summary>
+    public sealed class InstallRootNotWritableException : Exception {
+        public InstallRootNotWritableException() { }
+        public InstallRootNotWritableException(string message) : base(message) { }
+        public InstallRootNotWritableException(string message, Exception innerException) : base(message, innerException) { }
+        public InstallRootNotWritableException(string packageId, string root, string reason)
+            : base($"Cannot install '{packageId}': the daemon cannot write to '{root}' ({reason}). Point Options → Plate solving → index path at a directory the daemon owns (the default /var/lib/astap), or make that one writable.") {
+            Root = root;
+        }
+
+        public string? Root { get; }
+    }
+
+    /// <summary>#1136 — where each solver package was installed, keyed by package id, kept as a small JSON file
+    /// under the sky-data root. Lets a package installed under an earlier index path stay listed (and removable)
+    /// after the profile's path changes, instead of silently becoming an orphaned 1.3 GB directory.</summary>
+    internal sealed class SolverInstallRegistry {
+        public const string FileName = "solver-installs.json";
+        private readonly string _path;
+        private readonly object _gate = new();
+
+        public SolverInstallRegistry(string path) => _path = path;
+
+        public string? RootFor(string packageId) {
+            lock (_gate) {
+                return Load().TryGetValue(packageId, out var root) ? root : null;
+            }
+        }
+
+        public void Record(string packageId, string root) {
+            lock (_gate) {
+                var map = Load();
+                map[packageId] = root;
+                Save(map);
+            }
+        }
+
+        public void Forget(string packageId) {
+            lock (_gate) {
+                var map = Load();
+                if (map.Remove(packageId)) {
+                    Save(map);
+                }
+            }
+        }
+
+        [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+            Justification = "An unreadable or corrupt registry must read as empty: it only remembers where older copies sit, and a fresh install rewrites it.")]
+        private Dictionary<string, string> Load() {
+            try {
+                if (!File.Exists(_path)) {
+                    return new Dictionary<string, string>(StringComparer.Ordinal);
+                }
+                var node = JsonNode.Parse(File.ReadAllText(_path)) as JsonObject;
+                var map = new Dictionary<string, string>(StringComparer.Ordinal);
+                if (node is not null) {
+                    foreach (var kv in node) {
+                        if (kv.Value is JsonValue v && v.TryGetValue<string>(out var root) && !string.IsNullOrWhiteSpace(root)) {
+                            map[kv.Key] = root;
+                        }
+                    }
+                }
+                return map;
+            } catch (Exception) {
+                return new Dictionary<string, string>(StringComparer.Ordinal);
+            }
+        }
+
+        [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+            Justification = "Best-effort bookkeeping: a failed registry write must not fail an install that already succeeded on disk.")]
+        private void Save(Dictionary<string, string> map) {
+            try {
+                var obj = new JsonObject();
+                foreach (var kv in map) {
+                    obj[kv.Key] = kv.Value;
+                }
+                Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
+                File.WriteAllText(_path, obj.ToJsonString());
+            } catch (Exception) {
+                // see the justification
+            }
+        }
     }
 
     /// <summary>Thrown by <see cref="DataManagerService.CancelAsync"/> when the download id has no in-flight job
