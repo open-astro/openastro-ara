@@ -136,12 +136,16 @@ public static class SystemEndpoints {
                     } catch (PackageAlreadyInstalledException ex) {
                         // §36: a non-force request for an already-installed package — it did NOT re-download.
                         return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict);
+                    } catch (InsufficientDiskSpaceException ex) {
+                        // #1136: the volume cannot hold the package; nothing was downloaded.
+                        return Results.Problem(ex.Message, statusCode: StatusCodes.Status507InsufficientStorage);
                     }
                 })
             .Accepts<DownloadRequestDto>("application/json")
             .Produces<OperationAcceptedDto>(StatusCodes.Status202Accepted)
             .ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status409Conflict)
+            .ProducesProblem(StatusCodes.Status507InsufficientStorage)
             .WithName("StartDataPackageDownload");
 
         data.MapPost("/cancel/{downloadId:guid}",

@@ -122,7 +122,7 @@ void main() {
     );
 
     expect(find.text('No star database in /var/lib/astap'), findsOneWidget);
-    expect(find.textContaining('DEPLOY.md step 3'), findsOneWidget);
+    expect(find.textContaining('Settings → Sky data'), findsOneWidget);
     expect(find.text('Solver not found at /usr/bin/astap_cli'), findsOneWidget);
   });
 

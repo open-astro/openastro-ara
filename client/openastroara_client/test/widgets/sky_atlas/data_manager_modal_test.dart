@@ -82,6 +82,8 @@ void main() {
     final api = _FakeDataManagerClient(const [
       DataPackage(id: 'tycho-2', name: 'Tycho-2', category: 'catalog', sizeBytes: 2 * 1024 * 1024, isInstalled: true),
       DataPackage(id: 'horizon-default', name: 'Default horizon', category: 'horizon', sizeBytes: 4096),
+      // #1136 — the ASTAP databases the rig server plate-solves against.
+      DataPackage(id: 'astap-d80', name: 'ASTAP D80 star database', category: 'solver', sizeBytes: 1332217055, recommended: true),
     ]);
     await tester.pumpWidget(_host(api));
     await tester.pumpAndSettle();
@@ -90,6 +92,9 @@ void main() {
     expect(find.text('Default horizon'), findsOneWidget);
     expect(find.text('Star catalogs'), findsOneWidget, reason: 'category headers render');
     expect(find.text('Horizon profiles'), findsOneWidget);
+    expect(find.text('Plate-solver star databases'), findsOneWidget, reason: 'the solver category has its own header');
+    expect(find.text('1.2 GB'), findsOneWidget, reason: 'D80 shows its on-disk size');
+    expect(find.text('Recommended'), findsOneWidget, reason: 'a recommended, not-installed package says so (the installed Tycho-2 does not)');
     expect(find.text('2.0 MB installed'), findsOneWidget, reason: 'header sums installed sizes');
   });
 

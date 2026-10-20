@@ -182,7 +182,6 @@ namespace OpenAstroAra.PlateSolving.Solvers {
             // or empty falls back to that default lookup (logged once per process) rather than
             // forcing exit 32.
             if (EffectiveDatabaseLocation is string db) {
-                args.Add($"-d \"{db}\"");
                 // #1121 — with several databases installed ASTAP picks one itself; name it instead,
                 // from the field of view (AstapStarDatabase.Select has the rule).
                 var installed = AstapStarDatabase.Databases(db);
@@ -190,8 +189,14 @@ namespace OpenAstroAra.PlateSolving.Solvers {
                 if (partial.Count > 0 && System.Threading.Interlocked.CompareExchange(ref partialDatabaseWarned, 1, 0) == 0) {
                     Logger.Warning($"Plate solve - ASTAP star database(s) {string.Join(", ", partial)} in '{db}' are incomplete (fewer than {AstapStarDatabase.MinTileFiles} tiles — an interrupted download?) and will not be used; finish or remove them (#1215).");
                 }
-                if (AstapStarDatabase.Select(installed, imageProperties.FoVH) is string database) {
-                    Logger.Debug($"Plate solve - ASTAP star databases {string.Join(", ", installed)} installed; using {database} for a {imageProperties.FoVH.ToString("0.###", CultureInfo.InvariantCulture)}° field");
+                var database = AstapStarDatabase.Select(installed, imageProperties.FoVH);
+                // #1136 — a Data Manager package sits in its own subdirectory of the configured path;
+                // ASTAP reads one directory, so -d points at where the chosen (or only) database is.
+                var only = installed.Count == 1 ? installed[0] : null;
+                var dbDir = AstapStarDatabase.DirectoryFor(db, database ?? only) ?? db;
+                args.Add($"-d \"{dbDir}\"");
+                if (database is not null) {
+                    Logger.Debug($"Plate solve - ASTAP star databases {string.Join(", ", installed)} installed; using {database} in '{dbDir}' for a {imageProperties.FoVH.ToString("0.###", CultureInfo.InvariantCulture)}° field");
                     args.Add($"-D {database}");
                 }
             } else if (databaseLocation is not null

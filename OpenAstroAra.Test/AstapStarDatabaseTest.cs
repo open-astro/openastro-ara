@@ -113,11 +113,13 @@ namespace OpenAstroAra.Test {
             Assert.That(Pick(2.0), Is.Null);
         }
 
-        [TestCase(2.0, "d80")]        // D80's range (DEPLOY.md: roughly 0.25° to 30°)
+        [TestCase(2.0, "d80")]        // D80's range: ~0.25° up to ASTAP's 6° G05 threshold
         [TestCase(0.25, "d80")]
-        [TestCase(30.0, "d80")]
+        [TestCase(6.0, "d80")]
         [TestCase(0.1, "h18")]        // narrower than D80: the deepest database
-        [TestCase(45.0, "w08")]       // wider than D80: the shallowest database
+        [TestCase(15.0, "g05")]       // #1136 — above 6°: G05, as ASTAP itself auto-selects
+        [TestCase(30.0, "w08")]       // above 20°: the shallowest database
+        [TestCase(45.0, "w08")]
         [TestCase(double.NaN, "d80")] // unknown field: the general-purpose pick
         [TestCase(0.0, "d80")]
         public void Field_of_view_picks_among_several(double fovDeg, string expected) {

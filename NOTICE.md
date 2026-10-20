@@ -103,8 +103,18 @@ disclosure fresh):
   FITS load, binning, star detection and the spiral database search over every
   core, plus `-threads` / `ASTAP_THREADS`) are published in that repository under
   the same license, as the MPL requires. `scripts/build-astap-cli.sh` compiles it
-  with Free Pascal into `astap_cli` on every build; the star databases (D80 and
-  friends) are the user's own download from astap.nl and are not part of ARA.
+  with Free Pascal into `astap_cli` on every build. The star databases are not
+  part of ARA's binaries: the Data Manager downloads them on demand from
+  https://github.com/open-astro/sky-data/releases (release `astap-2026.10`),
+  flat repacks of Han Kleijn's SourceForge packages — **D80** and **G05**
+  (Gaia DR3 to 8000 and 500 stars per square degree; D80 "free if credit is
+  given", copyright ESA, compiled by Han Kleijn; G05 GPL-3+) and **W08**
+  (magnitude 8 wide-field, GPL-3+). This work has made use of data from the
+  European Space Agency (ESA) mission Gaia (https://www.cosmos.esa.int/gaia),
+  processed by the Gaia Data Processing and Analysis Consortium (DPAC,
+  https://www.cosmos.esa.int/web/gaia/dpac/consortium). Funding for the DPAC
+  has been provided by national institutions, in particular the institutions
+  participating in the Gaia Multilateral Agreement.
 
 ## Trademarks
 

@@ -4822,6 +4822,12 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
+        '507':
+          description: Insufficient Storage
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   '/api/v1/data-manager/cancel/{downloadId}':
     post:
       tags:

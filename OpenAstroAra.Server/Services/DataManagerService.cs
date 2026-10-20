@@ -14,6 +14,7 @@
 
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using OpenAstroAra.PlateSolving.Solvers;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Contracts.WsEvents;
 using System;
@@ -198,6 +199,49 @@ namespace OpenAstroAra.Server.Services {
                 InstalledUtc: null,
                 SourceUrl: new Uri("https://raw.githubusercontent.com/open-astro/sky-data/05404ebdfc2041f3d8066bfdd171cca9caf8e8b4/wr.csv"),
                 Recommended: false),
+            // #1136 — the ASTAP plate-solver star databases (§18.I/§36). Flat tar.gz repacks of Han Kleijn's
+            // SourceForge .debs, hosted as release assets on open-astro/sky-data (release astap-2026.10; the
+            // README there has provenance + the ESA/Gaia credit). Release assets 302 to objects.githubusercontent.com,
+            // which HttpSkyDataFetcher now follows (IsTrustedRedirect) — raw URLs cap a file at 100 MB, so the
+            // 1.3 GB D80 cannot be served the way the catalogs above are. These install under the profile's
+            // solver index path (Options → Plate solving), one subdirectory per package, where ASTAPSolver and
+            // AstapStarDatabase find them (DirectoryFor). Too large to ship as .deb seeds, so the seed manifest
+            // exempts the "solver" category. Recommended is computed per profile from the field of view (Describe):
+            // D80 for every rig, G05 above 6°, W08 above 20° — ASTAP's own auto-selection thresholds.
+            new DataPackageDto(
+                Id: "astap-d80",
+                Name: "ASTAP D80 star database",
+                Description: "Gaia DR3 to 8000 stars per square degree — the plate-solver database for the usual range of fields (down to ~0.25°). 1.3 GB on disk.",
+                Category: SolverCategory,
+                // Uncompressed size of the 1476 tiles (the extraction ceiling is +25%).
+                SizeBytes: 1_332_217_055,
+                Version: "2026.10",
+                IsInstalled: false,
+                InstalledUtc: null,
+                SourceUrl: new Uri("https://github.com/open-astro/sky-data/releases/download/astap-2026.10/astap-d80.tar.gz"),
+                Recommended: true),
+            new DataPackageDto(
+                Id: "astap-g05",
+                Name: "ASTAP G05 wide-field star database",
+                Description: "Gaia DR3 to 500 stars per square degree — faster solves for fields wider than ~6° (short lenses, 135 mm and under). 105 MB on disk.",
+                Category: SolverCategory,
+                SizeBytes: 105_388_420,
+                Version: "2026.10",
+                IsInstalled: false,
+                InstalledUtc: null,
+                SourceUrl: new Uri("https://github.com/open-astro/sky-data/releases/download/astap-2026.10/astap-g05.tar.gz"),
+                Recommended: false),
+            new DataPackageDto(
+                Id: "astap-w08",
+                Name: "ASTAP W08 all-sky star database",
+                Description: "Stars to magnitude 8 — for fields wider than ~20° (all-sky and meteor cameras). 0.5 MB on disk.",
+                Category: SolverCategory,
+                SizeBytes: 495_184,
+                Version: "2026.10",
+                IsInstalled: false,
+                InstalledUtc: null,
+                SourceUrl: new Uri("https://github.com/open-astro/sky-data/releases/download/astap-2026.10/astap-w08.tar.gz"),
+                Recommended: false),
             // NOTE: the former "horizon-default" entry was removed — it pointed at the dead data.openastro.net host
             // and was miscategorised as a download. A site horizon (flat default or survey) is generated LOCALLY for
             // the §36 Tonight's-Sky overlay, not fetched via the Data Manager; the real horizon feature re-adds it
@@ -219,7 +263,42 @@ namespace OpenAstroAra.Server.Services {
                 ["abell-pn"] = "aea2591ad1e1f0245205fca946a363cef8820e05a6e5e422ce1e4ed16f26e200",
                 ["arp-peculiar"] = "afe3aed0bbcfc5bd807e88a4b1f4ae15a493d9170d1bdff8a528a7a80e04f853",
                 ["wr-stars"] = "cf6d56f0055d2ac5e336322f26ef3f261bf7dd18c375a5a263c87e3f4fca9caa",
+                // #1136 — the sky-data release astap-2026.10 assets (its SHA256SUMS asset lists the same values).
+                ["astap-d80"] = "b2085e42032afef5ea3ed58efba1a5213cb20268bdb5fda27d27610e8882e6f4",
+                ["astap-g05"] = "cfe04d68a8546238863ef6dbaba31cf08eef57fe74587cd040fe0f5fc5c460fc",
+                ["astap-w08"] = "fc5d5e2306c1950ed2484d3746e73c81c4d8f080a3a01dcdb14d1b5cf08be3de",
             };
+
+        /// <summary>#1136 — the category of the plate-solver star-database packages. They install under the
+        /// profile's solver index path rather than the sky-data root (see <see cref="PackageDir"/>), are not
+        /// bundled as .deb seeds (1.3 GB), and have their Recommended flag computed from the field of view.</summary>
+        internal const string SolverCategory = "solver";
+
+        internal static bool IsSolverPackage(DataPackageDto pkg) => string.Equals(pkg.Category, SolverCategory, StringComparison.Ordinal);
+
+        /// <summary>Whether a solver database package is recommended for a rig whose frame is
+        /// <paramref name="fieldOfViewDeg"/> tall (null = optics unknown): D80 for every rig; G05 and W08 at
+        /// ASTAP's own auto-selection thresholds (<see cref="AstapStarDatabase.MediumWideFieldAboveDeg"/>,
+        /// <see cref="AstapStarDatabase.WideFieldAboveDeg"/>). Unknown ids keep their curated flag.</summary>
+        internal static bool RecommendedSolverPackage(DataPackageDto pkg, double? fieldOfViewDeg) => pkg.Id switch {
+            "astap-d80" => true,
+            "astap-g05" => fieldOfViewDeg is { } g && g > AstapStarDatabase.MediumWideFieldAboveDeg,
+            "astap-w08" => fieldOfViewDeg is { } w && w > AstapStarDatabase.WideFieldAboveDeg,
+            _ => pkg.Recommended,
+        };
+
+        /// <summary>The frame height in degrees from the profile's optics, the same quantity the solver passes
+        /// as <c>-fov</c> (<c>PlateSolveImageProperties.FoVH</c>); null until focal length, pixel size and sensor
+        /// height are all set. The reducer factor applies when positive (1.0 = none).</summary>
+        internal static double? FieldOfViewHeightDeg(OpticsSettingsDto? optics) {
+            if (optics is null || optics.FocalLengthMm <= 0 || optics.PixelSizeUm <= 0 || optics.SensorHeightPx <= 0) {
+                return null;
+            }
+            var reducer = optics.ReducerFactor > 0 ? optics.ReducerFactor : 1.0;
+            var arcsecPerPixel = 206.265 * optics.PixelSizeUm / (optics.FocalLengthMm * reducer);
+            var deg = arcsecPerPixel * optics.SensorHeightPx / 3600.0;
+            return double.IsFinite(deg) && deg > 0 ? deg : null;
+        }
 
         /// <summary>A `.tar.gz`/`.tgz` archive package — installed via the tar-extraction path.</summary>
         internal static bool IsArchiveFormat(Uri url) =>
@@ -250,8 +329,14 @@ namespace OpenAstroAra.Server.Services {
         // Catalog/CatalogSha256; injectable so tests can drive the worker with synthetic packages + controlled
         // integrity policy without depending on the production catalog's exact contents.
         private readonly IReadOnlyList<DataPackageDto> _catalog;
-        private readonly HashSet<string> _catalogIds;
+        private readonly Dictionary<string, DataPackageDto> _catalogById;
         private readonly IReadOnlyDictionary<string, string> _expectedDigests;
+        // #1136 — where solver database packages install (the profile's plate-solve index path, read per call so a
+        // settings change applies without a restart; null/blank falls back to the sky-data root), the rig's frame
+        // height for the Recommended flag, and the free bytes under a directory for the pre-download space check.
+        private readonly Func<string?> _solverDataRoot;
+        private readonly Func<double?> _fieldOfViewDeg;
+        private readonly Func<string, long?> _freeBytes;
 
         // In-flight downloads keyed by download id, plus a one-active-download-per-package guard.
         private readonly ConcurrentDictionary<Guid, DownloadJob> _downloads = new();
@@ -260,23 +345,51 @@ namespace OpenAstroAra.Server.Services {
         public DataManagerService(string dataRootPath, ISkyDataFetcher fetcher, IWsBroadcaster ws,
             ILogger<DataManagerService> logger, TimeSpan? idleTimeout = null,
             IReadOnlyList<DataPackageDto>? catalog = null,
-            IReadOnlyDictionary<string, string>? expectedDigests = null) {
+            IReadOnlyDictionary<string, string>? expectedDigests = null,
+            Func<string?>? solverDataRoot = null,
+            Func<double?>? fieldOfViewDeg = null,
+            Func<string, long?>? freeBytes = null) {
             _dataRoot = dataRootPath ?? throw new ArgumentNullException(nameof(dataRootPath));
             _fetcher = fetcher ?? throw new ArgumentNullException(nameof(fetcher));
             _ws = ws ?? throw new ArgumentNullException(nameof(ws));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _idleTimeout = idleTimeout ?? DefaultIdleTimeout;
             _catalog = catalog ?? Catalog;
-            _catalogIds = new HashSet<string>(_catalog.Select(p => p.Id), StringComparer.Ordinal);
+            _catalogById = _catalog.ToDictionary(p => p.Id, StringComparer.Ordinal);
             _expectedDigests = expectedDigests ?? CatalogSha256;
+            _solverDataRoot = solverDataRoot ?? (() => null);
+            _fieldOfViewDeg = fieldOfViewDeg ?? (() => null);
+            _freeBytes = freeBytes ?? FreeBytesOnDisk;
         }
 
         public Task<IReadOnlyList<DataPackageDto>> ListPackagesAsync(CancellationToken ct) {
             var packages = new List<DataPackageDto>(_catalog.Count);
+            // One optics read per listing, not per package.
+            var fov = _fieldOfViewDeg();
             foreach (var pkg in _catalog) {
-                packages.Add(Describe(pkg));
+                packages.Add(Describe(pkg, fov));
             }
             return Task.FromResult<IReadOnlyList<DataPackageDto>>(packages);
+        }
+
+        /// <summary>Free bytes on the volume holding <paramref name="dir"/> (the nearest existing ancestor when it
+        /// does not exist yet), or null when that cannot be read — the space check then does not block.</summary>
+        [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+            Justification = "A free-space probe is advisory: any failure to read it (odd mount, permissions, a path the runtime cannot map to a drive) must not refuse a download that may well succeed.")]
+        internal static long? FreeBytesOnDisk(string dir) {
+            try {
+                var probe = Path.GetFullPath(dir);
+                while (!Directory.Exists(probe)) {
+                    var parent = Path.GetDirectoryName(probe);
+                    if (string.IsNullOrEmpty(parent) || parent == probe) {
+                        return null;
+                    }
+                    probe = parent;
+                }
+                return new DriveInfo(probe).AvailableFreeSpace;
+            } catch (Exception) {
+                return null;
+            }
         }
 
         public Task<DataManagerStateDto> GetStateAsync(CancellationToken ct) {
@@ -423,6 +536,14 @@ namespace OpenAstroAra.Server.Services {
             // silently re-fetching a multi-GB package. ForceReinstall=true skips this and re-downloads.
             if (!request.ForceReinstall && IsInstalled(pkg.Id)) {
                 return Task.FromException<OperationAcceptedDto>(PackageAlreadyInstalledException.ForPackageId(pkg.Id));
+            }
+            // #1136 — refuse up front when the volume cannot hold the extracted package: a 1.3 GB database that
+            // fails at 90% on a full SD card wasted the download and left the user guessing. The staging dir is
+            // on the same volume as the install, so the ceiling (advertised size + headroom) is the right bound.
+            // Unreadable free space (null) does not block; the install's own I/O error still reports a failure.
+            var ceilingNeeded = ExtractionCeiling(pkg);
+            if (_freeBytes(RootFor(pkg)) is { } free && free < ceilingNeeded) {
+                return Task.FromException<OperationAcceptedDto>(new InsufficientDiskSpaceException(pkg.Id, ceilingNeeded, free));
             }
 
             // One active download per package: if another is already running, return its id (idempotent) instead
@@ -702,7 +823,11 @@ namespace OpenAstroAra.Server.Services {
         // Reflect the on-disk state of a catalog package. A package is "installed" only when §36-2a's .installed
         // sentinel is present (a bare dir from a torn/interrupted install reads as not-installed); InstalledUtc comes
         // from the sentinel's write time (the install-complete stamp), not the dir mtime which moves on any child write.
-        private DataPackageDto Describe(DataPackageDto pkg) {
+        private DataPackageDto Describe(DataPackageDto pkg, double? fieldOfViewDeg) {
+            // #1136 — a solver database's Recommended flag follows the rig's field of view, not the curated default.
+            if (IsSolverPackage(pkg)) {
+                pkg = pkg with { Recommended = RecommendedSolverPackage(pkg, fieldOfViewDeg) };
+            }
             var dir = PackageDir(pkg.Id);
             if (dir is null || ReadInstall(dir) is not { } info) {
                 return pkg with { IsInstalled = false, InstalledUtc = null };
@@ -711,9 +836,19 @@ namespace OpenAstroAra.Server.Services {
         }
 
         // Per-package directory — ONLY for a known catalog id, so a caller-supplied packageId (Delete,
-        // Download) can never traverse out of the data root.
+        // Download) can never traverse out of the data root. #1136: a solver database package lives under the
+        // profile's solver index path instead (where astap_cli's -d points; AstapStarDatabase reads one level of
+        // subdirectories), falling back to the sky-data root when that path is blank.
         private string? PackageDir(string packageId) =>
-            _catalogIds.Contains(packageId) ? Path.Combine(_dataRoot, packageId) : null;
+            _catalogById.TryGetValue(packageId, out var pkg) ? Path.Combine(RootFor(pkg), packageId) : null;
+
+        private string RootFor(DataPackageDto pkg) {
+            if (!IsSolverPackage(pkg)) {
+                return _dataRoot;
+            }
+            var root = _solverDataRoot()?.Trim();
+            return string.IsNullOrEmpty(root) ? _dataRoot : root;
+        }
 
         // A package counts as installed once §36-2a's .installed sentinel is present (a bare dir from a torn install
         // does not). Used by the ForceReinstall skip.
@@ -762,6 +897,12 @@ namespace OpenAstroAra.Server.Services {
         // paths instead of abandoned mid-extract (the boot-time SweepStaleScratch still covers a hard
         // kill, which no drain can catch).
         Task IHostedService.StartAsync(CancellationToken cancellationToken) {
+            // #1136 — the solver index path gets download scratch dirs too; reclaim any a crash orphaned there
+            // (Program.cs sweeps the sky-data root before the service exists; this root comes from the profile).
+            var solverRoot = _solverDataRoot()?.Trim();
+            if (!string.IsNullOrEmpty(solverRoot) && Directory.Exists(solverRoot)) {
+                SkyDataInstaller.SweepStaleScratch(solverRoot);
+            }
             // §36 offline-first seeding: the .deb ships every curated catalog as a
             // seed copy under {app}/seed-data/{id}/. Install any missing package
             // from its seed at boot, so a fresh rig at a remote site (or a rig
@@ -986,6 +1127,23 @@ namespace OpenAstroAra.Server.Services {
         public PackageAlreadyInstalledException(string message, Exception innerException) : base(message, innerException) { }
         public static PackageAlreadyInstalledException ForPackageId(string packageId) =>
             new($"Data package '{packageId}' is already installed; pass forceReinstall=true to re-download.");
+    }
+
+    /// <summary>#1136 — thrown by <see cref="DataManagerService.DownloadAsync"/> when the volume the package installs
+    /// to cannot hold its extracted size (plus headroom). The endpoint maps it to a 507 so the client can say how much
+    /// room the package needs instead of a download that fails near its end.</summary>
+    public sealed class InsufficientDiskSpaceException : Exception {
+        public InsufficientDiskSpaceException() { }
+        public InsufficientDiskSpaceException(string message) : base(message) { }
+        public InsufficientDiskSpaceException(string message, Exception innerException) : base(message, innerException) { }
+        public InsufficientDiskSpaceException(string packageId, long neededBytes, long freeBytes)
+            : base($"Not enough disk space for '{packageId}': it needs about {neededBytes / (1024.0 * 1024 * 1024):0.0} GB free and the volume has {freeBytes / (1024.0 * 1024 * 1024):0.0} GB.") {
+            NeededBytes = neededBytes;
+            FreeBytes = freeBytes;
+        }
+
+        public long NeededBytes { get; }
+        public long FreeBytes { get; }
     }
 
     /// <summary>Thrown by <see cref="DataManagerService.CancelAsync"/> when the download id has no in-flight job

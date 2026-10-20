@@ -609,9 +609,9 @@ public partial class Program {
         builder.Services.AddHttpClient(HttpSkyDataFetcher.HttpClientName)
             .ConfigureHttpClient(c => c.Timeout = System.Threading.Timeout.InfiniteTimeSpan)
             // Don't auto-follow redirects: the HTTPS scheme guard only checks the initial URL, so a CDN
-            // HTTPS→HTTP downgrade redirect would otherwise serve the body in cleartext. Our catalog URLs are
-            // direct, so a redirect is unexpected — let it surface as a non-success status (→ failed download)
-            // rather than silently following it. If redirects are ever needed, re-validate the Location scheme.
+            // HTTPS→HTTP downgrade redirect would otherwise serve the body in cleartext. The fetcher follows a
+            // redirect itself only after re-validating it (HttpSkyDataFetcher.IsTrustedRedirect: https, on
+            // github.com / *.githubusercontent.com — the #1136 release assets 302 there); anything else fails.
             .ConfigurePrimaryHttpMessageHandler(() => new System.Net.Http.SocketsHttpHandler { AllowAutoRedirect = false });
         builder.Services.AddSingleton<ISkyDataFetcher, HttpSkyDataFetcher>();
         // §63.20 / #1067 — the wizard's Alpaca device-name lookup, proxied through the daemon.
@@ -622,11 +622,17 @@ public partial class Program {
         // hard-killed mid-extract (a daemon crash) — a graceful drain can't catch that case. Best-effort + synchronous
         // (a handful of dirs); real package dirs are untouched (catalog ids never start with '.').
         SkyDataInstaller.SweepStaleScratch(skyDataRoot);
-        builder.Services.AddSingleton<DataManagerService>(sp =>
-            new DataManagerService(skyDataRoot,
+        builder.Services.AddSingleton<DataManagerService>(sp => {
+            // #1136 — the solver database packages install under the profile's plate-solve index path (where
+            // astap_cli's -d points) and are recommended from the rig's frame height; both read live per call.
+            var profiles = sp.GetRequiredService<IProfileStore>();
+            return new DataManagerService(skyDataRoot,
                 sp.GetRequiredService<ISkyDataFetcher>(),
                 sp.GetRequiredService<IWsBroadcaster>(),
-                sp.GetRequiredService<ILogger<DataManagerService>>()));
+                sp.GetRequiredService<ILogger<DataManagerService>>(),
+                solverDataRoot: () => profiles.GetPlateSolveSettings().IndexDownloadPath,
+                fieldOfViewDeg: () => DataManagerService.FieldOfViewHeightDeg(profiles.GetOpticsSettings()));
+        });
         builder.Services.AddSingleton<IDataManagerService>(sp => sp.GetRequiredService<DataManagerService>());
         // The same singleton as a hosted service so its StopAsync drains in-flight downloads on a
         // graceful daemon stop (§36-2b(b)) — cancel + await, so the workers' own finally paths

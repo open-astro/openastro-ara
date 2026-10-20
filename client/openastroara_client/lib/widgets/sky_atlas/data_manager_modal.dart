@@ -143,6 +143,8 @@ class _DataManagerViewState extends ConsumerState<DataManagerView> {
 String _categoryLabel(String c) => switch (c) {
   'catalog' => 'Star catalogs',
   'horizon' => 'Horizon profiles',
+  // #1136 — the ASTAP databases the rig server plate-solves against.
+  'solver' => 'Plate-solver star databases',
   '' => 'Other',
   _ => c[0].toUpperCase() + c.substring(1),
 };
@@ -181,9 +183,27 @@ class _PackageRow extends ConsumerWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  package.name.isEmpty ? package.id : package.name,
-                  style: theme.textTheme.bodyMedium,
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        package.name.isEmpty ? package.id : package.name,
+                        style: theme.textTheme.bodyMedium,
+                      ),
+                    ),
+                    // #1136 — the daemon flags what this rig's optics call for
+                    // (the solver databases follow the field of view); say so
+                    // next to anything recommended that is not installed yet.
+                    if (package.recommended && !package.isInstalled) ...[
+                      const SizedBox(width: 8),
+                      Text(
+                        'Recommended',
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: theme.colorScheme.primary,
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
                 if (package.description.isNotEmpty)
                   Text(
@@ -273,11 +293,20 @@ class _PackageRow extends ConsumerWidget {
           'Remove ${package.name.isEmpty ? package.id : package.name}?',
         ),
         content: Text(
-          'Features that rank and search the sky (Tonight\'s Sky, target '
-          'search, planning) rely on this catalog and will fall back to a '
-          'minimal built-in list without it.\n\n'
-          'Your images and settings are not affected, and you can download '
-          'the catalog again here at any time (${formatBytes(package.sizeBytes)}).',
+          package.category == 'solver'
+              // #1136 — a solver database: without one, centering, polar
+              // alignment and verify-position cannot solve at all.
+              ? 'The rig server plate-solves against this database. With no '
+                    'database installed, centering, polar alignment and '
+                    'position checks fail until one is downloaded again.\n\n'
+                    'Your images and settings are not affected, and you can '
+                    'download it again here at any time '
+                    '(${formatBytes(package.sizeBytes)}).'
+              : 'Features that rank and search the sky (Tonight\'s Sky, target '
+                    'search, planning) rely on this catalog and will fall back to a '
+                    'minimal built-in list without it.\n\n'
+                    'Your images and settings are not affected, and you can download '
+                    'the catalog again here at any time (${formatBytes(package.sizeBytes)}).',
         ),
         actions: [
           TextButton(

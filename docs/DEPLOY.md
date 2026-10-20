@@ -22,19 +22,17 @@ sudo apt update
 # 2. Install (apt resolves libcfitsio10 transitively; the ASTAP solver is bundled)
 sudo apt install openastroara-server
 
-# 3. Star database for the plate solver (one-time, ~1.7 GB). ASTAP's D80 covers the
-#    usual range of fields (roughly 0.25° to 30°); very wide fields want W08/G05 and
-#    very narrow ones H17/H18 (playbook §18.I). The package creates /var/lib/astap
-#    owned by the service user; the daemon passes it to astap_cli with -d
-#    (Options → Plate solving → index path).
-#    D80 is published only as a Debian package (its payload is the d80_*.1476 files);
-#    extract it into the daemon's directory rather than installing it, so the files
-#    land where the profile's index path points.
-#    Not via /tmp: on Raspberry Pi OS it is a ~2 GB tmpfs and this package is 1.2 GB.
-curl -L -o ~/d80.deb https://sourceforge.net/projects/astap-program/files/star_databases/d80_star_database.deb/download
-dpkg-deb --fsys-tarfile ~/d80.deb \
-  | sudo tar -x -C /var/lib/astap --strip-components=3 --wildcards './opt/astap/d80_*'
-sudo chown -R openastroara:openastroara /var/lib/astap && rm ~/d80.deb
+# 3. Star database for the plate solver: download it from the app, not the shell.
+#    Settings → Sky data lists ASTAP's databases as packages: D80 (1.3 GB, every rig),
+#    G05 (105 MB, fields wider than ~6°) and W08 (0.5 MB, wider than ~20°); the ones
+#    the profile's optics call for are marked Recommended. They install under
+#    /var/lib/astap (the profile's index path,
+#    Options → Plate solving), one subdirectory per package, and the daemon passes
+#    the right one to astap_cli with -d/-D per solve. The download needs the Pi
+#    online once and ~1.7 GB free on the root volume; the daemon refuses it with a
+#    clear message otherwise.
+#    A database you placed in /var/lib/astap by hand (any earlier install) keeps
+#    working and takes precedence over a package copy of the same database.
 
 # 4. The systemd unit auto-starts on first install
 sudo systemctl status openastroara-server
@@ -61,7 +59,7 @@ and `sudo apt install ./openastroara-server_<version>_arm64.deb` on the Pi.
 |---|---|---|
 | `/opt/openastroara/` | Self-contained .NET runtime + `OpenAstroAra.Server` binary + the `liberfa.so` / `libsupernovas.so` astrometry natives + the bundled multi-core `astap_cli` plate solver | `openastroara:openastroara` |
 | `/dev/shm/openastroara/PlateSolver/` | The frame handed to the solver, one per solve (RAM; falls back to the service's local app-data folder when `/dev/shm` is unavailable) | `openastroara:openastroara` |
-| `/var/lib/astap/` | ASTAP star database (you download it, step 3 above; the solver binary itself ships in `/opt/openastroara`) | `openastroara:openastroara` |
+| `/var/lib/astap/` | ASTAP star databases, one subdirectory per Data Manager package (`astap-d80/`, …; step 3 above). The solver binary itself ships in `/opt/openastroara` | `openastroara:openastroara` |
 | `/etc/openastroara/server.env` | Environment overrides (`OPENASTROARA_PORT`, etc.) | `root:openastroara`, 640 |
 | `/var/lib/openastroara/` | Profile + SQLite catalog (`profile.json`, `openastroara.db`) | `openastroara:openastroara` |
 | `/var/log/openastroara/` | Rotated log files (Serilog file sink) | `openastroara:openastroara` |

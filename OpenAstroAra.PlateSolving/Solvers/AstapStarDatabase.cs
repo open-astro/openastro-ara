@@ -21,8 +21,16 @@ using System.Linq;
 namespace OpenAstroAra.PlateSolving.Solvers {
 
     /// <summary>One read of an ASTAP database directory (#1215): the file count, the complete
-    /// databases and the partial ones (see <see cref="AstapStarDatabase.MinTileFiles"/>).</summary>
-    public sealed record AstapDatabaseScan(int FileCount, IReadOnlyList<string> Databases, IReadOnlyList<string> Partial) {
+    /// databases and the partial ones (see <see cref="AstapStarDatabase.MinTileFiles"/>), plus the
+    /// directory each complete database sits in (#1136: a Data Manager install lands in a
+    /// subdirectory of the configured path, one per package, while a manual download sits in the
+    /// path itself).</summary>
+    public sealed record AstapDatabaseScan(int FileCount, IReadOnlyList<string> Databases, IReadOnlyList<string> Partial,
+            IReadOnlyDictionary<string, string> Locations) {
+        public AstapDatabaseScan(int fileCount, IReadOnlyList<string> databases, IReadOnlyList<string> partial)
+            : this(fileCount, databases, partial, new Dictionary<string, string>(StringComparer.Ordinal)) {
+        }
+
         public static readonly AstapDatabaseScan Empty = new(0, Array.Empty<string>(), Array.Empty<string>());
     }
 
@@ -34,18 +42,26 @@ namespace OpenAstroAra.PlateSolving.Solvers {
     /// </summary>
     public static class AstapStarDatabase {
 
-        /// <summary>DEPLOY.md: D80 covers "roughly 0.25° to 30°". Narrower fields want the
-        /// deepest database, wider ones the shallowest.</summary>
+        /// <summary>D80 covers the usual range of fields down to roughly 0.25°; narrower fields
+        /// want the deepest database.</summary>
         public const double NarrowFieldBelowDeg = 0.25;
 
-        public const double WideFieldAboveDeg = 30.0;
+        /// <summary>ASTAP's own auto-selection (astap.htm): G05 above 6°, W08 above 20°. The Data
+        /// Manager recommends those packages at the same thresholds (#1136).</summary>
+        public const double MediumWideFieldAboveDeg = 6.0;
 
-        // Deepest first. D80 leads the general order: it is the database DEPLOY.md installs and
-        // the one sized for the usual range of fields. V50 is D50 plus photometry, so it sits
-        // beside D50.
+        public const double WideFieldAboveDeg = 20.0;
+
+        // Deepest first. D80 leads the general order: it is the database the Data Manager
+        // recommends for every rig and the one sized for the usual range of fields. V50 is D50
+        // plus photometry, so it sits beside D50.
         private static readonly string[] NarrowOrder = { "h18", "h17", "d80", "d50", "v50", "d20", "d05", "g05", "w08" };
 
         private static readonly string[] GeneralOrder = { "d80", "d50", "v50", "h18", "h17", "d20", "d05", "g05", "w08" };
+
+        // Above 6°: the 500 stars/deg² database first (a 15° field through D80 reads tens of
+        // thousands of stars for nothing); W08 is too shallow until the field is wider still.
+        private static readonly string[] MediumWideOrder = { "g05", "d05", "d20", "d50", "v50", "d80", "h17", "h18", "w08" };
 
         private static readonly string[] WideOrder = { "w08", "g05", "d05", "d20", "d50", "v50", "d80", "h17", "h18" };
 
@@ -90,7 +106,16 @@ namespace OpenAstroAra.PlateSolving.Solvers {
         /// that ships many. Reported so the log and the UI can say why they are not offered.</summary>
         public static IReadOnlyList<string> PartialDatabases(string? dir) => Scan(dir).Partial;
 
-        /// <summary>The directory's cached scan, re-read when its last-write time changed.</summary>
+        /// <summary>The directory to hand <c>astap_cli</c> as <c>-d</c> for <paramref name="database"/>:
+        /// the configured directory itself for a manual download, or the Data Manager's package
+        /// subdirectory (#1136). Null when the database is not installed under <paramref name="dir"/>.
+        /// ASTAP reads one directory per run, so a solve names the database and points at where it is.</summary>
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Globalization", "CA1308:Normalize strings to uppercase", Justification = "ASTAP database abbreviations are lower-case ASCII in its file names and its -D argument; not a security decision.")]
+        public static string? DirectoryFor(string? dir, string? database) =>
+            database is not null && Scan(dir).Locations.TryGetValue(database.ToLowerInvariant(), out var location) ? location : null;
+
+        /// <summary>The directory's cached scan, re-read when its last-write time (or a package
+        /// subdirectory's) changed.</summary>
         public static AstapDatabaseScan Scan(string? dir) {
             if (string.IsNullOrWhiteSpace(dir)) {
                 return AstapDatabaseScan.Empty;
@@ -101,7 +126,7 @@ namespace OpenAstroAra.PlateSolving.Solvers {
                     Cache.TryRemove(key, out _);
                     return AstapDatabaseScan.Empty;
                 }
-                var stamp = Directory.GetLastWriteTimeUtc(key);
+                var stamp = Stamp(key);
                 if (Cache.TryGetValue(key, out var cached) && cached.LastWriteUtc == stamp) {
                     return cached.Scan;
                 }
@@ -113,26 +138,59 @@ namespace OpenAstroAra.PlateSolving.Solvers {
             }
         }
 
+        // The newest last-write time across the directory and its package subdirectories: a tile
+        // written into a subdirectory bumps that subdirectory, not the root.
+        private static DateTime Stamp(string dir) {
+            var stamp = Directory.GetLastWriteTimeUtc(dir);
+            foreach (var sub in PackageSubdirectories(dir)) {
+                var s = Directory.GetLastWriteTimeUtc(sub);
+                if (s > stamp) {
+                    stamp = s;
+                }
+            }
+            return stamp;
+        }
+
+        // #1136 — the Data Manager installs each database package as {dir}/{package-id}/; its
+        // scratch directories (.staging-*, .backup-*) start with a dot and are never read.
+        private static IEnumerable<string> PackageSubdirectories(string dir) =>
+            Directory.EnumerateDirectories(dir).Where(d => !Path.GetFileName(d).StartsWith('.'));
+
         private static AstapDatabaseScan ScanNow(string dir) {
             var files = 0;
-            var tiles = new Dictionary<string, (int Count, bool SingleFileLayout)>(StringComparer.Ordinal);
-            foreach (var path in Directory.EnumerateFiles(dir)) {
-                files++;
-                var name = Path.GetFileName(path);
-                if (AbbreviationOf(name) is not string abbrev) {
-                    continue;
+            // Keyed by abbreviation and the directory the tiles were found in: the same database in
+            // two places is two candidates, and only a complete one is offered.
+            var tiles = new Dictionary<(string Abbrev, string Dir), (int Count, bool SingleFileLayout)>();
+            void Read(string directory) {
+                foreach (var path in Directory.EnumerateFiles(directory)) {
+                    files++;
+                    var name = Path.GetFileName(path);
+                    if (AbbreviationOf(name) is not string abbrev) {
+                        continue;
+                    }
+                    var single = name.EndsWith(SingleFileExtension, StringComparison.Ordinal);
+                    var k = (abbrev, directory);
+                    tiles[k] = tiles.TryGetValue(k, out var t) ? (t.Count + 1, t.SingleFileLayout && single) : (1, single);
                 }
-                var single = name.EndsWith(SingleFileExtension, StringComparison.Ordinal);
-                tiles[abbrev] = tiles.TryGetValue(abbrev, out var t) ? (t.Count + 1, t.SingleFileLayout && single) : (1, single);
             }
-            var complete = new List<string>();
-            var partial = new List<string>();
-            foreach (var (abbrev, t) in tiles) {
-                (t.Count >= MinTileFiles || t.SingleFileLayout ? complete : partial).Add(abbrev);
+            Read(dir);
+            foreach (var sub in PackageSubdirectories(dir)) {
+                Read(sub);
             }
-            complete.Sort(StringComparer.Ordinal);
-            partial.Sort(StringComparer.Ordinal);
-            return new AstapDatabaseScan(files, complete, partial);
+            var locations = new Dictionary<string, string>(StringComparer.Ordinal);
+            var partial = new HashSet<string>(StringComparer.Ordinal);
+            // The configured directory itself wins over a subdirectory for the same database (a
+            // manual install the user placed on purpose); subdirectories then in name order.
+            foreach (var ((abbrev, directory), t) in tiles.OrderBy(e => e.Key.Dir == dir ? 0 : 1).ThenBy(e => e.Key.Dir, StringComparer.Ordinal)) {
+                if (t.Count >= MinTileFiles || t.SingleFileLayout) {
+                    locations.TryAdd(abbrev, directory);
+                } else {
+                    partial.Add(abbrev);
+                }
+            }
+            partial.ExceptWith(locations.Keys); // complete somewhere → not reported as partial
+            var complete = locations.Keys.OrderBy(a => a, StringComparer.Ordinal).ToList();
+            return new AstapDatabaseScan(files, complete, partial.OrderBy(a => a, StringComparer.Ordinal).ToList(), locations);
         }
 
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Globalization", "CA1308:Normalize strings to uppercase", Justification = "ASTAP database abbreviations are lower-case ASCII in its file names and its -D argument; not a security decision.")]
@@ -152,10 +210,11 @@ namespace OpenAstroAra.PlateSolving.Solvers {
 
         /// <summary>The database to pass as <c>-D</c>, or null when fewer than two are installed
         /// (ASTAP then uses the only one there is). Deterministic: the field of view picks one of
-        /// three preference orders (narrower than <see cref="NarrowFieldBelowDeg"/>: deepest
-        /// first; wider than <see cref="WideFieldAboveDeg"/>: shallowest first; otherwise, or when
-        /// the field is unknown, D80 first), and the first installed entry wins. Abbreviations
-        /// this list does not know rank after the known ones, alphabetically.</summary>
+        /// four preference orders (narrower than <see cref="NarrowFieldBelowDeg"/>: deepest
+        /// first; wider than <see cref="MediumWideFieldAboveDeg"/>: G05 first; wider than
+        /// <see cref="WideFieldAboveDeg"/>: W08 first; otherwise, or when the field is unknown,
+        /// D80 first), and the first installed entry wins. Abbreviations this list does not know
+        /// rank after the known ones, alphabetically.</summary>
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Globalization", "CA1308:Normalize strings to uppercase", Justification = "ASTAP database abbreviations are lower-case ASCII in its file names and its -D argument; not a security decision.")]
         public static string? Select(IReadOnlyCollection<string> installed, double fieldOfViewDeg) {
             if (installed.Count < 2) {
@@ -164,6 +223,7 @@ namespace OpenAstroAra.PlateSolving.Solvers {
             var order = fieldOfViewDeg switch {
                 > 0 and < NarrowFieldBelowDeg => NarrowOrder,
                 > WideFieldAboveDeg => WideOrder,
+                > MediumWideFieldAboveDeg => MediumWideOrder,
                 _ => GeneralOrder,
             };
             var known = order.FirstOrDefault(a => installed.Contains(a, StringComparer.OrdinalIgnoreCase));

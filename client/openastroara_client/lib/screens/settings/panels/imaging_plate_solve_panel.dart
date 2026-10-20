@@ -280,9 +280,9 @@ class _StarDatabaseStatus extends ConsumerWidget {
                 padding: const EdgeInsets.only(bottom: 8),
                 child: Text(
                   'Every plate solve will fail until one is installed. '
-                  'Download the D80 database into this folder on the rig '
-                  '(DEPLOY.md step 3, about 1.7 GB), or point the index '
-                  'path at a folder that has one.',
+                  'Download the D80 database from Settings → Sky data '
+                  '(about 1.3 GB, installs into this folder on the rig), '
+                  'or point the index path at a folder that has one.',
                   style: errorStyle,
                 ),
               ),

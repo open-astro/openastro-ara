@@ -54,6 +54,13 @@ namespace OpenAstroAra.Test {
             var manifest = ReadManifest();
             foreach (var pkg in DataManagerService.Catalog) {
                 if (pkg.SourceUrl is null) continue;
+                if (DataManagerService.IsSolverPackage(pkg)) {
+                    // #1136 — the ASTAP databases (1.3 GB) are too large to ship inside the .deb; they are
+                    // download-only and must NOT be in the manifest (build-deb.sh would try to bundle them).
+                    Assert.That(manifest, Does.Not.ContainKey(pkg.Id),
+                        $"solver package '{pkg.Id}' must not be seeded — it would bloat the .deb by its full size");
+                    continue;
+                }
                 Assert.That(manifest, Contains.Key(pkg.Id),
                     $"package '{pkg.Id}' missing from seed-manifest.tsv — the .deb would ship without its offline seed");
                 var (url, sha) = manifest[pkg.Id];

@@ -1,5 +1,6 @@
 # §36 seed bundle manifest: <package-id> <TAB> <pinned-url> <TAB> <sha256>.
 # Must stay in lockstep with DataManagerService.Catalog — DataManagerSeedManifestTest enforces it.
+# The "solver" category (ASTAP star databases, #1136) is download-only: too large to bundle, so it is absent here on purpose.
 hyg-stars	https://raw.githubusercontent.com/open-astro/sky-data/712bf937b4967694746e3c5ae50560ab4aa1df38/hygdata_v40.csv.gz	8e3ff9e67445e558a759b117910850cff1b1d4d492f45f715c2ee2db3d869bac
 openngc-dso	https://raw.githubusercontent.com/open-astro/sky-data/712bf937b4967694746e3c5ae50560ab4aa1df38/NGC.csv	840fe0c9ee1332e551b2e722a0e92726cd7b157914a3d2177602832aadd3aa9e
 sharpless-hii	https://raw.githubusercontent.com/open-astro/sky-data/9ce09f7152356df04845e329a7d19678a473c77d/sh2.csv	cb090575c57699eb9d57de6acc9c8ae2b5b8165e52cec9dbbb47732ec203a148

@@ -28,9 +28,12 @@ location and horizon, optics and camera, mount, guiding (PHD2/openastro-guider),
 safety policies, storage, and optional sky-data downloads. Notes:
 
 - **Skip is always available** — anything skipped shows as "Default" in Settings and can be set later.
-- The **sky-data screen pre-checks the recommended catalogs** (star catalog + deep-sky objects);
-  they download in the background after you finish and are what the rig server plate-solves and
-  plans with. The planetarium, search, and Tonight's Sky run off catalogs bundled in the app, so
+- The **sky catalogs** (stars + deep-sky objects) ship inside the rig server package, so the
+  planetarium, search and Tonight's Sky work offline from the first start. The **plate-solver star
+  database** is the one download: Settings → Sky data lists ASTAP's D80 (1.3 GB, every rig) and
+  marks it Recommended, with G05 and W08 recommended for fields wider than ~6° and ~20°. It needs
+  the rig online once and about 1.7 GB free on its storage; without one, centering, polar
+  alignment and position checks cannot solve. The planetarium, search, and Tonight's Sky run off catalogs bundled in the app, so
   they work before that download finishes and offline.
 - The wizard writes a **profile**; you can create more later (Settings → Profile) and export/import
   them. Exported profiles are stripped of paths, secrets, and location — the recipient re-runs the

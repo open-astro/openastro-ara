@@ -126,22 +126,7 @@ namespace OpenAstroAra.Server.Services {
 
             var client = _httpClientFactory.CreateClient(HttpClientName);
             try {
-                using var request = new HttpRequestMessage(HttpMethod.Get, source);
-                if (validator?.LastModified is { } since) {
-                    // §36 incremental update: ask the CDN to answer 304 if the package is unchanged.
-                    request.Headers.IfModifiedSince = since;
-                }
-                if (!string.IsNullOrWhiteSpace(validator?.ETag)) {
-                    // #1171 — the ETag survives a re-upload of identical bytes where Last-Modified does not; an
-                    // unparsable stored tag is not sent (the date alone, if any, still makes the GET conditional).
-                    if (System.Net.Http.Headers.EntityTagHeaderValue.TryParse(validator.ETag, out var etag)) {
-                        request.Headers.IfNoneMatch.Add(etag);
-                    } else {
-                        OpenAstroAra.Core.Utility.Logger.Debug($"sky-data fetch of {source}: stored ETag '{validator.ETag}' is not a valid entity tag; fetching without If-None-Match.");
-                    }
-                }
-                // ResponseHeadersRead so the (potentially multi-GB) body streams rather than buffering in memory.
-                var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
+                var response = await SendFollowingTrustedRedirectsAsync(client, source, validator, ct).ConfigureAwait(false);
                 try {
                     if (response.StatusCode == System.Net.HttpStatusCode.NotModified) {
                         // 304: nothing to download. Capture the validator (if echoed) and return an empty,
@@ -170,6 +155,76 @@ namespace OpenAstroAra.Server.Services {
             } catch {
                 client.Dispose();
                 throw;
+            }
+        }
+
+        /// <summary>Redirect hops a fetch will follow before giving up (#1136): a GitHub release asset is one
+        /// hop, github.com → objects.githubusercontent.com.</summary>
+        internal const int MaxRedirects = 3;
+
+        /// <summary>#1136 — whether a redirect from <paramref name="from"/> to <paramref name="location"/> may be
+        /// followed. The HttpClient has AllowAutoRedirect off (an HTTPS→HTTP downgrade would otherwise serve the
+        /// body in cleartext), so redirects are re-validated here: absolute, https, and on a host we publish from
+        /// (github.com and its *.githubusercontent.com asset store — GitHub release assets 302 there). Anything
+        /// else is refused rather than followed, which keeps the raw-URL catalog entries exactly as strict as before.</summary>
+        internal static bool IsTrustedRedirect(Uri from, Uri? location) {
+            if (location is null || !location.IsAbsoluteUri) {
+                return false;
+            }
+            if (!string.Equals(location.Scheme, Uri.UriSchemeHttps, StringComparison.Ordinal)) {
+                return false;
+            }
+            if (!string.Equals(from.Scheme, Uri.UriSchemeHttps, StringComparison.Ordinal)) {
+                return false;
+            }
+            var host = location.Host;
+            return string.Equals(host, "github.com", StringComparison.OrdinalIgnoreCase)
+                || host.EndsWith(".githubusercontent.com", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool IsRedirect(System.Net.HttpStatusCode status) => status is
+            System.Net.HttpStatusCode.MovedPermanently or System.Net.HttpStatusCode.Found
+            or System.Net.HttpStatusCode.SeeOther or System.Net.HttpStatusCode.TemporaryRedirect
+            or System.Net.HttpStatusCode.PermanentRedirect;
+
+        // The conditional GET, re-issued for each trusted redirect hop. The validators ride along on every hop: a
+        // 304 from the asset store means the same as one from the first URL. The returned response is the first
+        // non-redirect one; its caller owns it.
+        private static async Task<HttpResponseMessage> SendFollowingTrustedRedirectsAsync(HttpClient client, Uri source,
+                SkyDataValidator? validator, CancellationToken ct) {
+            var url = source;
+            for (var hop = 0; ; hop++) {
+                using var request = new HttpRequestMessage(HttpMethod.Get, url);
+                if (validator?.LastModified is { } since) {
+                    // §36 incremental update: ask the CDN to answer 304 if the package is unchanged.
+                    request.Headers.IfModifiedSince = since;
+                }
+                if (!string.IsNullOrWhiteSpace(validator?.ETag)) {
+                    // #1171 — the ETag survives a re-upload of identical bytes where Last-Modified does not; an
+                    // unparsable stored tag is not sent (the date alone, if any, still makes the GET conditional).
+                    if (System.Net.Http.Headers.EntityTagHeaderValue.TryParse(validator.ETag, out var etag)) {
+                        request.Headers.IfNoneMatch.Add(etag);
+                    } else if (hop == 0) {
+                        OpenAstroAra.Core.Utility.Logger.Debug($"sky-data fetch of {source}: stored ETag '{validator.ETag}' is not a valid entity tag; fetching without If-None-Match.");
+                    }
+                }
+                // ResponseHeadersRead so the (potentially multi-GB) body streams rather than buffering in memory.
+                var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
+                if (!IsRedirect(response.StatusCode)) {
+                    return response;
+                }
+                var location = response.Headers.Location;
+                var next = location is null ? null : location.IsAbsoluteUri ? location : new Uri(url, location);
+                response.Dispose();
+                if (!IsTrustedRedirect(url, next)) {
+                    throw new InvalidOperationException(
+                        $"Sky-data source '{url}' redirects to '{next?.ToString() ?? "(no Location)"}', which is not an https URL on a host we publish from; refusing to follow it.");
+                }
+                if (hop + 1 > MaxRedirects) {
+                    throw new InvalidOperationException($"Sky-data source '{source}' redirected more than {MaxRedirects} times; giving up.");
+                }
+                OpenAstroAra.Core.Utility.Logger.Debug($"sky-data fetch of {source}: following redirect to {next}.");
+                url = next!;
             }
         }
     }
