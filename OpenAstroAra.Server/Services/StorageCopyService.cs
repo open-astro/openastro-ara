@@ -54,7 +54,7 @@ public interface IStorageCopyService {
 /// Hidden entries (OS metadata such as <c>.Spotlight-V100</c>), in-flight <c>*.tmp</c>
 /// writes and the §65.4 preview-cache sidecars (regenerated on demand) are not copied.
 /// </summary>
-public sealed partial class StorageCopyService : IStorageCopyService, IDisposable {
+public sealed partial class StorageCopyService : IStorageCopyService, IDisposable, IAsyncDisposable {
 
     internal const string TempSuffix = ".ara-copy.tmp";
 
@@ -160,6 +160,28 @@ public sealed partial class StorageCopyService : IStorageCopyService, IDisposabl
         }
     }
 
+    /// <summary>Host shutdown: cancel a running copy and wait (bounded) for its finally to
+    /// release the target, so the daemon never stops with a drive left mounted.</summary>
+    public async ValueTask DisposeAsync() {
+        Task? running;
+        CancellationTokenSource? source;
+        lock (gate) {
+            source = cts;
+            running = Running;
+        }
+        if (source is not null) {
+            await source.CancelAsync().ConfigureAwait(false);
+        }
+        if (running is not null) {
+            try {
+                await running.WaitAsync(TimeSpan.FromSeconds(30)).ConfigureAwait(false);
+            } catch (TimeoutException) {
+                // The release is a helper round trip; past this the host is going down anyway.
+            }
+        }
+        Dispose();
+    }
+
     /// <summary>A store path as the client may send it → path relative to the store
     /// root ("" for the root itself), or null when it is not a directory on the store.</summary>
     private string? ToRelative(string folder) {
@@ -174,6 +196,13 @@ public sealed partial class StorageCopyService : IStorageCopyService, IDisposabl
                 || !Directory.Exists(full)) {
             return null;
         }
+        // The walk never follows a link below a picked folder; a picked folder (or one of its
+        // parents) that is itself a link would lead off the store all the same.
+        for (var dir = full; dir != sourceRoot; dir = Path.GetDirectoryName(dir)!) {
+            if (new DirectoryInfo(dir).LinkTarget is not null) {
+                return null;
+            }
+        }
         return Path.GetRelativePath(sourceRoot, full);
     }
 
@@ -185,12 +214,16 @@ public sealed partial class StorageCopyService : IStorageCopyService, IDisposabl
         // reads as finished ever precedes "safe to unplug".
         (string State, string? Code, string? Detail) outcome = ("failed", "copy_failed", null);
         try {
-            var mount = await devices.MountCopyTargetAsync(current.TargetUuid, ct).ConfigureAwait(false);
+            // Not cancellable: a token would only stop the WAIT, while the root helper goes on
+            // and mounts the drive anyway. Wait it out, then honour a cancel, so a mounted
+            // drive always reaches the release in the finally.
+            var mount = await devices.MountCopyTargetAsync(current.TargetUuid, CancellationToken.None).ConfigureAwait(false);
             if (!mount.Success || mount.MountPoint is null) {
-                outcome = ("failed", mount.Code, mount.Detail);
+                outcome = ct.IsCancellationRequested ? ("cancelled", null, null) : ("failed", mount.Code, mount.Detail);
                 return;
             }
             mounted = true;
+            ct.ThrowIfCancellationRequested();
             var targetRoot = mount.MountPoint;
             var plan = Plan(current, targetRoot, ct);
             var needed = plan.Sum(f => f.Length + PerFileSlackBytes);
@@ -312,6 +345,7 @@ public sealed partial class StorageCopyService : IStorageCopyService, IDisposabl
             current.CurrentFile = file.Relative;
         }
         var temp = file.Destination + TempSuffix;
+        long written = 0;
         try {
             Directory.CreateDirectory(Path.GetDirectoryName(file.Destination)!);
             var source = new FileStream(file.Source, FileMode.Open, FileAccess.Read, FileShare.Read,
@@ -324,6 +358,7 @@ public sealed partial class StorageCopyService : IStorageCopyService, IDisposabl
                     int read;
                     while ((read = await source.ReadAsync(buffer, ct).ConfigureAwait(false)) > 0) {
                         await target.WriteAsync(buffer.AsMemory(0, read), ct).ConfigureAwait(false);
+                        written += read;
                         lock (gate) {
                             current.BytesCopied += read;
                         }
@@ -346,6 +381,8 @@ public sealed partial class StorageCopyService : IStorageCopyService, IDisposabl
             TryDelete(temp);
             LogFileFailed(logger, file.Relative, ex.Message);
             lock (gate) {
+                // Progress counts what landed: a file that failed partway is not on the drive.
+                current.BytesCopied -= written;
                 current.FilesFailed++;
                 current.FirstFailure ??= $"{file.Relative}: {ex.Message}";
             }

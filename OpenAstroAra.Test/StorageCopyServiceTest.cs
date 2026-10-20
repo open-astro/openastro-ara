@@ -185,12 +185,9 @@ public class StorageCopyServiceTest {
     [Test]
     public async Task A_second_start_while_one_runs_is_refused_and_cancel_ends_it() {
         var mountStarted = new TaskCompletionSource();
+        var mountDone = new TaskCompletionSource<StorageConfigureResult>();
         devices.Setup(d => d.MountCopyTargetAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .Returns(async (string _, CancellationToken ct) => {
-                mountStarted.SetResult();
-                await Task.Delay(Timeout.Infinite, ct).ConfigureAwait(false);
-                return new StorageConfigureResult(true, "ok", null, target);
-            });
+            .Returns(() => { mountStarted.TrySetResult(); return mountDone.Task; });
         Put("night/a.fits");
         var svc = Svc;
 
@@ -199,11 +196,73 @@ public class StorageCopyServiceTest {
         Assert.That(svc.IsRunning, Is.True);
         Assert.That(svc.Start("6EF6-FD21", null)?.Code, Is.EqualTo("copy_running"));
         Assert.That(svc.Cancel(), Is.True);
+        mountDone.SetResult(new StorageConfigureResult(false, "mount_failed", null, null));
         await svc.Running!.WaitAsync(TimeSpan.FromSeconds(10)).ConfigureAwait(false);
 
         Assert.That(svc.Status().State, Is.EqualTo("cancelled"));
         Assert.That(svc.IsRunning, Is.False);
         Assert.That(svc.Cancel(), Is.False, "nothing left to cancel");
+    }
+
+    [Test]
+    public async Task A_cancel_while_the_target_mounts_still_releases_it() {
+        // The root helper finishes its mount whatever the daemon's token says: a cancel that
+        // only stops the wait would leave the drive mounted with nothing reporting it.
+        var mountStarted = new TaskCompletionSource();
+        var mountDone = new TaskCompletionSource<StorageConfigureResult>();
+        // Like StorageDeviceService: the token cancels the WAIT for the helper, not the helper.
+        devices.Setup(d => d.MountCopyTargetAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .Returns(async (string _, CancellationToken ct) => {
+                mountStarted.TrySetResult();
+                return await mountDone.Task.WaitAsync(ct).ConfigureAwait(false);
+            });
+        Put("night/a.fits");
+
+        Assert.That(Svc.Start("6EF6-FD21", null), Is.Null);
+        await mountStarted.Task.WaitAsync(TimeSpan.FromSeconds(10)).ConfigureAwait(false);
+        Assert.That(Svc.Cancel(), Is.True);
+        await Task.Delay(100).ConfigureAwait(false); // the cancelled wait unwinds before the helper finishes
+        mountDone.SetResult(new StorageConfigureResult(true, "ok", null, target));
+        await Svc.Running!.WaitAsync(TimeSpan.FromSeconds(10)).ConfigureAwait(false);
+
+        var status = Svc.Status();
+        Assert.That(status.State, Is.EqualTo("cancelled"));
+        Assert.That(status.FilesCopied, Is.Zero);
+        Assert.That(status.TargetReleased, Is.True, "safe to unplug");
+        devices.Verify(d => d.ReleaseCopyTargetAsync(It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Test]
+    [Platform(Exclude = "Win")]
+    public void A_picked_folder_that_is_a_symlink_off_the_store_is_refused() {
+        var outside = Path.Combine(Path.GetDirectoryName(store)!, "outside");
+        Directory.CreateDirectory(outside);
+        Directory.CreateSymbolicLink(Path.Combine(store, "night"), outside);
+        Put("real/a.fits");
+        Directory.CreateSymbolicLink(Path.Combine(store, "real", "nested-link"), outside);
+
+        Assert.That(Svc.Start("6EF6-FD21", ["night"])?.Code, Is.EqualTo("bad_folder"));
+        Assert.That(Svc.Start("6EF6-FD21", ["real/nested-link"])?.Code, Is.EqualTo("bad_folder"));
+    }
+
+    [Test]
+    public async Task Disposing_waits_for_the_target_to_be_released() {
+        var mountStarted = new TaskCompletionSource();
+        devices.Setup(d => d.MountCopyTargetAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .Returns(async () => {
+                mountStarted.TrySetResult();
+                await Task.Delay(200).ConfigureAwait(false);
+                return new StorageConfigureResult(true, "ok", null, target);
+            });
+        Put("night/a.fits");
+
+        Assert.That(Svc.Start("6EF6-FD21", null), Is.Null);
+        await mountStarted.Task.WaitAsync(TimeSpan.FromSeconds(10)).ConfigureAwait(false);
+        await Svc.DisposeAsync().ConfigureAwait(false);
+        service = null;
+
+        devices.Verify(d => d.ReleaseCopyTargetAsync(It.IsAny<CancellationToken>()), Times.Once,
+            "daemon shutdown leaves no drive mounted");
     }
 
     [Test]
