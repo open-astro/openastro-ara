@@ -380,7 +380,9 @@ namespace OpenAstroAra.Server.Services {
                 File.WriteAllBytes(probe, Array.Empty<byte>());
                 File.Delete(probe);
                 return null;
-            } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
+            } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException) {
+                // ArgumentException / NotSupportedException: a malformed profile path (illegal characters, a
+                // Windows drive on Linux) is "cannot write there" too, not a 500.
                 return ex.Message;
             }
         }

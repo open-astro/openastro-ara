@@ -480,6 +480,34 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_304_on_a_force_reinstall_records_a_pre_registry_copy() {
+            // Round 3: a D80 installed before the registry existed, force-reinstalled (no listing first) against a
+            // CDN that answers 304, then an index-path change: the old copy must still be listed and removable.
+            var oldRoot = Path.Combine(_root, "astap-old");
+            var newRoot = Path.Combine(_root, "astap-new");
+            Directory.CreateDirectory(newRoot);
+            Touch(Path.Combine(oldRoot, "astap-d80"), "d80_0101.1476");
+            Touch(Path.Combine(oldRoot, "astap-d80"), SkyDataInstaller.InstalledMarkerFileName);
+            var root = oldRoot;
+            var ws = new CapturingBroadcaster();
+            var svc = new DataManagerService(_root, ConditionalFetcher.NotModified(), ws, NullLogger<DataManagerService>.Instance,
+                catalog: TestCatalog, expectedDigests: NoDigests, solverDataRoot: () => root, writeProbe: _ => null, freeBytes: _ => null);
+            Assert.That(svc.AllInstallDirs("astap-d80").Count, Is.EqualTo(1), "found under the current root, nothing recorded yet");
+            Assert.That(File.Exists(Path.Combine(_root, SolverInstallRegistry.FileName)), Is.False);
+
+            await svc.DownloadAsync(new DownloadRequestDto("astap-d80", ForceReinstall: true), null, CancellationToken.None);
+            Assert.That(await Eventually(() => ws.Events.Any(e => e.EventType == WsEventCatalog.DataManagerDownloadComplete)), Is.True, "304 reads as up to date");
+            Assert.That(File.Exists(Path.Combine(_root, SolverInstallRegistry.FileName)), Is.True, "the 304 path recorded the root");
+
+            root = newRoot;
+            var listed = (await svc.ListPackagesAsync(CancellationToken.None)).Single(p => p.Id == "astap-d80");
+            Assert.That(listed.IsInstalled, Is.True);
+            Assert.That(listed.InstallPath, Is.EqualTo(Path.Combine(oldRoot, "astap-d80")));
+            Assert.That(await svc.DeleteAsync("astap-d80", CancellationToken.None), Is.EqualTo(PackageDeleteResult.Deleted));
+            Assert.That(Directory.Exists(Path.Combine(oldRoot, "astap-d80")), Is.False);
+        }
+
+        [Test]
         public void Roots_compare_by_normalised_full_path() {
             Assert.That(SolverInstallRegistry.SameRoot(_solverRoot, _solverRoot + Path.DirectorySeparatorChar), Is.True, "a trailing separator is the same directory");
             Assert.That(SolverInstallRegistry.SameRoot(_solverRoot, Path.Combine(_solverRoot, "x")), Is.False);
