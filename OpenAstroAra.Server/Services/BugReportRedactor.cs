@@ -74,7 +74,9 @@ public static partial class BugReportRedactor {
     [GeneratedRegex(@"(?<=(^|[\s""'=:(\[,])/(?:home|Users)/)([^/\s""']+)(?=/)", RegexOptions.CultureInvariant)]
     private static partial Regex PosixUserPath();
 
-    [GeneratedRegex(@"(?<=[A-Za-z]:\\Users\\)([^\\\s""']+)(?=\\)", RegexOptions.CultureInvariant)]
+    // One or two backslashes: a Windows path inside serialized JSON (system-info, a CLEF log line) is
+    // escaped as C:\\Users\\name\\.
+    [GeneratedRegex(@"(?<=[A-Za-z]:\\{1,2}Users\\{1,2})([^\\\s""']+)(?=\\)", RegexOptions.CultureInvariant)]
     private static partial Regex WindowsUserPath();
 
     // RFC 1918 ranges only: a public address in a log is a deliberate remote-access config, not a LAN leak.
@@ -141,13 +143,18 @@ public static partial class BugReportRedactor {
                         obj[key] = 0.0;
                         continue;
                     }
-                    if (mode == BugReportSharingMode.Redacted && value is JsonValue sv && sv.TryGetValue<string>(out var str)) {
-                        if (str.Length > 0 && (SecretKey().IsMatch(key) || SerialKey().IsMatch(key) || HostKey().IsMatch(key))) {
+                    if (mode == BugReportSharingMode.Redacted && value is JsonValue sv) {
+                        var sensitiveKey = SecretKey().IsMatch(key) || SerialKey().IsMatch(key) || HostKey().IsMatch(key);
+                        if (sv.TryGetValue<string>(out var str)) {
+                            // An empty secret stays empty: the reader learns it is unset.
+                            obj[key] = sensitiveKey && str.Length > 0 ? RedactedValue : RedactText(str, mode);
+                            continue;
+                        }
+                        if (sensitiveKey && sv.TryGetValue<double>(out _)) {
+                            // A serial or token stored as a number is still a serial or token.
                             obj[key] = RedactedValue;
                             continue;
                         }
-                        obj[key] = RedactText(str, mode);
-                        continue;
                     }
                     if (value is JsonObject or JsonArray) {
                         Walk(value, mode);

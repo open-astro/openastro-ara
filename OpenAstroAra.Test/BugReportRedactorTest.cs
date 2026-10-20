@@ -26,7 +26,7 @@ namespace OpenAstroAra.Test {
             {
               "site": { "name": "Backyard", "latitude_deg": 30.2672, "longitude_deg": -97.7431, "elevation_m": 149.5 },
               "notifications": { "pushover_token": "azGDORePK8gMaC0QOYAMyEEuzJnyUi", "telegram_bot_token": "", "email": "" },
-              "equipment": [ { "name": "ASI2600MM", "serial_number": "1a2b3c4d", "host_name": "pi-observatory.local" } ],
+              "equipment": [ { "name": "ASI2600MM", "serial_number": "1a2b3c4d", "host_name": "pi-observatory.local", "usb_serial": 12345 } ],
               "storage": { "save_directory": "/home/joey/captures", "note": "see /Users/joey/notes" },
               "guider": { "endpoint": "192.168.1.118:4400", "pulse_ms": 500 }
             }
@@ -43,7 +43,7 @@ namespace OpenAstroAra.Test {
             var node = JsonNode.Parse(BugReportRedactor.RedactProfileJson(Profile, BugReportSharingMode.CoarseGps))!;
             Assert.Multiple(() => {
                 Assert.That(node["site"]!["latitude_deg"]!.GetValue<double>(), Is.EqualTo(30.0));
-                Assert.That(node["site"]!["longitude_deg"]!.GetValue<double>(), Is.EqualTo(-98.0), "away-from-zero rounding, ~111 km");
+                Assert.That(node["site"]!["longitude_deg"]!.GetValue<double>(), Is.EqualTo(-98.0), "nearest whole degree, ~111 km");
                 Assert.That(node["site"]!["elevation_m"]!.GetValue<double>(), Is.EqualTo(0.0));
                 Assert.That(node["notifications"]!["pushover_token"]!.GetValue<string>(), Is.EqualTo("azGDORePK8gMaC0QOYAMyEEuzJnyUi"), "coarse GPS keeps everything else");
                 Assert.That(node["storage"]!["save_directory"]!.GetValue<string>(), Is.EqualTo("/home/joey/captures"));
@@ -62,6 +62,7 @@ namespace OpenAstroAra.Test {
                 Assert.That(node["notifications"]!["telegram_bot_token"]!.GetValue<string>(), Is.EqualTo(""), "an empty secret stays empty: the reader learns it is unset");
                 Assert.That(node["equipment"]![0]!["serial_number"]!.GetValue<string>(), Is.EqualTo(BugReportRedactor.RedactedValue));
                 Assert.That(node["equipment"]![0]!["host_name"]!.GetValue<string>(), Is.EqualTo(BugReportRedactor.RedactedValue));
+                Assert.That(node["equipment"]![0]!["usb_serial"]!.GetValue<string>(), Is.EqualTo(BugReportRedactor.RedactedValue), "a numeric serial is a serial");
                 Assert.That(node["equipment"]![0]!["name"]!.GetValue<string>(), Is.EqualTo("ASI2600MM"), "a model name is diagnostic, not sensitive");
                 Assert.That(node["storage"]!["save_directory"]!.GetValue<string>(), Is.EqualTo("/home/[user]/captures"));
                 Assert.That(node["storage"]!["note"]!.GetValue<string>(), Is.EqualTo("see /Users/[user]/notes"));
@@ -75,6 +76,8 @@ namespace OpenAstroAra.Test {
             var line = "profile at /home/joey/.local/share, C:\\Users\\Joey\\AppData, bridge 192.168.1.118:11111, sim 10.0.0.7, vpn 172.16.4.2, api 8.8.8.8, host pi-observatory.local, sesame cds.unistra.fr";
             var scrubbed = BugReportRedactor.RedactText(line, BugReportSharingMode.Redacted);
             Assert.That(scrubbed, Is.EqualTo("profile at /home/[user]/.local/share, C:\\Users\\[user]\\AppData, bridge [private-ip]:11111, sim [private-ip], vpn [private-ip], api 8.8.8.8, host [host].local, sesame cds.unistra.fr"));
+            // Inside serialized JSON the backslashes are doubled.
+            Assert.That(BugReportRedactor.RedactText("{\"path\":\"C:\\\\Users\\\\Joey\\\\x\"}", BugReportSharingMode.Redacted), Is.EqualTo("{\"path\":\"C:\\\\Users\\\\[user]\\\\x\"}"));
         }
 
         [Test]
