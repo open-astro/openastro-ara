@@ -94,6 +94,43 @@ namespace OpenAstroAra.Test {
             Assert.That(names, Does.Contain("profile.json"));
         }
 
+        private static string ReadEntry(ZipArchive zip, string name) {
+            using var reader = new StreamReader(zip.GetEntry(name)!.Open());
+            return reader.ReadToEnd();
+        }
+
+        [Test]
+        public async Task PrepareAsync_in_redacted_mode_scrubs_the_profile_logs_and_system_info() {
+            // §54.4 — the bundle the user downloads never held the items the mode scrubs.
+            WriteLog("openastroara-20260619.log", "{\"@t\":\"2026-06-19T10:00:00Z\",\"@m\":\"store at /home/joey/captures, bridge 192.168.1.118, mount pi-observatory.local\"}");
+            WriteProfile("{\"site\":{\"latitude_deg\":30.2672,\"longitude_deg\":-97.7431},\"notifications\":{\"pushover_token\":\"secret-value\"}}");
+
+            var prep = await _svc.PrepareAsync(null, CancellationToken.None, BugReportSharingMode.Redacted);
+            Assert.That(prep.SharingMode, Is.EqualTo("redacted"));
+
+            using var zip = await OpenBundleAsync(prep.PreparationId);
+            var logText = ReadEntry(zip, "logs/openastroara-20260619.log");
+            Assert.That(logText, Does.Contain("/home/[user]/captures").And.Contain("[private-ip]").And.Contain("[host].local"));
+            Assert.That(logText, Does.Not.Contain("joey").And.Not.Contain("192.168"));
+
+            var profileText = ReadEntry(zip, "profile.json");
+            Assert.That(profileText, Does.Not.Contain("secret-value").And.Not.Contain("30.2672"));
+            Assert.That(profileText, Does.Contain("[redacted]"));
+
+            var infoText = ReadEntry(zip, "system-info.json");
+            Assert.That(infoText, Does.Contain("\"sharing_mode\": \"redacted\""));
+            Assert.That(infoText, Does.Not.Contain(Environment.UserName + "/"), "the profile_dir path carries no username");
+        }
+
+        [Test]
+        public async Task PrepareAsync_default_mode_is_full_and_says_so() {
+            WriteProfile("{\"site\":{\"latitude_deg\":30.2672}}");
+            var prep = await _svc.PrepareAsync(null, CancellationToken.None);
+            Assert.That(prep.SharingMode, Is.EqualTo("full"));
+            using var zip = await OpenBundleAsync(prep.PreparationId);
+            Assert.That(ReadEntry(zip, "profile.json"), Does.Contain("30.2672"));
+        }
+
         [Test]
         public async Task PrepareAsync_bundles_only_the_newest_logs() {
             // More log files than the cap; only the newest MaxBundledLogs are included.

@@ -35,10 +35,12 @@ class _FakeBugReportClient implements BugReportClient {
   int prepareCalls = 0;
   int downloadCalls = 0;
   String? lastDownloadId;
+  String? lastMode;
 
   @override
-  Future<BugReportPreparation> prepare() async {
+  Future<BugReportPreparation> prepare({String mode = 'full'}) async {
     prepareCalls++;
+    lastMode = mode;
     if (throwOnPrepare) throw Exception('prepare boom');
     return const BugReportPreparation(
       preparationId: 'abc-123',
@@ -93,6 +95,35 @@ void main() {
     await tester.pumpWidget(_host(_FakeBugReportClient()));
     expect(find.text('Send me a bug report'), findsOneWidget);
     expect(find.widgetWithText(FilledButton, 'Prepare & download'), findsOneWidget);
+  });
+
+  testWidgets('the sharing mode is sent to prepare; everything is the default', (tester) async {
+    // §54.3 — the mode is chosen before the bundle is built.
+    final api = _FakeBugReportClient();
+    await tester.pumpWidget(_host(api));
+    expect(find.text('Include everything'), findsOneWidget, reason: 'the spec default');
+
+    // Explicit pumps, as in the test below: the busy spinner animates while the dialog is open.
+    await tester.tap(find.widgetWithText(FilledButton, 'Prepare & download'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(api.lastMode, 'full');
+    await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    await tester.tap(find.byType(DropdownButton<String>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Redact all sensitive items').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Prepare & download'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(api.lastMode, 'redacted');
+    expect(api.prepareCalls, 2);
+    await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
   });
 
   testWidgets('prepare then cancel does not download', (tester) async {

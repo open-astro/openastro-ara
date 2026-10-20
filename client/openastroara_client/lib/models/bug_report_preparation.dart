@@ -8,12 +8,15 @@ class BugReportPreparation {
   final String status;
   final int estimatedSizeBytes;
   final DateTime? completedUtc;
+  // §54.3 — the sharing mode the daemon built the bundle with ('full' on an older daemon).
+  final String sharingMode;
 
   const BugReportPreparation({
     required this.preparationId,
     required this.status,
     required this.estimatedSizeBytes,
     this.completedUtc,
+    this.sharingMode = 'full',
   });
 
   factory BugReportPreparation.fromJson(Map<String, dynamic> json) {
@@ -32,6 +35,7 @@ class BugReportPreparation {
       estimatedSizeBytes: (json['estimated_size_bytes'] as num?)?.toInt() ?? 0,
       completedUtc:
           completed != null ? DateTime.tryParse(completed)?.toUtc() : null,
+          sharingMode: json['sharing_mode'] as String? ?? 'full',
     );
   }
 }

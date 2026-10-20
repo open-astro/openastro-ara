@@ -10,7 +10,11 @@ import 'content_disposition.dart';
 /// driven by a fake in widget tests.
 abstract interface class BugReportClient {
   /// `POST /api/v1/bugreport/prepare` — stage a diagnostic ZIP and describe it.
-  Future<BugReportPreparation> prepare();
+  /// [mode] is the §54.3 sharing mode the daemon builds the bundle with:
+  /// `full` (default), `coarse_gps` (site rounded to ~111 km) or `redacted`
+  /// (coordinates, serials, hostnames, usernames in paths, private IPs and
+  /// tokens scrubbed before the ZIP is written).
+  Future<BugReportPreparation> prepare({String mode = 'full'});
 
   /// `GET /api/v1/bugreport/download?preparationId=…&acknowledge=pii` — stream
   /// the ZIP straight to [savePath], chunk by chunk, never buffering it whole
@@ -39,9 +43,10 @@ class BugReportApi implements BugReportClient {
         ));
 
   @override
-  Future<BugReportPreparation> prepare() async {
+  Future<BugReportPreparation> prepare({String mode = 'full'}) async {
     final res = await _dio.post<Map<String, dynamic>>(
       '/api/v1/bugreport/prepare',
+      data: <String, dynamic>{'mode': mode},
     );
     final data = res.data;
     if (data == null) {

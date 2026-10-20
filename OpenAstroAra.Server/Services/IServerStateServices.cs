@@ -70,7 +70,8 @@ public interface IStatsService {
 
 /// <summary>Bug-report bundle preparation (§54).</summary>
 public interface IBugReportService {
-    Task<BugReportPreparationDto> PrepareAsync(string? idempotencyKey, CancellationToken ct);
+    /// <param name="mode">§54.3 sharing mode applied while the bundle is built (default: everything).</param>
+    Task<BugReportPreparationDto> PrepareAsync(string? idempotencyKey, CancellationToken ct, BugReportSharingMode mode = BugReportSharingMode.Full);
     Task<(Stream Stream, string FileName)?> OpenDownloadAsync(Guid preparationId, CancellationToken ct);
 }
 

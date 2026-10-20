@@ -82,9 +82,19 @@ public static class SystemEndpoints {
 
         // Phase 13.9 — wired to IBugReportService (placeholder).
         bug.MapPost("/prepare",
-                async ([FromHeader(Name = "Idempotency-Key")] string? idempotencyKey, IBugReportService svc, CancellationToken ct) =>
-                    Results.Accepted(value: await svc.PrepareAsync(idempotencyKey, ct)))
+                async ([FromBody] BugReportPrepareRequestDto? request, [FromHeader(Name = "Idempotency-Key")] string? idempotencyKey, IBugReportService svc, CancellationToken ct) => {
+                    // §54.3 — the sharing mode is applied while the bundle is built; an unknown value is a
+                    // client bug, not something to silently build "full" for.
+                    var mode = BugReportRedactor.Parse(request?.Mode);
+                    if (mode is null) {
+                        return Results.Problem($"Unknown bug-report sharing mode '{request?.Mode}'; expected full, coarse_gps or redacted.",
+                            statusCode: StatusCodes.Status400BadRequest);
+                    }
+                    return Results.Accepted(value: await svc.PrepareAsync(idempotencyKey, ct, mode.Value));
+                })
+           .Accepts<BugReportPrepareRequestDto>("application/json")
            .Produces<BugReportPreparationDto>(StatusCodes.Status202Accepted)
+           .ProducesProblem(StatusCodes.Status400BadRequest)
            .WithName("PrepareBugReport");
 
         bug.MapGet("/download",

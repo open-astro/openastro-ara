@@ -76,7 +76,7 @@ public sealed partial class BugReportService : IBugReportService, IDisposable {
     // Registered as a DI singleton, so the container disposes this on host shutdown.
     public void Dispose() => _gate.Dispose();
 
-    public async Task<BugReportPreparationDto> PrepareAsync(string? idempotencyKey, CancellationToken ct) {
+    public async Task<BugReportPreparationDto> PrepareAsync(string? idempotencyKey, CancellationToken ct, BugReportSharingMode mode = BugReportSharingMode.Full) {
         // idempotencyKey is accepted for contract symmetry but NOT enforced (no key→bundle
         // dedup): a retried prepare stages a fresh bundle each time — retention is bounded
         // separately by PruneOldBundles, not by the key. Log it so an operator retrying a
@@ -100,7 +100,7 @@ public sealed partial class BugReportService : IBugReportService, IDisposable {
             // completedUtc, captured after the build, is the accurate "bundle ready" time
             // surfaced to the client as CompletedUtc.
             var createdUtc = DateTimeOffset.UtcNow;
-            sizeBytes = await Task.Run(() => BuildBundleCore(id, createdUtc, ct), ct).ConfigureAwait(false);
+            sizeBytes = await Task.Run(() => BuildBundleCore(id, createdUtc, mode, ct), ct).ConfigureAwait(false);
             completedUtc = DateTimeOffset.UtcNow;
         } finally {
             _gate.Release();
@@ -112,10 +112,11 @@ public sealed partial class BugReportService : IBugReportService, IDisposable {
             Status: "ready",
             EstimatedSizeBytes: sizeBytes,
             DownloadUrl: DownloadUrl(id),
-            CompletedUtc: completedUtc);
+            CompletedUtc: completedUtc,
+            SharingMode: BugReportRedactor.ToWire(mode));
     }
 
-    private long BuildBundleCore(Guid id, DateTimeOffset createdUtc, CancellationToken ct) {
+    private long BuildBundleCore(Guid id, DateTimeOffset createdUtc, BugReportSharingMode mode, CancellationToken ct) {
         ct.ThrowIfCancellationRequested();
         Directory.CreateDirectory(_bugReportsDir);
 
@@ -130,7 +131,7 @@ public sealed partial class BugReportService : IBugReportService, IDisposable {
             using (var archive = new ZipArchive(zipStream, ZipArchiveMode.Create)) {
                 // system-info.json is always present, so the bundle is never empty even
                 // before the daemon has written a log or a profile.
-                WriteTextEntry(archive, "system-info.json", BuildSystemInfoJson(id, createdUtc));
+                WriteTextEntry(archive, "system-info.json", BugReportRedactor.RedactText(BuildSystemInfoJson(id, createdUtc, mode), mode));
 
                 var logsDir = Path.Combine(_profileDir, LogsDirName);
                 if (Directory.Exists(logsDir)) {
@@ -144,13 +145,15 @@ public sealed partial class BugReportService : IBugReportService, IDisposable {
                         ct.ThrowIfCancellationRequested();
                         // A single log that vanished (the rolling sink can delete a retained
                         // file mid-bundle) or is unreadable is skipped, not fatal to the bundle.
-                        TryAddFileEntry(archive, logPath, LogsDirName + "/" + Path.GetFileName(logPath));
+                        TryAddFileEntry(archive, logPath, LogsDirName + "/" + Path.GetFileName(logPath), mode);
                     }
                 }
 
                 var profilePath = Path.Combine(_profileDir, ProfileFileName);
                 if (File.Exists(profilePath)) {
-                    TryAddFileEntry(archive, profilePath, ProfileFileName);
+                    // §54.4 — the profile is scrubbed as JSON (keys decide), never as a byte copy, in any
+                    // mode other than Full.
+                    TryAddProfileEntry(archive, profilePath, mode);
                 }
             }
 
@@ -202,7 +205,7 @@ public sealed partial class BugReportService : IBugReportService, IDisposable {
         }
     }
 
-    private string BuildSystemInfoJson(Guid id, DateTimeOffset createdUtc) {
+    private string BuildSystemInfoJson(Guid id, DateTimeOffset createdUtc, BugReportSharingMode mode) {
         var asm = typeof(BugReportService).Assembly;
         var version = asm.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
             ?? asm.GetName().Version?.ToString()
@@ -215,6 +218,8 @@ public sealed partial class BugReportService : IBugReportService, IDisposable {
             ["os_architecture"] = RuntimeInformation.OSArchitecture.ToString(),
             ["process_architecture"] = RuntimeInformation.ProcessArchitecture.ToString(),
             ["framework"] = RuntimeInformation.FrameworkDescription,
+            // §54.3 — says which sharing mode built this bundle, so a reader knows what was scrubbed.
+            ["sharing_mode"] = BugReportRedactor.ToWire(mode),
             // PII note: the absolute profile path can carry the OS username
             // (e.g. /home/alice/.local/share/openastroara). Kept deliberately — it's
             // useful for "can't find the profile" diagnostics and the user downloads
@@ -233,7 +238,31 @@ public sealed partial class BugReportService : IBugReportService, IDisposable {
     // a symlink, vanished, or unreadable. Symlinks are refused for the same reason backups
     // refuse them — CreateEntryFromFile would follow the link and bundle whatever it points
     // at, possibly outside the profile root.
-    private bool TryAddFileEntry(ZipArchive archive, string sourcePath, string entryName) {
+    // The profile as scrubbed JSON for the mode (a byte copy in Full). Read whole: profile.json is a
+    // few hundred KB at most, and the JSON walk needs the complete document.
+    private bool TryAddProfileEntry(ZipArchive archive, string sourcePath, BugReportSharingMode mode) {
+        if (mode == BugReportSharingMode.Full) {
+            return TryAddFileEntry(archive, sourcePath, ProfileFileName, mode);
+        }
+        try {
+            if ((File.GetAttributes(sourcePath) & FileAttributes.ReparsePoint) != 0) {
+                LogSymlinkSkipped(sourcePath);
+                return false;
+            }
+            string json;
+            using (var source = new FileStream(sourcePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+            using (var reader = new StreamReader(source)) {
+                json = reader.ReadToEnd();
+            }
+            WriteTextEntry(archive, ProfileFileName, BugReportRedactor.RedactProfileJson(json, mode));
+            return true;
+        } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
+            LogEntrySkipped(sourcePath, ex);
+            return false;
+        }
+    }
+
+    private bool TryAddFileEntry(ZipArchive archive, string sourcePath, string entryName, BugReportSharingMode mode) {
         try {
             if ((File.GetAttributes(sourcePath) & FileAttributes.ReparsePoint) != 0) {
                 // Log the skip so an operator who symlinked a log/profile into place isn't
@@ -249,6 +278,16 @@ public sealed partial class BugReportService : IBugReportService, IDisposable {
             using var source = new FileStream(sourcePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
             var entry = archive.CreateEntry(entryName, CompressionLevel.Optimal);
             using var entryStream = entry.Open();
+            if (mode == BugReportSharingMode.Redacted) {
+                // §54.4 — scrub line by line (a log is text; the patterns never span a line) so a
+                // 50 MB log is not held whole in memory.
+                using var reader = new StreamReader(source);
+                using var writer = new StreamWriter(entryStream, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+                while (reader.ReadLine() is { } line) {
+                    writer.WriteLine(BugReportRedactor.RedactText(line, mode));
+                }
+                return true;
+            }
             source.CopyTo(entryStream);
             return true;
         } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {

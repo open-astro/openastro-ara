@@ -105,7 +105,13 @@ public sealed record BugReportPreparationDto(
     string Status,
     long EstimatedSizeBytes,
     Uri? DownloadUrl,
-    DateTimeOffset? CompletedUtc);
+    DateTimeOffset? CompletedUtc,
+    // §54.3 — the sharing mode the bundle was built with: "full" | "coarse_gps" | "redacted".
+    // Optional default keeps the pre-#1185 shape deserializing.
+    string SharingMode = "full");
+
+/// <summary>POST /api/v1/bugreport/prepare body (§54.3): the sharing mode. Absent body or mode = "full".</summary>
+public sealed record BugReportPrepareRequestDto(string? Mode = null);
 
 // ─── Full backup (ZIP / restore) (§43) ──────────────────────────────────────
 

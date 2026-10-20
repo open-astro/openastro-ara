@@ -4730,6 +4730,13 @@ paths:
           in: header
           schema:
             type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - type: 'null'
+                - $ref: '#/components/schemas/BugReportPrepareRequestDto'
       responses:
         '202':
           description: Accepted
@@ -4737,6 +4744,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/BugReportPreparationDto'
+        '400':
+          description: Bad Request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/bugreport/download:
     get:
       tags:
@@ -7488,6 +7501,16 @@ components:
             - 'null'
             - string
           format: date-time
+        sharing_mode:
+          type: string
+          default: full
+    BugReportPrepareRequestDto:
+      type: object
+      properties:
+        mode:
+          type:
+            - 'null'
+            - string
     BuildDarkLibraryRequestDto:
       type: object
       properties:
