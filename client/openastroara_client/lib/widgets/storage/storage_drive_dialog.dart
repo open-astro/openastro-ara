@@ -124,6 +124,9 @@ class _DiskChooserState extends ConsumerState<_DiskChooser> {
         'not_ext4' => 'This disk needs to be erased before ARA can use it.',
         'label_mismatch' =>
           'The disk changed since the list was loaded. Rescan and try again.',
+        'device_busy' when outcome.detail == 'previous_store' =>
+          'The disk frames are saved to now is in use, so ARA can\'t switch '
+              'away from it. Close anything reading it, then try again.',
         'device_busy' =>
           'The disk is in use. Close anything reading it, then try again.',
         'system_disk' || 'refused' =>

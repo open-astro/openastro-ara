@@ -29,11 +29,13 @@
 #
 # Bench overrides (#1248): FSTAB and FSTAB_LOCK point the fstab rebuild at scratch
 # files, and --fstab-entry runs ONLY that rebuild (no device lookup, no mount), so
-# scripts/tests can race six rebuilds against one scratch fstab. sudoers keeps
-# env_reset, so the daemon user cannot steer root's run with either variable.
+# scripts/tests can race six rebuilds against one scratch fstab. ARA_MOUNT_POINT
+# moves the store path so scripts/tests can drive a drive switch against stand-in
+# mount tools. sudoers keeps env_reset (and the unit passes no environment), so the
+# daemon user cannot steer root's run with any of these variables.
 set -eu
 
-MOUNT_POINT=/media/openastroara
+MOUNT_POINT=${ARA_MOUNT_POINT:-/media/openastroara}
 FSTAB=${FSTAB:-/etc/fstab}
 OWNER=${ARA_STORAGE_OWNER:-openastroara}
 # Dev rigs run the daemon as a regular user without the .deb's service
@@ -157,17 +159,42 @@ ensure_fstab_entry() { # $1=uuid $2=fstype
     systemctl daemon-reload 2>/dev/null || true
 }
 
-mount_and_own() { # $1=uuid $2=fstype $3=deep-chown (1 after mkfs, else top-level only)
+# The device mounted on top of the store path; empty when nothing is.
+store_holder() {
+    findmnt -no SOURCE "$MOUNT_POINT" 2>/dev/null | tail -n1 || true
+}
+
+mount_and_own() { # $1=uuid $2=fstype $3=deep-chown (1 after mkfs, else top-level only) $4=device
     uuid=$1
     fstype=$2
     deep=${3:-0}
+    device=$4
     mkdir -p "$MOUNT_POINT"
+    # Switching drives: a different disk still mounted at the store path comes off
+    # BEFORE fstab is repointed. Skipping the mount whenever anything held the path
+    # reported OK while frames kept landing on the previous drive. A busy previous
+    # store refuses with fstab and the mount both untouched.
+    held=$(store_holder)
+    if [ -n "$held" ] && [ "$held" != "$device" ]; then
+        sync
+        if ! umount "$MOUNT_POINT" 2>/dev/null; then
+            echo "ERROR: device_busy previous_store"
+            exit 5
+        fi
+    fi
     ensure_fstab_entry "$uuid" "$fstype"
-    if ! findmnt -no SOURCE "$MOUNT_POINT" >/dev/null 2>&1; then
+    if [ "$(store_holder)" != "$device" ]; then
         if ! mount "$MOUNT_POINT" 2>/dev/null; then
             echo "ERROR: mount_failed"
             exit 8
         fi
+    fi
+    # Whatever is on top of the store path now must be this drive — an older mount
+    # stacked underneath, or a mount that resolved somewhere else, is not the store
+    # the caller asked for.
+    if [ "$(store_holder)" != "$device" ]; then
+        echo "ERROR: mount_failed wrong_device"
+        exit 8
     fi
     # exFAT ownership comes from the mount options above; chown is not a
     # thing there (it would fail with EPERM on every file).
@@ -263,6 +290,12 @@ fi
 if [ "$CHECK" -eq 1 ]; then
     FS=$(value_for "$DEVICE" TYPE)
     case "$FS" in exfat|ext4) ;; *) echo "ERROR: not_ext4 ${FS:-unknown}"; exit 3 ;; esac
+    # Only the store (mounted there now, or named in fstab after an eject) is
+    # remounted afterwards. Remounting any other checked disk would quietly make
+    # it the store, unmounting the real one.
+    WAS_STORE=0
+    [ "$(store_holder)" = "$DEVICE" ] && WAS_STORE=1
+    grep -q "^UUID=${UUID}[[:space:]][[:space:]]*${MOUNT_POINT}[[:space:]]" "$FSTAB" 2>/dev/null && WAS_STORE=1
     # fsck needs the filesystem quiet — unmount, check, remount. A busy
     # mount (something holding files open) refuses rather than forcing.
     if findmnt -no TARGET "$DEVICE" >/dev/null 2>&1; then
@@ -286,7 +319,9 @@ if [ "$CHECK" -eq 1 ]; then
         echo "ERROR: fsck_failed exit=$rc"
         exit 11
     fi
-    mount_and_own "$UUID" "$FS" 0
+    if [ "$WAS_STORE" -eq 1 ]; then
+        mount_and_own "$UUID" "$FS" 0 "$DEVICE"
+    fi
     if [ "$rc" -ge 1 ]; then
         echo "OK $MOUNT_POINT checked repaired"
     else
@@ -373,7 +408,7 @@ if [ "$FORMAT" -eq 1 ]; then
         echo "ERROR: uuid_not_found"
         exit 2
     fi
-    mount_and_own "$UUID" "$NEW_FS" 1
+    mount_and_own "$UUID" "$NEW_FS" 1 "$DEVICE"
     echo "OK $MOUNT_POINT $UUID"
     exit 0
 fi
@@ -396,6 +431,6 @@ if [ -z "$UUID" ]; then
     echo "ERROR: uuid_not_found"
     exit 2
 fi
-mount_and_own "$UUID" "$FS" 0
+mount_and_own "$UUID" "$FS" 0 "$DEVICE"
 echo "OK $MOUNT_POINT"
 exit 0
