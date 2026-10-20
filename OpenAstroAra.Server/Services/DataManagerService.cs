@@ -386,6 +386,9 @@ namespace OpenAstroAra.Server.Services {
                     }
                     probe = parent;
                 }
+                // DriveInfo accepts any existing directory, not only a mount point: on Linux it statvfs()es the path
+                // itself, so there is no need to resolve the mount first (and resolving it would be wrong for bind
+                // mounts inside the service namespace).
                 return new DriveInfo(probe).AvailableFreeSpace;
             } catch (Exception) {
                 return null;

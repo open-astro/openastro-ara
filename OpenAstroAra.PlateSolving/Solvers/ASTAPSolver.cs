@@ -201,7 +201,7 @@ namespace OpenAstroAra.PlateSolving.Solvers {
                 }
             } else if (databaseLocation is not null
                     && System.Threading.Interlocked.CompareExchange(ref databaseMissingWarned, 1, 0) == 0) {
-                Logger.Warning($"Plate solve - ASTAP star database directory '{databaseLocation}' is missing or empty; leaving ASTAP to its default lookup. Download a database into it (see DEPLOY.md) or fix Options → Plate solving.");
+                Logger.Warning($"Plate solve - ASTAP star database directory '{databaseLocation}' is missing or empty; leaving ASTAP to its default lookup. Download a database from Settings → Sky data (it installs there) or fix Options → Plate solving.");
             }
 
             //Field height of image. -fov 0 asks ASTAP to search the scale itself: the staged search's
