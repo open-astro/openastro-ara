@@ -90,6 +90,10 @@ class ProfileApi {
       queryParameters: {
         'guider_profile': deleteGuiderProfile ? 'delete' : 'keep',
       },
+      // The daemon releases and reconnects the guider's equipment inside this
+      // request and allows itself 15 s before it queues the delete instead;
+      // the 5 s default would report a failure for a profile that WAS deleted.
+      options: Options(receiveTimeout: const Duration(seconds: 30)),
     );
     final data = res.data;
     return data is Map<String, dynamic>
