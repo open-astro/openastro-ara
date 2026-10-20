@@ -33,7 +33,7 @@ public sealed class GuidingRestartRecenter : IGuidingRestartRecenter {
 
     public TimeSpan LongGap { get; init; } = GuiderService.DefaultStarLostRecoverAfter;
 
-    internal TimeSpan Timeout { get; init; } = TimeSpan.FromMinutes(10);
+    internal TimeSpan Timeout { get; init; } = GuiderService.DefaultStarLostRecenterTimeout;
 
     public async Task<bool> RecenterAsync(Coordinates target, IProgress<ApplicationStatus>? progress, CancellationToken token) {
         var result = await _recenter.RecenterAsync(target, Timeout, token).ConfigureAwait(false);
