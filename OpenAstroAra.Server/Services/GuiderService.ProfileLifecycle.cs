@@ -243,6 +243,9 @@ public sealed partial class GuiderService {
         await _twinDeleteLock.WaitAsync(ct).ConfigureAwait(false);
         try {
             foreach (var entry in pending) {
+                if (reconnectEquipment && GuiderHeldReason() is not null) {
+                    return; // a run or an alignment started since the tick looked; the next idle tick asks again
+                }
                 // A twin queued as shared goes whatever the live list says (the user chose that); any
                 // other queued name a live profile maps to again was recreated since, and stays.
                 var names = entry.Shared

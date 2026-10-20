@@ -51,7 +51,7 @@ void main() {
     expect(result.guiderProfile, GuiderTwinOutcome.deleted);
     expect(adapter.lastRequest!.queryParameters['guider_profile'], 'delete');
     expect(adapter.lastRequest!.receiveTimeout,
-        greaterThanOrEqualTo(const Duration(seconds: 20)));
+        greaterThanOrEqualTo(const Duration(seconds: 45)));
   });
 
   test('deleteProfile defaults to keep and reads an empty 204 as kept', () async {

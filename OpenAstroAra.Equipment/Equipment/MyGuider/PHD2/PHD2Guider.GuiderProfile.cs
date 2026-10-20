@@ -452,9 +452,12 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                 return new GuiderProfileDeleteResult(GuiderProfileDeleteKind.NotFound, null);
             }
             var state = await GetAppState(EquipmentRpcTimeoutMs).ConfigureAwait(false);
-            if (!IsIdleAppState(state)) {
-                Logger.Info($"PHD2 §63.4 - delete of guider profile '{targets[0].Name}' deferred: the guider is {state}.");
-                return new GuiderProfileDeleteResult(GuiderProfileDeleteKind.Busy, state);
+            // An unanswered get_app_state reads as busy HERE (IsIdleAppState treats null as idle for
+            // the rename path): releasing the equipment of a guider that may be guiding is the one
+            // thing a delete must never do, so an unknown state waits for the next idle pass.
+            if (state is null || !IsIdleAppState(state)) {
+                Logger.Info($"PHD2 §63.4 - delete of guider profile '{targets[0].Name}' deferred: the guider is {state ?? "in an unknown state"}.");
+                return new GuiderProfileDeleteResult(GuiderProfileDeleteKind.Busy, state ?? "unknown");
             }
             var selectedInvolved = targets.Any(t => SelectedProfile?.Id == t.Id);
             var wasConnected = await IsPHD2EquipmentConnectedAsync().ConfigureAwait(false);

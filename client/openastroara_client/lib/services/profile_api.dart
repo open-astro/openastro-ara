@@ -91,9 +91,11 @@ class ProfileApi {
         'guider_profile': deleteGuiderProfile ? 'delete' : 'keep',
       },
       // The daemon releases and reconnects the guider's equipment inside this
-      // request and allows itself 15 s before it queues the delete instead;
-      // the 5 s default would report a failure for a profile that WAS deleted.
-      options: Options(receiveTimeout: const Duration(seconds: 30)),
+      // request: 15 s before it queues the delete instead, plus the recovery
+      // steps (profile refresh, twin re-ensure, reconnect) which run to the end
+      // on their own 15 s RPC bounds. The 5 s default reported a failure for
+      // a profile that WAS deleted; a minute covers the slow-daemon case.
+      options: Options(receiveTimeout: const Duration(seconds: 60)),
     );
     final data = res.data;
     return data is Map<String, dynamic>

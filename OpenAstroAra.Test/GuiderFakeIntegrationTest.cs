@@ -1796,6 +1796,26 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task An_unanswered_app_state_reads_as_busy_for_a_delete() {
+            // IsIdleAppState(null) is true for the rename path; a delete must not release the
+            // equipment of a guider whose state it could not read.
+            await using var fake = FakeGuider.Start();
+            var daemon = new ProfileDaemon(fake);
+            daemon.Profiles.Add((2, "Old Rig"));
+            using var q = new TempTwinStore();
+            using var svc = NewTwinService(q.Store, () => (Guid.NewGuid(), "Rig A"));
+            await ConnectAsync(svc, fake).ConfigureAwait(false);
+            fake.OnRpc("get_app_state", _ => throw new InvalidOperationException("no app state for you"));
+            daemon.SetConnected.Clear();
+
+            var outcome = await svc.DeleteAraGuiderProfileAsync("Old Rig", Guid.NewGuid(), true, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(outcome.Status, Is.EqualTo(GuiderTwinDeleteStatus.Queued));
+            Assert.That(daemon.SetConnected, Is.Empty);
+            Assert.That(daemon.Deleted, Is.Empty);
+        }
+
+        [Test]
         public async Task A_delete_with_no_guider_connected_is_queued() {
             using var q = new TempTwinStore();
             using var svc = NewTwinService(q.Store, () => (Guid.NewGuid(), "Rig A"));
