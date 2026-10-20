@@ -165,8 +165,10 @@ namespace OpenAstroAra.Server.Services {
         /// <summary>#1136 — whether a redirect from <paramref name="from"/> to <paramref name="location"/> may be
         /// followed. The HttpClient has AllowAutoRedirect off (an HTTPS→HTTP downgrade would otherwise serve the
         /// body in cleartext), so redirects are re-validated here: absolute, https, and on a host we publish from
-        /// (github.com and its *.githubusercontent.com asset store — GitHub release assets 302 there). Anything
-        /// else is refused rather than followed, which keeps the raw-URL catalog entries exactly as strict as before.</summary>
+        /// (github.com and the two hosts GitHub serves release assets from). Not the whole *.githubusercontent.com
+        /// family: raw. and gist. there carry any user's content, and a catalog entry without a digest pin would
+        /// then trust it. Anything else is refused rather than followed, which keeps the raw-URL catalog entries
+        /// exactly as strict as before.</summary>
         internal static bool IsTrustedRedirect(Uri from, Uri? location) {
             if (location is null || !location.IsAbsoluteUri) {
                 return false;
@@ -179,7 +181,8 @@ namespace OpenAstroAra.Server.Services {
             }
             var host = location.Host;
             return string.Equals(host, "github.com", StringComparison.OrdinalIgnoreCase)
-                || host.EndsWith(".githubusercontent.com", StringComparison.OrdinalIgnoreCase);
+                || string.Equals(host, "release-assets.githubusercontent.com", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(host, "objects.githubusercontent.com", StringComparison.OrdinalIgnoreCase);
         }
 
         private static bool IsRedirect(System.Net.HttpStatusCode status) => status is

@@ -192,6 +192,8 @@ namespace OpenAstroAra.Test {
         [TestCase("http://objects.githubusercontent.com/x", false)]           // downgrade
         [TestCase("https://evil.example/x.tar.gz", false)]                    // another host
         [TestCase("https://githubusercontent.com.evil.example/x", false)]     // suffix trick
+        [TestCase("https://raw.githubusercontent.com/someone/repo/main/x", false)]  // user-hostable, not an asset store
+        [TestCase("https://gist.githubusercontent.com/someone/x", false)]
         [TestCase("https://notgithub.com/x", false)]
         public void Only_https_redirects_to_github_hosts_are_trusted(string location, bool trusted) {
             Assert.That(HttpSkyDataFetcher.IsTrustedRedirect(Source, new Uri(location)), Is.EqualTo(trusted));

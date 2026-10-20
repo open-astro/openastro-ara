@@ -94,7 +94,7 @@ namespace OpenAstroAra.Test {
             Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.InsufficientStorage));
             using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync());
             var detail = doc.RootElement.GetProperty("detail").GetString();
-            Assert.That(detail, Does.Contain("astap-d80").And.Contain("1.6 GB").And.Contain("0.3 GB"), "the client shows this text as-is");
+            Assert.That(detail, Does.Contain("astap-d80").And.Contain("1.7 GB").And.Contain("0.3 GB"), "the client shows this text as-is");
         }
 
         [Test]

@@ -201,7 +201,7 @@ namespace OpenAstroAra.Server.Services {
                 Recommended: false),
             // #1136 — the ASTAP plate-solver star databases (§18.I/§36). Flat tar.gz repacks of Han Kleijn's
             // SourceForge .debs, hosted as release assets on open-astro/sky-data (release astap-2026.10; the
-            // README there has provenance + the ESA/Gaia credit). Release assets 302 to objects.githubusercontent.com,
+            // README there has provenance + the ESA/Gaia credit). Release assets 302 to release-assets.githubusercontent.com,
             // which HttpSkyDataFetcher now follows (IsTrustedRedirect) — raw URLs cap a file at 100 MB, so the
             // 1.3 GB D80 cannot be served the way the catalogs above are. These install under the profile's
             // solver index path (Options → Plate solving), one subdirectory per package, where ASTAPSolver and
@@ -364,10 +364,11 @@ namespace OpenAstroAra.Server.Services {
 
         public Task<IReadOnlyList<DataPackageDto>> ListPackagesAsync(CancellationToken ct) {
             var packages = new List<DataPackageDto>(_catalog.Count);
-            // One optics read per listing, not per package.
+            // One optics read and one solver-root read per listing, not per package.
             var fov = _fieldOfViewDeg();
+            var solverRoot = _solverDataRoot();
             foreach (var pkg in _catalog) {
-                packages.Add(Describe(pkg, fov));
+                packages.Add(Describe(pkg, fov, solverRoot));
             }
             return Task.FromResult<IReadOnlyList<DataPackageDto>>(packages);
         }
@@ -398,8 +399,9 @@ namespace OpenAstroAra.Server.Services {
         public Task<DataManagerStateDto> GetStateAsync(CancellationToken ct) {
             var installed = 0;
             long total = 0;
+            var solverRoot = _solverDataRoot();
             foreach (var pkg in _catalog) {
-                var dir = PackageDir(pkg.Id);
+                var dir = PackageDir(pkg.Id, solverRoot);
                 if (dir is not null && ReadInstall(dir) is { } info) {
                     installed++;
                     total += info.Size;
@@ -829,12 +831,12 @@ namespace OpenAstroAra.Server.Services {
         // Reflect the on-disk state of a catalog package. A package is "installed" only when §36-2a's .installed
         // sentinel is present (a bare dir from a torn/interrupted install reads as not-installed); InstalledUtc comes
         // from the sentinel's write time (the install-complete stamp), not the dir mtime which moves on any child write.
-        private DataPackageDto Describe(DataPackageDto pkg, double? fieldOfViewDeg) {
+        private DataPackageDto Describe(DataPackageDto pkg, double? fieldOfViewDeg, string? solverRoot) {
             // #1136 — a solver database's Recommended flag follows the rig's field of view, not the curated default.
             if (IsSolverPackage(pkg)) {
                 pkg = pkg with { Recommended = RecommendedSolverPackage(pkg, fieldOfViewDeg) };
             }
-            var dir = PackageDir(pkg.Id);
+            var dir = PackageDir(pkg.Id, solverRoot);
             if (dir is null || ReadInstall(dir) is not { } info) {
                 return pkg with { IsInstalled = false, InstalledUtc = null };
             }
@@ -846,15 +848,21 @@ namespace OpenAstroAra.Server.Services {
         // profile's solver index path instead (where astap_cli's -d points; AstapStarDatabase reads one level of
         // subdirectories). A blank path means the .deb's default directory, the same rule the solver side applies
         // (SolverPathMigration.EffectiveIndexPath) — never the sky-data root, where no solve would ever look.
-        private string? PackageDir(string packageId) =>
-            _catalogById.TryGetValue(packageId, out var pkg) ? Path.Combine(RootFor(pkg), packageId) : null;
+        private string? PackageDir(string packageId) => PackageDir(packageId, _solverDataRoot());
+
+        // The solver root passed in: a listing reads the profile once and hands the same value to every package,
+        // so a path change mid-listing cannot produce a mixed inventory.
+        private string? PackageDir(string packageId, string? solverRoot) =>
+            _catalogById.TryGetValue(packageId, out var pkg) ? Path.Combine(RootFor(pkg, solverRoot), packageId) : null;
 
         /// <summary>The directory a package installs under (tests).</summary>
         internal string InstallRootFor(string packageId) =>
             _catalogById.TryGetValue(packageId, out var pkg) ? RootFor(pkg) : throw new KeyNotFoundException(packageId);
 
-        private string RootFor(DataPackageDto pkg) =>
-            IsSolverPackage(pkg) ? SolverPathMigration.EffectiveIndexPath(_solverDataRoot()) : _dataRoot;
+        private string RootFor(DataPackageDto pkg) => RootFor(pkg, _solverDataRoot());
+
+        private string RootFor(DataPackageDto pkg, string? solverRoot) =>
+            IsSolverPackage(pkg) ? SolverPathMigration.EffectiveIndexPath(solverRoot) : _dataRoot;
 
         // A package counts as installed once §36-2a's .installed sentinel is present (a bare dir from a torn install
         // does not). Used by the ForceReinstall skip.
@@ -1143,7 +1151,9 @@ namespace OpenAstroAra.Server.Services {
         public InsufficientDiskSpaceException(string message) : base(message) { }
         public InsufficientDiskSpaceException(string message, Exception innerException) : base(message, innerException) { }
         public InsufficientDiskSpaceException(string packageId, long neededBytes, long freeBytes)
-            : base($"Not enough disk space for '{packageId}': it needs about {neededBytes / (1024.0 * 1024 * 1024):0.0} GB free and the volume has {freeBytes / (1024.0 * 1024 * 1024):0.0} GB.") {
+            // Decimal GB, the unit DEPLOY.md and the USER_GUIDE quote ("about 1.7 GB"), so the daemon's figure
+            // matches the docs rather than reading 0.1 lower in GiB.
+            : base($"Not enough disk space for '{packageId}': it needs about {neededBytes / 1e9:0.0} GB free and the volume has {freeBytes / 1e9:0.0} GB.") {
             NeededBytes = neededBytes;
             FreeBytes = freeBytes;
         }

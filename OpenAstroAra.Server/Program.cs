@@ -611,7 +611,7 @@ public partial class Program {
             // Don't auto-follow redirects: the HTTPS scheme guard only checks the initial URL, so a CDN
             // HTTPS→HTTP downgrade redirect would otherwise serve the body in cleartext. The fetcher follows a
             // redirect itself only after re-validating it (HttpSkyDataFetcher.IsTrustedRedirect: https, on
-            // github.com / *.githubusercontent.com — the #1136 release assets 302 there); anything else fails.
+            // github.com and GitHub's two release-asset hosts — the #1136 assets 302 there); anything else fails.
             .ConfigurePrimaryHttpMessageHandler(() => new System.Net.Http.SocketsHttpHandler { AllowAutoRedirect = false });
         builder.Services.AddSingleton<ISkyDataFetcher, HttpSkyDataFetcher>();
         // §63.20 / #1067 — the wizard's Alpaca device-name lookup, proxied through the daemon.
