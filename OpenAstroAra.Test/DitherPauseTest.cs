@@ -14,6 +14,7 @@
 
 using Moq;
 using NUnit.Framework;
+using OpenAstroAra.Astrometry;
 using OpenAstroAra.Core.Model;
 using OpenAstroAra.Equipment.Equipment.MyGuider;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
@@ -24,6 +25,7 @@ using OpenAstroAra.Sequencer.SequenceItem;
 using OpenAstroAra.Sequencer.SequenceItem.Guider;
 using OpenAstroAra.Sequencer.Trigger.Guider;
 using OpenAstroAra.Sequencer.Utility;
+using OpenAstroAra.Server.Services;
 using System;
 using System.Collections.Generic;
 using System.Threading;
@@ -307,6 +309,84 @@ namespace OpenAstroAra.Test {
             var item = new Dither(guider.Object, Mock.Of<IProfileService>());
 
             await Assert.ThrowsAsync<SequenceEntityFailedException>(() => item.Execute(NoProgress, CancellationToken.None));
+        }
+
+        // ── §42.2 a restart after a long guiding gap re-centers first ─────────────────────────────
+
+        private static readonly Coordinates Target = new(ra: 83.8, dec: -5.4, Epoch.J2000, Coordinates.RAType.Degrees);
+        private static readonly string[] RecenterThenStart = ["recenter", "start"];
+        private static readonly string[] StartOnly = ["start"];
+
+        /// <summary>A Dither inside a real target container (RetrieveContextCoordinates walks up to it),
+        /// with a restart re-center that records its calls.</summary>
+        private static (Dither Item, PauseGate Gate, List<string> Calls) TargetRig(Mock<IGuiderMediator> guider, bool recenterSucceeds = true) {
+            var calls = new List<string>();
+            var recenter = new Mock<IGuidingRestartRecenter>();
+            recenter.SetupGet(r => r.LongGap).Returns(TimeSpan.FromMinutes(3));
+            recenter.Setup(r => r.RecenterAsync(It.IsAny<Coordinates>(), It.IsAny<IProgress<ApplicationStatus>?>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(() => { calls.Add("recenter"); return recenterSucceeds; });
+            guider.Setup(g => g.StartGuiding(false, It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(() => { calls.Add("start"); return true; });
+            var gate = new PauseGate();
+            var root = new SequenceRootContainer { PauseGate = gate };
+            var dso = new DeepSkyObjectContainer(new HeadlessProfileService()) { Name = "Target" };
+            dso.Target.InputCoordinates = new InputCoordinates(Target);
+            dso.Target.DeepSkyObject = new DeepSkyObject("Target", Target, null);
+            dso.AttachNewParent(root);
+            var item = new Dither(guider.Object, Mock.Of<IProfileService>(), recenter.Object);
+            item.AttachNewParent(dso);
+            return (item, gate, calls);
+        }
+
+        [Test]
+        public async Task A_restart_after_a_long_guiding_gap_re_centers_the_target_first() {
+            var (guider, dithers) = Guider(connected: true, "refused", null);
+            guider.SetupGet(g => g.GuidingStoppedUtc).Returns(DateTimeOffset.UtcNow.AddMinutes(-20));
+            var (item, gate, calls) = TargetRig(guider);
+            string? status = null;
+
+            await item.Execute(new SyncProgress(s => status = s.Status), CancellationToken.None);
+
+            Assert.That(calls, Is.EqualTo(RecenterThenStart), "plate solve and re-center, then guiding, then the dither");
+            Assert.That(dithers, Has.Count.EqualTo(2));
+            Assert.That(gate.IsPauseRequested, Is.False);
+        }
+
+        [Test]
+        public async Task A_restart_after_a_short_gap_keeps_the_plain_restart() {
+            var (guider, dithers) = Guider(connected: true, "refused", null);
+            guider.SetupGet(g => g.GuidingStoppedUtc).Returns(DateTimeOffset.UtcNow.AddSeconds(-40));
+            var (item, _, calls) = TargetRig(guider);
+
+            await item.Execute(new SyncProgress(_ => { }), CancellationToken.None);
+
+            Assert.That(calls, Is.EqualTo(StartOnly), "a slew's stop or a brief loss is no reason to re-center");
+            Assert.That(dithers, Has.Count.EqualTo(2));
+        }
+
+        [Test]
+        public async Task A_re_center_that_fails_still_restarts_guiding_and_carries_on() {
+            var (guider, dithers) = Guider(connected: true, "refused", null);
+            guider.SetupGet(g => g.GuidingStoppedUtc).Returns(DateTimeOffset.UtcNow.AddMinutes(-20));
+            var (item, gate, calls) = TargetRig(guider, recenterSucceeds: false);
+
+            await item.Execute(new SyncProgress(_ => { }), CancellationToken.None);
+
+            Assert.That(calls, Is.EqualTo(RecenterThenStart));
+            Assert.That(dithers, Has.Count.EqualTo(2), "guiding where the mount points beats a parked run");
+            Assert.That(gate.IsPauseRequested, Is.False);
+        }
+
+        [Test]
+        public async Task Without_a_guiding_stopped_time_no_re_center_runs() {
+            var (guider, dithers) = Guider(connected: true, "refused", null);
+            guider.SetupGet(g => g.GuidingStoppedUtc).Returns((DateTimeOffset?) null);
+            var (item, _, calls) = TargetRig(guider);
+
+            await item.Execute(new SyncProgress(_ => { }), CancellationToken.None);
+
+            Assert.That(calls, Is.EqualTo(StartOnly));
+            Assert.That(dithers, Has.Count.EqualTo(2));
         }
     }
 }

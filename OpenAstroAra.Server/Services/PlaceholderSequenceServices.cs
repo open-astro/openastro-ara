@@ -194,6 +194,9 @@ public sealed class PlaceholderSequencerService : ISequencerService {
     public Task<SequenceLiveEditResult> MoveRunItemAsync(Guid id, SequenceRunItemMoveRequestDto request, string? idempotencyKey, CancellationToken ct) =>
         Task.FromResult(new SequenceLiveEditResult(SequenceLiveEditOutcome.RunNotMutable, "placeholder runs carry no editable plan tree"));
 
+    public Task<IReadOnlyList<Guid>> DaemonPausedRunsAsync(IReadOnlyCollection<Guid> ids, CancellationToken ct) =>
+        Task.FromResult<IReadOnlyList<Guid>>(Array.Empty<Guid>());
+
     public Task<int> ResumeRunsAsync(IReadOnlyCollection<Guid> ids, CancellationToken ct) {
         var resumed = 0;
         foreach (var id in ids) {

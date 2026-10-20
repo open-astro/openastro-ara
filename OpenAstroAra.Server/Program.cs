@@ -448,6 +448,11 @@ public partial class Program {
             };
             // #1311 — the polar alignment residual from guiding: logged with the running imaging
             // session, compared with tonight's Polar Align result, stamped with where the mount pointed.
+            // §42.2 long star loss — the recovery re-centers through the ONE shared TargetRecenter and
+            // defers to the safety engine while it holds the rig (resolved lazily: the safety engine
+            // takes this guider to construct).
+            guider.Recenter = sp.GetService<TargetRecenter>();
+            guider.SafetyHoldsRig = () => sp.GetService<SafetyReactionService>()?.IsHoldingRig == true;
             guider.PaResidualLog = sp.GetService<IPaResidualLog>();
             guider.PolarAlignmentLog = sp.GetService<IPolarAlignmentLog>();
             guider.ActiveRunSession = () => sp.GetService<ActiveRunSessionRegistry>()?.Current;
@@ -925,6 +930,12 @@ public partial class Program {
         // safe→unsafe transition executes the profile's on_unsafe policy (pause/abort
         // + stop guiding + park), with the auto-resume-when-safe countdown. The
         // sequencer resolver breaks the construction cycle (same pattern as §58.12).
+        // The ONE plate-solve-and-re-center used by the §35 auto-resume, the §38.10 resume refinement,
+        // the §42.2 star-lost recovery and a dither restart after a long gap.
+        builder.Services.AddSingleton(sp => new TargetRecenter(
+            () => sp.GetService<ICenteringService>(),
+            sp.GetService<IProfileStore>(),
+            sp.GetService<ILogger<TargetRecenter>>()));
         builder.Services.AddSingleton<SafetyReactionService>(sp =>
             new SafetyReactionService(
                 sp.GetService<ISafetyMonitorService>(),
@@ -938,7 +949,8 @@ public partial class Program {
                 sp.GetService<ILogger<SafetyReactionService>>(),
                 // §35 auto-resume pointing — resolver (not a direct dep) for the same
                 // construction-cycle reason as the sequencer.
-                () => sp.GetService<ICenteringService>()));
+                () => sp.GetService<ICenteringService>(),
+                sp.GetService<TargetRecenter>()));
         // Hosted so the poll timer starts with the daemon and a shutdown cancels a
         // pending auto-resume countdown.
         builder.Services.AddHostedService(sp => sp.GetRequiredService<SafetyReactionService>());
@@ -1144,7 +1156,9 @@ public partial class Program {
                 trackingProbeExecutor: sp.GetRequiredService<OpenAstroAra.Sequencer.SequenceItem.Telescope.ITrackingProbeExecutor>(),
                 frameQualityFeed: sp.GetRequiredService<FrameQualityFeed>(),
                 // #1195 — the saved-light solve feed behind the Center After Drift trigger.
-                frameSolveFeed: sp.GetRequiredService<FrameSolveFeed>()));
+                frameSolveFeed: sp.GetRequiredService<FrameSolveFeed>(),
+                // §42.2 — a Dither that restarts guiding after a long gap re-centers the target first.
+                guidingRestartRecenter: new GuidingRestartRecenter(sp.GetRequiredService<TargetRecenter>())));
         // The by-hand rotation readout (the Plan screen's "Rotate camera" panel on a rig without a rotator):
         // the centering service's solver stack as the protractor, the profile's rotation tolerance as "done",
         // the profile's plate-solve exposure as the default exposure.

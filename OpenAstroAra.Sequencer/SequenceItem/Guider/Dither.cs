@@ -18,6 +18,7 @@ using OpenAstroAra.Core.Model;
 using OpenAstroAra.Core.Utility;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Profile.Interfaces;
+using OpenAstroAra.Sequencer.Interfaces;
 using OpenAstroAra.Sequencer.Utility;
 using OpenAstroAra.Sequencer.Validations;
 using System;
@@ -34,13 +35,15 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Guider {
     public class Dither : SequenceItem, IValidatable, IEstimatesOwnDuration {
         private readonly IGuiderMediator guiderMediator;
         private readonly IProfileService profileService;
+        private readonly IGuidingRestartRecenter? restartRecenter;
 
-        public Dither(IGuiderMediator guiderMediator, IProfileService profileService) {
+        public Dither(IGuiderMediator guiderMediator, IProfileService profileService, IGuidingRestartRecenter? restartRecenter = null) {
             this.guiderMediator = guiderMediator;
             this.profileService = profileService;
+            this.restartRecenter = restartRecenter;
         }
 
-        private Dither(Dither cloneMe) : this(cloneMe.guiderMediator, cloneMe.profileService) {
+        private Dither(Dither cloneMe) : this(cloneMe.guiderMediator, cloneMe.profileService, cloneMe.restartRecenter) {
             CopyMetaData(cloneMe);
         }
 
@@ -100,6 +103,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Guider {
                     // 2-frame star loss and a Planning GoTo each parked the run, and every Resume parked
                     // it again within 2 ms because guiding had to be restarted by hand first.
                     restartTried = true;
+                    await RecenterAfterLongGapAsync(progress, token);
                     Logger.Warning("Dither: the guider is not guiding — restarting guiding before the dither");
                     progress?.Report(new ApplicationStatus { Status = "Guider is not guiding — restarting guiding, then dithering" });
                     var (restarted, fault) = await TryRestartGuidingAsync(progress, token);
@@ -141,6 +145,32 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Guider {
             } catch (Exception ex) {
                 Logger.Warning($"Dither: restarting guiding failed — {ex.Message}");
                 return (false, string.IsNullOrWhiteSpace(ex.Message) ? ex.GetType().Name : ex.Message);
+            }
+        }
+
+        /// <summary>§42.2 — guiding that has been off for a long gap left the mount drifting on tracking
+        /// alone; restarting on the guider's own star pick would lock that framing in, so the target is
+        /// re-centered by plate solve first. A short gap (a slew's stop, a brief star loss) keeps the
+        /// plain restart; a failed re-center is logged and the restart goes ahead regardless.</summary>
+        private async Task RecenterAfterLongGapAsync(IProgress<ApplicationStatus>? progress, CancellationToken token) {
+            if (restartRecenter is null || guiderMediator.GuidingStoppedUtc is not { } stoppedUtc) {
+                return;
+            }
+            var gap = DateTimeOffset.UtcNow - stoppedUtc;
+            if (gap < restartRecenter.LongGap) {
+                return;
+            }
+            var target = ItemUtility.RetrieveContextCoordinates(this.Parent)?.Coordinates;
+            if (target is null) {
+                return;
+            }
+            var minutes = Math.Max(1, (int) Math.Round(gap.TotalMinutes));
+            Logger.Warning($"Dither: guiding stopped {minutes} min ago — re-centering the target before restarting guiding");
+            progress?.Report(new ApplicationStatus { Status = $"Guiding stopped {minutes} min ago — re-centering before restarting guiding" });
+            var recentered = await restartRecenter.RecenterAsync(target, progress, token);
+            token.ThrowIfCancellationRequested();
+            if (!recentered) {
+                Logger.Warning("Dither: the re-center did not go through — restarting guiding where the mount points");
             }
         }
 

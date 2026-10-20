@@ -193,6 +193,14 @@ public sealed partial class GuiderService : IGuiderMediator {
     [LoggerMessage(Level = LogLevel.Warning, Message = "Releasing the guide camera before guiding failed — trying to guide anyway")]
     partial void LogGuideCameraReleaseFailed(Exception ex);
 
+    public DateTimeOffset? GuidingStoppedUtc {
+        get {
+            lock (_gate) {
+                return _guidingStoppedUtc;
+            }
+        }
+    }
+
     public Task<bool> StopGuiding(CancellationToken token) =>
         MediatorGuider()?.StopGuiding(token) ?? Task.FromResult(false);
 

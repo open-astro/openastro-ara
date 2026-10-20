@@ -199,6 +199,9 @@ public sealed partial class GuiderService {
                             lock (_gate) {
                                 if (_starLostReacted) {
                                     _starLostPausedRuns = paused;
+                                    // The long-outage half: after StarLostRecoverAfter the guider's own
+                                    // frames are asked whether the clouds have gone.
+                                    ArmStarLostRecoveryLocked(StarLostRecoverAfter);
                                 } else {
                                     starBackAlready = true;
                                 }

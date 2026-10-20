@@ -193,7 +193,8 @@ public sealed class HeadlessSequencerFactory : ISequencerFactory {
             IFlatCaptureExecutor? flatCaptureExecutor = null,
             OpenAstroAra.Sequencer.SequenceItem.Telescope.ITrackingProbeExecutor? trackingProbeExecutor = null,
             OpenAstroAra.Sequencer.Interfaces.IFrameQualityFeed? frameQualityFeed = null,
-            OpenAstroAra.Sequencer.Interfaces.IFrameSolveFeed? frameSolveFeed = null) {
+            OpenAstroAra.Sequencer.Interfaces.IFrameSolveFeed? frameSolveFeed = null,
+            OpenAstroAra.Sequencer.Interfaces.IGuidingRestartRecenter? guidingRestartRecenter = null) {
         // §38k-9 … §38k-22 — equipment-mediator stubs default to no-op headless
         // impls so call sites that don't yet have real Alpaca-backed mediators
         // still get a usable prototype set. As real drivers land (§14e Alpaca
@@ -291,7 +292,8 @@ public sealed class HeadlessSequencerFactory : ISequencerFactory {
                 new StopGuiding(guiderMediator),
                 // §38k-22 — Dither additionally needs IProfileService (settings);
                 // satisfied by the HeadlessProfileService stub.
-                new Dither(guiderMediator, profileService),
+                // §42.2 — a restart after a long guiding gap re-centers the target first.
+                new Dither(guiderMediator, profileService, guidingRestartRecenter),
                 // §38k-16 — rotator instruction. MoveRotatorMechanical depends
                 // only on IRotatorMediator.
                 new MoveRotatorMechanical(rotatorMediator),

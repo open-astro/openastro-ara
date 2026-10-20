@@ -494,6 +494,17 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         return Task.FromResult(resumed);
     }
 
+    public Task<IReadOnlyList<Guid>> DaemonPausedRunsAsync(IReadOnlyCollection<Guid> ids, CancellationToken ct) {
+        ct.ThrowIfCancellationRequested();
+        var held = new List<Guid>();
+        foreach (var id in ids) {
+            if (_runs.TryGetValue(id, out var run) && run.DaemonPaused && run.State == SequenceRunState.Paused) {
+                held.Add(id);
+            }
+        }
+        return Task.FromResult<IReadOnlyList<Guid>>(held);
+    }
+
     public Task<int> SkipActiveRunsAsync(CancellationToken ct) {
         // §42.2 skip_target — daemon-automated (no NotifyUserActivity). Mirrors
         // SkipAsync's semantics per run: cancel the currently-running items so

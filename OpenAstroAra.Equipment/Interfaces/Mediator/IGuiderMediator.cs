@@ -36,6 +36,11 @@ namespace OpenAstroAra.Equipment.Interfaces.Mediator {
         /// (2026-10-16: two settle timeouts, two trailed frames).</summary>
         string? LastDitherError { get; }
 
+        /// <summary>When the guider last reported guiding stopped (its <c>guiding_stopped</c> marker),
+        /// null while it is guiding or never has. A Dither that must restart guiding reads it: a long
+        /// gap means the mount drifted on tracking alone and the target is re-centered first.</summary>
+        DateTimeOffset? GuidingStoppedUtc { get; }
+
         Guid StartRMSRecording();
 
         RMS GetRMSRecording(Guid handle);

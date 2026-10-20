@@ -42,6 +42,11 @@ public sealed partial class SequencerService {
 
     private readonly Func<ICenteringService?>? _centeringResolver;
     private readonly Func<IAutofocusExecutor?>? _autofocusResolver;
+    private TargetRecenter? _recenter;
+
+    /// <summary>The shared re-center (horizon guard + bounded CenterOnTarget), built lazily over
+    /// the resolver so a test's resolver swap is honoured.</summary>
+    private TargetRecenter Recenter => _recenter ??= new TargetRecenter(() => _centeringResolver?.Invoke(), _profileStore);
 
     /// <summary>Bound on the pre-release re-center (mirrors §35's RecenterTimeout);
     /// internal-settable so tests can trip the timeout quickly.</summary>
@@ -109,53 +114,42 @@ public sealed partial class SequencerService {
             }
             await EmitResumeRecenteringAsync(id, run, recenter, refocus);
 
-            // §38.10a altitude guard — during a long pause the target may have
-            // sunk below the horizon limit; re-centering (and refocusing) on it
-            // would waste minutes of rig time on a target the plan's altitude
-            // conditions are about to abandon. Unknown altitude (no profile,
-            // math fault) proceeds with the refinement — the guard only ever
-            // SKIPS work, never blocks a resume.
-            var tooLow = TryGetTargetBelowHorizon(target);
-            if (tooLow is { } low) {
+            // §38.10a altitude guard + bounded re-center, through the ONE shared TargetRecenter
+            // (also the §35 safety auto-resume's and the §42.2 star-lost recovery's). During a long
+            // pause the target may have sunk below the horizon limit; re-centering (and refocusing)
+            // on it would waste minutes of rig time on a target the plan's altitude conditions are
+            // about to abandon. Unknown altitude proceeds — the guard only ever SKIPS work.
+            var coords = target.Target?.InputCoordinates?.Coordinates;
+            if (coords is not null && Recenter.TargetBelowHorizon(coords) is { } low) {
                 LogResumeTargetTooLow(id, low.AltitudeDeg, low.LimitDeg);
                 await NotifyTargetTooLowAsync(low.AltitudeDeg, low.LimitDeg, recenter, refocus).ConfigureAwait(false);
                 return; // finally releases the gate; the plan's conditions decide what's next
             }
 
-            if (recenter) {
-                // Resolver + coordinate reads live INSIDE the guarded region too
-                // (review #873): a throw here must still reach the outcome
-                // notification below, never fault the discarded Task.Run.
-                ICenteringService? centering = null;
-                OpenAstroAra.Astrometry.Coordinates? coords = null;
-                try {
-                    centering = _centeringResolver?.Invoke();
-                    coords = target.Target?.InputCoordinates?.Coordinates;
-                } catch (Exception ex) {
-                    LogResumeRecenterFailed(ex, id);
-                    centeringOutcome = "failed";
-                }
-                if (centeringOutcome == "failed" || centering is null || coords is null) {
-                    centeringOutcome = centeringOutcome == "failed" ? "failed" : "skipped";
-                } else {
-                    using var bounded = CancellationTokenSource.CreateLinkedTokenSource(runToken);
-                    bounded.CancelAfter(ResumeRecenterTimeout);
-                    try {
-                        LogResumeRecenterStarted(id);
-                        var result = await centering.CenterOnTarget(coords, solveProgress: null, progress: null, bounded.Token).ConfigureAwait(false);
-                        centeringOutcome = result?.Success == true ? "recentered" : "failed";
-                    } catch (OperationCanceledException) when (runToken.IsCancellationRequested) {
+            if (recenter && coords is not null) {
+                LogResumeRecenterStarted(id);
+                var result = await Recenter.RecenterAsync(coords, ResumeRecenterTimeout, runToken).ConfigureAwait(false);
+                switch (result.Outcome) {
+                    case TargetRecenterOutcome.Cancelled:
                         return; // abort/stop — the finally still releases the gate
-                    } catch (OperationCanceledException) {
+                    case TargetRecenterOutcome.Recentered:
+                        centeringOutcome = "recentered";
+                        break;
+                    case TargetRecenterOutcome.Timeout:
                         LogResumeRecenterTimedOut(id);
                         centeringOutcome = "timeout";
-                    } catch (PlateSolverConfigurationException ex) {
-                        LogResumeRecenterUnconfigured(ex, id);
+                        break;
+                    case TargetRecenterOutcome.Unconfigured:
+                        LogResumeRecenterUnconfigured(id);
                         centeringOutcome = "unconfigured";
-                    } catch (Exception ex) {
-                        LogResumeRecenterFailed(ex, id);
+                        break;
+                    case TargetRecenterOutcome.NoCenteringService:
+                        centeringOutcome = "skipped";
+                        break;
+                    default:
+                        LogResumeRecenterFailed(id);
                         centeringOutcome = "failed";
-                    }
+                        break;
                 }
             }
 
@@ -189,47 +183,6 @@ public sealed partial class SequencerService {
             // the refinement went.
             run.Gate.Resume();
         }
-    }
-
-    /// <summary>§38.10a — the target's current altitude vs. the profile's horizon
-    /// limit at its azimuth (custom-horizon interpolation when enabled, else the
-    /// flat default floor). Null = fine to proceed (above the limit, or the
-    /// altitude/limit can't be determined — the guard only ever skips work).</summary>
-    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "A profile read or transform fault must degrade to 'unknown — proceed with the refinement', never fault the background task. Log-and-recover boundary.")]
-    private (double AltitudeDeg, double LimitDeg)? TryGetTargetBelowHorizon(IDeepSkyObjectContainer target) {
-        try {
-            var site = _profileStore?.GetSiteSettings();
-            var coords = target.Target?.InputCoordinates?.Coordinates;
-            if (site is null || coords is null) return null;
-            // SiteAstrometry — the server's ONE managed sky model (shared with
-            // the §58.9 flip predictor and Tonight's Sky; deliberately not the
-            // NOVAS-native Transform, which needs the native library and whose
-            // sub-degree precision is irrelevant to a horizon floor).
-            var lst = SiteAstrometry.LocalSiderealTimeDeg(DateTimeOffset.UtcNow, site.LongitudeDeg);
-            var hourAngle = (lst - coords.RADegrees % 360.0 + 360.0) % 360.0;
-            var altitude = SiteAstrometry.AltitudeFromHourAngleDeg(coords.Dec, site.LatitudeDeg, hourAngle);
-            var azimuth = SiteAstrometry.AzimuthFromHourAngleDeg(coords.Dec, site.LatitudeDeg, hourAngle);
-            var limit = HorizonLimitDeg(site, azimuth);
-            return altitude < limit ? (altitude, limit) : null;
-        } catch (Exception ex) {
-            LogResumeAltitudeCheckFailed(ex);
-            return null;
-        }
-    }
-
-    /// <summary>The horizon altitude at <paramref name="azimuthDeg"/>: the §36
-    /// custom-horizon skyline interpolated via the ONE shared implementation
-    /// (<see cref="CustomHorizonValidator.AltitudeAtAzimuth"/> — review #875 r2:
-    /// no second copy of the wraparound math), else the flat default floor. The
-    /// stored points are re-normalized here because AltitudeAtAzimuth's contract
-    /// requires the canonical sorted/de-duplicated form.</summary>
-    private double HorizonLimitDeg(SiteSettingsDto site, double azimuthDeg) {
-        if (!site.UseCustomHorizon) return site.DefaultHorizonAltitudeDeg;
-        var (normalized, _) = CustomHorizonValidator.Normalize(_profileStore?.GetCustomHorizon());
-        var points = normalized?.Points;
-        if (points is null || points.Count == 0) return site.DefaultHorizonAltitudeDeg;
-        return CustomHorizonValidator.AltitudeAtAzimuth(points, azimuthDeg);
     }
 
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
@@ -321,9 +274,6 @@ public sealed partial class SequencerService {
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "§38.10a resume refinement on run {SequenceId}: target sits at {AltitudeDeg}° — below the {LimitDeg}° horizon limit; re-center/refocus skipped")]
     private partial void LogResumeTargetTooLow(Guid sequenceId, double altitudeDeg, double limitDeg);
 
-    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "§38.10a altitude check failed — proceeding with the refinement (the guard only ever skips work)")]
-    private partial void LogResumeAltitudeCheckFailed(Exception ex);
-
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "§38.10 resume refinement on run {SequenceId}: a service resolver faulted during the probe — resuming without refinement")]
     private partial void LogResumeRefinementProbeFailed(Exception ex, Guid sequenceId);
 
@@ -334,10 +284,10 @@ public sealed partial class SequencerService {
     private partial void LogResumeRecenterTimedOut(Guid sequenceId);
 
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Information, Message = "§38.10 resume refinement on run {SequenceId}: no plate solver configured — re-center skipped")]
-    private partial void LogResumeRecenterUnconfigured(Exception ex, Guid sequenceId);
+    private partial void LogResumeRecenterUnconfigured(Guid sequenceId);
 
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "§38.10 resume refinement on run {SequenceId}: re-center failed — resuming with a verify-pointing warning")]
-    private partial void LogResumeRecenterFailed(Exception ex, Guid sequenceId);
+    private partial void LogResumeRecenterFailed(Guid sequenceId);
 
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "§38.10 resume refinement on run {SequenceId}: the requested autofocus failed — imaging continues at the prior focus")]
     private partial void LogResumeRefocusFailed(Exception ex, Guid sequenceId);

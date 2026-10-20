@@ -15,6 +15,9 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using NUnit.Framework;
+using OpenAstroAra.Astrometry;
+using OpenAstroAra.Core.Model;
+using OpenAstroAra.PlateSolving;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Services;
 using OpenAstroAra.TestHarness.Guider;
@@ -43,10 +46,15 @@ namespace OpenAstroAra.Test {
             public readonly List<NotificationDto> Notifications = new();
             public readonly List<string> WsTopics = new();
             public readonly Guid RunId = Guid.NewGuid();
+            public readonly Mock<IProfileStore> Profiles = new();
+            public readonly Mock<ICenteringService> Centering = new();
+            public readonly List<string> FaultActions = new();
+            public int Restarts;
+            public bool RestartSucceeds = true;
             public GuiderService Service = null!;
 
             public Rig(bool runActive) {
-                var profiles = new Mock<IProfileStore>();
+                var profiles = Profiles;
                 profiles.Setup(p => p.GetSafetyPolicies()).Returns(new SafetyPoliciesDto(
                     OnUnsafe: "pause_and_park", AutoResumeWhenSafe: true, ResumeDelayMin: 10,
                     MeridianFlipAuto: true, MeridianPauseMin: 2, MeridianRecenter: true, MeridianRecalGuider: false,
@@ -58,6 +66,17 @@ namespace OpenAstroAra.Test {
                     .ReturnsAsync(runActive ? new List<Guid> { RunId } : new List<Guid>());
                 Sequencer.Setup(s => s.ResumeRunsAsync(It.IsAny<IReadOnlyCollection<Guid>>(), It.IsAny<CancellationToken>()))
                     .ReturnsAsync((IReadOnlyCollection<Guid> ids, CancellationToken _) => ids.Count);
+                // Until the user acts, the star-lost pause is still the daemon's.
+                Sequencer.Setup(s => s.DaemonPausedRunsAsync(It.IsAny<IReadOnlyCollection<Guid>>(), It.IsAny<CancellationToken>()))
+                    .ReturnsAsync((IReadOnlyCollection<Guid> ids, CancellationToken _) => (IReadOnlyList<Guid>) ids.ToList());
+                Sequencer.Setup(s => s.GetActiveTargetCoordinatesAsync(RunId, It.IsAny<CancellationToken>()))
+                    .ReturnsAsync(Target);
+                Centering.Setup(c => c.CenterOnTarget(It.IsAny<Coordinates>(), It.IsAny<IProgress<PlateSolveProgress>?>(), It.IsAny<IProgress<ApplicationStatus>?>(), It.IsAny<CancellationToken>()))
+                    .ReturnsAsync(new PlateSolveResult());
+                var faultLog = new Mock<IFaultLogService>();
+                faultLog.Setup(f => f.RecordActionAsync(It.IsAny<EquipmentFaultEvent>(), It.IsAny<string>(), It.IsAny<DateTimeOffset?>(), It.IsAny<CancellationToken>()))
+                    .Callback<EquipmentFaultEvent, string, DateTimeOffset?, CancellationToken>((_, a, _, _) => { lock (FaultActions) { FaultActions.Add(a); } })
+                    .Returns(Task.CompletedTask);
                 var notifications = new Mock<INotificationService>();
                 notifications.Setup(n => n.CreateAsync(It.IsAny<NotificationDto>(), It.IsAny<CancellationToken>()))
                     .Callback<NotificationDto, CancellationToken>((n, _) => { lock (Notifications) { Notifications.Add(n); } })
@@ -71,10 +90,19 @@ namespace OpenAstroAra.Test {
                     new GuiderRecoveryCoordinator(Mock.Of<IGuiderProcessSupervisor>(), Mock.Of<INotificationService>(),
                         Mock.Of<IDiagnosticsService>(), NullLogger<GuiderRecoveryCoordinator>.Instance),
                     NullLogger<GuiderService>.Instance, Mock.Of<IGuiderProcessSupervisor>(), ws.Object,
-                    profiles.Object, () => Sequencer.Object, notifications.Object, Mock.Of<IFaultLogService>()) {
+                    profiles.Object, () => Sequencer.Object, notifications.Object, faultLog.Object) {
                     StarLostGrace = Grace,
+                    StarLostRecoverAfter = Grace,
+                    StarLostProbeInterval = Grace / 2,
+                    StarLostRetryBackoff = new[] { Grace / 2 },
+                    StarLostRecenterTimeout = TimeSpan.FromSeconds(5),
                 };
+                Service.Recenter = new TargetRecenter(() => Centering.Object, profiles.Object);
+                Service.RestartGuidingOverride = _ => { Interlocked.Increment(ref Restarts); return Task.FromResult(RestartSucceeds); };
             }
+
+            public static readonly Coordinates Target = new(ra: 83.8, dec: 0.0, Epoch.J2000, Coordinates.RAType.Degrees);
+            public int Centered() => Centering.Invocations.Count(i => i.Method.Name == nameof(ICenteringService.CenterOnTarget));
 
             public int Paused() => Sequencer.Invocations.Count(i => i.Method.Name == nameof(ISequencerService.PauseActiveRunsAsync));
             public int Resumed() => Sequencer.Invocations.Count(i => i.Method.Name == nameof(ISequencerService.ResumeRunsAsync));
@@ -97,6 +125,10 @@ namespace OpenAstroAra.Test {
             fake.SetOnConnectEvents(PhdEvents.Version(subver: "openastroara-fake"), PhdEvents.AppState("Guiding"));
             fake.OnRpc("get_app_state", JsonValue.Create("Guiding"));
             fake.OnRpc("get_connected", JsonValue.Create(true));
+            // The guider's Stop button waits for the app state to read Stopped; the fake follows along.
+            fake.OnRpc("stop_capture", _ => { fake.OnRpc("get_app_state", JsonValue.Create("Stopped")); return JsonValue.Create(0); });
+            fake.OnRpc("loop", _ => { fake.OnRpc("get_app_state", JsonValue.Create("Looping")); return JsonValue.Create(0); });
+            fake.OnRpc("get_star_centroids", _ => new JsonArray());
             await rig.Service.ConnectAsync(new GuiderConnectRequestDto("127.0.0.1", fake.Port), idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
             Assert.That(await WaitUntilAsync(() => rig.Service.GetAsync(CancellationToken.None).Result?.State == EquipmentConnectionState.Connected).ConfigureAwait(false),
                 Is.True, "the guider never reached Connected against the fake");
@@ -195,6 +227,185 @@ namespace OpenAstroAra.Test {
 
             Assert.That(rig.Resumed(), Is.Zero, "nothing was parked, nothing to resume");
             Assert.That(rig.Notifications, Is.Empty, "no sequence was affected: the guider chip already shows the state");
+        }
+
+        // ── §42.2 long outage: the recovery ───────────────────────────────────────────────────────
+
+        private static JsonArray Stars(double snr = 25) => new(new JsonObject { ["x"] = 400.0, ["y"] = 300.0, ["snr"] = snr, ["mass"] = 900.0, ["hfd"] = 2.4 });
+
+        private static async Task<FakeGuider> LostStarPastTheGraceAsync(Rig rig) {
+            var fake = await GuidingFakeAsync(rig).ConfigureAwait(false);
+            await fake.BroadcastAsync(PhdEvents.StarLost(status: "low SNR")).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => rig.Paused() == 1).ConfigureAwait(false), Is.True, "the run was not paused after the grace");
+            return fake;
+        }
+
+        [Test]
+        public async Task A_star_still_lost_when_stars_are_back_on_the_frame_is_recovered_by_re_centering_and_the_run_resumes() {
+            using var rig = new Rig(runActive: true);
+            await using var fake = await LostStarPastTheGraceAsync(rig).ConfigureAwait(false);
+            fake.OnRpc("get_star_centroids", _ => Stars());
+
+            Assert.That(await WaitUntilAsync(() => rig.Resumed() == 1).ConfigureAwait(false), Is.True, "the recovery never resumed the run");
+
+            Assert.That(fake.ReceivedMethods, Does.Contain("stop_capture"), "the guider was stopped before the slew");
+            Assert.That(rig.Centered(), Is.EqualTo(1), "one re-center on the active target");
+            rig.Centering.Verify(c => c.CenterOnTarget(It.Is<Coordinates>(x => x.RADegrees == Rig.Target.RADegrees && x.Dec == Rig.Target.Dec),
+                It.IsAny<IProgress<PlateSolveProgress>?>(), It.IsAny<IProgress<ApplicationStatus>?>(), It.IsAny<CancellationToken>()), Times.Once);
+            Assert.That(rig.Restarts, Is.EqualTo(1), "guiding restarted once, after the re-center");
+            rig.Sequencer.Verify(s => s.ResumeRunsAsync(It.Is<IReadOnlyCollection<Guid>>(ids => ids.Single() == rig.RunId), It.IsAny<CancellationToken>()), Times.Once);
+            Assert.That(await WaitUntilAsync(() => rig.Notifications.Count == 2).ConfigureAwait(false), Is.True);
+            Assert.That(rig.Notifications[1].Title, Does.StartWith("Guide star lost for").And.Contains("re-centered, run resumed"));
+            Assert.That(rig.Notifications[1].Severity, Is.EqualTo(NotificationSeverity.Info));
+            Assert.That(await WaitUntilAsync(() => rig.FaultActions.Contains("recentered")).ConfigureAwait(false), Is.True, "the fault row carries the action");
+
+            // Guide steps from the restarted guider are not a second relock: nothing resumes twice.
+            await fake.BroadcastAsync(PhdEvents.GuideStep(0.1, -0.1)).ConfigureAwait(false);
+            await Task.Delay(Grace).ConfigureAwait(false);
+            Assert.That(rig.Resumed(), Is.EqualTo(1));
+            Assert.That(rig.Notifications, Has.Count.EqualTo(2));
+
+            // A second cloud later in the night is a new episode: it escalates again.
+            await fake.BroadcastAsync(PhdEvents.StarLost(status: "low SNR")).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => rig.Paused() == 2).ConfigureAwait(false), Is.True);
+            Assert.That(await WaitUntilAsync(() => rig.Resumed() == 2).ConfigureAwait(false), Is.True, "the second episode recovered too");
+            Assert.That(rig.Centered(), Is.EqualTo(2));
+        }
+
+        [Test]
+        public async Task While_the_guide_frame_stays_starless_nothing_moves_and_the_probe_keeps_asking() {
+            using var rig = new Rig(runActive: true);
+            await using var fake = await LostStarPastTheGraceAsync(rig).ConfigureAwait(false);
+
+            Assert.That(await WaitUntilAsync(() => fake.ReceivedMethods.Count(m => m == "get_star_centroids") >= 3).ConfigureAwait(false), Is.True, "the probe repeats while cloudy");
+            Assert.That(fake.ReceivedMethods, Does.Not.Contain("stop_capture"), "a cloudy sky is not a reason to stop the guider");
+            Assert.That(rig.Centered(), Is.Zero);
+            Assert.That(rig.Resumed(), Is.Zero);
+            Assert.That(rig.Notifications, Has.Count.EqualTo(1), "only the pause was announced");
+
+            // The guider's own relock still resumes, as before.
+            await fake.BroadcastAsync(PhdEvents.GuideStep(0.1, -0.1)).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => rig.Resumed() == 1).ConfigureAwait(false), Is.True);
+            var probes = fake.ReceivedMethods.Count(m => m == "get_star_centroids");
+            await Task.Delay(Grace * 3).ConfigureAwait(false);
+            Assert.That(fake.ReceivedMethods.Count(m => m == "get_star_centroids"), Is.EqualTo(probes), "the relock disarmed the probe");
+            Assert.That(rig.Centered(), Is.Zero, "a relock never re-centers");
+        }
+
+        [Test]
+        public async Task A_star_back_before_the_recovery_wait_resumes_the_old_way_without_a_re_center() {
+            using var rig = new Rig(runActive: true);
+            await using var fake = await LostStarPastTheGraceAsync(rig).ConfigureAwait(false);
+            fake.OnRpc("get_star_centroids", _ => Stars());
+
+            await fake.BroadcastAsync(PhdEvents.GuideStep(0.1, -0.1)).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => rig.Resumed() == 1).ConfigureAwait(false), Is.True);
+            await Task.Delay(Grace * 3).ConfigureAwait(false);
+
+            Assert.That(rig.Centered(), Is.Zero);
+            Assert.That(rig.Restarts, Is.Zero);
+            Assert.That(fake.ReceivedMethods, Does.Not.Contain("get_star_centroids"), "no probe ran: the star was back in time");
+            Assert.That(rig.Notifications[1].Title, Does.StartWith("Guide star back"));
+        }
+
+        [Test]
+        public async Task A_failed_re_center_keeps_the_run_paused_warns_once_and_a_later_attempt_resumes() {
+            using var rig = new Rig(runActive: true);
+            var solves = 0;
+            rig.Centering.Setup(c => c.CenterOnTarget(It.IsAny<Coordinates>(), It.IsAny<IProgress<PlateSolveProgress>?>(), It.IsAny<IProgress<ApplicationStatus>?>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(() => new PlateSolveResult { Success = ++solves >= 3 });
+            await using var fake = await LostStarPastTheGraceAsync(rig).ConfigureAwait(false);
+            fake.OnRpc("get_star_centroids", _ => Stars());
+
+            Assert.That(await WaitUntilAsync(() => rig.Resumed() == 1).ConfigureAwait(false), Is.True, "the third attempt resumed the run");
+
+            Assert.That(solves, Is.EqualTo(3), "two failed solves, then one that worked");
+            Assert.That(rig.Restarts, Is.EqualTo(1), "guiding is only restarted after a successful re-center");
+            Assert.That(fake.ReceivedMethods, Does.Contain("loop"), "between attempts the guider loops so the probe has frames");
+            Assert.That(await WaitUntilAsync(() => rig.Notifications.Count == 3).ConfigureAwait(false), Is.True);
+            Assert.That(rig.Notifications[1].Title, Does.Contain("re-center failed"));
+            Assert.That(rig.Notifications[1].Severity, Is.EqualTo(NotificationSeverity.Warning));
+            Assert.That(rig.Notifications[2].Title, Does.Contain("run resumed"));
+            Assert.That(rig.Notifications.Count(n => n.Title.Contains("re-center failed", StringComparison.Ordinal)), Is.EqualTo(1), "one warning per episode, not one per retry");
+            Assert.That(rig.FaultActions, Does.Contain("recenter_failed"));
+        }
+
+        [Test]
+        public async Task Once_the_user_has_acted_on_the_pause_the_recovery_hands_the_episode_over() {
+            using var rig = new Rig(runActive: true);
+            rig.Sequencer.Setup(s => s.DaemonPausedRunsAsync(It.IsAny<IReadOnlyCollection<Guid>>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(Array.Empty<Guid>());
+            await using var fake = await LostStarPastTheGraceAsync(rig).ConfigureAwait(false);
+            fake.OnRpc("get_star_centroids", _ => Stars());
+
+            Assert.That(await WaitUntilAsync(() => fake.ReceivedMethods.Contains("get_star_centroids")).ConfigureAwait(false), Is.True);
+            await Task.Delay(Grace * 3).ConfigureAwait(false);
+
+            Assert.That(fake.ReceivedMethods, Does.Not.Contain("stop_capture"), "the user's run is not the daemon's to stop guiding on");
+            Assert.That(rig.Centered(), Is.Zero);
+            Assert.That(rig.Resumed(), Is.Zero);
+            Assert.That(rig.Notifications, Has.Count.EqualTo(1));
+            Assert.That(fake.ReceivedMethods.Count(m => m == "get_star_centroids"), Is.EqualTo(1), "the episode ended: no more probes");
+        }
+
+        [Test]
+        public async Task While_the_safety_engine_holds_the_rig_the_recovery_waits() {
+            using var rig = new Rig(runActive: true);
+            var holding = true;
+            rig.Service.SafetyHoldsRig = () => holding;
+            await using var fake = await LostStarPastTheGraceAsync(rig).ConfigureAwait(false);
+            fake.OnRpc("get_star_centroids", _ => Stars());
+
+            await Task.Delay(Grace * 4).ConfigureAwait(false);
+            Assert.That(fake.ReceivedMethods, Does.Not.Contain("get_star_centroids"), "not even a probe while safety owns the rig");
+            Assert.That(rig.Centered(), Is.Zero);
+
+            holding = false;
+            Assert.That(await WaitUntilAsync(() => rig.Resumed() == 1).ConfigureAwait(false), Is.True, "once safety lets go the recovery runs");
+        }
+
+        [Test]
+        public async Task With_no_way_to_re_center_the_run_stays_paused_and_the_notice_says_why() {
+            using var rig = new Rig(runActive: true);
+            rig.Service.Recenter = null;
+            await using var fake = await LostStarPastTheGraceAsync(rig).ConfigureAwait(false);
+            fake.OnRpc("get_star_centroids", _ => Stars());
+
+            Assert.That(await WaitUntilAsync(() => rig.Notifications.Count == 2).ConfigureAwait(false), Is.True);
+            Assert.That(rig.Notifications[1].Title, Does.Contain("cannot re-center"));
+            Assert.That(rig.Notifications[1].Message, Does.Contain("no plate solver"));
+            await Task.Delay(Grace * 3).ConfigureAwait(false);
+            Assert.That(rig.Resumed(), Is.Zero);
+            Assert.That(rig.Restarts, Is.Zero);
+            Assert.That(fake.ReceivedMethods.Count(m => m == "get_star_centroids"), Is.EqualTo(1), "given up: no more probes this episode");
+            Assert.That(rig.FaultActions, Does.Contain("recenter_unavailable"));
+        }
+
+        [Test]
+        public async Task A_target_that_has_set_below_the_horizon_limit_is_not_slewed_to() {
+            using var rig = new Rig(runActive: true);
+            // A near-pole site: the dec-0° target hugs the horizon, so a +20° floor makes it too low.
+            rig.Profiles.Setup(p => p.GetSiteSettings()).Returns(new SiteSettingsDto("pole", 89.9, 0, 0, "UTC", false, 20, 4, 2.0, "astronomical"));
+            await using var fake = await LostStarPastTheGraceAsync(rig).ConfigureAwait(false);
+            fake.OnRpc("get_star_centroids", _ => Stars());
+
+            Assert.That(await WaitUntilAsync(() => rig.Notifications.Count == 2).ConfigureAwait(false), Is.True);
+            Assert.That(rig.Notifications[1].Title, Does.Contain("target is low"));
+            Assert.That(rig.Centered(), Is.Zero, "no slew to a target below the limit");
+            Assert.That(rig.Resumed(), Is.Zero);
+        }
+
+        [Test]
+        public async Task A_disconnect_during_the_wait_disarms_the_recovery() {
+            using var rig = new Rig(runActive: true);
+            await using var fake = await LostStarPastTheGraceAsync(rig).ConfigureAwait(false);
+            fake.OnRpc("get_star_centroids", _ => Stars());
+
+            await rig.Service.DisconnectAsync(idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
+            await Task.Delay(Grace * 4).ConfigureAwait(false);
+
+            Assert.That(rig.Centered(), Is.Zero);
+            Assert.That(rig.Resumed(), Is.Zero);
         }
     }
 }

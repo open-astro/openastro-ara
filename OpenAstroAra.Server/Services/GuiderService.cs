@@ -824,6 +824,7 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
                 return;
             }
             _disposed = true;
+            ResetStarLostRecoveryLocked();
             // Cancel + dispose the in-flight recovery pass (if any). RunRecoveryAsync's finally also
             // disposes under the gate; the null-check there makes either order safe, and disposing
             // here satisfies CA2213. No new pass can start — BeginRecoveryLocked checks _disposed.

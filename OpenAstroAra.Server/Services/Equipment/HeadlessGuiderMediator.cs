@@ -69,6 +69,7 @@ public sealed class HeadlessGuiderMediator : IGuiderMediator {
     // IGuiderMediator additions
     public Task<bool> Dither(CancellationToken token) => Task.FromResult(false);
     public string? LastDitherError => "no guider";
+    public DateTimeOffset? GuidingStoppedUtc => null;
     public Guid StartRMSRecording() => Guid.Empty;
     public RMS GetRMSRecording(Guid handle) => new RMS();
     public RMS StopRMSRecording(Guid handle) => new RMS();

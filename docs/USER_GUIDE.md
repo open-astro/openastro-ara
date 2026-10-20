@@ -274,6 +274,16 @@ Ara assumes you're asleep while it works:
   configured action runs and the alert names which threshold tripped ("wind 54 km/h over the 36
   km/h limit"). Auto-resume waits until every source — monitor and weather — reads safe. Off by
   default; a sensor your station doesn't report is simply skipped.
+- **Guide star lost**: when the guider loses its star for more than 30 s (a cloud), the run pauses
+  under **"When the guider is lost"** and resumes on its own as soon as the guider locks on again.
+  After 3 min Ara starts checking the guider's own frames once a minute: while they are starless it
+  waits; once stars are back and the guider still has no lock (the mount drifted while unguided),
+  Ara stops guiding, re-centers the target by plate solve, restarts guiding and resumes the run,
+  with an Info notice saying so. If the solve or the restart fails it warns once and tries again
+  after 5, 10, then every 15 min; it never parks. It stands aside while the safety engine holds
+  the rig, hands over as soon as you pause, resume or stop the run yourself, will not slew to a
+  target that has sunk below your horizon limit, and tells you once when the daemon has no plate
+  solver. A dither that must restart guiding after a gap of 3 min or more re-centers first too.
 - **Guider loss mid-sequence**: if the guider connection drops while a run is executing, the
   daemon applies **Settings → Safety → Policies → "When the guider is lost"** immediately —
   pause the run (default), skip the current target, or abort — while §63.3 process recovery

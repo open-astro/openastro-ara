@@ -45,7 +45,7 @@ public sealed partial class SafetyReactionService : IHostedService, IDisposable 
     private readonly IObservingConditionsService? _weather;
     private readonly IProfileStore? _profiles;
     private readonly Func<ISequencerService?>? _sequencerResolver;
-    private readonly Func<ICenteringService?>? _centeringResolver;
+    private readonly TargetRecenter? _recenter;
     private readonly IGuiderService? _guider;
     private readonly ITelescopeService? _telescope;
     private readonly INotificationService? _notifications;
@@ -77,6 +77,18 @@ public sealed partial class SafetyReactionService : IHostedService, IDisposable 
     private Task? _resumeWorker;
     private bool _disposed;
 
+    /// <summary>§42.2 — true while this engine owns the rig: an unsafe reaction is latched, it
+    /// holds paused runs, or an auto-resume countdown is running. The star-lost recovery defers
+    /// to it (the sky is not the guider's to judge while the safety monitor says unsafe, and a
+    /// pause safety adopted is safety's to release).</summary>
+    internal bool IsHoldingRig {
+        get {
+            lock (_lock) {
+                return _unsafeReactionLatched || _pausedRunIds.Count > 0 || _resumeCountdown is not null;
+            }
+        }
+    }
+
     // ─── test seams (the UnattendedShutdownService knob pattern) ───
     /// <summary>§35.4 poll cadence; production 10 s, tests compress it.</summary>
     internal TimeSpan PollInterval { get; set; } = TimeSpan.FromSeconds(10);
@@ -100,7 +112,8 @@ public sealed partial class SafetyReactionService : IHostedService, IDisposable 
             INotificationService? notifications = null,
             IWsBroadcaster? ws = null,
             ILogger<SafetyReactionService>? logger = null,
-            Func<ICenteringService?>? centeringResolver = null) {
+            Func<ICenteringService?>? centeringResolver = null,
+            TargetRecenter? recenter = null) {
         _safetyMonitor = safetyMonitor;
         _weather = weather;
         _profiles = profiles;
@@ -110,7 +123,10 @@ public sealed partial class SafetyReactionService : IHostedService, IDisposable 
         _notifications = notifications;
         _ws = ws;
         _logger = logger ?? NullLogger<SafetyReactionService>.Instance;
-        _centeringResolver = centeringResolver;
+        // The ONE re-center implementation (TargetRecenter) is shared with the §38.10 resume
+        // refinement and the §42.2 star-lost recovery; tests that only pass a resolver get a
+        // private one over it.
+        _recenter = recenter ?? (centeringResolver is null ? null : new TargetRecenter(centeringResolver, profiles));
     }
 
     // ─── pure decision helpers (unit-tested sim-free) ───
@@ -535,59 +551,34 @@ public sealed partial class SafetyReactionService : IHostedService, IDisposable 
     internal enum RecenterOutcome { NotAttempted, Recentered, Failed, CancelledByRelapse }
 
     /// <summary>§35 auto-resume pointing — best-effort re-center on the first paused run whose
-    /// live plan carries a coordinate target. NotAttempted when there is no centering service,
-    /// no sequencer, or no coordinate-bearing target (plans without a DSO container). Bounded
-    /// by <see cref="RecenterTimeout"/> (expiry = Failed, resume proceeds with an honest
-    /// warning); a relapse to unsafe cancels via <paramref name="ct"/> and reports
-    /// CancelledByRelapse so the caller restores the pause + re-parks.</summary>
-    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "Best-effort refinement: a coordinate read or centering fault (no solver configured, camera busy, driver error) degrades to the existing resume-with-verify-pointing warning; logged, never rethrown, never blocks the release.")]
+    /// live plan carries a coordinate target, through the shared <see cref="TargetRecenter"/>.
+    /// NotAttempted when there is no centering service, no sequencer, no coordinate-bearing target
+    /// or the target has sunk below the horizon limit (resume proceeds with the verify-pointing
+    /// warning either way). Bounded by <see cref="RecenterTimeout"/> (expiry = Failed); a relapse to
+    /// unsafe cancels via <paramref name="ct"/> and reports CancelledByRelapse so the caller
+    /// restores the pause + re-parks.</summary>
     private async Task<RecenterOutcome> TryRecenterQuietlyAsync(IReadOnlyList<Guid> ids, CancellationToken ct) {
-        var centering = _centeringResolver?.Invoke();
         var sequencer = _sequencerResolver?.Invoke();
-        if (centering is null || sequencer is null) {
+        if (_recenter is null || sequencer is null) {
             return RecenterOutcome.NotAttempted;
         }
-        // Only the first paused run with a coordinate target is centered; with a single
-        // mount the other paused runs inherit whatever pointing results — their targets
-        // are not separately verified.
-        OpenAstroAra.Astrometry.Coordinates? target = null;
-        foreach (var id in ids) {
-            try {
-                ct.ThrowIfCancellationRequested();
-                target = await sequencer.GetActiveTargetCoordinatesAsync(id, ct).ConfigureAwait(false);
-            } catch (OperationCanceledException) when (ct.IsCancellationRequested) {
-                // A relapse during the coordinate lookup must take the same
-                // restore-and-repark path as one during the centering itself —
-                // letting it escape would land in ResumeCountdownAsync's outer
-                // catch, dropping the run from tracking with the mount unparked.
+        LogRecenterStarted();
+        var result = await _recenter.RecenterActiveTargetAsync(sequencer, ids, RecenterTimeout, ct).ConfigureAwait(false);
+        switch (result.Outcome) {
+            case TargetRecenterOutcome.Recentered:
+                return RecenterOutcome.Recentered;
+            case TargetRecenterOutcome.Cancelled:
+                // A relapse during the coordinate lookup or the centering itself must take the same
+                // restore-and-repark path — letting it escape would land in ResumeCountdownAsync's
+                // outer catch, dropping the run from tracking with the mount unparked.
                 return RecenterOutcome.CancelledByRelapse;
-            } catch (Exception ex) {
-                LogRungFailed("recenter-target-read", ex);
-            }
-            if (target is not null) {
-                break;
-            }
-        }
-        if (target is null) {
-            return RecenterOutcome.NotAttempted;
-        }
-        using var bounded = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        bounded.CancelAfter(RecenterTimeout);
-        try {
-            LogRecenterStarted();
-            var result = await centering.CenterOnTarget(target, solveProgress: null, progress: null, bounded.Token)
-                .ConfigureAwait(false);
-            return result?.Success == true ? RecenterOutcome.Recentered : RecenterOutcome.Failed;
-        } catch (OperationCanceledException) when (ct.IsCancellationRequested) {
-            return RecenterOutcome.CancelledByRelapse;
-        } catch (OperationCanceledException) {
-            // Our own RecenterTimeout — the release must not be held hostage by a slow rig.
-            LogRecenterTimedOut();
-            return RecenterOutcome.Failed;
-        } catch (Exception ex) {
-            LogRungFailed("recenter", ex);
-            return RecenterOutcome.Failed;
+            case TargetRecenterOutcome.Timeout:
+                LogRecenterTimedOut();
+                return RecenterOutcome.Failed;
+            case TargetRecenterOutcome.Failed:
+                return RecenterOutcome.Failed;
+            default:
+                return RecenterOutcome.NotAttempted;
         }
     }
 
