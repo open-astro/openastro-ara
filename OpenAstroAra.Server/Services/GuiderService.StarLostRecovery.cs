@@ -52,8 +52,11 @@ public sealed partial class GuiderService {
         TimeSpan.FromMinutes(5), TimeSpan.FromMinutes(10), TimeSpan.FromMinutes(15),
     };
 
-    /// <summary>Bound on the re-center (capture → solve → slew iterates for minutes on a slow rig).</summary>
-    internal TimeSpan StarLostRecenterTimeout { get; set; } = TimeSpan.FromMinutes(10);
+    internal static readonly TimeSpan DefaultStarLostRecenterTimeout = TimeSpan.FromMinutes(10);
+
+    /// <summary>Bound on the re-center (capture → solve → slew iterates for minutes on a slow rig).
+    /// The Dither's long-gap re-center shares the default.</summary>
+    internal TimeSpan StarLostRecenterTimeout { get; set; } = DefaultStarLostRecenterTimeout;
 
     /// <summary>A guide frame counts as clear when one detected star reaches this SNR; a cloud bank's
     /// noise peaks sit well under it, a real star well over.</summary>
@@ -134,7 +137,11 @@ public sealed partial class GuiderService {
             var state = _guider.AppState?.State;
             var ownStop = _recoveryStoppedGuiding && (state == PhdAppState.LOOPING || state == PhdAppState.STOPPED);
             if (state != PhdAppState.LOSTLOCK && !ownStop) {
-                return;
+                if (_recoveryStoppedGuiding && state != PhdAppState.GUIDING) {
+                    // Selected or Calibrating after a partial restart: ask again rather than fall silent.
+                    ArmStarLostRecoveryLocked(StarLostProbeInterval);
+                }
+                return; // Guiding: the relock resume owns it now
             }
             if (safetyHolds) {
                 LogStarLostRecoveryDeferredToSafety();
@@ -379,10 +386,18 @@ public sealed partial class GuiderService {
             ? StarLostProbeInterval
             : StarLostRetryBackoff[Math.Min(failures, StarLostRetryBackoff.Count) - 1];
         LogStarLostRecoveryAttemptFailed(why, failures, (int) backoff.TotalMinutes);
-        try {
-            await guider.LoopAsync(CancellationToken.None).ConfigureAwait(false);
-        } catch (Exception ex) {
-            LogStarLostProbeFailed(ex);
+        if (guider.AppState?.State == PhdAppState.GUIDING) {
+            // The restart took but did not settle in time: PHD2 is guiding on the re-centered target.
+            // Leave it. Its guide steps reach NoteGuideStepLocked once this attempt is over and resume
+            // the run as a relock; a loop here would stop it, and its guiding_stopped would read as
+            // the user's (review round 5).
+            LogStarLostGuiderLeftGuiding();
+        } else {
+            try {
+                await guider.LoopAsync(CancellationToken.None).ConfigureAwait(false);
+            } catch (Exception ex) {
+                LogStarLostProbeFailed(ex);
+            }
         }
         if (notify) {
             if (fault is not null) {
@@ -454,6 +469,9 @@ public sealed partial class GuiderService {
 
     [LoggerMessage(EventId = 4238, Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "§42.2 star-lost recovery stopped: {Reason}")]
     private partial void LogStarLostRecoveryGaveUp(string reason);
+
+    [LoggerMessage(EventId = 4249, Level = Microsoft.Extensions.Logging.LogLevel.Information, Message = "§42.2 star-lost recovery: the guider is guiding after the failed restart (settle timed out) — left guiding, its guide steps resume the run")]
+    private partial void LogStarLostGuiderLeftGuiding();
 
     [LoggerMessage(EventId = 4239, Level = Microsoft.Extensions.Logging.LogLevel.Error, Message = "§42.2 star-lost recovery faulted; the run stays paused and a retry is scheduled")]
     private partial void LogStarLostRecoveryFailed(Exception exception);

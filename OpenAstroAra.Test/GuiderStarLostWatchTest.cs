@@ -51,6 +51,7 @@ namespace OpenAstroAra.Test {
             public readonly List<string> FaultActions = new();
             public int Restarts;
             public bool RestartSucceeds = true;
+            public bool RestartStartsButFails; // PHD2 guides but the settle timed out: StartGuiding returns false
             public Action? OnRestart; // the fake's side of a restart: app state Guiding, StartGuiding, a guide step
             public GuiderService Service = null!;
 
@@ -99,7 +100,11 @@ namespace OpenAstroAra.Test {
                     StarLostRecenterTimeout = TimeSpan.FromSeconds(5),
                 };
                 Service.Recenter = new TargetRecenter(() => Centering.Object, profiles.Object);
-                Service.RestartGuidingOverride = _ => { Interlocked.Increment(ref Restarts); if (RestartSucceeds) { OnRestart?.Invoke(); } return Task.FromResult(RestartSucceeds); };
+                Service.RestartGuidingOverride = _ => {
+                    Interlocked.Increment(ref Restarts);
+                    if (RestartSucceeds || RestartStartsButFails) { OnRestart?.Invoke(); }
+                    return Task.FromResult(RestartSucceeds && !RestartStartsButFails);
+                };
             }
 
             public static readonly Coordinates Target = new(ra: 83.8, dec: 0.0, Epoch.J2000, Coordinates.RAType.Degrees);
@@ -150,6 +155,8 @@ namespace OpenAstroAra.Test {
                 fake.BroadcastAsync(PhdEvents.AppState("Guiding")).GetAwaiter().GetResult();
                 fake.BroadcastAsync(PhdEvents.StartGuiding()).GetAwaiter().GetResult();
                 fake.BroadcastAsync(PhdEvents.GuideStep(0.02, 0.02)).GetAwaiter().GetResult();
+                // Real PHD2's settle wait is long enough for its events to land; the fake makes sure.
+                WaitUntilAsync(() => rig.Service.GetAsync(CancellationToken.None).Result?.Runtime.State == "guiding").GetAwaiter().GetResult();
             };
             fake.OnRpc("get_star_centroids", _ => new JsonArray());
             await rig.Service.ConnectAsync(new GuiderConnectRequestDto("127.0.0.1", fake.Port), idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
@@ -351,6 +358,27 @@ namespace OpenAstroAra.Test {
             Assert.That(rig.Notifications[2].Title, Does.Contain("run resumed"));
             Assert.That(rig.Notifications.Count(n => n.Title.Contains("re-center failed", StringComparison.Ordinal)), Is.EqualTo(1), "one warning per episode, not one per retry");
             Assert.That(rig.FaultActions, Does.Contain("recenter_failed"));
+        }
+
+        [Test]
+        public async Task A_restart_that_guides_but_does_not_settle_is_left_guiding_and_its_relock_resumes_the_run() {
+            // Common after cloud: PHD2 starts guiding, the settle times out, StartGuiding returns false.
+            // Putting it back to looping would stop guiding, and that guiding_stopped would read as the
+            // user's and end the retry loop with the run paused all night (review round 5).
+            using var rig = new Rig(runActive: true) { RestartStartsButFails = true };
+            await using var fake = await LostStarPastTheGraceAsync(rig).ConfigureAwait(false);
+            fake.OnRpc("get_star_centroids", _ => Stars());
+
+            Assert.That(await WaitUntilAsync(() => rig.Notifications.Count >= 2).ConfigureAwait(false), Is.True);
+            Assert.That(rig.Notifications[1].Title, Does.Contain("re-center failed"));
+            Assert.That(rig.Restarts, Is.EqualTo(1));
+            Assert.That(fake.ReceivedMethods, Does.Not.Contain("loop"), "a guiding PHD2 is left guiding");
+
+            await fake.BroadcastAsync(PhdEvents.GuideStep(0.1, -0.1)).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => rig.Resumed() == 1).ConfigureAwait(false), Is.True, "its guide step is a relock on the re-centered target");
+            Assert.That(await WaitUntilAsync(() => rig.Notifications.Count == 3).ConfigureAwait(false), Is.True);
+            Assert.That(rig.Notifications[2].Title, Does.StartWith("Guide star back"));
+            Assert.That(rig.Centered(), Is.EqualTo(1));
         }
 
         [Test]
