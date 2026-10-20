@@ -62,6 +62,11 @@ public sealed partial class GuiderService {
             if (!presence.Exists) {
                 return new GuiderTwinStatus(Exists: false, SelectedOnDaemon: false, CanDeleteNow: false, Reason: null);
             }
+            if (presence.AppState is null) {
+                // The same rule as the delete: an unreadable state is never "now".
+                return new GuiderTwinStatus(Exists: true, presence.Selected, CanDeleteNow: false,
+                    Reason: "The guider did not report its state. It will be deleted once it is idle.");
+            }
             if (!PHD2Guider.IsIdleAppState(presence.AppState)) {
                 return new GuiderTwinStatus(Exists: true, presence.Selected, CanDeleteNow: false, Reason: BusyReason(presence.AppState));
             }
@@ -181,9 +186,9 @@ public sealed partial class GuiderService {
     private List<string> LiveTwinNames() =>
         (_araProfilesResolver?.Invoke() ?? Array.Empty<(Guid, string?)>()).SelectMany(p => TwinNames(p.Name, p.Id)).ToList();
 
-    /// <summary>True when a queued twin delete is waiting — the ping loop's cheap pre-check (the
-    /// store answers from memory).</summary>
-    internal bool HasPendingTwinDeletes => _twinDeleteQueue is { } q && q.List().Count > 0;
+    /// <summary>True when a queued twin delete is waiting — the ping loop's pre-check, answered from
+    /// the store's lock-free count (never behind a queue write).</summary>
+    internal bool HasPendingTwinDeletes => _twinDeleteQueue is { } q && q.PendingCount > 0;
 
     private int _idleDrainInFlight;
 
@@ -198,11 +203,13 @@ public sealed partial class GuiderService {
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Fire-and-forget boundary: the drain logs its own faults; anything escaping would be an unobserved task exception.")]
     internal void StartIdleTwinDrainIfDue(PHD2Guider guider) {
-        if (!HasPendingTwinDeletes || !PHD2Guider.IsIdleAppState(guider.AppState?.State)) {
-            return;
+        // Cheapest first, and nothing here takes a lock: the cached app state, the hold delegates,
+        // then the store's volatile count. The ping tick must never wait behind a queue write.
+        if (!PHD2Guider.IsIdleAppState(guider.AppState?.State) || GuiderHeldReason() is not null) {
+            return; // busy, or the run / alignment owns the guider; the next idle tick asks again
         }
-        if (GuiderHeldReason() is not null) {
-            return; // the run or the alignment owns the guider; the next idle tick asks again
+        if (!HasPendingTwinDeletes) {
+            return;
         }
         if (Interlocked.CompareExchange(ref _idleDrainInFlight, 1, 0) != 0) {
             return;
@@ -245,6 +252,10 @@ public sealed partial class GuiderService {
             foreach (var entry in pending) {
                 if (reconnectEquipment && GuiderHeldReason() is not null) {
                     return; // a run or an alignment started since the tick looked; the next idle tick asks again
+                }
+                if (entry.TwinNames is not { Count: > 0 }) {
+                    _twinDeleteQueue.Remove(entry.AraProfileId); // a hand-edited file: nothing to delete, never retry
+                    continue;
                 }
                 // A twin queued as shared goes whatever the live list says (the user chose that); any
                 // other queued name a live profile maps to again was recreated since, and stays.

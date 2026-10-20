@@ -30,6 +30,9 @@ namespace OpenAstroAra.Server.Services;
 /// connected guider is seen idle.
 /// </summary>
 public interface IGuiderTwinDeleteStore {
+    /// <summary>How many deletes are waiting — readable without taking the store's lock, so the guider's
+    /// ping tick (hang detection) never waits behind a queue write to the SD card.</summary>
+    int PendingCount { get; }
     IReadOnlyList<PendingGuiderTwinDelete> List();
     void Add(PendingGuiderTwinDelete entry);
     void Remove(Guid araProfileId);
@@ -45,6 +48,9 @@ public sealed partial class FileGuiderTwinDeleteStore : IGuiderTwinDeleteStore {
     private readonly object _gate = new();
     // Loaded once, written through: the ping tick asks every few seconds and must not touch the disk.
     private List<PendingGuiderTwinDelete>? _cache;
+    private volatile int _count;
+
+    public int PendingCount => _count;
 
     public FileGuiderTwinDeleteStore(string profileDir, ILogger<FileGuiderTwinDeleteStore>? logger = null) {
         ArgumentException.ThrowIfNullOrEmpty(profileDir);
@@ -84,22 +90,28 @@ public sealed partial class FileGuiderTwinDeleteStore : IGuiderTwinDeleteStore {
         if (_cache is not null) {
             return _cache;
         }
+        List<PendingGuiderTwinDelete> loaded;
         if (!File.Exists(_path)) {
-            return _cache = new List<PendingGuiderTwinDelete>();
+            loaded = new List<PendingGuiderTwinDelete>();
+        } else {
+            try {
+                var json = File.ReadAllText(_path);
+                var file = JsonSerializer.Deserialize(json, AraJsonSerializerContext.Default.PendingGuiderTwinDeleteFile);
+                loaded = file?.Pending?.ToList() ?? new List<PendingGuiderTwinDelete>();
+            } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException) {
+                if (_logger is not null) LogUnreadable(_logger, ex, _path);
+                loaded = new List<PendingGuiderTwinDelete>();
+            }
         }
-        try {
-            var json = File.ReadAllText(_path);
-            var file = JsonSerializer.Deserialize(json, AraJsonSerializerContext.Default.PendingGuiderTwinDeleteFile);
-            return _cache = file?.Pending?.ToList() ?? new List<PendingGuiderTwinDelete>();
-        } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException) {
-            if (_logger is not null) LogUnreadable(_logger, ex, _path);
-            return _cache = new List<PendingGuiderTwinDelete>();
-        }
+        _cache = loaded;
+        _count = loaded.Count;
+        return loaded;
     }
 
     // Caller holds _gate.
     private void Save(List<PendingGuiderTwinDelete> all) {
         _cache = all;
+        _count = all.Count;
         if (all.Count == 0) {
             try {
                 File.Delete(_path);
