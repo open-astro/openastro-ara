@@ -151,12 +151,15 @@ public sealed partial class StorageCopyService : IStorageCopyService, IDisposabl
         }
     }
 
-    /// <summary>Daemon shutdown cancels a running copy; its finally still releases the target.</summary>
+    /// <summary>Daemon shutdown cancels a running copy; its finally still releases the target.
+    /// The token source is only disposed once no job can still be reading its token.</summary>
     public void Dispose() {
         lock (gate) {
             cts?.Cancel();
-            cts?.Dispose();
-            cts = null;
+            if (Running is null || Running.IsCompleted) {
+                cts?.Dispose();
+                cts = null;
+            }
         }
     }
 
@@ -370,10 +373,10 @@ public sealed partial class StorageCopyService : IStorageCopyService, IDisposabl
             }
             // No overwrite: a file that appeared under this name meanwhile is not ours.
             File.Move(temp, file.Destination, overwrite: false);
-            File.SetLastWriteTimeUtc(file.Destination, File.GetLastWriteTimeUtc(file.Source));
             lock (gate) {
                 current.FilesCopied++;
             }
+            KeepTimestamp(file);
         } catch (OperationCanceledException) {
             TryDelete(temp);
             throw;
@@ -386,6 +389,16 @@ public sealed partial class StorageCopyService : IStorageCopyService, IDisposabl
                 current.FilesFailed++;
                 current.FirstFailure ??= $"{file.Relative}: {ex.Message}";
             }
+        }
+    }
+
+    /// <summary>The frame's own time on the copy; best effort, since the file is already
+    /// safely in place and must not be counted as failed over a timestamp.</summary>
+    private static void KeepTimestamp(PlannedFile file) {
+        try {
+            File.SetLastWriteTimeUtc(file.Destination, File.GetLastWriteTimeUtc(file.Source));
+        } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
+            // The copy keeps the time it was written instead.
         }
     }
 

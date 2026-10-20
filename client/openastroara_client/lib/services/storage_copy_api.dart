@@ -161,16 +161,22 @@ final storageCopyStatusProvider =
     controller.close();
   });
   Future<void> poll() async {
+    // A Wi-Fi blip must not freeze the progress for good: a few failures in a
+    // row are retried before the error is shown.
+    var failures = 0;
     while (!disposed) {
       try {
         final status = await api.status();
         if (disposed) return;
+        failures = 0;
         controller.add(status);
         if (!status.isRunning) return;
       } catch (e, st) {
         if (disposed) return;
-        controller.addError(e, st);
-        return;
+        if (++failures >= 5) {
+          controller.addError(e, st);
+          return;
+        }
       }
       await Future<void>.delayed(const Duration(seconds: 1));
     }

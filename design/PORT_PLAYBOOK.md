@@ -2898,7 +2898,7 @@ Every mode except `--unmount-copy` first resolves the device (`blkid -U`, or the
 
 **Behavior (`--mount-copy`, `--unmount-copy`): disk-to-disk copy target**
 
-- `--mount-copy` mounts a second drive at `/media/openastroara-copy` with no fstab line, so it is gone after a reboot. The store itself is refused (`refused is_store`, exit 6), the filesystem must be exFAT or ext4, and a drive mounted elsewhere is refused (`device_busy mounted_elsewhere`). exFAT gets the store's ownership options; for ext4 the mount root is chowned to the daemon (never recursively). The daemon's unit lists the path as an optional `ReadWritePaths=`.
+- `--mount-copy` mounts a second drive at `/media/openastroara-copy` with no fstab line, so it is gone after a reboot. The store itself is refused (`refused is_store`, exit 6), the filesystem must be exFAT or ext4, and a drive mounted elsewhere is refused (`device_busy mounted_elsewhere`). exFAT gets the store's ownership options; for ext4 the mount root is chowned to the daemon (never recursively). Existing subfolders on an ext4 target that belong to another user stay theirs, so files copied into them fail one by one (counted, with the first reason shown) rather than the helper taking them over. The daemon's unit lists the path as an optional `ReadWritePaths=`.
 - `--unmount-copy` flushes and unmounts every layer at that path (`device_busy copy_target` when busy). Nothing mounted is a success.
 
 **Sudoers drop-in** (`/etc/sudoers.d/openastroara`, added by postinst per §34.3):
