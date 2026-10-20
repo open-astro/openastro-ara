@@ -113,6 +113,9 @@ public sealed partial class GuiderService {
     private void OnStarLostProbeDue(object? _) {
         PHD2Guider guider;
         CancellationTokenSource cts;
+        // Resolved outside _gate: the first call may construct the safety engine from DI, and a
+        // constructor that called back into this service would deadlock under the lock.
+        var safetyHolds = SafetyHoldsRig?.Invoke() == true;
         lock (_gate) {
             _starLostProbeTimer?.Dispose();
             _starLostProbeTimer = null;
@@ -133,7 +136,7 @@ public sealed partial class GuiderService {
             if (state != PhdAppState.LOSTLOCK && !ownStop) {
                 return;
             }
-            if (SafetyHoldsRig?.Invoke() == true) {
+            if (safetyHolds) {
                 LogStarLostRecoveryDeferredToSafety();
                 ArmStarLostRecoveryLocked(StarLostProbeInterval);
                 return;
@@ -169,6 +172,7 @@ public sealed partial class GuiderService {
         } finally {
             lock (_gate) {
                 _recoveryInFlight = false;
+                _recoveryStopPending = false; // a stop whose marker never came (looping guider) must not swallow the user's next one
                 if (ReferenceEquals(_recoveryCts, cts)) {
                     _recoveryCts = null;
                 }
@@ -256,8 +260,9 @@ public sealed partial class GuiderService {
         }
         var lostMinutes = fault is null ? 0 : Math.Max(1, (int) Math.Round((DateTimeOffset.UtcNow - fault.DetectedUtc).TotalMinutes));
         if (Recenter is null) {
-            // Nothing to re-center with: say so and leave the guider as it is, so a star that drifts
-            // back into the box still relocks and resumes the run the old way.
+            // Nothing to re-center with: say so and leave the guider as it is (no stop has happened,
+            // so _recoveryStoppedGuiding is false and GiveUpAsync restarts nothing), so a star that
+            // drifts back into the box still relocks and resumes the run the old way.
             return await GiveUpAsync(guider, fault, "Run stays paused — Ara cannot re-center on this rig",
                 $"The guide star has been lost for {lostMinutes} min and the guider has not found it again. "
                 + "This daemon has no plate solver wired, so Ara cannot re-center the target itself. Check the sky and press Resume.").ConfigureAwait(false);
@@ -266,9 +271,12 @@ public sealed partial class GuiderService {
 
         // 1. Stop the guider chasing a star that is gone; its own guiding_stopped must not end the
         // episode (consumed once by NoteStarLostMarker; a later stop by the user disarms as usual).
+        // A guider that is only looping (a retry after a failed attempt) answers the stop with
+        // LoopingExposuresStopped, never guiding_stopped: no marker to consume then.
+        var wasGuiding = guider.AppState?.State is var s && (s == PhdAppState.LOSTLOCK || s == PhdAppState.GUIDING);
         lock (_gate) {
             _recoveryStoppedGuiding = true;
-            _recoveryStopPending = true;
+            _recoveryStopPending = wasGuiding;
         }
         await guider.StopGuiding(ct).ConfigureAwait(false);
         ct.ThrowIfCancellationRequested();
