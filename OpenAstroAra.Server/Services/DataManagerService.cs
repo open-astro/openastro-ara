@@ -264,9 +264,9 @@ namespace OpenAstroAra.Server.Services {
                 ["arp-peculiar"] = "afe3aed0bbcfc5bd807e88a4b1f4ae15a493d9170d1bdff8a528a7a80e04f853",
                 ["wr-stars"] = "cf6d56f0055d2ac5e336322f26ef3f261bf7dd18c375a5a263c87e3f4fca9caa",
                 // #1136 — the sky-data release astap-2026.10 assets (its SHA256SUMS asset lists the same values).
-                ["astap-d80"] = "b2085e42032afef5ea3ed58efba1a5213cb20268bdb5fda27d27610e8882e6f4",
-                ["astap-g05"] = "cfe04d68a8546238863ef6dbaba31cf08eef57fe74587cd040fe0f5fc5c460fc",
-                ["astap-w08"] = "fc5d5e2306c1950ed2484d3746e73c81c4d8f080a3a01dcdb14d1b5cf08be3de",
+                ["astap-d80"] = "397b267181d3f5d742e1bb220ad3ab3629e12141f365f30f6ea5b54c8f797bfc",
+                ["astap-g05"] = "515f5ce998a3ec9c807199e3ee8258e0ce098b8bebf0b60e1c820928f0834c64",
+                ["astap-w08"] = "ba09f32dad097c415c88b416e264f3e2eb1dbbc8266b13753ea2221fe658a911",
             };
 
         /// <summary>#1136 — the category of the plate-solver star-database packages. They install under the
