@@ -48,13 +48,16 @@ public sealed record GuiderTwinPreviewDto(
 public sealed record ProfileDeleteResultDto(string GuiderProfile, string? Reason);
 
 /// <summary>A guider-twin delete waiting for a guider that is connected and idle (persisted next to the
-/// profiles so it survives a daemon restart).</summary>
+/// profiles so it survives a daemon restart). <paramref name="Shared"/> records that another ARA profile
+/// mapped to the twin when the user asked anyway: the drain then deletes it regardless of live names,
+/// exactly as the immediate path would have.</summary>
 public sealed record PendingGuiderTwinDelete(
     Guid AraProfileId,
     string? AraProfileName,
     IReadOnlyList<string> TwinNames,
     bool DeleteDarkFiles,
-    DateTimeOffset QueuedUtc);
+    DateTimeOffset QueuedUtc,
+    bool Shared = false);
 
 /// <summary>On-disk shape of the pending guider-twin delete queue.</summary>
 public sealed record PendingGuiderTwinDeleteFile(IReadOnlyList<PendingGuiderTwinDelete> Pending);
