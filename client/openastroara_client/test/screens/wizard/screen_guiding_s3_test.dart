@@ -230,6 +230,19 @@ void main() {
     expect(container.read(wizardStepValidProvider), isTrue);
   });
 
+  testWidgets('the Shortest menu opens at 0.01 s, not scrolled to the default',
+      (tester) async {
+    await _pump(tester);
+    final shortest = find.byWidgetPredicate((w) =>
+        w is DropdownMenu<int> && (w.label as Text?)?.data == 'Shortest');
+    await tester.ensureVisible(shortest);
+    await tester.tap(shortest);
+    await tester.pumpAndSettle();
+    expect(find.text('0.01 s').hitTestable(), findsOneWidget);
+    await tester.tapAt(Offset.zero);
+    await tester.pumpAndSettle();
+  });
+
   testWidgets('an inverted range blocks Next and shows the error hint; '
       'fixing it re-validates', (tester) async {
     final container = await _pump(tester);

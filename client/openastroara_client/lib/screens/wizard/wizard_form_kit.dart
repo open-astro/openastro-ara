@@ -206,6 +206,10 @@ class WizardDropdown<T> extends StatelessWidget {
   final ValueChanged<T?> onChanged;
   final String? helperText;
 
+  /// Open the menu scrolled to its first entry instead of the selected one,
+  /// for lists whose smaller values would otherwise sit hidden above it.
+  final bool openAtTop;
+
   const WizardDropdown({
     super.key,
     required this.label,
@@ -213,6 +217,7 @@ class WizardDropdown<T> extends StatelessWidget {
     required this.entries,
     required this.onChanged,
     this.helperText,
+    this.openAtTop = false,
   });
 
   @override
@@ -228,6 +233,8 @@ class WizardDropdown<T> extends StatelessWidget {
             expandedInsets: EdgeInsets.zero,
             onSelected: onChanged,
             dropdownMenuEntries: entries,
+            // No highlight means no scroll-to-selection on open.
+            searchCallback: openAtTop ? (_, _) => null : null,
           ),
           if (helperText != null) ...[
             const SizedBox(height: 4),

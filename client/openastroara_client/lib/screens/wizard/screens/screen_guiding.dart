@@ -714,6 +714,9 @@ class _ScreenGuiderState extends ConsumerState<ScreenGuider> {
             Expanded(
               child: WizardDropdown<int>(
                 label: 'Shortest',
+                // Start at 0.01 s so the shorter steps are seen, not hidden
+                // above the 1.0 s default.
+                openAtTop: true,
                 value: kGuideExposuresMs.contains(_g.darkMinExposureMs)
                     ? _g.darkMinExposureMs
                     : 1000,
