@@ -375,6 +375,8 @@ class _SolverDatabaseSectionState extends ConsumerState<_SolverDatabaseSection> 
     final api = ref.read(dataManagerApiProvider);
     final draft = ref.read(wizardControllerProvider).draft;
     if (api == null) {
+      // Same rule as the error branch: nothing from an earlier visit may be queued.
+      draft.plateSolve.solverDatabasePackageIds = const [];
       setState(() {
         _loading = false;
         _error = 'No rig in reach: the database is chosen when the profile reaches a rig.';

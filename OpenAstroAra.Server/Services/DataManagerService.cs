@@ -343,7 +343,7 @@ namespace OpenAstroAra.Server.Services {
             var mainReducer = request.ReducerFactor ?? optics?.ReducerFactor;
             double? guideFocal = setupType == "oag"
                 ? (mainFocal is > 0 ? mainFocal.Value * (mainReducer is > 0 ? mainReducer.Value : 1.0) : null)
-                : request.GuideFocalLengthMm ?? (guider?.GuideFocalLength > 0 ? guider.GuideFocalLength : null);
+                : request.GuideFocalLengthMm is > 0 ? request.GuideFocalLengthMm : (guider?.GuideFocalLength > 0 ? guider.GuideFocalLength : null);
             var guide = FieldOfViewHeightDeg(
                 guideFocal,
                 1.0,

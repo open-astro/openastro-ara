@@ -330,6 +330,10 @@ namespace OpenAstroAra.Test {
                 Assert.That(r.Band, Is.EqualTo("general"));
                 Assert.That(r.TooNarrow, Is.False);
             });
+            // An explicit 0 guide focal length is "unset", not a zero-length scope: the profile's value fills in.
+            var zeroGuide = svc.Recommend(new SolverRecommendationRequestDto(50, 1.0, 6248, 4176, 3.76, 0, 3.75, 1280, 960), null,
+                new Phd2SettingsDto("localhost", 4400, "", false, 0, 0, 0, 0, 0, false, GuideFocalLength: 200));
+            Assert.That(zeroGuide.GuideFovDeg, Is.EqualTo(1.03).Within(0.02), "profile guide focal length used for 0");
             // A 50 mm lens (18°, well inside G05's 6–20° band) with a 200 mm guide scope + ASI120 (1.0°, D05): two databases.
             var two = svc.Recommend(new SolverRecommendationRequestDto(50, 1.0, 6248, 4176, 3.76, 200, 3.75, 1280, 960), null, null);
             Assert.That(two.MainFovDeg, Is.EqualTo(18.0).Within(0.1));
