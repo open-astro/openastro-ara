@@ -1124,6 +1124,8 @@ PrivateTmp=true
 PrivateDevices=false   # cameras + USB serial need /dev access via udev rules
 ReadWritePaths=/var/log/openastroara
 ReadWritePaths=/var/lib/openastroara
+# #1136: the Data Manager installs the ASTAP star databases here (tmpfiles creates it).
+ReadWritePaths=/var/lib/astap
 ReadWritePaths=-/media/openastroara
 ReadWritePaths=/run/openastroara
 ReadWritePaths=/etc/openastroara

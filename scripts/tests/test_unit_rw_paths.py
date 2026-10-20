@@ -104,6 +104,14 @@ class UnitReadWritePathsTest(unittest.TestCase):
         # rewrite reintroduces the 226/NAMESPACE loop (#1186 review).
         self.assertEqual(rw_paths(PLAYBOOK.read_text()), rw_paths(UNIT.read_text()))
 
+    def test_solver_database_root_is_writable(self):
+        # #1136: the Data Manager installs the ASTAP star databases under
+        # /var/lib/astap (the profile's default index path). ProtectSystem=strict
+        # mounts everything else read-only, so without this entry the staging
+        # directory fails with EROFS and the headline feature fails on every
+        # packaged rig. tmpfiles creates the directory, so no '-' prefix is needed.
+        self.assertIn("/var/lib/astap", rw_paths(UNIT.read_text()))
+
     def test_parser_sees_the_unit(self):
         # A parser that silently finds nothing would pass the check above vacuously.
         self.assertGreaterEqual(len(required(rw_paths(UNIT.read_text()))), 4)
