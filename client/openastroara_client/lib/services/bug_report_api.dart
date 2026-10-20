@@ -32,8 +32,11 @@ abstract interface class BugReportClient {
 class BugReportApi implements BugReportClient {
   final Dio _dio;
 
-  BugReportApi(AraServer server)
-      : _dio = Dio(BaseOptions(
+  /// [dio] is injectable so tests can supply a stub adapter; production passes
+  /// nothing and a server-bound Dio is built.
+  BugReportApi(AraServer server, {Dio? dio})
+      : _dio = dio ??
+            Dio(BaseOptions(
           baseUrl: server.baseUrl,
           connectTimeout: const Duration(seconds: 3),
           sendTimeout: const Duration(seconds: 10),

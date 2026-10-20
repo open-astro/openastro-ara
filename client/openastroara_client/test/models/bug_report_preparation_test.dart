@@ -16,6 +16,17 @@ void main() {
       expect(p.completedUtc, isNotNull);
     });
 
+    test('reads the §54.3 sharing mode and falls back to full on an older daemon', () {
+      expect(
+        BugReportPreparation.fromJson(const {'preparation_id': 'a', 'status': 'ready', 'sharing_mode': 'coarse_gps'}).sharingMode,
+        'coarse_gps',
+      );
+      expect(
+        BugReportPreparation.fromJson(const {'preparation_id': 'a', 'status': 'ready'}).sharingMode,
+        'full',
+      );
+    });
+
     test('throws FormatException on a missing preparation_id', () {
       expect(
         () => BugReportPreparation.fromJson(const {'status': 'ready'}),
