@@ -8066,10 +8066,10 @@ User attaches the zip manually in GitHub — ARA cannot upload directly via API 
 |---|---|---|
 | GPS coordinates | profile keys `latitude*` / `longitude*` / `lat` / `lon` / `lng` (numbers, or strings holding a number); `elevation*` | coarse GPS rounds to the nearest degree (~111 km) and zeroes elevation; redacted zeroes both. Logs are **not** scanned for coordinates (a float in a log line is not reliably a coordinate) |
 | Equipment serial numbers | profile keys containing `serial` (string or number) | redacted → `[REDACTED-SN]` |
-| Hostnames / endpoints | profile keys `host_name` / `host` / `endpoint` / `address` / `*_url`; in text, names ending in `.local` or `.lan` (every label) | redacted → `[REDACTED-HOST]` (text keeps the `.local` / `.lan` suffix) |
+| Hostnames / endpoints | profile keys `host_name` / `host` / `*_host` / `endpoint` / `*address*` / `*_url`; in text, names ending in `.local` or `.lan` (every label) | redacted → `[REDACTED-HOST]` (text keeps the `.local` / `.lan` suffix) |
 | User home paths | `/home/<name>/`, `/Users/<name>/`, `C:\Users\<name>\` (single or JSON-escaped backslashes) | redacted → `[REDACTED-USER]` |
 | Internal IPs | RFC 1918 ranges (`10.x`, `192.168.x`, `172.16-31.x`); a public address is a deliberate remote-access setting and stays | redacted → `[REDACTED-IP]` |
-| Tokens / secrets | profile keys containing `token` / `secret` / `password` / `passphrase` / `api_key` / `webhook` (non-empty; an empty one stays empty so the reader learns it is unset) | redacted → `[REDACTED]` |
+| Tokens / secrets | profile keys containing `token` / `secret` / `password` / `passphrase` / `api_key` / `webhook` / `user_key` / `chat_id` or ending in `_key` — both halves of every notification channel, as the profile-share scrub does (non-empty; an empty one stays empty so the reader learns it is unset) | redacted → `[REDACTED]` |
 
 The scrub is best-effort pattern matching; the disclosure dialog says what the chosen mode covers rather than claiming completeness. Not done: vendor-specific serial shapes in log lines, and cross-referencing the profile's own hostname in logs.
 

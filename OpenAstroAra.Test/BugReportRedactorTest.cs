@@ -25,7 +25,8 @@ namespace OpenAstroAra.Test {
         private const string Profile = """
             {
               "site": { "name": "Backyard", "latitude_deg": 30.2672, "longitude_deg": -97.7431, "elevation_m": 149.5 },
-              "notifications": { "pushover_token": "azGDORePK8gMaC0QOYAMyEEuzJnyUi", "telegram_bot_token": "", "email": "" },
+              "notifications": { "pushover_token": "azGDORePK8gMaC0QOYAMyEEuzJnyUi", "pushover_user_key": "uQiRzpo4DXghDmr9QzzfQu27cmVRsG", "telegram_bot_token": "", "telegram_chat_id": "123456789", "email": "" },
+              "guider_alpaca_host": "observatory",
               "equipment": [ { "name": "ASI2600MM", "serial_number": "1a2b3c4d", "host_name": "pi-observatory.local", "usb_serial": 12345 } ],
               "guide_site": { "latitude_deg": "30.27", "longitude_deg": "-97.74" },
               "storage": { "save_directory": "/home/joey/captures", "note": "see /Users/joey/notes" },
@@ -57,11 +58,11 @@ namespace OpenAstroAra.Test {
         [Test]
         public void Credential_shapes_are_stripped_in_every_mode() {
             // §54.6 — not user-toggleable.
-            const string line = "hdr X-OpenAstroAra-Token: abcdefghijklmnopqrstuvwxyz0123 auth Bearer eyJhbGciOiJIUzI1NiJ9.payload.sig pat ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ0123 slack xoxb-1234567890-abcdef key -----BEGIN RSA PRIVATE KEY-----\nMIIE\n-----END RSA PRIVATE KEY----- short Bearer abc";
+            const string line = "hdr X-OpenAstroAra-Token: abcdefghijklmnopqrstuvwxyz0123 auth Bearer eyJhbGciOiJIUzI1NiJ9.payload+sig/x== pat ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ0123 slack xoxb-1234567890-abcdef key -----BEGIN RSA PRIVATE KEY-----\nMIIE\n-----END RSA PRIVATE KEY----- short Bearer abc";
             foreach (var mode in new[] { BugReportSharingMode.Full, BugReportSharingMode.CoarseGps, BugReportSharingMode.Redacted }) {
                 var s = BugReportRedactor.RedactText(line, mode);
                 Assert.That(s, Does.Not.Contain("abcdefghijklmnopqrstuvwxyz0123").And.Not.Contain("eyJhbGci").And.Not.Contain("ghp_ABC").And.Not.Contain("xoxb-").And.Not.Contain("MIIE"), mode.ToString());
-                Assert.That(s, Does.Contain("X-OpenAstroAra-Token: [REDACTED]").And.Contain("Bearer [REDACTED]").And.Contain("short Bearer abc"), "the header name stays; a short bearer is not a token");
+                Assert.That(s, Does.Contain("X-OpenAstroAra-Token: [REDACTED]").And.Contain("Bearer [REDACTED] pat").And.Contain("short Bearer abc"), "the header name stays; a padded base64 token leaves no tail; a short bearer is not a token");
             }
         }
 
@@ -87,6 +88,9 @@ namespace OpenAstroAra.Test {
                 Assert.That(node["site"]!["name"]!.GetValue<string>(), Is.EqualTo("Backyard"), "a site name is not on the §54 list");
                 Assert.That(node["notifications"]!["pushover_token"]!.GetValue<string>(), Is.EqualTo(BugReportRedactor.RedactedValue));
                 Assert.That(node["notifications"]!["telegram_bot_token"]!.GetValue<string>(), Is.EqualTo(""), "an empty secret stays empty: the reader learns it is unset");
+                Assert.That(node["notifications"]!["pushover_user_key"]!.GetValue<string>(), Is.EqualTo(BugReportRedactor.RedactedValue), "both halves of a channel");
+                Assert.That(node["notifications"]!["telegram_chat_id"]!.GetValue<string>(), Is.EqualTo(BugReportRedactor.RedactedValue));
+                Assert.That(node["guider_alpaca_host"]!.GetValue<string>(), Is.EqualTo(BugReportRedactor.RedactedHost), "a bare host name under a *_host key");
                 Assert.That(node["equipment"]![0]!["serial_number"]!.GetValue<string>(), Is.EqualTo(BugReportRedactor.RedactedSerial));
                 Assert.That(node["equipment"]![0]!["host_name"]!.GetValue<string>(), Is.EqualTo(BugReportRedactor.RedactedHost));
                 Assert.That(node["equipment"]![0]!["usb_serial"]!.GetValue<string>(), Is.EqualTo(BugReportRedactor.RedactedSerial), "a numeric serial is a serial");

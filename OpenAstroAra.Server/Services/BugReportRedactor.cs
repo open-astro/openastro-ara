@@ -61,7 +61,9 @@ public static partial class BugReportRedactor {
     };
 
     // Keys that hold a secret or a device identity, matched case-insensitively on the key name.
-    [GeneratedRegex("token|secret|password|passphrase|api_?key|webhook", RegexOptions.IgnoreCase)]
+    // Both halves of every notification channel count (pushover token + user key, telegram bot token +
+    // chat id), the same rule ProfileShareService applies.
+    [GeneratedRegex("token|secret|password|passphrase|api_?key|webhook|user_?key|chat_?id|_key$", RegexOptions.IgnoreCase)]
     private static partial Regex SecretKey();
 
     [GeneratedRegex("serial", RegexOptions.IgnoreCase)]
@@ -73,7 +75,7 @@ public static partial class BugReportRedactor {
     [GeneratedRegex("^elevation(_m)?$|altitude_m", RegexOptions.IgnoreCase)]
     private static partial Regex ElevationKey();
 
-    [GeneratedRegex("host_?name|^host$|endpoint|address|_url$", RegexOptions.IgnoreCase)]
+    [GeneratedRegex("host_?name|^host$|_host$|endpoint|address|_url$", RegexOptions.IgnoreCase)]
     private static partial Regex HostKey();
 
     // /home/<user>/, /Users/<user>/, C:\Users\<user>\ — keep the shape, drop the name.
@@ -95,7 +97,8 @@ public static partial class BugReportRedactor {
 
     // §54.6 always-blacklisted credential shapes, stripped in every mode: the daemon's own token header, bearer
     // tokens, GitHub / Stripe / Slack-style keys, and private-key blocks.
-    [GeneratedRegex(@"(?i)(X-OpenAstroAra-Token:\s*|Bearer\s+)[A-Za-z0-9_\-.]{20,}", RegexOptions.CultureInvariant)]
+    // url-safe and standard base64 alphabets, so a padded token does not leave its tail behind the placeholder.
+    [GeneratedRegex(@"(?i)(X-OpenAstroAra-Token:\s*|Bearer\s+)[A-Za-z0-9_\-.+/=]{20,}", RegexOptions.CultureInvariant)]
     private static partial Regex TokenHeader();
 
     [GeneratedRegex(@"\b(?:ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|sk_(?:live|test)_[A-Za-z0-9]{10,}|xox[abp]-[A-Za-z0-9-]{10,})\b", RegexOptions.CultureInvariant)]
