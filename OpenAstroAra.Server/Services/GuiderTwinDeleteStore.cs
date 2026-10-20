@@ -43,6 +43,8 @@ public sealed partial class FileGuiderTwinDeleteStore : IGuiderTwinDeleteStore {
     private readonly string _path;
     private readonly ILogger? _logger;
     private readonly object _gate = new();
+    // Loaded once, written through: the ping tick asks every few seconds and must not touch the disk.
+    private List<PendingGuiderTwinDelete>? _cache;
 
     public FileGuiderTwinDeleteStore(string profileDir, ILogger<FileGuiderTwinDeleteStore>? logger = null) {
         ArgumentException.ThrowIfNullOrEmpty(profileDir);
@@ -52,7 +54,7 @@ public sealed partial class FileGuiderTwinDeleteStore : IGuiderTwinDeleteStore {
 
     public IReadOnlyList<PendingGuiderTwinDelete> List() {
         lock (_gate) {
-            return Load();
+            return Load().ToArray();
         }
     }
 
@@ -74,21 +76,27 @@ public sealed partial class FileGuiderTwinDeleteStore : IGuiderTwinDeleteStore {
         }
     }
 
+    // Caller holds _gate.
     private List<PendingGuiderTwinDelete> Load() {
+        if (_cache is not null) {
+            return _cache;
+        }
         if (!File.Exists(_path)) {
-            return new List<PendingGuiderTwinDelete>();
+            return _cache = new List<PendingGuiderTwinDelete>();
         }
         try {
             var json = File.ReadAllText(_path);
             var file = JsonSerializer.Deserialize(json, AraJsonSerializerContext.Default.PendingGuiderTwinDeleteFile);
-            return file?.Pending?.ToList() ?? new List<PendingGuiderTwinDelete>();
+            return _cache = file?.Pending?.ToList() ?? new List<PendingGuiderTwinDelete>();
         } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException) {
             if (_logger is not null) LogUnreadable(_logger, ex, _path);
-            return new List<PendingGuiderTwinDelete>();
+            return _cache = new List<PendingGuiderTwinDelete>();
         }
     }
 
+    // Caller holds _gate.
     private void Save(List<PendingGuiderTwinDelete> all) {
+        _cache = all;
         if (all.Count == 0) {
             try {
                 File.Delete(_path);

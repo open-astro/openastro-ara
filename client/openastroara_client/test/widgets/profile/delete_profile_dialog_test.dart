@@ -144,10 +144,23 @@ void main() {
             exists: null,
             shared: false,
             canDeleteNow: false,
-            reason: 'No guider is connected.'));
+            reason: null));
     expect(_checkbox(tester).value, isTrue);
     expect(find.textContaining('deleted the next time the guider connects'),
         findsOneWidget);
+  });
+
+  testWidgets('a preview fault with the guider connected shows the fault, not the next-connect line',
+      (tester) async {
+    await _open(tester,
+        preview: () async => const GuiderTwinPreview(
+            twinNames: ['Travel Rig'],
+            exists: null,
+            shared: false,
+            canDeleteNow: false,
+            reason: 'get_profiles timed out'));
+    expect(find.textContaining('get_profiles timed out'), findsOneWidget);
+    expect(find.textContaining('next time the guider connects'), findsNothing);
   });
 
   testWidgets('a busy guider: the box stays, with the daemon\'s reason',

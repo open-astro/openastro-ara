@@ -153,10 +153,14 @@ class _DeleteProfileDialogState extends State<DeleteProfileDialog> {
       lines.add('Another Ara profile, "${twin.sharedWith ?? twin.displayName}", '
           'uses this guider profile.');
     }
-    if (twin.exists == null) {
-      lines.add('It will be deleted the next time the guider connects.');
-    } else if (!twin.canDeleteNow && twin.reason != null) {
+    // The daemon's sentence wins when it has one ("No guider is connected.
+    // It will be deleted the next time the guider connects.", "The guider is
+    // guiding…", or the fault that kept it from answering); the next-connect
+    // line is only the fallback for an unknown twin with no reason given.
+    if (!twin.canDeleteNow && twin.reason != null && twin.reason!.isNotEmpty) {
       lines.add(twin.reason!);
+    } else if (twin.exists == null) {
+      lines.add('It will be deleted the next time the guider connects.');
     }
     return lines.join(' ');
   }
