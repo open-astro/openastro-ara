@@ -207,6 +207,8 @@ void main() {
         baseOptics: const OpticsSettings(reducerFactor: 0.8));
     final draft = container.read(wizardControllerProvider).draft;
     draft.telescope.focalLengthMm = 2032;
+    expect(draft.telescope.reducerFactor, 0.8,
+        reason: 'seeded on entry, before Details is ever opened, so the review row and Save agree');
     await tester.ensureVisible(find.text('Details').first);
     await tester.tap(find.text('Details').first);
     await tester.pumpAndSettle();
@@ -248,10 +250,11 @@ void main() {
     expect(draft.telescope.reducerFactor, 2);
     expect(find.textContaining('4064 mm'), findsOneWidget);
 
-    // Out of range is refused and leaves the last good value.
+    // Out of range is refused, says so, and leaves the last good value.
     await tester.enterText(find.byKey(const ValueKey('details-mount-reducer')), '9');
     await tester.pumpAndSettle();
     expect(draft.telescope.reducerFactor, 2);
+    expect(find.textContaining('between 0.1 and 5×'), findsOneWidget);
   });
 
   // #1298: discovery always lists the daemon's manual filter wheel, so it

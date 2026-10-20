@@ -633,7 +633,7 @@ namespace OpenAstroAra.Test {
         // ── the production catalog ──
 
         [Test]
-        public void The_production_catalog_has_the_three_databases_as_release_assets_with_digests() {
+        public void The_production_catalog_has_the_five_databases_as_release_assets_with_digests() {
             var solver = DataManagerService.Catalog.Where(DataManagerService.IsSolverPackage).ToList();
             Assert.That(solver.Select(p => p.Id), Is.EquivalentTo(FiveIds));
             foreach (var pkg in solver) {

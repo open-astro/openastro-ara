@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 // The draft declares its own `ImagingDefaults` / `PlateSolveSettings` /
 // `AutofocusSettings` bags; we map onto the profile *section* types from the
@@ -8,6 +9,7 @@ import 'package:flutter/foundation.dart';
 import '../../models/profile_draft.dart'
     hide ImagingDefaults, PlateSolveSettings, AutofocusSettings, SafetyPolicies;
 import '../../services/profile_api.dart';
+import '../../state/profile_management_state.dart';
 import '../../util/guide_optics.dart';
 import '../../util/host_port.dart';
 import '../../widgets/guider/guider_setup_wizard.dart'
@@ -151,6 +153,26 @@ ImagingDefaults applyDraftToImaging(ImagingDefaults base, ProfileDraft d) {
       null => null,
     },
   );
+}
+
+/// §36.10 — new wizard profiles clone the active profile, so an untouched
+/// reducer field must show (and Save must keep) that profile's reducer, not
+/// 1×. Seeding the draft once makes the equipment helper, the review row, the
+/// recommendation and Save read the same number. Returns the seeded value, or
+/// null when the draft already had one or there is no rig to read (offline:
+/// the draft stays null and Save keeps whatever the profile has).
+Future<double?> seedReducerFromBaseProfile(WidgetRef ref, ProfileDraft draft) async {
+  if (draft.telescope.reducerFactor != null) return null;
+  final api = ref.read(profileApiProvider);
+  if (api == null) return null;
+  try {
+    final base = (await api.getOptics()).reducerFactor;
+    if (base <= 0 || draft.telescope.reducerFactor != null) return null;
+    draft.telescope.reducerFactor = base;
+    return base;
+  } catch (_) {
+    return null;
+  }
 }
 
 /// §63.19 — the guide-setup type the wizard should ACT on: the draft's pick

@@ -8,7 +8,6 @@ import '../../../models/equipment_readiness.dart';
 import '../../../models/profile_draft.dart';
 import '../../../models/solver_recommendation.dart';
 import '../../../services/equipment_discovery_api.dart';
-import '../../../state/profile_management_state.dart';
 import '../../../state/saved_server_state.dart';
 import '../../../state/settings/equipment_connection_state.dart';
 import '../../../state/wizard_state.dart';
@@ -16,6 +15,7 @@ import '../../../state/wizard/equipment_readiness_state.dart';
 import '../../../theme/ara_colors.dart';
 import '../wizard_facts_apply.dart';
 import '../wizard_form_kit.dart';
+import '../wizard_save.dart' show seedReducerFromBaseProfile;
 import 'screen_equipment_discovery.dart'
     show DeviceChoice, DiscoverySheet, equipmentDiscoveryApiFactoryProvider;
 
@@ -131,6 +131,9 @@ class _ScreenYourEquipmentState extends ConsumerState<ScreenYourEquipment> {
     _draft = ref.read(wizardControllerProvider).draft;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) unawaited(_prepare());
+      // §36.10 — seeded here, not only when Details opens, so a user who never
+      // expands it still reviews and saves the cloned profile's reducer.
+      if (mounted) unawaited(seedReducerFromBaseProfile(ref, _draft));
     });
   }
 
@@ -983,30 +986,17 @@ class _ReducerFieldState extends ConsumerState<_ReducerField> {
     super.initState();
     final r = widget.draft.telescope.reducerFactor;
     _ctl = TextEditingController(text: r == null ? '' : formatReducer(r));
-    if (r == null) _seedFromBaseProfile();
+    if (r == null) _seedField();
   }
 
-  /// New wizard profiles clone the active profile, so an untouched field must
-  /// show (and Save must keep) that profile's reducer, not 1×. Seeding the draft
-  /// makes the helper, the review row, the recommendation and Save read the
-  /// same number. Offline there is no base: the draft stays null and Save keeps
-  /// whatever the profile has.
-  Future<void> _seedFromBaseProfile() async {
-    final api = ref.read(profileApiProvider);
-    if (api == null) return;
-    try {
-      final optics = await api.getOptics();
-      if (!mounted || widget.draft.telescope.reducerFactor != null) return;
-      final base = optics.reducerFactor;
-      if (base <= 0) return;
-      setState(() {
-        widget.draft.telescope.reducerFactor = base;
-        _ctl.text = formatReducer(base);
-      });
-    } catch (_) {
-      // Offline / no daemon — the field stays blank, Save keeps the profile's value.
-    }
+  Future<void> _seedField() async {
+    final seeded = await seedReducerFromBaseProfile(ref, widget.draft);
+    if (!mounted || seeded == null) return;
+    setState(() => _ctl.text = formatReducer(seeded));
   }
+
+  // Out-of-range text stays visible in the field; say why the draft ignores it.
+  String? _rangeError;
 
   @override
   void dispose() {
@@ -1048,13 +1038,21 @@ class _ReducerFieldState extends ConsumerState<_ReducerField> {
   static const double _maxFactor = 5;
 
   void _set(double? v) {
-    if (v != null && v > 0 && (v < _minFactor || v > _maxFactor)) return;
-    setState(() => widget.draft.telescope.reducerFactor = (v != null && v > 0) ? v : 1.0);
+    if (v != null && v > 0 && (v < _minFactor || v > _maxFactor)) {
+      setState(() => _rangeError = 'Enter a factor between ${formatReducer(_minFactor)} and ${formatReducer(_maxFactor)}× (kept ${formatReducer(widget.draft.telescope.reducerFactor ?? 1)}×).');
+      return;
+    }
+    setState(() {
+      _rangeError = null;
+      widget.draft.telescope.reducerFactor = (v != null && v > 0) ? v : 1.0;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    final current = widget.draft.telescope.reducerFactor ?? 1.0;
+    // Null (offline, untouched) selects no chip: Save keeps the profile's value,
+    // which may not be 1×.
+    final current = widget.draft.telescope.reducerFactor;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1066,6 +1064,7 @@ class _ReducerFieldState extends ConsumerState<_ReducerField> {
             hintText: '1 = none',
             helperText: _helper(),
             helperMaxLines: 3,
+            errorText: _rangeError,
           ),
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
           inputFormatters: WizardInput.unsignedDecimal,
@@ -1079,7 +1078,7 @@ class _ReducerFieldState extends ConsumerState<_ReducerField> {
               ChoiceChip(
                 key: ValueKey('details-mount-reducer-$f'),
                 label: Text('${formatReducer(f)}×'),
-                selected: (current - f).abs() < 1e-9,
+                selected: current != null && (current - f).abs() < 1e-9,
                 onSelected: (_) {
                   _ctl.text = formatReducer(f);
                   _set(f);
