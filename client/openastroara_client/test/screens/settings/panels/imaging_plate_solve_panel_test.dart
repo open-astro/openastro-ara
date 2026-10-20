@@ -14,10 +14,11 @@ import 'package:openastroara/state/settings/panel_save_registry.dart';
 import 'package:openastroara/widgets/settings/editable_field.dart';
 
 /// A daemon that stores the plate-solve settings and, like the real one,
-/// normalises /usr/bin/astap to /usr/bin/astap_cli on write (#1215).
+/// normalises a stock solver path (/usr/bin/astap) to the bundled
+/// /opt/openastroara/astap_cli on write (#1215, #1136).
 class _NormalisingDaemon implements HttpClientAdapter {
   Map<String, dynamic> stored = {
-    'path_or_endpoint': '/usr/bin/astap_cli',
+    'path_or_endpoint': '/opt/openastroara/astap_cli',
     'index_download_path': '/var/lib/astap',
   };
   final List<String> requests = [];
@@ -35,7 +36,7 @@ class _NormalisingDaemon implements HttpClientAdapter {
     if (options.method == 'PUT') {
       final sent = Map<String, dynamic>.from(options.data as Map);
       if (sent['path_or_endpoint'] == '/usr/bin/astap') {
-        sent['path_or_endpoint'] = '/usr/bin/astap_cli';
+        sent['path_or_endpoint'] = '/opt/openastroara/astap_cli';
       }
       stored = {...stored, ...sent};
     }
@@ -177,7 +178,7 @@ void main() {
   testWidgets(
     'Save shows what the daemon stored and re-reads the database status',
     (tester) async {
-      // #1215 — the daemon rewrites /usr/bin/astap to /usr/bin/astap_cli on write; the
+      // #1215 — the daemon rewrites /usr/bin/astap to /opt/openastroara/astap_cli on write; the
       // field used to keep showing what was typed, and the status was read once.
       final daemon = _NormalisingDaemon();
       ImagingPlateSolvePanel.apiFactory = (server) =>
@@ -231,7 +232,7 @@ void main() {
       expect(daemon.requests, contains('PUT /api/v1/profile/plate-solve'));
       expect(
         tester.widget<TextField>(solverField).controller!.text,
-        '/usr/bin/astap_cli',
+        '/opt/openastroara/astap_cli',
         reason: 'the field shows what the daemon stored, not what was typed',
       );
       expect(

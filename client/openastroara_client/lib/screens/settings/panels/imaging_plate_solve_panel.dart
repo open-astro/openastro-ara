@@ -77,7 +77,8 @@ class _ImagingPlateSolvePanelState extends ConsumerState<ImagingPlateSolvePanel>
       final notifier = ref.read(plateSolveSettingsProvider.notifier);
       await notifier.persistToServer(api);
       if (!mounted) return;
-      // #1215 — the daemon normalises on write (/usr/bin/astap → /usr/bin/astap_cli);
+      // #1215 — the daemon normalises on write (a stock solver path such as /usr/bin/astap
+      // becomes the bundled /opt/openastroara/astap_cli, #1136);
       // re-read so the fields show what was stored, not what was typed.
       await notifier.hydrateFromServer(api);
       if (!mounted) return;
