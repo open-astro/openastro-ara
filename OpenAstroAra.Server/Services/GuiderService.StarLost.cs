@@ -46,7 +46,10 @@ public sealed partial class GuiderService {
     private bool _starLostReacted;                 // the reaction ran for the current lost-star episode
     private EquipmentFaultEvent? _starLostFault;   // its §42.5 row, resolved when the star is back
     private IReadOnlyList<Guid> _starLostPausedRuns = Array.Empty<Guid>();
-    private DateTimeOffset? _guidingStoppedUtc;   // IGuiderMediator.GuidingStoppedUtc — the Dither's long-gap read
+    // IGuiderMediator.GuidingStoppedUtc — the Dither's long-gap read. Deliberately NOT cleared by
+    // ResetStarLostWatchLocked: guiding stays off across a guider disconnect and reconnect, so a
+    // restart after one measures the gap from the real stop, not from the reconnect.
+    private DateTimeOffset? _guidingStoppedUtc;
 
     private void NoteStarLostMarker(string? kind) {
         lock (_gate) {

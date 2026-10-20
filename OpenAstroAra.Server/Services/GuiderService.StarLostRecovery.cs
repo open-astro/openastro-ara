@@ -150,6 +150,9 @@ public sealed partial class GuiderService {
         var ct = cts.Token;
         TimeSpan? next = null;
         try {
+            if (!await EpisodeStillOursAsync(ct).ConfigureAwait(false)) {
+                return; // the user acted on the pause: no more probes
+            }
             if (!await SkyIsClearAsync(guider, ct).ConfigureAwait(false)) {
                 LogStarLostProbeStillCloudy();
                 next = StarLostProbeInterval;
@@ -197,35 +200,57 @@ public sealed partial class GuiderService {
         }
     }
 
-    /// <summary>One recovery attempt. Returns the delay before the next probe, or null when the episode
-    /// is over (resumed, handed to the user, or given up).</summary>
-    private async Task<TimeSpan?> RecoverAsync(PHD2Guider guider, CancellationToken ct) {
-        var sequencer = _sequencerResolver?.Invoke();
+    /// <summary>Which of the episode's runs are still paused under daemon custody. Empty = the user
+    /// resumed, paused or stopped the run (or it finished): the episode is closed here, its fault row
+    /// resolved, and the caller stops. Asked before every probe and again right before the slew, so
+    /// a Resume pressed during the wait or the stop never meets a mount in motion.</summary>
+    private async Task<IReadOnlyList<Guid>> StillDaemonPausedAsync(ISequencerService sequencer, CancellationToken ct) {
         IReadOnlyList<Guid> paused;
         EquipmentFaultEvent? fault;
         lock (_gate) {
             paused = _starLostPausedRuns;
             fault = _starLostFault;
         }
+        var still = await sequencer.DaemonPausedRunsAsync(paused, ct).ConfigureAwait(false);
+        if (still.Count > 0) {
+            return still;
+        }
+        lock (_gate) {
+            if (!_starLostReacted) {
+                return still;
+            }
+            _starLostReacted = false;
+            _starLostFault = null;
+            _starLostPausedRuns = Array.Empty<Guid>();
+            _recoveryStoppedGuiding = false;
+        }
+        LogStarLostRecoveryUserActed();
+        if (fault is not null) {
+            await ResolveFaultQuietlyAsync(fault, DateTimeOffset.UtcNow).ConfigureAwait(false);
+        }
+        return still;
+    }
+
+    private async Task<bool> EpisodeStillOursAsync(CancellationToken ct) {
+        var sequencer = _sequencerResolver?.Invoke();
+        return sequencer is not null && (await StillDaemonPausedAsync(sequencer, ct).ConfigureAwait(false)).Count > 0;
+    }
+
+    /// <summary>One recovery attempt. Returns the delay before the next probe, or null when the episode
+    /// is over (resumed, handed to the user, or given up).</summary>
+    private async Task<TimeSpan?> RecoverAsync(PHD2Guider guider, CancellationToken ct) {
+        var sequencer = _sequencerResolver?.Invoke();
         if (sequencer is null) {
             return null;
         }
-        var still = await sequencer.DaemonPausedRunsAsync(paused, ct).ConfigureAwait(false);
+        var still = await StillDaemonPausedAsync(sequencer, ct).ConfigureAwait(false);
         if (still.Count == 0) {
-            // The user resumed, paused or stopped the run (or it finished): the episode is theirs.
-            lock (_gate) {
-                if (!_starLostReacted) {
-                    return null;
-                }
-                _starLostReacted = false;
-                _starLostFault = null;
-                _starLostPausedRuns = Array.Empty<Guid>();
-            }
-            LogStarLostRecoveryUserActed();
-            if (fault is not null) {
-                await ResolveFaultQuietlyAsync(fault, DateTimeOffset.UtcNow).ConfigureAwait(false);
-            }
             return null;
+        }
+        EquipmentFaultEvent? fault;
+        IReadOnlyList<Guid> paused;
+        lock (_gate) {
+            fault = _starLostFault;
         }
         var lostMinutes = fault is null ? 0 : Math.Max(1, (int) Math.Round((DateTimeOffset.UtcNow - fault.DetectedUtc).TotalMinutes));
         LogStarLostRecoveryStarted(lostMinutes);
@@ -236,6 +261,12 @@ public sealed partial class GuiderService {
         }
         await guider.StopGuiding(ct).ConfigureAwait(false);
         ct.ThrowIfCancellationRequested();
+        // The stop takes seconds and the user may have pressed Resume meanwhile: never slew under a
+        // run that is imaging again.
+        still = await StillDaemonPausedAsync(sequencer, ct).ConfigureAwait(false);
+        if (still.Count == 0) {
+            return null;
+        }
 
         // 2. Re-center by plate solve: the solve doubles as the clear-sky test for the imaging scope.
         if (Recenter is null) {

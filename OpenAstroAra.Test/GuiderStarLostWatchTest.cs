@@ -332,9 +332,12 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public async Task Once_the_user_has_acted_on_the_pause_the_recovery_hands_the_episode_over() {
+            // The user presses Resume between the probe and the attempt: the re-check before the stop
+            // sees the run released and nothing of the rig is touched.
             using var rig = new Rig(runActive: true);
+            var asked = 0;
             rig.Sequencer.Setup(s => s.DaemonPausedRunsAsync(It.IsAny<IReadOnlyCollection<Guid>>(), It.IsAny<CancellationToken>()))
-                .ReturnsAsync(Array.Empty<Guid>());
+                .ReturnsAsync((IReadOnlyCollection<Guid> ids, CancellationToken _) => ++asked == 1 ? (IReadOnlyList<Guid>) ids.ToList() : Array.Empty<Guid>());
             await using var fake = await LostStarPastTheGraceAsync(rig).ConfigureAwait(false);
             fake.OnRpc("get_star_centroids", _ => Stars());
 
@@ -346,6 +349,22 @@ namespace OpenAstroAra.Test {
             Assert.That(rig.Resumed(), Is.Zero);
             Assert.That(rig.Notifications, Has.Count.EqualTo(1));
             Assert.That(fake.ReceivedMethods.Count(m => m == "get_star_centroids"), Is.EqualTo(1), "the episode ended: no more probes");
+        }
+
+        [Test]
+        public async Task Once_the_user_has_acted_the_probe_stops_even_under_cloud() {
+            // A stopped-by-hand guider answers the probe with an error, read as "cloudy": without this
+            // check the probe would repeat every minute until a disconnect.
+            using var rig = new Rig(runActive: true);
+            await using var fake = await LostStarPastTheGraceAsync(rig).ConfigureAwait(false);
+            rig.Sequencer.Setup(s => s.DaemonPausedRunsAsync(It.IsAny<IReadOnlyCollection<Guid>>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(Array.Empty<Guid>());
+
+            await Task.Delay(Grace * 4).ConfigureAwait(false);
+
+            Assert.That(fake.ReceivedMethods, Does.Not.Contain("get_star_centroids"), "the episode closed before the first probe");
+            Assert.That(rig.Resumed(), Is.Zero);
+            Assert.That(rig.Notifications, Has.Count.EqualTo(1));
         }
 
         [Test]
