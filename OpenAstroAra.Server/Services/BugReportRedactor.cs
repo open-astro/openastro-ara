@@ -38,7 +38,13 @@ public enum BugReportSharingMode {
 /// </summary>
 public static partial class BugReportRedactor {
 
-    public const string RedactedValue = "[redacted]";
+    /// <summary>§54.5 placeholders. GPS is not a placeholder: coordinates stay numbers (zeroed, or rounded for
+    /// coarse GPS) so the scrubbed profile.json still parses for a maintainer's tooling.</summary>
+    public const string RedactedValue = "[REDACTED]";
+    public const string RedactedSerial = "[REDACTED-SN]";
+    public const string RedactedHost = "[REDACTED-HOST]";
+    public const string RedactedUser = "[REDACTED-USER]";
+    public const string RedactedIp = "[REDACTED-IP]";
 
     /// <summary>Parse a wire value; null/blank = <see cref="BugReportSharingMode.Full"/>; unknown = null.</summary>
     public static BugReportSharingMode? Parse(string? wire) => wire?.Trim().ToLowerInvariant() switch {
@@ -83,22 +89,43 @@ public static partial class BugReportRedactor {
     [GeneratedRegex(@"\b(?:10\.\d{1,3}\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|172\.(?:1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3})\b", RegexOptions.CultureInvariant)]
     private static partial Regex PrivateIpv4();
 
-    // mDNS names (pi-observatory.local) — the one hostname form a LAN daemon logs routinely.
-    [GeneratedRegex(@"\b[A-Za-z0-9](?:[A-Za-z0-9-]{0,62})\.local\b", RegexOptions.CultureInvariant)]
-    private static partial Regex LocalHostname();
+    // LAN names (pi-observatory.local, astro.pi.lan): every label goes, the suffix stays so the reader sees it was a LAN name.
+    [GeneratedRegex(@"\b(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,62})\.)+(?:local|lan)\b", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase)]
+    private static partial Regex LanHostname();
+
+    // §54.6 always-blacklisted credential shapes, stripped in every mode: the daemon's own token header, bearer
+    // tokens, GitHub / Stripe / Slack-style keys, and private-key blocks.
+    [GeneratedRegex(@"(?i)(X-OpenAstroAra-Token:\s*|Bearer\s+)[A-Za-z0-9_\-.]{20,}", RegexOptions.CultureInvariant)]
+    private static partial Regex TokenHeader();
+
+    [GeneratedRegex(@"\b(?:ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|sk_(?:live|test)_[A-Za-z0-9]{10,}|xox[abp]-[A-Za-z0-9-]{10,})\b", RegexOptions.CultureInvariant)]
+    private static partial Regex KnownKeyShape();
+
+    [GeneratedRegex(@"-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----", RegexOptions.CultureInvariant)]
+    private static partial Regex PrivateKeyBlock();
+
+    /// <summary>§54.6 — credential shapes no mode may pass through; applied to every text entry in every mode.</summary>
+    public static string StripCredentials(string text) {
+        ArgumentNullException.ThrowIfNull(text);
+        var s = TokenHeader().Replace(text, m => m.Groups[1].Value + RedactedValue);
+        s = KnownKeyShape().Replace(s, RedactedValue);
+        s = PrivateKeyBlock().Replace(s, RedactedValue);
+        return s;
+    }
 
     /// <summary>Scrub free text (a log file, system-info.json) for <paramref name="mode"/>. Full and
     /// coarse-GPS leave text alone: coordinates in logs are not reliably recognisable, and coarse-GPS
     /// is a profile-only promise (§54.3).</summary>
     public static string RedactText(string text, BugReportSharingMode mode) {
         ArgumentNullException.ThrowIfNull(text);
+        var s = StripCredentials(text);
         if (mode != BugReportSharingMode.Redacted) {
-            return text;
+            return s;
         }
-        var s = PosixUserPath().Replace(text, "[user]");
-        s = WindowsUserPath().Replace(s, "[user]");
-        s = PrivateIpv4().Replace(s, "[private-ip]");
-        s = LocalHostname().Replace(s, "[host].local");
+        s = PosixUserPath().Replace(s, RedactedUser);
+        s = WindowsUserPath().Replace(s, RedactedUser);
+        s = PrivateIpv4().Replace(s, RedactedIp);
+        s = LanHostname().Replace(s, m => RedactedHost + m.Value[m.Value.LastIndexOf('.')..]);
         return s;
     }
 
@@ -126,6 +153,20 @@ public static partial class BugReportRedactor {
 
     private static readonly JsonSerializerOptions Indented = new() { WriteIndented = true };
 
+    // §54.5 placeholder for a sensitive key, or null for an ordinary one.
+    private static string? PlaceholderFor(string key) =>
+        SerialKey().IsMatch(key) ? RedactedSerial
+        : HostKey().IsMatch(key) ? RedactedHost
+        : SecretKey().IsMatch(key) ? RedactedValue
+        : null;
+
+    private static bool TryDouble(JsonValue value, out double d) {
+        if (value.TryGetValue<double>(out d)) {
+            return true;
+        }
+        return value.TryGetValue<string>(out var s) && double.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture, out d);
+    }
+
     private static void Walk(JsonNode node, BugReportSharingMode mode) {
         switch (node) {
             case JsonObject obj:
@@ -135,7 +176,8 @@ public static partial class BugReportRedactor {
                     if (value is null) {
                         continue;
                     }
-                    if (CoordinateKey().IsMatch(key) && value is JsonValue cv && cv.TryGetValue<double>(out var deg)) {
+                    if (CoordinateKey().IsMatch(key) && value is JsonValue cv && TryDouble(cv, out var deg)) {
+                        // A coordinate stays a number (a string one is rewritten as a number) so the file still parses.
                         obj[key] = mode == BugReportSharingMode.CoarseGps ? Math.Round(deg, 0, MidpointRounding.AwayFromZero) : 0.0;
                         continue;
                     }
@@ -143,18 +185,17 @@ public static partial class BugReportRedactor {
                         obj[key] = 0.0;
                         continue;
                     }
-                    if (mode == BugReportSharingMode.Redacted && value is JsonValue sv) {
-                        var sensitiveKey = SecretKey().IsMatch(key) || SerialKey().IsMatch(key) || HostKey().IsMatch(key);
-                        if (sv.TryGetValue<string>(out var str)) {
-                            // An empty secret stays empty: the reader learns it is unset.
-                            obj[key] = sensitiveKey && str.Length > 0 ? RedactedValue : RedactText(str, mode);
-                            continue;
+                    if (value is JsonValue sv && sv.TryGetValue<string>(out var str)) {
+                        if (mode == BugReportSharingMode.Redacted && str.Length > 0 && PlaceholderFor(key) is { } placeholder) {
+                            obj[key] = placeholder; // an empty secret stays empty: the reader learns it is unset
+                        } else {
+                            obj[key] = RedactText(str, mode); // §54.6 credentials go in every mode
                         }
-                        if (sensitiveKey && sv.TryGetValue<double>(out _)) {
-                            // A serial or token stored as a number is still a serial or token.
-                            obj[key] = RedactedValue;
-                            continue;
-                        }
+                        continue;
+                    }
+                    if (mode == BugReportSharingMode.Redacted && value is JsonValue nv && PlaceholderFor(key) is { } p && nv.TryGetValue<double>(out _)) {
+                        obj[key] = p; // a serial or token stored as a number is still a serial or token
+                        continue;
                     }
                     if (value is JsonObject or JsonArray) {
                         Walk(value, mode);
@@ -166,7 +207,7 @@ public static partial class BugReportRedactor {
                     var item = arr[i];
                     if (item is JsonObject or JsonArray) {
                         Walk(item, mode);
-                    } else if (mode == BugReportSharingMode.Redacted && item is JsonValue v && v.TryGetValue<string>(out var s)) {
+                    } else if (item is JsonValue v && v.TryGetValue<string>(out var s)) {
                         arr[i] = RedactText(s, mode);
                     }
                 }

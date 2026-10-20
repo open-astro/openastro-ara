@@ -110,12 +110,12 @@ namespace OpenAstroAra.Test {
 
             using var zip = await OpenBundleAsync(prep.PreparationId);
             var logText = ReadEntry(zip, "logs/openastroara-20260619.log");
-            Assert.That(logText, Does.Contain("/home/[user]/captures").And.Contain("[private-ip]").And.Contain("[host].local"));
+            Assert.That(logText, Does.Contain("/home/[REDACTED-USER]/captures").And.Contain("[REDACTED-IP]").And.Contain("[REDACTED-HOST].local"));
             Assert.That(logText, Does.Not.Contain("joey").And.Not.Contain("192.168"));
 
             var profileText = ReadEntry(zip, "profile.json");
             Assert.That(profileText, Does.Not.Contain("secret-value").And.Not.Contain("30.2672"));
-            Assert.That(profileText, Does.Contain("[redacted]"));
+            Assert.That(profileText, Does.Contain("[REDACTED]"));
 
             var infoText = ReadEntry(zip, "system-info.json");
             Assert.That(infoText, Does.Contain("\"sharing_mode\": \"redacted\""));

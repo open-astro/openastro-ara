@@ -8060,45 +8060,41 @@ User attaches the zip manually in GitHub — ARA cannot upload directly via API 
 
 ### 54.4 Sensitivity detection
 
-The scan looks for these patterns:
+**Status (2026-10-20, #1185):** shipped server-side as `BugReportRedactor`, applied while the daemon builds the bundle (so the ZIP the user downloads never held what the chosen mode scrubs). The profile is walked as JSON (keys decide); logs and `system-info.json` are scrubbed by pattern, line by line. The client does not scan or edit the zip.
 
-| Pattern | Detection | Sensitivity |
+| Pattern | Detection | Mode |
 |---|---|---|
-| GPS coordinates near user's known site (from profile) | Floating-point lat/long in logs within 1° of profile coords | Medium-high |
-| Equipment serial numbers | Vendor-known patterns (e.g., ZWO ASI cameras have `ASIyy-cccc-ddee` format); cross-reference active profile's equipment | Medium |
-| Hostnames | Strings ending in `.local`, `.lan`, or matching profile hostname | Low |
-| User home paths | `/home/<name>/`, `/Users/<name>/`, `C:\Users\<name>\` | Low |
-| Internal IPs | RFC 1918 ranges (`10.x`, `192.168.x`, `172.16-31.x`) | Low |
+| GPS coordinates | profile keys `latitude*` / `longitude*` / `lat` / `lon` / `lng` (numbers, or strings holding a number); `elevation*` | coarse GPS rounds to the nearest degree (~111 km) and zeroes elevation; redacted zeroes both. Logs are **not** scanned for coordinates (a float in a log line is not reliably a coordinate) |
+| Equipment serial numbers | profile keys containing `serial` (string or number) | redacted → `[REDACTED-SN]` |
+| Hostnames / endpoints | profile keys `host_name` / `host` / `endpoint` / `address` / `*_url`; in text, names ending in `.local` or `.lan` (every label) | redacted → `[REDACTED-HOST]` (text keeps the `.local` / `.lan` suffix) |
+| User home paths | `/home/<name>/`, `/Users/<name>/`, `C:\Users\<name>\` (single or JSON-escaped backslashes) | redacted → `[REDACTED-USER]` |
+| Internal IPs | RFC 1918 ranges (`10.x`, `192.168.x`, `172.16-31.x`); a public address is a deliberate remote-access setting and stays | redacted → `[REDACTED-IP]` |
+| Tokens / secrets | profile keys containing `token` / `secret` / `password` / `passphrase` / `api_key` / `webhook` (non-empty; an empty one stays empty so the reader learns it is unset) | redacted → `[REDACTED]` |
 
-The scan is best-effort regex — surfaces detections to the user but doesn't claim completeness. The modal copy explicitly says *"potentially sensitive information found"* — implies "this is what we noticed" not "guaranteed exhaustive."
+The scrub is best-effort pattern matching; the disclosure dialog says what the chosen mode covers rather than claiming completeness. Not done: vendor-specific serial shapes in log lines, and cross-referencing the profile's own hostname in logs.
 
 ### 54.5 Sharing modes
 
-**1. Include everything (default)** — highest debug fidelity. Zip contains original log content. Maintainer can replay exactly what the user saw.
+Chosen in the Support card before the bundle is built (`POST /bugreport/prepare` `{"mode": …}`); `system-info.json` and the preparation record the mode as `sharing_mode`.
 
-**2. Coarse GPS only** — round latitude/longitude to nearest 1° (~111 km) in all log lines. Removes the "I just told the internet where my expensive observatory is" risk. Still useful for "was target above horizon" math at city/region scale (e.g., 30°N is enough to know Andromeda is high-sky from Texas in October). Equipment serial numbers, hostnames, paths preserved.
+**1. Include everything (default)** — `full`. Highest debug fidelity: the bundle is a byte copy of the logs and profile (only §54.6 applies).
 
-**3. Redact all sensitive items** — replaces every detected item with placeholders:
-- GPS → `[REDACTED-GPS]`
-- Serial numbers → `[REDACTED-SN]`
-- Hostnames → `[REDACTED-HOST]`
-- Usernames → `[REDACTED-USER]`
-- IPs → `[REDACTED-IP]`
+**2. Coarse GPS only** — `coarse_gps`. The profile's latitude/longitude are rounded to the nearest degree (~111 km) and elevation zeroed; everything else is as in full. Removes the "I just told the internet where my expensive observatory is" risk while keeping "was the target above the horizon" at region scale. A profile-only promise: log lines are not rewritten.
 
-Maintainer sees structure of the issue (which device, which API call, etc.) but not identifying details. Less useful for debugging; safest for users who don't want any PII shared.
+**3. Redact all sensitive items** — `redacted`. Every §54.4 row applies, with the placeholders in the table. The maintainer sees the structure of the issue (which device, which call) but not the identifying details.
 
-**4. Let me edit the zip first** — WILMA saves the zip to Desktop, opens the containing folder in the file manager, shows: *"Edit the zip's contents however you like, then attach it on GitHub. Drag the zip into the GitHub issue page once you're ready."* Power-user escape hatch.
+**4. Let me edit the zip first** — deferred. The bundle is a plain ZIP saved where the user chooses, so editing it before attaching needs no feature.
 
 ### 54.6 Always-blacklisted patterns (regardless of mode)
 
-These are stripped from every submission, every mode:
+Stripped from every text entry in every mode (`BugReportRedactor.StripCredentials`); not user-toggleable:
 
-- **Token-like strings**: anything matching `X-OpenAstroAra-Token: [a-zA-Z0-9_-]{20,}` or `Bearer [a-zA-Z0-9_-]{20,}`
-- **API keys / secrets**: patterns like `[A-Za-z0-9_-]{32,}=` (base64-like), `sk_[a-zA-Z0-9]+`, `ghp_[a-zA-Z0-9]+` (GitHub PATs that someone might accidentally have in their environment), `xoxb-` (Slack), etc.
-- **SSH keys**: `-----BEGIN ... PRIVATE KEY-----` blocks
-- **File contents from outside ARA data dirs** — bug zips never include `/etc/passwd`, `/etc/shadow`, `~/.ssh/`, browser-cookies, etc. ARA only zips files under `/var/log/openastroara/`, `/etc/openastroara/`, and `/media/openastroara/.araback/`. Hard whitelist.
+- **The daemon's own token header and bearer tokens**: `X-OpenAstroAra-Token: <20+ chars>` and `Bearer <20+ chars>` keep the header name and lose the value.
+- **Known key shapes**: `ghp_…` / `github_pat_…` (GitHub), `sk_live_…` / `sk_test_…` (Stripe), `xoxb-` / `xoxa-` / `xoxp-` (Slack).
+- **SSH / TLS keys**: `-----BEGIN … PRIVATE KEY-----` blocks.
+- **File contents from outside ARA data dirs** — the bundle only ever holds the daemon's rolling logs, `profile.json` and the generated `system-info.json` (symlinks are refused). Hard whitelist.
 
-This is the one thing that's NOT user-toggleable. Sneaking through credentials should be impossible regardless of user choice.
+Not done from the original list: generic base64-like `[A-Za-z0-9_-]{32,}=` strings (too many false positives against FITS keywords and ids).
 
 ### 54.7 Bug report template
 
