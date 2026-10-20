@@ -8077,7 +8077,7 @@ The scrub is best-effort pattern matching; the disclosure dialog says what the c
 
 Chosen in the Support card before the bundle is built (`POST /bugreport/prepare` `{"mode": …}`); `system-info.json` and the preparation record the mode as `sharing_mode`.
 
-**1. Include everything (default)** — `full`. Highest debug fidelity: the bundle is a byte copy of the logs and profile (only §54.6 applies).
+**1. Include everything (default)** — `full`. Highest debug fidelity: logs and profile go as they are, except that the §54.6 credential shapes are stripped (the profile is re-serialized, indented, for that walk).
 
 **2. Coarse GPS only** — `coarse_gps`. The profile's latitude/longitude are rounded to the nearest degree (~111 km) and elevation zeroed; everything else is as in full. Removes the "I just told the internet where my expensive observatory is" risk while keeping "was the target above the horizon" at region scale. A profile-only promise: log lines are not rewritten.
 

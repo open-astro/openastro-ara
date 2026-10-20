@@ -123,12 +123,38 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public async Task PrepareAsync_default_mode_is_full_and_says_so() {
-            WriteProfile("{\"site\":{\"latitude_deg\":30.2672}}");
+        public async Task PrepareAsync_default_mode_is_full_keeps_pii_but_strips_credential_shapes() {
+            // §54.6 is not user-toggleable: a bearer token / PAT in a log or the profile goes in every mode,
+            // while full keeps coordinates, paths and addresses.
+            WriteLog("openastroara-20260619.log",
+                "{\"@t\":\"2026-06-19T10:00:00Z\",\"@m\":\"auth Authorization: Bearer abcdefghijklmnopqrstuvwxyz0123 from /home/joey at 192.168.1.5\"}\n"
+                + "{\"@t\":\"2026-06-19T10:00:01Z\",\"@m\":\"pat ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ0123\"}");
+            WriteProfile("{\"site\":{\"latitude_deg\":30.2672},\"note\":\"ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ0123\"}");
+
             var prep = await _svc.PrepareAsync(null, CancellationToken.None);
             Assert.That(prep.SharingMode, Is.EqualTo("full"));
+
             using var zip = await OpenBundleAsync(prep.PreparationId);
-            Assert.That(ReadEntry(zip, "profile.json"), Does.Contain("30.2672"));
+            var logText = ReadEntry(zip, "logs/openastroara-20260619.log");
+            Assert.That(logText, Does.Not.Contain("abcdefghijklmnopqrstuvwxyz0123").And.Not.Contain("ghp_ABC"));
+            Assert.That(logText, Does.Contain("Bearer [REDACTED]").And.Contain("/home/joey").And.Contain("192.168.1.5"), "full keeps paths and addresses");
+            var profileText = ReadEntry(zip, "profile.json");
+            Assert.That(profileText, Does.Contain("30.2672").And.Not.Contain("ghp_ABC"));
+        }
+
+        [Test]
+        public async Task PrepareAsync_coarse_gps_rounds_the_site_and_keeps_the_rest() {
+            WriteLog("openastroara-20260619.log", "{\"@t\":\"2026-06-19T10:00:00Z\",\"@m\":\"from /home/joey, Bearer abcdefghijklmnopqrstuvwxyz0123\"}");
+            WriteProfile("{\"site\":{\"latitude_deg\":30.2672,\"longitude_deg\":-97.7431,\"elevation_m\":149.5},\"storage\":{\"save_directory\":\"/home/joey/captures\"}}");
+
+            var prep = await _svc.PrepareAsync(null, CancellationToken.None, BugReportSharingMode.CoarseGps);
+
+            using var zip = await OpenBundleAsync(prep.PreparationId);
+            var profileText = ReadEntry(zip, "profile.json");
+            Assert.That(profileText, Does.Contain("\"latitude_deg\": 30").And.Contain("\"longitude_deg\": -98").And.Contain("\"elevation_m\": 0").And.Contain("/home/joey/captures"));
+            Assert.That(profileText, Does.Not.Contain("30.2672"));
+            var logText = ReadEntry(zip, "logs/openastroara-20260619.log");
+            Assert.That(logText, Does.Contain("/home/joey").And.Contain("Bearer [REDACTED]"), "coarse GPS leaves paths but still strips §54.6");
         }
 
         [Test]

@@ -131,13 +131,12 @@ public static partial class BugReportRedactor {
 
     /// <summary>Scrub a profile.json for <paramref name="mode"/>. Unparseable JSON is returned as text
     /// through <see cref="RedactText"/>, never dropped (the bundle must still say what the profile
-    /// held). Coarse GPS rounds latitude/longitude to whole degrees (~111 km) and zeroes elevation;
-    /// Redacted zeroes them and blanks secrets, serials and host-like keys too.</summary>
+    /// held). Full strips §54.6 credential shapes only (and re-serializes, indented); coarse GPS also
+    /// rounds latitude/longitude to whole degrees (~111 km) and zeroes elevation; Redacted zeroes them
+    /// and blanks secrets, serials and host-like keys too.</summary>
     public static string RedactProfileJson(string json, BugReportSharingMode mode) {
         ArgumentNullException.ThrowIfNull(json);
-        if (mode == BugReportSharingMode.Full) {
-            return json;
-        }
+        // No early return for Full: §54.6 credential shapes go in every mode, which needs the walk.
         JsonNode? root;
         try {
             root = JsonNode.Parse(json);
@@ -176,13 +175,13 @@ public static partial class BugReportRedactor {
                     if (value is null) {
                         continue;
                     }
-                    if (CoordinateKey().IsMatch(key) && value is JsonValue cv && TryDouble(cv, out var deg)) {
+                    if (mode != BugReportSharingMode.Full && CoordinateKey().IsMatch(key) && value is JsonValue cv && TryDouble(cv, out var deg)) {
                         // A coordinate stays a number (a string one is rewritten as a number) so the file still parses.
                         obj[key] = mode == BugReportSharingMode.CoarseGps ? Math.Round(deg, 0, MidpointRounding.AwayFromZero) : 0.0;
                         continue;
                     }
-                    if (ElevationKey().IsMatch(key) && value is JsonValue ev && ev.TryGetValue<double>(out _)) {
-                        obj[key] = 0.0;
+                    if (mode != BugReportSharingMode.Full && ElevationKey().IsMatch(key) && value is JsonValue ev && TryDouble(ev, out _)) {
+                        obj[key] = 0.0; // a string elevation is an elevation too
                         continue;
                     }
                     if (value is JsonValue sv && sv.TryGetValue<string>(out var str)) {

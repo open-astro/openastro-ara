@@ -239,12 +239,10 @@ public sealed partial class BugReportService : IBugReportService, IDisposable {
     // a symlink, vanished, or unreadable. Symlinks are refused for the same reason backups
     // refuse them — CreateEntryFromFile would follow the link and bundle whatever it points
     // at, possibly outside the profile root.
-    // The profile as scrubbed JSON for the mode (a byte copy in Full). Read whole: profile.json is a
-    // few hundred KB at most, and the JSON walk needs the complete document.
+    // The profile as scrubbed JSON for the mode: in Full only §54.6 credential shapes go, but that still
+    // needs the walk. Read whole: profile.json is a few hundred KB at most, and the walk needs the
+    // complete document.
     private bool TryAddProfileEntry(ZipArchive archive, string sourcePath, BugReportSharingMode mode) {
-        if (mode == BugReportSharingMode.Full) {
-            return TryAddFileEntry(archive, sourcePath, ProfileFileName, mode);
-        }
         try {
             if ((File.GetAttributes(sourcePath) & FileAttributes.ReparsePoint) != 0) {
                 LogSymlinkSkipped(sourcePath);
@@ -279,17 +277,14 @@ public sealed partial class BugReportService : IBugReportService, IDisposable {
             using var source = new FileStream(sourcePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
             var entry = archive.CreateEntry(entryName, CompressionLevel.Optimal);
             using var entryStream = entry.Open();
-            if (mode == BugReportSharingMode.Redacted) {
-                // §54.4 — scrub line by line (a log is text; the patterns never span a line) so a
-                // 50 MB log is not held whole in memory.
-                using var reader = new StreamReader(source);
-                using var writer = new StreamWriter(entryStream, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
-                while (reader.ReadLine() is { } line) {
-                    writer.WriteLine(BugReportRedactor.RedactText(line, mode));
-                }
-                return true;
+            // §54.6 credentials are stripped in EVERY mode and §54.4 items in redacted mode, line by
+            // line so a 50 MB log is never held whole in memory. A CLEF line carries a multi-line value
+            // (a PEM block) with escaped newlines, so the per-line pass still sees it whole.
+            using var reader = new StreamReader(source);
+            using var writer = new StreamWriter(entryStream, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+            while (reader.ReadLine() is { } line) {
+                writer.WriteLine(BugReportRedactor.RedactText(line, mode));
             }
-            source.CopyTo(entryStream);
             return true;
         } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
             // Vanished (rolling sink deleted a retained log) or unreadable between the

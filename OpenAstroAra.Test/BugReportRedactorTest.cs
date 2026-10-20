@@ -35,8 +35,23 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public void Full_leaves_everything_alone_except_credential_shapes() {
-            Assert.That(BugReportRedactor.RedactProfileJson(Profile, BugReportSharingMode.Full), Is.EqualTo(Profile));
+            var node = JsonNode.Parse(BugReportRedactor.RedactProfileJson(Profile, BugReportSharingMode.Full))!;
+            Assert.Multiple(() => {
+                Assert.That(node["site"]!["latitude_deg"]!.GetValue<double>(), Is.EqualTo(30.2672));
+                Assert.That(node["site"]!["elevation_m"]!.GetValue<double>(), Is.EqualTo(149.5));
+                Assert.That(node["notifications"]!["pushover_token"]!.GetValue<string>(), Is.EqualTo("azGDORePK8gMaC0QOYAMyEEuzJnyUi"), "a token under a token key is not a §54.6 shape; full keeps it");
+                Assert.That(node["storage"]!["save_directory"]!.GetValue<string>(), Is.EqualTo("/home/joey/captures"));
+                Assert.That(node["guider"]!["endpoint"]!.GetValue<string>(), Is.EqualTo("192.168.1.118:4400"));
+            });
             Assert.That(BugReportRedactor.RedactText("at /home/joey on 192.168.1.5", BugReportSharingMode.Full), Is.EqualTo("at /home/joey on 192.168.1.5"));
+            var withPat = JsonNode.Parse(BugReportRedactor.RedactProfileJson("{\"note\":\"pat ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ0123 here\"}", BugReportSharingMode.Full))!;
+            Assert.That(withPat["note"]!.GetValue<string>(), Is.EqualTo("pat [REDACTED] here"), "§54.6 applies inside the profile in full mode");
+        }
+
+        [Test]
+        public void A_string_elevation_is_zeroed_too() {
+            var node = JsonNode.Parse(BugReportRedactor.RedactProfileJson("{\"site\":{\"elevation_m\":\"149.5\"}}", BugReportSharingMode.CoarseGps))!;
+            Assert.That(node["site"]!["elevation_m"]!.GetValue<double>(), Is.EqualTo(0.0));
         }
 
         [Test]
