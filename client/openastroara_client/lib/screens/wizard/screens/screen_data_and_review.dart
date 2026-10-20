@@ -136,7 +136,12 @@ class ScreenReview extends ConsumerWidget {
         // step 3 — keep them as separate Edit targets so each jumps to its own
         // screen.
         _ReviewSection(title: 'Connection', step: 2, onEdit: edit, rows: [
-          ('AlpacaBridge', reviewValue(draft.alpacaBridgeAddress)),
+          // Blank is the normal case, not a gap: step 2 only lets a blank
+          // address through once discovery found the bridge.
+          ('AlpacaBridge',
+              (draft.alpacaBridgeAddress ?? '').trim().isEmpty
+                  ? 'Found automatically'
+                  : draft.alpacaBridgeAddress!.trim()),
         ]),
         _ReviewSection(title: 'Equipment', step: 3, onEdit: edit, rows: [
           ('Assigned', assignedEquipment(draft.equipment)),

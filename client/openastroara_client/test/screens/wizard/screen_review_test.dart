@@ -124,6 +124,13 @@ void main() {
       expect(container.read(wizardControllerProvider).step, 2);
     });
 
+    testWidgets('a blank AlpacaBridge address reads as found, not "Not set"',
+        (tester) async {
+      await pump(tester);
+      await tester.pumpAndSettle();
+      expect(find.text('Found automatically'), findsOneWidget);
+    });
+
     testWidgets('a half-set rotator range reads as "Not set"', (tester) async {
       await pump(tester, seed: (d) {
         d.rotator.minAngleDeg = 0; // max left unset
