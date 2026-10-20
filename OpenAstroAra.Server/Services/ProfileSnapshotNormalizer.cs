@@ -79,8 +79,8 @@ public static class ProfileSnapshotNormalizer {
             Filenames = (FilenamesSettingsDto?)snap.Filenames ?? defaults.Filenames,
             SafetyPolicies = (SafetyPoliciesDto?)snap.SafetyPolicies ?? defaults.SafetyPolicies,
             Autofocus = (AutofocusSettingsDto?)snap.Autofocus ?? defaults.Autofocus,
-            // #1121 — a pre-#1094 profile's /usr/bin/astap becomes /usr/bin/astap_cli when that is
-            // the binary actually installed.
+            // #1121/#1136 — a stock solver path (/usr/bin/astap, /usr/bin/astap_cli,
+            // /opt/astap/astap_cli) becomes the bundled /opt/openastroara/astap_cli once it is on disk.
             PlateSolve = SolverPathMigration.Migrate((PlateSolveSettingsDto?)snap.PlateSolve ?? defaults.PlateSolve, fileExists),
             DiagnosticsMode = (DiagnosticsModeDto?)snap.DiagnosticsMode ?? defaults.DiagnosticsMode,
             Phd2 = (Phd2SettingsDto?)snap.Phd2 ?? defaults.Phd2,

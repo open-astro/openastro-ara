@@ -275,8 +275,8 @@ public sealed partial class FileProfileStore : IProfileStore {
             // GET body on upgrade — or an NRE in a consumer. One normalizer covers
             // every section (shared with the write path, see UpdateAndPersist).
             var normalized = ProfileSnapshotNormalizer.Normalize(loaded, _fileExists);
-            // #1121 — the solver-path migration rewrote a pre-#1094 /usr/bin/astap: persist it
-            // now so the rewrite happens once, not on every boot.
+            // #1121/#1136 — the solver-path migration rewrote a stock solver path to the bundled
+            // binary: persist it now so the rewrite happens once, not on every boot.
             var loadedSolverPath = ((PlateSolveSettingsDto?)loaded.PlateSolve)?.PathOrEndpoint;
             if (loadedSolverPath is not null
                     && !string.Equals(loadedSolverPath, normalized.PlateSolve.PathOrEndpoint, StringComparison.Ordinal)) {
