@@ -52,7 +52,7 @@ namespace OpenAstroAra.Test {
             public int Restarts;
             public bool RestartSucceeds = true;
             public bool RestartStartsButFails; // PHD2 guides but the settle timed out: StartGuiding returns false
-            public Action? OnRestart; // the fake's side of a restart: app state Guiding, StartGuiding, a guide step
+            public Func<Task>? OnRestart; // the fake's side of a restart: app state Guiding, StartGuiding, a guide step
             public GuiderService Service = null!;
 
             public Rig(bool runActive) {
@@ -100,10 +100,12 @@ namespace OpenAstroAra.Test {
                     StarLostRecenterTimeout = TimeSpan.FromSeconds(5),
                 };
                 Service.Recenter = new TargetRecenter(() => Centering.Object, profiles.Object);
-                Service.RestartGuidingOverride = _ => {
+                Service.RestartGuidingOverride = async _ => {
                     Interlocked.Increment(ref Restarts);
-                    if (RestartSucceeds || RestartStartsButFails) { OnRestart?.Invoke(); }
-                    return Task.FromResult(RestartSucceeds && !RestartStartsButFails);
+                    if ((RestartSucceeds || RestartStartsButFails) && OnRestart is { } hook) {
+                        await hook().ConfigureAwait(false);
+                    }
+                    return RestartSucceeds && !RestartStartsButFails;
                 };
             }
 
@@ -150,13 +152,14 @@ namespace OpenAstroAra.Test {
             });
             // A restart that worked: PHD2 is guiding again and its first guide step lands while the
             // recovery is still in flight (the in-flight guard must not read it as a relock).
-            rig.OnRestart = () => {
+            rig.OnRestart = async () => {
+                var guider = rig.Service.RequireConnectedGuider();
                 fake.OnRpc("get_app_state", JsonValue.Create("Guiding"));
-                fake.BroadcastAsync(PhdEvents.AppState("Guiding")).GetAwaiter().GetResult();
-                fake.BroadcastAsync(PhdEvents.StartGuiding()).GetAwaiter().GetResult();
-                fake.BroadcastAsync(PhdEvents.GuideStep(0.02, 0.02)).GetAwaiter().GetResult();
+                await fake.BroadcastAsync(PhdEvents.AppState("Guiding")).ConfigureAwait(false);
+                await fake.BroadcastAsync(PhdEvents.StartGuiding()).ConfigureAwait(false);
+                await fake.BroadcastAsync(PhdEvents.GuideStep(0.02, 0.02)).ConfigureAwait(false);
                 // Real PHD2's settle wait is long enough for its events to land; the fake makes sure.
-                WaitUntilAsync(() => rig.Service.GetAsync(CancellationToken.None).Result?.Runtime.State == "guiding").GetAwaiter().GetResult();
+                await WaitUntilAsync(() => guider.AppState?.State == "Guiding").ConfigureAwait(false);
             };
             fake.OnRpc("get_star_centroids", _ => new JsonArray());
             await rig.Service.ConnectAsync(new GuiderConnectRequestDto("127.0.0.1", fake.Port), idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
