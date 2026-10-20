@@ -42,14 +42,63 @@ class ScreenAlpacaConnect extends ConsumerStatefulWidget {
       _ScreenAlpacaConnectState();
 }
 
+/// The types the Connect probe counts, camera first (the handshake). Guider
+/// is not Alpaca-discoverable.
+const _summaryTypes = [
+  EquipmentDeviceType.camera,
+  EquipmentDeviceType.mount,
+  EquipmentDeviceType.focuser,
+  EquipmentDeviceType.filterWheel,
+  EquipmentDeviceType.rotator,
+  EquipmentDeviceType.flatPanel,
+  EquipmentDeviceType.dome,
+  EquipmentDeviceType.weather,
+  EquipmentDeviceType.safetyMonitor,
+  EquipmentDeviceType.switchDevice,
+];
+
+String _countNoun(EquipmentDeviceType t, int n) {
+  final (one, many) = switch (t) {
+    EquipmentDeviceType.camera => ('camera', 'cameras'),
+    EquipmentDeviceType.mount => ('mount', 'mounts'),
+    EquipmentDeviceType.focuser => ('focuser', 'focusers'),
+    EquipmentDeviceType.filterWheel => ('filter wheel', 'filter wheels'),
+    EquipmentDeviceType.rotator => ('rotator', 'rotators'),
+    EquipmentDeviceType.flatPanel => ('flat panel', 'flat panels'),
+    EquipmentDeviceType.dome => ('dome', 'domes'),
+    EquipmentDeviceType.weather => ('weather device', 'weather devices'),
+    EquipmentDeviceType.safetyMonitor => ('safety monitor', 'safety monitors'),
+    EquipmentDeviceType.switchDevice => ('switch', 'switches'),
+    EquipmentDeviceType.guider => ('guider', 'guiders'),
+  };
+  return '$n ${n == 1 ? one : many}';
+}
+
+/// "AlpacaBridge found — 2 cameras, 1 mount and 1 focuser." [found] lines
+/// up with [_summaryTypes]. The daemon's driverless manual filter wheel is
+/// not bridge gear, so it isn't counted.
+String _summary(List<List<DiscoveredDevice>> found) {
+  final parts = <String>[
+    for (var i = 0; i < _summaryTypes.length; i++)
+      if (found[i].where((d) => !d.isManualFilterWheel).length case final n
+          when n > 0)
+        _countNoun(_summaryTypes[i], n),
+  ];
+  if (parts.isEmpty) {
+    return 'AlpacaBridge found — no devices yet. Plug in your gear and '
+        'press Retry detection, or continue and add it later.';
+  }
+  final list = parts.length == 1
+      ? parts.single
+      : '${parts.sublist(0, parts.length - 1).join(', ')} and ${parts.last}';
+  return 'AlpacaBridge found — $list. You choose which to use on the next '
+      'steps.';
+}
+
 class _ScreenAlpacaConnectState extends ConsumerState<ScreenAlpacaConnect> {
   late final ProfileDraft _draft;
   String? _result;
   bool _ok = false;
-  // Advertised-but-unverified devices (registered slots, possibly no
-  // hardware behind them): the handshake still passes (§68.2 reachability)
-  // but the panel must render as a WARNING, not a success.
-  bool _advertisedUnverified = false;
   bool _testing = false;
   bool _skipped = false;
   // True when the last probe couldn't even start (no daemon connection) — a
@@ -100,26 +149,23 @@ class _ScreenAlpacaConnectState extends ConsumerState<ScreenAlpacaConnect> {
     // the auto-run-on-entry + retry cadence would otherwise stack leaked pools).
     final api = ref.read(equipmentDiscoveryApiFactoryProvider)(server);
     try {
-      // Probe the daemon's discovery path with a single type; a clean response
-      // (even an empty list) means the AlpacaBridge path is reachable.
-      final devices =
-          await api.discover(EquipmentDeviceType.camera, forceRefresh: true);
+      // Probe every Alpaca device type at once. Camera is the handshake: a
+      // clean response (even an empty list) means the AlpacaBridge path is
+      // reachable. The other types only feed the summary, so one failing
+      // type doesn't hide the bridge.
+      final camera =
+          api.discover(EquipmentDeviceType.camera, forceRefresh: true);
+      final others = [
+        for (final t in _summaryTypes.skip(1))
+          api
+              .discover(t, forceRefresh: true)
+              .catchError((Object _) => const <DiscoveredDevice>[]),
+      ];
+      final found = [await camera, ...await Future.wait(others)];
       if (!mounted) return;
       setState(() {
         _ok = true;
-        // §68.2 — the handshake gate is REACHABILITY, not gear presence: a
-        // clean discovery response means the bridge is up. Advertised devices
-        // are NOT verified connected — a registered-but-absent slot (vendor
-        // SDK name with no hardware behind it) must not read as a connected
-        // camera — so the copy reports the count as "advertised" only and the
-        // panel renders as a warning (HIG: icon + color + text, never color
-        // alone) until the user actually connects gear.
-        _advertisedUnverified = devices.isNotEmpty;
-        _result = devices.isEmpty
-            ? 'AlpacaBridge found — reachable (no devices advertised).'
-            : 'AlpacaBridge found — reachable; '
-                  '${devices.length} device(s) advertised, '
-                  'connectivity not verified.';
+        _result = _summary(found);
       });
       _setValid(true); // §68.2 — handshake succeeded, Next unblocks
     } on DioException catch (e) {
@@ -201,35 +247,19 @@ class _ScreenAlpacaConnectState extends ConsumerState<ScreenAlpacaConnect> {
         if (_ok && _result != null) ...[
           const SizedBox(height: 16),
           // HIG-style inline status: icon + color + text (never color alone),
-          // leading icon top-aligned with the first text line. Amber warning
-          // when the bridge advertises slots that are NOT verified connected;
-          // green success only for a genuinely clean reachability result.
+          // leading icon top-aligned with the first text line.
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             decoration: BoxDecoration(
-              color: (_advertisedUnverified
-                      ? AraColors.accentWarning
-                      : AraColors.accentConnected)
-                  .withValues(alpha: 0.15),
+              color: AraColors.accentConnected.withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(4),
-              border: Border.all(
-                color: _advertisedUnverified
-                    ? AraColors.accentWarning
-                    : AraColors.accentConnected,
-              ),
+              border: Border.all(color: AraColors.accentConnected),
             ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(
-                  _advertisedUnverified
-                      ? Icons.warning_amber_rounded
-                      : Icons.check_circle,
-                  size: 18,
-                  color: _advertisedUnverified
-                      ? AraColors.accentWarning
-                      : AraColors.accentConnected,
-                ),
+                const Icon(Icons.check_circle,
+                    size: 18, color: AraColors.accentConnected),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(_result!,
