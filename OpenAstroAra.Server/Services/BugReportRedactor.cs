@@ -72,7 +72,7 @@ public static partial class BugReportRedactor {
     [GeneratedRegex("^(latitude|longitude)(_deg)?$|^(lat|lon|lng)$", RegexOptions.IgnoreCase)]
     private static partial Regex CoordinateKey();
 
-    [GeneratedRegex("^elevation(_m)?$|altitude_m", RegexOptions.IgnoreCase)]
+    [GeneratedRegex("^(elevation|elevation_m|altitude_m)$", RegexOptions.IgnoreCase)]
     private static partial Regex ElevationKey();
 
     [GeneratedRegex("host_?name|^host$|_host$|endpoint|address|_url$", RegexOptions.IgnoreCase)]

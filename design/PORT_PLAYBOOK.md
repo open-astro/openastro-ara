@@ -8064,7 +8064,7 @@ User attaches the zip manually in GitHub — ARA cannot upload directly via API 
 
 | Pattern | Detection | Mode |
 |---|---|---|
-| GPS coordinates | profile keys `latitude*` / `longitude*` / `lat` / `lon` / `lng` (numbers, or strings holding a number); `elevation*` | coarse GPS rounds to the nearest degree (~111 km) and zeroes elevation; redacted zeroes both. Logs are **not** scanned for coordinates (a float in a log line is not reliably a coordinate) |
+| GPS coordinates | profile keys exactly `latitude`, `latitude_deg`, `longitude`, `longitude_deg`, `lat`, `lon`, `lng` (numbers, or strings holding a number); `elevation`, `elevation_m`, `altitude_m` | coarse GPS rounds to the nearest degree (~111 km) and zeroes elevation; redacted zeroes both. Logs are **not** scanned for coordinates (a float in a log line is not reliably a coordinate) |
 | Equipment serial numbers | profile keys containing `serial` (string or number) | redacted → `[REDACTED-SN]` |
 | Hostnames / endpoints | profile keys `host_name` / `host` / `*_host` / `endpoint` / `*address*` / `*_url`; in text, names ending in `.local` or `.lan` (every label) | redacted → `[REDACTED-HOST]` (text keeps the `.local` / `.lan` suffix) |
 | User home paths | `/home/<name>/`, `/Users/<name>/`, `C:\Users\<name>\` (single or JSON-escaped backslashes) | redacted → `[REDACTED-USER]` |
