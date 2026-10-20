@@ -51,14 +51,62 @@ class _FreshGuiderEquipment extends _FakeGuiderEquipment {
       const [];
 }
 
+/// An AlpacaBridge SBC answering discovery on loopback, LAN and hotspot, with
+/// two cameras, a mount and a rotator behind it.
+const _bridgeAliases = ['127.0.0.1:6800', '192.168.8.118:6800', '172.24.1.1:6800'];
+
+class _BridgeGuiderEquipment extends _FakeGuiderEquipment {
+  @override
+  Future<GuiderEquipmentChoicesResponse> getChoices() async =>
+      const GuiderEquipmentChoicesResponse(
+          connected: true,
+          choices: GuiderEquipmentChoices(
+              cameras: ['Alpaca Camera', 'None'],
+              mounts: ['Alpaca Mount', 'None'],
+              auxMounts: ['Alpaca Mount', 'None'],
+              rotators: ['Alpaca Rotator', 'None']));
+  @override
+  Future<List<String>> discoverAlpaca(
+          {int? numQueries, int? timeoutSeconds}) async =>
+      _bridgeAliases;
+}
+
+class _BridgeDevices extends AlpacaDeviceNamesClient {
+  @override
+  Future<Map<String, AlpacaDeviceInfo>> fetchDevices(
+          String host, int port) async =>
+      const {
+        'camera/0': AlpacaDeviceInfo(name: 'Guide Cam', uniqueId: 'GUIDE-ID'),
+        'camera/1':
+            AlpacaDeviceInfo(name: 'Imaging Cam', uniqueId: 'IMAGING-ID'),
+        'telescope/0': AlpacaDeviceInfo(name: 'Mount', uniqueId: 'MOUNT-ID'),
+        'rotator/0':
+            AlpacaDeviceInfo(name: 'Rotator', uniqueId: 'ROTATOR-ID'),
+      };
+  @override
+  void close() {}
+}
+
+/// The equipment step's picks: the imaging camera, mount and rotator.
+void _seedEquipment(ProviderContainer c) =>
+    c.read(wizardControllerProvider).draft.equipment
+      ..cameraDeviceId = 'IMAGING-ID'
+      ..mountDeviceId = 'MOUNT-ID'
+      ..rotatorDeviceId = 'ROTATOR-ID';
+
+DropdownMenu<String> _menu(WidgetTester tester, String label) =>
+    tester.widget<DropdownMenu<String>>(find.byWidgetPredicate((w) =>
+        w is DropdownMenu<String> && (w.label as Text?)?.data == label));
+
 /// The base profile the wizard clones: [camera] is its guide camera.
 class _BaseProfileApi extends ProfileApi {
-  _BaseProfileApi(this.camera)
+  _BaseProfileApi(this.camera, {this.mount = ''})
       : super(const AraServer(hostname: 'h', port: 5555));
   final String camera;
+  final String mount;
   @override
   Future<Phd2Settings> getPhd2Settings() async =>
-      Phd2Settings(guiderCamera: camera);
+      Phd2Settings(guiderCamera: camera, guiderMount: mount);
   @override
   Future<OpticsSettings> getOptics() async => const OpticsSettings();
 }
@@ -75,11 +123,13 @@ class _NoAlpacaNames extends AlpacaDeviceNamesClient {
 Future<ProviderContainer> _pump(WidgetTester tester,
     {GuiderEquipmentClient? equipment,
     ProfileApi? profile,
+    AlpacaDeviceNamesClient? devices,
     void Function(ProviderContainer)? seedDraft}) async {
   final container = ProviderContainer(overrides: [
     guiderEquipmentApiProvider.overrideWithValue(equipment),
     if (profile != null) profileApiProvider.overrideWithValue(profile),
-    alpacaDeviceNamesApiProvider.overrideWithValue(_NoAlpacaNames()),
+    alpacaDeviceNamesApiProvider
+        .overrideWithValue(devices ?? _NoAlpacaNames()),
   ]);
   addTearDown(container.dispose);
   container.listen(wizardStepValidProvider, (_, _) {});
@@ -261,5 +311,104 @@ void main() {
     expect(find.text('Guide pixel size (µm)'), findsOneWidget);
     expect(container.read(wizardControllerProvider).draft.guider.guidePixelSizeUm,
         isNull);
+  });
+
+  group('pre-picks from the equipment step', () {
+    testWidgets('a fresh profile gets the other camera and the imaging mount, '
+        'once each, on the guider\'s own machine', (tester) async {
+      final container = await _pump(tester,
+          equipment: _BridgeGuiderEquipment(),
+          profile: _BaseProfileApi(''),
+          devices: _BridgeDevices(),
+          seedDraft: _seedEquipment);
+      await tester.pumpAndSettle();
+
+      final g = container.read(wizardControllerProvider).draft.guider;
+      expect(g.guiderCamera, 'Alpaca Camera [127.0.0.1:6800/0]');
+      expect(g.guiderCameraAlpacaUniqueId, 'GUIDE-ID');
+      expect(g.guiderMount, 'Alpaca Mount [127.0.0.1:6800/0]');
+      // A guide scope never turns with the imaging rotator.
+      expect(g.guiderRotator, isNull);
+      expect(container.read(wizardStepValidProvider), isTrue);
+      expect(find.textContaining('Matched to the equipment'), findsNWidgets(2));
+
+      final cameraRows = _menu(tester, 'Guide camera')
+          .dropdownMenuEntries
+          .map((e) => e.value)
+          .toList();
+      expect(cameraRows, [
+        '',
+        'None',
+        'Alpaca Camera [127.0.0.1:6800/0]',
+        'Alpaca Camera [127.0.0.1:6800/1]',
+      ]);
+    });
+
+    testWidgets('an OAG brings the imaging rotator; a guide scope withdraws it',
+        (tester) async {
+      final container = await _pump(tester,
+          equipment: _BridgeGuiderEquipment(),
+          profile: _BaseProfileApi(''),
+          devices: _BridgeDevices(),
+          seedDraft: _seedEquipment);
+      await tester.pumpAndSettle();
+      final g = container.read(wizardControllerProvider).draft.guider;
+
+      _menu(tester, 'Guide setup').onSelected!('oag');
+      await tester.pumpAndSettle();
+      expect(g.guiderRotator, 'Alpaca Rotator [127.0.0.1:6800/0]');
+
+      _menu(tester, 'Guide setup').onSelected!('guide_scope');
+      await tester.pumpAndSettle();
+      expect(g.guiderRotator, isNull);
+    });
+
+    testWidgets('a user pick is never overwritten', (tester) async {
+      final container = await _pump(tester,
+          equipment: _BridgeGuiderEquipment(),
+          profile: _BaseProfileApi(''),
+          devices: _BridgeDevices(),
+          seedDraft: _seedEquipment);
+      await tester.pumpAndSettle();
+      final g = container.read(wizardControllerProvider).draft.guider;
+
+      _menu(tester, 'Guide mount (pulse target)').onSelected!('None');
+      _menu(tester, 'Guide camera').onSelected!('None');
+      await tester.pumpAndSettle();
+      expect(g.guiderCamera, 'None');
+      expect(g.guiderCameraAlpacaUniqueId, '');
+      expect(g.guiderMount, 'None');
+      expect(find.textContaining('Matched to the equipment'), findsNothing);
+    });
+
+    testWidgets('a base profile that fills the slots keeps them',
+        (tester) async {
+      final container = await _pump(tester,
+          equipment: _BridgeGuiderEquipment(),
+          profile: _BaseProfileApi('Alpaca Camera [192.168.8.118:6800/0]',
+              mount: 'Alpaca Mount [192.168.8.118:6800/0]'),
+          devices: _BridgeDevices(),
+          seedDraft: _seedEquipment);
+      await tester.pumpAndSettle();
+      final g = container.read(wizardControllerProvider).draft.guider;
+      expect(g.guiderCamera, isNull);
+      expect(g.guiderMount, isNull);
+      // The base camera's own address is the row kept for that device.
+      expect(
+          _menu(tester, 'Guide camera').dropdownMenuEntries.map((e) => e.value),
+          contains('Alpaca Camera [192.168.8.118:6800/0]'));
+    });
+
+    testWidgets('no equipment-step camera, no guess', (tester) async {
+      final container = await _pump(tester,
+          equipment: _BridgeGuiderEquipment(),
+          profile: _BaseProfileApi(''),
+          devices: _BridgeDevices());
+      await tester.pumpAndSettle();
+      final g = container.read(wizardControllerProvider).draft.guider;
+      expect(g.guiderCamera, isNull);
+      expect(g.guiderMount, isNull);
+      expect(container.read(wizardStepValidProvider), isFalse);
+    });
   });
 }

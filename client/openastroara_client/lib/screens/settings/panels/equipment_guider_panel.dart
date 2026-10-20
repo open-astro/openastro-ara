@@ -586,17 +586,30 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
       if (c != null) _resolveAlpacaNames(_choiceEndpoints(c));
     });
     final serving = _servingEndpoint(phd2);
-    final cameraOptions =
-        mergedAlpacaOptions(choices.cameras, 'camera', 'Camera', _alpacaNames);
+    final local = isLoopbackHost(phd2.host);
+    final cameraOptions = mergedAlpacaOptions(
+        choices.cameras, 'camera', 'Camera', _alpacaNames,
+        uniqueIds: _alpacaUniqueIds,
+        preferLoopback: local,
+        keep: phd2.guiderCamera);
     final mountOptions = mergedAlpacaOptions(
         choices.mounts, 'telescope', 'Mount', _alpacaNames,
-        onlyEndpoint: serving);
+        onlyEndpoint: serving,
+        uniqueIds: _alpacaUniqueIds,
+        preferLoopback: local,
+        keep: phd2.guiderMount);
     final auxOptions = mergedAlpacaOptions(
         choices.auxMounts, 'telescope', 'Mount', _alpacaNames,
-        onlyEndpoint: serving);
+        onlyEndpoint: serving,
+        uniqueIds: _alpacaUniqueIds,
+        preferLoopback: local,
+        keep: phd2.guiderAuxMount);
     final rotatorOptions = mergedAlpacaOptions(
         choices.rotators, 'rotator', 'Rotator', _alpacaNames,
-        onlyEndpoint: serving);
+        onlyEndpoint: serving,
+        uniqueIds: _alpacaUniqueIds,
+        preferLoopback: local,
+        keep: phd2.guiderRotator);
     final unserved = describeUnservedAlpacaSelection(phd2);
     // A hydrated mount/aux/rotator on a server other than the camera's: the
     // push keeps the camera's server and drops that device number (the

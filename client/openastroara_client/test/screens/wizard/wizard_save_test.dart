@@ -210,6 +210,27 @@ void main() {
           5);
     });
 
+    test('applyDraftToPhd2 #1308 pins a new guide camera, keeps an untouched '
+        'one\'s pin', () {
+      const base = Phd2Settings(
+          guiderCamera: 'Alpaca Camera [h:1/0]',
+          guiderCameraAlpacaUniqueId: 'OLD-ID');
+      expect(applyDraftToPhd2(base, ProfileDraft()).guiderCameraAlpacaUniqueId,
+          'OLD-ID');
+
+      final picked = ProfileDraft();
+      picked.guider
+        ..guiderCamera = 'Alpaca Camera [h:1/2]'
+        ..guiderCameraAlpacaUniqueId = 'NEW-ID';
+      expect(applyDraftToPhd2(base, picked).guiderCameraAlpacaUniqueId,
+          'NEW-ID');
+
+      // A pick whose id is unknown must not inherit the base camera's pin.
+      final unknown = ProfileDraft();
+      unknown.guider.guiderCamera = 'None';
+      expect(applyDraftToPhd2(base, unknown).guiderCameraAlpacaUniqueId, '');
+    });
+
     test('applyDraftToPhd2 §76.2 persists the guide exposure range', () {
       final d = ProfileDraft();
       d.guider

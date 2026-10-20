@@ -221,6 +221,10 @@ Phd2Settings applyDraftToPhd2(Phd2Settings base, ProfileDraft d,
         g.calibrationCadence == CalibrationCadence.eachSession,
     // §63.17 — null (untouched picker) keeps the base profile's selection.
     guiderCamera: g.guiderCamera,
+    // A new camera pick carries its own pin (#1308), "" when unknown.
+    guiderCameraAlpacaUniqueId: g.guiderCamera == null
+        ? null
+        : (g.guiderCameraAlpacaUniqueId ?? ''),
     guiderMount: g.guiderMount,
     guiderAuxMount: g.guiderAuxMount,
     guiderRotator: g.guiderRotator,

@@ -56,10 +56,23 @@ String friendlyAlpacaChoiceLabel(
 /// collapse. [onlyEndpoint] ("host:port") limits synthesis to one server —
 /// the guider has a SINGLE Alpaca server per profile, derived from the
 /// CAMERA's endpoint, so mount/rotator slots must only offer that server.
-/// Pure — unit-testable.
+///
+/// One row per physical device: an Alpaca server answers discovery on every
+/// interface (loopback, LAN, hotspot), so one device shows up under several
+/// endpoints. Rows sharing an Alpaca UniqueID ([uniqueIds], keyed like
+/// [namesByEndpoint]) collapse to one — [keep] (the slot's current pick) when
+/// it is among them, else a loopback endpoint when [preferLoopback] (the
+/// guider runs beside the daemon, and 127.0.0.1 survives the rig's Wi-Fi
+/// address changing) or a non-loopback one otherwise, else the first listed.
+/// Devices with no UniqueID never collapse. The bare generic `Alpaca <Slot>`
+/// names no server, so it is dropped once any real device is listed.
+/// Pure — unit-tested.
 List<String> mergedAlpacaOptions(List<String> daemonChoices, String alpacaType,
     String slotWord, Map<String, String> namesByEndpoint,
-    {String? onlyEndpoint}) {
+    {String? onlyEndpoint,
+    Map<String, String> uniqueIds = const {},
+    bool preferLoopback = false,
+    String? keep}) {
   final merged = <String>[...daemonChoices];
   for (final key in namesByEndpoint.keys) {
     final bar = key.indexOf('|');
@@ -72,7 +85,92 @@ List<String> mergedAlpacaOptions(List<String> daemonChoices, String alpacaType,
         'Alpaca $slotWord [$endpoint/${typeSlot.substring(alpacaType.length + 1)}]';
     if (!merged.contains(synthesized)) merged.add(synthesized);
   }
-  return merged;
+
+  String? idOf(String choice) {
+    final id = alpacaUniqueIdFor(choice, alpacaType, uniqueIds);
+    return id.isEmpty ? null : id;
+  }
+
+  int rank(String choice) {
+    if (choice == keep) return 0;
+    final loopback = isLoopbackHost(parseAlpacaChoiceEndpoint(choice)!.host);
+    return loopback == preferLoopback ? 1 : 2;
+  }
+
+  final best = <String, String>{};
+  for (final c in merged) {
+    final id = idOf(c);
+    if (id == null) continue;
+    final current = best[id];
+    if (current == null || rank(c) < rank(current)) best[id] = c;
+  }
+  final hasDevice = merged.any(
+      (c) => isAlpacaChoice(c) && parseAlpacaChoiceEndpoint(c) != null);
+  final placed = <String>{};
+  final out = <String>[];
+  for (final c in merged) {
+    final id = idOf(c);
+    if (id != null) {
+      if (placed.add(id)) out.add(best[id]!);
+    } else if (!(hasDevice && isBareAlpacaChoice(c) && c != keep)) {
+      out.add(c);
+    }
+  }
+  return out;
+}
+
+/// True for a host that only reaches the machine it is named on.
+bool isLoopbackHost(String host) {
+  final h = host.trim().toLowerCase();
+  return h.isEmpty ||
+      h == 'localhost' ||
+      h == '::1' ||
+      h == '[::1]' ||
+      h.startsWith('127.');
+}
+
+/// The guide camera to pre-pick on a fresh profile: the one other Alpaca
+/// camera on the imaging camera's server. [options] are the slot's merged
+/// choices; [imagingCameraId] is the equipment step's camera (an Alpaca
+/// UniqueID). Null, leaving the pick to the user, when the imaging camera is
+/// not listed or its server has no other camera or more than one. Pure —
+/// unit-tested.
+String? suggestedGuideCamera(List<String> options,
+    Map<String, String> uniqueIds, String? imagingCameraId) {
+  if (imagingCameraId == null || imagingCameraId.isEmpty) return null;
+  final imaging = options
+      .where((o) => alpacaUniqueIdFor(o, 'camera', uniqueIds) == imagingCameraId)
+      .firstOrNull;
+  if (imaging == null) return null;
+  final server = alpacaServerOf(imaging);
+  final others = [
+    for (final o in options)
+      if (o != imaging && isAlpacaChoice(o) && alpacaServerOf(o) == server) o,
+  ];
+  return others.length == 1 ? others.single : null;
+}
+
+/// The guide mount or rotator to pre-pick: the device the equipment step
+/// assigned ([deviceId], an Alpaca UniqueID) when it sits on the guide
+/// camera's server ([cameraServer], "host:port"). The guider talks to one
+/// Alpaca server, so a device anywhere else is never suggested. Pure —
+/// unit-tested.
+String? suggestedGuiderDevice(List<String> options, String alpacaType,
+    Map<String, String> uniqueIds, String? deviceId, String? cameraServer) {
+  if (deviceId == null || deviceId.isEmpty || cameraServer == null) {
+    return null;
+  }
+  return options
+      .where((o) =>
+          alpacaServerOf(o) == cameraServer &&
+          alpacaUniqueIdFor(o, alpacaType, uniqueIds) == deviceId)
+      .firstOrNull;
+}
+
+/// "host:port" of an `[host:port/N]` choice, or null.
+String? alpacaServerOf(String choice) {
+  final e = parseAlpacaChoiceEndpoint(choice);
+  return e == null ? null : '${e.host}:${e.port}';
 }
 
 /// Shown wherever a profile has no guide camera: a freshly installed guider
@@ -124,10 +222,16 @@ String? describeUnservedAlpacaSelection(Phd2Settings s) {
 
 /// #1308 — the Alpaca UniqueID behind a camera choice, from the resolved
 /// `"host:port|camera/N"` ids; "" for a non-Alpaca choice or an unknown id.
-String alpacaCameraUniqueIdFor(String choice, Map<String, String> uniqueIds) {
+String alpacaCameraUniqueIdFor(String choice, Map<String, String> uniqueIds) =>
+    alpacaUniqueIdFor(choice, 'camera', uniqueIds);
+
+/// The Alpaca UniqueID behind any [alpacaType] choice (camera, telescope,
+/// rotator); "" for a non-Alpaca choice or an unknown id.
+String alpacaUniqueIdFor(
+    String choice, String alpacaType, Map<String, String> uniqueIds) {
   final e = parseAlpacaChoiceEndpoint(choice);
   if (e == null) return '';
-  return uniqueIds['${e.host}:${e.port}|camera/${e.device}'] ?? '';
+  return uniqueIds['${e.host}:${e.port}|$alpacaType/${e.device}'] ?? '';
 }
 
 /// True for the daemon's "Alpaca …" choice strings, bare or suffixed.
@@ -291,11 +395,15 @@ class _GuiderSetupWizardState extends ConsumerState<GuiderSetupWizard> {
       };
 
   /// See [mergedAlpacaOptions] — bound to this wizard's discovered names.
+  /// [keep] is the slot's current pick, kept when its device is listed twice.
   List<String> _mergedOptions(
           List<String> daemonChoices, String alpacaType, String slotWord,
-          {String? onlyEndpoint}) =>
+          {String? onlyEndpoint, String? keep}) =>
       mergedAlpacaOptions(daemonChoices, alpacaType, slotWord, _alpacaNames,
-          onlyEndpoint: onlyEndpoint);
+          onlyEndpoint: onlyEndpoint,
+          uniqueIds: _alpacaUniqueIds,
+          preferLoopback: isLoopbackHost(_draft?.host ?? ''),
+          keep: keep);
 
   /// The selected guide camera's Alpaca server ("host:port"), or null for
   /// non-Alpaca / unset camera selections.
@@ -670,7 +778,8 @@ class _GuiderSetupWizardState extends ConsumerState<GuiderSetupWizard> {
         ];
       case _WizStep.camera:
         final cameraOptions =
-            _mergedOptions(_choices?.cameras ?? const [], 'camera', 'Camera');
+            _mergedOptions(_choices?.cameras ?? const [], 'camera', 'Camera',
+                keep: draft.guiderCamera);
         return [
           const Text(
               'Pick the guide camera. The list covers every Alpaca server '
@@ -808,11 +917,11 @@ class _GuiderSetupWizardState extends ConsumerState<GuiderSetupWizard> {
             value: draft.guiderMount,
             options: _mergedOptions(_choices?.mounts ?? const [], 'telescope',
                 'Mount',
-                onlyEndpoint: _cameraEndpoint),
+                onlyEndpoint: _cameraEndpoint, keep: draft.guiderMount),
             labels: _labelsFor(
                 _mergedOptions(_choices?.mounts ?? const [], 'telescope',
                     'Mount',
-                    onlyEndpoint: _cameraEndpoint),
+                    onlyEndpoint: _cameraEndpoint, keep: draft.guiderMount),
                 'telescope'),
             onChanged: (v) => _edit((d) => d.copyWith(guiderMount: v)),
           ),
@@ -829,8 +938,14 @@ class _GuiderSetupWizardState extends ConsumerState<GuiderSetupWizard> {
           _choiceDropdown(
             label: 'Aux mount',
             value: draft.guiderAuxMount,
-            options: _choices?.auxMounts ?? const [],
-            labels: _labelsFor(_choices?.auxMounts ?? const [], 'telescope'),
+            options: _mergedOptions(_choices?.auxMounts ?? const [],
+                'telescope', 'Mount',
+                onlyEndpoint: _cameraEndpoint, keep: draft.guiderAuxMount),
+            labels: _labelsFor(
+                _mergedOptions(_choices?.auxMounts ?? const [], 'telescope',
+                    'Mount',
+                    onlyEndpoint: _cameraEndpoint, keep: draft.guiderAuxMount),
+                'telescope'),
             allowUnset: true,
             onChanged: (v) => _edit((d) => d.copyWith(guiderAuxMount: v)),
           ),
@@ -846,11 +961,11 @@ class _GuiderSetupWizardState extends ConsumerState<GuiderSetupWizard> {
               value: draft.guiderRotator,
               options: _mergedOptions(
                   _choices?.rotators ?? const [], 'rotator', 'Rotator',
-                  onlyEndpoint: _cameraEndpoint),
+                  onlyEndpoint: _cameraEndpoint, keep: draft.guiderRotator),
               labels: _labelsFor(
                   _mergedOptions(_choices?.rotators ?? const [], 'rotator',
                       'Rotator',
-                      onlyEndpoint: _cameraEndpoint),
+                      onlyEndpoint: _cameraEndpoint, keep: draft.guiderRotator),
                   'rotator'),
               allowUnset: true,
               onChanged: (v) => _edit((d) => d.copyWith(guiderRotator: v)),

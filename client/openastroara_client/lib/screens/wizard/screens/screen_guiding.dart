@@ -7,6 +7,8 @@ import '../../../models/profile_draft.dart';
 import '../../../state/guider/guider_equipment_state.dart';
 import '../../../state/guider/guider_state.dart';
 import '../../../state/profile_management_state.dart';
+import '../../../state/settings/phd2_settings_state.dart'
+    show Phd2SettingsNotifier;
 import '../../../state/wizard_state.dart';
 import '../../../theme/ara_colors.dart';
 import '../../../util/guide_optics.dart';
@@ -14,10 +16,14 @@ import '../../../util/host_port.dart';
 import '../../../widgets/guider/guider_setup_wizard.dart'
     show
         alpacaDeviceNamesApiProvider,
+        alpacaUniqueIdFor,
         friendlyAlpacaChoiceLabel,
+        isLoopbackHost,
         kNoGuideCameraWarning,
         mergedAlpacaOptions,
-        parseAlpacaChoiceEndpoint;
+        parseAlpacaChoiceEndpoint,
+        suggestedGuideCamera,
+        suggestedGuiderDevice;
 import '../../../widgets/profile/profile_import_flow.dart'
     show friendlyDaemonError;
 import '../wizard_form_kit.dart';
@@ -103,6 +109,14 @@ class _ScreenGuiderState extends ConsumerState<ScreenGuider> {
   // mount/rotator server restriction holds without re-picking the camera
   // (review r4 — a cross-server pick would silently no-op on Save).
   String? _baseGuiderCamera;
+  // The base profile's mount and rotator picks: a filled one is kept, so the
+  // equipment-step pre-pick only lands on an empty slot.
+  String? _baseGuiderMount;
+  String? _baseGuiderRotator;
+  // Slots ('camera' / 'mount' / 'rotator') holding a pre-pick from the
+  // equipment step rather than the user's own: a later camera or setup-type
+  // change re-derives them, a user pick takes the slot out.
+  final Set<String> _autoPicked = {};
   // True once the base profile was read: only then is "no base camera" known
   // rather than "offline", and only then does the camera gate apply.
   bool _baseLoaded = false;
@@ -141,6 +155,10 @@ class _ScreenGuiderState extends ConsumerState<ScreenGuider> {
   // Real device names from the Alpaca management API, keyed
   // "host:port|type/N" — same overlay the §63.17 setup wizard uses.
   final Map<String, String> _alpacaNames = {};
+  // #1308 — the same keys → Alpaca UniqueID: collapses one device seen on
+  // several interfaces, matches the equipment step's picks, and pins the
+  // guide camera on Save.
+  final Map<String, String> _alpacaUniqueIds = {};
   bool _sweeping = false;
 
   /// Resolve real device names behind every Alpaca server we know about: the
@@ -180,17 +198,21 @@ class _ScreenGuiderState extends ConsumerState<ScreenGuider> {
     final fetched = await Future.wait([
       for (final entry in endpoints.entries)
         namesApi
-            .fetchNames(entry.value.host, entry.value.port)
-            .then((names) => (endpoint: entry.key, names: names)),
+            .fetchDevices(entry.value.host, entry.value.port)
+            .then((devices) => (endpoint: entry.key, devices: devices)),
     ]);
     if (!mounted) return;
     setState(() {
       for (final result in fetched) {
-        result.names.forEach((typeSlot, name) {
-          _alpacaNames['${result.endpoint}|$typeSlot'] = name;
+        result.devices.forEach((typeSlot, device) {
+          _alpacaNames['${result.endpoint}|$typeSlot'] = device.name;
+          if (device.uniqueId.isNotEmpty) {
+            _alpacaUniqueIds['${result.endpoint}|$typeSlot'] = device.uniqueId;
+          }
         });
       }
     });
+    _autoPick();
   }
 
   /// Refresh-choices button action: re-read the daemon's lists AND re-sweep
@@ -203,6 +225,119 @@ class _ScreenGuiderState extends ConsumerState<ScreenGuider> {
     } finally {
       if (mounted) setState(() => _sweeping = false);
     }
+  }
+
+  /// The guider runs on the daemon's machine, so a loopback Alpaca endpoint
+  /// reaches the gear from it and survives the rig's Wi-Fi address changing.
+  bool get _guiderIsLocal =>
+      isLoopbackHost(parseHostPort(_g.hostPort).host ?? '');
+
+  /// One slot's picker options: daemon choices + discovered devices, one row
+  /// per device (see [mergedAlpacaOptions]).
+  List<String> _options(List<String> daemonChoices, String alpacaType,
+          String slotWord, String? keep, {bool onCameraServer = false}) =>
+      mergedAlpacaOptions(daemonChoices, alpacaType, slotWord, _alpacaNames,
+          onlyEndpoint: onCameraServer ? _cameraEndpoint : null,
+          uniqueIds: _alpacaUniqueIds,
+          preferLoopback: _guiderIsLocal,
+          keep: keep);
+
+  List<String> get _cameraOptions => _options(
+      ref.read(guiderEquipmentProvider).value?.choices?.cameras ?? const [],
+      'camera', 'Camera', _g.guiderCamera ?? _baseGuiderCamera);
+
+  List<String> get _mountOptions => _options(
+      ref.read(guiderEquipmentProvider).value?.choices?.mounts ?? const [],
+      'telescope', 'Mount', _g.guiderMount ?? _baseGuiderMount,
+      onCameraServer: true);
+
+  List<String> get _auxMountOptions => _options(
+      ref.read(guiderEquipmentProvider).value?.choices?.auxMounts ?? const [],
+      'telescope', 'Mount', _g.guiderAuxMount,
+      onCameraServer: true);
+
+  List<String> get _rotatorOptions => _options(
+      ref.read(guiderEquipmentProvider).value?.choices?.rotators ?? const [],
+      'rotator', 'Rotator', _g.guiderRotator ?? _baseGuiderRotator,
+      onCameraServer: true);
+
+  /// Shown under a slot holding an equipment-step pre-pick.
+  String? _autoPickNote(String slot) => _autoPicked.contains(slot)
+      ? 'Matched to the equipment you picked earlier. Change it if that is '
+          'wrong.'
+      : null;
+
+  /// Pre-pick from the equipment step, for a fresh profile: the guide camera
+  /// is the one other camera on the imaging camera's Alpaca server, the guide
+  /// mount is the imaging mount, and on an OAG the rotator is the imaging
+  /// rotator — each only when it sits on the guide camera's server (the
+  /// guider talks to one). Never touches a slot the user picked or the base
+  /// profile fills; a pre-pick that no longer holds is withdrawn. Runs as
+  /// base profile, guider choices and Alpaca devices arrive.
+  void _autoPick() {
+    if (!mounted || !_baseLoaded) return;
+    final eq = _draftOf(ref).equipment;
+    var changed = false;
+
+    if (_baseGuiderCamera == null &&
+        (_g.guiderCamera == null || _autoPicked.contains('camera'))) {
+      final pick = suggestedGuideCamera(
+          _cameraOptions, _alpacaUniqueIds, eq.cameraDeviceId);
+      if (pick != null && pick != _g.guiderCamera) {
+        _setCamera(pick);
+        _autoPicked.add('camera');
+        changed = true;
+      }
+    }
+
+    // The slot's next value: the user's own or the base's stays; a pre-pick
+    // follows the suggestion, and is withdrawn when there is none.
+    String? device(String? current, String? base, String slot,
+        List<String> options, String alpacaType, String? deviceId,
+        {bool allowed = true}) {
+      final auto = _autoPicked.contains(slot);
+      if (base != null || (current != null && !auto)) return current;
+      final pick = allowed
+          ? suggestedGuiderDevice(
+              options, alpacaType, _alpacaUniqueIds, deviceId, _cameraEndpoint)
+          : null;
+      if (pick == null) {
+        if (!auto) return current;
+        _autoPicked.remove(slot);
+        changed = true;
+        return null;
+      }
+      _autoPicked.add(slot);
+      if (pick != current) changed = true;
+      return pick;
+    }
+
+    final mount = device(_g.guiderMount, _baseGuiderMount, 'mount',
+        _mountOptions, 'telescope', eq.mountDeviceId);
+    final rotator = device(_g.guiderRotator, _baseGuiderRotator, 'rotator',
+        _rotatorOptions, 'rotator', eq.rotatorDeviceId,
+        allowed: Phd2SettingsNotifier.usesGuideCameraRotator(
+            resolveGuiderSetupType(_g.setupType, _baseSetupType ?? 'guide_scope')));
+    if (!changed) return;
+    setState(() {
+      _g.guiderMount = mount;
+      _g.guiderRotator = rotator;
+    });
+    _publishValid();
+  }
+
+  /// Record a guide-camera pick (null clears it): its #1308 pin, and the
+  /// pixel-size read off the driver.
+  void _setCamera(String? sel) {
+    setState(() {
+      _g.guiderCamera = sel;
+      _g.guiderCameraAlpacaUniqueId = sel == null
+          ? null
+          : alpacaUniqueIdFor(sel, 'camera', _alpacaUniqueIds);
+      _pixelSizeFromDriver = false;
+    });
+    _publishValid();
+    if (sel != null) unawaited(_autofillPixelSize(sel));
   }
 
   /// The selected guide camera's Alpaca server ("host:port"), or null — the
@@ -286,9 +421,13 @@ class _ScreenGuiderState extends ConsumerState<ScreenGuider> {
         _baseReducerFactor = optics.reducerFactor;
         _baseGuiderCamera =
             phd2.guiderCamera.isEmpty ? null : phd2.guiderCamera;
+        _baseGuiderMount = phd2.guiderMount.isEmpty ? null : phd2.guiderMount;
+        _baseGuiderRotator =
+            phd2.guiderRotator.isEmpty ? null : phd2.guiderRotator;
         _baseLoaded = true;
       });
       _publishValid();
+      _autoPick();
     } catch (_) {
       // Offline / no daemon — keep the guide_scope / 1.0 fallbacks.
     }
@@ -381,8 +520,12 @@ class _ScreenGuiderState extends ConsumerState<ScreenGuider> {
 
   @override
   Widget build(BuildContext context) {
-    // Choices arriving (or vanishing) can flip the camera gate.
-    ref.listen(guiderEquipmentProvider, (_, _) => _publishValid());
+    // Choices arriving (or vanishing) can flip the camera gate and bring
+    // the devices a pre-pick needs.
+    ref.listen(guiderEquipmentProvider, (_, _) {
+      _publishValid();
+      _autoPick();
+    });
     final rangeInvalid = _g.darkMinExposureMs > _g.darkMaxExposureMs;
     return WizardScreenScaffold(
       step: 4,
@@ -432,7 +575,6 @@ class _ScreenGuiderState extends ConsumerState<ScreenGuider> {
         // value stays representable even when the guider is disconnected.
         Builder(builder: (context) {
           final equipment = ref.watch(guiderEquipmentProvider);
-          final choices = equipment.value?.choices;
           final base = _baseGuiderCamera;
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -440,51 +582,50 @@ class _ScreenGuiderState extends ConsumerState<ScreenGuider> {
               _choicePicker(
                 label: 'Guide camera',
                 current: _g.guiderCamera,
-                options: mergedAlpacaOptions(
-                    choices?.cameras ?? const [], 'camera', 'Camera',
-                    _alpacaNames),
+                options: _cameraOptions,
                 alpacaType: 'camera',
                 blankLabel: base == null
                     ? 'Pick a guide camera'
                     : '(keep ${friendlyAlpacaChoiceLabel(base, 'camera', _alpacaNames)})',
-                helperText: _cameraPickNeeded ? kNoGuideCameraWarning : null,
+                helperText: _cameraPickNeeded
+                    ? kNoGuideCameraWarning
+                    : _autoPickNote('camera'),
                 onPick: (v) {
                   // Camera has no ''-vs-null distinction: blank = untouched.
-                  final sel = v.isEmpty ? null : v;
-                  setState(() {
-                    _g.guiderCamera = sel;
-                    _pixelSizeFromDriver = false;
-                  });
-                  _publishValid();
-                  if (sel != null) unawaited(_autofillPixelSize(sel));
+                  _autoPicked.remove('camera');
+                  _setCamera(v.isEmpty ? null : v);
+                  // Mount and rotator pre-picks follow the camera's server.
+                  _autoPick();
                 },
               ),
               _choicePicker(
                 label: 'Guide mount (pulse target)',
                 current: _g.guiderMount,
-                options: mergedAlpacaOptions(
-                    choices?.mounts ?? const [], 'telescope', 'Mount',
-                    _alpacaNames,
-                    onlyEndpoint: _cameraEndpoint),
+                options: _mountOptions,
                 alpacaType: 'telescope',
-                onPick: (v) => setState(() => _g.guiderMount = v),
+                helperText: _autoPickNote('mount'),
+                onPick: (v) => setState(() {
+                  _autoPicked.remove('mount');
+                  _g.guiderMount = v;
+                }),
               ),
               _choicePicker(
                 label: 'Aux mount (optional)',
                 current: _g.guiderAuxMount,
-                options: choices?.auxMounts ?? const [],
+                options: _auxMountOptions,
                 alpacaType: 'telescope',
                 onPick: (v) => setState(() => _g.guiderAuxMount = v),
               ),
               _choicePicker(
                 label: 'Rotator (optional)',
                 current: _g.guiderRotator,
-                options: mergedAlpacaOptions(
-                    choices?.rotators ?? const [], 'rotator', 'Rotator',
-                    _alpacaNames,
-                    onlyEndpoint: _cameraEndpoint),
+                options: _rotatorOptions,
                 alpacaType: 'rotator',
-                onPick: (v) => setState(() => _g.guiderRotator = v),
+                helperText: _autoPickNote('rotator'),
+                onPick: (v) => setState(() {
+                  _autoPicked.remove('rotator');
+                  _g.guiderRotator = v;
+                }),
               ),
               Padding(
                 padding: const EdgeInsets.only(bottom: 12),
@@ -526,7 +667,11 @@ class _ScreenGuiderState extends ConsumerState<ScreenGuider> {
             DropdownMenuEntry(value: 'guide_scope', label: 'Guide scope'),
             DropdownMenuEntry(value: 'oag', label: 'Off-axis guider (OAG)'),
           ],
-          onChanged: (v) => setState(() => _g.setupType = v),
+          onChanged: (v) {
+            setState(() => _g.setupType = v);
+            // An OAG rotator pre-pick comes and goes with the setup type.
+            _autoPick();
+          },
         ),
         if (resolveGuiderSetupType(
                 _g.setupType, _baseSetupType ?? 'guide_scope') ==

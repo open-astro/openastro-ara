@@ -97,6 +97,7 @@ Map<String, dynamic> profileDraftToJson(ProfileDraft d) {
     'guider': strip({
       'host_port': d.guider.hostPort,
       'camera': d.guider.guiderCamera,
+      'camera_unique_id': d.guider.guiderCameraAlpacaUniqueId,
       'mount': d.guider.guiderMount,
       'aux_mount': d.guider.guiderAuxMount,
       'rotator': d.guider.guiderRotator,
@@ -291,6 +292,7 @@ ProfileDraft profileDraftFromJson(Map<String, dynamic> json) {
   final g = section('guider');
   d.guider.hostPort = str(g, 'host_port') ?? d.guider.hostPort;
   d.guider.guiderCamera = str(g, 'camera');
+  d.guider.guiderCameraAlpacaUniqueId = str(g, 'camera_unique_id');
   d.guider.guiderMount = str(g, 'mount');
   d.guider.guiderAuxMount = str(g, 'aux_mount');
   d.guider.guiderRotator = str(g, 'rotator');
