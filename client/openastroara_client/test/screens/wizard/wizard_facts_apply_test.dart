@@ -28,6 +28,25 @@ void main() {
                     sensorHeightPx: 4176,
                     pixelSizeUm: 3.76))));
     expect(d.camera.pixelSizeMicrons, 3.76);
+    // §36.10 — the sensor size feeds the field of view and so the database pick.
+    expect(d.camera.sensorWidthPx, 6248);
+    expect(d.camera.sensorHeightPx, 4176);
+  });
+
+  test('a camera that reports no sensor size (0×0) leaves the draft size as it was', () {
+    final d = ProfileDraft();
+    d.camera
+      ..sensorWidthPx = 1280
+      ..sensorHeightPx = 960;
+    applyFactsToDraft(
+        d,
+        _r(
+            EquipmentDeviceType.camera,
+            const DeviceFactsPayload(
+                camera: CameraGeometry(sensorWidthPx: 0, sensorHeightPx: 0, pixelSizeUm: 2.9))));
+    expect(d.camera.pixelSizeMicrons, 2.9);
+    expect(d.camera.sensorWidthPx, 1280);
+    expect(d.camera.sensorHeightPx, 960);
   });
 
   test('unreported optics never clear a user-typed fallback value', () {
