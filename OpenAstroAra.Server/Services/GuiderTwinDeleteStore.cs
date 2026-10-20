@@ -50,6 +50,9 @@ public sealed partial class FileGuiderTwinDeleteStore : IGuiderTwinDeleteStore {
         ArgumentException.ThrowIfNullOrEmpty(profileDir);
         _path = Path.Combine(profileDir, FileName);
         _logger = logger;
+        lock (_gate) {
+            Load(); // warm the cache at boot, not on a ping tick
+        }
     }
 
     public IReadOnlyList<PendingGuiderTwinDelete> List() {
