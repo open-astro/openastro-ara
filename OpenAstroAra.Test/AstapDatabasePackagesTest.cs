@@ -331,6 +331,22 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task An_untrusted_redirect_is_reported_as_a_failed_download_with_its_reason() {
+            // The fetcher throws InvalidOperationException for a redirect it will not follow; the worker's
+            // catch-all turns that into download.failed carrying the message, same as any other fetch error.
+            var ws = new CapturingBroadcaster();
+            var fetcher = new FakeSkyDataFetcher(_ => throw new InvalidOperationException("Sky-data source redirects to 'http://evil', refusing to follow it."));
+            var svc = NewService(fetcher, ws);
+
+            await svc.DownloadAsync(new DownloadRequestDto("astap-w08", ForceReinstall: false), null, CancellationToken.None);
+
+            Assert.That(await Eventually(() => ws.Events.Any(e => e.EventType == WsEventCatalog.DataManagerDownloadFailed)), Is.True);
+            var failed = ws.Events.First(e => e.EventType == WsEventCatalog.DataManagerDownloadFailed).Payload;
+            Assert.That(failed.GetProperty("error").GetString(), Does.Contain("refusing to follow"));
+            Assert.That(Directory.Exists(Path.Combine(_solverRoot, "astap-w08")), Is.False, "nothing installed");
+        }
+
+        [Test]
         public void Free_space_is_read_from_the_nearest_existing_ancestor() {
             var missing = Path.Combine(_root, "not", "yet", "there");
             Assert.That(DataManagerService.FreeBytesOnDisk(missing), Is.GreaterThan(0));

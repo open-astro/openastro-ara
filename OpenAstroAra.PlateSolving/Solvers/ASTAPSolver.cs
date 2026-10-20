@@ -187,7 +187,7 @@ namespace OpenAstroAra.PlateSolving.Solvers {
                 var installed = AstapStarDatabase.Databases(db);
                 var partial = AstapStarDatabase.PartialDatabases(db);
                 if (partial.Count > 0 && System.Threading.Interlocked.CompareExchange(ref partialDatabaseWarned, 1, 0) == 0) {
-                    Logger.Warning($"Plate solve - ASTAP star database(s) {string.Join(", ", partial)} in '{db}' are incomplete (fewer than {AstapStarDatabase.MinTileFiles} tiles — an interrupted download?) and will not be used; finish or remove them (#1215).");
+                    Logger.Warning($"Plate solve - ASTAP star database(s) {string.Join(", ", partial)} under '{db}' (or one of its package subdirectories) are incomplete (fewer than {AstapStarDatabase.MinTileFiles} tiles — an interrupted download?) and will not be used; finish or remove them (#1215).");
                 }
                 var database = AstapStarDatabase.Select(installed, imageProperties.FoVH);
                 // #1136 — a Data Manager package sits in its own subdirectory of the configured path;
