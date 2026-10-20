@@ -188,6 +188,28 @@ void main() {
     expect(find.text('Load older'), findsNothing, reason: 'the refreshed list is a short page');
   });
 
+  testWidgets('the cursor skips an oldest entry whose timestamp fell back to the epoch', (tester) async {
+    // Round 3: LogEntry.fromJson uses the epoch for an unparseable timestamp; paging from it would end
+    // early with an empty page, so the cursor is the oldest entry with a real timestamp.
+    final page = _fullPage();
+    page[page.length - 1] = LogEntry(
+      timestamp: DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
+      level: 'Information',
+      source: 'OpenAstroAra.Server',
+      message: 'unparseable timestamp',
+    );
+    final api = _FakeLogsClient(entries: page);
+    await tester.pumpWidget(_host(api));
+    await tester.pumpAndSettle();
+
+    final list = find.descendant(of: find.byType(ListView), matching: find.byType(Scrollable)).first;
+    await tester.scrollUntilVisible(find.text('Load older'), 400, scrollable: list);
+    await tester.tap(find.text('Load older'));
+    await tester.pumpAndSettle();
+
+    expect(api.lastBefore, page[page.length - 2].timestamp, reason: 'the last real timestamp, not 1970');
+  });
+
   testWidgets('a failed older page keeps the list and shows the error banner', (tester) async {
     final api = _FakeLogsClient(entries: _fullPage())..throwOnBefore = true;
     await tester.pumpWidget(_host(api));
