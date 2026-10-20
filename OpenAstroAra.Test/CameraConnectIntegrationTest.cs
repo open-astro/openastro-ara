@@ -64,6 +64,13 @@ namespace OpenAstroAra.Test {
             Assert.That(connected!.State, Is.EqualTo(EquipmentConnectionState.Connected));
             var withCaps = await PollUntilAsync(svc, d => d.Capabilities is not null).ConfigureAwait(false);
             Assert.That(withCaps!.Capabilities!.SensorWidth, Is.GreaterThan(0), "sensor size should be read from the sim");
+            // #1185 — the §25.5.5 wire fields come from the simulator too (OmniSim implements them all).
+            Assert.Multiple(() => {
+                Assert.That(withCaps.Capabilities.SensorType, Is.Not.Null.And.Not.Empty, "SensorType name is read");
+                Assert.That(withCaps.Capabilities.ExposureResolutionSec, Is.GreaterThanOrEqualTo(0));
+                Assert.That(withCaps.Capabilities.Gains, Is.Null.Or.Not.Empty, "a gain list is either absent (range mode) or non-empty");
+                Assert.That(withCaps.Capabilities.Offsets, Is.Null.Or.Not.Empty);
+            });
 
             try {
                 // §28 widening: sub-second on purpose — this is the ONLY test that drives
