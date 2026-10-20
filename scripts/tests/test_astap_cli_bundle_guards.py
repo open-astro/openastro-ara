@@ -64,3 +64,33 @@ class ClientDefaults(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+BUILD_DEB = REPO_ROOT / "packaging" / "build-deb.sh"
+VM_SH = REPO_ROOT / ".claude" / "skills" / "ara-sbc-vm" / "scripts" / "vm.sh"
+
+
+class DebPackaging(unittest.TestCase):
+    def test_build_deb_refuses_a_publish_dir_without_astap_cli(self) -> None:
+        self.assertRegex(BUILD_DEB.read_text(),
+                         r'\[ -f "\$PUBLISH_DIR/astap_cli" \] \|\| \{[^\n]*exit 1;')
+
+
+class VmBuildPr(unittest.TestCase):
+    """vm.sh build-pr assembles the .deb inside the VM; since build-deb.sh refuses a publish
+    dir without astap_cli, the skill has to ship the solver source and build it there."""
+
+    def test_ships_the_solver_submodule_and_build_script(self) -> None:
+        text = VM_SH.read_text()
+        tar = re.search(r"tar -cf - ([^)]*)\) \| vssh \"tar -xf - -C ~/build\"", text)
+        self.assertIsNotNone(tar, "vm.sh no longer ships the sources with tar")
+        for item in ("third_party/astap", "scripts/build-astap-cli.sh"):
+            self.assertIn(item, tar[1].split(), f"vm.sh must ship {item}")
+
+    def test_builds_astap_cli_before_the_deb(self) -> None:
+        text = VM_SH.read_text()
+        self.assertRegex(text, r"apt-get install[^\n]*\bfpc\b", "the VM needs fpc")
+        cli = text.find("bash scripts/build-astap-cli.sh publish")
+        deb = text.find("bash packaging/build-deb.sh publish")
+        self.assertGreater(cli, -1, "vm.sh must run build-astap-cli.sh")
+        self.assertLess(cli, deb, "build-astap-cli.sh must run before build-deb.sh")

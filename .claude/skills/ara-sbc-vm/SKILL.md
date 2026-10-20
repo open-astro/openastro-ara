@@ -54,8 +54,10 @@ vm.sh status                # daemon health, package version, profiles
 
 **Try a PR's daemon** — point it at a worktree on the PR head (the
 `ara-pr-investigation` skill makes one) and it publishes for arm64 on the
-Mac, compiles the astrometry natives and assembles the `.deb` inside the
-VM exactly as `packaging/build-deb.sh` does in CI, then installs it:
+Mac, compiles the astrometry natives and the bundled `astap_cli` solver
+(from the `third_party/astap` submodule, so the worktree needs
+`git submodule update --init`) and assembles the `.deb` inside the VM
+exactly as `packaging/build-deb.sh` does in CI, then installs it:
 
 ```bash
 git -C /path/to/worktree submodule update --init   # a fresh worktree has an empty third_party/ (#1386)

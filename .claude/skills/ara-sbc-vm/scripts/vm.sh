@@ -10,7 +10,7 @@
 #   vm.sh ssh [cmd...]          shell / run a command as astro
 #   vm.sh scp <src> <dest>      copy to/from the VM (dest like vm:/tmp/x)
 #   vm.sh deploy [<file.deb> | --run <ci-run-id>]   install a .deb (default: latest green master CI artifact)
-#   vm.sh build-pr <repo-or-worktree> [<version>]   publish the daemon for arm64 on the Mac, build natives + .deb inside the VM, deploy it
+#   vm.sh build-pr <repo-or-worktree> [<version>]   publish the daemon for arm64 on the Mac, build natives + astap_cli + .deb inside the VM, deploy it
 #   vm.sh reset                 delete the disk (keeps the pristine download) so setup starts clean
 set -euo pipefail
 
@@ -236,14 +236,18 @@ cmd_build_pr() {
     local out="$VM_DIR/build/$version"; rm -rf "$out"; mkdir -p "$out"
     log "dotnet publish linux-arm64 (self-contained) from $src"
     (cd "$src" && dotnet publish OpenAstroAra.Server/OpenAstroAra.Server.csproj -c Release -r linux-arm64 --self-contained -p:PublishAot=false -p:TreatWarningsAsErrors=false -o "$out/publish" > "$out/publish.log" 2>&1) || { tail -20 "$out/publish.log"; fail "publish failed"; }
-    log "shipping publish dir + astrometry submodule sources + packaging to the VM"
+    log "shipping publish dir + astrometry and ASTAP submodule sources + packaging to the VM"
     vssh "rm -rf ~/build && mkdir -p ~/build"
     # build-deb.sh copies the licence docs from the repo root into the package.
-    (cd "$src" && tar -cf - scripts/build-astrometry-natives.sh scripts/generate-3rd-party-licenses.py third_party/erfa third_party/supernovas packaging LICENSE.txt NOTICE.md 3rd-party-licenses.txt) | vssh "tar -xf - -C ~/build"
+    # third_party/astap is the bundled solver's source: build-deb.sh refuses a publish dir
+    # without astap_cli, and fpc has no cross units, so it is compiled inside the VM too.
+    [ -f "$src/third_party/astap/command-line_version/astap_command_line.lpr" ] || fail "$src/third_party/astap is empty; run git submodule update --init in $src"
+    (cd "$src" && tar -cf - scripts/build-astrometry-natives.sh scripts/build-astap-cli.sh scripts/generate-3rd-party-licenses.py third_party/erfa third_party/supernovas third_party/astap packaging LICENSE.txt NOTICE.md 3rd-party-licenses.txt) | vssh "tar -xf - -C ~/build"
     (cd "$out" && tar -cf - publish) | vssh "tar -xf - -C ~/build"
-    log "building natives + .deb inside the VM"
-    vssh "set -eo pipefail; cd ~/build; sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq build-essential dpkg-dev curl >/dev/null; \
+    log "building natives + astap_cli + .deb inside the VM"
+    vssh "set -eo pipefail; cd ~/build; sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq build-essential dpkg-dev curl fpc >/dev/null; \
           bash scripts/build-astrometry-natives.sh publish >/dev/null; \
+          bash scripts/build-astap-cli.sh publish 2>&1 | tail -1; \
           bash packaging/build-deb.sh publish '$version' dist 2>&1 | tail -3"
     vscp "astro@localhost:~/build/dist/openastroara-server_${version}_arm64.deb" "$out/"
     cmd_deploy "$out/openastroara-server_${version}_arm64.deb"
