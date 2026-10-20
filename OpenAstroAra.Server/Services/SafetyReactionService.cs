@@ -522,6 +522,8 @@ public sealed partial class SafetyReactionService : IHostedService, IDisposable 
                         "The target was re-centered by plate solve before the resume, so pointing is confirmed.",
                     RecenterOutcome.Failed =>
                         "An automatic re-center was attempted but did not converge — verify the pointing before trusting new frames.",
+                    RecenterOutcome.TargetTooLow =>
+                        "The target has set below your horizon limit during the pause, so no re-center was attempted; the plan's altitude conditions decide what's next.",
                     _ =>
                         "Verify the pointing: unless your sequence re-centers the target, frames after an unsafe pause may need the target re-slewed.",
                 };
@@ -548,13 +550,14 @@ public sealed partial class SafetyReactionService : IHostedService, IDisposable 
         }
     }
 
-    internal enum RecenterOutcome { NotAttempted, Recentered, Failed, CancelledByRelapse }
+    internal enum RecenterOutcome { NotAttempted, Recentered, Failed, CancelledByRelapse, TargetTooLow }
 
     /// <summary>§35 auto-resume pointing — best-effort re-center on the first paused run whose
     /// live plan carries a coordinate target, through the shared <see cref="TargetRecenter"/>.
-    /// NotAttempted when there is no centering service, no sequencer, no coordinate-bearing target
-    /// or the target has sunk below the horizon limit (resume proceeds with the verify-pointing
-    /// warning either way). Bounded by <see cref="RecenterTimeout"/> (expiry = Failed); a relapse to
+    /// NotAttempted when there is no centering service, no sequencer or no coordinate-bearing
+    /// target; TargetTooLow when the §38.10a horizon guard finds the target has set below the
+    /// limit during the pause (no slew; the resume says so and the plan's altitude conditions
+    /// decide). Bounded by <see cref="RecenterTimeout"/> (expiry = Failed); a relapse to
     /// unsafe cancels via <paramref name="ct"/> and reports CancelledByRelapse so the caller
     /// restores the pause + re-parks.</summary>
     private async Task<RecenterOutcome> TryRecenterQuietlyAsync(IReadOnlyList<Guid> ids, CancellationToken ct) {
@@ -577,6 +580,8 @@ public sealed partial class SafetyReactionService : IHostedService, IDisposable 
                 return RecenterOutcome.Failed;
             case TargetRecenterOutcome.Failed:
                 return RecenterOutcome.Failed;
+            case TargetRecenterOutcome.TargetTooLow:
+                return RecenterOutcome.TargetTooLow;
             default:
                 return RecenterOutcome.NotAttempted;
         }
