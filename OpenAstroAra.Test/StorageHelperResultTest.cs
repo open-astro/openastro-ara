@@ -27,6 +27,33 @@ namespace OpenAstroAra.Test {
     public class StorageHelperResultTest {
 
         [Test]
+        public void A_checked_store_keeps_its_mount_point_and_reports_a_repair() {
+            var result = StorageDeviceService.ParseCheckResult(0, "OK /media/openastroara checked repaired\n");
+            Assert.That(result.Success, Is.True);
+            Assert.That(result.Code, Is.EqualTo("repaired"));
+            Assert.That(result.MountPoint, Is.EqualTo("/media/openastroara"));
+        }
+
+        [Test]
+        public void A_checked_disk_that_is_not_the_store_reports_no_mount_point() {
+            // The helper leaves it unmounted and names the device: claiming the store's mount
+            // point here would tell the client a mount happened that did not.
+            var result = StorageDeviceService.ParseCheckResult(0, "OK /dev/sdb1 checked clean\n");
+            Assert.That(result.Success, Is.True);
+            Assert.That(result.Code, Is.EqualTo("clean"));
+            Assert.That(result.MountPoint, Is.Null);
+        }
+
+        [Test]
+        public void A_failed_check_carries_the_helper_code() {
+            var result = StorageDeviceService.ParseCheckResult(11, "ERROR: fsck_failed exit=4\n");
+            Assert.That(result.Success, Is.False);
+            Assert.That(result.Code, Is.EqualTo("fsck_failed"));
+            Assert.That(result.Detail, Is.EqualTo("exit=4"));
+            Assert.That(StorageDeviceService.ParseCheckResult(9, "usage: …").Code, Is.EqualTo("usage"));
+        }
+
+        [Test]
         public void SuccessCarriesMountPointLine() {
             var (code, output) = StorageDeviceService.ParseHelperResult("0\nOK /media/openastroara\n");
             Assert.That(code, Is.EqualTo(0));

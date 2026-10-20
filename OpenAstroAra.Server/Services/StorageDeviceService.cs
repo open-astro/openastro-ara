@@ -389,22 +389,28 @@ namespace OpenAstroAra.Server.Services {
                     "That does not look like a filesystem UUID.", null);
             }
             var (exitCode, output) = await RunHelperAsync(["--check", uuid], ct).ConfigureAwait(false);
+            var result = ParseCheckResult(exitCode, output);
+            if (result.Success) {
+                LogChecked(logger, uuid, result.Detail ?? string.Empty);
+            } else {
+                LogCheckFailed(logger, uuid, result.Code, result.Detail ?? string.Empty);
+            }
+            return result;
+        }
+
+        /// <summary>Pure: the helper's <c>--check</c> answer → the result. "OK &lt;where&gt; checked
+        /// clean|repaired": the last word says whether fsck fixed anything, and the mount point is
+        /// reported only when the store was remounted. A disk that is not the store is checked and
+        /// left unmounted, and the helper then names the device instead.</summary>
+        internal static StorageConfigureResult ParseCheckResult(int exitCode, string output) {
             var text = output.Trim();
             if (exitCode == 0) {
-                LogChecked(logger, uuid, text);
-                // "OK <mount> checked clean|repaired" — the last word tells the
-                // client whether fsck fixed anything.
                 var repaired = text.EndsWith("repaired", StringComparison.Ordinal);
-                // A disk that is not the store is checked and left unmounted: the helper
-                // then names the device, and there is no mount point to report.
                 var remounted = text.StartsWith("OK " + MountPoint + " ", StringComparison.Ordinal);
                 return new StorageConfigureResult(true, repaired ? "repaired" : "clean", text, remounted ? MountPoint : null);
             }
-            var parts = text.StartsWith("ERROR:", StringComparison.Ordinal)
-                ? text["ERROR:".Length..].Trim().Split(' ', 2)
-                : [exitCode == 9 ? "usage" : "helper_failed", text];
-            LogCheckFailed(logger, uuid, parts[0], parts.Length > 1 ? parts[1] : string.Empty);
-            return new StorageConfigureResult(false, parts[0], parts.Length > 1 ? parts[1] : null, null);
+            var (code, detail) = HelperError(exitCode, text);
+            return new StorageConfigureResult(false, code, detail, null);
         }
 
         public async Task<StorageConfigureResult> EjectAsync(string uuid, CancellationToken ct) {
