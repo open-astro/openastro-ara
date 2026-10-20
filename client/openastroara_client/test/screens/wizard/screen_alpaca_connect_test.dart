@@ -141,10 +141,33 @@ void main() {
     final message = tester
         .widget<Text>(find.textContaining('AlpacaBridge found'))
         .data;
-    expect(message, contains('2 cameras, 1 mount and 1 focuser'));
+    expect(message, contains('offering 2 cameras, 1 mount and 1 focuser'));
     expect(message, isNot(contains('filter wheel')));
     expect(find.byIcon(Icons.check_circle), findsOneWidget);
     expect(find.byIcon(Icons.warning_amber_rounded), findsNothing);
+  });
+
+  testWidgets('an advertised phantom slot is counted as offered, never as '
+      'connected gear', (tester) async {
+    // A registered bridge slot with NO hardware behind it: the bridge
+    // advertises a vendor name, /connected is false. The banner is green
+    // (the bridge is reachable) but must say the device is unverified.
+    final api = _FakeDiscoveryApi(devices: {
+      EquipmentDeviceType.camera: [
+        device(EquipmentDeviceType.camera, 'PLAYERONE_SN_0'),
+      ],
+    });
+    final container = await _pump(tester, api);
+
+    expect(container.read(wizardStepValidProvider), isTrue);
+    final message = tester
+        .widget<Text>(find.textContaining('AlpacaBridge found'))
+        .data;
+    expect(message, contains('offering 1 camera'));
+    expect(message, contains('checked when you connect'));
+    expect(message, isNot(contains('connected')));
+    expect(message, isNot(contains('seen')));
+    expect(find.byIcon(Icons.check_circle), findsOneWidget);
   });
 
   testWidgets('a non-camera type failing does not hide a reachable bridge',
@@ -160,7 +183,7 @@ void main() {
     final container = await _pump(tester, api);
 
     expect(container.read(wizardStepValidProvider), isTrue);
-    expect(find.textContaining('AlpacaBridge found — 1 camera.'),
+    expect(find.textContaining('AlpacaBridge found — offering 1 camera.'),
         findsOneWidget);
     expect(find.text('AlpacaBridge not detected.'), findsNothing);
   });

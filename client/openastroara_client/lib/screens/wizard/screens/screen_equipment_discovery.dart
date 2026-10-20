@@ -74,7 +74,7 @@ String _countNoun(EquipmentDeviceType t, int n) {
   return '$n ${n == 1 ? one : many}';
 }
 
-/// "AlpacaBridge found — 2 cameras, 1 mount and 1 focuser." [found] lines
+/// "AlpacaBridge found — offering 2 cameras, 1 mount and 1 focuser." [found] lines
 /// up with [_summaryTypes]. The daemon's driverless manual filter wheel is
 /// not bridge gear, so it isn't counted.
 String _summary(List<List<DiscoveredDevice>> found) {
@@ -91,8 +91,11 @@ String _summary(List<List<DiscoveredDevice>> found) {
   final list = parts.length == 1
       ? parts.single
       : '${parts.sublist(0, parts.length - 1).join(', ')} and ${parts.last}';
-  return 'AlpacaBridge found — $list. You choose which to use on the next '
-      'steps.';
+  // "Offering", not "connected": a vendor SDK slot can be advertised with no
+  // hardware behind it (2026-08-10 phantom-slot fix), so each device is only
+  // verified when the user connects it.
+  return 'AlpacaBridge found — offering $list. Each one is checked when you '
+      'connect it on the next steps.';
 }
 
 class _ScreenAlpacaConnectState extends ConsumerState<ScreenAlpacaConnect> {
