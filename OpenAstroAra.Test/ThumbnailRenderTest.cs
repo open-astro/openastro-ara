@@ -45,7 +45,14 @@ public class ThumbnailRenderTest {
     [Test]
     public void A_frame_bigger_than_the_preview_is_shrunk_first_and_renders_a_320_px_tile() {
         // 6248 wide, the ASI2600-class sensor from the field: stride 2 at the 4096 preview cap.
-        var jpeg = SqliteFrameRepository.RenderMonoThumbnail(Frame(6248, 400), 6248, 400, StretchAlgorithm.AutoStf);
+        var pixels = Frame(6248, 400);
+        var jpeg = SqliteFrameRepository.RenderMonoThumbnail(pixels, 6248, 400, StretchAlgorithm.AutoStf);
+
+        var (dp, dw, dh) = Decimator.Decimate(pixels, 6248, 400, 2);
+        var shrunkFirst = JpegEncoder.EncodeThumbnail(Stretcher.Apply(StretchAlgorithm.AutoStf, dp), dw, dh);
+        var fullResolution = JpegEncoder.EncodeThumbnail(Stretcher.Apply(StretchAlgorithm.AutoStf, pixels), 6248, 400);
+        Assert.That(jpeg, Is.EqualTo(shrunkFirst), "stretched from the preview-stride pixels");
+        Assert.That(jpeg, Is.Not.EqualTo(fullResolution), "not the old full-resolution stretch");
         var (w, h) = JpegSize(jpeg);
         Assert.That(w, Is.EqualTo(320));
         Assert.That(h, Is.EqualTo(20).Within(1), "aspect kept through the decimation");
