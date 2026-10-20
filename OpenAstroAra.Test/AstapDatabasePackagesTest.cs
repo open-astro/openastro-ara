@@ -322,6 +322,23 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_repeat_request_while_streaming_joins_the_download_even_when_free_space_reads_low() {
+            // The in-flight staging dir eats into free space; a second POST for the same package must get the
+            // running download's id, not a 507 off that usage. Free space reads fine for the first call only.
+            var gate = new TaskCompletionSource<byte[]>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var fetcher = new FakeSkyDataFetcher(async ct => await gate.Task.WaitAsync(ct));
+            var calls = 0;
+            var svc = NewService(fetcher, new CapturingBroadcaster(), freeBytes: _ => Interlocked.Increment(ref calls) == 1 ? long.MaxValue : 0);
+
+            var first = await svc.DownloadAsync(new DownloadRequestDto("astap-d80", ForceReinstall: false), null, CancellationToken.None);
+            var second = await svc.DownloadAsync(new DownloadRequestDto("astap-d80", ForceReinstall: false), null, CancellationToken.None);
+
+            Assert.That(second.OperationId, Is.EqualTo(first.OperationId), "the repeat joins the running download");
+            gate.SetResult(TarGz(("d80_0101.1476", new byte[] { 1 }), ("d80_0102.1476", new byte[] { 2 })));
+            Assert.That(await Eventually(() => svc.GetStateAsync(CancellationToken.None).Result.ActiveDownloads.Count == 0), Is.True);
+        }
+
+        [Test]
         public async Task Unreadable_free_space_does_not_block_a_download() {
             var archive = TarGz(("w08_0101.001", Encoding.UTF8.GetBytes("w")));
             var ws = new CapturingBroadcaster();

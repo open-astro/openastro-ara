@@ -537,14 +537,6 @@ namespace OpenAstroAra.Server.Services {
             if (!request.ForceReinstall && IsInstalled(pkg.Id)) {
                 return Task.FromException<OperationAcceptedDto>(PackageAlreadyInstalledException.ForPackageId(pkg.Id));
             }
-            // #1136 — refuse up front when the volume cannot hold the extracted package: a 1.3 GB database that
-            // fails at 90% on a full SD card wasted the download and left the user guessing. The staging dir is
-            // on the same volume as the install, so the ceiling (advertised size + headroom) is the right bound.
-            // Unreadable free space (null) does not block; the install's own I/O error still reports a failure.
-            var ceilingNeeded = ExtractionCeiling(pkg);
-            if (_freeBytes(RootFor(pkg)) is { } free && free < ceilingNeeded) {
-                return Task.FromException<OperationAcceptedDto>(new InsufficientDiskSpaceException(pkg.Id, ceilingNeeded, free));
-            }
 
             // One active download per package: if another is already running, return its id (idempotent) instead
             // of racing two writers into the same install directory. TryAdd is the atomic claim; the loop closes a
@@ -559,6 +551,17 @@ namespace OpenAstroAra.Server.Services {
                     if (!request.ForceReinstall && IsInstalled(pkg.Id)) {
                         _activeByPackage.TryRemove(new KeyValuePair<string, Guid>(pkg.Id, downloadId));
                         return Task.FromException<OperationAcceptedDto>(PackageAlreadyInstalledException.ForPackageId(pkg.Id));
+                    }
+                    // #1136 — refuse up front when the volume cannot hold the extracted package: a 1.3 GB database
+                    // that fails at 90% on a full SD card wasted the download and left the user guessing. Checked
+                    // under the claim, AFTER the in-flight lookup below has had its chance: a repeat request while
+                    // the same package is streaming must join that download, not read a 507 off the staging dir's
+                    // own usage. The staging dir is on the same volume as the install, so the ceiling (advertised
+                    // size + headroom) is the right bound. Unreadable free space (null) does not block.
+                    var ceilingNeeded = ExtractionCeiling(pkg);
+                    if (_freeBytes(RootFor(pkg)) is { } free && free < ceilingNeeded) {
+                        _activeByPackage.TryRemove(new KeyValuePair<string, Guid>(pkg.Id, downloadId));
+                        return Task.FromException<OperationAcceptedDto>(new InsufficientDiskSpaceException(pkg.Id, ceilingNeeded, free));
                     }
                     var job = new DownloadJob(downloadId, pkg.Id);
                     _downloads[downloadId] = job;

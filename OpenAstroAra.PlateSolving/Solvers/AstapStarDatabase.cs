@@ -76,7 +76,7 @@ namespace OpenAstroAra.PlateSolving.Solvers {
         // #1215 — the solver enumerated the directory twice per solve (1.5–3k entries on a full
         // install); one scan is kept per directory, keyed on its last-write time, which every file
         // add or remove bumps. A partial download in progress therefore re-scans as it grows.
-        private static readonly ConcurrentDictionary<string, (DateTime LastWriteUtc, AstapDatabaseScan Scan)> Cache = new(StringComparer.Ordinal);
+        private static readonly ConcurrentDictionary<string, (long Stamp, AstapDatabaseScan Scan)> Cache = new(StringComparer.Ordinal);
 
         /// <summary>Drop the cached scans (tests, or after a download the daemon ran itself).</summary>
         public static void InvalidateCache() => Cache.Clear();
@@ -127,7 +127,7 @@ namespace OpenAstroAra.PlateSolving.Solvers {
                     return AstapDatabaseScan.Empty;
                 }
                 var stamp = Stamp(key);
-                if (Cache.TryGetValue(key, out var cached) && cached.LastWriteUtc == stamp) {
+                if (Cache.TryGetValue(key, out var cached) && cached.Stamp == stamp) {
                     return cached.Scan;
                 }
                 var scan = ScanNow(key);
@@ -138,17 +138,19 @@ namespace OpenAstroAra.PlateSolving.Solvers {
             }
         }
 
-        // The newest last-write time across the directory and its package subdirectories: a tile
-        // written into a subdirectory bumps that subdirectory, not the root.
-        private static DateTime Stamp(string dir) {
-            var stamp = Directory.GetLastWriteTimeUtc(dir);
-            foreach (var sub in PackageSubdirectories(dir)) {
-                var s = Directory.GetLastWriteTimeUtc(sub);
-                if (s > stamp) {
-                    stamp = s;
-                }
+        // A stamp over the directory and every package subdirectory: a tile written into a
+        // subdirectory bumps that subdirectory, not the root. Built from all of their mtimes (and
+        // their names, so an added or removed subdirectory changes it), not the newest one, so a
+        // subdirectory carrying a future mtime (clock jump, `cp -p`) cannot mask later changes
+        // elsewhere.
+        private static long Stamp(string dir) {
+            var hash = new HashCode();
+            hash.Add(Directory.GetLastWriteTimeUtc(dir).Ticks);
+            foreach (var sub in PackageSubdirectories(dir).OrderBy(d => d, StringComparer.Ordinal)) {
+                hash.Add(Path.GetFileName(sub), StringComparer.Ordinal);
+                hash.Add(Directory.GetLastWriteTimeUtc(sub).Ticks);
             }
-            return stamp;
+            return hash.ToHashCode();
         }
 
         // #1136 — the Data Manager installs each database package as {dir}/{package-id}/; its
