@@ -329,6 +329,7 @@ public static class SystemEndpoints {
                 ActiveRunSessionRegistry runs,
                 ICameraService camera,
                 CaptureScanService scan,
+                IStorageCopyService copy,
                 CancellationToken ct) => {
                 if (string.IsNullOrWhiteSpace(request.Uuid)) {
                     return Results.Problem("uuid is required", statusCode: StatusCodes.Status400BadRequest);
@@ -337,6 +338,11 @@ public static class SystemEndpoints {
                 // nor from under a one-off REST capture, which the run
                 // registry doesn't track but which is writing a frame all the
                 // same.
+                if (copy.IsRunning) {
+                    return Results.Problem(
+                        "a disk-to-disk copy is running — wait for it to finish or cancel it before changing the storage drive",
+                        statusCode: StatusCodes.Status409Conflict);
+                }
                 if (runs.HasAny) {
                     return Results.Problem(
                         "a sequence run is active — stop it before changing the storage drive",
@@ -388,12 +394,18 @@ public static class SystemEndpoints {
                 ActiveRunSessionRegistry runs,
                 ICameraService camera,
                 CaptureScanService scan,
+                IStorageCopyService copy,
                 CancellationToken ct) => {
                 if (string.IsNullOrWhiteSpace(request.Uuid)) {
                     return Results.Problem("uuid is required", statusCode: StatusCodes.Status400BadRequest);
                 }
                 // Same exclusions as configure: never yank the store out from
                 // under a run, an in-flight exposure, or a capture scan.
+                if (copy.IsRunning) {
+                    return Results.Problem(
+                        "a disk-to-disk copy is running — wait for it to finish or cancel it before checking the storage drive",
+                        statusCode: StatusCodes.Status409Conflict);
+                }
                 if (runs.HasAny) {
                     return Results.Problem(
                         "a sequence run is active — stop it before checking the storage drive",
@@ -430,9 +442,15 @@ public static class SystemEndpoints {
                 ActiveRunSessionRegistry runs,
                 ICameraService camera,
                 CaptureScanService scan,
+                IStorageCopyService copy,
                 CancellationToken ct) => {
                 if (string.IsNullOrWhiteSpace(request.Uuid)) {
                     return Results.Problem("uuid is required", statusCode: StatusCodes.Status400BadRequest);
+                }
+                if (copy.IsRunning) {
+                    return Results.Problem(
+                        "a disk-to-disk copy is running — wait for it to finish or cancel it before ejecting the storage drive",
+                        statusCode: StatusCodes.Status409Conflict);
                 }
                 if (runs.HasAny) {
                     return Results.Problem(
@@ -461,6 +479,43 @@ public static class SystemEndpoints {
             .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
             .WithName("EjectStorageDevice")
             .WithSummary("Flush and unmount the store drive for safe removal; the fstab entry stays so a replug automounts.");
+
+        // Disk-to-disk copy: the store (or folders on it) onto a second drive, in the
+        // background. Copy only — nothing is overwritten or deleted on either drive.
+        storage.MapPost("/copy", (
+                StorageCopyRequestDto request,
+                IStorageCopyService copy,
+                ActiveRunSessionRegistry runs) => {
+                // The run's frames would land on the store mid-walk and be missed; copy in
+                // the morning, or re-run the copy afterwards (it only adds what is new).
+                if (runs.HasAny) {
+                    return Results.Problem(
+                        "a sequence run is active — stop it before copying the storage drive",
+                        statusCode: StatusCodes.Status409Conflict);
+                }
+                var refused = copy.Start(request.TargetUuid, request.Folders);
+                if (refused is not null) {
+                    return Results.Problem(title: refused.Code, detail: refused.Detail, statusCode: refused.StatusCode);
+                }
+                return Results.Accepted("/api/v1/storage/copy", copy.Status());
+            })
+            .Produces<StorageCopyStatusDto>(StatusCodes.Status202Accepted)
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .WithName("StartStorageCopy")
+            .WithSummary("Copy the store drive (or chosen folders on it) onto another drive; files already there are skipped.");
+
+        storage.MapGet("/copy", (IStorageCopyService copy) => Results.Ok(copy.Status()))
+            .Produces<StorageCopyStatusDto>()
+            .WithName("GetStorageCopy")
+            .WithSummary("Progress of the running disk-to-disk copy, or the outcome of the last one.");
+
+        storage.MapDelete("/copy", (IStorageCopyService copy) =>
+                copy.Cancel() ? Results.Ok(copy.Status()) : Results.NotFound())
+            .Produces<StorageCopyStatusDto>()
+            .Produces(StatusCodes.Status404NotFound)
+            .WithName("CancelStorageCopy")
+            .WithSummary("Cancel the running disk-to-disk copy; files already copied stay.");
 
         // §28.8 on demand. The startup scan already recovers FITS sitting on
         // disk but absent from the catalog — which was enough while the save

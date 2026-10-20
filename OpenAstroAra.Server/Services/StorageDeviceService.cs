@@ -50,6 +50,15 @@ namespace OpenAstroAra.Server.Services {
         /// pulled without losing cached writes. The fstab entry stays — a
         /// replug automounts.</summary>
         Task<StorageConfigureResult> EjectAsync(string uuid, CancellationToken ct);
+
+        /// <summary>Disk-to-disk copy: mount a second drive (never the store, never the
+        /// system disk) at <c>/media/openastroara-copy</c>, with no fstab entry. Success
+        /// carries that path as <see cref="StorageConfigureResult.MountPoint"/>.</summary>
+        Task<StorageConfigureResult> MountCopyTargetAsync(string uuid, CancellationToken ct);
+
+        /// <summary>Flush and unmount the copy target so the drive can be pulled.
+        /// Nothing mounted there is a success.</summary>
+        Task<StorageConfigureResult> ReleaseCopyTargetAsync(CancellationToken ct);
     }
 
     /// <summary>#1135 — where the storage helper, its systemd template unit and the
@@ -86,6 +95,8 @@ namespace OpenAstroAra.Server.Services {
     public sealed partial class StorageDeviceService : IStorageDeviceService {
         internal const string DefaultHelperPath = "/opt/openastroara/scripts/configure-storage.sh";
         internal const string MountPoint = "/media/openastroara";
+        /// <summary>Where <c>--mount-copy</c> puts the copy target.</summary>
+        internal const string CopyTargetPoint = "/media/openastroara-copy";
         /// <summary>Template unit installed by the .deb; its presence selects the
         /// request-file path over direct sudo.</summary>
         internal const string DefaultHelperUnitTemplate = "/etc/systemd/system/openastroara-storage@.service";
@@ -378,19 +389,28 @@ namespace OpenAstroAra.Server.Services {
                     "That does not look like a filesystem UUID.", null);
             }
             var (exitCode, output) = await RunHelperAsync(["--check", uuid], ct).ConfigureAwait(false);
+            var result = ParseCheckResult(exitCode, output);
+            if (result.Success) {
+                LogChecked(logger, uuid, result.Detail ?? string.Empty);
+            } else {
+                LogCheckFailed(logger, uuid, result.Code, result.Detail ?? string.Empty);
+            }
+            return result;
+        }
+
+        /// <summary>Pure: the helper's <c>--check</c> answer → the result. "OK &lt;where&gt; checked
+        /// clean|repaired": the last word says whether fsck fixed anything, and the mount point is
+        /// reported only when the store was remounted. A disk that is not the store is checked and
+        /// left unmounted, and the helper then names the device instead.</summary>
+        internal static StorageConfigureResult ParseCheckResult(int exitCode, string output) {
             var text = output.Trim();
             if (exitCode == 0) {
-                LogChecked(logger, uuid, text);
-                // "OK <mount> checked clean|repaired" — the last word tells the
-                // client whether fsck fixed anything.
                 var repaired = text.EndsWith("repaired", StringComparison.Ordinal);
-                return new StorageConfigureResult(true, repaired ? "repaired" : "clean", text, MountPoint);
+                var remounted = text.StartsWith("OK " + MountPoint + " ", StringComparison.Ordinal);
+                return new StorageConfigureResult(true, repaired ? "repaired" : "clean", text, remounted ? MountPoint : null);
             }
-            var parts = text.StartsWith("ERROR:", StringComparison.Ordinal)
-                ? text["ERROR:".Length..].Trim().Split(' ', 2)
-                : [exitCode == 9 ? "usage" : "helper_failed", text];
-            LogCheckFailed(logger, uuid, parts[0], parts.Length > 1 ? parts[1] : string.Empty);
-            return new StorageConfigureResult(false, parts[0], parts.Length > 1 ? parts[1] : null, null);
+            var (code, detail) = HelperError(exitCode, text);
+            return new StorageConfigureResult(false, code, detail, null);
         }
 
         public async Task<StorageConfigureResult> EjectAsync(string uuid, CancellationToken ct) {
@@ -418,6 +438,64 @@ namespace OpenAstroAra.Server.Services {
             LogEjectFailed(logger, uuid, parts[0], parts.Length > 1 ? parts[1] : string.Empty);
             return new StorageConfigureResult(false, parts[0], parts.Length > 1 ? parts[1] : null, null);
         }
+
+        public async Task<StorageConfigureResult> MountCopyTargetAsync(string uuid, CancellationToken ct) {
+            ArgumentException.ThrowIfNullOrWhiteSpace(uuid);
+            if (!OperatingSystem.IsLinux()) {
+                return new StorageConfigureResult(false, "unsupported_platform", "Disk-to-disk copy is Linux-only.", null);
+            }
+            if (!File.Exists(HelperPath)) {
+                return new StorageConfigureResult(false, "helper_missing",
+                    $"{HelperPath} is not installed — reinstall the openastroara-server package.", null);
+            }
+            if (!UuidShape().IsMatch(uuid)) {
+                return new StorageConfigureResult(false, "bad_uuid",
+                    "That does not look like a filesystem UUID.", null);
+            }
+            var (exitCode, output) = await RunHelperAsync(["--mount-copy", uuid], ct).ConfigureAwait(false);
+            var text = output.Trim();
+            if (exitCode == 0) {
+                LogCopyTargetMounted(logger, uuid);
+                return new StorageConfigureResult(true, "ok", text, CopyTargetPoint);
+            }
+            var (code, detail) = HelperError(exitCode, text);
+            LogCopyTargetFailed(logger, uuid, code, detail ?? string.Empty);
+            return new StorageConfigureResult(false, code, detail, null);
+        }
+
+        public async Task<StorageConfigureResult> ReleaseCopyTargetAsync(CancellationToken ct) {
+            if (!OperatingSystem.IsLinux()) {
+                return new StorageConfigureResult(true, "released", null, null);
+            }
+            if (!File.Exists(HelperPath)) {
+                return new StorageConfigureResult(false, "helper_missing",
+                    $"{HelperPath} is not installed — reinstall the openastroara-server package.", null);
+            }
+            var (exitCode, output) = await RunHelperAsync(["--unmount-copy"], ct).ConfigureAwait(false);
+            var text = output.Trim();
+            if (exitCode == 0) {
+                return new StorageConfigureResult(true, "released", text, null);
+            }
+            var (code, detail) = HelperError(exitCode, text);
+            LogCopyTargetFailed(logger, "(release)", code, detail ?? string.Empty);
+            return new StorageConfigureResult(false, code, detail, null);
+        }
+
+        /// <summary>"ERROR: &lt;code&gt; [detail]" → (code, detail); anything else is
+        /// usage (exit 9) or an opaque helper failure carrying the whole text.</summary>
+        private static (string Code, string? Detail) HelperError(int exitCode, string text) {
+            if (!text.StartsWith("ERROR:", StringComparison.Ordinal)) {
+                return (exitCode == 9 ? "usage" : "helper_failed", text);
+            }
+            var parts = text["ERROR:".Length..].Trim().Split(' ', 2);
+            return (parts[0], parts.Length > 1 ? parts[1] : null);
+        }
+
+        [LoggerMessage(Level = LogLevel.Information, Message = "Copy target {Uuid} mounted at " + CopyTargetPoint + ".")]
+        private static partial void LogCopyTargetMounted(ILogger logger, string uuid);
+
+        [LoggerMessage(Level = LogLevel.Warning, Message = "Copy target {Uuid}: {Code} {Detail}.")]
+        private static partial void LogCopyTargetFailed(ILogger logger, string uuid, string code, string detail);
 
         [LoggerMessage(Level = LogLevel.Information, Message = "Storage drive {Uuid} ejected (safe to remove).")]
         private static partial void LogEjected(ILogger logger, string uuid);

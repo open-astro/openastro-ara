@@ -8,6 +8,8 @@
 #   sudo configure-storage.sh --format [--fs exfat|ext4] <uuid-or-/dev/path> [<expected-label>]
 #   sudo configure-storage.sh --check <uuid>
 #   sudo configure-storage.sh --eject <uuid>
+#   sudo configure-storage.sh --mount-copy <uuid>
+#   sudo configure-storage.sh --unmount-copy
 #   configure-storage.sh --fstab-entry <uuid> [exfat|ext4]   (bench only, see below)
 #
 # A /dev/ path identifies a brand-new blank disk (no filesystem, hence no
@@ -21,21 +23,25 @@
 # the matching fsck (drive briefly unmounted) — exFAT has no journal, so
 # the user-triggered check is its recovery story. --eject flushes and
 # unmounts for safe removal (fstab entry stays — a replug automounts).
+# --mount-copy mounts a second drive (never the store, never the system disk)
+# at /media/openastroara-copy for a disk-to-disk copy, with no fstab entry, so
+# it is gone after a reboot; --unmount-copy flushes and releases it.
 #
 # Exit codes: 0 ok · 2 uuid_not_found · 3 not_ext4 (unsupported fs) ·
-#             4 label_mismatch · 5 device_busy · 6 refused (root/boot disk) ·
-#             7 mkfs_failed · 8 mount_failed · 9 usage · 10 chown_failed ·
-#             11 fsck_failed
+#             4 label_mismatch · 5 device_busy · 6 refused (root/boot disk,
+#             or the store itself as a copy target) · 7 mkfs_failed ·
+#             8 mount_failed · 9 usage · 10 chown_failed · 11 fsck_failed
 #
 # Bench overrides (#1248): FSTAB and FSTAB_LOCK point the fstab rebuild at scratch
 # files, and --fstab-entry runs ONLY that rebuild (no device lookup, no mount), so
 # scripts/tests can race six rebuilds against one scratch fstab. ARA_MOUNT_POINT
 # moves the store path so scripts/tests can drive a drive switch against stand-in
-# mount tools. sudoers keeps env_reset (and the unit passes no environment), so the
+# mount tools, and ARA_COPY_POINT does the same for the copy target. sudoers keeps env_reset (and the unit passes no environment), so the
 # daemon user cannot steer root's run with any of these variables.
 set -eu
 
 MOUNT_POINT=${ARA_MOUNT_POINT:-/media/openastroara}
+COPY_POINT=${ARA_COPY_POINT:-/media/openastroara-copy}
 FSTAB=${FSTAB:-/etc/fstab}
 OWNER=${ARA_STORAGE_OWNER:-openastroara}
 # Dev rigs run the daemon as a regular user without the .deb's service
@@ -203,10 +209,15 @@ release_previous_store() { # $1=device about to become the store
 # that drive and remount it, best effort, so frames never fall through to the
 # bare directory on the system disk. The rebuild runs in a subshell because it
 # exits on its own failures, and the caller still has its typed error to print.
+# Inside the subshell PREV_UUID is cleared first: by now fstab names the drive
+# that was just rejected, so the rebuild's own failure branches must not run
+# remount_unchanged_store against it. The subshell sits in a `||` list, where
+# set -e is suspended, so its last step is checked explicitly instead.
 restore_previous_store() {
     [ -n "$PREV_UUID" ] || return 0
     case "$PREV_FS" in exfat|ext4) ;; *) return 0 ;; esac
-    ( ensure_fstab_entry "$PREV_UUID" "$PREV_FS" ) >/dev/null 2>&1 || return 0
+    ( uuid=$PREV_UUID; fs=$PREV_FS; PREV_UUID=; ensure_fstab_entry "$uuid" "$fs" \
+        && grep -q "^UUID=${uuid}[[:space:]]" "$FSTAB" ) >/dev/null 2>&1 || return 0
     mount "$MOUNT_POINT" 2>/dev/null || true
 }
 
@@ -259,14 +270,23 @@ mount_and_own() { # $1=uuid $2=fstype $3=deep-chown (1 after mkfs, else top-leve
     fi
 }
 
+# The device mounted on top of the copy target path; empty when nothing is.
+copy_holder() {
+    canon "$(findmnt -no SOURCE "$COPY_POINT" 2>/dev/null | tail -n1 || true)"
+}
+
 FORMAT=0
 CHECK=0
 EJECT=0
 FSTAB_ONLY=0
+MOUNT_COPY=0
+UNMOUNT_COPY=0
 NEW_FS=exfat
 while [ $# -gt 0 ]; do
     case "$1" in
         --fstab-entry) FSTAB_ONLY=1; shift ;;
+        --mount-copy) MOUNT_COPY=1; shift ;;
+        --unmount-copy) UNMOUNT_COPY=1; shift ;;
         --format) FORMAT=1; shift ;;
         --check) CHECK=1; shift ;;
         --eject) EJECT=1; shift ;;
@@ -278,7 +298,23 @@ while [ $# -gt 0 ]; do
         *) break ;;
     esac
 done
-[ $((FORMAT + CHECK + EJECT + FSTAB_ONLY)) -gt 1 ] && usage
+[ $((FORMAT + CHECK + EJECT + FSTAB_ONLY + MOUNT_COPY + UNMOUNT_COPY)) -gt 1 ] && usage
+
+if [ "$UNMOUNT_COPY" -eq 1 ]; then
+    # Release the copy target: flush, then unmount every layer at the path (a
+    # crashed copy can leave one behind). A busy target refuses rather than forcing.
+    [ $# -eq 0 ] || usage
+    while [ -n "$(copy_holder)" ]; do
+        sync
+        if ! umount "$COPY_POINT" 2>/dev/null; then
+            echo "ERROR: device_busy copy_target"
+            exit 5
+        fi
+    done
+    echo "OK released"
+    exit 0
+fi
+
 UUID=${1:-}
 EXPECTED_LABEL=${2:-}
 [ -n "$UUID" ] || usage
@@ -316,6 +352,63 @@ if [ -z "$DEVICE" ] || [ ! -b "$DEVICE" ]; then
     exit 2
 fi
 refuse_if_system_disk "$DEVICE"
+
+if [ "$MOUNT_COPY" -eq 1 ]; then
+    # The store is the copy SOURCE: copying a drive onto itself would mount it
+    # twice and fill it with its own files.
+    if [ "$(store_holder)" = "$(canon "$DEVICE")" ]; then
+        echo "ERROR: refused is_store"
+        exit 6
+    fi
+    FS=$(value_for "$DEVICE" TYPE)
+    case "$FS" in exfat|ext4) ;; *) echo "ERROR: not_ext4 ${FS:-unknown}"; exit 3 ;; esac
+    held=$(copy_holder)
+    if [ "$held" = "$(canon "$DEVICE")" ]; then
+        echo "OK $COPY_POINT"
+        exit 0
+    fi
+    # Mounted somewhere else (a desktop automount): two mounts of one
+    # filesystem would let both write behind each other's backs.
+    if findmnt -no TARGET "$DEVICE" >/dev/null 2>&1; then
+        echo "ERROR: device_busy mounted_elsewhere"
+        exit 5
+    fi
+    # A different drive left at the copy path by an interrupted copy comes off.
+    while [ -n "$(copy_holder)" ]; do
+        sync
+        if ! umount "$COPY_POINT" 2>/dev/null; then
+            echo "ERROR: device_busy copy_target"
+            exit 5
+        fi
+    done
+    mkdir -p "$COPY_POINT"
+    if [ "$FS" = "exfat" ]; then
+        # Same ownership-by-mount-options as the store (exFAT has no Unix owners).
+        opts="noatime,uid=$(id -u "$OWNER"),gid=$(id -g "$OWNER"),fmask=0113,dmask=0002"
+    else
+        opts="noatime"
+    fi
+    if ! mount -t "$FS" -o "$opts" "$DEVICE" "$COPY_POINT" 2>/dev/null; then
+        echo "ERROR: mount_failed"
+        exit 8
+    fi
+    if [ "$(copy_holder)" != "$(canon "$DEVICE")" ]; then
+        umount "$COPY_POINT" 2>/dev/null || true
+        echo "ERROR: mount_failed wrong_device"
+        exit 8
+    fi
+    # ext4 keeps Unix owners: the daemon writes into the drive's top level, so
+    # it owns that directory (never a recursive chown of someone's files).
+    if [ "$FS" = "ext4" ]; then
+        if ! chown "$OWNER:$OWNER" "$COPY_POINT"; then
+            umount "$COPY_POINT" 2>/dev/null || true
+            echo "ERROR: chown_failed $OWNER"
+            exit 10
+        fi
+    fi
+    echo "OK $COPY_POINT"
+    exit 0
+fi
 
 if [ "$EJECT" -eq 1 ]; then
     # Safe removal: flush everything, then unmount. The fstab entry stays

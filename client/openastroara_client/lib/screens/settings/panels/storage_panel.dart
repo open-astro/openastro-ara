@@ -11,6 +11,8 @@ import '../../../theme/ara_colors.dart';
 import '../../../services/storage_devices_api.dart';
 import '../../../widgets/storage/server_folder_picker.dart';
 import '../../../widgets/storage/storage_drive_dialog.dart';
+import '../../../widgets/storage/storage_copy_dialog.dart';
+import '../../../services/storage_copy_api.dart';
 import '../../../widgets/backup/backup_restore_modal.dart';
 import '../../../state/backup/backup_stream_state.dart';
 import '../../../widgets/settings/editable_field.dart';
@@ -474,6 +476,10 @@ class _DestinationCard extends ConsumerWidget {
               ),
             ),
           ],
+          if (current != null) ...[
+            const SizedBox(height: 12),
+            const _CopyRow(),
+          ],
           if (current == null && !(space.asData?.value == null)) ...[
             const SizedBox(height: 14),
             Row(
@@ -500,6 +506,51 @@ class _DestinationCard extends ConsumerWidget {
             ),
           ],
         ],
+      ),
+    );
+  }
+}
+
+/// Disk-to-disk copy entry point; while a copy runs on the server it shows
+/// its progress here too, so closing the dialog never hides it.
+class _CopyRow extends ConsumerWidget {
+  const _CopyRow();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final status = ref.watch(storageCopyStatusProvider).asData?.value;
+    final theme = Theme.of(context);
+    if (status != null && status.isRunning) {
+      final fraction = status.fraction;
+      return Row(
+        children: [
+          const SizedBox(
+            width: 14,
+            height: 14,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              fraction == null
+                  ? 'Copying to another disk…'
+                  : 'Copying to another disk… ${(fraction * 100).round()}%',
+              style: theme.textTheme.bodySmall,
+            ),
+          ),
+          TextButton(
+            onPressed: () => showStorageCopyDialog(context),
+            child: const Text('Show'),
+          ),
+        ],
+      );
+    }
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: OutlinedButton.icon(
+        onPressed: () => showStorageCopyDialog(context),
+        icon: const Icon(Icons.copy_all, size: 16),
+        label: const Text('Copy to another disk…'),
       ),
     );
   }

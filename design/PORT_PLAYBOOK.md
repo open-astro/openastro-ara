@@ -1127,6 +1127,7 @@ ReadWritePaths=/var/lib/openastroara
 # #1136: the Data Manager installs the ASTAP star databases here (tmpfiles creates it).
 ReadWritePaths=/var/lib/astap
 ReadWritePaths=-/media/openastroara
+ReadWritePaths=-/media/openastroara-copy
 ReadWritePaths=/run/openastroara
 ReadWritePaths=/etc/openastroara
 
@@ -2862,32 +2863,43 @@ Lives at `/opt/openastroara/scripts/configure-storage.sh`, installed by the .deb
 **Interface:**
 
 ```
-sudo /opt/openastroara/scripts/configure-storage.sh <uuid>
-sudo /opt/openastroara/scripts/configure-storage.sh --format <uuid> <expected-label>
+sudo /opt/openastroara/scripts/configure-storage.sh <uuid-or-/dev/path>
+sudo /opt/openastroara/scripts/configure-storage.sh --format [--fs exfat|ext4] <uuid-or-/dev/path> [<expected-label>]
+sudo /opt/openastroara/scripts/configure-storage.sh --check <uuid>
+sudo /opt/openastroara/scripts/configure-storage.sh --eject <uuid>
+sudo /opt/openastroara/scripts/configure-storage.sh --mount-copy <uuid>
+sudo /opt/openastroara/scripts/configure-storage.sh --unmount-copy
 ```
 
-**Behavior (no `--format`):**
+Every mode except `--unmount-copy` first resolves the device (`blkid -U`, or the `/dev/` path of a blank disk; missing → `uuid_not_found`, exit 2) and refuses any device on the disk holding `/`, `/boot` or `/boot/firmware` (`refused system_disk`, exit 6). The script header is the source of truth; this is the shape.
 
-1. Validate `<uuid>` exists in `blkid` output. If not → echo `ERROR: uuid_not_found` + exit 2.
-2. Look up the device's filesystem type via `blkid`. If not `ext4` → echo `ERROR: not_ext4 <fs-type>` + exit 3.
-3. Ensure `/media/openastroara` exists (`mkdir -p`).
-4. Check `/etc/fstab` for an existing line with this UUID. If absent, append:
-   ```
-   UUID=<uuid>  /media/openastroara  ext4  defaults,data=ordered,noatime,errors=remount-ro,nofail,x-systemd.device-timeout=10  0  2
-   ```
-5. `systemctl daemon-reload`.
-6. `mount /media/openastroara` (idempotent — no-op if already mounted at the right UUID).
-7. `chown -R openastroara:openastroara /media/openastroara`.
+**Behavior (no `--format`): use a drive as the store**
+
+1. The filesystem must be exFAT or ext4, else `ERROR: not_ext4 <fs-type>` + exit 3.
+2. Ensure `/media/openastroara` exists.
+3. **Switching drives:** a *different* drive mounted at the store path is unmounted first (after `sync`). A busy one refuses with `ERROR: device_busy previous_store` + exit 5, with fstab and the mount untouched.
+4. Rebuild `/etc/fstab` under a lock (atomic temp + rename): drop any line for the mount point and add this drive's (exFAT: `uid`/`gid`/`fmask`/`dmask` ownership options; ext4: `data=ordered,errors=remount-ro`; both `nofail,x-systemd.device-timeout=10`).
+5. Mount `/media/openastroara` unless this drive is already on top there, then check the drive on top *is* this one (`mount_failed wrong_device` otherwise).
+6. ext4 only: `chown` the mount root (recursively only right after a format); exFAT ownership comes from the mount options.
+7. Any failure after step 3 puts the previous drive back: its fstab line is restored and it is remounted, so frames never fall through to the SD card.
 8. Echo `OK /media/openastroara` + exit 0.
 
-**Behavior (`--format`):**
+**Behavior (`--format`)**
 
-1. Validate `<uuid>` exists in `blkid` output. If not → exit 2.
-2. Look up the device's current label via `blkid`. If `<expected-label>` doesn't match exactly → echo `ERROR: label_mismatch <actual-label>` + exit 4.
-3. If the device is currently mounted, attempt `umount` (fail if busy → echo `ERROR: device_busy` + exit 5).
-4. Run `mkfs.ext4 -F -L <expected-label> <device-path>` (preserves the label so subsequent ops see the same human-readable name).
-5. Continue from step 3 of the no-`--format` path (create mount point, append fstab line if missing — note that mkfs.ext4 changes the UUID, so the fstab line should use the new UUID returned by `blkid` post-format, not the one passed in).
-6. Echo `OK /media/openastroara <new-uuid>` + exit 0.
+1. The drive's current label must equal `<expected-label>` (empty only for a drive with no label), else `ERROR: label_mismatch <actual-label>` + exit 4.
+2. A partition is promoted to its whole disk. A *different* drive holding the store is released first (step 3 above), before anything is erased.
+3. Every mounted piece of the disk is unmounted (busy → `device_busy`, exit 5), all signatures are wiped, a GPT with one partition is written (Microsoft Basic Data for exFAT, so Windows and macOS read it), and the filesystem is made with label `ARA-DISK` (`mkfs_failed`, exit 7, puts the previous store back).
+4. Continue as the no-`--format` path from step 4 with the NEW uuid; echo `OK /media/openastroara <new-uuid>` + exit 0.
+
+**Behavior (`--check`, `--eject`)**
+
+- `--check` unmounts the drive, runs `fsck.exfat -y` / `e2fsck -f -y` (exit 1, or 2 for e2fsck, counts as repaired), and remounts it only if it was the store (mounted there, or named in fstab after an eject). It echoes `OK /media/openastroara checked clean|repaired` for the store, `OK <device> checked …` for any other drive.
+- `--eject` flushes and unmounts the drive (`device_busy` when busy). The fstab line stays, so a replug automounts.
+
+**Behavior (`--mount-copy`, `--unmount-copy`): disk-to-disk copy target**
+
+- `--mount-copy` mounts a second drive at `/media/openastroara-copy` with no fstab line, so it is gone after a reboot. The store itself is refused (`refused is_store`, exit 6), the filesystem must be exFAT or ext4, and a drive mounted elsewhere is refused (`device_busy mounted_elsewhere`). exFAT gets the store's ownership options; for ext4 the mount root is chowned to the daemon (never recursively). Existing subfolders on an ext4 target that belong to another user stay theirs, so files copied into them fail one by one (counted, with the first reason shown) rather than the helper taking them over. The daemon's unit lists the path as an optional `ReadWritePaths=`.
+- `--unmount-copy` flushes and unmounts every layer at that path (`device_busy copy_target` when busy). Nothing mounted is a success.
 
 **Sudoers drop-in** (`/etc/sudoers.d/openastroara`, added by postinst per §34.3):
 
@@ -2907,7 +2919,7 @@ On a packaged install neither line is reachable (NoNewPrivileges, above); the st
 | 3 | Filesystem is neither exFAT nor ext4 (`not_ext4`) |
 | 4 | Label mismatch on `--format` (`label_mismatch`) |
 | 5 | Device busy — unmount failed (`device_busy`) |
-| 6 | Refused: the root or boot disk (`refused system_disk`) |
+| 6 | Refused: the root or boot disk (`refused system_disk`), or the store as a copy target (`refused is_store`) |
 | 7 | mkfs failed (`mkfs_failed`) |
 | 8 | mount failed, or the fstab rebuild could not run (`mount_failed`, `fstab_unreadable`, `fstab_tmp_failed`, `fstab_locked`) |
 | 9 | Usage error — bad or conflicting arguments (`usage`) |

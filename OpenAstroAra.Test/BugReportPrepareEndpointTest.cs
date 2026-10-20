@@ -58,6 +58,7 @@ namespace OpenAstroAra.Test {
             builder.Services.AddSingleton(Mock.Of<ISkyCatalogService>());
             builder.Services.AddSingleton(Mock.Of<IStorageBrowseService>());
             builder.Services.AddSingleton(Mock.Of<IStorageDeviceService>());
+            builder.Services.AddSingleton(Mock.Of<IStorageCopyService>());
             builder.Services.AddSingleton(Mock.Of<ISolverRecommender>());
             builder.Services.AddSingleton(Mock.Of<IGuiderService>());
             builder.Services.AddSingleton<CaptureScanService>(_ => throw new InvalidOperationException("not used by this test"));
