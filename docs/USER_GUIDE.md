@@ -36,8 +36,9 @@ safety policies, storage, and optional sky-data downloads. Notes:
   ASTAP database each needs — the smallest that covers the field (D05, 109 MB, for most refractors
   and lenses; G05/W08 for wide lenses and all-sky cameras; D50/D80 for narrow fields) — and downloads
   it on the rig after Save. The rig needs internet once. A field narrower than about 0.15° cannot be
-  solved by any database; the screen says so. Settings → Sky data shows the same recommendation and
-  every database installed; nothing is removed when a second profile needs a different one.
+  solved by any database; the screen says so. Settings → Sky data marks the main camera's pick as
+  Recommended and lists every database installed; nothing is removed when a second profile needs a
+  different one.
 - The wizard writes a **profile**; you can create more later (Settings → Profile) and export/import
   them. Exported profiles are stripped of paths, secrets, and location — the recipient re-runs the
   wizard sections that need local values.
