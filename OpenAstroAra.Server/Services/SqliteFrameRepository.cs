@@ -717,7 +717,7 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
         // cache key exists, so this rare path renders inline under the gate
         // instead of joining the single-flight map.
         if (autoSeedManual) {
-            await RenderGate.WaitAsync(ct).ConfigureAwait(false);
+            await Renders.WaitAsync(preview: true, ct).ConfigureAwait(false);
             byte[] seeded;
             try {
                 var (pixels, width, height, bayerPat, _) = LoadFitsPixels(filePath);
@@ -743,7 +743,7 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
                 TryWriteCache(cachePath, seeded);
                 EvictVariantsIfNeeded(filePath);
             } finally {
-                RenderGate.Release();
+                Renders.Release();
             }
             return (seeded, "image/jpeg", appliedManual);
         }
@@ -765,7 +765,7 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
     private byte[] RenderPreview(string filePath, OpenAstroAra.Stretch.StretchAlgorithm algorithm, OpenAstroAra.Stretch.StretchParams? stretchParams, string cachePath) {
         // Renders are CPU- and memory-bound full-FITS decodes; a burst of
         // distinct variants must queue here, not run all at once on a Pi.
-        RenderGate.Wait();
+        Renders.Wait(preview: true);
         byte[] jpeg;
         try {
             var (pixels, width, height, bayerPat, _) = LoadFitsPixels(filePath);
@@ -790,7 +790,7 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
             TryWriteCache(cachePath, jpeg);
             EvictVariantsIfNeeded(filePath);
         } finally {
-            RenderGate.Release();
+            Renders.Release();
         }
         return jpeg;
     }
@@ -812,7 +812,7 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
         if (TryServeFromCache(thumbPath) is byte[] cached) {
             return (cached, "image/jpeg");
         }
-        await RenderGate.WaitAsync(ct).ConfigureAwait(false);
+        await Renders.WaitAsync(preview: false, ct).ConfigureAwait(false);
         byte[] jpeg;
         try {
             if (TryServeFromCache(thumbPath) is byte[] raced) {
@@ -828,15 +828,21 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
                 var (rgb, ow, oh) = DebayerAndStretch(pixels, width, height, pattern, algorithm, null);
                 jpeg = OpenAstroAra.Stretch.JpegEncoder.EncodeColorThumbnail(rgb, ow, oh);
             } else {
-                var stretched = OpenAstroAra.Stretch.Stretcher.Apply(algorithm, pixels);
-                jpeg = OpenAstroAra.Stretch.JpegEncoder.EncodeThumbnail(stretched, width, height);
+                // Box-average down first, at the preview's own stride, so the tile looks like
+                // the preview: stretching all 26 MP only for a 320 px tile made a cold thumbnail
+                // three times slower than the full preview (4.4 s vs 1.5 s on a CM4), and a grid
+                // of them queued for minutes.
+                var stride = OpenAstroAra.Stretch.Decimator.StrideFor(width, height, PreviewMaxDim);
+                var (dp, dw, dh) = OpenAstroAra.Stretch.Decimator.Decimate(pixels, width, height, stride);
+                var stretched = OpenAstroAra.Stretch.Stretcher.Apply(algorithm, dp);
+                jpeg = OpenAstroAra.Stretch.JpegEncoder.EncodeThumbnail(stretched, dw, dh);
             }
             // Sidecar lands before the gate frees — same-tile callers queued
             // on the gate must hit the cache re-check, not re-decode (review
             // #932 finding 2).
             TryWriteCache(thumbPath, jpeg);
         } finally {
-            RenderGate.Release();
+            Renders.Release();
         }
         return (jpeg, "image/jpeg");
     }
@@ -1326,9 +1332,10 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
     // render pins a full frame's pixels and pegs a core; the library grid can
     // request dozens of tiles at once, which on a Pi queued minutes of work
     // and starved every other request. Two in flight overlaps I/O with CPU
-    // while keeping the box responsive. Static and process-lifetime — never
-    // disposed (disposal would race in-flight WaitAsync callers).
-    private static readonly SemaphoreSlim RenderGate = new(2, 2);
+    // while keeping the box responsive. A freed slot goes to a waiting preview
+    // before any thumbnail, so an opened frame never queues behind the grid.
+    // Static and process-lifetime.
+    private static readonly RenderGate Renders = new(2);
 
     // §29 storage-pressure threshold. When the captures volume free space
     // drops below this, the §65.4 variant-eviction path nukes all alt-
