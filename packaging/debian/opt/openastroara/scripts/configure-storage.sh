@@ -116,7 +116,7 @@ ensure_fstab_entry() { # $1=uuid $2=fstype
     # itself, so the rename below never replaces the locked inode out from under the
     # other holder. flock(1) is util-linux, present on every supported image; a box
     # without it degrades to the unlocked rebuild.
-    tmp=$(mktemp "${FSTAB}.ara-XXXXXX") || { echo "ERROR: fstab_tmp_failed"; exit 8; }
+    tmp=$(mktemp "${FSTAB}.ara-XXXXXX") || { remount_unchanged_store; echo "ERROR: fstab_tmp_failed"; exit 8; }
     # An early exit between here and the rename (id lookup failing under set -e, the
     # lock timing out) must not leave a uniquely named temp file beside fstab.
     trap 'rm -f "$tmp"' EXIT
@@ -128,15 +128,17 @@ ensure_fstab_entry() { # $1=uuid $2=fstype
     # opened — one unlocked rebuild beats a silent death with the temp file in place.
     if command -v flock >/dev/null 2>&1 && ( exec 9>"$lockpath" ) 2>/dev/null; then
         exec 9>"$lockpath"
-        flock -w 30 9 || { rm -f "$tmp"; echo "ERROR: fstab_locked"; exit 8; }
+        flock -w 30 9 || { rm -f "$tmp"; remount_unchanged_store; echo "ERROR: fstab_locked"; exit 8; }
         lockfd=9
     elif command -v flock >/dev/null 2>&1; then
         echo "WARN: fstab_lock_unavailable $lockpath" >&2
     fi
-    rc=0
-    grep -v "[[:space:]]${MOUNT_POINT}[[:space:]]" "$FSTAB" > "$tmp" || rc=$?
-    if [ "$rc" -gt 1 ]; then
+    # Its own name: the --check path keeps fsck's exit code in rc across this call.
+    grep_rc=0
+    grep -v "[[:space:]]${MOUNT_POINT}[[:space:]]" "$FSTAB" > "$tmp" || grep_rc=$?
+    if [ "$grep_rc" -gt 1 ]; then
         rm -f "$tmp"
+        remount_unchanged_store
         echo "ERROR: fstab_unreadable"
         exit 8
     fi
@@ -166,7 +168,10 @@ canon() {
     readlink -f "$1" 2>/dev/null || echo "$1"
 }
 
-# The device mounted on top of the store path; empty when nothing is.
+# The device mounted on top of the store path; empty when nothing is. findmnt
+# lists stacked mounts in mountinfo order, so the last line is the top layer.
+# Only that layer is ever released; a stale layer underneath stays mounted but
+# is never what the store path resolves to.
 store_holder() {
     canon "$(findmnt -no SOURCE "$MOUNT_POINT" 2>/dev/null | tail -n1 || true)"
 }
@@ -202,6 +207,13 @@ restore_previous_store() {
     [ -n "$PREV_UUID" ] || return 0
     case "$PREV_FS" in exfat|ext4) ;; *) return 0 ;; esac
     ( ensure_fstab_entry "$PREV_UUID" "$PREV_FS" ) >/dev/null 2>&1 || return 0
+    mount "$MOUNT_POINT" 2>/dev/null || true
+}
+
+# The fstab rebuild itself failed after the previous store came off. fstab was
+# not touched, so it still names that drive and a plain mount puts it back.
+remount_unchanged_store() {
+    [ -n "$PREV_UUID" ] || return 0
     mount "$MOUNT_POINT" 2>/dev/null || true
 }
 
@@ -355,10 +367,13 @@ if [ "$CHECK" -eq 1 ]; then
     if [ "$WAS_STORE" -eq 1 ]; then
         mount_and_own "$UUID" "$FS" 0 "$DEVICE"
     fi
+    # A disk that is not the store stays unmounted, so the line names the disk.
+    WHERE=$MOUNT_POINT
+    [ "$WAS_STORE" -eq 1 ] || WHERE=$DEVICE
     if [ "$rc" -ge 1 ]; then
-        echo "OK $MOUNT_POINT checked repaired"
+        echo "OK $WHERE checked repaired"
     else
-        echo "OK $MOUNT_POINT checked clean"
+        echo "OK $WHERE checked clean"
     fi
     exit 0
 fi

@@ -44,6 +44,10 @@ def block_devices() -> list[str]:
 
 
 DEVICES = block_devices()
+# CI runners always have block nodes (loop devices, the runner's disks); a skip there
+# would hide the switch regression, so CI fails instead of skipping.
+if os.environ.get("CI") and len(DEVICES) < 2:
+    raise RuntimeError(f"CI host has {len(DEVICES)} block node(s) in /dev; the store-switch tests need two")
 
 # Every stand-in reads the drive table ("uuid device fstype label" per line) and the
 # mount table ("source target" per line, last line on top) from $SHIM_DIR.
@@ -125,6 +129,7 @@ class ConfigureStorageSwitch(unittest.TestCase):
         for name in NO_OPS:
             self._shim(name, "#!/bin/sh\nexit 0\n")
         self.mount_point = str(root / "store")
+        os.mkdir(self.mount_point)
         (self.shims / "drives").write_text(
             f"{self.OLD[0]} {self.OLD[1]} exfat ARA-DISK\n{self.NEW[0]} {self.NEW[1]} exfat ARA-DISK\n")
         self.fstab = root / "fstab"
@@ -242,6 +247,35 @@ class ConfigureStorageSwitch(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("checked clean", result.stdout)
         self.assertEqual(self.mounted(), [self.OLD[1]])
+
+    def test_checking_the_store_reports_a_repair(self) -> None:
+        # fsck exit 1 = errors fixed. The fstab rebuild during the remount reused the same
+        # variable and turned every repair into "checked clean".
+        self._shim("fsck.exfat", "#!/bin/sh\nexit 1\n")
+        result = self.run_helper("--check", self.OLD[0])
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("checked repaired", result.stdout)
+
+    def test_checking_a_disk_that_is_not_the_store_names_that_disk(self) -> None:
+        result = self.run_helper("--check", self.NEW[0])
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertNotIn(self.mount_point, result.stdout, "nothing was mounted at the store path")
+        self.assertIn(self.NEW[1], result.stdout)
+
+    @unittest.skipIf(os.geteuid() == 0, "root writes through the read-only directory")
+    def test_a_failed_fstab_rebuild_after_the_release_remounts_the_previous_store(self) -> None:
+        # The rebuild's temp file cannot be created beside fstab: fstab itself is untouched,
+        # so mounting the store path from it puts the previous drive back.
+        root = Path(self.tmp.name)
+        root.chmod(0o555)
+        try:
+            result = self.run_helper(self.NEW[0])
+        finally:
+            root.chmod(0o755)
+        self.assertEqual(result.returncode, 8, result.stdout + result.stderr)
+        self.assertIn("ERROR: fstab_tmp_failed", result.stdout)
+        self.assertEqual(self.mounted(), [self.OLD[1]], "frames never fall through to the system disk")
+        self.assertEqual(self.fstab_uuid(), self.OLD[0])
 
     def test_checking_an_ejected_store_remounts_it_from_fstab(self) -> None:
         self.mounts.write_text("")
