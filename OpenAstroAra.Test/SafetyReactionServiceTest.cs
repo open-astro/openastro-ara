@@ -624,6 +624,33 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task IsHoldingRig_is_true_from_the_unsafe_reaction_through_the_countdown_and_false_after_the_release() {
+            // §42.2 — the star-lost recovery defers to this. Unsafe: latched + holding the paused run.
+            // Safe again: the auto-resume countdown is running. Released: nobody's.
+            var runId = Guid.NewGuid();
+            var resumed = false;
+            sequencer.Setup(s => s.PauseActiveRunsAsync(It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new List<Guid> { runId });
+            sequencer.Setup(s => s.ResumeRunsAsync(It.IsAny<IReadOnlyCollection<Guid>>(), It.IsAny<CancellationToken>()))
+                .Callback(() => resumed = true)
+                .ReturnsAsync(1);
+            service.ResumeDelayFromMinutes = _ => TimeSpan.FromSeconds(2);
+            Assert.That(service.IsHoldingRig, Is.False, "nothing has happened");
+
+            SetMonitor(safe: false);
+            await service.TickAsync();
+            Assert.That(service.IsHoldingRig, Is.True, "unsafe reaction latched, run held");
+
+            SetMonitor(safe: true);
+            await service.TickAsync();
+            Assert.That(service.IsHoldingRig, Is.True, "the auto-resume countdown is running");
+
+            await WaitUntilAsync(() => resumed, timeoutMs: 10_000);
+            await WaitUntilAsync(() => !service.IsHoldingRig, timeoutMs: 10_000);
+            Assert.That(service.IsHoldingRig, Is.False, "released: the rig is nobody's");
+        }
+
+        [Test]
         public async Task Auto_resume_skips_the_re_center_when_the_target_has_set_below_the_horizon_limit() {
             // §38.10a through the shared TargetRecenter: a near-pole site puts the dec-20° target at
             // ~20° altitude whatever the time, so a 30° floor makes it too low. No slew, honest copy.
