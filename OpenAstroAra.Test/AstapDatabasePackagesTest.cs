@@ -375,6 +375,31 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Boot_sweeps_crash_leftovers_under_the_solver_root_and_leaves_installs_alone() {
+            // A daemon hard-killed mid-extract leaves .staging-*/.backup-* under the index path (up to a 1.3 GB
+            // partial D80). StartAsync reclaims them there as Program.cs does for the sky-data root; a package dir
+            // and a manual install are untouched.
+            var stale = Path.Combine(_solverRoot, ".staging-abc");
+            var backup = Path.Combine(_solverRoot, ".backup-def");
+            var pkg = Path.Combine(_solverRoot, "astap-d80");
+            Touch(stale, "d80_0101.1476");
+            Touch(backup, "d80_0101.1476");
+            Touch(pkg, "d80_0101.1476");
+            Touch(_solverRoot, "w08_0101.001");
+            var svc = NewService(new UnusedFetcher(), new NullBroadcaster());
+
+            await ((Microsoft.Extensions.Hosting.IHostedService)svc).StartAsync(CancellationToken.None);
+
+            Assert.Multiple(() => {
+                Assert.That(Directory.Exists(stale), Is.False, ".staging-* is reclaimed");
+                Assert.That(Directory.Exists(backup), Is.False, ".backup-* is reclaimed");
+                Assert.That(File.Exists(Path.Combine(pkg, "d80_0101.1476")), Is.True, "a package dir is left alone");
+                Assert.That(File.Exists(Path.Combine(_solverRoot, "w08_0101.001")), Is.True, "a manual install is left alone");
+            });
+            await ((Microsoft.Extensions.Hosting.IHostedService)svc).StopAsync(CancellationToken.None);
+        }
+
+        [Test]
         public void Free_space_is_read_from_the_nearest_existing_ancestor() {
             var missing = Path.Combine(_root, "not", "yet", "there");
             Assert.That(DataManagerService.FreeBytesOnDisk(missing), Is.GreaterThan(0));
