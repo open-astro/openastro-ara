@@ -634,6 +634,7 @@ public partial class Program {
                 fieldOfViewDeg: () => DataManagerService.FieldOfViewHeightDeg(profiles.GetOpticsSettings()));
         });
         builder.Services.AddSingleton<IDataManagerService>(sp => sp.GetRequiredService<DataManagerService>());
+        builder.Services.AddSingleton<ISolverRecommender>(sp => sp.GetRequiredService<DataManagerService>());
         // The same singleton as a hosted service so its StopAsync drains in-flight downloads on a
         // graceful daemon stop (§36-2b(b)) — cancel + await, so the workers' own finally paths
         // reclaim their staging dirs instead of abandoning them for the next boot's sweep.

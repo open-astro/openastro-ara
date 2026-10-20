@@ -39,6 +39,53 @@ public sealed record DataPackageDto(
     // still listed and removable, but the solver does not read them until the path matches.
     string? InstallPath = null);
 
+/// <summary>POST /api/v1/data-manager/solver-recommendation body (§36.10, #1136): the rig's optics as the
+/// setup wizard holds them before the profile is saved. Every field is optional; a missing main sensor or
+/// pixel size falls back to the active profile's optics, a missing guide setup to its guider settings. The
+/// guide sensor size is known only to the guider (its frame size), so the client passes it when it has it.</summary>
+public sealed record SolverRecommendationRequestDto(
+    double? FocalLengthMm = null,
+    double? ReducerFactor = null,
+    int? SensorWidthPx = null,
+    int? SensorHeightPx = null,
+    double? PixelSizeUm = null,
+    double? GuideFocalLengthMm = null,
+    double? GuidePixelSizeUm = null,
+    int? GuideSensorWidthPx = null,
+    int? GuideSensorHeightPx = null,
+    // "oag" | "guide_scope" (§63.19). With an OAG the guide camera sits behind the main optics, so its
+    // field uses the telescope's focal length × reducer and GuideFocalLengthMm is ignored; null falls
+    // back to the profile's guider setup type.
+    string? GuideSetupType = null);
+
+/// <summary>One camera's place on the §36.10 ladder: its field, the band, and the database that covers it
+/// (null <c>PackageId</c> below the solver's floor, <c>TooNarrow</c>). Sizes are the catalog's advertised
+/// on-disk bytes; <c>IsInstalled</c> says whether the Data Manager already holds it (another profile may
+/// have fetched it).</summary>
+public sealed record SolverDatabasePickDto(
+    string Role,            // "camera" | "guide camera"
+    double FovDeg,
+    string Band,
+    string? PackageId,
+    string? PackageName,
+    long SizeBytes,
+    bool IsInstalled,
+    bool TooNarrow,
+    string Reason);
+
+/// <summary>The §36.10 ladder's answer for a rig: one pick per camera whose field is known (the guide
+/// camera solves polar-alignment frames, so it needs a database too), deduplicated when both fall in the
+/// same band. <c>Packages</c> is empty when no field is known. The narrowest field and its band are the
+/// headline the wizard shows.</summary>
+public sealed record SolverRecommendationDto(
+    double? MainFovDeg,
+    double? GuideFovDeg,
+    double? NarrowestFovDeg,
+    string Band,
+    System.Collections.Generic.IReadOnlyList<SolverDatabasePickDto> Packages,
+    bool TooNarrow,
+    string Reason);
+
 /// <summary>POST /api/v1/data-manager/download body.</summary>
 /// <param name="PackageId">Catalog id of the package to download.</param>
 /// <param name="ForceReinstall">When false, a request for a package that is already fully installed is a no-op —

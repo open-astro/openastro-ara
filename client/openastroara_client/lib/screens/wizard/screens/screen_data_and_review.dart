@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../models/profile_draft.dart';
+import '../../../util/friendly_error.dart';
+import '../../../state/sky_atlas/data_manager_state.dart';
+import '../../../models/solver_recommendation.dart';
 import '../../../state/wizard_state.dart';
 import '../../../theme/ara_colors.dart';
 import '../wizard_form_kit.dart';
@@ -142,6 +145,7 @@ class ScreenReview extends ConsumerWidget {
           ('Name', reviewValue(t.name)),
           ('Focal length', _unit(t.focalLengthMm, 'mm')),
           ('Aperture', _unit(t.apertureMm, 'mm')),
+          ('Reducer / Barlow', t.reducerFactor == null ? 'none (1×)' : '${t.reducerFactor}× → ${t.effectiveFocalLengthMm?.toStringAsFixed(0) ?? '?'} mm'),
           ('Focal ratio', fr),
         ]),
         _ReviewSection(title: 'Camera', step: 3, onEdit: edit, rows: [
@@ -202,6 +206,10 @@ class ScreenReview extends ConsumerWidget {
             CalibrationCadence.neverRecalibrate => 'Never recalibrate',
           }),
         ]),
+        // §36.10 — the star database(s) this rig needs, from the optics above
+        // (and the guide camera, which solves polar-alignment frames). Chosen
+        // here and downloaded on the rig after Save, so setup stays 5 screens.
+        const _SolverDatabaseSection(),
         _ReviewSection(title: 'Plate solving', step: null, onEdit: edit, rows: [
           ('ASTAP binary', reviewValue(ps.astapBinaryPath)),
           ('Star database', reviewValue(ps.starDatabasePath)),
@@ -334,6 +342,171 @@ class _ReviewSection extends ConsumerWidget {
               )),
         ],
       ),
+    );
+  }
+}
+
+/// §36.10 — asks the daemon which ASTAP database(s) the draft's optics need and
+/// offers to download them after Save. One pick per camera whose field is
+/// known (imaging, guide), deduplicated; a field below the solver's floor is
+/// reported as "cannot plate-solve" instead of a download. The choice lives
+/// on the draft (`plateSolve.solverDatabasePackageIds`) so Save can queue it.
+class _SolverDatabaseSection extends ConsumerStatefulWidget {
+  const _SolverDatabaseSection();
+
+  @override
+  ConsumerState<_SolverDatabaseSection> createState() => _SolverDatabaseSectionState();
+}
+
+class _SolverDatabaseSectionState extends ConsumerState<_SolverDatabaseSection> {
+  SolverRecommendation? _rec;
+  String? _error;
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _load());
+  }
+
+  Future<void> _load() async {
+    final api = ref.read(dataManagerApiProvider);
+    final draft = ref.read(wizardControllerProvider).draft;
+    if (api == null) {
+      setState(() {
+        _loading = false;
+        _error = 'No rig in reach: the database is chosen when the profile reaches a rig.';
+      });
+      return;
+    }
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final t = draft.telescope;
+      final c = draft.camera;
+      final g = draft.guider;
+      final rec = await api.solverRecommendation(SolverRecommendationRequest(
+        focalLengthMm: t.focalLengthMm,
+        reducerFactor: t.reducerFactor,
+        sensorWidthPx: c.sensorWidthPx,
+        sensorHeightPx: c.sensorHeightPx,
+        pixelSizeUm: c.pixelSizeMicrons,
+        guideFocalLengthMm: g.guideFocalLengthMm?.toDouble(),
+        guidePixelSizeUm: g.guidePixelSizeUm,
+        guideSensorWidthPx: g.guideSensorWidthPx,
+        guideSensorHeightPx: g.guideSensorHeightPx,
+        guideSetupType: g.setupType,
+      ));
+      if (!mounted) return;
+      final ids = rec.packages
+          .where((p) => p.packageId != null && !p.isInstalled)
+          .map((p) => p.packageId!)
+          .toSet()
+          .toList();
+      // The draft remembers what Save should queue; a re-run of this screen
+      // recomputes it from the latest optics.
+      draft.plateSolve.solverDatabasePackageIds = ids;
+      setState(() {
+        _rec = rec;
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = friendlyError(e, action: 'work out which star database this rig needs');
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final draft = ref.watch(wizardControllerProvider).draft;
+    final rec = _rec;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text('Plate-solver star database', style: theme.textTheme.titleMedium),
+              ),
+              TextButton.icon(
+                onPressed: _loading ? null : _load,
+                icon: const Icon(Icons.refresh, size: 18),
+                label: const Text('Recheck'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          if (_loading)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 8),
+              child: Row(children: [
+                SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+                SizedBox(width: 8),
+                Text('Working out the field of view…'),
+              ]),
+            )
+          else if (_error != null)
+            Text(_error!, style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.error))
+          else if (rec != null) ...[
+            if (rec.packages.isEmpty)
+              Text(rec.reason, style: theme.textTheme.bodySmall)
+            else
+              for (final p in rec.packages) _pickRow(context, p),
+            if (rec.packages.any((p) => p.packageId != null && !p.isInstalled))
+              CheckboxListTile(
+                key: const ValueKey('review-solver-db-download'),
+                contentPadding: EdgeInsets.zero,
+                controlAffinity: ListTileControlAffinity.leading,
+                value: draft.plateSolve.downloadSolverDatabase,
+                onChanged: (v) => setState(() => draft.plateSolve.downloadSolverDatabase = v ?? true),
+                title: Text(
+                  'Download after setup (${formatBytes(rec.packages.where((p) => p.packageId != null && !p.isInstalled).fold<int>(0, (s, p) => s + p.sizeBytes))}, '
+                  'the rig needs internet once)',
+                ),
+                subtitle: const Text('Runs on the rig in the background; progress in Settings → Sky data.'),
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _pickRow(BuildContext context, SolverDatabasePick p) {
+    final theme = Theme.of(context);
+    final role = p.role == 'guide camera' ? 'Guide camera' : 'Camera';
+    final field = '$role: ${p.fovDeg.toStringAsFixed(2)}° field (${p.band})';
+    if (p.tooNarrow) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Icon(Icons.warning_amber_rounded, size: 18, color: theme.colorScheme.error),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text('$field — cannot plate-solve. ${p.reason}',
+                style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.error)),
+          ),
+        ]),
+      );
+    }
+    final status = p.isInstalled ? 'already on the rig' : formatBytes(p.sizeBytes);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Icon(p.isInstalled ? Icons.check_circle_outline : Icons.download_outlined, size: 18, color: theme.colorScheme.primary),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text('$field → ${p.packageName ?? p.packageId} ($status)',
+              style: theme.textTheme.bodySmall),
+        ),
+      ]),
     );
   }
 }

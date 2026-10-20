@@ -85,7 +85,8 @@ namespace OpenAstroAra.Test {
         [Test]
         public void Several_databases_name_one_with_D() {
             // #1121 — with more than one installed, ASTAP would pick on its own. The test frame is
-            // 48 px tall at ~1.9"/px, a ~0.03° field: narrower than D80's range, so the deepest wins.
+            // 48 px tall at ~1.9"/px, a ~0.03° field: the narrow band, where D80 (the deepest current
+            // database; H18 is obsolete upstream) goes first.
             var dir = Path.Combine(Path.GetTempPath(), "ara-astap-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(dir);
             // Two tiles each: a single tile is a partial download since #1215 and is not offered.
@@ -94,7 +95,7 @@ namespace OpenAstroAra.Test {
             }
             try {
                 var args = Args(new ASTAPSolver("/usr/bin/astap_cli", dir));
-                Assert.That(args, Does.Contain($"-d \"{dir}\" -D h18"));
+                Assert.That(args, Does.Contain($"-d \"{dir}\" -D d80"));
             } finally {
                 Directory.Delete(dir, recursive: true);
             }

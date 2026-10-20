@@ -112,12 +112,21 @@ OpticsSettings applyDraftToOptics(OpticsSettings base, ProfileDraft d) {
   final fl = d.telescope.focalLengthMm;
   final ap = d.telescope.apertureMm;
   final px = d.camera.pixelSizeMicrons;
+  final reducer = d.telescope.reducerFactor;
+  final sw = d.camera.sensorWidthPx;
+  final sh = d.camera.sensorHeightPx;
   return base.copyWith(
     focalLengthMm: (fl != null && fl > 0) ? fl : null,
     // NEXTGEN §4: the telescope screen has always asked for the aperture; the
     // optics section can now store it (it feeds the Optimal-Sub sky-flux term).
     apertureMm: (ap != null && ap > 0) ? ap : null,
     pixelSizeUm: (px != null && px > 0) ? px : null,
+    // §36.10 — the reducer the telescope step collected and the sensor size the
+    // camera reported; null keeps the base value (the daemon also fills the
+    // sensor on first connect).
+    reducerFactor: (reducer != null && reducer > 0) ? reducer : null,
+    sensorWidthPx: (sw != null && sw > 0) ? sw : null,
+    sensorHeightPx: (sh != null && sh > 0) ? sh : null,
   );
 }
 
@@ -158,17 +167,17 @@ Phd2Settings applyDraftToPhd2(Phd2Settings base, ProfileDraft d,
     {OpticsSettings? baseOptics}) {
   final g = d.guider;
   // §63.19 — with an OAG the guide focal length is derived from the main
-  // optics: the telescope screen's focal length × the base profile's optics
-  // reducer factor (the wizard collects no reducer of its own; the base
-  // section is the source, falling back to 1.0 when it's unset/invalid).
-  // 0/unset telescope focal length maps to null = keep the base value.
+  // optics: the telescope screen's focal length × the reducer factor the
+  // telescope step collected (falling back to the base profile's optics, then
+  // 1.0, when the user left it untouched). 0/unset telescope focal length maps
+  // to null = keep the base value.
   final setupType = g.setupType == null
       ? null
       : Phd2SettingsNotifier.normalizeGuiderSetupType(g.setupType!);
   final effectiveType = resolveGuiderSetupType(g.setupType, base.guiderSetupType);
   int? focalLength;
   if (effectiveType == 'oag') {
-    final reducer = effectiveOagReducerFactor(baseOptics?.reducerFactor);
+    final reducer = effectiveOagReducerFactor(d.telescope.reducerFactor ?? baseOptics?.reducerFactor);
     final derived =
         derivedOagGuideFocalLength(d.telescope.focalLengthMm ?? 0, reducer);
     focalLength = derived == 0 ? null : derived;

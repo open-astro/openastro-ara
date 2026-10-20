@@ -189,6 +189,7 @@ public sealed class PlaceholderFlatDeviceService : IFlatDeviceService {
 }
 
 public sealed class PlaceholderGuiderService : IGuiderService {
+    public Task<(int Width, int Height)?> TryGetGuideFrameSizeAsync(CancellationToken ct) => Task.FromResult<(int, int)?>(null);
     public Task<GuiderDto?> GetAsync(CancellationToken ct) => Task.FromResult<GuiderDto?>(null);
     public Task<OperationAcceptedDto> ConnectAsync(GuiderConnectRequestDto request, string? idempotencyKey, CancellationToken ct) =>
         Task.FromResult(PlaceholderEquipmentHelpers.Accepted("guider.connect", idempotencyKey));

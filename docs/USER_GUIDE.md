@@ -29,12 +29,15 @@ safety policies, storage, and optional sky-data downloads. Notes:
 
 - **Skip is always available** — anything skipped shows as "Default" in Settings and can be set later.
 - The **sky catalogs** (stars + deep-sky objects) ship inside the rig server package, so the
-  planetarium, search and Tonight's Sky work offline from the first start; the wizard's sky-data
-  screen only reviews what is installed. The **plate-solver star
-  database** is the one download: Settings → Sky data lists ASTAP's D80 (1.3 GB, every rig) and
-  marks it Recommended, with G05 and W08 recommended for fields wider than ~6° and ~20°. It needs
-  the rig online once and about 1.7 GB free on its storage; without one, centering, polar
-  alignment and position checks cannot solve.
+  planetarium, search and Tonight's Sky work offline from the first start. The **plate-solver star
+  database** is the one download: the review screen works out the field of view of your camera
+  (and of the guide camera, which polar alignment solves) from the focal length, the reducer or
+  Barlow factor you enter on the equipment step, and the sensor the camera reports, then lists the
+  ASTAP database each needs — the smallest that covers the field (D05, 109 MB, for most refractors
+  and lenses; G05/W08 for wide lenses and all-sky cameras; D50/D80 for narrow fields) — and downloads
+  it on the rig after Save. The rig needs internet once. A field narrower than about 0.15° cannot be
+  solved by any database; the screen says so. Settings → Sky data shows the same recommendation and
+  every database installed; nothing is removed when a second profile needs a different one.
 - The wizard writes a **profile**; you can create more later (Settings → Profile) and export/import
   them. Exported profiles are stripped of paths, secrets, and location — the recipient re-runs the
   wizard sections that need local values.

@@ -69,6 +69,11 @@ public interface IStatsService {
 }
 
 /// <summary>Bug-report bundle preparation (§54).</summary>
+public interface ISolverRecommender {
+    /// <summary>§36.10 — the ASTAP database the ladder picks for the given (or the active profile's) optics.</summary>
+    SolverRecommendationDto Recommend(SolverRecommendationRequestDto request, OpticsSettingsDto? optics, Phd2SettingsDto? guider);
+}
+
 public interface IBugReportService {
     /// <param name="mode">§54.3 sharing mode applied while the bundle is built (default: everything).</param>
     Task<BugReportPreparationDto> PrepareAsync(string? idempotencyKey, CancellationToken ct, BugReportSharingMode mode = BugReportSharingMode.Full);

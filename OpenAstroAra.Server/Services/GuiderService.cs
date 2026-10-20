@@ -51,6 +51,18 @@ namespace OpenAstroAra.Server.Services;
 /// </summary>
 public sealed partial class GuiderService : IGuiderService, IDisposable {
 
+    /// <inheritdoc/>
+    public async Task<(int Width, int Height)?> TryGetGuideFrameSizeAsync(CancellationToken ct) {
+        PHD2Guider guider;
+        try {
+            guider = RequireConnectedGuider();
+        } catch (InvalidOperationException) {
+            return null; // not connected: the wizard then recommends from the main camera only
+        }
+        return await guider.GetCameraFrameSizeAsync(ct).ConfigureAwait(false);
+    }
+
+
     private readonly ILogger<GuiderService> _logger;
     private readonly IProfileService _profileService;
     // §63.6: WS sink for guider.dark_library.* events. Optional so the service composes in tests without a hub.

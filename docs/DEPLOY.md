@@ -23,9 +23,12 @@ sudo apt update
 sudo apt install openastroara-server
 
 # 3. Star database for the plate solver: download it from the app, not the shell.
-#    Settings → Sky data lists ASTAP's databases as packages: D80 (1.3 GB, every rig),
-#    G05 (105 MB, fields wider than ~6°) and W08 (0.5 MB, wider than ~20°); the ones
-#    the profile's optics call for are marked Recommended. They install under
+#    The setup wizard's review screen works out each camera's field of view and
+#    downloads the right ASTAP database after Save; Settings → Sky data lists them
+#    all as packages: W08 (0.5 MB, fields wider than 20°), G05 (105 MB, 6–20°),
+#    D05 (109 MB, 1–6°, most refractors), D50 (0.95 GB, 0.5–1°) and D80 (1.3 GB,
+#    narrower than 0.5°); the one the profile's optics call for is marked
+#    Recommended, and several can coexist for several rigs. They install under
 #    /var/lib/astap (the profile's index path,
 #    Options → Plate solving), one subdirectory per package, and the daemon passes
 #    the right one to astap_cli with -d/-D per solve. The download needs the Pi

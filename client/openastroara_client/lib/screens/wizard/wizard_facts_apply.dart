@@ -16,6 +16,11 @@ void applyFactsToDraft(ProfileDraft draft, DeviceReadiness r) {
       final g = p.camera;
       if (g != null) {
         draft.camera.pixelSizeMicrons = g.pixelSizeUm;
+        // The sensor size feeds the field of view (§36.10 database choice).
+        if (g.sensorWidthPx > 0 && g.sensorHeightPx > 0) {
+          draft.camera.sensorWidthPx = g.sensorWidthPx;
+          draft.camera.sensorHeightPx = g.sensorHeightPx;
+        }
       }
       break;
     case EquipmentDeviceType.mount:

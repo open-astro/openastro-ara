@@ -135,6 +135,22 @@ public static class SystemEndpoints {
             .Produces<IReadOnlyList<DataPackageDto>>(StatusCodes.Status200OK)
             .WithName("ListDataPackages");
 
+        // §36.10 (#1136) — which ASTAP database this rig needs, from the optics the wizard holds (or the
+        // profile's); the wizard's fifth screen asks before the profile is saved.
+        data.MapPost("/solver-recommendation",
+                async ([FromBody] SolverRecommendationRequestDto? request, ISolverRecommender recommender, IProfileStore profiles, IGuiderService guider, CancellationToken ct) => {
+                    var req = request ?? new SolverRecommendationRequestDto();
+                    // The guide camera's frame size is not in the profile: when the client has none, ask the
+                    // connected guider (null when it is not connected → main camera only).
+                    if (req.GuideSensorHeightPx is null && await guider.TryGetGuideFrameSizeAsync(ct) is { } frame) {
+                        req = req with { GuideSensorWidthPx = frame.Width, GuideSensorHeightPx = frame.Height };
+                    }
+                    return Results.Ok(recommender.Recommend(req, profiles.GetOpticsSettings(), profiles.GetPhd2Settings()));
+                })
+            .Accepts<SolverRecommendationRequestDto>("application/json")
+            .Produces<SolverRecommendationDto>(StatusCodes.Status200OK)
+            .WithName("RecommendSolverDatabase");
+
         data.MapPost("/download",
                 async ([FromBody] DownloadRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? idempotencyKey, IDataManagerService svc, CancellationToken ct) => {
                     try {

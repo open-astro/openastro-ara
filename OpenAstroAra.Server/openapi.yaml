@@ -4800,6 +4800,25 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/DataPackageDto'
+  /api/v1/data-manager/solver-recommendation:
+    post:
+      tags:
+        - DataManager
+      operationId: RecommendSolverDatabase
+      requestBody:
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - type: 'null'
+                - $ref: '#/components/schemas/SolverRecommendationRequestDto'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SolverRecommendationDto'
   /api/v1/data-manager/download:
     post:
       tags:
@@ -13873,6 +13892,161 @@ components:
             - 'null'
             - boolean
           default: false
+    SolverDatabasePickDto:
+      required:
+        - role
+        - fov_deg
+        - band
+        - package_id
+        - package_name
+        - size_bytes
+        - is_installed
+        - too_narrow
+        - reason
+      type: object
+      properties:
+        role:
+          type: string
+        fov_deg:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+        band:
+          type: string
+        package_id:
+          type:
+            - 'null'
+            - string
+        package_name:
+          type:
+            - 'null'
+            - string
+        size_bytes:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int64
+        is_installed:
+          type: boolean
+        too_narrow:
+          type: boolean
+        reason:
+          type: string
+    SolverRecommendationDto:
+      required:
+        - main_fov_deg
+        - guide_fov_deg
+        - narrowest_fov_deg
+        - band
+        - packages
+        - too_narrow
+        - reason
+      type: object
+      properties:
+        main_fov_deg:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        guide_fov_deg:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        narrowest_fov_deg:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        band:
+          type: string
+        packages:
+          type: array
+          items:
+            $ref: '#/components/schemas/SolverDatabasePickDto'
+        too_narrow:
+          type: boolean
+        reason:
+          type: string
+    SolverRecommendationRequestDto:
+      type: object
+      properties:
+        focal_length_mm:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        reducer_factor:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        sensor_width_px:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - 'null'
+            - integer
+            - string
+          format: int32
+        sensor_height_px:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - 'null'
+            - integer
+            - string
+          format: int32
+        pixel_size_um:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        guide_focal_length_mm:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        guide_pixel_size_um:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        guide_sensor_width_px:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - 'null'
+            - integer
+            - string
+          format: int32
+        guide_sensor_height_px:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - 'null'
+            - integer
+            - string
+          format: int32
+        guide_setup_type:
+          type:
+            - 'null'
+            - string
     StatsAchievementsDto:
       required:
         - total_nights_imaged

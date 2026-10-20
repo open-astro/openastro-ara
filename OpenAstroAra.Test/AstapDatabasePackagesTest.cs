@@ -68,7 +68,9 @@ namespace OpenAstroAra.Test {
         private static readonly string[] D80AndG05 = { "d80", "g05" };
         private static readonly string[] D80AndH18 = { "d80", "h18" };
         private static readonly string[] D80G05W08 = { "d80", "g05", "w08" };
-        private static readonly string[] ThreeIds = { "astap-d80", "astap-g05", "astap-w08" };
+        private static readonly (string, string?)[] TwoPicks = { ("camera", "astap-g05"), ("guide camera", "astap-d05") };
+        private static readonly string[] D05Only = { "astap-d05" };
+        private static readonly string[] FiveIds = { "astap-d80", "astap-d50", "astap-d05", "astap-g05", "astap-w08" };
 
         private static void Touch(string dir, string name) {
             Directory.CreateDirectory(dir);
@@ -158,18 +160,19 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public void Several_packages_name_one_and_point_d_at_its_directory() {
-            // The test frame is ~0.03° tall: narrower than D80's range, so H18 wins over D80.
+            // The test frame is ~0.03° tall: the narrow band, where D80 goes first and the subdirectory it
+            // sits in is what -d names.
             var d80 = Path.Combine(_solverRoot, "astap-d80");
-            var h18 = Path.Combine(_solverRoot, "astap-h18");
+            var d05 = Path.Combine(_solverRoot, "astap-d05");
             foreach (var t in new[] { "d80_0101.1476", "d80_0102.1476" }) Touch(d80, t);
-            foreach (var t in new[] { "h18_0101.1476", "h18_0102.1476" }) Touch(h18, t);
+            foreach (var t in new[] { "d05_0101.290", "d05_0102.290" }) Touch(d05, t);
 
-            Assert.That(Args(new ASTAPSolver("/usr/bin/astap_cli", _solverRoot)), Does.Contain($"-d \"{h18}\" -D h18"));
+            Assert.That(Args(new ASTAPSolver("/usr/bin/astap_cli", _solverRoot)), Does.Contain($"-d \"{d80}\" -D d80"));
         }
 
         // ── field-of-view bands follow ASTAP's own auto-selection ──
 
-        [TestCase(2.0, "d80")]
+        [TestCase(2.0, "d80")]   // general band: D05/D20/D50 first, none installed → D80
         [TestCase(6.0, "d80")]
         [TestCase(6.5, "g05")]   // above 6°: the 500 stars/deg² database
         [TestCase(15.0, "g05")]  // a 135 mm lens on a full-frame sensor
@@ -216,6 +219,10 @@ namespace OpenAstroAra.Test {
                 new Uri("https://example.test/astap-g05.tar.gz")),
             new DataPackageDto("astap-w08", "W08", "", DataManagerService.SolverCategory, 1 << 20, "1", false, null,
                 new Uri("https://example.test/astap-w08.tar.gz")),
+            new DataPackageDto("astap-d05", "D05", "", DataManagerService.SolverCategory, 1 << 20, "1", false, null,
+                new Uri("https://example.test/astap-d05.tar.gz")),
+            new DataPackageDto("astap-d50", "D50", "", DataManagerService.SolverCategory, 1 << 20, "1", false, null,
+                new Uri("https://example.test/astap-d50.tar.gz")),
             new DataPackageDto("hyg-stars", "HYG", "", "catalog", 1 << 20, "1", false, null,
                 new Uri("https://example.test/hyg.csv"), Recommended: true),
         };
@@ -293,19 +300,67 @@ namespace OpenAstroAra.Test {
             Assert.That(DataManagerService.UnknownSizeCeiling, Is.GreaterThan(1_600_000_000L));
         }
 
-        [TestCase(null, true, false, false)]   // optics unknown: D80 only
-        [TestCase(2.0, true, false, false)]
-        [TestCase(15.0, true, true, false)]    // a 15° field: G05 too
-        [TestCase(45.0, true, true, true)]     // all-sky: everything
-        public async Task Recommended_follows_the_field_of_view(double? fov, bool d80, bool g05, bool w08) {
+        [TestCase(null, null)]        // optics unknown: nothing recommended until the wizard knows the field
+        [TestCase(0.05, null)]        // below the floor: nothing solves it
+        [TestCase(0.3, "astap-d80")]  // narrow
+        [TestCase(0.7, "astap-d50")]  // sub-degree
+        [TestCase(2.0, "astap-d05")]  // general: the 100 MB database, not the 1.3 GB one
+        [TestCase(15.0, "astap-g05")] // wide
+        [TestCase(45.0, "astap-w08")] // all-sky
+        public async Task Recommended_is_the_ladder_pick_for_the_field_of_view(double? fov, string? recommended) {
             var svc = NewService(new UnusedFetcher(), new NullBroadcaster(), fov);
             var listed = await svc.ListPackagesAsync(CancellationToken.None);
+            var flagged = listed.Where(p => DataManagerService.IsSolverPackage(p) && p.Recommended).Select(p => p.Id).ToList();
+            Assert.That(flagged, Is.EqualTo(recommended is null ? Array.Empty<string>() : new[] { recommended }), "exactly the ladder's pick");
+            Assert.That(listed.Single(p => p.Id == "hyg-stars").Recommended, Is.True, "a catalog keeps its curated flag");
+        }
+
+        [Test]
+        public void Recommend_uses_the_narrower_of_main_and_guide_and_falls_back_to_the_profile() {
+            var svc = NewService(new UnusedFetcher(), new NullBroadcaster());
+            // RedCat 51 (250 mm) + IMX571: 3.6° → D05; a 120 mm guide scope with an ASI120 (3.75 µm, 960 px
+            // tall): 1.72° — narrower, still D05.
+            var r = svc.Recommend(new SolverRecommendationRequestDto(250, 1.0, 6248, 4176, 3.76, 120, 3.75, 1280, 960), null, null);
             Assert.Multiple(() => {
-                Assert.That(listed.Single(p => p.Id == "astap-d80").Recommended, Is.EqualTo(d80));
-                Assert.That(listed.Single(p => p.Id == "astap-g05").Recommended, Is.EqualTo(g05));
-                Assert.That(listed.Single(p => p.Id == "astap-w08").Recommended, Is.EqualTo(w08));
-                Assert.That(listed.Single(p => p.Id == "hyg-stars").Recommended, Is.True, "a catalog keeps its curated flag");
+                Assert.That(r.MainFovDeg, Is.EqualTo(3.6).Within(0.05));
+                Assert.That(r.GuideFovDeg, Is.EqualTo(1.72).Within(0.02));
+                Assert.That(r.NarrowestFovDeg, Is.EqualTo(r.GuideFovDeg));
+                Assert.That(r.Packages.Select(p => p.PackageId), Is.EqualTo(D05Only), "both cameras land on D05: one download");
+                Assert.That(r.Packages[0].Role, Is.EqualTo("camera"));
+                Assert.That(r.Band, Is.EqualTo("general"));
+                Assert.That(r.TooNarrow, Is.False);
             });
+            // A 135 mm lens (15°, G05) with a 200 mm guide scope + ASI120 (1.0°, D05): two databases.
+            var two = svc.Recommend(new SolverRecommendationRequestDto(135, 1.0, 6248, 4176, 3.76, 200, 3.75, 1280, 960), null, null);
+            Assert.That(two.Packages.Select(p => (p.Role, p.PackageId)), Is.EqualTo(TwoPicks));
+            // The same lens with an OAG: the guide camera looks through the 135 mm lens, 960 px tall at 3.75 µm → 1.53°,
+            // D05 again (the guide-scope focal length is ignored).
+            var oag = svc.Recommend(new SolverRecommendationRequestDto(135, 1.0, 6248, 4176, 3.76, 200, 3.75, 1280, 960, GuideSetupType: "oag"), null, null);
+            Assert.That(oag.GuideFovDeg, Is.EqualTo(1.53).Within(0.02));
+            Assert.That(oag.Packages.Select(p => (p.Role, p.PackageId)), Is.EqualTo(TwoPicks), "15° main → G05, 1.5° OAG guide → D05");
+            // A C14 × 0.63 with an OAG and an ASI120: the guide field is 0.08° → too narrow; polar alignment cannot solve.
+            var c14oag = svc.Recommend(new SolverRecommendationRequestDto(3910, 0.63, 6248, 4176, 3.76, null, 3.75, 1280, 960, GuideSetupType: "oag"), null, null);
+            Assert.That(c14oag.Packages.Single(p => p.Role == "guide camera").TooNarrow, Is.True);
+            Assert.That(c14oag.Packages.Single(p => p.Role == "camera").PackageId, Is.EqualTo("astap-d80"));
+            Assert.That(two.Band, Is.EqualTo("general"), "the headline band is the narrowest field's");
+            // A 0.63× reducer on a C14 (3910 mm) with the same main camera: 0.37° → D80, narrow band.
+            var c14 = svc.Recommend(new SolverRecommendationRequestDto(3910, 0.63, 6248, 4176, 3.76), null, null);
+            Assert.That(c14.Packages.Single().PackageId, Is.EqualTo("astap-d80"));
+            Assert.That(c14.Band, Is.EqualTo("narrow"));
+            // The same C14 with an ASI120MM as the main camera: 0.05° → too narrow, no package.
+            var tiny = svc.Recommend(new SolverRecommendationRequestDto(3910, 1.0, 1280, 960, 3.75), null, null);
+            Assert.That(tiny.TooNarrow, Is.True);
+            Assert.That(tiny.Packages.Single().PackageId, Is.Null);
+            Assert.That(tiny.Reason, Does.Contain("below the solver's floor"));
+            // Nothing known → unknown band, no picks, a reason naming what to set.
+            var none = svc.Recommend(new SolverRecommendationRequestDto(), null, null);
+            Assert.That(none.Band, Is.EqualTo("unknown"));
+            Assert.That(none.Packages, Is.Empty);
+            // Profile fallback: the request carries only the focal length; the sensor and pixel size come from optics.
+            var optics = new OpticsSettingsDto(FocalLengthMm: 250, ReducerFactor: 1.0, SensorWidthPx: 6248, SensorHeightPx: 4176, PixelSizeUm: 3.76);
+            var fromProfile = svc.Recommend(new SolverRecommendationRequestDto(FocalLengthMm: 135), optics, null);
+            Assert.That(fromProfile.MainFovDeg, Is.EqualTo(6.67).Within(0.05), "135 mm on the profile's sensor");
+            Assert.That(fromProfile.Packages.Single().PackageId, Is.EqualTo("astap-g05"));
         }
 
         [Test]
@@ -578,7 +633,7 @@ namespace OpenAstroAra.Test {
         [Test]
         public void The_production_catalog_has_the_three_databases_as_release_assets_with_digests() {
             var solver = DataManagerService.Catalog.Where(DataManagerService.IsSolverPackage).ToList();
-            Assert.That(solver.Select(p => p.Id), Is.EquivalentTo(ThreeIds));
+            Assert.That(solver.Select(p => p.Id), Is.EquivalentTo(FiveIds));
             foreach (var pkg in solver) {
                 Assert.That(pkg.SourceUrl!.Host, Is.EqualTo("github.com"), $"{pkg.Id} is a sky-data release asset");
                 Assert.That(DataManagerService.IsArchiveFormat(pkg.SourceUrl!), Is.True, $"{pkg.Id} is a tar.gz");

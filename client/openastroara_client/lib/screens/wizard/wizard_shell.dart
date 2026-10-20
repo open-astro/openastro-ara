@@ -12,6 +12,7 @@ import '../../state/guider/guider_equipment_state.dart';
 import '../../state/pending_profile_drafts_state.dart';
 import '../../state/profile_management_state.dart';
 import '../../state/saved_server_state.dart';
+import '../../state/sky_atlas/data_manager_state.dart';
 import '../../state/wizard_state.dart';
 import '../../theme/ara_colors.dart';
 import 'wizard_equipment_apply.dart';
@@ -110,6 +111,24 @@ class _WizardShellState extends ConsumerState<WizardShell> {
   // spinner during the round-trip and keeps the wizard open on failure so the
   // user doesn't lose their entries.
   
+  /// §36.10 — queue the star database(s) the fifth screen chose, on the rig,
+  /// after the profile is saved. Best-effort and per id: a refused or failed
+  /// queue never fails the save (the user can download from Settings → Sky
+  /// data); 409 (already installed, e.g. another profile fetched it) is fine.
+  Future<void> _queueSolverDatabases(ProfileDraft draft) async {
+    final ps = draft.plateSolve;
+    if (!ps.downloadSolverDatabase || ps.solverDatabasePackageIds.isEmpty) return;
+    final api = ref.read(dataManagerApiProvider);
+    if (api == null) return;
+    for (final id in ps.solverDatabasePackageIds) {
+      try {
+        await api.download(id);
+      } catch (e) {
+        debugPrint('[wizard] could not queue solver database $id: $e');
+      }
+    }
+  }
+
   Future<void> _saveAndExit(WizardController controller,
       {bool finalSave = false}) async {
     if (_isSaving) return; // double-tap guard until the spinner blocks input
@@ -196,6 +215,7 @@ class _WizardShellState extends ConsumerState<WizardShell> {
     // wizard exit would race disposal and silently drop the downloads).
     if (error == null) {
       try {
+        await _queueSolverDatabases(ref.read(wizardControllerProvider).draft);
       } catch (_) {
         // truly best-effort — per-id failures are already logged inside the method
       }

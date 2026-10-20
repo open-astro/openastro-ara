@@ -42,9 +42,18 @@ namespace OpenAstroAra.PlateSolving.Solvers {
     /// </summary>
     public static class AstapStarDatabase {
 
-        /// <summary>D80 covers the usual range of fields down to roughly 0.25°; narrower fields
-        /// want the deepest database.</summary>
-        public const double NarrowFieldBelowDeg = 0.25;
+        /// <summary>Below this the deepest database (D80, 8000 stars/deg²) is the only one dense
+        /// enough; ASTAP auto-selects D80 under 0.5°.</summary>
+        public const double NarrowFieldBelowDeg = 0.5;
+
+        /// <summary>Below this a frame holds too few stars for any database: ASTAP's practical floor
+        /// (a C14 with a small guide-class sensor is ~0.05°). The wizard says so instead of
+        /// offering a download.</summary>
+        public const double SolverFloorDeg = 0.15;
+
+        /// <summary>D05 (500 stars/deg²) is enough from 1° up (ASTAP: "0.6° or larger you can
+        /// download either the D05 or D20 or D50 or D80"); between 0.5° and 1° D50 gives margin.</summary>
+        public const double D05FromDeg = 1.0;
 
         /// <summary>ASTAP's own auto-selection (astap.htm): G05 above 6°, W08 above 20°. The Data
         /// Manager recommends those packages at the same thresholds (#1136).</summary>
@@ -52,18 +61,54 @@ namespace OpenAstroAra.PlateSolving.Solvers {
 
         public const double WideFieldAboveDeg = 20.0;
 
-        // Deepest first. D80 leads the general order: it is the database the Data Manager
-        // recommends for every rig and the one sized for the usual range of fields. V50 is D50
-        // plus photometry, so it sits beside D50.
-        private static readonly string[] NarrowOrder = { "h18", "h17", "d80", "d50", "v50", "d20", "d05", "g05", "w08" };
+        // Per band, the database that ladder picks first, then the ones that still solve it. V50 is
+        // D50 plus photometry, so it sits beside D50. H17/H18 are obsolete upstream but still solve.
+        private static readonly string[] NarrowOrder = { "d80", "h18", "h17", "d50", "v50", "d20", "d05", "g05", "w08" };
 
-        private static readonly string[] GeneralOrder = { "d80", "d50", "v50", "h18", "h17", "d20", "d05", "g05", "w08" };
+        // 0.5° to 1°: D50 first (D80 solves too, slower); D05 is marginal here.
+        private static readonly string[] SubDegreeOrder = { "d50", "v50", "d80", "h18", "h17", "d20", "d05", "g05", "w08" };
 
-        // Above 6°: the 500 stars/deg² database first (a 15° field through D80 reads tens of
-        // thousands of stars for nothing); W08 is too shallow until the field is wider still.
+        // 1° to 6°: the smallest database that covers it first; the deeper ones only read more
+        // stars for the same answer.
+        private static readonly string[] GeneralOrder = { "d05", "d20", "d50", "v50", "d80", "h18", "h17", "g05", "w08" };
+
+        // Above 6°: the 500 stars/deg² wide-field database first (a 15° field through D80 reads
+        // tens of thousands of stars for nothing); W08 is too shallow until the field is wider still.
         private static readonly string[] MediumWideOrder = { "g05", "d05", "d20", "d50", "v50", "d80", "h17", "h18", "w08" };
 
         private static readonly string[] WideOrder = { "w08", "g05", "d05", "d20", "d50", "v50", "d80", "h17", "h18" };
+
+        /// <summary>The §36.10 ladder: the smallest database that covers a frame
+        /// <paramref name="fieldOfViewDeg"/> tall, as the Data Manager recommends it. Null when the
+        /// field is unknown (NaN/0) or below <see cref="SolverFloorDeg"/> (nothing solves it).</summary>
+        public static string? RecommendedFor(double fieldOfViewDeg) {
+            if (double.IsNaN(fieldOfViewDeg) || fieldOfViewDeg <= 0 || fieldOfViewDeg < SolverFloorDeg) {
+                return null;
+            }
+            return fieldOfViewDeg switch {
+                > WideFieldAboveDeg => "w08",
+                > MediumWideFieldAboveDeg => "g05",
+                >= D05FromDeg => "d05",
+                >= NarrowFieldBelowDeg => "d50",
+                _ => "d80",
+            };
+        }
+
+        /// <summary>The band name the wizard shows for a field: "all-sky", "wide", "general",
+        /// "sub-degree", "narrow", or "too narrow" below the solver floor; "unknown" for no field.</summary>
+        public static string BandFor(double fieldOfViewDeg) {
+            if (double.IsNaN(fieldOfViewDeg) || fieldOfViewDeg <= 0) {
+                return "unknown";
+            }
+            return fieldOfViewDeg switch {
+                < SolverFloorDeg => "too narrow",
+                > WideFieldAboveDeg => "all-sky",
+                > MediumWideFieldAboveDeg => "wide",
+                >= D05FromDeg => "general",
+                >= NarrowFieldBelowDeg => "sub-degree",
+                _ => "narrow",
+            };
+        }
 
         /// <summary>A database needs at least this many tile files to count as installed (#1215):
         /// an interrupted download that left one orphan tile next to a complete database must not
@@ -212,10 +257,9 @@ namespace OpenAstroAra.PlateSolving.Solvers {
 
         /// <summary>The database to pass as <c>-D</c>, or null when fewer than two are installed
         /// (ASTAP then uses the only one there is). Deterministic: the field of view picks one of
-        /// four preference orders (narrower than <see cref="NarrowFieldBelowDeg"/>: deepest
-        /// first; wider than <see cref="MediumWideFieldAboveDeg"/>: G05 first; wider than
-        /// <see cref="WideFieldAboveDeg"/>: W08 first; otherwise, or when the field is unknown,
-        /// D80 first), and the first installed entry wins. Abbreviations this list does not know
+        /// five preference orders (the ladder bands of <see cref="RecommendedFor"/>: D80 first
+        /// under 0.5°, D50 first under 1°, D05 first up to 6°, G05 first up to 20°, W08 first
+        /// above; an unknown field takes the general order), and the first installed entry wins. Abbreviations this list does not know
         /// rank after the known ones, alphabetically.</summary>
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Globalization", "CA1308:Normalize strings to uppercase", Justification = "ASTAP database abbreviations are lower-case ASCII in its file names and its -D argument; not a security decision.")]
         public static string? Select(IReadOnlyCollection<string> installed, double fieldOfViewDeg) {
@@ -224,6 +268,7 @@ namespace OpenAstroAra.PlateSolving.Solvers {
             }
             var order = fieldOfViewDeg switch {
                 > 0 and < NarrowFieldBelowDeg => NarrowOrder,
+                > 0 and < D05FromDeg => SubDegreeOrder,
                 > WideFieldAboveDeg => WideOrder,
                 > MediumWideFieldAboveDeg => MediumWideOrder,
                 _ => GeneralOrder,

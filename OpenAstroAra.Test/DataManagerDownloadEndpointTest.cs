@@ -27,6 +27,7 @@ using System.Net;
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -41,6 +42,8 @@ namespace OpenAstroAra.Test {
         private WebApplication app = null!;
         private HttpClient http = null!;
         private Mock<IDataManagerService> svc = null!;
+        private Mock<ISolverRecommender> recommender = null!;
+        private Mock<IGuiderService> guider = null!;
 
         [OneTimeSetUp]
         public async Task StartKestrel() {
@@ -59,6 +62,10 @@ namespace OpenAstroAra.Test {
             builder.Services.AddSingleton(Mock.Of<ISkyCatalogService>());
             builder.Services.AddSingleton(Mock.Of<IStorageBrowseService>());
             builder.Services.AddSingleton(Mock.Of<IStorageDeviceService>());
+            recommender = new Mock<ISolverRecommender>();
+            guider = new Mock<IGuiderService>();
+            builder.Services.AddSingleton(recommender.Object);
+            builder.Services.AddSingleton(guider.Object);
             builder.Services.AddSingleton<CaptureScanService>(_ => throw new InvalidOperationException("not used by this test"));
             builder.Services.AddSingleton<ActiveRunSessionRegistry>(_ => throw new InvalidOperationException("not used by this test"));
             builder.Services.AddProblemDetails();
@@ -95,6 +102,37 @@ namespace OpenAstroAra.Test {
             using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync());
             var detail = doc.RootElement.GetProperty("detail").GetString();
             Assert.That(detail, Does.Contain("astap-d80").And.Contain("1.7 GB").And.Contain("0.3 GB"), "the client shows this text as-is");
+        }
+
+        /// <summary>§36.10 — the wizard never knows the guide camera's sensor (the profile does not hold it), so
+        /// the endpoint fills it from the connected guider; a client that sends it, or a disconnected guider, leaves
+        /// the request as it came. The recommendation itself is the recommender's (unit-tested elsewhere).</summary>
+        [Test]
+        public async Task The_recommendation_fills_the_guide_sensor_from_the_connected_guider_when_the_client_has_none() {
+            SolverRecommendationRequestDto? seen = null;
+            recommender.Setup(r => r.Recommend(It.IsAny<SolverRecommendationRequestDto>(), It.IsAny<OpticsSettingsDto>(), It.IsAny<Phd2SettingsDto>()))
+                .Callback<SolverRecommendationRequestDto, OpticsSettingsDto, Phd2SettingsDto>((req, _, _) => seen = req)
+                .Returns(new SolverRecommendationDto(null, null, null, "unknown", [], false, "test"));
+            guider.Setup(g => g.TryGetGuideFrameSizeAsync(It.IsAny<CancellationToken>())).ReturnsAsync((1304, 976));
+
+            using var filled = await PostRecommendation("{\"focal_length_mm\":800}");
+            Assert.That(filled.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+            Assert.That((seen!.GuideSensorWidthPx, seen.GuideSensorHeightPx), Is.EqualTo((1304, 976)), "filled from the guider");
+            Assert.That(seen.FocalLengthMm, Is.EqualTo(800));
+
+            using var kept = await PostRecommendation("{\"guide_sensor_width_px\":640,\"guide_sensor_height_px\":480}");
+            Assert.That(kept.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+            Assert.That(seen!.GuideSensorHeightPx, Is.EqualTo(480), "a client-supplied sensor is never overwritten");
+
+            guider.Setup(g => g.TryGetGuideFrameSizeAsync(It.IsAny<CancellationToken>())).ReturnsAsync(((int, int)?)null);
+            using var none = await PostRecommendation("{}");
+            Assert.That(none.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+            Assert.That(seen!.GuideSensorHeightPx, Is.Null, "guider not connected → main camera only");
+        }
+
+        private async Task<HttpResponseMessage> PostRecommendation(string json) {
+            using var content = new StringContent(json, Encoding.UTF8, "application/json");
+            return await http.PostAsync(new Uri("/api/v1/data-manager/solver-recommendation", UriKind.Relative), content);
         }
 
         [Test]

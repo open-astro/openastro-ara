@@ -113,10 +113,10 @@ namespace OpenAstroAra.Test {
             Assert.That(Pick(2.0), Is.Null);
         }
 
-        [TestCase(2.0, "d80")]        // D80's range: ~0.25° up to ASTAP's 6° G05 threshold
-        [TestCase(0.25, "d80")]
+        [TestCase(2.0, "d80")]        // general band: D05/D20/D50 first, none installed here → D80
+        [TestCase(0.25, "d80")]       // narrow band: D80 first
         [TestCase(6.0, "d80")]
-        [TestCase(0.1, "h18")]        // narrower than D80: the deepest database
+        [TestCase(0.1, "d80")]        // below the floor the deepest still goes first (H18 is obsolete upstream)
         [TestCase(15.0, "g05")]       // #1136 — above 6°: G05, as ASTAP itself auto-selects
         [TestCase(30.0, "w08")]       // above 20°: the shallowest database
         [TestCase(45.0, "w08")]
@@ -128,11 +128,29 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public void Each_band_falls_back_down_its_own_order() {
-            Assert.That(Pick(2.0, "d20", "d50"), Is.EqualTo("d50"));
+            Assert.That(Pick(2.0, "d20", "d50"), Is.EqualTo("d20"), "general band: the smallest that covers it");
+            Assert.That(Pick(0.7, "d20", "d50"), Is.EqualTo("d50"), "sub-degree band: D50 first");
+            Assert.That(Pick(3.0, "d05", "d80"), Is.EqualTo("d05"));
             Assert.That(Pick(2.0, "w08", "g05"), Is.EqualTo("g05"));
             Assert.That(Pick(45.0, "w08", "d05"), Is.EqualTo("w08"));
             Assert.That(Pick(45.0, "d05", "d80"), Is.EqualTo("d05"));
             Assert.That(Pick(0.1, "d50", "d80"), Is.EqualTo("d80"));
+        }
+
+        [TestCase(45.0, "w08", "all-sky")]
+        [TestCase(15.0, "g05", "wide")]
+        [TestCase(6.0, "d05", "general")]
+        [TestCase(3.6, "d05", "general")]   // RedCat 51 + APS-C
+        [TestCase(1.0, "d05", "general")]
+        [TestCase(0.7, "d50", "sub-degree")]
+        [TestCase(0.3, "d80", "narrow")]
+        [TestCase(0.15, "d80", "narrow")]
+        [TestCase(0.05, null, "too narrow")] // C14 + ASI120MM
+        [TestCase(0.0, null, "unknown")]
+        [TestCase(double.NaN, null, "unknown")]
+        public void The_ladder_picks_the_smallest_database_that_covers_the_field(double fovDeg, string? expected, string band) {
+            Assert.That(AstapStarDatabase.RecommendedFor(fovDeg), Is.EqualTo(expected));
+            Assert.That(AstapStarDatabase.BandFor(fovDeg), Is.EqualTo(band));
         }
 
         [Test]

@@ -10,7 +10,10 @@ import 'package:openastroara/screens/wizard/wizard_shell.dart';
 import 'package:openastroara/services/profile_api.dart';
 import 'package:openastroara/state/profile_management_state.dart';
 import 'package:openastroara/state/saved_server_state.dart';
+import 'package:openastroara/state/sky_atlas/data_manager_state.dart';
 import 'package:openastroara/state/wizard_state.dart';
+
+import '../../helpers/fake_data_manager_client.dart';
 import 'package:openastroara/state/settings/autofocus_settings_state.dart';
 import 'package:openastroara/state/settings/camera_electronics_state.dart';
 import 'package:openastroara/state/settings/filter_set_state.dart';
@@ -188,6 +191,32 @@ void main() {
     expect(api.listCalls, 2,
         reason: 'a successful save invalidates + re-fetches the profile list');
   });
+
+  for (final tick in [true, false]) {
+    testWidgets('a saved profile queues the chosen star databases on the rig (ticked=$tick, §36.10)',
+        (tester) async {
+      final api = _FakeProfileApi();
+      final dm = FakeDataManagerClient();
+      final container = ProviderContainer(overrides: [
+        activeServerProvider.overrideWithValue(const AraServer(hostname: 'daemon', port: 5555)),
+        dataManagerApiProvider.overrideWithValue(dm),
+      ]);
+      addTearDown(container.dispose);
+      final draft = container.read(wizardControllerProvider).draft;
+      draft.plateSolve.solverDatabasePackageIds = ['astap-d05', 'astap-d50'];
+      draft.plateSolve.downloadSolverDatabase = tick;
+      await tester.pumpWidget(UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(home: WizardShell(createApi: (_) => api, onComplete: (_) {})),
+      ));
+      await tester.tap(find.text('Save & Exit'));
+      await tester.pump();
+      api.releaseCreate();
+      await tester.pumpAndSettle();
+      expect(dm.downloaded, tick ? ['astap-d05', 'astap-d50'] : isEmpty,
+          reason: 'ticked → both queued after the save; unticked → nothing');
+    });
+  }
 
   testWidgets('the bottom-nav Skip is gated like Next while the step is invalid',
       (tester) async {

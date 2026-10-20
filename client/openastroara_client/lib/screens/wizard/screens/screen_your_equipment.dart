@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../models/equipment_readiness.dart';
 import '../../../models/profile_draft.dart';
+import '../../../models/solver_recommendation.dart';
 import '../../../services/equipment_discovery_api.dart';
 import '../../../state/saved_server_state.dart';
 import '../../../state/settings/equipment_connection_state.dart';
@@ -792,6 +793,11 @@ class _DetailsDisclosure extends StatelessWidget {
           inputFormatters: WizardInput.unsignedDecimal,
           onChanged: (v) => _assignDouble(v, (d) => t.apertureMm = d),
         ),
+      // §36.10 — the reducer or Barlow on the imaging train. Any factor (a
+      // 0.63× SCT reducer, a 0.5× guide-scope reducer, a 2× Barlow); it sets
+      // the effective focal length, the field of view and so the star
+      // database the rig needs. Shown always: the driver never reports it.
+      _ReducerField(draft: draft),
       _StatefulDropdown<MeridianFlipBehavior>(
         label: 'Meridian flip',
         value: m.meridianFlip,
@@ -951,6 +957,112 @@ class _StatefulDropdownState<T> extends State<_StatefulDropdown<T>> {
         setState(() => _value = v ?? _value);
         widget.onChanged(v);
       },
+    );
+  }
+}
+
+/// §36.10 — the reducer / Barlow factor with quick picks, showing the effective
+/// focal length and the field of view live as the draft knows them (the camera's
+/// sensor and pixel size come from its driver on the camera card; the focal
+/// length from the mount's). Owns the text controller; the draft is the state.
+class _ReducerField extends StatefulWidget {
+  const _ReducerField({required this.draft});
+  final ProfileDraft draft;
+
+  @override
+  State<_ReducerField> createState() => _ReducerFieldState();
+}
+
+class _ReducerFieldState extends State<_ReducerField> {
+  static const _quickPicks = [0.63, 0.7, 0.8, 1.0, 2.0];
+  late final TextEditingController _ctl;
+
+  @override
+  void initState() {
+    super.initState();
+    final r = widget.draft.telescope.reducerFactor;
+    _ctl = TextEditingController(text: r == null ? '' : formatReducer(r));
+  }
+
+  @override
+  void dispose() {
+    _ctl.dispose();
+    super.dispose();
+  }
+
+  /// "0.63" / "1" / "2" — no float noise in the field or on a chip.
+  static String formatReducer(double v) {
+    var s = v.toStringAsFixed(3);
+    s = s.replaceAll(RegExp(r'0+$'), '').replaceAll(RegExp(r'\.$'), '');
+    return s;
+  }
+
+  /// "Effective focal length 2463 mm · field 1.30° × 0.87°", as far as the draft knows it.
+  String _helper() {
+    final t = widget.draft.telescope;
+    final fl = t.effectiveFocalLengthMm;
+    if (fl == null || fl <= 0) {
+      return 'Scales the focal length: 0.63 for a Celestron reducer, 2 for a 2× Barlow. 1 = none.';
+    }
+    final c = widget.draft.camera;
+    final h = fieldOfViewHeightDeg(
+        focalLengthMm: t.focalLengthMm, reducerFactor: t.reducerFactor,
+        heightPx: c.sensorHeightPx, pixelSizeUm: c.pixelSizeMicrons);
+    final w = fieldOfViewHeightDeg(
+        focalLengthMm: t.focalLengthMm, reducerFactor: t.reducerFactor,
+        heightPx: c.sensorWidthPx, pixelSizeUm: c.pixelSizeMicrons);
+    final field = (h != null && w != null)
+        ? ' · field ${w.toStringAsFixed(2)}° × ${h.toStringAsFixed(2)}°'
+        : ' · field known once the camera reports its sensor';
+    return 'Effective focal length ${fl.round()} mm$field.';
+  }
+
+  // Any real reducer or Barlow lands in 0.1–5×; outside that the entry is a
+  // typo, so the last good value stays (blank or 0 means none, 1×).
+  static const double _minFactor = 0.1;
+  static const double _maxFactor = 5;
+
+  void _set(double? v) {
+    if (v != null && v > 0 && (v < _minFactor || v > _maxFactor)) return;
+    setState(() => widget.draft.telescope.reducerFactor = (v != null && v > 0) ? v : null);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final current = widget.draft.telescope.reducerFactor ?? 1.0;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        TextField(
+          key: const ValueKey('details-mount-reducer'),
+          controller: _ctl,
+          decoration: InputDecoration(
+            labelText: 'Reducer or Barlow factor',
+            hintText: '1 = none',
+            helperText: _helper(),
+            helperMaxLines: 3,
+          ),
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          inputFormatters: WizardInput.unsignedDecimal,
+          onChanged: (v) => _set(double.tryParse(v.trim())),
+        ),
+        const SizedBox(height: 6),
+        Wrap(
+          spacing: 8,
+          children: [
+            for (final f in _quickPicks)
+              ChoiceChip(
+                key: ValueKey('details-mount-reducer-$f'),
+                label: Text('${formatReducer(f)}×'),
+                selected: (current - f).abs() < 1e-9,
+                onSelected: (_) {
+                  _ctl.text = formatReducer(f);
+                  _set(f);
+                },
+              ),
+          ],
+        ),
+      ],
     );
   }
 }

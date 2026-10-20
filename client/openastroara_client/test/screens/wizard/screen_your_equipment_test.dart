@@ -188,6 +188,38 @@ void main() {
         findsOneWidget);
   });
 
+  testWidgets('the reducer field and its quick picks write the draft and show the effective focal length (§36.10)',
+      (tester) async {
+    final byType = {
+      EquipmentDeviceType.mount: [
+        _device(EquipmentDeviceType.mount, 'mnt-1', 'iOptron CEM70'),
+      ],
+    };
+    final container = await _pump(tester, byType: byType, mount: const MountProps());
+    final draft = container.read(wizardControllerProvider).draft;
+    draft.telescope.focalLengthMm = 2032;
+    await tester.ensureVisible(find.text('Details').first);
+    await tester.tap(find.text('Details').first);
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.byKey(const ValueKey('details-mount-reducer-0.63')));
+    await tester.tap(find.byKey(const ValueKey('details-mount-reducer-0.63')));
+    await tester.pumpAndSettle();
+    expect(draft.telescope.reducerFactor, 0.63);
+    expect(find.textContaining('1280 mm'), findsOneWidget, reason: '2032 × 0.63 effective focal length');
+
+    // Any factor, not just the chips: a 2× Barlow.
+    await tester.enterText(find.byKey(const ValueKey('details-mount-reducer')), '2');
+    await tester.pumpAndSettle();
+    expect(draft.telescope.reducerFactor, 2);
+    expect(find.textContaining('4064 mm'), findsOneWidget);
+
+    // Out of range is refused and leaves the last good value.
+    await tester.enterText(find.byKey(const ValueKey('details-mount-reducer')), '9');
+    await tester.pumpAndSettle();
+    expect(draft.telescope.reducerFactor, 2);
+  });
+
   // #1298: discovery always lists the daemon's manual filter wheel, so it
   // must not count toward the one-device auto-assign or be assigned by itself.
   final manualWheel = _device(EquipmentDeviceType.filterWheel,

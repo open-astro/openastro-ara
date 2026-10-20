@@ -105,7 +105,19 @@ class TelescopeSettings {
   String? name;
   double? focalLengthMm;
   double? apertureMm;
+  // Reducer or Barlow factor on the imaging train: 1.0 = none, 0.63 for a
+  // Celestron reducer, 2.0 for a 2× Barlow. Null = untouched (keeps the base
+  // profile's value; a fresh profile then reads 1.0). It scales the effective
+  // focal length and so the field of view, the plate-solve scale, the OAG guide
+  // focal length and which star database the rig needs (§36.10).
+  double? reducerFactor;
   // Focal ratio derived from focalLengthMm / apertureMm when both set.
+
+  double get effectiveReducer =>
+      (reducerFactor != null && reducerFactor! > 0) ? reducerFactor! : 1.0;
+
+  double? get effectiveFocalLengthMm =>
+      focalLengthMm == null ? null : focalLengthMm! * effectiveReducer;
 }
 
 class CameraSettings {
@@ -116,6 +128,11 @@ class CameraSettings {
   int? defaultOffset;
   int? defaultBin;
   double? pixelSizeMicrons;
+  // Sensor size in pixels, from the camera's Alpaca driver (the equipment
+  // step's read facts); null until a camera has reported. With the pixel size
+  // and the telescope's effective focal length this gives the field of view.
+  int? sensorWidthPx;
+  int? sensorHeightPx;
   // NEXTGEN §4 — the two electronics values ASCOM never reports (spec-sheet
   // numbers), so a fresh setup ends exposure-planning-ready without a Settings
   // detour. QE is entered as a percent (0–100); the profile stores a fraction.
@@ -190,6 +207,10 @@ class GuiderSettings {
   String? setupType;
   int? guideFocalLengthMm;
   double? guidePixelSizeUm;
+  // §36.10 — the guide camera's frame size when the guider has reported it;
+  // null = unknown (the daemon asks the connected guider instead).
+  int? guideSensorWidthPx;
+  int? guideSensorHeightPx;
   double ditherPixels = 5.0;
   double settleThresholdPx = 1.5;
   Duration settleDuration = const Duration(seconds: 10);
@@ -221,6 +242,12 @@ class PlateSolveSettings {
   // screen shows 30 / 2 as defaults but only writes on user input.
   double? searchRadiusDeg;
   int? downsampleFactor;
+  // §36.10 — the ASTAP database(s) the fifth screen recommended for this rig
+  // (one per camera whose field is known, not yet installed) and whether to
+  // download them on the rig after Save (default yes). Empty = nothing to
+  // fetch (field unknown, too narrow to solve, or already installed).
+  List<String> solverDatabasePackageIds = const [];
+  bool downloadSolverDatabase = true;
 }
 
 class AutofocusSettings {

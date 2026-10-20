@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/catalog_object.dart';
 import 'package:openastroara/models/data_package.dart';
+import 'package:openastroara/models/solver_recommendation.dart';
 import 'package:openastroara/models/server.dart';
 import 'package:openastroara/services/data_manager_api.dart';
 import 'package:openastroara/services/saved_server_service.dart';
@@ -32,6 +33,10 @@ class _FakeDataManagerClient implements DataManagerClient {
 
   @override
   Future<List<DataPackage>> listPackages() async => packages;
+
+  @override
+  Future<SolverRecommendation> solverRecommendation(SolverRecommendationRequest request) async =>
+      const SolverRecommendation();
   @override
   Future<String> download(String packageId, {bool forceReinstall = false}) async {
     downloaded.add(packageId);

@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 
 import '../models/catalog_object.dart';
 import '../models/data_package.dart';
+import '../models/solver_recommendation.dart';
 import '../models/server.dart';
 
 /// The §36 Data Manager operations the state layer depends on. An interface so
@@ -10,6 +11,11 @@ import '../models/server.dart';
 abstract interface class DataManagerClient {
   /// The curated package catalog with on-disk install state.
   Future<List<DataPackage>> listPackages();
+
+  /// `POST /api/v1/data-manager/solver-recommendation` — which ASTAP star
+  /// database(s) this rig needs (§36.10), from the optics the wizard holds;
+  /// the daemon fills anything missing from the active profile.
+  Future<SolverRecommendation> solverRecommendation(SolverRecommendationRequest request);
 
   /// Start a download. Returns the download id (the accepted operation's id),
   /// used to [cancel] it. A non-force request for an already-installed package
@@ -71,6 +77,19 @@ class DataManagerApi implements DataManagerClient {
               sendTimeout: const Duration(seconds: 5),
               receiveTimeout: const Duration(seconds: 12),
             ));
+
+  @override
+  Future<SolverRecommendation> solverRecommendation(SolverRecommendationRequest request) async {
+    final res = await _dio.post<dynamic>(
+      '/api/v1/data-manager/solver-recommendation',
+      data: request.toJson(),
+    );
+    final data = res.data;
+    if (data is! Map<String, dynamic>) {
+      throw FormatException('solver-recommendation returned a non-object body (${data.runtimeType})');
+    }
+    return SolverRecommendation.fromJson(data);
+  }
 
   @override
   Future<List<DataPackage>> listPackages() async {

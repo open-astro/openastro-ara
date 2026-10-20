@@ -46,7 +46,7 @@ namespace OpenAstroAra.Server.Services {
     /// Each package installs into <c>{dataRoot}/{packageId}/</c>. Only catalog ids map to a directory,
     /// so a caller-supplied <c>packageId</c> can never escape the data root (no path traversal).
     /// </summary>
-    public sealed partial class DataManagerService : IDataManagerService, IHostedService {
+    public sealed partial class DataManagerService : IDataManagerService, ISolverRecommender, IHostedService {
 
         /// <summary>
         /// The canonical file name a bare-CSV catalog package installs as, so the §36 catalog consumer can read
@@ -207,11 +207,12 @@ namespace OpenAstroAra.Server.Services {
             // solver index path (Options → Plate solving), one subdirectory per package, where ASTAPSolver and
             // AstapStarDatabase find them (DirectoryFor). Too large to ship as .deb seeds, so the seed manifest
             // exempts the "solver" category. Recommended is computed per profile from the field of view (Describe):
-            // D80 for every rig, G05 above 6°, W08 above 20° — ASTAP's own auto-selection thresholds.
+            // the §36.10 ladder (AstapStarDatabase.RecommendedFor): the smallest database that covers the
+            // rig's narrowest solved field — W08 above 20°, G05 above 6°, D05 from 1°, D50 from 0.5°, D80 below.
             new DataPackageDto(
                 Id: "astap-d80",
                 Name: "ASTAP D80 star database",
-                Description: "Gaia DR3 to 8000 stars per square degree — the plate-solver database for the usual range of fields (down to ~0.25°). 1.3 GB on disk.",
+                Description: "Gaia DR3 to 8000 stars per square degree — the deepest database, for fields narrower than 0.5° (long focal lengths on small sensors). 1.3 GB on disk.",
                 Category: SolverCategory,
                 // Uncompressed size of the 1476 tiles (the extraction ceiling is +25%).
                 SizeBytes: 1_332_217_055,
@@ -219,7 +220,29 @@ namespace OpenAstroAra.Server.Services {
                 IsInstalled: false,
                 InstalledUtc: null,
                 SourceUrl: new Uri("https://github.com/open-astro/sky-data/releases/download/astap-2026.10/astap-d80.tar.gz"),
-                Recommended: true),
+                Recommended: false),
+            new DataPackageDto(
+                Id: "astap-d05",
+                Name: "ASTAP D05 star database",
+                Description: "Gaia DR3 to 500 stars per square degree — the plate-solver database for fields of 1° and wider (most refractors and lenses). 109 MB on disk.",
+                Category: SolverCategory,
+                SizeBytes: 108_830_225,
+                Version: "2026.10",
+                IsInstalled: false,
+                InstalledUtc: null,
+                SourceUrl: new Uri("https://github.com/open-astro/sky-data/releases/download/astap-2026.10/astap-d05.tar.gz"),
+                Recommended: false),
+            new DataPackageDto(
+                Id: "astap-d50",
+                Name: "ASTAP D50 star database",
+                Description: "Gaia DR3 to 5000 stars per square degree — for fields between 0.5° and 1° (long focal lengths on mid-size sensors). 0.95 GB on disk.",
+                Category: SolverCategory,
+                SizeBytes: 951_326_950,
+                Version: "2026.10",
+                IsInstalled: false,
+                InstalledUtc: null,
+                SourceUrl: new Uri("https://github.com/open-astro/sky-data/releases/download/astap-2026.10/astap-d50.tar.gz"),
+                Recommended: false),
             new DataPackageDto(
                 Id: "astap-g05",
                 Name: "ASTAP G05 wide-field star database",
@@ -265,6 +288,8 @@ namespace OpenAstroAra.Server.Services {
                 ["wr-stars"] = "cf6d56f0055d2ac5e336322f26ef3f261bf7dd18c375a5a263c87e3f4fca9caa",
                 // #1136 — the sky-data release astap-2026.10 assets (its SHA256SUMS asset lists the same values).
                 ["astap-d80"] = "397b267181d3f5d742e1bb220ad3ab3629e12141f365f30f6ea5b54c8f797bfc",
+                ["astap-d05"] = "7936db10c8478612d952620b7f368f1a3cb261e1750ba9f082fba657fd53a977",
+                ["astap-d50"] = "5dbddf1a942f98ffe85daa46d79bfa84bd981e3c1500ed9d35650fbc2dce2cef",
                 ["astap-g05"] = "515f5ce998a3ec9c807199e3ee8258e0ce098b8bebf0b60e1c820928f0834c64",
                 ["astap-w08"] = "ba09f32dad097c415c88b416e264f3e2eb1dbbc8266b13753ea2221fe658a911",
             };
@@ -276,29 +301,99 @@ namespace OpenAstroAra.Server.Services {
 
         internal static bool IsSolverPackage(DataPackageDto pkg) => string.Equals(pkg.Category, SolverCategory, StringComparison.Ordinal);
 
-        /// <summary>Whether a solver database package is recommended for a rig whose frame is
-        /// <paramref name="fieldOfViewDeg"/> tall (null = optics unknown): D80 for every rig; G05 and W08 at
-        /// ASTAP's own auto-selection thresholds (<see cref="AstapStarDatabase.MediumWideFieldAboveDeg"/>,
-        /// <see cref="AstapStarDatabase.WideFieldAboveDeg"/>). Unknown ids keep their curated flag.</summary>
-        internal static bool RecommendedSolverPackage(DataPackageDto pkg, double? fieldOfViewDeg) => pkg.Id switch {
-            "astap-d80" => true,
-            "astap-g05" => fieldOfViewDeg is { } g && g > AstapStarDatabase.MediumWideFieldAboveDeg,
-            "astap-w08" => fieldOfViewDeg is { } w && w > AstapStarDatabase.WideFieldAboveDeg,
-            _ => pkg.Recommended,
-        };
+        /// <summary>Whether a solver database package is the §36.10 ladder's pick for a rig whose narrowest
+        /// solved frame is <paramref name="fieldOfViewDeg"/> tall (<see cref="AstapStarDatabase.RecommendedFor"/>:
+        /// the smallest database that covers it). Null (optics unknown) recommends nothing: the wizard asks for
+        /// the optics first. Non-solver ids keep their curated flag.</summary>
+        internal static bool RecommendedSolverPackage(DataPackageDto pkg, double? fieldOfViewDeg) {
+            if (!IsSolverPackage(pkg)) {
+                return pkg.Recommended;
+            }
+            var pick = fieldOfViewDeg is { } fov ? AstapStarDatabase.RecommendedFor(fov) : null;
+            return pick is not null && string.Equals(pkg.Id, "astap-" + pick, StringComparison.Ordinal);
+        }
+
+        /// <summary>The frame height in degrees for any optics: <c>206.265 × pixel / (focal length × reducer)</c>
+        /// arcsec per pixel times the sensor height. Null until every input is set and positive.</summary>
+        internal static double? FieldOfViewHeightDeg(double? focalLengthMm, double? reducerFactor, int? sensorHeightPx, double? pixelSizeUm) {
+            if (focalLengthMm is not > 0 || sensorHeightPx is not > 0 || pixelSizeUm is not > 0) {
+                return null;
+            }
+            var reducer = reducerFactor is > 0 ? reducerFactor.Value : 1.0;
+            var deg = 206.265 * pixelSizeUm.Value / (focalLengthMm.Value * reducer) * sensorHeightPx.Value / 3600.0;
+            return double.IsFinite(deg) && deg > 0 ? deg : null;
+        }
+
+        /// <summary>§36.10 — the database to offer a rig, from the narrower of its main and guide fields
+        /// (polar alignment solves guide-camera frames). The request's values win; anything missing falls
+        /// back to the profile (<paramref name="optics"/>, <paramref name="guider"/>). Pure, so the wizard
+        /// can ask before the profile is saved.</summary>
+        public SolverRecommendationDto Recommend(SolverRecommendationRequestDto request, OpticsSettingsDto? optics, Phd2SettingsDto? guider) {
+            ArgumentNullException.ThrowIfNull(request);
+            var main = FieldOfViewHeightDeg(
+                request.FocalLengthMm ?? optics?.FocalLengthMm,
+                request.ReducerFactor ?? optics?.ReducerFactor,
+                request.SensorHeightPx ?? optics?.SensorHeightPx,
+                request.PixelSizeUm ?? optics?.PixelSizeUm);
+            // The guide field only counts when its sensor size is known (the profile never holds it). An OAG
+            // guide camera looks through the main optics (focal length × reducer); a guide scope has its own.
+            var setupType = (request.GuideSetupType ?? guider?.GuiderSetupType ?? "guide_scope").Trim().ToLowerInvariant();
+            var mainFocal = request.FocalLengthMm ?? optics?.FocalLengthMm;
+            var mainReducer = request.ReducerFactor ?? optics?.ReducerFactor;
+            double? guideFocal = setupType == "oag"
+                ? (mainFocal is > 0 ? mainFocal.Value * (mainReducer is > 0 ? mainReducer.Value : 1.0) : null)
+                : request.GuideFocalLengthMm ?? (guider?.GuideFocalLength > 0 ? guider.GuideFocalLength : null);
+            var guide = FieldOfViewHeightDeg(
+                guideFocal,
+                1.0,
+                request.GuideSensorHeightPx,
+                request.GuidePixelSizeUm ?? (guider?.GuidePixelSize > 0 ? guider.GuidePixelSize : null));
+            var picks = new List<SolverDatabasePickDto>();
+            if (main is { } m) {
+                picks.Add(Pick("camera", m));
+            }
+            if (guide is { } g) {
+                var gp = Pick("guide camera", g);
+                // One download when both cameras land on the same database; the guide role still says why.
+                if (!picks.Any(p => p.PackageId is not null && p.PackageId == gp.PackageId)) {
+                    picks.Add(gp);
+                }
+            }
+            double? narrowest = (main, guide) switch {
+                ({ } a, { } b) => Math.Min(a, b),
+                ({ } a, null) => a,
+                (null, { } b) => b,
+                _ => null,
+            };
+            if (narrowest is null) {
+                return new SolverRecommendationDto(main, guide, null, "unknown", picks, TooNarrow: false,
+                    Reason: "The field of view is not known yet: set the focal length, the camera's pixel size and sensor size first.");
+            }
+            var tooNarrow = picks.Any(p => p.TooNarrow);
+            var reason = string.Join(" ", picks.Select(p => p.Reason));
+            return new SolverRecommendationDto(main, guide, narrowest, AstapStarDatabase.BandFor(narrowest.Value), picks, tooNarrow, reason);
+        }
+
+        private SolverDatabasePickDto Pick(string role, double fovDeg) {
+            var band = AstapStarDatabase.BandFor(fovDeg);
+            var pick = AstapStarDatabase.RecommendedFor(fovDeg);
+            if (pick is null) {
+                return new SolverDatabasePickDto(role, fovDeg, band, null, null, 0, false, TooNarrow: true,
+                    Reason: $"The {role}'s field ({fovDeg:0.00}°) is below the solver's floor of {AstapStarDatabase.SolverFloorDeg:0.00}°: a frame that small holds too few stars for any database. Use a reducer or a wider camera for alignment.");
+            }
+            var id = "astap-" + pick;
+            var pkg = _catalog.FirstOrDefault(p => p.Id == id);
+            var dir = pkg is null ? null : PackageDir(id);
+            var installed = dir is not null && ReadInstall(dir) is not null;
+            return new SolverDatabasePickDto(role, fovDeg, band, id, pkg?.Name ?? id, pkg?.SizeBytes ?? 0, installed, TooNarrow: false,
+                Reason: $"The {role}'s field is {fovDeg:0.00}° ({band}): {pick.ToUpperInvariant()} is the smallest database that covers it.");
+        }
 
         /// <summary>The frame height in degrees from the profile's optics, the same quantity the solver passes
         /// as <c>-fov</c> (<c>PlateSolveImageProperties.FoVH</c>); null until focal length, pixel size and sensor
         /// height are all set. The reducer factor applies when positive (1.0 = none).</summary>
-        internal static double? FieldOfViewHeightDeg(OpticsSettingsDto? optics) {
-            if (optics is null || optics.FocalLengthMm <= 0 || optics.PixelSizeUm <= 0 || optics.SensorHeightPx <= 0) {
-                return null;
-            }
-            var reducer = optics.ReducerFactor > 0 ? optics.ReducerFactor : 1.0;
-            var arcsecPerPixel = 206.265 * optics.PixelSizeUm / (optics.FocalLengthMm * reducer);
-            var deg = arcsecPerPixel * optics.SensorHeightPx / 3600.0;
-            return double.IsFinite(deg) && deg > 0 ? deg : null;
-        }
+        internal static double? FieldOfViewHeightDeg(OpticsSettingsDto? optics) =>
+            optics is null ? null : FieldOfViewHeightDeg(optics.FocalLengthMm, optics.ReducerFactor, optics.SensorHeightPx, optics.PixelSizeUm);
 
         /// <summary>A `.tar.gz`/`.tgz` archive package — installed via the tar-extraction path.</summary>
         internal static bool IsArchiveFormat(Uri url) =>

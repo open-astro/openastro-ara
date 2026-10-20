@@ -242,6 +242,9 @@ public interface IFlatDeviceService {
 
 public interface IGuiderService {
     Task<GuiderDto?> GetAsync(CancellationToken ct);
+    /// <summary>§36.10 — the guide camera's frame size from the connected guider, or null when the guider or
+    /// its camera is not connected (the profile never holds it; polar alignment reads the same RPC).</summary>
+    Task<(int Width, int Height)?> TryGetGuideFrameSizeAsync(CancellationToken ct);
     Task<OperationAcceptedDto> ConnectAsync(GuiderConnectRequestDto request, string? idempotencyKey, CancellationToken ct);
     Task<OperationAcceptedDto> DisconnectAsync(string? idempotencyKey, CancellationToken ct);
     Task<OperationAcceptedDto> StartGuidingAsync(string? idempotencyKey, CancellationToken ct);

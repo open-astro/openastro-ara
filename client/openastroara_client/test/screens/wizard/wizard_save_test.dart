@@ -71,7 +71,21 @@ void main() {
       final out = applyDraftToOptics(base, d);
       expect(out.focalLengthMm, 714);
       expect(out.pixelSizeUm, 3.76);
-      expect(out.reducerFactor, 0.8, reason: 'reducer is not a wizard field');
+      expect(out.reducerFactor, 0.8, reason: 'an unset wizard reducer keeps the profile value');
+    });
+
+    test('applyDraftToOptics maps the reducer factor and the camera sensor size (§36.10)', () {
+      final d = ProfileDraft();
+      d.telescope.focalLengthMm = 2032;
+      d.telescope.reducerFactor = 0.63;
+      d.camera.sensorWidthPx = 1280;
+      d.camera.sensorHeightPx = 960;
+      const base = OpticsSettings(reducerFactor: 1.0);
+      final out = applyDraftToOptics(base, d);
+      expect(out.reducerFactor, 0.63);
+      expect(out.sensorWidthPx, 1280);
+      expect(out.sensorHeightPx, 960);
+      expect(d.telescope.effectiveFocalLengthMm, closeTo(1280.16, 0.01));
     });
 
     test('applyDraftToImaging maps camera fields + warmup enum→bool', () {
