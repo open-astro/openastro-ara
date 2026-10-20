@@ -304,8 +304,6 @@ class ConfigureStorageSwitch(HelperRig):
         self.assertEqual(self.mounted(), [self.OLD[1]])
 
 
-if __name__ == "__main__":
-    unittest.main()
 
 
 class ConfigureStorageCopyTarget(HelperRig):
@@ -388,3 +386,7 @@ echo "$dev $1" >> "$SHIM_DIR/mounts"
         self.assertEqual(result.returncode, 8, result.stdout + result.stderr)
         self.assertIn("ERROR: mount_failed wrong_device", result.stdout)
         self.assertNotIn(self.NEW[1], self.mounted(), "the rejected drive was remounted as the store")
+
+
+if __name__ == "__main__":
+    unittest.main()

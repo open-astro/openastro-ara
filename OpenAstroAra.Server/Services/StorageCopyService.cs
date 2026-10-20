@@ -191,7 +191,10 @@ public sealed partial class StorageCopyService : IStorageCopyService, IDisposabl
         if (string.IsNullOrWhiteSpace(folder)) {
             return null;
         }
-        var full = Path.GetFullPath(Path.IsPathRooted(folder) ? folder : Path.Combine(sourceRoot, folder));
+        // A trailing separator ("/media/openastroara/") would otherwise miss the root check
+        // below and relativise to ".".
+        var full = Path.TrimEndingDirectorySeparator(
+            Path.GetFullPath(Path.IsPathRooted(folder) ? folder : Path.Combine(sourceRoot, folder)));
         if (full == sourceRoot) {
             return string.Empty;
         }

@@ -139,6 +139,15 @@ public class StorageCopyServiceTest {
     }
 
     [Test]
+    public async Task The_store_root_with_a_trailing_slash_is_the_whole_store() {
+        Put("night/a.fits");
+        var status = await RunToEnd(Svc, "6EF6-FD21", store + Path.DirectorySeparatorChar).ConfigureAwait(false);
+        Assert.That(status.State, Is.EqualTo("done"));
+        Assert.That(status.Folders, Is.Empty, "reads as the whole store, not \".\"");
+        Assert.That(status.FilesCopied, Is.EqualTo(1));
+    }
+
+    [Test]
     public void A_folder_off_the_store_is_refused() {
         Put("night/a.fits");
         var svc = Svc;
