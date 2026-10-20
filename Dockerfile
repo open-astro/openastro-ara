@@ -29,13 +29,16 @@
 # fine on Debian-host containers.
 FROM mcr.microsoft.com/dotnet/runtime-deps:10.0-noble-chiseled-arm64v8
 
-WORKDIR /app
+# /opt/openastroara, not /app: the profile default solver path is the absolute
+# /opt/openastroara/astap_cli (SolverPathMigration.AstapCliPath, the same directory the
+# .deb installs to), and the image copies astap_cli next to the daemon below.
+WORKDIR /opt/openastroara
 COPY publish/arm64/ ./
 # Natives guard — see the header. Re-copying the same files is a no-op in the
 # image; a publish dir that skipped scripts/build-astrometry-natives.sh fails here.
 COPY publish/arm64/liberfa.so publish/arm64/libsupernovas.so ./
 # Same guard for the bundled ASTAP solver (scripts/build-astap-cli.sh): the profile's default
-# solver path is <daemon dir>/astap_cli, so an image without it fails every plate solve.
+# solver path is /opt/openastroara/astap_cli, so an image without it fails every plate solve.
 COPY publish/arm64/astap_cli ./
 
 # Default Kestrel port per OpenAstroAra.Server/Program.cs ResolvePort:

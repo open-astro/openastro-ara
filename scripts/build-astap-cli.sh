@@ -6,8 +6,8 @@
 # blind solve from 12 s to 4 s against the stock binary; with ASTAP_THREADS=1 (or -threads 1)
 # the output is bit-identical to upstream. MPL-2.0, see NOTICE.md.
 #
-# The daemon runs it as <publish dir>/astap_cli (the .deb installs it at
-# /opt/openastroara/astap_cli, the Docker image at /app/astap_cli), passing the profile's star
+# The daemon runs it as /opt/openastroara/astap_cli (the .deb and the Docker image both put
+# the daemon directory there; scripts/tests/test_astap_cli_bundle_guards.py pins it), passing the profile's star
 # database directory with -d. The database itself (D80 and friends) is still the user's download
 # (docs/DEPLOY.md step 3).
 #
@@ -29,6 +29,9 @@ if [ ! -f "$SRC/astap_command_line.lpr" ]; then
 fi
 FPC="${FPC:-fpc}"
 command -v "$FPC" > /dev/null || { echo "error: Free Pascal compiler '$FPC' not found (apt install fpc)" >&2; exit 2; }
+# Debian's fpc is unpinned: record which compiler produced the binary so a codegen change after a
+# distro bump can be read off the build log.
+echo "fpc $("$FPC" -iV) for $("$FPC" -iTP)-$("$FPC" -iTO)"
 
 # Per-arch tuning mirrors the project's astap_command_line_linux_<arch>.lpi files: -O3 everywhere,
 # ARMv8 code generation on aarch64. Everything else is what lazbuild derives from the .lpi
