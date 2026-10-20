@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/guider_twin.dart';
@@ -175,6 +177,40 @@ void main() {
     expect(_checkbox(tester).value, isTrue);
     expect(find.textContaining('It will be deleted once guiding stops'),
         findsOneWidget);
+  });
+
+  testWidgets('Delete waits for the preview so the guider choice is never skipped',
+      (tester) async {
+    final gate = Completer<GuiderTwinPreview?>();
+    DeleteProfileChoice? choice;
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: Builder(builder: (context) {
+          return TextButton(
+            onPressed: () async {
+              choice = await showDeleteProfileDialog(context,
+                  name: 'Travel Rig',
+                  isActive: false,
+                  isLast: false,
+                  preview: () => gate.future);
+            },
+            child: const Text('open'),
+          );
+        }),
+      ),
+    ));
+    await tester.tap(find.text('open'));
+    await tester.pump();
+    expect(find.text('Checking the guider…'), findsOneWidget);
+    expect(tester.widget<FilledButton>(find.widgetWithText(FilledButton, 'Delete')).onPressed,
+        isNull);
+    gate.complete(_twin);
+    await tester.pumpAndSettle();
+    expect(tester.widget<FilledButton>(find.widgetWithText(FilledButton, 'Delete')).onPressed,
+        isNotNull);
+    await tester.tap(find.widgetWithText(FilledButton, 'Delete'));
+    await tester.pumpAndSettle();
+    expect(choice?.deleteGuiderProfile, isTrue);
   });
 
   testWidgets('no preview at all (old daemon): nothing about the guider',

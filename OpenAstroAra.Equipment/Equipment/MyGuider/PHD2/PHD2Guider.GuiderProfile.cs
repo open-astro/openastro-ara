@@ -512,9 +512,12 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
         private async Task<bool> IsPHD2EquipmentConnectedAsync() {
             var resp = await SendMessage(new Phd2GetConnected(), EquipmentRpcTimeoutMs).ConfigureAwait(false);
             if (resp?.error != null || resp?.result is null) {
-                return false;
+                // Unknown reads as connected: a needless set_connected(false) on released equipment is
+                // harmless, while skipping the release on connected equipment makes the daemon refuse
+                // the delete (and a drained entry would be dropped as refused).
+                return true;
             }
-            return resp.result is bool b ? b : bool.TryParse(resp.result.ToString(), out var parsed) && parsed;
+            return resp.result is bool b ? b : !bool.TryParse(resp.result.ToString(), out var parsed) || parsed;
         }
     }
 

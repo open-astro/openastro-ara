@@ -18,6 +18,7 @@ using OpenAstroAra.Server.Contracts;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -119,15 +120,14 @@ public sealed partial class GuiderService {
         var names = TwinNames(araProfileName, araProfileId);
         var guider = ConnectedGuiderOrNull();
         if (guider is null) {
-            Enqueue(araProfileId, araProfileName, names, deleteDarkFiles);
             LogGuiderProfileDeleteQueued(names[0], "no guider connected");
-            return new GuiderTwinDeleteOutcome(GuiderTwinDeleteStatus.Queued, "No guider is connected. It will be deleted the next time the guider connects.");
+            return Queued(araProfileId, araProfileName, names, deleteDarkFiles,
+                "No guider is connected. It will be deleted the next time the guider connects.");
         }
         if (GuiderHeldReason() is { } held) {
             // Same rule as the idle drain: a Stopped guider under a run is still the run's.
-            Enqueue(araProfileId, araProfileName, names, deleteDarkFiles);
             LogGuiderProfileDeleteQueued(names[0], "the guider's equipment is held by a run or an alignment");
-            return new GuiderTwinDeleteOutcome(GuiderTwinDeleteStatus.Queued, held);
+            return Queued(araProfileId, araProfileName, names, deleteDarkFiles, held);
         }
         try {
             await _twinDeleteLock.WaitAsync(ct).ConfigureAwait(false);
@@ -141,9 +141,8 @@ public sealed partial class GuiderService {
                         _twinDeleteQueue?.Remove(araProfileId);
                         return new GuiderTwinDeleteOutcome(GuiderTwinDeleteStatus.NotFound, null);
                     case GuiderProfileDeleteKind.Busy:
-                        Enqueue(araProfileId, araProfileName, names, deleteDarkFiles);
                         LogGuiderProfileDeleteQueuedBusy(names[0], result.Detail);
-                        return new GuiderTwinDeleteOutcome(GuiderTwinDeleteStatus.Queued, BusyReason(result.Detail));
+                        return Queued(araProfileId, araProfileName, names, deleteDarkFiles, BusyReason(result.Detail));
                     default:
                         LogGuiderProfileDeleteRefused(names[0], result.Detail ?? "(no reason given)");
                         return new GuiderTwinDeleteOutcome(GuiderTwinDeleteStatus.Failed, result.Detail ?? "The guider refused to delete the profile.");
@@ -154,9 +153,9 @@ public sealed partial class GuiderService {
         } catch (OperationCanceledException) {
             // The caller's bound ran out (the daemon took too long) — the delete is not lost, it waits
             // for the next connect or idle drain.
-            Enqueue(araProfileId, araProfileName, names, deleteDarkFiles);
             LogGuiderProfileDeleteQueued(names[0], "the guider did not answer in time");
-            return new GuiderTwinDeleteOutcome(GuiderTwinDeleteStatus.Queued, "The guider did not answer in time. It will be deleted once the guider is free.");
+            return Queued(araProfileId, araProfileName, names, deleteDarkFiles,
+                "The guider did not answer in time. It will be deleted once the guider is free.");
         } catch (Exception ex) {
             LogGuiderProfileDeleteFailed(ex, names[0]);
             return new GuiderTwinDeleteOutcome(GuiderTwinDeleteStatus.Failed, ex.Message);
@@ -171,16 +170,25 @@ public sealed partial class GuiderService {
         }
     }
 
-    private void Enqueue(Guid araProfileId, string? araProfileName, IReadOnlyList<string> names, bool deleteDarkFiles) {
+    /// <summary>Queue the delete and answer Queued — or Failed when the queue file cannot be written
+    /// (SD card full, read-only filesystem): the ARA profile is already gone, so the contract's "never
+    /// throws" holds and the user learns the twin stays.</summary>
+    private GuiderTwinDeleteOutcome Queued(Guid araProfileId, string? araProfileName, IReadOnlyList<string> names, bool deleteDarkFiles, string reason) {
         if (_twinDeleteQueue is null) {
             LogGuiderProfileDeleteSkipped(names[0]);
-            return;
+            return new GuiderTwinDeleteOutcome(GuiderTwinDeleteStatus.Queued, reason);
         }
         // The user ticked the box knowing another ARA profile shares the twin (the dialog says so):
         // the queued delete must do what the immediate one would have, so the drain must not read
         // the survivor as "a live profile maps to it again".
         var shared = LiveTwinNames().Any(l => SameTwin(l, names[0]));
-        _twinDeleteQueue.Add(new PendingGuiderTwinDelete(araProfileId, araProfileName, names, deleteDarkFiles, DateTimeOffset.UtcNow, shared));
+        try {
+            _twinDeleteQueue.Add(new PendingGuiderTwinDelete(araProfileId, araProfileName, names, deleteDarkFiles, DateTimeOffset.UtcNow, shared));
+        } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
+            LogGuiderProfileDeleteFailed(ex, names[0]);
+            return new GuiderTwinDeleteOutcome(GuiderTwinDeleteStatus.Failed, $"The guider profile could not be queued for deletion: {ex.Message}");
+        }
+        return new GuiderTwinDeleteOutcome(GuiderTwinDeleteStatus.Queued, reason);
     }
 
     private List<string> LiveTwinNames() =>

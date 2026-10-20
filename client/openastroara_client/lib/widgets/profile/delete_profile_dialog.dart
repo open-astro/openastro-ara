@@ -137,8 +137,12 @@ class _DeleteProfileDialogState extends State<DeleteProfileDialog> {
             child: const Text('Cancel')),
         FilledButton(
           style: FilledButton.styleFrom(backgroundColor: AraColors.accentError),
-          onPressed: () => Navigator.of(context).pop(DeleteProfileChoice(
-              deleteGuiderProfile: _offerGuider && _deleteGuider)),
+          // Delete waits for the preview: a tap before it lands would silently
+          // keep the guider profile the box is about to offer (default on).
+          onPressed: _loading
+              ? null
+              : () => Navigator.of(context).pop(DeleteProfileChoice(
+                  deleteGuiderProfile: _offerGuider && _deleteGuider)),
           child: const Text('Delete'),
         ),
       ],
