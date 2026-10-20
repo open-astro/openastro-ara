@@ -241,7 +241,7 @@ public sealed class InMemoryProfileStore : IProfileStore {
     // Defaults match PlateSolveSettings() constructor.
     private PlateSolveSettingsDto _plateSolve = new(
         Engine: "astap",
-        PathOrEndpoint: "/usr/bin/astap_cli", // Debian's astap-cli package (a .deb Depends since #1094)
+        PathOrEndpoint: SolverPathMigration.AstapCliPath, // the multi-core solver bundled with the daemon
         IndexDownloadPath: "/var/lib/astap",
         SearchRadiusDeg: 30.0,
         DownsampleFactor: 0, // 0 = auto from the pixel scale (#1136)

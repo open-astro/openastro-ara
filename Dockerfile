@@ -34,6 +34,9 @@ COPY publish/arm64/ ./
 # Natives guard — see the header. Re-copying the same files is a no-op in the
 # image; a publish dir that skipped scripts/build-astrometry-natives.sh fails here.
 COPY publish/arm64/liberfa.so publish/arm64/libsupernovas.so ./
+# Same guard for the bundled ASTAP solver (scripts/build-astap-cli.sh): the profile's default
+# solver path is <daemon dir>/astap_cli, so an image without it fails every plate solve.
+COPY publish/arm64/astap_cli ./
 
 # Default Kestrel port per OpenAstroAra.Server/Program.cs ResolvePort:
 # env OPENASTROARA_PORT > appsettings OpenAstroAra:Port > 5555 default.

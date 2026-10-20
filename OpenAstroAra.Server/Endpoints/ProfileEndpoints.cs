@@ -567,7 +567,7 @@ public static class ProfileEndpoints {
     }
 
     /// <summary>#1215 — <c>PUT /profile/plate-solve</c> echoes what the store HOLDS, not the body as
-    /// typed: the normalizer's <c>/usr/bin/astap</c> → <c>/usr/bin/astap_cli</c> migration runs on the
+    /// typed: the normalizer's stock-solver-path → bundled <c>astap_cli</c> migration runs on the
     /// write path, and a client that adopts the echo (the settings panels do) kept showing the typed
     /// path. Extracted so the echo rule is unit-testable with a real store.</summary>
     internal static IResult PutPlateSolveSettings(PlateSolveSettingsDto body, IProfileStore store) {

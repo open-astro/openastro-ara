@@ -78,10 +78,10 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void Fresh_defaults_point_at_debians_astap_cli() {
+        public void Fresh_defaults_point_at_the_bundled_astap_cli() {
             var store = new InMemoryProfileStore();
-            Assert.That(store.GetPlateSolveSettings().PathOrEndpoint, Is.EqualTo("/usr/bin/astap_cli"));
-            Assert.That(ProfileSnapshotNormalizer.Defaults.PlateSolve.PathOrEndpoint, Is.EqualTo("/usr/bin/astap_cli"));
+            Assert.That(store.GetPlateSolveSettings().PathOrEndpoint, Is.EqualTo(SolverPathMigration.AstapCliPath));
+            Assert.That(ProfileSnapshotNormalizer.Defaults.PlateSolve.PathOrEndpoint, Is.EqualTo(SolverPathMigration.AstapCliPath));
         }
     }
 }

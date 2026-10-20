@@ -36,6 +36,10 @@ SOURCE_TREE="$SCRIPT_DIR/debian"
 for lib in liberfa.so libsupernovas.so; do
   [ -f "$PUBLISH_DIR/$lib" ] || { echo "error: $lib not found in $PUBLISH_DIR — run 'CC=aarch64-linux-gnu-gcc scripts/build-astrometry-natives.sh $PUBLISH_DIR' first" >&2; exit 1; }
 done
+# The bundled multi-core ASTAP solver (scripts/build-astap-cli.sh from the third_party/astap
+# submodule) must ride along too: the profile's default solver path is /opt/openastroara/astap_cli,
+# so a .deb without it fails every plate solve.
+[ -f "$PUBLISH_DIR/astap_cli" ] || { echo "error: astap_cli not found in $PUBLISH_DIR — run 'scripts/build-astap-cli.sh $PUBLISH_DIR' (on an arm64 box or in an arm64 container) first" >&2; exit 1; }
 [ -d "$SOURCE_TREE/DEBIAN" ] || { echo "error: $SOURCE_TREE/DEBIAN missing — corrupted checkout?" >&2; exit 1; }
 
 mkdir -p "$OUTPUT_DIR"
@@ -107,6 +111,7 @@ find "$STAGE" -type f -exec chmod 0644 {} +
 
 # Set executable and restricted permissions per Debian policy.
 chmod 0755 "$STAGE/opt/openastroara/OpenAstroAra.Server"
+chmod 0755 "$STAGE/opt/openastroara/astap_cli"
 if [ -f "$STAGE/opt/openastroara/createdump" ]; then
     chmod 0755 "$STAGE/opt/openastroara/createdump"
 fi

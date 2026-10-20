@@ -18,22 +18,34 @@ using System;
 namespace OpenAstroAra.Server.Services;
 
 /// <summary>
-/// #1121 — #1094 moved the default ASTAP path to Debian's <c>/usr/bin/astap_cli</c>, but a
-/// profile written before then keeps <c>/usr/bin/astap</c> (the GUI package's binary, which the
-/// <c>.deb</c> never installs) and every solve fails. <see cref="ProfileSnapshotNormalizer"/>
-/// applies <see cref="Migrate"/> wherever a snapshot is born from disk or written, so the old
-/// value is rewritten once and then persists as the new one. File checks are injected for tests.
+/// The daemon ships its own ASTAP solver: <c>/opt/openastroara/astap_cli</c>, OpenAstro's
+/// multi-core fork built from the <c>third_party/astap</c> submodule (#1136 follow-up). Profiles
+/// written earlier point at Debian's <c>/usr/bin/astap_cli</c> (the default since #1094), the GUI
+/// package's <c>/usr/bin/astap</c> (#1121: never installed by the <c>.deb</c>, so every solve
+/// failed) or the ASTAP <c>.deb</c>'s <c>/opt/astap/astap_cli</c>. <see cref="ProfileSnapshotNormalizer"/>
+/// applies <see cref="Migrate"/> wherever a snapshot is born from disk or written, so a stock
+/// path is rewritten once to the bundled solver and then persists. A path outside that list is
+/// the user's own choice and stays. File checks are injected for tests.
 /// </summary>
 public static class SolverPathMigration {
     public const string LegacyAstapPath = "/usr/bin/astap";
-    public const string AstapCliPath = "/usr/bin/astap_cli";
+    /// <summary>Debian's <c>astap-cli</c> package, the default before the solver was bundled.</summary>
+    public const string DebianAstapCliPath = "/usr/bin/astap_cli";
+    /// <summary>The ASTAP <c>.deb</c> from astap.nl (also where its D80 database lands).</summary>
+    public const string AstapDebCliPath = "/opt/astap/astap_cli";
+    /// <summary>The bundled solver next to the daemon: the default and the migration target.</summary>
+    public const string AstapCliPath = "/opt/openastroara/astap_cli";
 
-    /// <summary>Rewrites <see cref="LegacyAstapPath"/> to <see cref="AstapCliPath"/> when the
-    /// former is absent and the latter present; otherwise returns <paramref name="ps"/> unchanged
-    /// (the same instance). A user who installed the GUI package keeps their choice.</summary>
+    /// <summary>The stock solver paths earlier releases wrote; any of them moves to the bundled
+    /// binary once it is on disk.</summary>
+    public static readonly string[] StockPaths = { LegacyAstapPath, DebianAstapCliPath, AstapDebCliPath };
+
+    /// <summary>Rewrites a stock solver path (<see cref="StockPaths"/>) to the bundled
+    /// <see cref="AstapCliPath"/> when that binary is present; otherwise returns <paramref name="ps"/>
+    /// unchanged (the same instance). Any other path is the user's own choice and is never touched.</summary>
     public static PlateSolveSettingsDto Migrate(PlateSolveSettingsDto ps, Func<string, bool> fileExists) {
-        if (!string.Equals(ps.PathOrEndpoint?.Trim(), LegacyAstapPath, StringComparison.Ordinal)
-                || fileExists(LegacyAstapPath) || !fileExists(AstapCliPath)) {
+        var path = ps.PathOrEndpoint?.Trim();
+        if (path == null || Array.IndexOf(StockPaths, path) < 0 || path == AstapCliPath || !fileExists(AstapCliPath)) {
             return ps;
         }
         return ps with { PathOrEndpoint = AstapCliPath };
@@ -62,10 +74,10 @@ public static class SolverPathMigration {
             return null;
         }
         if (IsEndpointUrl(path)) {
-            return $"Plate solver is configured as a URL ({path}), which ARA does not support (astrometry.net endpoints are not used): every plate solve (centering, polar alignment) will fail. Set Options → Plate solving → solver path to {AstapCliPath} (apt install astap-cli).";
+            return $"Plate solver is configured as a URL ({path}), which ARA does not support (astrometry.net endpoints are not used): every plate solve (centering, polar alignment) will fail. Set Options → Plate solving → solver path to {AstapCliPath} (the solver bundled with the daemon).";
         }
         if (!fileExists(path)) {
-            return $"Plate solver binary not found at {path}: every plate solve (centering, polar alignment) will fail. Install astap-cli (apt install astap-cli) or fix Options → Plate solving → solver path.";
+            return $"Plate solver binary not found at {path}: every plate solve (centering, polar alignment) will fail. Reinstall openastroara-server (it bundles the solver at {AstapCliPath}) or fix Options → Plate solving → solver path.";
         }
         return null;
     }

@@ -783,6 +783,20 @@ jobs:
         with:
           platforms: arm64
 
+      # The bundled ASTAP solver (third_party/astap submodule, OpenAstro's multi-core fork of
+      # astap_cli) ships next to the daemon; the profile's default solver path points at it. Free
+      # Pascal has no arm64 cross units in the distro packages, so build it natively inside an
+      # arm64 Debian container under qemu. build-deb.sh and the Dockerfile refuse a publish dir
+      # without it.
+      - name: Build astap_cli (ASTAP solver) for linux-arm64
+        run: |
+          set -e
+          docker run --rm --platform linux/arm64 -v "$PWD:/src" -w /src debian:trixie-slim bash -ec '
+            apt-get update -qq && apt-get install -y -qq --no-install-recommends fpc > /dev/null
+            scripts/build-astap-cli.sh publish/arm64'
+          sudo chown -R "$(id -u):$(id -g)" publish/arm64
+          file ./publish/arm64/astap_cli | tee /dev/stderr | grep -q 'ARM aarch64'
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069  # v3 pinned per zizmor immutable-ref policy
 

@@ -1652,7 +1652,7 @@ Placeholders during port. Every icon/splash/logo reference carries `TODO(brandin
 
 ### 18.I — Plate solving
 - **ASTAP**: only solver. Cross-platform; users download per OS from astap.nl. Server config exposes ASTAP binary path + **one or more star-database paths**; per-OS binary defaults attempted on first run:
-  - Linux: `/usr/bin/astap_cli` — Debian's `astap-cli` package, a `.deb` Depends since #1094 (the GUI package's `/usr/bin/astap` also works if installed)
+  - Linux: `/opt/openastroara/astap_cli` — the solver bundled with the daemon: OpenAstro's multi-core fork of `astap_cli` (git submodule `third_party/astap`, branch `main` of open-astro/astap, built by `scripts/build-astap-cli.sh` on every publish). It spreads the FITS load, binning, star detection and the spiral database search over every core: on a 4-core Pi a hinted solve of a 26 MP frame takes 0.7 s against the stock binary's 1.6 s, a blind solve 4 s against 12 s; with one thread its output is bit-identical to upstream. `ASTAP_THREADS` / `-threads n` cap the cores. Profiles that still name a stock binary (`/usr/bin/astap_cli` from Debian's `astap-cli`, the GUI package's `/usr/bin/astap`, the astap.nl `.deb`'s `/opt/astap/astap_cli`) are migrated to the bundled one by `SolverPathMigration`; any other path is the user's and stays
   - macOS: `/Applications/ASTAP.app/Contents/MacOS/astap`
   - Windows: `%PROGRAMFILES%\astap\astap.exe`
 - **Star databases — FOV-aware, multi-database.** The solver engine is the same across the whole field-of-view span (wide nebula → tiny galaxy); what actually determines whether a frame solves is the **star-database depth matched to the rig's pixel scale / FOV**. ASTAP ships several swappable Gaia-based databases, and the config must support **more than one installed at once** rather than a single fixed path:
@@ -4161,7 +4161,7 @@ sudo apt install openastroara-server
 
 - Name: `openastroara-server` (lowercase, hyphens per Debian convention)
 - Arch: **arm64** (RPi 4/5, Orange Pi 5, RockChip SBCs — any ARM64 Debian-family **Trixie or newer**; Bookworm's glibc 2.36 fails the `libc6` floor, #1130)
-- Depends: `libc6 (>= 2.38)`, `libgcc-s1`, `libstdc++6`, `libcfitsio10`, `exfatprogs`, `polkitd`, `astap-cli`, `curl` (the §33 update helper's `/healthz` probe) (authoritative list: `packaging/debian/DEBIAN/control.template`)
+- Depends: `libc6 (>= 2.38)`, `libgcc-s1`, `libstdc++6`, `libcfitsio10`, `exfatprogs`, `polkitd`, `curl` (the §33 update helper's `/healthz` probe); the ASTAP solver is bundled (§18.I), not a Depends (authoritative list: `packaging/debian/DEBIAN/control.template`)
 - Recommends: `alpacabridge`, `openastro-guider` (pulled in by default; opt-out with `--no-install-recommends`)
 - Suggests: `gpsd` (power-user clock discipline with no client attached, §31.4.1 — Ara itself never reads a receiver on the Pi)
 
@@ -12043,7 +12043,7 @@ ARA Core reads and writes FITS files via P/Invoke into **CFITSIO** ([heasarc.gsf
 **Pi (.deb path):** add `libcfitsio10` to `Depends` in §34.2:
 
 ```
-Depends: libc6 (>= 2.38), libgcc-s1, libstdc++6, libcfitsio10, exfatprogs, polkitd, astap-cli, curl
+Depends: libc6 (>= 2.38), libgcc-s1, libstdc++6, libcfitsio10, exfatprogs, polkitd, curl
 ```
 
 `libcfitsio10` ships in Debian Trixie's repos — `apt install` pulls it transparently. No build step required on the Pi.

@@ -67,7 +67,7 @@ namespace OpenAstroAra.Test {
             Assert.That(SolverPathMigration.BootWarning(Settings("https://nova.astrometry.net/api"), Nothing),
                 Does.Contain("configured as a URL").And.Contain("astap_cli").And.Not.Contain("not found at"));
             Assert.That(SolverPathMigration.BootWarning(Settings("/usr/bin/astap_cli"), Nothing),
-                Does.Contain("not found at /usr/bin/astap_cli").And.Contain("apt install astap-cli"));
+                Does.Contain("not found at /usr/bin/astap_cli").And.Contain("Reinstall openastroara-server"));
             Assert.That(SolverPathMigration.BootWarning(Settings("/usr/bin/astap_cli"), static _ => true), Is.Null);
             Assert.That(SolverPathMigration.BootWarning(Settings(""), Nothing), Is.Null, "nothing configured: the normalizer's default applies, nothing to warn about");
             Assert.That(SolverPathMigration.IsEndpointUrl("http://localhost:8080"), Is.True);

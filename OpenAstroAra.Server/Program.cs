@@ -1401,7 +1401,7 @@ public partial class Program {
         _ = app.Services.GetRequiredService<IProfileRepository>();
 
         // #1121 — say at boot when the configured plate-solver binary is missing (after the
-        // normalizer's /usr/bin/astap → /usr/bin/astap_cli migration had its chance): otherwise
+        // normalizer's stock-solver-path → bundled astap_cli migration had its chance): otherwise
         // the first sign is a failed centering or polar alignment in the field.
         if (SolverPathMigration.BootWarning(
                 app.Services.GetRequiredService<IProfileStore>().GetPlateSolveSettings(), File.Exists) is string solverWarning) {

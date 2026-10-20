@@ -95,6 +95,17 @@ disclosure fresh):
   legacy JPL ephemeris reader (`legacy/solsys1.c`, `legacy/eph_manager.c`),
   unmodified.
 
+- **ASTAP command-line solver** (`astap_cli`; git submodule `third_party/astap`,
+  OpenAstro's fork at https://github.com/open-astro/astap, `main`, of
+  Han Kleijn's https://github.com/han-k59/astap) — the astrometric plate solver
+  the daemon runs for centering and polar alignment. **MPL-2.0** (Copyright (C)
+  Han Kleijn, www.hnsky.org). The fork's changes (a worker pool that spreads the
+  FITS load, binning, star detection and the spiral database search over every
+  core, plus `-threads` / `ASTAP_THREADS`) are published in that repository under
+  the same license, as the MPL requires. `scripts/build-astap-cli.sh` compiles it
+  with Free Pascal into `astap_cli` on every build; the star databases (D80 and
+  friends) are the user's own download from astap.nl and are not part of ARA.
+
 ## Trademarks
 
 "N.I.N.A." and the N.I.N.A. logo are property of their respective owners. The OpenAstro Ara project does not use the N.I.N.A. wordmark or logo in any way that would imply endorsement.

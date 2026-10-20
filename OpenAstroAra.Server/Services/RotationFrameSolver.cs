@@ -83,7 +83,7 @@ public sealed class RotationFrameSolver : IPositionAngleSolver {
         }
         if (SolverPathMigration.MissingSolverBinary(_store.GetPlateSolveSettings(), System.IO.File.Exists) is string missing) {
             throw new PlateSolverConfigurationException(
-                $"the plate solver binary is missing at {missing} (install astap-cli or fix Options → Plate solving)");
+                $"the plate solver binary is missing at {missing} (reinstall openastroara-server or fix Options → Plate solving)");
         }
     }
 

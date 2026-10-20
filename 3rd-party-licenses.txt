@@ -54,6 +54,13 @@ here so this file's --check gate flags any drift):
     Observatory's maintained fork of USNO NOVAS C 3.1. PUBLIC DOMAIN (The
     Unlicense). Compiled unmodified into libsupernovas with its legacy JPL
     ephemeris reader.
+  * ASTAP command-line solver (astap_cli) — git submodule third_party/astap,
+    OpenAstro's fork https://github.com/open-astro/astap (main) of
+    Han Kleijn's https://github.com/han-k59/astap. MPL-2.0, Copyright (C) Han
+    Kleijn, www.hnsky.org. The fork's multi-core changes are published in that
+    repository under the same license, as the MPL requires. Compiled with Free
+    Pascal by scripts/build-astap-cli.sh into the astap_cli the daemon runs;
+    the star databases are the user's own download and not part of ARA.
   * IERS Bulletin A UT1-UTC series — IERS Rapid Service/Prediction Center,
     U.S. Naval Observatory (OpenAstroAra.Astrometry/External/iers-dut1.tsv, a
     snapshot of finals2000A.all + the bulletin's prediction formula taken by
