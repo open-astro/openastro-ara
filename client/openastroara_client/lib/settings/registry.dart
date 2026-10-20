@@ -1561,7 +1561,7 @@ const List<Setting> settingsRegistry = [
   Setting(
     id: 'img.platesolve.path_or_endpoint',
     label: 'Where to find the solver',
-    description: 'Where the solver lives: the program path for ASTAP or PlateSolve2, or the web address for astrometry.net. Installed with Ara by default.',
+    description: 'Where the solver lives: the program path for ASTAP or PlateSolve2, or the web address for astrometry.net. Installed with Ara by default; a stock ASTAP path (/usr/bin/astap_cli, /usr/bin/astap, /opt/astap/astap_cli) is moved to the bundled solver when you save, any other path is kept.',
     keywords: ['path', 'endpoint', 'executable', 'url', 'solver'],
     path: ['Settings', 'Imaging', 'Plate Solving'],
     type: SettingType.path(),

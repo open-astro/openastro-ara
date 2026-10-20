@@ -171,8 +171,11 @@ and are never published. CI cross-compiles the pair for linux-arm64 into the
 publish directory after `dotnet publish`, so the Docker image and the `.deb` ship
 arm64 natives, and `packaging/build-deb.sh` refuses a publish tree without them
 (for a hand-rolled publish, run `CC=aarch64-linux-gnu-gcc
-scripts/build-astrometry-natives.sh <publish-dir>` yourself). Windows is not a
-daemon target and has no build for them.
+scripts/build-astrometry-natives.sh <publish-dir>` yourself). The same goes for the
+bundled `astap_cli` plate solver: `scripts/build-astap-cli.sh <publish-dir>` compiles it
+from the `third_party/astap` submodule with Free Pascal, which has no cross units, so run
+it on an arm64 box or in an arm64 container. Windows is not a daemon target and has no
+build for them.
 
 ## 2. Run the client
 

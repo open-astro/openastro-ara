@@ -821,8 +821,10 @@ jobs:
           # The bundled solver is built on debian:trixie (glibc 2.41) and runs on the
           # noble-chiseled base (glibc 2.39); exec it once so a symbol-version mismatch
           # fails here, not on a user's first plate solve (/healthz never runs it).
-          docker run --rm --platform linux/arm64 --entrypoint ./astap_cli openastroara-server:arm64 -h \
-            | grep -q -- '-threads' || { echo "✗ bundled astap_cli does not run in the image"; exit 1; }
+          # Capture first: under pipefail a non-zero exit from -h, or SIGPIPE from grep -q
+          # closing the pipe early, would fail a working binary.
+          ASTAP_HELP="$(docker run --rm --platform linux/arm64 --entrypoint ./astap_cli openastroara-server:arm64 -h 2>&1 || true)"
+          grep -q -- '-threads' <<<"$ASTAP_HELP" || { echo "✗ bundled astap_cli does not run in the image:"; echo "$ASTAP_HELP" | head -5; exit 1; }
           echo "✓ bundled astap_cli runs in the image"
           docker run -d --platform linux/arm64 \
             --name oara-e2e \
