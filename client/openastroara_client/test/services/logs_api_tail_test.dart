@@ -30,12 +30,44 @@ class _StubAdapter implements HttpClientAdapter {
       );
 }
 
+/// Like [_StubAdapter] but keeps the last request so the wire body can be asserted.
+class _CapturingAdapter extends _StubAdapter {
+  _CapturingAdapter() : super(const <Object>[]);
+  RequestOptions? last;
+
+  @override
+  Future<ResponseBody> fetch(
+    RequestOptions options,
+    Stream<Uint8List>? requestStream,
+    Future<void>? cancelFuture,
+  ) {
+    last = options;
+    return super.fetch(options, requestStream, cancelFuture);
+  }
+}
+
 LogsApi _apiReturning(Object body) {
   final dio = Dio()..httpClientAdapter = _StubAdapter(body);
   return LogsApi(const AraServer(hostname: 'x', port: 80), dio: dio);
 }
 
 void main() {
+  test('tail sends the before cursor as a UTC ISO-8601 instant, and omits it when null', () async {
+    // #1185 — the page-back cursor's key and format are the wire contract with LogService.
+    final adapter = _CapturingAdapter();
+    final api = LogsApi(const AraServer(hostname: 'x', port: 80), dio: Dio()..httpClientAdapter = adapter);
+
+    await api.tail(maxLines: 50, before: DateTime(2026, 6, 20, 12, 30, 0, 0, 500).toUtc());
+    final body = adapter.last!.data as Map<String, dynamic>;
+    expect(adapter.last!.path, '/api/v1/server/logs/tail');
+    expect(body['max_lines'], 50);
+    expect(body['before'], DateTime(2026, 6, 20, 12, 30, 0, 0, 500).toUtc().toIso8601String());
+    expect((body['before'] as String).endsWith('Z'), isTrue, reason: 'always UTC');
+
+    await api.tail();
+    expect((adapter.last!.data as Map<String, dynamic>).containsKey('before'), isFalse);
+  });
+
   test('tail parses an array body into entries', () async {
     final api = _apiReturning([
       {'timestamp': '2026-07-10T04:00:00Z', 'level': 'info', 'message': 'hello'},
