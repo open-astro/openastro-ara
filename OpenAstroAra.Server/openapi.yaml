@@ -10966,6 +10966,11 @@ components:
           type:
             - 'null'
             - string
+        before:
+          type:
+            - 'null'
+            - string
+          format: date-time
     MatchingFlatsRequestDto:
       required:
         - override_frame_count

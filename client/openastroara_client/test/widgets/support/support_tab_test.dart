@@ -12,9 +12,12 @@ class _FakeLogsClient implements LogsClient {
   _FakeLogsClient({this.entries = const [], this.throwOnTail = false});
 
   List<LogEntry> entries;
+  // #1185 — what a `before` (page-back) call returns.
+  List<LogEntry> olderEntries = const [];
   bool throwOnTail;
   String? lastMinLevel;
   String? lastSubstring;
+  DateTime? lastBefore;
   int tailCalls = 0;
   int downloadCalls = 0;
 
@@ -23,12 +26,14 @@ class _FakeLogsClient implements LogsClient {
     int? maxLines,
     String? minLevel,
     String? containsSubstring,
+    DateTime? before,
   }) async {
     tailCalls++;
     lastMinLevel = minLevel;
     lastSubstring = containsSubstring;
+    lastBefore = before;
     if (throwOnTail) throw Exception('boom');
-    return entries;
+    return before == null ? entries : olderEntries;
   }
 
   String? lastSavePath;
@@ -80,6 +85,46 @@ void main() {
     expect(find.text('camera connected'), findsOneWidget);
     expect(find.text('mount near meridian'), findsOneWidget);
     expect(api.tailCalls, 1);
+  });
+
+  testWidgets('a full page offers Load older, which appends the page before the oldest entry', (tester) async {
+    // #1185 — 200 entries (the page size) → the control shows; a short second page hides it.
+    final full = List.generate(200, (i) => LogEntry(
+          timestamp: DateTime.utc(2026, 6, 20, 10, 30, 0).subtract(Duration(seconds: i)),
+          level: 'Information',
+          source: 'OpenAstroAra.Server',
+          message: 'entry $i',
+        ));
+    final api = _FakeLogsClient(entries: full)
+      ..olderEntries = [
+        LogEntry(
+          timestamp: DateTime.utc(2026, 6, 20, 9, 0, 0),
+          level: 'Warning',
+          source: 'OpenAstroAra.Server',
+          message: 'much older',
+        ),
+      ];
+    await tester.pumpWidget(_host(api));
+    await tester.pumpAndSettle();
+
+    final list = find.descendant(of: find.byType(ListView), matching: find.byType(Scrollable)).first;
+    await tester.scrollUntilVisible(find.text('Load older'), 400, scrollable: list);
+    expect(find.text('Load older'), findsOneWidget, reason: 'a full page may have older entries');
+    await tester.tap(find.text('Load older'));
+    await tester.pumpAndSettle();
+
+    expect(api.tailCalls, 2);
+    expect(api.lastBefore, full.last.timestamp, reason: 'the cursor is the oldest entry held');
+    await tester.scrollUntilVisible(find.text('much older'), 400, scrollable: list);
+    expect(find.text('much older'), findsOneWidget, reason: 'the older page is appended');
+    expect(find.text('Load older'), findsNothing, reason: 'a short page means nothing older is left');
+  });
+
+  testWidgets('a short first page never offers Load older', (tester) async {
+    final api = _FakeLogsClient(entries: [_entry('Information', 'only one')]);
+    await tester.pumpWidget(_host(api));
+    await tester.pumpAndSettle();
+    expect(find.text('Load older'), findsNothing);
   });
 
   testWidgets('empty result shows the no-entries message', (tester) async {

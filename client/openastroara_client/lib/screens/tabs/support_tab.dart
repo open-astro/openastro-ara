@@ -39,6 +39,10 @@ class _SupportTabState extends ConsumerState<SupportTab> {
   String _minLevel = 'All';
   List<LogEntry>? _entries;
   bool _loading = false;
+  // #1185 — paging back through older entries: in flight, and whether the last
+  // page came back short (nothing older to fetch).
+  bool _loadingMore = false;
+  bool _exhausted = false;
   bool _downloading = false;
   String? _error;
   // Monotonic refresh id: only the latest call applies its result/error, so a
@@ -74,6 +78,7 @@ class _SupportTabState extends ConsumerState<SupportTab> {
       if (!mounted || gen != _refreshGen) return;
       setState(() {
         _entries = entries;
+        _exhausted = entries.length < _maxLines;
         _error = null;
       });
     } catch (e) {
@@ -81,6 +86,36 @@ class _SupportTabState extends ConsumerState<SupportTab> {
       setState(() => _error = friendlyError(e, action: 'load the logs'));
     } finally {
       if (mounted && gen == _refreshGen) setState(() => _loading = false);
+    }
+  }
+
+  /// Fetch the page of entries older than the oldest one held and append it.
+  /// The same filters apply; a short page marks the log exhausted.
+  Future<void> _loadOlder() async {
+    final api = ref.read(logsApiProvider);
+    final held = _entries;
+    if (api == null || held == null || held.isEmpty || _loadingMore) return;
+    final gen = _refreshGen;
+    setState(() => _loadingMore = true);
+    try {
+      final older = await api.tail(
+        maxLines: _maxLines,
+        minLevel: _minLevel == 'All' ? null : _minLevel,
+        containsSubstring: _substringCtl.text,
+        before: held.last.timestamp,
+      );
+      // A refresh that started meanwhile owns the list now; drop this page.
+      if (!mounted || gen != _refreshGen) return;
+      setState(() {
+        _entries = [...held, ...older];
+        _exhausted = older.length < _maxLines;
+        _error = null;
+      });
+    } catch (e) {
+      if (!mounted || gen != _refreshGen) return;
+      setState(() => _error = friendlyError(e, action: 'load older logs'));
+    } finally {
+      if (mounted) setState(() => _loadingMore = false);
     }
   }
 
@@ -253,8 +288,27 @@ class _SupportTabState extends ConsumerState<SupportTab> {
               // into a bug report instead of only the whole-file download.
               : SelectionArea(
                   child: ListView.builder(
-                    itemCount: entries.length,
-                    itemBuilder: (context, i) => _LogRow(entry: entries[i]),
+                    // One extra row at the end: the "Load older" page control,
+                    // shown until a page comes back short.
+                    itemCount: entries.length + (_exhausted ? 0 : 1),
+                    itemBuilder: (context, i) => i < entries.length
+                        ? _LogRow(entry: entries[i])
+                        : Padding(
+                            padding: const EdgeInsets.all(12),
+                            child: Center(
+                              child: _loadingMore
+                                  ? const SizedBox(
+                                      width: 20,
+                                      height: 20,
+                                      child: CircularProgressIndicator(strokeWidth: 2),
+                                    )
+                                  : OutlinedButton.icon(
+                                      onPressed: _loading ? null : _loadOlder,
+                                      icon: const Icon(Icons.history),
+                                      label: const Text('Load older'),
+                                    ),
+                            ),
+                          ),
                   ),
                 ),
         ),

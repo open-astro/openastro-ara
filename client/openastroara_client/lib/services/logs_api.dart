@@ -10,11 +10,14 @@ import 'content_disposition.dart';
 /// driven by a fake in widget tests (provider override).
 abstract interface class LogsClient {
   /// `POST /api/v1/server/logs/tail` — the newest matching entries, newest-first.
-  /// [minLevel] / [containsSubstring] empty or null means "no filter".
+  /// [minLevel] / [containsSubstring] empty or null means "no filter". [before]
+  /// pages back: only entries strictly older than it (pass the timestamp of
+  /// the oldest entry held); null = the newest page.
   Future<List<LogEntry>> tail({
     int? maxLines,
     String? minLevel,
     String? containsSubstring,
+    DateTime? before,
   });
 
   /// `GET /api/v1/server/logs/download` — stream the whole newest log file (or
@@ -50,6 +53,7 @@ class LogsApi implements LogsClient {
     int? maxLines,
     String? minLevel,
     String? containsSubstring,
+    DateTime? before,
   }) async {
     final res = await _dio.post<dynamic>(
       '/api/v1/server/logs/tail',
@@ -60,6 +64,7 @@ class LogsApi implements LogsClient {
         if (minLevel != null && minLevel.isNotEmpty) 'min_level': minLevel,
         if (containsSubstring != null && containsSubstring.isNotEmpty)
           'contains_substring': containsSubstring,
+        if (before != null) 'before': before.toUtc().toIso8601String(),
       },
     );
     final data = res.data;

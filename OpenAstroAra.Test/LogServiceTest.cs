@@ -115,6 +115,35 @@ namespace OpenAstroAra.Test {
             Assert.That(entries[2].Source, Is.EqualTo("Foo"));
         }
 
+        private static readonly string[] ThirdSecond = { "third", "second" };
+        private static readonly string[] FirstD18b = { "first", "d18-b" };
+        private static readonly string[] D18aOnly = { "d18-a" };
+
+        [Test]
+        public async Task TailAsync_before_cursor_pages_back_from_the_oldest_held_entry() {
+            // #1185 — the client pages older entries by passing the timestamp of the oldest one it holds:
+            // the next page is strictly older, newest-first, capped to MaxLines, and crosses a roll boundary.
+            WriteLog("openastroara-20260618.log",
+                Clef("2026-06-18T23:59:58.0000000Z", "d18-a"),
+                Clef("2026-06-18T23:59:59.0000000Z", "d18-b"));
+            WriteLog("openastroara-20260619.log",
+                Clef("2026-06-19T10:00:00.0000000Z", "first"),
+                Clef("2026-06-19T10:00:01.0000000Z", "second"),
+                Clef("2026-06-19T10:00:02.0000000Z", "third"));
+
+            var page1 = await _svc.TailAsync(new LogTailRequestDto(2, null, null), CancellationToken.None);
+            Assert.That(page1.Select(e => e.Message), Is.EqualTo(ThirdSecond));
+
+            var page2 = await _svc.TailAsync(new LogTailRequestDto(2, null, null, Before: page1[^1].Timestamp), CancellationToken.None);
+            Assert.That(page2.Select(e => e.Message), Is.EqualTo(FirstD18b), "strictly older, across the roll boundary");
+
+            var page3 = await _svc.TailAsync(new LogTailRequestDto(2, null, null, Before: page2[^1].Timestamp), CancellationToken.None);
+            Assert.That(page3.Select(e => e.Message), Is.EqualTo(D18aOnly), "the last page is short");
+
+            var page4 = await _svc.TailAsync(new LogTailRequestDto(2, null, null, Before: page3[^1].Timestamp), CancellationToken.None);
+            Assert.That(page4, Is.Empty, "nothing older than the oldest entry");
+        }
+
         [Test]
         public async Task TailAsync_filters_by_min_level() {
             WriteLog("openastroara-20260619.log",

@@ -120,7 +120,11 @@ public sealed record ReleaseNotesDto(
 public sealed record LogTailRequestDto(
     int? MaxLines,
     string? MinLevel,
-    string? ContainsSubstring);
+    string? ContainsSubstring,
+    // §29.9 cursor (#1185): only entries strictly older than this instant, newest-first. A client
+    // pages back by passing the timestamp of the oldest entry it holds; null = the newest page.
+    // Optional default keeps the three-argument wire shape and constructor calls valid.
+    DateTimeOffset? Before = null);
 
 /// <summary>One structured log entry returned by tail.</summary>
 public sealed record LogEntryDto(
