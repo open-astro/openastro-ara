@@ -473,7 +473,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                     ct.ThrowIfCancellationRequested();
                     var resp = await SendMessage(new Phd2DeleteProfile {
                         Parameters = new Phd2DeleteProfileParameter { Name = target.Name, DeleteDarkFiles = deleteDarkFiles },
-                    }).ConfigureAwait(false);
+                    }, EquipmentRpcTimeoutMs).ConfigureAwait(false); // not the 60 s default: the caller's bound is 15 s
                     if (resp?.error != null) {
                         refusal = resp.error.message ?? $"error {resp.error.code}";
                         Logger.Warning($"PHD2 §63.4 - delete_profile for '{target.Name}' not applied: {refusal}");
