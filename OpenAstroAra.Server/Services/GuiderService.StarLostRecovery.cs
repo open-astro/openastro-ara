@@ -78,6 +78,7 @@ public sealed partial class GuiderService {
     private CancellationTokenSource? _recoveryCts; // the in-flight probe/attempt's token (under _gate)
     private bool _recoveryInFlight;
     private bool _recoveryStoppedGuiding;        // this episode's attempt stopped the guider itself
+    private bool _recoveryStopPending;           // ...and its guiding_stopped marker has not been seen yet
     private bool _recoveryGaveUp;                // target too low / nothing to re-center with: no more probes
     private int _recoveryFailures;               // failed attempts this episode (drives the backoff)
     private bool _recoveryFailureNotified;       // one Warning per episode, not one per retry
@@ -103,6 +104,7 @@ public sealed partial class GuiderService {
     private void ResetStarLostRecoveryLocked() {
         DisarmStarLostRecoveryLocked();
         _recoveryStoppedGuiding = false;
+        _recoveryStopPending = false;
         _recoveryGaveUp = false;
         _recoveryFailures = 0;
         _recoveryFailureNotified = false;
@@ -253,11 +255,20 @@ public sealed partial class GuiderService {
             fault = _starLostFault;
         }
         var lostMinutes = fault is null ? 0 : Math.Max(1, (int) Math.Round((DateTimeOffset.UtcNow - fault.DetectedUtc).TotalMinutes));
+        if (Recenter is null) {
+            // Nothing to re-center with: say so and leave the guider as it is, so a star that drifts
+            // back into the box still relocks and resumes the run the old way.
+            return await GiveUpAsync(guider, fault, "Run stays paused — Ara cannot re-center on this rig",
+                $"The guide star has been lost for {lostMinutes} min and the guider has not found it again. "
+                + "This daemon has no plate solver wired, so Ara cannot re-center the target itself. Check the sky and press Resume.").ConfigureAwait(false);
+        }
         LogStarLostRecoveryStarted(lostMinutes);
 
-        // 1. Stop the guider chasing a star that is gone; its own guiding_stopped must not end the episode.
+        // 1. Stop the guider chasing a star that is gone; its own guiding_stopped must not end the
+        // episode (consumed once by NoteStarLostMarker; a later stop by the user disarms as usual).
         lock (_gate) {
             _recoveryStoppedGuiding = true;
+            _recoveryStopPending = true;
         }
         await guider.StopGuiding(ct).ConfigureAwait(false);
         ct.ThrowIfCancellationRequested();
@@ -269,11 +280,6 @@ public sealed partial class GuiderService {
         }
 
         // 2. Re-center by plate solve: the solve doubles as the clear-sky test for the imaging scope.
-        if (Recenter is null) {
-            return await GiveUpAsync(fault, "Run stays paused — Ara cannot re-center on this rig",
-                $"The guide star has been lost for {lostMinutes} min and the guider has not found it again. "
-                + "This daemon has no plate solver wired, so Ara cannot re-center the target itself. Check the sky and press Resume.").ConfigureAwait(false);
-        }
         var result = await Recenter.RecenterActiveTargetAsync(sequencer, still, StarLostRecenterTimeout, ct).ConfigureAwait(false);
         switch (result.Outcome) {
             case TargetRecenterOutcome.Recentered:
@@ -281,13 +287,13 @@ public sealed partial class GuiderService {
             case TargetRecenterOutcome.Cancelled:
                 throw new OperationCanceledException(ct);
             case TargetRecenterOutcome.TargetTooLow:
-                return await GiveUpAsync(fault, "Run stays paused — target is low",
+                return await GiveUpAsync(guider, fault, "Run stays paused — target is low",
                     $"The guide star has been lost for {lostMinutes} min. The target now sits at {result.AltitudeDeg:F0}°, below your "
                     + $"{result.LimitDeg:F0}° horizon limit, so Ara did not re-center on it. The plan's altitude conditions decide what's next, or press Resume.").ConfigureAwait(false);
             case TargetRecenterOutcome.NoCenteringService:
             case TargetRecenterOutcome.Unconfigured:
             case TargetRecenterOutcome.NotAttempted:
-                return await GiveUpAsync(fault, "Run stays paused — Ara cannot re-center on this rig",
+                return await GiveUpAsync(guider, fault, "Run stays paused — Ara cannot re-center on this rig",
                     $"The guide star has been lost for {lostMinutes} min and the guider has not found it again. "
                     + (result.Outcome == TargetRecenterOutcome.NotAttempted
                         ? "The paused run carries no coordinate target to re-center on. "
@@ -378,12 +384,31 @@ public sealed partial class GuiderService {
     }
 
     /// <summary>Nothing more this recovery can do for the episode: say so once and stop probing. The
-    /// pause stays the guider's (a relock still resumes it) and the user's Resume works as always.</summary>
-    private async Task<TimeSpan?> GiveUpAsync(EquipmentFaultEvent? fault, string title, string message) {
+    /// pause stays the guider's and the user's Resume works as always. When the attempt had already
+    /// stopped the guider, guiding is restarted best-effort so a star that drifts back into the box
+    /// can still relock and resume the run the old way (a stopped guider never relocks).</summary>
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "The restart is best-effort: a guider that will not start leaves the run paused for the user, which is the give-up outcome anyway.")]
+    private async Task<TimeSpan?> GiveUpAsync(PHD2Guider guider, EquipmentFaultEvent? fault, string title, string message) {
+        bool restart;
         lock (_gate) {
             _recoveryGaveUp = true;
+            restart = _recoveryStoppedGuiding;
+            _recoveryStoppedGuiding = false;
         }
         LogStarLostRecoveryGaveUp(title);
+        if (restart) {
+            try {
+                var started = RestartGuidingOverride is { } seam
+                    ? await seam(CancellationToken.None).ConfigureAwait(false)
+                    : await StartGuiding(forceCalibration: false, _noProgress, CancellationToken.None).ConfigureAwait(false);
+                if (!started) {
+                    await guider.LoopAsync(CancellationToken.None).ConfigureAwait(false);
+                }
+            } catch (Exception ex) {
+                LogStarLostProbeFailed(ex);
+            }
+        }
         if (fault is not null) {
             await RecordActionQuietlyAsync(fault, "recenter_unavailable").ConfigureAwait(false);
         }

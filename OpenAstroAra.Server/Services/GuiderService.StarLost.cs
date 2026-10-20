@@ -73,9 +73,12 @@ public sealed partial class GuiderService {
                     _guidingSeen = false;
                     _guidingStoppedUtc ??= DateTimeOffset.UtcNow;
                     DisarmStarLostWatchLocked();
-                    if (!_recoveryStoppedGuiding) {
-                        // ...and nothing to recover: the user owns the pause now. A stop the recovery
-                        // itself issued (before its re-center) keeps the episode alive.
+                    if (_recoveryStopPending) {
+                        // The stop the recovery itself issued before its re-center: consumed once, the
+                        // episode stays alive. Any later stop is the user's and ends it below.
+                        _recoveryStopPending = false;
+                    } else {
+                        // ...and nothing to recover: the user owns the pause now.
                         DisarmStarLostRecoveryLocked();
                     }
                     break;
