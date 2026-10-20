@@ -828,14 +828,7 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
                 var (rgb, ow, oh) = DebayerAndStretch(pixels, width, height, pattern, algorithm, null);
                 jpeg = OpenAstroAra.Stretch.JpegEncoder.EncodeColorThumbnail(rgb, ow, oh);
             } else {
-                // Box-average down first, at the preview's own stride, so the tile looks like
-                // the preview: stretching all 26 MP only for a 320 px tile made a cold thumbnail
-                // three times slower than the full preview (4.4 s vs 1.5 s on a CM4), and a grid
-                // of them queued for minutes.
-                var stride = OpenAstroAra.Stretch.Decimator.StrideFor(width, height, PreviewMaxDim);
-                var (dp, dw, dh) = OpenAstroAra.Stretch.Decimator.Decimate(pixels, width, height, stride);
-                var stretched = OpenAstroAra.Stretch.Stretcher.Apply(algorithm, dp);
-                jpeg = OpenAstroAra.Stretch.JpegEncoder.EncodeThumbnail(stretched, dw, dh);
+                jpeg = RenderMonoThumbnail(pixels, width, height, algorithm);
             }
             // Sidecar lands before the gate frees — same-tile callers queued
             // on the gate must hit the cache re-check, not re-decode (review
@@ -845,6 +838,21 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
             Renders.Release();
         }
         return (jpeg, "image/jpeg");
+    }
+
+    /// <summary>Mono thumbnail: box-average down at the preview's own stride first, so the
+    /// tile looks like the preview. Stretching all 26 MP for a 320 px tile made a cold
+    /// thumbnail three times slower than the full preview (4.4 s vs 1.5 s on a CM4), and a
+    /// grid of them queued for minutes. A frame already within the preview size is used
+    /// as is (no copy).</summary>
+    internal static byte[] RenderMonoThumbnail(ushort[] pixels, int width, int height,
+            OpenAstroAra.Stretch.StretchAlgorithm algorithm) {
+        var stride = OpenAstroAra.Stretch.Decimator.StrideFor(width, height, PreviewMaxDim);
+        if (stride > 1) {
+            (pixels, width, height) = OpenAstroAra.Stretch.Decimator.Decimate(pixels, width, height, stride);
+        }
+        var stretched = OpenAstroAra.Stretch.Stretcher.Apply(algorithm, pixels);
+        return OpenAstroAra.Stretch.JpegEncoder.EncodeThumbnail(stretched, width, height);
     }
 
     public async Task<OpenAstroAra.Image.Interfaces.IImageData?> LoadImageDataAsync(
