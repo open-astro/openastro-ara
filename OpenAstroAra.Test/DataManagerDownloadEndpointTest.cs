@@ -62,6 +62,7 @@ namespace OpenAstroAra.Test {
             builder.Services.AddSingleton(Mock.Of<ISkyCatalogService>());
             builder.Services.AddSingleton(Mock.Of<IStorageBrowseService>());
             builder.Services.AddSingleton(Mock.Of<IStorageDeviceService>());
+            builder.Services.AddSingleton(Mock.Of<IStorageCopyService>());
             recommender = new Mock<ISolverRecommender>();
             guider = new Mock<IGuiderService>();
             builder.Services.AddSingleton(recommender.Object);

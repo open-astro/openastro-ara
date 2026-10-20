@@ -296,6 +296,7 @@ public partial class Program {
         // built — resolved eagerly after Build() below, so the sweep really runs at boot and
         // before any request can be in flight. Do not make this scoped/transient.
         builder.Services.AddSingleton<IStorageDeviceService, StorageDeviceService>();
+        builder.Services.AddSingleton<IStorageCopyService, StorageCopyService>();
         // §33 client-pushed update (#1122): same root-helper escalation shape as storage.
         builder.Services.AddSingleton(new ServerListenPort(port));
         builder.Services.AddSingleton<IServerUpdateService, ServerUpdateService>();

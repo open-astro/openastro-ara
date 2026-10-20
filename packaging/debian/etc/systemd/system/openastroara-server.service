@@ -50,6 +50,9 @@ ReadWritePaths=/var/lib/openastroara
 # #1136: the Data Manager installs the ASTAP star databases here (tmpfiles creates it).
 ReadWritePaths=/var/lib/astap
 ReadWritePaths=-/media/openastroara
+# The disk-to-disk copy target (configure-storage.sh --mount-copy): optional for the
+# same reason as the store, and mounted only while a copy runs.
+ReadWritePaths=-/media/openastroara-copy
 ReadWritePaths=/run/openastroara
 ReadWritePaths=/etc/openastroara
 

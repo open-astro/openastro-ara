@@ -85,6 +85,15 @@ fi
 printf '%s\n' "$out"
 """,
     "mount": r"""#!/bin/sh
+# mount -t <fs> -o <opts> <device> <mount point>: the copy target's explicit form.
+if [ $# -gt 1 ]; then
+    for a; do dev=$mp; mp=$a; done
+    if grep -qx "$dev" "$SHIM_DIR/mount-fails" 2>/dev/null; then
+        exit 32
+    fi
+    echo "$dev $mp" >> "$SHIM_DIR/mounts"
+    exit 0
+fi
 # mount <mount point>: resolve it through $FSTAB like the real one does.
 uuid=$(awk -v m="$1" '$2 == m { sub(/^UUID=/, "", $1); print $1 }' "$FSTAB" | tail -n1)
 dev=$(awk -v u="$uuid" '$1 == u { print $2 }' "$SHIM_DIR/drives")
@@ -115,7 +124,9 @@ NO_OPS = ("sync", "systemctl", "chown", "fsck.exfat", "e2fsck", "udevadm", "wipe
 
 
 @unittest.skipIf(len(DEVICES) < 2, "needs two block nodes in /dev to stand in for the drives")
-class ConfigureStorageSwitch(unittest.TestCase):
+class HelperRig(unittest.TestCase):
+    """Scratch fstab, mount table, store path and copy path; OLD is the mounted store."""
+
     OLD = ("aaaa-0001", DEVICES[0] if DEVICES else "")
     NEW = ("bbbb-0002", DEVICES[1] if len(DEVICES) > 1 else "")
 
@@ -130,6 +141,7 @@ class ConfigureStorageSwitch(unittest.TestCase):
             self._shim(name, "#!/bin/sh\nexit 0\n")
         self.mount_point = str(root / "store")
         os.mkdir(self.mount_point)
+        self.copy_point = str(root / "copy")
         (self.shims / "drives").write_text(
             f"{self.OLD[0]} {self.OLD[1]} exfat ARA-DISK\n{self.NEW[0]} {self.NEW[1]} exfat ARA-DISK\n")
         self.fstab = root / "fstab"
@@ -145,6 +157,7 @@ class ConfigureStorageSwitch(unittest.TestCase):
             FSTAB=str(self.fstab),
             FSTAB_LOCK=str(root / "fstab.lock"),
             ARA_MOUNT_POINT=self.mount_point,
+            ARA_COPY_POINT=self.copy_point,
             ARA_STORAGE_OWNER=os.environ.get("USER") or subprocess.check_output(["id", "-un"], text=True).strip(),
         )
 
@@ -167,6 +180,13 @@ class ConfigureStorageSwitch(unittest.TestCase):
         lines = [line for line in self.fstab.read_text().splitlines() if f"  {self.mount_point}  " in line]
         self.assertEqual(len(lines), 1, lines)
         return lines[0].split()[0].removeprefix("UUID=")
+
+    def copy_mounted(self) -> list[str]:
+        return [line.split()[0] for line in self.mounts.read_text().splitlines()
+                if line.split()[1:] == [self.copy_point]]
+
+
+class ConfigureStorageSwitch(HelperRig):
 
     def test_using_a_second_drive_unmounts_the_first_and_mounts_the_second(self) -> None:
         result = self.run_helper(self.NEW[0])
@@ -286,3 +306,85 @@ class ConfigureStorageSwitch(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ConfigureStorageCopyTarget(HelperRig):
+    def test_a_second_drive_mounts_at_the_copy_path_and_leaves_the_store_alone(self) -> None:
+        fstab_before = self.fstab.read_text()
+        result = self.run_helper("--mount-copy", self.NEW[0])
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(result.stdout.strip(), f"OK {self.copy_point}")
+        self.assertEqual(self.copy_mounted(), [self.NEW[1]])
+        self.assertEqual(self.mounted(), [self.OLD[1]], "the store stays where it is")
+        self.assertEqual(self.fstab.read_text(), fstab_before, "a copy target never gets an fstab line")
+
+    def test_the_store_is_refused_as_a_copy_target(self) -> None:
+        result = self.run_helper("--mount-copy", self.OLD[0])
+        self.assertEqual(result.returncode, 6, result.stdout + result.stderr)
+        self.assertIn("ERROR: refused is_store", result.stdout)
+        self.assertEqual(self.copy_mounted(), [])
+
+    def test_a_drive_mounted_elsewhere_is_refused(self) -> None:
+        self.mounts.write_text(self.mounts.read_text() + f"{self.NEW[1]} /media/somebody\n")
+        result = self.run_helper("--mount-copy", self.NEW[0])
+        self.assertEqual(result.returncode, 5, result.stdout + result.stderr)
+        self.assertIn("ERROR: device_busy mounted_elsewhere", result.stdout)
+
+    def test_mounting_the_same_target_twice_is_ok(self) -> None:
+        self.assertEqual(self.run_helper("--mount-copy", self.NEW[0]).returncode, 0)
+        result = self.run_helper("--mount-copy", self.NEW[0])
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(self.copy_mounted(), [self.NEW[1]], "no second layer")
+
+    def test_unmount_copy_releases_the_target(self) -> None:
+        self.assertEqual(self.run_helper("--mount-copy", self.NEW[0]).returncode, 0)
+        result = self.run_helper("--unmount-copy")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(self.copy_mounted(), [])
+        self.assertEqual(self.mounted(), [self.OLD[1]])
+
+    def test_unmount_copy_with_nothing_mounted_is_ok(self) -> None:
+        result = self.run_helper("--unmount-copy")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_a_busy_copy_target_refuses_to_release(self) -> None:
+        self.assertEqual(self.run_helper("--mount-copy", self.NEW[0]).returncode, 0)
+        (self.shims / "busy").write_text(f"{self.NEW[1]}\n")
+        result = self.run_helper("--unmount-copy")
+        self.assertEqual(result.returncode, 5, result.stdout + result.stderr)
+        self.assertIn("ERROR: device_busy copy_target", result.stdout)
+
+    def test_unmount_copy_takes_no_arguments(self) -> None:
+        self.assertEqual(self.run_helper("--unmount-copy", self.NEW[0]).returncode, 9)
+
+    def test_a_target_that_will_not_mount_is_a_typed_failure(self) -> None:
+        (self.shims / "mount-fails").write_text(f"{self.NEW[1]}\n")
+        result = self.run_helper("--mount-copy", self.NEW[0])
+        self.assertEqual(result.returncode, 8, result.stdout + result.stderr)
+        self.assertIn("ERROR: mount_failed", result.stdout)
+
+
+class RestoreDoesNotRemountTheRejectedDrive(HelperRig):
+    @unittest.skipIf(os.geteuid() == 0, "root writes through the read-only directory")
+    def test_a_restore_whose_rebuild_fails_leaves_the_rejected_drive_unmounted(self) -> None:
+        # wrong_device path: the new drive's line is in fstab, then the restore's own rebuild
+        # fails. Its failure branch must not mount the store path from the NEW line.
+        root = Path(self.tmp.name)
+        self._shim("mount", f"""#!/bin/sh
+if [ ! -e "$SHIM_DIR/first-mount-done" ]; then
+    touch "$SHIM_DIR/first-mount-done"
+    chmod 0555 "{root}"
+    echo "{self.OLD[1]} $1" >> "$SHIM_DIR/mounts"
+    exit 0
+fi
+uuid=$(awk -v m="$1" '$2 == m {{ sub(/^UUID=/, "", $1); print $1 }}' "$FSTAB" | tail -n1)
+dev=$(awk -v u="$uuid" '$1 == u {{ print $2 }}' "$SHIM_DIR/drives")
+echo "$dev $1" >> "$SHIM_DIR/mounts"
+""")
+        try:
+            result = self.run_helper(self.NEW[0])
+        finally:
+            root.chmod(0o755)
+        self.assertEqual(result.returncode, 8, result.stdout + result.stderr)
+        self.assertIn("ERROR: mount_failed wrong_device", result.stdout)
+        self.assertNotIn(self.NEW[1], self.mounted(), "the rejected drive was remounted as the store")

@@ -5186,6 +5186,63 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
+  /api/v1/storage/copy:
+    post:
+      tags:
+        - Storage
+      summary: Copy the store drive (or chosen folders on it) onto another drive; files already there are skipped.
+      operationId: StartStorageCopy
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StorageCopyRequestDto'
+        required: true
+      responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StorageCopyStatusDto'
+        '400':
+          description: Bad Request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '409':
+          description: Conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+    get:
+      tags:
+        - Storage
+      summary: 'Progress of the running disk-to-disk copy, or the outcome of the last one.'
+      operationId: GetStorageCopy
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StorageCopyStatusDto'
+    delete:
+      tags:
+        - Storage
+      summary: Cancel the running disk-to-disk copy; files already copied stay.
+      operationId: CancelStorageCopy
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StorageCopyStatusDto'
+        '404':
+          description: Not Found
   /api/v1/storage/rescan:
     post:
       tags:
@@ -14608,6 +14665,120 @@ components:
           type:
             - 'null'
             - string
+    StorageCopyRequestDto:
+      required:
+        - target_uuid
+      type: object
+      properties:
+        target_uuid:
+          type: string
+        folders:
+          type:
+            - 'null'
+            - array
+          items:
+            type: string
+    StorageCopyStatusDto:
+      required:
+        - state
+        - target_uuid
+        - folders
+        - files_to_copy
+        - files_copied
+        - files_skipped
+        - files_conflicting
+        - files_failed
+        - bytes_to_copy
+        - bytes_copied
+        - current_file
+        - error_code
+        - error_detail
+        - first_failure
+        - target_released
+        - started_utc
+        - finished_utc
+      type: object
+      properties:
+        state:
+          type: string
+        target_uuid:
+          type:
+            - 'null'
+            - string
+        folders:
+          type: array
+          items:
+            type: string
+        files_to_copy:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+        files_copied:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+        files_skipped:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+        files_conflicting:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+        files_failed:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+        bytes_to_copy:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int64
+        bytes_copied:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int64
+        current_file:
+          type:
+            - 'null'
+            - string
+        error_code:
+          type:
+            - 'null'
+            - string
+        error_detail:
+          type:
+            - 'null'
+            - string
+        first_failure:
+          type:
+            - 'null'
+            - string
+        target_released:
+          type: boolean
+        started_utc:
+          type:
+            - 'null'
+            - string
+          format: date-time
+        finished_utc:
+          type:
+            - 'null'
+            - string
+          format: date-time
     StorageCreateFolderRequestDto:
       required:
         - path
