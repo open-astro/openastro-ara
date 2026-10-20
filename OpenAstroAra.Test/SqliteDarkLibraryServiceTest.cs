@@ -157,6 +157,35 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task ReuseExistingFrames_counts_an_ambient_combination_across_temperature_buckets() {
+            // #1185 — coverage is one grouped query now; an ambient (no set-point) combination must still
+            // match darks of its exposure/gain at ANY temperature, and a set-point one only its own bucket.
+            var store = new FileSequenceService(_dir);
+            using var svc = new SqliteDarkLibraryService(_db, store);
+            await InsertDarkAsync(60, 100, -10.0);
+            await InsertDarkAsync(60, 100, 5.0);   // a different bucket: counts for ambient, not for -10°C
+            await InsertDarkAsync(300, 100, -10.0); // one frame only: never enough
+
+            await svc.StartBuildAsync(new DarkLibraryBuildRequestDto(
+                ExposureSecondsList: [60, 300],
+                GainList: [100],
+                TargetTemperatureCList: [],
+                FramesPerCombination: 2,
+                ReuseExistingFrames: true), idempotencyKey: null, CancellationToken.None);
+            var ambient = await svc.GetStatusAsync(CancellationToken.None);
+            Assert.That(ambient.CompletedCombinations, Is.EqualTo(1), "60 s is covered by its two darks at any temperature");
+
+            await svc.StartBuildAsync(new DarkLibraryBuildRequestDto(
+                ExposureSecondsList: [60],
+                GainList: [100],
+                TargetTemperatureCList: [-10.0],
+                FramesPerCombination: 2,
+                ReuseExistingFrames: true), idempotencyKey: null, CancellationToken.None);
+            var setPoint = await svc.GetStatusAsync(CancellationToken.None);
+            Assert.That(setPoint.CompletedCombinations, Is.EqualTo(0), "only one dark sits in the -10°C bucket");
+        }
+
+        [Test]
         public async Task ReuseExistingFrames_skips_combinations_the_catalog_already_covers() {
             var store = new FileSequenceService(_dir);
             using var svc = new SqliteDarkLibraryService(_db, store);

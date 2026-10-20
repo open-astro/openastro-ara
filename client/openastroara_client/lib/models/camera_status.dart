@@ -1,6 +1,6 @@
 import 'equipment_device_status.dart';
 
-bool _listEq(List<String> a, List<String> b) {
+bool _listEq<T>(List<T> a, List<T> b) {
   if (identical(a, b)) return true;
   if (a.length != b.length) return false;
   for (var i = 0; i < a.length; i++) {
@@ -28,6 +28,15 @@ class CameraCapabilities {
   // empty = no readout-mode support. Y pixel pitch: 0 = not reported (assume square).
   final List<String> readoutModes;
   final double pixelSizeUmY;
+  // #1185 (§25.5.5 gaps) — the ASCOM sensor-type name ("Monochrome", "Color",
+  // "RGGB", …; null on an older daemon), a mechanical shutter, the driver's
+  // discrete gain / offset name lists (empty = the min..max range applies), and
+  // the smallest exposure step (0 = not reported).
+  final String? sensorType;
+  final bool hasShutter;
+  final List<String> gains;
+  final List<String> offsets;
+  final double exposureResolutionSec;
   final int minGain;
   final int maxGain;
   final int minOffset;
@@ -48,6 +57,11 @@ class CameraCapabilities {
     this.hasCooler = false,
     this.readoutModes = const [],
     this.pixelSizeUmY = 0,
+    this.sensorType,
+    this.hasShutter = false,
+    this.gains = const [],
+    this.offsets = const [],
+    this.exposureResolutionSec = 0,
     required this.minGain,
     required this.maxGain,
     required this.minOffset,
@@ -78,6 +92,11 @@ class CameraCapabilities {
       hasCooler: json['has_cooler'] as bool? ?? canSetTemperature,
       readoutModes: (json['readout_modes'] as List?)?.whereType<String>().toList() ?? const [],
       pixelSizeUmY: d('pixel_size_um_y'),
+      sensorType: json['sensor_type'] as String?,
+      hasShutter: json['has_shutter'] as bool? ?? false,
+      gains: (json['gains'] as List?)?.map((g) => g.toString()).toList() ?? const [],
+      offsets: (json['offsets'] as List?)?.map((o) => o.toString()).toList() ?? const [],
+      exposureResolutionSec: d('exposure_resolution_sec'),
       minGain: i('min_gain'),
       maxGain: i('max_gain'),
       minOffset: i('min_offset'),
@@ -103,6 +122,11 @@ class CameraCapabilities {
           other.hasCooler == hasCooler &&
           _listEq(other.readoutModes, readoutModes) &&
           other.pixelSizeUmY == pixelSizeUmY &&
+          other.sensorType == sensorType &&
+          other.hasShutter == hasShutter &&
+          _listEq(other.gains, gains) &&
+          _listEq(other.offsets, offsets) &&
+          other.exposureResolutionSec == exposureResolutionSec &&
           other.minGain == minGain &&
           other.maxGain == maxGain &&
           other.minOffset == minOffset &&
@@ -124,6 +148,11 @@ class CameraCapabilities {
         hasCooler,
         Object.hashAll(readoutModes),
         pixelSizeUmY,
+        sensorType,
+        hasShutter,
+        Object.hashAll(gains),
+        Object.hashAll(offsets),
+        exposureResolutionSec,
         minGain,
         maxGain,
         minOffset,
@@ -159,6 +188,8 @@ class CameraStatus extends EquipmentDeviceStatus {
   // and the current readout-mode display name (null: no readout-mode support).
   final double? coolerSetpointC;
   final String? readoutMode;
+  // #1185 — the cooler's hot side; null when the driver does not report it.
+  final double? heatSinkTemperatureC;
   CameraStatus({
     required this.deviceId,
     required this.name,
@@ -171,6 +202,7 @@ class CameraStatus extends EquipmentDeviceStatus {
     required this.exposureProgressPct,
     this.coolerSetpointC,
     this.readoutMode,
+    this.heatSinkTemperatureC,
   });
 
   bool get isExposing => runtimeState == 'exposing' || runtimeState == 'downloading';
@@ -195,6 +227,7 @@ class CameraStatus extends EquipmentDeviceStatus {
       exposureProgressPct: (r['exposure_progress_pct'] as num?)?.toDouble(),
       coolerSetpointC: (r['cooler_setpoint_c'] as num?)?.toDouble(),
       readoutMode: r['readout_mode'] as String?,
+      heatSinkTemperatureC: (r['heat_sink_temperature_c'] as num?)?.toDouble(),
     );
   }
 
@@ -212,10 +245,11 @@ class CameraStatus extends EquipmentDeviceStatus {
           other.coolerOn == coolerOn &&
           other.exposureProgressPct == exposureProgressPct &&
           other.coolerSetpointC == coolerSetpointC &&
+          other.heatSinkTemperatureC == heatSinkTemperatureC &&
           other.readoutMode == readoutMode);
 
   @override
   int get hashCode => Object.hash(deviceId, name, connectionState, capabilities,
       runtimeState, ccdTemperature, coolerPowerPct, coolerOn, exposureProgressPct,
-      coolerSetpointC, readoutMode);
+      coolerSetpointC, readoutMode, heatSinkTemperatureC);
 }

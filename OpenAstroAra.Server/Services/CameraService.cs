@@ -1987,8 +1987,12 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
                 readoutMode = modes[idx]?.ToString();
             }
         } catch (Exception) { }
+        // #1185 — the cooler's hot side; optional on most drivers, so a throw reads as "not reported".
+        double? heatSink;
+        try { heatSink = c.HeatSinkTemperature; } catch (Exception) { heatSink = null; }
         return new CameraStateDto(MapState(state), temp, coolerPower, coolerOn, progress,
-            CoolerSetpointC: setpoint, ReadoutMode: readoutMode, CoolerStateKnown: coolerStateKnown);
+            CoolerSetpointC: setpoint, ReadoutMode: readoutMode, CoolerStateKnown: coolerStateKnown,
+            HeatSinkTemperatureC: heatSink);
     }
 
     // Extracted (internal) for direct unit testing.
@@ -2061,6 +2065,28 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
         } catch (Exception) { }
         double pixelSizeY = 0;
         try { pixelSizeY = c.PixelSizeY; } catch (Exception) { }
+        // #1185 — §25.5.5 DTO gaps the device layer can answer: the sensor-type name, a mechanical
+        // shutter, and a discrete gain list (empty from the driver → null, "use the range").
+        string? sensorType = null;
+        try { sensorType = c.SensorType.ToString(); } catch (Exception) { }
+        bool hasShutter = false;
+        try { hasShutter = c.HasShutter; } catch (Exception) { }
+        IReadOnlyList<string>? gains = null;
+        try {
+            var list = c.Gains;
+            if (list is { Count: > 0 }) {
+                gains = list.Select(g => g?.ToString() ?? "").ToList();
+            }
+        } catch (Exception) { }
+        IReadOnlyList<string>? offsets = null;
+        try {
+            var list = c.Offsets;
+            if (list is { Count: > 0 }) {
+                offsets = list.Select(o => o?.ToString() ?? "").ToList();
+            }
+        } catch (Exception) { }
+        double exposureResolution = 0;
+        try { exposureResolution = c.ExposureResolution; } catch (Exception) { }
         return new CameraCapabilitiesDto(
             SensorWidth: w, SensorHeight: h, PixelSizeUm: pixelSize,
             CanSetTemperature: canSetTemp, CanAbortExposure: canAbort, CanGetCoolerPower: canCoolerPower,
@@ -2075,7 +2101,12 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
             CurrentGain: currentGain,
             HasCooler: hasCooler,
             ReadoutModes: readoutModes,
-            PixelSizeUmY: pixelSizeY);
+            PixelSizeUmY: pixelSizeY,
+            SensorType: sensorType,
+            HasShutter: hasShutter,
+            Gains: gains,
+            Offsets: offsets,
+            ExposureResolutionSec: exposureResolution);
     }
 
     // RGGB native + ASCOM BayerOffsetX/Y → the effective 2×2 pattern at the image (0,0) origin,

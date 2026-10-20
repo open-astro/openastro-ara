@@ -111,7 +111,23 @@ public sealed record CameraCapabilitiesDto(
     System.Collections.Generic.IReadOnlyList<string>? ReadoutModes = null,
     // §25.5.5 — Y pixel pitch for asymmetric-pixel sensors; 0 = not reported (assume square,
     // use PixelSizeUm).
-    double PixelSizeUmY = 0);
+    double PixelSizeUmY = 0,
+    // #1185 (§25.5.5 DTO gaps) — the ASCOM SensorType name ("Monochrome", "Color", "RGGB", "CMYG",
+    // "CMYG2", "LRGB"); null when the driver does not report it. BayerPattern above stays the field
+    // the debayer path reads; this one tells a client a "Color" sensor (driver-debayered) from an
+    // RGGB mosaic and from a mono chip.
+    string? SensorType = null,
+    // #1185 — whether the camera has a mechanical shutter (ASCOM HasShutter): a DSLR or a shuttered
+    // CCD can take darks with the cap off; a shutterless CMOS cannot.
+    bool HasShutter = false,
+    // #1185 — the driver's discrete gain and offset NAME lists (ASCOM Gains / Offsets, for cameras
+    // whose gain is a named setting such as "ISO 800" rather than a 0..N range; the index selects).
+    // Null when the camera uses the Min..Max range instead.
+    System.Collections.Generic.IReadOnlyList<string>? Gains = null,
+    System.Collections.Generic.IReadOnlyList<string>? Offsets = null,
+    // #1185 — the smallest exposure step the driver honours (ASCOM ExposureResolution, seconds);
+    // 0 = not reported.
+    double ExposureResolutionSec = 0);
 
 public sealed record CameraStateDto(
     string State,   // "idle" | "exposing" | "downloading" | "error"
@@ -129,7 +145,11 @@ public sealed record CameraStateDto(
     // #1076 — false when the CoolerOn property read threw this pass: CoolerOn then reads false by
     // fallback, and the cooling-fan interlock must treat the state as UNKNOWN (refuse a fan-off),
     // not as "off".
-    bool CoolerStateKnown = true);
+    bool CoolerStateKnown = true,
+    // #1185 (§25.5.5) — the cooler's hot side (ASCOM HeatSinkTemperature); null when the driver
+    // does not report it. A heat sink that climbs while CCD temperature holds is a fan or airflow
+    // problem the cooler-power figure alone does not show.
+    double? HeatSinkTemperatureC = null);
 
 // §64 Live View: a server-driven short-exposure loop that renders the latest
 // frame to JPEG (no FITS write, not cataloged) for framing/focus. Start/stop +

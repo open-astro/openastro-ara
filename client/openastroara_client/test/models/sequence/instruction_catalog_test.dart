@@ -284,9 +284,9 @@ void main() {
       expect(() => dup.build(), throwsStateError);
     });
 
-    test('build() asserts on a non-String-keyed map default (debug)', () {
-      // `flutter test` runs in debug mode, where asserts are live; in a release
-      // build the assert is stripped and a TypeError would surface at the cast.
+    test('build() throws ArgumentError on a non-String-keyed map default', () {
+      // #1185 / §38 — a typed throw in every build mode, not a debug-only assert
+      // that a release build would strip (leaving a bare cast error).
       const bad = InstructionDef(
         type: 'X.Bad, X',
         label: 'bad',
@@ -296,7 +296,7 @@ void main() {
           InstructionField('K', 'k', InstructionFieldType.binning, defaultValue: {1: 'a'}),
         ],
       );
-      expect(() => bad.build(), throwsA(isA<AssertionError>()));
+      expect(() => bad.build(), throwsA(isA<ArgumentError>()));
     });
 
     test('built nodes share no mutable sub-object (deep clone)', () {

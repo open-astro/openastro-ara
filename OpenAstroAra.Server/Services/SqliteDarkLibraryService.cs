@@ -132,14 +132,9 @@ public sealed class SqliteDarkLibraryService : IDarkLibraryService, IDisposable 
             // (no set-point) combination can't predict its captured temperature; for THIS
             // opt-in reuse path any-temperature matching is the user's stated intent
             // ("I don't regulate — existing darks of this exposure/gain are fine").
-            var covered = new List<(double, int?, double?)>();
             await using var conn = _db.OpenConnection();
-            foreach (var combo in combos) {
-                if (await CoveredCountAsync(conn, combo, capturedAtOrAfter: null, ct) >= frames) {
-                    covered.Add(combo);
-                }
-            }
-            toCapture = combos.Except(covered).ToList();
+            var counts = await CoveredCountsAsync(conn, capturedAtOrAfter: null, ct).ConfigureAwait(false);
+            toCapture = combos.Where(combo => CoveredCount(counts, combo) < frames).ToList();
         }
 
         Guid? generatedId = null;
@@ -201,18 +196,17 @@ public sealed class SqliteDarkLibraryService : IDarkLibraryService, IDisposable 
 
         var completed = 0;
         await using (var conn = _db.OpenConnection()) {
-            foreach (var combo in build.Combinations) {
-                // ReuseExistingFrames governs status symmetrically with capture (r4): a reuse
-                // build counts every matching catalogued dark (its skip logic already treated
-                // them as satisfying the request), while a non-reuse build asked for FRESH
-                // frames — so only captures made since the request count, for set-point and
-                // ambient combos alike. Without that, pre-existing coverage would light the
-                // progress green before the generated sequence ever ran.
-                var since = build.ReuseExisting ? (DateTimeOffset?)null : build.StartedUtc;
-                if (await CoveredCountAsync(conn, combo, since, ct) >= build.FramesPerCombination) {
-                    completed++;
-                }
-            }
+            // ReuseExistingFrames governs status symmetrically with capture (r4): a reuse
+            // build counts every matching catalogued dark (its skip logic already treated
+            // them as satisfying the request), while a non-reuse build asked for FRESH
+            // frames — so only captures made since the request count, for set-point and
+            // ambient combos alike. Without that, pre-existing coverage would light the
+            // progress green before the generated sequence ever ran.
+            var since = build.ReuseExisting ? (DateTimeOffset?)null : build.StartedUtc;
+            // One grouped query for every combination (#1185): the status endpoint is polled
+            // while the build runs, and a 3 × 4 × 3 request used to cost 36 COUNT(*) scans per poll.
+            var counts = await CoveredCountsAsync(conn, since, ct).ConfigureAwait(false);
+            completed = build.Combinations.Count(combo => CoveredCount(counts, combo) >= build.FramesPerCombination);
         }
 
         // Everything below reads the ONE captured record — a concurrent StartBuildAsync may
@@ -291,32 +285,50 @@ public sealed class SqliteDarkLibraryService : IDarkLibraryService, IDisposable 
         return entries;
     }
 
-    private static async Task<int> CoveredCountAsync(
+    /// <summary>Dark frame counts per (exposure, gain, whole-degree temperature bucket), optionally
+    /// only frames captured at or after <paramref name="capturedAtOrAfter"/> (captured_utc is ISO-8601
+    /// "O" text, so lexicographic &gt;= is chronological). One query serves every combination of a build
+    /// (#1185); <see cref="CoveredCount"/> reads a combination's count out of it.</summary>
+    private static async Task<Dictionary<(double ExposureSeconds, int? Gain, double TempBucket), int>> CoveredCountsAsync(
             SqliteConnection conn,
-            (double ExposureSeconds, int? Gain, double? TemperatureC) combo,
             DateTimeOffset? capturedAtOrAfter,
             CancellationToken ct) {
         await using var cmd = conn.CreateCommand();
-        // One constant command text (CA2100-clean): the nullable gain/temperature/time predicates
-        // collapse via IS-NULL branches on bound parameters instead of string composition.
-        // $temp NULL = ambient combo → any captured temperature counts; callers that need to
-        // avoid the resulting false positives pass $since (captured_utc is ISO-8601 "O" text,
-        // so lexicographic >= is chronological).
+        // The same whole-degree bucket the §39 matching rules and ListEntriesAsync use.
         cmd.CommandText = """
-            SELECT COUNT(*) FROM frames
+            SELECT exposure_seconds,
+                   gain,
+                   ROUND(COALESCE(temperature_c, 0), 0) AS temp_bucket,
+                   COUNT(*) AS frame_count
+            FROM frames
             WHERE frame_type = 'dark'
-              AND exposure_seconds = $exp
-              AND (gain = $gain OR ($gain IS NULL AND gain IS NULL))
-              AND ($temp IS NULL OR ROUND(COALESCE(temperature_c, 0), 0) = ROUND($temp, 0))
-              AND ($since IS NULL OR captured_utc >= $since);
+              AND ($since IS NULL OR captured_utc >= $since)
+            GROUP BY exposure_seconds, gain, temp_bucket;
             """;
-        cmd.Parameters.AddWithValue("$exp", combo.ExposureSeconds);
-        cmd.Parameters.AddWithValue("$gain", combo.Gain is int gain ? gain : DBNull.Value);
-        cmd.Parameters.AddWithValue("$temp", combo.TemperatureC is double temp ? temp : DBNull.Value);
         cmd.Parameters.AddWithValue("$since", capturedAtOrAfter is DateTimeOffset since
             ? since.ToString("O", CultureInfo.InvariantCulture)
             : DBNull.Value);
-        return Convert.ToInt32(await cmd.ExecuteScalarAsync(ct) ?? 0, CultureInfo.InvariantCulture);
+        var counts = new Dictionary<(double, int?, double), int>();
+        await using var reader = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
+        while (await reader.ReadAsync(ct).ConfigureAwait(false)) {
+            var exposure = reader.GetDouble(0);
+            var gain = await reader.IsDBNullAsync(1, ct).ConfigureAwait(false) ? (int?)null : reader.GetInt32(1);
+            counts[(exposure, gain, reader.GetDouble(2))] = reader.GetInt32(3);
+        }
+        return counts;
+    }
+
+    /// <summary>Frames covering <paramref name="combo"/>: its own temperature bucket for a set-point
+    /// combination, or every bucket of that exposure/gain for an ambient (no set-point) one — the
+    /// any-temperature match the reuse path promises ("I don't regulate — existing darks of this
+    /// exposure/gain are fine").</summary>
+    private static int CoveredCount(
+            Dictionary<(double ExposureSeconds, int? Gain, double TempBucket), int> counts,
+            (double ExposureSeconds, int? Gain, double? TemperatureC) combo) {
+        if (combo.TemperatureC is double temp) {
+            return counts.TryGetValue((combo.ExposureSeconds, combo.Gain, Math.Round(temp, 0, MidpointRounding.AwayFromZero)), out var n) ? n : 0;
+        }
+        return counts.Where(kv => kv.Key.ExposureSeconds == combo.ExposureSeconds && kv.Key.Gain == combo.Gain).Sum(kv => kv.Value);
     }
 
     // A stable id per (exposure, gain, temp-bucket) group so clients can diff/select entries

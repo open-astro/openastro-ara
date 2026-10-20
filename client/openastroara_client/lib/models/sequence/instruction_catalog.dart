@@ -385,16 +385,19 @@ void checkNoReservedFieldKeys(
 Object? deepCloneJson(Object? value) {
   if (value is Map) {
     // JSON object keys are strings by construction (these defaults are body
-    // fragments). The debug assert makes that invariant self-catching: a future
-    // non-`Map<String, dynamic>` default trips here rather than at the `as
-    // String` cast below.
-    assert(
-      value is Map<String, dynamic>,
-      'instruction default maps must be String-keyed JSON fragments; got ${value.runtimeType}',
-    );
+    // fragments). A non-String-keyed default is an authoring mistake that must
+    // fail the same way in a release build as in a debug one (#1185 / §38): a
+    // typed ArgumentError here, not a bare cast error from the loop below.
+    if (value is! Map<String, dynamic>) {
+      throw ArgumentError.value(
+        value,
+        'value',
+        'instruction default maps must be String-keyed JSON fragments; got ${value.runtimeType}',
+      );
+    }
     return <String, dynamic>{
       for (final entry in value.entries)
-        entry.key as String: deepCloneJson(entry.value),
+        entry.key: deepCloneJson(entry.value),
     };
   }
   if (value is List) {
