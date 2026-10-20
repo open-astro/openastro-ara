@@ -85,6 +85,9 @@ printf '%s\n' "$out"
 uuid=$(awk -v m="$1" '$2 == m { sub(/^UUID=/, "", $1); print $1 }' "$FSTAB" | tail -n1)
 dev=$(awk -v u="$uuid" '$1 == u { print $2 }' "$SHIM_DIR/drives")
 [ -n "$dev" ] || exit 32
+if grep -qx "$dev" "$SHIM_DIR/mount-fails" 2>/dev/null; then
+    exit 32
+fi
 echo "$dev $1" >> "$SHIM_DIR/mounts"
 """,
     "umount": r"""#!/bin/sh
@@ -98,8 +101,13 @@ awk -v k="$1" '{ l[NR] = $0; if ($1 == k || $2 == k) last = NR }
     END { for (i = 1; i <= NR; i++) if (i != last) print l[i] }' "$SHIM_DIR/mounts" > "$SHIM_DIR/mounts.new"
 mv "$SHIM_DIR/mounts.new" "$SHIM_DIR/mounts"
 """,
+    "mkfs.exfat": r"""#!/bin/sh
+for a; do dev=$a; done
+echo "$dev" >> "$SHIM_DIR/erased"
+[ ! -e "$SHIM_DIR/mkfs-fails" ]
+""",
 }
-NO_OPS = ("sync", "systemctl", "chown", "fsck.exfat", "e2fsck", "udevadm")
+NO_OPS = ("sync", "systemctl", "chown", "fsck.exfat", "e2fsck", "udevadm", "wipefs", "sfdisk")
 
 
 @unittest.skipIf(len(DEVICES) < 2, "needs two block nodes in /dev to stand in for the drives")
@@ -182,6 +190,46 @@ class ConfigureStorageSwitch(unittest.TestCase):
         result = self.run_helper(self.NEW[0])
         self.assertEqual(result.returncode, 8, result.stdout + result.stderr)
         self.assertIn("ERROR: mount_failed wrong_device", result.stdout)
+        self.assertEqual(self.fstab_uuid(), self.OLD[0], "fstab points back at the previous store")
+
+    def test_a_new_drive_that_will_not_mount_puts_the_previous_store_back(self) -> None:
+        (self.shims / "mount-fails").write_text(f"{self.NEW[1]}\n")
+        result = self.run_helper(self.NEW[0])
+        self.assertEqual(result.returncode, 8, result.stdout + result.stderr)
+        self.assertIn("ERROR: mount_failed", result.stdout)
+        self.assertEqual(self.mounted(), [self.OLD[1]], "frames never fall through to the system disk")
+        self.assertEqual(self.fstab_uuid(), self.OLD[0])
+
+    def test_a_symlinked_mount_source_is_the_same_drive(self) -> None:
+        # findmnt can report a /dev/disk/by-* style link; it is still the current store.
+        link = Path(self.tmp.name) / "by-id-old"
+        link.symlink_to(self.OLD[1])
+        self.mounts.write_text(f"{link} {self.mount_point}\n")
+        (self.shims / "busy").write_text(f"{link}\n")
+        result = self.run_helper(self.OLD[0])
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(self.mounted(), [str(link)], "no needless unmount of the store")
+
+    def test_erasing_a_second_drive_refuses_a_busy_store_before_erasing(self) -> None:
+        (self.shims / "busy").write_text(f"{self.OLD[1]}\n")
+        result = self.run_helper("--format", "--fs", "exfat", self.NEW[0], "ARA-DISK")
+        self.assertEqual(result.returncode, 5, result.stdout + result.stderr)
+        self.assertIn("ERROR: device_busy previous_store", result.stdout)
+        self.assertFalse((self.shims / "erased").exists(), "the confirmed disk is still intact")
+        self.assertEqual(self.mounted(), [self.OLD[1]])
+
+    def test_erasing_a_second_drive_switches_the_store_to_it(self) -> None:
+        result = self.run_helper("--format", "--fs", "exfat", self.NEW[0], "ARA-DISK")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(self.mounted(), [self.NEW[1]])
+        self.assertEqual(self.fstab_uuid(), self.NEW[0])
+
+    def test_a_failed_erase_puts_the_previous_store_back(self) -> None:
+        (self.shims / "mkfs-fails").write_text("")
+        result = self.run_helper("--format", "--fs", "exfat", self.NEW[0], "ARA-DISK")
+        self.assertEqual(result.returncode, 7, result.stdout + result.stderr)
+        self.assertEqual(self.mounted(), [self.OLD[1]])
+        self.assertEqual(self.fstab_uuid(), self.OLD[0])
 
     def test_checking_a_disk_that_is_not_the_store_does_not_switch_to_it(self) -> None:
         result = self.run_helper("--check", self.NEW[0])

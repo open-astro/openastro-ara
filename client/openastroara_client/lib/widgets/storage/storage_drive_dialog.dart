@@ -28,6 +28,28 @@ Future<void> showStorageDriveDialog(BuildContext context, WidgetRef ref) async {
   ref.invalidate(storageDevicesProvider);
 }
 
+/// What the disk chooser says when Use Disk fails, keyed on the helper's code.
+String storageConfigureMessage(
+        StorageConfigureOutcome outcome, StorageDevice device) =>
+    switch (outcome.code) {
+      'not_ext4' => 'This disk needs to be erased before ARA can use it.',
+      'label_mismatch' =>
+        'The disk changed since the list was loaded. Rescan and try again.',
+      'device_busy' when outcome.detail == 'previous_store' =>
+        'The disk frames are saved to now is in use, so ARA can\'t switch '
+            'away from it. Close anything reading it, then try again.',
+      'device_busy' =>
+        'The disk is in use. Close anything reading it, then try again.',
+      'system_disk' || 'refused' =>
+        'That disk holds the server\'s operating system and can\'t be used.',
+      'uuid_not_found' => 'The disk disconnected. Reconnect it and rescan.',
+      'helper_missing' =>
+        'The server is missing part of its installation. Reinstall openastroara-server.',
+      'mkfs_failed' => 'Erasing the disk failed. See the server log for details.',
+      'mount_failed' => 'The disk was prepared but could not be connected.',
+      _ => outcome.detail ?? 'Could not use ${device.friendlyName}.',
+    };
+
 class _DiskChooser extends ConsumerStatefulWidget {
   const _DiskChooser();
 
@@ -110,7 +132,7 @@ class _DiskChooserState extends ConsumerState<_DiskChooser> {
         ));
         return;
       }
-      setState(() => _error = _friendly(outcome, device));
+      setState(() => _error = storageConfigureMessage(outcome, device));
     } finally {
       api.close();
       if (mounted) {
@@ -118,26 +140,6 @@ class _DiskChooserState extends ConsumerState<_DiskChooser> {
       }
     }
   }
-
-  static String _friendly(StorageConfigureOutcome outcome, StorageDevice device) =>
-      switch (outcome.code) {
-        'not_ext4' => 'This disk needs to be erased before ARA can use it.',
-        'label_mismatch' =>
-          'The disk changed since the list was loaded. Rescan and try again.',
-        'device_busy' when outcome.detail == 'previous_store' =>
-          'The disk frames are saved to now is in use, so ARA can\'t switch '
-              'away from it. Close anything reading it, then try again.',
-        'device_busy' =>
-          'The disk is in use. Close anything reading it, then try again.',
-        'system_disk' || 'refused' =>
-          'That disk holds the server\'s operating system and can\'t be used.',
-        'uuid_not_found' => 'The disk disconnected. Reconnect it and rescan.',
-        'helper_missing' =>
-          'The server is missing part of its installation. Reinstall openastroara-server.',
-        'mkfs_failed' => 'Erasing the disk failed. See the server log for details.',
-        'mount_failed' => 'The disk was prepared but could not be connected.',
-        _ => outcome.detail ?? 'Could not use ${device.friendlyName}.',
-      };
 
   @override
   Widget build(BuildContext context) {

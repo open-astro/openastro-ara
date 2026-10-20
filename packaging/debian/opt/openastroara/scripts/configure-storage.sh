@@ -159,32 +159,63 @@ ensure_fstab_entry() { # $1=uuid $2=fstype
     systemctl daemon-reload 2>/dev/null || true
 }
 
+# Canonical node for a device path, so a /dev/disk/by-* link compares equal to
+# the /dev/sdX1 findmnt reports. Empty in, empty out.
+canon() {
+    [ -n "$1" ] || return 0
+    readlink -f "$1" 2>/dev/null || echo "$1"
+}
+
 # The device mounted on top of the store path; empty when nothing is.
 store_holder() {
-    findmnt -no SOURCE "$MOUNT_POINT" 2>/dev/null | tail -n1 || true
+    canon "$(findmnt -no SOURCE "$MOUNT_POINT" 2>/dev/null | tail -n1 || true)"
+}
+
+# Switching drives: a different disk still mounted at the store path comes off
+# BEFORE fstab is repointed (skipping the mount whenever anything held the path
+# reported OK while frames kept landing on the previous drive). A busy previous
+# store refuses with fstab and the mount both untouched. The drive taken off is
+# remembered so a switch that fails later can put it back.
+PREV_UUID=
+PREV_FS=
+release_previous_store() { # $1=device about to become the store
+    held=$(store_holder)
+    if [ -z "$held" ] || [ "$held" = "$(canon "$1")" ]; then
+        return 0
+    fi
+    prev_uuid=$(value_for "$held" UUID)
+    prev_fs=$(value_for "$held" TYPE)
+    sync
+    if ! umount "$MOUNT_POINT" 2>/dev/null; then
+        echo "ERROR: device_busy previous_store"
+        exit 5
+    fi
+    PREV_UUID=$prev_uuid
+    PREV_FS=$prev_fs
+}
+
+# A switch that failed after the previous store came off: point fstab back at
+# that drive and remount it, best effort, so frames never fall through to the
+# bare directory on the system disk. The rebuild runs in a subshell because it
+# exits on its own failures, and the caller still has its typed error to print.
+restore_previous_store() {
+    [ -n "$PREV_UUID" ] || return 0
+    case "$PREV_FS" in exfat|ext4) ;; *) return 0 ;; esac
+    ( ensure_fstab_entry "$PREV_UUID" "$PREV_FS" ) >/dev/null 2>&1 || return 0
+    mount "$MOUNT_POINT" 2>/dev/null || true
 }
 
 mount_and_own() { # $1=uuid $2=fstype $3=deep-chown (1 after mkfs, else top-level only) $4=device
     uuid=$1
     fstype=$2
     deep=${3:-0}
-    device=$4
+    device=$(canon "$4")
     mkdir -p "$MOUNT_POINT"
-    # Switching drives: a different disk still mounted at the store path comes off
-    # BEFORE fstab is repointed. Skipping the mount whenever anything held the path
-    # reported OK while frames kept landing on the previous drive. A busy previous
-    # store refuses with fstab and the mount both untouched.
-    held=$(store_holder)
-    if [ -n "$held" ] && [ "$held" != "$device" ]; then
-        sync
-        if ! umount "$MOUNT_POINT" 2>/dev/null; then
-            echo "ERROR: device_busy previous_store"
-            exit 5
-        fi
-    fi
+    release_previous_store "$device"
     ensure_fstab_entry "$uuid" "$fstype"
     if [ "$(store_holder)" != "$device" ]; then
         if ! mount "$MOUNT_POINT" 2>/dev/null; then
+            restore_previous_store
             echo "ERROR: mount_failed"
             exit 8
         fi
@@ -193,6 +224,8 @@ mount_and_own() { # $1=uuid $2=fstype $3=deep-chown (1 after mkfs, else top-leve
     # stacked underneath, or a mount that resolved somewhere else, is not the store
     # the caller asked for.
     if [ "$(store_holder)" != "$device" ]; then
+        umount "$MOUNT_POINT" 2>/dev/null || true
+        restore_previous_store
         echo "ERROR: mount_failed wrong_device"
         exit 8
     fi
@@ -294,7 +327,7 @@ if [ "$CHECK" -eq 1 ]; then
     # remounted afterwards. Remounting any other checked disk would quietly make
     # it the store, unmounting the real one.
     WAS_STORE=0
-    [ "$(store_holder)" = "$DEVICE" ] && WAS_STORE=1
+    [ "$(store_holder)" = "$(canon "$DEVICE")" ] && WAS_STORE=1
     grep -q "^UUID=${UUID}[[:space:]][[:space:]]*${MOUNT_POINT}[[:space:]]" "$FSTAB" 2>/dev/null && WAS_STORE=1
     # fsck needs the filesystem quiet — unmount, check, remount. A busy
     # mount (something holding files open) refuses rather than forcing.
@@ -349,10 +382,18 @@ if [ "$FORMAT" -eq 1 ]; then
     if [ "$(lsblk -no TYPE "$DEVICE" 2>/dev/null | head -n1)" = "part" ]; then
         DEVICE=$(base_disk "$DEVICE")
     fi
+    # A different drive holding the store comes off BEFORE anything is erased, so
+    # a busy one refuses while the confirmed disk is still intact. A piece of the
+    # disk being erased (reformatting the store itself) is left to the loop below.
+    held=$(store_holder)
+    if [ -n "$held" ] && [ "$(base_disk "$held")" != "$(base_disk "$DEVICE")" ]; then
+        release_previous_store "$DEVICE"
+    fi
     # Unmount every mounted piece of the disk before touching it.
     for m in $(lsblk -lno PATH "$DEVICE" 2>/dev/null); do
         if findmnt -no TARGET "$m" >/dev/null 2>&1; then
             if ! umount "$m" 2>/dev/null; then
+                restore_previous_store
                 echo "ERROR: device_busy"
                 exit 5
             fi
@@ -376,6 +417,7 @@ if [ "$FORMAT" -eq 1 ]; then
         PTYPE=0FC63DAF-8483-4772-8E79-3D69D8477DE4   # Linux filesystem
         [ "$NEW_FS" = "exfat" ] && PTYPE=EBD0A0A2-B9E5-4433-87C0-68B6B72699C7  # Microsoft basic data
         if ! printf 'label: gpt\ntype=%s\n' "$PTYPE" | sfdisk --quiet --wipe always "$DEVICE" >/dev/null 2>&1; then
+            restore_previous_store
             echo "ERROR: mkfs_failed partition_table"
             exit 7
         fi
@@ -391,6 +433,7 @@ if [ "$FORMAT" -eq 1 ]; then
             i=$((i + 1))
         done
         if [ ! -b "$PART" ]; then
+            restore_previous_store
             echo "ERROR: mkfs_failed partition_node_missing"
             exit 7
         fi
@@ -398,13 +441,14 @@ if [ "$FORMAT" -eq 1 ]; then
         wipefs -a "$DEVICE" >/dev/null 2>&1 || true
     fi
     if [ "$NEW_FS" = "exfat" ]; then
-        mkfs.exfat -L "ARA-DISK" "$DEVICE" >/dev/null 2>&1 || { echo "ERROR: mkfs_failed"; exit 7; }
+        mkfs.exfat -L "ARA-DISK" "$DEVICE" >/dev/null 2>&1 || { restore_previous_store; echo "ERROR: mkfs_failed"; exit 7; }
     else
-        mkfs.ext4 -F -L "ARA-DISK" "$DEVICE" >/dev/null 2>&1 || { echo "ERROR: mkfs_failed"; exit 7; }
+        mkfs.ext4 -F -L "ARA-DISK" "$DEVICE" >/dev/null 2>&1 || { restore_previous_store; echo "ERROR: mkfs_failed"; exit 7; }
     fi
     # mkfs assigns a NEW uuid — fstab must pin that one, not the old one.
     UUID=$(value_for "$DEVICE" UUID)
     if [ -z "$UUID" ]; then
+        restore_previous_store
         echo "ERROR: uuid_not_found"
         exit 2
     fi

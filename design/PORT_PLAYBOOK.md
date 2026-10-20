@@ -2803,7 +2803,7 @@ After `sudo apt install openastroara-server` completes:
 3. WILMA prompts user: *"Select a USB drive for ARA data:"* with size + label + filesystem type + free space (if mounted) per option.
 4. User picks → WILMA calls `POST /api/v1/server/storage/configure { "uuid": "..." }`.
 5. Server invokes the **configure-storage helper** (§29.1.4) as root — on a packaged install through `openastroara-storage@.service` (request file + `systemctl start`, polkit-authorised; the daemon's unit has `NoNewPrivileges=true` so sudo cannot run inside it), on a dev rig via sudo:
-   - Helper validates the UUID, validates ext4, creates `/media/openastroara`, appends fstab line (idempotent), mounts the drive, chowns to `openastroara:openastroara`
+   - Helper validates the UUID, validates the filesystem (exFAT or ext4), creates `/media/openastroara`, unmounts a *different* drive still holding it (switching stores: a busy one refuses with `device_busy previous_store` before fstab changes, and a mount that then fails puts the previous drive back), rewrites the fstab line, mounts the drive and checks it is the one on top, chowns to `openastroara:openastroara` (ext4; exFAT ownership comes from the mount options)
    - On `ERROR: not_ext4` → server responds 422 with `{ "code": "not_ext4", "fs": "exfat" }`; WILMA presents the reformat path (§29.1.3)
    - On `ERROR: uuid_not_found` → server responds 422 with `{ "code": "uuid_not_found" }`; WILMA asks user to re-plug and retry
    - On `OK` → continue
