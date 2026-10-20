@@ -1816,6 +1816,62 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_delete_whose_bound_ran_out_is_queued_not_lost() {
+            // The endpoint hands the service a 15 s token; past it the delete must still happen later.
+            await using var fake = FakeGuider.Start();
+            var daemon = new ProfileDaemon(fake);
+            daemon.Profiles.Add((2, "Old Rig"));
+            using var q = new TempTwinStore();
+            using var svc = NewTwinService(q.Store, () => (Guid.NewGuid(), "Rig A"));
+            await ConnectAsync(svc, fake).ConfigureAwait(false);
+            daemon.SetConnected.Clear();
+            using var expired = new CancellationTokenSource();
+            await expired.CancelAsync().ConfigureAwait(false);
+            var id = Guid.NewGuid();
+
+            var outcome = await svc.DeleteAraGuiderProfileAsync("Old Rig", id, true, expired.Token).ConfigureAwait(false);
+
+            Assert.That(outcome.Status, Is.EqualTo(GuiderTwinDeleteStatus.Queued));
+            Assert.That(outcome.Reason, Does.Contain("did not answer in time"));
+            Assert.That(q.Store.List().Single().AraProfileId, Is.EqualTo(id));
+            Assert.That(daemon.SetConnected, Is.Empty);
+        }
+
+        /// <summary>A store that counts the calls that take its lock.</summary>
+        private sealed class CountingTwinStore : IGuiderTwinDeleteStore {
+            private readonly List<PendingGuiderTwinDelete> _items = new();
+            public int ListCalls;
+            public int PendingCount => _items.Count;
+            public IReadOnlyList<PendingGuiderTwinDelete> List() { ListCalls++; return _items.ToArray(); }
+            public void Add(PendingGuiderTwinDelete entry) => _items.Add(entry);
+            public void Remove(Guid araProfileId) => _items.RemoveAll(e => e.AraProfileId == araProfileId);
+        }
+
+        [Test]
+        public async Task The_ping_tick_never_takes_the_store_lock_while_the_guider_is_held_or_busy() {
+            // Add/Remove write the file under the store's lock; a ping tick that waited on it would stall
+            // hang detection behind SD-card I/O. The tick's pre-check must be lock-free.
+            await using var fake = FakeGuider.Start();
+            var daemon = new ProfileDaemon(fake);
+            var store = new CountingTwinStore();
+            var oldId = Guid.NewGuid();
+            store.Add(new PendingGuiderTwinDelete(oldId, "Old Rig", GuiderService.TwinNames("Old Rig", oldId), true, DateTimeOffset.UtcNow));
+            using var svc = NewTwinService(store, () => (Guid.NewGuid(), "Rig A"));
+            svc.ActiveRunSession = () => Guid.NewGuid();
+            await ConnectAsync(svc, fake).ConfigureAwait(false);
+            daemon.Profiles.Add((2, "Old Rig")); // the connect drain took the first copy; re-arm
+            store.Add(new PendingGuiderTwinDelete(oldId, "Old Rig", GuiderService.TwinNames("Old Rig", oldId), true, DateTimeOffset.UtcNow));
+            store.ListCalls = 0;
+
+            for (var i = 0; i < 5; i++) {
+                svc.StartIdleTwinDrainIfDue(svc.ConnectedGuiderOrNull()!);
+            }
+
+            Assert.That(store.ListCalls, Is.Zero, "under a run the tick decides from the cached state and the count, never the list");
+            Assert.That(store.PendingCount, Is.EqualTo(1));
+        }
+
+        [Test]
         public async Task A_delete_with_no_guider_connected_is_queued() {
             using var q = new TempTwinStore();
             using var svc = NewTwinService(q.Store, () => (Guid.NewGuid(), "Rig A"));
@@ -1943,6 +1999,13 @@ namespace OpenAstroAra.Test {
             var outcome = await svc.DeleteAraGuiderProfileAsync("Old Rig", Guid.NewGuid(), true, CancellationToken.None).ConfigureAwait(false);
             Assert.That(outcome.Status, Is.EqualTo(GuiderTwinDeleteStatus.Queued));
             Assert.That(outcome.Reason, Does.Contain("run"));
+
+            // ...and an unreadable app state is "not now" for the preview too, as it is for the delete.
+            svc.ActiveRunSession = () => null;
+            fake.OnRpc("get_app_state", _ => throw new InvalidOperationException("no app state"));
+            var unknown = await svc.DescribeAraGuiderTwinAsync("Old Rig", Guid.NewGuid(), CancellationToken.None).ConfigureAwait(false);
+            Assert.That(unknown.Exists, Is.True);
+            Assert.That(unknown.CanDeleteNow, Is.False);
             Assert.That(daemon.SetConnected, Is.Empty, "the run's equipment is never released");
             Assert.That(daemon.Deleted, Is.Empty);
             Assert.That(q.Store.List(), Has.Count.EqualTo(1));
