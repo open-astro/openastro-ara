@@ -809,6 +809,54 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task DaemonPausedRunsAsync_counts_a_pending_daemon_pause_and_a_landed_one_but_not_a_released_run() {
+            // §42.2 — a daemon pause lands at the next boundary; while the current instruction runs on,
+            // the run is Running with the gate armed. That is still the daemon's pause (review round 2:
+            // a 600 s sub must not read as "the user acted"). After the release it is nobody's.
+            var id = Guid.NewGuid();
+            var svc = BuildService(id, BuildBody(c => {
+                c.Items.Add(new WaitForTimeSpan { Time = 2 });
+                c.Items.Add(new Annotation { Name = "after" });
+            }), new RecordingWsBroadcaster());
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            await WaitForInstructionInFlightAsync(svc, id, 0);
+
+            var paused = await svc.PauseActiveRunsAsync(adoptable: true, CancellationToken.None);
+            Assert.That(paused, Is.EquivalentTo(new[] { id }));
+            Assert.That((await svc.GetRunStateAsync(id, CancellationToken.None))!.State, Is.EqualTo(SequenceRunState.Running), "the 2 s wait holds the boundary");
+            Assert.That(await svc.DaemonPausedRunsAsync(paused, CancellationToken.None), Is.EquivalentTo(new[] { id }), "a pending daemon pause is held");
+
+            await WaitForStateAsync(svc, id, SequenceRunState.Paused);
+            Assert.That(await svc.DaemonPausedRunsAsync(paused, CancellationToken.None), Is.EquivalentTo(new[] { id }), "a landed daemon pause is held");
+            Assert.That(await svc.DaemonPausedRunsAsync(new[] { Guid.NewGuid() }, CancellationToken.None), Is.Empty, "an unknown run is not");
+
+            Assert.That(await svc.ResumeRunsAsync(paused, CancellationToken.None), Is.EqualTo(1));
+            Assert.That(await svc.DaemonPausedRunsAsync(paused, CancellationToken.None), Is.Empty, "a resumed run is nobody's pause");
+            var state = await WaitForTerminalAsync(svc, id);
+            Assert.That(state!.State, Is.EqualTo(SequenceRunState.Completed));
+        }
+
+        [Test]
+        public async Task DaemonPausedRunsAsync_drops_a_run_the_user_re_paused_or_stopped() {
+            var id = Guid.NewGuid();
+            var svc = BuildService(id, BuildBody(c => {
+                c.Items.Add(new WaitForTimeSpan { Time = 2 });
+                c.Items.Add(new Annotation { Name = "after" });
+            }), new RecordingWsBroadcaster());
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            await WaitForInstructionInFlightAsync(svc, id, 0);
+            var paused = await svc.PauseActiveRunsAsync(adoptable: true, CancellationToken.None);
+            await WaitForStateAsync(svc, id, SequenceRunState.Paused);
+
+            await svc.PauseAsync(id, null, CancellationToken.None); // the user takes the pause over
+            Assert.That(await svc.DaemonPausedRunsAsync(paused, CancellationToken.None), Is.Empty, "a user pause is never the daemon's to release");
+
+            await svc.StopAsync(id, null, CancellationToken.None);
+            await WaitForTerminalAsync(svc, id);
+            Assert.That(await svc.DaemonPausedRunsAsync(paused, CancellationToken.None), Is.Empty, "a stopped run is not held");
+        }
+
+        [Test]
         public async Task An_adoptable_daemon_pause_is_reported_by_the_next_daemon_pause_so_its_auto_resume_covers_it() {
             // §42.2 — the star-lost watch pauses adoptably: if safety goes unsafe before the star is back,
             // safety's bulk pause must report the run among its own ids, or auto-resume-when-safe would

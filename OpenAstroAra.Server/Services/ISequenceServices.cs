@@ -154,10 +154,11 @@ public interface ISequencerService {
     Task<int> ResumeRunsAsync(IReadOnlyCollection<Guid> ids, CancellationToken ct);
 
     /// <summary>
-    /// §42.2 — which of <paramref name="ids"/> are still paused under daemon custody (a safety or
-    /// star-lost pause the user has neither resumed, re-paused nor stopped). The star-lost recovery
-    /// asks before it stops guiding and slews: an empty answer means the user acted and the episode
-    /// is theirs now.
+    /// §42.2 — which of <paramref name="ids"/> are still under daemon pause custody (a safety or
+    /// star-lost pause the user has neither resumed, re-paused nor stopped): Paused, or still Running
+    /// with the daemon's pause pending at the next instruction boundary. The star-lost recovery asks
+    /// before it probes, stops guiding and slews: an empty answer means the user acted and the
+    /// episode is theirs now.
     /// </summary>
     Task<IReadOnlyList<Guid>> DaemonPausedRunsAsync(IReadOnlyCollection<Guid> ids, CancellationToken ct);
 
