@@ -210,6 +210,20 @@ namespace OpenAstroAra.Test {
             return svc;
         }
 
+        /// <summary>The first recorded event of <paramref name="type"/>, waiting up to 20 s: for a state that is
+        /// transient at test cadences (paused → adjusting within one 20 ms retry delay) the event is the witness,
+        /// not a status poll.</summary>
+        private static async Task<JsonElement> WaitForEventAsync(WsRecorder ws, string type) {
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+            while (true) {
+                var hit = ws.Events.FirstOrDefault(e => e.Type == type);
+                if (hit.Type is not null) {
+                    return hit.Payload;
+                }
+                await Task.Delay(10, cts.Token).ConfigureAwait(false);
+            }
+        }
+
         private static async Task<PolarAlignStateDto> PollStateAsync(PolarAlignService svc, params string[] anyOf) {
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
             PolarAlignStateDto status = await svc.GetStatusAsync(cts.Token).ConfigureAwait(false);
@@ -444,8 +458,12 @@ namespace OpenAstroAra.Test {
             using var svc = NewService(guider, solver, ws: ws);
 
             await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
-            var paused = await PollStateAsync(svc, "paused", "failed").ConfigureAwait(false);
-            Assert.That(paused.State, Is.EqualTo("paused"), "5 consecutive failed solves park the loop in paused");
+            // The paused state lasts one PausedRetryDelay (20 ms here) before the scripted fallback solve
+            // resumes the loop, so a 50 ms status poll misses it about half the time and timed out at 20 s.
+            // The WS event is the durable witness of the pause; the state poll only has to see the resume.
+            var pausedEvent = await WaitForEventAsync(ws, WsEventCatalog.PolarAlignPaused).ConfigureAwait(false);
+            Assert.That(pausedEvent.GetProperty("state").GetString(), Is.EqualTo("paused"), "5 consecutive failed solves park the loop in paused");
+            Assert.That((await svc.GetStatusAsync(CancellationToken.None).ConfigureAwait(false)).State, Is.Not.EqualTo("failed"), "a failure streak pauses, it does not fail the routine");
 
             var resumed = await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
             Assert.That(resumed.State, Is.EqualTo("adjusting"), "the next good solve resumes the loop");
