@@ -122,5 +122,97 @@ namespace OpenAstroAra.Test {
             await Assert.ThatAsync(() => fetcher.OpenAsync(new Uri("http://cdn.example/x"), null, CancellationToken.None), Throws.TypeOf<InvalidOperationException>());
             Assert.That(handler.Requests, Is.Empty);
         }
+
+        // ── #1136: release assets redirect to GitHub's asset store ──
+
+        private static readonly Uri Asset = new("https://github.com/open-astro/sky-data/releases/download/astap-2026.10/astap-d80.tar.gz");
+        private static readonly Uri Store = new("https://release-assets.githubusercontent.com/github-production-release-asset/1/2?sig=x");
+
+        private static HttpResponseMessage Redirect(HttpStatusCode code, string location) {
+            var r = new HttpResponseMessage(code);
+            r.Headers.Location = new Uri(location, UriKind.RelativeOrAbsolute);
+            return r;
+        }
+
+        [Test]
+        public async Task A_302_to_the_github_asset_store_is_followed_and_the_body_comes_from_the_store() {
+            using var handler = new StubHandler();
+            handler.Respond = req => req.RequestUri == Asset
+                ? Redirect(HttpStatusCode.Found, Store.ToString())
+                : new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(new byte[] { 7, 7 }) };
+            var fetcher = new HttpSkyDataFetcher(new StubFactory(handler));
+
+            await using var fetch = await fetcher.OpenAsync(Asset, null, CancellationToken.None);
+
+            Assert.That(handler.Requests.Count, Is.EqualTo(2), "one hop");
+            Assert.That(handler.Requests[1].RequestUri, Is.EqualTo(Store));
+            Assert.That(fetch.TotalBytes, Is.EqualTo(2));
+        }
+
+        [TestCase("http://release-assets.githubusercontent.com/x")]   // HTTPS→HTTP downgrade
+        [TestCase("https://mirror.example/astap-d80.tar.gz")]          // another host
+        [TestCase("https://githubusercontent.com.evil.example/x")]     // suffix trick
+        public async Task An_untrusted_location_is_refused_and_not_requested(string location) {
+            using var handler = new StubHandler();
+            handler.Respond = _ => Redirect(HttpStatusCode.Found, location);
+            var fetcher = new HttpSkyDataFetcher(new StubFactory(handler));
+
+            await Assert.ThatAsync(() => fetcher.OpenAsync(Asset, null, CancellationToken.None),
+                Throws.TypeOf<InvalidOperationException>().With.Message.Contains("refusing to follow"));
+            Assert.That(handler.Requests.Count, Is.EqualTo(1), "the untrusted target is never requested");
+        }
+
+        [Test]
+        public async Task A_redirect_without_a_location_is_refused() {
+            using var handler = new StubHandler();
+            handler.Respond = _ => new HttpResponseMessage(HttpStatusCode.Found);
+            var fetcher = new HttpSkyDataFetcher(new StubFactory(handler));
+            await Assert.ThatAsync(() => fetcher.OpenAsync(Asset, null, CancellationToken.None),
+                Throws.TypeOf<InvalidOperationException>().With.Message.Contains("no Location"));
+        }
+
+        [Test]
+        public async Task A_redirect_loop_stops_at_the_cap() {
+            using var handler = new StubHandler();
+            // Every hop is trusted (github.com) and redirects again: the cap ends it, not a bad host.
+            handler.Respond = req => Redirect(HttpStatusCode.TemporaryRedirect, $"https://github.com/loop/{handler.Requests.Count}");
+            var fetcher = new HttpSkyDataFetcher(new StubFactory(handler));
+
+            await Assert.ThatAsync(() => fetcher.OpenAsync(Asset, null, CancellationToken.None),
+                Throws.TypeOf<InvalidOperationException>().With.Message.Contains("redirected more than"));
+            Assert.That(handler.Requests.Count, Is.EqualTo(HttpSkyDataFetcher.MaxRedirects + 1), "the first request plus MaxRedirects hops, then give up");
+        }
+
+        [Test]
+        public async Task A_relative_location_is_resolved_against_the_current_url() {
+            using var handler = new StubHandler();
+            handler.Respond = req => req.RequestUri == Asset
+                ? Redirect(HttpStatusCode.MovedPermanently, "/open-astro/sky-data/releases/download/astap-2026.10/astap-d80-v2.tar.gz")
+                : new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(Array.Empty<byte>()) };
+            var fetcher = new HttpSkyDataFetcher(new StubFactory(handler));
+
+            await using var fetch = await fetcher.OpenAsync(Asset, null, CancellationToken.None);
+
+            Assert.That(handler.Requests[1].RequestUri, Is.EqualTo(new Uri("https://github.com/open-astro/sky-data/releases/download/astap-2026.10/astap-d80-v2.tar.gz")));
+        }
+
+        [Test]
+        public async Task Validators_ride_every_hop_and_a_304_after_the_hop_is_not_modified() {
+            using var handler = new StubHandler();
+            var lastMod = new DateTimeOffset(2026, 10, 20, 0, 0, 0, TimeSpan.Zero);
+            handler.Respond = req => req.RequestUri == Asset
+                ? Redirect(HttpStatusCode.Found, Store.ToString())
+                : new HttpResponseMessage(HttpStatusCode.NotModified);
+            var fetcher = new HttpSkyDataFetcher(new StubFactory(handler));
+
+            await using var fetch = await fetcher.OpenAsync(Asset, new SkyDataValidator(lastMod, "\"d80\""), CancellationToken.None);
+
+            foreach (var req in handler.Requests) {
+                Assert.That(req.Headers.IfModifiedSince, Is.EqualTo(lastMod), $"If-Modified-Since on {req.RequestUri}");
+                Assert.That(req.Headers.IfNoneMatch.ToString(), Is.EqualTo("\"d80\""), $"If-None-Match on {req.RequestUri}");
+            }
+            Assert.That(fetch.NotModified, Is.True, "the store's 304 means the install is current");
+            Assert.That(fetch.ETag, Is.EqualTo("\"d80\""), "no echoed tag → the stored one is kept");
+        }
     }
 }
