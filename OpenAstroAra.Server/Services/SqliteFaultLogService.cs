@@ -158,10 +158,12 @@ public sealed partial class SqliteFaultLogService : IFaultLogService, IDisposabl
             await using var cmd = conn.CreateCommand();
             // action_taken is deliberately untouched: it records what the §42.3
             // reaction DID (e.g. gave_up:pause_sequence) — the resolution here
-            // is an observed reconnect, not a reaction outcome.
+            // is an observed reconnect, not a reaction outcome. A degraded row
+            // closes too: its in-memory episode dies with a daemon restart, so a
+            // row raised before one would otherwise hold the chip amber forever.
             cmd.CommandText = """
                 UPDATE faults SET resolved_at = $resolved
-                WHERE equipment_type = $etype AND fault_type = 'disconnected'
+                WHERE equipment_type = $etype AND fault_type IN ('disconnected', 'degraded')
                   AND resolved_at IS NULL;
                 """;
             cmd.Parameters.AddWithValue("$etype", deviceType.ToString().ToLowerInvariant());

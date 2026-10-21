@@ -396,6 +396,24 @@ namespace OpenAstroAra.Test {
                 Is.EqualTo(alreadyResolved.AddMinutes(1)), "an already-resolved row keeps its original resolution time");
         }
 
+        [Test]
+        public async Task Reconnect_resolves_a_degraded_row_left_by_an_earlier_daemon() {
+            // The service resolves its own degraded episode on connect, but that episode lives in
+            // memory: a row raised before a daemon restart has nobody left to resolve it.
+            var t0 = new DateTimeOffset(2026, 7, 10, 3, 0, 0, TimeSpan.Zero);
+            await service.RecordFaultAsync(Fault(DeviceType.Focuser, EquipmentFaultKind.Degraded, t0), CancellationToken.None);
+            await service.RecordFaultAsync(Fault(DeviceType.Rotator, EquipmentFaultKind.Degraded, t0.AddMinutes(1)), CancellationToken.None);
+
+            var reconnectAt = t0.AddHours(1);
+            var resolved = await service.ResolveOnReconnectAsync(DeviceType.Focuser, reconnectAt, CancellationToken.None);
+            Assert.That(resolved, Is.EqualTo(1));
+
+            var all = await service.ListAsync(50, null, null, null, null, null, CancellationToken.None);
+            Assert.That(all.Items.Single(f => f.EquipmentType == "focuser").ResolvedUtc, Is.EqualTo(reconnectAt));
+            Assert.That(all.Items.Single(f => f.EquipmentType == "rotator").ResolvedUtc, Is.Null,
+                "another device's degraded row waits for its own reconnect");
+        }
+
         // ─── #1191 — ResolveAsync: one row, by the fault's natural key ────────────────────────
 
         [Test]

@@ -43,11 +43,14 @@ public interface IFaultLogService {
     Task RecordActionAsync(EquipmentFaultEvent fault, string action, DateTimeOffset? resolvedUtc, CancellationToken ct);
 
     /// <summary>Stamp <c>resolved_at</c> on the device type's unresolved
-    /// <c>disconnected</c> rows — the device reported connected again, so a
-    /// standing disconnect fault is over regardless of how it healed (the
-    /// §42.3 ladder stamps `recovered` itself; this covers the gave-up-then-
-    /// manually-fixed path, where no `recovered` ever fires and the row would
-    /// otherwise read unresolved forever). Other kinds are untouched:
+    /// <c>disconnected</c> and <c>degraded</c> rows — the device reported
+    /// connected again, so a standing disconnect fault is over regardless of how
+    /// it healed (the §42.3 ladder stamps `recovered` itself; this covers the
+    /// gave-up-then-manually-fixed path, where no `recovered` ever fires and the
+    /// row would otherwise read unresolved forever). A degraded episode ends with
+    /// the session too: the service resolves its own on connect, but one raised
+    /// before a daemon restart has no owner left to resolve it, and a device still
+    /// failing re-raises it within a few refresh ticks. Other kinds are untouched:
     /// a connect doesn't prove tracking, and advisories are one-shots.
     /// Returns the number of rows resolved.</summary>
     Task<int> ResolveOnReconnectAsync(DeviceType deviceType, DateTimeOffset resolvedUtc, CancellationToken ct);

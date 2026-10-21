@@ -61,7 +61,8 @@ internal sealed class DeviceHealthWatch {
 
     /// <summary>A fresh session (connect / disconnect / trip) starts clean. A degraded episode that
     /// was standing ends here too — resolved as recovered, so its §42.5 row does not seed the chip
-    /// amber again on the next relaunch (the reconnect hook only resolves <c>disconnected</c> rows).</summary>
+    /// amber again on the next relaunch (a disconnect fires no reconnect hook; a row left behind by
+    /// a daemon restart is closed by the next connect's reconnect hook instead).</summary>
     public void Reset() {
         _tracker.Reset();
         var fault = _degradedFault;
