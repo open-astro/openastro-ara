@@ -22,9 +22,26 @@ namespace OpenAstroAra.Server.Services;
 /// A flat frame's brightness as calibration cares about it: the median of the central half of the
 /// frame (vignetting darkens the corners, hot pixels drag a mean up). On a colour sensor each of the
 /// four Bayer positions is measured on its own and the brightest wins, so green never clips while
-/// the average looks fine. <c>Brightest</c> is the hottest pixel in that area, for the range check.
+/// the average looks fine. <c>Brightest</c> is the hottest pixel in that area, for the range check;
+/// <c>BitsSet</c> is every bit any of its pixels had, for <see cref="LooksScaledAbove"/>.
 /// </summary>
-internal readonly record struct FlatLevel(double Level, int Brightest) {
+internal readonly record struct FlatLevel(double Level, int Brightest, int BitsSet = 0) {
+
+    /// <summary>
+    /// True when every pixel sits on a coarser grid than <paramref name="fullScale"/> implies: a
+    /// 12-bit camera reporting MaxADU 4095 whose driver delivers data scaled to 16 bits has every
+    /// value a multiple of 16. A dim probe from such a camera never exceeds 4095, so the range
+    /// check alone would accept it, and the flats would come out at a sixteenth of the real range.
+    /// Native data at that depth always has noise in its low bits.
+    /// </summary>
+    internal bool LooksScaledAbove(int fullScale) {
+        if (fullScale is <= 0 or >= ushort.MaxValue || BitsSet == 0) {
+            return false;
+        }
+        var bits = 32 - System.Numerics.BitOperations.LeadingZeroCount((uint)fullScale);
+        var lowBits = (1 << Math.Max(0, 16 - bits)) - 1;
+        return lowBits != 0 && (BitsSet & lowBits) == 0;
+    }
 
     internal static FlatLevel Measure(ReadOnlySpan<ushort> pixels, int width, int height, string? bayerPattern) {
         if (width <= 0 || height <= 0 || pixels.Length < width * height) {
@@ -38,28 +55,30 @@ internal readonly record struct FlatLevel(double Level, int Brightest) {
         var y1 = height >= 8 ? height - y0 : height;
         var histogram = new int[ushort.MaxValue + 1];
         var brightest = 0;
+        var bitsSet = 0;
         if (string.IsNullOrEmpty(bayerPattern)) {
-            var level = Median(pixels, width, x0, y0, x1, y1, 1, histogram, ref brightest);
-            return new FlatLevel(level, brightest);
+            var level = Median(pixels, width, x0, y0, x1, y1, 1, histogram, ref brightest, ref bitsSet);
+            return new FlatLevel(level, brightest, bitsSet);
         }
         var max = 0.0;
         for (var dy = 0; dy < 2; dy++) {
             for (var dx = 0; dx < 2; dx++) {
                 Array.Clear(histogram);
-                max = Math.Max(max, Median(pixels, width, x0 + dx, y0 + dy, x1, y1, 2, histogram, ref brightest));
+                max = Math.Max(max, Median(pixels, width, x0 + dx, y0 + dy, x1, y1, 2, histogram, ref brightest, ref bitsSet));
             }
         }
-        return new FlatLevel(max, brightest);
+        return new FlatLevel(max, brightest, bitsSet);
     }
 
     private static double Median(ReadOnlySpan<ushort> pixels, int width, int x0, int y0, int x1, int y1, int step,
-            int[] histogram, ref int brightest) {
+            int[] histogram, ref int brightest, ref int bitsSet) {
         long count = 0;
         for (var y = y0; y < y1; y += step) {
             var row = y * width;
             for (var x = x0; x < x1; x += step) {
                 var v = pixels[row + x];
                 histogram[v]++;
+                bitsSet |= v;
                 if (v > brightest) {
                     brightest = v;
                 }

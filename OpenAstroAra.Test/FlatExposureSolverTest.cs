@@ -151,6 +151,21 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void Twelve_bit_data_scaled_to_sixteen_bits_is_recognised_even_when_dim() {
+            var scaled = new ushort[16 * 16];
+            var native = new ushort[16 * 16];
+            for (var i = 0; i < scaled.Length; i++) {
+                scaled[i] = (ushort)(2032 + (16 * (i % 3)));  // 2032, 2048, 2064: all multiples of 16
+                native[i] = (ushort)(2040 + (i % 7));          // real 12-bit noise in the low bits
+            }
+            Assert.That(FlatLevel.Measure(scaled, 16, 16, null).LooksScaledAbove(4095), Is.True,
+                "a dim probe never exceeds 4095, but its values still give the scaling away");
+            Assert.That(FlatLevel.Measure(native, 16, 16, null).LooksScaledAbove(4095), Is.False);
+            Assert.That(FlatLevel.Measure(scaled, 16, 16, null).LooksScaledAbove(ushort.MaxValue), Is.False,
+                "16-bit cameras have no coarser grid to detect");
+        }
+
+        [Test]
         public void A_colour_sensor_is_measured_by_its_brightest_channel() {
             // RGGB: R 20000, G 40000, B 10000 — the mean (27500) would let green clip first.
             var pixels = new ushort[16 * 16];

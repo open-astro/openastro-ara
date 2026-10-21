@@ -45,6 +45,8 @@ namespace OpenAstroAra.Test {
             public double AduPerSecond { get; set; } = 10000;
             public double Pedestal { get; set; }
             public int MaxAdu { get; set; }
+            /// <summary>Values land on multiples of this (16 = 12-bit data scaled to 16 bits).</summary>
+            public int Quantum { get; set; } = 1;
             // The panel's brightness scales the rate (null = the scene doesn't depend on it).
             public Func<double>? BrightnessScale { get; set; }
             public List<double> ProbedExposures { get; } = new();
@@ -59,7 +61,8 @@ namespace OpenAstroAra.Test {
                 ct.ThrowIfCancellationRequested();
                 ProbedExposures.Add(exposureSec);
                 var rate = AduPerSecond * (BrightnessScale?.Invoke() ?? 1);
-                var value = (ushort)Math.Clamp(Pedestal + (rate * exposureSec), 0, ushort.MaxValue);
+                var raw = Math.Clamp(Pedestal + (rate * exposureSec), 0, ushort.MaxValue);
+                var value = (ushort)(Math.Floor(raw / Quantum) * Quantum);
                 var pixels = new ushort[16];
                 Array.Fill(pixels, value);
                 return Task.FromResult(new AnalysisFrame(pixels, 4, 4, DateTimeOffset.UtcNow));
@@ -205,6 +208,20 @@ namespace OpenAstroAra.Test {
             Assert.That(ok, Is.True);
             Assert.That(captured[0].ExposureTime, Is.EqualTo((65535 * 0.5 - 1000) / 10000).Within(1e-6));
             Assert.That(scene.ProbedGains, Is.All.EqualTo(101), "probes expose at the flats' gain, not the imaging default");
+        }
+
+        [Test]
+        public async Task A_dim_first_probe_of_scaled_data_still_solves_against_16_bit() {
+            // 12-bit camera, MaxADU 4095, frames scaled ×16. The first probe (1 s) reads 2048:
+            // inside 4095 and right on its 50% target, so the range check alone would accept it.
+            scene.MaxAdu = 4095;
+            scene.Quantum = 16;
+            scene.AduPerSecond = 2048;
+            var ok = await CreateSUT().CaptureFlatSetAsync(Request(targetAdu: 0, maxSec: 30), new Progress<ApplicationStatus>(), CancellationToken.None);
+
+            Assert.That(ok, Is.True);
+            Assert.That(captured[0].ExposureTime, Is.EqualTo(65535 * 0.5 / 2048).Within(0.5),
+                "half the real 16-bit range, not a sixteenth of it");
         }
 
         [Test]

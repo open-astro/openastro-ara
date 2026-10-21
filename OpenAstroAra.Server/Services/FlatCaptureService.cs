@@ -186,7 +186,7 @@ public sealed partial class FlatCaptureService : IFlatCaptureExecutor {
             }
             var frame = await _frames!.CaptureForAnalysisAsync(exposureSec, binning: 1, gain, offset, ct).ConfigureAwait(false);
             var level = FlatLevel.Measure(frame.Pixels.Span, frame.Width, frame.Height, frame.BayerPattern);
-            if (level.Brightest > fullScale) {
+            if (level.Brightest > fullScale || level.LooksScaledAbove(fullScale)) {
                 throw new FullScaleMismatchException();
             }
             probeNo++;
