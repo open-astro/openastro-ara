@@ -83,11 +83,12 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public async Task CaptureForAnalysisAsync_when_not_connected_throws_InvalidOperation() {
+        public async Task CaptureForAnalysisAsync_when_not_connected_throws_camera_unavailable() {
             // §59 — a probe capture on a disconnected camera must fail loudly (a silent
-            // gap in the sweep's measurements would corrupt the focus curve).
+            // gap in the sweep's measurements would corrupt the focus curve). Typed (#1436), so a
+            // run pauses for the user; still an InvalidOperationException for other callers.
             using var svc = new CameraService();
-            await Assert.ThrowsAsync<InvalidOperationException>(
+            await Assert.ThrowsAsync<OpenAstroAra.Core.Model.CameraUnavailableException>(
                 () => svc.CaptureForAnalysisAsync(1.0, binning: 1, CancellationToken.None));
         }
 
