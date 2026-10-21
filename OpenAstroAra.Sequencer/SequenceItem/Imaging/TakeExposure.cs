@@ -63,6 +63,8 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Imaging {
                 Binning = Binning is null ? new BinningMode(1, 1) : new BinningMode(Binning.X, Binning.Y),
                 ImageType = ImageType,
                 ExposureCount = ExposureCount,
+                CalibrationTarget = CalibrationTarget,
+                CalibrationNight = CalibrationNight,
             };
         }
 
@@ -120,6 +122,25 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Imaging {
             set { Volatile.Write(ref exposureCount, value); RaisePropertyChanged(); }
         }
 
+        private string? calibrationTarget;
+
+        /// <summary>A generated calibration run's lights target: files the frame under it (see
+        /// <see cref="CalibrationFiling"/>). Null = the enclosing target, as for any capture.</summary>
+        [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
+        public string? CalibrationTarget {
+            get => calibrationTarget;
+            set { calibrationTarget = value; RaisePropertyChanged(); }
+        }
+
+        private string? calibrationNight;
+
+        /// <summary>The lights' night (yyyy-MM-dd) the frame files under. Null = the night it was taken.</summary>
+        [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
+        public string? CalibrationNight {
+            get => calibrationNight;
+            set { calibrationNight = value; RaisePropertyChanged(); }
+        }
+
         private IList<string> issues = new List<string>();
 
         public IList<string> Issues {
@@ -136,6 +157,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Imaging {
                 exposureCount: 1) {
                 Gain = Gain,
                 Offset = Offset,
+                Night = CalibrationFiling.ParseNight(CalibrationNight),
             };
             // A missing storage disk or a lost camera parks the run awaiting the user and Resume takes
             // the frame again — never a failed frame per exposure (2026-10-16: the drive fell off, every
@@ -148,7 +170,8 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Imaging {
             // and the catalog's target_name (the night of 2026-10-02 they all landed under "Imaging").
             _ = await UserFixablePause.RetryAfterUserFixAsync(this, "Take exposure",
                 () => imagingMediator.CaptureImage(sequence, token, progress,
-                    ItemUtility.ResolveTargetName(this) ?? Parent?.Name ?? string.Empty), progress, token);
+                    CalibrationFiling.Target(CalibrationTarget) ?? ItemUtility.ResolveTargetName(this) ?? Parent?.Name ?? string.Empty),
+                progress, token);
             // Atomic: a ParallelContainer can drive concurrent executions, and a lost update would
             // persist a wrong count through the [JsonProperty] backing field.
             Interlocked.Increment(ref exposureCount);

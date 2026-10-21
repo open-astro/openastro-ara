@@ -35,6 +35,8 @@ namespace OpenAstroAra.Sequencer.SequenceItem.FlatDevice {
     /// <param name="Gain">Camera gain for the saved flats (-1 = camera default; match the session's lights).</param>
     /// <param name="Offset">Camera offset for the saved flats (-1 = camera default).</param>
     /// <param name="TargetPercent">Automatic target as a percentage of the camera's full scale.</param>
+    /// <param name="TargetName">The lights' target the flats file under (null = "Flats").</param>
+    /// <param name="Night">The lights' night the flats file under (null = the night they're taken).</param>
     public sealed record FlatSetRequest(
         double TargetAdu,
         double TolerancePct,
@@ -44,7 +46,9 @@ namespace OpenAstroAra.Sequencer.SequenceItem.FlatDevice {
         double MaxExposureSec,
         int Gain = -1,
         int Offset = -1,
-        double TargetPercent = 50);
+        double TargetPercent = 50,
+        string? TargetName = null,
+        DateOnly? Night = null);
 
     /// <summary>
     /// One §48.4 twilight sky-flat set for the CURRENT filter/pointing context. Unlike the panel
@@ -60,6 +64,8 @@ namespace OpenAstroAra.Sequencer.SequenceItem.FlatDevice {
     /// <param name="StopAtMinAdu">Bail when the sky reads below this even at the maximum exposure (over-dark dusk).</param>
     /// <param name="Gain">Camera gain for the saved flats (-1 = camera default).</param>
     /// <param name="Offset">Camera offset for the saved flats (-1 = camera default).</param>
+    /// <param name="TargetName">The lights' target the flats file under (null = "Sky flats").</param>
+    /// <param name="Night">The lights' night the flats file under (null = the night they're taken).</param>
     public sealed record SkyFlatSetRequest(
         double TargetAdu,
         double TolerancePct,
@@ -69,7 +75,9 @@ namespace OpenAstroAra.Sequencer.SequenceItem.FlatDevice {
         double StopAtMaxAdu,
         double StopAtMinAdu,
         int Gain = -1,
-        int Offset = -1);
+        int Offset = -1,
+        string? TargetName = null,
+        DateOnly? Night = null);
 
     /// <summary>
     /// §48.3/§48.4 — the flat-capture seam <see cref="FlatPanelFlats"/> and <see cref="SkyFlats"/>

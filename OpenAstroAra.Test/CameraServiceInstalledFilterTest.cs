@@ -166,6 +166,12 @@ namespace OpenAstroAra.Test {
                 Assert.That(row!.FilterName, Is.EqualTo("Ha"));
                 var header = Encoding.ASCII.GetString(await File.ReadAllBytesAsync(row.FilePath));
                 Assert.That(header, Does.Match(@"FILTER  = 'Ha\s*'"));
+
+                // Darks and bias don't depend on the filter: the wheel's position isn't recorded.
+                await svc.CaptureImage(new CaptureSequence { ExposureTime = 0.01, ImageType = "DARK" },
+                    CancellationToken.None, null, "M42");
+                Assert.That(row!.FrameType, Is.EqualTo(FrameType.Dark));
+                Assert.That(row.FilterName, Is.Null);
             } finally {
                 Directory.Delete(dir, recursive: true);
             }

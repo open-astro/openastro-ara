@@ -394,6 +394,11 @@ public sealed class SqliteCalibrationService : ICalibrationService {
         var totalDarks = darks.Sum(d => d.FrameCount);
         var afterFlats = new AfterFlatsSpec(bias, darks, request.PauseForLensCap);
 
+        // The frames file next to the lights they calibrate: {target}/{night}/Flat, …/Dark, …/Bias.
+        // The night is the lights' observing night on the daemon's clock, as the lights were named.
+        var filing = string.IsNullOrWhiteSpace(session.TargetName) ? null
+            : new CalibrationFilingSpec(session.TargetName,
+                DateOnly.FromDateTime(session.SessionStartUtc.ToLocalTime().AddHours(-12).DateTime));
         var name = $"{RunTitle(sky, steps.Count > 0, bias.Count > 0, darks.Count > 0)} — {session.TargetName}";
 
         // §39.5: materialize the plan into a runnable §38 sequence unless the caller asked for the
@@ -408,8 +413,8 @@ public sealed class SqliteCalibrationService : ICalibrationService {
                         SunAltitudeDeg: policies?.SkyFlatSunAltitude ?? DefaultSkySunAltitude,
                         AzimuthDeg: policies?.SkyFlatTargetAzimuth ?? DefaultSkyAzimuth,
                         AltitudeDeg: policies?.SkyFlatTargetAltitude ?? DefaultSkyAltitude),
-                    parkMountAfter: parkAfter, cooling: cooling, afterFlats: afterFlats)
-                : CalibrationSequenceBuilder.BuildMatchingFlatsBody(name, specs, parkMountAfter: parkAfter, cooling: cooling, afterFlats: afterFlats);
+                    parkMountAfter: parkAfter, cooling: cooling, afterFlats: afterFlats, filing: filing)
+                : CalibrationSequenceBuilder.BuildMatchingFlatsBody(name, specs, parkMountAfter: parkAfter, cooling: cooling, afterFlats: afterFlats, filing: filing);
             var created = await _sequences.CreateAsync(new SequenceCreateRequestDto(
                 Name: name,
                 Description: $"Matching flats generated from the {session.SessionStartUtc:yyyy-MM-dd} {session.TargetName} session ({sessionId:D}).",

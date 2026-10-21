@@ -155,7 +155,7 @@ public sealed partial class CameraService : ICameraMediator, IImagingMediator {
             // to clients over the §60.9 WS stream (SequencerService), not through NINA's in-process
             // IProgress reporter, which has no subscriber in the server.
             var ok = await CaptureWithRetryAsync(
-                id => CaptureCoreAsync(client, id, request, imageType, MapFrameType(imageType), effectiveTarget, token),
+                id => CaptureCoreAsync(client, id, request, imageType, MapFrameType(imageType), effectiveTarget, token, sequence.Night),
                 frameId, effectiveTarget).ConfigureAwait(false);
             if (!ok) {
                 // The store can drop while this capture waited its turn: still a pause, not a failed frame.

@@ -116,16 +116,21 @@ namespace OpenAstroAra.Test {
         private FakeFlatDeviceService panel = null!;
         private Mock<IImagingMediator> imagingMock = null!;
         private List<CaptureSequence> captured = null!;
+        private List<string> capturedTargets = null!;
 
         [SetUp]
         public void Setup() {
             scene = new LinearSceneFrameSource();
             panel = new FakeFlatDeviceService();
             captured = new List<CaptureSequence>();
+            capturedTargets = new List<string>();
             imagingMock = new Mock<IImagingMediator>();
             imagingMock
                 .Setup(x => x.CaptureImage(It.IsAny<CaptureSequence>(), It.IsAny<CancellationToken>(), It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<string>()))
-                .Callback<CaptureSequence, CancellationToken, IProgress<ApplicationStatus>?, string>((s, _, _, _) => captured.Add(s))
+                .Callback<CaptureSequence, CancellationToken, IProgress<ApplicationStatus>?, string>((s, _, _, target) => {
+                    captured.Add(s);
+                    capturedTargets.Add(target);
+                })
                 .ReturnsAsync((IExposureData)null!);
         }
 
@@ -162,6 +167,24 @@ namespace OpenAstroAra.Test {
             Assert.That(captured[0].ExposureTime, Is.EqualTo(3).Within(1e-6));
             Assert.That(captured[0].Gain, Is.EqualTo(101), "flats must match the session gain");
             Assert.That(captured[0].Offset, Is.EqualTo(7));
+        }
+
+        [Test]
+        public async Task Flats_for_a_session_file_under_its_target_and_night() {
+            var night = new DateOnly(2026, 10, 16);
+            var ok = await CreateSUT().CaptureFlatSetAsync(
+                Request() with { TargetName = "North America Nebula", Night = night },
+                new Progress<ApplicationStatus>(), CancellationToken.None);
+
+            Assert.That(ok, Is.True);
+            Assert.That(capturedTargets, Is.All.EqualTo("North America Nebula"));
+            Assert.That(captured.Select(s => s.Night), Is.All.EqualTo(night));
+
+            captured.Clear();
+            capturedTargets.Clear();
+            await CreateSUT().CaptureFlatSetAsync(Request(), new Progress<ApplicationStatus>(), CancellationToken.None);
+            Assert.That(capturedTargets, Is.All.EqualTo("Flats"), "a hand-built flat step still files under Flats");
+            Assert.That(captured.Select(s => s.Night), Is.All.Null);
         }
 
         [Test]

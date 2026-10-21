@@ -137,8 +137,9 @@ public sealed partial class FlatCaptureService : IFlatCaptureExecutor {
                     binning: new OpenAstroAra.Core.Model.Equipment.BinningMode(1, 1), exposureCount: 1) {
                     Gain = request.Gain,
                     Offset = request.Offset,
+                    Night = request.Night,
                 };
-                _ = await _imaging.CaptureImage(sequence, token, progress, "Flats").ConfigureAwait(false);
+                _ = await _imaging.CaptureImage(sequence, token, progress, request.TargetName ?? "Flats").ConfigureAwait(false);
                 progress?.Report(new ApplicationStatus {
                     Status = $"Flat {n}/{request.FrameCount} at {exposure:0.###}s",
                 });
@@ -424,8 +425,9 @@ public sealed partial class FlatCaptureService : IFlatCaptureExecutor {
                     binning: new OpenAstroAra.Core.Model.Equipment.BinningMode(1, 1), exposureCount: 1) {
                     Gain = request.Gain,
                     Offset = request.Offset,
+                    Night = request.Night,
                 };
-                _ = await _imaging.CaptureImage(sequence, token, progress, "Sky flats").ConfigureAwait(false);
+                _ = await _imaging.CaptureImage(sequence, token, progress, request.TargetName ?? "Sky flats").ConfigureAwait(false);
                 progress?.Report(new ApplicationStatus {
                     Status = $"Sky flat {n}/{request.FrameCount} at {exposure:0.###}s",
                 });

@@ -57,6 +57,16 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void Calibration_for_an_earlier_night_files_under_that_night() {
+            var path = FrameNaming.ExpandRelativePath(
+                "{target}/{night}/{type}/{datetime}", Ctx(imageType: "dark", target: "North America Nebula") with {
+                    Night = new DateOnly(2026, 7, 28),
+                });
+            Assert.That(path, Is.EqualTo($"North America Nebula{S}2026-07-28{S}Dark{S}2026-08-04_01-30-05"),
+                "the folder is the lights' night; the file name keeps when it was really taken");
+        }
+
+        [Test]
         public void Both_dialects_name_the_same_frame_identically() {
             var legacy = FrameNaming.ExpandRelativePath(
                 @"$$DATEMINUS12$$\\$$IMAGETYPE$$\\$$DATETIME$$_$$FILTER$$_$$EXPOSURETIME$$s", Ctx());

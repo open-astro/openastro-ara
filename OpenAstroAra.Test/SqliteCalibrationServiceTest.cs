@@ -446,6 +446,32 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Calibration_frames_file_under_the_lights_target_and_night() {
+            var store = new FileSequenceService(_dir);
+            var svc = new SqliteCalibrationService(_db, store);
+            await InsertFrameAsync(Session, "light", "Ha", 60, 100, "North America Nebula", offset: 50);
+
+            var plan = await svc.GenerateMatchingFlatsAsync(Session,
+                new MatchingFlatsRequestDto(null, null, GenerateOnly: false, IncludeBias: true, IncludeDarks: true),
+                idempotencyKey: null, CancellationToken.None);
+            var session = await svc.GetSessionAsync(Session, CancellationToken.None);
+            var night = DateOnly.FromDateTime(session!.SessionStartUtc.ToLocalTime().AddHours(-12).DateTime)
+                .ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+
+            var stored = await store.GetAsync(plan.GeneratedSequenceId!.Value, CancellationToken.None);
+            var root = new SequenceJsonConverter(HeadlessSequencerFactory.WithDefaults()).Deserialize(stored!.Body.GetRawText());
+            var blocks = root.GetItemsSnapshot().OfType<SequentialContainer>().ToList();
+            var flats = blocks.SelectMany(b => b.GetItemsSnapshot()).OfType<FlatPanelFlats>().ToList();
+            var exposures = blocks.SelectMany(b => b.GetItemsSnapshot()).OfType<TakeExposure>().ToList();
+            Assert.That(flats, Is.Not.Empty);
+            Assert.That(exposures.Select(e => e.ImageType), Is.EquivalentTo(BiasThenDark));
+            Assert.That(flats.Select(f => f.CalibrationTarget).Concat(exposures.Select(e => e.CalibrationTarget)),
+                Is.All.EqualTo("North America Nebula"), "{target}/{night}/Flat, Dark and Bias sit next to the lights");
+            Assert.That(flats.Select(f => f.CalibrationNight).Concat(exposures.Select(e => e.CalibrationNight)),
+                Is.All.EqualTo(night));
+        }
+
+        [Test]
         public async Task No_lens_cap_pause_unless_asked() {
             var store = new FileSequenceService(_dir);
             var svc = new SqliteCalibrationService(_db, store);

@@ -114,6 +114,25 @@ namespace OpenAstroAra.Sequencer.SequenceItem.FlatDevice {
             set { offset = value; RaisePropertyChanged(); }
         }
 
+        private string? calibrationTarget;
+
+        /// <summary>A generated calibration run's lights target: files the frame under it (see
+        /// <see cref="CalibrationFiling"/>). Null = the enclosing target, as for any capture.</summary>
+        [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
+        public string? CalibrationTarget {
+            get => calibrationTarget;
+            set { calibrationTarget = value; RaisePropertyChanged(); }
+        }
+
+        private string? calibrationNight;
+
+        /// <summary>The lights' night (yyyy-MM-dd) the frame files under. Null = the night it was taken.</summary>
+        [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
+        public string? CalibrationNight {
+            get => calibrationNight;
+            set { calibrationNight = value; RaisePropertyChanged(); }
+        }
+
         public override async Task Execute(IProgress<ApplicationStatus> progress, CancellationToken token) {
             if (flatCaptureExecutor is null) {
                 throw new SequenceEntityFailedException("Sky-flat capture is not wired for sequence execution on this daemon.");
@@ -125,7 +144,8 @@ namespace OpenAstroAra.Sequencer.SequenceItem.FlatDevice {
             }
             var request = new SkyFlatSetRequest(
                 TargetAdu, TargetAduTolerancePct, FrameCount,
-                MinExposureSec, MaxExposureSec, StopAtMaxAdu, StopAtMinAdu, Gain, Offset);
+                MinExposureSec, MaxExposureSec, StopAtMaxAdu, StopAtMinAdu, Gain, Offset,
+                CalibrationFiling.Target(CalibrationTarget), CalibrationFiling.ParseNight(CalibrationNight));
             // A lost camera pauses for the user, as for panel flats.
             var ok = await UserFixablePause.RetryAfterUserFixAsync(this, "Sky-flat set",
                 () => flatCaptureExecutor.CaptureSkyFlatSetAsync(request, progress, token), progress, token);
@@ -157,6 +177,8 @@ namespace OpenAstroAra.Sequencer.SequenceItem.FlatDevice {
                 StopAtMinAdu = StopAtMinAdu,
                 Gain = Gain,
                 Offset = Offset,
+                CalibrationTarget = CalibrationTarget,
+                CalibrationNight = CalibrationNight,
             };
         }
 

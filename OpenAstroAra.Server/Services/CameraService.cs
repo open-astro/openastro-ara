@@ -702,6 +702,10 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
         }
     }
 
+    private static bool IsFilterIndependent(string imageType) =>
+        string.Equals(imageType, OpenAstroAra.Equipment.Model.ImageTypes.BIAS, StringComparison.OrdinalIgnoreCase)
+        || string.Equals(imageType, OpenAstroAra.Equipment.Model.ImageTypes.DARK, StringComparison.OrdinalIgnoreCase);
+
     /// <summary>
     /// The request with its filter filled from the connected wheel when it names none. A named
     /// filter is kept: it is what the caller drove the wheel to. A disconnected wheel or one
@@ -895,7 +899,7 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
     /// </summary>
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Catalog-registration boundary: any DB failure after a successful FITS write degrades to an Error log naming the recoverable file (the §28.8 startup scan re-registers it) rather than faulting the capture worker. CA1031's log-and-recover boundary applies.")]
-    private async Task<bool> CaptureCoreAsync(AlpacaCamera client, Guid frameId, ExposureRequestDto request, string imageType, FrameType frameType, string targetName, CancellationToken ct) {
+    private async Task<bool> CaptureCoreAsync(AlpacaCamera client, Guid frameId, ExposureRequestDto request, string imageType, FrameType frameType, string targetName, CancellationToken ct, DateOnly? night = null) {
         // §29 — per-frame pre-capture free-space check: the disk monitor polls every 60 s, and a
         // burst of large frames can fill the volume between ticks. Blocks BEFORE the shutter
         // opens (an exposure that can't be saved is wasted sky time) — but only when the volume
@@ -918,7 +922,11 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
             LogPreCaptureStoreEjected(frameId, ejectedDir);
             return false;
         }
-        request = WithInstalledFilter(request);
+        // Bias and darks don't depend on the filter: recording the wheel's position just labels them
+        // with whatever filter it happened to be sitting on.
+        if (!IsFilterIndependent(imageType)) {
+            request = WithInstalledFilter(request);
+        }
         var exposed = await ExposeAndDownloadAsync(client, frameId, request, imageType.ToLowerInvariant(), ct).ConfigureAwait(false);
         if (exposed is null) {
             return false; // abandoned (disconnect/supersede) or not-ready — already logged
@@ -941,7 +949,7 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
         var storeTiming = System.Diagnostics.Stopwatch.StartNew();
         var filePath = WriteFits(frameId, pixels, width, height, applied, imageType, capturedAt, focuserPos,
             targetName: targetName, sensorTemp: sensorTemp, tempSetPoint: tempSetPoint, conditions: conditions,
-            pointing: pointing, rotatorMechanicalDeg: rotatorDeg);
+            pointing: pointing, rotatorMechanicalDeg: rotatorDeg, night: night);
         var writeMs = storeTiming.ElapsedMilliseconds;
         try {
             await RegisterFrameAsync(frameId, request, frameType, targetName, capturedAt, filePath, width, height, focuserPos, appliedBin: applied.BinX,
@@ -1294,14 +1302,14 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
         return request with { BinX = binX, BinY = binY, Gain = gain, CameraOffset = cameraOffset };
     }
 
-    private string WriteFits(Guid frameId, ushort[] pixels, int width, int height, ExposureRequestDto request, string imageType, DateTimeOffset capturedAt, int? focuserPosition = null, string? targetName = null, double? sensorTemp = null, double? tempSetPoint = null, ObservingConditionsDto? conditions = null, FramePointing? pointing = null, double? rotatorMechanicalDeg = null) {
+    private string WriteFits(Guid frameId, ushort[] pixels, int width, int height, ExposureRequestDto request, string imageType, DateTimeOffset capturedAt, int? focuserPosition = null, string? targetName = null, double? sensorTemp = null, double? tempSetPoint = null, ObservingConditionsDto? conditions = null, FramePointing? pointing = null, double? rotatorMechanicalDeg = null, DateOnly? night = null) {
         var dir = ResolveFramesDir();
         Directory.CreateDirectory(dir);
         // §29.2 — name the file the way the profile's template says, so what
         // lands on disk reads as the user's night ("2026-08-03/Light/…_L_180s.fits"),
         // not a directory of UUIDs. Any failure in naming falls back to the
         // id-based name: naming must never cost a frame.
-        var path = ResolveTemplatedPath(dir, frameId, request, imageType, capturedAt, targetName, sensorTemp);
+        var path = ResolveTemplatedPath(dir, frameId, request, imageType, capturedAt, targetName, sensorTemp, night);
         using var fits = FitsImage.Create(path, width, height, FitsBitDepth.UnsignedShort);
         fits.WriteImageData(pixels);
         // FITS convention + case-sensitive calibration matchers/plate-solvers want an uppercase
@@ -1679,7 +1687,7 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
     /// </summary>
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Naming is best-effort by §29.2: any IO/template fault degrades to the id-based filename rather than costing the frame. The falling-back log preserves the cause.")]
-    internal string ResolveTemplatedPath(string rootDir, Guid frameId, ExposureRequestDto request, string imageType, DateTimeOffset capturedAt, string? targetName, double? sensorTemp) {
+    internal string ResolveTemplatedPath(string rootDir, Guid frameId, ExposureRequestDto request, string imageType, DateTimeOffset capturedAt, string? targetName, double? sensorTemp, DateOnly? night = null) {
         var fallback = Path.Combine(rootDir, $"{frameId}.fits");
         try {
             var template = _profileStore?.GetStorageSettings().FilenameTemplate;
@@ -1695,7 +1703,8 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
                 SensorTemp: sensorTemp,
                 TargetName: string.IsNullOrWhiteSpace(targetName) || targetName == "Manual capture"
                     ? null : targetName,
-                FrameNumber: NextFrameNumber(rootDir)));
+                FrameNumber: NextFrameNumber(rootDir),
+                Night: night));
             if (relative is null) return fallback;
 
             var candidate = Path.Combine(rootDir, relative + ".fits");

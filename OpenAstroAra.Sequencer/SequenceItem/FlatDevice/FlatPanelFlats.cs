@@ -120,6 +120,25 @@ namespace OpenAstroAra.Sequencer.SequenceItem.FlatDevice {
             set { offset = value; RaisePropertyChanged(); }
         }
 
+        private string? calibrationTarget;
+
+        /// <summary>A generated calibration run's lights target: files the frame under it (see
+        /// <see cref="CalibrationFiling"/>). Null = the enclosing target, as for any capture.</summary>
+        [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
+        public string? CalibrationTarget {
+            get => calibrationTarget;
+            set { calibrationTarget = value; RaisePropertyChanged(); }
+        }
+
+        private string? calibrationNight;
+
+        /// <summary>The lights' night (yyyy-MM-dd) the frame files under. Null = the night it was taken.</summary>
+        [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
+        public string? CalibrationNight {
+            get => calibrationNight;
+            set { calibrationNight = value; RaisePropertyChanged(); }
+        }
+
         public override async Task Execute(IProgress<ApplicationStatus> progress, CancellationToken token) {
             if (flatCaptureExecutor is null) {
                 throw new SequenceEntityFailedException("Flat capture is not wired for sequence execution on this daemon.");
@@ -133,7 +152,8 @@ namespace OpenAstroAra.Sequencer.SequenceItem.FlatDevice {
             }
             var request = new FlatSetRequest(
                 TargetAdu, TargetAduTolerancePct, FrameCount, Brightness,
-                MinExposureSec, MaxExposureSec, Gain, Offset, TargetPercent);
+                MinExposureSec, MaxExposureSec, Gain, Offset, TargetPercent,
+                CalibrationFiling.Target(CalibrationTarget), CalibrationFiling.ParseNight(CalibrationNight));
             // A lost camera parks the run awaiting the user and Resume starts the set again, rather
             // than failing this filter and moving on to the next with no camera.
             var ok = await UserFixablePause.RetryAfterUserFixAsync(this, "Flat set",
@@ -166,6 +186,8 @@ namespace OpenAstroAra.Sequencer.SequenceItem.FlatDevice {
                 MaxExposureSec = MaxExposureSec,
                 Gain = Gain,
                 Offset = Offset,
+                CalibrationTarget = CalibrationTarget,
+                CalibrationNight = CalibrationNight,
             };
         }
 
