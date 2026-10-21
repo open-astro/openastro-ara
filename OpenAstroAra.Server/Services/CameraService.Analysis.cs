@@ -116,7 +116,7 @@ public sealed partial class CameraService : IAnalysisFrameSource {
         }
         var bin = binning;
         if (client is null) {
-            throw new InvalidOperationException("camera is not connected");
+            throw new CameraUnavailableException(CameraNotConnectedMessage, CameraNotConnectedTryAgain, null);
         }
 
         // Full-sensor frame at the requested binning, at the profile's imaging gain and offset. These
