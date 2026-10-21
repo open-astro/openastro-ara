@@ -173,8 +173,12 @@ public sealed partial class FlatCaptureService : IFlatCaptureExecutor {
             MaxExposureSec: request.MaxExposureSec,
             SaturationLevel: Math.Max(fullScale * SaturationFraction, Math.Min(fullScale, target + (2 * tolerance))),
             MaxBrightness: maxBrightness);
-        // Last time's exposure, rescaled if the target moved since; else a 1 s first look.
-        var start = trained is { ExposureSec: > 0, Target: > 0 } t ? t.ExposureSec * (target / t.Target) : 1.0;
+        // Last time's exposure, rescaled if the target moved since, and by the brightness ratio when
+        // this set starts the panel elsewhere (an explicit brightness); else a 1 s first look.
+        var start = trained is { ExposureSec: > 0, Target: > 0 } t
+            ? t.ExposureSec * (target / t.Target)
+                * (maxBrightness > 0 && t.Brightness is int was && was > 0 && startBrightness is int now && now > 0 ? (double)was / now : 1)
+            : 1.0;
         int? gain = request.Gain >= 0 ? request.Gain : null;
         int? offset = request.Offset >= 0 ? request.Offset : null;
         int? panelAt = startBrightness;

@@ -273,6 +273,19 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_remembered_exposure_is_rescaled_to_an_explicit_brightness() {
+            panel.MaxBrightness = 255;
+            scene.BrightnessScale = () => (panel.RequestedBrightness ?? 128) / 128.0;
+            var store = new MemoryTrainingStore();
+            // Last time: brightness 64 (5000 ADU/s here), 6 s to reach 30000.
+            store.Rows[("", 101, 7, 1)] = new FlatTraining(6, 64, 30000, 30000);
+
+            Assert.That(await CreateSUT(store).CaptureFlatSetAsync(Request(brightness: 128), new Progress<ApplicationStatus>(), CancellationToken.None), Is.True);
+            Assert.That(scene.ProbedExposures[0], Is.EqualTo(3).Within(1e-6), "twice the brightness, half the exposure");
+            Assert.That(scene.ProbedExposures, Has.Count.EqualTo(1), "the rescaled start lands on target first time");
+        }
+
+        [Test]
         public async Task A_first_probe_already_within_tolerance_skips_further_probing() {
             scene.AduPerSecond = 29500;   // 1s probe = 29500, inside 30000 ±5%
             var ok = await CreateSUT().CaptureFlatSetAsync(Request(), new Progress<ApplicationStatus>(), CancellationToken.None);
