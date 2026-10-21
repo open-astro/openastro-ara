@@ -2132,6 +2132,8 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
         try { offsets = NamesOrNull(c.Offsets); } catch (Exception) { }
         double exposureResolution = 0;
         try { exposureResolution = c.ExposureResolution; } catch (Exception) { }
+        int maxAdu = 0;
+        try { maxAdu = c.MaxADU; } catch (Exception) { }
         return new CameraCapabilitiesDto(
             SensorWidth: w, SensorHeight: h, PixelSizeUm: pixelSize,
             CanSetTemperature: canSetTemp, CanAbortExposure: canAbort, CanGetCoolerPower: canCoolerPower,
@@ -2151,7 +2153,8 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
             HasShutter: hasShutter,
             Gains: gains,
             Offsets: offsets,
-            ExposureResolutionSec: exposureResolution);
+            ExposureResolutionSec: exposureResolution,
+            MaxAdu: maxAdu);
     }
 
     // RGGB native + ASCOM BayerOffsetX/Y → the effective 2×2 pattern at the image (0,0) origin,

@@ -300,7 +300,7 @@ public sealed record SafetyPoliciesDto(
     // §48.7 flat_panel — the auto-exposure flat set the §39.5 generator emits
     // (FlatPanelFlats leaves read these; enforcement-first, shipped with the §48.3
     // instruction). Optional ctor defaults keep an older profile.json deserializing.
-    // Mean-ADU target for the exposure probe (≈45% of 16-bit full scale).
+    // Superseded by FlatTargetPercent for panel flats (kept so older profiles and clients round-trip).
     int FlatTargetAdu = 30000,
     // Acceptable deviation from the target, percent.
     double FlatTargetAduTolerancePct = 5,
@@ -364,7 +364,10 @@ public sealed record SafetyPoliciesDto(
     // zone, a daytime-sleeping operator). Both null/blank (default) = computed from the sun
     // (astronomical darkness, see UnattendedSeverity).
     string? UnattendedWindowStart = null,
-    string? UnattendedWindowEnd = null);
+    string? UnattendedWindowEnd = null,
+    // Panel flats aim for this share of the camera's own full scale (its MaxADU, so 12-, 14- and
+    // 16-bit cameras all land mid-range), measured as the median of the frame's central area.
+    double FlatTargetPercent = 50);
 
 /// <summary>
 /// §37.11 autofocus settings — method + sweep params + filter/runtime

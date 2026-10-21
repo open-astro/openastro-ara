@@ -136,7 +136,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(fake.flatsSessionId, 'cal-sess-1');
-    expect(fake.flatsFrameCount, 20, reason: 'the dialog default');
+    expect(fake.flatsFrameCount, 30,
+        reason: 'the dialog starts from the profile frames per filter');
     expect(fake.flatsCoolCamera, isFalse,
         reason: 'lights taken warm → the cooling switch starts off');
     expect(container.read(selectedSequenceIdProvider), 'seq-flats-1',

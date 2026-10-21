@@ -37,7 +37,7 @@ public sealed class SqliteCalibrationService : ICalibrationService {
     // Fallback defaults when no profile store is wired (test/bootstrap contexts) — production
     // reads the §48.7 flat_panel policy fields off SafetyPoliciesDto instead.
     private const int DefaultFlatFrames = 20;
-    private const int DefaultTargetAdu = 32000;
+    private const double DefaultTargetPercent = 50;
     private const double DefaultTargetAduTolerancePct = 5;
     // §48.7 sky_flat fallbacks (store-less contexts only; production reads the policy fields).
     private const int DefaultSkyFlatFrames = 20;
@@ -308,13 +308,17 @@ public sealed class SqliteCalibrationService : ICalibrationService {
         var sky = string.Equals(request.Flavor, "sky", StringComparison.OrdinalIgnoreCase);
         var policies = _profile?.GetSafetyPolicies();
         var policyFrames = sky ? policies?.SkyFlatFramesPerFilter : policies?.FlatFramesPerFilter;
-        var policyTarget = sky ? policies?.SkyFlatTargetAdu : policies?.FlatTargetAdu;
+        var policyTarget = sky ? policies?.SkyFlatTargetAdu : null;
         var frameCount = request.OverrideFrameCount is int n && n > 0
             ? n
             : policyFrames is int p && p > 0 ? p : (sky ? DefaultSkyFlatFrames : DefaultFlatFrames);
+        // Panel flats aim at a share of the camera's own range and solve their exposure and
+        // brightness at run time (FlatPanelFlats, TargetAdu 0); an explicit override is absolute.
+        // Sky flats keep their absolute §48.7 target and stop window.
         var targetAdu = request.OverrideTargetAdu is int o && o > 0
             ? o
-            : policyTarget is int t && t > 0 ? t : (sky ? DefaultSkyTargetAdu : DefaultTargetAdu);
+            : sky ? (policyTarget is int t && t > 0 ? t : DefaultSkyTargetAdu) : 0;
+        var targetPercent = policies?.FlatTargetPercent is double pct && pct > 0 && pct < 100 ? pct : DefaultTargetPercent;
         var tolerancePct = policies?.FlatTargetAduTolerancePct is double tol && tol > 0
             ? tol : DefaultTargetAduTolerancePct;
         // NB: the park rides only the persisted sequence body — GeneratedFlatSequenceDto.Steps
@@ -332,7 +336,7 @@ public sealed class SqliteCalibrationService : ICalibrationService {
             steps.Add(new GeneratedFlatStepDto(
                 FilterName: filter.FilterName,
                 FrameCount: frameCount,
-                TargetAdu: targetAdu,
+                TargetAdu: targetAdu > 0 ? targetAdu : null,
                 PanelBrightness: null));
             var settings = captureSettings.GetValueOrDefault(filter.FilterName);
             var specFilter = filter.FilterName == NoFilter ? null : filter.FilterName;
@@ -357,7 +361,8 @@ public sealed class SqliteCalibrationService : ICalibrationService {
                     Gain: settings?.Gain,
                     Offset: settings?.Offset,
                     FocuserPosition: settings?.FocuserPosition,
-                    RotatorMechanicalDeg: settings?.RotatorMechanicalDeg));
+                    RotatorMechanicalDeg: settings?.RotatorMechanicalDeg,
+                    TargetPercent: targetPercent));
             }
             total += frameCount;
         }

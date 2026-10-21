@@ -106,17 +106,18 @@ const Map<String, Help> helpRegistry = {
     key: 'session.calibration.flat_target_adu',
     title: 'Flat target brightness',
     body:
-        'Generated flat sets expose themselves: each per-filter set probes short exposures, '
-        'measures the frame\'s mean pixel value (ADU), and scales the exposure until it lands '
-        'on this target before capturing the real flats. 30000 is a solid default for 16-bit '
-        'cameras — roughly 45% of full scale, bright enough for clean signal and safely below '
-        'saturation. If your camera is 12/14-bit behind a driver that scales to 16 bits, the '
-        'default still applies; for unusual setups aim for 40-50% of your camera\'s full scale.',
+        'Generated flat sets expose themselves. Each filter takes two short test frames, fits '
+        'the straight line a sensor follows (the camera\'s offset plus light × time), and '
+        'solves the exposure that lands the centre of the frame on this share of the camera\'s '
+        'own range, then confirms it with one more frame. When that exposure would be under a '
+        'second (LED flicker) or past the limit, it solves the panel brightness instead. 50% is '
+        'the standard target: plenty of signal, well clear of the sensor\'s non-linear top end. '
+        'The answer is remembered per filter, so the next night starts there.',
     relatedSettings: [
       'session.calibration.flat_target_adu_tolerance_pct',
       'session.calibration.flat_frames_per_filter',
     ],
-    keywords: ['flats', 'adu', 'target', 'brightness', 'auto exposure'],
+    keywords: ['flats', 'adu', 'target', 'brightness', 'auto exposure', 'percent', 'histogram'],
   ),
   'session.calibration.flat_target_adu_tolerance_pct': Help(
     key: 'session.calibration.flat_target_adu_tolerance_pct',
@@ -1504,10 +1505,10 @@ const Map<String, Help> helpRegistry = {
     key: 'eq.flat.auto_brightness_target',
     title: 'Auto-brightness target',
     body:
-        'The average pixel level (in ADU) the flat-capture routine aims for when it auto-adjusts the panel brightness '
-        'or exposure time. Roughly half of the camera\'s full range (e.g. ~32000 for a 16-bit camera) keeps flats '
-        'well-exposed: bright enough to have low noise, far enough from saturation to stay linear. '
-        'This value is shared with the calibration system — edit it under Settings → Safety → Policies.',
+        'How bright the flat-capture routine makes each flat, as a share of the camera\'s full range, when it '
+        'solves the panel brightness and exposure time. Half of the range keeps flats well-exposed: bright enough '
+        'to have low noise, far enough from saturation to stay linear. '
+        'This value is shared with the calibration system — edit it under Settings → Your night → Calibration.',
   ),
   'eq.flat.target_tolerance': Help(
     key: 'eq.flat.target_tolerance',

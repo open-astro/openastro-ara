@@ -837,7 +837,10 @@ public partial class Program {
                 sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<FlatCaptureService>>(),
                 sp.GetRequiredService<IAnalysisFrameSource>(),
                 sp.GetRequiredService<OpenAstroAra.Equipment.Interfaces.Mediator.IImagingMediator>(),
-                sp.GetRequiredService<IFlatDeviceService>()));
+                sp.GetRequiredService<IFlatDeviceService>(),
+                // Remembered flat solutions + the installed filter that keys them.
+                new FlatTrainingStore(sp.GetRequiredService<IAraDatabase>()),
+                () => sp.GetService<OpenAstroAra.Equipment.Interfaces.Mediator.IFilterWheelMediator>()));
 
         // Phase 38a — §38.2 filesystem-backed sequence library at
         // {profileDir}/sequences/library/. Replaces the in-memory placeholder

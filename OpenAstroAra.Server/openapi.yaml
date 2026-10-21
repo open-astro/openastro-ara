@@ -13242,6 +13242,13 @@ components:
           type:
             - 'null'
             - string
+        flat_target_percent:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+          default: 50
     SavedTargetDto:
       required:
         - name

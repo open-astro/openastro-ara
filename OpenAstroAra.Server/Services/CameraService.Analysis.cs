@@ -46,6 +46,15 @@ public interface IAnalysisFrameSource {
     /// </summary>
     Task<AnalysisFrame> CaptureForAnalysisAsync(double exposureSec, int binning, CancellationToken ct);
 
+    /// <summary>The same capture at an explicit gain/offset (null = the profile's imaging value):
+    /// flat probes must expose at the gain the saved flats use, or the exposure they solve for is
+    /// wrong. Default: ignores them (sources with no gain to set).</summary>
+    Task<AnalysisFrame> CaptureForAnalysisAsync(double exposureSec, int binning, int? gain, int? offset, CancellationToken ct) =>
+        CaptureForAnalysisAsync(exposureSec, binning, ct);
+
+    /// <summary>The camera's MaxADU (the brightest a pixel reads), or 0 when unknown.</summary>
+    int MaxAdu => 0;
+
     /// <summary>The largest square binning the connected camera accepts (the smaller of its MaxBinX /
     /// MaxBinY), or 0 when unknown (no camera, capabilities not read). Default: unknown.</summary>
     int MaxBinning => 0;
@@ -65,7 +74,20 @@ public sealed partial class CameraService : IAnalysisFrameSource {
     }
 
     /// <inheritdoc/>
-    public async Task<AnalysisFrame> CaptureForAnalysisAsync(double exposureSec, int binning, CancellationToken ct) {
+    public int MaxAdu {
+        get {
+            lock (_gate) {
+                return _capabilities?.MaxAdu ?? 0;
+            }
+        }
+    }
+
+    /// <inheritdoc/>
+    public Task<AnalysisFrame> CaptureForAnalysisAsync(double exposureSec, int binning, CancellationToken ct) =>
+        CaptureForAnalysisAsync(exposureSec, binning, gain: null, offset: null, ct);
+
+    /// <inheritdoc/>
+    public async Task<AnalysisFrame> CaptureForAnalysisAsync(double exposureSec, int binning, int? gain, int? offset, CancellationToken ct) {
         AlpacaCamera? client;
         CameraCapabilitiesDto? caps;
         lock (_gate) {
@@ -102,14 +124,14 @@ public sealed partial class CameraService : IAnalysisFrameSource {
         // vanished into the 12-bit quantisation and the sweep fitted noise (2026-10-03). Imaging
         // exposures push the profile's gain to the camera; analysis captures now do the same, so the
         // first autofocus of the night sees the same sky as the tenth.
-        var (gain, offset) = AnalysisGainOffset(_profileStore?.GetImagingDefaults(), caps);
+        var (defaultGain, defaultOffset) = AnalysisGainOffset(_profileStore?.GetImagingDefaults(), caps);
         var request = new ExposureRequestDto(
             ExposureSec: exposureSec,
-            Gain: gain,
+            Gain: gain ?? defaultGain,
             BinX: bin,
             BinY: bin,
             FilterName: null,
-            CameraOffset: offset);
+            CameraOffset: offset ?? defaultOffset);
         return await CaptureUnpersistedAsync(request, "analysis", ct).ConfigureAwait(false);
     }
 

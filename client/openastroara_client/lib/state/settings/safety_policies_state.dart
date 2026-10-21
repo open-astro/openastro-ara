@@ -113,6 +113,9 @@ class SafetyPolicies {
   // §48.7 flat_panel — the auto-exposure flat sets the daemon generates
   // (target mean ADU, tolerance, saved frames per filter, park after).
   final int flatTargetAdu;
+  // Panel flats aim at this share of the camera's own full scale (supersedes
+  // flatTargetAdu, which stays only so older daemons round-trip).
+  final double flatTargetPercent;
   final double flatTargetAduTolerancePct;
   final int flatFramesPerFilter;
   final bool postFlatParkMount;
@@ -159,6 +162,7 @@ class SafetyPolicies {
     this.maxHumidityPct = 85,
     this.minDewDeltaC = 2.0,
     this.flatTargetAdu = 30000,
+    this.flatTargetPercent = 50,
     this.flatTargetAduTolerancePct = 5.0,
     this.flatFramesPerFilter = 30,
     this.postFlatParkMount = true,
@@ -202,6 +206,7 @@ class SafetyPolicies {
     int? maxHumidityPct,
     double? minDewDeltaC,
     int? flatTargetAdu,
+    double? flatTargetPercent,
     double? flatTargetAduTolerancePct,
     int? flatFramesPerFilter,
     bool? postFlatParkMount,
@@ -256,6 +261,7 @@ class SafetyPolicies {
         maxHumidityPct: maxHumidityPct ?? this.maxHumidityPct,
         minDewDeltaC: minDewDeltaC ?? this.minDewDeltaC,
         flatTargetAdu: flatTargetAdu ?? this.flatTargetAdu,
+        flatTargetPercent: flatTargetPercent ?? this.flatTargetPercent,
         flatTargetAduTolerancePct:
             flatTargetAduTolerancePct ?? this.flatTargetAduTolerancePct,
         flatFramesPerFilter: flatFramesPerFilter ?? this.flatFramesPerFilter,
@@ -384,6 +390,11 @@ class SafetyPoliciesNotifier extends Notifier<SafetyPolicies>
   void setFlatTargetAdu(int v) {
     if (v <= 0) return;
     state = state.copyWith(flatTargetAdu: v);
+  }
+
+  void setFlatTargetPercent(double v) {
+    if (v <= 0 || v >= 100) return;
+    state = state.copyWith(flatTargetPercent: v);
   }
 
   void setFlatTargetAduTolerancePct(double v) {

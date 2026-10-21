@@ -617,11 +617,12 @@ const List<InstructionDef> instructionCatalog = [
     ],
   ),
   // §38 NINA import — run an autofocus routine. No serialized fields.
-  // §48.3 — one auto-exposure flat set for the CURRENT filter: probes
-  // exposures until the frame mean hits the target ADU (lighting the flat
-  // panel when one is connected), then captures FrameCount saved FLATs at
-  // the converged exposure. Pair with Switch Filter for per-filter sets —
-  // the generated matching-flats sequences compose it exactly that way.
+  // §48.3 — one auto-exposure flat set for the CURRENT filter: closes the
+  // cover and lights the panel, solves the exposure and panel brightness
+  // that put the frame at TargetPercent of the camera's range (or a fixed
+  // TargetAdu), then captures FrameCount saved FLATs there. Pair with Switch
+  // Filter for per-filter sets — the generated matching-flats sequences
+  // compose it exactly that way.
   InstructionDef(
     type: flatPanelFlatsType,
     label: 'Flat Panel Flats',
@@ -629,10 +630,17 @@ const List<InstructionDef> instructionCatalog = [
     icon: Icons.fluorescent_outlined,
     fields: [
       InstructionField(
-        'TargetAdu',
-        'Target (mean ADU)',
+        'TargetPercent',
+        'Target (% of camera range)',
         InstructionFieldType.number,
-        defaultValue: 30000.0,
+        defaultValue: 50.0,
+      ),
+      // 0 = automatic (TargetPercent); a positive value is a fixed level.
+      InstructionField(
+        'TargetAdu',
+        'Fixed target ADU (0 = automatic)',
+        InstructionFieldType.number,
+        defaultValue: 0.0,
       ),
       InstructionField(
         'TargetAduTolerancePct',
@@ -646,11 +654,13 @@ const List<InstructionDef> instructionCatalog = [
         InstructionFieldType.integer,
         defaultValue: 30,
       ),
+      // 0 = automatic: last time's level for this filter, else half the
+      // panel's range. The set moves it when the exposure would be too short.
       InstructionField(
         'Brightness',
-        'Panel brightness',
+        'Starting panel brightness (0 = automatic)',
         InstructionFieldType.integer,
-        defaultValue: 50,
+        defaultValue: 0,
       ),
       // -1 is the NINA sentinel for "use the camera's profile default".
       InstructionField(

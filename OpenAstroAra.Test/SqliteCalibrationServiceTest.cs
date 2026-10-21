@@ -236,11 +236,29 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public async Task GenerateMatchingFlats_uses_the_default_target_adu_when_not_overridden() {
+        public async Task GenerateMatchingFlats_leaves_the_target_automatic_unless_overridden() {
             await InsertFrameAsync(Session, "light", "Ha", 300, 100, "M42");
             var plan = await _svc.GenerateMatchingFlatsAsync(
                 Session, new MatchingFlatsRequestDto(null, null, GenerateOnly: true), idempotencyKey: null, CancellationToken.None);
-            Assert.That(plan.Steps.Single().TargetAdu, Is.EqualTo(32000));
+            Assert.That(plan.Steps.Single().TargetAdu, Is.Null, "panel flats aim at a share of the camera's range at run time");
+            var overridden = await _svc.GenerateMatchingFlatsAsync(
+                Session, new MatchingFlatsRequestDto(null, 21000, GenerateOnly: true), idempotencyKey: null, CancellationToken.None);
+            Assert.That(overridden.Steps.Single().TargetAdu, Is.EqualTo(21000));
+        }
+
+        [Test]
+        public async Task Flat_training_round_trips_and_a_new_solution_replaces_the_old() {
+            var store = new FlatTrainingStore(_db);
+            Assert.That(await store.GetAsync("Ha", 100, 50, 1, CancellationToken.None), Is.Null);
+
+            await store.PutAsync("Ha", 100, 50, 1, new FlatTraining(4.2, 180, 32500, 32767.5), CancellationToken.None);
+            await store.PutAsync("Ha", 100, 50, 1, new FlatTraining(3.9, 190, 32800, 32767.5), CancellationToken.None);
+            await store.PutAsync("", 100, 50, 1, new FlatTraining(1.5, null, 32000, 32767.5), CancellationToken.None);
+
+            Assert.That(await store.GetAsync("Ha", 100, 50, 1, CancellationToken.None), Is.EqualTo(new FlatTraining(3.9, 190, 32800, 32767.5)));
+            Assert.That(await store.GetAsync("", 100, 50, 1, CancellationToken.None), Is.EqualTo(new FlatTraining(1.5, null, 32000, 32767.5)),
+                "no wheel and no dimmable panel still remember the exposure");
+            Assert.That(await store.GetAsync("Ha", 200, 50, 1, CancellationToken.None), Is.Null, "another gain is another solution");
         }
 
         [Test]
@@ -436,7 +454,7 @@ namespace OpenAstroAra.Test {
             var store = new FileSequenceService(_dir);
             var profile = new InMemoryProfileStore();
             profile.PutSafetyPolicies(profile.GetSafetyPolicies() with {
-                FlatTargetAdu = 25000,
+                FlatTargetPercent = 40,
                 FlatTargetAduTolerancePct = 3,
                 FlatFramesPerFilter = 12,
                 PostFlatParkMount = true,
@@ -449,7 +467,7 @@ namespace OpenAstroAra.Test {
                 idempotencyKey: null, CancellationToken.None);
 
             Assert.That(plan.Steps.Single().FrameCount, Is.EqualTo(12));
-            Assert.That(plan.Steps.Single().TargetAdu, Is.EqualTo(25000));
+            Assert.That(plan.Steps.Single().TargetAdu, Is.Null);
 
             var stored = await store.GetAsync(plan.GeneratedSequenceId!.Value, CancellationToken.None);
             var profileSvc = new HeadlessProfileService();
@@ -458,7 +476,8 @@ namespace OpenAstroAra.Test {
             var root = new SequenceJsonConverter(factory).Deserialize(stored!.Body.GetRawText());
             var block = root.GetItemsSnapshot().OfType<SequentialContainer>().Single();
             var flats = block.GetItemsSnapshot().OfType<FlatPanelFlats>().Single();
-            Assert.That(flats.TargetAdu, Is.EqualTo(25000), "the §48.7 target ADU is enforced, not advisory");
+            Assert.That(flats.TargetAdu, Is.EqualTo(0), "automatic: no absolute level");
+            Assert.That(flats.TargetPercent, Is.EqualTo(40), "the profile's share of the camera's range is enforced");
             Assert.That(flats.TargetAduTolerancePct, Is.EqualTo(3));
             Assert.That(flats.FrameCount, Is.EqualTo(12));
             Assert.That(root.GetItemsSnapshot().OfType<ParkScope>().Count(), Is.EqualTo(1),

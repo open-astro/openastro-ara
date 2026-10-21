@@ -7,6 +7,7 @@ import '../../state/calibration/calibration_state.dart';
 import '../../state/equipment/camera_state.dart';
 import '../../state/sequencer/sequence_list_state.dart';
 import '../../state/settings/imaging_defaults_state.dart';
+import '../../state/settings/safety_policies_state.dart';
 import '../../state/settings/settings_nav.dart';
 import '../../theme/ara_colors.dart';
 import '../../widgets/library/load_more_button.dart';
@@ -241,8 +242,9 @@ class MatchingFlatsDialog extends ConsumerStatefulWidget {
 }
 
 class _MatchingFlatsDialogState extends ConsumerState<MatchingFlatsDialog> {
-  final _frames = TextEditingController(text: '20');
-  final _targetAdu = TextEditingController(text: '32000');
+  late final _frames = TextEditingController(
+    text: ref.read(safetyPoliciesProvider).flatFramesPerFilter.toString(),
+  );
   final _coolTo = TextEditingController();
   bool _busy = false;
   String? _error;
@@ -283,7 +285,6 @@ class _MatchingFlatsDialogState extends ConsumerState<MatchingFlatsDialog> {
   @override
   void dispose() {
     _frames.dispose();
-    _targetAdu.dispose();
     _coolTo.dispose();
     super.dispose();
   }
@@ -292,15 +293,8 @@ class _MatchingFlatsDialogState extends ConsumerState<MatchingFlatsDialog> {
     final api = ref.read(calibrationApiProvider);
     if (api == null) return;
     final frames = int.tryParse(_frames.text.trim());
-    final aduText = _targetAdu.text.trim();
-    final adu = int.tryParse(aduText);
     if (frames == null || frames <= 0) {
       setState(() => _error = 'Frames per filter must be a positive number.');
-      return;
-    }
-    // Advisory or not, stray text must not silently become "no override".
-    if (aduText.isNotEmpty && adu == null) {
-      setState(() => _error = 'Target ADU must be a whole number (or empty).');
       return;
     }
     final coolTo = double.tryParse(_coolTo.text.trim());
@@ -316,7 +310,6 @@ class _MatchingFlatsDialogState extends ConsumerState<MatchingFlatsDialog> {
       final result = await api.generateMatchingFlats(
         widget.sessionId,
         frameCount: frames,
-        targetAdu: adu,
         coolCamera: _cool,
         coolToTemperatureC: _cool ? coolTo : null,
       );
@@ -360,7 +353,9 @@ class _MatchingFlatsDialogState extends ConsumerState<MatchingFlatsDialog> {
           Text(
             'Generates a flat sequence replaying this session\'s state per '
             'filter ($filters): wheel position, focus, rotator angle, gain '
-            'and offset.',
+            'and offset. Each filter works out its own exposure and panel '
+            'brightness from two test frames, and remembers them for next '
+            'time.',
             style: Theme.of(
               context,
             ).textTheme.bodySmall?.copyWith(color: AraColors.textSecondary),
@@ -372,15 +367,6 @@ class _MatchingFlatsDialogState extends ConsumerState<MatchingFlatsDialog> {
             decoration: const InputDecoration(labelText: 'Flats per filter'),
           ),
           const SizedBox(height: 8),
-          TextField(
-            controller: _targetAdu,
-            keyboardType: TextInputType.number,
-            decoration: const InputDecoration(
-              labelText: 'Target ADU (advisory)',
-              helperText:
-                  'Panel brightness/exposure tuning stays manual for now',
-            ),
-          ),
           const SizedBox(height: 8),
           SwitchListTile(
             value: _cool,

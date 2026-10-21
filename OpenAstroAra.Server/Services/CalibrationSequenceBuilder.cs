@@ -26,6 +26,8 @@ namespace OpenAstroAra.Server.Services;
 /// per-filter focus the lights were captured at (§39.5: dust-mote shadows only align when the
 /// optical train is unchanged); <paramref name="RotatorMechanicalDeg"/> turns the camera back to
 /// the lights' rotator angle for the same reason (null = no rotator on the lights).
+/// <paramref name="TargetAdu"/> 0 = automatic: the set aims for <paramref name="TargetPercent"/>
+/// of the camera's full scale and solves its own exposure and panel brightness.
 /// </summary>
 public sealed record FlatStepSpec(
     string? FilterName,
@@ -35,7 +37,8 @@ public sealed record FlatStepSpec(
     int? Gain,
     int? Offset,
     int? FocuserPosition,
-    double? RotatorMechanicalDeg = null);
+    double? RotatorMechanicalDeg = null,
+    double TargetPercent = 50);
 
 /// <summary>One per-filter §48.4 twilight sky-flat set: like <see cref="FlatStepSpec"/> plus the
 /// stop window the drifting sky must stay inside.</summary>
@@ -304,6 +307,7 @@ public static class CalibrationSequenceBuilder {
         var flats = new JsonObject {
             ["$type"] = FlatPanelFlatsType,
             ["TargetAdu"] = step.TargetAdu,
+            ["TargetPercent"] = step.TargetPercent,
             ["TargetAduTolerancePct"] = step.TargetAduTolerancePct,
             ["FrameCount"] = step.FrameCount,
         };
@@ -320,7 +324,9 @@ public static class CalibrationSequenceBuilder {
         return new JsonObject {
             ["$type"] = SequentialContainerType,
             ["Strategy"] = Strategy(),
-            ["Name"] = $"Flats — {label} ({step.FrameCount}× auto to {step.TargetAdu} ADU)",
+            ["Name"] = step.TargetAdu > 0
+                ? $"Flats — {label} ({step.FrameCount}× auto to {step.TargetAdu} ADU)"
+                : $"Flats — {label} ({step.FrameCount}× auto to {step.TargetPercent:0.#}% of range)",
             ["Conditions"] = new JsonArray(),
             ["Items"] = items,
             ["Triggers"] = new JsonArray(),

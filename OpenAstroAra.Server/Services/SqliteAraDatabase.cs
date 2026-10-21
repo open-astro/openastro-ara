@@ -289,6 +289,25 @@ public sealed partial class SqliteAraDatabase : IAraDatabase {
         await ExecAsync(conn, "CREATE INDEX IF NOT EXISTS idx_pa_residuals_completed_at ON pa_residuals(completed_at);", ct);
         await ExecAsync(conn, "CREATE INDEX IF NOT EXISTS idx_pa_residuals_session_id ON pa_residuals(session_id);", ct);
 
+        // Panel flats remember what they solved — exposure and panel brightness per filter, gain,
+        // offset and binning — so the next set starts from the answer and needs one check frame.
+        // `level` / `target` are what that exposure measured and aimed for (a changed target
+        // rescales the start). Filter '' = no wheel.
+        await ExecAsync(conn, """
+            CREATE TABLE IF NOT EXISTS flat_training (
+                filter_name   TEXT NOT NULL,
+                gain          INTEGER NOT NULL,
+                "offset"      INTEGER NOT NULL,
+                bin           INTEGER NOT NULL,
+                exposure_sec  REAL NOT NULL,
+                brightness    INTEGER,
+                level         REAL NOT NULL,
+                target        REAL NOT NULL,
+                updated_utc   TEXT NOT NULL,
+                PRIMARY KEY (filter_name, gain, "offset", bin)
+            );
+            """, ct);
+
         // §47 / #1146 — mosaic projects: the plan (centre, grid, overlap, PA, frames owed per panel)
         // and the per-panel J2000 centres the planetarium drew. Panel completion is NOT stored: it is
         // derived from the frames table at read time (light frames whose target_name is the panel's
