@@ -79,7 +79,7 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public async Task DeleteFromDisk_removes_fits_and_sidecars_but_not_neighbors() {
+        public async Task Delete_removes_fits_and_sidecars_but_not_neighbors() {
             var (id, fits) = await InsertFrameWithFilesAsync();
             var (survivorId, survivorFits) = await InsertFrameWithFilesAsync();
             var stem = Path.ChangeExtension(fits, null);
