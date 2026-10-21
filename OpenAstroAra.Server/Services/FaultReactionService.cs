@@ -464,6 +464,7 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
             }
             // The dispatch connects in the background — poll the service state to a verdict.
             var sw = Stopwatch.StartNew();
+            TimeSpan? landedAt = null; // when the state first left Connecting
             while (true) {
                 var state = await _reconnector.GetConnectionStateAsync(type, _cts.Token).ConfigureAwait(false);
                 // #1246 — for the mount, Connected is not recovered: a bridge still latched after the
@@ -475,9 +476,17 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
                 if (state == EquipmentConnectionState.Error) {
                     return false; // the background connect already failed — next rung
                 }
-                var window = state == EquipmentConnectionState.Connecting ? ConnectInFlightTimeout : ConnectConfirmTimeout;
-                if (sw.Elapsed >= window) {
-                    return false;
+                if (state == EquipmentConnectionState.Connecting) {
+                    if (sw.Elapsed >= ConnectInFlightTimeout) {
+                        return false;
+                    }
+                } else {
+                    // The confirm window (e.g. the mount's clean tick) starts when the connect
+                    // lands; timed from the dispatch, a slow connect would leave it already spent.
+                    landedAt ??= sw.Elapsed;
+                    if (sw.Elapsed - landedAt >= ConnectConfirmTimeout) {
+                        return false;
+                    }
                 }
                 await Task.Delay(ConnectPollInterval, _cts.Token).ConfigureAwait(false);
             }

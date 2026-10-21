@@ -267,6 +267,37 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_slow_mount_connect_gets_a_fresh_confirm_window_for_its_clean_read() {
+            // #1246 + AB #1452 — an iOptron on `network` answers Connected after the confirm window,
+            // then needs one clean refresh tick. That wait is timed from when the connect landed,
+            // not from the dispatch, or a connect that worked counts as a failed rung.
+            service.ConnectInFlightTimeout = TimeSpan.FromSeconds(10);
+            reconnector.Setup(r => r.ReconnectAsync(DeviceType.Telescope, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new ReconnectOutcome(1, 1));
+            var sinceDispatch = new Stopwatch();
+            TimeSpan Elapsed() {
+                lock (sinceDispatch) {
+                    if (!sinceDispatch.IsRunning) {
+                        sinceDispatch.Start();
+                    }
+                    return sinceDispatch.Elapsed;
+                }
+            }
+            // Connecting past the 200 ms confirm window, then Connected; the clean read lands 100 ms later.
+            reconnector.Setup(r => r.GetConnectionStateAsync(DeviceType.Telescope, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(() => Elapsed() < TimeSpan.FromMilliseconds(300)
+                    ? EquipmentConnectionState.Connecting
+                    : EquipmentConnectionState.Connected);
+            telescope.Setup(t => t.HasCleanReadSinceConnect).Returns(() => Elapsed() >= TimeSpan.FromMilliseconds(400));
+
+            service.OnFault(Fault(DeviceType.Telescope));
+            await service.WhenIdleAsync();
+
+            Assert.That(ActionPayload("recovered").GetProperty("attempts").GetInt32(), Is.EqualTo(1));
+            reconnector.Verify(r => r.ReconnectAsync(DeviceType.Telescope, It.IsAny<CancellationToken>()), Times.Once);
+        }
+
+        [Test]
         public async Task A_connect_stuck_in_Connecting_gives_up_at_the_in_flight_window() {
             service.ConnectInFlightTimeout = TimeSpan.FromMilliseconds(300);
             reconnector.Setup(r => r.ReconnectAsync(DeviceType.Camera, It.IsAny<CancellationToken>()))
