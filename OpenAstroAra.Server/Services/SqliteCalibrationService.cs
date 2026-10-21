@@ -40,6 +40,8 @@ public sealed class SqliteCalibrationService : ICalibrationService {
     private const int DefaultFlatFrames = 20;
     // Bias frames are cheap read-outs; 50 averages their read noise well below a light's.
     internal const int DefaultBiasFrames = 50;
+    // The dark library form's default per combination.
+    internal const int DefaultDarkFrames = 30;
     private const double DefaultTargetPercent = 50;
     private const double DefaultTargetAduTolerancePct = 5;
     // §48.7 sky_flat fallbacks (store-less contexts only; production reads the policy fields).
@@ -387,6 +389,10 @@ public sealed class SqliteCalibrationService : ICalibrationService {
         var biasFrames = request.BiasFrameCount is int bc && bc > 0 ? bc : DefaultBiasFrames;
         var bias = request.IncludeBias ? await UncoveredBiasAsync(conn, sessionId, biasFrames, ct) : [];
         var totalBias = bias.Sum(b => b.FrameCount);
+        var darkFrames = request.DarkFrameCount is int dc && dc > 0 ? dc : DefaultDarkFrames;
+        var darks = request.IncludeDarks ? await UncoveredDarksAsync(conn, sessionId, darkFrames, ct) : [];
+        var totalDarks = darks.Sum(d => d.FrameCount);
+        var afterFlats = new AfterFlatsSpec(bias, darks, request.PauseForLensCap);
 
         var name = sky ? $"Sky flats — {session.TargetName}" : $"Flats — {session.TargetName}";
 
@@ -394,15 +400,15 @@ public sealed class SqliteCalibrationService : ICalibrationService {
         // plan alone. The persisted body is the same NINA-verbatim tree every stored sequence uses,
         // so the WILMA editor renders it and POST /sequences/{id}/start runs it as-is.
         Guid? generatedId = null;
-        if (!request.GenerateOnly && _sequences is not null && (steps.Count > 0 || bias.Count > 0)) {
+        if (!request.GenerateOnly && _sequences is not null && (steps.Count > 0 || bias.Count > 0 || darks.Count > 0)) {
             var body = sky
                 ? CalibrationSequenceBuilder.BuildSkyFlatsBody(name, skySpecs,
                     new SkyFlatEnvelope(
                         SunAltitudeDeg: policies?.SkyFlatSunAltitude ?? DefaultSkySunAltitude,
                         AzimuthDeg: policies?.SkyFlatTargetAzimuth ?? DefaultSkyAzimuth,
                         AltitudeDeg: policies?.SkyFlatTargetAltitude ?? DefaultSkyAltitude),
-                    parkMountAfter: parkAfter, cooling: cooling, bias: bias)
-                : CalibrationSequenceBuilder.BuildMatchingFlatsBody(name, specs, parkMountAfter: parkAfter, cooling: cooling, bias: bias);
+                    parkMountAfter: parkAfter, cooling: cooling, afterFlats: afterFlats)
+                : CalibrationSequenceBuilder.BuildMatchingFlatsBody(name, specs, parkMountAfter: parkAfter, cooling: cooling, afterFlats: afterFlats);
             var created = await _sequences.CreateAsync(new SequenceCreateRequestDto(
                 Name: name,
                 Description: $"Matching flats generated from the {session.SessionStartUtc:yyyy-MM-dd} {session.TargetName} session ({sessionId:D}).",
@@ -417,7 +423,8 @@ public sealed class SqliteCalibrationService : ICalibrationService {
             GeneratedSequenceName: name,
             TotalFlatFrames: total,
             Steps: steps,
-            TotalBiasFrames: totalBias);
+            TotalBiasFrames: totalBias,
+            TotalDarkFrames: totalDarks);
     }
 
     // The cooler around the flats (see MatchingFlatsRequestDto's remarks for the request rules).
@@ -577,6 +584,45 @@ public sealed class SqliteCalibrationService : ICalibrationService {
         EXCEPT
         SELECT DISTINCT gain, "offset", COALESCE(bin, 1) FROM frames WHERE frame_type = 'bias'
         """;
+
+    // The session's (exposure, gain, temperature) combinations no dark covers yet, with the gain,
+    // offset and binning the lights used for each (modal, so one set per combination). The run's
+    // CoolCamera puts the sensor back at the lights' set-point before they are shot.
+    private static async Task<List<DarkStepSpec>> UncoveredDarksAsync(SqliteConnection conn, Guid sessionId, int frameCount, CancellationToken ct) {
+        var result = new List<DarkStepSpec>();
+        var seen = new HashSet<(double, int?, double)>();
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = """
+            SELECT l.exposure_seconds, l.gain, ROUND(COALESCE(l.temperature_c, 0), 0) AS temp_bucket,
+                   l."offset", COALESCE(l.bin, 1) AS bin, COUNT(*) AS c
+            FROM frames l
+            WHERE l.frame_type = 'light' AND l.session_id = $sid
+              AND NOT EXISTS (
+                  SELECT 1 FROM frames d
+                  WHERE d.frame_type = 'dark'
+                    AND d.exposure_seconds IS l.exposure_seconds
+                    AND d.gain IS l.gain
+                    AND ROUND(COALESCE(d.temperature_c, 0), 0) IS ROUND(COALESCE(l.temperature_c, 0), 0))
+            GROUP BY l.exposure_seconds, l.gain, temp_bucket, l."offset", bin
+            ORDER BY l.exposure_seconds, l.gain, temp_bucket, c DESC, l."offset", bin;
+            """;
+        cmd.Parameters.AddWithValue("$sid", sessionId.ToString());
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct)) {
+            var exposure = await reader.IsDBNullAsync(0, ct) ? 0 : reader.GetDouble(0);
+            var gain = await reader.IsDBNullAsync(1, ct) ? (int?)null : reader.GetInt32(1);
+            if (exposure <= 0 || !seen.Add((exposure, gain, reader.GetDouble(2)))) {
+                continue; // rows are frequency-ordered within a combination; the first is the modal offset/bin
+            }
+            result.Add(new DarkStepSpec(
+                ExposureSeconds: exposure,
+                Gain: gain,
+                FrameCount: frameCount,
+                Offset: await reader.IsDBNullAsync(3, ct) ? null : reader.GetInt32(3),
+                Bin: Math.Max(1, reader.GetInt32(4))));
+        }
+        return result;
+    }
 
     private static async Task<List<BiasStepSpec>> UncoveredBiasAsync(SqliteConnection conn, Guid sessionId, int frameCount, CancellationToken ct) {
         var result = new List<BiasStepSpec>();

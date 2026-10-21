@@ -64,7 +64,9 @@ public sealed record CalibrationFilterSummaryDto(
 /// <c>IncludeCoveredFilters</c>; with every filter covered the plan is empty and nothing is stored.
 /// <c>IncludeBias</c> adds bias sets after the flats (panel off, cover still closed) for each
 /// (gain, offset, binning) of the lights that has no bias frames yet, <c>BiasFrameCount</c> each
-/// (null = the default).</remarks>
+/// (null = the default). <c>IncludeDarks</c> adds dark sets for each (exposure, gain, temperature)
+/// of the lights with no darks yet, <c>DarkFrameCount</c> each. <c>PauseForLensCap</c> opens the
+/// panel's cover and waits for the user to put the lens cap on before those bias and darks.</remarks>
 public sealed record MatchingFlatsRequestDto(
     int? OverrideFrameCount,
     int? OverrideTargetAdu,
@@ -75,19 +77,24 @@ public sealed record MatchingFlatsRequestDto(
     bool? ParkMountAfter = null,
     bool IncludeCoveredFilters = false,
     bool IncludeBias = false,
-    int? BiasFrameCount = null);
+    int? BiasFrameCount = null,
+    bool IncludeDarks = false,
+    int? DarkFrameCount = null,
+    bool PauseForLensCap = false);
 
 /// <summary>Sequence the server generated to capture matching flats for the session.
 /// <c>GeneratedSequenceId</c> is the persisted §38 sequence (runnable via
 /// <c>POST /api/v1/sequences/{id}/start</c>); null when the caller asked for the plan
-/// only (<c>GenerateOnly</c>). <c>TotalBiasFrames</c> counts the bias frames planned after the flats.</summary>
+/// only (<c>GenerateOnly</c>). <c>TotalBiasFrames</c> / <c>TotalDarkFrames</c> count the bias and
+/// dark frames planned after the flats.</summary>
 public sealed record GeneratedFlatSequenceDto(
     Guid SourceSessionId,
     Guid? GeneratedSequenceId,
     string GeneratedSequenceName,
     int TotalFlatFrames,
     IReadOnlyList<GeneratedFlatStepDto> Steps,
-    int TotalBiasFrames = 0);
+    int TotalBiasFrames = 0,
+    int TotalDarkFrames = 0);
 
 public sealed record GeneratedFlatStepDto(
     string FilterName,

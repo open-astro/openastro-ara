@@ -183,13 +183,7 @@ class _SessionCard extends ConsumerWidget {
                   ),
                   // Flats carry over while the setup is unchanged: once every
                   // filter is covered the action is a deliberate re-shoot.
-                  label: Text(
-                    !session.matchingFlatsAvailable
-                        ? 'Capture Matching Flats'
-                        : session.matchingBiasAvailable
-                        ? 'Re-shoot flats'
-                        : 'Capture Bias',
-                  ),
+                  label: Text(_actionLabel(session)),
                 ),
               ],
             ),
@@ -198,6 +192,17 @@ class _SessionCard extends ConsumerWidget {
       ),
     );
   }
+}
+
+/// The card's calibration action: flats first; once they're covered, the
+/// bias and darks still missing; with everything covered, a re-shoot.
+String _actionLabel(CalibrationSession s) {
+  if (!s.matchingFlatsAvailable) return 'Capture Matching Flats';
+  final missing = [
+    if (!s.matchingBiasAvailable) 'Bias',
+    if (!s.matchingDarksAvailable) 'Darks',
+  ];
+  return missing.isEmpty ? 'Re-shoot flats' : 'Capture ${missing.join(' & ')}';
 }
 
 const _months = [
@@ -354,6 +359,12 @@ class _MatchingFlatsDialogState extends ConsumerState<MatchingFlatsDialog> {
   // while the cover is still closed. Ticked when the lights have none yet.
   bool _biasNeeded = false;
   bool _bias = false;
+  // Darks for the lights' exposures, gain and temperature, shot after the bias.
+  bool _darksNeeded = false;
+  bool _darks = false;
+  // A panel doesn't always seal out stray light: open its cover and wait for
+  // the user to put the lens cap on before the bias and darks.
+  bool _lensCap = true;
 
   @override
   void initState() {
@@ -377,10 +388,14 @@ class _MatchingFlatsDialogState extends ConsumerState<MatchingFlatsDialog> {
       _filters = session?.filtersUsed ?? const [];
       _biasNeeded = session != null && !session.matchingBiasAvailable;
       _bias = _biasNeeded;
+      _darksNeeded = session != null && !session.matchingDarksAvailable;
+      _darks = _darksNeeded;
       _cool = setpoint != null;
       if (setpoint != null) _coolTo.text = _degrees(setpoint);
     });
   }
+
+  bool get _afterFlats => (_biasNeeded && _bias) || (_darksNeeded && _darks);
 
   static String _degrees(double c) =>
       c == c.roundToDouble() ? c.toStringAsFixed(0) : c.toStringAsFixed(1);
@@ -418,6 +433,8 @@ class _MatchingFlatsDialogState extends ConsumerState<MatchingFlatsDialog> {
         parkMountAfter: _park,
         includeCoveredFilters: _reshoot,
         includeBias: _biasNeeded && _bias,
+        includeDarks: _darksNeeded && _darks,
+        pauseForLensCap: _afterFlats && _lensCap,
       );
       // Post-await UI work gates on State.mounted (the dialog may have been
       // dismissed while the request was in flight).
@@ -426,7 +443,9 @@ class _MatchingFlatsDialogState extends ConsumerState<MatchingFlatsDialog> {
       if (id == null) {
         setState(() {
           _busy = false;
-          _error = result.totalFlatFrames == 0 && result.totalBiasFrames == 0
+          _error = result.totalFlatFrames == 0 &&
+                  result.totalBiasFrames == 0 &&
+                  result.totalDarkFrames == 0
               ? 'Nothing to shoot: every filter already has flats from this setup.'
               : 'The server returned a plan but no stored sequence.';
         });
@@ -436,7 +455,8 @@ class _MatchingFlatsDialogState extends ConsumerState<MatchingFlatsDialog> {
         SnackBar(
           content: Text(
             '"${result.generatedSequenceName}" saved — ${result.totalFlatFrames} flats across ${widget.filterNames.length} filter(s)'
-            '${result.totalBiasFrames > 0 ? ' + ${result.totalBiasFrames} bias' : ''}.',
+            '${result.totalBiasFrames > 0 ? ' + ${result.totalBiasFrames} bias' : ''}'
+            '${result.totalDarkFrames > 0 ? ' + ${result.totalDarkFrames} darks' : ''}.',
           ),
         ),
       );
@@ -455,7 +475,7 @@ class _MatchingFlatsDialogState extends ConsumerState<MatchingFlatsDialog> {
     final filters = widget.filterNames.join(', ');
     final covered = [for (final f in _filters) if (f.hasFlats) f];
     final allCovered = _filters.isNotEmpty && covered.length == _filters.length;
-    final nothingToShoot = allCovered && !_reshoot && !(_biasNeeded && _bias);
+    final nothingToShoot = allCovered && !_reshoot && !_afterFlats;
     final mutedStyle = Theme.of(
       context,
     ).textTheme.bodySmall?.copyWith(color: AraColors.textSecondary);
@@ -557,6 +577,33 @@ class _MatchingFlatsDialogState extends ConsumerState<MatchingFlatsDialog> {
                 subtitle: const Text(
                   'The lights have no bias frames yet. 50 at the camera\'s shortest '
                   'exposure for each gain, offset and binning they used.',
+                ),
+              ),
+            if (_darksNeeded)
+              CheckboxListTile(
+                value: _darks,
+                onChanged: _busy ? null : (v) => setState(() => _darks = v ?? false),
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                controlAffinity: ListTileControlAffinity.leading,
+                title: const Text('Shoot darks after the flats'),
+                subtitle: const Text(
+                  'The lights have no matching darks yet. 30 for each exposure and '
+                  'gain they used, as long as the lights themselves, at their temperature.',
+                ),
+              ),
+            if (_afterFlats)
+              CheckboxListTile(
+                value: _lensCap,
+                onChanged: _busy ? null : (v) => setState(() => _lensCap = v ?? false),
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                controlAffinity: ListTileControlAffinity.leading,
+                title: const Text('Pause for the lens cap first'),
+                subtitle: const Text(
+                  'Opens the flat panel\'s cover and waits while you put the lens cap '
+                  'on, then press Resume to take the bias and darks. A panel doesn\'t '
+                  'always keep out all the light.',
                 ),
               ),
             CheckboxListTile(

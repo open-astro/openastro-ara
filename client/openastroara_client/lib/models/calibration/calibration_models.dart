@@ -102,14 +102,16 @@ class GeneratedFlatSequence {
   final String generatedSequenceName;
   final int totalFlatFrames;
 
-  /// Bias frames planned after the flats.
+  /// Bias and dark frames planned after the flats.
   final int totalBiasFrames;
+  final int totalDarkFrames;
 
   const GeneratedFlatSequence({
     required this.generatedSequenceId,
     required this.generatedSequenceName,
     required this.totalFlatFrames,
     this.totalBiasFrames = 0,
+    this.totalDarkFrames = 0,
   });
 
   factory GeneratedFlatSequence.fromJson(Map<String, dynamic> json) {
@@ -119,6 +121,7 @@ class GeneratedFlatSequence {
       generatedSequenceName: (json['generated_sequence_name'] as String?) ?? '',
       totalFlatFrames: (json['total_flat_frames'] as num?)?.toInt() ?? 0,
       totalBiasFrames: (json['total_bias_frames'] as num?)?.toInt() ?? 0,
+      totalDarkFrames: (json['total_dark_frames'] as num?)?.toInt() ?? 0,
     );
   }
 }

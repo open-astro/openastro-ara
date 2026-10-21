@@ -95,5 +95,12 @@ namespace OpenAstroAra.Sequencer.SequenceItem.FlatDevice {
         /// (stop bounds), never converged, or the capture path is unavailable — reasons logged.
         /// </summary>
         Task<bool> CaptureSkyFlatSetAsync(SkyFlatSetRequest request, IProgress<ApplicationStatus> progress, CancellationToken token);
+
+        /// <summary>
+        /// Turn the panel off and open its motorised cover, so the user can put a lens cap on
+        /// for bias and darks (a panel doesn't always seal out stray light). True once the cover
+        /// reads open; false with no panel connected or no motorised cover — the reason is logged.
+        /// </summary>
+        Task<bool> OpenCoverAsync(CancellationToken token);
     }
 }

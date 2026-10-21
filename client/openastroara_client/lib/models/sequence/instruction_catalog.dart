@@ -457,6 +457,8 @@ const String centerAndRotateType =
     'OpenAstroAra.Sequencer.SequenceItem.Platesolving.CenterAndRotate, OpenAstroAra.Sequencer';
 const String startGuidingType =
     'OpenAstroAra.Sequencer.SequenceItem.Guider.StartGuiding, OpenAstroAra.Sequencer';
+const String openFlatPanelCoverType =
+    'OpenAstroAra.Sequencer.SequenceItem.FlatDevice.OpenFlatPanelCover, OpenAstroAra.Sequencer';
 const String waitForUserType =
     'OpenAstroAra.Sequencer.SequenceItem.Utility.WaitForUser, OpenAstroAra.Sequencer';
 
@@ -998,6 +1000,15 @@ const List<InstructionDef> instructionCatalog = [
         defaultValue: 0,
       ),
     ],
+  ),
+  // Turns the flat panel off and opens its motorised cover, so the user can
+  // put a lens cap on before bias and darks (a no-op without one).
+  InstructionDef(
+    type: openFlatPanelCoverType,
+    label: 'Open Flat Panel Cover',
+    category: InstructionCategory.calibration,
+    icon: Icons.door_front_door_outlined,
+    fields: [],
   ),
   // §58.12-b — pause-for-a-human step: the daemon parks the run in the
   // awaiting-user state until Resume. Emitted by the plan chooser for manual

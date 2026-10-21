@@ -77,11 +77,22 @@ public sealed record SkyFlatEnvelope(
     double AltitudeDeg);
 
 /// <summary>One (exposure, gain) dark set inside a temperature group. Null <paramref name="Gain"/>
-/// = camera default (TakeExposure's -1 sentinel, expressed by omitting the property).</summary>
+/// / <paramref name="Offset"/> = camera default (TakeExposure's -1 sentinel, expressed by omitting
+/// the property); <paramref name="Bin"/> above 1 sets the binning.</summary>
 public sealed record DarkStepSpec(
     double ExposureSeconds,
     int? Gain,
-    int FrameCount);
+    int FrameCount,
+    int? Offset = null,
+    int Bin = 1);
+
+/// <summary>The bias and dark sets a calibration run shoots after its flats. With
+/// <paramref name="LensCapPause"/> the run first opens the panel's cover and waits for the user
+/// to put the lens cap on (a panel doesn't always seal out stray light).</summary>
+public sealed record AfterFlatsSpec(
+    IReadOnlyList<BiasStepSpec> Bias,
+    IReadOnlyList<DarkStepSpec> Darks,
+    bool LensCapPause);
 
 /// <summary>
 /// One cooler set-point's worth of dark sets. Null <paramref name="TemperatureC"/> = capture at
@@ -126,6 +137,11 @@ public static class CalibrationSequenceBuilder {
     private const string ParkScopeType = "OpenAstroAra.Sequencer.SequenceItem.Telescope.ParkScope, OpenAstroAra.Sequencer";
     private const string WaitForSunAltitudeType = "OpenAstroAra.Sequencer.SequenceItem.Utility.WaitForSunAltitude, OpenAstroAra.Sequencer";
     private const string SlewScopeToAltAzType = "OpenAstroAra.Sequencer.SequenceItem.Telescope.SlewScopeToAltAz, OpenAstroAra.Sequencer";
+    private const string OpenFlatPanelCoverType = "OpenAstroAra.Sequencer.SequenceItem.FlatDevice.OpenFlatPanelCover, OpenAstroAra.Sequencer";
+    private const string WaitForUserType = "OpenAstroAra.Sequencer.SequenceItem.Utility.WaitForUser, OpenAstroAra.Sequencer";
+
+    /// <summary>What the lens-cap pause asks the user to do.</summary>
+    internal const string LensCapPrompt = "Put the lens cap on the scope (move the flat panel out of the way if its cover didn't open), then press Resume to take the bias and darks.";
 
     /// <summary>
     /// Build the §38.1 body: a SequentialContainer root with one per-filter container —
@@ -133,16 +149,17 @@ public static class CalibrationSequenceBuilder {
     /// auto-exposure instruction (it probes to the target ADU and captures its own FrameCount,
     /// so the per-filter block needs no LoopCondition), followed by an optional ParkScope when
     /// the §48.7 post_flat_park_mount policy asks for it. <paramref name="cooling"/> wraps the
-    /// blocks in a CoolCamera / WarmCamera pair. <paramref name="bias"/> sets run after the flats:
-    /// the panel is off by then and the cover still closed over the optics.
+    /// blocks in a CoolCamera / WarmCamera pair. <paramref name="afterFlats"/> bias and dark sets
+    /// run after the flats: the panel is off by then and the cover still closed over the optics,
+    /// or the user has put the lens cap on.
     /// </summary>
-    public static JsonElement BuildMatchingFlatsBody(string name, IReadOnlyList<FlatStepSpec> steps, bool parkMountAfter = false, FlatCooling? cooling = null, IReadOnlyList<BiasStepSpec>? bias = null) {
+    public static JsonElement BuildMatchingFlatsBody(string name, IReadOnlyList<FlatStepSpec> steps, bool parkMountAfter = false, FlatCooling? cooling = null, AfterFlatsSpec? afterFlats = null) {
         var items = new JsonArray();
         AddCoolStep(items, cooling);
         foreach (var step in steps) {
             items.Add(FlatBlock(step));
         }
-        AddBiasBlocks(items, bias);
+        AddAfterFlats(items, afterFlats);
         if (parkMountAfter) {
             items.Add(new JsonObject { ["$type"] = ParkScopeType });
         }
@@ -166,7 +183,7 @@ public static class CalibrationSequenceBuilder {
     /// per-filter SkyFlats block] + an optional trailing ParkScope. The sequence itself owns
     /// the twilight timing, which is what makes auto-starting it at run completion safe.
     /// </summary>
-    public static JsonElement BuildSkyFlatsBody(string name, IReadOnlyList<SkyFlatStepSpec> steps, SkyFlatEnvelope envelope, bool parkMountAfter = false, FlatCooling? cooling = null, IReadOnlyList<BiasStepSpec>? bias = null) {
+    public static JsonElement BuildSkyFlatsBody(string name, IReadOnlyList<SkyFlatStepSpec> steps, SkyFlatEnvelope envelope, bool parkMountAfter = false, FlatCooling? cooling = null, AfterFlatsSpec? afterFlats = null) {
         ArgumentNullException.ThrowIfNull(envelope);
         var items = new JsonArray();
         // Cool before the twilight wait, so the sensor is at temperature when the sky is ready.
@@ -191,8 +208,8 @@ public static class CalibrationSequenceBuilder {
         foreach (var step in steps) {
             items.Add(SkyFlatBlock(step));
         }
-        // A bias at the camera's shortest exposure collects no meaningful sky light.
-        AddBiasBlocks(items, bias);
+        // Darks need the scope covered after sky flats, so these runs want the lens-cap pause.
+        AddAfterFlats(items, afterFlats);
         if (parkMountAfter) {
             items.Add(new JsonObject { ["$type"] = ParkScopeType });
         }
@@ -427,9 +444,19 @@ public static class CalibrationSequenceBuilder {
     /// with its shortest exposure (TakeExposure rejects a zero exposure).</summary>
     internal const double BiasPlaceholderExposureSec = 0.001;
 
-    private static void AddBiasBlocks(JsonArray items, IReadOnlyList<BiasStepSpec>? bias) {
-        foreach (var step in bias ?? []) {
+    private static void AddAfterFlats(JsonArray items, AfterFlatsSpec? afterFlats) {
+        if (afterFlats is null || (afterFlats.Bias.Count == 0 && afterFlats.Darks.Count == 0)) {
+            return;
+        }
+        if (afterFlats.LensCapPause) {
+            items.Add(new JsonObject { ["$type"] = OpenFlatPanelCoverType });
+            items.Add(new JsonObject { ["$type"] = WaitForUserType, ["Text"] = LensCapPrompt });
+        }
+        foreach (var step in afterFlats.Bias) {
             items.Add(BiasBlock(step));
+        }
+        foreach (var step in afterFlats.Darks) {
+            items.Add(DarkBlock(temperatureC: null, step));
         }
     }
 
@@ -476,6 +503,12 @@ public static class CalibrationSequenceBuilder {
         };
         if (step.Gain is int gain) {
             exposure["Gain"] = gain;
+        }
+        if (step.Offset is int offset) {
+            exposure["Offset"] = offset;
+        }
+        if (step.Bin > 1) {
+            exposure["Binning"] = new JsonObject { ["X"] = step.Bin, ["Y"] = step.Bin };
         }
 
         var gainLabel = step.Gain is int g ? $"g{g}" : "default gain";

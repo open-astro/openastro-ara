@@ -387,6 +387,58 @@ namespace OpenAstroAra.Test {
             Assert.That(exposure.ExposureTime, Is.GreaterThan(0), "TakeExposure rejects a zero exposure");
         }
 
+        private static readonly string[] BiasThenDark = ["BIAS", "DARK"];
+
+        [Test]
+        public async Task Darks_follow_the_lens_cap_pause_at_the_lights_exposure_gain_and_offset() {
+            await InsertSessionAsync(FlatsSession);
+            var store = new FileSequenceService(_dir);
+            var svc = new SqliteCalibrationService(_db, store);
+            await InsertFrameAsync(Session, "light", "Ha", 60, 100, "NA", offset: 50, rotatorDeg: 34.8);
+            await InsertFrameAsync(Session, "light", "Ha", 120, 100, "NA", offset: 50, rotatorDeg: 34.8);
+            await InsertFrameAsync(FlatsSession, "flat", "Ha", 1, 100, "Flats", rotatorDeg: 34.8);
+            await InsertFrameAsync(FlatsSession, "dark", null, 120, 100, "Darks"); // 120 s already covered
+
+            var plan = await svc.GenerateMatchingFlatsAsync(Session,
+                new MatchingFlatsRequestDto(null, null, GenerateOnly: false,
+                    IncludeBias: true, IncludeDarks: true, DarkFrameCount: 4, PauseForLensCap: true),
+                idempotencyKey: null, CancellationToken.None);
+            Assert.That(plan.Steps, Is.Empty, "flats already covered");
+            Assert.That(plan.TotalDarkFrames, Is.EqualTo(4), "only the 60 s darks are missing");
+
+            var stored = await store.GetAsync(plan.GeneratedSequenceId!.Value, CancellationToken.None);
+            var root = new SequenceJsonConverter(HeadlessSequencerFactory.WithDefaults()).Deserialize(stored!.Body.GetRawText());
+            var items = root.GetItemsSnapshot().ToList();
+            var cover = items.FindIndex(i => i is OpenFlatPanelCover);
+            var wait = items.FindIndex(i => i is WaitForUser);
+            Assert.That(cover, Is.GreaterThanOrEqualTo(0));
+            Assert.That(wait, Is.EqualTo(cover + 1), "the pause comes right after the cover opens");
+            Assert.That(((WaitForUser)items[wait]).Text, Does.Contain("lens cap"));
+            var blocks = items.Skip(wait + 1).OfType<SequentialContainer>().ToList();
+            Assert.That(blocks.Select(b => b.GetItemsSnapshot().OfType<TakeExposure>().Single().ImageType),
+                Is.EqualTo(BiasThenDark), "bias, then darks, both after the pause");
+            var dark = blocks[1];
+            Assert.That(dark.GetConditionsSnapshot().OfType<LoopCondition>().Single().Iterations, Is.EqualTo(4));
+            var take = dark.GetItemsSnapshot().OfType<TakeExposure>().Single();
+            Assert.That(take.ExposureTime, Is.EqualTo(60));
+            Assert.That(take.Gain, Is.EqualTo(100));
+            Assert.That(take.Offset, Is.EqualTo(50));
+        }
+
+        [Test]
+        public async Task No_lens_cap_pause_unless_asked() {
+            var store = new FileSequenceService(_dir);
+            var svc = new SqliteCalibrationService(_db, store);
+            await InsertFrameAsync(Session, "light", "Ha", 60, 100, "NA");
+
+            var plan = await svc.GenerateMatchingFlatsAsync(Session,
+                new MatchingFlatsRequestDto(null, null, GenerateOnly: false, IncludeDarks: true),
+                idempotencyKey: null, CancellationToken.None);
+            Assert.That(plan.TotalDarkFrames, Is.EqualTo(SqliteCalibrationService.DefaultDarkFrames));
+            var stored = await store.GetAsync(plan.GeneratedSequenceId!.Value, CancellationToken.None);
+            Assert.That(stored!.Body.GetRawText(), Does.Not.Contain("WaitForUser").And.Not.Contain("OpenFlatPanelCover"));
+        }
+
         [Test]
         public async Task Bias_alone_is_stored_when_every_filter_already_has_flats() {
             await InsertSessionAsync(FlatsSession);

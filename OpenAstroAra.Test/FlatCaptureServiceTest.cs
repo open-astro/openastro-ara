@@ -75,12 +75,13 @@ namespace OpenAstroAra.Test {
             public bool ThrowOnApply { get; set; }
             public int MaxBrightness { get; set; }
             public bool CoverOpen { get; set; }
+            public bool HasCover { get; set; } = true;
 
             public Task<FlatDeviceDto?> GetAsync(CancellationToken ct) =>
                 Task.FromResult<FlatDeviceDto?>(new FlatDeviceDto(
                     "panel-1", "Fake Panel", EquipmentConnectionState.Connected,
                     new FlatDeviceStateDto(LightOn ? "light_on" : "cover_closed", CoverOpen, LightOn, LightOn ? (RequestedBrightness ?? 0) : 0,
-                        MaxBrightness: MaxBrightness)));
+                        MaxBrightness: MaxBrightness, HasCover: HasCover)));
 
             public Task<OperationAcceptedDto> ConnectAsync(ConnectRequestDto request, string? idempotencyKey, CancellationToken ct) =>
                 throw new NotSupportedException();
@@ -276,6 +277,29 @@ namespace OpenAstroAra.Test {
 
             Assert.That(ok, Is.True);
             Assert.That(captured, Has.Count.EqualTo(3));
+        }
+
+        private static readonly bool[] OneOpen = [true];
+
+        [Test]
+        public async Task Opening_the_cover_for_the_lens_cap_turns_the_panel_off_and_opens_it() {
+            await panel.ApplyFlatPanelAsync(new FlatPanelRequestDto(LightOn: true), null, CancellationToken.None);
+            panel.CoverRequests.Clear();
+
+            var ok = await CreateSUT().OpenCoverAsync(CancellationToken.None);
+
+            Assert.That(ok, Is.True);
+            Assert.That(panel.CoverOpen, Is.True);
+            Assert.That(panel.LightOn, Is.False, "the panel goes dark before the lens cap goes on");
+            Assert.That(panel.CoverRequests, Is.EqualTo(OneOpen));
+        }
+
+        [Test]
+        public async Task A_panel_with_no_motorised_cover_has_nothing_to_open() {
+            panel.HasCover = false;
+            Assert.That(await CreateSUT().OpenCoverAsync(CancellationToken.None), Is.False);
+            Assert.That(panel.CoverRequests, Is.Empty);
+            Assert.That(await new FlatCaptureService().OpenCoverAsync(CancellationToken.None), Is.False, "no panel at all");
         }
 
         [Test]

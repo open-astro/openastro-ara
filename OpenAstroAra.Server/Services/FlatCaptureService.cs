@@ -310,6 +310,42 @@ public sealed partial class FlatCaptureService : IFlatCaptureExecutor {
         }
     }
 
+    /// <inheritdoc/>
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Panel boundary: a disconnected/absent panel or a driver fault means the cover can't be opened; the run's lens-cap pause still asks the user, so this logs and reports false rather than failing the step.")]
+    public async Task<bool> OpenCoverAsync(CancellationToken token) {
+        if (_flatDevice is null) {
+            LogNoCoverToOpen();
+            return false;
+        }
+        try {
+            var device = await _flatDevice.GetAsync(token).ConfigureAwait(false);
+            if (device?.Runtime is not { HasCover: true } runtime) {
+                LogNoCoverToOpen();
+                return false;
+            }
+            if (runtime.CoverOpen && !runtime.LightOn) {
+                return true;
+            }
+            _ = await _flatDevice.ApplyFlatPanelAsync(
+                new FlatPanelRequestDto(OpenCover: true, LightOn: false), idempotencyKey: null, token).ConfigureAwait(false);
+            LogOpeningCover();
+            var deadline = DateTimeOffset.UtcNow + CoverCloseTimeout;
+            while (DateTimeOffset.UtcNow < deadline) {
+                token.ThrowIfCancellationRequested();
+                if ((await _flatDevice.GetAsync(token).ConfigureAwait(false))?.Runtime is { CoverOpen: true }) {
+                    return true;
+                }
+                await Delay(TimeSpan.FromMilliseconds(250), token).ConfigureAwait(false);
+            }
+            LogCoverOpenTimeout(CoverCloseTimeout.TotalSeconds);
+            return false;
+        } catch (Exception ex) when (ex is not OperationCanceledException) {
+            LogPanelUnavailable(ex);
+            return false;
+        }
+    }
+
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Best-effort cleanup on every exit path (incl. cancellation): a panel-off failure must never mask the set's real outcome or fault the finally. CA1031's log-and-recover boundary applies.")]
     private void TurnPanelOffBestEffort() {
@@ -437,6 +473,15 @@ public sealed partial class FlatCaptureService : IFlatCaptureExecutor {
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Closing the flat panel cover before flats.")]
     private partial void LogClosingCover();
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Opening the flat panel cover for the lens cap.")]
+    private partial void LogOpeningCover();
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "No motorised flat panel cover to open — the user moves the panel for the lens cap.")]
+    private partial void LogNoCoverToOpen();
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Flat panel cover did not report open within {Seconds}s.")]
+    private partial void LogCoverOpenTimeout(double seconds);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Flat panel did not report brightness {Brightness} within {Seconds}s — probing anyway.")]
     private partial void LogBrightnessTimeout(int brightness, double seconds);

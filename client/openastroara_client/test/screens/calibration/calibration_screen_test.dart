@@ -20,6 +20,8 @@ class _FakeCalibrationClient implements CalibrationClient {
   bool? flatsPark;
   bool? flatsIncludeCovered;
   bool? flatsIncludeBias;
+  bool? flatsIncludeDarks;
+  bool? flatsLensCap;
   DarkLibraryBuildRequest? buildRequest;
 
   _FakeCalibrationClient({
@@ -57,9 +59,13 @@ class _FakeCalibrationClient implements CalibrationClient {
     bool? parkMountAfter,
     bool includeCoveredFilters = false,
     bool includeBias = false,
+    bool includeDarks = false,
+    bool pauseForLensCap = false,
   }) async {
     flatsSessionId = sessionId;
     flatsIncludeBias = includeBias;
+    flatsIncludeDarks = includeDarks;
+    flatsLensCap = pauseForLensCap;
     flatsPark = parkMountAfter;
     flatsIncludeCovered = includeCoveredFilters;
     flatsFrameCount = frameCount;
@@ -170,6 +176,48 @@ void main() {
     expect(fake.flatsIncludeCovered, isFalse);
   });
 
+  testWidgets('missing bias and darks come with the lens-cap pause by default',
+      (tester) async {
+    final fake = _FakeCalibrationClient(sessions: [
+      _session(flats: true, bias: false, darks: false, filters: const [
+        CalibrationFilterSummary(
+          filterName: 'Ha',
+          lightFrameCount: 5,
+          meanExposureSeconds: 60,
+          matchingFlatFrames: 30,
+        ),
+      ]),
+    ]);
+    await _pump(tester, fake);
+
+    await tester.tap(find.text('Capture Bias & Darks'));
+    await tester.pumpAndSettle();
+    expect(find.text('Shoot darks after the flats'), findsOneWidget);
+    expect(find.text('Pause for the lens cap first'), findsOneWidget);
+    await tester.tap(find.text('Generate & open'));
+    await tester.pumpAndSettle();
+    expect(fake.flatsIncludeBias, isTrue);
+    expect(fake.flatsIncludeDarks, isTrue);
+    expect(fake.flatsLensCap, isTrue);
+  });
+
+  testWidgets('the lens-cap pause is an option the user can turn off',
+      (tester) async {
+    final fake = _FakeCalibrationClient(
+        sessions: [_session(bias: false, darks: false)]);
+    await _pump(tester, fake);
+
+    await tester.tap(find.text('Capture Matching Flats'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Pause for the lens cap first'));
+    await tester.tap(find.text('Pause for the lens cap first'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Generate & open'));
+    await tester.pumpAndSettle();
+    expect(fake.flatsIncludeDarks, isTrue);
+    expect(fake.flatsLensCap, isFalse);
+  });
+
   testWidgets('lights that already have bias never ask for it', (tester) async {
     final fake = _FakeCalibrationClient(sessions: [_session()]);
     await _pump(tester, fake);
@@ -177,9 +225,12 @@ void main() {
     await tester.tap(find.text('Capture Matching Flats'));
     await tester.pumpAndSettle();
     expect(find.text('Shoot bias frames after the flats'), findsNothing);
+    expect(find.text('Pause for the lens cap first'), findsNothing,
+        reason: 'no bias or darks to shoot, so nothing to pause for');
     await tester.tap(find.text('Generate & open'));
     await tester.pumpAndSettle();
     expect(fake.flatsIncludeBias, isFalse);
+    expect(fake.flatsLensCap, isFalse);
   });
 
   testWidgets(

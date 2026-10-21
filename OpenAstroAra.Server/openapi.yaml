@@ -9877,6 +9877,13 @@ components:
             - string
           format: int32
           default: 0
+        total_dark_frames:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+          default: 0
     GeneratedFlatStepDto:
       required:
         - filter_name
@@ -11307,6 +11314,19 @@ components:
             - integer
             - string
           format: int32
+        include_darks:
+          type: boolean
+          default: false
+        dark_frame_count:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - 'null'
+            - integer
+            - string
+          format: int32
+        pause_for_lens_cap:
+          type: boolean
+          default: false
     MosaicCreateRequestDto:
       required:
         - name
