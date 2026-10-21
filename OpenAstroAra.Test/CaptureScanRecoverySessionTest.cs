@@ -108,11 +108,11 @@ namespace OpenAstroAra.Test {
             Assert.That(result.FramesRecovered, Is.EqualTo(2));
 
             var angle = await ScalarAsync(
-                "SELECT rotator_mechanical_deg FROM frames WHERE file_path LIKE $p;", "%rotated-0001.fits");
+                "SELECT rotator_mechanical_deg FROM frames WHERE file_path = $p;", Path.Combine(_root, "rotated-0001.fits"));
             Assert.That(double.Parse(angle!, System.Globalization.CultureInfo.InvariantCulture), Is.EqualTo(34.8).Within(1e-6),
                 "ROTATOR is read into the catalog, not left NULL with the 'assumed' note");
             var none = await ScalarAsync(
-                "SELECT rotator_mechanical_deg FROM frames WHERE file_path LIKE $p;", "%unrotated-0001.fits");
+                "SELECT rotator_mechanical_deg FROM frames WHERE file_path = $p;", Path.Combine(_root, "unrotated-0001.fits"));
             Assert.That(none, Is.Null, "no ROTATOR header: no angle invented");
         }
 
