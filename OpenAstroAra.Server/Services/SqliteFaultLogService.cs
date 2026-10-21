@@ -447,7 +447,7 @@ public sealed partial class SqliteFaultLogService : IFaultLogService, IDisposabl
     [LoggerMessage(Level = LogLevel.Debug, Message = "Fault log: recorded {DeviceType} {Kind} (§42.5)")]
     private partial void LogFaultRecorded(DeviceType deviceType, EquipmentFaultKind kind);
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "Fault log: {DeviceType} reconnected — {Count} unresolved disconnect fault(s) marked resolved (§42.5)")]
+    [LoggerMessage(Level = LogLevel.Information, Message = "Fault log: {DeviceType} reconnected — {Count} unresolved disconnect/degraded fault(s) marked resolved (§42.5)")]
     private partial void LogResolvedOnReconnect(DeviceType deviceType, int count);
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Fault log: {DeviceType} fault resolved by its device's own reconnect — {Details} (§42.5, #1191)")]

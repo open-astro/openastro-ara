@@ -176,7 +176,7 @@ public sealed partial class EquipmentEventPublisher {
             var now = DateTimeOffset.UtcNow;
             // FlatDevice/CoverCalibrator are one physical device under two wire
             // tokens (the EquipmentReconnector grouping) — a reconnect of either
-            // resolves both tokens' standing disconnect rows.
+            // resolves both tokens' standing disconnect and degraded rows.
             if (deviceType is DeviceType.FlatDevice or DeviceType.CoverCalibrator) {
                 await _faultLog!.ResolveOnReconnectAsync(DeviceType.FlatDevice, now, CancellationToken.None).ConfigureAwait(false);
                 await _faultLog.ResolveOnReconnectAsync(DeviceType.CoverCalibrator, now, CancellationToken.None).ConfigureAwait(false);
