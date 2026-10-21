@@ -1262,10 +1262,13 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
         var stem = Path.GetFileNameWithoutExtension(fitsPath);
         try {
             // <stem>.preview.jpg (default), <stem>.preview.<stretch>[.<hash>].jpg
-            // (variants) and <stem>.thumb.jpg (thumbnail) — same naming the §65.4
-            // cache helpers use above.
+            // (variants), <stem>.thumb.jpg (thumbnail) and <stem>.hist.v<n>.json
+            // (histogram cache, any version) — same naming the §65.4 cache
+            // helpers use above. The histogram cache was missed until 2026-10-21
+            // and piled up beside deleted frames.
             foreach (var sidecar in Directory.EnumerateFiles(dir, $"{stem}.preview*.jpg")
-                         .Concat(Directory.EnumerateFiles(dir, $"{stem}.thumb.jpg"))) {
+                         .Concat(Directory.EnumerateFiles(dir, $"{stem}.thumb.jpg"))
+                         .Concat(Directory.EnumerateFiles(dir, $"{stem}.hist.v*.json"))) {
                 try { File.Delete(sidecar); } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { /* skip locked */ }
             }
         } catch (DirectoryNotFoundException) { /* volume detached — nothing to delete */

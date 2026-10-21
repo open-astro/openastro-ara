@@ -67,6 +67,7 @@ namespace OpenAstroAra.Test {
             await File.WriteAllTextAsync(Path.ChangeExtension(fits, null) + ".preview.jpg", "p");
             await File.WriteAllTextAsync(Path.ChangeExtension(fits, null) + ".preview.auto_stf.jpg", "v");
             await File.WriteAllTextAsync(Path.ChangeExtension(fits, null) + ".thumb.jpg", "t");
+            await File.WriteAllTextAsync(Path.ChangeExtension(fits, null) + ".hist.v2.json", "h");
             await _repo.InsertAsync(new FrameDto(
                 Id: id, SessionId: Session, TargetName: "M31", FrameType: FrameType.Light,
                 FilterName: "Ha", ExposureSeconds: 300, Gain: 100, Offset: 10,
@@ -92,9 +93,11 @@ namespace OpenAstroAra.Test {
             Assert.That(File.Exists(stem + ".preview.jpg"), Is.False, "default preview deleted");
             Assert.That(File.Exists(stem + ".preview.auto_stf.jpg"), Is.False, "variant deleted");
             Assert.That(File.Exists(stem + ".thumb.jpg"), Is.False, "thumbnail deleted");
+            Assert.That(File.Exists(stem + ".hist.v2.json"), Is.False, "histogram cache deleted");
             // The other frame's row + files are untouched.
             Assert.That(await _repo.GetAsync(survivorId, CancellationToken.None), Is.Not.Null);
             Assert.That(File.Exists(survivorFits), Is.True);
+            Assert.That(File.Exists(Path.ChangeExtension(survivorFits, null) + ".hist.v2.json"), Is.True);
         }
 
         [Test]
