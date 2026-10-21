@@ -56,6 +56,8 @@ public sealed class SqliteCalibrationService : ICalibrationService {
     private readonly IAraDatabase _db;
     private readonly ISequenceService? _sequences;
     private readonly IProfileStore? _profile;
+    // Whether the connected camera can cool (null = no camera connected, or not known yet).
+    private readonly Func<bool?>? _cameraCanCool;
 
     /// <param name="db">The §28 frame catalog.</param>
     /// <param name="sequences">The §38 sequence store the generated matching-flats sequence is
@@ -63,10 +65,12 @@ public sealed class SqliteCalibrationService : ICalibrationService {
     /// store) degrades generation to plan-only, exactly as if the caller set GenerateOnly.</param>
     /// <param name="profile">The §48.7 flat_panel policy source (target ADU, tolerance, frames
     /// per filter, post-flat park). Null falls back to the conventional defaults above.</param>
-    public SqliteCalibrationService(IAraDatabase db, ISequenceService? sequences = null, IProfileStore? profile = null) {
+    public SqliteCalibrationService(IAraDatabase db, ISequenceService? sequences = null, IProfileStore? profile = null,
+            Func<bool?>? cameraCanCool = null) {
         _db = db;
         _sequences = sequences;
         _profile = profile;
+        _cameraCanCool = cameraCanCool;
     }
 
     // Keyset cursor prefix. captured_utc is stored as ISO-8601 "O" (fixed-width, UTC), so string
@@ -390,14 +394,19 @@ public sealed class SqliteCalibrationService : ICalibrationService {
         var bias = request.IncludeBias ? await UncoveredBiasAsync(conn, sessionId, biasFrames, ct) : [];
         var totalBias = bias.Sum(b => b.FrameCount);
         var darkFrames = request.DarkFrameCount is int dc && dc > 0 ? dc : DefaultDarkFrames;
-        var darks = request.IncludeDarks ? await UncoveredDarksAsync(conn, sessionId, darkFrames, ct) : [];
+        // A camera that can't cool gets no CoolCamera before its darks (it would refuse the step).
+        var darks = request.IncludeDarks
+            ? await UncoveredDarksAsync(conn, sessionId, darkFrames, canCool: _cameraCanCool?.Invoke() != false, ct)
+            : [];
         var totalDarks = darks.Sum(d => d.FrameCount);
         var afterFlats = new AfterFlatsSpec(bias, darks, request.PauseForLensCap);
 
         // The frames file next to the lights they calibrate: {target}/{night}/Flat, …/Dark, …/Bias.
         // The night is the lights' observing night on the daemon's clock, as the lights were named.
-        var filing = string.IsNullOrWhiteSpace(session.TargetName) ? null
-            : new CalibrationFilingSpec(session.TargetName,
+        // A session that imaged several targets files under the one with the most lights.
+        var filingTarget = await MainTargetAsync(conn, sessionId, ct) ?? session.TargetName;
+        var filing = string.IsNullOrWhiteSpace(filingTarget) ? null
+            : new CalibrationFilingSpec(filingTarget,
                 DateOnly.FromDateTime(session.SessionStartUtc.ToLocalTime().AddHours(-12).DateTime));
         var name = $"{RunTitle(sky, steps.Count > 0, bias.Count > 0, darks.Count > 0)} — {session.TargetName}";
 
@@ -615,7 +624,7 @@ public sealed class SqliteCalibrationService : ICalibrationService {
     // temperature to shoot their darks at: the set-point the lights ran at, else (lights from before
     // the catalog recorded it, or taken with the cooler off) their recorded sensor temperature, which
     // is the bucket the darks have to land in.
-    private static async Task<List<DarkStepSpec>> UncoveredDarksAsync(SqliteConnection conn, Guid sessionId, int frameCount, CancellationToken ct) {
+    private static async Task<List<DarkStepSpec>> UncoveredDarksAsync(SqliteConnection conn, Guid sessionId, int frameCount, bool canCool, CancellationToken ct) {
         var result = new List<DarkStepSpec>();
         var seen = new HashSet<(double, int?, double)>();
         await using var cmd = conn.CreateCommand();
@@ -648,11 +657,23 @@ public sealed class SqliteCalibrationService : ICalibrationService {
                 FrameCount: frameCount,
                 Offset: await reader.IsDBNullAsync(3, ct) ? null : reader.GetInt32(3),
                 Bin: Math.Max(1, reader.GetInt32(4)),
-                CoolToC: !await reader.IsDBNullAsync(6, ct) ? reader.GetDouble(6)
+                CoolToC: !canCool ? null
+                    : !await reader.IsDBNullAsync(6, ct) ? reader.GetDouble(6)
                     : !await reader.IsDBNullAsync(7, ct) ? reader.GetDouble(7)
                     : null));
         }
         return result;
+    }
+
+    private static async Task<string?> MainTargetAsync(SqliteConnection conn, Guid sessionId, CancellationToken ct) {
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = """
+            SELECT target_name FROM frames
+            WHERE session_id = $sid AND frame_type = 'light' AND target_name IS NOT NULL AND target_name <> ''
+            GROUP BY target_name ORDER BY COUNT(*) DESC, target_name LIMIT 1;
+            """;
+        cmd.Parameters.AddWithValue("$sid", sessionId.ToString());
+        return await cmd.ExecuteScalarAsync(ct) as string;
     }
 
     private static async Task<List<BiasStepSpec>> UncoveredBiasAsync(SqliteConnection conn, Guid sessionId, int frameCount, CancellationToken ct) {

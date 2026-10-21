@@ -495,6 +495,48 @@ namespace OpenAstroAra.Test {
         private static readonly double[] OnlyMinusTen = [-10];
 
         [Test]
+        public async Task A_camera_that_cannot_cool_gets_no_cooling_step_before_its_darks() {
+            var store = new FileSequenceService(_dir);
+            var svc = new SqliteCalibrationService(_db, store, cameraCanCool: () => false);
+            await InsertFrameAsync(Session, "light", "L", 30, 100, "M42", temperatureC: 21);
+
+            var plan = await svc.GenerateMatchingFlatsAsync(Session,
+                new MatchingFlatsRequestDto(null, null, GenerateOnly: false, IncludeFlats: false, IncludeDarks: true),
+                idempotencyKey: null, CancellationToken.None);
+            var stored = await store.GetAsync(plan.GeneratedSequenceId!.Value, CancellationToken.None);
+            Assert.That(stored!.Body.GetRawText(), Does.Not.Contain("CoolCamera"),
+                "an uncooled camera would refuse it and show a failed step");
+
+            // Not connected (unknown): the darks still regulate to the lights' temperature.
+            var unknown = new SqliteCalibrationService(_db, store, cameraCanCool: () => null);
+            var plan2 = await unknown.GenerateMatchingFlatsAsync(Session,
+                new MatchingFlatsRequestDto(null, null, GenerateOnly: false, IncludeFlats: false, IncludeDarks: true),
+                idempotencyKey: null, CancellationToken.None);
+            var stored2 = await store.GetAsync(plan2.GeneratedSequenceId!.Value, CancellationToken.None);
+            Assert.That(stored2!.Body.GetRawText(), Does.Contain("CoolCamera"));
+        }
+
+        [Test]
+        public async Task A_multi_target_session_files_its_calibration_under_the_main_target() {
+            var store = new FileSequenceService(_dir);
+            var svc = new SqliteCalibrationService(_db, store);
+            await InsertFrameAsync(Session, "light", "Ha", 300, 100, "M42");
+            for (var n = 0; n < 3; n++) {
+                await InsertFrameAsync(Session, "light", "Ha", 300, 100, "Orion Nebula");
+            }
+
+            var plan = await svc.GenerateMatchingFlatsAsync(Session,
+                new MatchingFlatsRequestDto(null, null, GenerateOnly: false, IncludeBias: true),
+                idempotencyKey: null, CancellationToken.None);
+            var stored = await store.GetAsync(plan.GeneratedSequenceId!.Value, CancellationToken.None);
+            var root = new SequenceJsonConverter(HeadlessSequencerFactory.WithDefaults()).Deserialize(stored!.Body.GetRawText());
+            var steps = root.GetItemsSnapshot().OfType<SequentialContainer>().SelectMany(b => b.GetItemsSnapshot()).ToList();
+            Assert.That(steps.OfType<FlatPanelFlats>().Select(f => f.CalibrationTarget)
+                    .Concat(steps.OfType<TakeExposure>().Select(e => e.CalibrationTarget)),
+                Is.Not.Empty.And.All.EqualTo("Orion Nebula"), "the target with most lights, not the alphabetically first");
+        }
+
+        [Test]
         public async Task Calibration_frames_file_under_the_lights_target_and_night() {
             var store = new FileSequenceService(_dir);
             var svc = new SqliteCalibrationService(_db, store);

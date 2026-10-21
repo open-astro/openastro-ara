@@ -534,7 +534,8 @@ public partial class Program {
         builder.Services.AddSingleton<ICalibrationService>(sp => new SqliteCalibrationService(
             sp.GetRequiredService<IAraDatabase>(),
             sp.GetRequiredService<ISequenceService>(),
-            sp.GetRequiredService<IProfileStore>()));
+            sp.GetRequiredService<IProfileStore>(),
+            cameraCanCool: () => sp.GetService<CameraService>()?.CanSetTemperatureNow));
         builder.Services.AddSingleton<IDarkLibraryService, SqliteDarkLibraryService>();
         // §47 / #1146 — mosaic projects persist in the catalog; panel completion is derived from the
         // frames table, so "panels 1-3 done, 4-6 owed" survives a restart.

@@ -123,6 +123,16 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
     private int _deviceFailures;
     internal const int DeviceFailuresBeforeLost = 2;
     internal int DeviceFailureCount => Volatile.Read(ref _deviceFailures);
+
+    /// <summary>Whether the connected camera can regulate its temperature; null when no camera is
+    /// connected or its capabilities aren't read yet.</summary>
+    internal bool? CanSetTemperatureNow {
+        get {
+            lock (_gate) {
+                return _state == EquipmentConnectionState.Connected ? _capabilities?.CanSetTemperature : null;
+            }
+        }
+    }
     private void NoteDeviceFailure() => Interlocked.Increment(ref _deviceFailures);
     // Set around the blocking ImageArray transfer: serializing Alpaca bridges queue every request
     // behind the download, so timer refreshes would stall for the whole window — skip them instead
