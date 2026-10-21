@@ -180,6 +180,34 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task An_earlier_failed_capture_doesnt_use_up_the_next_ones_retry() {
+            var starts = 0;
+            await using var box = ScriptedAlpacaDevice.Start(
+                path => path.EndsWith("/imageready", StringComparison.Ordinal) ? "true"
+                    : path.EndsWith("/imagearray", StringComparison.Ordinal) ? "[[100,200],[300,400]],\"Type\":2,\"Rank\":2"
+                    : null,
+                // The 1st and 2nd exposures fail (one whole capture lost), the 3rd fails, the 4th works.
+                putResponder: path => path.EndsWith("/startexposure", StringComparison.Ordinal) && ++starts != 4
+                    ? ScriptedAlpacaDevice.Error("ASISetControlValue: ASI_ERROR_GENERAL_ERROR")
+                    : null);
+            var dir = Directory.CreateTempSubdirectory("ara-camlost-").FullName;
+            try {
+                var frames = new Mock<IFrameRepository>();
+                using var svc = new CameraService(frames: frames.Object, fallbackFramesDir: dir);
+                await ConnectAsync(svc, box);
+                await Assert.ThrowsAsync<CameraUnavailableException>(() =>
+                    svc.CaptureImage(new CaptureSequence { ExposureTime = 0.01, ImageType = "LIGHT" }, CancellationToken.None, null, "M42"));
+
+                await svc.CaptureImage(new CaptureSequence { ExposureTime = 0.01, ImageType = "LIGHT" }, CancellationToken.None, null, "M42");
+
+                Assert.That(starts, Is.EqualTo(4), "the second capture's one glitch was retried, not treated as lost");
+                frames.Verify(f => f.InsertAsync(It.IsAny<FrameDto>(), It.IsAny<CancellationToken>()), Times.Once);
+            } finally {
+                Directory.Delete(dir, recursive: true);
+            }
+        }
+
+        [Test]
         public async Task Two_failed_exposures_in_a_row_are_a_lost_camera() {
             var starts = 0;
             await using var box = ScriptedAlpacaDevice.Start(
@@ -201,10 +229,10 @@ namespace OpenAstroAra.Test {
                 Assert.That(ex!.Message, Does.Contain("stopped responding"));
                 Assert.That(starts, Is.EqualTo(2));
 
-                // Still failing after Resume: lost again at once, no second free retry.
+                // Still failing after Resume: that capture gets its own retry, then pauses again.
                 await Assert.ThrowsAsync<CameraUnavailableException>(() =>
                     svc.CaptureImage(new CaptureSequence { ExposureTime = 0.01, ImageType = "BIAS" }, CancellationToken.None, null, "Flats"));
-                Assert.That(starts, Is.EqualTo(3));
+                Assert.That(starts, Is.EqualTo(4));
             } finally {
                 Directory.Delete(dir, recursive: true);
             }

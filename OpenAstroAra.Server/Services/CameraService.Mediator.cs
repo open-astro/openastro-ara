@@ -189,19 +189,20 @@ public sealed partial class CameraService : ICameraMediator, IImagingMediator {
     /// <summary>
     /// One capture with a single retry when the camera itself failed (a stalled exposure, a driver
     /// error, the camera vanishing mid-exposure): a one-off glitch costs one frame's time, not the
-    /// run. A second device failure in a row — or the first after the camera was already failing —
-    /// is a camera that's gone: <see cref="CameraUnavailableException"/>, which the sequencer turns
-    /// into a pause awaiting the user. Failures that aren't the camera's (a full or ejected disk,
-    /// a catalog error) return false unchanged.
+    /// run. A second device failure in the same capture is a camera that's gone:
+    /// <see cref="CameraUnavailableException"/>, which the sequencer turns into a pause awaiting the
+    /// user. Each capture gets its own retry, so a failed manual snapshot or analysis frame earlier
+    /// doesn't use it up. Failures that aren't the camera's (a full or ejected disk, a catalog
+    /// error) return false unchanged.
     /// </summary>
     internal async Task<bool> CaptureWithRetryAsync(Func<Guid, Task<bool>> capture, Guid frameId, string label) {
-        while (true) {
+        for (var failures = 1; ; failures++) {
             var before = DeviceFailureCount;
             bool ok;
             try {
                 ok = await capture(frameId).ConfigureAwait(false);
             } catch (Exception ex) when (ex is not OperationCanceledException && DeviceFailureCount > before) {
-                if (DeviceFailureCount >= DeviceFailuresBeforeLost) {
+                if (failures >= DeviceFailuresBeforeLost) {
                     throw new CameraUnavailableException(CameraLostMessage, ex);
                 }
                 LogRetryingAfterDeviceFailure(label);
@@ -211,7 +212,7 @@ public sealed partial class CameraService : ICameraMediator, IImagingMediator {
             if (ok || DeviceFailureCount == before) {
                 return ok;
             }
-            if (DeviceFailureCount >= DeviceFailuresBeforeLost) {
+            if (failures >= DeviceFailuresBeforeLost) {
                 throw new CameraUnavailableException(CameraLostMessage);
             }
             LogRetryingAfterDeviceFailure(label);
