@@ -139,6 +139,8 @@ class _SessionCard extends ConsumerWidget {
                 context,
               ).textTheme.bodySmall?.copyWith(color: AraColors.textSecondary),
             ),
+            const SizedBox(height: 6),
+            for (final f in session.filtersUsed) _FilterFlatsLine(filter: f),
             const SizedBox(height: 8),
             Row(
               children: [
@@ -167,12 +169,85 @@ class _SessionCard extends ConsumerWidget {
                     Icons.add_photo_alternate_outlined,
                     size: 16,
                   ),
-                  label: const Text('Capture Matching Flats'),
+                  // Flats carry over while the setup is unchanged: once every
+                  // filter is covered the action is a deliberate re-shoot.
+                  label: Text(
+                    session.matchingFlatsAvailable
+                        ? 'Re-shoot flats'
+                        : 'Capture Matching Flats',
+                  ),
                 ),
               ],
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+const _months = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', //
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+];
+
+String _shortDate(DateTime utc) {
+  final d = utc.toLocal();
+  return '${_months[d.month - 1]} ${d.day}';
+}
+
+/// One filter's flats: which flats cover it (from any night with the same
+/// setup), or why it still needs them.
+String flatsLineText(CalibrationFilterSummary f) {
+  if (f.hasFlats) {
+    final when = f.matchingFlatsNewestUtc;
+    final from = when == null ? '' : ' from ${_shortDate(when)}';
+    final count = f.matchingFlatFrames == 1 ? '1 flat' : '${f.matchingFlatFrames} flats';
+    return '${f.filterName} · $count$from';
+  }
+  return '${f.filterName} · ${f.flatsNote ?? 'needs flats'}';
+}
+
+class _FilterFlatsLine extends StatelessWidget {
+  final CalibrationFilterSummary filter;
+  const _FilterFlatsLine({required this.filter});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = filter.hasFlats
+        ? AraColors.accentConnected
+        : AraColors.accentBusy;
+    final style = Theme.of(context).textTheme.bodySmall;
+    // The covered case's note ("assumes the camera wasn't rotated") is a
+    // caveat, not a problem: shown muted after the count.
+    final caveat = filter.hasFlats ? filter.flatsNote : null;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 2),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            filter.hasFlats ? Icons.check : Icons.priority_high,
+            size: 14,
+            color: color,
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text.rich(
+              TextSpan(
+                text: flatsLineText(filter),
+                style: style,
+                children: [
+                  if (caveat != null)
+                    TextSpan(
+                      text: ' — $caveat',
+                      style: style?.copyWith(color: AraColors.textSecondary),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -253,7 +328,11 @@ class _MatchingFlatsDialogState extends ConsumerState<MatchingFlatsDialog> {
   // open: the Image Library's session cards don't carry it.
   bool _loadingSession = true;
   double? _lightsSetpointC;
+  List<CalibrationFilterSummary> _filters = const [];
   bool _cool = false;
+  // Filters that already have flats from the same setup are skipped unless
+  // the user deliberately re-shoots them.
+  bool _reshoot = false;
   // Mount motion is opt-in for every run: never pre-ticked, not even from the
   // profile's end-of-night setting (a bench or indoor rig has no clear path).
   bool _park = false;
@@ -266,17 +345,18 @@ class _MatchingFlatsDialogState extends ConsumerState<MatchingFlatsDialog> {
   }
 
   Future<void> _loadSetpoint() async {
-    double? setpoint;
+    CalibrationSession? session;
     try {
-      setpoint = (await ref.read(calibrationApiProvider)?.getSession(widget.sessionId))
-          ?.coolerSetpointC;
+      session = await ref.read(calibrationApiProvider)?.getSession(widget.sessionId);
     } on Exception {
       // No set-point known: the switch starts off and the user can still cool.
     }
+    final setpoint = session?.coolerSetpointC;
     if (!mounted) return;
     setState(() {
       _loadingSession = false;
       _lightsSetpointC = setpoint;
+      _filters = session?.filtersUsed ?? const [];
       _cool = setpoint != null;
       if (setpoint != null) _coolTo.text = _degrees(setpoint);
     });
@@ -316,6 +396,7 @@ class _MatchingFlatsDialogState extends ConsumerState<MatchingFlatsDialog> {
         coolCamera: _cool,
         coolToTemperatureC: _cool ? coolTo : null,
         parkMountAfter: _park,
+        includeCoveredFilters: _reshoot,
       );
       // Post-await UI work gates on State.mounted (the dialog may have been
       // dismissed while the request was in flight).
@@ -324,7 +405,9 @@ class _MatchingFlatsDialogState extends ConsumerState<MatchingFlatsDialog> {
       if (id == null) {
         setState(() {
           _busy = false;
-          _error = 'The server returned a plan but no stored sequence.';
+          _error = result.totalFlatFrames == 0
+              ? 'Nothing to shoot: every filter already has flats from this setup.'
+              : 'The server returned a plan but no stored sequence.';
         });
         return;
       }
@@ -348,6 +431,12 @@ class _MatchingFlatsDialogState extends ConsumerState<MatchingFlatsDialog> {
   @override
   Widget build(BuildContext context) {
     final filters = widget.filterNames.join(', ');
+    final covered = [for (final f in _filters) if (f.hasFlats) f];
+    final allCovered = _filters.isNotEmpty && covered.length == _filters.length;
+    final nothingToShoot = allCovered && !_reshoot;
+    final mutedStyle = Theme.of(
+      context,
+    ).textTheme.bodySmall?.copyWith(color: AraColors.textSecondary);
     return AlertDialog(
       title: const Text('Capture Matching Flats'),
       // Scrolls on a short window (cooling + park options outgrow 668 px).
@@ -362,17 +451,44 @@ class _MatchingFlatsDialogState extends ConsumerState<MatchingFlatsDialog> {
               'and offset. Each filter works out its own exposure and panel '
               'brightness from two test frames, and remembers them for next '
               'time.',
-              style: Theme.of(
-                context,
-              ).textTheme.bodySmall?.copyWith(color: AraColors.textSecondary),
+              style: mutedStyle,
             ),
+            // Flats carry over from night to night while the filter and the
+            // camera's rotation are unchanged: say which are already covered.
+            if (covered.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Text(
+                allCovered
+                    ? 'Every filter already has flats from this setup:'
+                    : 'Already covered by flats from this setup (skipped):',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              for (final f in covered)
+                Text(
+                  '  ${flatsLineText(f)}${f.flatsNote != null ? ' — ${f.flatsNote}' : ''}',
+                  style: mutedStyle,
+                ),
+              CheckboxListTile(
+                value: _reshoot,
+                onChanged: _busy
+                    ? null
+                    : (v) => setState(() => _reshoot = v ?? false),
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                controlAffinity: ListTileControlAffinity.leading,
+                title: const Text('Also re-shoot filters that already have flats'),
+                subtitle: const Text(
+                  'Only needed if something in the optical train changed: new dust, '
+                  'the camera taken off, a different filter.',
+                ),
+              ),
+            ],
             const SizedBox(height: 12),
             TextField(
               controller: _frames,
               keyboardType: TextInputType.number,
               decoration: const InputDecoration(labelText: 'Flats per filter'),
             ),
-            const SizedBox(height: 8),
             const SizedBox(height: 8),
             SwitchListTile(
               value: _cool,
@@ -437,7 +553,7 @@ class _MatchingFlatsDialogState extends ConsumerState<MatchingFlatsDialog> {
           child: const Text('Cancel'),
         ),
         FilledButton(
-          onPressed: _busy ? null : _generate,
+          onPressed: _busy || nothingToShoot ? null : _generate,
           child: _busy
               ? const SizedBox(
                   width: 16,

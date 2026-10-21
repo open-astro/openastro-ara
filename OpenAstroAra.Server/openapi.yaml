@@ -7792,6 +7792,22 @@ components:
             - integer
             - string
           format: int32
+        matching_flat_frames:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+          default: 0
+        matching_flats_newest_utc:
+          type:
+            - 'null'
+            - string
+          format: date-time
+        flats_note:
+          type:
+            - 'null'
+            - string
     CalibrationSessionDto:
       required:
         - id
@@ -11209,6 +11225,13 @@ components:
             - number
             - string
           format: double
+        park_mount_after:
+          type:
+            - 'null'
+            - boolean
+        include_covered_filters:
+          type: boolean
+          default: false
     MosaicCreateRequestDto:
       required:
         - name
@@ -13151,7 +13174,7 @@ components:
           default: 30
         post_flat_park_mount:
           type: boolean
-          default: true
+          default: false
         sky_flat_target_adu:
           pattern: '^-?(?:0|[1-9]\d*)$'
           type:

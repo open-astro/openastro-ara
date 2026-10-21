@@ -33,12 +33,20 @@ public sealed record CalibrationSessionDto(
     string? ProfileId,
     double? CoolerSetpointC = null);
 
-/// <summary>Per-filter summary inside a calibration session.</summary>
+/// <summary>Per-filter summary inside a calibration session. <c>MatchingFlatFrames</c> counts the
+/// catalogued flats that calibrate this filter's lights — same filter, taken at the same rotator
+/// angle (flats are reused across nights while the optical train is unchanged; 0 = this filter
+/// needs flats), the newest of them at <c>MatchingFlatsNewestUtc</c>. <c>FlatsNote</c> says why
+/// flats that exist don't count (another rotator angle), or that the match is assumed because an
+/// angle wasn't recorded.</summary>
 public sealed record CalibrationFilterSummaryDto(
     string FilterName,
     int LightFrameCount,
     double MeanExposureSeconds,
-    int? RecommendedFlatFrames);
+    int? RecommendedFlatFrames,
+    int MatchingFlatFrames = 0,
+    DateTimeOffset? MatchingFlatsNewestUtc = null,
+    string? FlatsNote = null);
 
 /// <summary>POST /api/v1/calibration/sessions/{id}/matching-flats body.</summary>
 /// <remarks><c>Flavor</c> picks the §48 capture style: "panel" (default — FlatPanelFlats sets,
@@ -49,7 +57,9 @@ public sealed record CalibrationFilterSummaryDto(
 /// cooler alone; true = cool to <c>CoolToTemperatureC</c>, else the lights' set-point, else the
 /// profile's cooler target. A <c>CoolToTemperatureC</c> with <c>CoolCamera</c> null also cools.
 /// <c>ParkMountAfter</c> is the user's answer for THIS run (the flats dialog always sends it);
-/// null — the unattended end-of-night path — follows the profile's post_flat_park_mount.</remarks>
+/// null — the unattended end-of-night path — follows the profile's post_flat_park_mount.
+/// Filters whose lights already have matching flats are skipped unless
+/// <c>IncludeCoveredFilters</c>; with every filter covered the plan is empty and nothing is stored.</remarks>
 public sealed record MatchingFlatsRequestDto(
     int? OverrideFrameCount,
     int? OverrideTargetAdu,
@@ -57,7 +67,8 @@ public sealed record MatchingFlatsRequestDto(
     string Flavor = "panel",
     bool? CoolCamera = null,
     double? CoolToTemperatureC = null,
-    bool? ParkMountAfter = null);
+    bool? ParkMountAfter = null,
+    bool IncludeCoveredFilters = false);
 
 /// <summary>Sequence the server generated to capture matching flats for the session.
 /// <c>GeneratedSequenceId</c> is the persisted §38 sequence (runnable via

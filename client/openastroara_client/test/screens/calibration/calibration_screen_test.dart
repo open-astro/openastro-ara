@@ -18,6 +18,7 @@ class _FakeCalibrationClient implements CalibrationClient {
   bool? flatsCoolCamera;
   double? flatsCoolTo;
   bool? flatsPark;
+  bool? flatsIncludeCovered;
   DarkLibraryBuildRequest? buildRequest;
 
   _FakeCalibrationClient({
@@ -53,9 +54,11 @@ class _FakeCalibrationClient implements CalibrationClient {
     bool? coolCamera,
     double? coolToTemperatureC,
     bool? parkMountAfter,
+    bool includeCoveredFilters = false,
   }) async {
     flatsSessionId = sessionId;
     flatsPark = parkMountAfter;
+    flatsIncludeCovered = includeCoveredFilters;
     flatsFrameCount = frameCount;
     flatsCoolCamera = coolCamera;
     flatsCoolTo = coolToTemperatureC;
@@ -82,6 +85,7 @@ CalibrationSession _session({
   bool flats = false,
   bool darks = true,
   double? coolerSetpointC,
+  List<CalibrationFilterSummary>? filters,
 }) =>
     CalibrationSession(
       id: 'cal-sess-1',
@@ -89,12 +93,13 @@ CalibrationSession _session({
       sessionStartUtc: DateTime.utc(2026, 6, 30, 22),
       sessionEndUtc: DateTime.utc(2026, 7, 1, 3),
       lightFrameCount: 40,
-      filtersUsed: const [
-        CalibrationFilterSummary(
-            filterName: 'Ha', lightFrameCount: 24, meanExposureSeconds: 300),
-        CalibrationFilterSummary(
-            filterName: 'OIII', lightFrameCount: 16, meanExposureSeconds: 180),
-      ],
+      filtersUsed: filters ??
+          const [
+            CalibrationFilterSummary(
+                filterName: 'Ha', lightFrameCount: 24, meanExposureSeconds: 300),
+            CalibrationFilterSummary(
+                filterName: 'OIII', lightFrameCount: 16, meanExposureSeconds: 180),
+          ],
       matchingFlatsAvailable: flats,
       matchingDarksAvailable: darks,
       coolerSetpointC: coolerSetpointC,
@@ -182,6 +187,68 @@ void main() {
     await tester.tap(find.text('Generate & open'));
     await tester.pumpAndSettle();
     expect(fake.flatsPark, isTrue);
+  });
+
+  testWidgets(
+      'each filter says which flats cover it, and the dialog shoots only the rest',
+      (tester) async {
+    final fake = _FakeCalibrationClient(sessions: [
+      _session(filters: [
+        CalibrationFilterSummary(
+          filterName: 'Ha',
+          lightFrameCount: 5,
+          meanExposureSeconds: 60,
+          matchingFlatFrames: 10,
+          matchingFlatsNewestUtc: DateTime.utc(2026, 10, 21, 3, 55),
+          flatsNote: "rotator angle not recorded for these frames — assumes the camera wasn't rotated",
+        ),
+        const CalibrationFilterSummary(
+          filterName: 'SII',
+          lightFrameCount: 5,
+          meanExposureSeconds: 60,
+          flatsNote: 'flats exist at rotator 34.8°, the lights were at 120°',
+        ),
+      ]),
+    ]);
+    await _pump(tester, fake);
+
+    expect(find.textContaining('Ha · 10 flats from Oct'), findsOneWidget);
+    expect(find.textContaining('SII · flats exist at rotator 34.8°'), findsOneWidget);
+
+    await tester.tap(find.text('Capture Matching Flats'));
+    await tester.pumpAndSettle();
+    expect(find.text('Already covered by flats from this setup (skipped):'), findsOneWidget);
+    await tester.tap(find.text('Generate & open'));
+    await tester.pumpAndSettle();
+    expect(fake.flatsIncludeCovered, isFalse, reason: 'covered filters are skipped');
+  });
+
+  testWidgets('a fully covered session offers only a deliberate re-shoot',
+      (tester) async {
+    final fake = _FakeCalibrationClient(sessions: [
+      _session(flats: true, filters: const [
+        CalibrationFilterSummary(
+          filterName: 'Ha',
+          lightFrameCount: 5,
+          meanExposureSeconds: 60,
+          matchingFlatFrames: 30,
+        ),
+      ]),
+    ]);
+    await _pump(tester, fake);
+
+    await tester.tap(find.text('Re-shoot flats'));
+    await tester.pumpAndSettle();
+    expect(find.text('Every filter already has flats from this setup:'), findsOneWidget);
+    final generate = find.widgetWithText(FilledButton, 'Generate & open');
+    expect(tester.widget<FilledButton>(generate).onPressed, isNull,
+        reason: 'nothing to shoot until re-shoot is ticked');
+
+    await tester.tap(find.text('Also re-shoot filters that already have flats'));
+    await tester.pumpAndSettle();
+    await tester.tap(generate);
+    await tester.pumpAndSettle();
+    expect(fake.flatsIncludeCovered, isTrue);
   });
 
   testWidgets('switching cooling off sends cool_camera false', (tester) async {

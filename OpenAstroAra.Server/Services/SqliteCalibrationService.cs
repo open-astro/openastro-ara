@@ -147,8 +147,8 @@ public sealed class SqliteCalibrationService : ICalibrationService {
     }
 
     // Batched page assembly (§39 perf): the per-session BuildSessionDtoAsync runs 5 queries per id —
-    // 6N+1 per page. This runs the same 6 aggregations ONCE each over the whole page's id set
-    // (session_id IN (...)), so a page costs 7 queries total regardless of size.
+    // 7N+1 per page. This runs the same 7 aggregations ONCE each over the whole page's id set
+    // (session_id IN (...)), so a page costs 8 queries total regardless of size.
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Security", "CA2100:Review SQL queries for security vulnerabilities",
         Justification = "The composed fragment is a parameter-placeholder list ($s0,$s1,…) generated locally; every value is bound as a parameter. No user input reaches the command text.")]
     private static async Task<List<CalibrationSessionDto>> BuildSessionDtosAsync(
@@ -209,20 +209,13 @@ public sealed class SqliteCalibrationService : ICalibrationService {
             }
         }
 
-        // 3+4) Coverage — the sessions with at least one UNCOVERED requirement. Same semantics as the
-        // per-session EXCEPT queries (coverage is GLOBAL: flats/darks are a shared library), expressed as
-        // NOT EXISTS with SQLite's null-safe IS so a no-filter light still matches a no-filter flat. The
-        // inner DISTINCT mirrors the EXCEPT's dedup: the NOT EXISTS probe runs once per requirement combo,
-        // not once per raw frame row (a 500-frame single-filter session probes once, not 500 times).
-        var flatsUncovered = await UncoveredSessionsAsync(conn, $"""
-            SELECT DISTINCT l.session_id
-            FROM (SELECT DISTINCT session_id, filter_name
-                  FROM frames
-                  WHERE frame_type = 'light' AND session_id IN ({placeholders})) l
-            WHERE NOT EXISTS (
-                  SELECT 1 FROM frames f
-                  WHERE f.frame_type = 'flat' AND f.filter_name IS l.filter_name)
-            """, BindIds, ct);
+        // 3) Flats coverage per filter (setup-aware: filter + rotator angle; see ApplyFlatCoverageAsync).
+        await ApplyFlatCoverageAsync(conn, $"session_id IN ({placeholders})", BindIds, filtersBySession, ct);
+
+        // 4) Darks coverage — the sessions with at least one UNCOVERED requirement. Coverage is GLOBAL
+        // (darks are a shared library), expressed as NOT EXISTS with SQLite's null-safe IS. The inner
+        // DISTINCT probes once per requirement combo, not once per raw frame row (a 500-frame
+        // single-filter session probes once, not 500 times).
         // Darks match by (exposure, gain, temperature bucketed to the nearest whole degree; NULL buckets
         // with 0 for uncooled cameras across sentinel generations — see BuildSessionDtoAsync's remarks).
         var darksUncovered = await UncoveredSessionsAsync(conn, $"""
@@ -268,7 +261,7 @@ public sealed class SqliteCalibrationService : ICalibrationService {
                 SessionEndUtc: h.End,
                 LightFrameCount: h.Count,
                 FiltersUsed: filtersBySession.GetValueOrDefault(sid) ?? [],
-                MatchingFlatsAvailable: !flatsUncovered.Contains(sid),
+                MatchingFlatsAvailable: FlatsCoverAll(filtersBySession.GetValueOrDefault(sid)),
                 MatchingDarksAvailable: !darksUncovered.Contains(sid),
                 ProfileId: profiles.GetValueOrDefault(sid),
                 CoolerSetpointC: setpoints.TryGetValue(sid, out var sp) ? sp : null));
@@ -334,6 +327,10 @@ public sealed class SqliteCalibrationService : ICalibrationService {
         var skySpecs = new List<SkyFlatStepSpec>(session.FiltersUsed.Count);
         var total = 0;
         foreach (var filter in session.FiltersUsed) {
+            // Flats are reused while the setup is unchanged: only shoot what isn't covered yet.
+            if (filter.MatchingFlatFrames > 0 && !request.IncludeCoveredFilters) {
+                continue;
+            }
             steps.Add(new GeneratedFlatStepDto(
                 FilterName: filter.FilterName,
                 FrameCount: frameCount,
@@ -374,7 +371,7 @@ public sealed class SqliteCalibrationService : ICalibrationService {
         // plan alone. The persisted body is the same NINA-verbatim tree every stored sequence uses,
         // so the WILMA editor renders it and POST /sequences/{id}/start runs it as-is.
         Guid? generatedId = null;
-        if (!request.GenerateOnly && _sequences is not null) {
+        if (!request.GenerateOnly && _sequences is not null && steps.Count > 0) {
             var body = sky
                 ? CalibrationSequenceBuilder.BuildSkyFlatsBody(name, skySpecs,
                     new SkyFlatEnvelope(
@@ -502,15 +499,11 @@ public sealed class SqliteCalibrationService : ICalibrationService {
             }
         }
 
-        // Calibration coverage is GLOBAL by design: flats/darks are a shared library reused across nights, so
-        // the right-hand side of each EXCEPT scans all flat/dark frames (not just this session's). Only the
-        // light requirements (left side) are session-scoped via $sid.
-        // No trailing ';' — these are embedded as subqueries in AllCoveredAsync's SELECT COUNT(*) FROM (...).
-        var flatsAvailable = await AllCoveredAsync(conn, sid, """
-            SELECT DISTINCT filter_name FROM frames WHERE frame_type = 'light' AND session_id = $sid
-            EXCEPT
-            SELECT DISTINCT filter_name FROM frames WHERE frame_type = 'flat'
-            """, ct);
+        // Calibration coverage is GLOBAL by design: flats/darks are a shared library reused across nights.
+        var byFilter = new Dictionary<string, List<CalibrationFilterSummaryDto>>(StringComparer.Ordinal) { [sid] = filters };
+        await ApplyFlatCoverageAsync(conn, "session_id = $sid", cmd => cmd.Parameters.AddWithValue("$sid", sid), byFilter, ct);
+        filters = byFilter[sid];
+        var flatsAvailable = FlatsCoverAll(filters);
 
         // Darks match a light by (exposure, gain, temperature). Temperature is bucketed to the nearest whole
         // degree via ROUND(COALESCE(temperature_c, 0), 0): a cooled camera regulates to its set-point within a
@@ -518,6 +511,7 @@ public sealed class SqliteCalibrationService : ICalibrationService {
         // a different temperature correctly fails to match. An uncooled camera (no temperature sensor) records
         // NULL since the sentinel pass; legacy rows may hold the old 0.0 sentinel — COALESCE buckets NULL with 0
         // so uncooled lights/darks keep matching across both generations, exactly the documented semantics.
+        // No trailing ';' — this is embedded as a subquery in AllCoveredAsync's SELECT COUNT(*) FROM (...).
         var darksAvailable = await AllCoveredAsync(conn, sid, """
             SELECT DISTINCT exposure_seconds, gain, ROUND(COALESCE(temperature_c, 0), 0) FROM frames WHERE frame_type = 'light' AND session_id = $sid
             EXCEPT
@@ -546,6 +540,97 @@ public sealed class SqliteCalibrationService : ICalibrationService {
             ProfileId: profileId,
             CoolerSetpointC: (await ModalCoolerSetpointsAsync(conn, "session_id = $sid",
                 cmd => cmd.Parameters.AddWithValue("$sid", sid), ct)).TryGetValue(sid, out var sp) ? sp : null);
+    }
+
+    /// <summary>Rotator angles closer than this are the same camera orientation (a CAA reads back
+    /// ±0.01°; a manual re-set lands within a few tenths).</summary>
+    internal const double FlatRotatorToleranceDeg = 1.0;
+
+    private static bool FlatsCoverAll(IReadOnlyList<CalibrationFilterSummaryDto>? filters) =>
+        filters is { Count: > 0 } && filters.All(f => f.MatchingFlatFrames > 0);
+
+    private sealed record FlatGroup(double? RotatorDeg, int Count, DateTimeOffset Newest);
+
+    // Flats calibrate lights taken through the same optical train, so a set is reused across nights
+    // until something changes. Ara can see two parts of that train: the filter and the rotator angle
+    // (dust and vignetting turn with the camera). For each session's filter it finds the lights'
+    // modal angle and counts the flats with the same filter at the same angle. An angle missing on
+    // either side (frames from before it was recorded) can't disprove a match: those flats count,
+    // with a note saying the match is assumed. Flats that exist only at other angles don't count,
+    // and the note says where they were taken. Focus is not compared — per-filter focus offsets are
+    // normal and the generator replays the lights' focus anyway.
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Security", "CA2100:Review SQL queries for security vulnerabilities",
+        Justification = "The 'sessionFilter' argument is a locally-composed literal (a bound $sid or a generated placeholder list); every value is bound as a parameter.")]
+    private static async Task ApplyFlatCoverageAsync(SqliteConnection conn, string sessionFilter, Action<SqliteCommand> bind,
+            Dictionary<string, List<CalibrationFilterSummaryDto>> filtersBySession, CancellationToken ct) {
+        var lightAngles = new Dictionary<(string Sid, string Filter), double?>();
+        await using (var cmd = conn.CreateCommand()) {
+            cmd.CommandText = $"""
+                SELECT session_id, filter_name, ROUND(rotator_mechanical_deg, 1) AS rotator, COUNT(*) AS c
+                FROM frames
+                WHERE frame_type = 'light' AND {sessionFilter}
+                GROUP BY session_id, filter_name, rotator
+                ORDER BY session_id, filter_name, c DESC, rotator;
+                """;
+            bind(cmd);
+            await using var reader = await cmd.ExecuteReaderAsync(ct);
+            while (await reader.ReadAsync(ct)) {
+                var key = (reader.GetString(0), await reader.IsDBNullAsync(1, ct) ? NoFilter : reader.GetString(1));
+                lightAngles.TryAdd(key, await reader.IsDBNullAsync(2, ct) ? null : reader.GetDouble(2)); // first = modal
+            }
+        }
+        var flats = new Dictionary<string, List<FlatGroup>>(StringComparer.Ordinal);
+        await using (var cmd = conn.CreateCommand()) {
+            cmd.CommandText = """
+                SELECT filter_name, ROUND(rotator_mechanical_deg, 1), COUNT(*), MAX(captured_utc)
+                FROM frames WHERE frame_type = 'flat'
+                GROUP BY filter_name, ROUND(rotator_mechanical_deg, 1);
+                """;
+            await using var reader = await cmd.ExecuteReaderAsync(ct);
+            while (await reader.ReadAsync(ct)) {
+                var filter = await reader.IsDBNullAsync(0, ct) ? NoFilter : reader.GetString(0);
+                if (!flats.TryGetValue(filter, out var groups)) {
+                    flats[filter] = groups = [];
+                }
+                groups.Add(new FlatGroup(
+                    await reader.IsDBNullAsync(1, ct) ? null : reader.GetDouble(1),
+                    reader.GetInt32(2),
+                    ParseUtc(reader.GetString(3))));
+            }
+        }
+        foreach (var (sid, list) in filtersBySession) {
+            for (var i = 0; i < list.Count; i++) {
+                var f = list[i];
+                var angle = lightAngles.GetValueOrDefault((sid, f.FilterName));
+                var (count, newest, note) = FlatCoverage(angle, flats.GetValueOrDefault(f.FilterName));
+                list[i] = f with { MatchingFlatFrames = count, MatchingFlatsNewestUtc = newest, FlatsNote = note };
+            }
+        }
+    }
+
+    internal static double AngleDifferenceDeg(double a, double b) {
+        var d = Math.Abs(a - b) % 360;
+        return d > 180 ? 360 - d : d;
+    }
+
+    private static (int Count, DateTimeOffset? Newest, string? Note) FlatCoverage(double? lightAngle, List<FlatGroup>? groups) {
+        if (groups is not { Count: > 0 }) {
+            return (0, null, null);
+        }
+        // Verified matches (both angles known and equal) win; unverifiable ones only when there are none.
+        var verified = groups.Where(g => lightAngle is double l && g.RotatorDeg is double r
+            && AngleDifferenceDeg(l, r) <= FlatRotatorToleranceDeg).ToList();
+        if (verified.Count > 0) {
+            return (verified.Sum(g => g.Count), verified.Max(g => g.Newest), null);
+        }
+        var assumed = groups.Where(g => lightAngle is null || g.RotatorDeg is null).ToList();
+        if (assumed.Count > 0) {
+            return (assumed.Sum(g => g.Count), assumed.Max(g => g.Newest),
+                "rotator angle not recorded for these frames — assumes the camera wasn't rotated");
+        }
+        var nearest = groups.OrderBy(g => AngleDifferenceDeg(lightAngle!.Value, g.RotatorDeg!.Value)).First();
+        return (0, null, string.Create(CultureInfo.InvariantCulture,
+            $"flats exist at rotator {nearest.RotatorDeg:0.#}°, the lights were at {lightAngle:0.#}°"));
     }
 
     // The set-point most of each session's cooled lights ran at, to 0.1 °C (a driver can read back

@@ -261,6 +261,81 @@ namespace OpenAstroAra.Test {
             Assert.That(await store.GetAsync("Ha", 200, 50, 1, CancellationToken.None), Is.Null, "another gain is another solution");
         }
 
+        // Flats belong to the optical train, not the night: reused while the filter and the camera's
+        // rotator angle are unchanged, retaken when the camera turned.
+        [Test]
+        public async Task Flats_cover_a_filter_only_at_the_lights_rotator_angle() {
+            await InsertSessionAsync(FlatsSession);
+            await InsertFrameAsync(Session, "light", "Ha", 300, 100, "M42", rotatorDeg: 120);
+            await InsertFrameAsync(Session, "light", "OIII", 300, 100, "M42", rotatorDeg: 120);
+            var earlier = DateTimeOffset.UtcNow.AddDays(-3);
+            await InsertFrameAsync(FlatsSession, "flat", "Ha", 1, 100, "Flats", rotatorDeg: 120.3, capturedUtc: earlier);
+            await InsertFrameAsync(FlatsSession, "flat", "OIII", 1, 100, "Flats", rotatorDeg: 34.8);
+
+            var session = await _svc.GetSessionAsync(Session, CancellationToken.None);
+            var ha = session!.FiltersUsed.Single(f => f.FilterName == "Ha");
+            var oiii = session.FiltersUsed.Single(f => f.FilterName == "OIII");
+            Assert.That(ha.MatchingFlatFrames, Is.EqualTo(1), "a flat from another night at the same angle still counts");
+            Assert.That(ha.MatchingFlatsNewestUtc, Is.EqualTo(earlier).Within(TimeSpan.FromSeconds(1)));
+            Assert.That(ha.FlatsNote, Is.Null);
+            Assert.That(oiii.MatchingFlatFrames, Is.Zero, "the camera was turned since those flats");
+            Assert.That(oiii.FlatsNote, Does.Contain("34.8°").And.Contain("120°"));
+            Assert.That(session.MatchingFlatsAvailable, Is.False);
+
+            var page = await _svc.ListSessionsAsync(10, null, CancellationToken.None);
+            Assert.That(page.Items.Single().FiltersUsed, Is.EqualTo(session.FiltersUsed), "list and single agree");
+        }
+
+        [Test]
+        public async Task Lights_from_before_angles_were_recorded_take_flats_shot_since_with_a_note() {
+            await InsertSessionAsync(FlatsSession);
+            // The 2026-10-16 North America nights: lights with no rotator angle, flats taken later at 34.8°.
+            await InsertFrameAsync(Session, "light", "Ha", 60, 100, "NA");
+            await InsertFrameAsync(FlatsSession, "flat", "Ha", 1, 100, "Flats", rotatorDeg: 34.8);
+
+            var ha = (await _svc.GetSessionAsync(Session, CancellationToken.None))!.FiltersUsed.Single();
+            Assert.That(ha.MatchingFlatFrames, Is.EqualTo(1));
+            Assert.That(ha.FlatsNote, Does.Contain("assumes the camera wasn't rotated"));
+        }
+
+        [Test]
+        public async Task A_rotator_angle_across_zero_is_the_same_angle() {
+            await InsertSessionAsync(FlatsSession);
+            await InsertFrameAsync(Session, "light", "Ha", 60, 100, "NA", rotatorDeg: 359.8);
+            await InsertFrameAsync(FlatsSession, "flat", "Ha", 1, 100, "Flats", rotatorDeg: 0.3);
+            Assert.That((await _svc.GetSessionAsync(Session, CancellationToken.None))!.MatchingFlatsAvailable, Is.True);
+        }
+
+        // The session a flats run catalogues its frames under (no lights, so not a calibration session).
+        private static readonly Guid FlatsSession = Guid.Parse("33333333-3333-3333-3333-3333333333f1");
+        private static readonly string[] OnlyOiii = ["OIII"];
+        private static readonly string[] HaAndOiii = ["Ha", "OIII"];
+
+        [Test]
+        public async Task Matching_flats_shoot_only_the_filters_still_missing_unless_asked_for_all() {
+            await InsertSessionAsync(FlatsSession);
+            var store = new FileSequenceService(_dir);
+            var svc = new SqliteCalibrationService(_db, store);
+            await InsertFrameAsync(Session, "light", "Ha", 300, 100, "NA", rotatorDeg: 34.8);
+            await InsertFrameAsync(Session, "light", "OIII", 300, 100, "NA", rotatorDeg: 34.8);
+            await InsertFrameAsync(FlatsSession, "flat", "Ha", 1, 100, "Flats", rotatorDeg: 34.8);
+
+            var missing = await svc.GenerateMatchingFlatsAsync(Session,
+                new MatchingFlatsRequestDto(null, null, GenerateOnly: false), idempotencyKey: null, CancellationToken.None);
+            Assert.That(missing.Steps.Select(s => s.FilterName).ToList(), Is.EqualTo(OnlyOiii));
+
+            var all = await svc.GenerateMatchingFlatsAsync(Session,
+                new MatchingFlatsRequestDto(null, null, GenerateOnly: true, IncludeCoveredFilters: true), idempotencyKey: null, CancellationToken.None);
+            Assert.That(all.Steps.Select(s => s.FilterName).ToList(), Is.EquivalentTo(HaAndOiii));
+
+            await InsertFrameAsync(FlatsSession, "flat", "OIII", 1, 100, "Flats", rotatorDeg: 34.8);
+            var none = await svc.GenerateMatchingFlatsAsync(Session,
+                new MatchingFlatsRequestDto(null, null, GenerateOnly: false), idempotencyKey: null, CancellationToken.None);
+            Assert.That(none.Steps, Is.Empty);
+            Assert.That(none.GeneratedSequenceId, Is.Null, "nothing to shoot, nothing stored");
+            Assert.That(none.TotalFlatFrames, Is.Zero);
+        }
+
         [Test]
         public async Task GetSession_returns_null_for_a_session_with_no_light_frames() {
             await InsertFrameAsync(Session, "dark", null, 300, 100, "M42"); // darks only — not a calibration session

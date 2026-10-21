@@ -54,11 +54,25 @@ class CalibrationFilterSummary {
   final int lightFrameCount;
   final double meanExposureSeconds;
 
+  /// Catalogued flats that calibrate this filter's lights: same filter, same
+  /// rotator angle, from any night (0 = this filter needs flats).
+  final int matchingFlatFrames;
+  final DateTime? matchingFlatsNewestUtc;
+
+  /// Why existing flats don't count (another rotator angle), or that the match
+  /// is assumed because an angle wasn't recorded.
+  final String? flatsNote;
+
   const CalibrationFilterSummary({
     required this.filterName,
     required this.lightFrameCount,
     required this.meanExposureSeconds,
+    this.matchingFlatFrames = 0,
+    this.matchingFlatsNewestUtc,
+    this.flatsNote,
   });
+
+  bool get hasFlats => matchingFlatFrames > 0;
 
   factory CalibrationFilterSummary.fromJson(Map<String, dynamic> json) {
     return CalibrationFilterSummary(
@@ -66,6 +80,12 @@ class CalibrationFilterSummary {
       lightFrameCount: (json['light_frame_count'] as num?)?.toInt() ?? 0,
       meanExposureSeconds:
           (json['mean_exposure_seconds'] as num?)?.toDouble() ?? 0,
+      matchingFlatFrames:
+          (json['matching_flat_frames'] as num?)?.toInt() ?? 0,
+      matchingFlatsNewestUtc: DateTime.tryParse(
+        json['matching_flats_newest_utc'] as String? ?? '',
+      ),
+      flatsNote: json['flats_note'] as String?,
     );
   }
 }
