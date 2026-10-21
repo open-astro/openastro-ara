@@ -7080,11 +7080,11 @@ When the sequence reaches the `FlatPanelFlats` instruction (typically appended a
    - Slew mount to the flat-friendly position (default: park position, or user-configured flat target)
    - Switch filter wheel to current filter
    - Move focuser to that filter's focus offset (so flats match imaging conditions)
-   - Hold rotator at current angle (CAA)
+   - Move the rotator to the lights' mechanical angle (CAA), and cool the camera to the lights' set-point
    - Turn on flat panel, set brightness, wait for stabilization
-   - **Auto-exposure**: capture short test exposure, measure median ADU, adjust panel brightness OR exposure time until target ADU is reached (default ~30000 for 16-bit cameras = ~45% full scale)
+   - **Auto-exposure**: two test exposures fit a line through the panel's response (median of the frame's central area, pedestal fitted out), and the exposure and panel brightness are solved for `flat_target_percent` of the camera's own full scale (default 50% of its MaxADU, so 12-, 14- and 16-bit cameras all land mid-range). The solution is remembered per filter, gain and offset, so the next set starts from it
    - Capture N flats (default 30)
-3. After all filters: turn off panel, park mount (optionally), log completion notification
+3. After all filters: turn off panel, log completion notification. The mount parks only when the user ticks it for that run in the Calibration dialog; end-of-session auto flats follow `post_flat_park_mount` (off by default — mount motion is opt-in)
 
 Inherits NINA's existing implementation; ARA preserves verbatim.
 
@@ -7141,10 +7141,11 @@ Profile JSON gains a `calibration` block (inside the existing safety/preferences
   "calibration": {
     "capture_default": "ask",           // "ask" | "panel_at_end" | "sky_at_twilight" | "never"
     "flat_panel": {
-      "target_adu": 30000,              // half of 16-bit full scale
+      "target_percent": 50,             // share of the camera's MaxADU panel flats aim for
+      "target_adu": 30000,              // superseded by target_percent for panel flats; kept for old profiles
       "target_adu_tolerance_pct": 5,
       "frames_per_filter": 30,
-      "post_flat_park_mount": true
+      "post_flat_park_mount": false     // end-of-session auto flats only; the dialog asks per run
     },
     "sky_flat": {
       "target_adu": 25000,
