@@ -48,7 +48,10 @@ public sealed record CalibrationFilterSummaryDto(
     int? RecommendedFlatFrames,
     int MatchingFlatFrames = 0,
     DateTimeOffset? MatchingFlatsNewestUtc = null,
-    string? FlatsNote = null);
+    string? FlatsNote = null,
+    // True when the covering flats were checked against the lights' rotator angle; false when the
+    // match is assumed because one side has no recorded angle (a rig without a rotator).
+    bool FlatsVerified = false);
 
 /// <summary>POST /api/v1/calibration/sessions/{id}/matching-flats body.</summary>
 /// <remarks><c>Flavor</c> picks the §48 capture style: "panel" (default — FlatPanelFlats sets,
@@ -67,6 +70,9 @@ public sealed record CalibrationFilterSummaryDto(
 /// (null = the default). <c>IncludeDarks</c> adds dark sets for each (exposure, gain, temperature)
 /// of the lights with no darks yet, <c>DarkFrameCount</c> each. <c>PauseForLensCap</c> opens the
 /// panel's cover and waits for the user to put the lens cap on before those bias and darks.
+/// <c>ReshootAssumedCoverage</c> skips only filters whose flats were verified at the lights'
+/// rotator angle, so a rig without a rotator still gets the flats it asked for each night (the
+/// end-of-session auto path sets it).
 /// <c>IncludeFlats</c> false shoots no flats at all — a bias-and-darks-only run.</remarks>
 public sealed record MatchingFlatsRequestDto(
     int? OverrideFrameCount,
@@ -82,7 +88,8 @@ public sealed record MatchingFlatsRequestDto(
     bool IncludeDarks = false,
     int? DarkFrameCount = null,
     bool PauseForLensCap = false,
-    bool IncludeFlats = true);
+    bool IncludeFlats = true,
+    bool ReshootAssumedCoverage = false);
 
 /// <summary>Sequence the server generated to capture matching flats for the session.
 /// <c>GeneratedSequenceId</c> is the persisted §38 sequence (runnable via

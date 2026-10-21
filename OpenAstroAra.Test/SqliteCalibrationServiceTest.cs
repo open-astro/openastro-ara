@@ -555,6 +555,45 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_rig_without_a_rotator_gets_the_flats_it_asks_for_each_night() {
+            await InsertSessionAsync(FlatsSession);
+            var svc = new SqliteCalibrationService(_db);
+            // No rotator: neither the lights nor last night's flats recorded an angle.
+            await InsertFrameAsync(Session, "light", "L", 120, 100, "M42");
+            await InsertFrameAsync(FlatsSession, "flat", "L", 1, 100, "Flats");
+
+            var summary = (await svc.GetSessionAsync(Session, CancellationToken.None))!.FiltersUsed.Single();
+            Assert.That(summary.MatchingFlatFrames, Is.EqualTo(1));
+            Assert.That(summary.FlatsVerified, Is.False, "nothing to compare the angle against");
+
+            var dialog = await svc.GenerateMatchingFlatsAsync(Session,
+                new MatchingFlatsRequestDto(null, null, GenerateOnly: true), idempotencyKey: null, CancellationToken.None);
+            Assert.That(dialog.Steps, Is.Empty, "the dialog still offers the assumed match as covered (with its caveat)");
+
+            var auto = await svc.GenerateMatchingFlatsAsync(Session,
+                new MatchingFlatsRequestDto(null, null, GenerateOnly: true, ReshootAssumedCoverage: true),
+                idempotencyKey: null, CancellationToken.None);
+            Assert.That(auto.Steps.Select(s => s.FilterName), Is.EqualTo(OnlyL),
+                "end-of-night flats the user asked for are shot, not skipped on an assumption");
+        }
+
+        [Test]
+        public async Task Flats_verified_at_the_lights_angle_are_skipped_even_on_the_auto_path() {
+            await InsertSessionAsync(FlatsSession);
+            var svc = new SqliteCalibrationService(_db);
+            await InsertFrameAsync(Session, "light", "L", 120, 100, "M42", rotatorDeg: 34.8);
+            await InsertFrameAsync(FlatsSession, "flat", "L", 1, 100, "Flats", rotatorDeg: 34.8);
+
+            Assert.That((await svc.GetSessionAsync(Session, CancellationToken.None))!.FiltersUsed.Single().FlatsVerified, Is.True);
+            var auto = await svc.GenerateMatchingFlatsAsync(Session,
+                new MatchingFlatsRequestDto(null, null, GenerateOnly: true, ReshootAssumedCoverage: true),
+                idempotencyKey: null, CancellationToken.None);
+            Assert.That(auto.Steps, Is.Empty);
+        }
+
+        private static readonly string[] OnlyL = ["L"];
+
+        [Test]
         public async Task Calibration_frames_file_under_the_lights_target_and_night() {
             var store = new FileSequenceService(_dir);
             var svc = new SqliteCalibrationService(_db, store);

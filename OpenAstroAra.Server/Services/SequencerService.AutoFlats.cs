@@ -135,8 +135,10 @@ public sealed partial class SequencerService : IAutoFlatsService {
             var skyFlavor = choice != ChoicePanelAtEnd;
             var generated = await calibration.GenerateMatchingFlatsAsync(
                 sessionId,
+                // The user asked for flats tonight: a filter is skipped only when its flats were
+                // verified at the lights' rotator angle, never on an assumed match (no rotator).
                 new MatchingFlatsRequestDto(OverrideFrameCount: null, OverrideTargetAdu: null, GenerateOnly: false,
-                    Flavor: skyFlavor ? "sky" : "panel"),
+                    Flavor: skyFlavor ? "sky" : "panel", ReshootAssumedCoverage: true),
                 idempotencyKey: null,
                 CancellationToken.None).ConfigureAwait(false);
             if (generated.GeneratedSequenceId is not Guid flatsId || generated.TotalFlatFrames <= 0) {
@@ -147,7 +149,7 @@ public sealed partial class SequencerService : IAutoFlatsService {
                     return;
                 }
                 // The session has lights (the generator would have thrown otherwise), so an empty
-                // plan means every filter is already covered by flats from the same setup.
+                // plan means every filter is already covered by flats verified at the same setup.
                 await NotifyAutoFlatsQuietlyAsync("Tonight's flats are already covered",
                     "Every filter you imaged tonight already has flats taken through the same setup (filter and rotator angle), "
                     + "so no new flats were captured. Capture them again from Calibration if anything in the optical train changed.").ConfigureAwait(false);

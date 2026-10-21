@@ -745,6 +745,9 @@ namespace OpenAstroAra.Test {
 
             Assert.That(await Task.WhenAny(generated.Task, Task.Delay(TimeSpan.FromSeconds(10))), Is.SameAs(generated.Task),
                 "completion of a panel_at_end run must invoke the §39.5 generator with the run's session");
+            calibration.Verify(c => c.GenerateMatchingFlatsAsync(sessionId,
+                It.Is<MatchingFlatsRequestDto>(r => r.ReshootAssumedCoverage), It.IsAny<string?>(), It.IsAny<CancellationToken>()),
+                Times.Once, "flats the user asked for tonight skip only filters verified at the lights' angle");
             await WaitForEventAsync(ws, "sequence.auto_flats_decided");
             Assert.That(ws.Events, Does.Not.Contain("sequence.auto_flats_prompt"), "a profile default never prompts");
         }

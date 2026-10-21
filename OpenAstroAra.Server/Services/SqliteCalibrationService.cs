@@ -353,7 +353,8 @@ public sealed class SqliteCalibrationService : ICalibrationService {
         var total = 0;
         foreach (var filter in session.FiltersUsed) {
             // Flats are reused while the setup is unchanged: only shoot what isn't covered yet.
-            if (!request.IncludeFlats || (filter.MatchingFlatFrames > 0 && !request.IncludeCoveredFilters)) {
+            var covered = filter.MatchingFlatFrames > 0 && (filter.FlatsVerified || !request.ReshootAssumedCoverage);
+            if (!request.IncludeFlats || (covered && !request.IncludeCoveredFilters)) {
                 continue;
             }
             steps.Add(new GeneratedFlatStepDto(
@@ -755,8 +756,8 @@ public sealed class SqliteCalibrationService : ICalibrationService {
             for (var i = 0; i < list.Count; i++) {
                 var f = list[i];
                 var angle = lightAngles.GetValueOrDefault((sid, f.FilterName));
-                var (count, newest, note) = FlatCoverage(angle, flats.GetValueOrDefault(f.FilterName));
-                list[i] = f with { MatchingFlatFrames = count, MatchingFlatsNewestUtc = newest, FlatsNote = note };
+                var (count, newest, note, verified) = FlatCoverage(angle, flats.GetValueOrDefault(f.FilterName));
+                list[i] = f with { MatchingFlatFrames = count, MatchingFlatsNewestUtc = newest, FlatsNote = note, FlatsVerified = verified };
             }
         }
     }
@@ -766,24 +767,24 @@ public sealed class SqliteCalibrationService : ICalibrationService {
         return d > 180 ? 360 - d : d;
     }
 
-    private static (int Count, DateTimeOffset? Newest, string? Note) FlatCoverage(double? lightAngle, List<FlatGroup>? groups) {
+    private static (int Count, DateTimeOffset? Newest, string? Note, bool Verified) FlatCoverage(double? lightAngle, List<FlatGroup>? groups) {
         if (groups is not { Count: > 0 }) {
-            return (0, null, null);
+            return (0, null, null, false);
         }
         // Verified matches (both angles known and equal) win; unverifiable ones only when there are none.
         var verified = groups.Where(g => lightAngle is double l && g.RotatorDeg is double r
             && AngleDifferenceDeg(l, r) <= FlatRotatorToleranceDeg).ToList();
         if (verified.Count > 0) {
-            return (verified.Sum(g => g.Count), verified.Max(g => g.Newest), null);
+            return (verified.Sum(g => g.Count), verified.Max(g => g.Newest), null, true);
         }
         var assumed = groups.Where(g => lightAngle is null || g.RotatorDeg is null).ToList();
         if (assumed.Count > 0) {
             return (assumed.Sum(g => g.Count), assumed.Max(g => g.Newest),
-                "rotator angle not recorded for these frames — assumes the camera wasn't rotated");
+                "rotator angle not recorded for these frames — assumes the camera wasn't rotated", false);
         }
         var nearest = groups.OrderBy(g => AngleDifferenceDeg(lightAngle!.Value, g.RotatorDeg!.Value)).First();
         return (0, null, string.Create(CultureInfo.InvariantCulture,
-            $"flats exist at rotator {nearest.RotatorDeg:0.#}°, the lights were at {lightAngle:0.#}°"));
+            $"flats exist at rotator {nearest.RotatorDeg:0.#}°, the lights were at {lightAngle:0.#}°"), false);
     }
 
     // The set-point most of each session's cooled lights ran at, to 0.1 °C (a driver can read back
