@@ -54,6 +54,15 @@ public sealed record SkyFlatStepSpec(
     int? FocuserPosition,
     double? RotatorMechanicalDeg = null);
 
+/// <summary>One bias set: <paramref name="FrameCount"/> BIAS frames at the lights' gain, offset
+/// and binning (null gain/offset = camera default). The camera takes them at its shortest
+/// exposure; the step's own exposure is only a placeholder.</summary>
+public sealed record BiasStepSpec(
+    int? Gain,
+    int? Offset,
+    int Bin,
+    int FrameCount);
+
 /// <summary>The cooler around a flats run: cool to <paramref name="CoolToC"/> first (null = leave
 /// the cooler alone), and warm the camera after when <paramref name="WarmAfter"/> — the flats
 /// run is the end of the night, so it restores the imaging run's warm-up.</summary>
@@ -124,14 +133,16 @@ public static class CalibrationSequenceBuilder {
     /// auto-exposure instruction (it probes to the target ADU and captures its own FrameCount,
     /// so the per-filter block needs no LoopCondition), followed by an optional ParkScope when
     /// the §48.7 post_flat_park_mount policy asks for it. <paramref name="cooling"/> wraps the
-    /// blocks in a CoolCamera / WarmCamera pair.
+    /// blocks in a CoolCamera / WarmCamera pair. <paramref name="bias"/> sets run after the flats:
+    /// the panel is off by then and the cover still closed over the optics.
     /// </summary>
-    public static JsonElement BuildMatchingFlatsBody(string name, IReadOnlyList<FlatStepSpec> steps, bool parkMountAfter = false, FlatCooling? cooling = null) {
+    public static JsonElement BuildMatchingFlatsBody(string name, IReadOnlyList<FlatStepSpec> steps, bool parkMountAfter = false, FlatCooling? cooling = null, IReadOnlyList<BiasStepSpec>? bias = null) {
         var items = new JsonArray();
         AddCoolStep(items, cooling);
         foreach (var step in steps) {
             items.Add(FlatBlock(step));
         }
+        AddBiasBlocks(items, bias);
         if (parkMountAfter) {
             items.Add(new JsonObject { ["$type"] = ParkScopeType });
         }
@@ -155,7 +166,7 @@ public static class CalibrationSequenceBuilder {
     /// per-filter SkyFlats block] + an optional trailing ParkScope. The sequence itself owns
     /// the twilight timing, which is what makes auto-starting it at run completion safe.
     /// </summary>
-    public static JsonElement BuildSkyFlatsBody(string name, IReadOnlyList<SkyFlatStepSpec> steps, SkyFlatEnvelope envelope, bool parkMountAfter = false, FlatCooling? cooling = null) {
+    public static JsonElement BuildSkyFlatsBody(string name, IReadOnlyList<SkyFlatStepSpec> steps, SkyFlatEnvelope envelope, bool parkMountAfter = false, FlatCooling? cooling = null, IReadOnlyList<BiasStepSpec>? bias = null) {
         ArgumentNullException.ThrowIfNull(envelope);
         var items = new JsonArray();
         // Cool before the twilight wait, so the sensor is at temperature when the sky is ready.
@@ -180,6 +191,8 @@ public static class CalibrationSequenceBuilder {
         foreach (var step in steps) {
             items.Add(SkyFlatBlock(step));
         }
+        // A bias at the camera's shortest exposure collects no meaningful sky light.
+        AddBiasBlocks(items, bias);
         if (parkMountAfter) {
             items.Add(new JsonObject { ["$type"] = ParkScopeType });
         }
@@ -408,6 +421,50 @@ public static class CalibrationSequenceBuilder {
             ["Triggers"] = new JsonArray(),
         };
         return JsonSerializer.SerializeToElement(root);
+    }
+
+    /// <summary>The placeholder exposure a generated bias step carries; the camera replaces it
+    /// with its shortest exposure (TakeExposure rejects a zero exposure).</summary>
+    internal const double BiasPlaceholderExposureSec = 0.001;
+
+    private static void AddBiasBlocks(JsonArray items, IReadOnlyList<BiasStepSpec>? bias) {
+        foreach (var step in bias ?? []) {
+            items.Add(BiasBlock(step));
+        }
+    }
+
+    private static JsonObject BiasBlock(BiasStepSpec step) {
+        var exposure = new JsonObject {
+            ["$type"] = TakeExposureType,
+            ["ExposureTime"] = BiasPlaceholderExposureSec,
+            ["ImageType"] = "BIAS",
+            ["ExposureCount"] = 0,
+        };
+        if (step.Gain is int gain) {
+            exposure["Gain"] = gain;
+        }
+        if (step.Offset is int offset) {
+            exposure["Offset"] = offset;
+        }
+        if (step.Bin > 1) {
+            exposure["Binning"] = new JsonObject { ["X"] = step.Bin, ["Y"] = step.Bin };
+        }
+
+        var gainLabel = step.Gain is int g ? $"g{g}" : "default gain";
+        var offsetLabel = step.Offset is int o ? $" o{o}" : "";
+        var binLabel = step.Bin > 1 ? $" bin{step.Bin}" : "";
+        return new JsonObject {
+            ["$type"] = SequentialContainerType,
+            ["Strategy"] = Strategy(),
+            ["Name"] = $"Bias — {gainLabel}{offsetLabel}{binLabel} ({step.FrameCount}×)",
+            ["Conditions"] = new JsonArray(new JsonObject {
+                ["$type"] = LoopConditionType,
+                ["Iterations"] = step.FrameCount,
+                ["CompletedIterations"] = 0,
+            }),
+            ["Items"] = new JsonArray(exposure),
+            ["Triggers"] = new JsonArray(),
+        };
     }
 
     private static JsonObject DarkBlock(double? temperatureC, DarkStepSpec step) {

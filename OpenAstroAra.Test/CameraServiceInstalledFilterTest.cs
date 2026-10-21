@@ -95,6 +95,42 @@ namespace OpenAstroAra.Test {
     public class CameraServiceInstalledFilterCaptureTest {
 
         [Test]
+        public async Task A_bias_frame_runs_at_the_cameras_shortest_exposure() {
+            await using var box = ScriptedAlpacaDevice.Start(path =>
+                path.EndsWith("/imageready", StringComparison.Ordinal) ? "true"
+                : path.EndsWith("/exposuremin", StringComparison.Ordinal) ? "0.000032"
+                : path.EndsWith("/imagearray", StringComparison.Ordinal) ? "[[100,200],[300,400]],\"Type\":2,\"Rank\":2"
+                : null);
+            var dir = Directory.CreateTempSubdirectory("ara-bias-").FullName;
+            try {
+                FrameDto? row = null;
+                var frames = new Mock<IFrameRepository>();
+                frames.Setup(f => f.InsertAsync(It.IsAny<FrameDto>(), It.IsAny<CancellationToken>()))
+                    .Callback<FrameDto, CancellationToken>((f, _) => row = f)
+                    .Returns(Task.CompletedTask);
+                using var svc = new CameraService(frames: frames.Object, fallbackFramesDir: dir);
+                await svc.ConnectAsync(new ConnectRequestDto(new DiscoveredDeviceDto(
+                    UniqueId: "Camera-under-test", Name: "Sim Camera", Type: DeviceType.Camera,
+                    HostName: box.BaseUri.Host, IpAddress: box.BaseUri.Host, IpPort: box.BaseUri.Port,
+                    AlpacaDeviceNumber: 0, UseHttps: false)), null, CancellationToken.None);
+                var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(15);
+                while ((await svc.GetAsync(CancellationToken.None)) is not { State: EquipmentConnectionState.Connected, Capabilities: not null }) {
+                    Assert.That(DateTime.UtcNow, Is.LessThan(deadline), "camera never connected");
+                    await Task.Delay(50);
+                }
+
+                await svc.CaptureImage(new CaptureSequence { ExposureTime = 0.001, ImageType = "BIAS" },
+                    CancellationToken.None, null, "Flats");
+
+                Assert.That(row, Is.Not.Null, "the frame was catalogued");
+                Assert.That(row!.FrameType, Is.EqualTo(FrameType.Bias));
+                Assert.That(row.ExposureSeconds, Is.EqualTo(0.000032), "the step's 1 ms placeholder gives way to ExposureMin");
+            } finally {
+                Directory.Delete(dir, recursive: true);
+            }
+        }
+
+        [Test]
         public async Task A_sequence_frame_records_the_installed_filter() {
             await using var box = ScriptedAlpacaDevice.Start(path =>
                 path.EndsWith("/imageready", StringComparison.Ordinal) ? "true"

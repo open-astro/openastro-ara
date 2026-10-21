@@ -29,7 +29,8 @@ namespace OpenAstroAra.Server.Services;
 ///
 /// Matching rules (standard calibration practice): a flat matches a light by <c>filter</c>; a dark matches a
 /// light by <c>(exposure, gain, temperature)</c>, where temperature is bucketed to the nearest whole degree
-/// (NULL temperature — an uncooled camera with no sensor — matches NULL). The dark-library <em>build</em> is a
+/// (NULL temperature — an uncooled camera with no sensor — matches NULL); a bias matches a light by
+/// <c>(gain, offset, binning)</c>. The dark-library <em>build</em> is a
 /// separate, guider/sequencer-gated concern (<see cref="IDarkLibraryService"/>);
 /// this service only reports availability + generates the matching-flats plan.
 /// </summary>
@@ -37,6 +38,8 @@ public sealed class SqliteCalibrationService : ICalibrationService {
     // Fallback defaults when no profile store is wired (test/bootstrap contexts) — production
     // reads the §48.7 flat_panel policy fields off SafetyPoliciesDto instead.
     private const int DefaultFlatFrames = 20;
+    // Bias frames are cheap read-outs; 50 averages their read noise well below a light's.
+    internal const int DefaultBiasFrames = 50;
     private const double DefaultTargetPercent = 50;
     private const double DefaultTargetAduTolerancePct = 5;
     // §48.7 sky_flat fallbacks (store-less contexts only; production reads the policy fields).
@@ -232,6 +235,21 @@ public sealed class SqliteCalibrationService : ICalibrationService {
                     AND ROUND(COALESCE(d.temperature_c, 0), 0) IS l.temp_bucket)
             """, BindIds, ct);
 
+        // 4b) Bias coverage — global like the darks, keyed by (gain, offset, binning). A row from
+        // before binning was recorded counts as 1×1, the overwhelmingly common case.
+        var biasUncovered = await UncoveredSessionsAsync(conn, $"""
+            SELECT DISTINCT l.session_id
+            FROM (SELECT DISTINCT session_id, gain, "offset", COALESCE(bin, 1) AS bin
+                  FROM frames
+                  WHERE frame_type = 'light' AND session_id IN ({placeholders})) l
+            WHERE NOT EXISTS (
+                  SELECT 1 FROM frames b
+                  WHERE b.frame_type = 'bias'
+                    AND b.gain IS l.gain
+                    AND b."offset" IS l."offset"
+                    AND COALESCE(b.bin, 1) IS l.bin)
+            """, BindIds, ct);
+
         // 5) The lights' cooler set-point (modal per session).
         var setpoints = await ModalCoolerSetpointsAsync(conn, $"session_id IN ({placeholders})", BindIds, ct);
 
@@ -264,7 +282,8 @@ public sealed class SqliteCalibrationService : ICalibrationService {
                 MatchingFlatsAvailable: FlatsCoverAll(filtersBySession.GetValueOrDefault(sid)),
                 MatchingDarksAvailable: !darksUncovered.Contains(sid),
                 ProfileId: profiles.GetValueOrDefault(sid),
-                CoolerSetpointC: setpoints.TryGetValue(sid, out var sp) ? sp : null));
+                CoolerSetpointC: setpoints.TryGetValue(sid, out var sp) ? sp : null,
+                MatchingBiasAvailable: !biasUncovered.Contains(sid)));
         }
         return items;
     }
@@ -365,21 +384,25 @@ public sealed class SqliteCalibrationService : ICalibrationService {
             total += frameCount;
         }
 
+        var biasFrames = request.BiasFrameCount is int bc && bc > 0 ? bc : DefaultBiasFrames;
+        var bias = request.IncludeBias ? await UncoveredBiasAsync(conn, sessionId, biasFrames, ct) : [];
+        var totalBias = bias.Sum(b => b.FrameCount);
+
         var name = sky ? $"Sky flats — {session.TargetName}" : $"Flats — {session.TargetName}";
 
         // §39.5: materialize the plan into a runnable §38 sequence unless the caller asked for the
         // plan alone. The persisted body is the same NINA-verbatim tree every stored sequence uses,
         // so the WILMA editor renders it and POST /sequences/{id}/start runs it as-is.
         Guid? generatedId = null;
-        if (!request.GenerateOnly && _sequences is not null && steps.Count > 0) {
+        if (!request.GenerateOnly && _sequences is not null && (steps.Count > 0 || bias.Count > 0)) {
             var body = sky
                 ? CalibrationSequenceBuilder.BuildSkyFlatsBody(name, skySpecs,
                     new SkyFlatEnvelope(
                         SunAltitudeDeg: policies?.SkyFlatSunAltitude ?? DefaultSkySunAltitude,
                         AzimuthDeg: policies?.SkyFlatTargetAzimuth ?? DefaultSkyAzimuth,
                         AltitudeDeg: policies?.SkyFlatTargetAltitude ?? DefaultSkyAltitude),
-                    parkMountAfter: parkAfter, cooling: cooling)
-                : CalibrationSequenceBuilder.BuildMatchingFlatsBody(name, specs, parkMountAfter: parkAfter, cooling: cooling);
+                    parkMountAfter: parkAfter, cooling: cooling, bias: bias)
+                : CalibrationSequenceBuilder.BuildMatchingFlatsBody(name, specs, parkMountAfter: parkAfter, cooling: cooling, bias: bias);
             var created = await _sequences.CreateAsync(new SequenceCreateRequestDto(
                 Name: name,
                 Description: $"Matching flats generated from the {session.SessionStartUtc:yyyy-MM-dd} {session.TargetName} session ({sessionId:D}).",
@@ -393,7 +416,8 @@ public sealed class SqliteCalibrationService : ICalibrationService {
             GeneratedSequenceId: generatedId,
             GeneratedSequenceName: name,
             TotalFlatFrames: total,
-            Steps: steps);
+            Steps: steps,
+            TotalBiasFrames: totalBias);
     }
 
     // The cooler around the flats (see MatchingFlatsRequestDto's remarks for the request rules).
@@ -518,6 +542,8 @@ public sealed class SqliteCalibrationService : ICalibrationService {
             SELECT DISTINCT exposure_seconds, gain, ROUND(COALESCE(temperature_c, 0), 0) FROM frames WHERE frame_type = 'dark'
             """, ct);
 
+        var biasAvailable = await AllCoveredAsync(conn, sid, BiasRequirementsSql, ct);
+
         string? profileId = null;
         await using (var cmd = conn.CreateCommand()) {
             cmd.CommandText = "SELECT profile_id FROM sessions WHERE id = $sid LIMIT 1;";
@@ -539,7 +565,33 @@ public sealed class SqliteCalibrationService : ICalibrationService {
             MatchingDarksAvailable: darksAvailable,
             ProfileId: profileId,
             CoolerSetpointC: (await ModalCoolerSetpointsAsync(conn, "session_id = $sid",
-                cmd => cmd.Parameters.AddWithValue("$sid", sid), ct)).TryGetValue(sid, out var sp) ? sp : null);
+                cmd => cmd.Parameters.AddWithValue("$sid", sid), ct)).TryGetValue(sid, out var sp) ? sp : null,
+            MatchingBiasAvailable: biasAvailable);
+    }
+
+    // The session's (gain, offset, binning) combinations no bias frame covers yet. EXCEPT treats
+    // NULLs as equal, so camera-default lights match camera-default biases. No trailing ';' — it is
+    // embedded as a subquery.
+    private const string BiasRequirementsSql = """
+        SELECT DISTINCT gain, "offset", COALESCE(bin, 1) FROM frames WHERE frame_type = 'light' AND session_id = $sid
+        EXCEPT
+        SELECT DISTINCT gain, "offset", COALESCE(bin, 1) FROM frames WHERE frame_type = 'bias'
+        """;
+
+    private static async Task<List<BiasStepSpec>> UncoveredBiasAsync(SqliteConnection conn, Guid sessionId, int frameCount, CancellationToken ct) {
+        var result = new List<BiasStepSpec>();
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = BiasRequirementsSql + " ORDER BY 1, 2, 3;";
+        cmd.Parameters.AddWithValue("$sid", sessionId.ToString());
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct)) {
+            result.Add(new BiasStepSpec(
+                Gain: await reader.IsDBNullAsync(0, ct) ? null : reader.GetInt32(0),
+                Offset: await reader.IsDBNullAsync(1, ct) ? null : reader.GetInt32(1),
+                Bin: Math.Max(1, reader.GetInt32(2)),
+                FrameCount: frameCount));
+        }
+        return result;
     }
 
     /// <summary>Rotator angles closer than this are the same camera orientation (a CAA reads back

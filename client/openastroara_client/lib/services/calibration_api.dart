@@ -20,7 +20,8 @@ abstract interface class CalibrationClient {
   /// carries its id. [coolCamera] null cools to the lights' set-point when
   /// they were cooled; false leaves the cooler alone; true cools to
   /// [coolToTemperatureC] (else the lights' set-point, else the profile's
-  /// cooler target).
+  /// cooler target). [includeBias] adds bias sets after the flats for each
+  /// gain/offset/binning of the lights that has none yet.
   Future<GeneratedFlatSequence> generateMatchingFlats(
     String sessionId, {
     int? frameCount,
@@ -30,6 +31,7 @@ abstract interface class CalibrationClient {
     double? coolToTemperatureC,
     bool? parkMountAfter,
     bool includeCoveredFilters = false,
+    bool includeBias = false,
   });
 
   Future<DarkLibraryState> darkLibraryStatus();
@@ -107,6 +109,7 @@ class CalibrationApi implements CalibrationClient {
     double? coolToTemperatureC,
     bool? parkMountAfter,
     bool includeCoveredFilters = false,
+    bool includeBias = false,
   }) async {
     final res = await _dio.post<dynamic>(
       '/api/v1/calibration/sessions/$sessionId/matching-flats',
@@ -118,6 +121,7 @@ class CalibrationApi implements CalibrationClient {
         'cool_to_temperature_c': ?coolToTemperatureC,
         'park_mount_after': ?parkMountAfter,
         'include_covered_filters': includeCoveredFilters,
+        'include_bias': includeBias,
       },
     );
     final data = res.data;

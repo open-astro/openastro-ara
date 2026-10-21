@@ -19,7 +19,8 @@ import '../../util/friendly_error.dart';
 /// flats/darks coverage, plus the §39.5 "Capture Matching Flats" flow — the
 /// server generates a runnable §38 sequence that replays the session's
 /// filter/focus/gain state, and the client jumps straight to it in the Run tab.
-/// Dark Library tab: catalogued dark groups + the §39.8 dark-matrix build.
+/// Dark Library tab: catalogued dark and bias groups + the §39.8 dark-matrix
+/// build.
 class CalibrationScreen extends StatelessWidget {
   const CalibrationScreen({super.key});
 
@@ -144,16 +145,27 @@ class _SessionCard extends ConsumerWidget {
             const SizedBox(height: 8),
             Row(
               children: [
-                _CoverageBadge(
-                  label: 'Flats',
-                  covered: session.matchingFlatsAvailable,
+                // Wraps on a narrow window rather than pushing the action off.
+                Expanded(
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 6,
+                    children: [
+                      _CoverageBadge(
+                        label: 'Flats',
+                        covered: session.matchingFlatsAvailable,
+                      ),
+                      _CoverageBadge(
+                        label: 'Darks',
+                        covered: session.matchingDarksAvailable,
+                      ),
+                      _CoverageBadge(
+                        label: 'Bias',
+                        covered: session.matchingBiasAvailable,
+                      ),
+                    ],
+                  ),
                 ),
-                const SizedBox(width: 8),
-                _CoverageBadge(
-                  label: 'Darks',
-                  covered: session.matchingDarksAvailable,
-                ),
-                const Spacer(),
                 TextButton.icon(
                   onPressed: () => showDialog<void>(
                     context: context,
@@ -172,9 +184,11 @@ class _SessionCard extends ConsumerWidget {
                   // Flats carry over while the setup is unchanged: once every
                   // filter is covered the action is a deliberate re-shoot.
                   label: Text(
-                    session.matchingFlatsAvailable
+                    !session.matchingFlatsAvailable
+                        ? 'Capture Matching Flats'
+                        : session.matchingBiasAvailable
                         ? 'Re-shoot flats'
-                        : 'Capture Matching Flats',
+                        : 'Capture Bias',
                   ),
                 ),
               ],
@@ -336,6 +350,10 @@ class _MatchingFlatsDialogState extends ConsumerState<MatchingFlatsDialog> {
   // Mount motion is opt-in for every run: never pre-ticked, not even from the
   // profile's end-of-night setting (a bench or indoor rig has no clear path).
   bool _park = false;
+  // Bias frames for the lights' gain/offset/binning, shot after the flats
+  // while the cover is still closed. Ticked when the lights have none yet.
+  bool _biasNeeded = false;
+  bool _bias = false;
 
   @override
   void initState() {
@@ -357,6 +375,8 @@ class _MatchingFlatsDialogState extends ConsumerState<MatchingFlatsDialog> {
       _loadingSession = false;
       _lightsSetpointC = setpoint;
       _filters = session?.filtersUsed ?? const [];
+      _biasNeeded = session != null && !session.matchingBiasAvailable;
+      _bias = _biasNeeded;
       _cool = setpoint != null;
       if (setpoint != null) _coolTo.text = _degrees(setpoint);
     });
@@ -397,6 +417,7 @@ class _MatchingFlatsDialogState extends ConsumerState<MatchingFlatsDialog> {
         coolToTemperatureC: _cool ? coolTo : null,
         parkMountAfter: _park,
         includeCoveredFilters: _reshoot,
+        includeBias: _biasNeeded && _bias,
       );
       // Post-await UI work gates on State.mounted (the dialog may have been
       // dismissed while the request was in flight).
@@ -405,7 +426,7 @@ class _MatchingFlatsDialogState extends ConsumerState<MatchingFlatsDialog> {
       if (id == null) {
         setState(() {
           _busy = false;
-          _error = result.totalFlatFrames == 0
+          _error = result.totalFlatFrames == 0 && result.totalBiasFrames == 0
               ? 'Nothing to shoot: every filter already has flats from this setup.'
               : 'The server returned a plan but no stored sequence.';
         });
@@ -414,7 +435,8 @@ class _MatchingFlatsDialogState extends ConsumerState<MatchingFlatsDialog> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            '"${result.generatedSequenceName}" saved — ${result.totalFlatFrames} flats across ${widget.filterNames.length} filter(s).',
+            '"${result.generatedSequenceName}" saved — ${result.totalFlatFrames} flats across ${widget.filterNames.length} filter(s)'
+            '${result.totalBiasFrames > 0 ? ' + ${result.totalBiasFrames} bias' : ''}.',
           ),
         ),
       );
@@ -433,7 +455,7 @@ class _MatchingFlatsDialogState extends ConsumerState<MatchingFlatsDialog> {
     final filters = widget.filterNames.join(', ');
     final covered = [for (final f in _filters) if (f.hasFlats) f];
     final allCovered = _filters.isNotEmpty && covered.length == _filters.length;
-    final nothingToShoot = allCovered && !_reshoot;
+    final nothingToShoot = allCovered && !_reshoot && !(_biasNeeded && _bias);
     final mutedStyle = Theme.of(
       context,
     ).textTheme.bodySmall?.copyWith(color: AraColors.textSecondary);
@@ -524,6 +546,19 @@ class _MatchingFlatsDialogState extends ConsumerState<MatchingFlatsDialog> {
                   helperMaxLines: 2,
                 ),
               ),
+            if (_biasNeeded)
+              CheckboxListTile(
+                value: _bias,
+                onChanged: _busy ? null : (v) => setState(() => _bias = v ?? false),
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                controlAffinity: ListTileControlAffinity.leading,
+                title: const Text('Shoot bias frames after the flats'),
+                subtitle: const Text(
+                  'The lights have no bias frames yet. 50 at the camera\'s shortest '
+                  'exposure for each gain, offset and binning they used.',
+                ),
+              ),
             CheckboxListTile(
               value: _park,
               onChanged: _busy ? null : (v) => setState(() => _park = v ?? false),
@@ -603,6 +638,15 @@ class _DarkLibraryTab extends ConsumerWidget {
               else
                 ...state.entries.map((e) => _DarkEntryRow(entry: e)),
               const Divider(height: 32),
+              Text('Bias', style: Theme.of(context).textTheme.titleSmall),
+              if (state.biasEntries.isEmpty)
+                const _EmptyNote(
+                  'No bias frames catalogued yet — tick "Shoot bias frames" in '
+                  'Capture Matching Flats on a session that needs them.',
+                )
+              else
+                ...state.biasEntries.map((e) => _BiasEntryRow(entry: e)),
+              const Divider(height: 32),
               const DarkBuildForm(),
             ],
           ),
@@ -666,6 +710,27 @@ class _DarkEntryRow extends StatelessWidget {
       title: Text(
         '${_secondsLabel(entry.exposureSeconds)} · $gain · ${entry.temperatureC.toStringAsFixed(0)}°C',
       ),
+      subtitle: Text('${entry.frameCount} frames · $size MB · newest $date'),
+    );
+  }
+}
+
+class _BiasEntryRow extends StatelessWidget {
+  final BiasLibraryEntry entry;
+  const _BiasEntryRow({required this.entry});
+
+  @override
+  Widget build(BuildContext context) {
+    final gain = entry.gain is int ? 'gain ${entry.gain}' : 'default gain';
+    final offset = entry.offset is int ? ' · offset ${entry.offset}' : '';
+    final size = (entry.fileSizeBytes / (1024 * 1024)).toStringAsFixed(1);
+    final d = entry.capturedUtc.toLocal();
+    final date =
+        '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+    return ListTile(
+      dense: true,
+      leading: const Icon(Icons.blur_on_outlined, size: 18),
+      title: Text('$gain$offset · bin ${entry.bin}×${entry.bin}'),
       subtitle: Text('${entry.frameCount} frames · $size MB · newest $date'),
     );
   }

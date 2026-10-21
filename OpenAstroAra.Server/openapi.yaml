@@ -7591,6 +7591,55 @@ components:
           type:
             - 'null'
             - string
+    BiasLibraryEntryDto:
+      required:
+        - id
+        - gain
+        - offset
+        - bin
+        - frame_count
+        - captured_utc
+        - file_size_bytes
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        gain:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - 'null'
+            - integer
+            - string
+          format: int32
+        offset:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - 'null'
+            - integer
+            - string
+          format: int32
+        bin:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+        frame_count:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+        captured_utc:
+          type: string
+          format: date-time
+        file_size_bytes:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int64
     BugReportPreparationDto:
       required:
         - preparation_id
@@ -7857,6 +7906,9 @@ components:
             - number
             - string
           format: double
+        matching_bias_available:
+          type: boolean
+          default: false
     CalibrationStateDto:
       required:
         - dark_library
@@ -8395,6 +8447,12 @@ components:
             - 'null'
             - string
           format: uuid
+        bias_entries:
+          type:
+            - 'null'
+            - array
+          items:
+            $ref: '#/components/schemas/BiasLibraryEntryDto'
     DataManagerActiveDownloadDto:
       required:
         - download_id
@@ -9812,6 +9870,13 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/GeneratedFlatStepDto'
+        total_bias_frames:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+          default: 0
     GeneratedFlatStepDto:
       required:
         - filter_name
@@ -11232,6 +11297,16 @@ components:
         include_covered_filters:
           type: boolean
           default: false
+        include_bias:
+          type: boolean
+          default: false
+        bias_frame_count:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - 'null'
+            - integer
+            - string
+          format: int32
     MosaicCreateRequestDto:
       required:
         - name

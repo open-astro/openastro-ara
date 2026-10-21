@@ -337,6 +337,78 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Bias_covers_lights_with_the_same_gain_offset_and_binning() {
+            await InsertSessionAsync(FlatsSession);
+            await InsertFrameAsync(Session, "light", "Ha", 300, 100, "NA", offset: 50);
+            await InsertFrameAsync(Session, "light", "OIII", 300, 100, "NA", offset: 50, bin: 2);
+            Assert.That((await _svc.GetSessionAsync(Session, CancellationToken.None))!.MatchingBiasAvailable, Is.False);
+
+            // Wrong offset, then only the 1×1 combination: still not covered.
+            await InsertFrameAsync(FlatsSession, "bias", null, 0, 100, "Bias", offset: 0);
+            await InsertFrameAsync(FlatsSession, "bias", null, 0, 100, "Bias", offset: 50, bin: 1);
+            Assert.That((await _svc.GetSessionAsync(Session, CancellationToken.None))!.MatchingBiasAvailable, Is.False);
+            var page = await _svc.ListSessionsAsync(10, null, CancellationToken.None);
+            Assert.That(page.Items.Single(i => i.Id == Session).MatchingBiasAvailable, Is.False);
+
+            await InsertFrameAsync(FlatsSession, "bias", null, 0, 100, "Bias", offset: 50, bin: 2);
+            Assert.That((await _svc.GetSessionAsync(Session, CancellationToken.None))!.MatchingBiasAvailable, Is.True);
+            page = await _svc.ListSessionsAsync(10, null, CancellationToken.None);
+            Assert.That(page.Items.Single(i => i.Id == Session).MatchingBiasAvailable, Is.True,
+                "the batched list agrees with the single-session read");
+        }
+
+        [Test]
+        public async Task Matching_flats_with_bias_add_a_set_per_missing_combination_after_the_flats() {
+            await InsertSessionAsync(FlatsSession);
+            var store = new FileSequenceService(_dir);
+            var svc = new SqliteCalibrationService(_db, store);
+            await InsertFrameAsync(Session, "light", "Ha", 300, 100, "NA", offset: 50);
+            await InsertFrameAsync(Session, "light", "Ha", 300, 100, "NA", offset: 50, bin: 2);
+            await InsertFrameAsync(FlatsSession, "bias", null, 0, 100, "Bias", offset: 50, bin: 1);
+
+            var plan = await svc.GenerateMatchingFlatsAsync(Session,
+                new MatchingFlatsRequestDto(null, null, GenerateOnly: false, IncludeBias: true, BiasFrameCount: 7),
+                idempotencyKey: null, CancellationToken.None);
+            Assert.That(plan.TotalBiasFrames, Is.EqualTo(7), "only the uncovered 2×2 combination is shot");
+
+            var stored = await store.GetAsync(plan.GeneratedSequenceId!.Value, CancellationToken.None);
+            var profile = new HeadlessProfileService();
+            profile.ActiveProfile.FilterWheelSettings.FilterWheelFilters.Add(new OpenAstroAra.Core.Model.Equipment.FilterInfo("Ha", 0, 0));
+            var root = new SequenceJsonConverter(HeadlessSequencerFactory.WithDefaults(profileService: profile)).Deserialize(stored!.Body.GetRawText());
+            var blocks = root.GetItemsSnapshot().OfType<SequentialContainer>().ToList();
+            Assert.That(blocks[0].GetItemsSnapshot().OfType<FlatPanelFlats>(), Is.Not.Empty, "flats first");
+            var bias = blocks[^1];
+            Assert.That(bias.GetConditionsSnapshot().OfType<LoopCondition>().Single().Iterations, Is.EqualTo(7));
+            var exposure = bias.GetItemsSnapshot().OfType<TakeExposure>().Single();
+            Assert.That(exposure.ImageType, Is.EqualTo("BIAS"));
+            Assert.That(exposure.Gain, Is.EqualTo(100));
+            Assert.That(exposure.Offset, Is.EqualTo(50));
+            Assert.That(exposure.Binning.X, Is.EqualTo(2));
+            Assert.That(exposure.ExposureTime, Is.GreaterThan(0), "TakeExposure rejects a zero exposure");
+        }
+
+        [Test]
+        public async Task Bias_alone_is_stored_when_every_filter_already_has_flats() {
+            await InsertSessionAsync(FlatsSession);
+            var store = new FileSequenceService(_dir);
+            var svc = new SqliteCalibrationService(_db, store);
+            await InsertFrameAsync(Session, "light", "Ha", 300, 100, "NA", rotatorDeg: 34.8);
+            await InsertFrameAsync(FlatsSession, "flat", "Ha", 1, 100, "Flats", rotatorDeg: 34.8);
+
+            var plan = await svc.GenerateMatchingFlatsAsync(Session,
+                new MatchingFlatsRequestDto(null, null, GenerateOnly: false, IncludeBias: true),
+                idempotencyKey: null, CancellationToken.None);
+            Assert.That(plan.Steps, Is.Empty);
+            Assert.That(plan.TotalBiasFrames, Is.EqualTo(SqliteCalibrationService.DefaultBiasFrames));
+            Assert.That(plan.GeneratedSequenceId, Is.Not.Null, "bias still to shoot, so the run is stored");
+
+            var without = await svc.GenerateMatchingFlatsAsync(Session,
+                new MatchingFlatsRequestDto(null, null, GenerateOnly: false), idempotencyKey: null, CancellationToken.None);
+            Assert.That(without.TotalBiasFrames, Is.Zero, "bias only when asked");
+            Assert.That(without.GeneratedSequenceId, Is.Null);
+        }
+
+        [Test]
         public async Task GetSession_returns_null_for_a_session_with_no_light_frames() {
             await InsertFrameAsync(Session, "dark", null, 300, 100, "M42"); // darks only — not a calibration session
             var dto = await _svc.GetSessionAsync(Session, CancellationToken.None);
@@ -834,16 +906,17 @@ namespace OpenAstroAra.Test {
             await cmd.ExecuteNonQueryAsync(CancellationToken.None);
         }
 
-        private async Task InsertFrameAsync(Guid sessionId, string frameType, string? filter, int exposureSeconds, int gain, string target, double temperatureC = -10.0, int? offset = null, int? focuserPosition = null, DateTimeOffset? capturedUtc = null, double? rotatorDeg = null, double? coolerSetpointC = null) {
+        private async Task InsertFrameAsync(Guid sessionId, string frameType, string? filter, int exposureSeconds, int gain, string target, double temperatureC = -10.0, int? offset = null, int? focuserPosition = null, DateTimeOffset? capturedUtc = null, double? rotatorDeg = null, double? coolerSetpointC = null, int? bin = null) {
             await using var conn = _db.OpenConnection();
             await using var cmd = conn.CreateCommand();
             cmd.CommandText = """
                 INSERT INTO frames (id, session_id, target_name, frame_type, filter_name,
                     exposure_seconds, gain, "offset", focuser_position, temperature_c, captured_utc, file_path,
-                    file_size_bytes, width, height, bit_depth, rotator_mechanical_deg, cooler_setpoint_c)
+                    file_size_bytes, width, height, bit_depth, rotator_mechanical_deg, cooler_setpoint_c, bin)
                 VALUES ($id, $sid, $target, $type, $filter, $exp, $gain, $offset, $focus, $temp, $utc,
-                    $path, 1000, 16, 16, 16, $rot, $setpoint);
+                    $path, 1000, 16, 16, 16, $rot, $setpoint, $bin);
                 """;
+            cmd.Parameters.AddWithValue("$bin", bin is null ? DBNull.Value : bin.Value);
             cmd.Parameters.AddWithValue("$rot", rotatorDeg is null ? DBNull.Value : rotatorDeg.Value);
             cmd.Parameters.AddWithValue("$setpoint", coolerSetpointC is null ? DBNull.Value : coolerSetpointC.Value);
             cmd.Parameters.AddWithValue("$offset", offset is null ? DBNull.Value : offset.Value);

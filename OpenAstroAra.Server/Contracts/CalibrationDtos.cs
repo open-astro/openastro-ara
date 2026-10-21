@@ -20,7 +20,8 @@ namespace OpenAstroAra.Server.Contracts;
 
 /// <summary>One imaging session that may need calibration frames. Per §39.
 /// <c>CoolerSetpointC</c> is the set-point most of the session's lights were taken at with the
-/// cooler on (null = taken warm, or before the catalog recorded it) — what matching flats cool to.</summary>
+/// cooler on (null = taken warm, or before the catalog recorded it) — what matching flats cool to.
+/// <c>MatchingBiasAvailable</c>: every (gain, offset, binning) the lights used has bias frames.</summary>
 public sealed record CalibrationSessionDto(
     Guid Id,
     string TargetName,
@@ -31,7 +32,8 @@ public sealed record CalibrationSessionDto(
     bool MatchingFlatsAvailable,
     bool MatchingDarksAvailable,
     string? ProfileId,
-    double? CoolerSetpointC = null);
+    double? CoolerSetpointC = null,
+    bool MatchingBiasAvailable = false);
 
 /// <summary>Per-filter summary inside a calibration session. <c>MatchingFlatFrames</c> counts the
 /// catalogued flats that calibrate this filter's lights — same filter, taken at the same rotator
@@ -59,7 +61,10 @@ public sealed record CalibrationFilterSummaryDto(
 /// <c>ParkMountAfter</c> is the user's answer for THIS run (the flats dialog always sends it);
 /// null — the unattended end-of-night path — follows the profile's post_flat_park_mount.
 /// Filters whose lights already have matching flats are skipped unless
-/// <c>IncludeCoveredFilters</c>; with every filter covered the plan is empty and nothing is stored.</remarks>
+/// <c>IncludeCoveredFilters</c>; with every filter covered the plan is empty and nothing is stored.
+/// <c>IncludeBias</c> adds bias sets after the flats (panel off, cover still closed) for each
+/// (gain, offset, binning) of the lights that has no bias frames yet, <c>BiasFrameCount</c> each
+/// (null = the default).</remarks>
 public sealed record MatchingFlatsRequestDto(
     int? OverrideFrameCount,
     int? OverrideTargetAdu,
@@ -68,18 +73,21 @@ public sealed record MatchingFlatsRequestDto(
     bool? CoolCamera = null,
     double? CoolToTemperatureC = null,
     bool? ParkMountAfter = null,
-    bool IncludeCoveredFilters = false);
+    bool IncludeCoveredFilters = false,
+    bool IncludeBias = false,
+    int? BiasFrameCount = null);
 
 /// <summary>Sequence the server generated to capture matching flats for the session.
 /// <c>GeneratedSequenceId</c> is the persisted §38 sequence (runnable via
 /// <c>POST /api/v1/sequences/{id}/start</c>); null when the caller asked for the plan
-/// only (<c>GenerateOnly</c>).</summary>
+/// only (<c>GenerateOnly</c>). <c>TotalBiasFrames</c> counts the bias frames planned after the flats.</summary>
 public sealed record GeneratedFlatSequenceDto(
     Guid SourceSessionId,
     Guid? GeneratedSequenceId,
     string GeneratedSequenceName,
     int TotalFlatFrames,
-    IReadOnlyList<GeneratedFlatStepDto> Steps);
+    IReadOnlyList<GeneratedFlatStepDto> Steps,
+    int TotalBiasFrames = 0);
 
 public sealed record GeneratedFlatStepDto(
     string FilterName,
@@ -104,7 +112,7 @@ public sealed record DarkLibraryBuildRequestDto(
 /// catalog holds at least FramesPerCombination darks matching it. ReuseExistingFrames governs
 /// which frames count, symmetrically with capture: a reuse build counts every matching
 /// catalogued dark; a non-reuse build asked for fresh frames, so only captures made at or after
-/// the build request count.</summary>
+/// the build request count. <c>BiasEntries</c> lists the catalogued bias groups.</summary>
 public sealed record DarkLibraryStateDto(
     string Status,
     int TotalCombinations,
@@ -113,7 +121,8 @@ public sealed record DarkLibraryStateDto(
     DateTimeOffset? BuildCompletedUtc,
     string? FailureReason,
     IReadOnlyList<DarkLibraryEntryDto> Entries,
-    Guid? GeneratedSequenceId);
+    Guid? GeneratedSequenceId,
+    IReadOnlyList<BiasLibraryEntryDto>? BiasEntries = null);
 
 /// <summary>One entry in the dark library: a distinct (exposure, gain, whole-degree temperature)
 /// group of catalogued DARK frames. <c>Id</c> is a stable hash of that key (same group ⇒ same id
@@ -127,4 +136,16 @@ public sealed record DarkLibraryEntryDto(
     int FrameCount,
     DateTimeOffset CapturedUtc,
     string FilePath,
+    long FileSizeBytes);
+
+/// <summary>One group of catalogued BIAS frames: a distinct (gain, offset, binning) — the key bias
+/// frames match lights by. <c>Id</c> is a stable hash of that key; <c>FileSizeBytes</c> is the
+/// group total. Null <c>Gain</c>/<c>Offset</c> = frames that recorded none.</summary>
+public sealed record BiasLibraryEntryDto(
+    Guid Id,
+    int? Gain,
+    int? Offset,
+    int Bin,
+    int FrameCount,
+    DateTimeOffset CapturedUtc,
     long FileSizeBytes);

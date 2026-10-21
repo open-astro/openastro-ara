@@ -147,6 +147,9 @@ public sealed partial class CameraService : ICameraMediator, IImagingMediator {
             if (client is null) {
                 throw new InvalidOperationException("camera disconnected while the capture was queued");
             }
+            if (string.Equals(imageType, ImageTypes.BIAS, StringComparison.OrdinalIgnoreCase)) {
+                request = request with { ExposureSec = BiasExposureSec(client, sequence.ExposureTime) };
+            }
             var frameId = Guid.NewGuid();
             // progress is intentionally not forwarded: the headless daemon reports capture progress
             // to clients over the §60.9 WS stream (SequencerService), not through NINA's in-process
@@ -166,6 +169,22 @@ public sealed partial class CameraService : ICameraMediator, IImagingMediator {
             Interlocked.Exchange(ref _captureInFlight, 0);
             RefreshCacheOnce();
         }
+    }
+
+    // A bias is the sensor's read-out with no exposure at all, so it runs at the shortest exposure
+    // the camera can take, whatever the step asked for (generated bias steps carry a 1 ms placeholder).
+    // A camera that can't report its minimum, or reports 0, keeps the step's exposure.
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "ExposureMin is an optional ASCOM read; any driver/HTTP failure means 'unknown' and the step's exposure stands.")]
+    private double BiasExposureSec(AlpacaCamera client, double requested) {
+        double min;
+        lock (_gate) {
+            min = _capabilities?.MinExposureSec ?? 0;
+        }
+        if (min <= 0) {
+            try { min = client.ExposureMin; } catch (Exception) { min = 0; }
+        }
+        return min > 0 && double.IsFinite(min) ? min : requested;
     }
 
     // NINA ImageTypes → §28 catalog FrameType. SNAPSHOT counts as a light; DARKFLAT (used by some

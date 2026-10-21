@@ -19,6 +19,7 @@ class _FakeCalibrationClient implements CalibrationClient {
   double? flatsCoolTo;
   bool? flatsPark;
   bool? flatsIncludeCovered;
+  bool? flatsIncludeBias;
   DarkLibraryBuildRequest? buildRequest;
 
   _FakeCalibrationClient({
@@ -55,8 +56,10 @@ class _FakeCalibrationClient implements CalibrationClient {
     double? coolToTemperatureC,
     bool? parkMountAfter,
     bool includeCoveredFilters = false,
+    bool includeBias = false,
   }) async {
     flatsSessionId = sessionId;
+    flatsIncludeBias = includeBias;
     flatsPark = parkMountAfter;
     flatsIncludeCovered = includeCoveredFilters;
     flatsFrameCount = frameCount;
@@ -84,6 +87,7 @@ class _FakeCalibrationClient implements CalibrationClient {
 CalibrationSession _session({
   bool flats = false,
   bool darks = true,
+  bool bias = true,
   double? coolerSetpointC,
   List<CalibrationFilterSummary>? filters,
 }) =>
@@ -102,6 +106,7 @@ CalibrationSession _session({
           ],
       matchingFlatsAvailable: flats,
       matchingDarksAvailable: darks,
+      matchingBiasAvailable: bias,
       coolerSetpointC: coolerSetpointC,
     );
 
@@ -128,6 +133,53 @@ void main() {
     expect(find.textContaining('Ha 24×300s'), findsOneWidget);
     expect(find.text('Flats needed'), findsOneWidget);
     expect(find.text('Darks matched'), findsOneWidget);
+    expect(find.text('Bias matched'), findsOneWidget);
+  });
+
+  testWidgets('a session with flats but no bias offers the bias on its own',
+      (tester) async {
+    final fake = _FakeCalibrationClient(sessions: [
+      _session(flats: true, bias: false, filters: const [
+        CalibrationFilterSummary(
+          filterName: 'Ha',
+          lightFrameCount: 5,
+          meanExposureSeconds: 60,
+          matchingFlatFrames: 30,
+        ),
+      ]),
+    ]);
+    await _pump(tester, fake);
+    expect(find.text('Bias needed'), findsOneWidget);
+
+    await tester.tap(find.text('Capture Bias'));
+    await tester.pumpAndSettle();
+    final generate = find.widgetWithText(FilledButton, 'Generate & open');
+    expect(tester.widget<FilledButton>(generate).onPressed, isNotNull,
+        reason: 'the bias is still to shoot');
+
+    await tester.tap(find.text('Shoot bias frames after the flats'));
+    await tester.pumpAndSettle();
+    expect(tester.widget<FilledButton>(generate).onPressed, isNull,
+        reason: 'flats covered and bias unticked: nothing to shoot');
+
+    await tester.tap(find.text('Shoot bias frames after the flats'));
+    await tester.pumpAndSettle();
+    await tester.tap(generate);
+    await tester.pumpAndSettle();
+    expect(fake.flatsIncludeBias, isTrue);
+    expect(fake.flatsIncludeCovered, isFalse);
+  });
+
+  testWidgets('lights that already have bias never ask for it', (tester) async {
+    final fake = _FakeCalibrationClient(sessions: [_session()]);
+    await _pump(tester, fake);
+
+    await tester.tap(find.text('Capture Matching Flats'));
+    await tester.pumpAndSettle();
+    expect(find.text('Shoot bias frames after the flats'), findsNothing);
+    await tester.tap(find.text('Generate & open'));
+    await tester.pumpAndSettle();
+    expect(fake.flatsIncludeBias, isFalse);
   });
 
   testWidgets(
@@ -309,6 +361,17 @@ void main() {
             fileSizeBytes: 1024 * 1024,
           ),
         ],
+        biasEntries: [
+          BiasLibraryEntry(
+            id: 'b1',
+            gain: 100,
+            offset: 50,
+            bin: 1,
+            frameCount: 50,
+            capturedUtc: DateTime.utc(2026, 6, 22, 12),
+            fileSizeBytes: 3 * 1024 * 1024,
+          ),
+        ],
       ),
     );
     final container = await _pump(tester, fake);
@@ -321,6 +384,8 @@ void main() {
     expect(find.textContaining('300s · gain 100'), findsOneWidget);
     expect(find.textContaining('0.5s · default gain'), findsOneWidget,
         reason: 'null gain renders honestly, sub-second exposures keep precision');
+    expect(find.text('gain 100 · offset 50 · bin 1×1'), findsOneWidget);
+    expect(find.text('50 frames · 3.0 MB · newest 2026-06-22'), findsOneWidget);
 
     await tester.tap(find.text('Open build sequence'));
     await tester.pumpAndSettle();
