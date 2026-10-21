@@ -426,6 +426,26 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Flats_can_be_left_out_for_a_bias_and_darks_run() {
+            var store = new FileSequenceService(_dir);
+            var svc = new SqliteCalibrationService(_db, store);
+            await InsertFrameAsync(Session, "light", "Ha", 60, 100, "M42", offset: 50, rotatorDeg: 34.8);
+
+            var plan = await svc.GenerateMatchingFlatsAsync(Session,
+                new MatchingFlatsRequestDto(null, null, GenerateOnly: false, Flavor: "sky",
+                    IncludeFlats: false, IncludeBias: true, IncludeDarks: true, PauseForLensCap: true),
+                idempotencyKey: null, CancellationToken.None);
+            Assert.That(plan.Steps, Is.Empty, "the lights need flats, but the user left them out");
+            Assert.That(plan.TotalBiasFrames, Is.GreaterThan(0));
+            Assert.That(plan.TotalDarkFrames, Is.GreaterThan(0));
+
+            var stored = await store.GetAsync(plan.GeneratedSequenceId!.Value, CancellationToken.None);
+            Assert.That(stored!.Name, Is.EqualTo("Bias & darks — M42"));
+            Assert.That(stored.Body.GetRawText(), Does.Not.Contain("SlewScopeToAltAz").And.Not.Contain("WaitForSunAltitude")
+                .And.Not.Contain("FlatPanelFlats"), "no flats means no twilight wait and no slew");
+        }
+
+        [Test]
         public async Task No_lens_cap_pause_unless_asked() {
             var store = new FileSequenceService(_dir);
             var svc = new SqliteCalibrationService(_db, store);

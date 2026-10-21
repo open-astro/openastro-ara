@@ -66,7 +66,8 @@ public sealed record CalibrationFilterSummaryDto(
 /// (gain, offset, binning) of the lights that has no bias frames yet, <c>BiasFrameCount</c> each
 /// (null = the default). <c>IncludeDarks</c> adds dark sets for each (exposure, gain, temperature)
 /// of the lights with no darks yet, <c>DarkFrameCount</c> each. <c>PauseForLensCap</c> opens the
-/// panel's cover and waits for the user to put the lens cap on before those bias and darks.</remarks>
+/// panel's cover and waits for the user to put the lens cap on before those bias and darks.
+/// <c>IncludeFlats</c> false shoots no flats at all — a bias-and-darks-only run.</remarks>
 public sealed record MatchingFlatsRequestDto(
     int? OverrideFrameCount,
     int? OverrideTargetAdu,
@@ -80,7 +81,8 @@ public sealed record MatchingFlatsRequestDto(
     int? BiasFrameCount = null,
     bool IncludeDarks = false,
     int? DarkFrameCount = null,
-    bool PauseForLensCap = false);
+    bool PauseForLensCap = false,
+    bool IncludeFlats = true);
 
 /// <summary>Sequence the server generated to capture matching flats for the session.
 /// <c>GeneratedSequenceId</c> is the persisted §38 sequence (runnable via

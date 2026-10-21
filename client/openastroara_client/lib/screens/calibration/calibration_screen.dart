@@ -16,7 +16,7 @@ import '../../util/friendly_error.dart';
 /// §39.10 Calibration screen — live over `/api/v1/calibration/*`.
 ///
 /// Sessions tab: every imaging session with its per-filter summary and
-/// flats/darks coverage, plus the §39.5 "Capture Matching Flats" flow — the
+/// flats/bias/darks coverage, plus the §39.5 calibration-frames flow — the
 /// server generates a runnable §38 sequence that replays the session's
 /// filter/focus/gain state, and the client jumps straight to it in the Run tab.
 /// Dark Library tab: catalogued dark and bias groups + the §39.8 dark-matrix
@@ -194,15 +194,17 @@ class _SessionCard extends ConsumerWidget {
   }
 }
 
-/// The card's calibration action: flats first; once they're covered, the
-/// bias and darks still missing; with everything covered, a re-shoot.
+/// The card's calibration action names what the lights still need; with
+/// everything covered, it's a re-shoot.
 String _actionLabel(CalibrationSession s) {
-  if (!s.matchingFlatsAvailable) return 'Capture Matching Flats';
   final missing = [
+    if (!s.matchingFlatsAvailable) 'Flats',
     if (!s.matchingBiasAvailable) 'Bias',
     if (!s.matchingDarksAvailable) 'Darks',
   ];
-  return missing.isEmpty ? 'Re-shoot flats' : 'Capture ${missing.join(' & ')}';
+  if (missing.isEmpty) return 'Re-shoot flats';
+  if (missing.length == 1) return 'Capture ${missing.single}';
+  return 'Capture ${missing.take(missing.length - 1).join(', ')} & ${missing.last}';
 }
 
 const _months = [
@@ -343,28 +345,28 @@ class _MatchingFlatsDialogState extends ConsumerState<MatchingFlatsDialog> {
   bool _busy = false;
   String? _error;
 
-  // The set-point the session's lights ran at (null = taken warm). Fetched on
-  // open: the Image Library's session cards don't carry it.
+  // The set-point the session's lights ran at (null = taken warm) and their
+  // coverage. Fetched on open: the Image Library's session cards don't carry
+  // them.
   bool _loadingSession = true;
   double? _lightsSetpointC;
   List<CalibrationFilterSummary> _filters = const [];
   bool _cool = false;
-  // Filters that already have flats from the same setup are skipped unless
-  // the user deliberately re-shoots them.
+  // What to shoot: each kind starts ticked when the lights still need it.
+  // Flats from the same setup carry over, so a covered filter is skipped
+  // unless the user deliberately re-shoots it.
+  bool _flats = true;
   bool _reshoot = false;
-  // Mount motion is opt-in for every run: never pre-ticked, not even from the
-  // profile's end-of-night setting (a bench or indoor rig has no clear path).
-  bool _park = false;
-  // Bias frames for the lights' gain/offset/binning, shot after the flats
-  // while the cover is still closed. Ticked when the lights have none yet.
   bool _biasNeeded = false;
   bool _bias = false;
-  // Darks for the lights' exposures, gain and temperature, shot after the bias.
   bool _darksNeeded = false;
   bool _darks = false;
   // A panel doesn't always seal out stray light: open its cover and wait for
   // the user to put the lens cap on before the bias and darks.
   bool _lensCap = true;
+  // Mount motion is opt-in for every run: never pre-ticked, not even from the
+  // profile's end-of-night setting (a bench or indoor rig has no clear path).
+  bool _park = false;
 
   @override
   void initState() {
@@ -378,7 +380,7 @@ class _MatchingFlatsDialogState extends ConsumerState<MatchingFlatsDialog> {
     try {
       session = await ref.read(calibrationApiProvider)?.getSession(widget.sessionId);
     } on Exception {
-      // No set-point known: the switch starts off and the user can still cool.
+      // No coverage known: flats stay ticked and the user can still cool.
     }
     final setpoint = session?.coolerSetpointC;
     if (!mounted) return;
@@ -386,6 +388,7 @@ class _MatchingFlatsDialogState extends ConsumerState<MatchingFlatsDialog> {
       _loadingSession = false;
       _lightsSetpointC = setpoint;
       _filters = session?.filtersUsed ?? const [];
+      _flats = session == null || !session.matchingFlatsAvailable;
       _biasNeeded = session != null && !session.matchingBiasAvailable;
       _bias = _biasNeeded;
       _darksNeeded = session != null && !session.matchingDarksAvailable;
@@ -395,7 +398,29 @@ class _MatchingFlatsDialogState extends ConsumerState<MatchingFlatsDialog> {
     });
   }
 
-  bool get _afterFlats => (_biasNeeded && _bias) || (_darksNeeded && _darks);
+  List<CalibrationFilterSummary> get _covered => [
+    for (final f in _filters)
+      if (f.hasFlats) f,
+  ];
+
+  bool get _allCovered =>
+      _filters.isNotEmpty && _covered.length == _filters.length;
+
+  bool get _shootBias => _biasNeeded && _bias;
+  bool get _shootDarks => _darksNeeded && _darks;
+  bool get _afterFlats => _shootBias || _shootDarks;
+
+  /// "Capture Flats, Bias & Darks": what the run will shoot.
+  String get _title {
+    final parts = [
+      if (_flats) 'Flats',
+      if (_shootBias) 'Bias',
+      if (_shootDarks) 'Darks',
+    ];
+    if (parts.isEmpty) return 'Capture Calibration Frames';
+    if (parts.length == 1) return 'Capture ${parts.single}';
+    return 'Capture ${parts.take(parts.length - 1).join(', ')} & ${parts.last}';
+  }
 
   static String _degrees(double c) =>
       c == c.roundToDouble() ? c.toStringAsFixed(0) : c.toStringAsFixed(1);
@@ -411,8 +436,8 @@ class _MatchingFlatsDialogState extends ConsumerState<MatchingFlatsDialog> {
     final api = ref.read(calibrationApiProvider);
     if (api == null) return;
     final frames = int.tryParse(_frames.text.trim());
-    if (frames == null || frames <= 0) {
-      setState(() => _error = 'Frames per filter must be a positive number.');
+    if (_flats && (frames == null || frames <= 0)) {
+      setState(() => _error = 'Flats per filter must be a positive number.');
       return;
     }
     final coolTo = double.tryParse(_coolTo.text.trim());
@@ -427,13 +452,15 @@ class _MatchingFlatsDialogState extends ConsumerState<MatchingFlatsDialog> {
     try {
       final result = await api.generateMatchingFlats(
         widget.sessionId,
-        frameCount: frames,
+        frameCount: _flats ? frames : null,
         coolCamera: _cool,
         coolToTemperatureC: _cool ? coolTo : null,
         parkMountAfter: _park,
-        includeCoveredFilters: _reshoot,
-        includeBias: _biasNeeded && _bias,
-        includeDarks: _darksNeeded && _darks,
+        includeFlats: _flats,
+        // With every filter covered, ticking Flats is the re-shoot.
+        includeCoveredFilters: _flats && (_reshoot || _allCovered),
+        includeBias: _shootBias,
+        includeDarks: _shootDarks,
         pauseForLensCap: _afterFlats && _lensCap,
       );
       // Post-await UI work gates on State.mounted (the dialog may have been
@@ -446,17 +473,20 @@ class _MatchingFlatsDialogState extends ConsumerState<MatchingFlatsDialog> {
           _error = result.totalFlatFrames == 0 &&
                   result.totalBiasFrames == 0 &&
                   result.totalDarkFrames == 0
-              ? 'Nothing to shoot: every filter already has flats from this setup.'
+              ? 'Nothing to shoot: the lights already have what\'s ticked.'
               : 'The server returned a plan but no stored sequence.';
         });
         return;
       }
+      final shot = [
+        if (result.totalFlatFrames > 0) '${result.totalFlatFrames} flats',
+        if (result.totalBiasFrames > 0) '${result.totalBiasFrames} bias',
+        if (result.totalDarkFrames > 0) '${result.totalDarkFrames} darks',
+      ];
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            '"${result.generatedSequenceName}" saved — ${result.totalFlatFrames} flats across ${widget.filterNames.length} filter(s)'
-            '${result.totalBiasFrames > 0 ? ' + ${result.totalBiasFrames} bias' : ''}'
-            '${result.totalDarkFrames > 0 ? ' + ${result.totalDarkFrames} darks' : ''}.',
+            '"${result.generatedSequenceName}" saved — ${shot.join(' + ')}.',
           ),
         ),
       );
@@ -470,68 +500,114 @@ class _MatchingFlatsDialogState extends ConsumerState<MatchingFlatsDialog> {
     }
   }
 
+  String _flatsSubtitle() {
+    final filters = widget.filterNames.join(', ');
+    final covered = _covered;
+    if (covered.isEmpty) {
+      return 'For each filter ($filters) at its wheel position, focus, rotator '
+          'angle, gain and offset. Exposure and panel brightness come from two '
+          'test frames.';
+    }
+    final coveredLines = [
+      for (final f in covered)
+        '${flatsLineText(f)}${f.flatsNote != null ? ' — ${f.flatsNote}' : ''}',
+    ].join('\n');
+    if (_allCovered) {
+      return 'Every filter already has flats from this setup:\n$coveredLines\n'
+          'Tick only to re-shoot them: new dust, the camera taken off, a '
+          'different filter.';
+    }
+    final missing = [
+      for (final f in _filters)
+        if (!f.hasFlats) f.filterName,
+    ].join(', ');
+    return 'Shoots $missing. Already covered by flats from this setup '
+        '(skipped):\n$coveredLines';
+  }
+
+  Widget _choice({
+    required String title,
+    required String subtitle,
+    required bool value,
+    required ValueChanged<bool>? onChanged,
+  }) {
+    return CheckboxListTile(
+      value: value,
+      onChanged: onChanged == null || _busy
+          ? null
+          : (v) => setState(() => onChanged(v ?? false)),
+      dense: true,
+      contentPadding: EdgeInsets.zero,
+      controlAffinity: ListTileControlAffinity.leading,
+      title: Text(title),
+      subtitle: Text(subtitle),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final filters = widget.filterNames.join(', ');
-    final covered = [for (final f in _filters) if (f.hasFlats) f];
-    final allCovered = _filters.isNotEmpty && covered.length == _filters.length;
-    final nothingToShoot = allCovered && !_reshoot && !_afterFlats;
-    final mutedStyle = Theme.of(
-      context,
-    ).textTheme.bodySmall?.copyWith(color: AraColors.textSecondary);
+    final partlyCovered = _covered.isNotEmpty && !_allCovered;
+    final nothingToShoot = !_flats && !_afterFlats;
+    final sectionStyle = Theme.of(context).textTheme.titleSmall;
+    const checking = 'Checking what the lights already have…';
     return AlertDialog(
-      title: const Text('Capture Matching Flats'),
+      title: Text(_title),
       // Scrolls on a short window (cooling + park options outgrow 668 px).
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'Generates a flat sequence replaying this session\'s state per '
-              'filter ($filters): wheel position, focus, rotator angle, gain '
-              'and offset. Each filter works out its own exposure and panel '
-              'brightness from two test frames, and remembers them for next '
-              'time.',
-              style: mutedStyle,
+            Text('Shoot', style: sectionStyle),
+            _choice(
+              title: 'Flats',
+              subtitle: _loadingSession ? checking : _flatsSubtitle(),
+              value: _flats,
+              onChanged: _loadingSession ? null : (v) => _flats = v,
             ),
-            // Flats carry over from night to night while the filter and the
-            // camera's rotation are unchanged: say which are already covered.
-            if (covered.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              Text(
-                allCovered
-                    ? 'Every filter already has flats from this setup:'
-                    : 'Already covered by flats from this setup (skipped):',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-              for (final f in covered)
-                Text(
-                  '  ${flatsLineText(f)}${f.flatsNote != null ? ' — ${f.flatsNote}' : ''}',
-                  style: mutedStyle,
-                ),
-              CheckboxListTile(
-                value: _reshoot,
-                onChanged: _busy
-                    ? null
-                    : (v) => setState(() => _reshoot = v ?? false),
-                dense: true,
-                contentPadding: EdgeInsets.zero,
-                controlAffinity: ListTileControlAffinity.leading,
-                title: const Text('Also re-shoot filters that already have flats'),
-                subtitle: const Text(
-                  'Only needed if something in the optical train changed: new dust, '
-                  'the camera taken off, a different filter.',
+            if (_flats && partlyCovered)
+              Padding(
+                padding: const EdgeInsets.only(left: 32),
+                child: _choice(
+                  title: 'Also re-shoot the covered filters',
+                  subtitle: 'Only if something in the optical train changed.',
+                  value: _reshoot,
+                  onChanged: (v) => _reshoot = v,
                 ),
               ),
-            ],
-            const SizedBox(height: 12),
-            TextField(
-              controller: _frames,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: 'Flats per filter'),
+            if (_flats)
+              Padding(
+                padding: const EdgeInsets.only(left: 32, bottom: 8),
+                child: TextField(
+                  controller: _frames,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: 'Flats per filter'),
+                ),
+              ),
+            _choice(
+              title: 'Bias',
+              subtitle: _loadingSession
+                  ? checking
+                  : _biasNeeded
+                  ? '50 at the camera\'s shortest exposure for each gain, offset '
+                        'and binning the lights used.'
+                  : 'The lights already have matching bias frames.',
+              value: _shootBias,
+              onChanged: _biasNeeded ? (v) => _bias = v : null,
             ),
-            const SizedBox(height: 8),
+            _choice(
+              title: 'Darks',
+              subtitle: _loadingSession
+                  ? checking
+                  : _darksNeeded
+                  ? '30 for each exposure and gain the lights used, as long as '
+                        'the lights themselves, at their temperature.'
+                  : 'The lights already have matching darks.',
+              value: _shootDarks,
+              onChanged: _darksNeeded ? (v) => _darks = v : null,
+            ),
+            const Divider(height: 24),
+            Text('Options', style: sectionStyle),
             SwitchListTile(
               value: _cool,
               onChanged: _loadingSession || _busy
@@ -559,63 +635,30 @@ class _MatchingFlatsDialogState extends ConsumerState<MatchingFlatsDialog> {
                   labelText: 'Cool to (°C)',
                   // Indoors the cooler may not reach a set-point a cold night
                   // made easy; CoolCamera gives up after its stall timeout and
-                  // the flats carry on, each recording its real temperature.
+                  // the run carries on, each frame recording its real
+                  // temperature.
                   helperText:
-                      'Indoors it may not get there: after a few minutes the flats '
-                      'start at the closest temperature reached.',
+                      'Indoors it may not get there: after a few minutes the run '
+                      'starts at the closest temperature reached.',
                   helperMaxLines: 2,
                 ),
               ),
-            if (_biasNeeded)
-              CheckboxListTile(
-                value: _bias,
-                onChanged: _busy ? null : (v) => setState(() => _bias = v ?? false),
-                dense: true,
-                contentPadding: EdgeInsets.zero,
-                controlAffinity: ListTileControlAffinity.leading,
-                title: const Text('Shoot bias frames after the flats'),
-                subtitle: const Text(
-                  'The lights have no bias frames yet. 50 at the camera\'s shortest '
-                  'exposure for each gain, offset and binning they used.',
-                ),
-              ),
-            if (_darksNeeded)
-              CheckboxListTile(
-                value: _darks,
-                onChanged: _busy ? null : (v) => setState(() => _darks = v ?? false),
-                dense: true,
-                contentPadding: EdgeInsets.zero,
-                controlAffinity: ListTileControlAffinity.leading,
-                title: const Text('Shoot darks after the flats'),
-                subtitle: const Text(
-                  'The lights have no matching darks yet. 30 for each exposure and '
-                  'gain they used, as long as the lights themselves, at their temperature.',
-                ),
-              ),
             if (_afterFlats)
-              CheckboxListTile(
+              _choice(
+                title: _flats
+                    ? 'Pause for the lens cap after the flats'
+                    : 'Pause for the lens cap first',
+                subtitle: 'Opens the flat panel\'s cover and waits while you put '
+                    'the lens cap on, then press Resume to take the bias and '
+                    'darks. A panel doesn\'t always keep out all the light.',
                 value: _lensCap,
-                onChanged: _busy ? null : (v) => setState(() => _lensCap = v ?? false),
-                dense: true,
-                contentPadding: EdgeInsets.zero,
-                controlAffinity: ListTileControlAffinity.leading,
-                title: const Text('Pause for the lens cap first'),
-                subtitle: const Text(
-                  'Opens the flat panel\'s cover and waits while you put the lens cap '
-                  'on, then press Resume to take the bias and darks. A panel doesn\'t '
-                  'always keep out all the light.',
-                ),
+                onChanged: (v) => _lensCap = v,
               ),
-            CheckboxListTile(
+            _choice(
+              title: 'Park the mount at the end',
+              subtitle: 'Leave this off unless the mount has a clear path to park.',
               value: _park,
-              onChanged: _busy ? null : (v) => setState(() => _park = v ?? false),
-              dense: true,
-              contentPadding: EdgeInsets.zero,
-              controlAffinity: ListTileControlAffinity.leading,
-              title: const Text('Park the mount when the flats finish'),
-              subtitle: const Text(
-                'Leave this off unless the mount has a clear path to park.',
-              ),
+              onChanged: (v) => _park = v,
             ),
             if (_error != null) ...[
               const SizedBox(height: 8),
@@ -688,8 +731,8 @@ class _DarkLibraryTab extends ConsumerWidget {
               Text('Bias', style: Theme.of(context).textTheme.titleSmall),
               if (state.biasEntries.isEmpty)
                 const _EmptyNote(
-                  'No bias frames catalogued yet — tick "Shoot bias frames" in '
-                  'Capture Matching Flats on a session that needs them.',
+                  'No bias frames catalogued yet — tick Bias when capturing a '
+                  'session\'s calibration frames.',
                 )
               else
                 ...state.biasEntries.map((e) => _BiasEntryRow(entry: e)),

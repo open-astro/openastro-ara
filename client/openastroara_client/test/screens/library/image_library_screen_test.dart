@@ -301,7 +301,7 @@ void main() {
     // Session actions live behind the header's overflow menu.
     await tester.tap(find.byTooltip('Session actions'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Capture Matching Flats'));
+    await tester.tap(find.text('Capture Calibration Frames'));
     await tester.pumpAndSettle();
     // The shared dialog from the Calibration screen, fed this card's session.
     expect(find.text('Generate & open'), findsOneWidget);

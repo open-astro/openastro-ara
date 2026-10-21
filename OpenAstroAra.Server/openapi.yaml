@@ -11327,6 +11327,9 @@ components:
         pause_for_lens_cap:
           type: boolean
           default: false
+        include_flats:
+          type: boolean
+          default: true
     MosaicCreateRequestDto:
       required:
         - name

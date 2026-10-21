@@ -349,7 +349,7 @@ public sealed class SqliteCalibrationService : ICalibrationService {
         var total = 0;
         foreach (var filter in session.FiltersUsed) {
             // Flats are reused while the setup is unchanged: only shoot what isn't covered yet.
-            if (filter.MatchingFlatFrames > 0 && !request.IncludeCoveredFilters) {
+            if (!request.IncludeFlats || (filter.MatchingFlatFrames > 0 && !request.IncludeCoveredFilters)) {
                 continue;
             }
             steps.Add(new GeneratedFlatStepDto(
@@ -394,14 +394,15 @@ public sealed class SqliteCalibrationService : ICalibrationService {
         var totalDarks = darks.Sum(d => d.FrameCount);
         var afterFlats = new AfterFlatsSpec(bias, darks, request.PauseForLensCap);
 
-        var name = sky ? $"Sky flats — {session.TargetName}" : $"Flats — {session.TargetName}";
+        var name = $"{RunTitle(sky, steps.Count > 0, bias.Count > 0, darks.Count > 0)} — {session.TargetName}";
 
         // §39.5: materialize the plan into a runnable §38 sequence unless the caller asked for the
         // plan alone. The persisted body is the same NINA-verbatim tree every stored sequence uses,
         // so the WILMA editor renders it and POST /sequences/{id}/start runs it as-is.
         Guid? generatedId = null;
         if (!request.GenerateOnly && _sequences is not null && (steps.Count > 0 || bias.Count > 0 || darks.Count > 0)) {
-            var body = sky
+            // A run with no flats is a bias/darks run: never the sky body's twilight wait and slew.
+            var body = sky && skySpecs.Count > 0
                 ? CalibrationSequenceBuilder.BuildSkyFlatsBody(name, skySpecs,
                     new SkyFlatEnvelope(
                         SunAltitudeDeg: policies?.SkyFlatSunAltitude ?? DefaultSkySunAltitude,
@@ -425,6 +426,25 @@ public sealed class SqliteCalibrationService : ICalibrationService {
             Steps: steps,
             TotalBiasFrames: totalBias,
             TotalDarkFrames: totalDarks);
+    }
+
+    // "Flats", "Sky flats, bias & darks", "Darks"...: what the run shoots, for its sequence name.
+    private static string RunTitle(bool sky, bool flats, bool bias, bool darks) {
+        var parts = new List<string>(3);
+        if (flats) {
+            parts.Add(sky ? "Sky flats" : "Flats");
+        }
+        if (bias) {
+            parts.Add(parts.Count == 0 ? "Bias" : "bias");
+        }
+        if (darks) {
+            parts.Add(parts.Count == 0 ? "Darks" : "darks");
+        }
+        return parts.Count switch {
+            0 => sky ? "Sky flats" : "Flats",
+            1 => parts[0],
+            _ => $"{string.Join(", ", parts.Take(parts.Count - 1))} & {parts[^1]}",
+        };
     }
 
     // The cooler around the flats (see MatchingFlatsRequestDto's remarks for the request rules).
