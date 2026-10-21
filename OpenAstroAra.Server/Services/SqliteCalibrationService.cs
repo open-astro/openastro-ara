@@ -611,15 +611,15 @@ public sealed class SqliteCalibrationService : ICalibrationService {
         """;
 
     // The session's (exposure, gain, temperature) combinations no dark covers yet, with the gain,
-    // offset and binning the lights used for each (modal, so one set per combination). The run's
-    // CoolCamera puts the sensor back at the lights' set-point before they are shot.
+    // offset and binning the lights used for each (modal, so one set per combination), and the
+    // set-point those lights ran at: the run cools to it before their darks.
     private static async Task<List<DarkStepSpec>> UncoveredDarksAsync(SqliteConnection conn, Guid sessionId, int frameCount, CancellationToken ct) {
         var result = new List<DarkStepSpec>();
         var seen = new HashSet<(double, int?, double)>();
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = """
             SELECT l.exposure_seconds, l.gain, ROUND(COALESCE(l.temperature_c, 0), 0) AS temp_bucket,
-                   l."offset", COALESCE(l.bin, 1) AS bin, COUNT(*) AS c
+                   l."offset", COALESCE(l.bin, 1) AS bin, COUNT(*) AS c, MAX(l.cooler_setpoint_c) AS setpoint
             FROM frames l
             WHERE l.frame_type = 'light' AND l.session_id = $sid
               AND NOT EXISTS (
@@ -644,7 +644,8 @@ public sealed class SqliteCalibrationService : ICalibrationService {
                 Gain: gain,
                 FrameCount: frameCount,
                 Offset: await reader.IsDBNullAsync(3, ct) ? null : reader.GetInt32(3),
-                Bin: Math.Max(1, reader.GetInt32(4))));
+                Bin: Math.Max(1, reader.GetInt32(4)),
+                CoolToC: await reader.IsDBNullAsync(6, ct) ? null : reader.GetDouble(6)));
         }
         return result;
     }

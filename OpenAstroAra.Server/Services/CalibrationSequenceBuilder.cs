@@ -13,6 +13,7 @@
 #endregion "copyright"
 
 using System.Globalization;
+using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
@@ -79,13 +80,16 @@ public sealed record SkyFlatEnvelope(
 
 /// <summary>One (exposure, gain) dark set inside a temperature group. Null <paramref name="Gain"/>
 /// / <paramref name="Offset"/> = camera default (TakeExposure's -1 sentinel, expressed by omitting
-/// the property); <paramref name="Bin"/> above 1 sets the binning.</summary>
+/// the property); <paramref name="Bin"/> above 1 sets the binning. <paramref name="CoolToC"/> is
+/// the set-point the lights ran at, for darks a calibration run shoots after its flats (null =
+/// lights taken with the cooler off).</summary>
 public sealed record DarkStepSpec(
     double ExposureSeconds,
     int? Gain,
     int FrameCount,
     int? Offset = null,
-    int Bin = 1);
+    int Bin = 1,
+    double? CoolToC = null);
 
 /// <summary>The bias and dark sets a calibration run shoots after its flats. With
 /// <paramref name="LensCapPause"/> the run first opens the panel's cover and waits for the user
@@ -164,7 +168,7 @@ public static class CalibrationSequenceBuilder {
         foreach (var step in steps) {
             items.Add(FlatBlock(step, filing));
         }
-        AddAfterFlats(items, afterFlats, filing);
+        AddAfterFlats(items, afterFlats, filing, cooling);
         if (parkMountAfter) {
             items.Add(new JsonObject { ["$type"] = ParkScopeType });
         }
@@ -214,7 +218,7 @@ public static class CalibrationSequenceBuilder {
             items.Add(SkyFlatBlock(step, filing));
         }
         // Darks need the scope covered after sky flats, so these runs want the lens-cap pause.
-        AddAfterFlats(items, afterFlats, filing);
+        AddAfterFlats(items, afterFlats, filing, cooling);
         if (parkMountAfter) {
             items.Add(new JsonObject { ["$type"] = ParkScopeType });
         }
@@ -460,7 +464,7 @@ public static class CalibrationSequenceBuilder {
         capture["CalibrationNight"] = filing.Night.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
     }
 
-    private static void AddAfterFlats(JsonArray items, AfterFlatsSpec? afterFlats, CalibrationFilingSpec? filing) {
+    private static void AddAfterFlats(JsonArray items, AfterFlatsSpec? afterFlats, CalibrationFilingSpec? filing, FlatCooling? cooling) {
         if (afterFlats is null || (afterFlats.Bias.Count == 0 && afterFlats.Darks.Count == 0)) {
             return;
         }
@@ -471,8 +475,18 @@ public static class CalibrationSequenceBuilder {
         foreach (var step in afterFlats.Bias) {
             items.Add(BiasBlock(step, filing));
         }
-        foreach (var step in afterFlats.Darks) {
-            items.Add(DarkBlock(temperatureC: null, step, filing));
+        // Darks only match lights at the same temperature: each set runs at the set-point its lights
+        // ran at, whether or not the flats were cooled, and darks for lights taken warm run with the
+        // cooler off. Cooled sets go first, grouped by set-point, so the cooler changes once per group.
+        var sensorAt = cooling?.CoolToC;
+        foreach (var step in afterFlats.Darks.OrderBy(d => d.CoolToC is null).ThenBy(d => d.CoolToC)) {
+            if (step.CoolToC != sensorAt) {
+                items.Add(step.CoolToC is double t
+                    ? new JsonObject { ["$type"] = CoolCameraType, ["Temperature"] = t, ["Duration"] = 0 }
+                    : new JsonObject { ["$type"] = WarmCameraType, ["Duration"] = 0 });
+                sensorAt = step.CoolToC;
+            }
+            items.Add(DarkBlock(step.CoolToC, step, filing));
         }
     }
 

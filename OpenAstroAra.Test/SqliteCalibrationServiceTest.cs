@@ -446,6 +446,32 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Each_dark_set_runs_at_the_set_point_its_lights_ran_at() {
+            var store = new FileSequenceService(_dir);
+            var svc = new SqliteCalibrationService(_db, store);
+            await InsertFrameAsync(Session, "light", "Ha", 300, 100, "M42", temperatureC: -10, coolerSetpointC: -10);
+            await InsertFrameAsync(Session, "light", "Ha", 300, 100, "M42", temperatureC: -20, coolerSetpointC: -20);
+            await InsertFrameAsync(Session, "light", "Ha", 60, 100, "M42", temperatureC: 18); // taken warm
+
+            // Cooling for the flats is off: the darks still have to match their lights.
+            var plan = await svc.GenerateMatchingFlatsAsync(Session,
+                new MatchingFlatsRequestDto(null, null, GenerateOnly: false, CoolCamera: false, IncludeFlats: false, IncludeDarks: true),
+                idempotencyKey: null, CancellationToken.None);
+            var stored = await store.GetAsync(plan.GeneratedSequenceId!.Value, CancellationToken.None);
+            var root = new SequenceJsonConverter(HeadlessSequencerFactory.WithDefaults()).Deserialize(stored!.Body.GetRawText());
+
+            var order = root.GetItemsSnapshot().Select(i => i switch {
+                CoolCamera c => $"cool {c.Temperature}",
+                WarmCamera => "warm",
+                SequentialContainer b => $"dark {b.GetItemsSnapshot().OfType<TakeExposure>().Single().ExposureTime}",
+                _ => i.GetType().Name,
+            }).ToList();
+            Assert.That(order, Is.EqualTo(DarksBySetPoint));
+        }
+
+        private static readonly string[] DarksBySetPoint = ["cool -20", "dark 300", "cool -10", "dark 300", "warm", "dark 60"];
+
+        [Test]
         public async Task Calibration_frames_file_under_the_lights_target_and_night() {
             var store = new FileSequenceService(_dir);
             var svc = new SqliteCalibrationService(_db, store);
