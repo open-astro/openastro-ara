@@ -1211,12 +1211,13 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
     public async Task<OperationAcceptedDto> BulkDeleteAsync(BulkDeleteRequestDto request, string? idempotencyKey, CancellationToken ct) {
         if (request.FrameIds.Count > 0) {
             // Collect file paths BEFORE the rows go — after the delete there's
-            // nothing left to resolve them from. Only needed for disk deletion.
+            // nothing left to resolve them from. The files always go (#1437):
+            // request.DeleteFromDisk is ignored, because a FITS left on disk is
+            // re-catalogued by the startup orphan scan and the frame comes back.
             var paths = new List<string>();
             await using var conn = _db.OpenConnection();
             await using (var tx = (SqliteTransaction)await conn.BeginTransactionAsync(ct)) {
-                if (request.DeleteFromDisk) {
-                    await using var pathCmd = conn.CreateCommand();
+                await using (var pathCmd = conn.CreateCommand()) {
                     pathCmd.Transaction = tx;
                     pathCmd.CommandText = "SELECT file_path FROM frames WHERE id = $id LIMIT 1;";
                     var pathParam = pathCmd.Parameters.Add("$id", Microsoft.Data.Sqlite.SqliteType.Text);

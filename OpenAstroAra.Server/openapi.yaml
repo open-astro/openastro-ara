@@ -7741,7 +7741,6 @@ components:
     BulkDeleteRequestDto:
       required:
         - frame_ids
-        - delete_from_disk
       type: object
       properties:
         frame_ids:
@@ -7751,6 +7750,7 @@ components:
             format: uuid
         delete_from_disk:
           type: boolean
+          default: true
     BulkExportRequestDto:
       required:
         - frame_ids
