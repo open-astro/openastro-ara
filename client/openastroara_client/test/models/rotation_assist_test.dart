@@ -205,7 +205,7 @@ void main() {
           'error': 'The camera stopped responding. Check its USB cable and power, then try again.',
         }),
       );
-      expect(h.title, 'Camera stopped');
+      expect(h.title, 'Camera unavailable');
       expect(h.detail, contains('USB cable'));
       expect(h.detail, isNot(contains('would not solve')));
     });

@@ -57,7 +57,7 @@ namespace OpenAstroAra.Sequencer.Utility {
 
         /// <summary>Pause the run awaiting the user and wait for Resume.</summary>
         private static async Task WaitAsync(PauseGate gate, string step, Exception ex, IProgress<ApplicationStatus>? progress, CancellationToken token) {
-            Logger.Warning($"{step}: {ex.Message} — pausing the run awaiting the user");
+            Logger.Warning($"{step}: {(ex is CameraUnavailableException camera ? camera.Cause : ex.Message)} — pausing the run awaiting the user");
             progress?.Report(new ApplicationStatus() { Status = Prompt(ex) });
             gate.RequestPause(PauseKind.AwaitingUser);
             await gate.WaitWhilePausedAsync(token);
