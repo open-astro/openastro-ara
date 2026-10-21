@@ -426,6 +426,32 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Sky_flats_always_pause_for_the_lens_cap_before_bias_and_darks() {
+            var store = new FileSequenceService(_dir);
+            var svc = new SqliteCalibrationService(_db, store);
+            await InsertFrameAsync(Session, "light", "Ha", 60, 100, "M42", offset: 50, rotatorDeg: 34.8);
+
+            // #1435: nothing covers the optics after twilight flats, so the darks would be sky frames.
+            var plan = await svc.GenerateMatchingFlatsAsync(Session,
+                new MatchingFlatsRequestDto(null, null, GenerateOnly: false, Flavor: "sky",
+                    IncludeBias: true, IncludeDarks: true, PauseForLensCap: false),
+                idempotencyKey: null, CancellationToken.None);
+            Assert.That(plan.Steps, Is.Not.Empty);
+            Assert.That(plan.TotalDarkFrames, Is.GreaterThan(0));
+
+            var stored = await store.GetAsync(plan.GeneratedSequenceId!.Value, CancellationToken.None);
+            var root = new SequenceJsonConverter(HeadlessSequencerFactory.WithDefaults()).Deserialize(stored!.Body.GetRawText());
+            var items = root.GetItemsSnapshot().ToList();
+            var wait = items.FindIndex(i => i is WaitForUser);
+            Assert.That(wait, Is.GreaterThanOrEqualTo(0), "the lens-cap pause is forced on");
+            Assert.That(((WaitForUser)items[wait]).Text, Does.Contain("lens cap"));
+            var lastSkyFlats = items.FindLastIndex(i => i is SequentialContainer c && c.GetItemsSnapshot().OfType<SkyFlats>().Any());
+            var firstBias = items.FindIndex(i => i is SequentialContainer c && c.GetItemsSnapshot().OfType<TakeExposure>().Any());
+            Assert.That(lastSkyFlats, Is.LessThan(wait), "the pause follows the sky flats");
+            Assert.That(firstBias, Is.GreaterThan(wait), "bias and darks wait for the cap");
+        }
+
+        [Test]
         public async Task Flats_can_be_left_out_for_a_bias_and_darks_run() {
             var store = new FileSequenceService(_dir);
             var svc = new SqliteCalibrationService(_db, store);

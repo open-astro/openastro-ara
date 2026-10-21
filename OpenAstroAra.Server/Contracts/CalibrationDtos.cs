@@ -69,7 +69,8 @@ public sealed record CalibrationFilterSummaryDto(
 /// (gain, offset, binning) of the lights that has no bias frames yet, <c>BiasFrameCount</c> each
 /// (null = the default). <c>IncludeDarks</c> adds dark sets for each (exposure, gain, temperature)
 /// of the lights with no darks yet, <c>DarkFrameCount</c> each. <c>PauseForLensCap</c> opens the
-/// panel's cover and waits for the user to put the lens cap on before those bias and darks.
+/// panel's cover and waits for the user to put the lens cap on before those bias and darks; a run
+/// that shoots sky flats always pauses, since nothing covers the optics after them.
 /// <c>ReshootAssumedCoverage</c> skips only filters whose flats were verified at the lights'
 /// rotator angle, so a rig without a rotator still gets the flats it asked for each night (the
 /// end-of-session auto path sets it).

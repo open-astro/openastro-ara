@@ -400,7 +400,10 @@ public sealed class SqliteCalibrationService : ICalibrationService {
             ? await UncoveredDarksAsync(conn, sessionId, darkFrames, canCool: _cameraCanCool?.Invoke() != false, ct)
             : [];
         var totalDarks = darks.Sum(d => d.FrameCount);
-        var afterFlats = new AfterFlatsSpec(bias, darks, request.PauseForLensCap,
+        // Sky flats leave the optics open to the twilight sky, with no panel over them: bias and
+        // darks after them always pause for the lens cap, whatever the request asked.
+        var lensCapPause = request.PauseForLensCap || (sky && skySpecs.Count > 0);
+        var afterFlats = new AfterFlatsSpec(bias, darks, lensCapPause,
             WarmAfter: _profile?.GetImagingDefaults().WarmupAtSessionEnd ?? false);
 
         // The frames file next to the lights they calibrate: {target}/{night}/Flat, …/Dark, …/Bias.

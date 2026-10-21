@@ -220,7 +220,7 @@ public static class CalibrationSequenceBuilder {
         foreach (var step in steps) {
             items.Add(SkyFlatBlock(step, filing));
         }
-        // Darks need the scope covered after sky flats, so these runs want the lens-cap pause.
+        // Darks need the scope covered after sky flats; the calibration service forces the lens-cap pause.
         var darksCooled = AddAfterFlats(items, afterFlats, filing, cooling);
         if (parkMountAfter) {
             items.Add(new JsonObject { ["$type"] = ParkScopeType });
