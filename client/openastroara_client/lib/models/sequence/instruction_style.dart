@@ -16,6 +16,7 @@ Color instructionCategoryColor(InstructionCategory category) =>
       InstructionCategory.camera => const Color(0xFF64B5F6), // sky blue
       InstructionCategory.filterWheel => const Color(0xFFBA68C8), // violet
       InstructionCategory.focuser => const Color(0xFF4DB6AC), // teal
+      InstructionCategory.rotator => const Color(0xFF7986CB), // indigo
       InstructionCategory.telescope => const Color(0xFFFFD54F), // gold
       InstructionCategory.guider => const Color(0xFF81C784), // soft green
       InstructionCategory.switchDevice => const Color(0xFFFF8A65), // coral

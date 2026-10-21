@@ -59,10 +59,10 @@ namespace OpenAstroAra.Test {
                 IFrameRepository? frames = null, HeadlessSequencerFactory? factory = null,
                 UnattendedShutdownService? unattendedShutdown = null,
                 IProfileStore? profileStore = null, ICalibrationService? calibration = null,
-                INotificationService? notifications = null) {
+                INotificationService? notifications = null, string? templateOrigin = null) {
             factory ??= HeadlessSequencerFactory.WithDefaults();
             var deserializer = new SequenceBodyDeserializer(factory);
-            var fake = new FakeSequenceService(id, body);
+            var fake = new FakeSequenceService(id, body, templateOrigin);
             return new SequencerService(deserializer, ws: ws, sequencesResolver: () => fake, checkpoint: null,
                 frames: frames, unattendedShutdown: unattendedShutdown,
                 profileStore: profileStore, calibrationResolver: () => calibration, notifications: notifications);
@@ -701,6 +701,22 @@ namespace OpenAstroAra.Test {
             await WaitForEventAsync(ws, "sequence.auto_flats_prompt");
         }
 
+        [TestCase("calibration:matching-flats")]
+        [TestCase("calibration:dark-library")]
+        public async Task A_generated_calibration_run_never_asks_to_capture_calibration(string origin) {
+            // Retaking flats for an earlier night: the flats run itself has no lights to calibrate.
+            var id = Guid.NewGuid();
+            var ws = new RecordingWsBroadcaster();
+            var svc = BuildService(id, BuildBody(c => c.Items.Add(new Annotation { Name = "one" })), ws,
+                profileStore: ProfileWithCaptureDefault("ask").Object, templateOrigin: origin);
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            await WaitForTerminalAsync(svc, id);
+            await Task.Delay(200); // the announcement rides a background task
+            Assert.That(ws.Events, Does.Contain("sequence.complete"));
+            Assert.That(ws.Events, Does.Not.Contain("sequence.auto_flats_prompt"));
+            Assert.That(ws.Events, Does.Not.Contain("sequence.auto_flats_decided"));
+        }
+
         [Test]
         public async Task Profile_panel_at_end_generates_and_starts_flats_after_completion() {
             // §48.1 end-to-end: the profile default auto-decides (Decided event,
@@ -1256,14 +1272,19 @@ namespace OpenAstroAra.Test {
         private sealed class FakeSequenceService : ISequenceService {
             private readonly Guid _id;
             private readonly JsonElement? _body;
-            public FakeSequenceService(Guid id, JsonElement? body) { _id = id; _body = body; }
+            private readonly string? _templateOrigin;
+            public FakeSequenceService(Guid id, JsonElement? body, string? templateOrigin = null) {
+                _id = id;
+                _body = body;
+                _templateOrigin = templateOrigin;
+            }
 
             public Task<SequenceDto?> GetAsync(Guid id, CancellationToken ct) {
                 if (id != _id || _body is null) return Task.FromResult<SequenceDto?>(null);
                 return Task.FromResult<SequenceDto?>(new SequenceDto(
                     Id: id, Name: "Test", Description: null,
                     CreatedUtc: DateTimeOffset.UnixEpoch, ModifiedUtc: DateTimeOffset.UnixEpoch,
-                    Body: _body.Value, TemplateOrigin: null));
+                    Body: _body.Value, TemplateOrigin: _templateOrigin));
             }
 
             public Task<CursorPage<SequenceListItemDto>> ListAsync(int limit, string? cursor, CancellationToken ct) => throw new NotSupportedException();

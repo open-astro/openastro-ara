@@ -26,6 +26,7 @@ enum InstructionCategory {
   camera,
   filterWheel,
   focuser,
+  rotator,
   telescope,
   guider,
   switchDevice,
@@ -40,6 +41,7 @@ extension InstructionCategoryLabel on InstructionCategory {
     InstructionCategory.camera => 'Camera',
     InstructionCategory.filterWheel => 'Filter Wheel',
     InstructionCategory.focuser => 'Focuser',
+    InstructionCategory.rotator => 'Rotator',
     InstructionCategory.telescope => 'Telescope',
     InstructionCategory.guider => 'Guider',
     InstructionCategory.switchDevice => 'Switch',
@@ -613,6 +615,23 @@ const List<InstructionDef> instructionCatalog = [
         'Steps',
         InstructionFieldType.integer,
         defaultValue: 0,
+      ),
+    ],
+  ),
+  // Turn the rotator to a mechanical angle (the camera's own angle, not the
+  // sky's). Matching flats use it to put the camera back where the lights were.
+  InstructionDef(
+    type:
+        'OpenAstroAra.Sequencer.SequenceItem.Rotator.MoveRotatorMechanical, OpenAstroAra.Sequencer',
+    label: 'Move Rotator (mechanical)',
+    category: InstructionCategory.rotator,
+    icon: Icons.rotate_right_outlined,
+    fields: [
+      InstructionField(
+        'MechanicalPosition',
+        'Angle (°)',
+        InstructionFieldType.number,
+        defaultValue: 0.0,
       ),
     ],
   ),

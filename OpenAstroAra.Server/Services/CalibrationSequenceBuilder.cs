@@ -95,31 +95,28 @@ public sealed record LightStepSpec(
 
 /// <summary>
 /// §39.5/§39.8/§40.6 — materializes a capture plan into a runnable §38.1 sequence body.
-/// Bodies use the NINA-verbatim <c>$type</c> tree (the same shape every stored sequence,
-/// starter template, and NINA import uses); the sequencer's type remapping resolves them
-/// to the OpenAstroAra classes on load, and the WILMA sequence renderer already knows how
-/// to display them. One builder so the §39.8 dark-matrix generation (follow-up slice) and
+/// Bodies use the <c>$type</c> tree every stored sequence uses, with the OpenAstroAra type
+/// names the client's sequence editor builds (its instruction catalog keys on them, so a
+/// NINA-named step would show as an unknown "?" row; the loader accepts both). One builder so the §39.8 dark-matrix generation (follow-up slice) and
 /// the matching-flats generation share the exact same body dialect.
 /// </summary>
 public static class CalibrationSequenceBuilder {
 
-    private const string SequentialContainerType = "NINA.Sequencer.Container.SequentialContainer, NINA.Sequencer";
-    private const string SequentialStrategyType = "NINA.Sequencer.Container.ExecutionStrategy.SequentialStrategy, NINA.Sequencer";
-    private const string LoopConditionType = "NINA.Sequencer.Conditions.LoopCondition, NINA.Sequencer";
-    private const string SwitchFilterType = "NINA.Sequencer.SequenceItem.FilterWheel.SwitchFilter, NINA.Sequencer";
-    private const string FilterInfoType = "NINA.Core.Model.Equipment.FilterInfo, NINA.Core";
-    private const string MoveFocuserAbsoluteType = "NINA.Sequencer.SequenceItem.Focuser.MoveFocuserAbsolute, NINA.Sequencer";
-    private const string TakeExposureType = "NINA.Sequencer.SequenceItem.Imaging.TakeExposure, NINA.Sequencer";
-    private const string CoolCameraType = "NINA.Sequencer.SequenceItem.Camera.CoolCamera, NINA.Sequencer";
-    private const string WarmCameraType = "NINA.Sequencer.SequenceItem.Camera.WarmCamera, NINA.Sequencer";
-    private const string MoveRotatorMechanicalType = "NINA.Sequencer.SequenceItem.Rotator.MoveRotatorMechanical, NINA.Sequencer";
-    // ARA-only classes still ride the NINA dialect: the loader's type remap is a plain
-    // NINA→OpenAstroAra prefix replace, so these resolve to the OpenAstroAra classes on load.
-    private const string FlatPanelFlatsType = "NINA.Sequencer.SequenceItem.FlatDevice.FlatPanelFlats, NINA.Sequencer";
-    private const string SkyFlatsType = "NINA.Sequencer.SequenceItem.FlatDevice.SkyFlats, NINA.Sequencer";
-    private const string ParkScopeType = "NINA.Sequencer.SequenceItem.Telescope.ParkScope, NINA.Sequencer";
-    private const string WaitForSunAltitudeType = "NINA.Sequencer.SequenceItem.Utility.WaitForSunAltitude, NINA.Sequencer";
-    private const string SlewScopeToAltAzType = "NINA.Sequencer.SequenceItem.Telescope.SlewScopeToAltAz, NINA.Sequencer";
+    private const string SequentialContainerType = "OpenAstroAra.Sequencer.Container.SequentialContainer, OpenAstroAra.Sequencer";
+    private const string SequentialStrategyType = "OpenAstroAra.Sequencer.Container.ExecutionStrategy.SequentialStrategy, OpenAstroAra.Sequencer";
+    private const string LoopConditionType = "OpenAstroAra.Sequencer.Conditions.LoopCondition, OpenAstroAra.Sequencer";
+    private const string SwitchFilterType = "OpenAstroAra.Sequencer.SequenceItem.FilterWheel.SwitchFilter, OpenAstroAra.Sequencer";
+    private const string FilterInfoType = "OpenAstroAra.Core.Model.Equipment.FilterInfo, OpenAstroAra.Core";
+    private const string MoveFocuserAbsoluteType = "OpenAstroAra.Sequencer.SequenceItem.Focuser.MoveFocuserAbsolute, OpenAstroAra.Sequencer";
+    private const string TakeExposureType = "OpenAstroAra.Sequencer.SequenceItem.Imaging.TakeExposure, OpenAstroAra.Sequencer";
+    private const string CoolCameraType = "OpenAstroAra.Sequencer.SequenceItem.Camera.CoolCamera, OpenAstroAra.Sequencer";
+    private const string WarmCameraType = "OpenAstroAra.Sequencer.SequenceItem.Camera.WarmCamera, OpenAstroAra.Sequencer";
+    private const string MoveRotatorMechanicalType = "OpenAstroAra.Sequencer.SequenceItem.Rotator.MoveRotatorMechanical, OpenAstroAra.Sequencer";
+    private const string FlatPanelFlatsType = "OpenAstroAra.Sequencer.SequenceItem.FlatDevice.FlatPanelFlats, OpenAstroAra.Sequencer";
+    private const string SkyFlatsType = "OpenAstroAra.Sequencer.SequenceItem.FlatDevice.SkyFlats, OpenAstroAra.Sequencer";
+    private const string ParkScopeType = "OpenAstroAra.Sequencer.SequenceItem.Telescope.ParkScope, OpenAstroAra.Sequencer";
+    private const string WaitForSunAltitudeType = "OpenAstroAra.Sequencer.SequenceItem.Utility.WaitForSunAltitude, OpenAstroAra.Sequencer";
+    private const string SlewScopeToAltAzType = "OpenAstroAra.Sequencer.SequenceItem.Telescope.SlewScopeToAltAz, OpenAstroAra.Sequencer";
 
     /// <summary>
     /// Build the §38.1 body: a SequentialContainer root with one per-filter container —
