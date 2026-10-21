@@ -403,7 +403,9 @@ public sealed class SqliteCalibrationService : ICalibrationService {
             WarmAfter: _profile?.GetImagingDefaults().WarmupAtSessionEnd ?? false);
 
         // The frames file next to the lights they calibrate: {target}/{night}/Flat, …/Dark, …/Bias.
-        // The night is the lights' observing night on the daemon's clock, as the lights were named.
+        // The night is the lights' observing night on the daemon's clock, as the lights were named:
+        // SessionStartUtc is the first LIGHT frame's capture time (not when the run started), so a
+        // run queued before noon that waited for darkness still files under its lights' night.
         // A session that imaged several targets files under the one with the most lights.
         var filingTarget = await MainTargetAsync(conn, sessionId, ct) ?? session.TargetName;
         var filing = string.IsNullOrWhiteSpace(filingTarget) ? null

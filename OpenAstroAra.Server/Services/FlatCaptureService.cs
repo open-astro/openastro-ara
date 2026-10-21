@@ -147,7 +147,7 @@ public sealed partial class FlatCaptureService : IFlatCaptureExecutor {
             }
             LogSetComplete(request.FrameCount, exposure);
             return true;
-        } catch (Exception ex) when (ex is not (OperationCanceledException or CameraUnavailableException)) {
+        } catch (Exception ex) when (ex is not (OperationCanceledException or CameraUnavailableException or StoreUnavailableException)) {
             // A lost camera propagates: the flat step pauses the run for the user instead of
             // failing this set and moving on to the next with no camera.
             LogSetFailed(ex);
@@ -436,7 +436,7 @@ public sealed partial class FlatCaptureService : IFlatCaptureExecutor {
             }
             LogSkySetComplete(request.FrameCount);
             return true;
-        } catch (Exception ex) when (ex is not (OperationCanceledException or CameraUnavailableException)) {
+        } catch (Exception ex) when (ex is not (OperationCanceledException or CameraUnavailableException or StoreUnavailableException)) {
             // A lost camera propagates: the flat step pauses the run for the user instead of
             // failing this set and moving on to the next with no camera.
             LogSetFailed(ex);

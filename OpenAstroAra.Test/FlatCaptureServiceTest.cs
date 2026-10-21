@@ -173,6 +173,16 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_disk_lost_mid_set_reaches_the_runs_pause_instead_of_failing_the_set() {
+            imagingMock
+                .Setup(x => x.CaptureImage(It.IsAny<CaptureSequence>(), It.IsAny<CancellationToken>(), It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<string>()))
+                .Returns(() => Task.FromException<IExposureData>(new StoreUnavailableException("The storage disk isn't there.")));
+            await Assert.ThrowsAsync<StoreUnavailableException>(() =>
+                CreateSUT().CaptureFlatSetAsync(Request(), new Progress<ApplicationStatus>(), CancellationToken.None),
+                "UserFixablePause parks the run awaiting the user; a swallowed false would just fail this filter");
+        }
+
+        [Test]
         public async Task The_set_counts_each_saved_flat_for_a_resume() {
             var tally = new FlatSetTally();
             var ok = await CreateSUT().CaptureFlatSetAsync(Request() with { Tally = tally },
