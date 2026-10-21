@@ -166,6 +166,12 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void An_all_zero_frame_cannot_tell_whether_the_data_is_scaled() {
+            // #1438: no signal is "unknown", not "native" — a zero probe must not settle the full scale.
+            Assert.That(FlatLevel.Measure(new ushort[16 * 16], 16, 16, null).LooksScaledAbove(4095), Is.Null);
+        }
+
+        [Test]
         public void A_colour_sensor_is_measured_by_its_brightest_channel() {
             // RGGB: R 20000, G 40000, B 10000 — the mean (27500) would let green clip first.
             var pixels = new ushort[16 * 16];

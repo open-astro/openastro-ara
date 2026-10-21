@@ -47,6 +47,8 @@ namespace OpenAstroAra.Test {
             public int MaxAdu { get; set; }
             /// <summary>Values land on multiples of this (16 = 12-bit data scaled to 16 bits).</summary>
             public int Quantum { get; set; } = 1;
+            /// <summary>This many first frames come back all zero (no light yet).</summary>
+            public int ZeroFrames { get; set; }
             // The panel's brightness scales the rate (null = the scene doesn't depend on it).
             public Func<double>? BrightnessScale { get; set; }
             public List<double> ProbedExposures { get; } = new();
@@ -62,7 +64,7 @@ namespace OpenAstroAra.Test {
                 ProbedExposures.Add(exposureSec);
                 var rate = AduPerSecond * (BrightnessScale?.Invoke() ?? 1);
                 var raw = Math.Clamp(Pedestal + (rate * exposureSec), 0, ushort.MaxValue);
-                var value = (ushort)(Math.Floor(raw / Quantum) * Quantum);
+                var value = ProbedExposures.Count <= ZeroFrames ? (ushort)0 : (ushort)(Math.Floor(raw / Quantum) * Quantum);
                 var pixels = new ushort[16];
                 Array.Fill(pixels, value);
                 return Task.FromResult(new AnalysisFrame(pixels, 4, 4, DateTimeOffset.UtcNow));
@@ -227,6 +229,21 @@ namespace OpenAstroAra.Test {
             scene.MaxAdu = 4095;
             scene.Quantum = 16;
             scene.AduPerSecond = 2048;
+            var ok = await CreateSUT().CaptureFlatSetAsync(Request(targetAdu: 0, maxSec: 30), new Progress<ApplicationStatus>(), CancellationToken.None);
+
+            Assert.That(ok, Is.True);
+            Assert.That(captured[0].ExposureTime, Is.EqualTo(65535 * 0.5 / 2048).Within(0.5),
+                "half the real 16-bit range, not a sixteenth of it");
+        }
+
+        [Test]
+        public async Task An_all_zero_first_probe_leaves_the_scaling_to_the_next_probe() {
+            // #1438: the zero probe can't say whether the data is scaled; the first probe with
+            // signal decides, and the solve runs against 16 bits.
+            scene.MaxAdu = 4095;
+            scene.Quantum = 16;
+            scene.AduPerSecond = 2048;
+            scene.ZeroFrames = 1;
             var ok = await CreateSUT().CaptureFlatSetAsync(Request(targetAdu: 0, maxSec: 30), new Progress<ApplicationStatus>(), CancellationToken.None);
 
             Assert.That(ok, Is.True);

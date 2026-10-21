@@ -183,6 +183,8 @@ public sealed partial class FlatCaptureService : IFlatCaptureExecutor {
         int? offset = request.Offset >= 0 ? request.Offset : null;
         int? panelAt = startBrightness;
         var probeNo = 0;
+        // Decided once, by the first probe with any signal: an all-zero probe can't tell.
+        bool? scaled = null;
         async Task<double> Probe(double exposureSec, int? brightness, CancellationToken ct) {
             if (maxBrightness > 0 && brightness is int want && want != panelAt) {
                 await SetBrightnessAsync(want, ct).ConfigureAwait(false);
@@ -190,7 +192,8 @@ public sealed partial class FlatCaptureService : IFlatCaptureExecutor {
             }
             var frame = await _frames!.CaptureForAnalysisAsync(exposureSec, binning: 1, gain, offset, ct).ConfigureAwait(false);
             var level = FlatLevel.Measure(frame.Pixels.Span, frame.Width, frame.Height, frame.BayerPattern);
-            if (level.Brightest > fullScale || level.LooksScaledAbove(fullScale)) {
+            scaled ??= level.LooksScaledAbove(fullScale);
+            if (level.Brightest > fullScale || scaled == true) {
                 throw new FullScaleMismatchException();
             }
             probeNo++;

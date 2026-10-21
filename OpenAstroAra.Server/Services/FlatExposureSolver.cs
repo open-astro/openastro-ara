@@ -32,11 +32,15 @@ internal readonly record struct FlatLevel(double Level, int Brightest, int BitsS
     /// 12-bit camera reporting MaxADU 4095 whose driver delivers data scaled to 16 bits has every
     /// value a multiple of 16. A dim probe from such a camera never exceeds 4095, so the range
     /// check alone would accept it, and the flats would come out at a sixteenth of the real range.
-    /// Native data at that depth always has noise in its low bits.
+    /// Native data at that depth always has noise in its low bits. Null when the frame has no
+    /// signal at all (every pixel 0): it can't tell either way (#1438).
     /// </summary>
-    internal bool LooksScaledAbove(int fullScale) {
-        if (fullScale is <= 0 or >= ushort.MaxValue || BitsSet == 0) {
+    internal bool? LooksScaledAbove(int fullScale) {
+        if (fullScale is <= 0 or >= ushort.MaxValue) {
             return false;
+        }
+        if (BitsSet == 0) {
+            return null;
         }
         var bits = 32 - System.Numerics.BitOperations.LeadingZeroCount((uint)fullScale);
         var lowBits = (1 << Math.Max(0, 16 - bits)) - 1;
