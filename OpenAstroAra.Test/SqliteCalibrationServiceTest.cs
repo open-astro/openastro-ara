@@ -469,7 +469,30 @@ namespace OpenAstroAra.Test {
             Assert.That(order, Is.EqualTo(DarksBySetPoint));
         }
 
-        private static readonly string[] DarksBySetPoint = ["cool -20", "dark 300", "cool -10", "dark 300", "warm", "dark 60"];
+        private static readonly string[] DarksBySetPoint = ["cool -20", "dark 300", "cool -10", "dark 300", "cool 18", "dark 60"];
+
+        [Test]
+        public async Task Darks_for_lights_from_before_set_points_were_recorded_run_at_their_temperature() {
+            // Catalogued before cooler_setpoint_c existed: -10 °C lights with no set-point on record.
+            var store = new FileSequenceService(_dir);
+            var svc = new SqliteCalibrationService(_db, store);
+            await InsertFrameAsync(Session, "light", "Ha", 300, 100, "M42", temperatureC: -10.2);
+
+            var plan = await svc.GenerateMatchingFlatsAsync(Session,
+                new MatchingFlatsRequestDto(null, null, GenerateOnly: false, CoolCamera: true, CoolToTemperatureC: -10, IncludeDarks: true),
+                idempotencyKey: null, CancellationToken.None);
+            var stored = await store.GetAsync(plan.GeneratedSequenceId!.Value, CancellationToken.None);
+            var root = new SequenceJsonConverter(HeadlessSequencerFactory.WithDefaults()).Deserialize(stored!.Body.GetRawText());
+            var items = root.GetItemsSnapshot().ToList();
+
+            Assert.That(items.OfType<WarmCamera>(), Is.Empty, "never warmed up before the darks");
+            Assert.That(items.OfType<CoolCamera>().Select(c => c.Temperature), Is.EqualTo(OnlyMinusTen),
+                "the flats' -10 °C cooling already matches the lights; no second step");
+            var darkBlock = items.OfType<SequentialContainer>().Last();
+            Assert.That(darkBlock.GetItemsSnapshot().OfType<TakeExposure>().Single().ImageType, Is.EqualTo("DARK"));
+        }
+
+        private static readonly double[] OnlyMinusTen = [-10];
 
         [Test]
         public async Task Calibration_frames_file_under_the_lights_target_and_night() {

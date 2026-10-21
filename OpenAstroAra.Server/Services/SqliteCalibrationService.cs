@@ -402,7 +402,7 @@ public sealed class SqliteCalibrationService : ICalibrationService {
         var name = $"{RunTitle(sky, steps.Count > 0, bias.Count > 0, darks.Count > 0)} — {session.TargetName}";
 
         // §39.5: materialize the plan into a runnable §38 sequence unless the caller asked for the
-        // plan alone. The persisted body is the same NINA-verbatim tree every stored sequence uses,
+        // plan alone. The persisted body is the same $type tree every stored sequence uses,
         // so the WILMA editor renders it and POST /sequences/{id}/start runs it as-is.
         Guid? generatedId = null;
         if (!request.GenerateOnly && _sequences is not null && (steps.Count > 0 || bias.Count > 0 || darks.Count > 0)) {
@@ -612,14 +612,17 @@ public sealed class SqliteCalibrationService : ICalibrationService {
 
     // The session's (exposure, gain, temperature) combinations no dark covers yet, with the gain,
     // offset and binning the lights used for each (modal, so one set per combination), and the
-    // set-point those lights ran at: the run cools to it before their darks.
+    // temperature to shoot their darks at: the set-point the lights ran at, else (lights from before
+    // the catalog recorded it, or taken with the cooler off) their recorded sensor temperature, which
+    // is the bucket the darks have to land in.
     private static async Task<List<DarkStepSpec>> UncoveredDarksAsync(SqliteConnection conn, Guid sessionId, int frameCount, CancellationToken ct) {
         var result = new List<DarkStepSpec>();
         var seen = new HashSet<(double, int?, double)>();
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = """
             SELECT l.exposure_seconds, l.gain, ROUND(COALESCE(l.temperature_c, 0), 0) AS temp_bucket,
-                   l."offset", COALESCE(l.bin, 1) AS bin, COUNT(*) AS c, MAX(l.cooler_setpoint_c) AS setpoint
+                   l."offset", COALESCE(l.bin, 1) AS bin, COUNT(*) AS c, MAX(l.cooler_setpoint_c) AS setpoint,
+                   MAX(ROUND(l.temperature_c, 0)) AS recorded_temp
             FROM frames l
             WHERE l.frame_type = 'light' AND l.session_id = $sid
               AND NOT EXISTS (
@@ -645,7 +648,9 @@ public sealed class SqliteCalibrationService : ICalibrationService {
                 FrameCount: frameCount,
                 Offset: await reader.IsDBNullAsync(3, ct) ? null : reader.GetInt32(3),
                 Bin: Math.Max(1, reader.GetInt32(4)),
-                CoolToC: await reader.IsDBNullAsync(6, ct) ? null : reader.GetDouble(6)));
+                CoolToC: !await reader.IsDBNullAsync(6, ct) ? reader.GetDouble(6)
+                    : !await reader.IsDBNullAsync(7, ct) ? reader.GetDouble(7)
+                    : null));
         }
         return result;
     }

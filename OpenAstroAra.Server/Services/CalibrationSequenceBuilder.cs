@@ -81,8 +81,8 @@ public sealed record SkyFlatEnvelope(
 /// <summary>One (exposure, gain) dark set inside a temperature group. Null <paramref name="Gain"/>
 /// / <paramref name="Offset"/> = camera default (TakeExposure's -1 sentinel, expressed by omitting
 /// the property); <paramref name="Bin"/> above 1 sets the binning. <paramref name="CoolToC"/> is
-/// the set-point the lights ran at, for darks a calibration run shoots after its flats (null =
-/// lights taken with the cooler off).</summary>
+/// the temperature a calibration run shoots these darks at: the lights' set-point, else their
+/// recorded sensor temperature (null = unknown, the cooler is left as it is).</summary>
 public sealed record DarkStepSpec(
     double ExposureSeconds,
     int? Gain,
@@ -475,16 +475,16 @@ public static class CalibrationSequenceBuilder {
         foreach (var step in afterFlats.Bias) {
             items.Add(BiasBlock(step, filing));
         }
-        // Darks only match lights at the same temperature: each set runs at the set-point its lights
-        // ran at, whether or not the flats were cooled, and darks for lights taken warm run with the
-        // cooler off. Cooled sets go first, grouped by set-point, so the cooler changes once per group.
+        // Darks only match lights at the same temperature: each set is regulated to its lights'
+        // temperature whether or not the flats were cooled, so it lands in their bucket, even for
+        // lights taken warm (a cooler holds +18 °C as readily as -10). A set with no known
+        // temperature leaves the cooler as it is. Sets are grouped by temperature, coldest first,
+        // so the cooler changes once per group.
         var sensorAt = cooling?.CoolToC;
         foreach (var step in afterFlats.Darks.OrderBy(d => d.CoolToC is null).ThenBy(d => d.CoolToC)) {
-            if (step.CoolToC != sensorAt) {
-                items.Add(step.CoolToC is double t
-                    ? new JsonObject { ["$type"] = CoolCameraType, ["Temperature"] = t, ["Duration"] = 0 }
-                    : new JsonObject { ["$type"] = WarmCameraType, ["Duration"] = 0 });
-                sensorAt = step.CoolToC;
+            if (step.CoolToC is double t && t != sensorAt) {
+                items.Add(new JsonObject { ["$type"] = CoolCameraType, ["Temperature"] = t, ["Duration"] = 0 });
+                sensorAt = t;
             }
             items.Add(DarkBlock(step.CoolToC, step, filing));
         }
