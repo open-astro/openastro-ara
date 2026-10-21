@@ -944,7 +944,10 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
         bool? coolerOn = null;
         try { sensorTemp = client.CCDTemperature; } catch (Exception) { }
         try { tempSetPoint = client.SetCCDTemperature; } catch (Exception) { }
-        try { coolerOn = client.CoolerOn; } catch (Exception) { }
+        // The cooler state the refresh pass already keeps: not a third bridge round-trip per frame.
+        lock (_gate) {
+            coolerOn = _runtime.CoolerStateKnown ? _runtime.CoolerOn : null;
+        }
         var conditions = await ReadConditionsBestEffortAsync(ct).ConfigureAwait(false);
         var storeTiming = System.Diagnostics.Stopwatch.StartNew();
         var filePath = WriteFits(frameId, pixels, width, height, applied, imageType, capturedAt, focuserPos,

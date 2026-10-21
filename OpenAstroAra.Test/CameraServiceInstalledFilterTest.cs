@@ -131,6 +131,51 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_saved_frame_takes_the_cooler_state_from_the_cache_not_the_bridge() {
+            var log = new System.Collections.Concurrent.ConcurrentQueue<string>();
+            await using var box = ScriptedAlpacaDevice.Start(path => {
+                log.Enqueue(path[(path.LastIndexOf('/') + 1)..]);
+                return path.EndsWith("/cooleron", StringComparison.Ordinal) ? "true"
+                    : path.EndsWith("/setccdtemperature", StringComparison.Ordinal) ? "-10"
+                    : path.EndsWith("/imageready", StringComparison.Ordinal) ? "true"
+                    : path.EndsWith("/imagearray", StringComparison.Ordinal) ? "[[100,200],[300,400]],\"Type\":2,\"Rank\":2"
+                    : null;
+            });
+            var dir = Directory.CreateTempSubdirectory("ara-cooler-").FullName;
+            try {
+                FrameDto? row = null;
+                var frames = new Mock<IFrameRepository>();
+                frames.Setup(f => f.InsertAsync(It.IsAny<FrameDto>(), It.IsAny<CancellationToken>()))
+                    .Callback<FrameDto, CancellationToken>((f, _) => row = f)
+                    .Returns(Task.CompletedTask);
+                // The background refresh stays out of the way; the connect's own read fills the cache.
+                using var svc = new CameraService(frames: frames.Object, fallbackFramesDir: dir) { RefreshPeriod = TimeSpan.FromHours(1) };
+                await svc.ConnectAsync(new ConnectRequestDto(new DiscoveredDeviceDto(
+                    UniqueId: "Camera-under-test", Name: "Sim Camera", Type: DeviceType.Camera,
+                    HostName: box.BaseUri.Host, IpAddress: box.BaseUri.Host, IpPort: box.BaseUri.Port,
+                    AlpacaDeviceNumber: 0, UseHttps: false)), null, CancellationToken.None);
+                var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(15);
+                while ((await svc.GetAsync(CancellationToken.None)) is not { State: EquipmentConnectionState.Connected, Capabilities: not null, Runtime.CoolerOn: true }) {
+                    Assert.That(DateTime.UtcNow, Is.LessThan(deadline), "camera never connected with its cooler state read");
+                    await Task.Delay(50);
+                }
+                log.Clear();
+
+                await svc.CaptureImage(new CaptureSequence { ExposureTime = 0.01, ImageType = "LIGHT" },
+                    CancellationToken.None, null, "M42");
+
+                Assert.That(row!.CoolerSetpointC, Is.EqualTo(-10), "the frame still records the set-point it ran at");
+                // The frame's own metadata reads (after the binning read-back) are the sensor
+                // temperature and set-point only; the status refresh reads CoolerOn on its own cadence.
+                Assert.That(string.Join(" ", log), Does.Contain("biny ccdtemperature setccdtemperature")
+                    .And.Not.Contain("biny ccdtemperature setccdtemperature cooleron"),
+                    "no CoolerOn round-trip to the bridge for each saved frame");
+            } finally {
+                Directory.Delete(dir, recursive: true);
+            }
+        }
+
+        [Test]
         public async Task A_sequence_frame_records_the_installed_filter() {
             await using var box = ScriptedAlpacaDevice.Start(path =>
                 path.EndsWith("/imageready", StringComparison.Ordinal) ? "true"

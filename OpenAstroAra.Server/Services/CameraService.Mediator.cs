@@ -231,12 +231,23 @@ public sealed partial class CameraService : ICameraMediator, IImagingMediator {
         double min;
         lock (_gate) {
             min = _capabilities?.MinExposureSec ?? 0;
+            if (min <= 0 && _exposureMinRead is { } read && ReferenceEquals(read.Client, client)) {
+                min = read.Min;
+            }
         }
         if (min <= 0) {
+            // Read once per connection, not on every bias frame (a new client re-reads it).
             try { min = client.ExposureMin; } catch (Exception) { min = 0; }
+            lock (_gate) {
+                _exposureMinRead = (client, min);
+            }
         }
         return min > 0 && double.IsFinite(min) ? min : requested;
     }
+
+    // ExposureMin read straight from the driver when the cached capabilities lack it, with the
+    // connection it was read on.
+    private (AlpacaCamera Client, double Min)? _exposureMinRead;
 
     // NINA ImageTypes → §28 catalog FrameType. SNAPSHOT counts as a light; DARKFLAT (used by some
     // NINA flows) coarsens to the catalog's Dark — the FrameType enum has no DarkFlat — while the
