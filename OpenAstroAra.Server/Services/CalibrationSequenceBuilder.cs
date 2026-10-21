@@ -154,6 +154,8 @@ public static class CalibrationSequenceBuilder {
 
     /// <summary>What the lens-cap pause asks the user to do.</summary>
     internal const string LensCapPrompt = "Put the lens cap on the scope (move the flat panel out of the way if its cover didn't open), then press Resume to take the bias and darks.";
+    // Sky flats have no panel, so their prompt doesn't mention one.
+    internal const string SkyLensCapPrompt = "Put the lens cap on the scope, then press Resume to take the bias and darks.";
 
     /// <summary>
     /// Build the §38.1 body: a SequentialContainer root with one per-filter container —
@@ -221,7 +223,7 @@ public static class CalibrationSequenceBuilder {
             items.Add(SkyFlatBlock(step, filing));
         }
         // Darks need the scope covered after sky flats; the calibration service forces the lens-cap pause.
-        var darksCooled = AddAfterFlats(items, afterFlats, filing, cooling);
+        var darksCooled = AddAfterFlats(items, afterFlats, filing, cooling, SkyLensCapPrompt);
         if (parkMountAfter) {
             items.Add(new JsonObject { ["$type"] = ParkScopeType });
         }
@@ -468,13 +470,14 @@ public static class CalibrationSequenceBuilder {
     }
 
     // Returns whether a dark set cooled the camera.
-    private static bool AddAfterFlats(JsonArray items, AfterFlatsSpec? afterFlats, CalibrationFilingSpec? filing, FlatCooling? cooling) {
+    private static bool AddAfterFlats(JsonArray items, AfterFlatsSpec? afterFlats, CalibrationFilingSpec? filing, FlatCooling? cooling,
+            string lensCapPrompt = LensCapPrompt) {
         if (afterFlats is null || (afterFlats.Bias.Count == 0 && afterFlats.Darks.Count == 0)) {
             return false;
         }
         if (afterFlats.LensCapPause) {
             items.Add(new JsonObject { ["$type"] = OpenFlatPanelCoverType });
-            items.Add(new JsonObject { ["$type"] = WaitForUserType, ["Text"] = LensCapPrompt });
+            items.Add(new JsonObject { ["$type"] = WaitForUserType, ["Text"] = lensCapPrompt });
         }
         foreach (var step in afterFlats.Bias) {
             items.Add(BiasBlock(step, filing));

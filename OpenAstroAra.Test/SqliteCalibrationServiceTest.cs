@@ -444,7 +444,8 @@ namespace OpenAstroAra.Test {
             var items = root.GetItemsSnapshot().ToList();
             var wait = items.FindIndex(i => i is WaitForUser);
             Assert.That(wait, Is.GreaterThanOrEqualTo(0), "the lens-cap pause is forced on");
-            Assert.That(((WaitForUser)items[wait]).Text, Does.Contain("lens cap"));
+            Assert.That(((WaitForUser)items[wait]).Text, Does.Contain("lens cap").And.Not.Contain("flat panel"),
+                "no panel on a sky-flats rig");
             var lastSkyFlats = items.FindLastIndex(i => i is SequentialContainer c && c.GetItemsSnapshot().OfType<SkyFlats>().Any());
             var firstBias = items.FindIndex(i => i is SequentialContainer c && c.GetItemsSnapshot().OfType<TakeExposure>().Any());
             Assert.That(lastSkyFlats, Is.LessThan(wait), "the pause follows the sky flats");
