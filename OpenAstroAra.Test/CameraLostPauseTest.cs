@@ -208,6 +208,14 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task An_analysis_capture_with_no_camera_connected_says_connect_it_and_try_again() {
+            using var camera = new CameraService(frames: new Mock<IFrameRepository>().Object);
+            var ex = await Assert.ThrowsAsync<CameraUnavailableException>(() => camera.CaptureForAnalysisAsync(1, 1, CancellationToken.None));
+            Assert.That(ex!.Message, Is.EqualTo("The camera isn't connected. Connect it, then try again."));
+            Assert.That(ex.Cause, Is.EqualTo("The camera isn't connected."), "a run's prompt builds on the bare cause");
+        }
+
+        [Test]
         public async Task An_analysis_capture_outside_a_run_says_try_again_not_press_resume() {
             await using var box = ScriptedAlpacaDevice.Start(
                 path => path.EndsWith("/imageready", StringComparison.Ordinal) ? "true" : null,
