@@ -272,18 +272,17 @@ public sealed partial class SafetyMonitorService : ISafetyMonitorService, IRetai
             client = new AlpacaSafetyMonitor(
                 device.UseHttps ? ServiceType.Https : ServiceType.Http,
                 host, device.IpPort, device.AlpacaDeviceNumber, strictCasing: false, logger: null);
-            // The blocking connect is bounded by the ASCOM client's establishConnectionTimeout
-            // (default 3s; standardDeviceResponseTimeout also 3s), so an unreachable or
-            // black-holed device surfaces as Error within seconds rather than wedging the
-            // service in Connecting. (SafetyMonitorServiceTest's dead-port case verifies the
-            // fast-fail path.)
+            // The blocking connect is bounded by AlpacaConnect.Timeout, so a black-holed device
+            // surfaces as Error rather than wedging the service in Connecting, and an unreachable
+            // one (connection refused) fails at once. (SafetyMonitorServiceTest's dead-port case
+            // verifies the fast-fail path.)
             //
             // Trust the setter: the Alpaca `Connected = true` PUT is authoritative and throws on
             // a real connect failure. We deliberately do NOT re-GET `Connected` to confirm — a
             // second round-trip can transiently read false on a slow device that already accepted
             // the SET, which would falsely demote a good connection to Error while leaving the
             // device connected on its side.
-            client.Connected = true;
+            AlpacaConnect.Connect(client);
             lock (_gate) {
                 // Adopt only if this is still the current attempt: a newer connect, a disconnect,
                 // or a Dispose() bumps the generation / sets _disposed, in which case this

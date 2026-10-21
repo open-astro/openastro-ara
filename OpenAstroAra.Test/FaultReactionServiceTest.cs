@@ -19,6 +19,7 @@ using OpenAstroAra.Server.Contracts.WsEvents;
 using OpenAstroAra.Server.Services;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Text.Json;
 using System.Threading;
@@ -233,6 +234,50 @@ namespace OpenAstroAra.Test {
             sequencer.Verify(s => s.ResumeRunsAsync(It.IsAny<IReadOnlyCollection<Guid>>(), It.IsAny<CancellationToken>()), Times.Once);
             Assert.That(posted.Select(n => n.Severity), Does.Contain(NotificationSeverity.Info),
                 "recovery posts the all-clear");
+        }
+
+        [Test]
+        public async Task A_connect_still_in_flight_past_the_confirm_window_is_waited_out_not_retried() {
+            // AB #1452 — a bridge that searches serial ports answers Connected=true late. The ladder
+            // must keep waiting while the service reports Connecting, not walk the next rung.
+            service.ConnectInFlightTimeout = TimeSpan.FromSeconds(10);
+            reconnector.Setup(r => r.ReconnectAsync(DeviceType.Camera, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new ReconnectOutcome(1, 1));
+            var connecting = new Stopwatch();
+            reconnector.Setup(r => r.GetConnectionStateAsync(DeviceType.Camera, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(() => {
+                    lock (connecting) {
+                        if (!connecting.IsRunning) {
+                            connecting.Start();
+                        }
+                        // three confirm windows (200 ms) of Connecting before the connect lands
+                        return connecting.Elapsed < TimeSpan.FromMilliseconds(600)
+                            ? EquipmentConnectionState.Connecting
+                            : EquipmentConnectionState.Connected;
+                    }
+                });
+
+            service.OnFault(Fault());
+            await service.WhenIdleAsync();
+
+            Assert.That(Actions(), Is.EqualTo(ReconnectRecover));
+            Assert.That(ActionPayload("recovered").GetProperty("attempts").GetInt32(), Is.EqualTo(1),
+                "the first attempt's connect landed; no rung was spent waiting on it");
+            reconnector.Verify(r => r.ReconnectAsync(DeviceType.Camera, It.IsAny<CancellationToken>()), Times.Once);
+        }
+
+        [Test]
+        public async Task A_connect_stuck_in_Connecting_gives_up_at_the_in_flight_window() {
+            service.ConnectInFlightTimeout = TimeSpan.FromMilliseconds(300);
+            reconnector.Setup(r => r.ReconnectAsync(DeviceType.Camera, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new ReconnectOutcome(1, 1));
+            reconnector.Setup(r => r.GetConnectionStateAsync(DeviceType.Camera, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(EquipmentConnectionState.Connecting);
+
+            service.OnFault(Fault());
+            await service.WhenIdleAsync();
+
+            Assert.That(Actions(), Does.Not.Contain("recovered"), "a connect that never lands is not a recovery");
         }
 
         [Test]

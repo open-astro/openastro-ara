@@ -394,7 +394,7 @@ public sealed partial class FlatDeviceService : IFlatDeviceService, IRetainedDev
             client = new AlpacaCoverCalibrator(
                 device.UseHttps ? ServiceType.Https : ServiceType.Http,
                 host, device.IpPort, device.AlpacaDeviceNumber, strictCasing: false, logger: null);
-            client.Connected = true;
+            AlpacaConnect.Connect(client);
             lock (_gate) {
                 if (!_disposed && _connectGeneration == generation) {
                     _client = client;

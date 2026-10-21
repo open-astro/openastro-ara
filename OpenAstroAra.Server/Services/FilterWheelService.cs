@@ -511,7 +511,7 @@ public sealed partial class FilterWheelService : IFilterWheelService, IRetainedD
             client = new AlpacaFilterWheel(
                 device.UseHttps ? ServiceType.Https : ServiceType.Http,
                 host, device.IpPort, device.AlpacaDeviceNumber, strictCasing: false, logger: null);
-            client.Connected = true;
+            AlpacaConnect.Connect(client);
             // #1075 — read the policy off the gate (the store has its own lock). The claim is
             // consumed either way: turning the policy on later never homes an already-connected
             // (or reconnecting) wheel mid-session.

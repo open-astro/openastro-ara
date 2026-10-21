@@ -1269,7 +1269,7 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
             client = new AlpacaTelescope(
                 device.UseHttps ? ServiceType.Https : ServiceType.Http,
                 host, device.IpPort, device.AlpacaDeviceNumber, strictCasing: false, logger: null);
-            client.Connected = true;
+            AlpacaConnect.Connect(client);
             lock (_gate) {
                 if (!_disposed && _connectGeneration == generation) {
                     _client = client;

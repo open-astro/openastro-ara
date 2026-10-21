@@ -664,7 +664,7 @@ public sealed partial class SwitchService : ISwitchService, ICoolingFanActuator,
             client = new AlpacaSwitch(
                 device.UseHttps ? ServiceType.Https : ServiceType.Http,
                 host, device.IpPort, device.AlpacaDeviceNumber, strictCasing: false, logger: null);
-            client.Connected = true;
+            AlpacaConnect.Connect(client);
             lock (_gate) {
                 if (!_disposed
                     && _connections.TryGetValue(conn.Key, out var current)

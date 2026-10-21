@@ -64,6 +64,10 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
     // run in milliseconds (the SafetyReactionService knob pattern).
     internal Func<TimeSpan, TimeSpan> DelayShaper { get; set; } = static d => d;
     internal TimeSpan ConnectConfirmTimeout { get; set; } = TimeSpan.FromSeconds(12);
+    // A connect the service still reports as Connecting is waited out to the Alpaca connect budget
+    // (plus slack for the background dispatch) instead of the confirm window: a bridge searching
+    // for its hardware answers late, and walking the next rung would only count a false failure.
+    internal TimeSpan ConnectInFlightTimeout { get; set; } = AlpacaConnect.Timeout + TimeSpan.FromSeconds(5);
     internal TimeSpan ConnectPollInterval { get; set; } = TimeSpan.FromMilliseconds(500);
     // §42.3 linger phase — slow-cadence post-give-up re-adoption (~an hour at the defaults).
     internal TimeSpan LingerInterval { get; set; } = TimeSpan.FromSeconds(120);
@@ -460,7 +464,7 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
             }
             // The dispatch connects in the background — poll the service state to a verdict.
             var sw = Stopwatch.StartNew();
-            while (sw.Elapsed < ConnectConfirmTimeout) {
+            while (true) {
                 var state = await _reconnector.GetConnectionStateAsync(type, _cts.Token).ConfigureAwait(false);
                 // #1246 — for the mount, Connected is not recovered: a bridge still latched after the
                 // reconnect answers Connected while every read fails. Wait for one clean tick, or let
@@ -471,9 +475,12 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
                 if (state == EquipmentConnectionState.Error) {
                     return false; // the background connect already failed — next rung
                 }
+                var window = state == EquipmentConnectionState.Connecting ? ConnectInFlightTimeout : ConnectConfirmTimeout;
+                if (sw.Elapsed >= window) {
+                    return false;
+                }
                 await Task.Delay(ConnectPollInterval, _cts.Token).ConfigureAwait(false);
             }
-            return false;
         } catch (OperationCanceledException) {
             throw; // unwind the episode on shutdown
         } catch (Exception ex) {

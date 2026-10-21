@@ -394,7 +394,7 @@ public sealed partial class RotatorService : IRotatorService, IRetainedDeviceSou
             client = new AlpacaRotator(
                 device.UseHttps ? ServiceType.Https : ServiceType.Http,
                 host, device.IpPort, device.AlpacaDeviceNumber, strictCasing: false, logger: null);
-            client.Connected = true;
+            AlpacaConnect.Connect(client);
             var caps = ReadCapabilities(client); // read once; they don't change while connected
             lock (_gate) {
                 if (!_disposed && _connectGeneration == generation) {

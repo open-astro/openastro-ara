@@ -307,7 +307,7 @@ public sealed partial class ObservingConditionsService : IObservingConditionsSer
                 device.UseHttps ? ServiceType.Https : ServiceType.Http,
                 host, device.IpPort, device.AlpacaDeviceNumber, strictCasing: false, logger: null);
             // Trust the authoritative Connected setter (throws on a real failure); do not re-GET.
-            client.Connected = true;
+            AlpacaConnect.Connect(client);
             lock (_gate) {
                 if (!_disposed && _connectGeneration == generation) {
                     _client = client;
