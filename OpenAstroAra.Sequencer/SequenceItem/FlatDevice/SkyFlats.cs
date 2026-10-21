@@ -14,6 +14,7 @@
 
 using Newtonsoft.Json;
 using OpenAstroAra.Core.Model;
+using OpenAstroAra.Sequencer.Utility;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
@@ -125,7 +126,9 @@ namespace OpenAstroAra.Sequencer.SequenceItem.FlatDevice {
             var request = new SkyFlatSetRequest(
                 TargetAdu, TargetAduTolerancePct, FrameCount,
                 MinExposureSec, MaxExposureSec, StopAtMaxAdu, StopAtMinAdu, Gain, Offset);
-            var ok = await flatCaptureExecutor.CaptureSkyFlatSetAsync(request, progress, token);
+            // A lost camera pauses for the user, as for panel flats.
+            var ok = await UserFixablePause.RetryAfterUserFixAsync(this, "Sky-flat set",
+                () => flatCaptureExecutor.CaptureSkyFlatSetAsync(request, progress, token), progress, token);
             if (!ok) {
                 throw new SequenceEntityFailedException(
                     "Sky-flat set failed — the sky left the usable brightness window or the capture path is unavailable (see the daemon log).");

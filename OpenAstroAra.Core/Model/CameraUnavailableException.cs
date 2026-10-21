@@ -1,0 +1,38 @@
+#region "copyright"
+
+/*
+    Copyright (c) 2026 Open Astro and the OpenAstro Ara contributors
+
+    This file is part of OpenAstro Ara (forked from N.I.N.A.).
+
+    This Source Code Form is subject to the terms of the Mozilla Public
+    License, v. 2.0. If a copy of the MPL was not distributed with this
+    file, You can obtain one at http://mozilla.org/MPL/2.0/.
+*/
+
+#endregion "copyright"
+
+using System;
+
+namespace OpenAstroAra.Core.Model {
+
+    /// <summary>
+    /// A capture refused because the camera is gone: not connected, or it failed twice running
+    /// (a stalled exposure, a driver error). The sequencer parks the run awaiting the user on this
+    /// rather than failing frame after frame — the night of 2026-10-21 the camera dropped off USB
+    /// during the flats and the run carried on into the bias and darks with no camera. An
+    /// <see cref="InvalidOperationException"/> so callers that already handle a failed capture
+    /// still do. The message is written for the user.
+    /// </summary>
+    public sealed class CameraUnavailableException : InvalidOperationException {
+
+        public CameraUnavailableException() : base("The camera stopped responding.") {
+        }
+
+        public CameraUnavailableException(string message) : base(message) {
+        }
+
+        public CameraUnavailableException(string message, Exception inner) : base(message, inner) {
+        }
+    }
+}

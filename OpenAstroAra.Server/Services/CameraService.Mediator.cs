@@ -109,7 +109,7 @@ public sealed partial class CameraService : ICameraMediator, IImagingMediator {
             client = !_disposed && _state == EquipmentConnectionState.Connected ? _client : null;
         }
         if (client is null) {
-            throw new InvalidOperationException("camera is not connected");
+            throw new CameraUnavailableException(CameraNotConnectedMessage);
         }
         if (_frames is null) {
             throw new InvalidOperationException("frame catalog is not configured; captures cannot be stored");
@@ -145,7 +145,7 @@ public sealed partial class CameraService : ICameraMediator, IImagingMediator {
                 client = !_disposed && _state == EquipmentConnectionState.Connected ? _client : null;
             }
             if (client is null) {
-                throw new InvalidOperationException("camera disconnected while the capture was queued");
+                throw new CameraUnavailableException(CameraNotConnectedMessage);
             }
             if (string.Equals(imageType, ImageTypes.BIAS, StringComparison.OrdinalIgnoreCase)) {
                 request = request with { ExposureSec = BiasExposureSec(client, sequence.ExposureTime) };
@@ -154,7 +154,9 @@ public sealed partial class CameraService : ICameraMediator, IImagingMediator {
             // progress is intentionally not forwarded: the headless daemon reports capture progress
             // to clients over the §60.9 WS stream (SequencerService), not through NINA's in-process
             // IProgress reporter, which has no subscriber in the server.
-            var ok = await CaptureCoreAsync(client, frameId, request, imageType, MapFrameType(imageType), effectiveTarget, token).ConfigureAwait(false);
+            var ok = await CaptureWithRetryAsync(
+                id => CaptureCoreAsync(client, id, request, imageType, MapFrameType(imageType), effectiveTarget, token),
+                frameId, effectiveTarget).ConfigureAwait(false);
             if (!ok) {
                 // The store can drop while this capture waited its turn: still a pause, not a failed frame.
                 if (StoreEjected(out var lostDir)) {
@@ -170,6 +172,45 @@ public sealed partial class CameraService : ICameraMediator, IImagingMediator {
             RefreshCacheOnce();
         }
     }
+
+    internal const string CameraNotConnectedMessage = "The camera isn't connected.";
+    internal const string CameraLostMessage = "The camera stopped responding — it may have dropped off USB or lost power.";
+
+    /// <summary>
+    /// One capture with a single retry when the camera itself failed (a stalled exposure, a driver
+    /// error, the camera vanishing mid-exposure): a one-off glitch costs one frame's time, not the
+    /// run. A second device failure in a row — or the first after the camera was already failing —
+    /// is a camera that's gone: <see cref="CameraUnavailableException"/>, which the sequencer turns
+    /// into a pause awaiting the user. Failures that aren't the camera's (a full or ejected disk,
+    /// a catalog error) return false unchanged.
+    /// </summary>
+    internal async Task<bool> CaptureWithRetryAsync(Func<Guid, Task<bool>> capture, Guid frameId, string label) {
+        while (true) {
+            var before = DeviceFailureCount;
+            bool ok;
+            try {
+                ok = await capture(frameId).ConfigureAwait(false);
+            } catch (Exception ex) when (ex is not OperationCanceledException && DeviceFailureCount > before) {
+                if (DeviceFailureCount >= DeviceFailuresBeforeLost) {
+                    throw new CameraUnavailableException(CameraLostMessage, ex);
+                }
+                LogRetryingAfterDeviceFailure(label);
+                frameId = Guid.NewGuid();
+                continue;
+            }
+            if (ok || DeviceFailureCount == before) {
+                return ok;
+            }
+            if (DeviceFailureCount >= DeviceFailuresBeforeLost) {
+                throw new CameraUnavailableException(CameraLostMessage);
+            }
+            LogRetryingAfterDeviceFailure(label);
+            frameId = Guid.NewGuid();
+        }
+    }
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "The camera failed a capture of '{Label}' — trying once more before treating it as lost.")]
+    private partial void LogRetryingAfterDeviceFailure(string label);
 
     // A bias is the sensor's read-out with no exposure at all, so it runs at the shortest exposure
     // the camera can take, whatever the step asked for (generated bias steps carry a 1 ms placeholder).

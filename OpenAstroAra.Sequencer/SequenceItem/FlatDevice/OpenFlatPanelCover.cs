@@ -29,7 +29,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.FlatDevice {
     /// that pause.
     /// </summary>
     [JsonObject(MemberSerialization.OptIn)]
-    public class OpenFlatPanelCover : SequenceItem {
+    public class OpenFlatPanelCover : SequenceItem, IEstimatesOwnDuration {
 
         public OpenFlatPanelCover(IFlatCaptureExecutor? flatCaptureExecutor = null) {
             this.flatCaptureExecutor = flatCaptureExecutor;

@@ -13,6 +13,7 @@
 #endregion "copyright"
 
 using ASCOM.Alpaca.Clients;
+using OpenAstroAra.Core.Model;
 using OpenAstroAra.Server.Contracts;
 using System;
 using System.Threading;
@@ -169,7 +170,7 @@ public sealed partial class CameraService : IAnalysisFrameSource {
             client = !_disposed && _state == EquipmentConnectionState.Connected ? _client : null;
         }
         if (client is null) {
-            throw new InvalidOperationException("camera is not connected");
+            throw new CameraUnavailableException(CameraNotConnectedMessage);
         }
         var exposureSec = request.ExposureSec;
 
@@ -192,15 +193,20 @@ public sealed partial class CameraService : IAnalysisFrameSource {
                 client = !_disposed && _state == EquipmentConnectionState.Connected ? _client : null;
             }
             if (client is null) {
-                throw new InvalidOperationException($"camera disconnected while the {kind} capture was queued");
+                throw new CameraUnavailableException(CameraNotConnectedMessage);
             }
+            (ushort[] Pixels, int Width, int Height, DateTimeOffset CapturedAt)? exposed = null;
             var frameId = Guid.NewGuid(); // log correlation only — nothing is persisted under it
-            var exposed = await ExposeAndDownloadAsync(client, frameId, request, kind, ct).ConfigureAwait(false);
-            if (exposed is null) {
+            var ok = await CaptureWithRetryAsync(async id => {
+                frameId = id;
+                exposed = await ExposeAndDownloadAsync(client, id, request, kind, ct).ConfigureAwait(false);
+                return exposed is not null;
+            }, frameId, kind).ConfigureAwait(false);
+            if (!ok) {
                 throw new InvalidOperationException(
                     $"{kind} capture failed — see the daemon log for the cause (device timeout or disconnect)");
             }
-            var (pixels, width, height, capturedAt) = exposed.Value;
+            var (pixels, width, height, capturedAt) = exposed!.Value;
             LogUnpersistedCaptureComplete(kind, frameId, width, height, exposureSec);
             // A 1×1 readout of a colour sensor is a Bayer mosaic (same rule as live view and BAYERPAT stamping);
             // carry the pattern so previews of the frame debayer instead of showing the colour-filter grid.

@@ -116,6 +116,14 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
     private int _refreshPending;
     private long _connectGeneration;
     private int _captureInFlight;
+
+    // Device failures in a row (a stalled exposure, a driver error, the camera vanishing
+    // mid-exposure); any exposure that downloads resets it. Sequencer captures retry the first
+    // failure and report the camera lost on the second (CameraUnavailableException).
+    private int _deviceFailures;
+    internal const int DeviceFailuresBeforeLost = 2;
+    internal int DeviceFailureCount => Volatile.Read(ref _deviceFailures);
+    private void NoteDeviceFailure() => Interlocked.Increment(ref _deviceFailures);
     // Set around the blocking ImageArray transfer: serializing Alpaca bridges queue every request
     // behind the download, so timer refreshes would stall for the whole window — skip them instead
     // (exposure progress still updates: the ImageReady poll loop refreshes every tick).
@@ -747,6 +755,7 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
             if (announced) {
                 _events?.ExposureFailed(frameId, kind, ex.Message);
             }
+            NoteDeviceFailure();
             PublishOpFault(client, EquipmentFaultKind.OpError,
                 $"capture of frame {frameId} failed: {ex.Message}");
             throw;
@@ -788,6 +797,7 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
         }
         switch (ready) {
             case ImageWait.Lost:
+                NoteDeviceFailure();
                 LogCaptureAbandonedDisconnect(frameId); // disconnect/supersede, NOT a device timeout
                 _events?.ExposureFailed(frameId, kind, "camera disconnected or superseded during the exposure");
                 return null;
@@ -797,6 +807,7 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
                 _events?.ExposureFailed(frameId, kind, "aborted");
                 return null;
             case ImageWait.Timeout:
+                NoteDeviceFailure();
                 LogCaptureFailedNotReady(frameId, request.ExposureSec);
                 _events?.ExposureFailed(frameId, kind, "camera never signaled ImageReady within the wait bound");
                 PublishOpFault(client, EquipmentFaultKind.StallTimeout,
@@ -858,6 +869,7 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
         LogCaptureDeviceTiming(frameId, settingsMs, exposeMs, downloadMs);
         _events?.ExposureComplete(frameId, request.ExposureSec, capturedAt, kind, exposeMs + downloadMs);
         RefreshCacheOnce();
+        Interlocked.Exchange(ref _deviceFailures, 0);
         return (pixels, width, height, capturedAt);
     }
 
