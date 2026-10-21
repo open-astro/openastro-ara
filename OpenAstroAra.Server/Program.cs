@@ -759,7 +759,10 @@ public partial class Program {
                 // #1264 — the latest analysed light's star shape for the unguided exposure guard.
                 frameQuality: sp.GetRequiredService<FrameQualityFeed>(),
                 // #1195 — every saved light, for the drift trigger's on-demand solve.
-                savedLights: sp.GetRequiredService<FrameSolveFeed>()));
+                savedLights: sp.GetRequiredService<FrameSolveFeed>(),
+                // The rotator's mechanical angle for ROTATOR / the catalog row, so matching flats
+                // rotate back to it. Func<>: registered later in this file.
+                rotator: () => sp.GetService<OpenAstroAra.Equipment.Interfaces.Mediator.IRotatorMediator>()));
         builder.Services.AddSingleton<ICameraService>(sp => sp.GetRequiredService<CameraService>());
         // §59 — the autofocus sweep's probe-capture seam rides the same singleton (same device
         // path + same in-flight capture gate as real captures; probes are never persisted).

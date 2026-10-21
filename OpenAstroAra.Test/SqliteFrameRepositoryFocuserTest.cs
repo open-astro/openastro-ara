@@ -65,6 +65,22 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Rotator_angle_and_cooler_setpoint_round_trip() {
+            var id = Guid.NewGuid();
+            await _repo.InsertAsync(Frame(id, focuserPosition: null) with { RotatorMechanicalDeg = 123.4, CoolerSetpointC = -10 },
+                CancellationToken.None);
+
+            var got = await _repo.GetAsync(id, CancellationToken.None);
+            Assert.That(got!.RotatorMechanicalDeg, Is.EqualTo(123.4));
+            Assert.That(got.CoolerSetpointC, Is.EqualTo(-10));
+            var unset = Guid.NewGuid();
+            await _repo.InsertAsync(Frame(unset, focuserPosition: null), CancellationToken.None);
+            var bare = await _repo.GetAsync(unset, CancellationToken.None);
+            Assert.That(bare!.RotatorMechanicalDeg, Is.Null);
+            Assert.That(bare.CoolerSetpointC, Is.Null);
+        }
+
+        [Test]
         public async Task FocuserPosition_is_null_when_unset() {
             var id = Guid.NewGuid();
             await _repo.InsertAsync(Frame(id, focuserPosition: null), CancellationToken.None);

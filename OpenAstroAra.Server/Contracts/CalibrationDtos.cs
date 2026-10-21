@@ -18,7 +18,9 @@ namespace OpenAstroAra.Server.Contracts;
 // PORT_PLAYBOOK.md §10.7 + §39 (calibration + matching flats + dark library)
 // ────────────────────────────────────────────────────────────────────────────
 
-/// <summary>One imaging session that may need calibration frames. Per §39.</summary>
+/// <summary>One imaging session that may need calibration frames. Per §39.
+/// <c>CoolerSetpointC</c> is the set-point most of the session's lights were taken at with the
+/// cooler on (null = taken warm, or before the catalog recorded it) — what matching flats cool to.</summary>
 public sealed record CalibrationSessionDto(
     Guid Id,
     string TargetName,
@@ -28,7 +30,8 @@ public sealed record CalibrationSessionDto(
     IReadOnlyList<CalibrationFilterSummaryDto> FiltersUsed,
     bool MatchingFlatsAvailable,
     bool MatchingDarksAvailable,
-    string? ProfileId);
+    string? ProfileId,
+    double? CoolerSetpointC = null);
 
 /// <summary>Per-filter summary inside a calibration session.</summary>
 public sealed record CalibrationFilterSummaryDto(
@@ -41,12 +44,17 @@ public sealed record CalibrationFilterSummaryDto(
 /// <remarks><c>Flavor</c> picks the §48 capture style: "panel" (default — FlatPanelFlats sets,
 /// run whenever a panel is lit) or "sky" (§48.4 — the sequence waits for twilight, slews to the
 /// profile's sky-flat patch, and captures SkyFlats sets with drift re-probing). Additive-optional
-/// so pre-§48.4 callers keep their shape.</remarks>
+/// so pre-§48.4 callers keep their shape.
+/// <c>CoolCamera</c> null = cool to the lights' set-point when they were cooled; false = leave the
+/// cooler alone; true = cool to <c>CoolToTemperatureC</c>, else the lights' set-point, else the
+/// profile's cooler target. A <c>CoolToTemperatureC</c> with <c>CoolCamera</c> null also cools.</remarks>
 public sealed record MatchingFlatsRequestDto(
     int? OverrideFrameCount,
     int? OverrideTargetAdu,
     bool GenerateOnly,
-    string Flavor = "panel");
+    string Flavor = "panel",
+    bool? CoolCamera = null,
+    double? CoolToTemperatureC = null);
 
 /// <summary>Sequence the server generated to capture matching flats for the session.
 /// <c>GeneratedSequenceId</c> is the persisted §38 sequence (runnable via

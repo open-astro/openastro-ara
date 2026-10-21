@@ -18,6 +18,7 @@ using ASCOM.Common.DeviceInterfaces;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using OpenAstroAra.Equipment.Equipment.MyFocuser;
+using OpenAstroAra.Equipment.Equipment.MyRotator;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Fits;
 using OpenAstroAra.Image.ImageAnalysis;
@@ -136,8 +137,10 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
         Func<ITelescopeMediator?>? telescope = null,
         Func<IFilterWheelMediator?>? filterWheel = null,
         IFrameQualitySink? frameQuality = null,
-        ISavedLightSink? savedLights = null) {
+        ISavedLightSink? savedLights = null,
+        Func<IRotatorMediator?>? rotator = null) {
         _logger = logger ?? NullLogger<CameraService>.Instance;
+        _rotator = rotator;
         _frameQuality = frameQuality;
         _savedLights = savedLights;
         _fan = fan;
@@ -184,6 +187,9 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
     // without this FILTER, the catalog row and the {filter} filename token stay empty on every
     // wheel. Func<>: the filter-wheel mediator is registered after this service in Program.cs.
     private readonly Func<IFilterWheelMediator?>? _filterWheel;
+    // The rotator's mechanical angle at capture, for the ROTATOR card and the catalog — matching
+    // flats turn the camera back to it. Func<>: the rotator mediator is registered after this service.
+    private readonly Func<IRotatorMediator?>? _rotator;
 
     /// <summary>A frame's pointing as written to its header, with the epoch the numbers are in:
     /// J2000 when the transform succeeded, else the mount's native epoch (see
@@ -253,6 +259,28 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
             return null;
         }
     }
+
+    // Snapshotted after readout like the focuser: the rotator does not move during an exposure.
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Recording rotator angle is best-effort metadata; a mediator/transport fault must not fail a capture whose image is already downloaded. Log-and-recover boundary.")]
+    private double? ReadRotatorMechanical() {
+        try {
+            return RotatorMechanicalFrom(_rotator?.Invoke()?.GetInfo());
+        } catch (Exception ex) {
+            LogRotatorSnapshotFailed(ex);
+            return null;
+        }
+    }
+
+    // Null when no rotator is connected, so ROTATOR is omitted and the catalog column stays null.
+    internal static double? RotatorMechanicalFrom(RotatorInfo? info) =>
+        info is { Connected: true } && float.IsFinite(info.MechanicalPosition) ? info.MechanicalPosition : null;
+
+    // The set-point the cooler was regulating to, or null when it was off (or there is none):
+    // SetCCDTemperature still reads back the last target with the cooler off, and flats must
+    // not cool a camera whose lights were taken warm.
+    internal static double? CoolerSetpointFrom(bool? coolerOn, double? setPoint) =>
+        coolerOn == true && setPoint is double sp && double.IsFinite(sp) ? sp : null;
 
     // §38: the connected focuser's step position at capture, for the §50.4
     // focus-vs-temperature view. Null when no focuser is connected (or absent),
@@ -890,18 +918,22 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
         // enforcement), and XBINNING/GAIN feed plate-solving + calibration matching.
         var applied = ReadAppliedSettings(client, request);
         var focuserPos = ReadFocuserPosition();
+        var rotatorDeg = ReadRotatorMechanical();
         var pointing = ReadPointing();
         double? sensorTemp = null, tempSetPoint = null;
+        bool? coolerOn = null;
         try { sensorTemp = client.CCDTemperature; } catch (Exception) { }
         try { tempSetPoint = client.SetCCDTemperature; } catch (Exception) { }
+        try { coolerOn = client.CoolerOn; } catch (Exception) { }
         var conditions = await ReadConditionsBestEffortAsync(ct).ConfigureAwait(false);
         var storeTiming = System.Diagnostics.Stopwatch.StartNew();
         var filePath = WriteFits(frameId, pixels, width, height, applied, imageType, capturedAt, focuserPos,
             targetName: targetName, sensorTemp: sensorTemp, tempSetPoint: tempSetPoint, conditions: conditions,
-            pointing: pointing);
+            pointing: pointing, rotatorMechanicalDeg: rotatorDeg);
         var writeMs = storeTiming.ElapsedMilliseconds;
         try {
-            await RegisterFrameAsync(frameId, request, frameType, targetName, capturedAt, filePath, width, height, focuserPos, appliedBin: applied.BinX).ConfigureAwait(false);
+            await RegisterFrameAsync(frameId, request, frameType, targetName, capturedAt, filePath, width, height, focuserPos, appliedBin: applied.BinX,
+                rotatorMechanicalDeg: rotatorDeg, coolerSetpointC: CoolerSetpointFrom(coolerOn, tempSetPoint)).ConfigureAwait(false);
         } catch (Exception ex) {
             // The FITS is on disk but invisible to the catalog; name the path so an operator can
             // recover it — and the §28.8 startup orphan scan re-registers it on the next boot.
@@ -1250,7 +1282,7 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
         return request with { BinX = binX, BinY = binY, Gain = gain, CameraOffset = cameraOffset };
     }
 
-    private string WriteFits(Guid frameId, ushort[] pixels, int width, int height, ExposureRequestDto request, string imageType, DateTimeOffset capturedAt, int? focuserPosition = null, string? targetName = null, double? sensorTemp = null, double? tempSetPoint = null, ObservingConditionsDto? conditions = null, FramePointing? pointing = null) {
+    private string WriteFits(Guid frameId, ushort[] pixels, int width, int height, ExposureRequestDto request, string imageType, DateTimeOffset capturedAt, int? focuserPosition = null, string? targetName = null, double? sensorTemp = null, double? tempSetPoint = null, ObservingConditionsDto? conditions = null, FramePointing? pointing = null, double? rotatorMechanicalDeg = null) {
         var dir = ResolveFramesDir();
         Directory.CreateDirectory(dir);
         // §29.2 — name the file the way the profile's template says, so what
@@ -1280,6 +1312,9 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
         // focus-vs-temperature view; the §28.8 scanner reads it back as FOCUSPOS.
         if (focuserPosition is int focPos) {
             fits.SetHeader("FOCUSPOS", focPos, "focuser position (steps)");
+        }
+        if (rotatorMechanicalDeg is double rotDeg) {
+            fits.SetHeader("ROTATOR", rotDeg, "rotator mechanical position (deg)");
         }
         // OSC sensors: record the Bayer pattern so downstream stackers (and ARA's §65 color preview)
         // can debayer the raw mosaic. The effective pattern is at the origin, so the offsets are 0.
@@ -1713,7 +1748,7 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
     // appliedBin: the binning the driver ACTUALLY used (read back after the exposure, like XBINNING in
     // the header), not the requested one — a driver can coerce a 2 to 1, and the #1140 pixel scale
     // must follow the frame. Null = no read-back available (the request's value is the best we have).
-    internal async Task RegisterFrameAsync(Guid frameId, ExposureRequestDto request, FrameType frameType, string targetName, DateTimeOffset capturedAt, string filePath, int width, int height, int? focuserPosition = null, int? appliedBin = null) {
+    internal async Task RegisterFrameAsync(Guid frameId, ExposureRequestDto request, FrameType frameType, string targetName, DateTimeOffset capturedAt, string filePath, int width, int height, int? focuserPosition = null, int? appliedBin = null, double? rotatorMechanicalDeg = null, double? coolerSetpointC = null) {
         // §40/§50 — a capture that runs INSIDE a sequence run carries the run's
         // catalog session via the ambient CaptureSessionScope (AsyncLocal set by
         // the run worker); everything else — the REST snapshot path — falls back
@@ -1748,7 +1783,9 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
             Rating: 0,
             Tags: Array.Empty<string>(),
             FocuserPosition: focuserPosition,
-            Bin: appliedBin ?? request.BinX), CancellationToken.None).ConfigureAwait(false);
+            Bin: appliedBin ?? request.BinX,
+            RotatorMechanicalDeg: rotatorMechanicalDeg,
+            CoolerSetpointC: coolerSetpointC), CancellationToken.None).ConfigureAwait(false);
     }
 
     // ── §32.4 cache (single-flight with coalescing, mirrors TelescopeService) ────────────────────
@@ -2374,6 +2411,9 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Focuser position snapshot failed; recording the frame without a focuser position")]
     private partial void LogFocuserSnapshotFailed(Exception ex);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Rotator position snapshot failed; recording the frame without a rotator angle")]
+    private partial void LogRotatorSnapshotFailed(Exception ex);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Mount pointing snapshot failed; recording the frame without RA/Dec")]
     private partial void LogPointingSnapshotFailed(Exception ex);

@@ -15,6 +15,8 @@ class _FakeCalibrationClient implements CalibrationClient {
   final DarkLibraryState darkState;
   String? flatsSessionId;
   int? flatsFrameCount;
+  bool? flatsCoolCamera;
+  double? flatsCoolTo;
   DarkLibraryBuildRequest? buildRequest;
 
   _FakeCalibrationClient({
@@ -34,14 +36,26 @@ class _FakeCalibrationClient implements CalibrationClient {
       CursorPage(items: sessions, nextCursor: null, hasMore: false);
 
   @override
+  Future<CalibrationSession?> getSession(String sessionId) async {
+    for (final s in sessions) {
+      if (s.id == sessionId) return s;
+    }
+    return null;
+  }
+
+  @override
   Future<GeneratedFlatSequence> generateMatchingFlats(
     String sessionId, {
     int? frameCount,
     int? targetAdu,
     bool generateOnly = false,
+    bool? coolCamera,
+    double? coolToTemperatureC,
   }) async {
     flatsSessionId = sessionId;
     flatsFrameCount = frameCount;
+    flatsCoolCamera = coolCamera;
+    flatsCoolTo = coolToTemperatureC;
     return const GeneratedFlatSequence(
       generatedSequenceId: 'seq-flats-1',
       generatedSequenceName: 'Flats — M42',
@@ -61,7 +75,11 @@ class _FakeCalibrationClient implements CalibrationClient {
   void close() {}
 }
 
-CalibrationSession _session({bool flats = false, bool darks = true}) =>
+CalibrationSession _session({
+  bool flats = false,
+  bool darks = true,
+  double? coolerSetpointC,
+}) =>
     CalibrationSession(
       id: 'cal-sess-1',
       targetName: 'M42',
@@ -76,6 +94,7 @@ CalibrationSession _session({bool flats = false, bool darks = true}) =>
       ],
       matchingFlatsAvailable: flats,
       matchingDarksAvailable: darks,
+      coolerSetpointC: coolerSetpointC,
     );
 
 Future<ProviderContainer> _pump(WidgetTester tester,
@@ -118,10 +137,61 @@ void main() {
 
     expect(fake.flatsSessionId, 'cal-sess-1');
     expect(fake.flatsFrameCount, 20, reason: 'the dialog default');
+    expect(fake.flatsCoolCamera, isFalse,
+        reason: 'lights taken warm → the cooling switch starts off');
     expect(container.read(selectedSequenceIdProvider), 'seq-flats-1',
         reason: 'the generated sequence is selected for the Run tab');
     expect(container.read(selectedTabIndexProvider), kRunTabIndex,
         reason: 'the shell switches to the Run tab');
+  });
+
+  testWidgets('flats for cooled lights cool to the lights\' set-point',
+      (tester) async {
+    final fake =
+        _FakeCalibrationClient(sessions: [_session(coolerSetpointC: -10)]);
+    await _pump(tester, fake);
+
+    await tester.tap(find.text('Capture Matching Flats'));
+    await tester.pumpAndSettle();
+    expect(find.text('The lights ran at -10 °C.'), findsOneWidget);
+    expect(find.widgetWithText(TextField, 'Cool to (°C)'), findsOneWidget);
+
+    await tester.enterText(find.widgetWithText(TextField, 'Cool to (°C)'), '-8');
+    await tester.tap(find.text('Generate & open'));
+    await tester.pumpAndSettle();
+
+    expect(fake.flatsCoolCamera, isTrue);
+    expect(fake.flatsCoolTo, -8, reason: 'the user can adjust the target');
+  });
+
+  testWidgets('switching cooling off sends cool_camera false', (tester) async {
+    final fake =
+        _FakeCalibrationClient(sessions: [_session(coolerSetpointC: -10)]);
+    await _pump(tester, fake);
+
+    await tester.tap(find.text('Capture Matching Flats'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Cool the camera first'));
+    await tester.pumpAndSettle();
+    expect(find.widgetWithText(TextField, 'Cool to (°C)'), findsNothing);
+
+    await tester.tap(find.text('Generate & open'));
+    await tester.pumpAndSettle();
+    expect(fake.flatsCoolCamera, isFalse);
+    expect(fake.flatsCoolTo, isNull);
+  });
+
+  testWidgets('the dark form starts from the sessions\' set-points',
+      (tester) async {
+    final fake =
+        _FakeCalibrationClient(sessions: [_session(coolerSetpointC: -10)]);
+    await _pump(tester, fake);
+
+    await tester.tap(find.text('Dark Library'));
+    await tester.pumpAndSettle();
+    final temps = tester.widget<TextField>(find.widgetWithText(
+        TextField, 'Sensor temperatures (°C, comma-separated)'));
+    expect(temps.controller!.text, '-10');
   });
 
   testWidgets('dark library lists entries and opens the build sequence',

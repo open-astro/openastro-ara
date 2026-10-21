@@ -287,6 +287,10 @@ public sealed partial class CaptureScanService : IDisposable {
         // FOCUSPOS is the NINA/ARA write keyword; FOCPOS is the legacy alias.
         var focuserPos = ParseInt(LookupHeader(headers, "FOCUSPOS"))
             ?? ParseInt(LookupHeader(headers, "FOCPOS"));
+        // Rotator mechanical angle (ARA and NINA both write ROTATOR), so matching flats for a
+        // recovered session still rotate back. No cooler set-point: SET-TEMP alone can't say the
+        // cooler was on.
+        var rotatorDeg = ParseDouble(LookupHeader(headers, "ROTATOR"));
 
         // Synthetic recovered session per (target, night) — a single global
         // bucket lumps a whole archive into one "session" whose display name
@@ -306,13 +310,13 @@ public sealed partial class CaptureScanService : IDisposable {
                  exposure_seconds, gain, "offset", temperature_c, captured_utc,
                  file_path, file_size_bytes, width, height, bit_depth,
                  hfr, star_count, eccentricity, guiding_rms_arcsec, snr_estimate,
-                 quality_score_json, rating, tags_json, focuser_position)
+                 quality_score_json, rating, tags_json, focuser_position, rotator_mechanical_deg)
             VALUES
                 ($id, $session_id, $target, $frame_type, $filter,
                  $exposure, $gain, $offset, $temp, $captured_utc,
                  $file_path, $file_size, $width, $height, $bit_depth,
                  $hfr, $stars, NULL, NULL, NULL,
-                 NULL, 0, '[]', $focuser_position);
+                 NULL, 0, '[]', $focuser_position, $rotator_mechanical_deg);
             """;
         insert.Parameters.AddWithValue("$id", frameId.ToString());
         insert.Parameters.AddWithValue("$session_id", sessionId.ToString());
@@ -332,6 +336,7 @@ public sealed partial class CaptureScanService : IDisposable {
         insert.Parameters.AddWithValue("$hfr", DbValue(hfr));
         insert.Parameters.AddWithValue("$stars", DbValue(stars));
         insert.Parameters.AddWithValue("$focuser_position", DbValue(focuserPos));
+        insert.Parameters.AddWithValue("$rotator_mechanical_deg", DbValue(rotatorDeg));
         await insert.ExecuteNonQueryAsync(ct);
 
         LogRecoveredOrphan(fitsPath, target, frameType, exposureSec);

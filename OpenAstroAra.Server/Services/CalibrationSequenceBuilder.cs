@@ -24,7 +24,8 @@ namespace OpenAstroAra.Server.Services;
 /// values the session's lights used (null = camera default, which TakeExposure expresses as its
 /// -1 sentinel by simply omitting the property). <paramref name="FocuserPosition"/> restores the
 /// per-filter focus the lights were captured at (§39.5: dust-mote shadows only align when the
-/// optical train is unchanged).
+/// optical train is unchanged); <paramref name="RotatorMechanicalDeg"/> turns the camera back to
+/// the lights' rotator angle for the same reason (null = no rotator on the lights).
 /// </summary>
 public sealed record FlatStepSpec(
     string? FilterName,
@@ -33,7 +34,8 @@ public sealed record FlatStepSpec(
     double TargetAduTolerancePct,
     int? Gain,
     int? Offset,
-    int? FocuserPosition);
+    int? FocuserPosition,
+    double? RotatorMechanicalDeg = null);
 
 /// <summary>One per-filter §48.4 twilight sky-flat set: like <see cref="FlatStepSpec"/> plus the
 /// stop window the drifting sky must stay inside.</summary>
@@ -46,7 +48,13 @@ public sealed record SkyFlatStepSpec(
     double StopAtMinAdu,
     int? Gain,
     int? Offset,
-    int? FocuserPosition);
+    int? FocuserPosition,
+    double? RotatorMechanicalDeg = null);
+
+/// <summary>The cooler around a flats run: cool to <paramref name="CoolToC"/> first (null = leave
+/// the cooler alone), and warm the camera after when <paramref name="WarmAfter"/> — the flats
+/// run is the end of the night, so it restores the imaging run's warm-up.</summary>
+public sealed record FlatCooling(double? CoolToC, bool WarmAfter);
 
 /// <summary>The §48.4 sky-flat pointing + timing envelope (§48.7 sky_flat block): wait until the
 /// sun rises through <paramref name="SunAltitudeDeg"/>, then slew to the flat-friendly patch at
@@ -100,6 +108,8 @@ public static class CalibrationSequenceBuilder {
     private const string MoveFocuserAbsoluteType = "NINA.Sequencer.SequenceItem.Focuser.MoveFocuserAbsolute, NINA.Sequencer";
     private const string TakeExposureType = "NINA.Sequencer.SequenceItem.Imaging.TakeExposure, NINA.Sequencer";
     private const string CoolCameraType = "NINA.Sequencer.SequenceItem.Camera.CoolCamera, NINA.Sequencer";
+    private const string WarmCameraType = "NINA.Sequencer.SequenceItem.Camera.WarmCamera, NINA.Sequencer";
+    private const string MoveRotatorMechanicalType = "NINA.Sequencer.SequenceItem.Rotator.MoveRotatorMechanical, NINA.Sequencer";
     // ARA-only classes still ride the NINA dialect: the loader's type remap is a plain
     // NINA→OpenAstroAra prefix replace, so these resolve to the OpenAstroAra classes on load.
     private const string FlatPanelFlatsType = "NINA.Sequencer.SequenceItem.FlatDevice.FlatPanelFlats, NINA.Sequencer";
@@ -113,16 +123,19 @@ public static class CalibrationSequenceBuilder {
     /// [SwitchFilter → MoveFocuserAbsolute → FlatPanelFlats]. Since §48.3 the flat leaf is the
     /// auto-exposure instruction (it probes to the target ADU and captures its own FrameCount,
     /// so the per-filter block needs no LoopCondition), followed by an optional ParkScope when
-    /// the §48.7 post_flat_park_mount policy asks for it.
+    /// the §48.7 post_flat_park_mount policy asks for it. <paramref name="cooling"/> wraps the
+    /// blocks in a CoolCamera / WarmCamera pair.
     /// </summary>
-    public static JsonElement BuildMatchingFlatsBody(string name, IReadOnlyList<FlatStepSpec> steps, bool parkMountAfter = false) {
+    public static JsonElement BuildMatchingFlatsBody(string name, IReadOnlyList<FlatStepSpec> steps, bool parkMountAfter = false, FlatCooling? cooling = null) {
         var items = new JsonArray();
+        AddCoolStep(items, cooling);
         foreach (var step in steps) {
             items.Add(FlatBlock(step));
         }
         if (parkMountAfter) {
             items.Add(new JsonObject { ["$type"] = ParkScopeType });
         }
+        AddWarmStep(items, cooling);
 
         var root = new JsonObject {
             ["schemaVersion"] = SequenceSchemaValidator.SchemaVersion,
@@ -142,33 +155,35 @@ public static class CalibrationSequenceBuilder {
     /// per-filter SkyFlats block] + an optional trailing ParkScope. The sequence itself owns
     /// the twilight timing, which is what makes auto-starting it at run completion safe.
     /// </summary>
-    public static JsonElement BuildSkyFlatsBody(string name, IReadOnlyList<SkyFlatStepSpec> steps, SkyFlatEnvelope envelope, bool parkMountAfter = false) {
+    public static JsonElement BuildSkyFlatsBody(string name, IReadOnlyList<SkyFlatStepSpec> steps, SkyFlatEnvelope envelope, bool parkMountAfter = false, FlatCooling? cooling = null) {
         ArgumentNullException.ThrowIfNull(envelope);
-        var items = new JsonArray {
-            // Comparator LessThan waits WHILE the sun sits at-or-below the offset — i.e. until
-            // it RISES through it (morning twilight; see WaitForSunAltitude.MustWait).
-            new JsonObject {
-                ["$type"] = WaitForSunAltitudeType,
-                ["Data"] = new JsonObject {
-                    ["Offset"] = envelope.SunAltitudeDeg,
-                    ["Comparator"] = (int)OpenAstroAra.Core.Enums.ComparisonOperator.LessThan,
-                },
+        var items = new JsonArray();
+        // Cool before the twilight wait, so the sensor is at temperature when the sky is ready.
+        AddCoolStep(items, cooling);
+        // Comparator LessThan waits WHILE the sun sits at-or-below the offset — i.e. until
+        // it RISES through it (morning twilight; see WaitForSunAltitude.MustWait).
+        items.Add(new JsonObject {
+            ["$type"] = WaitForSunAltitudeType,
+            ["Data"] = new JsonObject {
+                ["Offset"] = envelope.SunAltitudeDeg,
+                ["Comparator"] = (int)OpenAstroAra.Core.Enums.ComparisonOperator.LessThan,
             },
-            // Whole-degree pointing (the §48.7 fields are degrees); minutes/seconds stay zero.
-            new JsonObject {
-                ["$type"] = SlewScopeToAltAzType,
-                ["Coordinates"] = new JsonObject {
-                    ["AzDegrees"] = (int)envelope.AzimuthDeg,
-                    ["AltDegrees"] = (int)envelope.AltitudeDeg,
-                },
+        });
+        // Whole-degree pointing (the §48.7 fields are degrees); minutes/seconds stay zero.
+        items.Add(new JsonObject {
+            ["$type"] = SlewScopeToAltAzType,
+            ["Coordinates"] = new JsonObject {
+                ["AzDegrees"] = (int)envelope.AzimuthDeg,
+                ["AltDegrees"] = (int)envelope.AltitudeDeg,
             },
-        };
+        });
         foreach (var step in steps) {
             items.Add(SkyFlatBlock(step));
         }
         if (parkMountAfter) {
             items.Add(new JsonObject { ["$type"] = ParkScopeType });
         }
+        AddWarmStep(items, cooling);
 
         var root = new JsonObject {
             ["schemaVersion"] = SequenceSchemaValidator.SchemaVersion,
@@ -193,6 +208,10 @@ public static class CalibrationSequenceBuilder {
 
         if (step.FocuserPosition is int focus) {
             items.Add(MoveFocuserStep(focus));
+        }
+
+        if (step.RotatorMechanicalDeg is double angle) {
+            items.Add(MoveRotatorStep(angle));
         }
 
         var flats = new JsonObject {
@@ -239,6 +258,32 @@ public static class CalibrationSequenceBuilder {
         ["Position"] = position,
     };
 
+    private static JsonObject MoveRotatorStep(double mechanicalDeg) => new() {
+        ["$type"] = MoveRotatorMechanicalType,
+        ["MechanicalPosition"] = mechanicalDeg,
+    };
+
+    // Duration 0 = regulate as fast as the driver allows (the dark library's convention): the
+    // camera is usually still at temperature from the night's run, and a fixed ramp would stall.
+    private static void AddCoolStep(JsonArray items, FlatCooling? cooling) {
+        if (cooling?.CoolToC is double temp) {
+            items.Add(new JsonObject {
+                ["$type"] = CoolCameraType,
+                ["Temperature"] = temp,
+                ["Duration"] = 0,
+            });
+        }
+    }
+
+    private static void AddWarmStep(JsonArray items, FlatCooling? cooling) {
+        if (cooling is { CoolToC: not null, WarmAfter: true }) {
+            items.Add(new JsonObject {
+                ["$type"] = WarmCameraType,
+                ["Duration"] = 0,
+            });
+        }
+    }
+
     /// <summary>One per-filter §48.3 flat set: position the wheel + focuser, then hand the whole
     /// set to FlatPanelFlats (probe-to-ADU + N saved frames — its own iteration, no loop here).</summary>
     private static JsonObject FlatBlock(FlatStepSpec step) {
@@ -250,6 +295,10 @@ public static class CalibrationSequenceBuilder {
 
         if (step.FocuserPosition is int focus) {
             items.Add(MoveFocuserStep(focus));
+        }
+
+        if (step.RotatorMechanicalDeg is double angle) {
+            items.Add(MoveRotatorStep(angle));
         }
 
         var flats = new JsonObject {

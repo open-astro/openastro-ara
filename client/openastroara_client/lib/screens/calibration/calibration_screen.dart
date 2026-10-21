@@ -4,7 +4,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/calibration/calibration_models.dart';
 import '../../state/app_shell_state.dart';
 import '../../state/calibration/calibration_state.dart';
+import '../../state/equipment/camera_state.dart';
 import '../../state/sequencer/sequence_list_state.dart';
+import '../../state/settings/imaging_defaults_state.dart';
 import '../../state/settings/settings_nav.dart';
 import '../../theme/ara_colors.dart';
 import '../../widgets/library/load_more_button.dart';
@@ -241,13 +243,48 @@ class MatchingFlatsDialog extends ConsumerStatefulWidget {
 class _MatchingFlatsDialogState extends ConsumerState<MatchingFlatsDialog> {
   final _frames = TextEditingController(text: '20');
   final _targetAdu = TextEditingController(text: '32000');
+  final _coolTo = TextEditingController();
   bool _busy = false;
   String? _error;
+
+  // The set-point the session's lights ran at (null = taken warm). Fetched on
+  // open: the Image Library's session cards don't carry it.
+  bool _loadingSession = true;
+  double? _lightsSetpointC;
+  bool _cool = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _coolTo.text = _degrees(ref.read(imagingDefaultsProvider).coolerTargetC);
+    _loadSetpoint();
+  }
+
+  Future<void> _loadSetpoint() async {
+    double? setpoint;
+    try {
+      setpoint = (await ref.read(calibrationApiProvider)?.getSession(widget.sessionId))
+          ?.coolerSetpointC;
+    } on Exception {
+      // No set-point known: the switch starts off and the user can still cool.
+    }
+    if (!mounted) return;
+    setState(() {
+      _loadingSession = false;
+      _lightsSetpointC = setpoint;
+      _cool = setpoint != null;
+      if (setpoint != null) _coolTo.text = _degrees(setpoint);
+    });
+  }
+
+  static String _degrees(double c) =>
+      c == c.roundToDouble() ? c.toStringAsFixed(0) : c.toStringAsFixed(1);
 
   @override
   void dispose() {
     _frames.dispose();
     _targetAdu.dispose();
+    _coolTo.dispose();
     super.dispose();
   }
 
@@ -266,6 +303,11 @@ class _MatchingFlatsDialogState extends ConsumerState<MatchingFlatsDialog> {
       setState(() => _error = 'Target ADU must be a whole number (or empty).');
       return;
     }
+    final coolTo = double.tryParse(_coolTo.text.trim());
+    if (_cool && coolTo == null) {
+      setState(() => _error = 'Cooling temperature must be a number in °C.');
+      return;
+    }
     setState(() {
       _busy = true;
       _error = null;
@@ -275,6 +317,8 @@ class _MatchingFlatsDialogState extends ConsumerState<MatchingFlatsDialog> {
         widget.sessionId,
         frameCount: frames,
         targetAdu: adu,
+        coolCamera: _cool,
+        coolToTemperatureC: _cool ? coolTo : null,
       );
       // Post-await UI work gates on State.mounted (the dialog may have been
       // dismissed while the request was in flight).
@@ -315,7 +359,8 @@ class _MatchingFlatsDialogState extends ConsumerState<MatchingFlatsDialog> {
         children: [
           Text(
             'Generates a flat sequence replaying this session\'s state per '
-            'filter ($filters): wheel position, focus, gain and offset.',
+            'filter ($filters): wheel position, focus, rotator angle, gain '
+            'and offset.',
             style: Theme.of(
               context,
             ).textTheme.bodySmall?.copyWith(color: AraColors.textSecondary),
@@ -336,6 +381,41 @@ class _MatchingFlatsDialogState extends ConsumerState<MatchingFlatsDialog> {
                   'Panel brightness/exposure tuning stays manual for now',
             ),
           ),
+          const SizedBox(height: 8),
+          SwitchListTile(
+            value: _cool,
+            onChanged: _loadingSession || _busy
+                ? null
+                : (v) => setState(() => _cool = v),
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Cool the camera first'),
+            subtitle: Text(
+              _loadingSession
+                  ? 'Checking the lights\' temperature…'
+                  : _lightsSetpointC != null
+                  ? 'The lights ran at ${_degrees(_lightsSetpointC!)} °C.'
+                  : 'The lights were taken with the cooler off.',
+            ),
+          ),
+          if (_cool)
+            TextField(
+              controller: _coolTo,
+              keyboardType: const TextInputType.numberWithOptions(
+                signed: true,
+                decimal: true,
+              ),
+              decoration: const InputDecoration(
+                labelText: 'Cool to (°C)',
+                // Indoors the cooler may not reach a set-point a cold night
+                // made easy; CoolCamera gives up after its stall timeout and
+                // the flats carry on, each recording its real temperature.
+                helperText:
+                    'Indoors it may not get there: after a few minutes the flats '
+                    'start at the closest temperature reached.',
+                helperMaxLines: 2,
+              ),
+            ),
           if (_error != null) ...[
             const SizedBox(height: 8),
             Text(
@@ -489,6 +569,38 @@ class _DarkBuildFormState extends ConsumerState<DarkBuildForm> {
   String? _error;
 
   @override
+  void initState() {
+    super.initState();
+    _temps.text = _defaultTemperatures();
+  }
+
+  // Darks only calibrate lights taken at the same temperature, so start from
+  // the set-points the catalogued sessions actually ran at; with none, the
+  // profile's cooler target when the connected camera can regulate. A user
+  // with an uncooled camera still gets an empty field (capture at ambient).
+  String _defaultTemperatures() {
+    final sessions = ref.read(calibrationSessionsProvider).asData?.value ?? const [];
+    final setpoints = <double>{
+      for (final s in sessions)
+        if (s.coolerSetpointC != null) s.coolerSetpointC!,
+    }.toList()..sort();
+    if (setpoints.isNotEmpty) {
+      return setpoints.map(_MatchingFlatsDialogState._degrees).join(', ');
+    }
+    final canCool = ref
+            .read(cameraStatusProvider)
+            .asData
+            ?.value
+            ?.capabilities
+            ?.canSetTemperature ==
+        true;
+    return canCool
+        ? _MatchingFlatsDialogState._degrees(
+            ref.read(imagingDefaultsProvider).coolerTargetC)
+        : '';
+  }
+
+  @override
   void dispose() {
     _exposures.dispose();
     _gains.dispose();
@@ -586,7 +698,8 @@ class _DarkBuildFormState extends ConsumerState<DarkBuildForm> {
         const SizedBox(height: 4),
         Text(
           'Generates a ready-to-run sequence covering every exposure × gain × '
-          'temperature combination. Leave temperatures empty to capture at ambient.',
+          'temperature combination; it cools the camera to each temperature '
+          'first. Leave temperatures empty to capture at ambient.',
           style: Theme.of(
             context,
           ).textTheme.bodySmall?.copyWith(color: AraColors.textSecondary),

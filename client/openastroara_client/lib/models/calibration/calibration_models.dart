@@ -12,6 +12,11 @@ class CalibrationSession {
   final bool matchingFlatsAvailable;
   final bool matchingDarksAvailable;
 
+  /// The cooler set-point most of the lights ran at with the cooler on; null
+  /// when they were taken warm (or before the daemon recorded it). Matching
+  /// flats cool to it.
+  final double? coolerSetpointC;
+
   const CalibrationSession({
     required this.id,
     required this.targetName,
@@ -21,6 +26,7 @@ class CalibrationSession {
     required this.filtersUsed,
     required this.matchingFlatsAvailable,
     required this.matchingDarksAvailable,
+    this.coolerSetpointC,
   });
 
   factory CalibrationSession.fromJson(Map<String, dynamic> json) {
@@ -38,6 +44,7 @@ class CalibrationSession {
           .toList(growable: false),
       matchingFlatsAvailable: json['matching_flats_available'] == true,
       matchingDarksAvailable: json['matching_darks_available'] == true,
+      coolerSetpointC: (json['cooler_setpoint_c'] as num?)?.toDouble(),
     );
   }
 }

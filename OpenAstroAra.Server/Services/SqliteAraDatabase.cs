@@ -152,6 +152,11 @@ public sealed partial class SqliteAraDatabase : IAraDatabase {
         await AddColumnIfMissingAsync(conn, "frames", "background_adu", "REAL", ct);
         await AddColumnIfMissingAsync(conn, "frames", "median_adu", "REAL", ct);
         await AddColumnIfMissingAsync(conn, "frames", "bin", "INTEGER", ct);
+        // Matching flats replay the lights' optical train: the rotator's mechanical angle (dust and
+        // vignetting turn with the camera) and the cooler set-point the lights ran at (NULL = the
+        // cooler was off or the camera has none). Same after-the-rebuilds placement as above.
+        await AddColumnIfMissingAsync(conn, "frames", "rotator_mechanical_deg", "REAL", ct);
+        await AddColumnIfMissingAsync(conn, "frames", "cooler_setpoint_c", "REAL", ct);
 
         await ExecAsync(conn, "CREATE INDEX IF NOT EXISTS idx_frames_session_id ON frames(session_id);", ct);
         await ExecAsync(conn, "CREATE INDEX IF NOT EXISTS idx_frames_captured_utc ON frames(captured_utc);", ct);

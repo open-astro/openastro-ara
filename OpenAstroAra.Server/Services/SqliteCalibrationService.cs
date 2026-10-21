@@ -147,8 +147,8 @@ public sealed class SqliteCalibrationService : ICalibrationService {
     }
 
     // Batched page assembly (§39 perf): the per-session BuildSessionDtoAsync runs 5 queries per id —
-    // 5N+1 per page. This runs the same 5 aggregations ONCE each over the whole page's id set
-    // (session_id IN (...)), so a page costs 6 queries total regardless of size.
+    // 6N+1 per page. This runs the same 6 aggregations ONCE each over the whole page's id set
+    // (session_id IN (...)), so a page costs 7 queries total regardless of size.
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Security", "CA2100:Review SQL queries for security vulnerabilities",
         Justification = "The composed fragment is a parameter-placeholder list ($s0,$s1,…) generated locally; every value is bound as a parameter. No user input reaches the command text.")]
     private static async Task<List<CalibrationSessionDto>> BuildSessionDtosAsync(
@@ -239,7 +239,10 @@ public sealed class SqliteCalibrationService : ICalibrationService {
                     AND ROUND(COALESCE(d.temperature_c, 0), 0) IS l.temp_bucket)
             """, BindIds, ct);
 
-        // 5) Owning profile ids.
+        // 5) The lights' cooler set-point (modal per session).
+        var setpoints = await ModalCoolerSetpointsAsync(conn, $"session_id IN ({placeholders})", BindIds, ct);
+
+        // 6) Owning profile ids.
         var profiles = new Dictionary<string, string>(StringComparer.Ordinal);
         await using (var cmd = conn.CreateCommand()) {
             cmd.CommandText = $"SELECT id, profile_id FROM sessions WHERE id IN ({placeholders});";
@@ -267,7 +270,8 @@ public sealed class SqliteCalibrationService : ICalibrationService {
                 FiltersUsed: filtersBySession.GetValueOrDefault(sid) ?? [],
                 MatchingFlatsAvailable: !flatsUncovered.Contains(sid),
                 MatchingDarksAvailable: !darksUncovered.Contains(sid),
-                ProfileId: profiles.GetValueOrDefault(sid)));
+                ProfileId: profiles.GetValueOrDefault(sid),
+                CoolerSetpointC: setpoints.TryGetValue(sid, out var sp) ? sp : null));
         }
         return items;
     }
@@ -318,6 +322,7 @@ public sealed class SqliteCalibrationService : ICalibrationService {
         // Store-less fallback is FALSE (not the DTO's true default) on purpose: with no profile
         // consulted, the generator must not add unrequested mount motion.
         var parkAfter = policies?.PostFlatParkMount ?? false;
+        var cooling = ResolveFlatCooling(request, session.CoolerSetpointC);
         var captureSettings = await ModalCaptureSettingsByFilterAsync(conn, sessionId, ct);
         var steps = new List<GeneratedFlatStepDto>(session.FiltersUsed.Count);
         var specs = new List<FlatStepSpec>(session.FiltersUsed.Count);
@@ -341,7 +346,8 @@ public sealed class SqliteCalibrationService : ICalibrationService {
                     StopAtMinAdu: policies?.SkyFlatStopAtMinAdu is double mn && mn >= 0 && mn < targetAdu ? mn : DefaultSkyStopAtMinAdu,
                     Gain: settings?.Gain,
                     Offset: settings?.Offset,
-                    FocuserPosition: settings?.FocuserPosition));
+                    FocuserPosition: settings?.FocuserPosition,
+                    RotatorMechanicalDeg: settings?.RotatorMechanicalDeg));
             } else {
                 specs.Add(new FlatStepSpec(
                     FilterName: specFilter,
@@ -350,7 +356,8 @@ public sealed class SqliteCalibrationService : ICalibrationService {
                     TargetAduTolerancePct: tolerancePct,
                     Gain: settings?.Gain,
                     Offset: settings?.Offset,
-                    FocuserPosition: settings?.FocuserPosition));
+                    FocuserPosition: settings?.FocuserPosition,
+                    RotatorMechanicalDeg: settings?.RotatorMechanicalDeg));
             }
             total += frameCount;
         }
@@ -368,8 +375,8 @@ public sealed class SqliteCalibrationService : ICalibrationService {
                         SunAltitudeDeg: policies?.SkyFlatSunAltitude ?? DefaultSkySunAltitude,
                         AzimuthDeg: policies?.SkyFlatTargetAzimuth ?? DefaultSkyAzimuth,
                         AltitudeDeg: policies?.SkyFlatTargetAltitude ?? DefaultSkyAltitude),
-                    parkMountAfter: parkAfter)
-                : CalibrationSequenceBuilder.BuildMatchingFlatsBody(name, specs, parkMountAfter: parkAfter);
+                    parkMountAfter: parkAfter, cooling: cooling)
+                : CalibrationSequenceBuilder.BuildMatchingFlatsBody(name, specs, parkMountAfter: parkAfter, cooling: cooling);
             var created = await _sequences.CreateAsync(new SequenceCreateRequestDto(
                 Name: name,
                 Description: $"Matching flats generated from the {session.SessionStartUtc:yyyy-MM-dd} {session.TargetName} session ({sessionId:D}).",
@@ -386,11 +393,29 @@ public sealed class SqliteCalibrationService : ICalibrationService {
             Steps: steps);
     }
 
-    private sealed record ModalCaptureSettings(int? Gain, int? Offset, int? FocuserPosition);
+    // The cooler around the flats (see MatchingFlatsRequestDto's remarks for the request rules).
+    // Flats are short, so cooling is not about their own dark current: it puts the sensor back
+    // where the lights were (an imaging run that warmed up at its end leaves it warm), so the
+    // flats calibrate with the lights' darks/dark-flats. The warm-up after follows the profile's
+    // "warm up at session end", which the imaging run itself honours.
+    private FlatCooling? ResolveFlatCooling(MatchingFlatsRequestDto request, double? lightsSetpointC) {
+        if (request.CoolCamera == false) {
+            return null;
+        }
+        var defaults = _profile?.GetImagingDefaults();
+        var target = request.CoolToTemperatureC is double t && double.IsFinite(t)
+            ? t
+            : lightsSetpointC ?? (request.CoolCamera == true ? defaults?.CoolerTargetC : null);
+        return target is double c ? new FlatCooling(c, WarmAfter: defaults?.WarmupAtSessionEnd ?? false) : null;
+    }
+
+    private sealed record ModalCaptureSettings(int? Gain, int? Offset, int? FocuserPosition, double? RotatorMechanicalDeg);
 
     // The per-filter capture settings the session's lights actually used, so the generated flats
     // replay them (§39.5: gain/offset must match for the calibration to apply; focus per filter so
-    // dust shadows align). "Modal" = the most frequent (gain, offset, focuser) combination per
+    // dust shadows align; rotator angle so the camera turns back with its dust and vignetting).
+    // The angle is rounded to 0.1° so driver read-back jitter doesn't split one position into
+    // several combinations. "Modal" = the most frequent (gain, offset, focuser, rotator) combination per
     // filter — a mid-session change loses the minority combination, which is the standard
     // one-flat-set-per-filter trade-off. The trailing ORDER BY terms are a deterministic
     // tiebreaker: an even split must not pick a different combo on different runs.
@@ -399,11 +424,12 @@ public sealed class SqliteCalibrationService : ICalibrationService {
         var result = new Dictionary<string, ModalCaptureSettings>(StringComparer.Ordinal);
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = """
-            SELECT filter_name, gain, "offset", focuser_position, COUNT(*) AS c
+            SELECT filter_name, gain, "offset", focuser_position,
+                   ROUND(rotator_mechanical_deg, 1) AS rotator, COUNT(*) AS c
             FROM frames
             WHERE frame_type = 'light' AND session_id = $sid
-            GROUP BY filter_name, gain, "offset", focuser_position
-            ORDER BY c DESC, gain, "offset", focuser_position;
+            GROUP BY filter_name, gain, "offset", focuser_position, rotator
+            ORDER BY c DESC, gain, "offset", focuser_position, rotator;
             """;
         cmd.Parameters.AddWithValue("$sid", sessionId.ToString());
         await using var reader = await cmd.ExecuteReaderAsync(ct);
@@ -415,7 +441,8 @@ public sealed class SqliteCalibrationService : ICalibrationService {
             result[filter] = new ModalCaptureSettings(
                 Gain: await reader.IsDBNullAsync(1, ct) ? null : reader.GetInt32(1),
                 Offset: await reader.IsDBNullAsync(2, ct) ? null : reader.GetInt32(2),
-                FocuserPosition: await reader.IsDBNullAsync(3, ct) ? null : reader.GetInt32(3));
+                FocuserPosition: await reader.IsDBNullAsync(3, ct) ? null : reader.GetInt32(3),
+                RotatorMechanicalDeg: await reader.IsDBNullAsync(4, ct) ? null : reader.GetDouble(4));
         }
         return result;
     }
@@ -510,7 +537,33 @@ public sealed class SqliteCalibrationService : ICalibrationService {
             FiltersUsed: filters,
             MatchingFlatsAvailable: flatsAvailable,
             MatchingDarksAvailable: darksAvailable,
-            ProfileId: profileId);
+            ProfileId: profileId,
+            CoolerSetpointC: (await ModalCoolerSetpointsAsync(conn, "session_id = $sid",
+                cmd => cmd.Parameters.AddWithValue("$sid", sid), ct)).TryGetValue(sid, out var sp) ? sp : null);
+    }
+
+    // The set-point most of each session's cooled lights ran at, to 0.1 °C (a driver can read back
+    // −9.9999). Lights taken warm record NULL and don't vote, so a session that cooled for only part
+    // of the night still cools its flats. Ties break toward the colder set-point, deterministically.
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Security", "CA2100:Review SQL queries for security vulnerabilities",
+        Justification = "The 'sessionFilter' argument is a locally-composed literal (a bound $sid or a generated placeholder list); every value is bound as a parameter.")]
+    private static async Task<Dictionary<string, double>> ModalCoolerSetpointsAsync(
+            SqliteConnection conn, string sessionFilter, Action<SqliteCommand> bind, CancellationToken ct) {
+        var result = new Dictionary<string, double>(StringComparer.Ordinal);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = $"""
+            SELECT session_id, ROUND(cooler_setpoint_c, 1) AS setpoint, COUNT(*) AS c
+            FROM frames
+            WHERE frame_type = 'light' AND cooler_setpoint_c IS NOT NULL AND {sessionFilter}
+            GROUP BY session_id, setpoint
+            ORDER BY session_id, c DESC, setpoint;
+            """;
+        bind(cmd);
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct)) {
+            result.TryAdd(reader.GetString(0), reader.GetDouble(1)); // first row per session is the modal set-point
+        }
+        return result;
     }
 
     // The query returns the set of light requirements NOT covered by the calibration frame set; zero rows means

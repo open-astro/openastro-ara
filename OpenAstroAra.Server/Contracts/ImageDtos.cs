@@ -76,7 +76,13 @@ public sealed record FrameDto(
     double? BackgroundAdu = null,
     double? MedianAdu = null,
     // #1140 P2 — the binning at capture (null for rows older than the column).
-    int? Bin = null);
+    int? Bin = null,
+    // The rotator's mechanical angle at capture (null = no rotator connected), so matching
+    // flats can turn the camera back to where the lights were taken.
+    double? RotatorMechanicalDeg = null,
+    // The cooler set-point the frame was taken at (null = cooler off or no cooler), so matching
+    // flats can cool to the lights' temperature.
+    double? CoolerSetpointC = null);
 
 /// <summary>List item used by /api/v1/frames (paginated). Excludes the heavy quality breakdown.</summary>
 public sealed record FrameListItemDto(

@@ -7834,6 +7834,13 @@ components:
           type:
             - 'null'
             - string
+        cooler_setpoint_c:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
     CalibrationStateDto:
       required:
         - dark_library
@@ -9437,6 +9444,20 @@ components:
             - integer
             - string
           format: int32
+        rotator_mechanical_deg:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        cooler_setpoint_c:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
     FrameHistogramDto:
       required:
         - bins
@@ -11177,6 +11198,17 @@ components:
         flavor:
           type: string
           default: panel
+        cool_camera:
+          type:
+            - 'null'
+            - boolean
+        cool_to_temperature_c:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
     MosaicCreateRequestDto:
       required:
         - name
