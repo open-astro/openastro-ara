@@ -5404,8 +5404,9 @@ User flow in WILMA:
      4. Cooler: set target to the session's SET-TEMP and wait for
         stabilization (subject to ambient limits — see §39.6)
      5. Camera: configure same gain, offset, binning
-     6. Flat panel: turn on, auto-adjust brightness to target ADU
-        (~30000 for 16-bit), capture 30 flat frames
+     6. Flat panel: turn on; two test frames solve the exposure and panel
+        brightness for `flat_target_percent` (default 50%) of the camera's
+        MaxADU (median of the central area), then capture 30 flat frames
      7. Flat panel: turn off
    Mount can stay parked or wherever — flats don't depend on sky position
    ```
@@ -5467,23 +5468,22 @@ Server captures `5 × 3 × 3 × 50 = 2,250` dark frames over many hours (typical
 
 ### 39.9 Calibration library storage on Pi
 
+Calibration frames live in the frame store beside the lights, named by the profile's filename
+template like every other frame. Calibration generated for a session carries that session's
+target and observing night, so with the default template it lands next to the lights it
+calibrates:
+
 ```
-/var/lib/openastroara/calibration/
-├── darks/
-│   └── <camera-id>/
-│       └── exp_<seconds>_gain_<n>_temp_<c>/
-│           └── frame_001.fits
-├── bias/
-│   └── <camera-id>/
-│       └── gain_<n>_offset_<n>/
-│           └── frame_001.fits
-└── flats/
-    └── <camera-id>/
-        └── filter_<name>_rot_<angle>_focus_<pos>/
-            └── frame_001.fits
+<store>/<target>/<night>/
+├── Light/
+├── Flat/     (per filter, at the lights' rotator angle)
+├── Dark/     (per exposure + gain, at the lights' temperature)
+└── Bias/     (per gain + offset + binning)
 ```
 
-Filenames + sidecar JSONs make matching by metadata easy for both ARA's session-matching workflow and external post-processing tools.
+Matching runs on the catalog (`frames` rows carry filter, exposure, gain, offset, binning,
+temperature, cooler set-point and rotator angle), not on folder names; the FITS headers carry
+the same values for external post-processing tools.
 
 ### 39.10 Calibration library browsing in WILMA
 
