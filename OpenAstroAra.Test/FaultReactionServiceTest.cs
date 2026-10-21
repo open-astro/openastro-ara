@@ -299,8 +299,13 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public async Task A_connect_stuck_in_Connecting_gives_up_at_the_in_flight_window() {
-            service.ConnectInFlightTimeout = TimeSpan.FromMilliseconds(300);
+            // In-flight window well past the fixture's 200 ms confirm window, so a rung that stopped
+            // at the confirm window shows up as a short gap between dispatches.
+            service.ConnectInFlightTimeout = TimeSpan.FromMilliseconds(500);
+            var clock = Stopwatch.StartNew();
+            var dispatches = new List<TimeSpan>();
             reconnector.Setup(r => r.ReconnectAsync(DeviceType.Camera, It.IsAny<CancellationToken>()))
+                .Callback(() => { lock (dispatches) { dispatches.Add(clock.Elapsed); } })
                 .ReturnsAsync(new ReconnectOutcome(1, 1));
             reconnector.Setup(r => r.GetConnectionStateAsync(DeviceType.Camera, It.IsAny<CancellationToken>()))
                 .ReturnsAsync(EquipmentConnectionState.Connecting);
@@ -309,6 +314,10 @@ namespace OpenAstroAra.Test {
             await service.WhenIdleAsync();
 
             Assert.That(Actions(), Does.Not.Contain("recovered"), "a connect that never lands is not a recovery");
+            Assert.That(dispatches, Has.Count.GreaterThan(1), "the ladder walks its rungs");
+            var gaps = dispatches.Zip(dispatches.Skip(1), (a, b) => b - a).ToList();
+            Assert.That(gaps, Has.All.GreaterThanOrEqualTo(TimeSpan.FromMilliseconds(500)),
+                "each rung waited out the in-flight window, not the 200 ms confirm window");
         }
 
         [Test]
