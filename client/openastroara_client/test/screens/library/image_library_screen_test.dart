@@ -206,7 +206,7 @@ class _FakeLibraryClient implements LibraryClient {
   @override
   Future<void> bulkDelete(
     List<String> frameIds, {
-    bool deleteFromDisk = false,
+    bool deleteFromDisk = true,
   }) async {
     deleted = (frameIds, deleteFromDisk);
   }

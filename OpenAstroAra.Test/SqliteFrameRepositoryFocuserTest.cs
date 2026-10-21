@@ -165,7 +165,7 @@ namespace OpenAstroAra.Test {
             }
 
             await _repo.BulkMoveAsync(new BulkMoveRequestDto(new[] { ids[0] }, other), null, CancellationToken.None);
-            await _repo.BulkDeleteAsync(new BulkDeleteRequestDto(new[] { ids[1] }, DeleteFromDisk: false), null, CancellationToken.None);
+            await _repo.BulkDeleteAsync(new BulkDeleteRequestDto(new[] { ids[1] }), null, CancellationToken.None);
 
             Assert.That(await StoredFrameCountAsync(Session), Is.EqualTo(1), "one moved out, one deleted");
             Assert.That(await StoredFrameCountAsync(other), Is.EqualTo(1), "the moved frame counts where it landed");

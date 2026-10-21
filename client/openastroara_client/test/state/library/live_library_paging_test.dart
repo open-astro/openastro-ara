@@ -74,7 +74,7 @@ class _PagedFake implements LibraryClient {
 
   @override
   Future<void> bulkDelete(List<String> frameIds,
-      {bool deleteFromDisk = false}) async {}
+      {bool deleteFromDisk = true}) async {}
 
   @override
   Future<void> bulkMove(List<String> frameIds, String targetSessionId) async {}

@@ -150,7 +150,7 @@ namespace OpenAstroAra.Test {
             Assert.That((await restarted.GetProgressAsync(dto.Id, CancellationToken.None))!.CompletedPanels, Is.EqualTo(1));
 
             var frameId = (await _frames.ListAsync(10, null, null, null, CancellationToken.None)).Items.Single().Id;
-            await _frames.BulkDeleteAsync(new BulkDeleteRequestDto([frameId], DeleteFromDisk: false), null, CancellationToken.None);
+            await _frames.BulkDeleteAsync(new BulkDeleteRequestDto([frameId]), null, CancellationToken.None);
             Assert.That((await restarted.GetProgressAsync(dto.Id, CancellationToken.None))!.CompletedPanels, Is.EqualTo(0), "derived, so a deleted frame un-does the panel");
         }
 
