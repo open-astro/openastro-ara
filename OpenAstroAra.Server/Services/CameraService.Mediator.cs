@@ -230,13 +230,17 @@ public sealed partial class CameraService : ICameraMediator, IImagingMediator {
         Justification = "ExposureMin is an optional ASCOM read; any driver/HTTP failure means 'unknown' and the step's exposure stands.")]
     private double BiasExposureSec(AlpacaCamera client, double requested) {
         double min;
+        var readThisConnection = false;
         lock (_gate) {
             min = _capabilities?.MinExposureSec ?? 0;
             if (min <= 0 && _exposureMinRead is { } read && ReferenceEquals(read.Client, client)) {
+                // Final for this connection whatever it was: a driver that can't report it (threw,
+                // or said 0) isn't asked again on every bias frame.
                 min = read.Min;
+                readThisConnection = true;
             }
         }
-        if (min <= 0) {
+        if (min <= 0 && !readThisConnection) {
             // Read once per connection, not on every bias frame (a new client re-reads it).
             try { min = client.ExposureMin; } catch (Exception) { min = 0; }
             lock (_gate) {

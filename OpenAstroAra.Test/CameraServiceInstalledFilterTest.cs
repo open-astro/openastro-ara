@@ -131,6 +131,44 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_driver_without_ExposureMin_is_asked_once_not_on_every_bias_frame() {
+            var minReads = 0;
+            await using var box = ScriptedAlpacaDevice.Start(path => {
+                if (path.EndsWith("/exposuremin", StringComparison.Ordinal)) {
+                    Interlocked.Increment(ref minReads);
+                    return ScriptedAlpacaDevice.Error("Property ExposureMin is not implemented");
+                }
+                return path.EndsWith("/imageready", StringComparison.Ordinal) ? "true"
+                    : path.EndsWith("/imagearray", StringComparison.Ordinal) ? "[[100,200],[300,400]],\"Type\":2,\"Rank\":2"
+                    : null;
+            });
+            var dir = Directory.CreateTempSubdirectory("ara-bias-").FullName;
+            try {
+                using var svc = new CameraService(frames: new Mock<IFrameRepository>().Object, fallbackFramesDir: dir);
+                await svc.ConnectAsync(new ConnectRequestDto(new DiscoveredDeviceDto(
+                    UniqueId: "Camera-under-test", Name: "Sim Camera", Type: DeviceType.Camera,
+                    HostName: box.BaseUri.Host, IpAddress: box.BaseUri.Host, IpPort: box.BaseUri.Port,
+                    AlpacaDeviceNumber: 0, UseHttps: false)), null, CancellationToken.None);
+                var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(15);
+                while ((await svc.GetAsync(CancellationToken.None)) is not { State: EquipmentConnectionState.Connected, Capabilities: not null }) {
+                    Assert.That(DateTime.UtcNow, Is.LessThan(deadline), "camera never connected");
+                    await Task.Delay(50);
+                }
+                var atConnect = Volatile.Read(ref minReads);
+
+                for (var n = 0; n < 3; n++) {
+                    await svc.CaptureImage(new CaptureSequence { ExposureTime = 0.001, ImageType = "BIAS" },
+                        CancellationToken.None, null, "M42");
+                }
+
+                Assert.That(Volatile.Read(ref minReads) - atConnect, Is.LessThanOrEqualTo(1),
+                    "one read per connection, not a bridge round-trip per bias frame");
+            } finally {
+                Directory.Delete(dir, recursive: true);
+            }
+        }
+
+        [Test]
         public async Task A_saved_frame_takes_the_cooler_state_from_the_cache_not_the_bridge() {
             var log = new System.Collections.Concurrent.ConcurrentQueue<string>();
             await using var box = ScriptedAlpacaDevice.Start(path => {
