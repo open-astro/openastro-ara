@@ -195,19 +195,21 @@ class LibraryBulkActionBar extends ConsumerWidget {
                       onPressed: api == null
                           ? null
                           : () async {
-                              final fromDisk = await showDialog<bool>(
+                              final confirmed = await showDialog<bool>(
                                 context: context,
                                 builder: (_) =>
                                     _DeleteConfirmDialog(count: ids.length),
                               );
-                              if (fromDisk == null || !context.mounted) return;
+                              if (confirmed != true || !context.mounted) return;
+                              // Always with the files: a catalog-only delete
+                              // came back on the daemon's next start, when its
+                              // scan re-imports every FITS file it finds.
                               await _apply(
                                   context,
                                   ref,
                                   () => api.bulkDelete(ids,
-                                      deleteFromDisk: fromDisk),
-                                  'Deleted ${ids.length} frame(s)'
-                                  '${fromDisk ? ' and their files' : ' from the catalog'}.');
+                                      deleteFromDisk: true),
+                                  'Deleted ${ids.length} frame(s) and their files.');
                             },
                     ),
                   ]),
@@ -398,41 +400,18 @@ class _TagDialogState extends State<_TagDialog> {
 
 /// Confirm deletion; returns null on cancel, else whether to also delete the
 /// FITS files from disk (default: catalog-only).
-class _DeleteConfirmDialog extends StatefulWidget {
+class _DeleteConfirmDialog extends StatelessWidget {
   final int count;
   const _DeleteConfirmDialog({required this.count});
 
   @override
-  State<_DeleteConfirmDialog> createState() => _DeleteConfirmDialogState();
-}
-
-class _DeleteConfirmDialogState extends State<_DeleteConfirmDialog> {
-  bool _fromDisk = false;
-
-  @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: Text(widget.count == 1
+      title: Text(count == 1
           ? 'Delete this frame?'
-          : 'Delete these ${widget.count} frames?'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(_fromDisk
-              ? 'The FITS files are deleted for good. This can\'t be undone.'
-              : 'They leave your library. The FITS files stay on disk, so you '
-                  'can bring them back by rescanning.'),
-          CheckboxListTile(
-            value: _fromDisk,
-            onChanged: (v) => setState(() => _fromDisk = v ?? false),
-            dense: true,
-            contentPadding: EdgeInsets.zero,
-            controlAffinity: ListTileControlAffinity.leading,
-            title: const Text('Also delete the files from disk'),
-          ),
-        ],
-      ),
+          : 'Delete these $count frames?'),
+      content: const Text(
+          'The FITS files are deleted from the disk for good. This can\'t be undone.'),
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
@@ -441,8 +420,8 @@ class _DeleteConfirmDialogState extends State<_DeleteConfirmDialog> {
         FilledButton(
           style:
               FilledButton.styleFrom(backgroundColor: AraColors.accentError),
-          onPressed: () => Navigator.of(context).pop(_fromDisk),
-          child: Text(widget.count == 1 ? 'Delete' : 'Delete ${widget.count}'),
+          onPressed: () => Navigator.of(context).pop(true),
+          child: Text(count == 1 ? 'Delete' : 'Delete $count'),
         ),
       ],
     );
