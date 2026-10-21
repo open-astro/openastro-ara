@@ -197,6 +197,18 @@ void main() {
         RotateAdvice.noSolve,
       );
     });
+    test('a camera that stopped is not blamed on the sky (#1436)', () {
+      final h = rotationHint(
+        RotationAssistStatus.fromJson({
+          'state': 'error',
+          'camera_lost': true,
+          'error': 'The camera stopped responding. Check its USB cable and power, then try again.',
+        }),
+      );
+      expect(h.title, 'Camera stopped');
+      expect(h.detail, contains('USB cable'));
+      expect(h.detail, isNot(contains('would not solve')));
+    });
   });
 
   group('scopeBoxCommandFor', () {

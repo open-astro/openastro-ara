@@ -17,6 +17,7 @@ using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Services;
 using System;
 using System.Collections.Generic;
+using OpenAstroAra.Core.Model;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -111,6 +112,47 @@ namespace OpenAstroAra.Test {
             Assert.That(svc.GetStatus().State, Is.EqualTo("stopped"));
             Assert.That(svc.GetStatus().Active, Is.False);
             Assert.That(svc.GetStatus().Latest, Is.Not.Null, "the last readout stays visible after a stop");
+        }
+
+        /// <summary>Solves <see cref="GoodSolves"/> frames, then the camera is gone.</summary>
+        private sealed class LostCameraSolver : IPositionAngleSolver {
+            public int GoodSolves;
+            public int MaxBinning { get; set; } = 2;
+            public async Task<RotationSolve?> SolvePositionAngleAsync(double exposureSeconds, int binning, CancellationToken ct) {
+                await Task.Delay(5, ct);
+                if (GoodSolves-- > 0) {
+                    return new RotationSolve(50, RaDeg: 314.82, DecDeg: 44.53, PixelScaleArcsec: 2.3, Flipped: true,
+                        new AnalysisFrame(new ushort[16], 4, 4, DateTimeOffset.UtcNow, null));
+                }
+                throw new CameraUnavailableException("The camera stopped responding.", "Check its USB cable and power, then try again.", null);
+            }
+        }
+
+        [Test]
+        public async Task A_lost_camera_ends_the_readout_with_the_cameras_message_not_a_solve_failure() {
+            // #1436: the capture already retried once; the user is told to check the camera, not the sky.
+            using var svc = new RotationAssistService(new LostCameraSolver(), () => 1.0);
+            await svc.StartAsync(new RotationAssistStartRequestDto(50), CancellationToken.None);
+            var s = await WaitForState(svc, "error");
+
+            Assert.That(s.State, Is.EqualTo("error"));
+            Assert.That(s.CameraLost, Is.True);
+            Assert.That(s.Error, Does.Contain("stopped responding").And.Contain("then try again").And.Not.Contain("solve"));
+            Assert.That(s.ConsecutiveFailures, Is.EqualTo(1), "no further solves after the camera is gone");
+
+        }
+
+        [Test]
+        public async Task A_lost_camera_on_the_done_check_says_so() {
+            var solver = new LostCameraSolver { GoodSolves = 1 };
+            using var svc = new RotationAssistService(solver, () => 1.0);
+            await svc.StartAsync(new RotationAssistStartRequestDto(50, Mode: RotationAssistModes.SingleShot), CancellationToken.None);
+            Assert.That((await WaitForState(svc, "stopped")).CameraLost, Is.False);
+
+            await svc.ConfirmAsync(CancellationToken.None);
+            var s = await WaitForState(svc, "error");
+            Assert.That(s.CameraLost, Is.True);
+            Assert.That(s.Error, Does.Contain("then try again").And.Not.Contain("press Done"));
         }
 
         [Test]

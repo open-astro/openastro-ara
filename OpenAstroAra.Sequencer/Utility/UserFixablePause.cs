@@ -34,6 +34,7 @@ namespace OpenAstroAra.Sequencer.Utility {
         /// <summary>What the user is asked to do, after the failure's own message.</summary>
         public static string Prompt(Exception ex) => ex switch {
             StoreUnavailableException => $"{ex.Message} Plug the drive back in, then press Resume",
+            CameraUnavailableException camera => $"{camera.Cause} Check its USB cable and power, reconnect it if it doesn't come back by itself, then press Resume",
             _ => $"{ex.Message} Check its USB cable and power, reconnect it if it doesn't come back by itself, then press Resume",
         };
 

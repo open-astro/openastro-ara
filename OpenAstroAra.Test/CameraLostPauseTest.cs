@@ -208,6 +208,27 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task An_analysis_capture_outside_a_run_says_try_again_not_press_resume() {
+            await using var box = ScriptedAlpacaDevice.Start(
+                path => path.EndsWith("/imageready", StringComparison.Ordinal) ? "true" : null,
+                putResponder: path => path.EndsWith("/startexposure", StringComparison.Ordinal)
+                    ? ScriptedAlpacaDevice.Error("ZWO image acquisition failed: camera exposure failed after SDK retries")
+                    : null);
+            using var svc = new CameraService(frames: new Mock<IFrameRepository>().Object);
+            await ConnectAsync(svc, box);
+
+            // #1436: Smart Focus, a plate solve or the rotation readout has nothing to Resume.
+            var ex = await Assert.ThrowsAsync<CameraUnavailableException>(() => svc.CaptureForAnalysisAsync(0.01, 1, CancellationToken.None));
+            Assert.That(ex!.Message, Does.Contain("stopped responding").And.Contain("USB cable and power").And.EndWith("then try again."));
+            Assert.That(ex.Message, Does.Not.Contain("Resume"));
+
+            // The same failure inside a run (a flat probe) prompts once, for Resume.
+            var prompt = UserFixablePause.Prompt(ex);
+            Assert.That(prompt, Does.EndWith("then press Resume").And.Not.Contain("try again"));
+            Assert.That(prompt.Split("USB cable").Length - 1, Is.EqualTo(1), "the advice isn't doubled");
+        }
+
+        [Test]
         public async Task Two_failed_exposures_in_a_row_are_a_lost_camera() {
             var starts = 0;
             await using var box = ScriptedAlpacaDevice.Start(

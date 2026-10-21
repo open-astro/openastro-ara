@@ -26,13 +26,27 @@ namespace OpenAstroAra.Core.Model {
     /// </summary>
     public sealed class CameraUnavailableException : InvalidOperationException {
 
-        public CameraUnavailableException() : base("The camera stopped responding.") {
+        public CameraUnavailableException() : this("The camera stopped responding.") {
         }
 
         public CameraUnavailableException(string message) : base(message) {
+            Cause = message;
         }
 
         public CameraUnavailableException(string message, Exception inner) : base(message, inner) {
+            Cause = message;
         }
+
+        /// <summary>
+        /// A camera failure a caller outside a run may see, where nothing waits for Resume: the
+        /// message is the <paramref name="cause"/> followed by <paramref name="nextStep"/> (#1436).
+        /// </summary>
+        public CameraUnavailableException(string cause, string? nextStep, Exception? inner)
+            : base(nextStep is null ? cause : $"{cause} {nextStep}", inner) {
+            Cause = cause;
+        }
+
+        /// <summary>What went wrong, without a next step; the run's pause prompt adds its own.</summary>
+        public string Cause { get; }
     }
 }

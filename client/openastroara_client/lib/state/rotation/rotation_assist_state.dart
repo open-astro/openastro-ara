@@ -276,6 +276,14 @@ RotationHint rotationHint(RotationAssistStatus status) {
       'At full resolution the camera is ${off.abs().toStringAsFixed(1)}° off the plan. Keep adjusting, then press Done again.',
     );
   }
+  if (status.state == RotationAssistStates.error && status.cameraLost) {
+    return RotationHint(
+      RotateAdvice.noSolve,
+      'Camera stopped',
+      status.error ??
+          'The camera stopped responding. Check its USB cable and power, then try again.',
+    );
+  }
   if (status.state == RotationAssistStates.error) {
     return const RotationHint(
       RotateAdvice.noSolve,

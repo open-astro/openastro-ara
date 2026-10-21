@@ -13115,6 +13115,9 @@ components:
           oneOf:
             - type: 'null'
             - $ref: '#/components/schemas/RotationAssistSampleDto'
+        camera_lost:
+          type: boolean
+          default: false
     RotatorMoveRequestDto:
       required:
         - target_angle_deg

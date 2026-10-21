@@ -105,6 +105,10 @@ class RotationAssistStatus {
   /// `confirmed` or `not_confirmed`.
   final RotationAssistSample? confirmation;
 
+  /// The `error` is the camera failing, not the sky: [error] says what to
+  /// check.
+  final bool cameraLost;
+
   const RotationAssistStatus({
     this.active = false,
     this.state = RotationAssistStates.idle,
@@ -126,6 +130,7 @@ class RotationAssistStatus {
     this.autoBinning = 1,
     this.maxBinning = 0,
     this.confirmation,
+    this.cameraLost = false,
   });
 
   bool get confirming => state == RotationAssistStates.confirming;
@@ -175,6 +180,7 @@ class RotationAssistStatus {
               json['confirmation'] as Map<String, dynamic>,
             )
           : null,
+      cameraLost: json['camera_lost'] as bool? ?? false,
     );
   }
 }

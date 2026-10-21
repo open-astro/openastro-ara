@@ -185,17 +185,21 @@ public sealed partial class CameraService : ICameraMediator, IImagingMediator {
         }
     }
     internal const string CameraLostMessage = "The camera stopped responding — it may have dropped off USB or lost power.";
+    // Outside a run (autofocus, plate solves, rotation assist) nothing waits for Resume (#1436).
+    internal const string CameraLostTryAgain = "Check its USB cable and power, then try again.";
+    internal const string CameraNotConnectedTryAgain = "Connect it, then try again.";
 
     /// <summary>
     /// One capture with a single retry when the camera itself failed (a stalled exposure, a driver
     /// error, the camera vanishing mid-exposure): a one-off glitch costs one frame's time, not the
     /// run. A second device failure in the same capture is a camera that's gone:
     /// <see cref="CameraUnavailableException"/>, which the sequencer turns into a pause awaiting the
-    /// user. Each capture gets its own retry, so a failed manual snapshot or analysis frame earlier
+    /// user; <paramref name="lostNextStep"/> is what a caller outside a run tells the user instead.
+    /// Each capture gets its own retry, so a failed manual snapshot or analysis frame earlier
     /// doesn't use it up. Failures that aren't the camera's (a full or ejected disk, a catalog
     /// error) return false unchanged.
     /// </summary>
-    internal async Task<bool> CaptureWithRetryAsync(Func<Guid, Task<bool>> capture, Guid frameId, string label) {
+    internal async Task<bool> CaptureWithRetryAsync(Func<Guid, Task<bool>> capture, Guid frameId, string label, string? lostNextStep = null) {
         for (var failures = 1; ; failures++) {
             var before = DeviceFailureCount;
             bool ok;
@@ -203,7 +207,7 @@ public sealed partial class CameraService : ICameraMediator, IImagingMediator {
                 ok = await capture(frameId).ConfigureAwait(false);
             } catch (Exception ex) when (ex is not OperationCanceledException && DeviceFailureCount > before) {
                 if (failures >= DeviceFailuresBeforeLost) {
-                    throw new CameraUnavailableException(CameraLostMessage, ex);
+                    throw new CameraUnavailableException(CameraLostMessage, lostNextStep, ex);
                 }
                 LogRetryingAfterDeviceFailure(label);
                 frameId = Guid.NewGuid();
@@ -213,7 +217,7 @@ public sealed partial class CameraService : ICameraMediator, IImagingMediator {
                 return ok;
             }
             if (failures >= DeviceFailuresBeforeLost) {
-                throw new CameraUnavailableException(CameraLostMessage);
+                throw new CameraUnavailableException(CameraLostMessage, lostNextStep, null);
             }
             LogRetryingAfterDeviceFailure(label);
             frameId = Guid.NewGuid();

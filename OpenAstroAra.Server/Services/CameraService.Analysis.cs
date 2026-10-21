@@ -170,7 +170,7 @@ public sealed partial class CameraService : IAnalysisFrameSource {
             client = !_disposed && _state == EquipmentConnectionState.Connected ? _client : null;
         }
         if (client is null) {
-            throw new CameraUnavailableException(CameraNotConnectedMessage);
+            throw new CameraUnavailableException(CameraNotConnectedMessage, CameraNotConnectedTryAgain, null);
         }
         var exposureSec = request.ExposureSec;
 
@@ -193,7 +193,7 @@ public sealed partial class CameraService : IAnalysisFrameSource {
                 client = !_disposed && _state == EquipmentConnectionState.Connected ? _client : null;
             }
             if (client is null) {
-                throw new CameraUnavailableException(CameraNotConnectedMessage);
+                throw new CameraUnavailableException(CameraNotConnectedMessage, CameraNotConnectedTryAgain, null);
             }
             (ushort[] Pixels, int Width, int Height, DateTimeOffset CapturedAt)? exposed = null;
             var frameId = Guid.NewGuid(); // log correlation only — nothing is persisted under it
@@ -201,7 +201,7 @@ public sealed partial class CameraService : IAnalysisFrameSource {
                 frameId = id;
                 exposed = await ExposeAndDownloadAsync(CurrentClientOrThrow(), id, request, kind, ct).ConfigureAwait(false);
                 return exposed is not null;
-            }, frameId, kind).ConfigureAwait(false);
+            }, frameId, kind, CameraLostTryAgain).ConfigureAwait(false);
             if (!ok) {
                 throw new InvalidOperationException(
                     $"{kind} capture failed — see the daemon log for the cause (device timeout or disconnect)");
