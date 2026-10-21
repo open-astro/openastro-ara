@@ -28,6 +28,7 @@ abstract interface class CalibrationClient {
     bool generateOnly = false,
     bool? coolCamera,
     double? coolToTemperatureC,
+    bool? parkMountAfter,
   });
 
   Future<DarkLibraryState> darkLibraryStatus();
@@ -103,6 +104,7 @@ class CalibrationApi implements CalibrationClient {
     bool generateOnly = false,
     bool? coolCamera,
     double? coolToTemperatureC,
+    bool? parkMountAfter,
   }) async {
     final res = await _dio.post<dynamic>(
       '/api/v1/calibration/sessions/$sessionId/matching-flats',
@@ -112,6 +114,7 @@ class CalibrationApi implements CalibrationClient {
         'generate_only': generateOnly,
         'cool_camera': ?coolCamera,
         'cool_to_temperature_c': ?coolToTemperatureC,
+        'park_mount_after': ?parkMountAfter,
       },
     );
     final data = res.data;

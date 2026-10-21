@@ -47,14 +47,17 @@ public sealed record CalibrationFilterSummaryDto(
 /// so pre-§48.4 callers keep their shape.
 /// <c>CoolCamera</c> null = cool to the lights' set-point when they were cooled; false = leave the
 /// cooler alone; true = cool to <c>CoolToTemperatureC</c>, else the lights' set-point, else the
-/// profile's cooler target. A <c>CoolToTemperatureC</c> with <c>CoolCamera</c> null also cools.</remarks>
+/// profile's cooler target. A <c>CoolToTemperatureC</c> with <c>CoolCamera</c> null also cools.
+/// <c>ParkMountAfter</c> is the user's answer for THIS run (the flats dialog always sends it);
+/// null — the unattended end-of-night path — follows the profile's post_flat_park_mount.</remarks>
 public sealed record MatchingFlatsRequestDto(
     int? OverrideFrameCount,
     int? OverrideTargetAdu,
     bool GenerateOnly,
     string Flavor = "panel",
     bool? CoolCamera = null,
-    double? CoolToTemperatureC = null);
+    double? CoolToTemperatureC = null,
+    bool? ParkMountAfter = null);
 
 /// <summary>Sequence the server generated to capture matching flats for the session.
 /// <c>GeneratedSequenceId</c> is the persisted §38 sequence (runnable via

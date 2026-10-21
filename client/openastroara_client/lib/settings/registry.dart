@@ -726,11 +726,11 @@ const List<Setting> settingsRegistry = [
   Setting(
     id: 'session.calibration.post_flat_park_mount',
     label: 'Park the mount after flats',
-    description: 'Append a park step to the generated flats sequence so the rig ends the night parked once the last flat set completes.',
+    description: 'For the flats that start on their own when a night\'s run finishes: park the mount after the last flat set. Off by default; flats started from Calibration ask each time.',
     keywords: ['flats', 'park', 'mount', 'end of night'],
     path: ['Settings', 'Your night', 'Calibration'],
     type: SettingType.bool(),
-    defaultValue: true,
+    defaultValue: false,
     profilePath: 'safety.post_flat_park_mount',
   ),
   Setting(

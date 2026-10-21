@@ -1146,7 +1146,7 @@ class ProfileApi {
             (j['flat_target_adu_tolerance_pct'] as num?)?.toDouble() ?? 5.0,
         flatFramesPerFilter:
             (j['flat_frames_per_filter'] as num?)?.toInt() ?? 30,
-        postFlatParkMount: (j['post_flat_park_mount'] as bool?) ?? true,
+        postFlatParkMount: (j['post_flat_park_mount'] as bool?) ?? false,
         skyFlatTargetAdu: (j['sky_flat_target_adu'] as num?)?.toInt() ?? 25000,
         skyFlatFramesPerFilter:
             (j['sky_flat_frames_per_filter'] as num?)?.toInt() ?? 20,

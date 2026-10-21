@@ -668,6 +668,32 @@ namespace OpenAstroAra.Test {
             return new SequenceJsonConverter(factory).Deserialize(stored.Body.GetRawText());
         }
 
+        // A park nobody asked for swung a bench mount toward the desk next to it: the user's
+        // answer for this run wins over the profile, and a fresh profile never parks.
+        [Test]
+        public async Task GenerateMatchingFlats_parks_only_when_this_run_asks() {
+            var store = new FileSequenceService(_dir);
+            var profile = new InMemoryProfileStore();
+            var svc = new SqliteCalibrationService(_db, store, profile);
+            await InsertFrameAsync(Session, "light", "Ha", 300, 100, "M42");
+
+            async Task<int> Parks(bool? parkMountAfter) {
+                var plan = await svc.GenerateMatchingFlatsAsync(Session,
+                    new MatchingFlatsRequestDto(null, null, GenerateOnly: false, ParkMountAfter: parkMountAfter),
+                    idempotencyKey: null, CancellationToken.None);
+                return Deserialize((await store.GetAsync(plan.GeneratedSequenceId!.Value, CancellationToken.None))!, "Ha")
+                    .GetItemsSnapshot().OfType<ParkScope>().Count();
+            }
+
+            Assert.That(profile.GetSafetyPolicies().PostFlatParkMount, Is.False, "mount motion is opt-in by default");
+            Assert.That(await Parks(null), Is.Zero);
+            Assert.That(await Parks(true), Is.EqualTo(1));
+
+            profile.PutSafetyPolicies(profile.GetSafetyPolicies() with { PostFlatParkMount = true });
+            Assert.That(await Parks(false), Is.Zero, "the dialog's unticked box beats the end-of-night setting");
+            Assert.That(await Parks(null), Is.EqualTo(1), "end-of-night auto flats follow the setting");
+        }
+
         [Test]
         public async Task GenerateMatchingFlats_without_a_profile_store_omits_the_park() {
             var store = new FileSequenceService(_dir);

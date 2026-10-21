@@ -306,8 +306,10 @@ public sealed record SafetyPoliciesDto(
     double FlatTargetAduTolerancePct = 5,
     // Saved FLAT frames per filter.
     int FlatFramesPerFilter = 30,
-    // Append a ParkScope step after the generated flats so the rig ends the night parked.
-    bool PostFlatParkMount = true,
+    // Append a ParkScope step after the flats the night's run starts on its own (end-of-session
+    // auto flats). Off by default: mount motion is opt-in. Flats started from the Calibration
+    // dialog ask every time instead.
+    bool PostFlatParkMount = false,
     // §48.7 sky_flat — the twilight sky-flat variant the §39.5 generator emits for
     // "sky_at_twilight" (SkyFlats leaves + the WaitForSunAltitude/SlewScopeToAltAz
     // envelope). Optional ctor defaults keep an older profile.json deserializing.

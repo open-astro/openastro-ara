@@ -144,10 +144,10 @@ const Map<String, Help> helpRegistry = {
     key: 'session.calibration.post_flat_park_mount',
     title: 'Park after flats',
     body:
-        'Appends a park step to the end of the generated flats sequence, so when the last '
-        'flat set finishes the mount parks itself and the rig ends the night in a safe, '
-        'known position. Turn it off if something else manages parking (an observatory '
-        'controller, or you run flats mid-evening).',
+        'For the flats Ara starts on its own when a night\'s run finishes: appends a park step, '
+        'so the mount parks itself after the last flat set. Off by default, because a park '
+        'swings the mount; only turn it on if the mount always has a clear path to park. Flats '
+        'you start from Calibration ask each time instead.',
     relatedSettings: ['session.calibration.capture_default'],
     keywords: ['park', 'mount', 'flats', 'end of night'],
   ),

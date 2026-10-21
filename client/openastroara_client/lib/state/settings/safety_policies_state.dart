@@ -165,7 +165,7 @@ class SafetyPolicies {
     this.flatTargetPercent = 50,
     this.flatTargetAduTolerancePct = 5.0,
     this.flatFramesPerFilter = 30,
-    this.postFlatParkMount = true,
+    this.postFlatParkMount = false,
     this.skyFlatTargetAdu = 25000,
     this.skyFlatFramesPerFilter = 20,
     this.skyFlatTargetAzimuth = 90.0,

@@ -254,6 +254,9 @@ class _MatchingFlatsDialogState extends ConsumerState<MatchingFlatsDialog> {
   bool _loadingSession = true;
   double? _lightsSetpointC;
   bool _cool = false;
+  // Mount motion is opt-in for every run: never pre-ticked, not even from the
+  // profile's end-of-night setting (a bench or indoor rig has no clear path).
+  bool _park = false;
 
   @override
   void initState() {
@@ -312,6 +315,7 @@ class _MatchingFlatsDialogState extends ConsumerState<MatchingFlatsDialog> {
         frameCount: frames,
         coolCamera: _cool,
         coolToTemperatureC: _cool ? coolTo : null,
+        parkMountAfter: _park,
       );
       // Post-await UI work gates on State.mounted (the dialog may have been
       // dismissed while the request was in flight).
@@ -346,72 +350,86 @@ class _MatchingFlatsDialogState extends ConsumerState<MatchingFlatsDialog> {
     final filters = widget.filterNames.join(', ');
     return AlertDialog(
       title: const Text('Capture Matching Flats'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Generates a flat sequence replaying this session\'s state per '
-            'filter ($filters): wheel position, focus, rotator angle, gain '
-            'and offset. Each filter works out its own exposure and panel '
-            'brightness from two test frames, and remembers them for next '
-            'time.',
-            style: Theme.of(
-              context,
-            ).textTheme.bodySmall?.copyWith(color: AraColors.textSecondary),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _frames,
-            keyboardType: TextInputType.number,
-            decoration: const InputDecoration(labelText: 'Flats per filter'),
-          ),
-          const SizedBox(height: 8),
-          const SizedBox(height: 8),
-          SwitchListTile(
-            value: _cool,
-            onChanged: _loadingSession || _busy
-                ? null
-                : (v) => setState(() => _cool = v),
-            dense: true,
-            contentPadding: EdgeInsets.zero,
-            title: const Text('Cool the camera first'),
-            subtitle: Text(
-              _loadingSession
-                  ? 'Checking the lights\' temperature…'
-                  : _lightsSetpointC != null
-                  ? 'The lights ran at ${_degrees(_lightsSetpointC!)} °C.'
-                  : 'The lights were taken with the cooler off.',
-            ),
-          ),
-          if (_cool)
-            TextField(
-              controller: _coolTo,
-              keyboardType: const TextInputType.numberWithOptions(
-                signed: true,
-                decimal: true,
-              ),
-              decoration: const InputDecoration(
-                labelText: 'Cool to (°C)',
-                // Indoors the cooler may not reach a set-point a cold night
-                // made easy; CoolCamera gives up after its stall timeout and
-                // the flats carry on, each recording its real temperature.
-                helperText:
-                    'Indoors it may not get there: after a few minutes the flats '
-                    'start at the closest temperature reached.',
-                helperMaxLines: 2,
-              ),
-            ),
-          if (_error != null) ...[
-            const SizedBox(height: 8),
+      // Scrolls on a short window (cooling + park options outgrow 668 px).
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
             Text(
-              _error!,
+              'Generates a flat sequence replaying this session\'s state per '
+              'filter ($filters): wheel position, focus, rotator angle, gain '
+              'and offset. Each filter works out its own exposure and panel '
+              'brightness from two test frames, and remembers them for next '
+              'time.',
               style: Theme.of(
                 context,
-              ).textTheme.bodySmall?.copyWith(color: AraColors.accentError),
+              ).textTheme.bodySmall?.copyWith(color: AraColors.textSecondary),
             ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _frames,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(labelText: 'Flats per filter'),
+            ),
+            const SizedBox(height: 8),
+            const SizedBox(height: 8),
+            SwitchListTile(
+              value: _cool,
+              onChanged: _loadingSession || _busy
+                  ? null
+                  : (v) => setState(() => _cool = v),
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Cool the camera first'),
+              subtitle: Text(
+                _loadingSession
+                    ? 'Checking the lights\' temperature…'
+                    : _lightsSetpointC != null
+                    ? 'The lights ran at ${_degrees(_lightsSetpointC!)} °C.'
+                    : 'The lights were taken with the cooler off.',
+              ),
+            ),
+            if (_cool)
+              TextField(
+                controller: _coolTo,
+                keyboardType: const TextInputType.numberWithOptions(
+                  signed: true,
+                  decimal: true,
+                ),
+                decoration: const InputDecoration(
+                  labelText: 'Cool to (°C)',
+                  // Indoors the cooler may not reach a set-point a cold night
+                  // made easy; CoolCamera gives up after its stall timeout and
+                  // the flats carry on, each recording its real temperature.
+                  helperText:
+                      'Indoors it may not get there: after a few minutes the flats '
+                      'start at the closest temperature reached.',
+                  helperMaxLines: 2,
+                ),
+              ),
+            CheckboxListTile(
+              value: _park,
+              onChanged: _busy ? null : (v) => setState(() => _park = v ?? false),
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              controlAffinity: ListTileControlAffinity.leading,
+              title: const Text('Park the mount when the flats finish'),
+              subtitle: const Text(
+                'Leave this off unless the mount has a clear path to park.',
+              ),
+            ),
+            if (_error != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                _error!,
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: AraColors.accentError),
+              ),
+            ],
           ],
-        ],
+        ),
       ),
       actions: [
         TextButton(

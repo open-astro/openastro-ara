@@ -323,9 +323,10 @@ public sealed class SqliteCalibrationService : ICalibrationService {
             ? tol : DefaultTargetAduTolerancePct;
         // NB: the park rides only the persisted sequence body — GeneratedFlatSequenceDto.Steps
         // is the per-filter capture plan and deliberately doesn't model non-capture steps.
-        // Store-less fallback is FALSE (not the DTO's true default) on purpose: with no profile
-        // consulted, the generator must not add unrequested mount motion.
-        var parkAfter = policies?.PostFlatParkMount ?? false;
+        // Mount motion is never added unasked: a park the user didn't choose for THIS run swung a
+        // mount on a bench at the desk next to it. The request's answer wins; only the unattended
+        // end-of-night path (null) reads the profile, and a store-less context never parks.
+        var parkAfter = request.ParkMountAfter ?? policies?.PostFlatParkMount ?? false;
         var cooling = ResolveFlatCooling(request, session.CoolerSetpointC);
         var captureSettings = await ModalCaptureSettingsByFilterAsync(conn, sessionId, ct);
         var steps = new List<GeneratedFlatStepDto>(session.FiltersUsed.Count);

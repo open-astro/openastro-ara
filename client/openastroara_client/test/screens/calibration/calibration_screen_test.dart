@@ -17,6 +17,7 @@ class _FakeCalibrationClient implements CalibrationClient {
   int? flatsFrameCount;
   bool? flatsCoolCamera;
   double? flatsCoolTo;
+  bool? flatsPark;
   DarkLibraryBuildRequest? buildRequest;
 
   _FakeCalibrationClient({
@@ -51,8 +52,10 @@ class _FakeCalibrationClient implements CalibrationClient {
     bool generateOnly = false,
     bool? coolCamera,
     double? coolToTemperatureC,
+    bool? parkMountAfter,
   }) async {
     flatsSessionId = sessionId;
+    flatsPark = parkMountAfter;
     flatsFrameCount = frameCount;
     flatsCoolCamera = coolCamera;
     flatsCoolTo = coolToTemperatureC;
@@ -140,6 +143,8 @@ void main() {
         reason: 'the dialog starts from the profile frames per filter');
     expect(fake.flatsCoolCamera, isFalse,
         reason: 'lights taken warm → the cooling switch starts off');
+    expect(fake.flatsPark, isFalse,
+        reason: 'the mount never parks unless this run asks for it');
     expect(container.read(selectedSequenceIdProvider), 'seq-flats-1',
         reason: 'the generated sequence is selected for the Run tab');
     expect(container.read(selectedTabIndexProvider), kRunTabIndex,
@@ -163,6 +168,20 @@ void main() {
 
     expect(fake.flatsCoolCamera, isTrue);
     expect(fake.flatsCoolTo, -8, reason: 'the user can adjust the target');
+  });
+
+  testWidgets('ticking park asks the daemon to park after the flats',
+      (tester) async {
+    final fake = _FakeCalibrationClient(sessions: [_session()]);
+    await _pump(tester, fake);
+
+    await tester.tap(find.text('Capture Matching Flats'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Park the mount when the flats finish'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Generate & open'));
+    await tester.pumpAndSettle();
+    expect(fake.flatsPark, isTrue);
   });
 
   testWidgets('switching cooling off sends cool_camera false', (tester) async {
