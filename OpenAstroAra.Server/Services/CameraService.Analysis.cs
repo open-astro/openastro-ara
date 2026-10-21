@@ -199,7 +199,7 @@ public sealed partial class CameraService : IAnalysisFrameSource {
             var frameId = Guid.NewGuid(); // log correlation only — nothing is persisted under it
             var ok = await CaptureWithRetryAsync(async id => {
                 frameId = id;
-                exposed = await ExposeAndDownloadAsync(CurrentClientOrThrow(), id, request, kind, ct).ConfigureAwait(false);
+                exposed = await ExposeAndDownloadAsync(CurrentClientOrThrow(CameraNotConnectedTryAgain), id, request, kind, ct).ConfigureAwait(false);
                 return exposed is not null;
             }, frameId, kind, CameraLostTryAgain).ConfigureAwait(false);
             if (!ok) {

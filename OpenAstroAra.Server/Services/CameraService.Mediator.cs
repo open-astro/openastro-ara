@@ -177,11 +177,11 @@ public sealed partial class CameraService : ICameraMediator, IImagingMediator {
 
     // The connection each capture attempt runs on: re-read per attempt, so the retry after a lost
     // exposure uses the client a reconnect put in place rather than the superseded one.
-    private AlpacaCamera CurrentClientOrThrow() {
+    private AlpacaCamera CurrentClientOrThrow(string? nextStep = null) {
         lock (_gate) {
             return !_disposed && _state == EquipmentConnectionState.Connected && _client is { } c
                 ? c
-                : throw new CameraUnavailableException(CameraNotConnectedMessage);
+                : throw new CameraUnavailableException(CameraNotConnectedMessage, nextStep, null);
         }
     }
     internal const string CameraLostMessage = "The camera stopped responding — it may have dropped off USB or lost power.";

@@ -40,6 +40,8 @@ namespace OpenAstroAra.Core.Model {
         /// <summary>
         /// A camera failure a caller outside a run may see, where nothing waits for Resume: the
         /// message is the <paramref name="cause"/> followed by <paramref name="nextStep"/> (#1436).
+        /// A run's pause prompt uses <see cref="Cause"/> alone and adds its own Resume step, so the
+        /// next step given here never reaches a paused run.
         /// </summary>
         public CameraUnavailableException(string cause, string? nextStep, Exception? inner)
             : base(nextStep is null ? cause : $"{cause} {nextStep}", inner) {

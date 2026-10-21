@@ -415,7 +415,7 @@ public sealed partial class RotationAssistService : IRotationAssistService, IDis
 
     // A dead camera is not a sky that won't solve (#1436): the error is the camera's own message.
     private void CameraFailed(CameraUnavailableException ex) {
-        LogSolveFaulted(ex);
+        LogCameraLost(ex.Cause);
         lock (_gate) {
             _consecutiveFailures++;
             _state = "error";
@@ -531,6 +531,9 @@ public sealed partial class RotationAssistService : IRotationAssistService, IDis
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Rotation readout: solved position angle {Solved:0.##}°, {Delta:+0.##;-0.##}° to the target")]
     private partial void LogSample(double solved, double delta);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Rotation readout: stopped, the camera is unavailable: {Cause}")]
+    private partial void LogCameraLost(string cause);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Rotation readout: a solve faulted (counted as a failed sample)")]
     private partial void LogSolveFaulted(Exception ex);
