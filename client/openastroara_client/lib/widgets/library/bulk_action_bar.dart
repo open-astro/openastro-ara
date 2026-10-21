@@ -398,8 +398,9 @@ class _TagDialogState extends State<_TagDialog> {
   }
 }
 
-/// Confirm deletion; returns null on cancel, else whether to also delete the
-/// FITS files from disk (default: catalog-only).
+/// Confirm deletion; returns true to delete, null on cancel. Deletes always
+/// remove the FITS files too: a catalog-only delete came back at the next
+/// restart's orphan scan.
 class _DeleteConfirmDialog extends StatelessWidget {
   final int count;
   const _DeleteConfirmDialog({required this.count});
