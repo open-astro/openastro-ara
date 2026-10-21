@@ -123,10 +123,12 @@ const Map<String, Help> helpRegistry = {
     key: 'session.calibration.flat_target_adu_tolerance_pct',
     title: 'Flat target tolerance',
     body:
-        'How close the probe\'s measured mean must be to the target before the set starts '
-        'capturing, as a percentage of the target. 5% converges in one or two probes on a '
-        'stable panel; tighten it if you want maximally consistent flats between filters, '
-        'loosen it if your panel flickers and the probe struggles to settle.',
+        'How close a test frame\'s level must be to the target before the set starts '
+        'capturing, as a percentage of the target. The level is the median of the frame\'s '
+        'central area (on a colour camera, its brightest colour channel). Two test frames '
+        'work out the exposure and a third checks it, or one when the remembered exposure '
+        'still lands on target. Tighten it for more consistent flats between filters; loosen '
+        'it if your panel flickers and the check frame keeps missing.',
     relatedSettings: ['session.calibration.flat_target_adu'],
     keywords: ['flats', 'tolerance', 'percent', 'probe'],
   ),
