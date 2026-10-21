@@ -472,6 +472,24 @@ namespace OpenAstroAra.Test {
         private static readonly string[] DarksBySetPoint = ["cool -20", "dark 300", "cool -10", "dark 300", "cool 18", "dark 60"];
 
         [Test]
+        public async Task Darks_that_cooled_the_camera_end_with_the_profiles_warm_up() {
+            var store = new FileSequenceService(_dir);
+            var profile = new InMemoryProfileStore();
+            profile.PutImagingDefaults(profile.GetImagingDefaults() with { WarmupAtSessionEnd = true });
+            var svc = new SqliteCalibrationService(_db, store, profile);
+            await InsertFrameAsync(Session, "light", "Ha", 300, 100, "M42", temperatureC: -10, coolerSetpointC: -10);
+
+            // Cooling for the flats unticked: only the darks cool the camera.
+            var plan = await svc.GenerateMatchingFlatsAsync(Session,
+                new MatchingFlatsRequestDto(null, null, GenerateOnly: false, CoolCamera: false, IncludeFlats: false, IncludeDarks: true),
+                idempotencyKey: null, CancellationToken.None);
+            var stored = await store.GetAsync(plan.GeneratedSequenceId!.Value, CancellationToken.None);
+            var root = new SequenceJsonConverter(HeadlessSequencerFactory.WithDefaults()).Deserialize(stored!.Body.GetRawText());
+            Assert.That(root.GetItemsSnapshot().Last(), Is.InstanceOf<WarmCamera>(),
+                "the camera isn't left regulating at the darks' temperature");
+        }
+
+        [Test]
         public async Task Darks_for_lights_from_before_set_points_were_recorded_run_at_their_temperature() {
             // Catalogued before cooler_setpoint_c existed: -10 °C lights with no set-point on record.
             var store = new FileSequenceService(_dir);

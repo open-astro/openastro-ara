@@ -93,11 +93,14 @@ public sealed record DarkStepSpec(
 
 /// <summary>The bias and dark sets a calibration run shoots after its flats. With
 /// <paramref name="LensCapPause"/> the run first opens the panel's cover and waits for the user
-/// to put the lens cap on (a panel doesn't always seal out stray light).</summary>
+/// to put the lens cap on (a panel doesn't always seal out stray light). <paramref name="WarmAfter"/>
+/// (the profile's warm-up at session end) warms the camera at the end of a run whose darks cooled
+/// it, even when the flats weren't cooled.</summary>
 public sealed record AfterFlatsSpec(
     IReadOnlyList<BiasStepSpec> Bias,
     IReadOnlyList<DarkStepSpec> Darks,
-    bool LensCapPause);
+    bool LensCapPause,
+    bool WarmAfter = false);
 
 /// <summary>Where a calibration run files its frames: the lights' target and observing night, so
 /// the flats, darks and bias land next to those lights (<c>{target}/{night}/Flat</c> …).</summary>
@@ -168,11 +171,11 @@ public static class CalibrationSequenceBuilder {
         foreach (var step in steps) {
             items.Add(FlatBlock(step, filing));
         }
-        AddAfterFlats(items, afterFlats, filing, cooling);
+        var darksCooled = AddAfterFlats(items, afterFlats, filing, cooling);
         if (parkMountAfter) {
             items.Add(new JsonObject { ["$type"] = ParkScopeType });
         }
-        AddWarmStep(items, cooling);
+        AddWarmStep(items, cooling, darksCooled && afterFlats!.WarmAfter);
 
         var root = new JsonObject {
             ["schemaVersion"] = SequenceSchemaValidator.SchemaVersion,
@@ -218,11 +221,11 @@ public static class CalibrationSequenceBuilder {
             items.Add(SkyFlatBlock(step, filing));
         }
         // Darks need the scope covered after sky flats, so these runs want the lens-cap pause.
-        AddAfterFlats(items, afterFlats, filing, cooling);
+        var darksCooled = AddAfterFlats(items, afterFlats, filing, cooling);
         if (parkMountAfter) {
             items.Add(new JsonObject { ["$type"] = ParkScopeType });
         }
-        AddWarmStep(items, cooling);
+        AddWarmStep(items, cooling, darksCooled && afterFlats!.WarmAfter);
 
         var root = new JsonObject {
             ["schemaVersion"] = SequenceSchemaValidator.SchemaVersion,
@@ -315,8 +318,8 @@ public static class CalibrationSequenceBuilder {
         }
     }
 
-    private static void AddWarmStep(JsonArray items, FlatCooling? cooling) {
-        if (cooling is { CoolToC: not null, WarmAfter: true }) {
+    private static void AddWarmStep(JsonArray items, FlatCooling? cooling, bool afterCooledDarks) {
+        if (cooling is { CoolToC: not null, WarmAfter: true } || afterCooledDarks) {
             items.Add(new JsonObject {
                 ["$type"] = WarmCameraType,
                 ["Duration"] = 0,
@@ -464,9 +467,10 @@ public static class CalibrationSequenceBuilder {
         capture["CalibrationNight"] = filing.Night.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
     }
 
-    private static void AddAfterFlats(JsonArray items, AfterFlatsSpec? afterFlats, CalibrationFilingSpec? filing, FlatCooling? cooling) {
+    // Returns whether a dark set cooled the camera.
+    private static bool AddAfterFlats(JsonArray items, AfterFlatsSpec? afterFlats, CalibrationFilingSpec? filing, FlatCooling? cooling) {
         if (afterFlats is null || (afterFlats.Bias.Count == 0 && afterFlats.Darks.Count == 0)) {
-            return;
+            return false;
         }
         if (afterFlats.LensCapPause) {
             items.Add(new JsonObject { ["$type"] = OpenFlatPanelCoverType });
@@ -481,13 +485,16 @@ public static class CalibrationSequenceBuilder {
         // temperature leaves the cooler as it is. Sets are grouped by temperature, coldest first,
         // so the cooler changes once per group.
         var sensorAt = cooling?.CoolToC;
+        var cooled = false;
         foreach (var step in afterFlats.Darks.OrderBy(d => d.CoolToC is null).ThenBy(d => d.CoolToC)) {
             if (step.CoolToC is double t && t != sensorAt) {
                 items.Add(new JsonObject { ["$type"] = CoolCameraType, ["Temperature"] = t, ["Duration"] = 0 });
                 sensorAt = t;
+                cooled = true;
             }
             items.Add(DarkBlock(step.CoolToC, step, filing));
         }
+        return cooled;
     }
 
     private static JsonObject BiasBlock(BiasStepSpec step, CalibrationFilingSpec? filing) {

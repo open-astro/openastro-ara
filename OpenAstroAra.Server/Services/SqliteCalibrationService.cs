@@ -399,7 +399,8 @@ public sealed class SqliteCalibrationService : ICalibrationService {
             ? await UncoveredDarksAsync(conn, sessionId, darkFrames, canCool: _cameraCanCool?.Invoke() != false, ct)
             : [];
         var totalDarks = darks.Sum(d => d.FrameCount);
-        var afterFlats = new AfterFlatsSpec(bias, darks, request.PauseForLensCap);
+        var afterFlats = new AfterFlatsSpec(bias, darks, request.PauseForLensCap,
+            WarmAfter: _profile?.GetImagingDefaults().WarmupAtSessionEnd ?? false);
 
         // The frames file next to the lights they calibrate: {target}/{night}/Flat, …/Dark, …/Bias.
         // The night is the lights' observing night on the daemon's clock, as the lights were named.
