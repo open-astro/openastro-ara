@@ -183,7 +183,8 @@ public sealed partial class FlatCaptureService : IFlatCaptureExecutor {
         int? offset = request.Offset >= 0 ? request.Offset : null;
         int? panelAt = startBrightness;
         var probeNo = 0;
-        // Decided once, by the first probe with any signal: an all-zero probe can't tell.
+        // Decided once, by the first probe with any signal (an all-zero probe can't tell): scaled
+        // throws at once, so what sticks is "native", and later probes aren't re-checked (#1438).
         bool? scaled = null;
         async Task<double> Probe(double exposureSec, int? brightness, CancellationToken ct) {
             if (maxBrightness > 0 && brightness is int want && want != panelAt) {

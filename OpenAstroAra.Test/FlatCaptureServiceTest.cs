@@ -49,6 +49,8 @@ namespace OpenAstroAra.Test {
             public int Quantum { get; set; } = 1;
             /// <summary>This many first frames come back all zero (no light yet).</summary>
             public int ZeroFrames { get; set; }
+            /// <summary>This many first frames ignore <see cref="Quantum"/> (native data).</summary>
+            public int NativeFrames { get; set; }
             // The panel's brightness scales the rate (null = the scene doesn't depend on it).
             public Func<double>? BrightnessScale { get; set; }
             public List<double> ProbedExposures { get; } = new();
@@ -64,7 +66,8 @@ namespace OpenAstroAra.Test {
                 ProbedExposures.Add(exposureSec);
                 var rate = AduPerSecond * (BrightnessScale?.Invoke() ?? 1);
                 var raw = Math.Clamp(Pedestal + (rate * exposureSec), 0, ushort.MaxValue);
-                var value = ProbedExposures.Count <= ZeroFrames ? (ushort)0 : (ushort)(Math.Floor(raw / Quantum) * Quantum);
+                var quantum = ProbedExposures.Count <= NativeFrames ? 1 : Quantum;
+                var value = ProbedExposures.Count <= ZeroFrames ? (ushort)0 : (ushort)(Math.Floor(raw / quantum) * quantum);
                 var pixels = new ushort[16];
                 Array.Fill(pixels, value);
                 return Task.FromResult(new AnalysisFrame(pixels, 4, 4, DateTimeOffset.UtcNow));
@@ -249,6 +252,21 @@ namespace OpenAstroAra.Test {
             Assert.That(ok, Is.True);
             Assert.That(captured[0].ExposureTime, Is.EqualTo(65535 * 0.5 / 2048).Within(0.5),
                 "half the real 16-bit range, not a sixteenth of it");
+        }
+
+        [Test]
+        public async Task The_first_probe_with_signal_decides_the_scaling_for_the_whole_solve() {
+            // #1438: a first probe with native low-bit noise settles it. A later probe that happens
+            // to land on multiples of 16 doesn't restart the solve against 16 bits.
+            scene.MaxAdu = 4095;
+            scene.AduPerSecond = 1001;  // probe 1 (1 s) reads 1001: native, off target
+            scene.Quantum = 16;
+            scene.NativeFrames = 1;     // probe 2 onward lands on the 16-grid
+            var ok = await CreateSUT().CaptureFlatSetAsync(Request(targetAdu: 0, maxSec: 60), new Progress<ApplicationStatus>(), CancellationToken.None);
+
+            Assert.That(ok, Is.True);
+            Assert.That(captured[0].ExposureTime, Is.EqualTo(4095 * 0.5 / 1001).Within(0.1),
+                "half the native 12-bit range, not a restart against 16 bits");
         }
 
         [Test]
