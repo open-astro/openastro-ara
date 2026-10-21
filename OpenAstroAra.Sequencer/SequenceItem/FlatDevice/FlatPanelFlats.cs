@@ -150,14 +150,19 @@ namespace OpenAstroAra.Sequencer.SequenceItem.FlatDevice {
                 throw new SequenceEntityFailedException(
                     $"Flat set is misconfigured: target ADU {TargetAdu}, target {TargetPercent}%, frame count {FrameCount}, exposure bounds [{MinExposureSec}, {MaxExposureSec}].");
             }
+            var tally = new FlatSetTally();
             var request = new FlatSetRequest(
                 TargetAdu, TargetAduTolerancePct, FrameCount, Brightness,
                 MinExposureSec, MaxExposureSec, Gain, Offset, TargetPercent,
-                CalibrationFiling.Target(CalibrationTarget), CalibrationFiling.ParseNight(CalibrationNight));
-            // A lost camera parks the run awaiting the user and Resume starts the set again, rather
-            // than failing this filter and moving on to the next with no camera.
+                CalibrationFiling.Target(CalibrationTarget), CalibrationFiling.ParseNight(CalibrationNight),
+                Tally: tally);
+            // A lost camera parks the run awaiting the user and Resume shoots the flats still missing,
+            // rather than failing this filter and moving on to the next with no camera.
             var ok = await UserFixablePause.RetryAfterUserFixAsync(this, "Flat set",
-                () => flatCaptureExecutor.CaptureFlatSetAsync(request, progress, token), progress, token);
+                () => tally.Saved >= FrameCount
+                    ? Task.FromResult(true)
+                    : flatCaptureExecutor.CaptureFlatSetAsync(request with { FrameCount = FrameCount - tally.Saved }, progress, token),
+                progress, token);
             if (!ok) {
                 throw new SequenceEntityFailedException(
                     "Flat set failed — no exposure and panel brightness reach the target level, or the capture path is unavailable (see the daemon log).");

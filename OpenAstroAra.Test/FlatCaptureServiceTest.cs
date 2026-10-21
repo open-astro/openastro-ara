@@ -170,6 +170,15 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task The_set_counts_each_saved_flat_for_a_resume() {
+            var tally = new FlatSetTally();
+            var ok = await CreateSUT().CaptureFlatSetAsync(Request() with { Tally = tally },
+                new Progress<ApplicationStatus>(), CancellationToken.None);
+            Assert.That(ok, Is.True);
+            Assert.That(tally.Saved, Is.EqualTo(captured.Count).And.EqualTo(3));
+        }
+
+        [Test]
         public async Task Flats_for_a_session_file_under_its_target_and_night() {
             var night = new DateOnly(2026, 10, 16);
             var ok = await CreateSUT().CaptureFlatSetAsync(
@@ -382,7 +391,8 @@ namespace OpenAstroAra.Test {
 
             await item.Execute(new Progress<ApplicationStatus>(), CancellationToken.None);
 
-            Assert.That(seen, Is.EqualTo(new FlatSetRequest(25000, 3, 12, 80, 0.5, 6, 120, 30)));
+            Assert.That(seen!.Tally, Is.Not.Null, "the set counts its saved frames for a resume");
+            Assert.That(seen with { Tally = null }, Is.EqualTo(new FlatSetRequest(25000, 3, 12, 80, 0.5, 6, 120, 30)));
         }
 
         [Test]
@@ -546,7 +556,8 @@ namespace OpenAstroAra.Test {
 
             await item.Execute(new Progress<ApplicationStatus>(), CancellationToken.None);
 
-            Assert.That(seen, Is.EqualTo(new SkyFlatSetRequest(20000, 4, 15, 0.02, 8, 45000, 4000, 120, 30)));
+            Assert.That(seen!.Tally, Is.Not.Null, "the set counts its saved frames for a resume");
+            Assert.That(seen with { Tally = null }, Is.EqualTo(new SkyFlatSetRequest(20000, 4, 15, 0.02, 8, 45000, 4000, 120, 30)));
         }
 
         [Test]

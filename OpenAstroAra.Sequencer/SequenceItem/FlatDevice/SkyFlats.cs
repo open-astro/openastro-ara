@@ -142,13 +142,19 @@ namespace OpenAstroAra.Sequencer.SequenceItem.FlatDevice {
                 throw new SequenceEntityFailedException(
                     $"Sky-flat set is misconfigured: target ADU {TargetAdu} must sit between stop bounds [{StopAtMinAdu}, {StopAtMaxAdu}], frame count {FrameCount}, exposure bounds [{MinExposureSec}, {MaxExposureSec}].");
             }
+            var tally = new FlatSetTally();
             var request = new SkyFlatSetRequest(
                 TargetAdu, TargetAduTolerancePct, FrameCount,
                 MinExposureSec, MaxExposureSec, StopAtMaxAdu, StopAtMinAdu, Gain, Offset,
-                CalibrationFiling.Target(CalibrationTarget), CalibrationFiling.ParseNight(CalibrationNight));
-            // A lost camera pauses for the user, as for panel flats.
+                CalibrationFiling.Target(CalibrationTarget), CalibrationFiling.ParseNight(CalibrationNight),
+                Tally: tally);
+            // A lost camera pauses for the user, and Resume shoots the flats still missing, as for
+            // panel flats.
             var ok = await UserFixablePause.RetryAfterUserFixAsync(this, "Sky-flat set",
-                () => flatCaptureExecutor.CaptureSkyFlatSetAsync(request, progress, token), progress, token);
+                () => tally.Saved >= FrameCount
+                    ? Task.FromResult(true)
+                    : flatCaptureExecutor.CaptureSkyFlatSetAsync(request with { FrameCount = FrameCount - tally.Saved }, progress, token),
+                progress, token);
             if (!ok) {
                 throw new SequenceEntityFailedException(
                     "Sky-flat set failed — the sky left the usable brightness window or the capture path is unavailable (see the daemon log).");

@@ -140,6 +140,7 @@ public sealed partial class FlatCaptureService : IFlatCaptureExecutor {
                     Night = request.Night,
                 };
                 _ = await _imaging.CaptureImage(sequence, token, progress, request.TargetName ?? "Flats").ConfigureAwait(false);
+                request.Tally?.Add();
                 progress?.Report(new ApplicationStatus {
                     Status = $"Flat {n}/{request.FrameCount} at {exposure:0.###}s",
                 });
@@ -428,6 +429,7 @@ public sealed partial class FlatCaptureService : IFlatCaptureExecutor {
                     Night = request.Night,
                 };
                 _ = await _imaging.CaptureImage(sequence, token, progress, request.TargetName ?? "Sky flats").ConfigureAwait(false);
+                request.Tally?.Add();
                 progress?.Report(new ApplicationStatus {
                     Status = $"Sky flat {n}/{request.FrameCount} at {exposure:0.###}s",
                 });

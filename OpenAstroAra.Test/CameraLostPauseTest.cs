@@ -106,6 +106,33 @@ namespace OpenAstroAra.Test {
             await execute.WaitAsync(TimeSpan.FromSeconds(5));
             Assert.That(sets, Is.EqualTo(2));
         }
+
+        private static readonly int[] FullThenRemainder = [30, 10];
+
+        [Test]
+        public async Task Resume_shoots_only_the_flats_the_lost_camera_left_missing() {
+            var executor = new Mock<IFlatCaptureExecutor>();
+            var asked = new System.Collections.Generic.List<int>();
+            executor.Setup(e => e.CaptureFlatSetAsync(It.IsAny<FlatSetRequest>(), It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()))
+                .Returns<FlatSetRequest, IProgress<ApplicationStatus>, CancellationToken>((request, _, _) => {
+                    asked.Add(request.FrameCount);
+                    if (asked.Count == 1) {
+                        for (var n = 0; n < 20; n++) {
+                            request.Tally!.Add(); // 20 of 30 saved, then the camera drops
+                        }
+                        throw new CameraUnavailableException("The camera stopped responding.");
+                    }
+                    return Task.FromResult(true);
+                });
+            var item = new FlatPanelFlats(executor.Object) { FrameCount = 30 };
+            var gate = Attach(item);
+
+            var execute = item.Execute(new SyncProgress(_ => { }), CancellationToken.None);
+            await Task.Delay(50);
+            gate.Resume();
+            await execute.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.That(asked, Is.EqualTo(FullThenRemainder), "the filter ends with 30 flats, not 50");
+        }
     }
 
     /// <summary>The device half against a scripted loopback camera: one failed exposure is retried,

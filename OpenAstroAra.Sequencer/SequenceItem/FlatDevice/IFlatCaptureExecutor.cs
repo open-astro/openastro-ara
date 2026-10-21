@@ -37,6 +37,8 @@ namespace OpenAstroAra.Sequencer.SequenceItem.FlatDevice {
     /// <param name="TargetPercent">Automatic target as a percentage of the camera's full scale.</param>
     /// <param name="TargetName">The lights' target the flats file under (null = "Flats").</param>
     /// <param name="Night">The lights' night the flats file under (null = the night they're taken).</param>
+    /// <param name="Tally">Counts the frames saved, so a set the camera interrupted resumes with the
+    /// rest instead of starting over.</param>
     public sealed record FlatSetRequest(
         double TargetAdu,
         double TolerancePct,
@@ -48,7 +50,8 @@ namespace OpenAstroAra.Sequencer.SequenceItem.FlatDevice {
         int Offset = -1,
         double TargetPercent = 50,
         string? TargetName = null,
-        DateOnly? Night = null);
+        DateOnly? Night = null,
+        FlatSetTally? Tally = null);
 
     /// <summary>
     /// One §48.4 twilight sky-flat set for the CURRENT filter/pointing context. Unlike the panel
@@ -66,6 +69,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.FlatDevice {
     /// <param name="Offset">Camera offset for the saved flats (-1 = camera default).</param>
     /// <param name="TargetName">The lights' target the flats file under (null = "Sky flats").</param>
     /// <param name="Night">The lights' night the flats file under (null = the night they're taken).</param>
+    /// <param name="Tally">Counts the frames saved (see <see cref="FlatSetRequest"/>).</param>
     public sealed record SkyFlatSetRequest(
         double TargetAdu,
         double TolerancePct,
@@ -77,7 +81,19 @@ namespace OpenAstroAra.Sequencer.SequenceItem.FlatDevice {
         int Gain = -1,
         int Offset = -1,
         string? TargetName = null,
-        DateOnly? Night = null);
+        DateOnly? Night = null,
+        FlatSetTally? Tally = null);
+
+    /// <summary>The flats a set has saved so far, across the attempts a lost camera forces: Resume
+    /// shoots only the frames still missing (2026-10-21: a camera that dropped at flat 20 of 30
+    /// would otherwise leave the filter with 50).</summary>
+    public sealed class FlatSetTally {
+        private int saved;
+
+        public int Saved => Volatile.Read(ref saved);
+
+        public void Add() => Interlocked.Increment(ref saved);
+    }
 
     /// <summary>
     /// §48.3/§48.4 — the flat-capture seam <see cref="FlatPanelFlats"/> and <see cref="SkyFlats"/>
