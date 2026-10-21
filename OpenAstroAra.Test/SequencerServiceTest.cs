@@ -749,6 +749,38 @@ namespace OpenAstroAra.Test {
             Assert.That(ws.Events, Does.Not.Contain("sequence.auto_flats_prompt"), "a profile default never prompts");
         }
 
+        private static readonly GeneratedFlatStepDto[] OneFilterToShoot = [new("Ha", 30, null, null)];
+
+        [TestCase(false, true, TestName = "Every filter covered: the user hears flats are already covered")]
+        [TestCase(true, false, TestName = "No sequence stored for another reason: no covered-flats notice")]
+        public async Task The_covered_flats_notice_only_says_what_is_true(bool planHasSteps, bool expectNotice) {
+            var id = Guid.NewGuid();
+            var sessionId = Guid.NewGuid();
+            var frames = new Mock<IFrameRepository>();
+            frames.Setup(f => f.CreateRunSessionAsync(It.IsAny<CancellationToken>())).ReturnsAsync(sessionId);
+            frames.Setup(f => f.EndSessionAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+            var calibration = new Mock<ICalibrationService>();
+            var generated = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            // No stored sequence either way: a covered plan has no steps, an unwired store has steps but no id.
+            calibration.Setup(c => c.GenerateMatchingFlatsAsync(sessionId, It.IsAny<MatchingFlatsRequestDto>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+                .Callback(() => generated.TrySetResult())
+                .ReturnsAsync(new GeneratedFlatSequenceDto(sessionId, null, "Flats — tonight", planHasSteps ? 30 : 0,
+                    planHasSteps ? OneFilterToShoot : Array.Empty<GeneratedFlatStepDto>()));
+            var notifications = new Mock<INotificationService>();
+            notifications.Setup(n => n.CreateAsync(It.IsAny<NotificationDto>(), It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+            var svc = BuildService(id, BuildBody(c => c.Items.Add(new Annotation { Name = "one" })), new RecordingWsBroadcaster(),
+                frames: frames.Object, profileStore: ProfileWithCaptureDefault("panel_at_end").Object,
+                calibration: calibration.Object, notifications: notifications.Object);
+
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            await WaitForTerminalAsync(svc, id);
+            Assert.That(await Task.WhenAny(generated.Task, Task.Delay(TimeSpan.FromSeconds(10))), Is.SameAs(generated.Task));
+            await Task.Delay(200); // the notice rides the same background task
+
+            notifications.Verify(n => n.CreateAsync(It.Is<NotificationDto>(d => d.Title == "Tonight's flats are already covered"), It.IsAny<CancellationToken>()),
+                expectNotice ? Times.Once() : Times.Never());
+        }
+
         [Test]
         public async Task An_aborted_run_never_triggers_end_of_session_flats() {
             var id = Guid.NewGuid();

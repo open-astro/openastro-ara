@@ -141,6 +141,11 @@ public sealed partial class SequencerService : IAutoFlatsService {
                 CancellationToken.None).ConfigureAwait(false);
             if (generated.GeneratedSequenceId is not Guid flatsId || generated.TotalFlatFrames <= 0) {
                 LogAutoFlatsNothingToCapture(sequenceId, sessionId);
+                // No sequence for another reason (no sequence store wired): nothing true to tell
+                // the user about their flats.
+                if (generated.Steps.Count > 0) {
+                    return;
+                }
                 // The session has lights (the generator would have thrown otherwise), so an empty
                 // plan means every filter is already covered by flats from the same setup.
                 await NotifyAutoFlatsQuietlyAsync("Tonight's flats are already covered",
