@@ -30,6 +30,9 @@ internal static class AlpacaConnect {
     /// <summary>How long a device gets to answer <c>Connected = true</c>.</summary>
     public static readonly TimeSpan Timeout = TimeSpan.FromSeconds(60);
 
+    /// <summary>Sends <c>Connected = true</c> on a client nobody else holds yet. The budget is set on
+    /// the client's shared configuration for the duration of the PUT, so a concurrent caller on the
+    /// same client would see the long timeout too.</summary>
     public static void Connect(AlpacaDeviceBaseClass client) {
         ArgumentNullException.ThrowIfNull(client);
         WithConnectBudget(client.ClientConfiguration, () => client.Connected = true);
