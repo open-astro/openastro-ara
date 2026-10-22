@@ -124,6 +124,30 @@ public sealed partial class EquipmentEventPublisher {
         }
     }
 
+    /// <summary>A connected device's details (caps, readings, ports) are now cached. Services set
+    /// Connected — and publish it — before their seed read, so a client that re-read on that push
+    /// saw no details; this repeats <c>equipment.state_changed</c> (<c>state: "connected"</c>,
+    /// <c>details_ready: true</c>) so it re-reads now instead of on its next poll. No alias and no
+    /// <see cref="Transition"/>: the connection did not change, so in-process listeners and the
+    /// <c>equipment.connected</c> subscribers must not see a second connect.</summary>
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Event publication is best-effort UX freshness: serialization or channel faults must be logged and dropped, never propagated into a device connect path. CA1031's log-and-recover boundary applies.")]
+    public void DetailsReady(DeviceType deviceType, string? deviceId, string? deviceName) {
+        try {
+            var payload = new JsonObject {
+                ["device_type"] = deviceType.ToString().ToLowerInvariant(),
+                ["device_id"] = deviceId,
+                ["device_name"] = deviceName,
+                ["state"] = EquipmentConnectionState.Connected.ToString().ToLowerInvariant(),
+                ["details_ready"] = true,
+            };
+            using var doc = JsonDocument.Parse(payload.ToJsonString());
+            Publish(WsEventCatalog.EquipmentStateChanged, doc.RootElement.Clone());
+        } catch (Exception ex) {
+            LogPublishFailed(ex, WsEventCatalog.EquipmentStateChanged);
+        }
+    }
+
     /// <summary>#1298 — the manual filter wheel's hand-swap prompt changed: raised (pending set),
     /// resolved or cancelled (pending null). Clients show or drop the "install the X filter"
     /// prompt and re-read the wheel.</summary>

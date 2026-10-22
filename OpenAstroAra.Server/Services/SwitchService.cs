@@ -692,9 +692,9 @@ public sealed partial class SwitchService : ISwitchService, ICoolingFanActuator,
                     && _connections.TryGetValue(conn.Key, out var current)
                     && ReferenceEquals(current, conn);
                 if (stillConnected) {
-                    // The Connected push went out before this seed read; push again so a
-                    // client re-reads now that the port cache is filled.
-                    _events?.StateChanged(DeviceType.Switch, conn.Device.UniqueId, conn.Device.Name, conn.State);
+                    // The Connected push went out before this seed read; tell clients the
+                    // details are cached so they re-read now.
+                    _events?.DetailsReady(DeviceType.Switch, conn.Device.UniqueId, conn.Device.Name);
                 }
             }
             if (stillConnected) {

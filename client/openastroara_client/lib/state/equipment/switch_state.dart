@@ -82,7 +82,9 @@ class SwitchListNotifier extends AsyncNotifier<List<SwitchDevice>> {
   // one-off action failure never wipes the loaded device list.
   bool _acting = false;
   // A §60.9 push that landed during a manual read, replayed when it ends — see
-  // EquipmentDeviceNotifier._pushPending.
+  // EquipmentDeviceNotifier._pushPending. Unlike that notifier, a push during an
+  // action's re-read is not held: refresh() doesn't drop reads while _acting, so
+  // it runs alongside and the _readIssue guard keeps the newer result.
   bool _pushPending = false;
   // Bumped on every build() (active-server change). A refresh captures the gen at
   // its start and only writes if it still matches, so an in-flight read can't land
