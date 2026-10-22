@@ -32,6 +32,9 @@ namespace OpenAstroAra.Server.Services;
 /// transition plus the notable-moment alias (<c>equipment.connected</c> /
 /// <c>equipment.disconnected</c> / <c>equipment.connection_failed</c>) the
 /// client can subscribe to without decoding the state machine.
+/// <see cref="Removed"/> and <see cref="DetailsReady"/> also publish
+/// <c>equipment.state_changed</c> without a transition (no alias), so a client
+/// re-reads the device.
 ///
 /// <para>Payload shape (§60.6 lowercase enum tokens, matching the REST wire):
 /// <c>{ "device_type": "telescope", "device_id": ..., "device_name": ...,

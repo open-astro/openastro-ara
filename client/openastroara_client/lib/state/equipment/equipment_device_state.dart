@@ -234,9 +234,11 @@ abstract class EquipmentDeviceNotifier<T extends EquipmentDeviceStatus>
     refresh();
   }
 
-  // Re-read once for a push that arrived mid-read (see [_pushPending]).
+  // Re-read once for a push that arrived mid-read (see [_pushPending]). The flag
+  // stays set while the other guard still holds (a manual read ending under an
+  // action), since refresh() would drop the read; the action's finally replays it.
   void _replayPendingPush() {
-    if (!_pushPending || !ref.mounted) return;
+    if (!_pushPending || !ref.mounted || _refreshing || _acting) return;
     _pushPending = false;
     refresh();
   }
