@@ -29,64 +29,83 @@ namespace OpenAstroAra.Test {
 
     /// <summary>
     /// A connect announces Connected before the service has read the device's details (caps,
-    /// readings, ports), then announces it again once they are cached — so a client that
-    /// re-read on the first push, and saw no details, re-reads instead of waiting out its
-    /// 15 s liveness poll. Two representative services; all ten share the same tail.
+    /// readings, ports), then publishes <see cref="EquipmentEventPublisher.DetailsReady"/> once
+    /// they are cached — so a client that re-read on the first push, and saw no details, re-reads
+    /// instead of waiting out its 15 s liveness poll. Every service has its own connect tail, so
+    /// every service is a case.
     /// </summary>
     [TestFixture]
     [Category("IO")] // #1265 — real disk, loopback HTTP or a simulator: not part of the quick unit run
     public class ConnectedDetailsPushTest {
 
-        private sealed class StateRecorder : IWsBroadcaster {
-            private readonly List<string> _states = new();
-            public long CurrentSequence => _states.Count;
-            public int Connected() { lock (_states) { return _states.Count(s => s == "connected"); } }
+        private sealed record Published(string Type, string? State, string? DeviceId, bool DetailsReady);
+
+        private sealed class Recorder : IWsBroadcaster {
+            private readonly List<Published> _events = new();
+            public long CurrentSequence => _events.Count;
+            public Published[] Snapshot() { lock (_events) { return _events.ToArray(); } }
             public Task PublishAsync(string eventType, JsonElement payload, CancellationToken ct) {
-                if (eventType == WsEventCatalog.EquipmentStateChanged) {
-                    lock (_states) { _states.Add(payload.GetProperty("state").GetString()!); }
-                }
+                var state = payload.TryGetProperty("state", out var s) ? s.GetString() : null;
+                var id = payload.TryGetProperty("device_id", out var d) ? d.GetString() : null;
+                var ready = payload.TryGetProperty("details_ready", out var r) && r.GetBoolean();
+                lock (_events) { _events.Add(new Published(eventType, state, id, ready)); }
                 return Task.CompletedTask;
             }
         }
 
-        private static DiscoveredDeviceDto Device(ScriptedAlpacaDevice stub, DeviceType type) => new(
-            UniqueId: $"{type}-under-test", Name: $"Bench {type}", Type: type,
-            HostName: stub.BaseUri.Host, IpAddress: stub.BaseUri.Host, IpPort: stub.BaseUri.Port,
-            AlpacaDeviceNumber: 0, UseHttps: false);
+        private static TestCaseData Make<T>(DeviceType type, Func<EquipmentEventPublisher, T> create,
+                Func<T, ConnectRequestDto, Task> connect) where T : IDisposable =>
+            new TestCaseData(type,
+                    new Func<EquipmentEventPublisher, IDisposable>(e => create(e)),
+                    new Func<IDisposable, ConnectRequestDto, Task>((svc, req) => connect((T)svc, req)))
+                .SetArgDisplayNames(type.ToString());
 
-        private static async Task WaitForConnectedPushesAsync(StateRecorder recorder, int count) {
-            var sw = Stopwatch.StartNew();
-            while (recorder.Connected() < count && sw.Elapsed < TimeSpan.FromSeconds(15)) {
-                await Task.Delay(20);
-            }
+        public static IEnumerable<TestCaseData> Services() {
+            yield return Make(DeviceType.Camera, e => new CameraService(events: e), (s, r) => s.ConnectAsync(r, null, CancellationToken.None));
+            yield return Make(DeviceType.Telescope, e => new TelescopeService(events: e), (s, r) => s.ConnectAsync(r, null, CancellationToken.None));
+            yield return Make(DeviceType.Focuser, e => new FocuserService(events: e), (s, r) => s.ConnectAsync(r, null, CancellationToken.None));
+            yield return Make(DeviceType.FilterWheel, e => new FilterWheelService(events: e), (s, r) => s.ConnectAsync(r, null, CancellationToken.None));
+            yield return Make(DeviceType.Rotator, e => new RotatorService(events: e), (s, r) => s.ConnectAsync(r, null, CancellationToken.None));
+            yield return Make(DeviceType.FlatDevice, e => new FlatDeviceService(events: e), (s, r) => s.ConnectAsync(r, null, CancellationToken.None));
+            yield return Make(DeviceType.ObservingConditions, e => new ObservingConditionsService(events: e), (s, r) => s.ConnectAsync(r, null, CancellationToken.None));
+            yield return Make(DeviceType.SafetyMonitor, e => new SafetyMonitorService(events: e), (s, r) => s.ConnectAsync(r, null, CancellationToken.None));
+            yield return Make(DeviceType.Dome, e => new DomeService(events: e), (s, r) => s.ConnectAsync(r, null, CancellationToken.None));
+            yield return Make(DeviceType.Switch, e => new SwitchService(events: e), (s, r) => s.ConnectAsync(r, null, CancellationToken.None));
         }
+
+        // Numeric answers for the seed reads that need one; everything else answers `true`.
+        private static string? Script(string path) =>
+            path.EndsWith("/maxstep", StringComparison.Ordinal) || path.EndsWith("/position", StringComparison.Ordinal)
+            || path.EndsWith("/maxincrement", StringComparison.Ordinal) || path.EndsWith("/maxswitch", StringComparison.Ordinal)
+                ? "1" : null;
 
         [Test]
         [Category("bench")] // loopback-only, runs in the default job too
-        public async Task Focuser_connect_pushes_connected_again_once_details_are_cached() {
-            await using var stub = ScriptedAlpacaDevice.Start(path => path.EndsWith("/maxstep", StringComparison.Ordinal)
-                || path.EndsWith("/position", StringComparison.Ordinal) || path.EndsWith("/maxincrement", StringComparison.Ordinal)
-                ? "1000" : null);
-            var recorder = new StateRecorder();
-            using var svc = new FocuserService(events: new EquipmentEventPublisher(recorder));
+        [TestCaseSource(nameof(Services))]
+        public async Task Connect_publishes_details_ready_once_the_seed_read_is_cached(DeviceType type,
+                Func<EquipmentEventPublisher, IDisposable> create, Func<IDisposable, ConnectRequestDto, Task> connect) {
+            await using var stub = ScriptedAlpacaDevice.Start(Script);
+            var recorder = new Recorder();
+            using var svc = create(new EquipmentEventPublisher(recorder));
+            var device = new DiscoveredDeviceDto(
+                UniqueId: $"{type}-under-test", Name: $"Bench {type}", Type: type,
+                HostName: stub.BaseUri.Host, IpAddress: stub.BaseUri.Host, IpPort: stub.BaseUri.Port,
+                AlpacaDeviceNumber: 0, UseHttps: false);
 
-            await svc.ConnectAsync(new ConnectRequestDto(Device(stub, DeviceType.Focuser)), null, CancellationToken.None);
-            await WaitForConnectedPushesAsync(recorder, 2);
+            await connect(svc, new ConnectRequestDto(device));
+            var sw = Stopwatch.StartNew();
+            while (!recorder.Snapshot().Any(e => e.DetailsReady) && sw.Elapsed < TimeSpan.FromSeconds(5)) {
+                await Task.Delay(20);
+            }
 
-            Assert.That(recorder.Connected(), Is.EqualTo(2), "Connected, then Connected again after the seed read");
-        }
-
-        [Test]
-        [Category("bench")]
-        public async Task SafetyMonitor_connect_pushes_connected_again_once_details_are_cached() {
-            await using var stub = ScriptedAlpacaDevice.Start();
-            var recorder = new StateRecorder();
-            using var svc = new SafetyMonitorService(events: new EquipmentEventPublisher(recorder));
-
-            await svc.ConnectAsync(new ConnectRequestDto(Device(stub, DeviceType.SafetyMonitor)), null, CancellationToken.None);
-            await WaitForConnectedPushesAsync(recorder, 2);
-
-            Assert.That(recorder.Connected(), Is.EqualTo(2), "Connected, then Connected again after the seed read");
+            var events = recorder.Snapshot();
+            var connected = events.Where(e => e.Type == WsEventCatalog.EquipmentStateChanged && e.State == "connected").ToArray();
+            Assert.That(connected, Has.Length.EqualTo(2), "Connected, then details-ready after the seed read");
+            Assert.That(connected[0].DetailsReady, Is.False);
+            Assert.That(connected[1].DetailsReady, Is.True);
+            Assert.That(connected[1].DeviceId, Is.EqualTo(device.UniqueId), "the push names the device");
+            Assert.That(events.Count(e => e.Type == WsEventCatalog.EquipmentConnected), Is.EqualTo(1),
+                "details-ready is not a second connect: no repeated alias");
         }
     }
 }
