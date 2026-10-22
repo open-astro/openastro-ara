@@ -186,6 +186,24 @@ void main() {
       expect(api.statusReads, 3, reason: 'the held push re-reads at once');
     });
 
+    test('a push during a push-driven read is replayed once it ends', () async {
+      // The first Connected push starts a refresh; the details-ready push can
+      // land while that read is still in flight and must not be dropped.
+      await prime();
+      api.gateSecondRead = Completer<void>();
+      events.add(_stateChanged('telescope'));
+      await pumpEventQueue();
+      expect(api.statusReads, 2, reason: 'the first push read is held');
+
+      events.add(_stateChanged('telescope'));
+      await pumpEventQueue();
+      expect(api.statusReads, 2, reason: 'no overlapping read');
+
+      api.gateSecondRead!.complete();
+      await pumpEventQueue();
+      expect(api.statusReads, 3, reason: 'the held push re-reads at once');
+    });
+
     test(
       'an unknown device_type token from a newer daemon is ignored',
       () async {
