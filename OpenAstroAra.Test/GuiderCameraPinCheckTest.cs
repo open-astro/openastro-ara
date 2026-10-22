@@ -95,6 +95,20 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void The_main_camera_saved_as_localhost_is_still_refused_under_its_lan_address() {
+            // #1443: the main camera is remembered as localhost; the guide-camera choice names the address the
+            // client discovered. Both are this box, so picking the imaging camera is still refused.
+            static bool cm4(string? h) => h is "localhost" or "127.0.0.1" or "192.168.1.118";
+            var main = new DiscoveredDeviceDto(Pro, "ZWO ASI533MC Pro", DeviceType.Camera, "localhost", "127.0.0.1", 6800, 0, false);
+            var settings = Settings("Alpaca Camera [192.168.1.118:6800/0]", Pro);
+
+            Assert.That(GuiderCameraPinCheck.IsMainCamera(settings, Before(), main, cm4), Is.True);
+            Assert.That(GuiderCameraPinCheck.Describe(settings, Before(), main, cm4), Does.Contain("is the main imaging camera"));
+            Assert.That(GuiderCameraPinCheck.IsMainCamera(Settings("Alpaca Camera [192.168.1.50:6800/0]", Pro), Before(), main, cm4), Is.False,
+                "the same id on another box is another camera");
+        }
+
+        [Test]
         public void The_main_imaging_camera_is_refused_by_identity_and_by_address() {
             // By UniqueID: the pin is fine but the device at that number IS the imaging camera.
             var byId = GuiderCameraPinCheck.Describe(Settings("Alpaca Camera [127.0.0.1:6800/0]", Pro), Before(), MainCamera(0));

@@ -145,6 +145,15 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task An_https_or_addressless_record_asks_no_server() {
+            var alpaca = new FakeAlpaca(new() { ["127.0.0.1"] = LocalBridge() });
+
+            Assert.That(await HostLocality.FindOnLocalServerAsync(Focuser("192.168.8.118") with { UseHttps = true }, alpaca, CancellationToken.None, AtHome), Is.Null);
+            Assert.That(await HostLocality.FindOnLocalServerAsync(Focuser("") with { HostName = "  " }, alpaca, CancellationToken.None, _ => false), Is.Null);
+            Assert.That(alpaca.Asked, Is.Empty);
+        }
+
+        [Test]
         public async Task A_local_record_asks_no_server() {
             var alpaca = new FakeAlpaca(new());
 

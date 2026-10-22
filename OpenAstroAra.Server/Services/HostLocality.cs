@@ -114,6 +114,11 @@ public static class HostLocality {
             return null; // already this machine
         }
         var savedHost = string.IsNullOrWhiteSpace(device.IpAddress) ? device.HostName : device.IpAddress;
+        // The management lookup is plain http: an https-only server would look gone, and a record with no
+        // address has nothing to ask.
+        if (device.UseHttps || string.IsNullOrWhiteSpace(savedHost)) {
+            return null;
+        }
         var key = EquipmentIdentityReconcile.DeviceKey(device.Type, device.AlpacaDeviceNumber);
         var savedTask = alpaca.GetConfiguredDevicesAsync(savedHost, device.IpPort, ct);
         var localTask = alpaca.GetConfiguredDevicesAsync(LocalIpAddress, device.IpPort, ct);

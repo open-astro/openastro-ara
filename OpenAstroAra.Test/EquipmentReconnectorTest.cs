@@ -276,6 +276,22 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_record_under_one_of_this_boxes_addresses_is_dialled_as_localhost() {
+            var saved = new DiscoveredDeviceDto("ZWO_EAF_0", "ZWO EAF", DeviceType.Focuser, "192.168.1.118", "192.168.1.118", 6800, 0, false);
+            var foc = new Mock<IFocuserService>();
+            foc.Setup(s => s.ConnectAsync(It.IsAny<ConnectRequestDto>(), null, It.IsAny<CancellationToken>())).ReturnsAsync(Accepted());
+            var sp = new Mock<IServiceProvider>();
+            sp.Setup(s => s.GetService(typeof(IFocuserService))).Returns(foc.Object);
+            var r = new EquipmentReconnector(sp.Object, new FakeStore(saved), NullLogger<EquipmentReconnector>.Instance,
+                isThisMachine: h => h == "192.168.1.118");
+
+            await r.ReconnectAsync(DeviceType.Focuser, CancellationToken.None);
+
+            foc.Verify(s => s.ConnectAsync(It.Is<ConnectRequestDto>(c => c.Device.HostName == "localhost" && c.Device.IpAddress == "127.0.0.1"),
+                null, It.IsAny<CancellationToken>()), Times.Once);
+        }
+
+        [Test]
         public async Task Without_a_management_client_the_saved_record_is_dialled_as_it_is() {
             var saved = new DiscoveredDeviceDto("ZWO_EAF_0", "ZWO EAF", DeviceType.Focuser, "192.168.8.118", "192.168.8.118", 6800, 0, false);
             var foc = new Mock<IFocuserService>();

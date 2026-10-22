@@ -46,7 +46,8 @@ public static class GuiderCameraPinCheck {
     /// main-camera check by host/port/number runs. <paramref name="mainCamera"/> is the imaging
     /// camera the daemon holds (connected or retained), or null.</summary>
     public static string? Describe(IGuiderSettings settings,
-            IReadOnlyDictionary<string, AlpacaConfiguredDevice> devices, DiscoveredDeviceDto? mainCamera) {
+            IReadOnlyDictionary<string, AlpacaConfiguredDevice> devices, DiscoveredDeviceDto? mainCamera,
+            Func<string?, bool>? isThisMachine = null) {
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(devices);
         if (CameraEndpoint(settings) is not { } ep) {
@@ -74,7 +75,7 @@ public static class GuiderCameraPinCheck {
             }
         }
 
-        return IsMainCamera(settings, devices, mainCamera)
+        return IsMainCamera(settings, devices, mainCamera, isThisMachine)
             ? $"The guide camera '{selection}' is the main imaging camera ({mainCamera!.Name}). "
                 + "The guider must not open the camera the sequence images with; pick the guide camera instead."
             : null;
@@ -95,8 +96,11 @@ public static class GuiderCameraPinCheck {
 
     /// <summary>The main-camera half of <see cref="Describe"/> alone: whether the picked slot is the imaging
     /// camera the daemon holds, by identity when the server told us ids, else by address.</summary>
+    /// <param name="isThisMachine">"Is this host this machine?" — injectable for tests; defaults to
+    /// <see cref="HostLocality.IsThisMachine"/>.</param>
     public static bool IsMainCamera(IGuiderSettings settings,
-            IReadOnlyDictionary<string, AlpacaConfiguredDevice> devices, DiscoveredDeviceDto? mainCamera) {
+            IReadOnlyDictionary<string, AlpacaConfiguredDevice> devices, DiscoveredDeviceDto? mainCamera,
+            Func<string?, bool>? isThisMachine = null) {
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(devices);
         if (mainCamera is null || CameraEndpoint(settings) is not { } ep) {
@@ -107,7 +111,8 @@ public static class GuiderCameraPinCheck {
         var sameServer = ep.Port == mainCamera.IpPort
             && (string.Equals(ep.Host, mainCamera.IpAddress, StringComparison.OrdinalIgnoreCase)
                 || string.Equals(ep.Host, mainCamera.HostName, StringComparison.OrdinalIgnoreCase)
-                || (IsLoopback(ep.Host) && (IsLoopback(mainCamera.IpAddress) || IsLoopback(mainCamera.HostName))));
+                || (OnThisMachine(ep.Host, isThisMachine)
+                    && (OnThisMachine(mainCamera.IpAddress, isThisMachine) || OnThisMachine(mainCamera.HostName, isThisMachine))));
         // When the server told us the picked device's id and the main camera has one, identity decides
         // alone: after a renumber the daemon's retained main-camera NUMBER can be stale (review r1), and
         // the Mini sitting at that old number is not the imaging camera. The number comparison is the
@@ -121,7 +126,8 @@ public static class GuiderCameraPinCheck {
         return byId || byNumber;
     }
 
-    private static bool IsLoopback(string? host) =>
-        !string.IsNullOrEmpty(host)
-        && (host.Equals("localhost", StringComparison.OrdinalIgnoreCase) || host.StartsWith("127.", StringComparison.Ordinal) || host == "::1");
+    // Loopback, or any of this machine's names and addresses: the main camera is remembered as localhost
+    // (#1443) while the guide-camera choice carries the address the client discovered (192.168.1.118).
+    private static bool OnThisMachine(string? host, Func<string?, bool>? isThisMachine) =>
+        !string.IsNullOrWhiteSpace(host) && (isThisMachine ?? HostLocality.IsThisMachine)(host);
 }
