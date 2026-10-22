@@ -34,7 +34,9 @@ abstract interface class LibraryClient {
     List<String> removeTags = const [],
   });
 
-  Future<void> bulkDelete(List<String> frameIds, {bool deleteFromDisk = false});
+  /// Deletes the frames and their files. Daemons since #1437 always remove the
+  /// files; [deleteFromDisk] is still sent for older ones that honour it.
+  Future<void> bulkDelete(List<String> frameIds, {bool deleteFromDisk = true});
 
   /// §40.8 move: reassign frames to another session (422 if it doesn't exist).
   Future<void> bulkMove(List<String> frameIds, String targetSessionId);
@@ -174,7 +176,7 @@ class LibraryApi implements LibraryClient {
   @override
   Future<void> bulkDelete(
     List<String> frameIds, {
-    bool deleteFromDisk = false,
+    bool deleteFromDisk = true,
   }) async {
     await _dio.post<dynamic>(
       '/api/v1/frames/bulk/delete',

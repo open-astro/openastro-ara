@@ -115,19 +115,19 @@ class _SessionCalibrationPanelState
             if (v != null) n.setCalibrationCaptureDefault(v);
           },
         ),
-        // §48.7 flat_panel — the auto-exposure flat sets the generated
-        // sequences run (each filter probes exposure to the target ADU,
-        // then captures this many frames).
+        // §48.7 flat_panel — the flat sets the generated sequences run
+        // (each filter solves its exposure and panel brightness for this
+        // share of the camera's range, then captures this many frames).
         const SettingsSectionHeader('Flat sets'),
         EditableNumberRow(
-          label: 'Target brightness (mean ADU)',
+          label: 'Target brightness (% of camera range)',
           helpKey: 'session.calibration.flat_target_adu',
-          currentValue: s.flatTargetAdu.toString(),
+          currentValue: _percent(s.flatTargetPercent),
           getCanonical: () =>
-              ref.read(safetyPoliciesProvider).flatTargetAdu.toString(),
+              _percent(ref.read(safetyPoliciesProvider).flatTargetPercent),
           parse: (str) {
-            final v = int.tryParse(str);
-            if (v != null) n.setFlatTargetAdu(v);
+            final v = double.tryParse(str);
+            if (v != null) n.setFlatTargetPercent(v);
           },
         ),
         EditableNumberRow(
@@ -261,3 +261,6 @@ class _SessionCalibrationPanelState
     );
   }
 }
+
+String _percent(double v) =>
+    v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toString();

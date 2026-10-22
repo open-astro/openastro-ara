@@ -15,6 +15,7 @@
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using OpenAstroAra.Astrometry;
+using OpenAstroAra.Core.Model;
 using OpenAstroAra.Core.Utility;
 using OpenAstroAra.Server.Contracts;
 using System;
@@ -91,6 +92,7 @@ public sealed partial class RotationAssistService : IRotationAssistService, IDis
     private RotationAssistSampleDto? _latest;
     private readonly Queue<RotationAssistSampleDto> _recent = new();
     private string? _error;
+    private bool _cameraLost;
     private int _consecutiveFailures;
     private byte[]? _frame;
     private long _frameSeq;
@@ -207,6 +209,7 @@ public sealed partial class RotationAssistService : IRotationAssistService, IDis
                 _target = target;
                 _started = DateTimeOffset.UtcNow;
                 _error = null;
+                _cameraLost = false;
                 _consecutiveFailures = 0;
             }
             _loopCts?.Dispose();
@@ -245,6 +248,7 @@ public sealed partial class RotationAssistService : IRotationAssistService, IDis
             lock (_gate) {
                 _state = "confirming";
                 _error = null;
+                _cameraLost = false;
                 _confirmation = null;
             }
             _loopCts = new CancellationTokenSource();
@@ -319,7 +323,8 @@ public sealed partial class RotationAssistService : IRotationAssistService, IDis
                 Binning: _binning,
                 AutoBinning: ResolveBinning(null, maxBinning),
                 MaxBinning: maxBinning,
-                Confirmation: _confirmation);
+                Confirmation: _confirmation,
+                CameraLost: _cameraLost);
         }
     }
 
@@ -361,6 +366,10 @@ public sealed partial class RotationAssistService : IRotationAssistService, IDis
                 try {
                     solved = await _solver.SolvePositionAngleAsync(exposureSeconds, binning, ct).ConfigureAwait(false);
                 } catch (OperationCanceledException) when (ct.IsCancellationRequested) {
+                    return;
+                } catch (CameraUnavailableException ex) {
+                    // The capture already retried once: a gone camera ends the readout now, saying so.
+                    CameraFailed(ex);
                     return;
                 } catch (Exception ex) {
                     LogSolveFaulted(ex);
@@ -404,6 +413,17 @@ public sealed partial class RotationAssistService : IRotationAssistService, IDis
         }
     }
 
+    // A dead camera is not a sky that won't solve (#1436): the error is the camera's own message.
+    private void CameraFailed(CameraUnavailableException ex) {
+        LogCameraLost(ex.Cause);
+        lock (_gate) {
+            _consecutiveFailures++;
+            _state = "error";
+            _error = ex.Message;
+            _cameraLost = true;
+        }
+    }
+
     /// <summary>Append one solve as the latest sample (and the picture, when it rendered). Caller holds <see cref="_gate"/>.</summary>
     private RotationAssistSampleDto RecordSample(RotationSolve s, double delta, byte[]? jpeg) {
         _seq++;
@@ -433,6 +453,9 @@ public sealed partial class RotationAssistService : IRotationAssistService, IDis
         try {
             solved = await _solver.SolvePositionAngleAsync(exposureSeconds, 1, ct).ConfigureAwait(false);
         } catch (OperationCanceledException) when (ct.IsCancellationRequested) {
+            return;
+        } catch (CameraUnavailableException ex) {
+            CameraFailed(ex);
             return;
         } catch (Exception ex) {
             LogSolveFaulted(ex);
@@ -508,6 +531,9 @@ public sealed partial class RotationAssistService : IRotationAssistService, IDis
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Rotation readout: solved position angle {Solved:0.##}°, {Delta:+0.##;-0.##}° to the target")]
     private partial void LogSample(double solved, double delta);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Rotation readout: stopped, the camera is unavailable: {Cause}")]
+    private partial void LogCameraLost(string cause);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Rotation readout: a solve faulted (counted as a failed sample)")]
     private partial void LogSolveFaulted(Exception ex);

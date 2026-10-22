@@ -65,6 +65,7 @@ namespace OpenAstroAra.Equipment.Model {
             clone.Dither = Dither;
             clone.DitherAmount = DitherAmount;
             clone.Offset = Offset;
+            clone.Night = Night;
             return clone;
         }
 
@@ -161,6 +162,14 @@ namespace OpenAstroAra.Equipment.Model {
                 RaisePropertyChanged();
             }
         }
+
+        /// <summary>
+        /// The observing night the frame is filed under, instead of the night it was taken. Set
+        /// for calibration frames shot for an earlier night's lights, so the flats, darks and bias
+        /// land in the same night folder as those lights. Null = the night it was taken.
+        /// </summary>
+        [XmlIgnore]
+        public DateOnly? Night { get; set; }
 
         private bool _enableSubSample;
 

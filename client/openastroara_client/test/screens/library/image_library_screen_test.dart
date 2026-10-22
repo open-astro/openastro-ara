@@ -206,7 +206,7 @@ class _FakeLibraryClient implements LibraryClient {
   @override
   Future<void> bulkDelete(
     List<String> frameIds, {
-    bool deleteFromDisk = false,
+    bool deleteFromDisk = true,
   }) async {
     deleted = (frameIds, deleteFromDisk);
   }
@@ -301,7 +301,7 @@ void main() {
     // Session actions live behind the header's overflow menu.
     await tester.tap(find.byTooltip('Session actions'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Capture Matching Flats'));
+    await tester.tap(find.text('Capture Calibration Frames'));
     await tester.pumpAndSettle();
     // The shared dialog from the Calibration screen, fed this card's session.
     expect(find.text('Generate & open'), findsOneWidget);
@@ -342,7 +342,7 @@ void main() {
     );
   });
 
-  testWidgets('12f.3b: bulk delete confirms and sends the disk flag', (
+  testWidgets('12f.3b: bulk delete confirms and deletes the files too', (
     tester,
   ) async {
     final fake = _FakeLibraryClient(
@@ -361,13 +361,14 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Delete this frame?'), findsOneWidget);
 
-    // Default: catalog-only (delete_from_disk false).
+    // A catalog-only delete came back on the next daemon start (its scan
+    // re-imports the files), so delete always takes the files with it.
     await tester.tap(find.widgetWithText(FilledButton, 'Delete'));
     await tester.pumpAndSettle();
 
     expect(fake.deleted, isNotNull);
     expect(fake.deleted!.$1, ['f1']);
-    expect(fake.deleted!.$2, isFalse);
+    expect(fake.deleted!.$2, isTrue);
   });
 
   testWidgets('§40.6: Resume Target lands on the generated sequence in Run', (

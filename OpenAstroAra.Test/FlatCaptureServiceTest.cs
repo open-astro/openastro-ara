@@ -43,12 +43,31 @@ namespace OpenAstroAra.Test {
         /// <summary>Frame source whose mean ADU is <c>rate × exposure</c>, clamped to 16-bit.</summary>
         private sealed class LinearSceneFrameSource : IAnalysisFrameSource {
             public double AduPerSecond { get; set; } = 10000;
+            public double Pedestal { get; set; }
+            public int MaxAdu { get; set; }
+            /// <summary>Values land on multiples of this (16 = 12-bit data scaled to 16 bits).</summary>
+            public int Quantum { get; set; } = 1;
+            /// <summary>This many first frames come back all zero (no light yet).</summary>
+            public int ZeroFrames { get; set; }
+            /// <summary>This many first frames ignore <see cref="Quantum"/> (native data).</summary>
+            public int NativeFrames { get; set; }
+            // The panel's brightness scales the rate (null = the scene doesn't depend on it).
+            public Func<double>? BrightnessScale { get; set; }
             public List<double> ProbedExposures { get; } = new();
+            public List<int?> ProbedGains { get; } = new();
+
+            public Task<AnalysisFrame> CaptureForAnalysisAsync(double exposureSec, int binning, int? gain, int? offset, CancellationToken ct) {
+                ProbedGains.Add(gain);
+                return CaptureForAnalysisAsync(exposureSec, binning, ct);
+            }
 
             public Task<AnalysisFrame> CaptureForAnalysisAsync(double exposureSec, int binning, CancellationToken ct) {
                 ct.ThrowIfCancellationRequested();
                 ProbedExposures.Add(exposureSec);
-                var value = (ushort)Math.Clamp(AduPerSecond * exposureSec, 0, ushort.MaxValue);
+                var rate = AduPerSecond * (BrightnessScale?.Invoke() ?? 1);
+                var raw = Math.Clamp(Pedestal + (rate * exposureSec), 0, ushort.MaxValue);
+                var quantum = ProbedExposures.Count <= NativeFrames ? 1 : Quantum;
+                var value = ProbedExposures.Count <= ZeroFrames ? (ushort)0 : (ushort)(Math.Floor(raw / quantum) * quantum);
                 var pixels = new ushort[16];
                 Array.Fill(pixels, value);
                 return Task.FromResult(new AnalysisFrame(pixels, 4, 4, DateTimeOffset.UtcNow));
@@ -59,12 +78,18 @@ namespace OpenAstroAra.Test {
             public bool LightOn { get; private set; }
             public int? RequestedBrightness { get; private set; }
             public List<bool> LightRequests { get; } = new();
+            public List<bool> CoverRequests { get; } = new();
+            public List<int> BrightnessRequests { get; } = new();
             public bool ThrowOnApply { get; set; }
+            public int MaxBrightness { get; set; }
+            public bool CoverOpen { get; set; }
+            public bool HasCover { get; set; } = true;
 
             public Task<FlatDeviceDto?> GetAsync(CancellationToken ct) =>
                 Task.FromResult<FlatDeviceDto?>(new FlatDeviceDto(
                     "panel-1", "Fake Panel", EquipmentConnectionState.Connected,
-                    new FlatDeviceStateDto(LightOn ? "light_on" : "cover_closed", CoverOpen: false, LightOn, LightOn ? (RequestedBrightness ?? 0) : 0)));
+                    new FlatDeviceStateDto(LightOn ? "light_on" : "cover_closed", CoverOpen, LightOn, LightOn ? (RequestedBrightness ?? 0) : 0,
+                        MaxBrightness: MaxBrightness, HasCover: HasCover)));
 
             public Task<OperationAcceptedDto> ConnectAsync(ConnectRequestDto request, string? idempotencyKey, CancellationToken ct) =>
                 throw new NotSupportedException();
@@ -79,12 +104,17 @@ namespace OpenAstroAra.Test {
                 if (ThrowOnApply) {
                     throw new InvalidOperationException("flat device is not connected");
                 }
+                if (request.OpenCover is bool open) {
+                    CoverOpen = open;
+                    CoverRequests.Add(open);
+                }
                 if (request.LightOn is bool on) {
                     LightOn = on;
                     LightRequests.Add(on);
                 }
                 if (request.Brightness is int b) {
                     RequestedBrightness = b;
+                    BrightnessRequests.Add(b);
                 }
                 return Task.FromResult(new OperationAcceptedDto(Guid.NewGuid(), "flat-device.apply", DateTimeOffset.UtcNow, idempotencyKey));
             }
@@ -94,21 +124,36 @@ namespace OpenAstroAra.Test {
         private FakeFlatDeviceService panel = null!;
         private Mock<IImagingMediator> imagingMock = null!;
         private List<CaptureSequence> captured = null!;
+        private List<string> capturedTargets = null!;
 
         [SetUp]
         public void Setup() {
             scene = new LinearSceneFrameSource();
             panel = new FakeFlatDeviceService();
             captured = new List<CaptureSequence>();
+            capturedTargets = new List<string>();
             imagingMock = new Mock<IImagingMediator>();
             imagingMock
                 .Setup(x => x.CaptureImage(It.IsAny<CaptureSequence>(), It.IsAny<CancellationToken>(), It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<string>()))
-                .Callback<CaptureSequence, CancellationToken, IProgress<ApplicationStatus>?, string>((s, _, _, _) => captured.Add(s))
+                .Callback<CaptureSequence, CancellationToken, IProgress<ApplicationStatus>?, string>((s, _, _, target) => {
+                    captured.Add(s);
+                    capturedTargets.Add(target);
+                })
                 .ReturnsAsync((IExposureData)null!);
         }
 
-        private FlatCaptureService CreateSUT() =>
-            new(frames: scene, imaging: imagingMock.Object, flatDevice: panel) {
+        private sealed class MemoryTrainingStore : IFlatTrainingStore {
+            public Dictionary<(string, int, int, int), FlatTraining> Rows { get; } = new();
+            public Task<FlatTraining?> GetAsync(string filterName, int gain, int offset, int bin, CancellationToken ct) =>
+                Task.FromResult(Rows.TryGetValue((filterName, gain, offset, bin), out var t) ? t : null);
+            public Task PutAsync(string filterName, int gain, int offset, int bin, FlatTraining training, CancellationToken ct) {
+                Rows[(filterName, gain, offset, bin)] = training;
+                return Task.CompletedTask;
+            }
+        }
+
+        private FlatCaptureService CreateSUT(IFlatTrainingStore? training = null) =>
+            new(frames: scene, imaging: imagingMock.Object, flatDevice: panel, training: training) {
                 Delay = (_, _) => Task.CompletedTask,
             };
 
@@ -119,17 +164,160 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public async Task Converges_then_captures_the_set_as_FLAT_at_the_found_exposure() {
-            // 10000 ADU/s: 1s probe reads 10000, scaling lands 3s -> 30000 (exact target).
+            // 10000 ADU/s: probes at 1 s and 2 s fit the line, the solve lands 3 s -> 30000 (exact target).
             var ok = await CreateSUT().CaptureFlatSetAsync(Request(), new Progress<ApplicationStatus>(), CancellationToken.None);
 
             Assert.That(ok, Is.True);
-            Assert.That(scene.ProbedExposures, Has.Count.EqualTo(2), "probe at 1s, converge at 3s");
-            Assert.That(scene.ProbedExposures[1], Is.EqualTo(3).Within(1e-6));
+            Assert.That(scene.ProbedExposures, Has.Count.EqualTo(3), "two points for the line, one check");
+            Assert.That(scene.ProbedExposures[2], Is.EqualTo(3).Within(1e-6));
             Assert.That(captured, Has.Count.EqualTo(3));
             Assert.That(captured.All(s => s.ImageType == ImageTypes.FLAT), Is.True);
             Assert.That(captured[0].ExposureTime, Is.EqualTo(3).Within(1e-6));
             Assert.That(captured[0].Gain, Is.EqualTo(101), "flats must match the session gain");
             Assert.That(captured[0].Offset, Is.EqualTo(7));
+        }
+
+        [Test]
+        public async Task A_disk_lost_mid_set_reaches_the_runs_pause_instead_of_failing_the_set() {
+            imagingMock
+                .Setup(x => x.CaptureImage(It.IsAny<CaptureSequence>(), It.IsAny<CancellationToken>(), It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<string>()))
+                .Returns(() => Task.FromException<IExposureData>(new StoreUnavailableException("The storage disk isn't there.")));
+            await Assert.ThrowsAsync<StoreUnavailableException>(() =>
+                CreateSUT().CaptureFlatSetAsync(Request(), new Progress<ApplicationStatus>(), CancellationToken.None),
+                "UserFixablePause parks the run awaiting the user; a swallowed false would just fail this filter");
+        }
+
+        [Test]
+        public async Task The_set_counts_each_saved_flat_for_a_resume() {
+            var tally = new FlatSetTally();
+            var ok = await CreateSUT().CaptureFlatSetAsync(Request() with { Tally = tally },
+                new Progress<ApplicationStatus>(), CancellationToken.None);
+            Assert.That(ok, Is.True);
+            Assert.That(tally.Saved, Is.EqualTo(captured.Count).And.EqualTo(3));
+        }
+
+        [Test]
+        public async Task Flats_for_a_session_file_under_its_target_and_night() {
+            var night = new DateOnly(2026, 10, 16);
+            var ok = await CreateSUT().CaptureFlatSetAsync(
+                Request() with { TargetName = "North America Nebula", Night = night },
+                new Progress<ApplicationStatus>(), CancellationToken.None);
+
+            Assert.That(ok, Is.True);
+            Assert.That(capturedTargets, Is.All.EqualTo("North America Nebula"));
+            Assert.That(captured.Select(s => s.Night), Is.All.EqualTo(night));
+
+            captured.Clear();
+            capturedTargets.Clear();
+            await CreateSUT().CaptureFlatSetAsync(Request(), new Progress<ApplicationStatus>(), CancellationToken.None);
+            Assert.That(capturedTargets, Is.All.EqualTo("Flats"), "a hand-built flat step still files under Flats");
+            Assert.That(captured.Select(s => s.Night), Is.All.Null);
+        }
+
+        [Test]
+        public async Task An_automatic_target_is_half_the_cameras_range_and_the_offset_is_fitted_out() {
+            scene.Pedestal = 1000;
+            scene.MaxAdu = 65535;
+            var ok = await CreateSUT().CaptureFlatSetAsync(Request(targetAdu: 0), new Progress<ApplicationStatus>(), CancellationToken.None);
+
+            Assert.That(ok, Is.True);
+            Assert.That(captured[0].ExposureTime, Is.EqualTo((65535 * 0.5 - 1000) / 10000).Within(1e-6));
+            Assert.That(scene.ProbedGains, Is.All.EqualTo(101), "probes expose at the flats' gain, not the imaging default");
+        }
+
+        [Test]
+        public async Task A_dim_first_probe_of_scaled_data_still_solves_against_16_bit() {
+            // 12-bit camera, MaxADU 4095, frames scaled ×16. The first probe (1 s) reads 2048:
+            // inside 4095 and right on its 50% target, so the range check alone would accept it.
+            scene.MaxAdu = 4095;
+            scene.Quantum = 16;
+            scene.AduPerSecond = 2048;
+            var ok = await CreateSUT().CaptureFlatSetAsync(Request(targetAdu: 0, maxSec: 30), new Progress<ApplicationStatus>(), CancellationToken.None);
+
+            Assert.That(ok, Is.True);
+            Assert.That(captured[0].ExposureTime, Is.EqualTo(65535 * 0.5 / 2048).Within(0.5),
+                "half the real 16-bit range, not a sixteenth of it");
+        }
+
+        [Test]
+        public async Task An_all_zero_first_probe_leaves_the_scaling_to_the_next_probe() {
+            // #1438: the zero probe can't say whether the data is scaled; the first probe with
+            // signal decides, and the solve runs against 16 bits.
+            scene.MaxAdu = 4095;
+            scene.Quantum = 16;
+            scene.AduPerSecond = 2048;
+            scene.ZeroFrames = 1;
+            var ok = await CreateSUT().CaptureFlatSetAsync(Request(targetAdu: 0, maxSec: 30), new Progress<ApplicationStatus>(), CancellationToken.None);
+
+            Assert.That(ok, Is.True);
+            Assert.That(captured[0].ExposureTime, Is.EqualTo(65535 * 0.5 / 2048).Within(0.5),
+                "half the real 16-bit range, not a sixteenth of it");
+        }
+
+        [Test]
+        public async Task The_first_probe_with_signal_decides_the_scaling_for_the_whole_solve() {
+            // #1438: a first probe with native low-bit noise settles it. A later probe that happens
+            // to land on multiples of 16 doesn't restart the solve against 16 bits.
+            scene.MaxAdu = 4095;
+            scene.AduPerSecond = 1001;  // probe 1 (1 s) reads 1001: native, off target
+            scene.Quantum = 16;
+            scene.NativeFrames = 1;     // probe 2 onward lands on the 16-grid
+            var ok = await CreateSUT().CaptureFlatSetAsync(Request(targetAdu: 0, maxSec: 60), new Progress<ApplicationStatus>(), CancellationToken.None);
+
+            Assert.That(ok, Is.True);
+            Assert.That(captured[0].ExposureTime, Is.EqualTo(4095 * 0.5 / 1001).Within(0.1),
+                "half the native 12-bit range, not a restart against 16 bits");
+        }
+
+        [Test]
+        public async Task A_driver_reporting_native_range_for_scaled_data_solves_against_16_bit() {
+            scene.MaxAdu = 4095;   // the sensor's 12 bits; the frames arrive scaled to 16
+            var ok = await CreateSUT().CaptureFlatSetAsync(Request(targetAdu: 0), new Progress<ApplicationStatus>(), CancellationToken.None);
+
+            Assert.That(ok, Is.True);
+            Assert.That(captured[0].ExposureTime, Is.EqualTo(65535 * 0.5 / 10000).Within(0.05));
+        }
+
+        [Test]
+        public async Task An_open_cover_is_closed_and_a_dimmable_panel_is_dimmed_for_a_bright_filter() {
+            panel.CoverOpen = true;
+            panel.MaxBrightness = 255;
+            // Luminance at brightness 128: 200000 ADU/s, so the target needs ~0.15 s undimmed.
+            scene.AduPerSecond = 200_000;
+            scene.BrightnessScale = () => (panel.RequestedBrightness ?? 128) / 128.0;
+
+            var ok = await CreateSUT().CaptureFlatSetAsync(Request(targetAdu: 0, brightness: 0), new Progress<ApplicationStatus>(), CancellationToken.None);
+
+            Assert.That(ok, Is.True);
+            Assert.That(panel.CoverRequests, Has.Count.EqualTo(1).And.All.False, "the cover closes before the panel lights");
+            Assert.That(panel.BrightnessRequests[0], Is.EqualTo(127), "no brightness given: start at half the panel's range");
+            Assert.That(panel.RequestedBrightness, Is.LessThan(127));
+            Assert.That(captured[0].ExposureTime, Is.GreaterThanOrEqualTo(FlatExposureSolver.PreferredMinExposureSec));
+        }
+
+        [Test]
+        public async Task The_next_set_starts_from_the_remembered_solution() {
+            var store = new MemoryTrainingStore();
+            var sut = CreateSUT(store);
+            Assert.That(await sut.CaptureFlatSetAsync(Request(), new Progress<ApplicationStatus>(), CancellationToken.None), Is.True);
+            Assert.That(store.Rows, Has.Count.EqualTo(1));
+            scene.ProbedExposures.Clear();
+
+            Assert.That(await sut.CaptureFlatSetAsync(Request(), new Progress<ApplicationStatus>(), CancellationToken.None), Is.True);
+            Assert.That(scene.ProbedExposures, Has.Count.EqualTo(1), "one check frame at last time's answer");
+        }
+
+        [Test]
+        public async Task A_remembered_exposure_is_rescaled_to_an_explicit_brightness() {
+            panel.MaxBrightness = 255;
+            scene.BrightnessScale = () => (panel.RequestedBrightness ?? 128) / 128.0;
+            var store = new MemoryTrainingStore();
+            // Last time: brightness 64 (5000 ADU/s here), 6 s to reach 30000.
+            store.Rows[("", 101, 7, 1)] = new FlatTraining(6, 64, 30000, 30000);
+
+            Assert.That(await CreateSUT(store).CaptureFlatSetAsync(Request(brightness: 128), new Progress<ApplicationStatus>(), CancellationToken.None), Is.True);
+            Assert.That(scene.ProbedExposures[0], Is.EqualTo(3).Within(1e-6), "twice the brightness, half the exposure");
+            Assert.That(scene.ProbedExposures, Has.Count.EqualTo(1), "the rescaled start lands on target first time");
         }
 
         [Test]
@@ -198,6 +386,29 @@ namespace OpenAstroAra.Test {
             Assert.That(captured, Has.Count.EqualTo(3));
         }
 
+        private static readonly bool[] OneOpen = [true];
+
+        [Test]
+        public async Task Opening_the_cover_for_the_lens_cap_turns_the_panel_off_and_opens_it() {
+            await panel.ApplyFlatPanelAsync(new FlatPanelRequestDto(LightOn: true), null, CancellationToken.None);
+            panel.CoverRequests.Clear();
+
+            var ok = await CreateSUT().OpenCoverAsync(CancellationToken.None);
+
+            Assert.That(ok, Is.True);
+            Assert.That(panel.CoverOpen, Is.True);
+            Assert.That(panel.LightOn, Is.False, "the panel goes dark before the lens cap goes on");
+            Assert.That(panel.CoverRequests, Is.EqualTo(OneOpen));
+        }
+
+        [Test]
+        public async Task A_panel_with_no_motorised_cover_has_nothing_to_open() {
+            panel.HasCover = false;
+            Assert.That(await CreateSUT().OpenCoverAsync(CancellationToken.None), Is.False);
+            Assert.That(panel.CoverRequests, Is.Empty);
+            Assert.That(await new FlatCaptureService().OpenCoverAsync(CancellationToken.None), Is.False, "no panel at all");
+        }
+
         [Test]
         public async Task Missing_capture_wiring_fails_instead_of_pretending() {
             var sut = new FlatCaptureService(frames: null, imaging: null, flatDevice: panel);
@@ -255,7 +466,8 @@ namespace OpenAstroAra.Test {
 
             await item.Execute(new Progress<ApplicationStatus>(), CancellationToken.None);
 
-            Assert.That(seen, Is.EqualTo(new FlatSetRequest(25000, 3, 12, 80, 0.5, 6, 120, 30)));
+            Assert.That(seen!.Tally, Is.Not.Null, "the set counts its saved frames for a resume");
+            Assert.That(seen with { Tally = null }, Is.EqualTo(new FlatSetRequest(25000, 3, 12, 80, 0.5, 6, 120, 30)));
         }
 
         [Test]
@@ -419,7 +631,8 @@ namespace OpenAstroAra.Test {
 
             await item.Execute(new Progress<ApplicationStatus>(), CancellationToken.None);
 
-            Assert.That(seen, Is.EqualTo(new SkyFlatSetRequest(20000, 4, 15, 0.02, 8, 45000, 4000, 120, 30)));
+            Assert.That(seen!.Tally, Is.Not.Null, "the set counts its saved frames for a resume");
+            Assert.That(seen with { Tally = null }, Is.EqualTo(new SkyFlatSetRequest(20000, 4, 15, 0.02, 8, 45000, 4000, 120, 30)));
         }
 
         [Test]

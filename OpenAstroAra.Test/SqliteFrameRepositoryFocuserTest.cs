@@ -65,6 +65,22 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Rotator_angle_and_cooler_setpoint_round_trip() {
+            var id = Guid.NewGuid();
+            await _repo.InsertAsync(Frame(id, focuserPosition: null) with { RotatorMechanicalDeg = 123.4, CoolerSetpointC = -10 },
+                CancellationToken.None);
+
+            var got = await _repo.GetAsync(id, CancellationToken.None);
+            Assert.That(got!.RotatorMechanicalDeg, Is.EqualTo(123.4));
+            Assert.That(got.CoolerSetpointC, Is.EqualTo(-10));
+            var unset = Guid.NewGuid();
+            await _repo.InsertAsync(Frame(unset, focuserPosition: null), CancellationToken.None);
+            var bare = await _repo.GetAsync(unset, CancellationToken.None);
+            Assert.That(bare!.RotatorMechanicalDeg, Is.Null);
+            Assert.That(bare.CoolerSetpointC, Is.Null);
+        }
+
+        [Test]
         public async Task FocuserPosition_is_null_when_unset() {
             var id = Guid.NewGuid();
             await _repo.InsertAsync(Frame(id, focuserPosition: null), CancellationToken.None);
@@ -149,7 +165,7 @@ namespace OpenAstroAra.Test {
             }
 
             await _repo.BulkMoveAsync(new BulkMoveRequestDto(new[] { ids[0] }, other), null, CancellationToken.None);
-            await _repo.BulkDeleteAsync(new BulkDeleteRequestDto(new[] { ids[1] }, DeleteFromDisk: false), null, CancellationToken.None);
+            await _repo.BulkDeleteAsync(new BulkDeleteRequestDto(new[] { ids[1] }), null, CancellationToken.None);
 
             Assert.That(await StoredFrameCountAsync(Session), Is.EqualTo(1), "one moved out, one deleted");
             Assert.That(await StoredFrameCountAsync(other), Is.EqualTo(1), "the moved frame counts where it landed");

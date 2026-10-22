@@ -26,6 +26,7 @@ enum InstructionCategory {
   camera,
   filterWheel,
   focuser,
+  rotator,
   telescope,
   guider,
   switchDevice,
@@ -40,6 +41,7 @@ extension InstructionCategoryLabel on InstructionCategory {
     InstructionCategory.camera => 'Camera',
     InstructionCategory.filterWheel => 'Filter Wheel',
     InstructionCategory.focuser => 'Focuser',
+    InstructionCategory.rotator => 'Rotator',
     InstructionCategory.telescope => 'Telescope',
     InstructionCategory.guider => 'Guider',
     InstructionCategory.switchDevice => 'Switch',
@@ -455,6 +457,8 @@ const String centerAndRotateType =
     'OpenAstroAra.Sequencer.SequenceItem.Platesolving.CenterAndRotate, OpenAstroAra.Sequencer';
 const String startGuidingType =
     'OpenAstroAra.Sequencer.SequenceItem.Guider.StartGuiding, OpenAstroAra.Sequencer';
+const String openFlatPanelCoverType =
+    'OpenAstroAra.Sequencer.SequenceItem.FlatDevice.OpenFlatPanelCover, OpenAstroAra.Sequencer';
 const String waitForUserType =
     'OpenAstroAra.Sequencer.SequenceItem.Utility.WaitForUser, OpenAstroAra.Sequencer';
 
@@ -616,12 +620,30 @@ const List<InstructionDef> instructionCatalog = [
       ),
     ],
   ),
+  // Turn the rotator to a mechanical angle (the camera's own angle, not the
+  // sky's). Matching flats use it to put the camera back where the lights were.
+  InstructionDef(
+    type:
+        'OpenAstroAra.Sequencer.SequenceItem.Rotator.MoveRotatorMechanical, OpenAstroAra.Sequencer',
+    label: 'Move Rotator (mechanical)',
+    category: InstructionCategory.rotator,
+    icon: Icons.rotate_right_outlined,
+    fields: [
+      InstructionField(
+        'MechanicalPosition',
+        'Angle (°)',
+        InstructionFieldType.number,
+        defaultValue: 0.0,
+      ),
+    ],
+  ),
   // §38 NINA import — run an autofocus routine. No serialized fields.
-  // §48.3 — one auto-exposure flat set for the CURRENT filter: probes
-  // exposures until the frame mean hits the target ADU (lighting the flat
-  // panel when one is connected), then captures FrameCount saved FLATs at
-  // the converged exposure. Pair with Switch Filter for per-filter sets —
-  // the generated matching-flats sequences compose it exactly that way.
+  // §48.3 — one auto-exposure flat set for the CURRENT filter: closes the
+  // cover and lights the panel, solves the exposure and panel brightness
+  // that put the frame at TargetPercent of the camera's range (or a fixed
+  // TargetAdu), then captures FrameCount saved FLATs there. Pair with Switch
+  // Filter for per-filter sets — the generated matching-flats sequences
+  // compose it exactly that way.
   InstructionDef(
     type: flatPanelFlatsType,
     label: 'Flat Panel Flats',
@@ -629,10 +651,17 @@ const List<InstructionDef> instructionCatalog = [
     icon: Icons.fluorescent_outlined,
     fields: [
       InstructionField(
-        'TargetAdu',
-        'Target (mean ADU)',
+        'TargetPercent',
+        'Target (% of camera range)',
         InstructionFieldType.number,
-        defaultValue: 30000.0,
+        defaultValue: 50.0,
+      ),
+      // 0 = automatic (TargetPercent); a positive value is a fixed level.
+      InstructionField(
+        'TargetAdu',
+        'Fixed target ADU (0 = automatic)',
+        InstructionFieldType.number,
+        defaultValue: 0.0,
       ),
       InstructionField(
         'TargetAduTolerancePct',
@@ -646,11 +675,13 @@ const List<InstructionDef> instructionCatalog = [
         InstructionFieldType.integer,
         defaultValue: 30,
       ),
+      // 0 = automatic: last time's level for this filter, else half the
+      // panel's range. The set moves it when the exposure would be too short.
       InstructionField(
         'Brightness',
-        'Panel brightness',
+        'Starting panel brightness (0 = automatic)',
         InstructionFieldType.integer,
-        defaultValue: 50,
+        defaultValue: 0,
       ),
       // -1 is the NINA sentinel for "use the camera's profile default".
       InstructionField(
@@ -969,6 +1000,15 @@ const List<InstructionDef> instructionCatalog = [
         defaultValue: 0,
       ),
     ],
+  ),
+  // Turns the flat panel off and opens its motorised cover, so the user can
+  // put a lens cap on before bias and darks (a no-op without one).
+  InstructionDef(
+    type: openFlatPanelCoverType,
+    label: 'Open Flat Panel Cover',
+    category: InstructionCategory.calibration,
+    icon: Icons.door_front_door_outlined,
+    fields: [],
   ),
   // §58.12-b — pause-for-a-human step: the daemon parks the run in the
   // awaiting-user state until Resume. Emitted by the plan chooser for manual

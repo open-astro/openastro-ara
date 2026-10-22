@@ -135,12 +135,24 @@ public sealed partial class SequencerService : IAutoFlatsService {
             var skyFlavor = choice != ChoicePanelAtEnd;
             var generated = await calibration.GenerateMatchingFlatsAsync(
                 sessionId,
+                // The user asked for flats tonight: a filter is skipped only when its flats were
+                // verified at the lights' rotator angle, never on an assumed match (no rotator).
                 new MatchingFlatsRequestDto(OverrideFrameCount: null, OverrideTargetAdu: null, GenerateOnly: false,
-                    Flavor: skyFlavor ? "sky" : "panel"),
+                    Flavor: skyFlavor ? "sky" : "panel", ReshootAssumedCoverage: true),
                 idempotencyKey: null,
                 CancellationToken.None).ConfigureAwait(false);
             if (generated.GeneratedSequenceId is not Guid flatsId || generated.TotalFlatFrames <= 0) {
                 LogAutoFlatsNothingToCapture(sequenceId, sessionId);
+                // No sequence for another reason (no sequence store wired): nothing true to tell
+                // the user about their flats.
+                if (generated.Steps.Count > 0) {
+                    return;
+                }
+                // The session has lights (the generator would have thrown otherwise), so an empty
+                // plan means every filter is already covered by flats verified at the same setup.
+                await NotifyAutoFlatsQuietlyAsync("Tonight's flats are already covered",
+                    "Every filter you imaged tonight already has flats taken through the same setup (filter and rotator angle), "
+                    + "so no new flats were captured. Capture them again from Calibration if anything in the optical train changed.").ConfigureAwait(false);
                 return;
             }
 
@@ -234,7 +246,7 @@ public sealed partial class SequencerService : IAutoFlatsService {
     [LoggerMessage(EventId = 4804, Level = LogLevel.Information, Message = "§48 end-of-session flats started: run of sequence {SequenceId} → flats sequence {FlatsSequenceId} ({Frames} frames)")]
     private partial void LogAutoFlatsStarted(Guid sequenceId, Guid flatsSequenceId, int frames);
 
-    [LoggerMessage(EventId = 4806, Level = LogLevel.Information, Message = "§48 nothing to capture: session {SessionId} of sequence {SequenceId} yielded no flats plan (no light frames?)")]
+    [LoggerMessage(EventId = 4806, Level = LogLevel.Information, Message = "§48 nothing to capture: session {SessionId} of sequence {SequenceId} — every filter already has flats from the same setup")]
     private partial void LogAutoFlatsNothingToCapture(Guid sequenceId, Guid sessionId);
 
     [LoggerMessage(EventId = 4807, Level = LogLevel.Error, Message = "§48 end-of-session flats execution failed for sequence {SequenceId} / session {SessionId}")]

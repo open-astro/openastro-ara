@@ -62,9 +62,12 @@ public sealed class SqliteSessionService : ISessionService {
 
         await using var conn = _db.OpenConnection();
         await using var cmd = conn.CreateCommand();
+        // A run that saved no frames (aborted, every frame failed, or its frames were all
+        // deleted) has nothing to show: it stays in the table for recovery, not in the library.
         cmd.CommandText = """
             SELECT id, started_at, ended_at, profile_id, frame_count
-            FROM sessions
+            FROM sessions s
+            WHERE EXISTS (SELECT 1 FROM frames f WHERE f.session_id = s.id)
             ORDER BY started_at DESC
             LIMIT $limit OFFSET $offset;
             """;

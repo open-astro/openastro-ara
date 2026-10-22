@@ -5404,8 +5404,9 @@ User flow in WILMA:
      4. Cooler: set target to the session's SET-TEMP and wait for
         stabilization (subject to ambient limits — see §39.6)
      5. Camera: configure same gain, offset, binning
-     6. Flat panel: turn on, auto-adjust brightness to target ADU
-        (~30000 for 16-bit), capture 30 flat frames
+     6. Flat panel: turn on; two test frames solve the exposure and panel
+        brightness for `flat_target_percent` (default 50%) of the camera's
+        MaxADU (median of the central area), then capture 30 flat frames
      7. Flat panel: turn off
    Mount can stay parked or wherever — flats don't depend on sky position
    ```
@@ -5467,23 +5468,22 @@ Server captures `5 × 3 × 3 × 50 = 2,250` dark frames over many hours (typical
 
 ### 39.9 Calibration library storage on Pi
 
+Calibration frames live in the frame store beside the lights, named by the profile's filename
+template like every other frame. Calibration generated for a session carries that session's
+target and observing night, so with the default template it lands next to the lights it
+calibrates:
+
 ```
-/var/lib/openastroara/calibration/
-├── darks/
-│   └── <camera-id>/
-│       └── exp_<seconds>_gain_<n>_temp_<c>/
-│           └── frame_001.fits
-├── bias/
-│   └── <camera-id>/
-│       └── gain_<n>_offset_<n>/
-│           └── frame_001.fits
-└── flats/
-    └── <camera-id>/
-        └── filter_<name>_rot_<angle>_focus_<pos>/
-            └── frame_001.fits
+<store>/<target>/<night>/
+├── Light/
+├── Flat/     (per filter, at the lights' rotator angle)
+├── Dark/     (per exposure + gain, at the lights' temperature)
+└── Bias/     (per gain + offset + binning)
 ```
 
-Filenames + sidecar JSONs make matching by metadata easy for both ARA's session-matching workflow and external post-processing tools.
+Matching runs on the catalog (`frames` rows carry filter, exposure, gain, offset, binning,
+temperature, cooler set-point and rotator angle), not on folder names; the FITS headers carry
+the same values for external post-processing tools.
 
 ### 39.10 Calibration library browsing in WILMA
 
@@ -7080,11 +7080,11 @@ When the sequence reaches the `FlatPanelFlats` instruction (typically appended a
    - Slew mount to the flat-friendly position (default: park position, or user-configured flat target)
    - Switch filter wheel to current filter
    - Move focuser to that filter's focus offset (so flats match imaging conditions)
-   - Hold rotator at current angle (CAA)
+   - Move the rotator to the lights' mechanical angle (CAA), and cool the camera to the lights' set-point
    - Turn on flat panel, set brightness, wait for stabilization
-   - **Auto-exposure**: capture short test exposure, measure median ADU, adjust panel brightness OR exposure time until target ADU is reached (default ~30000 for 16-bit cameras = ~45% full scale)
+   - **Auto-exposure**: two test exposures fit a line through the panel's response (median of the frame's central area, pedestal fitted out), and the exposure and panel brightness are solved for `flat_target_percent` of the camera's own full scale (default 50% of its MaxADU, so 12-, 14- and 16-bit cameras all land mid-range). The solution is remembered per filter, gain and offset, so the next set starts from it
    - Capture N flats (default 30)
-3. After all filters: turn off panel, park mount (optionally), log completion notification
+3. After all filters: turn off panel, log completion notification. The mount parks only when the user ticks it for that run in the Calibration dialog; end-of-session auto flats follow `post_flat_park_mount` (off by default — mount motion is opt-in)
 
 Inherits NINA's existing implementation; ARA preserves verbatim.
 
@@ -7141,10 +7141,11 @@ Profile JSON gains a `calibration` block (inside the existing safety/preferences
   "calibration": {
     "capture_default": "ask",           // "ask" | "panel_at_end" | "sky_at_twilight" | "never"
     "flat_panel": {
-      "target_adu": 30000,              // half of 16-bit full scale
+      "target_percent": 50,             // share of the camera's MaxADU panel flats aim for
+      "target_adu": 30000,              // superseded by target_percent for panel flats; kept for old profiles
       "target_adu_tolerance_pct": 5,
       "frames_per_filter": 30,
-      "post_flat_park_mount": true
+      "post_flat_park_mount": false     // end-of-session auto flats only; the dialog asks per run
     },
     "sky_flat": {
       "target_adu": 25000,

@@ -100,6 +100,23 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_recovered_light_keeps_its_rotator_angle_so_its_flats_rotate_back() {
+            WriteOrphanFits(Path.Combine(_root, "rotated-0001.fits"), rotatorDeg: 34.8);
+            WriteOrphanFits(Path.Combine(_root, "unrotated-0001.fits"));
+
+            var result = await _scan.RunAsync(CancellationToken.None);
+            Assert.That(result.FramesRecovered, Is.EqualTo(2));
+
+            var angle = await ScalarAsync(
+                "SELECT rotator_mechanical_deg FROM frames WHERE file_path = $p;", Path.Combine(_root, "rotated-0001.fits"));
+            Assert.That(double.Parse(angle!, System.Globalization.CultureInfo.InvariantCulture), Is.EqualTo(34.8).Within(1e-6),
+                "ROTATOR is read into the catalog, not left NULL with the 'assumed' note");
+            var none = await ScalarAsync(
+                "SELECT rotator_mechanical_deg FROM frames WHERE file_path = $p;", Path.Combine(_root, "unrotated-0001.fits"));
+            Assert.That(none, Is.Null, "no ROTATOR header: no angle invented");
+        }
+
+        [Test]
         public async Task Orphan_folds_into_an_already_ended_session_for_the_same_target_and_night() {
             var endedId = Guid.NewGuid();
             await InsertSessionAsync(endedId, endedAt: Captured);
@@ -157,9 +174,12 @@ namespace OpenAstroAra.Test {
             await cmd.ExecuteNonQueryAsync(CancellationToken.None);
         }
 
-        private static void WriteOrphanFits(string path) {
+        private static void WriteOrphanFits(string path, double? rotatorDeg = null) {
             using var fits = FitsImage.Create(path, 4, 4, FitsBitDepth.UnsignedShort);
             fits.SetHeader("OBJECT", Target);
+            if (rotatorDeg is double angle) {
+                fits.SetHeader("ROTATOR", angle);
+            }
             // Zoneless DATE-OBS is UTC per the FITS spec (CaptureScanDateObsTest).
             fits.SetHeader("DATE-OBS", Captured.UtcDateTime.ToString(
                 "yyyy-MM-ddTHH:mm:ss", System.Globalization.CultureInfo.InvariantCulture));

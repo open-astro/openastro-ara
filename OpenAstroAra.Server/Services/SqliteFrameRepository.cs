@@ -467,14 +467,14 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
                  file_path, file_size_bytes, width, height, bit_depth,
                  hfr, star_count, eccentricity, guiding_rms_arcsec, snr_estimate,
                  quality_score_json, rating, tags_json, focuser_position,
-                 background_adu, median_adu, bin)
+                 background_adu, median_adu, bin, rotator_mechanical_deg, cooler_setpoint_c)
             VALUES
                 ($id, $session_id, $target_name, $frame_type, $filter_name,
                  $exposure_seconds, $gain, $offset, $temperature_c, $captured_utc,
                  $file_path, $file_size_bytes, $width, $height, $bit_depth,
                  $hfr, $star_count, $eccentricity, $guiding_rms_arcsec, $snr_estimate,
                  $quality_score_json, $rating, $tags_json, $focuser_position,
-                 $background_adu, $median_adu, $bin);
+                 $background_adu, $median_adu, $bin, $rotator_mechanical_deg, $cooler_setpoint_c);
             """;
         cmd.Parameters.AddWithValue("$id", f.Id.ToString());
         cmd.Parameters.AddWithValue("$session_id", f.SessionId.ToString());
@@ -506,6 +506,8 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
         cmd.Parameters.AddWithValue("$background_adu", DbValue(f.BackgroundAdu));
         cmd.Parameters.AddWithValue("$median_adu", DbValue(f.MedianAdu));
         cmd.Parameters.AddWithValue("$bin", DbValue(f.Bin));
+        cmd.Parameters.AddWithValue("$rotator_mechanical_deg", DbValue(f.RotatorMechanicalDeg));
+        cmd.Parameters.AddWithValue("$cooler_setpoint_c", DbValue(f.CoolerSetpointC));
         await cmd.ExecuteNonQueryAsync(ct);
         // The session's running count (it stayed 0 for every session until now).
         await using var bump = conn.CreateCommand();
@@ -608,7 +610,7 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
                    file_path, file_size_bytes, width, height, bit_depth,
                    hfr, star_count, eccentricity, guiding_rms_arcsec, snr_estimate,
                    quality_score_json, rating, tags_json, focuser_position,
-                   background_adu, median_adu, bin
+                   background_adu, median_adu, bin, rotator_mechanical_deg, cooler_setpoint_c
             FROM frames WHERE id = $id LIMIT 1;
             """;
         cmd.Parameters.AddWithValue("$id", id.ToString());
@@ -656,7 +658,9 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
             FocuserPosition: await reader.IsDBNullAsync(23, ct) ? null : reader.GetInt32(23),
             BackgroundAdu: await reader.IsDBNullAsync(24, ct) ? null : reader.GetDouble(24),
             MedianAdu: await reader.IsDBNullAsync(25, ct) ? null : reader.GetDouble(25),
-            Bin: await reader.IsDBNullAsync(26, ct) ? null : reader.GetInt32(26));
+            Bin: await reader.IsDBNullAsync(26, ct) ? null : reader.GetInt32(26),
+            RotatorMechanicalDeg: await reader.IsDBNullAsync(27, ct) ? null : reader.GetDouble(27),
+            CoolerSetpointC: await reader.IsDBNullAsync(28, ct) ? null : reader.GetDouble(28));
     }
 
     /// <inheritdoc />
@@ -1207,12 +1211,13 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
     public async Task<OperationAcceptedDto> BulkDeleteAsync(BulkDeleteRequestDto request, string? idempotencyKey, CancellationToken ct) {
         if (request.FrameIds.Count > 0) {
             // Collect file paths BEFORE the rows go — after the delete there's
-            // nothing left to resolve them from. Only needed for disk deletion.
+            // nothing left to resolve them from. The files always go (#1437):
+            // request.DeleteFromDisk is ignored, because a FITS left on disk is
+            // re-catalogued by the startup orphan scan and the frame comes back.
             var paths = new List<string>();
             await using var conn = _db.OpenConnection();
             await using (var tx = (SqliteTransaction)await conn.BeginTransactionAsync(ct)) {
-                if (request.DeleteFromDisk) {
-                    await using var pathCmd = conn.CreateCommand();
+                await using (var pathCmd = conn.CreateCommand()) {
                     pathCmd.Transaction = tx;
                     pathCmd.CommandText = "SELECT file_path FROM frames WHERE id = $id LIMIT 1;";
                     var pathParam = pathCmd.Parameters.Add("$id", Microsoft.Data.Sqlite.SqliteType.Text);
@@ -1258,10 +1263,13 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
         var stem = Path.GetFileNameWithoutExtension(fitsPath);
         try {
             // <stem>.preview.jpg (default), <stem>.preview.<stretch>[.<hash>].jpg
-            // (variants) and <stem>.thumb.jpg (thumbnail) — same naming the §65.4
-            // cache helpers use above.
+            // (variants), <stem>.thumb.jpg (thumbnail) and <stem>.hist.v<n>.json
+            // (histogram cache, any version) — same naming the §65.4 cache
+            // helpers use above. The histogram cache was missed until 2026-10-21
+            // and piled up beside deleted frames.
             foreach (var sidecar in Directory.EnumerateFiles(dir, $"{stem}.preview*.jpg")
-                         .Concat(Directory.EnumerateFiles(dir, $"{stem}.thumb.jpg"))) {
+                         .Concat(Directory.EnumerateFiles(dir, $"{stem}.thumb.jpg"))
+                         .Concat(Directory.EnumerateFiles(dir, $"{stem}.hist.v*.json"))) {
                 try { File.Delete(sidecar); } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { /* skip locked */ }
             }
         } catch (DirectoryNotFoundException) { /* volume detached — nothing to delete */

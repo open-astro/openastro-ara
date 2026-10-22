@@ -534,7 +534,8 @@ public partial class Program {
         builder.Services.AddSingleton<ICalibrationService>(sp => new SqliteCalibrationService(
             sp.GetRequiredService<IAraDatabase>(),
             sp.GetRequiredService<ISequenceService>(),
-            sp.GetRequiredService<IProfileStore>()));
+            sp.GetRequiredService<IProfileStore>(),
+            cameraCanCool: () => sp.GetService<CameraService>()?.CanSetTemperatureNow));
         builder.Services.AddSingleton<IDarkLibraryService, SqliteDarkLibraryService>();
         // §47 / #1146 — mosaic projects persist in the catalog; panel completion is derived from the
         // frames table, so "panels 1-3 done, 4-6 owed" survives a restart.
@@ -759,7 +760,10 @@ public partial class Program {
                 // #1264 — the latest analysed light's star shape for the unguided exposure guard.
                 frameQuality: sp.GetRequiredService<FrameQualityFeed>(),
                 // #1195 — every saved light, for the drift trigger's on-demand solve.
-                savedLights: sp.GetRequiredService<FrameSolveFeed>()));
+                savedLights: sp.GetRequiredService<FrameSolveFeed>(),
+                // The rotator's mechanical angle for ROTATOR / the catalog row, so matching flats
+                // rotate back to it. Func<>: registered later in this file.
+                rotator: () => sp.GetService<OpenAstroAra.Equipment.Interfaces.Mediator.IRotatorMediator>()));
         builder.Services.AddSingleton<ICameraService>(sp => sp.GetRequiredService<CameraService>());
         // §59 — the autofocus sweep's probe-capture seam rides the same singleton (same device
         // path + same in-flight capture gate as real captures; probes are never persisted).
@@ -834,7 +838,10 @@ public partial class Program {
                 sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<FlatCaptureService>>(),
                 sp.GetRequiredService<IAnalysisFrameSource>(),
                 sp.GetRequiredService<OpenAstroAra.Equipment.Interfaces.Mediator.IImagingMediator>(),
-                sp.GetRequiredService<IFlatDeviceService>()));
+                sp.GetRequiredService<IFlatDeviceService>(),
+                // Remembered flat solutions + the installed filter that keys them.
+                new FlatTrainingStore(sp.GetRequiredService<IAraDatabase>()),
+                () => sp.GetService<OpenAstroAra.Equipment.Interfaces.Mediator.IFilterWheelMediator>()));
 
         // Phase 38a — §38.2 filesystem-backed sequence library at
         // {profileDir}/sequences/library/. Replaces the in-memory placeholder

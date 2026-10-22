@@ -74,7 +74,9 @@ public sealed partial class RotatorService : IRotatorMediator {
                 Name = _device?.Name ?? string.Empty,
                 DeviceId = _device?.UniqueId ?? string.Empty,
                 Position = connected ? (float)(runtime.SkyAngleDeg ?? 0) : 0,
-                MechanicalPosition = connected ? (float)(runtime.MechanicalAngleDeg ?? 0) : 0,
+                // NaN, not 0, while connected but not read yet: a frame taken right after the rotator
+                // connects would otherwise record 0° and its flats would turn to the wrong angle.
+                MechanicalPosition = connected ? (float)(runtime.MechanicalAngleDeg ?? double.NaN) : 0,
                 IsMoving = connected && runtime.State == "moving",
             };
         }

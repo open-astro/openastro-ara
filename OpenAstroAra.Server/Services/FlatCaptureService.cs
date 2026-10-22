@@ -28,25 +28,35 @@ namespace OpenAstroAra.Server.Services;
 
 /// <summary>
 /// §48.3 — the daemon half of <see cref="FlatPanelFlats"/> (serves
-/// <see cref="IFlatCaptureExecutor"/>). One flat set: light the panel (when a CoverCalibrator is
-/// connected — a manual/EL panel user proceeds without one), probe exposures through the §59
-/// <see cref="IAnalysisFrameSource"/> until the frame mean lands within tolerance of the target
-/// ADU (probes are instrument readings — never persisted), then capture the requested saved FLAT
-/// frames through the real <see cref="IImagingMediator"/> pipeline (§72 FITS + catalog row, same
-/// as TakeExposure). The panel light is restored off on every exit path.
+/// <see cref="IFlatCaptureExecutor"/>). One flat set: close the cover and light the panel (when a
+/// CoverCalibrator is connected — a manual/EL panel user proceeds without one), solve the exposure
+/// and panel brightness that put the frame at the target level (<see cref="FlatExposureSolver"/>;
+/// probes are instrument readings at the flats' own gain, never persisted), remember the answer
+/// for the next set of this filter, then capture the requested saved FLAT frames through the real
+/// <see cref="IImagingMediator"/> pipeline (§72 FITS + catalog row, same as TakeExposure). The panel
+/// light is restored off on every exit path; the cover stays closed over the optics.
 /// </summary>
 public sealed partial class FlatCaptureService : IFlatCaptureExecutor {
 
-    /// <summary>Probe iterations before declaring non-convergence (each multiplies exposure by target/mean).</summary>
-    internal const int MaxProbeIterations = 8;
-
     /// <summary>Bounded wait for the panel light to report on before probing (2 s state-poll cadence upstream).</summary>
     private static readonly TimeSpan PanelOnTimeout = TimeSpan.FromSeconds(10);
+
+    /// <summary>The same wait when the cover has to close first (motorised covers take ~20–60 s).</summary>
+    private static readonly TimeSpan CoverCloseTimeout = TimeSpan.FromSeconds(90);
+
+    /// <summary>Bounded wait for a brightness change to report applied (EL panels warm to a level).</summary>
+    private static readonly TimeSpan BrightnessSettleTimeout = TimeSpan.FromSeconds(15);
+
+    /// <summary>A probe at or above this share of full scale is clipped or past the linear region.</summary>
+    internal const double SaturationFraction = 0.9;
 
     private readonly ILogger<FlatCaptureService> _logger;
     private readonly IAnalysisFrameSource? _frames;
     private readonly IImagingMediator? _imaging;
     private readonly IFlatDeviceService? _flatDevice;
+    private readonly IFlatTrainingStore? _training;
+    // The filter in the light path keys the remembered solution (SwitchFilter ran before this set).
+    private readonly Func<IFilterWheelMediator?>? _filterWheel;
 
     // Test seam: the panel-on poll sleeps through this (tests assert without real waits).
     internal Func<TimeSpan, CancellationToken, Task> Delay { get; set; } = Task.Delay;
@@ -55,18 +65,30 @@ public sealed partial class FlatCaptureService : IFlatCaptureExecutor {
         ILogger<FlatCaptureService>? logger = null,
         IAnalysisFrameSource? frames = null,
         IImagingMediator? imaging = null,
-        IFlatDeviceService? flatDevice = null) {
+        IFlatDeviceService? flatDevice = null,
+        IFlatTrainingStore? training = null,
+        Func<IFilterWheelMediator?>? filterWheel = null) {
         _logger = logger ?? NullLogger<FlatCaptureService>.Instance;
         _frames = frames;
         _imaging = imaging;
         _flatDevice = flatDevice;
+        _training = training;
+        _filterWheel = filterWheel;
+    }
+
+    // Thrown from a probe whose pixels exceed the camera's reported MaxADU: the driver reports the
+    // sensor's native range but delivers scaled 16-bit data, so the solve restarts against 65535.
+    private sealed class FullScaleMismatchException : Exception {
+        public FullScaleMismatchException() { }
+        public FullScaleMismatchException(string message) : base(message) { }
+        public FullScaleMismatchException(string message, Exception innerException) : base(message, innerException) { }
     }
 
     /// <inheritdoc/>
     public async Task<bool> CaptureFlatSetAsync(FlatSetRequest request, IProgress<ApplicationStatus> progress, CancellationToken token) {
         ArgumentNullException.ThrowIfNull(request);
-        if (request.TargetAdu <= 0 || request.FrameCount < 1
-            || request.MinExposureSec <= 0 || request.MaxExposureSec < request.MinExposureSec) {
+        if (request.TargetAdu < 0 || (request.TargetAdu == 0 && !(request.TargetPercent > 0 && request.TargetPercent < 100))
+            || request.FrameCount < 1 || request.MinExposureSec <= 0 || request.MaxExposureSec < request.MinExposureSec) {
             LogBadRequest(request.TargetAdu, request.FrameCount, request.MinExposureSec, request.MaxExposureSec);
             return false;
         }
@@ -75,28 +97,59 @@ public sealed partial class FlatCaptureService : IFlatCaptureExecutor {
             return false;
         }
 
-        var panelLit = await TryLightPanelAsync(request.Brightness, token).ConfigureAwait(false);
+        var filter = InstalledFilter();
+        var trained = await ReadTrainingAsync(filter, request, token).ConfigureAwait(false);
+        var device = await PanelInfoAsync(token).ConfigureAwait(false);
+        var maxBrightness = device?.Runtime is { HasCalibrator: true, MaxBrightness: > 1 } r ? r.MaxBrightness : 0;
+        // Start where this filter landed last time, else mid-range; an explicit request wins.
+        int? startBrightness = request.Brightness > 0 ? request.Brightness
+            : maxBrightness > 0 ? trained?.Brightness ?? Math.Max(1, maxBrightness / 2)
+            : null;
+        if (startBrightness is int sb && maxBrightness > 0) {
+            startBrightness = Math.Clamp(sb, 1, maxBrightness);
+        }
+        var closeCover = device?.Runtime is { HasCover: true, CoverOpen: true };
+        var panelLit = await TryLightPanelAsync(startBrightness ?? 0, closeCover, token).ConfigureAwait(false);
         try {
-            var exposure = await ProbeExposureAsync(request, token).ConfigureAwait(false);
-            if (exposure is not double converged) {
+            var fullScale = _frames.MaxAdu is > 255 and <= ushort.MaxValue ? _frames.MaxAdu : ushort.MaxValue;
+            FlatSolveResult solved;
+            try {
+                solved = await SolveAsync(request, fullScale, trained, panelLit && maxBrightness > 0 ? maxBrightness : 0,
+                    startBrightness, filter, progress, token).ConfigureAwait(false);
+            } catch (FullScaleMismatchException) {
+                LogFullScaleMismatch(fullScale);
+                fullScale = ushort.MaxValue;
+                solved = await SolveAsync(request, fullScale, trained, panelLit && maxBrightness > 0 ? maxBrightness : 0,
+                    startBrightness, filter, progress, token).ConfigureAwait(false);
+            }
+            if (solved.ExposureSec is not double exposure) {
+                LogSolveFailed(filter, solved.Failure ?? "unknown", solved.Probes, solved.Level);
                 return false;
             }
+            var target = TargetLevel(request, fullScale);
+            LogSolved(filter, exposure, solved.Brightness, solved.Level, target, solved.Probes);
+            await WriteTrainingAsync(filter, request,
+                new FlatTraining(exposure, maxBrightness > 0 ? solved.Brightness : null, solved.Level, target), token).ConfigureAwait(false);
             for (var n = 1; n <= request.FrameCount; n++) {
                 token.ThrowIfCancellationRequested();
                 var sequence = new CaptureSequence(
-                    converged, ImageTypes.FLAT, filterType: null,
+                    exposure, ImageTypes.FLAT, filterType: null,
                     binning: new OpenAstroAra.Core.Model.Equipment.BinningMode(1, 1), exposureCount: 1) {
                     Gain = request.Gain,
                     Offset = request.Offset,
+                    Night = request.Night,
                 };
-                _ = await _imaging.CaptureImage(sequence, token, progress, "Flats").ConfigureAwait(false);
+                _ = await _imaging.CaptureImage(sequence, token, progress, request.TargetName ?? "Flats").ConfigureAwait(false);
+                request.Tally?.Add();
                 progress?.Report(new ApplicationStatus {
-                    Status = $"Flat {n}/{request.FrameCount} at {converged:0.###}s",
+                    Status = $"Flat {n}/{request.FrameCount} at {exposure:0.###}s",
                 });
             }
-            LogSetComplete(request.FrameCount, converged);
+            LogSetComplete(request.FrameCount, exposure);
             return true;
-        } catch (Exception ex) when (ex is not OperationCanceledException) {
+        } catch (Exception ex) when (ex is not (OperationCanceledException or CameraUnavailableException or StoreUnavailableException)) {
+            // A lost camera propagates: the flat step pauses the run for the user instead of
+            // failing this set and moving on to the next with no camera.
             LogSetFailed(ex);
             return false;
         } finally {
@@ -106,71 +159,134 @@ public sealed partial class FlatCaptureService : IFlatCaptureExecutor {
         }
     }
 
-    /// <summary>
-    /// The §48.3 auto-exposure loop: start at 1 s (clamped to the bounds), scale by
-    /// target/mean each probe, stop when within tolerance. Null = no convergence (bounds
-    /// pinned while still out of tolerance, no light reaching the sensor, or the iteration
-    /// budget ran out) — the reason is logged.
-    /// </summary>
-    private async Task<double?> ProbeExposureAsync(FlatSetRequest request, CancellationToken token) {
-        var tolerance = Math.Abs(request.TargetAdu * request.TolerancePct / 100.0);
-        var exposure = Math.Clamp(1.0, request.MinExposureSec, request.MaxExposureSec);
-        double mean = 0;
-        for (var i = 0; i < MaxProbeIterations; i++) {
-            token.ThrowIfCancellationRequested();
-            var frame = await _frames!.CaptureForAnalysisAsync(exposure, binning: 1, token).ConfigureAwait(false);
-            mean = MeanAdu(frame.Pixels.Span);
-            LogProbe(i + 1, exposure, mean);
-            if (Math.Abs(mean - request.TargetAdu) <= tolerance) {
-                LogConverged(exposure, mean, request.TargetAdu);
-                return exposure;
+    internal static double TargetLevel(FlatSetRequest request, int fullScale) =>
+        request.TargetAdu > 0 ? request.TargetAdu : fullScale * request.TargetPercent / 100.0;
+
+    private async Task<FlatSolveResult> SolveAsync(FlatSetRequest request, int fullScale, FlatTraining? trained,
+            int maxBrightness, int? startBrightness, string filter, IProgress<ApplicationStatus>? progress, CancellationToken token) {
+        var target = TargetLevel(request, fullScale);
+        var tolerance = Math.Abs(target * request.TolerancePct / 100.0);
+        var limits = new FlatSolveLimits(
+            TargetLevel: target,
+            ToleranceLevel: tolerance,
+            MinExposureSec: request.MinExposureSec,
+            MaxExposureSec: request.MaxExposureSec,
+            SaturationLevel: Math.Max(fullScale * SaturationFraction, Math.Min(fullScale, target + (2 * tolerance))),
+            MaxBrightness: maxBrightness);
+        // Last time's exposure, rescaled if the target moved since, and by the brightness ratio when
+        // this set starts the panel elsewhere (an explicit brightness); else a 1 s first look.
+        var start = trained is { ExposureSec: > 0, Target: > 0 } t
+            ? t.ExposureSec * (target / t.Target)
+                * (maxBrightness > 0 && t.Brightness is int was && was > 0 && startBrightness is int now && now > 0 ? (double)was / now : 1)
+            : 1.0;
+        int? gain = request.Gain >= 0 ? request.Gain : null;
+        int? offset = request.Offset >= 0 ? request.Offset : null;
+        int? panelAt = startBrightness;
+        var probeNo = 0;
+        // Decided once, by the first probe with any signal (an all-zero probe can't tell): scaled
+        // throws at once, so what sticks is "native", and later probes aren't re-checked (#1438).
+        bool? scaled = null;
+        async Task<double> Probe(double exposureSec, int? brightness, CancellationToken ct) {
+            if (maxBrightness > 0 && brightness is int want && want != panelAt) {
+                await SetBrightnessAsync(want, ct).ConfigureAwait(false);
+                panelAt = want;
             }
-            if (mean <= 0) {
-                // A pitch-black probe cannot steer the loop — scaling by target/0 is meaningless.
-                LogNoLight(exposure);
-                return null;
+            var frame = await _frames!.CaptureForAnalysisAsync(exposureSec, binning: 1, gain, offset, ct).ConfigureAwait(false);
+            var level = FlatLevel.Measure(frame.Pixels.Span, frame.Width, frame.Height, frame.BayerPattern);
+            scaled ??= level.LooksScaledAbove(fullScale);
+            if (level.Brightest > fullScale || scaled == true) {
+                throw new FullScaleMismatchException();
             }
-            var next = Math.Clamp(exposure * (request.TargetAdu / mean), request.MinExposureSec, request.MaxExposureSec);
-            if (Math.Abs(next - exposure) < 1e-9) {
-                // Pinned at a bound and still out of tolerance: the panel is too bright (min
-                // bound) or too dim (max bound) for this target — an exposure change can't fix it.
-                LogBoundsPinned(exposure, mean, request.TargetAdu);
-                return null;
-            }
-            exposure = next;
+            probeNo++;
+            LogProbe(probeNo, exposureSec, panelAt, level.Level, target);
+            progress?.Report(new ApplicationStatus {
+                Status = $"Flats{(filter.Length > 0 ? $" ({filter})" : "")}: measuring the panel, probe {probeNo}",
+            });
+            return level.Level;
         }
-        LogNoConvergence(MaxProbeIterations, exposure, mean, request.TargetAdu);
-        return null;
+        return await FlatExposureSolver.SolveAsync(limits, start, maxBrightness > 0 ? startBrightness : null, Probe, token).ConfigureAwait(false);
+    }
+
+    private string InstalledFilter() {
+        var info = _filterWheel?.Invoke()?.GetInfo();
+        return info is { Connected: true, IsMoving: false } ? info.SelectedFilter?.Name ?? "" : "";
+    }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "The remembered solution only seeds the first probe; a catalog fault must degrade to solving from scratch, never fail the flat set. Logged.")]
+    private async Task<FlatTraining?> ReadTrainingAsync(string filter, FlatSetRequest request, CancellationToken token) {
+        if (_training is null) {
+            return null;
+        }
+        try {
+            return await _training.GetAsync(filter, request.Gain, request.Offset, 1, token).ConfigureAwait(false);
+        } catch (Exception ex) when (ex is not OperationCanceledException) {
+            LogTrainingIoFailed(ex);
+            return null;
+        }
+    }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Remembering the solution is an optimisation; a catalog fault must not fail flats that already solved. Logged.")]
+    private async Task WriteTrainingAsync(string filter, FlatSetRequest request, FlatTraining training, CancellationToken token) {
+        if (_training is null) {
+            return;
+        }
+        try {
+            await _training.PutAsync(filter, request.Gain, request.Offset, 1, training, token).ConfigureAwait(false);
+        } catch (Exception ex) when (ex is not OperationCanceledException) {
+            LogTrainingIoFailed(ex);
+        }
+    }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Panel boundary: an absent or faulting panel means probing the scene as-is (manual panel / sky), never a failed flat set. Logged.")]
+    private async Task<FlatDeviceDto?> PanelInfoAsync(CancellationToken token) {
+        if (_flatDevice is null) {
+            return null;
+        }
+        try {
+            return await _flatDevice.GetAsync(token).ConfigureAwait(false);
+        } catch (Exception ex) when (ex is not OperationCanceledException) {
+            LogPanelUnavailable(ex);
+            return null;
+        }
     }
 
     /// <summary>
-    /// Request the panel light at the set's brightness and wait (bounded) for the runtime to
-    /// report it on. False when no panel is connected — the set proceeds anyway (manual panels
-    /// and sky sources are legitimate §48 setups; a genuinely dark scene fails the probe loop
-    /// honestly instead).
+    /// Close the cover when it's open (flats need the panel over the optics, and a run that
+    /// imaged all night left it open), light the panel at <paramref name="brightness"/> and wait
+    /// (bounded) for the runtime to report it on and closed. False when no panel is connected — the
+    /// set proceeds anyway (manual panels and sky sources are legitimate §48 setups; a genuinely
+    /// dark scene fails the solve honestly instead).
     /// </summary>
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Panel boundary: ApplyFlatPanelAsync throws for a disconnected/absent panel and arbitrary driver faults; the flat set must degrade to probing the scene as-is (manual panel / sky), never fault the sequence step over an optional device. CA1031's log-and-recover boundary applies.")]
-    private async Task<bool> TryLightPanelAsync(int brightness, CancellationToken token) {
+    private async Task<bool> TryLightPanelAsync(int brightness, bool closeCover, CancellationToken token) {
         if (_flatDevice is null) {
             return false;
         }
         try {
             _ = await _flatDevice.ApplyFlatPanelAsync(
-                new FlatPanelRequestDto(LightOn: true, Brightness: brightness > 0 ? brightness : null),
+                new FlatPanelRequestDto(OpenCover: closeCover ? false : null, LightOn: true, Brightness: brightness > 0 ? brightness : null),
                 idempotencyKey: null, token).ConfigureAwait(false);
         } catch (Exception ex) when (ex is not OperationCanceledException) {
             LogPanelUnavailable(ex);
             return false;
         }
+        if (closeCover) {
+            LogClosingCover();
+        }
         // The apply runs on a fire-and-forget worker with a 2 s state poll — wait (bounded) for
-        // the light to actually read on so the first probe isn't of a half-lit panel.
-        var deadline = DateTimeOffset.UtcNow + PanelOnTimeout;
+        // the cover to close and the light to actually read on so the first probe isn't of a
+        // half-lit panel or the sky.
+        var timeout = closeCover ? CoverCloseTimeout : PanelOnTimeout;
+        var deadline = DateTimeOffset.UtcNow + timeout;
         while (DateTimeOffset.UtcNow < deadline) {
             token.ThrowIfCancellationRequested();
             try {
                 var dto = await _flatDevice.GetAsync(token).ConfigureAwait(false);
-                if (dto?.Runtime.LightOn == true) {
+                if (dto?.Runtime is { LightOn: true, CoverOpen: false }) {
                     LogPanelLit(dto.Runtime.Brightness);
                     return true;
                 }
@@ -180,10 +296,66 @@ public sealed partial class FlatCaptureService : IFlatCaptureExecutor {
             }
             await Delay(TimeSpan.FromMilliseconds(250), token).ConfigureAwait(false);
         }
-        // The apply was accepted but the light never read on — proceed and let the probe loop
+        // The apply was accepted but the light never read on — proceed and let the solve
         // decide (some calibrators mis-report state; a dark probe fails honestly).
-        LogPanelLightTimeout(PanelOnTimeout.TotalSeconds);
+        LogPanelLightTimeout(timeout.TotalSeconds);
         return true;
+    }
+
+    // Change the lit panel's level and wait (bounded) until it reports it, warmed up.
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Panel boundary: a level read/apply fault degrades to probing at whatever the panel shows; the next probe's slope read absorbs it. Logged.")]
+    private async Task SetBrightnessAsync(int brightness, CancellationToken token) {
+        try {
+            _ = await _flatDevice!.ApplyFlatPanelAsync(new FlatPanelRequestDto(Brightness: brightness), idempotencyKey: null, token).ConfigureAwait(false);
+            var deadline = DateTimeOffset.UtcNow + BrightnessSettleTimeout;
+            while (DateTimeOffset.UtcNow < deadline) {
+                var dto = await _flatDevice.GetAsync(token).ConfigureAwait(false);
+                if (dto?.Runtime is { LightWarming: false } rt && rt.Brightness == brightness) {
+                    return;
+                }
+                await Delay(TimeSpan.FromMilliseconds(250), token).ConfigureAwait(false);
+            }
+            LogBrightnessTimeout(brightness, BrightnessSettleTimeout.TotalSeconds);
+        } catch (Exception ex) when (ex is not OperationCanceledException) {
+            LogPanelUnavailable(ex);
+        }
+    }
+
+    /// <inheritdoc/>
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Panel boundary: a disconnected/absent panel or a driver fault means the cover can't be opened; the run's lens-cap pause still asks the user, so this logs and reports false rather than failing the step.")]
+    public async Task<bool> OpenCoverAsync(CancellationToken token) {
+        if (_flatDevice is null) {
+            LogNoCoverToOpen();
+            return false;
+        }
+        try {
+            var device = await _flatDevice.GetAsync(token).ConfigureAwait(false);
+            if (device?.Runtime is not { HasCover: true } runtime) {
+                LogNoCoverToOpen();
+                return false;
+            }
+            if (runtime.CoverOpen && !runtime.LightOn) {
+                return true;
+            }
+            _ = await _flatDevice.ApplyFlatPanelAsync(
+                new FlatPanelRequestDto(OpenCover: true, LightOn: false), idempotencyKey: null, token).ConfigureAwait(false);
+            LogOpeningCover();
+            var deadline = DateTimeOffset.UtcNow + CoverCloseTimeout;
+            while (DateTimeOffset.UtcNow < deadline) {
+                token.ThrowIfCancellationRequested();
+                if ((await _flatDevice.GetAsync(token).ConfigureAwait(false))?.Runtime is { CoverOpen: true }) {
+                    return true;
+                }
+                await Delay(TimeSpan.FromMilliseconds(250), token).ConfigureAwait(false);
+            }
+            LogCoverOpenTimeout(CoverCloseTimeout.TotalSeconds);
+            return false;
+        } catch (Exception ex) when (ex is not OperationCanceledException) {
+            LogPanelUnavailable(ex);
+            return false;
+        }
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
@@ -220,7 +392,8 @@ public sealed partial class FlatCaptureService : IFlatCaptureExecutor {
                 // minute, so yesterday's exposure is already wrong by the next frame.
                 var settled = false;
                 for (var attempt = 0; attempt < SkyProbeAttemptsPerFrame; attempt++) {
-                    var frame = await _frames.CaptureForAnalysisAsync(exposure, binning: 1, token).ConfigureAwait(false);
+                    var frame = await _frames.CaptureForAnalysisAsync(exposure, binning: 1,
+                        request.Gain >= 0 ? request.Gain : null, request.Offset >= 0 ? request.Offset : null, token).ConfigureAwait(false);
                     var mean = MeanAdu(frame.Pixels.Span);
                     LogSkyProbe(n, exposure, mean);
                     if (mean >= request.StopAtMaxAdu && exposure <= request.MinExposureSec) {
@@ -261,15 +434,19 @@ public sealed partial class FlatCaptureService : IFlatCaptureExecutor {
                     binning: new OpenAstroAra.Core.Model.Equipment.BinningMode(1, 1), exposureCount: 1) {
                     Gain = request.Gain,
                     Offset = request.Offset,
+                    Night = request.Night,
                 };
-                _ = await _imaging.CaptureImage(sequence, token, progress, "Sky flats").ConfigureAwait(false);
+                _ = await _imaging.CaptureImage(sequence, token, progress, request.TargetName ?? "Sky flats").ConfigureAwait(false);
+                request.Tally?.Add();
                 progress?.Report(new ApplicationStatus {
                     Status = $"Sky flat {n}/{request.FrameCount} at {exposure:0.###}s",
                 });
             }
             LogSkySetComplete(request.FrameCount);
             return true;
-        } catch (Exception ex) when (ex is not OperationCanceledException) {
+        } catch (Exception ex) when (ex is not (OperationCanceledException or CameraUnavailableException or StoreUnavailableException)) {
+            // A lost camera propagates: the flat step pauses the run for the user instead of
+            // failing this set and moving on to the next with no camera.
             LogSetFailed(ex);
             return false;
         }
@@ -295,20 +472,38 @@ public sealed partial class FlatCaptureService : IFlatCaptureExecutor {
     [LoggerMessage(Level = LogLevel.Warning, Message = "Flat set unavailable: the camera analysis/capture path is not wired on this daemon.")]
     private partial void LogNotWired();
 
-    [LoggerMessage(Level = LogLevel.Debug, Message = "Flat probe {Iteration}: {ExposureSec}s -> mean {MeanAdu} ADU.")]
-    private partial void LogProbe(int iteration, double exposureSec, double meanAdu);
+    [LoggerMessage(Level = LogLevel.Information, Message = "Flat probe {Iteration}: {ExposureSec}s at panel {Brightness} -> level {Level} ADU (target {Target}).")]
+    private partial void LogProbe(int iteration, double exposureSec, int? brightness, double level, double target);
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "Flat exposure converged at {ExposureSec}s (mean {MeanAdu} ADU, target {TargetAdu}).")]
-    private partial void LogConverged(double exposureSec, double meanAdu, double targetAdu);
+    [LoggerMessage(Level = LogLevel.Information, Message = "Flats for '{Filter}' solved: {ExposureSec}s at panel {Brightness} -> level {Level} ADU (target {Target}) in {Probes} probes.")]
+    private partial void LogSolved(string filter, double exposureSec, int? brightness, double level, double target, int probes);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Flats for '{Filter}' could not be solved: {Reason} ({Probes} probes, last level {Level} ADU).")]
+    private partial void LogSolveFailed(string filter, string reason, int probes, double level);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "A flat probe read above the camera's reported MaxADU {MaxAdu}: the driver delivers scaled 16-bit data, solving against 65535.")]
+    private partial void LogFullScaleMismatch(int maxAdu);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Remembered flat exposures could not be read or written (best-effort).")]
+    private partial void LogTrainingIoFailed(Exception ex);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Closing the flat panel cover before flats.")]
+    private partial void LogClosingCover();
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Opening the flat panel cover for the lens cap.")]
+    private partial void LogOpeningCover();
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "No motorised flat panel cover to open — the user moves the panel for the lens cap.")]
+    private partial void LogNoCoverToOpen();
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Flat panel cover did not report open within {Seconds}s.")]
+    private partial void LogCoverOpenTimeout(double seconds);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Flat panel did not report brightness {Brightness} within {Seconds}s — probing anyway.")]
+    private partial void LogBrightnessTimeout(int brightness, double seconds);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Flat probe at {ExposureSec}s read a zero-mean frame — no light is reaching the sensor (panel off/blocked?).")]
     private partial void LogNoLight(double exposureSec);
-
-    [LoggerMessage(Level = LogLevel.Warning, Message = "Flat probe pinned at the {ExposureSec}s exposure bound with mean {MeanAdu} ADU (target {TargetAdu}) — adjust panel brightness or the exposure bounds.")]
-    private partial void LogBoundsPinned(double exposureSec, double meanAdu, double targetAdu);
-
-    [LoggerMessage(Level = LogLevel.Warning, Message = "Flat probe did not converge in {Iterations} iterations (last {ExposureSec}s -> mean {MeanAdu} ADU, target {TargetAdu}).")]
-    private partial void LogNoConvergence(int iterations, double exposureSec, double meanAdu, double targetAdu);
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Flat set complete: {FrameCount} frames at {ExposureSec}s.")]
     private partial void LogSetComplete(int frameCount, double exposureSec);
@@ -322,7 +517,7 @@ public sealed partial class FlatCaptureService : IFlatCaptureExecutor {
     [LoggerMessage(Level = LogLevel.Information, Message = "Flat panel lit at brightness {Brightness}.")]
     private partial void LogPanelLit(int brightness);
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "Flat panel light did not report on within {Seconds}s — proceeding; the probe loop will fail honestly if the panel is dark.")]
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Flat panel light did not report on (and closed) within {Seconds}s — proceeding; the solve fails honestly if the panel is dark.")]
     private partial void LogPanelLightTimeout(double seconds);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Flat panel light-off after the set failed (best-effort).")]
