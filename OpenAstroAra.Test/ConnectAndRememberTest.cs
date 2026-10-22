@@ -18,6 +18,7 @@ using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Endpoints;
 using OpenAstroAra.Server.Services;
 using System;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -49,7 +50,7 @@ namespace OpenAstroAra.Test {
 
             var result = await EquipmentEndpoints.ConnectAndRememberAsync(
                 Request(), store,
-                () => { connectCalled = true; return Task.FromResult(Accepted); },
+                _ => { connectCalled = true; return Task.FromResult(Accepted); },
                 CancellationToken.None);
 
             var accepted = result as Accepted<OperationAcceptedDto>;
@@ -71,7 +72,7 @@ namespace OpenAstroAra.Test {
 
             await Assert.ThrowsAsync<OperationCanceledException>(() => EquipmentEndpoints.ConnectAndRememberAsync(
                 Request(), store,
-                () => { connectCalled = true; return Task.FromResult(Accepted); },
+                _ => { connectCalled = true; return Task.FromResult(Accepted); },
                 cts.Token));
 
             Assert.Multiple(() => {
@@ -86,10 +87,46 @@ namespace OpenAstroAra.Test {
 
             await Assert.ThrowsAsync<InvalidOperationException>(() => EquipmentEndpoints.ConnectAndRememberAsync(
                 Request(), store,
-                () => throw new InvalidOperationException("bridge unreachable"),
+                _ => throw new InvalidOperationException("bridge unreachable"),
                 CancellationToken.None));
 
             Assert.That(store.Remembered, Is.Empty, "a device that failed to connect must NOT be remembered");
+        }
+
+        private static ConnectRequestDto At(string host, string ip) =>
+            new(new DiscoveredDeviceDto(
+                UniqueId: "ZWO_EAF_0", Name: "ZWO EAF", Type: DeviceType.Focuser,
+                HostName: host, IpAddress: ip, IpPort: 6800, AlpacaDeviceNumber: 0, UseHttps: false));
+
+        [Test]
+        public async Task A_device_on_this_machine_is_dialled_and_remembered_as_localhost() {
+            // Any loopback address is this machine under the production rule, whatever the NICs are.
+            var store = new FakeSelectionStore();
+            ConnectRequestDto? dialled = null;
+
+            await EquipmentEndpoints.ConnectAndRememberAsync(At("127.0.0.2", "127.0.0.2"), store,
+                r => { dialled = r; return Task.FromResult(Accepted); }, CancellationToken.None);
+
+            Assert.Multiple(() => {
+                Assert.That(dialled?.Device.HostName, Is.EqualTo("localhost"));
+                Assert.That(dialled?.Device.IpAddress, Is.EqualTo("127.0.0.1"));
+                Assert.That(store.Remembered.Single().HostName, Is.EqualTo("localhost"));
+                Assert.That(store.Remembered.Single().IpAddress, Is.EqualTo("127.0.0.1"));
+            });
+        }
+
+        [Test]
+        public async Task A_device_on_another_machine_is_dialled_and_remembered_as_given() {
+            var store = new FakeSelectionStore();
+            ConnectRequestDto? dialled = null;
+
+            await EquipmentEndpoints.ConnectAndRememberAsync(At("192.0.2.10", "192.0.2.10"), store,
+                r => { dialled = r; return Task.FromResult(Accepted); }, CancellationToken.None);
+
+            Assert.Multiple(() => {
+                Assert.That(dialled?.Device.IpAddress, Is.EqualTo("192.0.2.10"));
+                Assert.That(store.Remembered.Single().IpAddress, Is.EqualTo("192.0.2.10"));
+            });
         }
 
         private sealed class FakeSelectionStore : IEquipmentSelectionStore {

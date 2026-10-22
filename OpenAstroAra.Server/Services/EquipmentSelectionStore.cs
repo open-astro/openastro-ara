@@ -255,8 +255,15 @@ public sealed partial class EquipmentSelectionStore : IEquipmentSelectionStore, 
                 ?? new Dictionary<string, DiscoveredDeviceDto>();
             // A file written before the localhost rule (or on another network) migrates on read: every
             // entry naming one of this machine's addresses is dialled as localhost from now on.
+            // A switch is keyed by its endpoint, so a localized entry moves to its localhost key; one already
+            // there wins, and the old-address key is dropped so no writer can carry the same switch twice.
             foreach (var key in map.Keys.ToList()) {
-                map[key] = HostLocality.LocalizeDevice(map[key], _isThisMachine);
+                var local = HostLocality.LocalizeDevice(map[key], _isThisMachine);
+                if (ReferenceEquals(local, map[key])) {
+                    continue;
+                }
+                map.Remove(key);
+                map.TryAdd(KeyFor(local), local);
             }
             return map;
         } catch (FileNotFoundException) {

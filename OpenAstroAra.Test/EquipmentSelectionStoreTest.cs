@@ -77,6 +77,25 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_switch_under_an_old_own_address_leaves_no_key_behind_on_the_next_write() {
+            // The same switch under the field router's address and under localhost: the next write must
+            // not carry the old-address key forward (a raw-map reader would dial the switch twice).
+            await File.WriteAllTextAsync(Path.Combine(_dir, EquipmentSelectionStore.FileName), """
+                {
+                  "Switch:192.168.8.118:6800:2": { "UniqueId": "ZWO_ASIAIR_2", "Name": "ASIAIR", "Type": "Switch", "HostName": "192.168.8.118", "IpAddress": "192.168.8.118", "IpPort": 6800, "AlpacaDeviceNumber": 2, "UseHttps": false },
+                  "Switch:LOCALHOST:6800:2": { "UniqueId": "ZWO_ASIAIR_2", "Name": "ASIAIR", "Type": "Switch", "HostName": "localhost", "IpAddress": "127.0.0.1", "IpPort": 6800, "AlpacaDeviceNumber": 2, "UseHttps": false }
+                }
+                """);
+            using var store = new EquipmentSelectionStore(_dir, NullLogger<EquipmentSelectionStore>.Instance, LocalBox);
+
+            await store.RememberAsync(new DiscoveredDeviceDto("cam", "ASI2600MM", DeviceType.Camera, "localhost", "127.0.0.1", 6800, 1, false), CancellationToken.None);
+
+            var text = await File.ReadAllTextAsync(Path.Combine(_dir, EquipmentSelectionStore.FileName));
+            Assert.That(text, Does.Not.Contain("192.168.8.118"));
+            Assert.That((await store.GetAllAsync(CancellationToken.None)).Count(d => d.Type == DeviceType.Switch), Is.EqualTo(1));
+        }
+
+        [Test]
         public async Task A_file_from_before_the_localhost_rule_migrates_on_read() {
             // The on-disk map the night's box had: every device under an address of its own.
             await File.WriteAllTextAsync(Path.Combine(_dir, EquipmentSelectionStore.FileName), """
