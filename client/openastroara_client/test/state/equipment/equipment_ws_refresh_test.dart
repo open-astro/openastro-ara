@@ -23,11 +23,17 @@ class _FakeMountApi implements EquipmentDeviceClient<MountStatus> {
   /// initial read in flight while a WS-push refresh overtakes it.
   Completer<void>? gateFirstRead;
 
+  /// When set, the SECOND read (an action's post-202 re-read) blocks on this.
+  Completer<void>? gateSecondRead;
+
   @override
   Future<MountStatus?> getStatus() async {
     final call = ++statusReads;
     if (call == 1 && gateFirstRead != null) {
       await gateFirstRead!.future;
+    }
+    if (call == 2 && gateSecondRead != null) {
+      await gateSecondRead!.future;
     }
     return MountStatus(
       deviceId: 'mnt-1',
@@ -157,6 +163,27 @@ void main() {
         'read-2',
         reason: 'the pre-transition build read would silently revert the panel',
       );
+    });
+
+    test('a push during an action\'s re-read is replayed once it ends', () async {
+      // The daemon pushes Connected before it has read the device's details,
+      // then pushes again once they are cached. The second push can land while
+      // the connect's own re-read is in flight — dropping it left the card on
+      // detail-less status until the 15 s liveness poll.
+      await prime();
+      api.gateSecondRead = Completer<void>();
+      final action = container.read(mountProvider.notifier).reconnect();
+      await pumpEventQueue();
+      expect(api.statusReads, 2, reason: 'the post-202 re-read is held');
+
+      events.add(_stateChanged('telescope'));
+      await pumpEventQueue();
+      expect(api.statusReads, 2, reason: 'no overlapping read');
+
+      api.gateSecondRead!.complete();
+      await action;
+      await pumpEventQueue();
+      expect(api.statusReads, 3, reason: 'the held push re-reads at once');
     });
 
     test(

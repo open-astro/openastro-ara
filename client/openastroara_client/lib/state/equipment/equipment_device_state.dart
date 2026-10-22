@@ -49,6 +49,11 @@ abstract class EquipmentDeviceNotifier<T extends EquipmentDeviceStatus>
   bool _refreshing = false;
   // True while a connect/disconnect is in flight (re-entrancy guard).
   bool _acting = false;
+  // A §60.9 push that landed while a read was in flight. refresh() drops reads
+  // during another read, but that in-flight read may predate the transition the
+  // push announces (the daemon pushes Connected, then pushes again once the
+  // device's details are cached) — so the push is replayed when the read ends.
+  bool _pushPending = false;
   // Bumped on every build() (active-server change). A refresh captures the gen at
   // its start and only writes if it still matches, so an in-flight read can't land
   // stale data over a new server's result.
@@ -88,6 +93,7 @@ abstract class EquipmentDeviceNotifier<T extends EquipmentDeviceStatus>
     // server would otherwise lock out actions on the new one.
     _refreshing = false;
     _acting = false;
+    _pushPending = false;
     // Failures counted against the OLD server must not carry over: three
     // failures on server A plus one on server B would otherwise trip the
     // threshold on a device that has failed once on its current link.
@@ -127,7 +133,7 @@ abstract class EquipmentDeviceNotifier<T extends EquipmentDeviceStatus>
       final eventType = DiscoveredDevice.tryParseDeviceType(
         event.payload['device_type'],
       );
-      if (eventType == deviceType) refresh();
+      if (eventType == deviceType) _onPush();
     });
     final api = watchClient();
     if (api == null) return null;
@@ -213,8 +219,26 @@ abstract class EquipmentDeviceNotifier<T extends EquipmentDeviceStatus>
       // Clear the guard only if no server change happened mid-action — build()
       // already reset it for the new generation, and a fresh action there may have
       // set it true again; an unconditional clear would wipe that newer guard.
-      if (gen == _generation) _acting = false;
+      if (gen == _generation) {
+        _acting = false;
+        _replayPendingPush();
+      }
     }
+  }
+
+  void _onPush() {
+    if (_refreshing || _acting) {
+      _pushPending = true;
+      return;
+    }
+    refresh();
+  }
+
+  // Re-read once for a push that arrived mid-read (see [_pushPending]).
+  void _replayPendingPush() {
+    if (!_pushPending || !ref.mounted) return;
+    _pushPending = false;
+    refresh();
   }
 
   /// Re-read the device status. [client] pins the read to a specific client (used
@@ -278,7 +302,10 @@ abstract class EquipmentDeviceNotifier<T extends EquipmentDeviceStatus>
         }
       }
     } finally {
-      if (manual && gen == _generation) _refreshing = false;
+      if (manual && gen == _generation) {
+        _refreshing = false;
+        _replayPendingPush();
+      }
     }
   }
 

@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/discovered_device.dart';
 import 'package:openastroara/models/server.dart';
 import 'package:openastroara/models/switch_device.dart';
+import 'package:openastroara/models/ws_event.dart';
 import 'package:openastroara/services/equipment_discovery_api.dart';
 import 'package:openastroara/services/saved_server_service.dart';
 import 'package:openastroara/services/switch_api.dart';
@@ -13,6 +14,7 @@ import 'package:openastroara/state/equipment/equipment_discovery_provider.dart';
 import 'package:openastroara/state/equipment/switch_state.dart';
 import 'package:openastroara/state/saved_server_state.dart';
 import 'package:openastroara/state/settings/equipment_connection_state.dart';
+import 'package:openastroara/state/ws/ws_providers.dart';
 
 class _FakeSavedServerService implements SavedServerService {
   _FakeSavedServerService(this._stored);
@@ -36,6 +38,9 @@ class _FakeSwitchApi implements SwitchClient {
   // When set, connect() awaits this before completing — lets a test hold one
   // action in flight to exercise the re-entrancy drop.
   Completer<void>? connectGate;
+  int getAllCalls = 0;
+  // When set, the next getAll() awaits this — holds a read in flight.
+  Completer<void>? getAllGate;
 
   SwitchDevice _dev(int n, SwitchConnectionState s) => SwitchDevice(
         deviceId: 'sw-$n',
@@ -47,6 +52,12 @@ class _FakeSwitchApi implements SwitchClient {
 
   @override
   Future<List<SwitchDevice>> getAll() async {
+    getAllCalls++;
+    final gate = getAllGate;
+    if (gate != null) {
+      getAllGate = null;
+      await gate.future;
+    }
     if (throwOnGetAll) throw StateError('getAll failed');
     return devices;
   }
@@ -137,12 +148,14 @@ ProviderContainer _container(
   List<AraServer> servers,
   SwitchClient api, {
   EquipmentDiscoveryApi? discovery,
+  Stream<WsEvent>? events,
 }) {
   final c = ProviderContainer(overrides: [
     savedServerServiceProvider.overrideWithValue(_FakeSavedServerService(servers)),
     switchApiFactoryProvider.overrideWithValue((_) => api),
     if (discovery != null)
       equipmentDiscoveryApiFactoryProvider.overrideWithValue((_) => discovery),
+    if (events != null) wsEventsProvider.overrideWith((ref) => events),
   ]);
   addTearDown(c.dispose);
   return c;
@@ -434,5 +447,37 @@ void main() {
     final state = c.read(switchListProvider);
     expect(state.hasError, isFalse);
     expect(state.value!.single.alpacaDeviceNumber, 0);
+  });
+
+  test('a state_changed push during a manual read is replayed when it ends',
+      () async {
+    // The daemon pushes Connected, then again once the switch's ports are
+    // cached. A push landing while a read is in flight must not be dropped —
+    // that read may predate the ports.
+    final events = StreamController<WsEvent>.broadcast();
+    addTearDown(events.close);
+    final api = _FakeSwitchApi();
+    final c = _container(const [server], api, events: events.stream);
+    await c.read(savedServersProvider.future);
+    c.listen(switchListProvider, (_, _) {});
+    await c.read(switchListProvider.future);
+    expect(api.getAllCalls, 1);
+
+    final gate = api.getAllGate = Completer<void>();
+    final read = c.read(switchListProvider.notifier).refresh();
+    await pumpEventQueue();
+    events.add(WsEvent(
+      type: 'equipment.state_changed',
+      ts: DateTime.utc(2026, 10, 22),
+      seq: 1,
+      payload: {'device_type': 'switch', 'device_id': 'sw-0', 'state': 'connected'},
+    ));
+    await pumpEventQueue();
+    expect(api.getAllCalls, 2, reason: 'held while the manual read is in flight');
+
+    gate.complete();
+    await read;
+    await pumpEventQueue();
+    expect(api.getAllCalls, 3, reason: 'the held push re-reads once');
   });
 }

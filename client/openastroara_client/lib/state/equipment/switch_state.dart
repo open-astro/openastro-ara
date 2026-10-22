@@ -81,6 +81,9 @@ class SwitchListNotifier extends AsyncNotifier<List<SwitchDevice>> {
   // dropped (re-entrancy guard) without touching the list's AsyncValue, so a
   // one-off action failure never wipes the loaded device list.
   bool _acting = false;
+  // A §60.9 push that landed during a manual read, replayed when it ends — see
+  // EquipmentDeviceNotifier._pushPending.
+  bool _pushPending = false;
   // Bumped on every build() (active-server change). A refresh captures the gen at
   // its start and only writes if it still matches, so an in-flight read can't land
   // stale data over a new server's result.
@@ -97,6 +100,7 @@ class SwitchListNotifier extends AsyncNotifier<List<SwitchDevice>> {
     // one until the abandoned (force-closed) Dio call unwinds.
     _refreshing = false;
     _acting = false;
+    _pushPending = false;
     _generation++;
     // Discovery records are per server (a same-id switch on another server is
     // the same physical device, but the map must not grow across servers for
@@ -113,7 +117,12 @@ class SwitchListNotifier extends AsyncNotifier<List<SwitchDevice>> {
       final eventType = DiscoveredDevice.tryParseDeviceType(
         event.payload['device_type'],
       );
-      if (eventType == EquipmentDeviceType.switchDevice) refresh();
+      if (eventType != EquipmentDeviceType.switchDevice) return;
+      if (_refreshing) {
+        _pushPending = true;
+      } else {
+        refresh();
+      }
     });
     final api = ref.watch(switchApiProvider);
     if (api == null) return const <SwitchDevice>[];
@@ -283,7 +292,13 @@ class SwitchListNotifier extends AsyncNotifier<List<SwitchDevice>> {
       // unconditional clear here would wipe that newer refresh's flag (a race).
       // Every generation bump comes from build(), which resets the flag, so this
       // stale branch can never strand _refreshing == true.
-      if (manual && gen == _generation) _refreshing = false;
+      if (manual && gen == _generation) {
+        _refreshing = false;
+        if (_pushPending && ref.mounted) {
+          _pushPending = false;
+          refresh();
+        }
+      }
     }
   }
 }

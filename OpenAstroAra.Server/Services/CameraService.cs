@@ -2255,6 +2255,11 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
             bool stillConnected;
             lock (_gate) {
                 stillConnected = _state == EquipmentConnectionState.Connected;
+                if (stillConnected) {
+                    // The Connected push went out before this seed read; push again so a
+                    // client re-reads now that the device's details are cached.
+                    _events?.StateChanged(DeviceType.Camera, _device?.UniqueId, _device?.Name, _state);
+                }
             }
             if (stillConnected) {
                 LogConnected(device.Name, host, device.IpPort, device.AlpacaDeviceNumber);
