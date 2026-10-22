@@ -144,6 +144,8 @@ namespace OpenAstroAra.Test {
                 Task.FromResult(Remembered.RemoveAll(d => d.Type == type));
 
         public Task<int> ForgetSwitchAsync(string uniqueId, CancellationToken ct) => Task.FromResult(0);
+
+            public Task RelocateAsync(DiscoveredDeviceDto from, DiscoveredDeviceDto moved, CancellationToken ct) => RememberAsync(moved, ct);
         }
     }
 }

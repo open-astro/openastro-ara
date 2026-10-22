@@ -30,8 +30,11 @@ public static class CameraConnectGuard {
 
     /// <summary>True when <paramref name="device"/> is the guider's configured camera: the profile's
     /// <c>phd2.guider_camera</c> choice string embeds <c>[host:port/N]</c>, matched against the device's
-    /// host name or IP (case-insensitive, loopback spellings equal), its Alpaca port and device number.</summary>
-    public static bool IsGuiderCamera(DiscoveredDeviceDto device, Phd2SettingsDto phd2) {
+    /// host name or IP (case-insensitive, loopback spellings equal), its Alpaca port and device number. With the
+    /// guider on this machine, any of this machine's addresses on both sides is the same server: the client
+    /// discovered the camera at 192.168.1.118 while the guider's choice says localhost (#1443).
+    /// <paramref name="isThisMachine"/> is injectable for tests.</summary>
+    public static bool IsGuiderCamera(DiscoveredDeviceDto device, Phd2SettingsDto phd2, Func<string?, bool>? isThisMachine = null) {
         ArgumentNullException.ThrowIfNull(device);
         ArgumentNullException.ThrowIfNull(phd2);
         var endpoint = PHD2Guider.ParseAlpacaSelectionEndpoint(phd2.GuiderCamera);
@@ -41,7 +44,29 @@ public static class CameraConnectGuard {
         if (ep.Port != device.IpPort || ep.Device != device.AlpacaDeviceNumber) {
             return false;
         }
-        return HostsEqual(ep.Host, device.HostName) || HostsEqual(ep.Host, device.IpAddress);
+        var local = isThisMachine ?? HostLocality.IsThisMachine;
+        var host = AsSeenHere(ep.Host, phd2.Host, local);
+        if (HostsEqual(host, device.HostName) || HostsEqual(host, device.IpAddress)) {
+            return true;
+        }
+        return !string.IsNullOrWhiteSpace(host) && local(host)
+            && HostLocality.LocalizeDevice(device, local).HostName == HostLocality.LocalHostName;
+    }
+
+    /// <summary>The guider's choice string names hosts as the guider sees them: its "localhost" is the guider's
+    /// own machine. Translated to this machine's view — the guider's host when the guider runs elsewhere,
+    /// unchanged when it runs here (a blank guider host is the default local guider).</summary>
+    public static string? AsSeenHere(string? choiceHost, string? guiderHost, Func<string?, bool> isThisMachine) {
+        ArgumentNullException.ThrowIfNull(isThisMachine);
+        var guiderHere = string.IsNullOrWhiteSpace(guiderHost) || isThisMachine(guiderHost);
+        return !guiderHere && IsLoopbackName(choiceHost) ? guiderHost : choiceHost;
+    }
+
+    private static bool IsLoopbackName(string? host) {
+        var h = host?.Trim().Trim('[', ']');
+        return !string.IsNullOrEmpty(h)
+            && (h.Equals(HostLocality.LocalHostName, StringComparison.OrdinalIgnoreCase)
+                || (System.Net.IPAddress.TryParse(h, out var ip) && System.Net.IPAddress.IsLoopback(ip)));
     }
 
     internal static bool HostsEqual(string? a, string? b) {

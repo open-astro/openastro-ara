@@ -224,6 +224,9 @@ The daemon computes sidereal time with a bundled snapshot of the IERS UT1-UTC se
 - Check the firewall: `sudo ufw status` — port 5555/tcp must be open
 - Direct connection: enter the Pi's IP + port in the Flutter client's manual-connect dialog
 
+**Devices on the Pi's own AlpacaBridge time out after moving the Pi to another network**
+Ara dials the bridge on the same box as `localhost` (`127.0.0.1:6800`), so it keeps working whichever network, NIC or router the Pi is on, and a device saved under an address the Pi no longer has is found again on its own bridge at the next boot. That needs AlpacaBridge listening on loopback: its default (`*:6800`) does; `ss -ltn | grep 6800` should show `*:6800` or `0.0.0.0:6800`, not only a LAN address. A device the bridge has since given a new UniqueID (the ZWO dew heater under AlpacaBridge 5) is picked once more in the client.
+
 **Captures refused: "the store drive is ejected/unmounted"**
 The journal's §29 pre-capture line means nothing is mounted at `/media/openastroara`; `mount | grep /media/openastroara` to verify, then reconnect the drive or choose a store. A drive that is mounted but read-only passes that check and the frame write fails instead: if `errors=remount-ro` triggered, run `sudo fsck -y /dev/sdaN` and `sudo mount -o remount,rw /media/openastroara`.
 

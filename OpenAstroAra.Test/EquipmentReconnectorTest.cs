@@ -57,6 +57,11 @@ namespace OpenAstroAra.Test {
                 ForgottenSwitches.Add(uniqueId);
                 return Task.FromResult(0);
             }
+            public List<(DiscoveredDeviceDto From, DiscoveredDeviceDto To)> Relocated { get; } = new();
+            public Task RelocateAsync(DiscoveredDeviceDto from, DiscoveredDeviceDto moved, CancellationToken ct) {
+                Relocated.Add((from, moved));
+                return Task.CompletedTask;
+            }
         }
 
         // Build a reconnector whose IServiceProvider resolves the given mocked services.
@@ -270,9 +275,10 @@ namespace OpenAstroAra.Test {
             Assert.That(outcome.Dispatched, Is.EqualTo(1));
             sw.Verify(s => s.ConnectAsync(It.Is<ConnectRequestDto>(c => c.Device.HostName == "localhost" && c.Device.IpAddress == "127.0.0.1"),
                 null, It.IsAny<CancellationToken>()), Times.Once);
-            Assert.That(store.ForgottenSwitches, Has.Count.EqualTo(1).And.Contains("ZWO_ASIAIR_2"), "the old address's entry goes");
-            Assert.That(store.Remembered, Has.Count.EqualTo(1));
-            Assert.That(store.Remembered[0].HostName, Is.EqualTo("localhost"));
+            Assert.That(store.ForgottenSwitches, Is.Empty, "never by UniqueId: another server's switch may share it");
+            Assert.That(store.Relocated, Has.Count.EqualTo(1));
+            Assert.That(store.Relocated[0].From.IpAddress, Is.EqualTo("192.168.8.118"));
+            Assert.That(store.Relocated[0].To.HostName, Is.EqualTo("localhost"));
         }
 
         [Test]
@@ -303,6 +309,7 @@ namespace OpenAstroAra.Test {
 
             foc.Verify(s => s.ConnectAsync(It.Is<ConnectRequestDto>(c => c.Device.IpAddress == "192.168.8.118"), null, It.IsAny<CancellationToken>()), Times.Once);
             Assert.That(store.Remembered, Is.Empty);
+            Assert.That(store.Relocated, Is.Empty);
         }
     }
 }

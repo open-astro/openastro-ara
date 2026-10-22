@@ -106,6 +106,10 @@ namespace OpenAstroAra.Test {
             Assert.That(GuiderCameraPinCheck.Describe(settings, Before(), main, cm4), Does.Contain("is the main imaging camera"));
             Assert.That(GuiderCameraPinCheck.IsMainCamera(Settings("Alpaca Camera [192.168.1.50:6800/0]", Pro), Before(), main, cm4), Is.False,
                 "the same id on another box is another camera");
+            // A guider on another machine reads "localhost" as itself, so its localhost camera is not ours.
+            var remoteGuider = Settings("Alpaca Camera [localhost:6800/0]", Pro);
+            Mock.Get(remoteGuider).SetupGet(x => x.PHD2ServerHost).Returns("192.168.1.50");
+            Assert.That(GuiderCameraPinCheck.IsMainCamera(remoteGuider, Before(), main, cm4), Is.False);
         }
 
         [Test]

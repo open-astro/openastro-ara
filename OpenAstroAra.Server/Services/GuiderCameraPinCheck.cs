@@ -108,10 +108,12 @@ public static class GuiderCameraPinCheck {
         }
         var key = $"camera/{ep.Device.ToString(CultureInfo.InvariantCulture)}";
         // The main imaging camera, by identity when the server told us ids, else by address.
+        // The choice names the guider's view of the host; a remote guider's "localhost" is the guider's box.
+        var host = CameraConnectGuard.AsSeenHere(ep.Host, settings.PHD2ServerHost, isThisMachine ?? HostLocality.IsThisMachine);
         var sameServer = ep.Port == mainCamera.IpPort
-            && (string.Equals(ep.Host, mainCamera.IpAddress, StringComparison.OrdinalIgnoreCase)
-                || string.Equals(ep.Host, mainCamera.HostName, StringComparison.OrdinalIgnoreCase)
-                || (OnThisMachine(ep.Host, isThisMachine)
+            && (string.Equals(host, mainCamera.IpAddress, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(host, mainCamera.HostName, StringComparison.OrdinalIgnoreCase)
+                || (OnThisMachine(host, isThisMachine)
                     && (OnThisMachine(mainCamera.IpAddress, isThisMachine) || OnThisMachine(mainCamera.HostName, isThisMachine))));
         // When the server told us the picked device's id and the main camera has one, identity decides
         // alone: after a renumber the daemon's retained main-camera NUMBER can be stale (review r1), and

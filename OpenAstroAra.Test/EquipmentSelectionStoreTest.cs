@@ -96,6 +96,22 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Relocate_drops_only_the_old_address_entry() {
+            // Two switches share the serial-less id "ZWO_ASIAIR_2": one saved under this box's old field
+            // address, one on another bridge that is still there. Healing the first must keep the second.
+            using var store = new EquipmentSelectionStore(_dir, NullLogger<EquipmentSelectionStore>.Instance, _ => false);
+            var old = new DiscoveredDeviceDto("ZWO_ASIAIR_2", "ASIAIR", DeviceType.Switch, "192.168.8.118", "192.168.8.118", 6800, 2, false);
+            var remote = new DiscoveredDeviceDto("ZWO_ASIAIR_2", "ASIAIR", DeviceType.Switch, "192.168.1.50", "192.168.1.50", 6800, 2, false);
+            await store.RememberAsync(old, CancellationToken.None);
+            await store.RememberAsync(remote, CancellationToken.None);
+
+            await store.RelocateAsync(old, old with { HostName = "localhost", IpAddress = "127.0.0.1" }, CancellationToken.None);
+
+            var switches = (await store.GetAllAsync(CancellationToken.None)).Where(d => d.Type == DeviceType.Switch).Select(d => d.IpAddress).ToList();
+            Assert.That(switches, Has.Count.EqualTo(2).And.Contains("127.0.0.1").And.Contains("192.168.1.50"));
+        }
+
+        [Test]
         public async Task A_file_from_before_the_localhost_rule_migrates_on_read() {
             // The on-disk map the night's box had: every device under an address of its own.
             await File.WriteAllTextAsync(Path.Combine(_dir, EquipmentSelectionStore.FileName), """

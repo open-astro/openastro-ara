@@ -188,6 +188,19 @@ namespace OpenAstroAra.Test {
             Assert.That(CameraConnectGuard.IsGuiderCamera(Device("asiair.lan", "192.168.1.118", 6800, 1), phd2), Is.False);
         }
 
+        [Test]
+        public void The_guider_camera_at_localhost_is_the_same_device_discovered_at_this_boxes_lan_address() {
+            // #1443: a local guider names its camera "localhost"; the client discovers it at the box's LAN address.
+            static bool cm4(string? h) => h is "localhost" or "127.0.0.1" or "192.168.1.118";
+            var phd2 = Phd2("Alpaca Camera [localhost:6800/0]");
+            Assert.That(CameraConnectGuard.IsGuiderCamera(Device("192.168.1.118", "192.168.1.118", 6800, 0), phd2, cm4), Is.True);
+            Assert.That(CameraConnectGuard.IsGuiderCamera(Device("192.168.1.50", "192.168.1.50", 6800, 0), phd2, cm4), Is.False, "another box");
+            // A guider on another machine: its "localhost" is that machine, not this one.
+            Assert.That(CameraConnectGuard.IsGuiderCamera(Device("192.168.1.118", "192.168.1.118", 6800, 0), phd2 with { Host = "192.168.1.50" }, cm4), Is.False);
+            Assert.That(CameraConnectGuard.IsGuiderCamera(Device("192.168.1.50", "192.168.1.50", 6800, 0), phd2 with { Host = "192.168.1.50" }, cm4), Is.True,
+                "its localhost camera is the one on its own box");
+        }
+
         // ─── the loop itself, driven through the synthetic-frames seam (no guider daemon) ───
 
         private static GuideFocusService NewLoopService(GuiderService guider, Func<(ushort[] Pixels, int Width, int Height)> frames) =>

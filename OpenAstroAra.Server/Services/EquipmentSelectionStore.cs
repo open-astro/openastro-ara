@@ -50,6 +50,12 @@ public interface IEquipmentSelectionStore {
     /// stuck switch also stops auto-connect-on-boot resurrecting it. Idempotent; returns the
     /// number of entries removed.</summary>
     Task<int> ForgetSwitchAsync(string uniqueId, CancellationToken ct);
+
+    /// <summary>Replace the entry remembered at <paramref name="from"/>'s endpoint with <paramref name="moved"/>
+    /// in one write: a device found at a new address (its own bridge, as localhost) drops only the old
+    /// address's entry, never another server's device that shares its UniqueId. Best-effort like
+    /// <see cref="RememberAsync"/>.</summary>
+    Task RelocateAsync(DiscoveredDeviceDto from, DiscoveredDeviceDto moved, CancellationToken ct);
 }
 
 /// <summary>
@@ -113,6 +119,40 @@ public sealed partial class EquipmentSelectionStore : IEquipmentSelectionStore, 
         catch (Exception ex) {
             SafeDeleteTmp(tmp); // don't leave an orphaned .tmp if the write/move failed mid-way
             LogWriteFailed(ex, device.Type);
+        }
+#pragma warning restore CA1031
+        finally {
+            _gate.Release();
+        }
+    }
+
+    public async Task RelocateAsync(DiscoveredDeviceDto from, DiscoveredDeviceDto moved, CancellationToken ct) {
+        ArgumentNullException.ThrowIfNull(from);
+        ArgumentNullException.ThrowIfNull(moved);
+        var to = HostLocality.LocalizeDevice(moved, _isThisMachine ?? HostLocality.ThisMachineSnapshot());
+        await _gate.WaitAsync(ct).ConfigureAwait(false);
+        var tmp = _path + ".tmp";
+        try {
+            var map = await ReadLocked(ct).ConfigureAwait(false);
+            var oldEndpoint = DiscoveredDeviceEndpoint.KeyOf(from);
+            foreach (var key in map.Where(kv => Canonical(kv.Value.Type) == Canonical(from.Type)
+                                             && DiscoveredDeviceEndpoint.KeyOf(kv.Value) == oldEndpoint)
+                                   .Select(kv => kv.Key).ToList()) {
+                map.Remove(key);
+            }
+            map[KeyFor(to)] = to;
+            var json = JsonSerializer.Serialize(map, JsonOptions);
+            await File.WriteAllTextAsync(tmp, json, Encoding.UTF8, ct).ConfigureAwait(false);
+            File.Move(tmp, _path, overwrite: true);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) {
+            SafeDeleteTmp(tmp);
+            throw;
+        }
+#pragma warning disable CA1031 // best-effort persistence must not fail the connect that triggered it
+        catch (Exception ex) {
+            SafeDeleteTmp(tmp);
+            LogWriteFailed(ex, to.Type);
         }
 #pragma warning restore CA1031
         finally {

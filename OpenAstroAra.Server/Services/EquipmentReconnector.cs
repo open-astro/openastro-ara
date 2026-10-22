@@ -116,11 +116,9 @@ public sealed partial class EquipmentReconnector : IEquipmentReconnector {
             return null;
         }
         LogMovedToLocalhost(device.Type, device.Name, device.IpAddress);
-        // A switch is remembered per endpoint, so the old address's entry has to go or boot dials it too.
-        if (device.Type == DeviceType.Switch && !string.IsNullOrWhiteSpace(device.UniqueId)) {
-            await _store.ForgetSwitchAsync(device.UniqueId, ct).ConfigureAwait(false);
-        }
-        await _store.RememberAsync(moved, ct).ConfigureAwait(false);
+        // A switch is remembered per endpoint: the old address's entry goes (only that one; another
+        // server's switch may share a serial-less UniqueId) or boot dials it too.
+        await _store.RelocateAsync(device, moved, ct).ConfigureAwait(false);
         return moved;
     }
 
