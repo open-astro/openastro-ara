@@ -42,6 +42,20 @@ This file captures the *reasoning* behind each contract decision — DTO shapes,
 **Related:** §X.Y of PORT_PLAYBOOK.md, PR #N
 ```
 
+### 2026-10-22 — A connect announces again once the device's details are read (`details_ready`)
+
+**Endpoint(s) or area:** WS `equipment.state_changed` (every device type).
+
+**Decision:** a connect now emits two `equipment.state_changed` events with `state: "connected"`. The first is the state transition, published before the service has read the device; the second, `{ device_type, device_id, device_name, state: "connected", details_ready: true }`, follows once the seed read (caps, readings, switch ports) has run. The second is not a reconnect: `equipment.connected` still fires once, and the daemon's in-process transition listeners (identity reconcile, fault-log resolve) do not see it. Clients re-read the device on either event.
+
+**Reasoning:** a client re-reading on the first event got a connected device with no details and then waited out its 15 s liveness poll (a camera removed and connected again on the CM4, 2026-10-22). Setting Connected only after the seed read was the alternative, but the seed read itself only runs on a Connected service.
+
+**Spec ref:** `OpenAstroAra.Server/Services/EquipmentEventPublisher.cs` (`DetailsReady`); each service's `ConnectInBackground`.
+
+**Related:** PR #1444
+
+---
+
 ### 2026-07-27 — §38.9 live mid-run sequence editing
 
 **Endpoint(s) or area:** `POST /api/v1/sequences/{id}/run/items`, `DELETE /api/v1/sequences/{id}/run/items?path=i,j`, `POST /api/v1/sequences/{id}/run/items/move`; WS `sequence.run_items_changed`

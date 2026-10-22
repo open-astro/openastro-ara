@@ -124,7 +124,8 @@ public sealed partial class EquipmentEventPublisher {
         }
     }
 
-    /// <summary>A connected device's details (caps, readings, ports) are now cached. Services set
+    /// <summary>A connected device's seed read (caps, readings, ports) has run — best-effort: a
+    /// failed read caches nothing and the client's re-read just shows what is there. Services set
     /// Connected — and publish it — before their seed read, so a client that re-read on that push
     /// saw no details; this repeats <c>equipment.state_changed</c> (<c>state: "connected"</c>,
     /// <c>details_ready: true</c>) so it re-reads now instead of on its next poll. No alias and no
