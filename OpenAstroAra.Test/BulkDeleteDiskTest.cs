@@ -24,10 +24,10 @@ using System.Threading.Tasks;
 namespace OpenAstroAra.Test {
 
     /// <summary>
-    /// §40.8 — BulkDeleteAsync's DeleteFromDisk flag (from the #675 review: the flag used to be
-    /// a silent no-op behind a UI checkbox that implied real deletion). With the flag the FITS
-    /// file and its §65.4 sidecars (default/variant previews, thumbnail) are removed; without
-    /// it only the catalog row goes. Unrelated neighbors always survive.
+    /// §40.8 — BulkDeleteAsync removes the FITS file and its §65.4 sidecars (default/variant
+    /// previews, thumbnail, histogram cache) with the catalog row. Since #1437 it does so whatever
+    /// DeleteFromDisk says: a catalog-only delete was resurrected by the startup orphan scan.
+    /// Unrelated neighbors always survive.
     /// </summary>
     [TestFixture]
     [Category("IO")] // #1265 — real disk, loopback HTTP or a simulator: not part of the quick unit run
@@ -67,6 +67,7 @@ namespace OpenAstroAra.Test {
             await File.WriteAllTextAsync(Path.ChangeExtension(fits, null) + ".preview.jpg", "p");
             await File.WriteAllTextAsync(Path.ChangeExtension(fits, null) + ".preview.auto_stf.jpg", "v");
             await File.WriteAllTextAsync(Path.ChangeExtension(fits, null) + ".thumb.jpg", "t");
+            await File.WriteAllTextAsync(Path.ChangeExtension(fits, null) + ".hist.v2.json", "h");
             await _repo.InsertAsync(new FrameDto(
                 Id: id, SessionId: Session, TargetName: "M31", FrameType: FrameType.Light,
                 FilterName: "Ha", ExposureSeconds: 300, Gain: 100, Offset: 10,
@@ -78,7 +79,7 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public async Task DeleteFromDisk_removes_fits_and_sidecars_but_not_neighbors() {
+        public async Task Delete_removes_fits_and_sidecars_but_not_neighbors() {
             var (id, fits) = await InsertFrameWithFilesAsync();
             var (survivorId, survivorFits) = await InsertFrameWithFilesAsync();
             var stem = Path.ChangeExtension(fits, null);
@@ -92,9 +93,11 @@ namespace OpenAstroAra.Test {
             Assert.That(File.Exists(stem + ".preview.jpg"), Is.False, "default preview deleted");
             Assert.That(File.Exists(stem + ".preview.auto_stf.jpg"), Is.False, "variant deleted");
             Assert.That(File.Exists(stem + ".thumb.jpg"), Is.False, "thumbnail deleted");
+            Assert.That(File.Exists(stem + ".hist.v2.json"), Is.False, "histogram cache deleted");
             // The other frame's row + files are untouched.
             Assert.That(await _repo.GetAsync(survivorId, CancellationToken.None), Is.Not.Null);
             Assert.That(File.Exists(survivorFits), Is.True);
+            Assert.That(File.Exists(Path.ChangeExtension(survivorFits, null) + ".hist.v2.json"), Is.True);
         }
 
         [Test]
@@ -211,7 +214,7 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public async Task Catalog_only_delete_leaves_the_files_on_disk() {
+        public async Task A_catalog_only_request_still_deletes_the_files() {
             var (id, fits) = await InsertFrameWithFilesAsync();
 
             await _repo.BulkDeleteAsync(
@@ -219,7 +222,10 @@ namespace OpenAstroAra.Test {
                 idempotencyKey: null, CancellationToken.None);
 
             Assert.That(await _repo.GetAsync(id, CancellationToken.None), Is.Null, "catalog row gone");
-            Assert.That(File.Exists(fits), Is.True, "the FITS file stays without the flag");
+            // #1437: a FITS left behind is re-catalogued by the startup orphan scan.
+            Assert.That(File.Exists(fits), Is.False, "the flag is ignored: nothing is left for the scan to resurrect");
+            Assert.That(Directory.EnumerateFiles(Path.GetDirectoryName(fits)!, $"{Path.GetFileNameWithoutExtension(fits)}.*"),
+                Is.Empty, "sidecars go too");
         }
 
         [Test]

@@ -4,7 +4,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/calibration/calibration_models.dart';
 import '../../state/app_shell_state.dart';
 import '../../state/calibration/calibration_state.dart';
+import '../../state/equipment/camera_state.dart';
 import '../../state/sequencer/sequence_list_state.dart';
+import '../../state/settings/imaging_defaults_state.dart';
+import '../../state/settings/safety_policies_state.dart';
 import '../../state/settings/settings_nav.dart';
 import '../../theme/ara_colors.dart';
 import '../../widgets/library/load_more_button.dart';
@@ -13,10 +16,11 @@ import '../../util/friendly_error.dart';
 /// §39.10 Calibration screen — live over `/api/v1/calibration/*`.
 ///
 /// Sessions tab: every imaging session with its per-filter summary and
-/// flats/darks coverage, plus the §39.5 "Capture Matching Flats" flow — the
+/// flats/bias/darks coverage, plus the §39.5 calibration-frames flow — the
 /// server generates a runnable §38 sequence that replays the session's
 /// filter/focus/gain state, and the client jumps straight to it in the Run tab.
-/// Dark Library tab: catalogued dark groups + the §39.8 dark-matrix build.
+/// Dark Library tab: catalogued dark and bias groups + the §39.8 dark-matrix
+/// build.
 class CalibrationScreen extends StatelessWidget {
   const CalibrationScreen({super.key});
 
@@ -136,19 +140,32 @@ class _SessionCard extends ConsumerWidget {
                 context,
               ).textTheme.bodySmall?.copyWith(color: AraColors.textSecondary),
             ),
+            const SizedBox(height: 6),
+            for (final f in session.filtersUsed) _FilterFlatsLine(filter: f),
             const SizedBox(height: 8),
             Row(
               children: [
-                _CoverageBadge(
-                  label: 'Flats',
-                  covered: session.matchingFlatsAvailable,
+                // Wraps on a narrow window rather than pushing the action off.
+                Expanded(
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 6,
+                    children: [
+                      _CoverageBadge(
+                        label: 'Flats',
+                        covered: session.matchingFlatsAvailable,
+                      ),
+                      _CoverageBadge(
+                        label: 'Darks',
+                        covered: session.matchingDarksAvailable,
+                      ),
+                      _CoverageBadge(
+                        label: 'Bias',
+                        covered: session.matchingBiasAvailable,
+                      ),
+                    ],
+                  ),
                 ),
-                const SizedBox(width: 8),
-                _CoverageBadge(
-                  label: 'Darks',
-                  covered: session.matchingDarksAvailable,
-                ),
-                const Spacer(),
                 TextButton.icon(
                   onPressed: () => showDialog<void>(
                     context: context,
@@ -164,12 +181,94 @@ class _SessionCard extends ConsumerWidget {
                     Icons.add_photo_alternate_outlined,
                     size: 16,
                   ),
-                  label: const Text('Capture Matching Flats'),
+                  // Flats carry over while the setup is unchanged: once every
+                  // filter is covered the action is a deliberate re-shoot.
+                  label: Text(_actionLabel(session)),
                 ),
               ],
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// The card's calibration action names what the lights still need; with
+/// everything covered, it's a re-shoot.
+String _actionLabel(CalibrationSession s) {
+  final missing = [
+    if (!s.matchingFlatsAvailable) 'Flats',
+    if (!s.matchingBiasAvailable) 'Bias',
+    if (!s.matchingDarksAvailable) 'Darks',
+  ];
+  if (missing.isEmpty) return 'Re-shoot flats';
+  if (missing.length == 1) return 'Capture ${missing.single}';
+  return 'Capture ${missing.take(missing.length - 1).join(', ')} & ${missing.last}';
+}
+
+const _months = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', //
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+];
+
+String _shortDate(DateTime utc) {
+  final d = utc.toLocal();
+  return '${_months[d.month - 1]} ${d.day}';
+}
+
+/// One filter's flats: which flats cover it (from any night with the same
+/// setup), or why it still needs them.
+String flatsLineText(CalibrationFilterSummary f) {
+  if (f.hasFlats) {
+    final when = f.matchingFlatsNewestUtc;
+    final from = when == null ? '' : ' from ${_shortDate(when)}';
+    final count = f.matchingFlatFrames == 1 ? '1 flat' : '${f.matchingFlatFrames} flats';
+    return '${f.filterName} · $count$from';
+  }
+  return '${f.filterName} · ${f.flatsNote ?? 'needs flats'}';
+}
+
+class _FilterFlatsLine extends StatelessWidget {
+  final CalibrationFilterSummary filter;
+  const _FilterFlatsLine({required this.filter});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = filter.hasFlats
+        ? AraColors.accentConnected
+        : AraColors.accentBusy;
+    final style = Theme.of(context).textTheme.bodySmall;
+    // The covered case's note ("assumes the camera wasn't rotated") is a
+    // caveat, not a problem: shown muted after the count.
+    final caveat = filter.hasFlats ? filter.flatsNote : null;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 2),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            filter.hasFlats ? Icons.check : Icons.priority_high,
+            size: 14,
+            color: color,
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text.rich(
+              TextSpan(
+                text: flatsLineText(filter),
+                style: style,
+                children: [
+                  if (caveat != null)
+                    TextSpan(
+                      text: ' — $caveat',
+                      style: style?.copyWith(color: AraColors.textSecondary),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -239,15 +338,97 @@ class MatchingFlatsDialog extends ConsumerStatefulWidget {
 }
 
 class _MatchingFlatsDialogState extends ConsumerState<MatchingFlatsDialog> {
-  final _frames = TextEditingController(text: '20');
-  final _targetAdu = TextEditingController(text: '32000');
+  late final _frames = TextEditingController(
+    text: ref.read(safetyPoliciesProvider).flatFramesPerFilter.toString(),
+  );
+  final _coolTo = TextEditingController();
   bool _busy = false;
   String? _error;
+
+  // The set-point the session's lights ran at (null = taken warm) and their
+  // coverage. Fetched on open: the Image Library's session cards don't carry
+  // them.
+  bool _loadingSession = true;
+  double? _lightsSetpointC;
+  List<CalibrationFilterSummary> _filters = const [];
+  bool _cool = false;
+  // What to shoot: each kind starts ticked when the lights still need it.
+  // Flats from the same setup carry over, so a covered filter is skipped
+  // unless the user deliberately re-shoots it.
+  bool _flats = true;
+  bool _reshoot = false;
+  bool _biasNeeded = false;
+  bool _bias = false;
+  bool _darksNeeded = false;
+  bool _darks = false;
+  // A panel doesn't always seal out stray light: open its cover and wait for
+  // the user to put the lens cap on before the bias and darks.
+  bool _lensCap = true;
+  // Mount motion is opt-in for every run: never pre-ticked, not even from the
+  // profile's end-of-night setting (a bench or indoor rig has no clear path).
+  bool _park = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _coolTo.text = _degrees(ref.read(imagingDefaultsProvider).coolerTargetC);
+    _loadSetpoint();
+  }
+
+  Future<void> _loadSetpoint() async {
+    CalibrationSession? session;
+    try {
+      session = await ref.read(calibrationApiProvider)?.getSession(widget.sessionId);
+    } on Exception {
+      // No coverage known: flats stay ticked and the user can still cool.
+    }
+    final setpoint = session?.coolerSetpointC;
+    if (!mounted) return;
+    setState(() {
+      _loadingSession = false;
+      _lightsSetpointC = setpoint;
+      _filters = session?.filtersUsed ?? const [];
+      _flats = session == null || !session.matchingFlatsAvailable;
+      _biasNeeded = session != null && !session.matchingBiasAvailable;
+      _bias = _biasNeeded;
+      _darksNeeded = session != null && !session.matchingDarksAvailable;
+      _darks = _darksNeeded;
+      _cool = setpoint != null;
+      if (setpoint != null) _coolTo.text = _degrees(setpoint);
+    });
+  }
+
+  List<CalibrationFilterSummary> get _covered => [
+    for (final f in _filters)
+      if (f.hasFlats) f,
+  ];
+
+  bool get _allCovered =>
+      _filters.isNotEmpty && _covered.length == _filters.length;
+
+  bool get _shootBias => _biasNeeded && _bias;
+  bool get _shootDarks => _darksNeeded && _darks;
+  bool get _afterFlats => _shootBias || _shootDarks;
+
+  /// "Capture Flats, Bias & Darks": what the run will shoot.
+  String get _title {
+    final parts = [
+      if (_flats) 'Flats',
+      if (_shootBias) 'Bias',
+      if (_shootDarks) 'Darks',
+    ];
+    if (parts.isEmpty) return 'Capture Calibration Frames';
+    if (parts.length == 1) return 'Capture ${parts.single}';
+    return 'Capture ${parts.take(parts.length - 1).join(', ')} & ${parts.last}';
+  }
+
+  static String _degrees(double c) =>
+      c == c.roundToDouble() ? c.toStringAsFixed(0) : c.toStringAsFixed(1);
 
   @override
   void dispose() {
     _frames.dispose();
-    _targetAdu.dispose();
+    _coolTo.dispose();
     super.dispose();
   }
 
@@ -255,15 +436,13 @@ class _MatchingFlatsDialogState extends ConsumerState<MatchingFlatsDialog> {
     final api = ref.read(calibrationApiProvider);
     if (api == null) return;
     final frames = int.tryParse(_frames.text.trim());
-    final aduText = _targetAdu.text.trim();
-    final adu = int.tryParse(aduText);
-    if (frames == null || frames <= 0) {
-      setState(() => _error = 'Frames per filter must be a positive number.');
+    if (_flats && (frames == null || frames <= 0)) {
+      setState(() => _error = 'Flats per filter must be a positive number.');
       return;
     }
-    // Advisory or not, stray text must not silently become "no override".
-    if (aduText.isNotEmpty && adu == null) {
-      setState(() => _error = 'Target ADU must be a whole number (or empty).');
+    final coolTo = double.tryParse(_coolTo.text.trim());
+    if (_cool && coolTo == null) {
+      setState(() => _error = 'Cooling temperature must be a number in °C.');
       return;
     }
     setState(() {
@@ -273,8 +452,16 @@ class _MatchingFlatsDialogState extends ConsumerState<MatchingFlatsDialog> {
     try {
       final result = await api.generateMatchingFlats(
         widget.sessionId,
-        frameCount: frames,
-        targetAdu: adu,
+        frameCount: _flats ? frames : null,
+        coolCamera: _cool,
+        coolToTemperatureC: _cool ? coolTo : null,
+        parkMountAfter: _park,
+        includeFlats: _flats,
+        // With every filter covered, ticking Flats is the re-shoot.
+        includeCoveredFilters: _flats && (_reshoot || _allCovered),
+        includeBias: _shootBias,
+        includeDarks: _shootDarks,
+        pauseForLensCap: _afterFlats && _lensCap,
       );
       // Post-await UI work gates on State.mounted (the dialog may have been
       // dismissed while the request was in flight).
@@ -283,14 +470,23 @@ class _MatchingFlatsDialogState extends ConsumerState<MatchingFlatsDialog> {
       if (id == null) {
         setState(() {
           _busy = false;
-          _error = 'The server returned a plan but no stored sequence.';
+          _error = result.totalFlatFrames == 0 &&
+                  result.totalBiasFrames == 0 &&
+                  result.totalDarkFrames == 0
+              ? 'Nothing to shoot: the lights already have what\'s ticked.'
+              : 'The server returned a plan but no stored sequence.';
         });
         return;
       }
+      final shot = [
+        if (result.totalFlatFrames > 0) '${result.totalFlatFrames} flats',
+        if (result.totalBiasFrames > 0) '${result.totalBiasFrames} bias',
+        if (result.totalDarkFrames > 0) '${result.totalDarkFrames} darks',
+      ];
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            '"${result.generatedSequenceName}" saved — ${result.totalFlatFrames} flats across ${widget.filterNames.length} filter(s).',
+            '"${result.generatedSequenceName}" saved — ${shot.join(' + ')}.',
           ),
         ),
       );
@@ -304,48 +500,177 @@ class _MatchingFlatsDialogState extends ConsumerState<MatchingFlatsDialog> {
     }
   }
 
+  String _flatsSubtitle() {
+    final filters = widget.filterNames.join(', ');
+    final covered = _covered;
+    if (covered.isEmpty) {
+      return 'For each filter ($filters) at its wheel position, focus, rotator '
+          'angle, gain and offset. Exposure and panel brightness come from two '
+          'test frames.';
+    }
+    final coveredLines = [
+      for (final f in covered)
+        '${flatsLineText(f)}${f.flatsNote != null ? ' — ${f.flatsNote}' : ''}',
+    ].join('\n');
+    if (_allCovered) {
+      return 'Every filter already has flats from this setup:\n$coveredLines\n'
+          'Tick only to re-shoot them: new dust, the camera taken off, a '
+          'different filter.';
+    }
+    final missing = [
+      for (final f in _filters)
+        if (!f.hasFlats) f.filterName,
+    ].join(', ');
+    return 'Shoots $missing. Already covered by flats from this setup '
+        '(skipped):\n$coveredLines';
+  }
+
+  Widget _choice({
+    required String title,
+    required String subtitle,
+    required bool value,
+    required ValueChanged<bool>? onChanged,
+  }) {
+    return CheckboxListTile(
+      value: value,
+      onChanged: onChanged == null || _busy
+          ? null
+          : (v) => setState(() => onChanged(v ?? false)),
+      dense: true,
+      contentPadding: EdgeInsets.zero,
+      controlAffinity: ListTileControlAffinity.leading,
+      title: Text(title),
+      subtitle: Text(subtitle),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final filters = widget.filterNames.join(', ');
+    final partlyCovered = _covered.isNotEmpty && !_allCovered;
+    final nothingToShoot = !_flats && !_afterFlats;
+    final sectionStyle = Theme.of(context).textTheme.titleSmall;
+    const checking = 'Checking what the lights already have…';
     return AlertDialog(
-      title: const Text('Capture Matching Flats'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Generates a flat sequence replaying this session\'s state per '
-            'filter ($filters): wheel position, focus, gain and offset.',
-            style: Theme.of(
-              context,
-            ).textTheme.bodySmall?.copyWith(color: AraColors.textSecondary),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _frames,
-            keyboardType: TextInputType.number,
-            decoration: const InputDecoration(labelText: 'Flats per filter'),
-          ),
-          const SizedBox(height: 8),
-          TextField(
-            controller: _targetAdu,
-            keyboardType: TextInputType.number,
-            decoration: const InputDecoration(
-              labelText: 'Target ADU (advisory)',
-              helperText:
-                  'Panel brightness/exposure tuning stays manual for now',
+      title: Text(_title),
+      // Scrolls on a short window (cooling + park options outgrow 668 px).
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Shoot', style: sectionStyle),
+            _choice(
+              title: 'Flats',
+              subtitle: _loadingSession ? checking : _flatsSubtitle(),
+              value: _flats,
+              onChanged: _loadingSession ? null : (v) => _flats = v,
             ),
-          ),
-          if (_error != null) ...[
-            const SizedBox(height: 8),
-            Text(
-              _error!,
-              style: Theme.of(
-                context,
-              ).textTheme.bodySmall?.copyWith(color: AraColors.accentError),
+            if (_flats && partlyCovered)
+              Padding(
+                padding: const EdgeInsets.only(left: 32),
+                child: _choice(
+                  title: 'Also re-shoot the covered filters',
+                  subtitle: 'Only if something in the optical train changed.',
+                  value: _reshoot,
+                  onChanged: (v) => _reshoot = v,
+                ),
+              ),
+            if (_flats)
+              Padding(
+                padding: const EdgeInsets.only(left: 32, bottom: 8),
+                child: TextField(
+                  controller: _frames,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: 'Flats per filter'),
+                ),
+              ),
+            _choice(
+              title: 'Bias',
+              subtitle: _loadingSession
+                  ? checking
+                  : _biasNeeded
+                  ? '50 at the camera\'s shortest exposure for each gain, offset '
+                        'and binning the lights used.'
+                  : 'The lights already have matching bias frames.',
+              value: _shootBias,
+              onChanged: _biasNeeded ? (v) => _bias = v : null,
             ),
+            _choice(
+              title: 'Darks',
+              subtitle: _loadingSession
+                  ? checking
+                  : _darksNeeded
+                  ? '30 for each exposure and gain the lights used, as long as '
+                        'the lights themselves, at their temperature.'
+                  : 'The lights already have matching darks.',
+              value: _shootDarks,
+              onChanged: _darksNeeded ? (v) => _darks = v : null,
+            ),
+            const Divider(height: 24),
+            Text('Options', style: sectionStyle),
+            SwitchListTile(
+              value: _cool,
+              onChanged: _loadingSession || _busy
+                  ? null
+                  : (v) => setState(() => _cool = v),
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Cool the camera first'),
+              subtitle: Text(
+                _loadingSession
+                    ? 'Checking the lights\' temperature…'
+                    : _lightsSetpointC != null
+                    ? 'The lights ran at ${_degrees(_lightsSetpointC!)} °C.'
+                    : 'The lights were taken with the cooler off.',
+              ),
+            ),
+            if (_cool)
+              TextField(
+                controller: _coolTo,
+                keyboardType: const TextInputType.numberWithOptions(
+                  signed: true,
+                  decimal: true,
+                ),
+                decoration: const InputDecoration(
+                  labelText: 'Cool to (°C)',
+                  // Indoors the cooler may not reach a set-point a cold night
+                  // made easy; CoolCamera gives up after its stall timeout and
+                  // the run carries on, each frame recording its real
+                  // temperature.
+                  helperText:
+                      'Indoors it may not get there: after a few minutes the run '
+                      'starts at the closest temperature reached.',
+                  helperMaxLines: 2,
+                ),
+              ),
+            if (_afterFlats)
+              _choice(
+                title: _flats
+                    ? 'Pause for the lens cap after the flats'
+                    : 'Pause for the lens cap first',
+                subtitle: 'Opens the flat panel\'s cover and waits while you put '
+                    'the lens cap on, then press Resume to take the bias and '
+                    'darks. A panel doesn\'t always keep out all the light.',
+                value: _lensCap,
+                onChanged: (v) => _lensCap = v,
+              ),
+            _choice(
+              title: 'Park the mount at the end',
+              subtitle: 'Leave this off unless the mount has a clear path to park.',
+              value: _park,
+              onChanged: (v) => _park = v,
+            ),
+            if (_error != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                _error!,
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: AraColors.accentError),
+              ),
+            ],
           ],
-        ],
+        ),
       ),
       actions: [
         TextButton(
@@ -353,7 +678,7 @@ class _MatchingFlatsDialogState extends ConsumerState<MatchingFlatsDialog> {
           child: const Text('Cancel'),
         ),
         FilledButton(
-          onPressed: _busy ? null : _generate,
+          onPressed: _busy || nothingToShoot ? null : _generate,
           child: _busy
               ? const SizedBox(
                   width: 16,
@@ -402,6 +727,15 @@ class _DarkLibraryTab extends ConsumerWidget {
                 )
               else
                 ...state.entries.map((e) => _DarkEntryRow(entry: e)),
+              const Divider(height: 32),
+              Text('Bias', style: Theme.of(context).textTheme.titleSmall),
+              if (state.biasEntries.isEmpty)
+                const _EmptyNote(
+                  'No bias frames catalogued yet — tick Bias when capturing a '
+                  'session\'s calibration frames.',
+                )
+              else
+                ...state.biasEntries.map((e) => _BiasEntryRow(entry: e)),
               const Divider(height: 32),
               const DarkBuildForm(),
             ],
@@ -471,6 +805,27 @@ class _DarkEntryRow extends StatelessWidget {
   }
 }
 
+class _BiasEntryRow extends StatelessWidget {
+  final BiasLibraryEntry entry;
+  const _BiasEntryRow({required this.entry});
+
+  @override
+  Widget build(BuildContext context) {
+    final gain = entry.gain is int ? 'gain ${entry.gain}' : 'default gain';
+    final offset = entry.offset is int ? ' · offset ${entry.offset}' : '';
+    final size = (entry.fileSizeBytes / (1024 * 1024)).toStringAsFixed(1);
+    final d = entry.capturedUtc.toLocal();
+    final date =
+        '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+    return ListTile(
+      dense: true,
+      leading: const Icon(Icons.blur_on_outlined, size: 18),
+      title: Text('$gain$offset · bin ${entry.bin}×${entry.bin}'),
+      subtitle: Text('${entry.frameCount} frames · $size MB · newest $date'),
+    );
+  }
+}
+
 /// §39.8 build form: comma-separated matrix + frames per combination.
 class DarkBuildForm extends ConsumerStatefulWidget {
   const DarkBuildForm({super.key});
@@ -487,6 +842,38 @@ class _DarkBuildFormState extends ConsumerState<DarkBuildForm> {
   bool _reuse = true;
   bool _busy = false;
   String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _temps.text = _defaultTemperatures();
+  }
+
+  // Darks only calibrate lights taken at the same temperature, so start from
+  // the set-points the catalogued sessions actually ran at; with none, the
+  // profile's cooler target when the connected camera can regulate. A user
+  // with an uncooled camera still gets an empty field (capture at ambient).
+  String _defaultTemperatures() {
+    final sessions = ref.read(calibrationSessionsProvider).asData?.value ?? const [];
+    final setpoints = <double>{
+      for (final s in sessions)
+        if (s.coolerSetpointC != null) s.coolerSetpointC!,
+    }.toList()..sort();
+    if (setpoints.isNotEmpty) {
+      return setpoints.map(_MatchingFlatsDialogState._degrees).join(', ');
+    }
+    final canCool = ref
+            .read(cameraStatusProvider)
+            .asData
+            ?.value
+            ?.capabilities
+            ?.canSetTemperature ==
+        true;
+    return canCool
+        ? _MatchingFlatsDialogState._degrees(
+            ref.read(imagingDefaultsProvider).coolerTargetC)
+        : '';
+  }
 
   @override
   void dispose() {
@@ -586,7 +973,8 @@ class _DarkBuildFormState extends ConsumerState<DarkBuildForm> {
         const SizedBox(height: 4),
         Text(
           'Generates a ready-to-run sequence covering every exposure × gain × '
-          'temperature combination. Leave temperatures empty to capture at ambient.',
+          'temperature combination; it cools the camera to each temperature '
+          'first. Leave temperatures empty to capture at ambient.',
           style: Theme.of(
             context,
           ).textTheme.bodySmall?.copyWith(color: AraColors.textSecondary),

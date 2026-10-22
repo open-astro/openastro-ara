@@ -59,10 +59,10 @@ namespace OpenAstroAra.Test {
                 IFrameRepository? frames = null, HeadlessSequencerFactory? factory = null,
                 UnattendedShutdownService? unattendedShutdown = null,
                 IProfileStore? profileStore = null, ICalibrationService? calibration = null,
-                INotificationService? notifications = null) {
+                INotificationService? notifications = null, string? templateOrigin = null) {
             factory ??= HeadlessSequencerFactory.WithDefaults();
             var deserializer = new SequenceBodyDeserializer(factory);
-            var fake = new FakeSequenceService(id, body);
+            var fake = new FakeSequenceService(id, body, templateOrigin);
             return new SequencerService(deserializer, ws: ws, sequencesResolver: () => fake, checkpoint: null,
                 frames: frames, unattendedShutdown: unattendedShutdown,
                 profileStore: profileStore, calibrationResolver: () => calibration, notifications: notifications);
@@ -701,6 +701,22 @@ namespace OpenAstroAra.Test {
             await WaitForEventAsync(ws, "sequence.auto_flats_prompt");
         }
 
+        [TestCase("calibration:matching-flats")]
+        [TestCase("calibration:dark-library")]
+        public async Task A_generated_calibration_run_never_asks_to_capture_calibration(string origin) {
+            // Retaking flats for an earlier night: the flats run itself has no lights to calibrate.
+            var id = Guid.NewGuid();
+            var ws = new RecordingWsBroadcaster();
+            var svc = BuildService(id, BuildBody(c => c.Items.Add(new Annotation { Name = "one" })), ws,
+                profileStore: ProfileWithCaptureDefault("ask").Object, templateOrigin: origin);
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            await WaitForTerminalAsync(svc, id);
+            await Task.Delay(200); // the announcement rides a background task
+            Assert.That(ws.Events, Does.Contain("sequence.complete"));
+            Assert.That(ws.Events, Does.Not.Contain("sequence.auto_flats_prompt"));
+            Assert.That(ws.Events, Does.Not.Contain("sequence.auto_flats_decided"));
+        }
+
         [Test]
         public async Task Profile_panel_at_end_generates_and_starts_flats_after_completion() {
             // §48.1 end-to-end: the profile default auto-decides (Decided event,
@@ -729,8 +745,43 @@ namespace OpenAstroAra.Test {
 
             Assert.That(await Task.WhenAny(generated.Task, Task.Delay(TimeSpan.FromSeconds(10))), Is.SameAs(generated.Task),
                 "completion of a panel_at_end run must invoke the §39.5 generator with the run's session");
+            calibration.Verify(c => c.GenerateMatchingFlatsAsync(sessionId,
+                It.Is<MatchingFlatsRequestDto>(r => r.ReshootAssumedCoverage), It.IsAny<string?>(), It.IsAny<CancellationToken>()),
+                Times.Once, "flats the user asked for tonight skip only filters verified at the lights' angle");
             await WaitForEventAsync(ws, "sequence.auto_flats_decided");
             Assert.That(ws.Events, Does.Not.Contain("sequence.auto_flats_prompt"), "a profile default never prompts");
+        }
+
+        private static readonly GeneratedFlatStepDto[] OneFilterToShoot = [new("Ha", 30, null, null)];
+
+        [TestCase(false, true, TestName = "Every filter covered: the user hears flats are already covered")]
+        [TestCase(true, false, TestName = "No sequence stored for another reason: no covered-flats notice")]
+        public async Task The_covered_flats_notice_only_says_what_is_true(bool planHasSteps, bool expectNotice) {
+            var id = Guid.NewGuid();
+            var sessionId = Guid.NewGuid();
+            var frames = new Mock<IFrameRepository>();
+            frames.Setup(f => f.CreateRunSessionAsync(It.IsAny<CancellationToken>())).ReturnsAsync(sessionId);
+            frames.Setup(f => f.EndSessionAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+            var calibration = new Mock<ICalibrationService>();
+            var generated = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            // No stored sequence either way: a covered plan has no steps, an unwired store has steps but no id.
+            calibration.Setup(c => c.GenerateMatchingFlatsAsync(sessionId, It.IsAny<MatchingFlatsRequestDto>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+                .Callback(() => generated.TrySetResult())
+                .ReturnsAsync(new GeneratedFlatSequenceDto(sessionId, null, "Flats — tonight", planHasSteps ? 30 : 0,
+                    planHasSteps ? OneFilterToShoot : Array.Empty<GeneratedFlatStepDto>()));
+            var notifications = new Mock<INotificationService>();
+            notifications.Setup(n => n.CreateAsync(It.IsAny<NotificationDto>(), It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+            var svc = BuildService(id, BuildBody(c => c.Items.Add(new Annotation { Name = "one" })), new RecordingWsBroadcaster(),
+                frames: frames.Object, profileStore: ProfileWithCaptureDefault("panel_at_end").Object,
+                calibration: calibration.Object, notifications: notifications.Object);
+
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            await WaitForTerminalAsync(svc, id);
+            Assert.That(await Task.WhenAny(generated.Task, Task.Delay(TimeSpan.FromSeconds(10))), Is.SameAs(generated.Task));
+            await Task.Delay(200); // the notice rides the same background task
+
+            notifications.Verify(n => n.CreateAsync(It.Is<NotificationDto>(d => d.Title == "Tonight's flats are already covered"), It.IsAny<CancellationToken>()),
+                expectNotice ? Times.Once() : Times.Never());
         }
 
         [Test]
@@ -1256,14 +1307,19 @@ namespace OpenAstroAra.Test {
         private sealed class FakeSequenceService : ISequenceService {
             private readonly Guid _id;
             private readonly JsonElement? _body;
-            public FakeSequenceService(Guid id, JsonElement? body) { _id = id; _body = body; }
+            private readonly string? _templateOrigin;
+            public FakeSequenceService(Guid id, JsonElement? body, string? templateOrigin = null) {
+                _id = id;
+                _body = body;
+                _templateOrigin = templateOrigin;
+            }
 
             public Task<SequenceDto?> GetAsync(Guid id, CancellationToken ct) {
                 if (id != _id || _body is null) return Task.FromResult<SequenceDto?>(null);
                 return Task.FromResult<SequenceDto?>(new SequenceDto(
                     Id: id, Name: "Test", Description: null,
                     CreatedUtc: DateTimeOffset.UnixEpoch, ModifiedUtc: DateTimeOffset.UnixEpoch,
-                    Body: _body.Value, TemplateOrigin: null));
+                    Body: _body.Value, TemplateOrigin: _templateOrigin));
             }
 
             public Task<CursorPage<SequenceListItemDto>> ListAsync(int limit, string? cursor, CancellationToken ct) => throw new NotSupportedException();

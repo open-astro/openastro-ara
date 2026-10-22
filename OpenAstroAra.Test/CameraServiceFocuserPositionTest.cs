@@ -14,6 +14,7 @@
 
 using NUnit.Framework;
 using OpenAstroAra.Equipment.Equipment.MyFocuser;
+using OpenAstroAra.Equipment.Equipment.MyRotator;
 using OpenAstroAra.Server.Services;
 
 namespace OpenAstroAra.Test {
@@ -41,6 +42,29 @@ namespace OpenAstroAra.Test {
         [Test]
         public void No_focuser_yields_null() {
             Assert.That(CameraService.FocuserPositionFrom(null), Is.Null);
+        }
+
+        [Test]
+        public void Connected_rotator_yields_its_mechanical_angle() {
+            var info = new RotatorInfo { Connected = true, MechanicalPosition = 212.5f, Position = 30f };
+            Assert.That(CameraService.RotatorMechanicalFrom(info), Is.EqualTo(212.5),
+                "the mechanical angle, not the sky angle — the dust turns with the camera");
+        }
+
+        [Test]
+        public void Disconnected_or_missing_rotator_yields_null() {
+            Assert.That(CameraService.RotatorMechanicalFrom(new RotatorInfo { Connected = false, MechanicalPosition = 10f }), Is.Null);
+            Assert.That(CameraService.RotatorMechanicalFrom(new RotatorInfo { Connected = true, MechanicalPosition = float.NaN }), Is.Null);
+            Assert.That(CameraService.RotatorMechanicalFrom(null), Is.Null);
+        }
+
+        [Test]
+        public void Cooler_setpoint_is_recorded_only_while_the_cooler_is_on() {
+            Assert.That(CameraService.CoolerSetpointFrom(true, -10), Is.EqualTo(-10));
+            // SetCCDTemperature reads back the last target with the cooler off — that frame was warm.
+            Assert.That(CameraService.CoolerSetpointFrom(false, -10), Is.Null);
+            Assert.That(CameraService.CoolerSetpointFrom(null, -10), Is.Null, "an unreadable CoolerOn is not a cooled frame");
+            Assert.That(CameraService.CoolerSetpointFrom(true, null), Is.Null);
         }
     }
 }

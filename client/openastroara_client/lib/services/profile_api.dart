@@ -1140,11 +1140,13 @@ class ProfileApi {
         maxHumidityPct: (j['max_humidity_pct'] as num?)?.toInt() ?? 85,
         minDewDeltaC: (j['min_dew_delta_c'] as num?)?.toDouble() ?? 2.0,
         flatTargetAdu: (j['flat_target_adu'] as num?)?.toInt() ?? 30000,
+        flatTargetPercent:
+            (j['flat_target_percent'] as num?)?.toDouble() ?? 50,
         flatTargetAduTolerancePct:
             (j['flat_target_adu_tolerance_pct'] as num?)?.toDouble() ?? 5.0,
         flatFramesPerFilter:
             (j['flat_frames_per_filter'] as num?)?.toInt() ?? 30,
-        postFlatParkMount: (j['post_flat_park_mount'] as bool?) ?? true,
+        postFlatParkMount: (j['post_flat_park_mount'] as bool?) ?? false,
         skyFlatTargetAdu: (j['sky_flat_target_adu'] as num?)?.toInt() ?? 25000,
         skyFlatFramesPerFilter:
             (j['sky_flat_frames_per_filter'] as num?)?.toInt() ?? 20,
@@ -1198,6 +1200,7 @@ class ProfileApi {
     'max_humidity_pct': v.maxHumidityPct,
     'min_dew_delta_c': v.minDewDeltaC,
     'flat_target_adu': v.flatTargetAdu,
+    'flat_target_percent': v.flatTargetPercent,
     'flat_target_adu_tolerance_pct': v.flatTargetAduTolerancePct,
     'flat_frames_per_filter': v.flatFramesPerFilter,
     'post_flat_park_mount': v.postFlatParkMount,

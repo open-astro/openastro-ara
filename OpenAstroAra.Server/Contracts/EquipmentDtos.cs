@@ -127,7 +127,10 @@ public sealed record CameraCapabilitiesDto(
     System.Collections.Generic.IReadOnlyList<string>? Offsets = null,
     // #1185 — the smallest exposure step the driver honours (ASCOM ExposureResolution, seconds);
     // 0 = not reported.
-    double ExposureResolutionSec = 0);
+    double ExposureResolutionSec = 0,
+    // ASCOM MaxADU — the brightest value a pixel can read (the full scale panel flats aim at a
+    // share of); 0 = not reported.
+    int MaxAdu = 0);
 
 public sealed record CameraStateDto(
     string State,   // "idle" | "exposing" | "downloading" | "error"

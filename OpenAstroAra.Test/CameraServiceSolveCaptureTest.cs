@@ -114,9 +114,11 @@ namespace OpenAstroAra.Test {
             // centering loop's attempt policy understands — not a "feature missing" throw.
             using var svc = new CameraService(legacyProfile: () => new HeadlessProfileService());
             var seq = new CaptureSequence(2, ImageTypes.SNAPSHOT, null, new BinningMode(1, 1), exposureCount: 1);
-            var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            // CameraUnavailableException is an InvalidOperationException: the same failure, typed
+            // so a run can pause for the user.
+            var ex = await Assert.ThrowsAsync<CameraUnavailableException>(() =>
                 svc.CaptureAndPrepareImage(seq, new PrepareImageParameters(detectStars: false), CancellationToken.None, null));
-            Assert.That(ex!.Message, Does.Contain("not connected"));
+            Assert.That(ex!.Message, Does.Contain("connected"));
         }
 
         [Test]
@@ -125,9 +127,11 @@ namespace OpenAstroAra.Test {
             // not be a failure mode of its own.
             using var svc = new CameraService();
             var seq = new CaptureSequence(2, ImageTypes.SNAPSHOT, null, new BinningMode(1, 1), exposureCount: 1);
-            var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            // CameraUnavailableException is an InvalidOperationException: the same failure, typed
+            // so a run can pause for the user.
+            var ex = await Assert.ThrowsAsync<CameraUnavailableException>(() =>
                 svc.CaptureAndPrepareImage(seq, new PrepareImageParameters(detectStars: false), CancellationToken.None, null));
-            Assert.That(ex!.Message, Does.Contain("not connected"));
+            Assert.That(ex!.Message, Does.Contain("connected"));
         }
 
         [Test]

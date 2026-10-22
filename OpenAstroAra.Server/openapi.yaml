@@ -7591,6 +7591,55 @@ components:
           type:
             - 'null'
             - string
+    BiasLibraryEntryDto:
+      required:
+        - id
+        - gain
+        - offset
+        - bin
+        - frame_count
+        - captured_utc
+        - file_size_bytes
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        gain:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - 'null'
+            - integer
+            - string
+          format: int32
+        offset:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - 'null'
+            - integer
+            - string
+          format: int32
+        bin:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+        frame_count:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+        captured_utc:
+          type: string
+          format: date-time
+        file_size_bytes:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int64
     BugReportPreparationDto:
       required:
         - preparation_id
@@ -7692,7 +7741,6 @@ components:
     BulkDeleteRequestDto:
       required:
         - frame_ids
-        - delete_from_disk
       type: object
       properties:
         frame_ids:
@@ -7702,6 +7750,7 @@ components:
             format: uuid
         delete_from_disk:
           type: boolean
+          default: true
     BulkExportRequestDto:
       required:
         - frame_ids
@@ -7792,6 +7841,25 @@ components:
             - integer
             - string
           format: int32
+        matching_flat_frames:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+          default: 0
+        matching_flats_newest_utc:
+          type:
+            - 'null'
+            - string
+          format: date-time
+        flats_note:
+          type:
+            - 'null'
+            - string
+        flats_verified:
+          type: boolean
+          default: false
     CalibrationSessionDto:
       required:
         - id
@@ -7834,6 +7902,16 @@ components:
           type:
             - 'null'
             - string
+        cooler_setpoint_c:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        matching_bias_available:
+          type: boolean
+          default: false
     CalibrationStateDto:
       required:
         - dark_library
@@ -8372,6 +8450,12 @@ components:
             - 'null'
             - string
           format: uuid
+        bias_entries:
+          type:
+            - 'null'
+            - array
+          items:
+            $ref: '#/components/schemas/BiasLibraryEntryDto'
     DataManagerActiveDownloadDto:
       required:
         - download_id
@@ -9437,6 +9521,20 @@ components:
             - integer
             - string
           format: int32
+        rotator_mechanical_deg:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        cooler_setpoint_c:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
     FrameHistogramDto:
       required:
         - bins
@@ -9775,6 +9873,20 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/GeneratedFlatStepDto'
+        total_bias_frames:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+          default: 0
+        total_dark_frames:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+          default: 0
     GeneratedFlatStepDto:
       required:
         - filter_name
@@ -11177,6 +11289,53 @@ components:
         flavor:
           type: string
           default: panel
+        cool_camera:
+          type:
+            - 'null'
+            - boolean
+        cool_to_temperature_c:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        park_mount_after:
+          type:
+            - 'null'
+            - boolean
+        include_covered_filters:
+          type: boolean
+          default: false
+        include_bias:
+          type: boolean
+          default: false
+        bias_frame_count:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - 'null'
+            - integer
+            - string
+          format: int32
+        include_darks:
+          type: boolean
+          default: false
+        dark_frame_count:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - 'null'
+            - integer
+            - string
+          format: int32
+        pause_for_lens_cap:
+          type: boolean
+          default: false
+        include_flats:
+          type: boolean
+          default: true
+        reshoot_assumed_coverage:
+          type: boolean
+          default: false
     MosaicCreateRequestDto:
       required:
         - name
@@ -12956,6 +13115,9 @@ components:
           oneOf:
             - type: 'null'
             - $ref: '#/components/schemas/RotationAssistSampleDto'
+        camera_lost:
+          type: boolean
+          default: false
     RotatorMoveRequestDto:
       required:
         - target_angle_deg
@@ -13119,7 +13281,7 @@ components:
           default: 30
         post_flat_park_mount:
           type: boolean
-          default: true
+          default: false
         sky_flat_target_adu:
           pattern: '^-?(?:0|[1-9]\d*)$'
           type:
@@ -13210,6 +13372,13 @@ components:
           type:
             - 'null'
             - string
+        flat_target_percent:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+          default: 50
     SavedTargetDto:
       required:
         - name

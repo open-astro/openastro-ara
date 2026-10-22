@@ -99,6 +99,19 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task The_library_lists_only_sessions_that_saved_frames() {
+            var empty = Guid.Parse("66666666-6666-6666-6666-666666666662");
+            await InsertSessionAsync(Session);
+            await InsertSessionAsync(empty);
+            await InsertLightAsync("Ha", 300, 100, 10, 5230);
+
+            var page = await _svc.ListAsync(50, null, CancellationToken.None);
+
+            Assert.That(page.Items.Select(i => i.Id).ToList(), Is.EqualTo(new[] { Session }),
+                "an aborted run with no frames is not an \"Untitled\" library entry");
+        }
+
+        [Test]
         public async Task Synthesis_replays_per_filter_modal_settings_with_original_counts() {
             await InsertSessionAsync(Session);
             await InsertLightAsync("Ha", 300, 100, 10, 5230);

@@ -63,6 +63,24 @@ namespace OpenAstroAra.Test {
         // ── entries (catalog-backed reads) ─────────────────────────────────────
 
         [Test]
+        public async Task Status_lists_bias_groups_by_gain_offset_and_binning() {
+            await InsertBiasAsync(100, 50, bin: null, sizeBytes: 100); // pre-binning row = 1×1
+            await InsertBiasAsync(100, 50, bin: 1, sizeBytes: 150);
+            await InsertBiasAsync(100, 50, bin: 2, sizeBytes: 100);
+            await InsertBiasAsync(0, 10, bin: 1, sizeBytes: 100);
+            await InsertDarkAsync(300, 100, -10); // darks never show up as bias
+
+            using var svc = new SqliteDarkLibraryService(_db);
+            var bias = (await svc.GetStatusAsync(CancellationToken.None)).BiasEntries!;
+
+            Assert.That(bias.Count, Is.EqualTo(3));
+            var main = bias.Single(b => b.Gain == 100 && b.Offset == 50 && b.Bin == 1);
+            Assert.That(main.FrameCount, Is.EqualTo(2));
+            Assert.That(main.FileSizeBytes, Is.EqualTo(250));
+            Assert.That(bias.Select(b => b.Id).Distinct().Count(), Is.EqualTo(3), "one stable id per group");
+        }
+
+        [Test]
         public async Task Entries_group_darks_by_exposure_gain_and_temperature_bucket() {
             await InsertDarkAsync(300, 100, -10.1, sizeBytes: 100);
             await InsertDarkAsync(300, 100, -9.9, sizeBytes: 150); // same whole-degree bucket
@@ -389,6 +407,27 @@ namespace OpenAstroAra.Test {
                 """;
             cmd.Parameters.AddWithValue("$id", id.ToString());
             cmd.Parameters.AddWithValue("$t", DateTimeOffset.UtcNow.ToString("O", CultureInfo.InvariantCulture));
+            await cmd.ExecuteNonQueryAsync(CancellationToken.None);
+        }
+
+        private async Task InsertBiasAsync(int gain, int offset, int? bin, long sizeBytes) {
+            await using var conn = _db.OpenConnection();
+            await using var cmd = conn.CreateCommand();
+            cmd.CommandText = """
+                INSERT INTO frames (id, session_id, target_name, frame_type, filter_name,
+                    exposure_seconds, gain, "offset", bin, temperature_c, captured_utc, file_path,
+                    file_size_bytes, width, height, bit_depth)
+                VALUES ($id, $sid, 'BIAS', 'bias', NULL, 0.000032, $gain, $offset, $bin, -10, $utc,
+                    $path, $size, 16, 16, 16);
+                """;
+            cmd.Parameters.AddWithValue("$id", Guid.NewGuid().ToString());
+            cmd.Parameters.AddWithValue("$sid", Session.ToString());
+            cmd.Parameters.AddWithValue("$gain", gain);
+            cmd.Parameters.AddWithValue("$offset", offset);
+            cmd.Parameters.AddWithValue("$bin", bin is null ? DBNull.Value : bin.Value);
+            cmd.Parameters.AddWithValue("$utc", DateTimeOffset.UtcNow.ToString("O", CultureInfo.InvariantCulture));
+            cmd.Parameters.AddWithValue("$path", $"/tmp/{Guid.NewGuid():N}.fits");
+            cmd.Parameters.AddWithValue("$size", sizeBytes);
             await cmd.ExecuteNonQueryAsync(CancellationToken.None);
         }
 

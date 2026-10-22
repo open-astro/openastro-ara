@@ -35,7 +35,8 @@ public sealed record FrameNamingContext(
     double? SensorTemp = null,
     string? CameraName = null,
     string? TargetName = null,
-    int FrameNumber = 1);
+    int FrameNumber = 1,
+    DateOnly? Night = null);
 
 /// <summary>
 /// §29.2 — expands the profile's filename template into the relative path a
@@ -125,8 +126,10 @@ public static class FrameNaming {
             "time" => t.ToString("HH-mm-ss", CultureInfo.InvariantCulture),
             "datetime" => t.ToString("yyyy-MM-dd_HH-mm-ss", CultureInfo.InvariantCulture),
             // The astronomer's night: everything before local noon belongs to
-            // the evening it started.
-            "night" => t.AddHours(-12).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+            // the evening it started. Calibration shot for an earlier night's
+            // lights files under that night instead.
+            "night" => ctx.Night?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)
+                ?? t.AddHours(-12).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
             "dateutc" => t.ToUniversalTime().ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
             "timeutc" => t.ToUniversalTime().ToString("HH-mm-ss", CultureInfo.InvariantCulture),
             "type" => Capitalize(ctx.ImageType),

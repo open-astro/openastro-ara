@@ -24,14 +24,21 @@ namespace OpenAstroAra.Sequencer.SequenceItem.FlatDevice {
     /// the CURRENT filter/focus context (per-filter iteration is the sequence's concern —
     /// the §39.5 generator emits one <see cref="FlatPanelFlats"/> per filter block).
     /// </summary>
-    /// <param name="TargetAdu">Mean-ADU target for the probe loop (§48.7 default 30000 ≈ 45% of 16-bit full scale).</param>
+    /// <param name="TargetAdu">Absolute level to aim for; 0 = automatic (<paramref name="TargetPercent"/> of the camera's full scale).</param>
     /// <param name="TolerancePct">Acceptable deviation from <paramref name="TargetAdu"/> in percent.</param>
     /// <param name="FrameCount">Saved FLAT frames to capture once the exposure converges.</param>
-    /// <param name="Brightness">Flat-panel brightness to request while capturing (device units; the panel service clamps).</param>
+    /// <param name="Brightness">Starting flat-panel brightness (device units); 0 = automatic (the
+    /// brightness that worked last time for this filter, else half the panel's range). The
+    /// executor changes it when the exposure would fall outside the usable window.</param>
     /// <param name="MinExposureSec">Lower exposure bound for the probe loop.</param>
     /// <param name="MaxExposureSec">Upper exposure bound for the probe loop.</param>
     /// <param name="Gain">Camera gain for the saved flats (-1 = camera default; match the session's lights).</param>
     /// <param name="Offset">Camera offset for the saved flats (-1 = camera default).</param>
+    /// <param name="TargetPercent">Automatic target as a percentage of the camera's full scale.</param>
+    /// <param name="TargetName">The lights' target the flats file under (null = "Flats").</param>
+    /// <param name="Night">The lights' night the flats file under (null = the night they're taken).</param>
+    /// <param name="Tally">Counts the frames saved, so a set the camera interrupted resumes with the
+    /// rest instead of starting over.</param>
     public sealed record FlatSetRequest(
         double TargetAdu,
         double TolerancePct,
@@ -40,7 +47,11 @@ namespace OpenAstroAra.Sequencer.SequenceItem.FlatDevice {
         double MinExposureSec,
         double MaxExposureSec,
         int Gain = -1,
-        int Offset = -1);
+        int Offset = -1,
+        double TargetPercent = 50,
+        string? TargetName = null,
+        DateOnly? Night = null,
+        FlatSetTally? Tally = null);
 
     /// <summary>
     /// One §48.4 twilight sky-flat set for the CURRENT filter/pointing context. Unlike the panel
@@ -56,6 +67,9 @@ namespace OpenAstroAra.Sequencer.SequenceItem.FlatDevice {
     /// <param name="StopAtMinAdu">Bail when the sky reads below this even at the maximum exposure (over-dark dusk).</param>
     /// <param name="Gain">Camera gain for the saved flats (-1 = camera default).</param>
     /// <param name="Offset">Camera offset for the saved flats (-1 = camera default).</param>
+    /// <param name="TargetName">The lights' target the flats file under (null = "Sky flats").</param>
+    /// <param name="Night">The lights' night the flats file under (null = the night they're taken).</param>
+    /// <param name="Tally">Counts the frames saved (see <see cref="FlatSetRequest"/>).</param>
     public sealed record SkyFlatSetRequest(
         double TargetAdu,
         double TolerancePct,
@@ -65,7 +79,21 @@ namespace OpenAstroAra.Sequencer.SequenceItem.FlatDevice {
         double StopAtMaxAdu,
         double StopAtMinAdu,
         int Gain = -1,
-        int Offset = -1);
+        int Offset = -1,
+        string? TargetName = null,
+        DateOnly? Night = null,
+        FlatSetTally? Tally = null);
+
+    /// <summary>The flats a set has saved so far, across the attempts a lost camera forces: Resume
+    /// shoots only the frames still missing (2026-10-21: a camera that dropped at flat 20 of 30
+    /// would otherwise leave the filter with 50).</summary>
+    public sealed class FlatSetTally {
+        private int saved;
+
+        public int Saved => Volatile.Read(ref saved);
+
+        public void Add() => Interlocked.Increment(ref saved);
+    }
 
     /// <summary>
     /// §48.3/§48.4 — the flat-capture seam <see cref="FlatPanelFlats"/> and <see cref="SkyFlats"/>
@@ -76,9 +104,9 @@ namespace OpenAstroAra.Sequencer.SequenceItem.FlatDevice {
     public interface IFlatCaptureExecutor {
 
         /// <summary>
-        /// Light the flat panel (when one is connected), probe exposures until the frame mean
-        /// lands within tolerance of the target ADU, then capture the requested number of saved
-        /// FLAT frames at the converged exposure. True on success; false when the probe cannot
+        /// Close the cover and light the flat panel (when one is connected), solve the exposure
+        /// (and panel brightness) that puts the frame's level within tolerance of the target, then
+        /// capture the requested number of saved FLAT frames there. True on success; false when the probe cannot
         /// converge (bounds pinned, no light) or the capture path is unavailable — the
         /// implementation logs the reason and restores the panel light either way.
         /// </summary>
@@ -91,5 +119,12 @@ namespace OpenAstroAra.Sequencer.SequenceItem.FlatDevice {
         /// (stop bounds), never converged, or the capture path is unavailable — reasons logged.
         /// </summary>
         Task<bool> CaptureSkyFlatSetAsync(SkyFlatSetRequest request, IProgress<ApplicationStatus> progress, CancellationToken token);
+
+        /// <summary>
+        /// Turn the panel off and open its motorised cover, so the user can put a lens cap on
+        /// for bias and darks (a panel doesn't always seal out stray light). True once the cover
+        /// reads open; false with no panel connected or no motorised cover — the reason is logged.
+        /// </summary>
+        Task<bool> OpenCoverAsync(CancellationToken token);
     }
 }

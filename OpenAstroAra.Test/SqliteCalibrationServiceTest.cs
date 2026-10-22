@@ -17,13 +17,17 @@ using NUnit.Framework;
 using OpenAstroAra.Core.Enums;
 using OpenAstroAra.Sequencer.Conditions;
 using OpenAstroAra.Sequencer.Container;
+using OpenAstroAra.Sequencer.SequenceItem;
+using OpenAstroAra.Sequencer.SequenceItem.Camera;
 using OpenAstroAra.Sequencer.SequenceItem.FilterWheel;
 using OpenAstroAra.Sequencer.SequenceItem.FlatDevice;
 using OpenAstroAra.Sequencer.SequenceItem.Focuser;
 using OpenAstroAra.Sequencer.SequenceItem.Imaging;
+using OpenAstroAra.Sequencer.SequenceItem.Rotator;
 using OpenAstroAra.Sequencer.SequenceItem.Telescope;
 using OpenAstroAra.Sequencer.SequenceItem.Utility;
 using OpenAstroAra.Sequencer.Serialization;
+using OpenAstroAra.Sequencer.Utility;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Services;
 using System;
@@ -232,11 +236,449 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public async Task GenerateMatchingFlats_uses_the_default_target_adu_when_not_overridden() {
+        public async Task GenerateMatchingFlats_leaves_the_target_automatic_unless_overridden() {
             await InsertFrameAsync(Session, "light", "Ha", 300, 100, "M42");
             var plan = await _svc.GenerateMatchingFlatsAsync(
                 Session, new MatchingFlatsRequestDto(null, null, GenerateOnly: true), idempotencyKey: null, CancellationToken.None);
-            Assert.That(plan.Steps.Single().TargetAdu, Is.EqualTo(32000));
+            Assert.That(plan.Steps.Single().TargetAdu, Is.Null, "panel flats aim at a share of the camera's range at run time");
+            var overridden = await _svc.GenerateMatchingFlatsAsync(
+                Session, new MatchingFlatsRequestDto(null, 21000, GenerateOnly: true), idempotencyKey: null, CancellationToken.None);
+            Assert.That(overridden.Steps.Single().TargetAdu, Is.EqualTo(21000));
+        }
+
+        [Test]
+        public async Task Flat_training_round_trips_and_a_new_solution_replaces_the_old() {
+            var store = new FlatTrainingStore(_db);
+            Assert.That(await store.GetAsync("Ha", 100, 50, 1, CancellationToken.None), Is.Null);
+
+            await store.PutAsync("Ha", 100, 50, 1, new FlatTraining(4.2, 180, 32500, 32767.5), CancellationToken.None);
+            await store.PutAsync("Ha", 100, 50, 1, new FlatTraining(3.9, 190, 32800, 32767.5), CancellationToken.None);
+            await store.PutAsync("", 100, 50, 1, new FlatTraining(1.5, null, 32000, 32767.5), CancellationToken.None);
+
+            Assert.That(await store.GetAsync("Ha", 100, 50, 1, CancellationToken.None), Is.EqualTo(new FlatTraining(3.9, 190, 32800, 32767.5)));
+            Assert.That(await store.GetAsync("", 100, 50, 1, CancellationToken.None), Is.EqualTo(new FlatTraining(1.5, null, 32000, 32767.5)),
+                "no wheel and no dimmable panel still remember the exposure");
+            Assert.That(await store.GetAsync("Ha", 200, 50, 1, CancellationToken.None), Is.Null, "another gain is another solution");
+        }
+
+        // Flats belong to the optical train, not the night: reused while the filter and the camera's
+        // rotator angle are unchanged, retaken when the camera turned.
+        [Test]
+        public async Task Flats_cover_a_filter_only_at_the_lights_rotator_angle() {
+            await InsertSessionAsync(FlatsSession);
+            await InsertFrameAsync(Session, "light", "Ha", 300, 100, "M42", rotatorDeg: 120);
+            await InsertFrameAsync(Session, "light", "OIII", 300, 100, "M42", rotatorDeg: 120);
+            var earlier = DateTimeOffset.UtcNow.AddDays(-3);
+            await InsertFrameAsync(FlatsSession, "flat", "Ha", 1, 100, "Flats", rotatorDeg: 120.3, capturedUtc: earlier);
+            await InsertFrameAsync(FlatsSession, "flat", "OIII", 1, 100, "Flats", rotatorDeg: 34.8);
+
+            var session = await _svc.GetSessionAsync(Session, CancellationToken.None);
+            var ha = session!.FiltersUsed.Single(f => f.FilterName == "Ha");
+            var oiii = session.FiltersUsed.Single(f => f.FilterName == "OIII");
+            Assert.That(ha.MatchingFlatFrames, Is.EqualTo(1), "a flat from another night at the same angle still counts");
+            Assert.That(ha.MatchingFlatsNewestUtc, Is.EqualTo(earlier).Within(TimeSpan.FromSeconds(1)));
+            Assert.That(ha.FlatsNote, Is.Null);
+            Assert.That(oiii.MatchingFlatFrames, Is.Zero, "the camera was turned since those flats");
+            Assert.That(oiii.FlatsNote, Does.Contain("34.8°").And.Contain("120°"));
+            Assert.That(session.MatchingFlatsAvailable, Is.False);
+
+            var page = await _svc.ListSessionsAsync(10, null, CancellationToken.None);
+            Assert.That(page.Items.Single().FiltersUsed, Is.EqualTo(session.FiltersUsed), "list and single agree");
+        }
+
+        [Test]
+        public async Task Lights_from_before_angles_were_recorded_take_flats_shot_since_with_a_note() {
+            await InsertSessionAsync(FlatsSession);
+            // The 2026-10-16 North America nights: lights with no rotator angle, flats taken later at 34.8°.
+            await InsertFrameAsync(Session, "light", "Ha", 60, 100, "NA");
+            await InsertFrameAsync(FlatsSession, "flat", "Ha", 1, 100, "Flats", rotatorDeg: 34.8);
+
+            var ha = (await _svc.GetSessionAsync(Session, CancellationToken.None))!.FiltersUsed.Single();
+            Assert.That(ha.MatchingFlatFrames, Is.EqualTo(1));
+            Assert.That(ha.FlatsNote, Does.Contain("assumes the camera wasn't rotated"));
+        }
+
+        [Test]
+        public async Task A_rotator_angle_across_zero_is_the_same_angle() {
+            await InsertSessionAsync(FlatsSession);
+            await InsertFrameAsync(Session, "light", "Ha", 60, 100, "NA", rotatorDeg: 359.8);
+            await InsertFrameAsync(FlatsSession, "flat", "Ha", 1, 100, "Flats", rotatorDeg: 0.3);
+            Assert.That((await _svc.GetSessionAsync(Session, CancellationToken.None))!.MatchingFlatsAvailable, Is.True);
+        }
+
+        // The session a flats run catalogues its frames under (no lights, so not a calibration session).
+        private static readonly Guid FlatsSession = Guid.Parse("33333333-3333-3333-3333-3333333333f1");
+        private static readonly string[] OnlyOiii = ["OIII"];
+        private static readonly string[] HaAndOiii = ["Ha", "OIII"];
+
+        [Test]
+        public async Task Matching_flats_shoot_only_the_filters_still_missing_unless_asked_for_all() {
+            await InsertSessionAsync(FlatsSession);
+            var store = new FileSequenceService(_dir);
+            var svc = new SqliteCalibrationService(_db, store);
+            await InsertFrameAsync(Session, "light", "Ha", 300, 100, "NA", rotatorDeg: 34.8);
+            await InsertFrameAsync(Session, "light", "OIII", 300, 100, "NA", rotatorDeg: 34.8);
+            await InsertFrameAsync(FlatsSession, "flat", "Ha", 1, 100, "Flats", rotatorDeg: 34.8);
+
+            var missing = await svc.GenerateMatchingFlatsAsync(Session,
+                new MatchingFlatsRequestDto(null, null, GenerateOnly: false), idempotencyKey: null, CancellationToken.None);
+            Assert.That(missing.Steps.Select(s => s.FilterName).ToList(), Is.EqualTo(OnlyOiii));
+
+            var all = await svc.GenerateMatchingFlatsAsync(Session,
+                new MatchingFlatsRequestDto(null, null, GenerateOnly: true, IncludeCoveredFilters: true), idempotencyKey: null, CancellationToken.None);
+            Assert.That(all.Steps.Select(s => s.FilterName).ToList(), Is.EquivalentTo(HaAndOiii));
+
+            await InsertFrameAsync(FlatsSession, "flat", "OIII", 1, 100, "Flats", rotatorDeg: 34.8);
+            var none = await svc.GenerateMatchingFlatsAsync(Session,
+                new MatchingFlatsRequestDto(null, null, GenerateOnly: false), idempotencyKey: null, CancellationToken.None);
+            Assert.That(none.Steps, Is.Empty);
+            Assert.That(none.GeneratedSequenceId, Is.Null, "nothing to shoot, nothing stored");
+            Assert.That(none.TotalFlatFrames, Is.Zero);
+        }
+
+        [Test]
+        public async Task Bias_covers_lights_with_the_same_gain_offset_and_binning() {
+            await InsertSessionAsync(FlatsSession);
+            await InsertFrameAsync(Session, "light", "Ha", 300, 100, "NA", offset: 50);
+            await InsertFrameAsync(Session, "light", "OIII", 300, 100, "NA", offset: 50, bin: 2);
+            Assert.That((await _svc.GetSessionAsync(Session, CancellationToken.None))!.MatchingBiasAvailable, Is.False);
+
+            // Wrong offset, then only the 1×1 combination: still not covered.
+            await InsertFrameAsync(FlatsSession, "bias", null, 0, 100, "Bias", offset: 0);
+            await InsertFrameAsync(FlatsSession, "bias", null, 0, 100, "Bias", offset: 50, bin: 1);
+            Assert.That((await _svc.GetSessionAsync(Session, CancellationToken.None))!.MatchingBiasAvailable, Is.False);
+            var page = await _svc.ListSessionsAsync(10, null, CancellationToken.None);
+            Assert.That(page.Items.Single(i => i.Id == Session).MatchingBiasAvailable, Is.False);
+
+            await InsertFrameAsync(FlatsSession, "bias", null, 0, 100, "Bias", offset: 50, bin: 2);
+            Assert.That((await _svc.GetSessionAsync(Session, CancellationToken.None))!.MatchingBiasAvailable, Is.True);
+            page = await _svc.ListSessionsAsync(10, null, CancellationToken.None);
+            Assert.That(page.Items.Single(i => i.Id == Session).MatchingBiasAvailable, Is.True,
+                "the batched list agrees with the single-session read");
+        }
+
+        [Test]
+        public async Task Matching_flats_with_bias_add_a_set_per_missing_combination_after_the_flats() {
+            await InsertSessionAsync(FlatsSession);
+            var store = new FileSequenceService(_dir);
+            var svc = new SqliteCalibrationService(_db, store);
+            await InsertFrameAsync(Session, "light", "Ha", 300, 100, "NA", offset: 50);
+            await InsertFrameAsync(Session, "light", "Ha", 300, 100, "NA", offset: 50, bin: 2);
+            await InsertFrameAsync(FlatsSession, "bias", null, 0, 100, "Bias", offset: 50, bin: 1);
+
+            var plan = await svc.GenerateMatchingFlatsAsync(Session,
+                new MatchingFlatsRequestDto(null, null, GenerateOnly: false, IncludeBias: true, BiasFrameCount: 7),
+                idempotencyKey: null, CancellationToken.None);
+            Assert.That(plan.TotalBiasFrames, Is.EqualTo(7), "only the uncovered 2×2 combination is shot");
+
+            var stored = await store.GetAsync(plan.GeneratedSequenceId!.Value, CancellationToken.None);
+            var profile = new HeadlessProfileService();
+            profile.ActiveProfile.FilterWheelSettings.FilterWheelFilters.Add(new OpenAstroAra.Core.Model.Equipment.FilterInfo("Ha", 0, 0));
+            var root = new SequenceJsonConverter(HeadlessSequencerFactory.WithDefaults(profileService: profile)).Deserialize(stored!.Body.GetRawText());
+            var blocks = root.GetItemsSnapshot().OfType<SequentialContainer>().ToList();
+            Assert.That(blocks[0].GetItemsSnapshot().OfType<FlatPanelFlats>(), Is.Not.Empty, "flats first");
+            var bias = blocks[^1];
+            Assert.That(bias.GetConditionsSnapshot().OfType<LoopCondition>().Single().Iterations, Is.EqualTo(7));
+            var exposure = bias.GetItemsSnapshot().OfType<TakeExposure>().Single();
+            Assert.That(exposure.ImageType, Is.EqualTo("BIAS"));
+            Assert.That(exposure.Gain, Is.EqualTo(100));
+            Assert.That(exposure.Offset, Is.EqualTo(50));
+            Assert.That(exposure.Binning.X, Is.EqualTo(2));
+            Assert.That(exposure.ExposureTime, Is.GreaterThan(0), "TakeExposure rejects a zero exposure");
+        }
+
+        private static readonly string[] BiasThenDark = ["BIAS", "DARK"];
+
+        [Test]
+        public async Task Darks_follow_the_lens_cap_pause_at_the_lights_exposure_gain_and_offset() {
+            await InsertSessionAsync(FlatsSession);
+            var store = new FileSequenceService(_dir);
+            var svc = new SqliteCalibrationService(_db, store);
+            await InsertFrameAsync(Session, "light", "Ha", 60, 100, "NA", offset: 50, rotatorDeg: 34.8);
+            await InsertFrameAsync(Session, "light", "Ha", 120, 100, "NA", offset: 50, rotatorDeg: 34.8);
+            await InsertFrameAsync(FlatsSession, "flat", "Ha", 1, 100, "Flats", rotatorDeg: 34.8);
+            await InsertFrameAsync(FlatsSession, "dark", null, 120, 100, "Darks"); // 120 s already covered
+
+            var plan = await svc.GenerateMatchingFlatsAsync(Session,
+                new MatchingFlatsRequestDto(null, null, GenerateOnly: false,
+                    IncludeBias: true, IncludeDarks: true, DarkFrameCount: 4, PauseForLensCap: true),
+                idempotencyKey: null, CancellationToken.None);
+            Assert.That(plan.Steps, Is.Empty, "flats already covered");
+            Assert.That(plan.TotalDarkFrames, Is.EqualTo(4), "only the 60 s darks are missing");
+
+            var stored = await store.GetAsync(plan.GeneratedSequenceId!.Value, CancellationToken.None);
+            var root = new SequenceJsonConverter(HeadlessSequencerFactory.WithDefaults()).Deserialize(stored!.Body.GetRawText());
+            var items = root.GetItemsSnapshot().ToList();
+            var cover = items.FindIndex(i => i is OpenFlatPanelCover);
+            var wait = items.FindIndex(i => i is WaitForUser);
+            Assert.That(cover, Is.GreaterThanOrEqualTo(0));
+            Assert.That(wait, Is.EqualTo(cover + 1), "the pause comes right after the cover opens");
+            Assert.That(((WaitForUser)items[wait]).Text, Does.Contain("lens cap"));
+            var blocks = items.Skip(wait + 1).OfType<SequentialContainer>().ToList();
+            Assert.That(blocks.Select(b => b.GetItemsSnapshot().OfType<TakeExposure>().Single().ImageType),
+                Is.EqualTo(BiasThenDark), "bias, then darks, both after the pause");
+            var dark = blocks[1];
+            Assert.That(dark.GetConditionsSnapshot().OfType<LoopCondition>().Single().Iterations, Is.EqualTo(4));
+            var take = dark.GetItemsSnapshot().OfType<TakeExposure>().Single();
+            Assert.That(take.ExposureTime, Is.EqualTo(60));
+            Assert.That(take.Gain, Is.EqualTo(100));
+            Assert.That(take.Offset, Is.EqualTo(50));
+        }
+
+        [Test]
+        public async Task Sky_flats_always_pause_for_the_lens_cap_before_bias_and_darks() {
+            var store = new FileSequenceService(_dir);
+            var svc = new SqliteCalibrationService(_db, store);
+            await InsertFrameAsync(Session, "light", "Ha", 60, 100, "M42", offset: 50, rotatorDeg: 34.8);
+
+            // #1435: nothing covers the optics after twilight flats, so the darks would be sky frames.
+            var plan = await svc.GenerateMatchingFlatsAsync(Session,
+                new MatchingFlatsRequestDto(null, null, GenerateOnly: false, Flavor: "sky",
+                    IncludeBias: true, IncludeDarks: true, PauseForLensCap: false),
+                idempotencyKey: null, CancellationToken.None);
+            Assert.That(plan.Steps, Is.Not.Empty);
+            Assert.That(plan.TotalDarkFrames, Is.GreaterThan(0));
+
+            var stored = await store.GetAsync(plan.GeneratedSequenceId!.Value, CancellationToken.None);
+            var root = new SequenceJsonConverter(HeadlessSequencerFactory.WithDefaults()).Deserialize(stored!.Body.GetRawText());
+            var items = root.GetItemsSnapshot().ToList();
+            var wait = items.FindIndex(i => i is WaitForUser);
+            Assert.That(wait, Is.GreaterThanOrEqualTo(0), "the lens-cap pause is forced on");
+            Assert.That(((WaitForUser)items[wait]).Text, Does.Contain("lens cap").And.Not.Contain("flat panel"),
+                "no panel on a sky-flats rig");
+            var lastSkyFlats = items.FindLastIndex(i => i is SequentialContainer c && c.GetItemsSnapshot().OfType<SkyFlats>().Any());
+            var firstBias = items.FindIndex(i => i is SequentialContainer c && c.GetItemsSnapshot().OfType<TakeExposure>().Any());
+            Assert.That(lastSkyFlats, Is.LessThan(wait), "the pause follows the sky flats");
+            Assert.That(firstBias, Is.GreaterThan(wait), "bias and darks wait for the cap");
+        }
+
+        [Test]
+        public async Task Flats_can_be_left_out_for_a_bias_and_darks_run() {
+            var store = new FileSequenceService(_dir);
+            var svc = new SqliteCalibrationService(_db, store);
+            await InsertFrameAsync(Session, "light", "Ha", 60, 100, "M42", offset: 50, rotatorDeg: 34.8);
+
+            var plan = await svc.GenerateMatchingFlatsAsync(Session,
+                new MatchingFlatsRequestDto(null, null, GenerateOnly: false, Flavor: "sky",
+                    IncludeFlats: false, IncludeBias: true, IncludeDarks: true, PauseForLensCap: true),
+                idempotencyKey: null, CancellationToken.None);
+            Assert.That(plan.Steps, Is.Empty, "the lights need flats, but the user left them out");
+            Assert.That(plan.TotalBiasFrames, Is.GreaterThan(0));
+            Assert.That(plan.TotalDarkFrames, Is.GreaterThan(0));
+
+            var stored = await store.GetAsync(plan.GeneratedSequenceId!.Value, CancellationToken.None);
+            Assert.That(stored!.Name, Is.EqualTo("Bias & darks — M42"));
+            Assert.That(stored.Body.GetRawText(), Does.Not.Contain("SlewScopeToAltAz").And.Not.Contain("WaitForSunAltitude")
+                .And.Not.Contain("FlatPanelFlats"), "no flats means no twilight wait and no slew");
+        }
+
+        [Test]
+        public async Task Each_dark_set_runs_at_the_set_point_its_lights_ran_at() {
+            var store = new FileSequenceService(_dir);
+            var svc = new SqliteCalibrationService(_db, store);
+            await InsertFrameAsync(Session, "light", "Ha", 300, 100, "M42", temperatureC: -10, coolerSetpointC: -10);
+            await InsertFrameAsync(Session, "light", "Ha", 300, 100, "M42", temperatureC: -20, coolerSetpointC: -20);
+            await InsertFrameAsync(Session, "light", "Ha", 60, 100, "M42", temperatureC: 18); // taken warm
+
+            // Cooling for the flats is off: the darks still have to match their lights.
+            var plan = await svc.GenerateMatchingFlatsAsync(Session,
+                new MatchingFlatsRequestDto(null, null, GenerateOnly: false, CoolCamera: false, IncludeFlats: false, IncludeDarks: true),
+                idempotencyKey: null, CancellationToken.None);
+            var stored = await store.GetAsync(plan.GeneratedSequenceId!.Value, CancellationToken.None);
+            var root = new SequenceJsonConverter(HeadlessSequencerFactory.WithDefaults()).Deserialize(stored!.Body.GetRawText());
+
+            var order = root.GetItemsSnapshot().Select(i => i switch {
+                CoolCamera c => $"cool {c.Temperature}",
+                WarmCamera => "warm",
+                SequentialContainer b => $"dark {b.GetItemsSnapshot().OfType<TakeExposure>().Single().ExposureTime}",
+                _ => i.GetType().Name,
+            }).ToList();
+            Assert.That(order, Is.EqualTo(DarksBySetPoint));
+        }
+
+        private static readonly string[] DarksBySetPoint = ["cool -20", "dark 300", "cool -10", "dark 300", "cool 18", "dark 60"];
+
+        [Test]
+        public async Task Darks_that_cooled_the_camera_end_with_the_profiles_warm_up() {
+            var store = new FileSequenceService(_dir);
+            var profile = new InMemoryProfileStore();
+            profile.PutImagingDefaults(profile.GetImagingDefaults() with { WarmupAtSessionEnd = true });
+            var svc = new SqliteCalibrationService(_db, store, profile);
+            await InsertFrameAsync(Session, "light", "Ha", 300, 100, "M42", temperatureC: -10, coolerSetpointC: -10);
+
+            // Cooling for the flats unticked: only the darks cool the camera.
+            var plan = await svc.GenerateMatchingFlatsAsync(Session,
+                new MatchingFlatsRequestDto(null, null, GenerateOnly: false, CoolCamera: false, IncludeFlats: false, IncludeDarks: true),
+                idempotencyKey: null, CancellationToken.None);
+            var stored = await store.GetAsync(plan.GeneratedSequenceId!.Value, CancellationToken.None);
+            var root = new SequenceJsonConverter(HeadlessSequencerFactory.WithDefaults()).Deserialize(stored!.Body.GetRawText());
+            Assert.That(root.GetItemsSnapshot().Last(), Is.InstanceOf<WarmCamera>(),
+                "the camera isn't left regulating at the darks' temperature");
+        }
+
+        [Test]
+        public async Task Darks_for_lights_from_before_set_points_were_recorded_run_at_their_temperature() {
+            // Catalogued before cooler_setpoint_c existed: -10 °C lights with no set-point on record.
+            var store = new FileSequenceService(_dir);
+            var svc = new SqliteCalibrationService(_db, store);
+            await InsertFrameAsync(Session, "light", "Ha", 300, 100, "M42", temperatureC: -10.2);
+
+            var plan = await svc.GenerateMatchingFlatsAsync(Session,
+                new MatchingFlatsRequestDto(null, null, GenerateOnly: false, CoolCamera: true, CoolToTemperatureC: -10, IncludeDarks: true),
+                idempotencyKey: null, CancellationToken.None);
+            var stored = await store.GetAsync(plan.GeneratedSequenceId!.Value, CancellationToken.None);
+            var root = new SequenceJsonConverter(HeadlessSequencerFactory.WithDefaults()).Deserialize(stored!.Body.GetRawText());
+            var items = root.GetItemsSnapshot().ToList();
+
+            Assert.That(items.OfType<WarmCamera>(), Is.Empty, "never warmed up before the darks");
+            Assert.That(items.OfType<CoolCamera>().Select(c => c.Temperature), Is.EqualTo(OnlyMinusTen),
+                "the flats' -10 °C cooling already matches the lights; no second step");
+            var darkBlock = items.OfType<SequentialContainer>().Last();
+            Assert.That(darkBlock.GetItemsSnapshot().OfType<TakeExposure>().Single().ImageType, Is.EqualTo("DARK"));
+        }
+
+        private static readonly double[] OnlyMinusTen = [-10];
+
+        [Test]
+        public async Task A_camera_that_cannot_cool_gets_no_cooling_step_before_its_darks() {
+            var store = new FileSequenceService(_dir);
+            var svc = new SqliteCalibrationService(_db, store, cameraCanCool: () => false);
+            await InsertFrameAsync(Session, "light", "L", 30, 100, "M42", temperatureC: 21);
+
+            var plan = await svc.GenerateMatchingFlatsAsync(Session,
+                new MatchingFlatsRequestDto(null, null, GenerateOnly: false, IncludeFlats: false, IncludeDarks: true),
+                idempotencyKey: null, CancellationToken.None);
+            var stored = await store.GetAsync(plan.GeneratedSequenceId!.Value, CancellationToken.None);
+            Assert.That(stored!.Body.GetRawText(), Does.Not.Contain("CoolCamera"),
+                "an uncooled camera would refuse it and show a failed step");
+
+            // Not connected (unknown): the darks still regulate to the lights' temperature.
+            var unknown = new SqliteCalibrationService(_db, store, cameraCanCool: () => null);
+            var plan2 = await unknown.GenerateMatchingFlatsAsync(Session,
+                new MatchingFlatsRequestDto(null, null, GenerateOnly: false, IncludeFlats: false, IncludeDarks: true),
+                idempotencyKey: null, CancellationToken.None);
+            var stored2 = await store.GetAsync(plan2.GeneratedSequenceId!.Value, CancellationToken.None);
+            Assert.That(stored2!.Body.GetRawText(), Does.Contain("CoolCamera"));
+        }
+
+        [Test]
+        public async Task A_multi_target_session_files_its_calibration_under_the_main_target() {
+            var store = new FileSequenceService(_dir);
+            var svc = new SqliteCalibrationService(_db, store);
+            await InsertFrameAsync(Session, "light", "Ha", 300, 100, "M42");
+            for (var n = 0; n < 3; n++) {
+                await InsertFrameAsync(Session, "light", "Ha", 300, 100, "Orion Nebula");
+            }
+
+            var plan = await svc.GenerateMatchingFlatsAsync(Session,
+                new MatchingFlatsRequestDto(null, null, GenerateOnly: false, IncludeBias: true),
+                idempotencyKey: null, CancellationToken.None);
+            var stored = await store.GetAsync(plan.GeneratedSequenceId!.Value, CancellationToken.None);
+            var root = new SequenceJsonConverter(HeadlessSequencerFactory.WithDefaults()).Deserialize(stored!.Body.GetRawText());
+            var steps = root.GetItemsSnapshot().OfType<SequentialContainer>().SelectMany(b => b.GetItemsSnapshot()).ToList();
+            Assert.That(steps.OfType<FlatPanelFlats>().Select(f => f.CalibrationTarget)
+                    .Concat(steps.OfType<TakeExposure>().Select(e => e.CalibrationTarget)),
+                Is.Not.Empty.And.All.EqualTo("Orion Nebula"), "the target with most lights, not the alphabetically first");
+        }
+
+        [Test]
+        public async Task A_rig_without_a_rotator_gets_the_flats_it_asks_for_each_night() {
+            await InsertSessionAsync(FlatsSession);
+            var svc = new SqliteCalibrationService(_db);
+            // No rotator: neither the lights nor last night's flats recorded an angle.
+            await InsertFrameAsync(Session, "light", "L", 120, 100, "M42");
+            await InsertFrameAsync(FlatsSession, "flat", "L", 1, 100, "Flats");
+
+            var summary = (await svc.GetSessionAsync(Session, CancellationToken.None))!.FiltersUsed.Single();
+            Assert.That(summary.MatchingFlatFrames, Is.EqualTo(1));
+            Assert.That(summary.FlatsVerified, Is.False, "nothing to compare the angle against");
+
+            var dialog = await svc.GenerateMatchingFlatsAsync(Session,
+                new MatchingFlatsRequestDto(null, null, GenerateOnly: true), idempotencyKey: null, CancellationToken.None);
+            Assert.That(dialog.Steps, Is.Empty, "the dialog still offers the assumed match as covered (with its caveat)");
+
+            var auto = await svc.GenerateMatchingFlatsAsync(Session,
+                new MatchingFlatsRequestDto(null, null, GenerateOnly: true, ReshootAssumedCoverage: true),
+                idempotencyKey: null, CancellationToken.None);
+            Assert.That(auto.Steps.Select(s => s.FilterName), Is.EqualTo(OnlyL),
+                "end-of-night flats the user asked for are shot, not skipped on an assumption");
+        }
+
+        [Test]
+        public async Task Flats_verified_at_the_lights_angle_are_skipped_even_on_the_auto_path() {
+            await InsertSessionAsync(FlatsSession);
+            var svc = new SqliteCalibrationService(_db);
+            await InsertFrameAsync(Session, "light", "L", 120, 100, "M42", rotatorDeg: 34.8);
+            await InsertFrameAsync(FlatsSession, "flat", "L", 1, 100, "Flats", rotatorDeg: 34.8);
+
+            Assert.That((await svc.GetSessionAsync(Session, CancellationToken.None))!.FiltersUsed.Single().FlatsVerified, Is.True);
+            var auto = await svc.GenerateMatchingFlatsAsync(Session,
+                new MatchingFlatsRequestDto(null, null, GenerateOnly: true, ReshootAssumedCoverage: true),
+                idempotencyKey: null, CancellationToken.None);
+            Assert.That(auto.Steps, Is.Empty);
+        }
+
+        private static readonly string[] OnlyL = ["L"];
+
+        [Test]
+        public async Task Calibration_frames_file_under_the_lights_target_and_night() {
+            var store = new FileSequenceService(_dir);
+            var svc = new SqliteCalibrationService(_db, store);
+            await InsertFrameAsync(Session, "light", "Ha", 60, 100, "North America Nebula", offset: 50);
+
+            var plan = await svc.GenerateMatchingFlatsAsync(Session,
+                new MatchingFlatsRequestDto(null, null, GenerateOnly: false, IncludeBias: true, IncludeDarks: true),
+                idempotencyKey: null, CancellationToken.None);
+            var session = await svc.GetSessionAsync(Session, CancellationToken.None);
+            var night = DateOnly.FromDateTime(session!.SessionStartUtc.ToLocalTime().AddHours(-12).DateTime)
+                .ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+
+            var stored = await store.GetAsync(plan.GeneratedSequenceId!.Value, CancellationToken.None);
+            var root = new SequenceJsonConverter(HeadlessSequencerFactory.WithDefaults()).Deserialize(stored!.Body.GetRawText());
+            var blocks = root.GetItemsSnapshot().OfType<SequentialContainer>().ToList();
+            var flats = blocks.SelectMany(b => b.GetItemsSnapshot()).OfType<FlatPanelFlats>().ToList();
+            var exposures = blocks.SelectMany(b => b.GetItemsSnapshot()).OfType<TakeExposure>().ToList();
+            Assert.That(flats, Is.Not.Empty);
+            Assert.That(exposures.Select(e => e.ImageType), Is.EquivalentTo(BiasThenDark));
+            Assert.That(flats.Select(f => f.CalibrationTarget).Concat(exposures.Select(e => e.CalibrationTarget)),
+                Is.All.EqualTo("North America Nebula"), "{target}/{night}/Flat, Dark and Bias sit next to the lights");
+            Assert.That(flats.Select(f => f.CalibrationNight).Concat(exposures.Select(e => e.CalibrationNight)),
+                Is.All.EqualTo(night));
+        }
+
+        [Test]
+        public async Task No_lens_cap_pause_unless_asked() {
+            var store = new FileSequenceService(_dir);
+            var svc = new SqliteCalibrationService(_db, store);
+            await InsertFrameAsync(Session, "light", "Ha", 60, 100, "NA");
+
+            var plan = await svc.GenerateMatchingFlatsAsync(Session,
+                new MatchingFlatsRequestDto(null, null, GenerateOnly: false, IncludeDarks: true),
+                idempotencyKey: null, CancellationToken.None);
+            Assert.That(plan.TotalDarkFrames, Is.EqualTo(SqliteCalibrationService.DefaultDarkFrames));
+            var stored = await store.GetAsync(plan.GeneratedSequenceId!.Value, CancellationToken.None);
+            Assert.That(stored!.Body.GetRawText(), Does.Not.Contain("WaitForUser").And.Not.Contain("OpenFlatPanelCover"));
+        }
+
+        [Test]
+        public async Task Bias_alone_is_stored_when_every_filter_already_has_flats() {
+            await InsertSessionAsync(FlatsSession);
+            var store = new FileSequenceService(_dir);
+            var svc = new SqliteCalibrationService(_db, store);
+            await InsertFrameAsync(Session, "light", "Ha", 300, 100, "NA", rotatorDeg: 34.8);
+            await InsertFrameAsync(FlatsSession, "flat", "Ha", 1, 100, "Flats", rotatorDeg: 34.8);
+
+            var plan = await svc.GenerateMatchingFlatsAsync(Session,
+                new MatchingFlatsRequestDto(null, null, GenerateOnly: false, IncludeBias: true),
+                idempotencyKey: null, CancellationToken.None);
+            Assert.That(plan.Steps, Is.Empty);
+            Assert.That(plan.TotalBiasFrames, Is.EqualTo(SqliteCalibrationService.DefaultBiasFrames));
+            Assert.That(plan.GeneratedSequenceId, Is.Not.Null, "bias still to shoot, so the run is stored");
+
+            var without = await svc.GenerateMatchingFlatsAsync(Session,
+                new MatchingFlatsRequestDto(null, null, GenerateOnly: false), idempotencyKey: null, CancellationToken.None);
+            Assert.That(without.TotalBiasFrames, Is.Zero, "bias only when asked");
+            Assert.That(without.GeneratedSequenceId, Is.Null);
         }
 
         [Test]
@@ -432,7 +874,7 @@ namespace OpenAstroAra.Test {
             var store = new FileSequenceService(_dir);
             var profile = new InMemoryProfileStore();
             profile.PutSafetyPolicies(profile.GetSafetyPolicies() with {
-                FlatTargetAdu = 25000,
+                FlatTargetPercent = 40,
                 FlatTargetAduTolerancePct = 3,
                 FlatFramesPerFilter = 12,
                 PostFlatParkMount = true,
@@ -445,7 +887,7 @@ namespace OpenAstroAra.Test {
                 idempotencyKey: null, CancellationToken.None);
 
             Assert.That(plan.Steps.Single().FrameCount, Is.EqualTo(12));
-            Assert.That(plan.Steps.Single().TargetAdu, Is.EqualTo(25000));
+            Assert.That(plan.Steps.Single().TargetAdu, Is.Null);
 
             var stored = await store.GetAsync(plan.GeneratedSequenceId!.Value, CancellationToken.None);
             var profileSvc = new HeadlessProfileService();
@@ -454,7 +896,8 @@ namespace OpenAstroAra.Test {
             var root = new SequenceJsonConverter(factory).Deserialize(stored!.Body.GetRawText());
             var block = root.GetItemsSnapshot().OfType<SequentialContainer>().Single();
             var flats = block.GetItemsSnapshot().OfType<FlatPanelFlats>().Single();
-            Assert.That(flats.TargetAdu, Is.EqualTo(25000), "the §48.7 target ADU is enforced, not advisory");
+            Assert.That(flats.TargetAdu, Is.EqualTo(0), "automatic: no absolute level");
+            Assert.That(flats.TargetPercent, Is.EqualTo(40), "the profile's share of the camera's range is enforced");
             Assert.That(flats.TargetAduTolerancePct, Is.EqualTo(3));
             Assert.That(flats.FrameCount, Is.EqualTo(12));
             Assert.That(root.GetItemsSnapshot().OfType<ParkScope>().Count(), Is.EqualTo(1),
@@ -526,6 +969,151 @@ namespace OpenAstroAra.Test {
             Assert.That(block.GetItemsSnapshot().OfType<MoveFocuserAbsolute>().Single().Position, Is.EqualTo(4100));
         }
 
+        // The flats replay the lights' optical train: each filter's block turns the rotator back to
+        // the lights' mechanical angle, and the run cools to the lights' set-point first (then warms
+        // up after, as the profile's imaging run does).
+        [Test]
+        public async Task GenerateMatchingFlats_rotates_back_and_cools_to_the_lights_setpoint() {
+            var store = new FileSequenceService(_dir);
+            var profile = new InMemoryProfileStore();
+            profile.PutImagingDefaults(profile.GetImagingDefaults() with { WarmupAtSessionEnd = true });
+            var svc = new SqliteCalibrationService(_db, store, profile);
+            for (var i = 0; i < 3; i++) {
+                await InsertFrameAsync(Session, "light", "Ha", 300, 100, "M42", rotatorDeg: 212.53, coolerSetpointC: -10);
+            }
+            // A minority frame at another angle/set-point loses the vote.
+            await InsertFrameAsync(Session, "light", "Ha", 300, 100, "M42", rotatorDeg: 30, coolerSetpointC: -5);
+            await InsertFrameAsync(Session, "light", "OIII", 300, 100, "M42", rotatorDeg: 212.5, coolerSetpointC: -10);
+
+            var session = await svc.GetSessionAsync(Session, CancellationToken.None);
+            Assert.That(session!.CoolerSetpointC, Is.EqualTo(-10), "the session reports what its flats cool to");
+
+            var plan = await svc.GenerateMatchingFlatsAsync(
+                Session, new MatchingFlatsRequestDto(null, null, GenerateOnly: false), idempotencyKey: null, CancellationToken.None);
+            var root = Deserialize((await store.GetAsync(plan.GeneratedSequenceId!.Value, CancellationToken.None))!, "Ha", "OIII");
+            var items = root.GetItemsSnapshot();
+
+            var cool = items.First() as CoolCamera;
+            Assert.That(cool, Is.Not.Null, "cooling is the first step, before any flat");
+            Assert.That(cool!.Temperature, Is.EqualTo(-10));
+            // Indoors the cooler may not reach a set-point the cold night made easy: a stall must not
+            // cost the flats, so the step keeps the default continue-on-error.
+            Assert.That(cool.ErrorBehavior, Is.EqualTo(InstructionErrorBehavior.ContinueOnError));
+            Assert.That(items.Last(), Is.InstanceOf<WarmCamera>(), "the profile's warm-up at session end follows the flats");
+
+            var blocks = items.OfType<SequentialContainer>().ToList();
+            Assert.That(blocks[0].GetItemsSnapshot().OfType<MoveRotatorMechanical>().Single().MechanicalPosition,
+                Is.EqualTo(212.5f).Within(0.01f), "the modal angle, rounded to 0.1°");
+            Assert.That(blocks[1].GetItemsSnapshot().OfType<MoveRotatorMechanical>().Single().MechanicalPosition,
+                Is.EqualTo(212.5f).Within(0.01f));
+        }
+
+        [Test]
+        public async Task GenerateMatchingFlats_leaves_the_cooler_alone_for_warm_lights_unless_asked() {
+            var store = new FileSequenceService(_dir);
+            var profile = new InMemoryProfileStore();
+            profile.PutImagingDefaults(profile.GetImagingDefaults() with { CoolerTargetC = -15 });
+            var svc = new SqliteCalibrationService(_db, store, profile);
+            await InsertFrameAsync(Session, "light", "Ha", 300, 100, "M42");
+
+            async Task<ICollection<ISequenceItem>> ItemsFor(MatchingFlatsRequestDto request) {
+                var plan = await svc.GenerateMatchingFlatsAsync(Session, request, idempotencyKey: null, CancellationToken.None);
+                return Deserialize((await store.GetAsync(plan.GeneratedSequenceId!.Value, CancellationToken.None))!, "Ha").GetItemsSnapshot();
+            }
+
+            var auto = await ItemsFor(new MatchingFlatsRequestDto(null, null, GenerateOnly: false));
+            Assert.That(auto.OfType<CoolCamera>(), Is.Empty, "lights taken warm → no cooling step");
+            Assert.That(auto.OfType<SequentialContainer>().Single().GetItemsSnapshot().OfType<MoveRotatorMechanical>(), Is.Empty,
+                "no rotator on the lights → no rotate step");
+
+            var asked = await ItemsFor(new MatchingFlatsRequestDto(null, null, GenerateOnly: false, CoolCamera: true));
+            Assert.That(asked.OfType<CoolCamera>().Single().Temperature, Is.EqualTo(-15), "falls back to the profile's cooler target");
+            Assert.That(asked.OfType<WarmCamera>(), Is.Empty, "warm-up follows the profile (off here)");
+
+            var explicitTemp = await ItemsFor(new MatchingFlatsRequestDto(null, null, GenerateOnly: false, CoolToTemperatureC: -7));
+            Assert.That(explicitTemp.OfType<CoolCamera>().Single().Temperature, Is.EqualTo(-7));
+        }
+
+        [Test]
+        public async Task GenerateMatchingFlats_can_skip_cooling_for_cooled_lights() {
+            var store = new FileSequenceService(_dir);
+            var svc = new SqliteCalibrationService(_db, store);
+            await InsertFrameAsync(Session, "light", "Ha", 300, 100, "M42", coolerSetpointC: -10);
+
+            var plan = await svc.GenerateMatchingFlatsAsync(
+                Session, new MatchingFlatsRequestDto(null, null, GenerateOnly: false, CoolCamera: false), idempotencyKey: null, CancellationToken.None);
+            var root = Deserialize((await store.GetAsync(plan.GeneratedSequenceId!.Value, CancellationToken.None))!, "Ha");
+            Assert.That(root.GetItemsSnapshot().OfType<CoolCamera>(), Is.Empty);
+        }
+
+        [Test]
+        public async Task GenerateSkyFlats_cools_before_the_twilight_wait_and_rotates_per_filter() {
+            var store = new FileSequenceService(_dir);
+            var svc = new SqliteCalibrationService(_db, store);
+            await InsertFrameAsync(Session, "light", "Ha", 300, 100, "M42", rotatorDeg: 90, coolerSetpointC: -20);
+
+            var plan = await svc.GenerateMatchingFlatsAsync(
+                Session, new MatchingFlatsRequestDto(null, null, GenerateOnly: false, Flavor: "sky"), idempotencyKey: null, CancellationToken.None);
+            var stored = await store.GetAsync(plan.GeneratedSequenceId!.Value, CancellationToken.None);
+            // Raw body: WaitForSunAltitude needs the NOVAS natives to deserialize (see the sky test above).
+            using var doc = System.Text.Json.JsonDocument.Parse(stored!.Body.GetRawText());
+            var types = doc.RootElement.GetProperty("Items").EnumerateArray()
+                .Select(i => i.GetProperty("$type").GetString()!).ToList();
+            Assert.That(types[0], Does.Contain("CoolCamera"));
+            Assert.That(types[1], Does.Contain("WaitForSunAltitude"));
+            var block = doc.RootElement.GetProperty("Items").EnumerateArray().Single(i => i.TryGetProperty("Items", out _));
+            var rotate = block.GetProperty("Items").EnumerateArray()
+                .Single(i => i.GetProperty("$type").GetString()!.Contains("MoveRotatorMechanical", StringComparison.Ordinal));
+            Assert.That(rotate.GetProperty("MechanicalPosition").GetDouble(), Is.EqualTo(90));
+        }
+
+        [Test]
+        public async Task ListSessions_reports_each_sessions_cooler_setpoint() {
+            var warm = Guid.Parse("33333333-3333-3333-3333-333333333332");
+            await InsertSessionAsync(warm);
+            await InsertFrameAsync(Session, "light", "Ha", 300, 100, "M42", coolerSetpointC: -10);
+            await InsertFrameAsync(warm, "light", "Ha", 300, 100, "M31");
+
+            var page = await _svc.ListSessionsAsync(10, null, CancellationToken.None);
+            Assert.That(page.Items.Single(s => s.Id == Session).CoolerSetpointC, Is.EqualTo(-10));
+            Assert.That(page.Items.Single(s => s.Id == warm).CoolerSetpointC, Is.Null);
+        }
+
+        private static ISequenceContainer Deserialize(SequenceDto stored, params string[] filters) {
+            var profile = new HeadlessProfileService();
+            for (var i = 0; i < filters.Length; i++) {
+                profile.ActiveProfile.FilterWheelSettings.FilterWheelFilters.Add(new OpenAstroAra.Core.Model.Equipment.FilterInfo(filters[i], 0, (short)i));
+            }
+            var factory = HeadlessSequencerFactory.WithDefaults(profileService: profile);
+            return new SequenceJsonConverter(factory).Deserialize(stored.Body.GetRawText());
+        }
+
+        // A park nobody asked for swung a bench mount toward the desk next to it: the user's
+        // answer for this run wins over the profile, and a fresh profile never parks.
+        [Test]
+        public async Task GenerateMatchingFlats_parks_only_when_this_run_asks() {
+            var store = new FileSequenceService(_dir);
+            var profile = new InMemoryProfileStore();
+            var svc = new SqliteCalibrationService(_db, store, profile);
+            await InsertFrameAsync(Session, "light", "Ha", 300, 100, "M42");
+
+            async Task<int> Parks(bool? parkMountAfter) {
+                var plan = await svc.GenerateMatchingFlatsAsync(Session,
+                    new MatchingFlatsRequestDto(null, null, GenerateOnly: false, ParkMountAfter: parkMountAfter),
+                    idempotencyKey: null, CancellationToken.None);
+                return Deserialize((await store.GetAsync(plan.GeneratedSequenceId!.Value, CancellationToken.None))!, "Ha")
+                    .GetItemsSnapshot().OfType<ParkScope>().Count();
+            }
+
+            Assert.That(profile.GetSafetyPolicies().PostFlatParkMount, Is.False, "mount motion is opt-in by default");
+            Assert.That(await Parks(null), Is.Zero);
+            Assert.That(await Parks(true), Is.EqualTo(1));
+
+            profile.PutSafetyPolicies(profile.GetSafetyPolicies() with { PostFlatParkMount = true });
+            Assert.That(await Parks(false), Is.Zero, "the dialog's unticked box beats the end-of-night setting");
+            Assert.That(await Parks(null), Is.EqualTo(1), "end-of-night auto flats follow the setting");
+        }
+
         [Test]
         public async Task GenerateMatchingFlats_without_a_profile_store_omits_the_park() {
             var store = new FileSequenceService(_dir);
@@ -591,16 +1179,19 @@ namespace OpenAstroAra.Test {
             await cmd.ExecuteNonQueryAsync(CancellationToken.None);
         }
 
-        private async Task InsertFrameAsync(Guid sessionId, string frameType, string? filter, int exposureSeconds, int gain, string target, double temperatureC = -10.0, int? offset = null, int? focuserPosition = null, DateTimeOffset? capturedUtc = null) {
+        private async Task InsertFrameAsync(Guid sessionId, string frameType, string? filter, int exposureSeconds, int gain, string target, double temperatureC = -10.0, int? offset = null, int? focuserPosition = null, DateTimeOffset? capturedUtc = null, double? rotatorDeg = null, double? coolerSetpointC = null, int? bin = null) {
             await using var conn = _db.OpenConnection();
             await using var cmd = conn.CreateCommand();
             cmd.CommandText = """
                 INSERT INTO frames (id, session_id, target_name, frame_type, filter_name,
                     exposure_seconds, gain, "offset", focuser_position, temperature_c, captured_utc, file_path,
-                    file_size_bytes, width, height, bit_depth)
+                    file_size_bytes, width, height, bit_depth, rotator_mechanical_deg, cooler_setpoint_c, bin)
                 VALUES ($id, $sid, $target, $type, $filter, $exp, $gain, $offset, $focus, $temp, $utc,
-                    $path, 1000, 16, 16, 16);
+                    $path, 1000, 16, 16, 16, $rot, $setpoint, $bin);
                 """;
+            cmd.Parameters.AddWithValue("$bin", bin is null ? DBNull.Value : bin.Value);
+            cmd.Parameters.AddWithValue("$rot", rotatorDeg is null ? DBNull.Value : rotatorDeg.Value);
+            cmd.Parameters.AddWithValue("$setpoint", coolerSetpointC is null ? DBNull.Value : coolerSetpointC.Value);
             cmd.Parameters.AddWithValue("$offset", offset is null ? DBNull.Value : offset.Value);
             cmd.Parameters.AddWithValue("$focus", focuserPosition is null ? DBNull.Value : focuserPosition.Value);
             cmd.Parameters.AddWithValue("$id", Guid.NewGuid().ToString());

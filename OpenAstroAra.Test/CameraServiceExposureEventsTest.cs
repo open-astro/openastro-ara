@@ -14,6 +14,7 @@
 
 using Moq;
 using NUnit.Framework;
+using OpenAstroAra.Core.Model;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Contracts.WsEvents;
 using OpenAstroAra.Server.Services;
@@ -223,10 +224,12 @@ namespace OpenAstroAra.Test {
             var (hub, faults) = Hub();
             using var svc = await ConnectedAsync(box, ws, hub);
 
-            await Assert.CatchAsync<Exception>(() => svc.CaptureForAnalysisAsync(0.01, 1, CancellationToken.None));
+            // The camera gets one retry before it counts as lost: every attempt is announced and ended.
+            await Assert.CatchAsync<CameraUnavailableException>(() => svc.CaptureForAnalysisAsync(0.01, 1, CancellationToken.None));
             var events = ws.Exposure();
-            Assert.That(events.Select(e => e.Type),
-                Is.EqualTo(new[] { WsEventCatalog.CameraExposureStarted, WsEventCatalog.CameraExposureFailed }));
+            Assert.That(events.Select(e => e.Type), Is.EqualTo(new[] {
+                WsEventCatalog.CameraExposureStarted, WsEventCatalog.CameraExposureFailed,
+                WsEventCatalog.CameraExposureStarted, WsEventCatalog.CameraExposureFailed }));
             Assert.That(events[1].Payload.GetProperty("reason").GetString(), Is.Not.EqualTo("cancelled").And.Not.EqualTo("aborted"));
             lock (faults) {
                 Assert.That(faults.Select(f => f.Kind), Does.Contain(EquipmentFaultKind.OpError));

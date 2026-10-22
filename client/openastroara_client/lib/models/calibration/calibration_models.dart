@@ -12,6 +12,14 @@ class CalibrationSession {
   final bool matchingFlatsAvailable;
   final bool matchingDarksAvailable;
 
+  /// Every (gain, offset, binning) the lights used has bias frames.
+  final bool matchingBiasAvailable;
+
+  /// The cooler set-point most of the lights ran at with the cooler on; null
+  /// when they were taken warm (or before the daemon recorded it). Matching
+  /// flats cool to it.
+  final double? coolerSetpointC;
+
   const CalibrationSession({
     required this.id,
     required this.targetName,
@@ -21,6 +29,8 @@ class CalibrationSession {
     required this.filtersUsed,
     required this.matchingFlatsAvailable,
     required this.matchingDarksAvailable,
+    this.matchingBiasAvailable = false,
+    this.coolerSetpointC,
   });
 
   factory CalibrationSession.fromJson(Map<String, dynamic> json) {
@@ -38,6 +48,8 @@ class CalibrationSession {
           .toList(growable: false),
       matchingFlatsAvailable: json['matching_flats_available'] == true,
       matchingDarksAvailable: json['matching_darks_available'] == true,
+      matchingBiasAvailable: json['matching_bias_available'] == true,
+      coolerSetpointC: (json['cooler_setpoint_c'] as num?)?.toDouble(),
     );
   }
 }
@@ -47,11 +59,25 @@ class CalibrationFilterSummary {
   final int lightFrameCount;
   final double meanExposureSeconds;
 
+  /// Catalogued flats that calibrate this filter's lights: same filter, same
+  /// rotator angle, from any night (0 = this filter needs flats).
+  final int matchingFlatFrames;
+  final DateTime? matchingFlatsNewestUtc;
+
+  /// Why existing flats don't count (another rotator angle), or that the match
+  /// is assumed because an angle wasn't recorded.
+  final String? flatsNote;
+
   const CalibrationFilterSummary({
     required this.filterName,
     required this.lightFrameCount,
     required this.meanExposureSeconds,
+    this.matchingFlatFrames = 0,
+    this.matchingFlatsNewestUtc,
+    this.flatsNote,
   });
+
+  bool get hasFlats => matchingFlatFrames > 0;
 
   factory CalibrationFilterSummary.fromJson(Map<String, dynamic> json) {
     return CalibrationFilterSummary(
@@ -59,6 +85,12 @@ class CalibrationFilterSummary {
       lightFrameCount: (json['light_frame_count'] as num?)?.toInt() ?? 0,
       meanExposureSeconds:
           (json['mean_exposure_seconds'] as num?)?.toDouble() ?? 0,
+      matchingFlatFrames:
+          (json['matching_flat_frames'] as num?)?.toInt() ?? 0,
+      matchingFlatsNewestUtc: DateTime.tryParse(
+        json['matching_flats_newest_utc'] as String? ?? '',
+      ),
+      flatsNote: json['flats_note'] as String?,
     );
   }
 }
@@ -70,10 +102,16 @@ class GeneratedFlatSequence {
   final String generatedSequenceName;
   final int totalFlatFrames;
 
+  /// Bias and dark frames planned after the flats.
+  final int totalBiasFrames;
+  final int totalDarkFrames;
+
   const GeneratedFlatSequence({
     required this.generatedSequenceId,
     required this.generatedSequenceName,
     required this.totalFlatFrames,
+    this.totalBiasFrames = 0,
+    this.totalDarkFrames = 0,
   });
 
   factory GeneratedFlatSequence.fromJson(Map<String, dynamic> json) {
@@ -82,6 +120,8 @@ class GeneratedFlatSequence {
       generatedSequenceId: id is String && id.isNotEmpty ? id : null,
       generatedSequenceName: (json['generated_sequence_name'] as String?) ?? '',
       totalFlatFrames: (json['total_flat_frames'] as num?)?.toInt() ?? 0,
+      totalBiasFrames: (json['total_bias_frames'] as num?)?.toInt() ?? 0,
+      totalDarkFrames: (json['total_dark_frames'] as num?)?.toInt() ?? 0,
     );
   }
 }
@@ -119,6 +159,41 @@ class DarkLibraryEntry {
   }
 }
 
+/// One group of catalogued bias frames: a distinct (gain, offset, binning),
+/// the key bias frames match lights by.
+class BiasLibraryEntry {
+  final String id;
+  final int? gain;
+  final int? offset;
+  final int bin;
+  final int frameCount;
+  final DateTime capturedUtc;
+  final int fileSizeBytes;
+
+  const BiasLibraryEntry({
+    required this.id,
+    required this.gain,
+    required this.offset,
+    required this.bin,
+    required this.frameCount,
+    required this.capturedUtc,
+    required this.fileSizeBytes,
+  });
+
+  factory BiasLibraryEntry.fromJson(Map<String, dynamic> json) {
+    return BiasLibraryEntry(
+      id: (json['id'] as String?) ?? '',
+      gain: (json['gain'] as num?)?.toInt(),
+      offset: (json['offset'] as num?)?.toInt(),
+      bin: (json['bin'] as num?)?.toInt() ?? 1,
+      frameCount: (json['frame_count'] as num?)?.toInt() ?? 0,
+      capturedUtc: DateTime.tryParse(json['captured_utc'] as String? ?? '') ??
+          DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
+      fileSizeBytes: (json['file_size_bytes'] as num?)?.toInt() ?? 0,
+    );
+  }
+}
+
 /// GET `/calibration/dark-library/status`. Coverage semantics per the §39.8
 /// server contract: non-reuse builds count only frames captured since the
 /// build request.
@@ -128,6 +203,7 @@ class DarkLibraryState {
   final int completedCombinations;
   final String? generatedSequenceId;
   final List<DarkLibraryEntry> entries;
+  final List<BiasLibraryEntry> biasEntries;
 
   const DarkLibraryState({
     required this.status,
@@ -135,6 +211,7 @@ class DarkLibraryState {
     required this.completedCombinations,
     required this.generatedSequenceId,
     required this.entries,
+    this.biasEntries = const [],
   });
 
   factory DarkLibraryState.fromJson(Map<String, dynamic> json) {
@@ -148,6 +225,10 @@ class DarkLibraryState {
       entries: ((json['entries'] as List?) ?? const [])
           .whereType<Map<String, dynamic>>()
           .map(DarkLibraryEntry.fromJson)
+          .toList(growable: false),
+      biasEntries: ((json['bias_entries'] as List?) ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .map(BiasLibraryEntry.fromJson)
           .toList(growable: false),
     );
   }

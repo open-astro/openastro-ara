@@ -12,14 +12,32 @@ abstract interface class CalibrationClient {
   Future<CursorPage<CalibrationSession>> listSessions(
       {int limit = 200, String? cursor});
 
+  /// One session; null when the server has no such calibration session.
+  Future<CalibrationSession?> getSession(String sessionId);
+
   /// Generate matching flats for a session. With [generateOnly] false (the
   /// default) the server persists a runnable §38 sequence and the result
-  /// carries its id.
+  /// carries its id. [coolCamera] null cools to the lights' set-point when
+  /// they were cooled; false leaves the cooler alone; true cools to
+  /// [coolToTemperatureC] (else the lights' set-point, else the profile's
+  /// cooler target). [includeBias] / [includeDarks] add bias and dark sets
+  /// after the flats for each combination of the lights that has none yet;
+  /// [pauseForLensCap] opens the panel's cover and waits for the user to put
+  /// the lens cap on before them. [includeFlats] false shoots no flats: a
+  /// bias-and-darks-only run.
   Future<GeneratedFlatSequence> generateMatchingFlats(
     String sessionId, {
     int? frameCount,
     int? targetAdu,
     bool generateOnly = false,
+    bool? coolCamera,
+    double? coolToTemperatureC,
+    bool? parkMountAfter,
+    bool includeCoveredFilters = false,
+    bool includeBias = false,
+    bool includeDarks = false,
+    bool pauseForLensCap = false,
+    bool includeFlats = true,
   });
 
   Future<DarkLibraryState> darkLibraryStatus();
@@ -72,11 +90,35 @@ class CalibrationApi implements CalibrationClient {
   }
 
   @override
+  Future<CalibrationSession?> getSession(String sessionId) async {
+    try {
+      final res = await _dio.get<dynamic>('/api/v1/calibration/sessions/$sessionId');
+      final data = res.data;
+      if (data is! Map<String, dynamic>) {
+        throw FormatException(
+            'calibration session returned an unexpected body (${data.runtimeType})');
+      }
+      return CalibrationSession.fromJson(data);
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 404) return null;
+      rethrow;
+    }
+  }
+
+  @override
   Future<GeneratedFlatSequence> generateMatchingFlats(
     String sessionId, {
     int? frameCount,
     int? targetAdu,
     bool generateOnly = false,
+    bool? coolCamera,
+    double? coolToTemperatureC,
+    bool? parkMountAfter,
+    bool includeCoveredFilters = false,
+    bool includeBias = false,
+    bool includeDarks = false,
+    bool pauseForLensCap = false,
+    bool includeFlats = true,
   }) async {
     final res = await _dio.post<dynamic>(
       '/api/v1/calibration/sessions/$sessionId/matching-flats',
@@ -84,6 +126,14 @@ class CalibrationApi implements CalibrationClient {
         'override_frame_count': frameCount,
         'override_target_adu': targetAdu,
         'generate_only': generateOnly,
+        'cool_camera': ?coolCamera,
+        'cool_to_temperature_c': ?coolToTemperatureC,
+        'park_mount_after': ?parkMountAfter,
+        'include_covered_filters': includeCoveredFilters,
+        'include_bias': includeBias,
+        'include_darks': includeDarks,
+        'pause_for_lens_cap': pauseForLensCap,
+        'include_flats': includeFlats,
       },
     );
     final data = res.data;

@@ -125,8 +125,31 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
     public Task<SequenceRunStateDto?> GetRunStateAsync(Guid id, CancellationToken ct) =>
         Task.FromResult(_runs.TryGetValue(id, out var run) ? run.ToDto(id) : null);
 
-    public Task<OperationAcceptedDto> StartAsync(Guid id, SequenceStartRequestDto request, string? idempotencyKey, CancellationToken ct) =>
-        StartCoreAsync(id, request, idempotencyKey, announceAutoFlats: true);
+    public async Task<OperationAcceptedDto> StartAsync(Guid id, SequenceStartRequestDto request, string? idempotencyKey, CancellationToken ct) {
+        // A generated flats or dark-library run has no lights to calibrate: asking "capture
+        // calibration frames tonight?" about it (and queuing flats of the flats) is the prompt that
+        // met a user retaking flats for an earlier night.
+        var calibrationRun = await IsCalibrationSequenceAsync(id, ct).ConfigureAwait(false);
+        return await StartCoreAsync(id, request, idempotencyKey, announceAutoFlats: !calibrationRun).ConfigureAwait(false);
+    }
+
+    internal const string CalibrationTemplateOriginPrefix = "calibration:";
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Best-effort lookup on the start path: a store fault falls back to the normal prompt (fail toward asking), and the worker's own load reports the real error.")]
+    private async Task<bool> IsCalibrationSequenceAsync(Guid id, CancellationToken ct) {
+        var sequences = _sequencesResolver?.Invoke();
+        if (sequences is null) {
+            return false;
+        }
+        try {
+            var dto = await sequences.GetAsync(id, ct).ConfigureAwait(false);
+            return dto?.TemplateOrigin?.StartsWith(CalibrationTemplateOriginPrefix, StringComparison.Ordinal) == true;
+        } catch (Exception ex) when (ex is not OperationCanceledException) {
+            LogAutoFlatsPolicyReadFailed(ex);
+            return false;
+        }
+    }
 
     // §48 — the auto-started end-of-session flats run must not itself announce
     // (a prompt asking whether to calibrate the calibration run, or a re-tagged

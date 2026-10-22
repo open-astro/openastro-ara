@@ -54,22 +54,22 @@ class EquipmentFlatPanel extends ConsumerWidget {
         ),
         const SettingsSectionHeader('Flat capture'),
         SettingsRow(
-          label: 'Auto-brightness target (ADU)',
+          label: 'Auto-brightness target',
           helpKey: 'eq.flat.auto_brightness_target',
-          value: policies.flatTargetAdu.toString(),
-          hint: 'Edit in Settings → Safety → Policies (flat sets)',
+          value: '${policies.flatTargetPercent.toStringAsFixed(0)}% of the camera\'s range',
+          hint: 'Edit in Settings → Your night → Calibration',
         ),
         SettingsRow(
           label: 'Target tolerance (%)',
           helpKey: 'eq.flat.target_tolerance',
           value: policies.flatTargetAduTolerancePct.toString(),
-          hint: 'Edit in Settings → Safety → Policies (flat sets)',
+          hint: 'Edit in Settings → Your night → Calibration',
         ),
         SettingsRow(
           label: 'Frames per filter',
           helpKey: 'eq.flat.frames_per_filter',
           value: policies.flatFramesPerFilter.toString(),
-          hint: 'Edit in Settings → Safety → Policies (flat sets)',
+          hint: 'Edit in Settings → Your night → Calibration',
         ),
       ],
     );

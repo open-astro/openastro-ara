@@ -44,7 +44,7 @@ String _friendlyDate(DateTime utc) {
 
 /// Image Library per playbook §40 — 12f.2: live over `/api/v1/sessions` +
 /// `/api/v1/frames` (sessions, frame grids, capture-time thumbnails), with
-/// the §39.5 [Capture Matching Flats] flow on every session's overflow menu.
+/// the §39.5 [Capture Calibration Frames] flow on every session's overflow menu.
 /// Photos-style layout: session sections with a lazy thumbnail grid, so
 /// off-screen tiles never fetch their thumbnails.
 class ImageLibraryScreen extends ConsumerWidget {
@@ -519,7 +519,7 @@ class _FilterPill extends StatelessWidget {
 }
 
 /// Section header for one session: title + metadata line on the left, faults
-/// badge and an overflow menu (Capture Matching Flats / Resume Target) on the
+/// badge and an overflow menu (Capture Calibration Frames / Resume Target) on the
 /// right — actions live behind "⋯" instead of a row of link buttons.
 class _SessionHeader extends ConsumerWidget {
   final LibrarySession session;
@@ -584,7 +584,7 @@ class _SessionHeader extends ConsumerWidget {
                   dense: true,
                   contentPadding: EdgeInsets.zero,
                   leading: Icon(Icons.add_photo_alternate_outlined, size: 18),
-                  title: Text('Capture Matching Flats'),
+                  title: Text('Capture Calibration Frames'),
                 ),
               ),
               PopupMenuItem(

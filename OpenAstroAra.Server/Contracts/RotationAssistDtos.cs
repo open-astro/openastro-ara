@@ -57,7 +57,8 @@ public sealed record RotationAssistSampleDto(
 /// <c>confirmed</c> when it sits within the tolerance (the framing is approved), <c>not_confirmed</c> when it
 /// does not (keep adjusting). <c>WithinTolerance</c> is true once the latest
 /// solve sits within the profile's rotation tolerance of the target. The client turns the delta history into
-/// advice relative to the user's last move; the daemon only measures.
+/// advice relative to the user's last move; the daemon only measures. <c>CameraLost</c> marks an
+/// <c>error</c> that is the camera failing, not the sky: <c>Error</c> then says what to check.
 /// </summary>
 public sealed record RotationAssistStatusDto(
     bool Active,
@@ -85,4 +86,5 @@ public sealed record RotationAssistStatusDto(
     int Binning = 1,
     int AutoBinning = 1,
     int MaxBinning = 0,
-    RotationAssistSampleDto? Confirmation = null);
+    RotationAssistSampleDto? Confirmation = null,
+    bool CameraLost = false);

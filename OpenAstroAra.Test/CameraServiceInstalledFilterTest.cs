@@ -95,6 +95,125 @@ namespace OpenAstroAra.Test {
     public class CameraServiceInstalledFilterCaptureTest {
 
         [Test]
+        public async Task A_bias_frame_runs_at_the_cameras_shortest_exposure() {
+            await using var box = ScriptedAlpacaDevice.Start(path =>
+                path.EndsWith("/imageready", StringComparison.Ordinal) ? "true"
+                : path.EndsWith("/exposuremin", StringComparison.Ordinal) ? "0.000032"
+                : path.EndsWith("/imagearray", StringComparison.Ordinal) ? "[[100,200],[300,400]],\"Type\":2,\"Rank\":2"
+                : null);
+            var dir = Directory.CreateTempSubdirectory("ara-bias-").FullName;
+            try {
+                FrameDto? row = null;
+                var frames = new Mock<IFrameRepository>();
+                frames.Setup(f => f.InsertAsync(It.IsAny<FrameDto>(), It.IsAny<CancellationToken>()))
+                    .Callback<FrameDto, CancellationToken>((f, _) => row = f)
+                    .Returns(Task.CompletedTask);
+                using var svc = new CameraService(frames: frames.Object, fallbackFramesDir: dir);
+                await svc.ConnectAsync(new ConnectRequestDto(new DiscoveredDeviceDto(
+                    UniqueId: "Camera-under-test", Name: "Sim Camera", Type: DeviceType.Camera,
+                    HostName: box.BaseUri.Host, IpAddress: box.BaseUri.Host, IpPort: box.BaseUri.Port,
+                    AlpacaDeviceNumber: 0, UseHttps: false)), null, CancellationToken.None);
+                var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(15);
+                while ((await svc.GetAsync(CancellationToken.None)) is not { State: EquipmentConnectionState.Connected, Capabilities: not null }) {
+                    Assert.That(DateTime.UtcNow, Is.LessThan(deadline), "camera never connected");
+                    await Task.Delay(50);
+                }
+
+                await svc.CaptureImage(new CaptureSequence { ExposureTime = 0.001, ImageType = "BIAS" },
+                    CancellationToken.None, null, "Flats");
+
+                Assert.That(row, Is.Not.Null, "the frame was catalogued");
+                Assert.That(row!.FrameType, Is.EqualTo(FrameType.Bias));
+                Assert.That(row.ExposureSeconds, Is.EqualTo(0.000032), "the step's 1 ms placeholder gives way to ExposureMin");
+            } finally {
+                Directory.Delete(dir, recursive: true);
+            }
+        }
+
+        [Test]
+        public async Task A_driver_without_ExposureMin_is_asked_once_not_on_every_bias_frame() {
+            var minReads = 0;
+            await using var box = ScriptedAlpacaDevice.Start(path => {
+                if (path.EndsWith("/exposuremin", StringComparison.Ordinal)) {
+                    Interlocked.Increment(ref minReads);
+                    return ScriptedAlpacaDevice.Error("Property ExposureMin is not implemented");
+                }
+                return path.EndsWith("/imageready", StringComparison.Ordinal) ? "true"
+                    : path.EndsWith("/imagearray", StringComparison.Ordinal) ? "[[100,200],[300,400]],\"Type\":2,\"Rank\":2"
+                    : null;
+            });
+            var dir = Directory.CreateTempSubdirectory("ara-bias-").FullName;
+            try {
+                using var svc = new CameraService(frames: new Mock<IFrameRepository>().Object, fallbackFramesDir: dir);
+                await svc.ConnectAsync(new ConnectRequestDto(new DiscoveredDeviceDto(
+                    UniqueId: "Camera-under-test", Name: "Sim Camera", Type: DeviceType.Camera,
+                    HostName: box.BaseUri.Host, IpAddress: box.BaseUri.Host, IpPort: box.BaseUri.Port,
+                    AlpacaDeviceNumber: 0, UseHttps: false)), null, CancellationToken.None);
+                var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(15);
+                while ((await svc.GetAsync(CancellationToken.None)) is not { State: EquipmentConnectionState.Connected, Capabilities: not null }) {
+                    Assert.That(DateTime.UtcNow, Is.LessThan(deadline), "camera never connected");
+                    await Task.Delay(50);
+                }
+                var atConnect = Volatile.Read(ref minReads);
+
+                for (var n = 0; n < 3; n++) {
+                    await svc.CaptureImage(new CaptureSequence { ExposureTime = 0.001, ImageType = "BIAS" },
+                        CancellationToken.None, null, "M42");
+                }
+
+                Assert.That(Volatile.Read(ref minReads) - atConnect, Is.LessThanOrEqualTo(1),
+                    "one read per connection, not a bridge round-trip per bias frame");
+            } finally {
+                Directory.Delete(dir, recursive: true);
+            }
+        }
+
+        [Test]
+        public async Task A_saved_frame_takes_the_cooler_state_from_the_cache_not_the_bridge() {
+            var log = new System.Collections.Concurrent.ConcurrentQueue<string>();
+            await using var box = ScriptedAlpacaDevice.Start(path => {
+                log.Enqueue(path[(path.LastIndexOf('/') + 1)..]);
+                return path.EndsWith("/cooleron", StringComparison.Ordinal) ? "true"
+                    : path.EndsWith("/setccdtemperature", StringComparison.Ordinal) ? "-10"
+                    : path.EndsWith("/imageready", StringComparison.Ordinal) ? "true"
+                    : path.EndsWith("/imagearray", StringComparison.Ordinal) ? "[[100,200],[300,400]],\"Type\":2,\"Rank\":2"
+                    : null;
+            });
+            var dir = Directory.CreateTempSubdirectory("ara-cooler-").FullName;
+            try {
+                FrameDto? row = null;
+                var frames = new Mock<IFrameRepository>();
+                frames.Setup(f => f.InsertAsync(It.IsAny<FrameDto>(), It.IsAny<CancellationToken>()))
+                    .Callback<FrameDto, CancellationToken>((f, _) => row = f)
+                    .Returns(Task.CompletedTask);
+                // The background refresh stays out of the way; the connect's own read fills the cache.
+                using var svc = new CameraService(frames: frames.Object, fallbackFramesDir: dir) { RefreshPeriod = TimeSpan.FromHours(1) };
+                await svc.ConnectAsync(new ConnectRequestDto(new DiscoveredDeviceDto(
+                    UniqueId: "Camera-under-test", Name: "Sim Camera", Type: DeviceType.Camera,
+                    HostName: box.BaseUri.Host, IpAddress: box.BaseUri.Host, IpPort: box.BaseUri.Port,
+                    AlpacaDeviceNumber: 0, UseHttps: false)), null, CancellationToken.None);
+                var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(15);
+                while ((await svc.GetAsync(CancellationToken.None)) is not { State: EquipmentConnectionState.Connected, Capabilities: not null, Runtime.CoolerOn: true }) {
+                    Assert.That(DateTime.UtcNow, Is.LessThan(deadline), "camera never connected with its cooler state read");
+                    await Task.Delay(50);
+                }
+                log.Clear();
+
+                await svc.CaptureImage(new CaptureSequence { ExposureTime = 0.01, ImageType = "LIGHT" },
+                    CancellationToken.None, null, "M42");
+
+                Assert.That(row!.CoolerSetpointC, Is.EqualTo(-10), "the frame still records the set-point it ran at");
+                // The frame's own metadata reads (after the binning read-back) are the sensor
+                // temperature and set-point only; the status refresh reads CoolerOn on its own cadence.
+                Assert.That(string.Join(" ", log), Does.Contain("biny ccdtemperature setccdtemperature")
+                    .And.Not.Contain("biny ccdtemperature setccdtemperature cooleron"),
+                    "no CoolerOn round-trip to the bridge for each saved frame");
+            } finally {
+                Directory.Delete(dir, recursive: true);
+            }
+        }
+
+        [Test]
         public async Task A_sequence_frame_records_the_installed_filter() {
             await using var box = ScriptedAlpacaDevice.Start(path =>
                 path.EndsWith("/imageready", StringComparison.Ordinal) ? "true"
@@ -130,6 +249,12 @@ namespace OpenAstroAra.Test {
                 Assert.That(row!.FilterName, Is.EqualTo("Ha"));
                 var header = Encoding.ASCII.GetString(await File.ReadAllBytesAsync(row.FilePath));
                 Assert.That(header, Does.Match(@"FILTER  = 'Ha\s*'"));
+
+                // Darks and bias don't depend on the filter: the wheel's position isn't recorded.
+                await svc.CaptureImage(new CaptureSequence { ExposureTime = 0.01, ImageType = "DARK" },
+                    CancellationToken.None, null, "M42");
+                Assert.That(row!.FrameType, Is.EqualTo(FrameType.Dark));
+                Assert.That(row.FilterName, Is.Null);
             } finally {
                 Directory.Delete(dir, recursive: true);
             }

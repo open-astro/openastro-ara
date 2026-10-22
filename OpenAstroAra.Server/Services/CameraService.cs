@@ -18,6 +18,7 @@ using ASCOM.Common.DeviceInterfaces;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using OpenAstroAra.Equipment.Equipment.MyFocuser;
+using OpenAstroAra.Equipment.Equipment.MyRotator;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Fits;
 using OpenAstroAra.Image.ImageAnalysis;
@@ -115,6 +116,24 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
     private int _refreshPending;
     private long _connectGeneration;
     private int _captureInFlight;
+
+    // Device failures in a row (a stalled exposure, a driver error, the camera vanishing
+    // mid-exposure); any exposure that downloads resets it. Sequencer captures retry the first
+    // failure and report the camera lost on the second (CameraUnavailableException).
+    private int _deviceFailures;
+    internal const int DeviceFailuresBeforeLost = 2;
+    internal int DeviceFailureCount => Volatile.Read(ref _deviceFailures);
+
+    /// <summary>Whether the connected camera can regulate its temperature; null when no camera is
+    /// connected or its capabilities aren't read yet.</summary>
+    internal bool? CanSetTemperatureNow {
+        get {
+            lock (_gate) {
+                return _state == EquipmentConnectionState.Connected ? _capabilities?.CanSetTemperature : null;
+            }
+        }
+    }
+    private void NoteDeviceFailure() => Interlocked.Increment(ref _deviceFailures);
     // Set around the blocking ImageArray transfer: serializing Alpaca bridges queue every request
     // behind the download, so timer refreshes would stall for the whole window — skip them instead
     // (exposure progress still updates: the ImageReady poll loop refreshes every tick).
@@ -136,8 +155,10 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
         Func<ITelescopeMediator?>? telescope = null,
         Func<IFilterWheelMediator?>? filterWheel = null,
         IFrameQualitySink? frameQuality = null,
-        ISavedLightSink? savedLights = null) {
+        ISavedLightSink? savedLights = null,
+        Func<IRotatorMediator?>? rotator = null) {
         _logger = logger ?? NullLogger<CameraService>.Instance;
+        _rotator = rotator;
         _frameQuality = frameQuality;
         _savedLights = savedLights;
         _fan = fan;
@@ -184,6 +205,9 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
     // without this FILTER, the catalog row and the {filter} filename token stay empty on every
     // wheel. Func<>: the filter-wheel mediator is registered after this service in Program.cs.
     private readonly Func<IFilterWheelMediator?>? _filterWheel;
+    // The rotator's mechanical angle at capture, for the ROTATOR card and the catalog — matching
+    // flats turn the camera back to it. Func<>: the rotator mediator is registered after this service.
+    private readonly Func<IRotatorMediator?>? _rotator;
 
     /// <summary>A frame's pointing as written to its header, with the epoch the numbers are in:
     /// J2000 when the transform succeeded, else the mount's native epoch (see
@@ -253,6 +277,28 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
             return null;
         }
     }
+
+    // Snapshotted after readout like the focuser: the rotator does not move during an exposure.
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Recording rotator angle is best-effort metadata; a mediator/transport fault must not fail a capture whose image is already downloaded. Log-and-recover boundary.")]
+    private double? ReadRotatorMechanical() {
+        try {
+            return RotatorMechanicalFrom(_rotator?.Invoke()?.GetInfo());
+        } catch (Exception ex) {
+            LogRotatorSnapshotFailed(ex);
+            return null;
+        }
+    }
+
+    // Null when no rotator is connected, so ROTATOR is omitted and the catalog column stays null.
+    internal static double? RotatorMechanicalFrom(RotatorInfo? info) =>
+        info is { Connected: true } && float.IsFinite(info.MechanicalPosition) ? info.MechanicalPosition : null;
+
+    // The set-point the cooler was regulating to, or null when it was off (or there is none):
+    // SetCCDTemperature still reads back the last target with the cooler off, and flats must
+    // not cool a camera whose lights were taken warm.
+    internal static double? CoolerSetpointFrom(bool? coolerOn, double? setPoint) =>
+        coolerOn == true && setPoint is double sp && double.IsFinite(sp) ? sp : null;
 
     // §38: the connected focuser's step position at capture, for the §50.4
     // focus-vs-temperature view. Null when no focuser is connected (or absent),
@@ -666,6 +712,10 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
         }
     }
 
+    private static bool IsFilterIndependent(string imageType) =>
+        string.Equals(imageType, OpenAstroAra.Equipment.Model.ImageTypes.BIAS, StringComparison.OrdinalIgnoreCase)
+        || string.Equals(imageType, OpenAstroAra.Equipment.Model.ImageTypes.DARK, StringComparison.OrdinalIgnoreCase);
+
     /// <summary>
     /// The request with its filter filled from the connected wheel when it names none. A named
     /// filter is kept: it is what the caller drove the wheel to. A disconnected wheel or one
@@ -719,6 +769,7 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
             if (announced) {
                 _events?.ExposureFailed(frameId, kind, ex.Message);
             }
+            NoteDeviceFailure();
             PublishOpFault(client, EquipmentFaultKind.OpError,
                 $"capture of frame {frameId} failed: {ex.Message}");
             throw;
@@ -760,6 +811,7 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
         }
         switch (ready) {
             case ImageWait.Lost:
+                NoteDeviceFailure();
                 LogCaptureAbandonedDisconnect(frameId); // disconnect/supersede, NOT a device timeout
                 _events?.ExposureFailed(frameId, kind, "camera disconnected or superseded during the exposure");
                 return null;
@@ -769,6 +821,7 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
                 _events?.ExposureFailed(frameId, kind, "aborted");
                 return null;
             case ImageWait.Timeout:
+                NoteDeviceFailure();
                 LogCaptureFailedNotReady(frameId, request.ExposureSec);
                 _events?.ExposureFailed(frameId, kind, "camera never signaled ImageReady within the wait bound");
                 PublishOpFault(client, EquipmentFaultKind.StallTimeout,
@@ -830,6 +883,7 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
         LogCaptureDeviceTiming(frameId, settingsMs, exposeMs, downloadMs);
         _events?.ExposureComplete(frameId, request.ExposureSec, capturedAt, kind, exposeMs + downloadMs);
         RefreshCacheOnce();
+        Interlocked.Exchange(ref _deviceFailures, 0);
         return (pixels, width, height, capturedAt);
     }
 
@@ -855,7 +909,7 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
     /// </summary>
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Catalog-registration boundary: any DB failure after a successful FITS write degrades to an Error log naming the recoverable file (the §28.8 startup scan re-registers it) rather than faulting the capture worker. CA1031's log-and-recover boundary applies.")]
-    private async Task<bool> CaptureCoreAsync(AlpacaCamera client, Guid frameId, ExposureRequestDto request, string imageType, FrameType frameType, string targetName, CancellationToken ct) {
+    private async Task<bool> CaptureCoreAsync(AlpacaCamera client, Guid frameId, ExposureRequestDto request, string imageType, FrameType frameType, string targetName, CancellationToken ct, DateOnly? night = null) {
         // §29 — per-frame pre-capture free-space check: the disk monitor polls every 60 s, and a
         // burst of large frames can fill the volume between ticks. Blocks BEFORE the shutter
         // opens (an exposure that can't be saved is wasted sky time) — but only when the volume
@@ -878,7 +932,11 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
             LogPreCaptureStoreEjected(frameId, ejectedDir);
             return false;
         }
-        request = WithInstalledFilter(request);
+        // Bias and darks don't depend on the filter: recording the wheel's position just labels them
+        // with whatever filter it happened to be sitting on.
+        if (!IsFilterIndependent(imageType)) {
+            request = WithInstalledFilter(request);
+        }
         var exposed = await ExposeAndDownloadAsync(client, frameId, request, imageType.ToLowerInvariant(), ct).ConfigureAwait(false);
         if (exposed is null) {
             return false; // abandoned (disconnect/supersede) or not-ready — already logged
@@ -890,18 +948,25 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
         // enforcement), and XBINNING/GAIN feed plate-solving + calibration matching.
         var applied = ReadAppliedSettings(client, request);
         var focuserPos = ReadFocuserPosition();
+        var rotatorDeg = ReadRotatorMechanical();
         var pointing = ReadPointing();
         double? sensorTemp = null, tempSetPoint = null;
+        bool? coolerOn = null;
         try { sensorTemp = client.CCDTemperature; } catch (Exception) { }
         try { tempSetPoint = client.SetCCDTemperature; } catch (Exception) { }
+        // The cooler state the refresh pass already keeps: not a third bridge round-trip per frame.
+        lock (_gate) {
+            coolerOn = _runtime.CoolerStateKnown ? _runtime.CoolerOn : null;
+        }
         var conditions = await ReadConditionsBestEffortAsync(ct).ConfigureAwait(false);
         var storeTiming = System.Diagnostics.Stopwatch.StartNew();
         var filePath = WriteFits(frameId, pixels, width, height, applied, imageType, capturedAt, focuserPos,
             targetName: targetName, sensorTemp: sensorTemp, tempSetPoint: tempSetPoint, conditions: conditions,
-            pointing: pointing);
+            pointing: pointing, rotatorMechanicalDeg: rotatorDeg, night: night);
         var writeMs = storeTiming.ElapsedMilliseconds;
         try {
-            await RegisterFrameAsync(frameId, request, frameType, targetName, capturedAt, filePath, width, height, focuserPos, appliedBin: applied.BinX).ConfigureAwait(false);
+            await RegisterFrameAsync(frameId, request, frameType, targetName, capturedAt, filePath, width, height, focuserPos, appliedBin: applied.BinX,
+                rotatorMechanicalDeg: rotatorDeg, coolerSetpointC: CoolerSetpointFrom(coolerOn, tempSetPoint)).ConfigureAwait(false);
         } catch (Exception ex) {
             // The FITS is on disk but invisible to the catalog; name the path so an operator can
             // recover it — and the §28.8 startup orphan scan re-registers it on the next boot.
@@ -1250,14 +1315,14 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
         return request with { BinX = binX, BinY = binY, Gain = gain, CameraOffset = cameraOffset };
     }
 
-    private string WriteFits(Guid frameId, ushort[] pixels, int width, int height, ExposureRequestDto request, string imageType, DateTimeOffset capturedAt, int? focuserPosition = null, string? targetName = null, double? sensorTemp = null, double? tempSetPoint = null, ObservingConditionsDto? conditions = null, FramePointing? pointing = null) {
+    private string WriteFits(Guid frameId, ushort[] pixels, int width, int height, ExposureRequestDto request, string imageType, DateTimeOffset capturedAt, int? focuserPosition = null, string? targetName = null, double? sensorTemp = null, double? tempSetPoint = null, ObservingConditionsDto? conditions = null, FramePointing? pointing = null, double? rotatorMechanicalDeg = null, DateOnly? night = null) {
         var dir = ResolveFramesDir();
         Directory.CreateDirectory(dir);
         // §29.2 — name the file the way the profile's template says, so what
         // lands on disk reads as the user's night ("2026-08-03/Light/…_L_180s.fits"),
         // not a directory of UUIDs. Any failure in naming falls back to the
         // id-based name: naming must never cost a frame.
-        var path = ResolveTemplatedPath(dir, frameId, request, imageType, capturedAt, targetName, sensorTemp);
+        var path = ResolveTemplatedPath(dir, frameId, request, imageType, capturedAt, targetName, sensorTemp, night);
         using var fits = FitsImage.Create(path, width, height, FitsBitDepth.UnsignedShort);
         fits.WriteImageData(pixels);
         // FITS convention + case-sensitive calibration matchers/plate-solvers want an uppercase
@@ -1280,6 +1345,9 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
         // focus-vs-temperature view; the §28.8 scanner reads it back as FOCUSPOS.
         if (focuserPosition is int focPos) {
             fits.SetHeader("FOCUSPOS", focPos, "focuser position (steps)");
+        }
+        if (rotatorMechanicalDeg is double rotDeg) {
+            fits.SetHeader("ROTATOR", rotDeg, "rotator mechanical position (deg)");
         }
         // OSC sensors: record the Bayer pattern so downstream stackers (and ARA's §65 color preview)
         // can debayer the raw mosaic. The effective pattern is at the origin, so the offsets are 0.
@@ -1632,7 +1700,7 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
     /// </summary>
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Naming is best-effort by §29.2: any IO/template fault degrades to the id-based filename rather than costing the frame. The falling-back log preserves the cause.")]
-    internal string ResolveTemplatedPath(string rootDir, Guid frameId, ExposureRequestDto request, string imageType, DateTimeOffset capturedAt, string? targetName, double? sensorTemp) {
+    internal string ResolveTemplatedPath(string rootDir, Guid frameId, ExposureRequestDto request, string imageType, DateTimeOffset capturedAt, string? targetName, double? sensorTemp, DateOnly? night = null) {
         var fallback = Path.Combine(rootDir, $"{frameId}.fits");
         try {
             var template = _profileStore?.GetStorageSettings().FilenameTemplate;
@@ -1648,7 +1716,8 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
                 SensorTemp: sensorTemp,
                 TargetName: string.IsNullOrWhiteSpace(targetName) || targetName == "Manual capture"
                     ? null : targetName,
-                FrameNumber: NextFrameNumber(rootDir)));
+                FrameNumber: NextFrameNumber(rootDir),
+                Night: night));
             if (relative is null) return fallback;
 
             var candidate = Path.Combine(rootDir, relative + ".fits");
@@ -1713,7 +1782,7 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
     // appliedBin: the binning the driver ACTUALLY used (read back after the exposure, like XBINNING in
     // the header), not the requested one — a driver can coerce a 2 to 1, and the #1140 pixel scale
     // must follow the frame. Null = no read-back available (the request's value is the best we have).
-    internal async Task RegisterFrameAsync(Guid frameId, ExposureRequestDto request, FrameType frameType, string targetName, DateTimeOffset capturedAt, string filePath, int width, int height, int? focuserPosition = null, int? appliedBin = null) {
+    internal async Task RegisterFrameAsync(Guid frameId, ExposureRequestDto request, FrameType frameType, string targetName, DateTimeOffset capturedAt, string filePath, int width, int height, int? focuserPosition = null, int? appliedBin = null, double? rotatorMechanicalDeg = null, double? coolerSetpointC = null) {
         // §40/§50 — a capture that runs INSIDE a sequence run carries the run's
         // catalog session via the ambient CaptureSessionScope (AsyncLocal set by
         // the run worker); everything else — the REST snapshot path — falls back
@@ -1748,7 +1817,9 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
             Rating: 0,
             Tags: Array.Empty<string>(),
             FocuserPosition: focuserPosition,
-            Bin: appliedBin ?? request.BinX), CancellationToken.None).ConfigureAwait(false);
+            Bin: appliedBin ?? request.BinX,
+            RotatorMechanicalDeg: rotatorMechanicalDeg,
+            CoolerSetpointC: coolerSetpointC), CancellationToken.None).ConfigureAwait(false);
     }
 
     // ── §32.4 cache (single-flight with coalescing, mirrors TelescopeService) ────────────────────
@@ -2095,6 +2166,8 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
         try { offsets = NamesOrNull(c.Offsets); } catch (Exception) { }
         double exposureResolution = 0;
         try { exposureResolution = c.ExposureResolution; } catch (Exception) { }
+        int maxAdu = 0;
+        try { maxAdu = c.MaxADU; } catch (Exception) { }
         return new CameraCapabilitiesDto(
             SensorWidth: w, SensorHeight: h, PixelSizeUm: pixelSize,
             CanSetTemperature: canSetTemp, CanAbortExposure: canAbort, CanGetCoolerPower: canCoolerPower,
@@ -2114,7 +2187,8 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
             HasShutter: hasShutter,
             Gains: gains,
             Offsets: offsets,
-            ExposureResolutionSec: exposureResolution);
+            ExposureResolutionSec: exposureResolution,
+            MaxAdu: maxAdu);
     }
 
     // RGGB native + ASCOM BayerOffsetX/Y → the effective 2×2 pattern at the image (0,0) origin,
@@ -2374,6 +2448,9 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Focuser position snapshot failed; recording the frame without a focuser position")]
     private partial void LogFocuserSnapshotFailed(Exception ex);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Rotator position snapshot failed; recording the frame without a rotator angle")]
+    private partial void LogRotatorSnapshotFailed(Exception ex);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Mount pointing snapshot failed; recording the frame without RA/Dec")]
     private partial void LogPointingSnapshotFailed(Exception ex);

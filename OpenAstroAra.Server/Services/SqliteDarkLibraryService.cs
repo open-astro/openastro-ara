@@ -174,6 +174,7 @@ public sealed class SqliteDarkLibraryService : IDarkLibraryService, IDisposable 
 
     public async Task<DarkLibraryStateDto> GetStatusAsync(CancellationToken ct) {
         var entries = await ListEntriesAsync(ct);
+        var biasEntries = await ListBiasEntriesAsync(ct);
 
         BuildRecord? build;
         lock (_gate) {
@@ -191,7 +192,8 @@ public sealed class SqliteDarkLibraryService : IDarkLibraryService, IDisposable 
                 BuildCompletedUtc: null,
                 FailureReason: null,
                 Entries: entries,
-                GeneratedSequenceId: null);
+                GeneratedSequenceId: null,
+                BiasEntries: biasEntries);
         }
 
         var completed = 0;
@@ -235,7 +237,8 @@ public sealed class SqliteDarkLibraryService : IDarkLibraryService, IDisposable 
             BuildCompletedUtc: completedUtc,
             FailureReason: null,
             Entries: entries,
-            GeneratedSequenceId: build.GeneratedSequenceId);
+            GeneratedSequenceId: build.GeneratedSequenceId,
+            BiasEntries: biasEntries);
     }
 
     public async Task<IReadOnlyList<DarkLibraryEntryDto>> ListEntriesAsync(CancellationToken ct) {
@@ -281,6 +284,38 @@ public sealed class SqliteDarkLibraryService : IDarkLibraryService, IDisposable 
                 CapturedUtc: ParseUtc(reader.GetString(4)),
                 FilePath: await reader.IsDBNullAsync(6, ct) ? string.Empty : reader.GetString(6),
                 FileSizeBytes: reader.GetInt64(5)));
+        }
+        return entries;
+    }
+
+    /// <summary>The catalogued BIAS frames grouped by (gain, offset, binning) — the key
+    /// <see cref="SqliteCalibrationService"/> matches bias frames to lights by (a row from before
+    /// binning was recorded counts as 1×1).</summary>
+    public async Task<IReadOnlyList<BiasLibraryEntryDto>> ListBiasEntriesAsync(CancellationToken ct) {
+        var entries = new List<BiasLibraryEntryDto>();
+        await using var conn = _db.OpenConnection();
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = """
+            SELECT gain, "offset", COALESCE(bin, 1) AS b, COUNT(*), MAX(captured_utc), SUM(file_size_bytes)
+            FROM frames
+            WHERE frame_type = 'bias'
+            GROUP BY gain, "offset", b
+            ORDER BY gain, "offset", b;
+            """;
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct)) {
+            var gain = await reader.IsDBNullAsync(0, ct) ? (int?)null : reader.GetInt32(0);
+            var offset = await reader.IsDBNullAsync(1, ct) ? (int?)null : reader.GetInt32(1);
+            var bin = reader.GetInt32(2);
+            var key = string.Create(CultureInfo.InvariantCulture, $"bias|{gain?.ToString(CultureInfo.InvariantCulture) ?? "null"}|{offset?.ToString(CultureInfo.InvariantCulture) ?? "null"}|{bin}");
+            entries.Add(new BiasLibraryEntryDto(
+                Id: new Guid(SHA256.HashData(Encoding.UTF8.GetBytes(key)).AsSpan(0, 16)),
+                Gain: gain,
+                Offset: offset,
+                Bin: bin,
+                FrameCount: reader.GetInt32(3),
+                CapturedUtc: ParseUtc(reader.GetString(4)),
+                FileSizeBytes: await reader.IsDBNullAsync(5, ct) ? 0 : reader.GetInt64(5)));
         }
         return entries;
     }

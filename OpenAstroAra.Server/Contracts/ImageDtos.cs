@@ -76,7 +76,13 @@ public sealed record FrameDto(
     double? BackgroundAdu = null,
     double? MedianAdu = null,
     // #1140 P2 — the binning at capture (null for rows older than the column).
-    int? Bin = null);
+    int? Bin = null,
+    // The rotator's mechanical angle at capture (null = no rotator connected), so matching
+    // flats can turn the camera back to where the lights were taken.
+    double? RotatorMechanicalDeg = null,
+    // The cooler set-point the frame was taken at (null = cooler off or no cooler), so matching
+    // flats can cool to the lights' temperature.
+    double? CoolerSetpointC = null);
 
 /// <summary>List item used by /api/v1/frames (paginated). Excludes the heavy quality breakdown.</summary>
 public sealed record FrameListItemDto(
@@ -203,10 +209,13 @@ public sealed record BulkMoveRequestDto(
 public sealed record BulkExportRequestDto(
     IReadOnlyList<Guid> FrameIds);
 
-/// <summary>POST /api/v1/frames/bulk/delete body per §40.8.</summary>
+/// <summary>POST /api/v1/frames/bulk/delete body per §40.8. A delete always removes the FITS
+/// and its sidecars from disk: a catalog-only delete left the file behind and the §28.8 startup
+/// orphan scan put it back in the library. <c>DeleteFromDisk</c> is deprecated and ignored
+/// (#1437); it stays so older clients that send it keep working.</summary>
 public sealed record BulkDeleteRequestDto(
     IReadOnlyList<Guid> FrameIds,
-    bool DeleteFromDisk);
+    bool DeleteFromDisk = true);
 
 /// <summary>HFR drift analysis result per §40.7 / §51.</summary>
 public sealed record HfrAnalysisDto(
