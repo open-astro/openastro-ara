@@ -115,7 +115,7 @@ public sealed partial class EquipmentReconnector : IEquipmentReconnector {
         if (moved is null) {
             return null;
         }
-        LogMovedToLocalhost(device.Type, device.Name, device.IpAddress);
+        LogMovedToLocalhost(device.Type, device.Name, device.UniqueId, device.IpAddress);
         // A switch is remembered per endpoint: the old address's entry goes (only that one; another
         // server's switch may share a serial-less UniqueId) or boot dials it too.
         await _store.RelocateAsync(device, moved, ct).ConfigureAwait(false);
@@ -252,8 +252,8 @@ public sealed partial class EquipmentReconnector : IEquipmentReconnector {
     private static bool SameGroup(DeviceType a, DeviceType b) => a.Canonical() == b.Canonical();
 
     [LoggerMessage(Level = LogLevel.Information,
-        Message = "{DeviceType} '{DeviceName}' was saved under {OldAddress}, which no longer serves it; this box's own Alpaca server does, so it is dialled and saved as localhost")]
-    private partial void LogMovedToLocalhost(DeviceType deviceType, string deviceName, string oldAddress);
+        Message = "{DeviceType} '{DeviceName}' ({UniqueId}) was saved under {OldAddress}, which no longer serves it; this box's own Alpaca server lists the same UniqueID, so it is dialled and saved as localhost (re-pick it in the client if it belongs to another rig)")]
+    private partial void LogMovedToLocalhost(DeviceType deviceType, string deviceName, string uniqueId, string oldAddress);
 
     [LoggerMessage(Level = LogLevel.Warning,
         Message = "Reconnect dispatch for {DeviceType} '{DeviceName}' failed; the other remembered devices still get their turn.")]
