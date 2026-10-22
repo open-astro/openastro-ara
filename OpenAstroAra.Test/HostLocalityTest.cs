@@ -65,6 +65,13 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void A_namesake_at_another_address_is_another_machine() {
+            // A second Pi with this box's name: reverse DNS names it like us, its address says otherwise.
+            var namesake = Device("openastro.lan", "192.168.1.50");
+            Assert.That(HostLocality.LocalizeDevice(namesake, ThisBox), Is.SameAs(namesake));
+        }
+
+        [Test]
         public void A_device_on_another_machine_is_untouched() {
             var remote = Device("rc91.lan", "192.168.1.235");
             Assert.That(HostLocality.LocalizeDevice(remote, ThisBox), Is.SameAs(remote));
@@ -115,13 +122,11 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public async Task A_bridge_that_renamed_its_unique_id_still_matches_by_name() {
-            // AlpacaBridge 5 renamed the ZWO dew heater's id; the saved record carries the old one.
-            var alpaca = new FakeAlpaca(new() { ["127.0.0.1"] = LocalBridge(id: "ZWO_DEW_1", name: "ZWO EAF") });
+        public async Task A_name_alone_is_not_the_same_device() {
+            // The saved server may only be switched off, and driver names repeat on every rig.
+            var alpaca = new FakeAlpaca(new() { ["127.0.0.1"] = LocalBridge(id: "ZWO_EAF_OTHER", name: "ZWO EAF") });
 
-            var moved = await HostLocality.FindOnLocalServerAsync(Focuser("192.168.8.118", id: "ZWO_DEW_SN_2e18"), alpaca, CancellationToken.None, AtHome);
-
-            Assert.That(moved?.UniqueId, Is.EqualTo("ZWO_DEW_1"), "the local server's id is carried forward");
+            Assert.That(await HostLocality.FindOnLocalServerAsync(Focuser("192.168.8.118"), alpaca, CancellationToken.None, AtHome), Is.Null);
         }
 
         [Test]

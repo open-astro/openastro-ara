@@ -73,20 +73,21 @@ public sealed partial class EquipmentSelectionStore : IEquipmentSelectionStore, 
     private readonly SemaphoreSlim _gate = new(1, 1);
 
     // "Is this address this machine?" — injectable so the store's localhost rule is testable on any box.
-    private readonly Func<string?, bool> _isThisMachine;
+    // Null: the real machine, its name and addresses read once per store operation.
+    private readonly Func<string?, bool>? _isThisMachine;
 
     public EquipmentSelectionStore(string profileDir, ILogger<EquipmentSelectionStore> logger, Func<string?, bool>? isThisMachine = null) {
         ArgumentException.ThrowIfNullOrEmpty(profileDir);
         _path = Path.Combine(profileDir, FileName);
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        _isThisMachine = isThisMachine ?? HostLocality.IsThisMachine;
+        _isThisMachine = isThisMachine;
     }
 
     public async Task RememberAsync(DiscoveredDeviceDto device, CancellationToken ct) {
         ArgumentNullException.ThrowIfNull(device);
         // A device on this machine's own Alpaca server is remembered as localhost: the one address
         // that survives a move between the hotspot, the field router and the home LAN.
-        device = HostLocality.LocalizeDevice(device, _isThisMachine);
+        device = HostLocality.LocalizeDevice(device, _isThisMachine ?? HostLocality.ThisMachineSnapshot());
         await _gate.WaitAsync(ct).ConfigureAwait(false);
         // Atomic replace: write a temp sibling then move over the target so a
         // crash mid-write can never leave a half-written selection file.
@@ -257,8 +258,9 @@ public sealed partial class EquipmentSelectionStore : IEquipmentSelectionStore, 
             // entry naming one of this machine's addresses is dialled as localhost from now on.
             // A switch is keyed by its endpoint, so a localized entry moves to its localhost key; one already
             // there wins, and the old-address key is dropped so no writer can carry the same switch twice.
+            var isThisMachine = _isThisMachine ?? HostLocality.ThisMachineSnapshot();
             foreach (var key in map.Keys.ToList()) {
-                var local = HostLocality.LocalizeDevice(map[key], _isThisMachine);
+                var local = HostLocality.LocalizeDevice(map[key], isThisMachine);
                 if (ReferenceEquals(local, map[key])) {
                     continue;
                 }

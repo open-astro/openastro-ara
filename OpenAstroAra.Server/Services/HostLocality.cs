@@ -65,6 +65,14 @@ public static class HostLocality {
     /// own name and interface addresses, no DNS. Never throws.</summary>
     public static bool IsThisMachine(string? host) => IsLocalHost(host, SafeMachineName(), SafeLocalAddresses());
 
+    /// <summary><see cref="IsThisMachine"/> with the name and interface addresses read once, for a caller
+    /// that asks about many records in a row (the selection store's read).</summary>
+    public static Func<string?, bool> ThisMachineSnapshot() {
+        var name = SafeMachineName();
+        var addresses = SafeLocalAddresses();
+        return host => IsLocalHost(host, name, addresses);
+    }
+
     /// <summary>A device whose Alpaca server is this machine is remembered and dialled as
     /// <c>localhost</c>, whatever address discovery or the client saw it under; any other device is
     /// returned unchanged. <paramref name="isThisMachine"/> is injectable for tests.</summary>
@@ -76,11 +84,13 @@ public static class HostLocality {
         if (alreadyLocal) {
             return device;
         }
-        // Either field naming this machine is enough: discovery fills both from one answer, and a
-        // hand-entered device may carry only one of them.
-        var hostLocal = !string.IsNullOrWhiteSpace(device.HostName) && local(device.HostName);
-        var ipLocal = !string.IsNullOrWhiteSpace(device.IpAddress) && local(device.IpAddress);
-        return hostLocal || ipLocal
+        // An IP address decides: discovery's HostName is the reverse-DNS name of the answering server,
+        // and a second Pi with the default name ("raspberrypi.lan" at 192.168.1.50) would otherwise read as
+        // this box. The name counts only when no address was given (a hand-entered device).
+        var isLocal = IPAddress.TryParse(device.IpAddress?.Trim().Trim('[', ']'), out _)
+            ? local(device.IpAddress)
+            : !string.IsNullOrWhiteSpace(device.HostName) && local(device.HostName);
+        return isLocal
             ? device with { HostName = LocalHostName, IpAddress = LocalIpAddress }
             : device;
     }
@@ -91,8 +101,7 @@ public static class HostLocality {
     /// cannot recognise because no interface carries it any more, and each connect waited out the 60 s
     /// Alpaca timeout. Asks the saved server and this machine's own Alpaca server (same port) for their
     /// configured devices: when the saved server does not list the device and the local one lists the same
-    /// type and number under the same UniqueID or name, returns the record pointed at <c>localhost</c>
-    /// (carrying the local UniqueID). Null when the device is already local, the saved server still serves
+    /// type and number under the same UniqueID, returns the record pointed at <c>localhost</c>. Null when the device is already local, the saved server still serves
     /// it, or the local server does not. Bounded by the management client's request timeout; never throws
     /// for an unreachable server.
     /// </summary>
@@ -108,24 +117,21 @@ public static class HostLocality {
         var key = EquipmentIdentityReconcile.DeviceKey(device.Type, device.AlpacaDeviceNumber);
         var savedTask = alpaca.GetConfiguredDevicesAsync(savedHost, device.IpPort, ct);
         var localTask = alpaca.GetConfiguredDevicesAsync(LocalIpAddress, device.IpPort, ct);
+        await Task.WhenAll(savedTask, localTask).ConfigureAwait(false);
         var saved = await savedTask.ConfigureAwait(false);
         var local = await localTask.ConfigureAwait(false);
         if (saved.ContainsKey(key) || !local.TryGetValue(key, out var live) || !SameDevice(device, live)) {
             return null;
         }
-        var uniqueId = string.IsNullOrWhiteSpace(live.UniqueId) ? device.UniqueId : live.UniqueId.Trim();
-        return device with { UniqueId = uniqueId, HostName = LocalHostName, IpAddress = LocalIpAddress };
+        return device with { HostName = LocalHostName, IpAddress = LocalIpAddress };
     }
 
-    // The number alone is not enough (two servers can both have a focuser 0). A bridge upgrade can change a
-    // UniqueID (the ZWO dew heater went from ZWO_DEW_SN_<camera serial> to ZWO_DEW_1), so the name counts too.
+    // The number alone is not enough (two servers can both have a focuser 0), and neither is a driver name
+    // ("ZWO EAF", "ZWO ASI120MM" on every rig that has one): the saved server may only be switched off. A
+    // device whose UniqueID the bridge has since renamed is re-picked once by hand.
     private static bool SameDevice(DiscoveredDeviceDto device, AlpacaConfiguredDevice live) {
         var id = device.UniqueId?.Trim() ?? string.Empty;
-        if (id.Length > 0 && id.Equals(live.UniqueId?.Trim(), StringComparison.OrdinalIgnoreCase)) {
-            return true;
-        }
-        var name = device.Name?.Trim() ?? string.Empty;
-        return name.Length > 0 && name.Equals(live.Name?.Trim(), StringComparison.OrdinalIgnoreCase);
+        return id.Length > 0 && id.Equals(live.UniqueId?.Trim(), StringComparison.OrdinalIgnoreCase);
     }
 
     // IPAddress.Equals includes the IPv6 scope id, so the NIC's fe80::1234%2 would never match a
