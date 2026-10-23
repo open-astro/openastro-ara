@@ -262,7 +262,9 @@ public sealed class HeadlessSequencerFactory : ISequencerFactory {
                 new UnparkScope(telescopeMediator),
                 new ParkScope(telescopeMediator, guiderMediator),
                 new FindHome(telescopeMediator, guiderMediator),
-                new SlewScopeToRaDec(telescopeMediator, guiderMediator),
+                // #1446 — with "Center target after slew" on, the slew centres through the §28
+                // CenteringService (the same executor as Center and Rotate below).
+                new SlewScopeToRaDec(telescopeMediator, guiderMediator, profileService, centeringExecutor),
                 // §48.4 — the §39.5 sky-flat generator emits SlewScopeToAltAz (point the mount at
                 // the twilight sky patch) wrapped by a WaitForSunAltitude gate; both must resolve
                 // through the factory or those generated bodies fail to load.

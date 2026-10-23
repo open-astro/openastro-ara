@@ -18,7 +18,9 @@ using OpenAstroAra.Core.Locale;
 using OpenAstroAra.Core.Model;
 using OpenAstroAra.Core.Utility.Notification;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
+using OpenAstroAra.Profile.Interfaces;
 using OpenAstroAra.Sequencer.Container;
+using OpenAstroAra.Sequencer.SequenceItem.Platesolving;
 using OpenAstroAra.Sequencer.Utility;
 using OpenAstroAra.Sequencer.Validations;
 using System;
@@ -34,13 +36,17 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Telescope {
     [JsonObject(MemberSerialization.OptIn)]
     public class SlewScopeToRaDec : SequenceItem, IValidatable {
 
-        public SlewScopeToRaDec(ITelescopeMediator telescopeMediator, IGuiderMediator guiderMediator) {
+        public SlewScopeToRaDec(ITelescopeMediator telescopeMediator, IGuiderMediator guiderMediator,
+                IProfileService? profileService = null, ICenteringExecutor? centeringExecutor = null) {
             this.telescopeMediator = telescopeMediator;
             this.guiderMediator = guiderMediator;
+            this.profileService = profileService;
+            this.centeringExecutor = centeringExecutor;
             Coordinates = new InputCoordinates();
         }
 
-        private SlewScopeToRaDec(SlewScopeToRaDec cloneMe) : this(cloneMe.telescopeMediator, cloneMe.guiderMediator) {
+        private SlewScopeToRaDec(SlewScopeToRaDec cloneMe)
+            : this(cloneMe.telescopeMediator, cloneMe.guiderMediator, cloneMe.profileService, cloneMe.centeringExecutor) {
             CopyMetaData(cloneMe);
         }
 
@@ -52,6 +58,8 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Telescope {
 
         private ITelescopeMediator telescopeMediator;
         private IGuiderMediator guiderMediator;
+        private IProfileService? profileService;
+        private ICenteringExecutor? centeringExecutor;
 
         private bool inherited;
 
@@ -91,7 +99,18 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Telescope {
             }
 
             var stoppedGuiding = await guiderMediator.StopGuiding(token);
-            await telescopeMediator.SlewToCoordinatesAsync(Coordinates.Coordinates, token);
+            // #1446 — Settings → Plate Solving → "Center target after slew" makes the step centre on its
+            // target (slew, plate-solve, sync, re-slew) instead of trusting the mount's pointing model.
+            // Prototype construction has no executor and keeps the blind slew.
+            if (centeringExecutor is not null && profileService?.ActiveProfile.PlateSolveSettings.SlewToTarget == true) {
+                if (!await centeringExecutor.CenterAsync(Coordinates.Coordinates, progress, token)) {
+                    // Same rule as Center and Rotate: an off-target field would quietly ruin every frame after it.
+                    throw new SequenceEntityFailedException(
+                        "Centering after the slew did not converge within the profile's threshold/attempts (Settings → Plate Solving → Center target after slew).");
+                }
+            } else {
+                await telescopeMediator.SlewToCoordinatesAsync(Coordinates.Coordinates, token);
+            }
             if (stoppedGuiding) {
                 await guiderMediator.StartGuiding(false, progress, token);
             }

@@ -71,9 +71,10 @@ class UnguidedOptions {
 /// execute for real now.
 ///
 /// A dialed framing position angle ([positionAngleDeg]) upgrades the slew to
-/// a `CenterAndRotate` carrying it (§36/§38 — the rotate half executes now);
-/// with no PA the plain slew stays the default, so a run never requires a
-/// plate solver the user didn't opt into by framing with rotation.
+/// a `CenterAndRotate` carrying it (§36/§38 — the rotate half executes now).
+/// With no PA the step stays a plain slew; the daemon centres it (solve,
+/// sync, re-slew) when Settings → Plate Solving → "Center target after slew"
+/// is on (#1446), and slews blind when it is off.
 ///
 /// The body is editable afterwards in the Run tab like any hand-built
 /// sequence — this is a starting point that actually images, not a template
@@ -370,9 +371,9 @@ Map<String, dynamic> buildTargetBlock({
   }
 
   // §36/§38 — a dialed framing position angle upgrades the plain slew to a
-  // Center and Rotate carrying it (slew + plate-solve centre + rotate); with
-  // no PA the blind slew stays, so runs never require a solver the user
-  // didn't opt into by framing with rotation.
+  // Center and Rotate carrying it (slew + plate-solve centre + rotate). With
+  // no PA the plain slew stays; the daemon centres it when "Center target
+  // after slew" is on (#1446).
   //
   // A failed go-to skips the rest of this target (SkipInstructionSetOnError)
   // instead of the default ContinueOnError: filter, focus, guiding and every
