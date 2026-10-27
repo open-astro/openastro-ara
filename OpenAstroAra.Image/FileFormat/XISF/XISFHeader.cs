@@ -81,7 +81,7 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
 
             var parsedMetaData = header.Element(xmlns + "Metadata")
                 ?? header.Elements().FirstOrDefault(x => x.Name?.LocalName == "Metadata");
-            MetaData = parsedMetaData != null ? new XElement(parsedMetaData) : new XElement(xmlns + "Metadata");
+            MetaData = parsedMetaData != null ? new XElement(parsedMetaData) : new XElement(header.Name.Namespace + "Metadata");
             Xisf.Add(MetaData);
 
             var parsedImage = header.Element(xmlns + "Image")

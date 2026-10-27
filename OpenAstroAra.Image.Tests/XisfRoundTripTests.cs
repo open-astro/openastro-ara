@@ -614,6 +614,11 @@ public sealed class XisfRoundTripTests : IDisposable {
         var metadata = Assert.Single(header.Content.Root!.Elements(ns + "Metadata"));
         Assert.Empty(metadata.Elements());
         Assert.Same(metadata, header.MetaData);
+
+        // The fallback follows the source root's namespace, so a namespace-less root does not
+        // get a PixInsight-namespaced child.
+        var bare = new XISFHeader(new XElement("xisf", new XElement("Image", new XAttribute("geometry", "1:1:1"))));
+        Assert.Same(bare.MetaData, Assert.Single(bare.Content.Root!.Elements("Metadata")));
     }
 
     [Fact]
