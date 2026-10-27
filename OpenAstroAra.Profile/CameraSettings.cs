@@ -41,7 +41,6 @@ namespace OpenAstroAra.Profile {
             serialPort = "COM1";
             bitDepth = 16;
             bayerPattern = BayerPattern.Auto;
-            rawConverter = RawConverter.FREEIMAGE;
             minFlatExposureTime = 0.2;
             maxFlatExposureTime = 20;
             fileCameraFolder = string.Empty;
@@ -170,19 +169,6 @@ namespace OpenAstroAra.Profile {
             set {
                 if (bitDepth != value) {
                     bitDepth = value;
-                    RaisePropertyChanged();
-                }
-            }
-        }
-
-        private RawConverter rawConverter;
-
-        [DataMember]
-        public RawConverter RawConverter {
-            get => rawConverter;
-            set {
-                if (rawConverter != value) {
-                    rawConverter = value;
                     RaisePropertyChanged();
                 }
             }

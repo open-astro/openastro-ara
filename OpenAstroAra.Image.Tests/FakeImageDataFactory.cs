@@ -12,7 +12,6 @@
 
 #endregion "copyright"
 
-using OpenAstroAra.Core.Enums;
 using OpenAstroAra.Image.ImageData;
 using OpenAstroAra.Image.Interfaces;
 
@@ -31,6 +30,6 @@ internal sealed class FakeImageDataFactory : IImageDataFactory {
     public BaseImageData CreateBaseImageData(IImageArray imageArray, int width, int height, int bitDepth, bool isBayered, ImageMetaData metaData) =>
         new(imageArray, width, height, bitDepth, isBayered, metaData, null!, null!, null!);
 
-    public Task<IImageData> CreateFromFile(string path, int bitDepth, bool isBayered, RawConverter rawConverter, CancellationToken ct = default) =>
-        BaseImageData.FromFile(path, bitDepth, isBayered, null, this, ct);
+    public Task<IImageData> CreateFromFile(string path, int bitDepth, bool isBayered, CancellationToken ct = default) =>
+        BaseImageData.FromFile(path, bitDepth, isBayered, this, ct);
 }

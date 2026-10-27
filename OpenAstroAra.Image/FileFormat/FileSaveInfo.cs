@@ -22,7 +22,6 @@ namespace OpenAstroAra.Image.FileFormat {
         public string FilePattern { get; set; } = string.Empty;
         public string ForceExtension { get; set; } = string.Empty;
         public FileType FileType { get; set; } = FileType.FITS;
-        public TIFFCompressionType TIFFCompressionType { get; set; } = TIFFCompressionType.NONE;
         public XISFCompressionType XISFCompressionType { get; set; } = XISFCompressionType.NONE;
         public XISFChecksumType XISFChecksumType { get; set; } = XISFChecksumType.NONE;
         public bool XISFByteShuffling { get; set; }
@@ -35,7 +34,6 @@ namespace OpenAstroAra.Image.FileFormat {
                 FilePath = profileService.ActiveProfile.ImageFileSettings.FilePath;
                 FilePattern = profileService.ActiveProfile.ImageFileSettings.FilePattern;
                 FileType = profileService.ActiveProfile.ImageFileSettings.FileType;
-                TIFFCompressionType = profileService.ActiveProfile.ImageFileSettings.TIFFCompressionType;
                 XISFCompressionType = profileService.ActiveProfile.ImageFileSettings.XISFCompressionType;
                 XISFByteShuffling = profileService.ActiveProfile.ImageFileSettings.XISFByteShuffling;
                 XISFChecksumType = profileService.ActiveProfile.ImageFileSettings.XISFChecksumType;

@@ -27,7 +27,6 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
-using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
@@ -55,11 +54,10 @@ namespace OpenAstroAra.Image.ImageData {
             Data = imageArray;
             MetaData = metaData;
             Properties = new ImageProperties(width: width, height: height, bitDepth: bitDepth, isBayered: isBayered, gain: metaData.Camera.Gain, offset: metaData.Camera.Offset);
-            // StarDetectionAnalysis gets a real result once the OpenCvSharp4-backed
-            // IStarDetection lands (playbook §line-2105). Until then use a default
-            // instance whose sentinels (HFR = NaN, DetectedStars = -1) make
-            // GetImagePatterns() take the correct "no star data" branch — assigning
-            // null! here would NRE on any FinalizeSave() before detection runs.
+            // Start from a default StarDetectionAnalysis whose sentinels (HFR = NaN,
+            // DetectedStars = -1) make GetImagePatterns() take the "no star data"
+            // branch until detection runs — assigning null! here would NRE on any
+            // FinalizeSave() before then.
             StarDetectionAnalysis = new StarDetectionAnalysis();
             Statistics = new Nito.AsyncEx.AsyncLazy<IImageStatistics>(async () => await Task.Run(() => ImageStatistics.Create(this)));
             this.profileService = profileService;
@@ -122,7 +120,7 @@ namespace OpenAstroAra.Image.ImageData {
                     // Reference: https://devblogs.microsoft.com/premier-developer/the-danger-of-taskcompletionsourcet-class/
                     var cancelTaskSource = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
                     using (cancelToken.Register(() => cancelTaskSource.SetCanceled())) {
-                        var saveTask = SaveToDiskAsync(fileSaveInfo, Guid.NewGuid().ToString(), cancelToken, false);
+                        var saveTask = SaveToDiskAsync(fileSaveInfo, Guid.NewGuid().ToString(), cancelToken);
                         await Task.WhenAny(cancelTaskSource.Task, saveTask);
                         cancelToken.ThrowIfCancellationRequested();
                         actualPath = await saveTask;
@@ -153,11 +151,6 @@ namespace OpenAstroAra.Image.ImageData {
         /// <returns></returns>        
         public string FinalizeSave(string file, string pattern, IList<ImagePattern> customPatterns) {
             try {
-                if (pattern.Contains(ImagePatternKeys.SensorTemp, StringComparison.Ordinal) && double.IsNaN(MetaData.Camera.Temperature) && !string.IsNullOrEmpty(Data.RAWType)) {
-                    string sensorTemp = GetSensorTempFromExifTool(file);
-                    pattern = pattern.Replace(ImagePatternKeys.SensorTemp, sensorTemp, StringComparison.Ordinal);
-                }
-
                 var imagePatterns = GetImagePatterns();
                 foreach (var cp in customPatterns) {
                     imagePatterns.Add(cp);
@@ -188,58 +181,6 @@ namespace OpenAstroAra.Image.ImageData {
 
         [GeneratedRegex(@"(?:(?:\.\w+)?\.\w+$)")]
         private static partial Regex GetFileExtensionsRegex();
-
-        [System.Diagnostics.CodeAnalysis.SuppressMessage("Globalization", "CA1308:Normalize strings to uppercase", Justification = "Lowercasing ASCII file-format tokens (XISF codec/checksum names, file extensions, EXIF tags) to match lowercase identifiers; not a security decision.")]
-        [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "External-tool boundary: invoking exiftool may fail for any reason (tool missing, bad output, IO); on any failure the sensor temperature is simply left unset.")]
-        private static string GetSensorTempFromExifTool(string file) {
-            string tempString = string.Empty;
-            try {
-                string EXIFTOOLLOCATION = Path.Combine(CoreUtil.APPLICATIONDIRECTORY, "Utility", "ExifTool", "exiftool.exe");
-                var sb = new StringBuilder();
-
-                using System.Diagnostics.Process process = new System.Diagnostics.Process();
-                System.Diagnostics.ProcessStartInfo startInfo = new System.Diagnostics.ProcessStartInfo();
-                startInfo.WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden;
-                startInfo.FileName = EXIFTOOLLOCATION;
-                startInfo.UseShellExecute = false;
-                startInfo.RedirectStandardOutput = true;
-                startInfo.RedirectStandardError = true;
-                startInfo.RedirectStandardInput = true;
-                startInfo.CreateNoWindow = true;
-                startInfo.Arguments = $"-CameraTemperature \"{file}\"";
-                process.StartInfo = startInfo;
-                process.EnableRaisingEvents = true;
-
-                process.OutputDataReceived += (sender, e) => {
-                    sb.AppendLine(e.Data);
-                };
-
-                process.ErrorDataReceived += (sender, e) => {
-                    sb.AppendLine(e.Data);
-                };
-
-                process.Start();
-                process.BeginOutputReadLine();
-                process.BeginErrorReadLine();
-
-                process.WaitForExit();
-
-                Logger.Trace(sb.ToString());
-
-                // remove whitespace and format
-                tempString = sb.ToString().Replace(" ", "", StringComparison.Ordinal);
-                tempString = tempString.Substring(tempString.IndexOf(':', StringComparison.Ordinal) + 1).ToLowerInvariant().Trim();
-
-                if (!Regex.IsMatch(tempString, "^[0-9]{1,4}[cCfFkK]$")) {
-                    Logger.Error($"Value returned by EXIF Tool is no valid temperature: {tempString}");
-                    tempString = string.Empty;
-                }
-            } catch (Exception ex) {
-                Logger.Error(ex);
-            }
-
-            return tempString;
-        }
 
         public ImagePatterns GetImagePatterns() {
             var p = new ImagePatterns();
@@ -341,28 +282,18 @@ namespace OpenAstroAra.Image.ImageData {
         }
 
 
-        public async Task<string> SaveToDisk(FileSaveInfo fileSaveInfo, bool forceFileType, IList<ImagePattern> customPatterns, CancellationToken cancelToken) {
+        public async Task<string> SaveToDisk(FileSaveInfo fileSaveInfo, IList<ImagePattern> customPatterns, CancellationToken cancelToken) {
             if (customPatterns == null) { customPatterns = new List<ImagePattern>(); }
             var pattern = fileSaveInfo.FilePattern;
             string actualPath = string.Empty;
             try {
-                if (pattern.Contains(ImagePatternKeys.SensorTemp, StringComparison.Ordinal) && double.IsNaN(MetaData.Camera.Temperature) && !string.IsNullOrEmpty(Data.RAWType)) {
-                    // For DSLRs we need to retrieve the temperature after the file is written. Hence we replace the pattern with this special placeholder
-                    pattern = pattern.Replace(ImagePatternKeys.SensorTemp, "$$DSLR_SENSORTEMP$$", StringComparison.Ordinal);
-                }
-
                 var imagePatterns = GetImagePatterns();
                 foreach (var cp in customPatterns) {
                     imagePatterns.Add(cp);
                 }
                 var fileName = imagePatterns.GetImageFileString(pattern);
 
-                actualPath = await SaveToDiskAsync(fileSaveInfo, fileName, cancelToken, forceFileType);
-
-                if (pattern.Contains("$$DSLR_SENSORTEMP$$", StringComparison.Ordinal) && double.IsNaN(MetaData.Camera.Temperature) && !string.IsNullOrEmpty(Data.RAWType)) {
-                    // Extract the temperature from the EXIF info for DSLRs
-                    actualPath = ExtractDSLRTemperatureAndMoveFile(actualPath);
-                }
+                actualPath = await SaveToDiskAsync(fileSaveInfo, fileName, cancelToken);
                 Logger.Info($"Saved image to {actualPath}");
             } catch (OperationCanceledException) {
                 throw;
@@ -373,81 +304,21 @@ namespace OpenAstroAra.Image.ImageData {
             return actualPath;
         }
 
-        [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "Best-effort DSLR-temperature extraction + file move: any failure is logged and the original path is returned, so a metadata/IO hiccup cannot fail the save.")]
-        private static string ExtractDSLRTemperatureAndMoveFile(string actualPath) {
-            var oldPath = actualPath;
-            try {
-                string sensorTemp = GetSensorTempFromExifTool(actualPath);
-                actualPath = actualPath.Replace("$$DSLR_SENSORTEMP$$", sensorTemp.ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal);
-
-                // Create a folder in case this pattern was set up to be a folder
-                var fi = new FileInfo(actualPath);
-                if (fi.Directory != null && !fi.Directory.Exists) {
-                    fi.Directory.Create();
-                }
-
-                File.Move(oldPath, actualPath);
-            } catch (Exception ex) {
-                // In case of any error point to the original file
-                actualPath = oldPath;
-                Logger.Error(ex);
-
-            }
-            return actualPath;
+        public Task<string> SaveToDisk(FileSaveInfo fileSaveInfo, CancellationToken cancelToken = default) {
+            return SaveToDisk(fileSaveInfo, new List<ImagePattern>(), cancelToken);
         }
 
-
-        public Task<string> SaveToDisk(FileSaveInfo fileSaveInfo, bool forceFileType = false, CancellationToken cancelToken = default) {
-            return SaveToDisk(fileSaveInfo, forceFileType, new List<ImagePattern>(), cancelToken);
-        }
-
-        private Task<string> SaveToDiskAsync(FileSaveInfo fileSaveInfo, string fileName, CancellationToken cancelToken, bool forceFileType = false) {
+        private Task<string> SaveToDiskAsync(FileSaveInfo fileSaveInfo, string fileName, CancellationToken cancelToken) {
             return Task.Run(() => {
-                string path = string.Empty;
                 fileSaveInfo.FilePath = Path.Combine(fileSaveInfo.FilePath, fileName);
 
-                if (!forceFileType && Data.RAWData != null) {
-                    fileSaveInfo.FileType = FileType.RAW;
-                    path = SaveRAW(fileSaveInfo.FilePath);
-                } else {
-                    switch (fileSaveInfo.FileType) {
-                        case FileType.FITS:
-                            path = SaveFits(fileSaveInfo);
-                            break;
-
-                        case FileType.XISF:
-                            path = SaveXisf(fileSaveInfo);
-                            break;
-
-                        case FileType.TIFF:
-                        default:
-                            path = SaveTiff(fileSaveInfo);
-                            break;
-                    }
-                }
-
-                return path;
+                // Ara saves FITS and XISF only; older profiles may still carry TIFF or RAW.
+                return fileSaveInfo.FileType switch {
+                    FileType.FITS => SaveFits(fileSaveInfo),
+                    FileType.XISF => SaveXisf(fileSaveInfo),
+                    _ => throw new NotSupportedException($"Saving {fileSaveInfo.FileType} files is not supported; Ara saves FITS or XISF."),
+                };
             }, cancelToken);
-        }
-
-        private string SaveRAW(string path) {
-            Directory.CreateDirectory(Path.GetDirectoryName(path) ?? string.Empty);
-            IImageArray data = Data;
-            if (data.RAWData == null) {
-                throw new InvalidOperationException("Image has no RAW data to save.");
-            }
-            string uniquePath = CoreUtil.GetUniqueFilePath(path + "." + data.RAWType);
-            File.WriteAllBytes(uniquePath, data.RAWData);
-            return uniquePath;
-        }
-
-        private string SaveTiff(FileSaveInfo fileSaveInfo) {
-            // SaveTiff pending OpenCvSharp4 / SkiaSharp TIFF encoder per
-            // playbook §line-2105 — the WPF TiffBitmapEncoder pipeline was
-            // deleted in the net10.0 conversion. The headless daemon's
-            // primary capture path is FITS via OpenAstroAra.Fits; TIFF export
-            // arrives in a follow-up.
-            throw new NotImplementedException("SaveTiff pending OpenCvSharp4 wiring.");
         }
 
         private static CfitsioNative.COMPRESSION GetFITSCompression(FITSCompressionType fITSCompressionTypeEnum) {
@@ -546,11 +417,10 @@ namespace OpenAstroAra.Image.ImageData {
         /// <param name="path">File Path to image</param>
         /// <param name="bitDepth">bit depth of each pixel</param>
         /// <param name="isBayered">Flag to indicate if the image is bayer matrix encoded</param>
-        /// <param name="rawConverter">Which type of raw converter to use, when image is in RAW format</param>
         /// <param name="ct">Token to cancel operation</param>
         /// <returns></returns>
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Globalization", "CA1308:Normalize strings to uppercase", Justification = "Lowercasing ASCII file-format tokens (XISF codec/checksum names, file extensions, EXIF tags) to match lowercase identifiers; not a security decision.")]
-        public static Task<IImageData> FromFile(string path, int bitDepth, bool isBayered, object? rawConverter, IImageDataFactory imageDataFactory, CancellationToken ct = default) {
+        public static Task<IImageData> FromFile(string path, int bitDepth, bool isBayered, IImageDataFactory imageDataFactory, CancellationToken ct = default) {
             return Task.Run(async () => {
                 if (!File.Exists(path)) {
                     throw new FileNotFoundException();
@@ -566,11 +436,9 @@ namespace OpenAstroAra.Image.ImageData {
                         return await FITS.Load(new Uri(path), isBayered, imageDataFactory, ct);
 
                     default:
-                        // Non-FITS / non-XISF formats (gif/tiff/jpg/png/cr2/etc.)
-                        // pending OpenCvSharp4 + libraw integration per playbook
-                        // §line-2105 — the previous WPF BitmapDecoder + DCRaw
-                        // pipeline was deleted in the net10.0 conversion.
-                        throw new NotSupportedException($"File format {Path.GetExtension(path)} pending OpenCvSharp4 wiring.");
+                        // Ara loads FITS and XISF only. DSLR RAW is decoded by
+                        // AlpacaBridge, which hands Ara a plain ImageArray.
+                        throw new NotSupportedException($"File format {Path.GetExtension(path)} is not supported; Ara loads FITS or XISF.");
                 }
             }, ct);
         }
@@ -580,13 +448,10 @@ namespace OpenAstroAra.Image.ImageData {
                 throw new FileNotFoundException();
             }
 
-            // Until OpenCvSharp4 lands, only FITS + XISF are supported headless.
+            // FITS and XISF only; see FromFile.
             var supportedExtensions = new Regex(@".*\.(xisf|fits?|fz|fts)", RegexOptions.IgnoreCase);
             return supportedExtensions.IsMatch(path);
         }
-
-        // BitmapToImageArray (WPF BitmapDecoder + FormatConvertedBitmap) deleted;
-        // replacement lands with OpenCvSharp4 wiring per playbook §line-2105.
 
         #endregion "Load"
     }
@@ -610,11 +475,8 @@ namespace OpenAstroAra.Image.ImageData {
             return new BaseImageData(imageArray, width, height, bitDepth, isBayered, metaData, this.profileService, this.starDetectionSelector.GetBehavior(), this.starAnnotatorSelector.GetBehavior());
         }
 
-        public Task<IImageData> CreateFromFile(string path, int bitDepth, bool isBayered, RawConverter rawConverter, CancellationToken ct = default) {
-            // RawConverterFactory deleted in the net10.0 conversion; the
-            // rawConverter param is ignored until libraw replaces DCRaw per
-            // playbook §line-2105.
-            return BaseImageData.FromFile(path, bitDepth, isBayered, null, this, ct);
+        public Task<IImageData> CreateFromFile(string path, int bitDepth, bool isBayered, CancellationToken ct = default) {
+            return BaseImageData.FromFile(path, bitDepth, isBayered, this, ct);
         }
     }
 }

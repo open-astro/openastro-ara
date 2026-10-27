@@ -17,7 +17,5 @@ namespace OpenAstroAra.Image.Interfaces {
     public interface IImageArray {
         ushort[] FlatArray { get; }
         int[]? FlatArrayInt { get; }
-        byte[]? RAWData { get; }
-        string? RAWType { get; }
     }
 }

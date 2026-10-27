@@ -51,21 +51,9 @@ namespace OpenAstroAra.Image.ImageData {
             this.starAnnotator = starAnnotator;
         }
 
-        public static async Task<IRenderedImage> FromBitmapSource(byte[] source, IExposureDataFactory exposureDataFactory, IProfileService profileService, IStarDetection starDetection, IStarAnnotator starAnnotator, bool calculateStatistics = false) {
-            var exposureData = await exposureDataFactory.CreateImageArrayExposureDataFromBitmapSource(source);
-            var rawImageData = await exposureData.ToImageData();
-            return Create(source, rawImageData, profileService, starDetection, starAnnotator, calculateStatistics: calculateStatistics);
-        }
-
         public static RenderedImage Create(byte[] source, IImageData rawImageData, IProfileService profileService, IStarDetection starDetection, IStarAnnotator starAnnotator, bool calculateStatistics = false) {
             return new RenderedImage(source, rawImageData, profileService, starDetection, starAnnotator);
         }
-
-        // ReRender / Debayer / Stretch / DetectStars / GetThumbnail /
-        // UpdateAnalysis bodies removed — they used the deleted WPF-coupled
-        // ImageUtility + DebayeredImage + WPF BitmapSource transforms.
-        // Replacements arrive when OpenCvSharp4 wiring lands per playbook
-        // §line-2105.
 
         public virtual IRenderedImage ReRender() =>
             // §2105: re-render the display buffer from the raw frame (RenderBitmapSource → a fresh

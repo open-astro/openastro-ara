@@ -23,7 +23,6 @@ namespace OpenAstroAra.Profile.Interfaces {
         string Id { get; set; }
         string LastDeviceName { get; set; }
         double PixelSize { get; set; }
-        RawConverter RawConverter { get; set; }
         string SerialPort { get; set; }
         double MinFlatExposureTime { get; set; }
         double MaxFlatExposureTime { get; set; }

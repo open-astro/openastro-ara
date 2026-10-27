@@ -65,14 +65,5 @@ namespace OpenAstroAra.Image.ImageData {
                     isBayered: this.IsBayered,
                     metaData: this.MetaData));
         }
-
-        // FromBitmapSource / ArrayFromSource / ArrayFrom8BitSource /
-        // ArrayFrom16BitSource removed — the WPF BitmapSource pixel-format
-        // matrix is replaced by OpenCvSharp4 Mat conversions per playbook
-        // §line-2105. The headless daemon's capture path uses raw ushort[]
-        // arrays directly (via the §72 CFITSIO P/Invoke + the §65 stretch
-        // pipeline), so this no-longer-used WPF entry point is stubbed.
-        public static Task<ImageArrayExposureData> FromBitmapSource(byte[] source, IImageDataFactory imageDataFactory) =>
-            throw new NotImplementedException("FromBitmapSource pending OpenCvSharp4 wiring.");
     }
 }

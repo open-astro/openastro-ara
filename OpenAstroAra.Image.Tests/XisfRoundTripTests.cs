@@ -625,7 +625,7 @@ public sealed class XisfRoundTripTests : IDisposable {
     public async Task FromFileDispatchesXisfByExtension() {
         var path = TempPath("dispatch.xisf");
         await File.WriteAllBytesAsync(path, Write(Pattern(3, 3), 3, 3, SaveInfo(XISFCompressionType.LZ4HC, false, XISFChecksumType.SHA512)));
-        var img = await new FakeImageDataFactory().CreateFromFile(path, 16, false, RawConverter.DCRAW);
+        var img = await new FakeImageDataFactory().CreateFromFile(path, 16, false);
         Assert.Equal(Pattern(3, 3), img.Data.FlatArray);
     }
 }

@@ -1027,9 +1027,6 @@ when the lines are not aligned there is some Polar Alignment error</value>
   <data name="LblDays" xml:space="preserve">
     <value>Days</value>
   </data>
-  <data name="LblDCRaw" xml:space="preserve">
-    <value>DCRaw</value>
-  </data>
   <data name="LblDebayeredHFR" xml:space="preserve">
     <value>Debayered HFR</value>
   </data>
@@ -1653,9 +1650,6 @@ Calculated HFR: {2}
   </data>
   <data name="LblFramingAssistant" xml:space="preserve">
     <value>Framing Assistant</value>
-  </data>
-  <data name="LblFreeImage" xml:space="preserve">
-    <value>FreeImage</value>
   </data>
   <data name="LblFrom" xml:space="preserve">
     <value>From</value>
@@ -2550,9 +2544,6 @@ Calculated HFR: {2}
   <data name="LblPreferredPlanetarium" xml:space="preserve">
     <value>Preferred Planetatium software</value>
   </data>
-  <data name="LblPrepareExposure" xml:space="preserve">
-    <value>Prepare Exposure</value>
-  </data>
   <data name="LblPrepareImage" xml:space="preserve">
     <value>Preparing image</value>
   </data>
@@ -2609,12 +2600,6 @@ Calculated HFR: {2}
   </data>
   <data name="LblRate" xml:space="preserve">
     <value>Rate</value>
-  </data>
-  <data name="LblRawConverter" xml:space="preserve">
-    <value>Raw converter</value>
-  </data>
-  <data name="LblRawConverterTooltip" xml:space="preserve">
-    <value>Specifies which tool should be used for DSLR raw file conversion</value>
   </data>
   <data name="LblReadNoise" xml:space="preserve">
     <value>Read noise in e</value>

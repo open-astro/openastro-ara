@@ -12,12 +12,8 @@
 
 #endregion "copyright"
 
-using OpenAstroAra.Core.Enums;
-using OpenAstroAra.Core.Interfaces;
-using OpenAstroAra.Core.Locale;
 using OpenAstroAra.Core.Model;
 using OpenAstroAra.Core.Utility;
-using OpenAstroAra.Image.ImageAnalysis;
 using OpenAstroAra.Image.Interfaces;
 using OpenAstroAra.Profile.Interfaces;
 using System;
@@ -253,53 +249,13 @@ namespace OpenAstroAra.Image.ImageData {
         }
     }
 
-    public class RAWExposureData : BaseExposureData {
-        private readonly byte[] rawBytes;
-        private readonly IRawConverter rawConverter;
-        private readonly string rawType;
-
-        public RAWExposureData(
-            IRawConverter rawConverter,
-            byte[] rawBytes,
-            string rawType,
-            int bitDepth,
-            ImageMetaData metaData,
-            IImageDataFactory imageDataFactory)
-            : base(bitDepth, metaData, imageDataFactory) {
-            this.rawConverter = rawConverter;
-            this.rawBytes = rawBytes;
-            this.rawType = rawType;
-        }
-
-        public override async Task<IImageData> ToImageData(IProgress<ApplicationStatus>? progress = default, CancellationToken cancelToken = default) {
-            try {
-                progress?.Report(new ApplicationStatus { Status = Loc.Instance["LblPrepareExposure"] });
-                using (var memoryStream = new System.IO.MemoryStream(this.rawBytes)) {
-                    var data = await this.rawConverter.Convert(
-                        s: memoryStream,
-                        rawType: this.rawType,
-                        bitDepth: this.BitDepth,
-                        metaData: this.MetaData,
-                        token: cancelToken);
-                    return data;
-                }
-            } finally {
-                progress?.Report(new ApplicationStatus { Status = string.Empty });
-            }
-        }
-    }
-
     public class ExposureDataFactory : IExposureDataFactory {
         private protected readonly IImageDataFactory imageDataFactory;
         private protected readonly IProfileService profileService;
-        private protected readonly IPluggableBehaviorSelector<IStarDetection> starDetectionSelector;
-        private protected readonly IPluggableBehaviorSelector<IStarAnnotator> starAnnotatorSelector;
 
-        public ExposureDataFactory(IImageDataFactory imageDataFactory, IProfileService profileService, IPluggableBehaviorSelector<IStarDetection> starDetectionSelector, IPluggableBehaviorSelector<IStarAnnotator> starAnnotatorSelector) {
+        public ExposureDataFactory(IImageDataFactory imageDataFactory, IProfileService profileService) {
             this.imageDataFactory = imageDataFactory;
             this.profileService = profileService;
-            this.starDetectionSelector = starDetectionSelector;
-            this.starAnnotatorSelector = starAnnotatorSelector;
         }
 
         public CachedExposureData CreateCachedExposureData(IImageData imageData) {
@@ -310,24 +266,11 @@ namespace OpenAstroAra.Image.ImageData {
             return new Flipped2DExposureData(flipped2DArray, bitDepth, isBayered, metaData, imageDataFactory, profileService.ActiveProfile.CameraSettings.ASCOMCreate32BitData);
         }
 
-        public RAWExposureData CreateRAWExposureData(RawConverter converter, byte[] rawBytes, string rawType, int bitDepth, ImageMetaData metaData) =>
-            // RawConverterFactory deleted (DCRaw + FreeImage WPF dependencies);
-            // RAW decoding lands with libraw integration per playbook §line-2105.
-            throw new NotImplementedException("CreateRAWExposureData pending libraw integration.");
-
         public ImageArrayExposureData CreateImageArrayExposureData(ushort[] input, int width, int height, int bitDepth, bool isBayered, ImageMetaData metaData) {
             return new ImageArrayExposureData(input, width, height, bitDepth, isBayered, metaData, imageDataFactory);
         }
         public ImageArrayExposureData CreateImageArrayExposureDataInt(int[] input, int width, int height, int bitDepth, bool isBayered, ImageMetaData metaData) {
             return new ImageArrayExposureData(input, width, height, bitDepth, isBayered, metaData, imageDataFactory);
-        }
-
-        public Task<ImageArrayExposureData> CreateImageArrayExposureDataFromBitmapSource(byte[] source) {
-            return ImageArrayExposureData.FromBitmapSource(source, imageDataFactory);
-        }
-
-        public Task<IRenderedImage> CreateRenderedImageFromBitmapSource(byte[] source, bool calculateStatistics = false) {
-            return RenderedImage.FromBitmapSource(source, this, profileService, starDetectionSelector.GetBehavior(), starAnnotatorSelector.GetBehavior(), calculateStatistics);
         }
     }
 }
