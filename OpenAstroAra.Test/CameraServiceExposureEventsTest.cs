@@ -316,21 +316,19 @@ namespace OpenAstroAra.Test {
                 Is.EqualTo(new[] { WsEventCatalog.CameraExposureStarted, WsEventCatalog.CameraExposureComplete }));
         }
 
-        [Test]
-        public async Task A_rest_capture_into_an_ejected_store_publishes_the_failure_with_the_reason() {
-            // #1450 — the store went away between the 202 and the capture: the §29 pre-capture check refuses
-            // the frame before the shutter opens, and Take One hears why instead of timing out.
+        /// <summary>#1450 — a REST capture the §29 pre-capture check refuses: [refuse] runs after the
+        /// camera connected (the store goes away between the 202 and the capture). Returns the frame id
+        /// and the one exposure event, after checking the shutter never opened.</summary>
+        private static async Task<(string FrameId, (string Type, JsonElement Payload) Event)> RefusedRestCaptureAsync(
+                InMemoryProfileStore profiles, Func<bool?> mountProbe, Action refuse) {
             await using var box = Camera(() => true);
             var ws = new RecordingBroadcaster();
-            var profiles = new InMemoryProfileStore();
-            profiles.PutStorageSettings(profiles.GetStorageSettings() with { SaveDirectory = "/media/openastroara" });
-            var mounted = true;
             using var svc = new CameraService(frames: new Mock<IFrameRepository>().Object, profileStore: profiles,
-                events: new EquipmentEventPublisher(ws)) { StoreMountedProbe = () => mounted };
+                events: new EquipmentEventPublisher(ws)) { StoreMountedProbe = mountProbe };
             await svc.ConnectAsync(new ConnectRequestDto(Device(box)), null, CancellationToken.None);
             await WaitForAsync(async () => (await svc.GetAsync(CancellationToken.None)) is { State: EquipmentConnectionState.Connected, Capabilities: not null },
                 "camera never connected with its capabilities read");
-            mounted = false;
+            refuse();
 
             var accepted = await svc.StartExposureAsync(new ExposureRequestDto(0.01, Gain: null), null, CancellationToken.None);
             await WaitForAsync(() => Task.FromResult(ws.Exposure().Count > 0), "the refused frame was never reported");
@@ -338,11 +336,36 @@ namespace OpenAstroAra.Test {
             var events = ws.Exposure();
             Assert.That(events.Select(e => e.Type), Is.EqualTo(new[] { WsEventCatalog.CameraExposureFailed }),
                 "failed with no started: the shutter never opened");
+            Assert.That(box.Puts.Where(p => p.Path.EndsWith("/startexposure", StringComparison.Ordinal)), Is.Empty);
             Assert.That(events[0].Payload.GetProperty("frame_id").GetString(), Is.EqualTo(accepted.FrameId));
             Assert.That(events[0].Payload.GetProperty("kind").GetString(), Is.EqualTo("light"));
-            Assert.That(events[0].Payload.GetProperty("reason").GetString(),
+            return (accepted.FrameId, events[0]);
+        }
+
+        [Test]
+        public async Task A_rest_capture_into_an_ejected_store_publishes_the_failure_with_the_reason() {
+            var profiles = new InMemoryProfileStore();
+            profiles.PutStorageSettings(profiles.GetStorageSettings() with { SaveDirectory = "/media/openastroara" });
+            var mounted = true;
+
+            var (_, failed) = await RefusedRestCaptureAsync(profiles, () => mounted, () => mounted = false);
+
+            Assert.That(failed.Payload.GetProperty("reason").GetString(),
                 Does.StartWith("No storage disk: nothing is mounted at /media/openastroara"));
-            Assert.That(box.Puts.Where(p => p.Path.EndsWith("/startexposure", StringComparison.Ordinal)), Is.Empty);
+        }
+
+        [Test]
+        public async Task A_rest_capture_onto_a_full_disk_under_abort_publishes_the_failure_with_the_reason() {
+            // ~1 EiB critical threshold once connected: every real volume reads critical. The store probe
+            // says "unknown", so the full-disk gate, not the ejected one, answers.
+            var profiles = new InMemoryProfileStore();
+            profiles.PutStorageSettings(profiles.GetStorageSettings() with { SaveDirectory = System.IO.Path.GetTempPath() });
+            profiles.PutSafetyPolicies(profiles.GetSafetyPolicies() with { OnDiskSpaceCritical = "abort" });
+
+            var (_, failed) = await RefusedRestCaptureAsync(profiles, () => null, () =>
+                profiles.PutStorageSettings(profiles.GetStorageSettings() with { MinFreeDiskWarnGb = 2_000_000, MinFreeDiskCriticalGb = 1_000_000 }));
+
+            Assert.That(failed.Payload.GetProperty("reason").GetString(), Does.StartWith("The storage disk is full"));
         }
     }
 }

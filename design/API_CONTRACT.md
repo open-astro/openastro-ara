@@ -52,7 +52,7 @@ This file captures the *reasoning* behind each contract decision — DTO shapes,
 
 **Spec ref:** `OpenAstroAra.Server/Endpoints/EquipmentEndpoints.cs` (`StartExposureAsync`), `CameraService.CaptureCoreAsync`, client `imaging_tab.dart` (`_takeOne`), `capture_progress_state.dart`.
 
-**Related:** #1374 (the run-start refusal); tests `NoStorageDiskTest`, client `capture_progress_state_test`.
+**Related:** #1374 (the run-start refusal); tests `NoStorageDiskTest`, `CameraServiceExposureEventsTest`, client `imaging_tab_test`, `capture_progress_state_test`.
 
 ---
 
