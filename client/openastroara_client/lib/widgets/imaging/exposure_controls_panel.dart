@@ -193,10 +193,13 @@ class _DurationSecondsFieldState extends State<_DurationSecondsField> {
     }
     // Clamp in seconds before converting so a huge input never reaches
     // Duration; any positive input is at least 1 ms, the request's resolution.
-    final maxMs = widget.maxSeconds > 0
-        ? (widget.maxSeconds * 1000).floor().clamp(1, _kMaxExposureMs)
+    final maxSec = widget.maxSeconds, minSec = widget.minSeconds;
+    final maxMs = maxSec.isFinite && maxSec > 0
+        ? (maxSec * 1000).floor().clamp(1, _kMaxExposureMs)
         : _kMaxExposureMs;
-    final minMs = (widget.minSeconds * 1000).ceil().clamp(1, maxMs);
+    final minMs = minSec.isFinite && minSec > 0
+        ? (minSec * 1000).ceil().clamp(1, maxMs)
+        : 1;
     final ms =
         (parsed.clamp(0, maxMs / 1000) * 1000).round().clamp(minMs, maxMs);
     final d = Duration(milliseconds: ms);
