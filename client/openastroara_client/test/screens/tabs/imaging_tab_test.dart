@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -20,6 +21,11 @@ import 'package:openastroara/state/ws/ws_providers.dart';
 /// banner doesn't take over counting the sub that was just aborted.
 
 const _abortPath = '/api/v1/equipment/camera/exposure/abort';
+const _exposurePath = '/api/v1/equipment/camera/exposure';
+const _noDisk =
+    'No storage disk: nothing is mounted at /media/openastroara, so there is '
+    'nowhere to save frames. Plug in the storage drive (Settings → Storage) '
+    'before imaging.';
 
 WsEvent _started(String frameId, num secs) => WsEvent(
   type: 'camera.exposure_started',
@@ -78,6 +84,44 @@ Future<void> _teardown(WidgetTester tester, _Rig rig) async {
 }
 
 final _banner = find.text('Exposing · Light');
+
+/// A loopback daemon stand-in: CameraExposureApi and FramesApi build their own
+/// Dio, so their requests have to reach a socket. The test binding mocks every
+/// HttpClient to answer 400, so this lifts that for the calling test only.
+Future<HttpServer> _loopback(
+  WidgetTester tester,
+  Future<void> Function(HttpRequest req) handle,
+) async {
+  final savedHttp = HttpOverrides.current;
+  HttpOverrides.global = null;
+  addTearDown(() => HttpOverrides.global = savedHttp);
+  final server = (await tester.runAsync(() async {
+    final s = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    s.listen(handle);
+    return s;
+  }))!;
+  addTearDown(() => server.close(force: true));
+  return server;
+}
+
+/// Taps Take One with real I/O, then pumps until the card leaves the
+/// capturing phases or [limit] of wall time has passed.
+Future<void> _takeOneUntilSettled(
+  WidgetTester tester,
+  _Rig rig, {
+  Duration limit = const Duration(seconds: 4),
+}) async {
+  await tester.runAsync(() => tester.tap(find.text('Take One')));
+  final deadline = DateTime.now().add(limit);
+  do {
+    await tester.pump();
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 20)),
+    );
+  } while (rig.container.read(captureProgressProvider).isCapturing &&
+      DateTime.now().isBefore(deadline));
+  await tester.pump();
+}
 
 void main() {
   testWidgets('the guiding strip is sized from the Live tab height', (tester) async {
@@ -193,6 +237,83 @@ void main() {
       findsNothing,
       reason: 'the rail timer must not resume counting the aborted sub',
     );
+
+    await _teardown(tester, rig);
+  });
+
+  testWidgets('Take One with no storage disk shows the daemon\'s refusal '
+      'at once (#1450)', (tester) async {
+    final hits = <String>[];
+    final server = await _loopback(tester, (req) async {
+      hits.add('${req.method} ${req.uri.path}');
+      req.response
+        ..statusCode = HttpStatus.conflict
+        ..headers.contentType =
+            ContentType('application', 'problem+json', charset: 'utf-8')
+        ..write(jsonEncode({
+          'title': 'store_unavailable',
+          'status': 409,
+          'detail': _noDisk,
+        }));
+      await req.response.close();
+    });
+    final rig = await _pumpTab(
+      tester,
+      server: AraServer(hostname: '127.0.0.1', port: server.port),
+    );
+
+    await _takeOneUntilSettled(tester, rig);
+
+    expect(hits, ['POST $_exposurePath'], reason: 'no frame poll after a 409');
+    final progress = rig.container.read(captureProgressProvider);
+    expect(progress.phase, CapturePhase.failed);
+    expect(progress.error, _noDisk);
+    expect(find.text(_noDisk), findsOneWidget);
+
+    await _teardown(tester, rig);
+  });
+
+  testWidgets('a frame the daemon fails ends the Take One wait with its '
+      'reason, even when the failure beats the 202 (#1450)', (tester) async {
+    late _Rig rig;
+    final polls = <String>[];
+    final server = await _loopback(tester, (req) async {
+      if (req.method == 'POST' && req.uri.path == _exposurePath) {
+        // The store went away between the 202 and the capture: the daemon's
+        // pre-capture check fails the frame before this reply goes out.
+        rig.ws.add(WsEvent(
+          type: 'camera.exposure_failed',
+          ts: DateTime.utc(2026, 10, 27),
+          seq: 2,
+          payload: {'frame_id': 'f-1', 'kind': 'light', 'reason': _noDisk},
+        ));
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+        req.response
+          ..statusCode = HttpStatus.accepted
+          ..headers.contentType = ContentType.json
+          ..write(jsonEncode({
+            'frame_id': 'f-1',
+            'exposure_sec': 30,
+            'captured_at': '2026-10-27T21:00:00Z',
+          }));
+      } else {
+        polls.add(req.uri.path);
+        req.response.statusCode = HttpStatus.notFound;
+      }
+      await req.response.close();
+    });
+    rig = await _pumpTab(
+      tester,
+      server: AraServer(hostname: '127.0.0.1', port: server.port),
+    );
+
+    await _takeOneUntilSettled(tester, rig);
+
+    final progress = rig.container.read(captureProgressProvider);
+    expect(progress.phase, CapturePhase.failed,
+        reason: 'ended by the failed event, not the exposure + 20 s timeout');
+    expect(progress.error, _noDisk);
+    expect(polls, isEmpty, reason: 'the failure was known before the first poll');
 
     await _teardown(tester, rig);
   });

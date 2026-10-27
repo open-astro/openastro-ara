@@ -315,5 +315,34 @@ namespace OpenAstroAra.Test {
             Assert.That(ws.Exposure().Select(e => e.Type),
                 Is.EqualTo(new[] { WsEventCatalog.CameraExposureStarted, WsEventCatalog.CameraExposureComplete }));
         }
+
+        [Test]
+        public async Task A_rest_capture_into_an_ejected_store_publishes_the_failure_with_the_reason() {
+            // #1450 — the store went away between the 202 and the capture: the §29 pre-capture check refuses
+            // the frame before the shutter opens, and Take One hears why instead of timing out.
+            await using var box = Camera(() => true);
+            var ws = new RecordingBroadcaster();
+            var profiles = new InMemoryProfileStore();
+            profiles.PutStorageSettings(profiles.GetStorageSettings() with { SaveDirectory = "/media/openastroara" });
+            var mounted = true;
+            using var svc = new CameraService(frames: new Mock<IFrameRepository>().Object, profileStore: profiles,
+                events: new EquipmentEventPublisher(ws)) { StoreMountedProbe = () => mounted };
+            await svc.ConnectAsync(new ConnectRequestDto(Device(box)), null, CancellationToken.None);
+            await WaitForAsync(async () => (await svc.GetAsync(CancellationToken.None)) is { State: EquipmentConnectionState.Connected, Capabilities: not null },
+                "camera never connected with its capabilities read");
+            mounted = false;
+
+            var accepted = await svc.StartExposureAsync(new ExposureRequestDto(0.01, Gain: null), null, CancellationToken.None);
+            await WaitForAsync(() => Task.FromResult(ws.Exposure().Count > 0), "the refused frame was never reported");
+
+            var events = ws.Exposure();
+            Assert.That(events.Select(e => e.Type), Is.EqualTo(new[] { WsEventCatalog.CameraExposureFailed }),
+                "failed with no started: the shutter never opened");
+            Assert.That(events[0].Payload.GetProperty("frame_id").GetString(), Is.EqualTo(accepted.FrameId));
+            Assert.That(events[0].Payload.GetProperty("kind").GetString(), Is.EqualTo("light"));
+            Assert.That(events[0].Payload.GetProperty("reason").GetString(),
+                Does.StartWith("No storage disk: nothing is mounted at /media/openastroara"));
+            Assert.That(box.Puts.Where(p => p.Path.EndsWith("/startexposure", StringComparison.Ordinal)), Is.Empty);
+        }
     }
 }

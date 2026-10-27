@@ -101,6 +101,37 @@ namespace OpenAstroAra.Test {
             Assert.That((result as Accepted<OperationAcceptedDto>)?.Value, Is.SameAs(accepted));
         }
 
+        // ── the Take One gate (#1450) ─────────────────────────────────────
+
+        [Test]
+        public async Task Take_one_without_its_disk_is_refused_and_never_exposed() {
+            var camera = new Mock<ICameraService>();
+            camera.Setup(c => c.StoreRefusal()).Returns("No storage disk: nothing is mounted at /media/openastroara.");
+
+            var result = await EquipmentEndpoints.StartExposureAsync(new ExposureRequestDto(1.0, Gain: null), null,
+                camera.Object, CancellationToken.None);
+
+            var problem = result as ProblemHttpResult;
+            Assert.That(problem, Is.Not.Null, "a Problem response, not a 202 for a frame that is never taken");
+            Assert.That(problem!.StatusCode, Is.EqualTo(StatusCodes.Status409Conflict));
+            Assert.That(problem.ProblemDetails.Title, Is.EqualTo("store_unavailable"));
+            Assert.That(problem.ProblemDetails.Detail, Does.Contain("No storage disk"));
+            camera.Verify(c => c.StartExposureAsync(It.IsAny<ExposureRequestDto>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
+        }
+
+        [Test]
+        public async Task Take_one_with_its_disk_is_accepted() {
+            var response = new ExposureResponseDto("f-1", new Uri("/api/v1/frames/f-1/preview", UriKind.Relative), 1.0, "2026-10-27T21:00:00Z");
+            var camera = new Mock<ICameraService>();
+            camera.Setup(c => c.StoreRefusal()).Returns((string?)null);
+            camera.Setup(c => c.StartExposureAsync(It.IsAny<ExposureRequestDto>(), null, It.IsAny<CancellationToken>())).ReturnsAsync(response);
+
+            var result = await EquipmentEndpoints.StartExposureAsync(new ExposureRequestDto(1.0, Gain: null), null,
+                camera.Object, CancellationToken.None);
+
+            Assert.That((result as Accepted<ExposureResponseDto>)?.Value, Is.SameAs(response));
+        }
+
         [Test]
         public void An_ejected_store_is_a_refusal_naming_the_mount_point() {
             using var camera = new CameraService(profileStore: StoreAt()) { StoreMountedProbe = () => false };

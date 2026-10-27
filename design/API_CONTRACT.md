@@ -42,6 +42,20 @@ This file captures the *reasoning* behind each contract decision — DTO shapes,
 **Related:** §X.Y of PORT_PLAYBOOK.md, PR #N
 ```
 
+### 2026-10-27 — Take One refuses without a storage disk: `POST /equipment/camera/exposure` 409 (#1450)
+
+**Endpoint(s) or area:** `POST /api/v1/equipment/camera/exposure` gains a 409; `camera.exposure_failed` can now arrive with no `camera.exposure_started` before it.
+
+**Decision:** the exposure endpoint asks the same `StoreRefusal()` as sequence start and answers 409 Problem `title: store_unavailable` with the user's words in `detail` ("No storage disk: nothing is mounted at …" / "The storage disk is full …"). A store lost between the 202 and the capture is refused by the §29 pre-capture check before the shutter opens; that refusal now publishes `camera.exposure_failed { frame_id, kind, reason }` with the same words, so the frame's failure reaches the client although its exposure never started. Take One ends its frame poll on a failed event for its `frame_id` and shows the reason.
+
+**Reasoning:** found on the CM4 2026-10-27 with no drive mounted: the POST answered 202, the capture was dropped in the background with only a journal line, and the client polled `GET /frames/{id}` until exposure + 20 s and then said it "couldn't confirm the frame arrived".
+
+**Spec ref:** `OpenAstroAra.Server/Endpoints/EquipmentEndpoints.cs` (`StartExposureAsync`), `CameraService.CaptureCoreAsync`, client `imaging_tab.dart` (`_takeOne`), `capture_progress_state.dart`.
+
+**Related:** #1374 (the run-start refusal); tests `NoStorageDiskTest`, client `capture_progress_state_test`.
+
+---
+
 ### 2026-10-22 — A connect announces again once the device's details are read (`details_ready`)
 
 **Endpoint(s) or area:** WS `equipment.state_changed` (every device type).
@@ -1010,7 +1024,9 @@ loop, whose sub-second frames would flood the stream):
       supersede mid-exposure, caller cancellation ("cancelled"), a REST abort
       (POST /equipment/camera/exposure/abort, "aborted": reported at once, no
       equipment.fault) or a thrown device fault. Every started is followed by exactly one complete OR
-      failed for the same frame_id; a client timer should still age out on
+      failed for the same frame_id. A frame the §29 pre-capture check refuses (no
+      storage disk, disk full under abort/pause) gets a failed with NO started
+      before it, the reason in the user's words (#1450); a client timer should still age out on
       its own (exposure + ~2 min) in case the WS link dropped in between.
       Clients should stamp the exposure start on their OWN clock at receipt:
       started_utc is informational (the two clocks can disagree, §31).

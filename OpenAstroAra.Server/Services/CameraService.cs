@@ -698,8 +698,9 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
             // test snapshots; calibration frames are sequencer-driven. See #1177 for the optional
             // ImageType-field follow-up.
             // The bool result is intentionally ignored (fire-and-forget): a false/failed capture is
-            // already logged inside CaptureCoreAsync, and the pre-announced frame simply never lands
-            // — unlike the sequencer path, there's no caller to surface a throw to.
+            // already logged and published (camera.exposure_failed) inside CaptureCoreAsync, and the
+            // pre-announced frame simply never lands — unlike the sequencer path, there's no caller
+            // to surface a throw to.
             // #1177 — the request's ImageType (validated at the entry point) picks the IMAGETYP, the
             // catalog frame type and, through the lower-cased kind, the shutter.
             var imageType = NormalizeManualImageType(request.ImageType);
@@ -916,8 +917,11 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
         // is critically low AND the profile's OnDiskSpaceCritical policy is "abort" or "pause"
         // (#1185); the "warn" default never blocks (the monitor's own notification path owns telling
         // the user).
+        // #1450 — a blocked frame says why on the wire: Take One's poll ends on the failed event and shows
+        // the reason, instead of waiting out exposure + 20 s for a frame that was never taken.
         if (PreCaptureDiskBlocked(out var freeBytes)) {
             LogPreCaptureDiskBlocked(frameId, freeBytes);
+            _events?.ExposureFailed(frameId, imageType.ToLowerInvariant(), DiskFullRefusal(freeBytes));
             return false;
         }
         // The sequencer's CaptureImage refuses an ejected store before it queues, and again after a failed
@@ -930,6 +934,7 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
         // eject exists for.
         if (StoreEjected(out var ejectedDir)) {
             LogPreCaptureStoreEjected(frameId, ejectedDir);
+            _events?.ExposureFailed(frameId, imageType.ToLowerInvariant(), StoreEjectedRefusal(ejectedDir));
             return false;
         }
         // Bias and darks don't depend on the filter: recording the wheel's position just labels them
@@ -1641,14 +1646,21 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
     /// <inheritdoc />
     public string? StoreRefusal() {
         if (StoreEjected(out var ejectedDir)) {
-            return StoreMissingMessage(ejectedDir) + " Plug in the storage drive (Settings → Storage) before imaging.";
+            return StoreEjectedRefusal(ejectedDir);
         }
         if (PreCaptureDiskBlocked(out var freeBytes)) {
-            var dir = _profileStore?.GetStorageSettings().SaveDirectory;
-            return string.Create(CultureInfo.InvariantCulture,
-                $"The storage disk is full: {freeBytes / 1e9:F1} GB free on {dir}. Free some space or plug in another drive before imaging.");
+            return DiskFullRefusal(freeBytes);
         }
         return null;
+    }
+
+    private static string StoreEjectedRefusal(string saveDirectory) =>
+        StoreMissingMessage(saveDirectory) + " Plug in the storage drive (Settings → Storage) before imaging.";
+
+    private string DiskFullRefusal(long freeBytes) {
+        var dir = _profileStore?.GetStorageSettings().SaveDirectory;
+        return string.Create(CultureInfo.InvariantCulture,
+            $"The storage disk is full: {freeBytes / 1e9:F1} GB free on {dir}. Free some space or plug in another drive before imaging.");
     }
 
     /// <summary>The user's words for an ejected store — the run-start refusal and the mid-run pause

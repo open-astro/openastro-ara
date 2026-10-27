@@ -5,6 +5,7 @@ import 'package:clock/clock.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../equipment/camera_state.dart';
+import '../ws/ws_providers.dart';
 
 /// Capture lifecycle for the Imaging tab's "Take One" — from the exposure
 /// POST through the daemon's background pipeline (expose → download → FITS →
@@ -179,6 +180,14 @@ class CaptureProgressNotifier extends Notifier<CaptureProgress> {
   static const Duration doneVisible = Duration(milliseconds: 1800);
   static const Duration failedVisible = Duration(seconds: 6);
 
+  /// #1450 — the reasons of the last few `camera.exposure_failed` events, by
+  /// frame id. Take One learns its frame id only when the exposure POST
+  /// answers, and a frame the daemon refuses before the shutter opens (the
+  /// storage disk went away) can fail before that answer lands, so the poll
+  /// loop looks its frame up here rather than listening from its own start.
+  final Map<String, String> _failures = {};
+  static const int _failuresKept = 8;
+
   @override
   CaptureProgress build() {
     ref.onDispose(() {
@@ -193,7 +202,30 @@ class CaptureProgressNotifier extends Notifier<CaptureProgress> {
       final cam = next.maybeWhen(data: (s) => s, orElse: () => null);
       updateExposureProgress(cam?.exposureProgressPct);
     });
+    ref.listen(wsEventsProvider, (prev, next) {
+      final event = next.asData?.value;
+      if (event == null || event.type != 'camera.exposure_failed') return;
+      final id = event.payload['frame_id'];
+      final reason = event.payload['reason'];
+      if (id is! String || id.isEmpty) return;
+      _failures.remove(id);
+      _failures[id] = reason is String && reason.trim().isNotEmpty
+          ? reason.trim()
+          : 'the exposure failed';
+      while (_failures.length > _failuresKept) {
+        _failures.remove(_failures.keys.first);
+      }
+    });
     return const CaptureProgress();
+  }
+
+  /// Why the daemon says [frameId] failed, as a sentence for the card — null
+  /// while no `camera.exposure_failed` has named it.
+  String? failureFor(String frameId) {
+    final reason = _failures[frameId];
+    if (reason == null) return null;
+    final sentence = reason[0].toUpperCase() + reason.substring(1);
+    return RegExp(r'[.!?]$').hasMatch(sentence) ? sentence : '$sentence.';
   }
 
   /// Take One accepted (or about to POST) — the camera starts exposing.

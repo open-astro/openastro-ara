@@ -1,7 +1,11 @@
+import 'dart:async';
+
 import 'package:fake_async/fake_async.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/models/ws_event.dart';
 import 'package:openastroara/state/imaging/capture_progress_state.dart';
+import 'package:openastroara/state/ws/ws_providers.dart';
 
 void main() {
   group('CaptureProgressNotifier', () {
@@ -333,6 +337,44 @@ void main() {
             endedAt);
       });
     });
+  });
+
+  test('failureFor answers a camera.exposure_failed by frame id, as a '
+      'sentence, for the last few frames (#1450)', () async {
+    final ws = StreamController<WsEvent>();
+    addTearDown(ws.close);
+    final container = ProviderContainer(overrides: [
+      wsEventsProvider.overrideWith((ref) => ws.stream),
+    ]);
+    addTearDown(container.dispose);
+    // Listened, as the Live tab's watch keeps it: an unlistened provider is
+    // paused and its WS listener with it.
+    final sub = container.listen(captureProgressProvider, (_, _) {});
+    addTearDown(sub.close);
+    final n = container.read(captureProgressProvider.notifier);
+    var seq = 0;
+    Future<void> failed(String id, String reason) async {
+      ws.add(WsEvent(
+          type: 'camera.exposure_failed',
+          ts: DateTime.utc(2026, 10, 27),
+          seq: ++seq,
+          payload: {'frame_id': id, 'kind': 'light', 'reason': reason}));
+      await Future<void>.delayed(Duration.zero);
+    }
+
+    await failed('a', 'No storage disk: nothing is mounted at /media/openastroara.');
+    await failed('b', 'camera never signaled ImageReady within the wait bound');
+    expect(n.failureFor('a'),
+        'No storage disk: nothing is mounted at /media/openastroara.');
+    expect(n.failureFor('b'),
+        'Camera never signaled ImageReady within the wait bound.');
+    expect(n.failureFor('c'), isNull);
+
+    for (var i = 0; i < 8; i++) {
+      await failed('x$i', 'aborted');
+    }
+    expect(n.failureFor('a'), isNull, reason: 'only the last few are kept');
+    expect(n.failureFor('x7'), 'Aborted.');
   });
 }
 

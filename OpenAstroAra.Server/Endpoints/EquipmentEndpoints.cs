@@ -102,6 +102,17 @@ public static partial class EquipmentEndpoints {
         }
     }
 
+    /// <summary>#1450 — POST /equipment/camera/exposure: 409 when there is nowhere to save the frame (the
+    /// store drive is not mounted, or the disk is full under an abort/pause policy), the same refusal as
+    /// sequence start. Before this Take One got a 202, the capture was dropped in the background and the
+    /// client waited out exposure + 20 s for a frame that was never taken.</summary>
+    internal static async Task<IResult> StartExposureAsync(ExposureRequestDto request, string? key, ICameraService svc, CancellationToken ct) {
+        if (svc.StoreRefusal() is { } noStore) {
+            return Results.Problem(title: SequenceEndpoints.NoStoreProblemTitle, detail: noStore, statusCode: StatusCodes.Status409Conflict);
+        }
+        return Results.Accepted(value: await svc.StartExposureAsync(request, key, ct));
+    }
+
     /// <summary>#1298 — POST /equipment/filterwheel/installed: the user reports the filter now in
     /// the manual wheel. 409 when the selected wheel is not the manual one or is not connected;
     /// 400 for a slot it does not have.</summary>
@@ -196,7 +207,7 @@ public static partial class EquipmentEndpoints {
         camera.MapPost("/disconnect", async ([FromHeader(Name = "Idempotency-Key")] string? key, ICameraService svc, CancellationToken ct) =>
             Results.Accepted(value: await svc.DisconnectAsync(key, ct)));
         camera.MapPost("/exposure", async ([FromBody] ExposureRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, ICameraService svc, CancellationToken ct) =>
-            Results.Accepted(value: await svc.StartExposureAsync(request, key, ct)));
+            await StartExposureAsync(request, key, svc, ct));
         camera.MapPost("/exposure/abort", async (ICameraService svc, CancellationToken ct) => {
             await svc.AbortExposureAsync(ct); return Results.Accepted();
         });

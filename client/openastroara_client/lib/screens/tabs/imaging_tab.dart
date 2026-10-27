@@ -225,8 +225,11 @@ class ImagingTab extends ConsumerWidget {
       return;
     }
     // Phase 2 — the POST returned 202; the capture (expose → download → FITS)
-    // runs in the background. Poll the catalog until the frame is registered.
-    // A failure here means the exposure was accepted but we couldn't confirm
+    // runs in the background. Poll the catalog until the frame is registered,
+    // or until the daemon's camera.exposure_failed names this frame (#1450 —
+    // the storage disk went away before the shutter opened, a device fault):
+    // its reason is the user's answer, not a timeout 20 s later. A failure of
+    // the poll itself means the exposure was accepted but we couldn't confirm
     // it landed — distinct remedy (retry the preview, don't re-shoot).
     final api = FramesApi(server);
     final deadline = DateTime.now().add(
@@ -244,6 +247,10 @@ class ImagingTab extends ConsumerWidget {
         // polling instead of hitting the catalog until the full deadline
         // (rapid Cancel → Retry would otherwise stack several dead loops).
         if (!progress.isCurrent(generation)) return;
+        if (progress.failureFor(frameId) case final reason?) {
+          progress.fail(reason, generation: generation);
+          return;
+        }
         if (await api.isRegistered(frameId)) {
           landed = true;
           break;
