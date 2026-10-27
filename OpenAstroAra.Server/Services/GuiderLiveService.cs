@@ -362,8 +362,27 @@ public sealed partial class GuiderLiveService : IGuiderLiveService {
         return MapGuidingAssistant(raw, connected: true);
     }
 
-    public Task<IReadOnlyList<string>> ApplyGuidingAssistantAsync(IReadOnlyList<string> which, CancellationToken ct) =>
-        _guider.RequireConnectedGuider().ApplyGuidingAssistantAsync(which, ct);
+    /// <summary>#1448 — after the guider takes the recommendations, its new values are read back and written
+    /// into Ara's profile, so Ara shows what the guider runs and its next push keeps them. The read-back is
+    /// best-effort: the Apply itself already happened, so a failure there is logged, not thrown.</summary>
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Best-effort profile write-back after a guider Apply that already succeeded; OperationCanceledException is rethrown.")]
+    public async Task<IReadOnlyList<string>> ApplyGuidingAssistantAsync(IReadOnlyList<string> which, CancellationToken ct) {
+        var guider = _guider.RequireConnectedGuider();
+        var applied = await guider.ApplyGuidingAssistantAsync(which, ct).ConfigureAwait(false);
+        if (applied.Count == 0) {
+            return applied;
+        }
+        try {
+            var values = await guider.ReadGuidingAssistantAppliedAsync(applied, ct).ConfigureAwait(false);
+            _guider.RecordGuidingAssistantApplied(values);
+        } catch (OperationCanceledException) {
+            throw;
+        } catch (Exception ex) {
+            LogAssistantWriteBackFailed(ex);
+        }
+        return applied;
+    }
 
     /// <summary>PHD2's own default search region, used when the guider did not answer with one.</summary>
     private const int DefaultSearchRegionPx = 15;
@@ -465,4 +484,7 @@ public sealed partial class GuiderLiveService : IGuiderLiveService {
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "Guider live view: no frame ({Reason})")]
     partial void LogFrameUnavailable(string reason);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Guiding Assistant Apply reached the guider, but writing its values into Ara's profile failed; Ara's next push may undo them (#1448)")]
+    partial void LogAssistantWriteBackFailed(Exception ex);
 }

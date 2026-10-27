@@ -35,12 +35,15 @@ namespace OpenAstroAra.Test {
         private static Dictionary<string, object>? Params(IReadOnlyList<Phd2Method> msgs, string method) =>
             msgs.OfType<Phd2NamedSetter>().FirstOrDefault(m => m.Method == method)?.Parameters;
 
+        private static readonly string[] DecModeOnly = { "set_dec_guide_mode" };
+
         [Test]
         public void Nothing_set_sends_nothing() {
             Assert.That(PHD2Guider.BuildAdvancedSettingsMessages(null), Is.Empty);
             Assert.That(PHD2Guider.BuildAdvancedSettingsMessages(new GuiderAdvancedSettings()), Is.Empty);
-            Assert.That(PHD2Guider.BuildGuiderEngineConfigMessages(Plain(), new GuiderAdvancedSettings()), Is.Empty,
-                "an untouched profile never overwrites the guider");
+            // Only the Dec mode, which Ara always pushes (#1448); nothing else of an untouched profile.
+            Assert.That(PHD2Guider.BuildGuiderEngineConfigMessages(Plain(), new GuiderAdvancedSettings()).Select(m => m.Method),
+                Is.EqualTo(DecModeOnly), "an untouched profile never overwrites the guider's other settings");
         }
 
         [Test]

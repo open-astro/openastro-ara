@@ -48,7 +48,8 @@ namespace OpenAstroAra.Test {
             public Task<byte[]> FetchLiveFrameJpegAsync(string host, int rpcPort, CancellationToken ct) => throw new TaskCanceledException("HttpClient.Timeout");
         }
 
-        private static async Task<(FakeGuider Fake, GuiderService Svc)> ConnectedAsync(Action<FakeGuider>? setup = null) {
+        private static async Task<(FakeGuider Fake, GuiderService Svc)> ConnectedAsync(Action<FakeGuider>? setup = null,
+                InMemoryProfileStore? store = null, StoreBackedProfileService? profiles = null) {
             var fake = FakeGuider.Start();
             fake.SetOnConnectEvents(PhdEvents.Version(subver: "openastroara-fake"), PhdEvents.AppState("Stopped"));
             fake.OnRpc("get_pixel_scale", JsonValue.Create(1.5));
@@ -57,10 +58,10 @@ namespace OpenAstroAra.Test {
             fake.OnRpc("create_profile", _ => new JsonObject { ["id"] = 5, ["name"] = "Ara", ["selected"] = true });
             fake.OnRpc("get_connected", JsonValue.Create(true));
             setup?.Invoke(fake);
-            var svc = new GuiderService(new HeadlessProfileService(),
+            var svc = new GuiderService(profiles is null ? new HeadlessProfileService() : profiles,
                 new GuiderRecoveryCoordinator(Mock.Of<IGuiderProcessSupervisor>(), Mock.Of<INotificationService>(),
                     Mock.Of<IDiagnosticsService>(), NullLogger<GuiderRecoveryCoordinator>.Instance),
-                NullLogger<GuiderService>.Instance, Mock.Of<IGuiderProcessSupervisor>());
+                NullLogger<GuiderService>.Instance, Mock.Of<IGuiderProcessSupervisor>(), profileStore: store);
             await svc.ConnectAsync(new GuiderConnectRequestDto("127.0.0.1", fake.Port), idempotencyKey: null, CancellationToken.None)
                 .ConfigureAwait(false);
             Assert.That(await WaitUntilAsync(() => svc.GetInfo().PixelScale > 0).ConfigureAwait(false), Is.True, "precondition: connected");
@@ -329,6 +330,59 @@ namespace OpenAstroAra.Test {
             var emptyApply = await OpenAstroAra.Server.Endpoints.EquipmentEndpoints.GuiderLiveResultAsync(
                 () => live.ApplyGuidingAssistantAsync(Array.Empty<string>(), CancellationToken.None)).ConfigureAwait(false);
             Assert.That((emptyApply as Microsoft.AspNetCore.Http.IStatusCodeHttpResult)?.StatusCode, Is.EqualTo(400));
+        }
+
+        private static readonly string[] JustDecMode = { "dec_guide_mode" };
+        private static readonly string[] EveryRecommendation = { "exposure", "min_move_ra", "min_move_dec", "dec_backlash", "dec_guide_mode", "dec_algorithm" };
+
+        [Test]
+        public async Task An_apply_writes_the_guiders_new_values_into_aras_profile() {
+            // #1448 — Apply set North in the guider's profile while Ara kept showing Auto; Ara's next push
+            // (Auto was never sent) left North in place and South drift went uncorrected. The values are
+            // read back from the guider, so the exposure is the duration it picked, not the recommended range.
+            var store = new InMemoryProfileStore();
+            store.PutGuiderAdvancedSettings(new GuiderAdvancedSettingsDto(MaxRaDurationMs: 2500));
+            using var profiles = new StoreBackedProfileService(store);
+            var (fake, svc) = await ConnectedAsync(f => {
+                f.OnRpc("guiding_assistant_apply", _ => new JsonObject { ["applied"] = new JsonArray(EveryRecommendation.Select(n => (JsonNode)n).ToArray()) });
+                f.OnRpc("get_exposure", JsonValue.Create(2000));
+                f.OnRpc("get_algo", req => req["params"]?["axis"]?.GetValue<string>() == "dec" ? JsonValue.Create("Resist Switch") : JsonValue.Create("Hysteresis"));
+                f.OnRpc("get_algo_param", req => req["params"]?["axis"]?.GetValue<string>() == "ra" ? JsonValue.Create(0.18) : JsonValue.Create(0.32));
+                f.OnRpc("get_dec_guide_mode", JsonValue.Create("North"));
+                f.OnRpc("get_backlash_comp", _ => new JsonObject { ["Enabled"] = true, ["PulseWidth"] = 1200, ["Floor"] = 20, ["Ceiling"] = 2400 });
+            }, store, profiles).ConfigureAwait(false);
+            await using var _ = fake;
+            using var __ = svc;
+            var live = new GuiderLiveService(svc, new NoFrames());
+
+            var applied = await live.ApplyGuidingAssistantAsync(EveryRecommendation, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(applied, Is.EqualTo(EveryRecommendation));
+            var phd2 = store.GetPhd2Settings();
+            Assert.That((phd2.GuideExposureMs, phd2.MinimumMove, phd2.DecMinimumMove, phd2.DecGuideMode), Is.EqualTo((2000, 0.18, (double?)0.32, "north")));
+            var advanced = store.GetGuiderAdvancedSettings();
+            Assert.That((advanced.DecAlgorithm, advanced.BacklashEnabled, advanced.BacklashPulseMs, advanced.BacklashFloorMs, advanced.BacklashCeilingMs),
+                Is.EqualTo(("Resist Switch", (bool?)true, (int?)1200, (int?)20, (int?)2400)));
+            Assert.That(advanced.MaxRaDurationMs, Is.EqualTo(2500), "settings Apply did not touch are kept");
+        }
+
+        [Test]
+        public async Task An_apply_whose_read_back_fails_still_reports_what_the_guider_applied() {
+            // The guider already holds the values; a getter it refuses leaves Ara's profile as it was.
+            var store = new InMemoryProfileStore();
+            using var profiles = new StoreBackedProfileService(store);
+            var (fake, svc) = await ConnectedAsync(f => {
+                f.OnRpc("guiding_assistant_apply", _ => new JsonObject { ["applied"] = new JsonArray("dec_guide_mode") });
+                f.OnRpc("get_dec_guide_mode", _ => throw new InvalidOperationException("no mount"));
+            }, store, profiles).ConfigureAwait(false);
+            await using var _ = fake;
+            using var __ = svc;
+            var live = new GuiderLiveService(svc, new NoFrames());
+
+            var applied = await live.ApplyGuidingAssistantAsync(JustDecMode, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(applied, Is.EqualTo(JustDecMode));
+            Assert.That(store.GetPhd2Settings().DecGuideMode, Is.EqualTo("auto"));
         }
 
         [Test]

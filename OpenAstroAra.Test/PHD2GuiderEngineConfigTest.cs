@@ -227,7 +227,9 @@ namespace OpenAstroAra.Test {
         public void RequiresDisconnectedEquipment_covers_setup_and_every_selection_setter() {
             // Single source of truth for the push's disconnect window — every §63.17 selection message and
             // set_profile_setup force it; runtime-safe messages (algo params, dec mode) must not.
-            var forced = PHD2Guider.BuildGuiderEngineConfigMessages(SettingsWithSelections());
+            // The Dec mode rides every push (#1448), so it is the one runtime-safe message here.
+            var forced = PHD2Guider.BuildGuiderEngineConfigMessages(SettingsWithSelections())
+                .Where(m => m is not Phd2SetDecGuideMode).ToList();
             Assert.That(forced, Is.Not.Empty);
             Assert.That(forced.All(PHD2Guider.RequiresDisconnectedEquipment), Is.True);
             var runtimeSafe = PHD2Guider.BuildGuiderEngineConfigMessages(Settings(focal: 0, pixel: 0));
@@ -291,23 +293,25 @@ namespace OpenAstroAra.Test {
         private static readonly string[] RaAxisOnly = { "ra" };
 
         [Test]
-        public void Build_with_all_unset_values_pushes_nothing() {
-            // Every value at its unset/default sentinel (numerics 0, dec-mode "auto") → push nothing, leaving
-            // PHD2's own configuration untouched rather than overwriting it with ARA's blank defaults.
+        public void Build_with_all_unset_values_pushes_only_the_dec_mode() {
+            // Every numeric at its 0 = unset sentinel → nothing but the Dec mode, which has no unset value:
+            // Ara's Auto is pushed like any other mode (#1448).
             var msgs = PHD2Guider.BuildGuiderEngineConfigMessages(
                 Settings(focal: 0, pixel: 0, ra: 0, dec: 0, minMove: 0, mode: "auto"));
-            Assert.That(msgs, Is.Empty);
+            Assert.That(msgs.Single(), Is.InstanceOf<Phd2SetDecGuideMode>());
+            Assert.That(((Phd2SetDecGuideMode)msgs.Single()).Parameters!.Mode, Is.EqualTo("Auto"));
         }
 
-        [Test]
-        public void Build_pushes_dec_mode_only_when_it_is_not_auto() {
-            // "auto" is both ARA's and PHD2's default → don't push (don't overwrite the user's PHD2 setting).
-            Assert.That(PHD2Guider.BuildGuiderEngineConfigMessages(Settings(mode: "auto"))
-                .OfType<Phd2SetDecGuideMode>(), Is.Empty);
-            // An explicit mode IS pushed.
-            var north = PHD2Guider.BuildGuiderEngineConfigMessages(Settings(mode: "north"))
+        [TestCase("auto", "Auto")]
+        [TestCase("north", "North")]
+        [TestCase("south", "South")]
+        [TestCase("off", "Off")]
+        public void Build_always_pushes_the_dec_mode(string mode, string expected) {
+            // #1448 — Auto used to be skipped as "unset", so a North the guider's profile held (Guiding
+            // Assistant Apply) outlived the user's Auto in Ara and South drift went uncorrected all night.
+            var sent = PHD2Guider.BuildGuiderEngineConfigMessages(Settings(mode: mode))
                 .OfType<Phd2SetDecGuideMode>().Single();
-            Assert.That(north.Parameters!.Mode, Is.EqualTo("North"));
+            Assert.That(sent.Parameters!.Mode, Is.EqualTo(expected));
         }
 
         [Test]

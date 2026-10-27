@@ -362,14 +362,10 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                 messages.Add(new Phd2SetExposure { Parameters = new int[] { guider.GuideExposureMs } });
             }
 
-            // dec-guide-mode: "Auto" is both ARA's default and PHD2's own default, so treat it as the unset
-            // sentinel (like the numeric 0s) and don't push it — otherwise a fresh ARA profile would overwrite
-            // a user's deliberate PHD2 North/South (e.g. a backlash-sensitive mount) on every connect. Only an
-            // explicit North/South/Off is sent.
-            var decMode = MapDecGuideMode(guider.DecGuideMode);
-            if (decMode != "Auto") {
-                messages.Add(new Phd2SetDecGuideMode { Parameters = new() { Mode = decMode } });
-            }
+            // dec-guide-mode is always pushed, Auto included: Ara owns it (§63.5). Auto used to be skipped as
+            // an "unset" sentinel, so a North the guider's profile picked up (Guiding Assistant Apply) outlived
+            // the user's Auto in Ara and Dec drift that needed a South pulse was never corrected (#1448).
+            messages.Add(new Phd2SetDecGuideMode { Parameters = new() { Mode = MapDecGuideMode(guider.DecGuideMode) } });
             // #1364 — the rest of the advanced settings Ara keeps; all runtime-safe.
             messages.AddRange(advancedMessages.Where(m => m.Method != AlgorithmSetter));
             return messages;

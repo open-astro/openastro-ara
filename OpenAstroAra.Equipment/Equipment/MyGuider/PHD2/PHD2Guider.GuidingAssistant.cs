@@ -13,6 +13,7 @@
 using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -115,5 +116,67 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             ThrowOnError("guiding_assistant_apply", response);
             return response.result?.Applied ?? Array.Empty<string>();
         }
+
+        /// <summary>
+        /// #1448 — what the guider now holds for each applied recommendation, read back from the guider
+        /// rather than taken from the recommendation (the exposure is a range the guider rounds to one of its
+        /// durations; the backlash pulse is capped). Ara writes these into its profile so its next push sends
+        /// them, not the values Apply just replaced. Best-effort: a getter the guider refuses leaves its
+        /// field null.
+        /// </summary>
+        public async Task<GuidingAssistantAppliedValues> ReadGuidingAssistantAppliedAsync(IReadOnlyList<string> applied, CancellationToken ct) {
+            ArgumentNullException.ThrowIfNull(applied);
+            async Task<JToken?> Get(string method, Dictionary<string, object>? p = null) {
+                ct.ThrowIfCancellationRequested();
+                var resp = await SendMessage<GenericPhdMethodResponse>(new Phd2NamedGetter(method, p), LiveRpcTimeoutMs, notifyOnError: false).ConfigureAwait(false);
+                return resp.error != null || resp.result is null ? null : JToken.FromObject(resp.result);
+            }
+            static double? D(JToken? t) => t?.Type is JTokenType.Float or JTokenType.Integer && double.IsFinite(t.Value<double>()) ? t.Value<double>() : null;
+            static int? I(JToken? t) => D(t) is double d ? (int)Math.Round(d) : null;
+            static string? S(JToken? t) => t?.Type == JTokenType.String && !string.IsNullOrWhiteSpace(t.Value<string>()) ? t.Value<string>() : null;
+            bool Has(string name) => applied.Contains(name, StringComparer.Ordinal);
+
+            var values = new GuidingAssistantAppliedValues();
+            if (Has("exposure")) {
+                values = values with { ExposureMs = I(await Get("get_exposure").ConfigureAwait(false)) };
+            }
+            // The algorithm first: the Dec minimum move below belongs to whichever algorithm Apply left.
+            if (Has("dec_algorithm")) {
+                values = values with { DecAlgorithm = S(await Get("get_algo", new() { ["axis"] = "dec" }).ConfigureAwait(false)) };
+            }
+            if (Has("min_move_ra")) {
+                values = values with { MinMoveRaPx = D(await Get("get_algo_param", new() { ["axis"] = "ra", ["name"] = "minMove" }).ConfigureAwait(false)) };
+            }
+            if (Has("min_move_dec")) {
+                values = values with { MinMoveDecPx = D(await Get("get_algo_param", new() { ["axis"] = "dec", ["name"] = "minMove" }).ConfigureAwait(false)) };
+            }
+            if (Has("dec_guide_mode")) {
+                values = values with { DecGuideMode = S(await Get("get_dec_guide_mode").ConfigureAwait(false)) };
+            }
+            if (Has("dec_backlash")) {
+                var b = await Get("get_backlash_comp").ConfigureAwait(false);
+                values = values with {
+                    BacklashEnabled = b?["Enabled"]?.Type == JTokenType.Boolean ? b["Enabled"]!.Value<bool>() : null,
+                    BacklashPulseMs = I(b?["PulseWidth"]),
+                    BacklashFloorMs = I(b?["Floor"]),
+                    BacklashCeilingMs = I(b?["Ceiling"]),
+                };
+            }
+            return values;
+        }
+    }
+
+    /// <summary>#1448 — the guider's values after a Guiding Assistant Apply, in the guider's units (ms, px)
+    /// and names (Dec mode "North", algorithm "Hysteresis"). Null = not applied, or the guider did not say.</summary>
+    public sealed record GuidingAssistantAppliedValues {
+        public int? ExposureMs { get; init; }
+        public double? MinMoveRaPx { get; init; }
+        public double? MinMoveDecPx { get; init; }
+        public string? DecGuideMode { get; init; }
+        public string? DecAlgorithm { get; init; }
+        public bool? BacklashEnabled { get; init; }
+        public int? BacklashPulseMs { get; init; }
+        public int? BacklashFloorMs { get; init; }
+        public int? BacklashCeilingMs { get; init; }
     }
 }

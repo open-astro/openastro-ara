@@ -8,10 +8,24 @@ import 'package:openastroara/models/guider_status.dart';
 import 'package:openastroara/models/guiding_assistant.dart';
 import 'package:openastroara/models/server.dart';
 import 'package:openastroara/services/guiding_assistant_api.dart';
+import 'package:openastroara/services/profile_api.dart';
+import 'package:openastroara/state/profile_management_state.dart';
+import 'package:openastroara/state/settings/phd2_settings_state.dart';
 import 'package:openastroara/state/saved_server_state.dart';
 import 'package:openastroara/state/guider/guider_state.dart';
 import 'package:openastroara/state/guider/guiding_assistant_state.dart';
 import 'package:openastroara/widgets/imaging/guiding_assistant_dialog.dart';
+
+/// What the daemon's profile holds after an Apply: the guider's North (#1448).
+class _Profile extends ProfileApi {
+  _Profile() : super(const AraServer(hostname: 'localhost', port: 5555));
+  int reads = 0;
+  @override
+  Future<Phd2Settings> getPhd2Settings() async {
+    reads++;
+    return const Phd2Settings(decGuideMode: 'north', guideExposureMs: 2000);
+  }
+}
 
 class _Fake implements GuidingAssistantClient {
   GuidingAssistantStatus status;
@@ -123,6 +137,7 @@ Future<_Fake> _pump(
   _Fake? fake,
   bool open = true,
   bool shared = false,
+  _Profile? profile,
 }) async {
   fake ??= _Fake(status);
   t.view.physicalSize = const Size(900, 900);
@@ -137,6 +152,7 @@ Future<_Fake> _pump(
         activeServerProvider.overrideWith((ref) => ref.watch(_server)),
         guidingAssistantApiFactoryProvider.overrideWithValue((_) => fake!),
         guiderStatusProvider.overrideWith(() => _GuiderAt(guider)),
+        profileApiProvider.overrideWithValue(profile ?? _Profile()),
       ],
       child: MaterialApp(
         home: Scaffold(
@@ -445,10 +461,27 @@ void main() {
     );
   });
 
+  testWidgets('Accept re-reads the guider settings the daemon wrote', (
+    t,
+  ) async {
+    // #1448 — Apply set North in the guider; the shared settings must show
+    // it, or a later save from Settings → Guider puts Auto back.
+    final profile = _Profile();
+    await _pump(t, _done(), profile: profile);
+    await t.ensureVisible(find.byKey(const Key('guiding-assistant-apply')));
+    await t.tap(find.byKey(const Key('guiding-assistant-apply')));
+    await t.pump();
+    await t.pump();
+    expect(profile.reads, 1);
+    final phd2 = _container(t).read(phd2SettingsProvider);
+    expect((phd2.decGuideMode, phd2.guideExposureMs), ('north', 2000));
+  });
+
   testWidgets('an Accept that lands after a server switch marks nothing', (
     t,
   ) async {
-    final fake = await _pump(t, _done(), shared: true);
+    final profile = _Profile();
+    final fake = await _pump(t, _done(), shared: true, profile: profile);
     final gate = Completer<void>();
     fake.applyGate = gate;
     await t.ensureVisible(find.byKey(const Key('guiding-assistant-apply')));
@@ -463,6 +496,7 @@ void main() {
     await t.pump();
     await t.pump();
     expect(_container(t).read(guidingAssistantAppliedProvider), isEmpty);
+    expect(profile.reads, 0, reason: 'the old server\'s settings stay out');
   });
 
   testWidgets('a missing drift reads a bare dash', (t) async {
