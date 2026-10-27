@@ -123,8 +123,18 @@ paths:
               $ref: '#/components/schemas/ExposureRequestDto'
         required: true
       responses:
-        '200':
-          description: OK
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExposureResponseDto'
+        '409':
+          description: Conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/equipment/camera/exposure/abort:
     post:
       tags:
@@ -9017,6 +9027,27 @@ components:
           type:
             - 'null'
             - string
+    ExposureResponseDto:
+      required:
+        - frame_id
+        - preview_url
+        - exposure_sec
+        - captured_at
+      type: object
+      properties:
+        frame_id:
+          type: string
+        preview_url:
+          type: string
+          format: uri
+        exposure_sec:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+        captured_at:
+          type: string
     FaultDto:
       required:
         - id

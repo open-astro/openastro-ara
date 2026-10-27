@@ -207,7 +207,9 @@ public static partial class EquipmentEndpoints {
         camera.MapPost("/disconnect", async ([FromHeader(Name = "Idempotency-Key")] string? key, ICameraService svc, CancellationToken ct) =>
             Results.Accepted(value: await svc.DisconnectAsync(key, ct)));
         camera.MapPost("/exposure", async ([FromBody] ExposureRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, ICameraService svc, CancellationToken ct) =>
-            await StartExposureAsync(request, key, svc, ct));
+            await StartExposureAsync(request, key, svc, ct))
+            .Produces<ExposureResponseDto>(StatusCodes.Status202Accepted)
+            .ProducesProblem(StatusCodes.Status409Conflict);
         camera.MapPost("/exposure/abort", async (ICameraService svc, CancellationToken ct) => {
             await svc.AbortExposureAsync(ct); return Results.Accepted();
         });
