@@ -127,16 +127,18 @@ public sealed partial class AutofocusSweepService {
             var reached = await _focuser.MoveFocuser(position, token).ConfigureAwait(false);
             var frame = await _frames.CaptureForAnalysisAsync(settings.ExposureSeconds, settings.Binning, token).ConfigureAwait(false);
             var hfr = _coarseMetric(frame, token);
-            LogCoarseProbe(reached, hfr);
+            // #1445 — full resolution beside every binned reading, so a run that walks away from focus on
+            // bad frames (a slew still settling, a passing cloud) shows it in the log: the binned/full-res
+            // ratio swings with defocus, so no rule is drawn from it until real runs show the pattern.
+            var sharp = _metric(frame, token);
+            LogCoarseProbe(reached, hfr, sharp.AverageHFR, sharp.DetectedStars);
             measured[position] = hfr;
-            if (!double.IsFinite(hfr)) {
-                // +∞ has two causes: discs too big even for the binned frame, or stars so sharp and faint
-                // (a narrowband filter) that binning averages them into the noise. Full resolution tells
-                // whether anything is there; the neighbours decide which side of the V it is.
-                var sharp = _metric(frame, token);
-                if (sharp.DetectedStars >= MinStarsPerProbe && sharp.AverageHFR > 0 && double.IsFinite(sharp.AverageHFR) && !sharp.NoiseFlooded) {
-                    sharpUnbinned.Add(position);
-                }
+            // +∞ has two causes: discs too big even for the binned frame, or stars so sharp and faint
+            // (a narrowband filter) that binning averages them into the noise. Full resolution tells
+            // whether anything is there; the neighbours decide which side of the V it is.
+            if (!double.IsFinite(hfr)
+                    && sharp.DetectedStars >= MinStarsPerProbe && sharp.AverageHFR > 0 && double.IsFinite(sharp.AverageHFR) && !sharp.NoiseFlooded) {
+                sharpUnbinned.Add(position);
             }
             // The coarse metric reports no star count (∞ = too few to measure); the run record shows it as 0.
             await RecordProbeAsync("coarse", reached, hfr, 0, double.IsFinite(hfr), CoarseMaxProbes, null).ConfigureAwait(false);
@@ -268,8 +270,8 @@ public sealed partial class AutofocusSweepService {
         return null;
     }
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "Autofocus coarse probe: position {Position} HFR {Hfr:0.##} (native px, binned measurement)")]
-    private partial void LogCoarseProbe(int position, double hfr);
+    [LoggerMessage(Level = LogLevel.Information, Message = "Autofocus coarse probe: position {Position} HFR {Hfr:0.##} (native px, binned measurement); full resolution HFR {FullHfr:0.###} ({Stars} stars)")]
+    private partial void LogCoarseProbe(int position, double hfr, double fullHfr, int stars);
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Autofocus coarse search: the binned frame lost the stars at {Position} but full resolution sees them, between measurable neighbours (HFR {Up:0.##} above, {Down:0.##} below) — keeping it as the sweep centre")]
     private partial void LogCoarseSharpStart(int position, double up, double down);

@@ -149,16 +149,17 @@ namespace OpenAstroAra.Test {
             // restore, without ever starting the fine sweep.
             var (focuser, moves) = Focuser();
             int Current() => moves.Count == 0 ? StartPosition : moves[^1];
-            var fineProbes = 0;
+            var fullResReads = 0;
             using var svc = new AutofocusSweepService(
                 Profiles(Settings(steps: 4, stepSize: 100, restore: true)).Object, focuser.Object, Frames().Object,
-                metric: (_, _) => { fineProbes++; return Result(1.5, 42); },
+                metric: (_, _) => { fullResReads++; return Result(1.5, 42); },
                 coarseMetric: (_, _) => 1e6 - Current());
 
             var ok = await svc.RunAutofocusAsync(NoProgress, CancellationToken.None);
 
             Assert.That(ok, Is.False);
-            Assert.That(fineProbes, Is.Zero);
+            // #1445 — each coarse probe logs its full-resolution reading beside the binned one; no fine probe ran.
+            Assert.That(fullResReads, Is.EqualTo(AutofocusSweepService.CoarseMaxProbes));
             var coarseMoves = moves.GetRange(0, moves.Count - 1);
             Assert.That(coarseMoves, Has.Count.EqualTo(AutofocusSweepService.CoarseMaxProbes));
             Assert.That(coarseMoves, Is.Ordered.Ascending);

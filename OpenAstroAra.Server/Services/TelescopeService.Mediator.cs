@@ -280,6 +280,20 @@ public sealed partial class TelescopeService : ITelescopeMediator {
 
     public Task<bool> SlewToCoordinatesAsync(Coordinates coords, CancellationToken token) {
         ArgumentNullException.ThrowIfNull(coords);
+        return GotoThenSettleAsync();
+
+        async Task<bool> GotoThenSettleAsync() {
+            var arrived = await GotoAsync(coords, token).ConfigureAwait(false);
+            if (arrived) {
+                await PostSlewSettleAsync(token).ConfigureAwait(false);
+            }
+            return arrived;
+        }
+    }
+
+    // The goto alone: drive the slew and wait for arrival, no settle. The flip goto uses it directly —
+    // MeridianFlipExecutor settles after it with MeridianFlipSettings.SettleTime.
+    private Task<bool> GotoAsync(Coordinates coords, CancellationToken token) {
         AlpacaTelescope client;
         bool parked;
         lock (_gate) {
@@ -342,6 +356,24 @@ public sealed partial class TelescopeService : ITelescopeMediator {
             }
         }
     }
+
+    // #1445 — NINA's post-slew settle (TelescopeSettings.SettleTime, default 5 s): Slewing goes false
+    // while the mount is still ringing, and the first frame after the goto (an autofocus probe, a
+    // centering solve) must not catch it. Every slew consumer gets it, as in NINA's TelescopeVM.
+    private async Task PostSlewSettleAsync(CancellationToken token) {
+        var seconds = _profileService?.ActiveProfile?.TelescopeSettings.SettleTime ?? 0;
+        if (seconds <= 0) {
+            return;
+        }
+        LogPostSlewSettle(seconds);
+        await SettleDelay(TimeSpan.FromSeconds(seconds), token).ConfigureAwait(false);
+    }
+
+    // Test knob: the settle wait (tests record the requested settle instead of sleeping through it).
+    internal Func<TimeSpan, CancellationToken, Task> SettleDelay { get; set; } = Task.Delay;
+
+    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Information, Message = "Slew complete; settling the mount for {Seconds} s before the next frame (#1445)")]
+    private partial void LogPostSlewSettle(int seconds);
 
     private void ClearPendingSlewTarget() {
         lock (_gate) {
@@ -746,7 +778,7 @@ public sealed partial class TelescopeService : ITelescopeMediator {
         if (_profileService?.ActiveProfile?.MeridianFlipSettings.UseSideOfPier == true) {
             await CommandDestinationPierSideAsync(client, targetCoordinates, token).ConfigureAwait(false);
         }
-        var slewed = await SlewToCoordinatesAsync(targetCoordinates, token).ConfigureAwait(false);
+        var slewed = await GotoAsync(targetCoordinates, token).ConfigureAwait(false);
         RefreshCacheOnce();
         return slewed;
     }
