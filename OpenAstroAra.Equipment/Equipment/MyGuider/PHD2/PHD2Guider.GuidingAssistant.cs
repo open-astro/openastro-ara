@@ -136,32 +136,29 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             static string? S(JToken? t) => t?.Type == JTokenType.String && !string.IsNullOrWhiteSpace(t.Value<string>()) ? t.Value<string>() : null;
             bool Has(string name) => applied.Contains(name, StringComparer.Ordinal);
 
-            var values = new GuidingAssistantAppliedValues();
-            if (Has("exposure")) {
-                values = values with { ExposureMs = I(await Get("get_exposure").ConfigureAwait(false)) };
-            }
-            // The algorithm first: the Dec minimum move below belongs to whichever algorithm Apply left.
-            if (Has("dec_algorithm")) {
-                values = values with { DecAlgorithm = S(await Get("get_algo", new() { ["axis"] = "dec" }).ConfigureAwait(false)) };
-            }
-            if (Has("min_move_ra")) {
-                values = values with { MinMoveRaPx = D(await Get("get_algo_param", new() { ["axis"] = "ra", ["name"] = "minMove" }).ConfigureAwait(false)) };
-            }
-            if (Has("min_move_dec")) {
-                values = values with { MinMoveDecPx = D(await Get("get_algo_param", new() { ["axis"] = "dec", ["name"] = "minMove" }).ConfigureAwait(false)) };
-            }
-            if (Has("dec_guide_mode")) {
-                values = values with { DecGuideMode = S(await Get("get_dec_guide_mode").ConfigureAwait(false)) };
-            }
-            if (Has("dec_backlash")) {
-                var b = await Get("get_backlash_comp").ConfigureAwait(false);
-                values = values with {
-                    BacklashEnabled = b?["Enabled"]?.Type == JTokenType.Boolean ? b["Enabled"]!.Value<bool>() : null,
-                    BacklashPulseMs = I(b?["PulseWidth"]),
-                    BacklashFloorMs = I(b?["Floor"]),
-                    BacklashCeilingMs = I(b?["Ceiling"]),
-                };
-            }
+            // In parallel (each RPC is its own connection, as the advanced-settings read is): six sequential
+            // timeouts against a slow guider would keep Accept waiting. Every read is of the state Apply left.
+            Task<JToken?> GetIf(string name, string method, Dictionary<string, object>? p = null) =>
+                Has(name) ? Get(method, p) : Task.FromResult<JToken?>(null);
+            var exposureT = GetIf("exposure", "get_exposure");
+            var decAlgoT = GetIf("dec_algorithm", "get_algo", new() { ["axis"] = "dec" });
+            var raMinMoveT = GetIf("min_move_ra", "get_algo_param", new() { ["axis"] = "ra", ["name"] = "minMove" });
+            var decMinMoveT = GetIf("min_move_dec", "get_algo_param", new() { ["axis"] = "dec", ["name"] = "minMove" });
+            var decModeT = GetIf("dec_guide_mode", "get_dec_guide_mode");
+            var backlashT = GetIf("dec_backlash", "get_backlash_comp");
+            await Task.WhenAll(exposureT, decAlgoT, raMinMoveT, decMinMoveT, decModeT, backlashT).ConfigureAwait(false);
+            var b = await backlashT.ConfigureAwait(false);
+            var values = new GuidingAssistantAppliedValues {
+                ExposureMs = I(await exposureT.ConfigureAwait(false)),
+                DecAlgorithm = S(await decAlgoT.ConfigureAwait(false)),
+                MinMoveRaPx = D(await raMinMoveT.ConfigureAwait(false)),
+                MinMoveDecPx = D(await decMinMoveT.ConfigureAwait(false)),
+                DecGuideMode = S(await decModeT.ConfigureAwait(false)),
+                BacklashEnabled = b?["Enabled"]?.Type == JTokenType.Boolean ? b["Enabled"]!.Value<bool>() : null,
+                BacklashPulseMs = I(b?["PulseWidth"]),
+                BacklashFloorMs = I(b?["Floor"]),
+                BacklashCeilingMs = I(b?["Ceiling"]),
+            };
             return values;
         }
     }

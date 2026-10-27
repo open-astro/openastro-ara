@@ -42,6 +42,20 @@ This file captures the *reasoning* behind each contract decision — DTO shapes,
 **Related:** §X.Y of PORT_PLAYBOOK.md, PR #N
 ```
 
+### 2026-10-27 — Guiding Assistant Apply also writes Ara's profile; the Dec guide mode is always pushed (#1448)
+
+**Endpoint(s) or area:** `POST /api/v1/equipment/guider/live/assistant/apply` (same request and `{ applied[] }` answer); `GET/PUT /api/v1/profile/phd2` and `/profile/guider-advanced` now change after an Apply; every guider push (`POST /equipment/guider/profile/push`, both scopes, and the connect push) sends `set_dec_guide_mode`.
+
+**Decision:** after the guider applies the recommendations, the daemon reads its resulting values back (`get_exposure`, `get_algo_param minMove` per axis, `get_dec_guide_mode`, `get_algo dec`, `get_backlash_comp`) and writes them into the active profile: `guide_exposure_ms`, `minimum_move`, `dec_minimum_move`, `dec_guide_mode` in the PHD2 block; `dec_algorithm` and the backlash group in the guider-advanced block. A value the guider does not report, or one the PUT boundary would refuse, keeps the profile's. The read-back is best-effort: its failure is logged and the Apply still answers 200. Clients re-read `/profile/phd2` after Apply. The Dec guide mode has no "unset" value any more: Auto is pushed like North/South/Off.
+
+**Reasoning:** Ara owns the guider settings (§63.5) and pushes them on every connect, but Apply wrote only the guider's profile and Auto was skipped as "unset". A North the assistant applied stayed in force under Ara's Auto, and South drift went uncorrected for whole nights. Reading back instead of copying the recommendation stores what the guider actually runs (the exposure range is rounded to one of its durations; the backlash pulse is capped).
+
+**Spec ref:** `Services/GuiderLiveService.cs` (`ApplyGuidingAssistantAsync`), `Services/GuiderService.GuidingAssistant.cs`, `Equipment/MyGuider/PHD2/PHD2Guider.GuidingAssistant.cs` (`ReadGuidingAssistantAppliedAsync`), `PHD2Guider.GuiderEngineConfig.cs` (`BuildGuiderEngineConfigMessages`); client `state/guider/guiding_assistant_state.dart`.
+
+**Related:** #1364 item 4 (the assistant endpoints), PR #1452.
+
+---
+
 ### 2026-10-27 — Take One refuses without a storage disk: `POST /equipment/camera/exposure` 409 (#1450)
 
 **Endpoint(s) or area:** `POST /api/v1/equipment/camera/exposure` gains a 409; `camera.exposure_failed` can now arrive with no `camera.exposure_started` before it.

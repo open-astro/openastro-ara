@@ -33,6 +33,9 @@ public sealed partial class GuiderService {
             if (values.MinMoveRaPx is > 0 and var ra) live.MinimumMove = ra;
             if (values.MinMoveDecPx is > 0 and var dec) live.DecMinimumMove = dec;
             if (DecGuideModeFromGuider(values.DecGuideMode) is { } mode) live.DecGuideMode = mode;
+            if (values.DecAlgorithm is not null || values.BacklashPulseMs is not null) {
+                LogGuidingAssistantAdvancedDropped();
+            }
         } else {
             var phd2 = _profileStore.GetPhd2Settings();
             var nextPhd2 = WithGuidingAssistantApplied(phd2, values);
@@ -89,6 +92,10 @@ public sealed partial class GuiderService {
         }
         return next;
     }
+
+    [LoggerMessage(Level = LogLevel.Debug,
+        Message = "Guiding Assistant Apply: no profile store, so the Dec algorithm and backlash compensation stay only in the guider (#1448)")]
+    private partial void LogGuidingAssistantAdvancedDropped();
 
     [LoggerMessage(Level = LogLevel.Information,
         Message = "Guiding Assistant Apply recorded in Ara's profile: exposure {ExposureMs} ms, min move RA {MinMoveRa} / Dec {MinMoveDec} px, Dec mode {DecMode}, Dec algorithm {DecAlgorithm}, backlash {BacklashEnabled} {BacklashPulseMs} ms (#1448)")]
