@@ -884,7 +884,7 @@ void main() {
     testWidgets('zero or junk puts back the exposure in force',
         (tester) async {
       final container = await _pump(tester);
-      for (final bad in ['0', '-1', 'abc', '0.0001']) {
+      for (final bad in ['0', '-1', 'abc', 'NaN', 'Infinity']) {
         await submit(tester, bad);
         expect(container.read(exposureControllerProvider).exposure,
             const Duration(seconds: 5),
@@ -913,6 +913,45 @@ void main() {
       expect(container.read(exposureControllerProvider).exposure,
           const Duration(milliseconds: 10));
       expect(shown(tester), '0.01');
+    });
+
+    testWidgets('a positive input under 1 ms floors to 1 ms', (tester) async {
+      final container = await _pump(tester);
+      await submit(tester, '0.0001');
+      expect(container.read(exposureControllerProvider).exposure,
+          const Duration(milliseconds: 1));
+      expect(shown(tester), '0.001');
+    });
+
+    testWidgets("caps at the camera's ExposureMax", (tester) async {
+      final camera = CameraStatus.fromJson({
+        'state': 'connected',
+        'capabilities': {
+          'sensor_width': 100,
+          'sensor_height': 100,
+          'min_bin_x': 1,
+          'max_bin_x': 2,
+          'min_bin_y': 1,
+          'max_bin_y': 2,
+          'min_exposure_sec': 0.01,
+          'max_exposure_sec': 600,
+        },
+        'runtime': {'state': 'idle'},
+      });
+      final container = await _pump(tester, cameraStatus: camera);
+      await submit(tester, '900');
+      expect(container.read(exposureControllerProvider).exposure,
+          const Duration(seconds: 600));
+      expect(shown(tester), '600');
+    });
+
+    testWidgets('an absurd input with no camera is bounded, not overflowed',
+        (tester) async {
+      final container = await _pump(tester);
+      await submit(tester, '1e300');
+      expect(tester.takeException(), isNull);
+      expect(container.read(exposureControllerProvider).exposure,
+          const Duration(hours: 24));
     });
 
     testWidgets('offers a decimal key on mobile keyboards', (tester) async {
