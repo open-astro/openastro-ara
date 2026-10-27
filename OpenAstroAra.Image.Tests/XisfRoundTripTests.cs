@@ -14,6 +14,7 @@
 
 using System.Globalization;
 using System.Text;
+using System.Xml.Linq;
 using OpenAstroAra.Core.Enums;
 using OpenAstroAra.Image.FileFormat;
 using OpenAstroAra.Image.FileFormat.XISF;
@@ -575,6 +576,44 @@ public sealed class XisfRoundTripTests : IDisposable {
         using var ms = new MemoryStream();
         Assert.Throws<InvalidDataException>(() => xisf.Save(ms));
         Assert.Equal(0, ms.Length);
+    }
+
+    [Fact]
+    public void AParsedHeaderKeepsOnlyTheSourceMetadataAndIsDetachedFromTheSource() {
+        XNamespace ns = "http://www.pixinsight.com/xisf";
+        var source = new XElement(ns + "xisf",
+            new XAttribute("version", "1.0"),
+            new XElement(ns + "Metadata",
+                new XElement(ns + "Property", new XAttribute("id", "XISF:CreatorApplication"), new XAttribute("type", "String"), new XAttribute("value", "PixInsight"))),
+            new XElement(ns + "Image", new XAttribute("geometry", "2:2:1"), new XAttribute("sampleFormat", "UInt16")));
+        var sourceText = source.ToString();
+
+        var header = new XISFHeader(source);
+        var root = header.Content.Root!;
+
+        // The writer defaults of the parameterless ctor (creation time, Ara as creator) must not
+        // join the parsed metadata: one Metadata element, holding exactly the source's property.
+        var metadata = Assert.Single(root.Elements(ns + "Metadata"));
+        var property = Assert.Single(metadata.Elements());
+        Assert.Equal("PixInsight", property.Attribute("value")?.Value);
+        Assert.Single(root.Elements(ns + "Image"));
+
+        // MetaData and Image are the elements inside Content, so edits land in what Save writes,
+        // and the caller's tree is left alone.
+        Assert.Same(root, header.MetaData.Parent);
+        Assert.Same(root, header.Image!.Parent);
+        header.Image.SetAttributeValue("location", "attachment:4096:8");
+        Assert.Equal("attachment:4096:8", Assert.Single(root.Elements(ns + "Image")).Attribute("location")?.Value);
+        Assert.Equal(sourceText, source.ToString());
+    }
+
+    [Fact]
+    public void AParsedHeaderWithoutMetadataGetsOneEmptyMetadataElement() {
+        XNamespace ns = "http://www.pixinsight.com/xisf";
+        var header = new XISFHeader(new XElement(ns + "xisf", new XElement(ns + "Image", new XAttribute("geometry", "1:1:1"))));
+        var metadata = Assert.Single(header.Content.Root!.Elements(ns + "Metadata"));
+        Assert.Empty(metadata.Elements());
+        Assert.Same(metadata, header.MetaData);
     }
 
     [Fact]

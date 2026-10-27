@@ -73,21 +73,28 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
         /// Creates a XISF Header out of an existing XISF xml
         /// </summary>
         /// <param name="header"></param>
-        public XISFHeader(XElement header) : this() {
-            // Keep the empty Metadata element created by this() if the source has none.
+        public XISFHeader(XElement header) {
+            // Not this(): its writer defaults (creation time, Ara as creator) would sit beside the
+            // parsed Metadata as a second element (#1054). Copies, so MetaData and Image are the
+            // elements inside Content and edits reach what Save writes, not the caller's tree.
+            Xisf = new XElement(header.Name, header.Attributes());
+
             var parsedMetaData = header.Element(xmlns + "Metadata")
                 ?? header.Elements().FirstOrDefault(x => x.Name?.LocalName == "Metadata");
-            if (parsedMetaData != null) {
-                MetaData = parsedMetaData;
-            }
-
-            Image = header.Element(xmlns + "Image")
-                ?? header.Elements().FirstOrDefault(x => x.Name?.LocalName == "Image");
-
+            MetaData = parsedMetaData != null ? new XElement(parsedMetaData) : new XElement(xmlns + "Metadata");
             Xisf.Add(MetaData);
-            if (Image != null) {
+
+            var parsedImage = header.Element(xmlns + "Image")
+                ?? header.Elements().FirstOrDefault(x => x.Name?.LocalName == "Image");
+            if (parsedImage != null) {
+                Image = new XElement(parsedImage);
                 Xisf.Add(Image);
             }
+
+            Content = new XDocument(
+                new XDeclaration("1.0", "UTF-8", null),
+                Xisf
+            );
         }
 
         public int ByteCount {
