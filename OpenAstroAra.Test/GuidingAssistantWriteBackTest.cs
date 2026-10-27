@@ -10,6 +10,8 @@
 */
 #endregion "copyright"
 
+using Microsoft.Extensions.Logging.Abstractions;
+using Moq;
 using NUnit.Framework;
 using OpenAstroAra.Equipment.Equipment.MyGuider.PHD2;
 using OpenAstroAra.Server.Contracts;
@@ -41,6 +43,26 @@ namespace OpenAstroAra.Test {
             Assert.That((next.GuideExposureMs, next.MinimumMove, next.DecMinimumMove, next.DecGuideMode),
                 Is.EqualTo((2000, 0.18, (double?)0.32, "north")));
             Assert.That(next.Host, Is.EqualTo("localhost"), "the rest of the block is untouched");
+            Assert.That(OpenAstroAra.Server.Endpoints.ProfileEndpoints.ValidateGuideExposureRange(next), Is.Null,
+                "what Ara stores passes its own write boundary");
+        }
+
+        [Test]
+        public void Without_a_store_the_active_profile_takes_the_tuning_values() {
+            // A headless service (no profile store) writes the live guider settings; the advanced block has
+            // nowhere to live there and is skipped.
+            var profiles = new HeadlessProfileService();
+            using var svc = new GuiderService(profiles,
+                new GuiderRecoveryCoordinator(Mock.Of<IGuiderProcessSupervisor>(), Mock.Of<INotificationService>(),
+                    Mock.Of<IDiagnosticsService>(), NullLogger<GuiderRecoveryCoordinator>.Instance),
+                NullLogger<GuiderService>.Instance, Mock.Of<IGuiderProcessSupervisor>());
+
+            svc.RecordGuidingAssistantApplied(new GuidingAssistantAppliedValues {
+                ExposureMs = 2000, MinMoveRaPx = 0.18, MinMoveDecPx = 0.32, DecGuideMode = "North", DecAlgorithm = "Resist Switch",
+            });
+
+            var live = profiles.ActiveProfile.GuiderSettings;
+            Assert.That((live.GuideExposureMs, live.MinimumMove, live.DecMinimumMove, live.DecGuideMode), Is.EqualTo((2000, 0.18, 0.32, "north")));
         }
 
         [Test]
