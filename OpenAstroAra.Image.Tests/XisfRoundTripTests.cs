@@ -621,6 +621,18 @@ public sealed class XisfRoundTripTests : IDisposable {
         Assert.Same(bare.MetaData, Assert.Single(bare.Content.Root!.Elements("Metadata")));
     }
 
+    [Theory]
+    [InlineData(FileType.TIFF)]
+    [InlineData(FileType.RAW)]
+    public async Task SavingAnythingButFitsOrXisfIsRefusedByName(FileType type) {
+        // Profiles migrated from TIFFLzw/TIFFZip still carry TIFF; Ara writes FITS or XISF only.
+        var img = new FakeImageDataFactory().CreateBaseImageData(Pattern(2, 2), 2, 2, 16, false, new ImageMetaData());
+        var info = new FileSaveInfo { FilePath = _dir, FilePattern = "frame", FileType = type };
+        var ex = await Assert.ThrowsAsync<NotSupportedException>(() => img.SaveToDisk(info));
+        Assert.Contains(type.ToString(), ex.Message, StringComparison.Ordinal);
+        Assert.Empty(Directory.EnumerateFileSystemEntries(_dir));
+    }
+
     [Fact]
     public async Task FromFileDispatchesXisfByExtension() {
         var path = TempPath("dispatch.xisf");
