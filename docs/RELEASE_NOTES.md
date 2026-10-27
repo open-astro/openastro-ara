@@ -22,8 +22,7 @@
 - **§36 sky-data Data Manager**: downloads the real HYG star + OpenNGC deep-sky catalogs (commit-pinned, SHA-256-verified, atomic install), serving Tonight's Sky ranking + planetarium catalog overlays.
 - **§43 configuration backup**: ZIP snapshots with retention pruning + restore (local or from another daemon's snapshot URL, SHA-256-gated).
 
-**Still placeholders (real impl ahead):**
-- DSLR RAW decoding (libraw).
+DSLR RAW frames are decoded upstream by AlpacaBridge's gPhoto driver (libraw), which serves them to Ara as an ordinary Alpaca image array; the daemon has no RAW pipeline of its own (#1147).
 
 *(Shipped since this list was written: §45 polar alignment end-to-end (PRs #888–#891; on-rig hardware close-out remains), the §44 backup stream both halves incl. §29-named mirror files, §29 storage/filenames/FITS headers (PR #923), and §76 Wizard 2.0 (PRs #901–#907) replacing the §37 18-screen flow.)*
 
@@ -48,7 +47,6 @@
 
 ### Known limitations
 
-- DSLR RAW decoding (libraw) not yet integrated.
 - Polar alignment (§45) not yet implemented.
 - Dependency licenses audited release-safe (MPL-2.0-compatible; no GPL/AGPL/commercial in the daemon); `3rd-party-licenses.txt` at the repo root is generated from the full NuGet graph and kept fresh by CI.
 
