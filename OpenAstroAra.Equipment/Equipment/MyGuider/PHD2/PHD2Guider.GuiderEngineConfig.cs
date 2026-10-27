@@ -43,23 +43,8 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             Justification = "Best-effort §63.5 push boundary: each setter RPC may throw (socket drop, a PHD2 build that doesn't expose a param) — it's logged and skipped so a config push can never fail or block the guider connect itself.")]
         private async Task PushGuiderEngineConfigAsync(CancellationToken ct) {
             var guider = profileService.ActiveProfile.GuiderSettings;
+            // Never empty: the Dec mode rides every push (#1448), so the summary line always reports the run.
             var messages = BuildGuiderEngineConfigMessages(guider, AdvancedSettingsQuietly());
-
-            if (messages.Count == 0) {
-                // All values left at their unset sentinels (0 / "auto") — nothing to push. Logged so an
-                // operator who expected their scope/aggressiveness to reach the guider can see the push ran
-                // but found nothing configured, rather than wondering whether it fired at all.
-                Logger.Debug("PHD2 §63.5 push - no guider-engine config set (all values unset/Auto); leaving the daemon's own settings.");
-                return;
-            }
-
-            // "Auto" dec-mode is intentionally skipped (it's PHD2's own default); surfacing its absence keeps a
-            // missing set_dec_guide_mode from reading as a bug. Inferred from the built message set (the single
-            // source of truth — BuildGuiderEngineConfigMessages emits one iff dec-mode != Auto) so this can't
-            // drift from the builder's own skip rule.
-            if (!messages.OfType<Phd2SetDecGuideMode>().Any()) {
-                Logger.Debug("PHD2 §63.5 push - dec-guide-mode is Auto (PHD2's default); not pushed, leaving the daemon's own setting.");
-            }
 
             // Only set_profile_setup and the §63.17 selection setters need the equipment off, so only pay the
             // disconnect → reconnect cost when one is actually being sent — otherwise the algo-param /
@@ -133,11 +118,8 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             }
             // The gain always goes: a profile with every other tuning value unset can still change it.
             await PushCameraGainAsync(ct);
+            // Never empty: the Dec mode is always among the runtime-safe messages (#1448).
             var messages = BuildGuiderTuningMessages(profileService.ActiveProfile.GuiderSettings, AdvancedSettingsQuietly());
-            if (messages.Count == 0) {
-                Logger.Debug("PHD2 §63.5 tuning push - no other runtime-safe guider config set; only the gain sent.");
-                return new[] { CameraGainSetter };
-            }
             await SendEngineConfigMessagesAsync(messages, " (tuning only, equipment left connected)", ct);
             return messages.Select(m => m.Method).Append(CameraGainSetter).Distinct().ToList();
         }

@@ -190,6 +190,28 @@ namespace OpenAstroAra.Test {
             Assert.That(sent.Single(s => s.Method == "set_noise_reduction").Params!["method"]!.GetValue<string>(), Is.EqualTo("3x3 Median"));
         }
 
+        [Test]
+        public async Task Connect_and_tuning_pushes_send_aras_auto_dec_mode() {
+            // #1448 — Auto used to be skipped as "unset", so a North in the guider's profile outlived it.
+            var modes = new ConcurrentQueue<string?>();
+            var (fake, svc, _) = await ConnectedAsync(setup: f => f.OnRpc("set_dec_guide_mode", req => {
+                modes.Enqueue(req["params"]?["mode"]?.GetValue<string>());
+                return JsonValue.Create(0);
+            })).ConfigureAwait(false);
+            await using var _f = fake;
+            using var _s = svc;
+            Assert.That(await WaitUntilAsync(() => !modes.IsEmpty).ConfigureAwait(false), Is.True, "the connect push sent the Dec mode");
+            Assert.That(modes, Is.All.EqualTo("Auto"));
+            modes.Clear();
+
+            var methods = await svc.ConnectedGuiderOrNull()!.RepushGuiderTuningAsync(CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(methods, Does.Contain("set_dec_guide_mode"));
+            Assert.That(modes, Is.EqualTo(AutoOnly));
+        }
+
+        private static readonly string[] AutoOnly = ["Auto"];
+
         private static async Task<bool> WaitUntilAsync(Func<bool> condition) {
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
             while (!cts.IsCancellationRequested) {
