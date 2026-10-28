@@ -1209,27 +1209,48 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
     // must not abort the capture; subframe defaults to full sensor when unspecified. Subframe
     // bounds are deliberately NOT pre-validated: an out-of-bounds subframe logs + falls back to the
     // driver's current framing (per-setting-guarded strategy) rather than failing the capture.
+    //
+    // Each setting is read first and written only when the camera holds something else: on
+    // AlpacaBridge a read costs ~1 ms and a binning or subframe write ~47 ms (the SDK reconfigures),
+    // so rewriting all eight cost ~0.3 s of every frame on a CM4. Reading the camera, not a cache of
+    // what Ara last wrote, keeps this right after a bridge restart or another client's change.
     private void ApplyExposureSettings(AlpacaCamera client, ExposureRequestDto request) {
-        TrySet(() => client.BinX = (short)request.BinX, "BinX");
-        TrySet(() => client.BinY = (short)request.BinY, "BinY");
+        TrySet(() => WriteIfChanged(() => client.BinX, v => client.BinX = (short)v, request.BinX), "BinX");
+        TrySet(() => WriteIfChanged(() => client.BinY, v => client.BinY = (short)v, request.BinY), "BinY");
         if (request.Gain is int gain) {
-            TrySet(() => client.Gain = (short)gain, "Gain");
+            TrySet(() => WriteIfChanged(() => client.Gain, v => client.Gain = (short)v, gain), "Gain");
         }
         if (request.CameraOffset is int cameraOffset) {
-            TrySet(() => client.Offset = cameraOffset, "Offset");
+            TrySet(() => WriteIfChanged(() => client.Offset, v => client.Offset = v, cameraOffset), "Offset");
         }
         TrySet(() => {
             var maxX = client.CameraXSize / request.BinX;
             var maxY = client.CameraYSize / request.BinY;
             var startX = Math.Clamp(request.OffsetX ?? 0, 0, Math.Max(0, maxX - 1));
             var startY = Math.Clamp(request.OffsetY ?? 0, 0, Math.Max(0, maxY - 1));
-            client.StartX = startX;
-            client.StartY = startY;
+            WriteIfChanged(() => client.StartX, v => client.StartX = v, startX);
+            WriteIfChanged(() => client.StartY, v => client.StartY = v, startY);
             // Clamp to at least 1px so an off-sensor offset can't drive NumX/NumY negative (the
             // driver throw would be logged as "unsupported", which would be misleading).
-            client.NumX = Math.Max(1, Math.Min(request.Width ?? maxX, maxX - startX));
-            client.NumY = Math.Max(1, Math.Min(request.Height ?? maxY, maxY - startY));
+            WriteIfChanged(() => client.NumX, v => client.NumX = v, Math.Max(1, Math.Min(request.Width ?? maxX, maxX - startX)));
+            WriteIfChanged(() => client.NumY, v => client.NumY = v, Math.Max(1, Math.Min(request.Height ?? maxY, maxY - startY)));
         }, "subframe");
+    }
+
+    // A setting that can't be read is written, as before this check existed.
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "A failed read only means 'unknown': the write goes ahead and the per-setting TrySet boundary handles its own failure.")]
+    private static void WriteIfChanged(Func<int> read, Action<int> write, int wanted) {
+        int current;
+        try {
+            current = read();
+        } catch (Exception) {
+            write(wanted);
+            return;
+        }
+        if (current != wanted) {
+            write(wanted);
+        }
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
