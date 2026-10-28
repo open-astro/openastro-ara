@@ -22,6 +22,7 @@ using OpenAstroAra.Server.Services;
 using OpenAstroAra.TestHarness.Alpaca;
 using System;
 using System.IO;
+using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -121,6 +122,7 @@ namespace OpenAstroAra.Test {
 
                 await svc.CaptureImage(new CaptureSequence { ExposureTime = 0.001, ImageType = "BIAS" },
                     CancellationToken.None, null, "Flats");
+                await svc.FinishPendingSavesAsync(); // the sequencer's frames are saved in the background
 
                 Assert.That(row, Is.Not.Null, "the frame was catalogued");
                 Assert.That(row!.FrameType, Is.EqualTo(FrameType.Bias));
@@ -201,6 +203,7 @@ namespace OpenAstroAra.Test {
 
                 await svc.CaptureImage(new CaptureSequence { ExposureTime = 0.01, ImageType = "LIGHT" },
                     CancellationToken.None, null, "M42");
+                await svc.FinishPendingSavesAsync(); // the sequencer's frames are saved in the background
 
                 Assert.That(row!.CoolerSetpointC, Is.EqualTo(-10), "the frame still records the set-point it ran at");
                 // The frame's own metadata reads (after the binning read-back) are the sensor
@@ -208,6 +211,62 @@ namespace OpenAstroAra.Test {
                 Assert.That(string.Join(" ", log), Does.Contain("biny ccdtemperature setccdtemperature")
                     .And.Not.Contain("biny ccdtemperature setccdtemperature cooleron"),
                     "no CoolerOn round-trip to the bridge for each saved frame");
+            } finally {
+                Directory.Delete(dir, recursive: true);
+            }
+        }
+
+        [Test]
+        public async Task A_frame_that_could_not_be_saved_stops_the_next_exposure_until_it_lands() {
+            // #1374 at the capture site: the sequencer's frame is handed off and its save fails; the
+            // next capture retries it and, still failing, pauses the run before the shutter opens.
+            await using var box = ScriptedAlpacaDevice.Start(path =>
+                path.EndsWith("/imageready", StringComparison.Ordinal) ? "true"
+                : path.EndsWith("/imagearray", StringComparison.Ordinal) ? "[[100,200],[300,400]],\"Type\":2,\"Rank\":2"
+                : null);
+            var dir = Directory.CreateTempSubdirectory("ara-held-").FullName;
+            try {
+                var inserted = new System.Collections.Concurrent.ConcurrentQueue<Guid>();
+                var catalogDown = true;
+                var frames = new Mock<IFrameRepository>();
+                frames.Setup(f => f.InsertAsync(It.IsAny<FrameDto>(), It.IsAny<CancellationToken>()))
+                    .Returns((FrameDto f, CancellationToken _) => {
+                        if (Volatile.Read(ref catalogDown)) {
+                            return Task.FromException(new IOException("catalog is read-only"));
+                        }
+                        inserted.Enqueue(f.Id);
+                        return Task.CompletedTask;
+                    });
+                using var svc = new CameraService(frames: frames.Object, fallbackFramesDir: dir);
+                await svc.ConnectAsync(new ConnectRequestDto(new DiscoveredDeviceDto(
+                    UniqueId: "Camera-under-test", Name: "Sim Camera", Type: DeviceType.Camera,
+                    HostName: box.BaseUri.Host, IpAddress: box.BaseUri.Host, IpPort: box.BaseUri.Port,
+                    AlpacaDeviceNumber: 0, UseHttps: false)), null, CancellationToken.None);
+                var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(15);
+                while ((await svc.GetAsync(CancellationToken.None)) is not { State: EquipmentConnectionState.Connected, Capabilities: not null }) {
+                    Assert.That(DateTime.UtcNow, Is.LessThan(deadline), "camera never connected");
+                    await Task.Delay(50);
+                }
+                int Exposures() => box.Puts.Count(p => p.Path.EndsWith("/startexposure", StringComparison.Ordinal));
+                var dark = new CaptureSequence { ExposureTime = 0.01, ImageType = "DARK" };
+
+                // Handed off: the capture returns although its save will fail.
+                await svc.CaptureImage(dark, CancellationToken.None, null, "M42");
+                while (!svc.SaveHeld) {
+                    Assert.That(DateTime.UtcNow, Is.LessThan(deadline + TimeSpan.FromSeconds(15)), "the save never failed");
+                    await Task.Delay(20);
+                }
+                var before = Exposures();
+
+                await Assert.ThrowsAsync<OpenAstroAra.Core.Model.StoreUnavailableException>(
+                    () => svc.CaptureImage(dark, CancellationToken.None, null, "M42"));
+                Assert.That(Exposures(), Is.EqualTo(before), "no shutter opened while a frame is held");
+
+                Volatile.Write(ref catalogDown, false); // the user fixed it; Resume captures again
+                await svc.CaptureImage(dark, CancellationToken.None, null, "M42");
+                await svc.FinishPendingSavesAsync();
+                Assert.That(inserted, Has.Count.EqualTo(2), "the held frame landed, then the new one");
+                Assert.That(Exposures(), Is.EqualTo(before + 1));
             } finally {
                 Directory.Delete(dir, recursive: true);
             }
@@ -244,6 +303,7 @@ namespace OpenAstroAra.Test {
 
                 await svc.CaptureImage(new CaptureSequence { ExposureTime = 0.01, ImageType = "LIGHT" },
                     CancellationToken.None, null, "M42");
+                await svc.FinishPendingSavesAsync(); // the sequencer's frames are saved in the background
 
                 Assert.That(row, Is.Not.Null, "the frame was catalogued");
                 Assert.That(row!.FilterName, Is.EqualTo("Ha"));
@@ -253,6 +313,7 @@ namespace OpenAstroAra.Test {
                 // Darks and bias don't depend on the filter: the wheel's position isn't recorded.
                 await svc.CaptureImage(new CaptureSequence { ExposureTime = 0.01, ImageType = "DARK" },
                     CancellationToken.None, null, "M42");
+                await svc.FinishPendingSavesAsync();
                 Assert.That(row!.FrameType, Is.EqualTo(FrameType.Dark));
                 Assert.That(row.FilterName, Is.Null);
             } finally {
