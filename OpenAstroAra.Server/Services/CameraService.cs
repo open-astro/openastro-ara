@@ -752,7 +752,7 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
         Justification = "Catch-classify-rethrow boundary: any device/driver exception during expose/download is published as the §42.2 op_error fault and rethrown unchanged to the caller's existing boundary; genuine cancellation is filtered first. CA1031's catch-classify-rethrow boundary applies.")]
     private async Task<(ushort[] Pixels, int Width, int Height, DateTimeOffset CapturedAt)?> ExposeAndDownloadAsync(
             AlpacaCamera client, Guid frameId, ExposureRequestDto request, string kind, CancellationToken ct) {
-        // Entry checkpoint: ApplyExposureSettings is up to 7 synchronous Alpaca round-trips with no
+        // Entry checkpoint: ApplyExposureSettings is up to 18 synchronous Alpaca round-trips with no
         // ct hook, so honor a cancel that arrived before any device work begins. Inert for REST.
         ct.ThrowIfCancellationRequested();
         var announced = false;
@@ -781,11 +781,11 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
         var timing = System.Diagnostics.Stopwatch.StartNew();
         ApplyExposureSettings(client, request);
         var settingsMs = timing.ElapsedMilliseconds;
-        // Stamp NOW, after the settings round-trips (up to 7 Alpaca calls — seconds on a slow
+        // Stamp NOW, after the settings round-trips (up to 18 Alpaca calls — seconds on a slow
         // bridge): DATE-OBS feeds plate-solving, so the FITS header must carry the actual
         // exposure start, not the request-accepted time the §60.5 response reported.
         var capturedAt = DateTimeOffset.UtcNow;
-        // A sequencer cancel during the up-to-7 ApplyExposureSettings round-trips above shouldn't
+        // A sequencer cancel during the up-to-18 ApplyExposureSettings round-trips above shouldn't
         // still kick off an exposure we'd only abort on the first ImageReady poll. Inert for REST
         // (CancellationToken.None).
         ct.ThrowIfCancellationRequested();
@@ -1215,36 +1215,38 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
     // so rewriting all eight cost ~0.3 s of every frame on a CM4. Reading the camera, not a cache of
     // what Ara last wrote, keeps this right after a bridge restart or another client's change.
     private void ApplyExposureSettings(AlpacaCamera client, ExposureRequestDto request) {
-        TrySet(() => WriteIfChanged(() => client.BinX, v => client.BinX = (short)v, request.BinX), "BinX");
-        TrySet(() => WriteIfChanged(() => client.BinY, v => client.BinY = (short)v, request.BinY), "BinY");
+        TrySet(() => WriteIfChanged(() => client.BinX, v => client.BinX = (short)v, request.BinX, "BinX"), "BinX");
+        TrySet(() => WriteIfChanged(() => client.BinY, v => client.BinY = (short)v, request.BinY, "BinY"), "BinY");
         if (request.Gain is int gain) {
-            TrySet(() => WriteIfChanged(() => client.Gain, v => client.Gain = (short)v, gain), "Gain");
+            TrySet(() => WriteIfChanged(() => client.Gain, v => client.Gain = (short)v, gain, "Gain"), "Gain");
         }
         if (request.CameraOffset is int cameraOffset) {
-            TrySet(() => WriteIfChanged(() => client.Offset, v => client.Offset = v, cameraOffset), "Offset");
+            TrySet(() => WriteIfChanged(() => client.Offset, v => client.Offset = v, cameraOffset, "Offset"), "Offset");
         }
         TrySet(() => {
             var maxX = client.CameraXSize / request.BinX;
             var maxY = client.CameraYSize / request.BinY;
             var startX = Math.Clamp(request.OffsetX ?? 0, 0, Math.Max(0, maxX - 1));
             var startY = Math.Clamp(request.OffsetY ?? 0, 0, Math.Max(0, maxY - 1));
-            WriteIfChanged(() => client.StartX, v => client.StartX = v, startX);
-            WriteIfChanged(() => client.StartY, v => client.StartY = v, startY);
+            WriteIfChanged(() => client.StartX, v => client.StartX = v, startX, "StartX");
+            WriteIfChanged(() => client.StartY, v => client.StartY = v, startY, "StartY");
             // Clamp to at least 1px so an off-sensor offset can't drive NumX/NumY negative (the
             // driver throw would be logged as "unsupported", which would be misleading).
-            WriteIfChanged(() => client.NumX, v => client.NumX = v, Math.Max(1, Math.Min(request.Width ?? maxX, maxX - startX)));
-            WriteIfChanged(() => client.NumY, v => client.NumY = v, Math.Max(1, Math.Min(request.Height ?? maxY, maxY - startY)));
+            WriteIfChanged(() => client.NumX, v => client.NumX = v, Math.Max(1, Math.Min(request.Width ?? maxX, maxX - startX)), "NumX");
+            WriteIfChanged(() => client.NumY, v => client.NumY = v, Math.Max(1, Math.Min(request.Height ?? maxY, maxY - startY)), "NumY");
         }, "subframe");
     }
 
     // A setting that can't be read is written, as before this check existed.
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "A failed read only means 'unknown': the write goes ahead and the per-setting TrySet boundary handles its own failure.")]
-    private static void WriteIfChanged(Func<int> read, Action<int> write, int wanted) {
+    private void WriteIfChanged(Func<int> read, Action<int> write, int wanted, string setting) {
         int current;
         try {
             current = read();
-        } catch (Exception) {
+        } catch (Exception ex) {
+            // Visible when timing frames: a driver whose reads always fail gets every write again.
+            LogExposureSettingUnread(ex, setting);
             write(wanted);
             return;
         }
@@ -1252,6 +1254,9 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
             write(wanted);
         }
     }
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Camera setting {Setting} could not be read before the exposure; writing it")]
+    private partial void LogExposureSettingUnread(Exception ex, string setting);
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Per-setting write boundary: an optional exposure setting unsupported by the driver throws; it is logged and skipped so the capture proceeds with device defaults. CA1031's log-and-recover boundary applies.")]
