@@ -106,7 +106,7 @@ jobs:
           git status --short
 
       - id: agent
-        uses: anthropics/claude-code-action@5eb090f3c3afd701a0672cd32981197ca27688f6  # v1
+        uses: anthropics/claude-code-action@925afb53776cf1a2b738c6bdbed37b4d4000ef13  # v1
         with:
           # Subscription (Pro/Max) auth. Generate locally with `claude setup-token`
           # and store as an org or repo secret named CLAUDE_CODE_OAUTH_TOKEN.
@@ -303,7 +303,7 @@ jobs:
           fi
           git status --short
 
-      - uses: anthropics/claude-code-action@5eb090f3c3afd701a0672cd32981197ca27688f6  # v1
+      - uses: anthropics/claude-code-action@925afb53776cf1a2b738c6bdbed37b4d4000ef13  # v1
         env:
           # allowed_non_write_users (below) auto-enables subprocess secret
           # scrubbing, which strips the GitHub token from the agent's
