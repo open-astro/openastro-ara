@@ -413,6 +413,51 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task An_upward_reversal_lands_from_above() {
+            // The wrong-direction ladder: shot 2 goes DOWN (wrong side), the half-magnitude reversal goes UP
+            // from there, so it comes down onto its target from the measured backlash's overshoot.
+            var rig = Build(calibration: Calibration() with { BacklashUpSteps = 150 }, realBest: StartPosition + 150, upwardBacklash: 150);
+            using var _ = rig.Service;
+
+            Assert.That(await rig.Service.RunAutofocusAsync(NoProgress, CancellationToken.None), Is.True);
+
+            Assert.That(rig.Moves[0], Is.LessThan(StartPosition), "shot 2 went down, directly");
+            Assert.That(rig.Moves[1] - rig.Moves[2], Is.EqualTo(225), "the reversal came down from 225 above");
+            Assert.That(rig.Moves[2], Is.GreaterThan(StartPosition));
+        }
+
+        [Test]
+        public async Task An_upward_trim_lands_from_above_and_the_return_to_shot_two_is_direct() {
+            // Start below best: shot 2 and the +20% trim both go UP (each through the overshoot); the trim reads
+            // worse, so the return to shot 2 goes DOWN, directly.
+            var rig = Build(calibration: Calibration() with { BacklashUpSteps = 150 }, upwardBacklash: 150, start: CalibratedBest - 300,
+                skyHfr: (capture, _) => capture switch { 1 => 3.3, 2 => 1.7, _ => 1.9 });
+            using var _ = rig.Service;
+
+            Assert.That(await rig.Service.RunAutofocusAsync(NoProgress, CancellationToken.None), Is.True);
+
+            var m = rig.Moves;
+            Assert.That(m, Has.Count.EqualTo(5), "shot 2 (over, down), trim (over, down), back to shot 2");
+            Assert.Multiple(() => {
+                Assert.That(m[0] - m[1], Is.EqualTo(225), "shot 2 from above");
+                Assert.That(m[2] - m[3], Is.EqualTo(225), "the trim from above");
+                Assert.That(m[3], Is.GreaterThan(m[1]), "the trim went up");
+                Assert.That(m[4], Is.EqualTo(m[1]), "back to shot 2, directly");
+            });
+        }
+
+        [Test]
+        public async Task A_landing_at_the_top_of_the_travel_never_overshoots_past_it() {
+            var rig = Build(calibration: Calibration() with { BacklashUpSteps = 150 }, upwardBacklash: 150, start: CalibratedBest - 300,
+                travel: (0, CalibratedBest + 100));
+            using var _ = rig.Service;
+
+            await rig.Service.RunAutofocusAsync(NoProgress, CancellationToken.None);
+
+            Assert.That(rig.Moves.Max(), Is.LessThanOrEqualTo(CalibratedBest + 100));
+        }
+
+        [Test]
         public void ApproachOvershoot_clears_the_measured_backlash() {
             Assert.Multiple(() => {
                 Assert.That(AutofocusSweepService.ApproachOvershoot(100, null), Is.EqualTo(100), "no measurement: one sweep step");

@@ -216,6 +216,46 @@ namespace OpenAstroAra.Test {
             Assert.That(Current(), Is.EqualTo(11_700).Within(30));
         }
 
+        [Test]
+        public async Task The_sweep_overshoots_by_the_measured_backlash_and_stays_inside_the_travel() {
+            // §59.7 — a calibration that measured 150 steps of backlash: the sweep's entry and its final landing
+            // come down from 1.5× that (225) above, and the centre clamp leaves room for it under the travel's
+            // top (the overshoot used to be one step, and the clamp reserved one step).
+            const int maxPosition = 12_000;
+            var (focuser, moves) = Focuser();
+            int Current() => moves.Count == 0 ? StartPosition : moves[^1];
+            var profiles = Profiles(Settings(steps: 4, stepSize: 100));
+            // No samples: the Smart path has no map to run on, so the Classic sweep runs with this backlash.
+            profiles.Setup(p => p.GetFocusCalibration()).Returns(new FocusCalibrationDto([], DateTimeOffset.UnixEpoch, null, null, BacklashUpSteps: 150));
+            using var svc = new AutofocusSweepService(
+                profiles.Object, focuser.Object, Frames().Object,
+                metric: VCurveMetric(Current, 11_700),
+                coarseMetric: (_, _) => 1e6 - Current(),
+                travelRange: _ => Task.FromResult<(int Min, int Max)?>((0, maxPosition)));
+
+            var ok = await svc.RunAutofocusAsync(NoProgress, CancellationToken.None);
+
+            Assert.That(ok, Is.True);
+            Assert.That(moves.Max(), Is.LessThanOrEqualTo(maxPosition), "the larger overshoot stays inside the travel");
+            // The centre clamps to 12 000 − 4·100 − 225 = 11 375, so the probes run 11 775 down to 10 975.
+            var top = IndexOfRun(moves, 11_775, 11_675);
+            Assert.That(top, Is.GreaterThan(0), "the fine sweep ran from 11 775 down");
+            Assert.That(moves[top - 1], Is.EqualTo(11_775 + 225), "entered from 225 above the top probe");
+            var bottom = moves.IndexOf(10_975, top);
+            Assert.That(bottom, Is.GreaterThan(top));
+            Assert.That(moves[bottom + 1] - moves[bottom + 2], Is.EqualTo(225), "the final landing comes down from 225 above best");
+            Assert.That(Current(), Is.EqualTo(11_700).Within(30));
+        }
+
+        private static int IndexOfRun(List<int> moves, int first, int second) {
+            for (int i = 0; i + 1 < moves.Count; i++) {
+                if (moves[i] == first && moves[i + 1] == second) {
+                    return i;
+                }
+            }
+            return -1;
+        }
+
         [TestCase(true, 30_000, 0, 30_000)]
         [TestCase(false, 30_000, int.MinValue, int.MaxValue)] // relative focuser: no travel stop
         [TestCase(true, 0, null, null)]       // range not reported yet
