@@ -176,9 +176,8 @@ namespace OpenAstroAra.Test {
         public async Task A_failure_after_the_frame_is_saved_is_not_a_failed_save() {
             // Enrichment (preview, analysis, the solve feed) runs once the frame is in the catalog;
             // its fault must neither hold the frame nor register it twice.
-            var sink = new Mock<ISavedLightSink>();
-            sink.Setup(s => s.RecordLightSaved(It.IsAny<Guid>())).Throws(new InvalidOperationException("solve feed is down"));
-            using var camera = new CameraService(frames: _frames.Object, profileStore: _profile, fallbackFramesDir: _root, savedLights: sink.Object);
+            using var camera = NewCamera();
+            camera.FrameSavedHook = _ => throw new InvalidOperationException("enrichment is down");
             var request = new ExposureRequestDto(1, 100);
             var light = new FrameSaveJob {
                 FrameId = Guid.NewGuid(), Pixels = new ushort[16], Width = 4, Height = 4, Request = request, Applied = request,

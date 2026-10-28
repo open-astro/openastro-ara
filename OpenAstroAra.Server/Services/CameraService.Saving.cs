@@ -19,6 +19,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -55,6 +56,9 @@ internal sealed class FrameSaveJob {
     public Guid? SessionId { get; init; }
     public string? FilePath { get; set; }
     public bool Registered { get; set; }
+    // Completes once the frame is in the catalog; faults when it is never saved. The solve feed
+    // waits on it, so a light recorded at hand-off is never solved before its file exists.
+    public TaskCompletionSource Saved { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 }
 
 /// <summary>
@@ -125,6 +129,7 @@ public sealed partial class CameraService {
                 coolerSetpointC: job.CoolerSetpointC, sessionId: job.SessionId, ccdTemperatureC: job.CcdTemperatureC).ConfigureAwait(false);
             job.Registered = true;
         }
+        job.Saved.TrySetResult();
         LogCaptureComplete(job.FrameId, job.Width, job.Height, path);
         LogCaptureStoreTiming(job.FrameId, writeMs, timing.ElapsedMilliseconds - writeMs);
         AfterFrameSavedBestEffort(job);
@@ -263,6 +268,7 @@ public sealed partial class CameraService {
         }
         foreach (var job in lost) {
             LogUnsavedFrameDropped(job.FrameId, job.FilePath ?? "(not written)");
+            job.Saved.TrySetException(new IOException($"frame {job.FrameId} was never saved"));
         }
         return lost.Count;
     }

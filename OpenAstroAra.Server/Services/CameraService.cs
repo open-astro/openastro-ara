@@ -970,6 +970,12 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
             TempSetPoint = tempSetPoint, CoolerSetpointC = CoolerSetpointFrom(coolerOn, tempSetPoint), Conditions = conditions,
             Night = night, SessionId = CaptureSessionScope.Current, CcdTemperatureC = CachedCcdTemperature(),
         };
+        if (frameType == FrameType.Light) {
+            // Recorded now, in capture order and before the sequencer's next step looks: Center After
+            // Drift reads the latest light right after the exposure returns. The feed waits for the
+            // save itself before it reads the frame (job.Saved).
+            RecordLightBestEffort(job);
+        }
         if (saveInBackground) {
             // The sequencer's next exposure starts while this one is written (CameraService.Saving.cs).
             await EnqueueSaveAsync(job).ConfigureAwait(false);
@@ -977,7 +983,11 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
         }
         try {
             await SaveFrameAsync(job).ConfigureAwait(false);
-        } catch (Exception ex) when (job.FilePath is not null && !job.Registered) {
+        } catch (Exception ex) {
+            job.Saved.TrySetException(ex);
+            if (job.FilePath is null || job.Registered) {
+                throw;
+            }
             // The FITS is on disk but invisible to the catalog; name the path so an operator can
             // recover it — and the §28.8 startup orphan scan re-registers it on the next boot.
             LogCatalogRegistrationFailed(ex, frameId, job.FilePath);
@@ -1003,13 +1013,26 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
         // had to drop is measured all the same.
         _ = Task.Run(() => MeasureBackgroundAsync(job.FrameId, job.Pixels), CancellationToken.None);
         if (job.FrameType == FrameType.Light) {
-            _savedLights?.RecordLightSaved(job.FrameId);
             // §59.5 — off the capture path: HFR/star analysis of a full frame takes real CPU
             // time, and delaying frame.complete (or the next exposure) for a statistic is the
             // wrong trade. The pixels are already in hand; the write-back lands as
             // frame.analyzed when done.
             QueueFrameAnalysis(job.FrameId, job.Pixels, job.Width, job.Height,
                 string.IsNullOrWhiteSpace(job.Request.FilterName) ? null : job.Request.FilterName, job.Request.ExposureSec);
+        }
+        FrameSavedHook?.Invoke(job.FrameId);
+    }
+
+    // Test seam: runs last in the post-save enrichment.
+    internal Action<Guid>? FrameSavedHook { get; set; }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "The solve feed is enrichment for Center After Drift: its fault must never cost the frame.")]
+    private void RecordLightBestEffort(FrameSaveJob job) {
+        try {
+            _savedLights?.RecordLightSaved(job.FrameId, job.Saved.Task);
+        } catch (Exception ex) {
+            LogFrameEnrichmentFailed(ex, job.FrameId);
         }
     }
 
@@ -2474,6 +2497,11 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
             IdempotencyKey: idempotencyKey);
 
     public void Dispose() {
+        lock (_gate) {
+            if (_disposed) {
+                return;
+            }
+        }
         // The run's last frames land before the camera goes (bounded; a stuck save is logged).
         FinishPendingSavesForDispose();
         AlpacaCamera? client;
