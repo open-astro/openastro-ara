@@ -322,7 +322,9 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
                 // backlash while every other sample is approached downward — and the topmost point is
                 // one of the two boundary points that most influence the fit. Overshoot above, then
                 // enter the sweep moving down.
-                await _focuser.MoveFocuser(top + approach, token).ConfigureAwait(false);
+                // Clamped: on a travel too short for the whole sweep ClampSweepCentre can only keep the bottom
+                // probe inside it, and a focuser refuses a move past its MaxStep.
+                await _focuser.MoveFocuser((int)Math.Min((long)top + approach, travel.Max), token).ConfigureAwait(false);
                 for (var i = 0; i <= settings.Steps * 2; i++) {
                     token.ThrowIfCancellationRequested();
                     var position = top - i * settings.StepSize;

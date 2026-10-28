@@ -123,12 +123,13 @@ public sealed partial class AutofocusSweepService {
 
         var startPosition = info.Position;
         var targetHfr = map.InFocusHfr * (1.0 + TargetHfrTolerancePct / 100.0);
-        // Read once for the run: the focuser's travel and the overshoot every landing from above uses.
-        var landing = new Landing(ApproachOvershoot(settings),
-            (_travelRange is null ? null : await _travelRange(token).ConfigureAwait(false)) ?? (0, int.MaxValue));
         await PublishAutofocusEventAsync(WsEventCatalog.AutofocusStarted, new JsonObject { ["mode"] = "smart" }).ConfigureAwait(false);
 
         try {
+            // Read once for the run, inside the run's fault boundary: the focuser's travel and the overshoot
+            // every landing from above uses.
+            var landing = new Landing(ApproachOvershoot(settings),
+                (_travelRange is null ? null : await _travelRange(token).ConfigureAwait(false)) ?? (0, int.MaxValue));
             // Shot 1 — read the rig's current defocus where it stands. Published AFTER the prediction so
             // the §59.15 shot_complete event can carry predicted_offset + direction_source.
             var shot1 = await CaptureSmartShotAsync(1, startPosition, settings, progress, token).ConfigureAwait(false);
@@ -160,7 +161,8 @@ public sealed partial class AutofocusSweepService {
                 }
                 var minusPosition = await _focuser.MoveFocuser(minusTarget, token).ConfigureAwait(false);
                 var minus = await TakeSmartShotAsync(2, minusPosition, settings, progress, token).ConfigureAwait(false);
-                // The + side is entered from above as well, through an overshoot of one bracket, so it is a
+                // The + side is entered from above as well, through an overshoot of at least one bracket (and
+                // never less than the backlash overshoot, BracketMoves), so it is a
                 // downward move like every other sample and backlash cannot shorten it. Compensating an upward
                 // move needs a measured backlash, and the probe measures at the V's flat bottom where it cannot
                 // see one: 2026-10-17 it stored 0 "verified" on a ZWO EAF whose upward move then landed ≈ 40

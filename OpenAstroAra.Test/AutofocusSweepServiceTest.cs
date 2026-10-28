@@ -247,6 +247,33 @@ namespace OpenAstroAra.Test {
             Assert.That(Current(), Is.EqualTo(11_700).Within(30));
         }
 
+        [Test]
+        public async Task On_a_travel_too_short_for_the_sweep_the_entry_overshoot_stops_at_the_top() {
+            // Travel 0..1000 cannot hold ±4·100 plus a 225-step overshoot: the centre clamps to 400 (the bottom
+            // probe at 0), the top probe sits at 800, and the entry must stop at 1000, not 1025.
+            const int maxPosition = 1_000;
+            var moves = new List<int>();
+            var position = 500; // inside the travel
+            var focuser = new Mock<IFocuserMediator>();
+            focuser.Setup(f => f.GetInfo()).Returns(() => new FocuserInfo { Connected = true, Position = position, Temperature = double.NaN });
+            focuser.Setup(f => f.MoveFocuser(It.IsAny<int>(), It.IsAny<CancellationToken>()))
+                .Returns<int, CancellationToken>((p, _) => { position = p; moves.Add(p); return Task.FromResult(p); });
+            int Current() => position;
+            var profiles = Profiles(Settings(steps: 4, stepSize: 100));
+            profiles.Setup(p => p.GetFocusCalibration()).Returns(new FocusCalibrationDto([], DateTimeOffset.UnixEpoch, null, null, BacklashUpSteps: 150));
+            using var svc = new AutofocusSweepService(
+                profiles.Object, focuser.Object, Frames().Object,
+                metric: VCurveMetric(Current, 450),
+                coarseMetric: (_, _) => Current(),
+                travelRange: _ => Task.FromResult<(int Min, int Max)?>((0, maxPosition)));
+
+            await svc.RunAutofocusAsync(NoProgress, CancellationToken.None);
+
+            var top = IndexOfRun(moves, 800, 700);
+            Assert.That(top, Is.GreaterThan(0), "the fine sweep ran from 800 down");
+            Assert.That(moves[top - 1], Is.EqualTo(maxPosition), "entered from the top of the travel, not 800 + 225");
+        }
+
         private static int IndexOfRun(List<int> moves, int first, int second) {
             for (int i = 0; i + 1 < moves.Count; i++) {
                 if (moves[i] == first && moves[i + 1] == second) {
