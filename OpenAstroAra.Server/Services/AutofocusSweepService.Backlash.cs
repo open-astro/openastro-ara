@@ -114,18 +114,18 @@ public sealed partial class AutofocusSweepService {
             var control = await BacklashShotAsync(settings, low, 1, token).ConfigureAwait(false);
             if (control is not double controlHfr || controlHfr <= tolerance) {
                 LogBacklashProbeInconclusive(control is null ? "the control shot had too few stars" : "the control shot did not read out of focus");
-                return await BacklashDoneAsync(settings, best, null, false, token).ConfigureAwait(false);
+                return await BacklashDoneAsync(new Landing(ApproachOvershoot(settings), travel), best, null, false, token).ConfigureAwait(false);
             }
             // 2. straight up to best: a focuser with backlash stops short, and reads it as HFR
             var up = await _focuser.MoveFocuser(best, token).ConfigureAwait(false);
             var back = await BacklashShotAsync(settings, up, 2, token).ConfigureAwait(false);
             if (back is not double backHfr) {
                 LogBacklashProbeInconclusive("the return shot had too few stars");
-                return await BacklashDoneAsync(settings, best, null, false, token).ConfigureAwait(false);
+                return await BacklashDoneAsync(new Landing(ApproachOvershoot(settings), travel), best, null, false, token).ConfigureAwait(false);
             }
             if (backHfr <= tolerance) {
                 LogBacklashMeasured(0, true);
-                return await BacklashDoneAsync(settings, best, 0, true, token).ConfigureAwait(false);
+                return await BacklashDoneAsync(new Landing(ApproachOvershoot(settings), travel), best, 0, true, token).ConfigureAwait(false);
             }
             // Invert the return shot's EXCESS over the measured baseline on the model's own minimum
             // (review of #1319): the confirmation frame routinely reads off the fit's predicted minimum
@@ -134,12 +134,12 @@ public sealed partial class AutofocusSweepService {
             var estimate = InvertBelowBest(fit.Model, best, fit.Model(best) + (backHfr - baselineHfr), span);
             if (estimate is not double offset || offset <= 0) {
                 LogBacklashProbeInconclusive("the fitted curve could not place the return shot");
-                return await BacklashDoneAsync(settings, best, null, false, token).ConfigureAwait(false);
+                return await BacklashDoneAsync(new Landing(ApproachOvershoot(settings), travel), best, null, false, token).ConfigureAwait(false);
             }
             var steps = Math.Max(1, (int)Math.Round(offset));
             if (best + steps > travel.Max) {
                 LogBacklashProbeInconclusive("the compensated return would exceed the focuser's travel");
-                return await BacklashDoneAsync(settings, best, null, false, token).ConfigureAwait(false);
+                return await BacklashDoneAsync(new Landing(ApproachOvershoot(settings), travel), best, null, false, token).ConfigureAwait(false);
             }
             // 3. verify: down again, then up to best + estimate — the counter overshoots by the
             // backlash so the optics land ON best
@@ -148,34 +148,34 @@ public sealed partial class AutofocusSweepService {
             var check = await BacklashShotAsync(settings, compensated, 3, token).ConfigureAwait(false);
             var verified = check is double checkHfr && checkHfr <= tolerance;
             LogBacklashMeasured(steps, verified);
-            return await BacklashDoneAsync(settings, best, steps, verified, token).ConfigureAwait(false);
+            return await BacklashDoneAsync(new Landing(ApproachOvershoot(settings), travel), best, steps, verified, token).ConfigureAwait(false);
         } catch (OperationCanceledException) {
             // A cancel during the probe must not throw away the sweep that already succeeded (the
             // sweep's own catch would restore the pre-sweep position): land on best, record nothing
             // for backlash, and let the sweep complete — same posture as the confirmation frame.
             LogBacklashProbeInconclusive("cancelled during the probe");
-            await LandQuietlyAsync(best, settings).ConfigureAwait(false);
+            await LandQuietlyAsync(best, new Landing(ApproachOvershoot(settings), travel)).ConfigureAwait(false);
             return new BacklashMeasurement(null, false);
         } catch (Exception ex) {
             LogBacklashProbeFailed(ex);
-            await LandQuietlyAsync(best, settings).ConfigureAwait(false);
+            await LandQuietlyAsync(best, new Landing(ApproachOvershoot(settings), travel)).ConfigureAwait(false);
             return new BacklashMeasurement(null, false);
         }
     }
 
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Best-effort landing after a failed or cancelled probe; a focuser fault here is logged, the sweep's result stands.")]
-    private async Task LandQuietlyAsync(int best, AutofocusSettingsDto settings) {
+    private async Task LandQuietlyAsync(int best, Landing landing) {
         try {
-            await LandFromAboveAsync(best, settings, CancellationToken.None).ConfigureAwait(false);
+            await LandFromAboveAsync(best, landing, CancellationToken.None).ConfigureAwait(false);
         } catch (Exception restore) {
             LogBacklashProbeFailed(restore);
         }
     }
 
     /// <summary>Land on best from above (the sweep's resting discipline) and hand back the result.</summary>
-    private async Task<BacklashMeasurement> BacklashDoneAsync(AutofocusSettingsDto settings, int best, double? steps, bool verified, CancellationToken token) {
-        await LandFromAboveAsync(best, settings, token).ConfigureAwait(false);
+    private async Task<BacklashMeasurement> BacklashDoneAsync(Landing landing, int best, double? steps, bool verified, CancellationToken token) {
+        await LandFromAboveAsync(best, landing, token).ConfigureAwait(false);
         return new BacklashMeasurement(steps, verified);
     }
 

@@ -285,13 +285,15 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
             // ±Steps·StepSize sweep nothing but unmeasurable probes.
             _tracker?.SetPhase("coarse");
             var travel = (_travelRange is null ? null : await _travelRange(token).ConfigureAwait(false)) ?? (0, int.MaxValue);
+            // The overshoot every landing from above uses (one step, or 1.5× a measured backlash), read once.
+            var approach = ApproachOvershoot(settings);
             var coarse = await CoarseCentreAsync(settings, startPosition, travel, progress, token).ConfigureAwait(false);
             if (coarse is not int coarseCentre) {
                 // CoarseCentreAsync logged the reason and left it in _lastCoarseFailure for the run record.
                 return await FailAsync(_lastCoarseFailure ?? "coarse search found no measurable focus", restoreOnFailure, startPosition, alreadyLogged: true).ConfigureAwait(false);
             }
             // Every fine probe, and the overshoot above the top one, must stay inside the travel.
-            var centre = ClampSweepCentre(coarseCentre, settings, travel);
+            var centre = ClampSweepCentre(coarseCentre, settings, travel, approach);
             var points = new List<FocusPoint>(ProbeCount(settings));
             // §59.10 — retain each probe's (position, detected stars) for the end-of-sweep collimation read.
             // At completion we feed the evaluator the single MOST-DEFOCUSED probe's stars (widest, best-resolved
@@ -320,7 +322,7 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
                 // backlash while every other sample is approached downward — and the topmost point is
                 // one of the two boundary points that most influence the fit. Overshoot above, then
                 // enter the sweep moving down.
-                await _focuser.MoveFocuser(top + ApproachOvershoot(settings), token).ConfigureAwait(false);
+                await _focuser.MoveFocuser(top + approach, token).ConfigureAwait(false);
                 for (var i = 0; i <= settings.Steps * 2; i++) {
                     token.ThrowIfCancellationRequested();
                     var position = top - i * settings.StepSize;
@@ -409,7 +411,7 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
                 // Re-centre on that edge and sweep again rather than give up. Judged on the probes the fit
                 // used: a thin-wing probe the fit already distrusts must not steer the re-sweep either.
                 if (attempt < MaxSweepRecentres && EdgeMinimum(fitPoints) is int edge
-                        && ClampSweepCentre(edge, settings, travel) is var recentred && recentred != centre) {
+                        && ClampSweepCentre(edge, settings, travel, approach) is var recentred && recentred != centre) {
                     LogSweepRecentred(recentred, attempt + 1);
                     centre = recentred;
                     continue;
@@ -429,7 +431,7 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
                         LogStepResized(settings.StepSize, resized, measuredWidth, attempt + 1);
                         settings = settings with { StepSize = resized };
                         _tracker?.SetStepSize(resized, "measured");
-                        centre = ClampSweepCentre((int)Math.Round(fitPoints[sharpestAt].Position), settings, travel);
+                        centre = ClampSweepCentre((int)Math.Round(fitPoints[sharpestAt].Position), settings, travel, approach);
                         continue;
                     }
                 }
@@ -447,8 +449,7 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
             // ends at the bottom, so even a best at (or rounding to) the top edge needs the
             // overshoot — a direct move there would be upward, i.e. backlash-inconsistent.
             // The overshoot clears the backlash a previous calibration measured (ApproachOvershoot).
-            await _focuser.MoveFocuser(best + ApproachOvershoot(settings), token).ConfigureAwait(false);
-            var final = await _focuser.MoveFocuser(best, token).ConfigureAwait(false);
+            var final = await LandFromAboveAsync(best, new Landing(approach, travel), token).ConfigureAwait(false);
             LogSweepComplete(final, fit.PredictedHfr, fit.RSquared, fit.Method);
             // §59.12 — one confirmation frame AT best focus: the measured in-focus HFR (not the fit's
             // prediction) and the picture of the focused field the Smart Focus pane shows. Best-effort.
