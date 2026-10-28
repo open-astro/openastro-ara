@@ -320,7 +320,7 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
                 // backlash while every other sample is approached downward — and the topmost point is
                 // one of the two boundary points that most influence the fit. Overshoot above, then
                 // enter the sweep moving down.
-                await _focuser.MoveFocuser(top + settings.StepSize, token).ConfigureAwait(false);
+                await _focuser.MoveFocuser(top + ApproachOvershoot(settings), token).ConfigureAwait(false);
                 for (var i = 0; i <= settings.Steps * 2; i++) {
                     token.ThrowIfCancellationRequested();
                     var position = top - i * settings.StepSize;
@@ -446,7 +446,8 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
             // final move matches the backlash baked into every sample. Unconditional: the sweep
             // ends at the bottom, so even a best at (or rounding to) the top edge needs the
             // overshoot — a direct move there would be upward, i.e. backlash-inconsistent.
-            await _focuser.MoveFocuser(best + settings.StepSize, token).ConfigureAwait(false);
+            // The overshoot clears the backlash a previous calibration measured (ApproachOvershoot).
+            await _focuser.MoveFocuser(best + ApproachOvershoot(settings), token).ConfigureAwait(false);
             var final = await _focuser.MoveFocuser(best, token).ConfigureAwait(false);
             LogSweepComplete(final, fit.PredictedHfr, fit.RSquared, fit.Method);
             // §59.12 — one confirmation frame AT best focus: the measured in-focus HFR (not the fit's

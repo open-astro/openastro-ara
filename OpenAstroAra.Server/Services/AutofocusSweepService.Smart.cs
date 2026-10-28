@@ -148,7 +148,7 @@ public sealed partial class AutofocusSweepService {
                 // on the same side of its backlash as the calibration's own best. A straight return would land
                 // the optics a backlash short of 29463 while the counter said 29463 (2026-10-03).
                 var travel = (_travelRange is null ? null : await _travelRange(token).ConfigureAwait(false)) ?? (0, int.MaxValue);
-                var (minusTarget, plusTarget, overshoot) = BracketMoves(startPosition, bracket, settings.StepSize, travel);
+                var (minusTarget, plusTarget, overshoot) = BracketMoves(startPosition, bracket, settings.StepSize, travel, ApproachOvershoot(settings));
                 if (plusTarget <= startPosition || minusTarget >= startPosition) {
                     // Within a step of a travel stop there is no room for a side: the vertex check would only
                     // see a degenerate bracket, so say so and let the Classic sweep (travel-clamped) take over.
@@ -256,8 +256,9 @@ public sealed partial class AutofocusSweepService {
             }
             await PublishShotCompleteAsync(1, startPosition, shot1, move, directionSource).ConfigureAwait(false);
 
-            // Shot 2 — at predicted focus.
-            var position2 = await _focuser.MoveFocuser(startPosition + move, token).ConfigureAwait(false);
+            // Shot 2 — at predicted focus. Every move from here on lands like the calibration's samples:
+            // an upward one through the backlash overshoot (LandAsync), a downward one directly.
+            var position2 = await LandAsync(startPosition, startPosition + move, settings, token).ConfigureAwait(false);
             var shot2 = await TakeSmartShotAsync(2, position2, settings, progress, token).ConfigureAwait(false);
             if (!shot2.Trustworthy) {
                 // A starless/thin shot 2 (clouds, a bad move) has MedianHFR 0 and would "win" every raw
@@ -278,12 +279,12 @@ public sealed partial class AutofocusSweepService {
                 if (trim == 0) {
                     trim = direction;
                 }
-                var position3 = await _focuser.MoveFocuser(position2 + trim, token).ConfigureAwait(false);
+                var position3 = await LandAsync(position2, position2 + trim, settings, token).ConfigureAwait(false);
                 var shot3 = await TakeSmartShotAsync(3, position3, settings, progress, token).ConfigureAwait(false);
                 // An untrustworthy (thin-star) trim shot counts as "worse": shot 2's position is a
                 // VERIFIED improvement, so keep that known-good result rather than falling back.
                 if (!shot3.Trustworthy || shot3.Hfr > shot2.Hfr) {
-                    await _focuser.MoveFocuser(position2, token).ConfigureAwait(false);
+                    await LandAsync(position3, position2, settings, token).ConfigureAwait(false);
                     LogSmartComplete(position2, shot2.Hfr, 3);
                 await RecordCompletedAsync("smart", position2, shot2.Hfr, shot2.Features.StarCount, started, 3).ConfigureAwait(false);
                 } else {
@@ -295,7 +296,7 @@ public sealed partial class AutofocusSweepService {
             }
 
             // Shot 2 worse — the direction guess was wrong. Reverse from the START with half magnitude.
-            var reversed = await _focuser.MoveFocuser(startPosition - Math.Sign(move) * Math.Max(1, Math.Abs(move) / 2), token).ConfigureAwait(false);
+            var reversed = await LandAsync(position2, startPosition - Math.Sign(move) * Math.Max(1, Math.Abs(move) / 2), settings, token).ConfigureAwait(false);
             var reversedShot = await TakeSmartShotAsync(3, reversed, settings, progress, token).ConfigureAwait(false);
             // The reversed shot must be BOTH trustworthy and a real improvement to claim success.
             if (reversedShot.Trustworthy && reversedShot.Hfr < shot1.Hfr) {
@@ -382,21 +383,39 @@ public sealed partial class AutofocusSweepService {
     /// the travel's bottom, the + side no higher than one step below its top, and the overshoot the + side is
     /// entered from at least one step above it and never past the top. Near the top of the travel a bare
     /// <c>start + 2·bracket</c> was either refused (the whole run failed) or clamped onto the + side itself,
-    /// which turned the + landing back into an upward move and let backlash shorten it again.</summary>
-    internal static (int Minus, int Plus, int Overshoot) BracketMoves(int start, int bracket, int stepSize, (int Min, int Max) travel) {
+    /// which turned the + landing back into an upward move and let backlash shorten it again.
+    /// <paramref name="approach"/> is the backlash overshoot (<see cref="ApproachOvershoot(int, double?)"/>); it
+    /// defaults to one step.</summary>
+    internal static (int Minus, int Plus, int Overshoot) BracketMoves(int start, int bracket, int stepSize, (int Min, int Max) travel, int? approach = null) {
         var minus = Math.Max(start - bracket, travel.Min);
         var plus = Math.Min(start + bracket, travel.Max - stepSize);
-        var overshoot = Math.Min(Math.Max(start + 2 * bracket, plus + stepSize), travel.Max);
+        var overshoot = Math.Min(Math.Max(start + 2 * bracket, plus + (approach ?? stepSize)), travel.Max);
         return (minus, plus, overshoot);
     }
 
-    /// <summary>Every landing in the bracket is made from above — the direction the calibration's
-    /// samples were approached from — through the sweep's one-step overshoot, so the focuser rests on
-    /// the same side of its backlash as the calibration's best.</summary>
+    /// <summary>Land on <paramref name="position"/> from above — the direction the calibration's samples
+    /// were approached from — through the backlash overshoot, so the focuser rests on the same side of its
+    /// backlash as the calibration's best.</summary>
     private async Task<int> LandFromAboveAsync(int position, AutofocusSettingsDto settings, CancellationToken token) {
-        await _focuser.MoveFocuser(position + settings.StepSize, token).ConfigureAwait(false);
+        await _focuser.MoveFocuser(position + ApproachOvershoot(settings), token).ConfigureAwait(false);
         return await _focuser.MoveFocuser(position, token).ConfigureAwait(false);
     }
+
+    /// <summary>Move from <paramref name="from"/> to <paramref name="target"/> the way every calibration
+    /// sample was reached: a downward move directly, an upward one from above. A straight upward move stops
+    /// a backlash short while the counter reads the target (≈ 48 steps on the CM4's EAF, 2026-10-17).</summary>
+    private Task<int> LandAsync(int from, int target, AutofocusSettingsDto settings, CancellationToken token) =>
+        target > from ? LandFromAboveAsync(target, settings, token) : _focuser.MoveFocuser(target, token);
+
+    /// <summary>The overshoot a landing from above passes through: one sweep step, or 1.5× the backlash the
+    /// calibration's probe measured when that is more. The downward return only lands where the counter says
+    /// once it has taken up the slack the upward move left; a one-step overshoot shorter than the backlash
+    /// leaves the optics short (a 50-step default sweep step against the EAF's 48).</summary>
+    internal static int ApproachOvershoot(int stepSize, double? backlashSteps) =>
+        Math.Max(Math.Max(1, stepSize), (int)Math.Ceiling(1.5 * Math.Max(0.0, backlashSteps ?? 0.0)));
+
+    private int ApproachOvershoot(AutofocusSettingsDto settings) =>
+        ApproachOvershoot(settings.StepSize, _profiles.GetFocusCalibration()?.BacklashUpSteps);
 
     /// <summary>The vertex of the parabola through (−bracket, minusHfr), (0, centreHfr), (+bracket, plusHfr),
     /// as a signed step offset from the centre; null when the three points do not curve upward.</summary>

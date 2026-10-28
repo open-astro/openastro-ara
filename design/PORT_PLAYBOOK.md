@@ -5786,7 +5786,7 @@ Per-fault action is configurable in profile safety policies (§35 extension), wi
 | Mount loses tracking | Alpaca `Tracking = false` unexpectedly during exposure | Re-enable → Pause if rejected | Common cause of trailed stars |
 | Mount slew error / refuses command | Alpaca slew returns error or doesn't complete | Retry → Abort + park | May indicate physical obstruction |
 | Mount unexpected park / disconnect | Alpaca connection lost or mount auto-parks | Reconnect → Abort + park if persistent | Cable disconnect is most common |
-| Focuser stalls | Commanded position not reached within timeout | Retry → recalibrate backlash → Notify | Common in cold weather (lubricant viscosity) |
+| Focuser stalls | Commanded position not reached within timeout | Retry → Notify | Common in cold weather (lubricant viscosity). Backlash is not re-measured: moves land from above through a 1.5× overshoot (§59.7) |
 | **EFW (filter wheel) jam / position not reached** | Commanded slot not reached within timeout | Retry → Notify | User must intervene physically |
 | Rotator (CAA) runaway / position drift | Reported angle differs from commanded > tolerance (default 0.5°) | Re-issue → Notify | Mechanical issues |
 | Guider (PHD2): loses calibration | PHD2 calibration-failed event | Recalibrate → Pause if persistent | Common after meridian flip |
@@ -8804,8 +8804,9 @@ Total calibration cost: **~5 minutes, one-time per profile.**
        vertex outside the bracket → Classic AF (`bracket_failed`)
 3. Predict offset + direction by looking up the feature vector in the
    calibration table — gives both magnitude AND sign
-4. Move focuser by predicted offset, applying backlash compensation
-   (§59.7 — auto-discovered, no user input)
+4. Move focuser by predicted offset, landing from above like every
+   calibration sample (§59.7 — an upward move overshoots, then comes
+   down; no user input)
 5. Take second exposure, measure HFR
 6. Done in TWO shots IF:
      - HFR within target tolerance (default 10% above the
@@ -8860,59 +8861,17 @@ If a filter has too few stars (< 30 detected at the calibration exposure time), 
 
 The `always_luminance` alternative was considered and rejected: too dangerous when filters aren't parfocal, too time-costly when they are (extra swap = extra delay = extra mount tracking variance).
 
-### 59.7 Backlash auto-discovery (three layers)
+### 59.7 Backlash: measured once, cancelled by approaching from above
 
-Backlash is **never manually measured by the user**. Three layers handle it:
+Backlash is **never manually measured by the user**. Ara does not compensate it by adding steps to a move; it makes every move that matters end the same way: **moving down**, the direction every calibration sample and sweep probe is approached from. A downward landing after an upward move first takes up the gear's slack, so the overshoot above the target must be larger than the backlash.
 
-**Layer 1 — Backlash probe routine (appended to first calibration, ~60-90 s):**
+**Measurement (#1319):** a probe appended to the calibrating Classic sweep measures the upward backlash (three frames from best focus: down 4 steps, straight up to best, then up to best + the estimate). Stored on the focus calibration (`backlash_up_steps`, `backlash_verified`) and shown in the run record. 2026-10-17 on the CM4's ZWO EAF: 48 steps.
 
-After the calibration curve completes, server runs a dedicated probe:
+**Use:** the overshoot every landing from above passes through is one sweep step, or **1.5 × the measured backlash** when that is more (`ApproachOvershoot`). It applies to the Classic sweep's entry and final move, the Smart bracket's + side, the centre and vertex returns, and since #1139 to Smart Focus's predicted move, trim and reversal when they go upward (they used to move straight up and stop a backlash short).
 
-```
-1. Move focuser to predicted-best position P₀
-2. Capture, measure HFR_baseline (should be near curve minimum)
-3. Move IN by step_size × 4 → P₀ − 4·S
-4. Capture, measure HFR_in_check
-5. Move OUT by step_size × 4 → back to P₀ (in theory)
-6. Capture, measure HFR_return_attempt
-   ├─ If HFR_return ≈ HFR_baseline → zero backlash on OUT direction
-   └─ If HFR_return > HFR_baseline → focuser didn't actually return
+**Equipment change (#1362):** `EquipmentIdentityReconciler` re-reads the focuser's Alpaca `UniqueID` on every connect and at sequence start; a different device clears the focus calibration (backlash included), posts *"Focuser changed"* to the inbox, and the next AF run recalibrates.
 
-7. If backlash detected: move OUT additional small steps (10, 20, 40),
-   capture each, find the step count where HFR snaps back to baseline.
-   That step count = OUT-direction backlash.
-
-8. Once OUT backlash known, apply compensation and verify HFR returns
-   cleanly. Lock in OUT backlash value.
-
-9. Repeat with directions swapped (OUT first, IN correction) to
-   measure IN-direction backlash.
-
-10. Save both values to profile. Mark backlash_verified = false.
-```
-
-8-10 extra exposures × ~6 s each = 60-90 s. One-time per profile.
-
-**Layer 2 — Passive refinement during every Smart Focus run:**
-
-Every direction change is a backlash data point. Server tracks:
-- Commanded delta vs achieved HFR delta vs predicted HFR delta
-- If achieved HFR delta < predicted → backlash absorbed motion
-- Magnitude of discrepancy refines backlash estimate
-
-After N stable runs (default 5) with backlash variance < 10%, `backlash_verified = true` flips. Refinement still runs but only acts on >2σ anomalous observations.
-
-**Layer 3 — Equipment-change invalidation:**
-
-Server identifies focusers via Alpaca's `DriverInfo` + `Name` + device-ID. When any of those changes:
-- Profile's `focuser.device_signature` is updated
-- Backlash values invalidated (set to null, `auto_discover` reset to true)
-- Calibration curve invalidated
-- Next AF trigger triggers full re-calibration including backlash probe
-
-User-visible notification: *"Focuser changed — re-calibrating Smart Focus on next AF run."* User can also manually invalidate via Settings → Focuser → [Re-calibrate Smart Focus].
-
-Compensation mode defaults to `overshoot` (forgiving, works on focusers with non-linear backlash). `absolute` mode is available via the advanced disclosure for users on absolute-encoder focusers like ZWO EAF Pro.
+**Not built, by decision (2026-10-28):** passive refinement of the backlash value from every Smart run, and re-measuring it after a focuser stall. The value only sizes an overshoot that already carries a 1.5× margin, so refining it buys nothing; a stall is reported as a §42.2 fault (row "Focuser stalls").
 
 ### 59.8 Curve fitting + Classic AF specifics (calibration + fallback path)
 

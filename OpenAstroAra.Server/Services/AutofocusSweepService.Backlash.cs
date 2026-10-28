@@ -22,10 +22,10 @@ using System.Threading.Tasks;
 namespace OpenAstroAra.Server.Services;
 
 /// <summary>
-/// §59.7 layer 1 — the backlash probe appended to a successful Classic sweep (#1139). The sweep and
-/// Smart Focus approach every position from above, so the only backlash that ever bites is the
-/// UPWARD one (the Smart bracket's + side, a vertex shot above the centre). Measured in three frames
-/// from best focus, where the fitted V turns HFR back into distance:
+/// §59.7 — the backlash probe appended to a successful Classic sweep (#1139). The sweep and Smart Focus
+/// land on every position from above, so what matters is the slack an upward move leaves for the
+/// downward landing to take up: the measured value sizes that overshoot (<see cref="ApproachOvershoot(int, double?)"/>).
+/// Measured in three frames from best focus, where the fitted V turns HFR back into distance:
 /// <list type="number">
 /// <item>move DOWN 4 steps and shoot (the control: HFR must read above the baseline there);</item>
 /// <item>move straight UP to best and shoot — a focuser with backlash stops short, and the V's
