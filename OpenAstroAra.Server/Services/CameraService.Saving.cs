@@ -147,23 +147,30 @@ public sealed partial class CameraService {
     }
 
     /// <summary>Hands <paramref name="job"/> to the background saver and returns once it is queued,
-    /// waiting only while <see cref="SaveQueueCapacity"/> frames are already waiting.</summary>
-    internal async Task EnqueueSaveAsync(FrameSaveJob job) {
+    /// waiting only while <see cref="SaveQueueCapacity"/> frames are already waiting. Cancelling the
+    /// wait (Abort, a stalled drive) still queues the frame — it is downloaded and must not be lost —
+    /// and then throws, so the run ends instead of waiting on the drive.</summary>
+    internal async Task EnqueueSaveAsync(FrameSaveJob job, CancellationToken ct = default) {
         while (true) {
             Task changed;
             lock (_saveQueueGate) {
                 // A held (failed) frame never frees its slot on its own; the next capture's retry
                 // deals with it, so this frame joins the queue behind it.
-                if (_saveQueue.Count < SaveQueueCapacity || _saveFault is not null) {
+                if (_saveQueue.Count < SaveQueueCapacity || _saveFault is not null || ct.IsCancellationRequested) {
                     _saveQueue.Add(job);
                     if (_saveFault is null) {
                         StartSaveWorkerLocked();
                     }
+                    ct.ThrowIfCancellationRequested();
                     return;
                 }
                 changed = _saveQueueChanged.Task;
             }
-            await changed.ConfigureAwait(false);
+            try {
+                await changed.WaitAsync(ct).ConfigureAwait(false);
+            } catch (OperationCanceledException) {
+                // Loop once more: the frame is queued past the cap, then the cancellation throws.
+            }
         }
     }
 

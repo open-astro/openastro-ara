@@ -70,10 +70,10 @@ public sealed partial class FrameSolveFeed : IFrameSolveFeed, ISavedLightSink, I
     public void RecordLightSaved(Guid frameId, Task? saved = null) {
         if (saved is { IsCompleted: false }) {
             _pendingSaves[frameId] = saved;
+            // Gone once the save settles either way: a solve asking later reads the catalog, where a
+            // frame that was never saved is simply missing (reported unsolved).
             _ = saved.ContinueWith(_ => _pendingSaves.TryRemove(frameId, out var _), CancellationToken.None,
                 TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
-        } else if (saved is { IsCompletedSuccessfully: false }) {
-            _pendingSaves[frameId] = saved; // already failed: the solve reports it unsolved
         }
         var seq = Interlocked.Increment(ref _sequence);
         Volatile.Write(ref _latest, new SavedLight(frameId, seq, _clock()));

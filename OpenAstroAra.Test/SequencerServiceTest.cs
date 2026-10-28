@@ -108,6 +108,23 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_stopped_run_waits_only_briefly_for_its_last_frames() {
+            // Stop, Abort or daemon shutdown: the drain is short so shutdown fits systemd's stop timeout.
+            var id = Guid.NewGuid();
+            var ws = new RecordingWsBroadcaster();
+            var camera = new Mock<ICameraService>();
+            camera.Setup(c => c.FinishPendingSavesAsync()).Returns(new TaskCompletionSource<int>().Task); // never lands
+            var svc = BuildService(id, BuildBody(c => c.Items.Add(new WaitForTimeSpan { Time = 30 })), ws: ws, camera: camera.Object);
+            svc.PendingSavesWait = TimeSpan.FromMinutes(10);
+            svc.StoppedRunSavesWait = TimeSpan.FromMilliseconds(200);
+
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            await WaitForStateAsync(svc, id, SequenceRunState.Running);
+            await svc.AbortAsync(id, null, CancellationToken.None);
+            Assert.That((await WaitForTerminalAsync(svc, id))!.State, Is.EqualTo(SequenceRunState.Stopped));
+        }
+
+        [Test]
         public async Task Frames_dropped_at_the_end_of_a_run_are_reported_to_the_user() {
             var id = Guid.NewGuid();
             var ws = new RecordingWsBroadcaster();

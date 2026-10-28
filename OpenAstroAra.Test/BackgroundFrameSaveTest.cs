@@ -173,6 +173,29 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task An_abort_while_waiting_for_a_slot_keeps_the_frame_and_ends_the_wait() {
+            // A stalled drive holds the queue full; Abort must end the capture's wait without losing
+            // the frame it already downloaded.
+            using var camera = NewCamera();
+            _insertGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var jobs = new[] { Job(), Job(), Job() };
+            await camera.EnqueueSaveAsync(jobs[0]);
+            await camera.EnqueueSaveAsync(jobs[1]);
+            using var abort = new CancellationTokenSource();
+            var third = camera.EnqueueSaveAsync(jobs[2], abort.Token);
+            await Task.Delay(100);
+            Assert.That(third.IsCompleted, Is.False);
+
+            await abort.CancelAsync();
+            await Assert.ThatAsync(async () => await third, Throws.InstanceOf<OperationCanceledException>());
+
+            _insertGate.SetResult();
+            _insertGate = null;
+            Assert.That(await camera.FinishPendingSavesAsync(), Is.EqualTo(0));
+            Assert.That(_inserted, Is.EqualTo(jobs.Select(j => j.FrameId)), "the aborted capture's frame was still saved");
+        }
+
+        [Test]
         public async Task A_failure_after_the_frame_is_saved_is_not_a_failed_save() {
             // Enrichment (preview, analysis, the solve feed) runs once the frame is in the catalog;
             // its fault must neither hold the frame nor register it twice.

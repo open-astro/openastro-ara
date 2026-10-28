@@ -953,7 +953,7 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
                 } finally {
                     // The last frames are still being written in the background: they land in this
                     // run's session before it ends and before the terminal event reports the run.
-                    await FinishPendingSavesAsync(sequenceId);
+                    await FinishPendingSavesAsync(sequenceId, run.Cts.IsCancellationRequested);
                     await capCts.CancelAsync();
                     await capTask;
                     await pollTask;
@@ -1068,16 +1068,21 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
     /// the run from ending; the saves carry on in the background.</summary>
     internal TimeSpan PendingSavesWait { get; set; } = TimeSpan.FromMinutes(2);
 
+    /// <summary>The same wait for a run that was stopped, aborted or cut short by daemon shutdown: short
+    /// enough that shutdown (this plus the camera's own 30 s) stays inside systemd's 90 s stop timeout.</summary>
+    internal TimeSpan StoppedRunSavesWait { get; set; } = TimeSpan.FromSeconds(20);
+
     /// <summary>The run's frames still being written in the background land before it ends; a frame
     /// that can't be saved even now is dropped (the camera logs its id) and the user is told.</summary>
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Teardown must reach the terminal event whatever the saver does; a fault is logged.")]
-    private async Task FinishPendingSavesAsync(Guid sequenceId) {
+    private async Task FinishPendingSavesAsync(Guid sequenceId, bool cancelled) {
         if (_cameraResolver?.Invoke() is not { } camera) {
             return;
         }
+        var wait = cancelled ? StoppedRunSavesWait : PendingSavesWait;
         try {
-            var lost = await camera.FinishPendingSavesAsync().WaitAsync(PendingSavesWait).ConfigureAwait(false);
+            var lost = await camera.FinishPendingSavesAsync().WaitAsync(wait).ConfigureAwait(false);
             if (lost > 0) {
                 LogFramesLostAtRunEnd(sequenceId, lost);
                 await NotifyQuietlyAsync(lost == 1 ? "A frame couldn't be saved" : $"{lost} frames couldn't be saved",
@@ -1086,7 +1091,7 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
                     .ConfigureAwait(false);
             }
         } catch (TimeoutException) {
-            LogPendingSavesStillRunning(sequenceId, PendingSavesWait.TotalMinutes);
+            LogPendingSavesStillRunning(sequenceId, wait.TotalMinutes);
         } catch (Exception ex) {
             LogFinishSavesFailed(ex, sequenceId);
         }

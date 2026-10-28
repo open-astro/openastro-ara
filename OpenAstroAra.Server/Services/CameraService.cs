@@ -970,15 +970,15 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
             TempSetPoint = tempSetPoint, CoolerSetpointC = CoolerSetpointFrom(coolerOn, tempSetPoint), Conditions = conditions,
             Night = night, SessionId = CaptureSessionScope.Current, CcdTemperatureC = CachedCcdTemperature(),
         };
-        if (frameType == FrameType.Light) {
-            // Recorded now, in capture order and before the sequencer's next step looks: Center After
-            // Drift reads the latest light right after the exposure returns. The feed waits for the
-            // save itself before it reads the frame (job.Saved).
-            RecordLightBestEffort(job);
-        }
         if (saveInBackground) {
+            if (frameType == FrameType.Light) {
+                // Recorded now, in capture order and before the sequencer's next step looks: Center
+                // After Drift reads the latest light right after the exposure returns. The feed waits
+                // for the save itself before it reads the frame (job.Saved).
+                RecordLightBestEffort(job);
+            }
             // The sequencer's next exposure starts while this one is written (CameraService.Saving.cs).
-            await EnqueueSaveAsync(job).ConfigureAwait(false);
+            await EnqueueSaveAsync(job, ct).ConfigureAwait(false);
             return true;
         }
         try {
@@ -992,6 +992,9 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
             // recover it — and the §28.8 startup orphan scan re-registers it on the next boot.
             LogCatalogRegistrationFailed(ex, frameId, job.FilePath);
             return false;
+        }
+        if (frameType == FrameType.Light) {
+            RecordLightBestEffort(job); // saved inline: only a light that landed becomes the latest
         }
         return true;
     }
