@@ -556,6 +556,30 @@ void main() {
       expect(BackupStreamController.mirrorRelativeSegments('a/./b/../c.fits'),
           ['a', 'b', 'c.fits']);
     });
+    test('an XISF path keeps its extension', () {
+      expect(
+          BackupStreamController.mirrorRelativeSegments(
+              '2026-10-27/Light/M31_0001.xisf'),
+          ['2026-10-27', 'Light', 'M31_0001.xisf']);
+    });
+  });
+
+  // #1148 — an id-named mirror file (no store-relative path) is named after
+  // what the bytes are, not always .fits.
+  group('frameFileExtension', () {
+    test('an XISF signature names an .xisf file', () {
+      expect(
+          BackupStreamController.frameFileExtension(
+              [...'XISF0100'.codeUnits, 0, 1, 2, 3]),
+          '.xisf');
+    });
+    test('FITS, or anything too short to tell, stays .fits', () {
+      expect(
+          BackupStreamController.frameFileExtension('SIMPLE  =    T'.codeUnits),
+          '.fits');
+      expect(BackupStreamController.frameFileExtension('XISF'.codeUnits), '.fits');
+      expect(BackupStreamController.frameFileExtension(const []), '.fits');
+    });
   });
 }
 

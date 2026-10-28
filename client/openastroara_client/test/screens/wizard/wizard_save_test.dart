@@ -547,11 +547,11 @@ void main() {
       expect(out.compression, StorageCompression.off);
     });
 
-    test('applyDraftToStorage maps compress=true to Rice and keeps base on blank',
+    test('applyDraftToStorage maps compress=true to Zstandard and keeps base on blank',
         () {
       final yes = ProfileDraft()..fileSaving.compress = true;
       expect(applyDraftToStorage(const StorageSettings(), yes).compression,
-          StorageCompression.rice);
+          StorageCompression.zstd);
       // Blank draft preserves base (here: the section default save directory).
       final base = const StorageSettings().copyWith(saveDirectory: '/keep/dir');
       final out = applyDraftToStorage(base, ProfileDraft());

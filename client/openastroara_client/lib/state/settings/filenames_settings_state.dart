@@ -8,8 +8,10 @@ import '../../services/profile_api.dart';
 /// `StorageSettings`. Keeps state non-overlapping with the storage panel:
 ///   - dateSeparator: how `$$DATE*$$` tokens render (`/` = directory hop,
 ///     `_` = flat filename)
-///   - compressDarksAndBias: applies RICE to bias/dark frames (default on
-///     since they're highly compressible and don't lose information)
+///   - compressDarksAndBias: XISF only — bias/dark frames are written with
+///     lossless Zstandard even when Storage compression is off (default on
+///     since they're highly compressible and don't lose information); FITS
+///     is always uncompressed (#1148)
 ///
 /// Phase 12h.6f wires the daemon round-trip via [ProfileApi]
 /// (`/api/v1/profile/filenames`). The main filename template + file

@@ -264,9 +264,9 @@ class AutofocusSettings {
 class FileSavingSettings {
   // All nullable so a blank/untouched field preserves the base profile's value on
   // Save (null = "not set"), mapped onto the profile's storage section in
-  // wizard_save.applyDraftToStorage. [compress] is a wizard simplification of the
-  // section's 3-way compression (true → Rice, false → Off; gzip stays a
-  // Settings-only choice).
+  // wizard_save.applyDraftToStorage. [compress] maps onto the section's
+  // compression (true → Zstandard, false → Off); like the section, it applies
+  // only to XISF — FITS is always written uncompressed (#1148).
   String? saveDirectory;
   ImageFormat? format;
   bool? compress;

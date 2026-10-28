@@ -168,6 +168,12 @@ namespace OpenAstroAra.Profile {
         public XISFCompressionType XISFCompressionType {
             get => xisfCompressionType;
             set {
+                // #1148 — zlib is read-only in the XISF writer (far too slow on a Pi); a stored zlib
+                // choice still means "compress", so it reads as Zstandard, the one lossless codec Ara
+                // writes, rather than reaching a writer that refuses it.
+                if (value == XISFCompressionType.ZLIB) {
+                    value = XISFCompressionType.ZSTD;
+                }
                 if (xisfCompressionType != value) {
                     xisfCompressionType = value;
                     RaisePropertyChanged();

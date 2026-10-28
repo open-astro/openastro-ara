@@ -30,9 +30,9 @@ namespace OpenAstroAra.Server.Services;
 ///    in the captures tree is presumed crashed-mid-write and deleted
 ///    (§28.7's atomic-rename pattern guarantees only crashed writes leave
 ///    .tmp files behind; healthy writes finish in seconds).
-/// 3. <b>Orphan FITS recovery</b>: for each <c>.fits</c> not in the catalog,
-///    parse the header via <see cref="OpenAstroAra.Fits.FitsImage"/> and
-///    INSERT a row. Synthetic session id used if the orphan's session
+/// 3. <b>Orphan frame recovery</b>: for each <c>.fits</c>/<c>.fit</c>/<c>.xisf</c>
+///    not in the catalog, parse the header via <see cref="FrameFileReader"/>
+///    (FITS or XISF, #1148) and INSERT a row. Synthetic session id used if the orphan's session
 ///    can't be determined from parent directory.
 ///
 /// On a fresh install with no captures yet (typical v0.0.1 state), all
@@ -207,17 +207,20 @@ public sealed partial class CaptureScanService : IDisposable {
     private async Task<int> RecoverOrphanFitsAsync(string root, CancellationToken ct) {
         var recovered = 0;
         var seenIds = await LoadKnownIdsAsync(ct);
-        // Both extensions the wild actually uses: Ara writes .fits, NINA (and
-        // most captured archives a user copies onto a take-home drive) write
-        // .fit — a whole drive of NINA frames previously scanned as "nothing
-        // found". Enumeration is case-insensitive (.FIT/.FITS included), and
-        // macOS AppleDouble droppings ("._Light_….fit") are metadata forks,
-        // not FITS — skip them by name.
+        // Every extension the wild actually uses: Ara writes .fits (or .xisf
+        // when the profile says XISF, #1148), NINA (and most captured archives
+        // a user copies onto a take-home drive) write .fit — a whole drive of
+        // NINA frames previously scanned as "nothing found". Matching is
+        // case-insensitive (.FIT/.FITS/.XISF included), and macOS AppleDouble
+        // droppings ("._Light_….fit") are metadata forks, not frames — skip
+        // them by name.
         // One recursive walk, not one per extension — these are 1 TB
-        // take-home drives; LooksLikeFits does the exact-extension filtering.
-        foreach (var fitsPath in EnumerateFilesSafe(root, "*.fit*")) {
+        // take-home drives; LooksLikeFrameFile does the exact-extension
+        // filtering (.NET matches the glob in managed code anyway, so "*"
+        // costs the walk nothing extra).
+        foreach (var fitsPath in EnumerateFilesSafe(root, "*")) {
             if (ct.IsCancellationRequested) break;
-            if (!LooksLikeFits(fitsPath)) continue;
+            if (!LooksLikeFrameFile(fitsPath)) continue;
             try {
                 var inserted = await TryRecoverAsync(fitsPath, seenIds, ct);
                 if (inserted) recovered++;
@@ -250,16 +253,15 @@ public sealed partial class CaptureScanService : IDisposable {
         if (knownPaths.Contains(fitsPath)) return false;  // already cataloged
 
         // Header-only parse to avoid loading megabytes of pixel data per
-        // orphan. We still open the file via FitsImage.Open + ReadHeaders.
+        // orphan: FITS cards through FitsImage, an XISF file's XML header
+        // without its data block (#1148).
         IReadOnlyDictionary<string, string> headers;
         int width, height;
         long fileSize;
         try {
-            using var fits = OpenAstroAra.Fits.FitsImage.Open(fitsPath);
-            headers = fits.ReadHeaders();
-            (width, height) = fits.GetDimensions();
+            (width, height, headers) = FrameFileReader.ReadHeaderInfo(fitsPath);
             fileSize = new FileInfo(fitsPath).Length;
-        } catch (OpenAstroAra.Fits.FitsException ex) {
+        } catch (Exception ex) when (ex is OpenAstroAra.Fits.FitsException or InvalidDataException or System.Xml.XmlException) {
             LogSkipCorruptFits(ex, fitsPath);
             return false;
         }
@@ -467,13 +469,14 @@ public sealed partial class CaptureScanService : IDisposable {
         }
     }
 
-    /// <summary>The extensions the scan recognizes as FITS, shared with the
-    /// enumeration above so the two never drift.</summary>
-    internal static bool LooksLikeFits(string path) {
+    /// <summary>The extensions the scan recognizes as frames — FITS (.fits/.fit)
+    /// and XISF (#1148) — shared with the enumeration above.</summary>
+    internal static bool LooksLikeFrameFile(string path) {
         var name = Path.GetFileName(path);
         if (name.StartsWith("._", StringComparison.Ordinal)) return false;
         return name.EndsWith(".fits", StringComparison.OrdinalIgnoreCase)
-            || name.EndsWith(".fit", StringComparison.OrdinalIgnoreCase);
+            || name.EndsWith(".fit", StringComparison.OrdinalIgnoreCase)
+            || FrameFileReader.IsXisf(name);
     }
 
     // Boxes a nullable value type for an ADO.NET parameter, mapping null to DBNull.
@@ -550,7 +553,7 @@ public sealed partial class CaptureScanService : IDisposable {
     [LoggerMessage(Level = LogLevel.Debug, Message = "§28.8 could not recover {Path}")]
     private partial void LogCouldNotRecover(Exception ex, string path);
 
-    [LoggerMessage(Level = LogLevel.Debug, Message = "§28.8 skip non-FITS or corrupt: {Path}")]
+    [LoggerMessage(Level = LogLevel.Debug, Message = "§28.8 skip unreadable or corrupt frame file: {Path}")]
     private partial void LogSkipCorruptFits(Exception ex, string path);
 
     [LoggerMessage(Level = LogLevel.Information, Message = "§28.8 recovered orphan FITS: {Path} (target={Target}, frame_type={FrameType}, exposure={Exposure}s)")]

@@ -724,7 +724,7 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
             await Renders.WaitAsync(preview: true, ct).ConfigureAwait(false);
             byte[] seeded;
             try {
-                var (pixels, width, height, bayerPat, _) = LoadFitsPixels(filePath);
+                var (pixels, width, height, bayerPat, _) = LoadFramePixels(filePath);
                 WarmHistogramCache(filePath, pixels);
                 stretchParams = OpenAstroAra.Stretch.Stretcher.DeriveStfParams(pixels);
                 appliedManual = stretchParams;
@@ -772,7 +772,7 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
         Renders.Wait(preview: true);
         byte[] jpeg;
         try {
-            var (pixels, width, height, bayerPat, _) = LoadFitsPixels(filePath);
+            var (pixels, width, height, bayerPat, _) = LoadFramePixels(filePath);
             // Free ride: the raw pixels are in hand, so the histogram cache warms
             // with the first (capture-time pre-warmed) preview render.
             WarmHistogramCache(filePath, pixels);
@@ -822,7 +822,7 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
             if (TryServeFromCache(thumbPath) is byte[] raced) {
                 return (raced, "image/jpeg");
             }
-            var (pixels, width, height, bayerPat, _) = LoadFitsPixels(filePath);
+            var (pixels, width, height, bayerPat, _) = LoadFramePixels(filePath);
             // Thumbnail: §65.4 always uses the default stretch (re-stretch on
             // thumbnails is not supported in v0.0.1). Per-frame-type override
             // still applies — calibration frames get linear.
@@ -872,9 +872,9 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
         if (filePath is null) {
             return null;
         }
-        // A corrupt/truncated FITS lets LoadFitsPixels throw → 500, consistent with GetPreviewAsync/
+        // A corrupt/truncated FITS lets LoadFramePixels throw → 500, consistent with GetPreviewAsync/
         // GetThumbnailAsync on the same file (a malformed catalogued frame is an exceptional, not user-input, case).
-        var (pixels, width, height, bayerPat, binning) = LoadFitsPixels(filePath);
+        var (pixels, width, height, bayerPat, binning) = LoadFramePixels(filePath);
         var metaData = new OpenAstroAra.Image.ImageData.ImageMetaData();
         // Through Debayer.TryParse, not Enum.TryParse: a FITS string card comes back quoted and padded
         // ("'RGGB    '") and some cameras write it lowercase; both must still name the mosaic.
@@ -917,18 +917,16 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
         if (filePath is null) {
             return null;
         }
-        // The whole read is best-effort: a header hint is optional, so a FITS open/read fault (a corrupt
-        // card, or a TOCTOU delete between the File.Exists check and Open) must degrade to a blind solve —
-        // never surface as a 500 (unlike LoadImageDataAsync, where a corrupt frame IS the exceptional case).
+        // The whole read is best-effort: a header hint is optional, so an open/read fault (a corrupt
+        // card or XISF header, or a TOCTOU delete between the File.Exists check and Open) must degrade to a
+        // blind solve — never surface as a 500 (unlike LoadImageDataAsync, where a corrupt frame IS the
+        // exceptional case). #1148: FITS or XISF, by extension.
         try {
-            IReadOnlyDictionary<string, string> headers;
-            using (var fits = OpenAstroAra.Fits.FitsImage.Open(filePath)) {
-                headers = fits.ReadHeaders();
-            }
+            var headers = FrameFileReader.ReadHeaders(filePath);
             headers.TryGetValue("OBJCTRA", out var raHms);
             headers.TryGetValue("OBJCTDEC", out var decDms);
             return ParseTargetCoordinates(raHms, decDms);
-        } catch (Exception ex) when (ex is OpenAstroAra.Fits.FitsException or IOException) {
+        } catch (Exception ex) when (FrameFileReader.IsReadFault(ex)) {
             return null;
         }
     }
@@ -967,13 +965,12 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
         return (reader.GetString(0), ParseFrameType(reader.GetString(1)));
     }
 
-    private static (ushort[] Pixels, int Width, int Height, string? BayerPattern, int Binning) LoadFitsPixels(string filePath) {
-        using var fits = OpenAstroAra.Fits.FitsImage.Open(filePath);
-        var (w, h) = fits.GetDimensions();
-        var pixels = fits.ReadImageData16();
-        var headers = fits.ReadHeaders();
-        var bayer = headers.TryGetValue("BAYERPAT", out var bp) ? bp : null;
-        return (pixels, w, h, bayer, BinningFromHeaders(headers));
+    // #1148 — every library-frame pixel read (preview, thumbnail, histogram, solve) goes through the
+    // reader seam, so an XISF frame renders and solves exactly like a FITS one.
+    private static (ushort[] Pixels, int Width, int Height, string? BayerPattern, int Binning) LoadFramePixels(string filePath) {
+        var frame = FrameFileReader.Read(filePath);
+        var bayer = frame.Headers.TryGetValue("BAYERPAT", out var bp) ? bp : null;
+        return (frame.Pixels, frame.Width, frame.Height, bayer, BinningFromHeaders(frame.Headers));
     }
 
     /// <summary>The frame's <c>XBINNING</c> card as an integer, 1 when absent or unparsable (a frame
@@ -1406,7 +1403,7 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
         }
         ushort[]? pixels = null;
         if (histogram is null) {
-            (pixels, _, _, _, _) = LoadFitsPixels(filePath);
+            (pixels, _, _, _, _) = LoadFramePixels(filePath);
             histogram = ComputeHistogram(pixels);
             TryWriteCache(cachePath, System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(
                 histogram, AraJsonSerializerContext.Default.FrameHistogramDto));
@@ -1461,7 +1458,7 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
             return;
         }
         try {
-            pixels ??= LoadFitsPixels(filePath).Pixels;
+            pixels ??= LoadFramePixels(filePath).Pixels;
             var (p05, median) = FrameBackground.Measure(pixels);
             if (double.IsNaN(p05)) {
                 return;

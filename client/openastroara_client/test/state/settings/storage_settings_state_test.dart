@@ -12,7 +12,7 @@ void main() {
       final s = container.read(storageSettingsProvider);
       expect(s.saveDirectory, '/media/openastroara');
       expect(s.fileFormat, StorageFileFormat.fits);
-      expect(s.compression, StorageCompression.rice);
+      expect(s.compression, StorageCompression.zstd);
       expect(s.filenameTemplate.isNotEmpty, isTrue);
     });
 

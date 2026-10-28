@@ -97,7 +97,7 @@ namespace OpenAstroAra.Test {
             Directory.CreateDirectory(dir);
             var path = Path.Combine(dir, "frame.fits");
             try {
-                using (var fits = FitsImage.Create(path, 4, 4, FitsBitDepth.UnsignedShort)) {
+                using (var fits = FrameFileWriter.Create(path, 4, 4, FrameWriteOptions.PlainFits)) {
                     fits.WriteImageData(new ushort[16]);
                     CameraService.WritePointingHeaders(fits,
                         new CameraService.FramePointing(RaHours: 1, DecDegrees: 1, Epoch.B1950),
@@ -125,7 +125,7 @@ namespace OpenAstroAra.Test {
             Directory.CreateDirectory(dir);
             var path = Path.Combine(dir, "frame.fits");
             try {
-                using (var fits = FitsImage.Create(path, 4, 4, FitsBitDepth.UnsignedShort)) {
+                using (var fits = FrameFileWriter.Create(path, 4, 4, FrameWriteOptions.PlainFits)) {
                     fits.WriteImageData(new ushort[16]);
                     CameraService.WritePointingHeaders(fits,
                         new CameraService.FramePointing(RaHours: 0.7123, DecDegrees: -41.269, Epoch.J2000),
@@ -159,7 +159,7 @@ namespace OpenAstroAra.Test {
             Directory.CreateDirectory(dir);
             var path = Path.Combine(dir, "frame.fits");
             try {
-                using (var fits = FitsImage.Create(path, 4, 4, FitsBitDepth.UnsignedShort)) {
+                using (var fits = FrameFileWriter.Create(path, 4, 4, FrameWriteOptions.PlainFits)) {
                     fits.WriteImageData(new ushort[16]);
                     CameraService.WritePointingHeaders(fits,
                         new CameraService.FramePointing(RaHours: 1, DecDegrees: 1, Epoch.JNOW),

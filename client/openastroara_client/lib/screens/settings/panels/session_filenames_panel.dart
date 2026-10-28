@@ -131,7 +131,10 @@ class _SessionFilenamesPanelState extends ConsumerState<SessionFilenamesPanel>
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [
-        _PreviewCard(template: ss.filenameTemplate),
+        _PreviewCard(
+          template: ss.filenameTemplate,
+          extension: ss.fileFormat == StorageFileFormat.xisf ? '.xisf' : '.fits',
+        ),
         const SizedBox(height: 20),
         if (model != null) ...[
           const SettingsSectionHeader('Organize into folders'),
@@ -307,7 +310,7 @@ class _SessionFilenamesPanelState extends ConsumerState<SessionFilenamesPanel>
           helpKey: 'session.filenames.compress_darks_and_bias',
           value: fs.compressDarksAndBias,
           onChanged: fn.setCompressDarksAndBias,
-          hint: 'Lossless — calibration frames compress very well',
+          hint: 'Applies to XISF — lossless; FITS is never compressed',
         ),
         if (model != null)
           ExpansionTile(
@@ -356,8 +359,6 @@ class _SessionFilenamesPanelState extends ConsumerState<SessionFilenamesPanel>
   String _formatLabel(StorageFileFormat f) => switch (f) {
     StorageFileFormat.fits => 'FITS',
     StorageFileFormat.xisf => 'XISF',
-    StorageFileFormat.fitsRice => 'FITS + RICE',
-    StorageFileFormat.fitsGzip => 'FITS + gzip',
   };
 }
 
@@ -365,9 +366,10 @@ class _SessionFilenamesPanelState extends ConsumerState<SessionFilenamesPanel>
 /// the emphasis. This is the whole panel's feedback loop — every toggle below
 /// changes it immediately.
 class _PreviewCard extends StatelessWidget {
-  const _PreviewCard({required this.template});
+  const _PreviewCard({required this.template, required this.extension});
 
   final String template;
+  final String extension;
 
   @override
   Widget build(BuildContext context) {
@@ -375,6 +377,7 @@ class _PreviewCard extends StatelessWidget {
     final segments = previewSegments(
       template,
       NamingPreviewContext(captured: DateTime.now()),
+      extension: extension,
     );
     return Container(
       width: double.infinity,

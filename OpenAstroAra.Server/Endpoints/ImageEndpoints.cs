@@ -110,14 +110,16 @@ public static class ImageEndpoints {
         // the FITS file is missing on disk (deleted out-of-band, drive
         // unmounted, or the sample-seeded frames whose file_path values
         // point at non-existent paths). 200 with `application/fits`
-        // content-type otherwise.
+        // content-type otherwise — or `application/octet-stream` for an
+        // XISF frame (#1148; XISF has no registered media type).
         frames.MapGet("/{id:guid}/download",
                 async (Guid id, IFrameRepository repo, CancellationToken ct) => {
                     var result = await repo.OpenDownloadAsync(id, ct);
                     if (result is null) return Results.NotFound();
-                    return Results.File(result.Value.FitsStream, "application/fits", result.Value.FileName);
+                    var contentType = FrameFileReader.IsXisf(result.Value.FileName) ? "application/octet-stream" : "application/fits";
+                    return Results.File(result.Value.FitsStream, contentType, result.Value.FileName);
                 })
-            .Produces<byte[]>(StatusCodes.Status200OK, "application/fits")
+            .Produces<byte[]>(StatusCodes.Status200OK, "application/fits", "application/octet-stream")
             .ProducesProblem(StatusCodes.Status404NotFound)
             .WithName("DownloadFrame");
 

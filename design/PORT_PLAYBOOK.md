@@ -2972,7 +2972,7 @@ bytes_per_pixel = 2 if camera.MaxADU > 255 else 1
 frame_size_bytes = ceil(width / binX) * ceil(height / binY) * bytes_per_pixel + 16384  // FITS header overhead
 ```
 
-Uses **uncompressed worst-case** for safety — real frames may compress to 30-60% via FITS RICE or XISF compression, but estimating high prevents surprises mid-night.
+Uses **uncompressed worst-case** for safety — real frames may compress to 30-60% via XISF Zstandard compression (FITS is always written uncompressed, #1148), but estimating high prevents surprises mid-night.
 
 ### 29.4 Sequence-start validation
 

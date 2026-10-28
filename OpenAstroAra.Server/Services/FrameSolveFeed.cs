@@ -83,7 +83,7 @@ public sealed partial class FrameSolveFeed : IFrameSolveFeed, ISavedLightSink, I
                 LogFrameMissing(frameId);
                 return null;
             }
-            var (pixels, width, height, binning) = await (PixelLoader ?? LoadFitsAsync)(frame.FilePath, ct).ConfigureAwait(false);
+            var (pixels, width, height, binning) = await (PixelLoader ?? LoadFrameAsync)(frame.FilePath, ct).ConfigureAwait(false);
             // The solver ignores the CFA; a one-shot-colour mosaic solves as luminance like every other path here.
             // The frame's binning sets the solve scale (#1136): a 2x2 light is not a 1x1 one.
             var metaData = new OpenAstroAra.Image.ImageData.ImageMetaData();
@@ -117,11 +117,11 @@ public sealed partial class FrameSolveFeed : IFrameSolveFeed, ISavedLightSink, I
 
     public void Dispose() => _solveGate.Dispose();
 
-    private static Task<(ushort[] Pixels, int Width, int Height, int Binning)> LoadFitsAsync(string path, CancellationToken ct) =>
+    // #1148 — the catalogued frame is FITS or XISF; the reader seam dispatches on the extension.
+    private static Task<(ushort[] Pixels, int Width, int Height, int Binning)> LoadFrameAsync(string path, CancellationToken ct) =>
         Task.Run(() => {
-            using var fits = OpenAstroAra.Fits.FitsImage.Open(path);
-            var (w, h) = fits.GetDimensions();
-            return (fits.ReadImageData16(), w, h, SqliteFrameRepository.BinningFromHeaders(fits.ReadHeaders()));
+            var frame = FrameFileReader.Read(path);
+            return (frame.Pixels, frame.Width, frame.Height, SqliteFrameRepository.BinningFromHeaders(frame.Headers));
         }, ct);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Center after drift: frame {FrameId} is not in the catalog (or has no file) — not solved")]

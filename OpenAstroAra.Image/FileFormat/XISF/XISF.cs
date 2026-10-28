@@ -52,250 +52,273 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
         /// </summary>
         public static int PaddedBlockSize => 1024;
 
-        [System.Diagnostics.CodeAnalysis.SuppressMessage("Globalization", "CA1308:Normalize strings to uppercase", Justification = "Lowercasing ASCII file-format tokens (XISF codec/checksum names, file extensions, EXIF tags) to match lowercase identifiers; not a security decision.")]
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "XISF metadata-extraction boundary: extracting metadata from arbitrary XISF XML may throw various parse/format exceptions; the failure is logged and load continues with default metadata.")]
         public static async Task<IImageData> Load(Uri filePath, bool isBayered, IImageDataFactory imageDataFactory, CancellationToken ct) {
             return await Task.Run(() => {
-                using (FileStream fs = new FileStream(filePath.LocalPath, FileMode.Open, FileAccess.Read)) {
-                    // First make sure we are opening a XISF file by looking for the XISF signature at bytes 1-8
-                    byte[] fileSig = new byte[xisfSignature.Length];
-                    fs.ReadExactly(fileSig, 0, fileSig.Length);
+                var (img, width, height, header) = ReadImage(filePath.LocalPath);
 
-                    if (!fileSig.SequenceEqual(xisfSignature)) {
-                        Logger.Error($"XISF: Opened file \"{filePath.LocalPath}\" is not a valid XISF file");
-                        throw new InvalidDataException(Loc.Instance["LblXisfInvalidFile"]);
-                    }
-
-                    Logger.Debug($"XISF: Opening file \"{filePath.LocalPath}\"");
-
-                    // Get the header length info, bytes 9-12
-                    byte[] headerLengthInfo = new byte[4];
-                    fs.ReadExactly(headerLengthInfo, 0, headerLengthInfo.Length);
-                    uint headerLength = BitConverter.ToUInt32(headerLengthInfo, 0);
-
-                    // Guard against a malformed/hostile header length before allocating for it.
-                    if (headerLength == 0 || headerLength > fs.Length) {
-                        Logger.Error($"XISF: header length {headerLength} is invalid for a file of {fs.Length} bytes");
-                        throw new InvalidDataException(Loc.Instance["LblXisfInvalidFile"]);
-                    }
-
-                    // Skip the next 4 bytes as they are reserved space
-                    fs.Seek(4, SeekOrigin.Current);
-
-                    // XML document starts at byte 17
-                    byte[] bytes = new byte[headerLength];
-                    fs.ReadExactly(bytes, 0, (int)headerLength);
-                    string xmlString = Encoding.UTF8.GetString(bytes);
-
-                    /*
-                     * Create the header for ease of access
-                     */
-                    XElement xml = XElement.Parse(xmlString);
-                    var header = new XISFHeader(xml);
-                    var imageElement = header.Image
-                        ?? throw new InvalidDataException(Loc.Instance["LblXisfInvalidFile"]);
-
-                    var metaData = new ImageMetaData();
-                    try {
-                        metaData = header.ExtractMetaData();
-                    } catch (Exception ex) {
-                        Logger.Error($"XISF: Error during metadata extraction {ex.Message}");
-                    }
-
-                    /*
-                     * Retrieve the geometry attribute.
-                     */
-                    int width = 0;
-                    int height = 0;
-                    int channels = 1;
-
-                    try {
-                        string[] geometry = RequiredAttribute(imageElement, "geometry").Split(':');
-                        width = int.Parse(geometry[0], CultureInfo.InvariantCulture);
-                        height = int.Parse(geometry[1], CultureInfo.InvariantCulture);
-                        // Per the XISF spec the last geometry token is the channel count.
-                        if (geometry.Length > 2) {
-                            channels = int.Parse(geometry[^1], CultureInfo.InvariantCulture);
-                        }
-                    } catch (Exception ex) {
-                        Logger.Error($"XISF: Could not find image geometry: {ex}");
-                        throw new InvalidDataException(Loc.Instance["LblXisfInvalidGeometry"]);
-                    }
-
-                    if (width <= 0 || height <= 0 || channels <= 0) {
-                        Logger.Error($"XISF: invalid geometry width={width}, height={height}, channels={channels}");
-                        throw new InvalidDataException(Loc.Instance["LblXisfInvalidGeometry"]);
-                    }
-
-                    long expectedSamples = (long)width * height * channels;
-
-                    // Spec attributes that shape the block. Both are optional with defaults; a value
-                    // outside the spec's vocabulary is a malformed file, not something to guess at.
-                    string pixelStorage = imageElement.Attribute("pixelStorage")?.Value ?? "Planar";
-                    if (!pixelStorage.Equals("Planar", StringComparison.OrdinalIgnoreCase) && !pixelStorage.Equals("Normal", StringComparison.OrdinalIgnoreCase)) {
-                        throw new InvalidDataException(string.Format(CultureInfo.CurrentCulture, "XISF: unsupported pixelStorage '{0}'", pixelStorage));
-                    }
-                    string colorSpace = imageElement.Attribute("colorSpace")?.Value ?? "Gray";
-                    if (!colorSpace.Equals("Gray", StringComparison.OrdinalIgnoreCase) && !colorSpace.Equals("RGB", StringComparison.OrdinalIgnoreCase) && !colorSpace.Equals("CIELab", StringComparison.OrdinalIgnoreCase)) {
-                        throw new InvalidDataException(string.Format(CultureInfo.CurrentCulture, "XISF: unsupported colorSpace '{0}'", colorSpace));
-                    }
-                    // A colour space implies a channel count (Gray 1, RGB and CIELab 3), and XISF 1.0
-                    // lets one trailing alpha channel follow it (Gray 2, RGB/CIELab 4). Anything else
-                    // is a malformed file rather than something to read as whichever it turns out to be.
-                    int channelsForColorSpace = colorSpace.Equals("Gray", StringComparison.OrdinalIgnoreCase) ? 1 : 3;
-                    if (channels != channelsForColorSpace && channels != channelsForColorSpace + 1) {
-                        throw new InvalidDataException(string.Format(CultureInfo.CurrentCulture, "XISF: colorSpace {0} implies {1} channel(s), or {2} with alpha, but geometry declares {3}", colorSpace, channelsForColorSpace, channelsForColorSpace + 1, channels));
-                    }
-                    // The image model is single-channel (an OSC frame is a Bayered mono array). A
-                    // multi-channel block (colour, or mono plus alpha) would otherwise be handed to a
-                    // WxH image as an N*W*H array, so say so instead of producing a scrambled picture
-                    // (#996, remaining scope: when a colour model exists, carry the alpha plane too).
-                    if (channels != 1) {
-                        Logger.Error($"XISF: {channels}-channel {colorSpace} image; only single-channel images are supported");
-                        throw new InvalidDataException(string.Format(CultureInfo.CurrentCulture, "XISF: {0}-channel images are not supported yet (colorSpace={1}, pixelStorage={2})", channels, colorSpace, pixelStorage));
-                    }
-
-                    Logger.Debug($"XISF: File geometry: width={width}, height={height}, channels={channels}");
-
-                    /*
-                     * Retrieve the pixel data type
-                     */
-                    string sampleFormat = "UInt16";
-                    try {
-                        sampleFormat = RequiredAttribute(imageElement, "sampleFormat");
-                    } catch (InvalidDataException ex) {
-                        Logger.Error($"XISF: Could not read image data: {ex}");
-                        throw;
-                    } catch (Exception ex) {
-                        Logger.Error($"XISF: Could not find image data type: {ex}");
-                        throw new InvalidDataException("Could not find XISF image data type");
-                    }
-
-                    // Floating-point samples are nominally in [0, 1]; `bounds="lo:hi"` declares the
-                    // range actually used, and the spec makes it mandatory for float formats. Integer
-                    // formats ignore it (their range is the type's).
-                    double boundsLow = 0d, boundsHigh = 1d;
-                    bool floatFormat = sampleFormat.StartsWith("Float", StringComparison.Ordinal) || sampleFormat.StartsWith("Complex", StringComparison.Ordinal);
-                    if (floatFormat && imageElement.Attribute("bounds") is XAttribute boundsAttribute) {
-                        string[] b = boundsAttribute.Value.Split(':');
-                        if (b.Length != 2
-                            || !double.TryParse(b[0], NumberStyles.Float, CultureInfo.InvariantCulture, out boundsLow)
-                            || !double.TryParse(b[1], NumberStyles.Float, CultureInfo.InvariantCulture, out boundsHigh)
-                            || !(boundsHigh > boundsLow)) {
-                            throw new InvalidDataException(string.Format(CultureInfo.CurrentCulture, "XISF: malformed bounds '{0}'", boundsAttribute.Value));
-                        }
-                    }
-
-                    // Expected number of raw sample bytes for this image. Used to bound decompression
-                    // allocations so a malformed/hostile "uncompressed size" cannot trigger a decompression bomb.
-                    long expectedBytes = expectedSamples * SampleFormatByteSize(sampleFormat);
-
-                    /*
-                     * Determine if the data block is compressed and if a checksum is provided for it
-                     */
-                    XISFCompressionInfo compressionInfo = new XISFCompressionInfo();
-                    string[]? compression = null;
-
-                    try {
-                        if (imageElement.Attribute("compression") != null) {
-                            // [compression codec]:[uncompressed size]:[sizeof shuffled typedef]
-                            compression = RequiredAttribute(imageElement, "compression").ToLowerInvariant().Split(':');
-
-                            if (!string.IsNullOrEmpty(compression[0])) {
-                                compressionInfo = GetCompressionType(compression);
-                            }
-                        } else {
-                            Logger.Debug("XISF: Compressed data block was not encountered");
-                        }
-                    } catch (InvalidDataException) {
-                        Logger.Error($"XISF: Unknown compression codec encountered: {compression?[0]}");
-                        throw new InvalidDataException(string.Format(CultureInfo.CurrentCulture, Loc.Instance["LblXisfUnsupportedCompression"], compression?[0]));
-                    }
-
-                    if (compressionInfo.CompressionType != XISFCompressionType.NONE) {
-                        // Reject an uncompressed size that is non-positive or exceeds the raw image byte count.
-                        if (compressionInfo.UncompressedSize <= 0 || compressionInfo.UncompressedSize > expectedBytes) {
-                            Logger.Error($"XISF: declared uncompressed size {compressionInfo.UncompressedSize} is invalid (expected {expectedBytes} bytes)");
-                            throw new InvalidDataException(Loc.Instance["LblXisfInvalidFile"]);
-                        }
-                        Logger.Debug(string.Format(CultureInfo.InvariantCulture, "XISF: CompressionType: {0}, UncompressedSize: {1}, IsShuffled: {2}, ItemSize: {3}",
-                            compressionInfo.CompressionType,
-                            compressionInfo.UncompressedSize,
-                            compressionInfo.IsShuffled,
-                            compressionInfo.ItemSize));
-                    }
-
-                    /*
-                     * Determine if a checksum is provided for the datablock.
-                     * If the data block is compressed, the checksum is for the compressed form.
-                     */
-                    XISFChecksumType cksumType = XISFChecksumType.NONE;
-                    string cksumHash = string.Empty;
-                    string[]? cksum = null;
-
-                    try {
-                        if (imageElement.Attribute("checksum") != null) {
-                            // [hash type]:[hash string]
-                            cksum = RequiredAttribute(imageElement, "checksum").ToLowerInvariant().Split(':');
-                            if (cksum.Length != 2 || string.IsNullOrEmpty(cksum[1])) {
-                                throw new InvalidDataException(string.Format(CultureInfo.CurrentCulture, Loc.Instance["LblXisfUnsupportedChecksum"], string.Join(':', cksum)));
-                            }
-
-                            if (!string.IsNullOrEmpty(cksum[0])) {
-                                cksumType = GetChecksumType(cksum[0]);
-                                cksumHash = cksum[1];
-                            }
-                        } else {
-                            Logger.Debug("XISF: Checksummed data block was not encountered");
-                        }
-                    } catch (InvalidDataException) {
-                        Logger.Error($"XISF: Unknown checksum type: {cksum?[0]}");
-                        throw new InvalidDataException(string.Format(CultureInfo.CurrentCulture, Loc.Instance["LblXisfUnsupportedChecksum"], cksum?[0]));
-                    }
-
-                    if (cksumType != XISFChecksumType.NONE) {
-                        Logger.Debug($"XISF: Checksum type: {cksumType}, Hash: {cksumHash}");
-                    }
-
-                    /*
-                     * Retrieve the attachment attribute to find the start and length of the data block.
-                     * If the attachment attribute does not exist, we assume that the image data is
-                     * inside a <Data> element and is base64-encoded.
-                     */
-                    string location = RequiredAttribute(imageElement, "location");
-                    byte[] raw;
-
-                    if (location.StartsWith("attachment", StringComparison.Ordinal)) {
-                        string[] parts = location.Split(':');
-                        if (parts.Length < 3) {
-                            throw new InvalidDataException(Loc.Instance["LblXisfInvalidFile"]);
-                        }
-                        long start = long.Parse(parts[1], CultureInfo.InvariantCulture);
-                        long size = long.Parse(parts[2], CultureInfo.InvariantCulture);
-
-                        // Validate the data block lies within the file before allocating for it.
-                        if (start < 0 || size < 0 || size > int.MaxValue || start + size > fs.Length) {
-                            Logger.Error($"XISF: data block (start={start}, size={size}) lies outside the {fs.Length}-byte file");
-                            throw new InvalidDataException(Loc.Instance["LblXisfInvalidFile"]);
-                        }
-
-                        Logger.Debug($"XISF: Data block type: attachment, Data block start: {start}, Data block size: {size}");
-
-                        raw = new byte[size];
-                        fs.Seek(start, SeekOrigin.Begin);
-                        fs.ReadExactly(raw, 0, (int)size);
-                    } else {
-                        raw = ReadInlineOrEmbeddedBlock(imageElement, location);
-                    }
-
-                    // Same pipeline for every block location: the spec's checksum and compression
-                    // attributes describe the block wherever it is stored.
-                    var img = DecodeBlock(raw, sampleFormat, compressionInfo, cksumType, cksumHash, expectedSamples, boundsLow, boundsHigh);
-                    BaseImageData imageData = imageDataFactory.CreateBaseImageData(img, width, height, 16, isBayered, metaData);
-
-                    return imageData;
+                var metaData = new ImageMetaData();
+                try {
+                    metaData = header.ExtractMetaData();
+                } catch (Exception ex) {
+                    Logger.Error($"XISF: Error during metadata extraction {ex.Message}");
                 }
+
+                IImageData imageData = imageDataFactory.CreateBaseImageData(img, width, height, 16, isBayered, metaData);
+                return imageData;
             }, ct);
+        }
+
+        /// <summary>
+        /// Reads only the XML header of a monolithic XISF file: the signature, the header length and
+        /// the document, never the data block. For callers that want the keywords without decoding
+        /// pixels (the daemon's frame catalog scan reads a whole drive this way).
+        /// </summary>
+        public static XISFHeader ReadHeader(string path) {
+            using FileStream fs = new FileStream(path, FileMode.Open, FileAccess.Read);
+            return ReadHeader(fs, path);
+        }
+
+        /// <summary>
+        /// Reads the header and decodes the single-channel image block as 16-bit samples (verified,
+        /// decompressed and unshuffled), with no image-data factory. <see cref="Load"/> is this plus
+        /// the metadata model; the daemon's library-frame reader uses it directly so it keeps the
+        /// header's FITSKeyword elements as written.
+        /// </summary>
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Globalization", "CA1308:Normalize strings to uppercase", Justification = "Lowercasing ASCII file-format tokens (XISF codec/checksum names) to match lowercase identifiers; not a security decision.")]
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "Geometry-parse boundary: any parse fault of the geometry attribute is logged and rethrown as InvalidDataException.")]
+        public static (ushort[] Pixels, int Width, int Height, XISFHeader Header) ReadImage(string path) {
+            using (FileStream fs = new FileStream(path, FileMode.Open, FileAccess.Read)) {
+                var header = ReadHeader(fs, path);
+                var imageElement = header.Image
+                    ?? throw new InvalidDataException(Loc.Instance["LblXisfInvalidFile"]);
+
+                /*
+                 * Retrieve the geometry attribute.
+                 */
+                int width = 0;
+                int height = 0;
+                int channels = 1;
+
+                try {
+                    string[] geometry = RequiredAttribute(imageElement, "geometry").Split(':');
+                    width = int.Parse(geometry[0], CultureInfo.InvariantCulture);
+                    height = int.Parse(geometry[1], CultureInfo.InvariantCulture);
+                    // Per the XISF spec the last geometry token is the channel count.
+                    if (geometry.Length > 2) {
+                        channels = int.Parse(geometry[^1], CultureInfo.InvariantCulture);
+                    }
+                } catch (Exception ex) {
+                    Logger.Error($"XISF: Could not find image geometry: {ex}");
+                    throw new InvalidDataException(Loc.Instance["LblXisfInvalidGeometry"]);
+                }
+
+                if (width <= 0 || height <= 0 || channels <= 0) {
+                    Logger.Error($"XISF: invalid geometry width={width}, height={height}, channels={channels}");
+                    throw new InvalidDataException(Loc.Instance["LblXisfInvalidGeometry"]);
+                }
+
+                long expectedSamples = (long)width * height * channels;
+
+                // Spec attributes that shape the block. Both are optional with defaults; a value
+                // outside the spec's vocabulary is a malformed file, not something to guess at.
+                string pixelStorage = imageElement.Attribute("pixelStorage")?.Value ?? "Planar";
+                if (!pixelStorage.Equals("Planar", StringComparison.OrdinalIgnoreCase) && !pixelStorage.Equals("Normal", StringComparison.OrdinalIgnoreCase)) {
+                    throw new InvalidDataException(string.Format(CultureInfo.CurrentCulture, "XISF: unsupported pixelStorage '{0}'", pixelStorage));
+                }
+                string colorSpace = imageElement.Attribute("colorSpace")?.Value ?? "Gray";
+                if (!colorSpace.Equals("Gray", StringComparison.OrdinalIgnoreCase) && !colorSpace.Equals("RGB", StringComparison.OrdinalIgnoreCase) && !colorSpace.Equals("CIELab", StringComparison.OrdinalIgnoreCase)) {
+                    throw new InvalidDataException(string.Format(CultureInfo.CurrentCulture, "XISF: unsupported colorSpace '{0}'", colorSpace));
+                }
+                // A colour space implies a channel count (Gray 1, RGB and CIELab 3), and XISF 1.0
+                // lets one trailing alpha channel follow it (Gray 2, RGB/CIELab 4). Anything else
+                // is a malformed file rather than something to read as whichever it turns out to be.
+                int channelsForColorSpace = colorSpace.Equals("Gray", StringComparison.OrdinalIgnoreCase) ? 1 : 3;
+                if (channels != channelsForColorSpace && channels != channelsForColorSpace + 1) {
+                    throw new InvalidDataException(string.Format(CultureInfo.CurrentCulture, "XISF: colorSpace {0} implies {1} channel(s), or {2} with alpha, but geometry declares {3}", colorSpace, channelsForColorSpace, channelsForColorSpace + 1, channels));
+                }
+                // The image model is single-channel (an OSC frame is a Bayered mono array). A
+                // multi-channel block (colour, or mono plus alpha) would otherwise be handed to a
+                // WxH image as an N*W*H array, so say so instead of producing a scrambled picture
+                // (#996, remaining scope: when a colour model exists, carry the alpha plane too).
+                if (channels != 1) {
+                    Logger.Error($"XISF: {channels}-channel {colorSpace} image; only single-channel images are supported");
+                    throw new InvalidDataException(string.Format(CultureInfo.CurrentCulture, "XISF: {0}-channel images are not supported yet (colorSpace={1}, pixelStorage={2})", channels, colorSpace, pixelStorage));
+                }
+
+                Logger.Debug($"XISF: File geometry: width={width}, height={height}, channels={channels}");
+
+                /*
+                 * Retrieve the pixel data type
+                 */
+                string sampleFormat = "UInt16";
+                try {
+                    sampleFormat = RequiredAttribute(imageElement, "sampleFormat");
+                } catch (InvalidDataException ex) {
+                    Logger.Error($"XISF: Could not read image data: {ex}");
+                    throw;
+                } catch (Exception ex) {
+                    Logger.Error($"XISF: Could not find image data type: {ex}");
+                    throw new InvalidDataException("Could not find XISF image data type");
+                }
+
+                // Floating-point samples are nominally in [0, 1]; `bounds="lo:hi"` declares the
+                // range actually used, and the spec makes it mandatory for float formats. Integer
+                // formats ignore it (their range is the type's).
+                double boundsLow = 0d, boundsHigh = 1d;
+                bool floatFormat = sampleFormat.StartsWith("Float", StringComparison.Ordinal) || sampleFormat.StartsWith("Complex", StringComparison.Ordinal);
+                if (floatFormat && imageElement.Attribute("bounds") is XAttribute boundsAttribute) {
+                    string[] b = boundsAttribute.Value.Split(':');
+                    if (b.Length != 2
+                        || !double.TryParse(b[0], NumberStyles.Float, CultureInfo.InvariantCulture, out boundsLow)
+                        || !double.TryParse(b[1], NumberStyles.Float, CultureInfo.InvariantCulture, out boundsHigh)
+                        || !(boundsHigh > boundsLow)) {
+                        throw new InvalidDataException(string.Format(CultureInfo.CurrentCulture, "XISF: malformed bounds '{0}'", boundsAttribute.Value));
+                    }
+                }
+
+                // Expected number of raw sample bytes for this image. Used to bound decompression
+                // allocations so a malformed/hostile "uncompressed size" cannot trigger a decompression bomb.
+                long expectedBytes = expectedSamples * SampleFormatByteSize(sampleFormat);
+
+                /*
+                 * Determine if the data block is compressed and if a checksum is provided for it
+                 */
+                XISFCompressionInfo compressionInfo = new XISFCompressionInfo();
+                string[]? compression = null;
+
+                try {
+                    if (imageElement.Attribute("compression") != null) {
+                        // [compression codec]:[uncompressed size]:[sizeof shuffled typedef]
+                        compression = RequiredAttribute(imageElement, "compression").ToLowerInvariant().Split(':');
+
+                        if (!string.IsNullOrEmpty(compression[0])) {
+                            compressionInfo = GetCompressionType(compression);
+                        }
+                    } else {
+                        Logger.Debug("XISF: Compressed data block was not encountered");
+                    }
+                } catch (InvalidDataException) {
+                    Logger.Error($"XISF: Unknown compression codec encountered: {compression?[0]}");
+                    throw new InvalidDataException(string.Format(CultureInfo.CurrentCulture, Loc.Instance["LblXisfUnsupportedCompression"], compression?[0]));
+                }
+
+                if (compressionInfo.CompressionType != XISFCompressionType.NONE) {
+                    // Reject an uncompressed size that is non-positive or exceeds the raw image byte count.
+                    if (compressionInfo.UncompressedSize <= 0 || compressionInfo.UncompressedSize > expectedBytes) {
+                        Logger.Error($"XISF: declared uncompressed size {compressionInfo.UncompressedSize} is invalid (expected {expectedBytes} bytes)");
+                        throw new InvalidDataException(Loc.Instance["LblXisfInvalidFile"]);
+                    }
+                    Logger.Debug(string.Format(CultureInfo.InvariantCulture, "XISF: CompressionType: {0}, UncompressedSize: {1}, IsShuffled: {2}, ItemSize: {3}",
+                        compressionInfo.CompressionType,
+                        compressionInfo.UncompressedSize,
+                        compressionInfo.IsShuffled,
+                        compressionInfo.ItemSize));
+                }
+
+                /*
+                 * Determine if a checksum is provided for the datablock.
+                 * If the data block is compressed, the checksum is for the compressed form.
+                 */
+                XISFChecksumType cksumType = XISFChecksumType.NONE;
+                string cksumHash = string.Empty;
+                string[]? cksum = null;
+
+                try {
+                    if (imageElement.Attribute("checksum") != null) {
+                        // [hash type]:[hash string]
+                        cksum = RequiredAttribute(imageElement, "checksum").ToLowerInvariant().Split(':');
+                        if (cksum.Length != 2 || string.IsNullOrEmpty(cksum[1])) {
+                            throw new InvalidDataException(string.Format(CultureInfo.CurrentCulture, Loc.Instance["LblXisfUnsupportedChecksum"], string.Join(':', cksum)));
+                        }
+
+                        if (!string.IsNullOrEmpty(cksum[0])) {
+                            cksumType = GetChecksumType(cksum[0]);
+                            cksumHash = cksum[1];
+                        }
+                    } else {
+                        Logger.Debug("XISF: Checksummed data block was not encountered");
+                    }
+                } catch (InvalidDataException) {
+                    Logger.Error($"XISF: Unknown checksum type: {cksum?[0]}");
+                    throw new InvalidDataException(string.Format(CultureInfo.CurrentCulture, Loc.Instance["LblXisfUnsupportedChecksum"], cksum?[0]));
+                }
+
+                if (cksumType != XISFChecksumType.NONE) {
+                    Logger.Debug($"XISF: Checksum type: {cksumType}, Hash: {cksumHash}");
+                }
+
+                /*
+                 * Retrieve the attachment attribute to find the start and length of the data block.
+                 * If the attachment attribute does not exist, we assume that the image data is
+                 * inside a <Data> element and is base64-encoded.
+                 */
+                string location = RequiredAttribute(imageElement, "location");
+                byte[] raw;
+
+                if (location.StartsWith("attachment", StringComparison.Ordinal)) {
+                    string[] parts = location.Split(':');
+                    if (parts.Length < 3) {
+                        throw new InvalidDataException(Loc.Instance["LblXisfInvalidFile"]);
+                    }
+                    long start = long.Parse(parts[1], CultureInfo.InvariantCulture);
+                    long size = long.Parse(parts[2], CultureInfo.InvariantCulture);
+
+                    // Validate the data block lies within the file before allocating for it.
+                    if (start < 0 || size < 0 || size > int.MaxValue || start + size > fs.Length) {
+                        Logger.Error($"XISF: data block (start={start}, size={size}) lies outside the {fs.Length}-byte file");
+                        throw new InvalidDataException(Loc.Instance["LblXisfInvalidFile"]);
+                    }
+
+                    Logger.Debug($"XISF: Data block type: attachment, Data block start: {start}, Data block size: {size}");
+
+                    raw = new byte[size];
+                    fs.Seek(start, SeekOrigin.Begin);
+                    fs.ReadExactly(raw, 0, (int)size);
+                } else {
+                    raw = ReadInlineOrEmbeddedBlock(imageElement, location);
+                }
+
+                // Same pipeline for every block location: the spec's checksum and compression
+                // attributes describe the block wherever it is stored.
+                var img = DecodeBlock(raw, sampleFormat, compressionInfo, cksumType, cksumHash, expectedSamples, boundsLow, boundsHigh);
+                return (img, width, height, header);
+            }
+        }
+
+        private static XISFHeader ReadHeader(FileStream fs, string path) {
+            // First make sure we are opening a XISF file by looking for the XISF signature at bytes 1-8
+            byte[] fileSig = new byte[xisfSignature.Length];
+            fs.ReadExactly(fileSig, 0, fileSig.Length);
+
+            if (!fileSig.SequenceEqual(xisfSignature)) {
+                Logger.Error($"XISF: Opened file \"{path}\" is not a valid XISF file");
+                throw new InvalidDataException(Loc.Instance["LblXisfInvalidFile"]);
+            }
+
+            Logger.Debug($"XISF: Opening file \"{path}\"");
+
+            // Get the header length info, bytes 9-12
+            byte[] headerLengthInfo = new byte[4];
+            fs.ReadExactly(headerLengthInfo, 0, headerLengthInfo.Length);
+            uint headerLength = BitConverter.ToUInt32(headerLengthInfo, 0);
+
+            // Guard against a malformed/hostile header length before allocating for it.
+            if (headerLength == 0 || headerLength > fs.Length) {
+                Logger.Error($"XISF: header length {headerLength} is invalid for a file of {fs.Length} bytes");
+                throw new InvalidDataException(Loc.Instance["LblXisfInvalidFile"]);
+            }
+
+            // Skip the next 4 bytes as they are reserved space
+            fs.Seek(4, SeekOrigin.Current);
+
+            // XML document starts at byte 17
+            byte[] bytes = new byte[headerLength];
+            fs.ReadExactly(bytes, 0, (int)headerLength);
+            string xmlString = Encoding.UTF8.GetString(bytes);
+
+            XElement xml = XElement.Parse(xmlString);
+            return new XISFHeader(xml);
         }
 
         /// <summary>

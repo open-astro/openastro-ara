@@ -528,7 +528,7 @@ class BackupStreamController extends Notifier<BackupStreamState> {
       } else {
         dir = Directory(
             '${state.localRoot}${Platform.pathSeparator}$hostDir${Platform.pathSeparator}${_sanitize(entry.sessionId)}');
-        file = File('${dir.path}${Platform.pathSeparator}${_sanitize(entry.id)}.fits');
+        file = File('${dir.path}${Platform.pathSeparator}${_sanitize(entry.id)}${frameFileExtension(bytes)}');
       }
       await dir.create(recursive: true);
       // Temp + rename so a crash mid-write never leaves a plausible-looking
@@ -547,6 +547,19 @@ class BackupStreamController extends Notifier<BackupStreamState> {
   }
 
   static bool _digestMatches(String a, String b) => a.toLowerCase() == b.toLowerCase();
+
+  /// The extension an id-named mirror file gets (#1148): the rig writes FITS
+  /// or XISF, and with no store-relative path to copy the name from, the
+  /// bytes say which — a monolithic XISF file opens with `XISF0100`.
+  /// Visible for tests.
+  static String frameFileExtension(List<int> bytes) {
+    const signature = [0x58, 0x49, 0x53, 0x46, 0x30, 0x31, 0x30, 0x30];
+    if (bytes.length < signature.length) return '.fits';
+    for (var i = 0; i < signature.length; i++) {
+      if (bytes[i] != signature[i]) return '.fits';
+    }
+    return '.xisf';
+  }
 
   /// Filenames come from server-issued GUIDs/hostnames, but never trust a path
   /// segment blindly — strip separators + parent-dir tokens.

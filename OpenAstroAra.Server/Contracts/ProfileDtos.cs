@@ -36,9 +36,13 @@ public sealed record ImagingDefaultsDto(
 
 /// <summary>
 /// §29 storage settings (save directory + file format + compression +
-/// filename template). `FileFormat` is one of `fits`/`xisf`/`fits_rice`/
-/// `fits_gzip`; `Compression` is `off`/`rice`/`gzip`. Both are strings on
-/// the wire (matches the §60.6 enum-as-string convention used everywhere
+/// filename template). `FileFormat` is `fits` or `xisf`; `Compression` is
+/// `off` or `zstd` — lossless Zstandard with byte shuffling, applied only to
+/// XISF (FITS is always written uncompressed: PixInsight cannot open
+/// tile-compressed FITS). #1148: the retired `fits_rice`/`fits_gzip` formats
+/// are read as `fits` and the legacy `rice`/`gzip` compression values as
+/// `zstd` (see <see cref="Services.StorageFormatTokens"/>). Both are strings
+/// on the wire (matches the §60.6 enum-as-string convention used everywhere
 /// else); the client maps them back to its `StorageFileFormat` +
 /// `StorageCompression` enums.
 /// </summary>
@@ -204,6 +208,9 @@ public sealed record EquipmentIdentityDto(IReadOnlyDictionary<string, DeviceIden
 /// <see cref="StorageSettingsDto"/>; this section covers what the storage
 /// panel doesn't.) `DateSeparator` is `forward_slash`/`underscore`/`dash`
 /// on the wire (snake_case for compound names per §60.6).
+/// `CompressDarksAndBias` (#1148): with XISF and compression off, dark and
+/// bias frames are still written Zstandard-compressed; it has no effect on
+/// FITS, which is always uncompressed.
 /// </summary>
 public sealed record FilenamesSettingsDto(
     string DateSeparator,

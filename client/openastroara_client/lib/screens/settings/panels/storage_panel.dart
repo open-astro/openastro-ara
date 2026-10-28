@@ -162,25 +162,36 @@ class _StoragePanelState extends ConsumerState<StoragePanel>
           items: const {
             StorageFileFormat.fits: 'FITS',
             StorageFileFormat.xisf: 'XISF',
-            StorageFileFormat.fitsRice: 'FITS + RICE compression',
-            StorageFileFormat.fitsGzip: 'FITS + gzip',
           },
           onChanged: (v) {
             if (v != null) n.setFileFormat(v);
           },
         ),
-        SettingsDropdownRow<StorageCompression>(
-          label: 'Compression',
-          helpKey: 'session.storage.compression',
-          value: s.compression,
-          items: const {
-            StorageCompression.off: 'Off',
-            StorageCompression.rice: 'RICE',
-            StorageCompression.gzip: 'gzip',
-          },
-          onChanged: (v) {
-            if (v != null) n.setCompression(v);
-          },
+        // #1148 — only XISF compresses; FITS is always written uncompressed
+        // (PixInsight can't open tile-compressed FITS).
+        if (s.fileFormat == StorageFileFormat.xisf)
+          SettingsDropdownRow<StorageCompression>(
+            label: 'Compression',
+            helpKey: 'session.storage.compression',
+            value: s.compression,
+            items: const {
+              StorageCompression.off: 'Off',
+              StorageCompression.zstd: 'Lossless (Zstandard)',
+            },
+            onChanged: (v) {
+              if (v != null) n.setCompression(v);
+            },
+          ),
+        Padding(
+          padding: const EdgeInsets.only(left: 280, bottom: 4),
+          child: Text(
+            s.fileFormat == StorageFileFormat.xisf
+                ? 'PixInsight reads compressed XISF directly.'
+                : 'FITS is always written uncompressed. Pick XISF to compress frames.',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: AraColors.textSecondary,
+                ),
+          ),
         ),
         const SettingsRow(
           label: 'File naming',

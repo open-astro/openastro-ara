@@ -260,7 +260,8 @@ public sealed class SqliteSessionService : ISessionService {
                             WhitePoint: request.WhitePoint,
                             MaxDimensionPx: null,
                             ApplyDebayer: false), jobCt);
-                    } catch (Exception ex) when (ex is IOException or InvalidOperationException or ArgumentException or OpenAstroAra.Fits.FitsException) {
+                    } catch (Exception ex) when (ex is IOException or InvalidOperationException or ArgumentException or OpenAstroAra.Fits.FitsException
+                        or InvalidDataException or System.Xml.XmlException) {
                         // Per-frame stretch failures don't abort the batch —
                         // user gets the rest. Future enhancement: per-frame
                         // failure list on the job DTO.

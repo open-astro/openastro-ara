@@ -54,7 +54,7 @@ namespace OpenAstroAra.Test {
         private static IProfileStore StoreWithRetention(int keep) {
             var store = new Mock<IProfileStore>();
             store.Setup(s => s.GetStorageSettings())
-                .Returns(new StorageSettingsDto("/tmp", "fits", "rice", "t", BackupRetentionCount: keep));
+                .Returns(new StorageSettingsDto("/tmp", "fits", "zstd", "t", BackupRetentionCount: keep));
             return store.Object;
         }
 

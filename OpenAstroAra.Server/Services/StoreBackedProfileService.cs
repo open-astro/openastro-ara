@@ -232,7 +232,8 @@ internal static class ProfileStoreMapper {
         // FilePattern consumes the same token syntax.
         imageFile.FilePattern = storage.FilenameTemplate;
         imageFile.FileType = MapFileType(storage.FileFormat);
-        // Compression rides on the §72 FITS writer (fits_rice/fits_gzip), not on FileType.
+        // Compression (#1148: lossless Zstandard, XISF only) is applied by the daemon's own frame
+        // writer from the store, not through these NINA-side settings.
     }
 
     internal static void ApplyPlateSolve(PlateSolveSettingsDto plateSolve, IProfile profile) {
@@ -258,8 +259,8 @@ internal static class ProfileStoreMapper {
         // re-calibration flag rides on the §63 PHD2 wiring — store-only here.
     }
 
-    // FileFormat tokens per the §29 contract: fits / xisf / fits_rice / fits_gzip. The compressed
-    // FITS variants are still FITS container-wise.
+    // FileFormat tokens per the §29 contract: fits / xisf (#1148). The retired fits_rice/fits_gzip
+    // tokens of older profiles are plain FITS, like any other value.
     internal static FileType MapFileType(string fileFormat) =>
         string.Equals(fileFormat, "xisf", StringComparison.OrdinalIgnoreCase)
             ? FileType.XISF

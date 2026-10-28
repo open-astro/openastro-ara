@@ -755,8 +755,8 @@ class ProfileApi {
     Map<String, dynamic> j,
   ) => StorageSettings(
     saveDirectory: (j['save_directory'] as String?) ?? '/media/openastroara',
-    fileFormat: _fileFormatFromString(j['file_format'] as String?),
-    compression: _compressionFromString(j['compression'] as String?),
+    fileFormat: StorageFileFormat.fromWire(j['file_format'] as String?),
+    compression: StorageCompression.fromWire(j['compression'] as String?),
     // Fallback matches the StorageSettings() constructor default
     // (raw-string literal with `\\` double-backslash separators).
     filenameTemplate:
@@ -772,53 +772,14 @@ class ProfileApi {
 
   static Map<String, dynamic> _storageSettingsToJson(StorageSettings v) => {
     'save_directory': v.saveDirectory,
-    'file_format': _fileFormatToString(v.fileFormat),
-    'compression': v.compression.name,
+    'file_format': v.fileFormat.wire,
+    'compression': v.compression.wire,
     'filename_template': v.filenameTemplate,
     'min_free_disk_warn_gb': v.minFreeDiskWarnGb,
     'min_free_disk_critical_gb': v.minFreeDiskCriticalGb,
     'backup_retention_count': v.backupRetentionCount,
     'fault_log_retention_days': v.faultLogRetentionDays,
   };
-
-  static StorageFileFormat _fileFormatFromString(String? s) {
-    switch (s) {
-      case 'xisf':
-        return StorageFileFormat.xisf;
-      case 'fits_rice':
-        return StorageFileFormat.fitsRice;
-      case 'fits_gzip':
-        return StorageFileFormat.fitsGzip;
-      case 'fits':
-      default:
-        return StorageFileFormat.fits;
-    }
-  }
-
-  static String _fileFormatToString(StorageFileFormat f) {
-    switch (f) {
-      case StorageFileFormat.fits:
-        return 'fits';
-      case StorageFileFormat.xisf:
-        return 'xisf';
-      case StorageFileFormat.fitsRice:
-        return 'fits_rice';
-      case StorageFileFormat.fitsGzip:
-        return 'fits_gzip';
-    }
-  }
-
-  static StorageCompression _compressionFromString(String? s) {
-    switch (s) {
-      case 'off':
-        return StorageCompression.off;
-      case 'gzip':
-        return StorageCompression.gzip;
-      case 'rice':
-      default:
-        return StorageCompression.rice;
-    }
-  }
 
   // ── Equipment-connection JSON mapping ──────────────────────────────────
 

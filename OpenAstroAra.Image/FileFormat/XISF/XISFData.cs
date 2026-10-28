@@ -12,7 +12,6 @@
 
 #endregion "copyright"
 
-using Ionic.Zlib;
 using K4os.Compression.LZ4;
 using OpenAstroAra.Core.Enums;
 using OpenAstroAra.Core.Utility;
@@ -77,6 +76,7 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
         public string? Checksum { get; private set; }
 
         public XISFData(ushort[] data, FileSaveInfo fileSaveInfo) {
+            RejectUnsupportedWrite(fileSaveInfo);
             CompressionType = fileSaveInfo.XISFCompressionType;
             ChecksumType = fileSaveInfo.XISFChecksumType; ;
             ByteShuffling = fileSaveInfo.XISFByteShuffling;
@@ -93,6 +93,18 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
             Data = PrepareArray(byteArray);
             Size = (uint)data.Length * sizeof(ushort);
             CompressedSize = CompressionType == XISFCompressionType.NONE ? 0 : (uint)Data.Length;
+        }
+
+        /// <summary>
+        /// zlib is read-only (#1148): other software writes it and the reader keeps decoding it, but
+        /// writing it costs ~55 s per 52 MB frame on a CM4 against ~0.6 s for Zstandard (level 1) at a similar
+        /// ratio. A request for it is refused rather than quietly written as something else.
+        /// </summary>
+        private static void RejectUnsupportedWrite(FileSaveInfo fileSaveInfo) {
+            ArgumentNullException.ThrowIfNull(fileSaveInfo);
+            if (fileSaveInfo.XISFCompressionType == XISFCompressionType.ZLIB) {
+                throw new ArgumentException("XISF: zlib compression is read-only; write with Zstandard (XISFCompressionType.ZSTD) instead.", nameof(fileSaveInfo));
+            }
         }
 
         /// <summary>
@@ -129,6 +141,7 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
         }
 
         public XISFData(uint[] data, FileSaveInfo fileSaveInfo) {
+            RejectUnsupportedWrite(fileSaveInfo);
             CompressionType = fileSaveInfo.XISFCompressionType;
             ChecksumType = fileSaveInfo.XISFChecksumType; ;
             ByteShuffling = fileSaveInfo.XISFByteShuffling;
@@ -194,15 +207,6 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
 
                     outArray = new byte[compressedSize];
                     Array.Copy(tmpArray, outArray, outArray.Length);
-                } else if (CompressionType == XISFCompressionType.ZLIB) {
-                    if (ByteShuffling) {
-                        CompressionName = "zlib+sh";
-                        byteArray = Shuffle(byteArray, ShuffleItemSize);
-                    } else {
-                        CompressionName = "zlib";
-                    }
-
-                    outArray = ZlibStream.CompressBuffer(byteArray);
                 } else if (CompressionType == XISFCompressionType.ZSTD) {
                     if (ByteShuffling) {
                         CompressionName = "zstd+sh";
@@ -211,9 +215,10 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
                         CompressionName = "zstd";
                     }
 
-                    // Level 3 is zstd's default and what PixInsight ships; the spec fixes only the
-                    // frame format, so any level reads back the same.
-                    using var compressor = new ZstdSharp.Compressor(3);
+                    // Level 1, single-threaded: on the CM4 a 52 MB frame takes 0.63 s and 22.5 MB, against
+                    // 1.2 s and 22.4 MB at zstd's default 3, and leaves the other cores to guiding and
+                    // frame analysis. The spec fixes only the frame format, so any level reads back the same.
+                    using var compressor = new ZstdSharp.Compressor(1);
                     outArray = compressor.Wrap(byteArray).ToArray();
                 } else {
                     outArray = new byte[byteArray.Length];

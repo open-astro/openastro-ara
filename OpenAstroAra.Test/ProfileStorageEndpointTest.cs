@@ -31,7 +31,7 @@ namespace OpenAstroAra.Test {
     public class ProfileStorageEndpointTest {
 
         private static StorageSettingsDto Body(int warnGb = 10, int criticalGb = 2, int backupKeep = 20, int faultDays = 90) =>
-            new("/media/openastroara", "fits", "rice", "t", warnGb, criticalGb, backupKeep, faultDays);
+            new("/media/openastroara", "fits", "zstd", "t", warnGb, criticalGb, backupKeep, faultDays);
 
         [TestCase(-1)]
         [TestCase(-365)]

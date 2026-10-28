@@ -10,8 +10,40 @@ import '../../services/profile_api.dart';
 /// panel mount, [StorageSettingsNotifier.persistToServer] runs from the
 /// Save button. Local state is still the source of truth between syncs.
 
-enum StorageFileFormat { fits, xisf, fitsRice, fitsGzip }
-enum StorageCompression { off, rice, gzip }
+/// The on-disk frame container (#1148). FITS is always written
+/// uncompressed; XISF is PixInsight's native format and the one that
+/// compresses. The FITS + RICE / FITS + gzip formats are gone (PixInsight
+/// can't open tile-compressed FITS): a stored `fits_rice`/`fits_gzip` reads
+/// as plain FITS, as the daemon does.
+enum StorageFileFormat {
+  fits('fits'),
+  xisf('xisf');
+
+  const StorageFileFormat(this.wire);
+
+  /// The §29 wire token.
+  final String wire;
+
+  /// Any token but `xisf` (incl. the legacy `fits_rice`/`fits_gzip`) is FITS.
+  static StorageFileFormat fromWire(String? s) =>
+      s?.trim().toLowerCase() == 'xisf' ? xisf : fits;
+}
+
+/// XISF compression (#1148): off, or lossless Zstandard with byte shuffling.
+/// Legacy `rice`/`gzip` meant "compress", so they read as [zstd].
+enum StorageCompression {
+  off('off'),
+  zstd('zstd');
+
+  const StorageCompression(this.wire);
+
+  /// The §29 wire token.
+  final String wire;
+
+  /// `off` stays off; anything else (incl. `rice`/`gzip`, or no value) is [zstd].
+  static StorageCompression fromWire(String? s) =>
+      s?.trim().toLowerCase() == 'off' ? off : zstd;
+}
 
 class StorageSettings {
   final String saveDirectory;
@@ -34,7 +66,7 @@ class StorageSettings {
   const StorageSettings({
     this.saveDirectory = '/media/openastroara',
     this.fileFormat = StorageFileFormat.fits,
-    this.compression = StorageCompression.rice,
+    this.compression = StorageCompression.zstd,
     this.filenameTemplate =
         r'$$DATEMINUS12$$\\$$IMAGETYPE$$\\$$DATETIME$$_$$FILTER$$_$$EXPOSURETIME$$s',
     this.minFreeDiskWarnGb = 10,

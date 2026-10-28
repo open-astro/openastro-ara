@@ -88,12 +88,16 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void LooksLikeFits_accepts_both_extensions_and_skips_appledouble() {
-            Assert.That(CaptureScanService.LooksLikeFits("/d/a.fits"), Is.True);
-            Assert.That(CaptureScanService.LooksLikeFits("/d/Light_NGC6188_0004.fit"), Is.True, "NINA single-t extension");
-            Assert.That(CaptureScanService.LooksLikeFits("/d/B.FIT"), Is.True, "case-insensitive");
-            Assert.That(CaptureScanService.LooksLikeFits("/d/._Light_NGC6188_0004.fit"), Is.False, "macOS AppleDouble fork");
-            Assert.That(CaptureScanService.LooksLikeFits("/d/readme.txt"), Is.False);
+        public void LooksLikeFrameFile_accepts_fits_and_xisf_and_skips_appledouble() {
+            Assert.That(CaptureScanService.LooksLikeFrameFile("/d/a.fits"), Is.True);
+            Assert.That(CaptureScanService.LooksLikeFrameFile("/d/Light_NGC6188_0004.fit"), Is.True, "NINA single-t extension");
+            Assert.That(CaptureScanService.LooksLikeFrameFile("/d/B.FIT"), Is.True, "case-insensitive");
+            Assert.That(CaptureScanService.LooksLikeFrameFile("/d/M31_L_180s.xisf"), Is.True, "#1148 XISF library frame");
+            Assert.That(CaptureScanService.LooksLikeFrameFile("/d/M31_L_180s.XISF"), Is.True, "case-insensitive");
+            Assert.That(CaptureScanService.LooksLikeFrameFile("/d/._Light_NGC6188_0004.fit"), Is.False, "macOS AppleDouble fork");
+            Assert.That(CaptureScanService.LooksLikeFrameFile("/d/._M31_L_180s.xisf"), Is.False, "macOS AppleDouble fork");
+            Assert.That(CaptureScanService.LooksLikeFrameFile("/d/M31_L_180s.xisf.tmp"), Is.False, "an unfinished write");
+            Assert.That(CaptureScanService.LooksLikeFrameFile("/d/readme.txt"), Is.False);
         }
     }
 }

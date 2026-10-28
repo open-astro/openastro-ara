@@ -47,7 +47,7 @@ public class ProfileShareServiceTest {
         Storage: new(
             SaveDirectory: @"C:\Astro\Captures",
             FileFormat: "fits",
-            Compression: "rice",
+            Compression: "zstd",
             FilenameTemplate: @"$$TARGET$$\$$FILTER$$"),
         Notifications: new(
             InAppBanner: true, OsDesktop: true, SoundAlert: true,

@@ -648,19 +648,20 @@ const Map<String, Help> helpRegistry = {
     title: 'File format',
     body:
         'FITS is the historical standard for astronomy and the safest choice for downstream tools (DSS, Siril, PixInsight, AstroPixelProcessor — all read FITS). '
-        'XISF is PixInsight\'s native format with richer metadata (per-frame statistics, processing history) but smaller tool support. '
-        'RICE-compressed FITS halves file size on light frames with minimal CPU cost and is widely supported. '
-        'Gzipped FITS is universal but slower to write and read.',
+        'Ara always writes FITS uncompressed: PixInsight cannot open tile-compressed FITS.\n\n'
+        'XISF is PixInsight\'s native format and its author\'s recommended raw format; Siril reads it too, but fewer other tools do. '
+        'XISF frames can be compressed losslessly (see Compression).\n\n'
+        'Profiles that used the old FITS + RICE or FITS + gzip formats now write plain FITS.',
     relatedSettings: ['session.storage.file_format'],
   ),
   'session.storage.compression': Help(
     key: 'session.storage.compression',
     title: 'Compression',
     body:
-        'Optional lossless compression applied as each frame is written to disk.\n\n'
-        '* **Off**: No compression — fastest, biggest files.\n'
-        '* **RICE**: Astronomy-tuned algorithm. ~2x compression on lights, ~10x on darks/bias. Fast both ways. Recommended.\n'
-        '* **gzip**: General-purpose. Smaller files than RICE but ~5x slower to write. Use only if a downstream tool requires it.',
+        'Lossless compression applied as each XISF frame is written to disk. Shown only when the file format is XISF — FITS is always written uncompressed.\n\n'
+        '* **Off**: No compression — biggest files.\n'
+        '* **Lossless (Zstandard)**: Zstandard with byte shuffling. Pixels come back bit-for-bit. A 52 MB frame takes about 1.4 s and 22 MB on a Raspberry Pi CM4. Recommended.\n\n'
+        'PixInsight reads compressed XISF directly.',
     relatedSettings: ['session.storage.compression'],
   ),
   'session.storage.filename_template': Help(
@@ -1012,9 +1013,10 @@ const Map<String, Help> helpRegistry = {
     key: 'session.filenames.compress_darks_and_bias',
     title: 'Compress bias + dark frames',
     body:
-        'Bias and dark frames are dominated by sensor noise (mostly zero in bias, slowly-varying in darks) and compress losslessly very well — typically 8-15x with RICE. '
-        'When on, calibration frames get RICE compression regardless of the global compression setting in Storage.'
-        'When off, calibration frames respect the global compression setting.\n\n'
+        'Applies to XISF. Bias and dark frames are dominated by sensor noise (mostly zero in bias, slowly-varying in darks) and compress losslessly very well. '
+        'When on, bias and dark frames are compressed with lossless Zstandard even if compression is off in Storage. '
+        'When off, they follow the Storage compression setting.\n\n'
+        'No effect on FITS, which is always written uncompressed.\n\n'
         'Recommended on — calibration frames are bulky (one library can take 5+ GB) and benefit far more from compression than light frames.',
     relatedSettings: ['session.storage.compression'],
   ),

@@ -599,6 +599,9 @@ public static class ProfileEndpoints {
                 detail: "fault_log_retention_days must be >= 0 (0 keeps every fault row).",
                 statusCode: StatusCodes.Status400BadRequest);
         }
+        // #1148 — legacy tokens (fits_rice/fits_gzip, rice/gzip) are accepted and stored as their
+        // current meaning; the echo carries what was stored so the client adopts it.
+        body = StorageFormatTokens.Normalize(body);
         store.PutStorageSettings(body);
         return Results.Ok(body);
     }

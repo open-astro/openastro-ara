@@ -32,7 +32,7 @@ namespace OpenAstroAra.Test {
         private static IProfileStore StoreWith(int days) {
             var store = new Mock<IProfileStore>();
             store.Setup(s => s.GetStorageSettings())
-                .Returns(new StorageSettingsDto("/tmp", "fits", "rice", "t", FaultLogRetentionDays: days));
+                .Returns(new StorageSettingsDto("/tmp", "fits", "zstd", "t", FaultLogRetentionDays: days));
             return store.Object;
         }
 

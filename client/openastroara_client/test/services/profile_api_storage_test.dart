@@ -53,7 +53,7 @@ void main() {
           body: {
             'save_directory': '/media/x',
             'file_format': 'fits',
-            'compression': 'rice',
+            'compression': 'zstd',
             'filename_template': 't',
             'min_free_disk_warn_gb': 10,
             'min_free_disk_critical_gb': 2,
@@ -83,5 +83,63 @@ void main() {
       expect((a.requestData as Map)['fault_log_retention_days'], 0);
       expect(echoed.faultLogRetentionDays, 0);
     });
+  });
+
+  // #1148 — the format is fits | xisf and compression off | zstd on the wire;
+  // the retired fits_rice/fits_gzip formats read as FITS and the legacy
+  // rice/gzip compression values (which meant "compress") as Zstandard.
+  group('storage file format + compression wire tokens (#1148)', () {
+    Future<StorageSettings> read(Object? format, Object? compression) =>
+        _api(_RecordingAdapter(body: {
+          'save_directory': '/media/x',
+          'file_format': ?format,
+          'compression': ?compression,
+        })).getStorageSettings();
+
+    test('current tokens parse', () async {
+      final s = await read('xisf', 'off');
+      expect(s.fileFormat, StorageFileFormat.xisf);
+      expect(s.compression, StorageCompression.off);
+      final t = await read('fits', 'zstd');
+      expect(t.fileFormat, StorageFileFormat.fits);
+      expect(t.compression, StorageCompression.zstd);
+    });
+
+    test('legacy formats read as plain FITS', () async {
+      expect((await read('fits_rice', 'rice')).fileFormat, StorageFileFormat.fits);
+      expect((await read('fits_gzip', 'gzip')).fileFormat, StorageFileFormat.fits);
+      expect((await read('XISF', null)).fileFormat, StorageFileFormat.xisf);
+      expect((await read(null, null)).fileFormat, StorageFileFormat.fits);
+    });
+
+    test('legacy compression values read as Zstandard; only off is off', () async {
+      expect((await read('xisf', 'rice')).compression, StorageCompression.zstd);
+      expect((await read('xisf', 'gzip')).compression, StorageCompression.zstd);
+      expect((await read('xisf', null)).compression, StorageCompression.zstd);
+      expect((await read('xisf', 'OFF')).compression, StorageCompression.off);
+    });
+
+    for (final format in StorageFileFormat.values) {
+      for (final compression in StorageCompression.values) {
+        test('${format.name}/${compression.name} round-trips', () async {
+          final sent = StorageSettings(
+              fileFormat: format, compression: compression);
+          final a = _RecordingAdapter(body: {
+            'file_format': format.wire,
+            'compression': compression.wire,
+          });
+          final echoed = await _api(a).putStorageSettings(sent);
+          final body = a.requestData as Map;
+          expect(body['file_format'], anyOf('fits', 'xisf'));
+          expect(body['compression'], anyOf('off', 'zstd'));
+          expect(StorageFileFormat.fromWire(body['file_format'] as String),
+              format);
+          expect(StorageCompression.fromWire(body['compression'] as String),
+              compression);
+          expect(echoed.fileFormat, format);
+          expect(echoed.compression, compression);
+        });
+      }
+    }
   });
 }

@@ -73,7 +73,8 @@ public static class ProfileSnapshotNormalizer {
         }
         return snap with {
             ImagingDefaults = (ImagingDefaultsDto?)snap.ImagingDefaults ?? defaults.ImagingDefaults,
-            Storage = (StorageSettingsDto?)snap.Storage ?? defaults.Storage,
+            // #1148 — the retired fits_rice/fits_gzip formats read as fits, rice/gzip compression as zstd.
+            Storage = StorageFormatTokens.Normalize((StorageSettingsDto?)snap.Storage ?? defaults.Storage),
             Notifications = (NotificationsSettingsDto?)snap.Notifications ?? defaults.Notifications,
             Site = (SiteSettingsDto?)snap.Site ?? defaults.Site,
             Filenames = (FilenamesSettingsDto?)snap.Filenames ?? defaults.Filenames,
@@ -136,8 +137,8 @@ public static class ProfileSnapshotNormalizer {
             CoolerTargetC: -10.0, CoolerRampCPerMin: 1.0, WarmupAtSessionEnd: false),
         Storage: new(
             SaveDirectory: "/media/openastroara",
-            FileFormat: "fits",
-            Compression: "rice",
+            FileFormat: StorageFormatTokens.Fits,
+            Compression: StorageFormatTokens.CompressionZstd,
             FilenameTemplate: @"$$TARGETNAME$$\\$$DATEMINUS12$$\\$$IMAGETYPE$$\\$$DATETIME$$_$$FILTER$$_$$EXPOSURETIME$$s"),
         Notifications: new(
             InAppBanner: true, OsDesktop: true, SoundAlert: true,

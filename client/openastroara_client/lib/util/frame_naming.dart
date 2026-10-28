@@ -144,8 +144,10 @@ class NamingPreviewContext {
 }
 
 /// Mirror of the server's expander, for the preview only — the server's
-/// expansion is the one that names real files.
-List<String> previewSegments(String template, NamingPreviewContext ctx) {
+/// expansion is the one that names real files. [extension] follows the
+/// profile's file format (#1148: `.xisf` for XISF).
+List<String> previewSegments(String template, NamingPreviewContext ctx,
+    {String extension = '.fits'}) {
   String two(int n) => n.toString().padLeft(2, '0');
   String date(DateTime t) => '${t.year}-${two(t.month)}-${two(t.day)}';
   final t = ctx.captured;
@@ -238,7 +240,7 @@ List<String> previewSegments(String template, NamingPreviewContext ctx) {
       .where((s) => s.isNotEmpty)
       .toList();
   if (segments.isNotEmpty) {
-    segments[segments.length - 1] = '${segments.last}.fits';
+    segments[segments.length - 1] = '${segments.last}$extension';
   }
   return segments;
 }

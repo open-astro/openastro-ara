@@ -52,8 +52,8 @@ public sealed class InMemoryProfileStore : IProfileStore {
     // The save directory matches the §13 systemd unit's WorkingDirectory.
     private StorageSettingsDto _storage = new(
         SaveDirectory: "/media/openastroara",
-        FileFormat: "fits",
-        Compression: "rice",
+        FileFormat: StorageFormatTokens.Fits,
+        Compression: StorageFormatTokens.CompressionZstd,
         FilenameTemplate: @"$$TARGETNAME$$\\$$DATEMINUS12$$\\$$IMAGETYPE$$\\$$DATETIME$$_$$FILTER$$_$$EXPOSURETIME$$s");
 
     public ImagingDefaultsDto GetImagingDefaults() {
@@ -70,6 +70,8 @@ public sealed class InMemoryProfileStore : IProfileStore {
     }
 
     public void PutStorageSettings(StorageSettingsDto value) {
+        // #1148 — same token normalization FileProfileStore gets from ProfileSnapshotNormalizer.
+        value = StorageFormatTokens.Normalize(value);
         lock (_lock) { _storage = value; }
         RaiseChanged();
     }

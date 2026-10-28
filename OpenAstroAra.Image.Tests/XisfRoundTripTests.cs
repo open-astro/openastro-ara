@@ -77,9 +77,10 @@ public sealed class XisfRoundTripTests : IDisposable {
         return await XISF.Load(new Uri(path), false, new FakeImageDataFactory(), CancellationToken.None);
     }
 
-    /// <summary>Every writer option combination. The reader must return the identical pixels.</summary>
+    /// <summary>Every writer option combination. The reader must return the identical pixels. zlib is
+    /// read-only (#1148) and covered by the synthesized-block tests below.</summary>
     public static IEnumerable<object[]> WriterOptions() {
-        foreach (var c in new[] { XISFCompressionType.NONE, XISFCompressionType.LZ4, XISFCompressionType.LZ4HC, XISFCompressionType.ZLIB, XISFCompressionType.ZSTD }) {
+        foreach (var c in new[] { XISFCompressionType.NONE, XISFCompressionType.LZ4, XISFCompressionType.LZ4HC, XISFCompressionType.ZSTD }) {
             foreach (var shuffle in new[] { false, true }) {
                 if (c == XISFCompressionType.NONE && shuffle) { continue; }
                 foreach (var k in new[] { XISFChecksumType.NONE, XISFChecksumType.SHA1, XISFChecksumType.SHA256, XISFChecksumType.SHA512, XISFChecksumType.Sha3256, XISFChecksumType.Sha3512 }) {
@@ -247,7 +248,7 @@ public sealed class XisfRoundTripTests : IDisposable {
 
     [Fact]
     public async Task ACorruptCompressedBlockIsRejectedBeforeDecompression() {
-        var file = Write(Pattern(64, 64), 64, 64, SaveInfo(XISFCompressionType.ZLIB, true, XISFChecksumType.SHA256));
+        var file = Write(Pattern(64, 64), 64, 64, SaveInfo(XISFCompressionType.ZSTD, true, XISFChecksumType.SHA256));
         file[^5] ^= 0x01;
         await Assert.ThrowsAsync<InvalidDataException>(() => Read(file));
     }
@@ -286,6 +287,41 @@ public sealed class XisfRoundTripTests : IDisposable {
         ms.Write(new byte[start - ms.Position]);
         ms.Write(attachment);
         return ms.ToArray();
+    }
+
+    [Fact]
+    public void AZlibWriteIsRefusedNamingZstandard() {
+        // #1148 — zlib is far too slow to write on a Pi; the writer refuses it instead of quietly
+        // substituting another codec, and the refusal points at the one to use.
+        foreach (var shuffle in new[] { false, true }) {
+            var ex = Assert.Throws<ArgumentException>(() => Write(Pattern(8, 8), 8, 8, SaveInfo(XISFCompressionType.ZLIB, shuffle, XISFChecksumType.NONE)));
+            Assert.Contains("Zstandard", ex.Message, StringComparison.Ordinal);
+        }
+    }
+
+    /// <summary>Other software writes zlib (with and without byte shuffling); the reader keeps
+    /// decoding it even though Ara no longer writes it. The block is built here with the BCL's
+    /// ZLibStream, independent of the reader's own zlib library.</summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task AZlibBlockFromOtherSoftwareStillReads(bool shuffle) {
+        const int w = 37, h = 23;
+        var px = Pattern(w, h);
+        var bytes = new byte[px.Length * sizeof(ushort)];
+        Buffer.BlockCopy(px, 0, bytes, 0, bytes.Length);
+        var payload = shuffle ? XISFData.Shuffle(bytes, sizeof(ushort)) : bytes;
+        byte[] block;
+        using (var ms = new MemoryStream()) {
+            using (var z = new System.IO.Compression.ZLibStream(ms, System.IO.Compression.CompressionLevel.Optimal, leaveOpen: true)) {
+                z.Write(payload);
+            }
+            block = ms.ToArray();
+        }
+        string codec = shuffle ? $"zlib+sh:{bytes.Length}:2" : $"zlib:{bytes.Length}";
+        var file = Monolithic($"geometry=\"{w}:{h}:1\" sampleFormat=\"UInt16\" colorSpace=\"Gray\" compression=\"{codec}\"", "", block);
+        var img = await Read(file);
+        Assert.Equal(px, img.Data.FlatArray);
     }
 
     [Fact]

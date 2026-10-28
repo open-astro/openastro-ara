@@ -80,5 +80,12 @@ void main() {
           r'$$HOCUSPOCUS$$_$$FILTER$$', NamingPreviewContext(captured: captured));
       expect(segments.single, 'L.fits');
     });
+
+    test('the extension follows the file format (#1148)', () {
+      final segments = previewSegments(
+          r'$$FILTER$$', NamingPreviewContext(captured: captured),
+          extension: '.xisf');
+      expect(segments.single, 'L.xisf');
+    });
   });
 }

@@ -20,7 +20,6 @@ using Microsoft.Extensions.Logging.Abstractions;
 using OpenAstroAra.Equipment.Equipment.MyFocuser;
 using OpenAstroAra.Equipment.Equipment.MyRotator;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
-using OpenAstroAra.Fits;
 using OpenAstroAra.Image.ImageAnalysis;
 using OpenAstroAra.Server.Contracts;
 using System;
@@ -42,7 +41,7 @@ namespace OpenAstroAra.Server.Services;
 /// and — the substantive part — <see cref="StartExposureAsync"/> runs a REAL capture:
 /// pre-allocates the frame id and returns immediately (§60.5 async semantics: the preview URL 404s
 /// until the capture lands), while a background pipeline exposes, polls <c>ImageReady</c>, downloads
-/// <c>ImageArray</c>, writes a §72 <see cref="FitsImage"/> (atomic per §28.7) into the configured
+/// <c>ImageArray</c>, writes a §72 frame (FITS or XISF per the profile, #1148; atomic per §28.7) into the configured
 /// save directory and registers the frame in the §28 catalog — at which point the existing
 /// preview/thumbnail/download endpoints serve it like any other frame.
 ///
@@ -965,7 +964,7 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
         }
         var conditions = await ReadConditionsBestEffortAsync(ct).ConfigureAwait(false);
         var storeTiming = System.Diagnostics.Stopwatch.StartNew();
-        var filePath = WriteFits(frameId, pixels, width, height, applied, imageType, capturedAt, focuserPos,
+        var filePath = WriteFrame(frameId, pixels, width, height, applied, imageType, capturedAt, focuserPos,
             targetName: targetName, sensorTemp: sensorTemp, tempSetPoint: tempSetPoint, conditions: conditions,
             pointing: pointing, rotatorMechanicalDeg: rotatorDeg, night: night);
         var writeMs = storeTiming.ElapsedMilliseconds;
@@ -1320,15 +1319,21 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
         return request with { BinX = binX, BinY = binY, Gain = gain, CameraOffset = cameraOffset };
     }
 
-    private string WriteFits(Guid frameId, ushort[] pixels, int width, int height, ExposureRequestDto request, string imageType, DateTimeOffset capturedAt, int? focuserPosition = null, string? targetName = null, double? sensorTemp = null, double? tempSetPoint = null, ObservingConditionsDto? conditions = null, FramePointing? pointing = null, double? rotatorMechanicalDeg = null, DateOnly? night = null) {
+    /// <summary>
+    /// Write one captured frame in the profile's format (#1148: plain FITS, or XISF — lossless
+    /// Zstandard when the profile compresses) and return its path. <paramref name="options"/> is a
+    /// test seam; null reads the profile.
+    /// </summary>
+    internal string WriteFrame(Guid frameId, ushort[] pixels, int width, int height, ExposureRequestDto request, string imageType, DateTimeOffset capturedAt, int? focuserPosition = null, string? targetName = null, double? sensorTemp = null, double? tempSetPoint = null, ObservingConditionsDto? conditions = null, FramePointing? pointing = null, double? rotatorMechanicalDeg = null, DateOnly? night = null, FrameWriteOptions? options = null) {
+        options ??= ResolveWriteOptions(imageType);
         var dir = ResolveFramesDir();
         Directory.CreateDirectory(dir);
         // §29.2 — name the file the way the profile's template says, so what
         // lands on disk reads as the user's night ("2026-08-03/Light/…_L_180s.fits"),
         // not a directory of UUIDs. Any failure in naming falls back to the
         // id-based name: naming must never cost a frame.
-        var path = ResolveTemplatedPath(dir, frameId, request, imageType, capturedAt, targetName, sensorTemp, night);
-        using var fits = FitsImage.Create(path, width, height, FitsBitDepth.UnsignedShort);
+        var path = ResolveTemplatedPath(dir, frameId, request, imageType, capturedAt, targetName, sensorTemp, night, options.Extension);
+        using var fits = FrameFileWriter.Create(path, width, height, options);
         fits.WriteImageData(pixels);
         // FITS convention + case-sensitive calibration matchers/plate-solvers want an uppercase
         // IMAGETYP; Validate() accepts the type case-insensitively, so normalize here at the write.
@@ -1368,6 +1373,23 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
         WriteStandardHeaders(fits, request, targetName, sensorTemp, tempSetPoint, conditions, capturedAt, pointing);
         fits.Complete(); // §28.7 atomic finish
         return path;
+    }
+
+    /// <summary>#1148 — the profile's container and compression for a frame of
+    /// <paramref name="imageType"/>. Best-effort like the header preferences: a profile that can't be
+    /// read writes plain FITS rather than costing the frame.</summary>
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Best-effort profile read for the frame format; any store fault degrades to plain FITS rather than failing the write. CA1031's log-and-recover boundary applies.")]
+    internal FrameWriteOptions ResolveWriteOptions(string imageType) {
+        try {
+            var storage = _profileStore?.GetStorageSettings();
+            if (storage is null) {
+                return FrameWriteOptions.PlainFits;
+            }
+            return FrameWriteOptions.For(storage, ReadHeaderPrefsBestEffort().CompressDarksAndBias, imageType);
+        } catch (Exception) {
+            return FrameWriteOptions.PlainFits;
+        }
     }
 
     /// <summary>
@@ -1415,7 +1437,7 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Header enrichment is best-effort by design: profile reads can throw arbitrary IO exceptions and a missing optional header must never fail the frame write. CA1031's log-and-recover boundary applies.")]
-    private void WriteStandardHeaders(FitsImage fits, ExposureRequestDto request, string? targetName, double? sensorTemp, double? tempSetPoint, ObservingConditionsDto? conditions, DateTimeOffset capturedAt, FramePointing? pointing = null) {
+    private void WriteStandardHeaders(IFrameFileWriter fits, ExposureRequestDto request, string? targetName, double? sensorTemp, double? tempSetPoint, ObservingConditionsDto? conditions, DateTimeOffset capturedAt, FramePointing? pointing = null) {
         try {
             // §29.2 — the user chooses which optional groups their frames
             // carry (Files & headers panel). All-on is the default; the off
@@ -1542,7 +1564,7 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
     /// mount's own epoch and EQUINOX names it (the capture's Julian year for JNOW, 1950.0 / 2050.0
     /// for a B1950 / J2050 mount) rather than claiming 2000.0 for a position that isn't.
     /// </summary>
-    internal static void WritePointingHeaders(FitsImage fits, FramePointing pt, DateTimeOffset capturedAt) {
+    internal static void WritePointingHeaders(IFrameFileWriter fits, FramePointing pt, DateTimeOffset capturedAt) {
         var raDeg = OpenAstroAra.Astrometry.AstroUtil.HoursToDegrees(pt.RaHours);
         fits.SetHeader("OBJCTRA", OpenAstroAra.Astrometry.AstroUtil.HoursToFitsHMS(pt.RaHours), "RA of mount pointing (H M S)");
         fits.SetHeader("OBJCTDEC", OpenAstroAra.Astrometry.AstroUtil.DegreesToFitsDMS(pt.DecDegrees), "Dec of mount pointing (D M S)");
@@ -1572,7 +1594,7 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
     /// </summary>
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Best-effort ephemeris for optional headers: any math fault must never fail the frame write. CA1031's log-and-recover boundary applies.")]
-    private void WriteEphemerisHeaders(FitsImage fits, SiteSettingsDto site, DateTimeOffset capturedAt) {
+    private void WriteEphemerisHeaders(IFrameFileWriter fits, SiteSettingsDto site, DateTimeOffset capturedAt) {
         try {
             // The frame's own capture instant — wall-clock at header-write
             // time would drift by the exposure length plus readout.
@@ -1709,11 +1731,12 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
     /// " (2)", " (3)"… on collision (a Finder convention people already know);
     /// fall back to <c>{frameId}.fits</c> flat in [rootDir] when the template
     /// is empty, expands to nothing, or the folders can't be created.
+    /// <paramref name="extension"/> follows the frame's format (#1148: <c>.xisf</c> for XISF).
     /// </summary>
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Naming is best-effort by §29.2: any IO/template fault degrades to the id-based filename rather than costing the frame. The falling-back log preserves the cause.")]
-    internal string ResolveTemplatedPath(string rootDir, Guid frameId, ExposureRequestDto request, string imageType, DateTimeOffset capturedAt, string? targetName, double? sensorTemp, DateOnly? night = null) {
-        var fallback = Path.Combine(rootDir, $"{frameId}.fits");
+    internal string ResolveTemplatedPath(string rootDir, Guid frameId, ExposureRequestDto request, string imageType, DateTimeOffset capturedAt, string? targetName, double? sensorTemp, DateOnly? night = null, string extension = ".fits") {
+        var fallback = Path.Combine(rootDir, $"{frameId}{extension}");
         try {
             var template = _profileStore?.GetStorageSettings().FilenameTemplate;
             var relative = FrameNaming.ExpandRelativePath(template, new FrameNamingContext(
@@ -1732,11 +1755,11 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
                 Night: night));
             if (relative is null) return fallback;
 
-            var candidate = Path.Combine(rootDir, relative + ".fits");
+            var candidate = Path.Combine(rootDir, relative + extension);
             var parent = Path.GetDirectoryName(candidate);
             if (parent is not null) Directory.CreateDirectory(parent);
             for (var n = 2; File.Exists(candidate); n++) {
-                candidate = Path.Combine(rootDir, $"{relative} ({n}).fits");
+                candidate = Path.Combine(rootDir, $"{relative} ({n}){extension}");
             }
             return candidate;
         } catch (Exception ex) {
@@ -1756,10 +1779,12 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
             if (_frameCounter < 0) {
                 var count = 0;
                 try {
+                    // Both containers Ara writes (#1148): a library that switched to XISF mid-life
+                    // keeps counting from its FITS frames.
                     count = Directory.Exists(rootDir)
-                        ? Directory.EnumerateFiles(rootDir, "*.fits", new EnumerationOptions {
+                        ? Directory.EnumerateFiles(rootDir, "*", new EnumerationOptions {
                               RecurseSubdirectories = true, IgnoreInaccessible = true, AttributesToSkip = 0,
-                          }).Count()
+                          }).Count(f => f.EndsWith(".fits", StringComparison.OrdinalIgnoreCase) || FrameFileReader.IsXisf(f))
                         : 0;
                 } catch (IOException) { } catch (UnauthorizedAccessException) { }
                 _frameCounter = count;

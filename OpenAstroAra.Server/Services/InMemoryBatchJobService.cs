@@ -116,7 +116,8 @@ public sealed partial class InMemoryBatchJobService : IBatchJobService {
             } catch (OperationCanceledException) {
                 lock (state) { state.State = "cancelled"; }
             } catch (Exception ex) when (ex is IOException or InvalidOperationException or ArgumentException
-                                          or SqliteException or JsonException or OpenAstroAra.Fits.FitsException) {
+                                          or SqliteException or JsonException or OpenAstroAra.Fits.FitsException
+                                          or InvalidDataException or System.Xml.XmlException) {
                 // Batch work is DB + image + WS publish (see the §65.7 restretch job);
                 // record the failure on the job rather than faulting the worker task.
                 lock (state) {

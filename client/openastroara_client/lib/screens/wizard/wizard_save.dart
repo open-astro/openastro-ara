@@ -324,7 +324,7 @@ int? derivedAutofocusStepSize({
 /// §37.4 screen 13 — map the draft's file-saving choices onto the profile's
 /// storage section. The screen stores trimmed-or-null strings (null keeps base);
 /// the format/compression enums translate from the draft's wizard model
-/// (compress true → Rice, false → Off; gzip stays a Settings-only choice).
+/// (compress true → Zstandard, false → Off; it only affects XISF, #1148).
 StorageSettings applyDraftToStorage(StorageSettings base, ProfileDraft d) {
   final f = d.fileSaving;
   // Explicitly-reset fields take the section default (see applyDraftToPlateSolve).
@@ -342,7 +342,7 @@ StorageSettings applyDraftToStorage(StorageSettings base, ProfileDraft d) {
       null => null,
     },
     compression: switch (f.compress) {
-      true => StorageCompression.rice,
+      true => StorageCompression.zstd,
       false => StorageCompression.off,
       null => null,
     },
