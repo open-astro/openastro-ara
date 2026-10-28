@@ -93,6 +93,36 @@ namespace OpenAstroAra.Test {
             Assert.That((await WaitForTerminalAsync(svc, id))!.State, Is.EqualTo(SequenceRunState.Completed));
         }
 
+        [Test]
+        public async Task A_stalled_drive_does_not_keep_a_run_from_ending() {
+            var id = Guid.NewGuid();
+            var ws = new RecordingWsBroadcaster();
+            var camera = new Mock<ICameraService>();
+            camera.Setup(c => c.FinishPendingSavesAsync()).Returns(new TaskCompletionSource<int>().Task); // never lands
+            var svc = BuildService(id, BuildBody(c => c.Items.Add(new WaitForTimeSpan { Time = 0 })), ws: ws, camera: camera.Object);
+            svc.PendingSavesWait = TimeSpan.FromMilliseconds(200);
+
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            await WaitForEventAsync(ws, "sequence.complete");
+            Assert.That((await WaitForTerminalAsync(svc, id))!.State, Is.EqualTo(SequenceRunState.Completed));
+        }
+
+        [Test]
+        public async Task Frames_dropped_at_the_end_of_a_run_are_reported_to_the_user() {
+            var id = Guid.NewGuid();
+            var ws = new RecordingWsBroadcaster();
+            var camera = new Mock<ICameraService>();
+            camera.Setup(c => c.FinishPendingSavesAsync()).ReturnsAsync(2);
+            var notifications = new Mock<INotificationService>();
+            var svc = BuildService(id, BuildBody(c => c.Items.Add(new WaitForTimeSpan { Time = 0 })), ws: ws,
+                notifications: notifications.Object, camera: camera.Object);
+
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            await WaitForEventAsync(ws, "sequence.complete");
+            notifications.Verify(n => n.CreateAsync(It.Is<NotificationDto>(d =>
+                d.Severity == NotificationSeverity.Warning && d.Title == "2 frames couldn't be saved"), It.IsAny<CancellationToken>()), Times.Once);
+        }
+
         private static Mock<IProfileStore> ProfileWithCaptureDefault(string token) {
             var store = new Mock<IProfileStore>();
             store.Setup(p => p.GetSafetyPolicies()).Returns(new SafetyPoliciesDto(

@@ -48,6 +48,8 @@ internal sealed class FrameSaveJob {
     public double? SensorTemp { get; init; }
     public double? TempSetPoint { get; init; }
     public double? CoolerSetpointC { get; init; }
+    // The sensor temperature for the catalog row, from the status cache at capture time.
+    public double? CcdTemperatureC { get; init; }
     public ObservingConditionsDto? Conditions { get; init; }
     public DateOnly? Night { get; init; }
     public Guid? SessionId { get; init; }
@@ -61,15 +63,17 @@ internal sealed class FrameSaveJob {
 /// 0.5 s XISF on a CM4) and its catalog registration overlap sky time instead of adding to it.
 ///
 /// One save runs at a time, oldest first, and at most <see cref="SaveQueueCapacity"/> frames wait
-/// in memory: a third hand-off waits for the first slot to free. A save that fails stops the queue with the frame
+/// in memory: a third hand-off waits for the first slot to free. The one exception is a save that
+/// fails while the next exposure is already under way: that frame joins behind the held ones (three
+/// in memory), and the capture after it stops before exposing. A save that fails stops the queue with the frame
 /// still held. The next capture retries it before the shutter opens, and if it fails again the
 /// capture throws <see cref="StoreUnavailableException"/>, which pauses the run awaiting the user
 /// (#1374: no disk, no run). Resume retries again, so a re-plugged drive gets the held frames and
 /// nothing is lost. A run drains the queue before it ends (<see cref="FinishPendingSavesAsync"/>).
 /// </summary>
 public sealed partial class CameraService {
-    // The frame being written plus one waiting: two full frames of RAM at most (104 MB for a
-    // 26 MP sensor) beside the one downloading.
+    // The frame being written plus one waiting: two full frames of RAM (104 MB for a 26 MP sensor)
+    // beside the one downloading; three only when a save fails mid-exposure (see the class doc).
     internal const int SaveQueueCapacity = 2;
 
     private static readonly TimeSpan PendingSaveShutdownWait = TimeSpan.FromSeconds(30);
@@ -118,7 +122,7 @@ public sealed partial class CameraService {
         if (!job.Registered) {
             await RegisterFrameAsync(job.FrameId, job.Request, job.FrameType, job.TargetName, job.CapturedAt, path,
                 job.Width, job.Height, job.FocuserPosition, appliedBin: job.Applied.BinX, rotatorMechanicalDeg: job.RotatorDeg,
-                coolerSetpointC: job.CoolerSetpointC, sessionId: job.SessionId).ConfigureAwait(false);
+                coolerSetpointC: job.CoolerSetpointC, sessionId: job.SessionId, ccdTemperatureC: job.CcdTemperatureC).ConfigureAwait(false);
             job.Registered = true;
         }
         LogCaptureComplete(job.FrameId, job.Width, job.Height, path);
@@ -205,17 +209,23 @@ public sealed partial class CameraService {
     /// <summary>Restarts the queue (retrying a held frame) and waits until it is empty or fails again.
     /// Returns the fault when frames are still held, else null.</summary>
     private async Task<Exception?> FlushSavesAsync() {
-        Task worker;
         lock (_saveQueueGate) {
             _saveFault = null;
-            if (_saveQueue.Count > 0) {
-                StartSaveWorkerLocked();
-            }
-            worker = _saveWorker;
         }
-        await worker.ConfigureAwait(false);
-        lock (_saveQueueGate) {
-            return _saveFault;
+        while (true) {
+            Task worker;
+            lock (_saveQueueGate) {
+                if (_saveFault is { } fault) {
+                    return fault;
+                }
+                if (_saveQueue.Count == 0) {
+                    return null;
+                }
+                // A frame handed off while this waited may have started a worker of its own.
+                StartSaveWorkerLocked();
+                worker = _saveWorker;
+            }
+            await worker.ConfigureAwait(false);
         }
     }
 

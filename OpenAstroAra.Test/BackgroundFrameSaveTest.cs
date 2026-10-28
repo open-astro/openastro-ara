@@ -299,6 +299,21 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task The_row_keeps_the_sensor_temperature_read_at_capture() {
+            using var camera = NewCamera();
+            var request = new ExposureRequestDto(1, 100);
+            var job = new FrameSaveJob {
+                FrameId = Guid.NewGuid(), Pixels = new ushort[16], Width = 4, Height = 4, Request = request, Applied = request,
+                ImageType = "DARK", FrameType = FrameType.Dark, TargetName = "Darks", CapturedAt = DateTimeOffset.UtcNow,
+                CcdTemperatureC = -10.2,
+            };
+            await camera.EnqueueSaveAsync(job);
+            Assert.That(await camera.FinishPendingSavesAsync(), Is.EqualTo(0));
+            _frames.Verify(f => f.InsertAsync(It.Is<FrameDto>(d => d.Id == job.FrameId && d.TemperatureC == -10.2), It.IsAny<CancellationToken>()), Times.Once,
+                "registration a frame later records the capture's reading, not the cache's current one");
+        }
+
+        [Test]
         public async Task Dispose_lands_a_save_still_in_flight() {
             var camera = NewCamera();
             _insertGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);

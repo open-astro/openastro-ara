@@ -1064,8 +1064,12 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
 
     private readonly Func<ICameraService?>? _cameraResolver;
 
+    /// <summary>How long a run's end waits for its last frames to be saved. A stalled drive must not keep
+    /// the run from ending; the saves carry on in the background.</summary>
+    internal TimeSpan PendingSavesWait { get; set; } = TimeSpan.FromMinutes(2);
+
     /// <summary>The run's frames still being written in the background land before it ends; a frame
-    /// that can't be saved even now is dropped (the camera logs it) and the run's log says how many.</summary>
+    /// that can't be saved even now is dropped (the camera logs its id) and the user is told.</summary>
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Teardown must reach the terminal event whatever the saver does; a fault is logged.")]
     private async Task FinishPendingSavesAsync(Guid sequenceId) {
@@ -1073,20 +1077,57 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
             return;
         }
         try {
-            var lost = await camera.FinishPendingSavesAsync().ConfigureAwait(false);
+            var lost = await camera.FinishPendingSavesAsync().WaitAsync(PendingSavesWait).ConfigureAwait(false);
             if (lost > 0) {
                 LogFramesLostAtRunEnd(sequenceId, lost);
+                await NotifyQuietlyAsync(lost == 1 ? "A frame couldn't be saved" : $"{lost} frames couldn't be saved",
+                    $"{(lost == 1 ? "One frame" : $"{lost} frames")} from the run that just ended could not be saved to the storage drive "
+                    + "and were dropped. Check the drive. A frame that was written but not catalogued is recovered when the daemon next starts.")
+                    .ConfigureAwait(false);
             }
+        } catch (TimeoutException) {
+            LogPendingSavesStillRunning(sequenceId, PendingSavesWait.TotalMinutes);
         } catch (Exception ex) {
             LogFinishSavesFailed(ex, sequenceId);
+        }
+    }
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Notification store faults must never delay the run's teardown. Log-and-recover boundary.")]
+    private async Task NotifyQuietlyAsync(string title, string message) {
+        if (_notifications is null) {
+            return;
+        }
+        try {
+            await _notifications.CreateAsync(new NotificationDto(
+                Id: Guid.NewGuid(),
+                PostedUtc: DateTimeOffset.UtcNow,
+                Severity: NotificationSeverity.Warning,
+                Category: NotificationCategory.Sequence,
+                Title: title,
+                Message: message,
+                Read: false,
+                Dismissed: false,
+                DismissedUtc: null,
+                Payload: null,
+                RelatedEntityType: null,
+                RelatedEntityId: null), CancellationToken.None).ConfigureAwait(false);
+        } catch (Exception ex) {
+            LogLostFramesNotifyFailed(ex);
         }
     }
 
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Error, Message = "Sequence run {SequenceId} ended with {Count} frame(s) that could not be saved; they are dropped")]
     private partial void LogFramesLostAtRunEnd(Guid sequenceId, int count);
 
+    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "Sequence run {SequenceId}: frames were still being saved after {Minutes} min; the run ends and they land when the drive responds")]
+    private partial void LogPendingSavesStillRunning(Guid sequenceId, double minutes);
+
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Error, Message = "Sequence run {SequenceId}: waiting for its last frames to be saved failed")]
     private partial void LogFinishSavesFailed(Exception ex, Guid sequenceId);
+
+    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "Failed to post the dropped-frames notification")]
+    private partial void LogLostFramesNotifyFailed(Exception ex);
 
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Same best-effort catalog boundary as TryOpenRunSessionAsync, on the teardown side.")]

@@ -968,7 +968,7 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
             ImageType = imageType, FrameType = frameType, TargetName = targetName, CapturedAt = capturedAt,
             FocuserPosition = focuserPos, RotatorDeg = rotatorDeg, Pointing = pointing, SensorTemp = sensorTemp,
             TempSetPoint = tempSetPoint, CoolerSetpointC = CoolerSetpointFrom(coolerOn, tempSetPoint), Conditions = conditions,
-            Night = night, SessionId = CaptureSessionScope.Current,
+            Night = night, SessionId = CaptureSessionScope.Current, CcdTemperatureC = CachedCcdTemperature(),
         };
         if (saveInBackground) {
             // The sequencer's next exposure starts while this one is written (CameraService.Saving.cs).
@@ -984,6 +984,14 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
             return false;
         }
         return true;
+    }
+
+    // Null when the camera reports no CCD temperature — recorded as NULL, not a fabricated 0.0
+    // (the same honesty rule as gain, #670). _runtime is written under _gate; read it there too.
+    private double? CachedCcdTemperature() {
+        lock (_gate) {
+            return _runtime.CcdTemperature;
+        }
     }
 
     /// <summary>Enrichment once a frame is on disk and in the catalog, all off the capture path.</summary>
@@ -1838,7 +1846,7 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
     // appliedBin: the binning the driver ACTUALLY used (read back after the exposure, like XBINNING in
     // the header), not the requested one — a driver can coerce a 2 to 1, and the #1140 pixel scale
     // must follow the frame. Null = no read-back available (the request's value is the best we have).
-    internal async Task RegisterFrameAsync(Guid frameId, ExposureRequestDto request, FrameType frameType, string targetName, DateTimeOffset capturedAt, string filePath, int width, int height, int? focuserPosition = null, int? appliedBin = null, double? rotatorMechanicalDeg = null, double? coolerSetpointC = null, Guid? sessionId = null) {
+    internal async Task RegisterFrameAsync(Guid frameId, ExposureRequestDto request, FrameType frameType, string targetName, DateTimeOffset capturedAt, string filePath, int width, int height, int? focuserPosition = null, int? appliedBin = null, double? rotatorMechanicalDeg = null, double? coolerSetpointC = null, Guid? sessionId = null, double? ccdTemperatureC = null) {
         // §40/§50 — a capture that runs INSIDE a sequence run carries the run's
         // catalog session via the ambient CaptureSessionScope (AsyncLocal set by
         // the run worker); everything else — the REST snapshot path — falls back
@@ -1847,12 +1855,8 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
         sessionId ??= CaptureSessionScope.Current
             ?? await _frames!.EnsureManualCaptureSessionAsync(CancellationToken.None).ConfigureAwait(false);
         var fileSize = new FileInfo(filePath).Length;
-        double? ccdTemp;
-        lock (_gate) {
-            // Null when the camera reports no CCD temperature — recorded as NULL,
-            // not a fabricated 0.0 (the same honesty rule as gain, #670).
-            ccdTemp = _runtime.CcdTemperature; // _runtime is written under _gate; read it there too
-        }
+        // A background save passes the reading taken at capture; registration may run a frame later.
+        var ccdTemp = ccdTemperatureC ?? CachedCcdTemperature();
         await _frames!.InsertAsync(new FrameDto(
             Id: frameId,
             SessionId: sessionId.Value,
