@@ -87,6 +87,32 @@ internal static class FrameFileWriter {
     }
 }
 
+/// <summary>
+/// The optional-header pass's view of a frame writer: a non-finite reading (a weather station's NaN
+/// humidity) is left out the way a missing reading is. Both writers refuse NaN/±Infinity as CFITSIO
+/// does, and inside the one try block of the header pass that refusal used to cost every header
+/// after it, the sun and moon cards included. It does not own the inner writer.
+/// </summary>
+internal sealed class FiniteHeaderWriter : IFrameFileWriter {
+    private readonly IFrameFileWriter _inner;
+
+    public FiniteHeaderWriter(IFrameFileWriter inner) {
+        _inner = inner;
+    }
+
+    public void WriteImageData(ushort[] pixels) => _inner.WriteImageData(pixels);
+    public void SetHeader(string keyname, string value, string comment) => _inner.SetHeader(keyname, value, comment);
+    public void SetHeader(string keyname, double value, string comment) {
+        if (double.IsFinite(value)) {
+            _inner.SetHeader(keyname, value, comment);
+        }
+    }
+    public void SetHeader(string keyname, int value, string comment) => _inner.SetHeader(keyname, value, comment);
+    public void Complete() => _inner.Complete();
+    public void Dispose() {
+    }
+}
+
 /// <summary>The FITS container: CFITSIO through <see cref="FitsImage"/>, unchanged on disk.</summary>
 internal sealed class FitsFrameWriter : IFrameFileWriter {
     private readonly FitsImage _fits;
@@ -150,8 +176,17 @@ internal sealed class XisfFrameWriter : IFrameFileWriter {
     public void SetHeader(string keyname, string value, string comment) =>
         Set(new Card(keyname, "'" + value.Replace("'", "''", StringComparison.Ordinal) + "'", comment, value));
 
-    public void SetHeader(string keyname, double value, string comment) =>
+    // CFITSIO refuses a non-finite double card (ffuky status 402, BAD_F2C: "bad float to string
+    // conversion") and FitsImage surfaces that as a FitsException, writing nothing. The XISF writer
+    // refuses it the same way, so a NaN reading costs the same headers in either container.
+    private const int CfitsioBadFloatToString = 402;
+
+    public void SetHeader(string keyname, double value, string comment) {
+        if (!double.IsFinite(value)) {
+            throw new FitsException($"ffuky ({keyname})", CfitsioBadFloatToString);
+        }
         Set(new Card(keyname, FitsCardFormat.Double(value), comment, value));
+    }
 
     public void SetHeader(string keyname, int value, string comment) =>
         Set(new Card(keyname, value.ToString(CultureInfo.InvariantCulture), comment, value));
@@ -180,8 +215,9 @@ internal sealed class XisfFrameWriter : IFrameFileWriter {
         });
         try {
             using (var fs = new FileStream(_tempPath, FileMode.CreateNew, FileAccess.Write, FileShare.None)) {
+                // No data fsync, as FitsImage: the rename plus the parent-directory fsync below is the
+                // commit point for both containers (an fsync of 22 MB costs ~0.4 s on the CM4's USB drive).
                 xisf.Save(fs);
-                fs.Flush(flushToDisk: true);
             }
             File.Move(_tempPath, _path, overwrite: true);
         } catch {
@@ -374,7 +410,11 @@ internal static class FrameFileReader {
     /// <summary>Keywords only — no pixel decode.</summary>
     public static IReadOnlyDictionary<string, string> ReadHeaders(string path) => ReadHeaderInfo(path).Headers;
 
-    /// <summary>Geometry and keywords without decoding the pixels (the catalog scan's read).</summary>
+    /// <summary>Geometry and keywords without decoding the pixels (the catalog scan's read).
+    /// An XISF file that isn't a single-channel UInt16 frame — a PixInsight colour master, a 32-bit
+    /// float integration copied onto the drive — throws <see cref="NotSupportedException"/>: the
+    /// library's previews and solver work on one 16-bit plane, so cataloguing it would only give a
+    /// row whose preview fails.</summary>
     public static (int Width, int Height, IReadOnlyDictionary<string, string> Headers) ReadHeaderInfo(string path) {
         if (IsXisf(path)) {
             var header = XISF.ReadHeader(path);
@@ -383,6 +423,16 @@ internal static class FrameFileReader {
                     || !int.TryParse(geometry[0], NumberStyles.Integer, CultureInfo.InvariantCulture, out var width)
                     || !int.TryParse(geometry[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out var height)) {
                 throw new InvalidDataException($"XISF: no image geometry in {path}");
+            }
+            // XISF geometry is width:height[:...]:channels; two tokens means one channel.
+            var channels = 1;
+            if (geometry.Length > 2 && !int.TryParse(geometry[^1], NumberStyles.Integer, CultureInfo.InvariantCulture, out channels)) {
+                throw new InvalidDataException($"XISF: malformed image geometry in {path}");
+            }
+            var sampleFormat = header.Image?.Attribute("sampleFormat")?.Value;
+            if (channels != 1 || !string.Equals(sampleFormat, "UInt16", StringComparison.Ordinal)) {
+                throw new NotSupportedException(string.Create(CultureInfo.InvariantCulture,
+                    $"{channels}-channel {sampleFormat ?? "unknown"} image; the library shows single-channel UInt16 frames"));
             }
             return (width, height, Keywords(header));
         }

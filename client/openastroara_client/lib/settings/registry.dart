@@ -815,7 +815,7 @@ const List<Setting> settingsRegistry = [
   Setting(
     id: 'session.storage.backup_stream_folder',
     label: 'Backup folder',
-    description: 'Where streamed frames are written on this desktop, organized as <server>/<session>/<frame>.fits. Defaults to Documents/OpenAstroAra/Backups.',
+    description: 'Where streamed frames are written on this desktop, organized as <server>/<session>/<frame>.fits (or .xisf, matching the profile file format). Defaults to Documents/OpenAstroAra/Backups.',
     keywords: ['backup', 'folder', 'path', 'directory', 'stream', 'destination', 'local'],
     path: ['Settings', 'Your night', 'Storage'],
     type: SettingType.string(),

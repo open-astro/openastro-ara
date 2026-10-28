@@ -264,6 +264,11 @@ public sealed partial class CaptureScanService : IDisposable {
         } catch (Exception ex) when (ex is OpenAstroAra.Fits.FitsException or InvalidDataException or System.Xml.XmlException) {
             LogSkipCorruptFits(ex, fitsPath);
             return false;
+        } catch (NotSupportedException ex) {
+            // #1148 — a colour or non-16-bit XISF (a PixInsight master copied onto the drive) would be
+            // catalogued only to fail its preview; it stays on disk, out of the library.
+            LogSkipUnsupportedFrame(fitsPath, ex.Message);
+            return false;
         }
 
         var capturedUtc = ParseDateObs(headers) ?? File.GetLastWriteTimeUtc(fitsPath);
@@ -555,6 +560,9 @@ public sealed partial class CaptureScanService : IDisposable {
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "§28.8 skip unreadable or corrupt frame file: {Path}")]
     private partial void LogSkipCorruptFits(Exception ex, string path);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "§28.8 skip frame the library can't show: {Path} ({Reason})")]
+    private partial void LogSkipUnsupportedFrame(string path, string reason);
 
     [LoggerMessage(Level = LogLevel.Information, Message = "§28.8 recovered orphan FITS: {Path} (target={Target}, frame_type={FrameType}, exposure={Exposure}s)")]
     private partial void LogRecoveredOrphan(string path, string target, string frameType, double exposure);

@@ -270,7 +270,7 @@ const Map<String, Help> helpRegistry = {
     title: 'Backup folder',
     body:
         'Streamed frames land here, organized by server and imaging session: '
-        '<folder>/<server>/<session-id>/<frame-id>.fits. Pick a drive with room for a full '
+        '<folder>/<server>/<session-id>/<frame-id>.fits (or .xisf when the profile saves XISF). Pick a drive with room for a full '
         'night of frames; if it fills, the stream surfaces the problem and stops pulling '
         '(Ara keeps the queue, so re-enabling resumes where it left off).',
     relatedSettings: ['session.storage.backup_stream'],
@@ -660,7 +660,7 @@ const Map<String, Help> helpRegistry = {
     body:
         'Lossless compression applied as each XISF frame is written to disk. Shown only when the file format is XISF — FITS is always written uncompressed.\n\n'
         '* **Off**: No compression — biggest files.\n'
-        '* **Lossless (Zstandard)**: Zstandard with byte shuffling. Pixels come back bit-for-bit. A 52 MB frame takes about 1.4 s and 22 MB on a Raspberry Pi CM4. Recommended.\n\n'
+        '* **Lossless (Zstandard)**: Zstandard with byte shuffling. Pixels come back bit-for-bit. A 52 MB frame takes about 0.5 s and comes out at 22.5 MB on a Raspberry Pi CM4. Recommended.\n\n'
         'PixInsight reads compressed XISF directly.',
     relatedSettings: ['session.storage.compression'],
   ),

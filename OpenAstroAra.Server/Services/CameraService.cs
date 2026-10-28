@@ -898,8 +898,8 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
     private partial void LogCaptureDeviceTiming(Guid frameId, long settingsMs, long exposeMs, long downloadMs);
 
     [LoggerMessage(Level = LogLevel.Information,
-        Message = "Capture {FrameId} store timing: fits-write {WriteMs}ms, register {RegisterMs}ms.")]
-    private partial void LogCaptureStoreTiming(Guid frameId, long writeMs, long registerMs);
+        Message = "Capture {FrameId} store timing: write {WriteMs}ms, register {RegisterMs}ms.")]
+    internal partial void LogCaptureStoreTiming(Guid frameId, long writeMs, long registerMs);
 
     /// <summary>
     /// The capture pipeline shared by the REST background path and the §14e PRb sequencer path
@@ -1438,6 +1438,10 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Header enrichment is best-effort by design: profile reads can throw arbitrary IO exceptions and a missing optional header must never fail the frame write. CA1031's log-and-recover boundary applies.")]
     private void WriteStandardHeaders(IFrameFileWriter fits, ExposureRequestDto request, string? targetName, double? sensorTemp, double? tempSetPoint, ObservingConditionsDto? conditions, DateTimeOffset capturedAt, FramePointing? pointing = null) {
+        // A NaN reading is skipped, not thrown, so it costs only its own card (see FiniteHeaderWriter;
+        // its Dispose leaves the real writer open).
+        using var finite = new FiniteHeaderWriter(fits);
+        fits = finite;
         try {
             // §29.2 — the user chooses which optional groups their frames
             // carry (Files & headers panel). All-on is the default; the off
@@ -1774,17 +1778,18 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
     private int _frameCounter = -1;
     private readonly Lock _frameCounterLock = new();
 
-    private int NextFrameNumber(string rootDir) {
+    internal int NextFrameNumber(string rootDir) {
         lock (_frameCounterLock) {
             if (_frameCounter < 0) {
                 var count = 0;
                 try {
-                    // Both containers Ara writes (#1148): a library that switched to XISF mid-life
-                    // keeps counting from its FITS frames.
+                    // Every frame extension the reader seam knows (#1148): FITS as Ara (.fits) and
+                    // NINA (.fit) write it, and XISF — a library that switched format mid-life, or
+                    // holds frames copied from NINA, keeps counting past all of them.
                     count = Directory.Exists(rootDir)
                         ? Directory.EnumerateFiles(rootDir, "*", new EnumerationOptions {
                               RecurseSubdirectories = true, IgnoreInaccessible = true, AttributesToSkip = 0,
-                          }).Count(f => f.EndsWith(".fits", StringComparison.OrdinalIgnoreCase) || FrameFileReader.IsXisf(f))
+                          }).Count(f => FrameFileReader.IsFits(f) || FrameFileReader.IsXisf(f))
                         : 0;
                 } catch (IOException) { } catch (UnauthorizedAccessException) { }
                 _frameCounter = count;

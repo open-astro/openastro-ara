@@ -17,6 +17,7 @@ using OpenAstroAra.Core.Enums;
 using OpenAstroAra.Core.Utility;
 using System;
 using System.Globalization;
+using System.Runtime.Intrinsics;
 using System.IO;
 using System.Security.Cryptography;
 using System.Text;
@@ -85,19 +86,27 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
 
             /*
              * Convert the data array into a byte[]
-             * From here onwards we deal in byte arrays only
+             * From here onwards we deal in byte arrays only. A shuffled block is built straight from
+             * the samples in one vectorized pass instead of a copy and a byte-at-a-time shuffle: on
+             * the CM4 that is most of the 0.2 s the shuffle used to cost per 52 MB frame.
              */
-            byte[] byteArray = new byte[data.Length * ShuffleItemSize];
-            Buffer.BlockCopy(data, 0, byteArray, 0, data.Length * ShuffleItemSize);
+            bool shuffleNow = ByteShuffling && CompressionType != XISFCompressionType.NONE;
+            byte[] byteArray;
+            if (shuffleNow) {
+                byteArray = ShuffleUInt16(data);
+            } else {
+                byteArray = new byte[data.Length * ShuffleItemSize];
+                Buffer.BlockCopy(data, 0, byteArray, 0, data.Length * ShuffleItemSize);
+            }
 
-            Data = PrepareArray(byteArray);
+            Data = PrepareArray(byteArray, alreadyShuffled: shuffleNow);
             Size = (uint)data.Length * sizeof(ushort);
             CompressedSize = CompressionType == XISFCompressionType.NONE ? 0 : (uint)Data.Length;
         }
 
         /// <summary>
         /// zlib is read-only (#1148): other software writes it and the reader keeps decoding it, but
-        /// writing it costs ~55 s per 52 MB frame on a CM4 against ~0.6 s for Zstandard (level 1) at a similar
+        /// writing it costs ~55 s per 52 MB frame on a CM4 against ~0.5 s for Zstandard (level 1, two threads) at a similar
         /// ratio. A request for it is refused rather than quietly written as something else.
         /// </summary>
         private static void RejectUnsupportedWrite(FileSaveInfo fileSaveInfo) {
@@ -154,7 +163,7 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
             byte[] byteArray = new byte[data.Length * ShuffleItemSize];
             Buffer.BlockCopy(data, 0, byteArray, 0, data.Length * ShuffleItemSize);
 
-            Data = PrepareArray(byteArray);
+            Data = PrepareArray(byteArray, alreadyShuffled: false);
             Size = (uint)data.Length * sizeof(uint);
             CompressedSize = CompressionType == XISFCompressionType.NONE ? 0 : (uint)Data.Length;
         }
@@ -174,7 +183,7 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
         /// <param name="data"></param>
         /// <returns>Uncompressed or compressed byte array</returns>
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Security", "CA5350:Do not use weak cryptographic algorithms", Justification = "SHA-1 is one of the integrity checksum algorithms defined by the XISF file-format specification; the algorithm is selected per the file for data-integrity verification, not for any security decision.")]
-        private byte[] PrepareArray(byte[] byteArray) {
+        private byte[] PrepareArray(byte[] byteArray, bool alreadyShuffled) {
             byte[] outArray;
 
             /*
@@ -184,7 +193,9 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
                 if (CompressionType == XISFCompressionType.LZ4) {
                     if (ByteShuffling) {
                         CompressionName = "lz4+sh";
-                        byteArray = Shuffle(byteArray, ShuffleItemSize);
+                        if (!alreadyShuffled) {
+                            byteArray = Shuffle(byteArray, ShuffleItemSize);
+                        }
                     } else {
                         CompressionName = "lz4";
                     }
@@ -197,7 +208,9 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
                 } else if (CompressionType == XISFCompressionType.LZ4HC) {
                     if (ByteShuffling) {
                         CompressionName = "lz4hc+sh";
-                        byteArray = Shuffle(byteArray, ShuffleItemSize);
+                        if (!alreadyShuffled) {
+                            byteArray = Shuffle(byteArray, ShuffleItemSize);
+                        }
                     } else {
                         CompressionName = "lz4hc";
                     }
@@ -210,15 +223,22 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
                 } else if (CompressionType == XISFCompressionType.ZSTD) {
                     if (ByteShuffling) {
                         CompressionName = "zstd+sh";
-                        byteArray = Shuffle(byteArray, ShuffleItemSize);
+                        if (!alreadyShuffled) {
+                            byteArray = Shuffle(byteArray, ShuffleItemSize);
+                        }
                     } else {
                         CompressionName = "zstd";
                     }
 
-                    // Level 1, single-threaded: on the CM4 a 52 MB frame takes 0.63 s and 22.5 MB, against
-                    // 1.2 s and 22.4 MB at zstd's default 3, and leaves the other cores to guiding and
-                    // frame analysis. The spec fixes only the frame format, so any level reads back the same.
+                    // Level 1 on two worker threads: on the CM4 a 52 MB frame takes 0.33 s and 22.5 MB
+                    // (one thread 0.55 s; zstd's default level 3 1.2 s for 22.4 MB). A third or fourth
+                    // worker gains nothing there and takes the cores guiding and frame analysis use; peak
+                    // memory is the same as single-threaded. The spec fixes only the frame format, so any
+                    // level or thread count reads back the same.
                     using var compressor = new ZstdSharp.Compressor(1);
+                    if (ZstdWorkers > 0) {
+                        compressor.SetParameter(ZstdSharp.Unsafe.ZSTD_cParameter.ZSTD_c_nbWorkers, ZstdWorkers);
+                    }
                     outArray = compressor.Wrap(byteArray).ToArray();
                 } else {
                     outArray = new byte[byteArray.Length];
@@ -329,6 +349,36 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
                 }
             }
 
+            return shuffled;
+        }
+
+        /// <summary>Zstandard worker threads: two on a machine with four or more cores (the Pi 4 / CM4),
+        /// none (compress on the calling thread) below that.</summary>
+        internal static int ZstdWorkers { get; } = Environment.ProcessorCount >= 4 ? 2 : 0;
+
+        /// <summary>
+        /// <see cref="Shuffle"/> for UInt16 samples, straight from the sample array: every low byte,
+        /// then every high byte (XISF blocks are little-endian), 16 samples per vector step.
+        /// </summary>
+        public static byte[] ShuffleUInt16(ReadOnlySpan<ushort> samples) {
+            int n = samples.Length;
+            byte[] shuffled = new byte[n * sizeof(ushort)];
+            Span<byte> low = shuffled.AsSpan(0, n);
+            Span<byte> high = shuffled.AsSpan(n, n);
+            int i = 0;
+            if (Vector128.IsHardwareAccelerated) {
+                var lowMask = Vector128.Create((ushort)0x00FF);
+                for (; i <= n - 16; i += 16) {
+                    var a = Vector128.Create(samples.Slice(i, 8));
+                    var b = Vector128.Create(samples.Slice(i + 8, 8));
+                    Vector128.Narrow(a & lowMask, b & lowMask).CopyTo(low.Slice(i, 16));
+                    Vector128.Narrow(Vector128.ShiftRightLogical(a, 8), Vector128.ShiftRightLogical(b, 8)).CopyTo(high.Slice(i, 16));
+                }
+            }
+            for (; i < n; i++) {
+                low[i] = (byte)samples[i];
+                high[i] = (byte)(samples[i] >> 8);
+            }
             return shuffled;
         }
 

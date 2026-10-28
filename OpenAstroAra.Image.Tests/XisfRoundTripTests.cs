@@ -669,6 +669,25 @@ public sealed class XisfRoundTripTests : IDisposable {
         Assert.Empty(Directory.EnumerateFileSystemEntries(_dir));
     }
 
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(15)]
+    [InlineData(16)]
+    [InlineData(17)]
+    [InlineData(1037)]
+    public void TheUInt16ShuffleMatchesTheByteShuffle(int samples) {
+        // The vectorized path does 16 samples per step and finishes the rest one at a time; both must
+        // lay the block out exactly as the generic byte shuffle (which the reader's unshuffle inverts).
+        var px = new ushort[samples];
+        for (int i = 0; i < px.Length; i++) {
+            px[i] = (ushort)(i * 40503 + 0x1234); // distinct low and high bytes across the vector lanes
+        }
+        var bytes = new byte[px.Length * 2];
+        Buffer.BlockCopy(px, 0, bytes, 0, bytes.Length);
+        Assert.Equal(XISFData.Shuffle(bytes, 2), XISFData.ShuffleUInt16(px));
+    }
+
     [Fact]
     public async Task FromFileDispatchesXisfByExtension() {
         var path = TempPath("dispatch.xisf");

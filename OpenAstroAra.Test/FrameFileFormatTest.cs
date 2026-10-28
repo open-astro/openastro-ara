@@ -331,6 +331,124 @@ namespace OpenAstroAra.Test {
             }
         }
 
+        // ---- review round 1 ----------------------------------------------------------------
+
+        [Test]
+        public void The_frame_counter_seeds_from_every_frame_extension_the_reader_knows() {
+            var root = Path.Combine(_root, "counted");
+            Directory.CreateDirectory(Path.Combine(root, "nested"));
+            foreach (var name in new[] { "a.fits", "b.fit", "c.xisf", "d.fts", Path.Combine("nested", "e.XISF"), Path.Combine("nested", "f.FIT") }) {
+                File.WriteAllText(Path.Combine(root, name), "x");
+            }
+            foreach (var name in new[] { "g.txt", "h.xisf.tmp", "i.thumb.jpg", "j.fits.tmp" }) {
+                File.WriteAllText(Path.Combine(root, name), "x");
+            }
+            using var camera = new CameraService(profileStore: _profile, fallbackFramesDir: _root);
+            Assert.That(camera.NextFrameNumber(root), Is.EqualTo(7), "six frames on disk (FITS as .fits/.fit/.fts, XISF) → the next is 7");
+            Assert.That(camera.NextFrameNumber(root), Is.EqualTo(8), "then it climbs per capture");
+        }
+
+        private static void WriteForeignXisf(string path, string geometry, string colorSpace, string sampleFormat) {
+            var header = new XISFHeader();
+            header.AddImageMetaData(new OpenAstroAra.Image.ImageData.ImageProperties(2, 2, 16, false, 0, 0), "LIGHT");
+            header.Image!.SetAttributeValue("geometry", geometry);
+            header.Image.SetAttributeValue("colorSpace", colorSpace);
+            header.Image.SetAttributeValue("sampleFormat", sampleFormat);
+            var xisf = new XISF(header);
+            xisf.AddAttachedImage(new ushort[12], new OpenAstroAra.Image.FileFormat.FileSaveInfo { FileType = OpenAstroAra.Core.Enums.FileType.XISF });
+            using var fs = File.Create(path);
+            xisf.Save(fs);
+        }
+
+        [Test]
+        public async Task The_catalog_scan_skips_a_colour_or_non_16_bit_xisf_it_could_not_show() {
+            var profileDir = Path.Combine(Path.GetTempPath(), $"oara-1148q-{Guid.NewGuid():N}");
+            Directory.CreateDirectory(profileDir);
+            try {
+                var db = new SqliteAraDatabase(profileDir, logger: null);
+                await db.InitializeAsync(CancellationToken.None);
+                UseStorage("xisf", "zstd");
+                var ours = Capture(Pattern(8, 8), 8, 8);
+                var rgb = Path.Combine(_root, "master_RGB.xisf");
+                var float32 = Path.Combine(_root, "integration_L.xisf");
+                WriteForeignXisf(rgb, "2:2:3", "RGB", "UInt16");
+                WriteForeignXisf(float32, "2:2:1", "Gray", "Float32");
+
+                Assert.Multiple(() => {
+                    Assert.Throws<NotSupportedException>(() => FrameFileReader.ReadHeaderInfo(rgb));
+                    Assert.Throws<NotSupportedException>(() => FrameFileReader.ReadHeaderInfo(float32));
+                    Assert.That(FrameFileReader.ReadHeaderInfo(ours).Width, Is.EqualTo(8));
+                });
+                using (var scan = new CaptureScanService(_profile, db, logger: null)) {
+                    var result = await scan.RunAsync(CancellationToken.None);
+                    Assert.That(result.FramesRecovered, Is.EqualTo(1), "only the single-channel UInt16 frame is catalogued");
+                }
+                await using var conn = db.OpenConnection();
+                await using var cmd = conn.CreateCommand();
+                cmd.CommandText = "SELECT file_path FROM frames;";
+                Assert.That(await cmd.ExecuteScalarAsync(), Is.EqualTo(ours));
+                Assert.That(File.Exists(rgb) && File.Exists(float32), Is.True, "skipped files stay on disk");
+            } finally {
+                Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+                try { Directory.Delete(profileDir, recursive: true); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+            }
+        }
+
+        [TestCase(double.NaN)]
+        [TestCase(double.PositiveInfinity)]
+        [TestCase(double.NegativeInfinity)]
+        public void A_non_finite_double_card_is_refused_by_both_writers_alike(double value) {
+            foreach (var (name, options) in new[] { ("nan.fits", FrameWriteOptions.PlainFits), ("nan.xisf", new FrameWriteOptions(FrameFileFormat.Xisf, false)) }) {
+                var path = Path.Combine(_root, name);
+                using (var writer = FrameFileWriter.Create(path, 2, 2, options)) {
+                    writer.WriteImageData(new ushort[4]);
+                    var ex = Assert.Throws<OpenAstroAra.Fits.FitsException>(() => writer.SetHeader("HUMIDITY", value, "relative humidity pct"), name);
+                    Assert.That(ex!.StatusCode, Is.EqualTo(402), "CFITSIO's BAD_F2C");
+                    writer.SetHeader("AMBTEMP", 8.5, "ambient temperature C");
+                    writer.Complete();
+                }
+                var headers = FrameFileReader.ReadHeaders(path);
+                Assert.That(headers.ContainsKey("HUMIDITY"), Is.False, name);
+                Assert.That(headers["AMBTEMP"], Is.EqualTo("8.5"), name);
+                File.Delete(path);
+            }
+        }
+
+        private static readonly string[] WeatherCardsAfterHumidity = ["DEWPOINT", "PRESSURE", "WINDSPD", "WINDGUST", "WINDDIR", "CLOUDCVR"];
+
+        [Test]
+        public void A_nan_weather_reading_costs_only_its_own_card_in_either_container() {
+            ushort[] px = Pattern(8, 8);
+            var conditions = new ObservingConditionsDto("w", "Weather", EquipmentConnectionState.Connected,
+                TemperatureC: 8.5, HumidityPct: double.NaN, DewPointC: 3.4, PressureHpa: 1013.2, CloudCoverPct: 5,
+                WindSpeedMs: 2.5, WindGustMs: 4, WindDirectionDeg: 270, RainRate: 0, Safe: true, CapturedAt: "");
+            string Write(FrameWriteOptions options) => _camera.WriteFrame(Guid.NewGuid(), px, 8, 8,
+                new ExposureRequestDto(ExposureSec: 60, Gain: 100), "LIGHT", Captured, targetName: "M 31", conditions: conditions, options: options);
+            var fits = FrameFileReader.ReadHeaders(Write(FrameWriteOptions.PlainFits)).Where(kv => !Structural.Contains(kv.Key)).ToDictionary(kv => kv.Key, kv => kv.Value);
+            var xisf = FrameFileReader.ReadHeaders(Write(new FrameWriteOptions(FrameFileFormat.Xisf, true))).ToDictionary(kv => kv.Key, kv => kv.Value);
+            Assert.That(fits.ContainsKey("HUMIDITY"), Is.False);
+            // The cards after it in the weather group still land.
+            Assert.That(fits.Keys, Is.SupersetOf(WeatherCardsAfterHumidity));
+            Assert.That(xisf, Is.EquivalentTo(fits));
+        }
+
+        private sealed class RecordingLogger : Microsoft.Extensions.Logging.ILogger<CameraService> {
+            public List<string> Messages { get; } = new();
+            public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+            public bool IsEnabled(Microsoft.Extensions.Logging.LogLevel logLevel) => true;
+            public void Log<TState>(Microsoft.Extensions.Logging.LogLevel logLevel, Microsoft.Extensions.Logging.EventId eventId, TState state, Exception? exception,
+                Func<TState, Exception?, string> formatter) => Messages.Add(formatter(state, exception));
+        }
+
+        [Test]
+        public void The_store_timing_line_names_the_write_not_a_container() {
+            var log = new RecordingLogger();
+            using var camera = new CameraService(logger: log);
+            camera.LogCaptureStoreTiming(Guid.Empty, 720, 15);
+            Assert.That(log.Messages.Single(), Does.Contain("store timing: write 720ms, register 15ms"));
+            Assert.That(log.Messages.Single(), Does.Not.Contain("fits"));
+        }
+
         // ---- legacy profile values ---------------------------------------------------------
 
         [TestCase("fits", "fits")]
