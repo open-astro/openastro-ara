@@ -119,7 +119,8 @@ namespace OpenAstroAra.Test {
                 Func<int, bool>? noiseFlooded = null,
                 int upwardBacklash = 0,
                 (int Min, int Max)? travel = null,
-                int start = StartPosition) {
+                int start = StartPosition,
+                Func<CancellationToken, Task<(int Min, int Max)?>>? travelRange = null) {
             var store = new InMemoryProfileStore();
             store.PutAutofocusSettings(Settings(restoreOnFailure, telescopeType));
             if (calibration is not null) {
@@ -168,7 +169,7 @@ namespace OpenAstroAra.Test {
                 ws: ws.Object,
                 notifications: notifications.Object,
                 tracker: tracker,
-                travelRange: travel is null ? null : _ => Task.FromResult<(int Min, int Max)?>(travel),
+                travelRange: travelRange ?? (travel is null ? null : _ => Task.FromResult<(int Min, int Max)?>(travel)),
                 metric: (_, _) => {
                     captures++;
                     var hfr = skyHfr is null ? VCurveHfr(physical, realBest) : skyHfr(captures, physical);
@@ -455,6 +456,21 @@ namespace OpenAstroAra.Test {
             await rig.Service.RunAutofocusAsync(NoProgress, CancellationToken.None);
 
             Assert.That(rig.Moves.Max(), Is.LessThanOrEqualTo(CalibratedBest + 100));
+        }
+
+        [Test]
+        public async Task A_travel_read_fault_restores_and_falls_back_like_any_device_fault() {
+            // The travel is read inside the Smart run's fault boundary: a fault there restores the start and
+            // hands over to the Classic sweep (which fails on the same fault), never escaping the run.
+            var rig = Build(calibration: Calibration(),
+                travelRange: _ => Task.FromException<(int Min, int Max)?>(new InvalidOperationException("focuser went away")));
+            using var _ = rig.Service;
+
+            Assert.That(await rig.Service.RunAutofocusAsync(NoProgress, CancellationToken.None), Is.False);
+
+            var fallback = rig.Events.Where(e => e.Type == WsEventCatalog.AutofocusFallbackClassic).ToList();
+            Assert.That(fallback, Has.Count.EqualTo(1));
+            Assert.That(fallback[0].Payload.GetProperty("reason").GetString(), Is.EqualTo("smart_focus_error"));
         }
 
         [Test]

@@ -285,6 +285,13 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
             // ±Steps·StepSize sweep nothing but unmeasurable probes.
             _tracker?.SetPhase("coarse");
             var travel = (_travelRange is null ? null : await _travelRange(token).ConfigureAwait(false)) ?? (0, int.MaxValue);
+            // A sweep wider than the travel cannot keep its probes inside it: the top ones would be refused
+            // past MaxStep (or clamped, which breaks the downward-only approach). Say so instead of sweeping.
+            var span = 2L * settings.Steps * settings.StepSize;
+            if (travel.Min != int.MinValue && travel.Max != int.MaxValue && span > (long)travel.Max - travel.Min) {
+                return await FailAsync($"the sweep (±{settings.Steps} × {settings.StepSize} = {span} steps) is wider than the focuser's travel [{travel.Min}, {travel.Max}] — lower the step size or the number of steps",
+                    restoreOnFailure, startPosition).ConfigureAwait(false);
+            }
             // The overshoot every landing from above uses (one step, or 1.5× a measured backlash), read once.
             var approach = ApproachOvershoot(settings);
             var coarse = await CoarseCentreAsync(settings, startPosition, travel, progress, token).ConfigureAwait(false);

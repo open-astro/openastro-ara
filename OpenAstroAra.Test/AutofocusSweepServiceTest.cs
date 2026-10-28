@@ -274,6 +274,30 @@ namespace OpenAstroAra.Test {
             Assert.That(moves[top - 1], Is.EqualTo(maxPosition), "entered from the top of the travel, not 800 + 225");
         }
 
+        [Test]
+        public async Task A_sweep_wider_than_the_travel_fails_without_moving_past_it() {
+            // ±4·100 spans 800 steps; a 0..500 travel cannot hold it, so the sweep says so instead of commanding
+            // probes above MaxStep.
+            var moves = new List<int>();
+            var position = 250;
+            var focuser = new Mock<IFocuserMediator>();
+            focuser.Setup(f => f.GetInfo()).Returns(() => new FocuserInfo { Connected = true, Position = position, Temperature = double.NaN });
+            focuser.Setup(f => f.MoveFocuser(It.IsAny<int>(), It.IsAny<CancellationToken>()))
+                .Returns<int, CancellationToken>((p, _) => { position = p; moves.Add(p); return Task.FromResult(p); });
+            var tracker = new AutofocusRunTracker();
+            using var svc = new AutofocusSweepService(
+                Profiles(Settings(steps: 4, stepSize: 100)).Object, focuser.Object, Frames().Object,
+                tracker: tracker,
+                metric: VCurveMetric(() => position, 250),
+                coarseMetric: (_, _) => position,
+                travelRange: _ => Task.FromResult<(int Min, int Max)?>((0, 500)));
+
+            Assert.That(await svc.RunAutofocusAsync(NoProgress, CancellationToken.None), Is.False);
+
+            Assert.That(moves.DefaultIfEmpty(position).Max(), Is.LessThanOrEqualTo(500));
+            Assert.That(tracker.Snapshot().Reason, Does.Contain("wider than the focuser's travel"));
+        }
+
         private static int IndexOfRun(List<int> moves, int first, int second) {
             for (int i = 0; i + 1 < moves.Count; i++) {
                 if (moves[i] == first && moves[i + 1] == second) {
