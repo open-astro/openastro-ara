@@ -1333,7 +1333,10 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
         // not a directory of UUIDs. Any failure in naming falls back to the
         // id-based name: naming must never cost a frame.
         var path = ResolveTemplatedPath(dir, frameId, request, imageType, capturedAt, targetName, sensorTemp, night, options.Extension);
-        using var fits = FrameFileWriter.Create(path, width, height, options);
+        using var file = FrameFileWriter.Create(path, width, height, options);
+        // A NaN reading (a rotator, a sensor, a weather station) is skipped, not thrown, so it costs
+        // only its own card, never the frame (see FiniteHeaderWriter; its Dispose leaves the file open).
+        using var fits = new FiniteHeaderWriter(file);
         fits.WriteImageData(pixels);
         // FITS convention + case-sensitive calibration matchers/plate-solvers want an uppercase
         // IMAGETYP; Validate() accepts the type case-insensitively, so normalize here at the write.
@@ -1437,11 +1440,7 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Header enrichment is best-effort by design: profile reads can throw arbitrary IO exceptions and a missing optional header must never fail the frame write. CA1031's log-and-recover boundary applies.")]
-    private void WriteStandardHeaders(IFrameFileWriter fits, ExposureRequestDto request, string? targetName, double? sensorTemp, double? tempSetPoint, ObservingConditionsDto? conditions, DateTimeOffset capturedAt, FramePointing? pointing = null) {
-        // A NaN reading is skipped, not thrown, so it costs only its own card (see FiniteHeaderWriter;
-        // its Dispose leaves the real writer open).
-        using var finite = new FiniteHeaderWriter(fits);
-        fits = finite;
+    private void WriteStandardHeaders(FiniteHeaderWriter fits, ExposureRequestDto request, string? targetName, double? sensorTemp, double? tempSetPoint, ObservingConditionsDto? conditions, DateTimeOffset capturedAt, FramePointing? pointing = null) {
         try {
             // §29.2 — the user chooses which optional groups their frames
             // carry (Files & headers panel). All-on is the default; the off
@@ -1598,7 +1597,7 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
     /// </summary>
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Best-effort ephemeris for optional headers: any math fault must never fail the frame write. CA1031's log-and-recover boundary applies.")]
-    private void WriteEphemerisHeaders(IFrameFileWriter fits, SiteSettingsDto site, DateTimeOffset capturedAt) {
+    private void WriteEphemerisHeaders(FiniteHeaderWriter fits, SiteSettingsDto site, DateTimeOffset capturedAt) {
         try {
             // The frame's own capture instant — wall-clock at header-write
             // time would drift by the exposure length plus readout.
@@ -1762,7 +1761,9 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
             var candidate = Path.Combine(rootDir, relative + extension);
             var parent = Path.GetDirectoryName(candidate);
             if (parent is not null) Directory.CreateDirectory(parent);
-            for (var n = 2; File.Exists(candidate); n++) {
+            // Taken in either container: thumbnails and previews are keyed on the stem, so a
+            // format switch must not put Light.fits and Light.xisf side by side.
+            for (var n = 2; FrameStemTaken(candidate); n++) {
                 candidate = Path.Combine(rootDir, $"{relative} ({n}){extension}");
             }
             return candidate;
@@ -1770,6 +1771,11 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
             LogTemplateNamingFailed(ex, frameId);
             return fallback;
         }
+    }
+
+    private static bool FrameStemTaken(string candidate) {
+        var stem = Path.ChangeExtension(candidate, null);
+        return FrameFileReader.FrameExtensions.Any(ext => File.Exists(stem + ext));
     }
 
     // Session-scoped counter: monotonic per daemon lifetime, seeded from the
