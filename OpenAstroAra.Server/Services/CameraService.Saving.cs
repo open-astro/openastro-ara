@@ -212,7 +212,8 @@ public sealed partial class CameraService {
                 return;
             }
             lock (_saveQueueGate) {
-                _saveQueue.RemoveAt(0);
+                // By reference: a run-end drain may have dropped frames from the queue meanwhile.
+                _saveQueue.Remove(job);
                 SignalSaveQueueChangedLocked();
             }
         }
@@ -275,6 +276,10 @@ public sealed partial class CameraService {
         }
         List<FrameSaveJob> lost;
         lock (_saveQueueGate) {
+            if (_saveWorkerRunning) {
+                // The next run's capture is already retrying the held frames: they are its to save now.
+                return 0;
+            }
             lost = _saveQueue.FindAll(owned.Contains);
             _saveQueue.RemoveAll(owned.Contains);
             _saveFault = null;

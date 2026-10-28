@@ -58,7 +58,7 @@ public static class StatsEndpoints {
                 }
                 if (camera.HasPendingFrameSaves) {
                     return Results.Problem(
-                        "a frame is still being saved — wait for it to finish before rebuilding the catalog",
+                        "a frame is still being saved — wait for it to finish before rebuilding the catalog (a frame held after a failed save is saved when the run resumes; stopping the run drops it)",
                         statusCode: StatusCodes.Status409Conflict);
                 }
                 var (framesCleared, sessionsCleared, result) =

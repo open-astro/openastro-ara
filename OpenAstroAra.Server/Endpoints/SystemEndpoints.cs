@@ -355,7 +355,7 @@ public static class SystemEndpoints {
                 }
                 if (camera.HasPendingFrameSaves) {
                     return Results.Problem(
-                        "a frame is still being saved — wait for it to finish before changing the storage drive",
+                        "a frame is still being saved — wait for it to finish before changing the storage drive (a frame held after a failed save is saved when the run resumes; stopping the run drops it)",
                         statusCode: StatusCodes.Status409Conflict);
                 }
                 // Exclusive with any capture scan: a reformat mid-scan would
@@ -423,7 +423,7 @@ public static class SystemEndpoints {
                 }
                 if (camera.HasPendingFrameSaves) {
                     return Results.Problem(
-                        "a frame is still being saved — wait for it to finish before checking the storage drive",
+                        "a frame is still being saved — wait for it to finish before checking the storage drive (a frame held after a failed save is saved when the run resumes; stopping the run drops it)",
                         statusCode: StatusCodes.Status409Conflict);
                 }
                 var result = await scan.RunExclusiveAsync(
@@ -474,7 +474,7 @@ public static class SystemEndpoints {
                 }
                 if (camera.HasPendingFrameSaves) {
                     return Results.Problem(
-                        "a frame is still being saved — wait for it to finish before ejecting the storage drive",
+                        "a frame is still being saved — wait for it to finish before ejecting the storage drive (a frame held after a failed save is saved when the run resumes; stopping the run drops it)",
                         statusCode: StatusCodes.Status409Conflict);
                 }
                 var result = await scan.RunExclusiveAsync(
