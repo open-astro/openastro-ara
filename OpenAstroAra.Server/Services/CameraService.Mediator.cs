@@ -91,7 +91,8 @@ public sealed partial class CameraService : ICameraMediator, IImagingMediator {
 
     /// <summary>
     /// §14e PRb — the sequencer capture: maps the NINA <see cref="CaptureSequence"/> onto the shared
-    /// pipeline and blocks until the frame is in the catalog. Serializes against REST captures via
+    /// pipeline and returns once the frame is downloaded and handed to the background saver, so the
+    /// next exposure starts while it is written (CameraService.Saving.cs). Serializes against REST captures via
     /// the same in-flight gate (waiting, not failing — a sequence must queue behind a manual
     /// snapshot, not abort). Throws on a failed capture so the instruction's attempt/error policy
     /// engages; genuine sequencer cancellation aborts the exposure and propagates.
@@ -147,6 +148,9 @@ public sealed partial class CameraService : ICameraMediator, IImagingMediator {
             if (client is null) {
                 throw new CameraUnavailableException(CameraNotConnectedMessage);
             }
+            // A frame whose background save failed is retried before this shutter opens; a store that
+            // still refuses it pauses the run with the frame held (StoreUnavailableException).
+            await RetryFailedSavesAsync().ConfigureAwait(false);
             if (string.Equals(imageType, ImageTypes.BIAS, StringComparison.OrdinalIgnoreCase)) {
                 request = request with { ExposureSec = BiasExposureSec(client, sequence.ExposureTime) };
             }
@@ -155,7 +159,8 @@ public sealed partial class CameraService : ICameraMediator, IImagingMediator {
             // to clients over the §60.9 WS stream (SequencerService), not through NINA's in-process
             // IProgress reporter, which has no subscriber in the server.
             var ok = await CaptureWithRetryAsync(
-                id => CaptureCoreAsync(CurrentClientOrThrow(), id, request, imageType, MapFrameType(imageType), effectiveTarget, token, sequence.Night),
+                id => CaptureCoreAsync(CurrentClientOrThrow(), id, request, imageType, MapFrameType(imageType), effectiveTarget, token, sequence.Night,
+                    saveInBackground: true),
                 frameId, effectiveTarget).ConfigureAwait(false);
             if (!ok) {
                 // The store can drop while this capture waited its turn: still a pause, not a failed frame.
@@ -801,7 +806,9 @@ public sealed partial class CameraService : ICameraMediator, IImagingMediator {
     public bool IsFreeToCapture(ICameraConsumer cameraConsumer) => Volatile.Read(ref _captureInFlight) == 0;
     public void RegisterCaptureBlock(object cameraConsumer) { }
     public void ReleaseCaptureBlock(object cameraConsumer) { }
-    public bool IsFreeToCapture(object cameraConsumer) => Volatile.Read(ref _captureInFlight) == 0;
+    // Free also means no frame still on its way to disk: the storage endpoints (switch, eject, check)
+    // gate on this, and a drive must not move under a background save.
+    public bool IsFreeToCapture(object cameraConsumer) => Volatile.Read(ref _captureInFlight) == 0 && !HasPendingSaves;
 
     // Connection lifecycle is REST-driven; these mirror the headless stub. The instructions never
     // call them.

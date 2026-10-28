@@ -106,7 +106,8 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
             // §38.10 — resume-refinement deps, resolver-shaped to dodge the
             // construction cycles the other cross-service deps already dodge.
             Func<ICenteringService?>? centeringResolver = null,
-            Func<OpenAstroAra.Sequencer.SequenceItem.Autofocus.IAutofocusExecutor?>? autofocusResolver = null) {
+            Func<OpenAstroAra.Sequencer.SequenceItem.Autofocus.IAutofocusExecutor?>? autofocusResolver = null,
+            Func<ICameraService?>? cameraResolver = null) {
         _deserializer = deserializer;
         _ws = ws;
         _sequencesResolver = sequencesResolver;
@@ -120,6 +121,7 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         _runSessions = runSessions;
         _centeringResolver = centeringResolver;
         _autofocusResolver = autofocusResolver;
+        _cameraResolver = cameraResolver;
     }
 
     public Task<SequenceRunStateDto?> GetRunStateAsync(Guid id, CancellationToken ct) =>
@@ -949,6 +951,9 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
                 try {
                     await sequencer.Start(progress, skipIssuePrompt: true, run.Cts.Token);
                 } finally {
+                    // The last frames are still being written in the background: they land in this
+                    // run's session before it ends and before the terminal event reports the run.
+                    await FinishPendingSavesAsync(sequenceId);
                     await capCts.CancelAsync();
                     await capTask;
                     await pollTask;
@@ -1056,6 +1061,32 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
             return null;
         }
     }
+
+    private readonly Func<ICameraService?>? _cameraResolver;
+
+    /// <summary>The run's frames still being written in the background land before it ends; a frame
+    /// that can't be saved even now is dropped (the camera logs it) and the run's log says how many.</summary>
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Teardown must reach the terminal event whatever the saver does; a fault is logged.")]
+    private async Task FinishPendingSavesAsync(Guid sequenceId) {
+        if (_cameraResolver?.Invoke() is not { } camera) {
+            return;
+        }
+        try {
+            var lost = await camera.FinishPendingSavesAsync().ConfigureAwait(false);
+            if (lost > 0) {
+                LogFramesLostAtRunEnd(sequenceId, lost);
+            }
+        } catch (Exception ex) {
+            LogFinishSavesFailed(ex, sequenceId);
+        }
+    }
+
+    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Error, Message = "Sequence run {SequenceId} ended with {Count} frame(s) that could not be saved; they are dropped")]
+    private partial void LogFramesLostAtRunEnd(Guid sequenceId, int count);
+
+    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Error, Message = "Sequence run {SequenceId}: waiting for its last frames to be saved failed")]
+    private partial void LogFinishSavesFailed(Exception ex, Guid sequenceId);
 
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Same best-effort catalog boundary as TryOpenRunSessionAsync, on the teardown side.")]

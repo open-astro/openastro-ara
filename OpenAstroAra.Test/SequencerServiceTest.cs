@@ -59,13 +59,38 @@ namespace OpenAstroAra.Test {
                 IFrameRepository? frames = null, HeadlessSequencerFactory? factory = null,
                 UnattendedShutdownService? unattendedShutdown = null,
                 IProfileStore? profileStore = null, ICalibrationService? calibration = null,
-                INotificationService? notifications = null, string? templateOrigin = null) {
+                INotificationService? notifications = null, string? templateOrigin = null, ICameraService? camera = null) {
             factory ??= HeadlessSequencerFactory.WithDefaults();
             var deserializer = new SequenceBodyDeserializer(factory);
             var fake = new FakeSequenceService(id, body, templateOrigin);
             return new SequencerService(deserializer, ws: ws, sequencesResolver: () => fake, checkpoint: null,
                 frames: frames, unattendedShutdown: unattendedShutdown,
-                profileStore: profileStore, calibrationResolver: () => calibration, notifications: notifications);
+                profileStore: profileStore, calibrationResolver: () => calibration, notifications: notifications,
+                cameraResolver: () => camera);
+        }
+
+        [Test]
+        public async Task A_run_reports_its_end_only_after_its_last_frames_are_saved() {
+            // Background frame saves: the run's last frames are still being written when the engine
+            // returns; sequence.complete (and the session end) wait for them.
+            var id = Guid.NewGuid();
+            var ws = new RecordingWsBroadcaster();
+            var saves = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var camera = new Mock<ICameraService>();
+            camera.Setup(c => c.FinishPendingSavesAsync()).Returns(saves.Task);
+            var svc = BuildService(id, BuildBody(c => c.Items.Add(new WaitForTimeSpan { Time = 0 })), ws: ws, camera: camera.Object);
+
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            for (var i = 0; i < 250 && camera.Invocations.Count == 0; i++) {
+                await Task.Delay(20);
+            }
+            camera.Verify(c => c.FinishPendingSavesAsync(), Times.Once);
+            await Task.Delay(300);
+            Assert.That(ws.Events, Does.Not.Contain("sequence.complete"), "the run waits for its frames");
+
+            saves.SetResult(0);
+            await WaitForEventAsync(ws, "sequence.complete");
+            Assert.That((await WaitForTerminalAsync(svc, id))!.State, Is.EqualTo(SequenceRunState.Completed));
         }
 
         private static Mock<IProfileStore> ProfileWithCaptureDefault(string token) {

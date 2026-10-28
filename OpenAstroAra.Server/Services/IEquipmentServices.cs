@@ -41,8 +41,13 @@ public interface IRetainedDeviceSource {
 public interface ICameraService {
     Task<CameraDto?> GetAsync(CancellationToken ct);
     // True when no exposure (sequenced, one-off REST, or live-view frame) holds
-    // the shared in-flight gate — storage maintenance must not run otherwise.
+    // the shared in-flight gate and no frame is still being saved — storage
+    // maintenance must not run otherwise.
     bool IsFreeToCapture(object consumer);
+    /// <summary>Waits for every frame still being saved in the background, retrying a held one once.
+    /// Frames that still can't be saved are dropped (logged with their ids); returns how many. A run
+    /// calls this before it ends, so its last frames land in its session.</summary>
+    Task<int> FinishPendingSavesAsync() => Task.FromResult(0);
     /// <summary>Why a run must not start for want of somewhere to save its frames — the store drive is
     /// not mounted, or the save volume is critically low under an abort/pause policy — in words for the
     /// user; null when frames can be saved (and on a host that cannot tell). The same checks every

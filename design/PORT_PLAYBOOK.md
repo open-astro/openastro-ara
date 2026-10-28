@@ -2363,6 +2363,8 @@ After every captured exposure, the server writes the FITS file using an **atomic
 
 Steps 1–4 take ~5–200 ms on USB SSD (typically 10–50 ms on quality SSDs; longer on USB sticks — which §29 already warns against). Since typical exposures are 60–300 s, fsync overhead is **< 1% of exposure time** in practice — effectively free.
 
+Sequencer frames run these steps in the background (`CameraService.Saving.cs`, NINA's async save): the frame is handed off once downloaded and the next exposure starts while it is written, at most two frames waiting in memory. A failed save holds its frame and is retried before the next exposure; a second failure throws `StoreUnavailableException`, so the run pauses awaiting the user (§29, "no disk, no run") and Resume retries. A run drains the queue before its terminal event. One-off REST captures still run the steps inline.
+
 **Same pattern applies to**:
 - Preview JPEGs (`<frame>.preview.jpg`, alt-stretch variants per §65)
 - Thumbnails (`<frame>.thumb.jpg`)
