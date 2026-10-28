@@ -200,6 +200,7 @@ public sealed class FitsImage : IDisposable {
 
     /// <summary>Set or update a string-valued header card.</summary>
     public void SetHeader(string keyname, string value, string? comment = null) {
+        ArgumentNullException.ThrowIfNull(value);
         var status = 0;
         if (CFitsIO.UpdateKeyString(_fptr, keyname, value, comment ?? string.Empty, ref status) != 0) {
             throw new FitsException($"ffukys ({keyname})", status);
@@ -268,9 +269,10 @@ public sealed class FitsImage : IDisposable {
         // outside any quote pair.
         var commentStart = FindCommentStart(valueAndComment);
         var value = (commentStart >= 0 ? valueAndComment[..commentStart] : valueAndComment).Trim();
-        // Strip surrounding single quotes on string values.
+        // Strip surrounding single quotes on string values, and turn the doubled quote FITS uses
+        // for an apostrophe back into one ("Lion''s" is the card text of "Lion's").
         if (value.Length >= 2 && value[0] == '\'' && value[^1] == '\'') {
-            value = value[1..^1].TrimEnd();
+            value = value[1..^1].TrimEnd().Replace("''", "'", StringComparison.Ordinal);
         }
         return (key, value);
     }

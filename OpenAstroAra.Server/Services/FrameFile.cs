@@ -173,8 +173,11 @@ internal sealed class XisfFrameWriter : IFrameFileWriter {
         _pixels = pixels;
     }
 
-    public void SetHeader(string keyname, string value, string comment) =>
-        Set(new Card(keyname, "'" + value.Replace("'", "''", StringComparison.Ordinal) + "'", comment, value));
+    public void SetHeader(string keyname, string value, string comment) {
+        ArgumentNullException.ThrowIfNull(value);
+        var literal = FitsCardFormat.String(value);
+        Set(new Card(keyname, "'" + literal + "'", comment, literal.Replace("''", "'", StringComparison.Ordinal)));
+    }
 
     // CFITSIO refuses a non-finite double card (ffuky status 402, BAD_F2C: "bad float to string
     // conversion") and FitsImage surfaces that as a FitsException, writing nothing. The XISF writer
@@ -360,6 +363,25 @@ internal sealed class XisfFrameWriter : IFrameFileWriter {
 /// <summary>How CFITSIO renders a double card value (ffuky TDOUBLE: <c>%.15G</c>, a decimal point
 /// added when none shows), so an XISF FITSKeyword reads back exactly as the FITS card does.</summary>
 internal static class FitsCardFormat {
+    /// <summary>CFITSIO's longest string value (ffukys): 68 characters of card text.</summary>
+    public const int MaxStringLength = 68;
+
+    /// <summary>A string card's text as CFITSIO writes it: an apostrophe doubled, and cut at
+    /// <see cref="MaxStringLength"/> characters of card text, never between the two halves of a
+    /// doubled apostrophe.</summary>
+    public static string String(string value) {
+        var text = new System.Text.StringBuilder(Math.Min(value.Length, MaxStringLength));
+        foreach (var c in value) {
+            var width = c == '\'' ? 2 : 1;
+            if (text.Length + width > MaxStringLength) {
+                break;
+            }
+            text.Append(c == '\'' ? "''" : c.ToString());
+        }
+        return text.ToString();
+    }
+
+
     public static string Double(double value) {
         var text = value.ToString("G15", CultureInfo.InvariantCulture);
         var e = text.IndexOf('E', StringComparison.Ordinal);

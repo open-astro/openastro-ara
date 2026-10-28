@@ -414,6 +414,33 @@ namespace OpenAstroAra.Test {
             }
         }
 
+        [Test]
+        public void A_long_string_card_reads_back_the_same_from_either_container() {
+            // CFITSIO keeps at most 68 characters of a string card (an apostrophe counts twice once
+            // doubled); the XISF FITSKeyword must carry what the FITS card does, not the whole value.
+            var name = "Sh2-132 Lion Nebula 'deep' mosaic panel 3 of 6, " + new string('x', 60);
+            var read = new Dictionary<string, string>();
+            foreach (var (file, options) in new[] { ("long.fits", FrameWriteOptions.PlainFits), ("long.xisf", new FrameWriteOptions(FrameFileFormat.Xisf, false)) }) {
+                var path = Path.Combine(_root, file);
+                using (var writer = FrameFileWriter.Create(path, 2, 2, options)) {
+                    writer.WriteImageData(new ushort[4]);
+                    writer.SetHeader("OBJECT", name, "target name");
+                    writer.Complete();
+                }
+                read[file] = FrameFileReader.ReadHeaders(path)["OBJECT"];
+            }
+            Assert.That(read["long.xisf"], Is.EqualTo(read["long.fits"]));
+            Assert.That(read["long.fits"], Is.Not.EqualTo(name), "CFITSIO truncates; the probe needs a value it cuts");
+        }
+
+        [Test]
+        public void A_null_string_card_is_refused_by_both_writers_alike() {
+            foreach (var (file, options) in new[] { ("null.fits", FrameWriteOptions.PlainFits), ("null.xisf", new FrameWriteOptions(FrameFileFormat.Xisf, false)) }) {
+                using var writer = FrameFileWriter.Create(Path.Combine(_root, file), 2, 2, options);
+                Assert.Throws<ArgumentNullException>(() => writer.SetHeader("OBJECT", (string)null!, "target name"), file);
+            }
+        }
+
         private static readonly string[] WeatherCardsAfterHumidity = ["DEWPOINT", "PRESSURE", "WINDSPD", "WINDGUST", "WINDDIR", "CLOUDCVR"];
 
         [Test]

@@ -89,6 +89,26 @@ public class FitsImageTests {
         }
     }
 
+    // FITS writes an apostrophe as a doubled quote inside a string card; ReadHeaders hands back the
+    // value, not the card text, so "Barnard's Loop" round-trips as written.
+    [Fact]
+    public void An_apostrophe_in_a_string_card_reads_back_single() {
+        if (!CfitsioReady()) return;
+        var path = TempPath("apostrophe.fits");
+        try {
+            using (var fits = FitsImage.Create(path, 2, 2, FitsBitDepth.UnsignedShort)) {
+                fits.SetHeader("OBJECT", "Barnard's Loop", "target name");
+                fits.WriteImageData(new ushort[4]);
+                fits.Complete();
+            }
+            using (var fits = FitsImage.Open(path)) {
+                Assert.Equal("Barnard's Loop", fits.ReadHeaders()["OBJECT"]);
+            }
+        } finally {
+            if (File.Exists(path)) File.Delete(path);
+        }
+    }
+
     // Target names land in the frame path ("Lion Nebula (Sh2-132)/…"), and
     // CFITSIO's extended filename syntax reads "(…)" as a template file and
     // "[…]" as an HDU filter — every frame of such a target failed with
