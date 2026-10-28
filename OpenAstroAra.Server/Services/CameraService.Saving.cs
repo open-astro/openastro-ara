@@ -264,14 +264,26 @@ public sealed partial class CameraService {
 
     /// <inheritdoc />
     public async Task<int> FinishPendingSavesAsync() {
+        // Only the frames queued now are this drain's to drop. A caller that stopped waiting (the run
+        // end's time bound) leaves this running; frames a later run hands off meanwhile are its own.
+        HashSet<FrameSaveJob> owned;
+        lock (_saveQueueGate) {
+            owned = [.. _saveQueue];
+        }
         if (await FlushSavesAsync().ConfigureAwait(false) is null) {
             return 0;
         }
         List<FrameSaveJob> lost;
         lock (_saveQueueGate) {
-            lost = [.. _saveQueue];
-            _saveQueue.Clear();
+            lost = _saveQueue.FindAll(owned.Contains);
+            _saveQueue.RemoveAll(owned.Contains);
             _saveFault = null;
+            if (_saveQueue.Count > 0) {
+                // A later frame waits behind the dropped ones: it gets its own save (and, failing,
+                // holds the queue for its own run's next capture).
+                StartSaveWorkerLocked();
+            }
+            SignalSaveQueueChangedLocked();
         }
         foreach (var job in lost) {
             LogUnsavedFrameDropped(job.FrameId, job.FilePath ?? "(not written)");

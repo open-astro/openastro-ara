@@ -125,6 +125,27 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Frames_dropped_after_the_run_stopped_waiting_are_still_reported() {
+            var id = Guid.NewGuid();
+            var ws = new RecordingWsBroadcaster();
+            var finishing = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var camera = new Mock<ICameraService>();
+            camera.Setup(c => c.FinishPendingSavesAsync()).Returns(finishing.Task);
+            var notifications = new Mock<INotificationService>();
+            var svc = BuildService(id, BuildBody(c => c.Items.Add(new WaitForTimeSpan { Time = 0 })), ws: ws,
+                notifications: notifications.Object, camera: camera.Object);
+            svc.PendingSavesWait = TimeSpan.FromMilliseconds(200);
+
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            await WaitForEventAsync(ws, "sequence.complete");
+            finishing.SetResult(1); // the stalled drive finally gave up on one frame
+            for (var i = 0; i < 100 && notifications.Invocations.Count == 0; i++) {
+                await Task.Delay(20);
+            }
+            notifications.Verify(n => n.CreateAsync(It.Is<NotificationDto>(d => d.Title == "A frame couldn't be saved"), It.IsAny<CancellationToken>()), Times.Once);
+        }
+
+        [Test]
         public async Task Frames_dropped_at_the_end_of_a_run_are_reported_to_the_user() {
             var id = Guid.NewGuid();
             var ws = new RecordingWsBroadcaster();

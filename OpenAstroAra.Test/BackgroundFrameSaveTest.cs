@@ -306,6 +306,36 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_late_drain_drops_only_its_own_frames_not_the_next_runs() {
+            // Run A's end stopped waiting on a stalled drive; its drain is still running when run B
+            // hands off a frame. When the stalled save finally fails, A's frames are dropped and B's
+            // frame is saved.
+            using var camera = NewCamera();
+            var stalled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var a1 = Job();
+            var b1 = Job();
+            _frames.Setup(f => f.InsertAsync(It.IsAny<FrameDto>(), It.IsAny<CancellationToken>()))
+                .Returns(async (FrameDto frame, CancellationToken _) => {
+                    Interlocked.Increment(ref _insertAttempts);
+                    if (frame.Id == a1.FrameId) {
+                        await stalled.Task.ConfigureAwait(false);
+                        throw new IOException("the drive stopped answering");
+                    }
+                    _inserted.Enqueue(frame.Id);
+                });
+            await camera.EnqueueSaveAsync(a1);
+            await Until(() => _insertAttempts == 1, "run A's last save is stalled");
+
+            var runAEnd = camera.FinishPendingSavesAsync(); // the sequencer stopped waiting for this
+            await camera.EnqueueSaveAsync(b1);              // run B's first frame, queued behind it
+            stalled.SetResult();
+
+            Assert.That(await runAEnd, Is.EqualTo(1), "only run A's frame is dropped");
+            Assert.That(await camera.FinishPendingSavesAsync(), Is.EqualTo(0));
+            Assert.That(_inserted, Is.EqualTo(new[] { b1.FrameId }), "run B's frame was saved, not dropped with A's");
+        }
+
+        [Test]
         public async Task A_background_save_registers_in_the_session_it_was_captured_in() {
             using var camera = NewCamera();
             var runSession = Guid.NewGuid();

@@ -1081,20 +1081,43 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
             return;
         }
         var wait = cancelled ? StoppedRunSavesWait : PendingSavesWait;
+        Task<int> finishing;
         try {
-            var lost = await camera.FinishPendingSavesAsync().WaitAsync(wait).ConfigureAwait(false);
-            if (lost > 0) {
-                LogFramesLostAtRunEnd(sequenceId, lost);
-                await NotifyQuietlyAsync(lost == 1 ? "A frame couldn't be saved" : $"{lost} frames couldn't be saved",
-                    $"{(lost == 1 ? "One frame" : $"{lost} frames")} from the run that just ended could not be saved to the storage drive "
-                    + "and were dropped. Check the drive. A frame that was written but not catalogued is recovered when the daemon next starts.")
-                    .ConfigureAwait(false);
-            }
+            finishing = camera.FinishPendingSavesAsync();
+        } catch (Exception ex) {
+            LogFinishSavesFailed(ex, sequenceId);
+            return;
+        }
+        try {
+            await ReportLostFramesAsync(sequenceId, await finishing.WaitAsync(wait).ConfigureAwait(false)).ConfigureAwait(false);
         } catch (TimeoutException) {
-            LogPendingSavesStillRunning(sequenceId, wait.TotalMinutes);
+            LogPendingSavesStillRunning(sequenceId, wait.TotalSeconds);
+            // The run ends now; whatever the saver drops when the drive finally answers is still reported.
+            _ = ReportWhenSettledAsync(sequenceId, finishing);
         } catch (Exception ex) {
             LogFinishSavesFailed(ex, sequenceId);
         }
+    }
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Background reporting after the run ended; a fault is logged.")]
+    private async Task ReportWhenSettledAsync(Guid sequenceId, Task<int> finishing) {
+        try {
+            await ReportLostFramesAsync(sequenceId, await finishing.ConfigureAwait(false)).ConfigureAwait(false);
+        } catch (Exception ex) {
+            LogFinishSavesFailed(ex, sequenceId);
+        }
+    }
+
+    private async Task ReportLostFramesAsync(Guid sequenceId, int lost) {
+        if (lost <= 0) {
+            return;
+        }
+        LogFramesLostAtRunEnd(sequenceId, lost);
+        await NotifyQuietlyAsync(lost == 1 ? "A frame couldn't be saved" : $"{lost} frames couldn't be saved",
+            $"{(lost == 1 ? "One frame" : $"{lost} frames")} from the run that just ended could not be saved to the storage drive "
+            + "and were dropped. Check the drive. A frame that was written but not catalogued is recovered when the daemon next starts.")
+            .ConfigureAwait(false);
     }
 
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
@@ -1125,8 +1148,8 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Error, Message = "Sequence run {SequenceId} ended with {Count} frame(s) that could not be saved; they are dropped")]
     private partial void LogFramesLostAtRunEnd(Guid sequenceId, int count);
 
-    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "Sequence run {SequenceId}: frames were still being saved after {Minutes} min; the run ends and they land when the drive responds")]
-    private partial void LogPendingSavesStillRunning(Guid sequenceId, double minutes);
+    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "Sequence run {SequenceId}: frames were still being saved after {Seconds} s; the run ends and they land when the drive responds")]
+    private partial void LogPendingSavesStillRunning(Guid sequenceId, double seconds);
 
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Error, Message = "Sequence run {SequenceId}: waiting for its last frames to be saved failed")]
     private partial void LogFinishSavesFailed(Exception ex, Guid sequenceId);
