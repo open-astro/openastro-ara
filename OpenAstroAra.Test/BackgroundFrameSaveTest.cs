@@ -109,8 +109,8 @@ namespace OpenAstroAra.Test {
             Assert.That(await Task.WhenAny(handOff, Task.Delay(5000)), Is.SameAs(handOff), "the hand-off doesn't wait for the save");
             await Until(() => _insertAttempts == 1, "the save is under way");
             Assert.Multiple(() => {
-                Assert.That(camera.HasPendingSaves, Is.True);
-                Assert.That(camera.IsFreeToCapture(new object()), Is.False, "storage maintenance waits for a save in flight");
+                Assert.That(camera.HasPendingFrameSaves, Is.True, "storage maintenance waits for a save in flight");
+                Assert.That(camera.IsFreeToCapture(new object()), Is.True, "the camera itself is free: Verify Position may expose");
             });
 
             _insertGate.SetResult();
@@ -118,8 +118,7 @@ namespace OpenAstroAra.Test {
             Assert.Multiple(() => {
                 Assert.That(_inserted, Is.EqualTo(new[] { job.FrameId }));
                 Assert.That(Frames(_root), Has.Length.EqualTo(1));
-                Assert.That(camera.HasPendingSaves, Is.False);
-                Assert.That(camera.IsFreeToCapture(new object()), Is.True);
+                Assert.That(camera.HasPendingFrameSaves, Is.False);
             });
         }
 
@@ -143,6 +142,59 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_waiting_hand_off_takes_the_first_slot_that_frees() {
+            // Each insert waits on its own gate, so the first frame can land while the second is
+            // still being saved: the third hand-off must not wait for the whole queue to drain.
+            var gates = new ConcurrentQueue<TaskCompletionSource>();
+            var first = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var second = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            gates.Enqueue(first);
+            gates.Enqueue(second);
+            _frames.Setup(f => f.InsertAsync(It.IsAny<FrameDto>(), It.IsAny<CancellationToken>()))
+                .Returns(async (FrameDto frame, CancellationToken _) => {
+                    if (gates.TryDequeue(out var gate)) {
+                        await gate.Task.ConfigureAwait(false);
+                    }
+                    _inserted.Enqueue(frame.Id);
+                });
+            using var camera = NewCamera();
+            var jobs = new[] { Job(), Job(), Job() };
+            await camera.EnqueueSaveAsync(jobs[0]);
+            await camera.EnqueueSaveAsync(jobs[1]);
+            var third = camera.EnqueueSaveAsync(jobs[2]);
+
+            first.SetResult();
+            Assert.That(await Task.WhenAny(third, Task.Delay(5000)), Is.SameAs(third), "the first freed slot is taken at once");
+            Assert.That(second.Task.IsCompleted, Is.False, "while the second frame is still being saved");
+
+            second.SetResult();
+            Assert.That(await camera.FinishPendingSavesAsync(), Is.EqualTo(0));
+            Assert.That(_inserted, Is.EqualTo(jobs.Select(j => j.FrameId)));
+        }
+
+        [Test]
+        public async Task A_failure_after_the_frame_is_saved_is_not_a_failed_save() {
+            // Enrichment (preview, analysis, the solve feed) runs once the frame is in the catalog;
+            // its fault must neither hold the frame nor register it twice.
+            var sink = new Mock<ISavedLightSink>();
+            sink.Setup(s => s.RecordLightSaved(It.IsAny<Guid>())).Throws(new InvalidOperationException("solve feed is down"));
+            using var camera = new CameraService(frames: _frames.Object, profileStore: _profile, fallbackFramesDir: _root, savedLights: sink.Object);
+            var request = new ExposureRequestDto(1, 100);
+            var light = new FrameSaveJob {
+                FrameId = Guid.NewGuid(), Pixels = new ushort[16], Width = 4, Height = 4, Request = request, Applied = request,
+                ImageType = "LIGHT", FrameType = FrameType.Light, TargetName = "M 31", CapturedAt = DateTimeOffset.UtcNow,
+            };
+
+            await camera.EnqueueSaveAsync(light);
+            var dropped = await camera.FinishPendingSavesAsync();
+            Assert.Multiple(() => {
+                Assert.That(dropped, Is.EqualTo(0), "nothing dropped");
+                Assert.That(camera.SaveHeld, Is.False);
+                Assert.That(_inserted, Is.EqualTo(new[] { light.FrameId }), "registered once");
+            });
+        }
+
+        [Test]
         public async Task A_frame_the_catalog_refuses_is_held_and_the_next_capture_pauses_until_it_lands() {
             using var camera = NewCamera();
             _insertFails = true;
@@ -158,14 +210,14 @@ namespace OpenAstroAra.Test {
             var ex = await Assert.ThrowsAsync<StoreUnavailableException>(camera.RetryFailedSavesAsync,
                 "still failing: the run pauses awaiting the user instead of exposing more frames");
             Assert.That(ex!.Message, Does.Contain("holding it"));
-            Assert.That(camera.HasPendingSaves, Is.True, "both frames are still held");
+            Assert.That(camera.HasPendingFrameSaves, Is.True, "both frames are still held");
 
             _insertFails = false; // the user fixed it; Resume retries
             await camera.RetryFailedSavesAsync();
             Assert.Multiple(() => {
                 Assert.That(_inserted, Is.EqualTo(new[] { held.FrameId, next.FrameId }), "nothing lost, order kept");
                 Assert.That(Frames(_root), Has.Length.EqualTo(2), "the held frame's file was written once, not again per retry");
-                Assert.That(camera.HasPendingSaves, Is.False);
+                Assert.That(camera.HasPendingFrameSaves, Is.False);
             });
         }
 
@@ -222,7 +274,7 @@ namespace OpenAstroAra.Test {
             await Until(() => camera.SaveHeld, "the failed save holds the frame");
 
             Assert.That(await camera.FinishPendingSavesAsync(), Is.EqualTo(1), "one retry, then the frame is dropped and counted");
-            Assert.That(camera.HasPendingSaves, Is.False);
+            Assert.That(camera.HasPendingFrameSaves, Is.False);
 
             _insertFails = false;
             var after = Job();

@@ -977,7 +977,7 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
         }
         try {
             await SaveFrameAsync(job).ConfigureAwait(false);
-        } catch (Exception ex) when (job.FilePath is not null) {
+        } catch (Exception ex) when (job.FilePath is not null && !job.Registered) {
             // The FITS is on disk but invisible to the catalog; name the path so an operator can
             // recover it — and the §28.8 startup orphan scan re-registers it on the next boot.
             LogCatalogRegistrationFailed(ex, frameId, job.FilePath);

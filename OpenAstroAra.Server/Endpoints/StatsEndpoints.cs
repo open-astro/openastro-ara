@@ -56,6 +56,11 @@ public static class StatsEndpoints {
                         "an exposure is in progress — wait for it to finish before rebuilding the catalog",
                         statusCode: StatusCodes.Status409Conflict);
                 }
+                if (camera.HasPendingFrameSaves) {
+                    return Results.Problem(
+                        "a frame is still being saved — wait for it to finish before rebuilding the catalog",
+                        statusCode: StatusCodes.Status409Conflict);
+                }
                 var (framesCleared, sessionsCleared, result) =
                     await scan.ResetAndRescanAsync(ct).ConfigureAwait(false);
                 return Results.Ok(new StatsRebuildCatalogResultDto(

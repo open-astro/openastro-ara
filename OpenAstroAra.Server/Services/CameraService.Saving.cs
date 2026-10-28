@@ -27,8 +27,9 @@ namespace OpenAstroAra.Server.Services;
 /// <summary>
 /// A downloaded frame on its way to disk and the catalog: the pixels plus everything read from the
 /// rig at capture time, so the headers describe the moment of the exposure whenever the write runs.
-/// <see cref="FilePath"/> is set once the file is written, so a retry after a failed registration
-/// registers that file instead of writing a second one.
+/// <see cref="FilePath"/> is set once the file is written and <see cref="Registered"/> once it is in
+/// the catalog, so a retry picks up where the failure was: it never writes a second file or inserts
+/// the row twice.
 /// </summary>
 internal sealed class FrameSaveJob {
     public required Guid FrameId { get; init; }
@@ -51,6 +52,7 @@ internal sealed class FrameSaveJob {
     public DateOnly? Night { get; init; }
     public Guid? SessionId { get; init; }
     public string? FilePath { get; set; }
+    public bool Registered { get; set; }
 }
 
 /// <summary>
@@ -59,7 +61,7 @@ internal sealed class FrameSaveJob {
 /// 0.5 s XISF on a CM4) and its catalog registration overlap sky time instead of adding to it.
 ///
 /// One save runs at a time, oldest first, and at most <see cref="SaveQueueCapacity"/> frames wait
-/// in memory: a third hand-off waits for a slot. A save that fails stops the queue with the frame
+/// in memory: a third hand-off waits for the first slot to free. A save that fails stops the queue with the frame
 /// still held. The next capture retries it before the shutter opens, and if it fails again the
 /// capture throws <see cref="StoreUnavailableException"/>, which pauses the run awaiting the user
 /// (#1374: no disk, no run). Resume retries again, so a re-plugged drive gets the held frames and
@@ -78,11 +80,14 @@ public sealed partial class CameraService {
     // Background and inline saves never write at once: two writers could pick the same templated name.
     private readonly Lock _saveWriteGate = new();
     private Task _saveWorker = Task.CompletedTask;
+    // Completed (and replaced) whenever a frame leaves the queue or a save fails: a hand-off waiting
+    // for a slot wakes on the first freed slot, not when the whole queue has drained.
+    private TaskCompletionSource _saveQueueChanged = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private bool _saveWorkerRunning;
     private Exception? _saveFault;
 
-    /// <summary>Frames handed off but not yet written and registered, held ones included.</summary>
-    internal bool HasPendingSaves {
+    /// <inheritdoc />
+    public bool HasPendingFrameSaves {
         get {
             lock (_saveQueueGate) {
                 return _saveQueue.Count > 0;
@@ -100,7 +105,7 @@ public sealed partial class CameraService {
     }
 
     /// <summary>Writes and registers <paramref name="job"/>, then starts its enrichment (preview,
-    /// background, star analysis). Throws when the write or the registration fails.</summary>
+    /// background, star analysis). Throws only when the write or the registration fails.</summary>
     internal async Task SaveFrameAsync(FrameSaveJob job) {
         var timing = Stopwatch.StartNew();
         string path;
@@ -110,19 +115,33 @@ public sealed partial class CameraService {
                 conditions: job.Conditions, pointing: job.Pointing, rotatorMechanicalDeg: job.RotatorDeg, night: job.Night);
         }
         var writeMs = timing.ElapsedMilliseconds;
-        await RegisterFrameAsync(job.FrameId, job.Request, job.FrameType, job.TargetName, job.CapturedAt, path,
-            job.Width, job.Height, job.FocuserPosition, appliedBin: job.Applied.BinX, rotatorMechanicalDeg: job.RotatorDeg,
-            coolerSetpointC: job.CoolerSetpointC, sessionId: job.SessionId).ConfigureAwait(false);
+        if (!job.Registered) {
+            await RegisterFrameAsync(job.FrameId, job.Request, job.FrameType, job.TargetName, job.CapturedAt, path,
+                job.Width, job.Height, job.FocuserPosition, appliedBin: job.Applied.BinX, rotatorMechanicalDeg: job.RotatorDeg,
+                coolerSetpointC: job.CoolerSetpointC, sessionId: job.SessionId).ConfigureAwait(false);
+            job.Registered = true;
+        }
         LogCaptureComplete(job.FrameId, job.Width, job.Height, path);
         LogCaptureStoreTiming(job.FrameId, writeMs, timing.ElapsedMilliseconds - writeMs);
-        AfterFrameSaved(job);
+        AfterFrameSavedBestEffort(job);
+    }
+
+    // The frame is saved: enrichment that fails is a logged skip, never a failed save to retry.
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Enrichment boundary after a completed save: a preview/analysis fault must not hold a saved frame or fail the capture.")]
+    private void AfterFrameSavedBestEffort(FrameSaveJob job) {
+        try {
+            AfterFrameSaved(job);
+        } catch (Exception ex) {
+            LogFrameEnrichmentFailed(ex, job.FrameId);
+        }
     }
 
     /// <summary>Hands <paramref name="job"/> to the background saver and returns once it is queued,
     /// waiting only while <see cref="SaveQueueCapacity"/> frames are already waiting.</summary>
     internal async Task EnqueueSaveAsync(FrameSaveJob job) {
         while (true) {
-            Task worker;
+            Task changed;
             lock (_saveQueueGate) {
                 // A held (failed) frame never frees its slot on its own; the next capture's retry
                 // deals with it, so this frame joins the queue behind it.
@@ -133,10 +152,16 @@ public sealed partial class CameraService {
                     }
                     return;
                 }
-                worker = _saveWorker;
+                changed = _saveQueueChanged.Task;
             }
-            await worker.ConfigureAwait(false);
+            await changed.ConfigureAwait(false);
         }
+    }
+
+    private void SignalSaveQueueChangedLocked() {
+        var changed = _saveQueueChanged;
+        _saveQueueChanged = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        changed.TrySetResult();
     }
 
     private void StartSaveWorkerLocked() {
@@ -166,11 +191,13 @@ public sealed partial class CameraService {
                 lock (_saveQueueGate) {
                     _saveFault = ex;
                     _saveWorkerRunning = false;
+                    SignalSaveQueueChangedLocked();
                 }
                 return;
             }
             lock (_saveQueueGate) {
                 _saveQueue.RemoveAt(0);
+                SignalSaveQueueChangedLocked();
             }
         }
     }
@@ -249,6 +276,9 @@ public sealed partial class CameraService {
     [LoggerMessage(Level = LogLevel.Error,
         Message = "Frame {FrameId} was never saved and is dropped as its run ends ({Path}). A written but unregistered file is recovered by the startup scan.")]
     private partial void LogUnsavedFrameDropped(Guid frameId, string path);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Frame {FrameId} is saved, but its preview/analysis enrichment failed.")]
+    private partial void LogFrameEnrichmentFailed(Exception ex, Guid frameId);
 
     [LoggerMessage(Level = LogLevel.Error, Message = "Frames were still being saved when the daemon shut down.")]
     private partial void LogPendingSavesAtShutdown();

@@ -353,6 +353,11 @@ public static class SystemEndpoints {
                         "an exposure is in progress — wait for it to finish before changing the storage drive",
                         statusCode: StatusCodes.Status409Conflict);
                 }
+                if (camera.HasPendingFrameSaves) {
+                    return Results.Problem(
+                        "a frame is still being saved — wait for it to finish before changing the storage drive",
+                        statusCode: StatusCodes.Status409Conflict);
+                }
                 // Exclusive with any capture scan: a reformat mid-scan would
                 // unmount the tree the scan is walking.
                 var result = await scan.RunExclusiveAsync(
@@ -416,6 +421,11 @@ public static class SystemEndpoints {
                         "an exposure is in progress — wait for it to finish before checking the storage drive",
                         statusCode: StatusCodes.Status409Conflict);
                 }
+                if (camera.HasPendingFrameSaves) {
+                    return Results.Problem(
+                        "a frame is still being saved — wait for it to finish before checking the storage drive",
+                        statusCode: StatusCodes.Status409Conflict);
+                }
                 var result = await scan.RunExclusiveAsync(
                     () => svc.CheckAsync(request.Uuid, ct), ct).ConfigureAwait(false);
                 if (!result.Success) {
@@ -460,6 +470,11 @@ public static class SystemEndpoints {
                 if (!camera.IsFreeToCapture(runs)) {
                     return Results.Problem(
                         "an exposure is in progress — wait for it to finish before ejecting the storage drive",
+                        statusCode: StatusCodes.Status409Conflict);
+                }
+                if (camera.HasPendingFrameSaves) {
+                    return Results.Problem(
+                        "a frame is still being saved — wait for it to finish before ejecting the storage drive",
                         statusCode: StatusCodes.Status409Conflict);
                 }
                 var result = await scan.RunExclusiveAsync(

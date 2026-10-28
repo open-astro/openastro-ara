@@ -806,9 +806,7 @@ public sealed partial class CameraService : ICameraMediator, IImagingMediator {
     public bool IsFreeToCapture(ICameraConsumer cameraConsumer) => Volatile.Read(ref _captureInFlight) == 0;
     public void RegisterCaptureBlock(object cameraConsumer) { }
     public void ReleaseCaptureBlock(object cameraConsumer) { }
-    // Free also means no frame still on its way to disk: the storage endpoints (switch, eject, check)
-    // gate on this, and a drive must not move under a background save.
-    public bool IsFreeToCapture(object cameraConsumer) => Volatile.Read(ref _captureInFlight) == 0 && !HasPendingSaves;
+    public bool IsFreeToCapture(object cameraConsumer) => Volatile.Read(ref _captureInFlight) == 0;
 
     // Connection lifecycle is REST-driven; these mirror the headless stub. The instructions never
     // call them.
