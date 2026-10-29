@@ -128,7 +128,8 @@ _NUGET_OVERRIDES_CI = {k.lower(): (k, v) for k, v in NUGET_OVERRIDES.items()}
 # ways (unmapped direct dep / dead entry → hard fail).
 PUB_LICENSES: dict[str, dict[str, str]] = {
     "geolocator": {
-        "version": "14.1.1",
+        # 14.1.2 verified 2026-10-28: LICENSE byte-identical to 14.1.1 (MIT, Baseflow).
+        "version": "14.1.2",
         "license": "MIT",
         "copyright": "Copyright (c) 2018 Baseflow",
     },
@@ -181,7 +182,8 @@ PUB_LICENSES: dict[str, dict[str, str]] = {
         "copyright": "Copyright (c) 2018 Miguel Ruivo",
     },
     "fl_chart": {
-        "version": "1.2.0",
+        # 1.3.0 verified 2026-10-28: LICENSE byte-identical to 1.2.0 (MIT, Flutter 4 Fun).
+        "version": "1.3.0",
         "license": "MIT",
         "copyright": "Copyright (c) 2022 Flutter 4 Fun",
     },
@@ -234,8 +236,8 @@ PUB_LICENSES: dict[str, dict[str, str]] = {
         "copyright": "Copyright 2016, the Dart project authors",
     },
     "webview_all": {
-        # 1.4.4 verified 2026-10-07: LICENSE byte-identical to 1.4.1 (MIT, Abandoft).
-        "version": "1.4.4",
+        # 1.4.7 verified 2026-10-28: LICENSE byte-identical to 1.4.4 (MIT, Abandoft).
+        "version": "1.4.7",
         "license": "MIT",
         "copyright": "Copyright 2021-2026 Abandoft",
     },
