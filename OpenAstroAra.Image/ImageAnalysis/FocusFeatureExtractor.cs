@@ -24,8 +24,8 @@ namespace OpenAstroAra.Image.ImageAnalysis {
     /// <see cref="StarDetector"/> measures (<see cref="DetectedStar.FWHM"/> etc.); §59.4 later weights the
     /// fields per telescope type. Carries the refractor-relevant metrics (HFR, FWHM, roundness,
     /// peak-to-background) plus the §59.3/§59.10 donut geometry for obstructed scopes (outer/inner diameter,
-    /// ring thickness, obstruction-shadow depth). The intra/extra-focal asymmetry coefficient (which resolves
-    /// the §59.2 defocus sign) and the §59.4 per-telescope field weighting are later slices.
+    /// ring thickness, obstruction-shadow depth), and two intra/extra-focal side signals: the radial-profile
+    /// skew and the rim-vs-core asymmetry coefficient (#1139).
     /// </summary>
     public sealed record FocusFeatureVector(
         int StarCount,
@@ -37,7 +37,9 @@ namespace OpenAstroAra.Image.ImageAnalysis {
         double MedianDonutInnerDiameter,
         double MedianRingThickness,
         double MedianDonutShadowDepth,
-        double MedianRadialSkew) {
+        double MedianRadialSkew,
+        // Appended with a default so existing positional constructions keep compiling (they read 0: no signal).
+        double MedianRimCoreAsymmetry = 0.0) {
 
         /// <summary>The empty-field vector — no stars, every metric zero. Returned for a starless frame so
         /// callers never branch on null; a zero <see cref="StarCount"/> is the "unusable sample" signal.</summary>
@@ -70,6 +72,7 @@ namespace OpenAstroAra.Image.ImageAnalysis {
             var ringThickness = new double[n];
             var shadowDepth = new double[n];
             var radialSkew = new double[n];
+            var rimCore = new double[n];
             for (int i = 0; i < n; i++) {
                 var s = stars[i];
                 hfr[i] = s.HFR;
@@ -81,6 +84,7 @@ namespace OpenAstroAra.Image.ImageAnalysis {
                 ringThickness[i] = s.RingThickness;
                 shadowDepth[i] = s.DonutShadowDepth;
                 radialSkew[i] = s.RadialProfileSkew;
+                rimCore[i] = s.RimCoreAsymmetry;
             }
 
             return new FocusFeatureVector(
@@ -97,7 +101,9 @@ namespace OpenAstroAra.Image.ImageAnalysis {
                 MedianDonutShadowDepth: Median(shadowDepth),
                 // Median of SIGNED per-star skews — the sign is the §59.3 side signal, so it must survive
                 // aggregation (a median of magnitudes would erase it).
-                MedianRadialSkew: Median(radialSkew));
+                MedianRadialSkew: Median(radialSkew),
+                // Signed, like the skew: the sign is the side signal.
+                MedianRimCoreAsymmetry: Median(rimCore));
         }
 
         // Median of a non-empty sample; sorts in place (each array is a private per-call copy). Even counts

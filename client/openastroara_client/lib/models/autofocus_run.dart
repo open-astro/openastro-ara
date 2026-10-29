@@ -49,6 +49,11 @@ class AutofocusProbe {
   final int stars;
   final bool kept;
 
+  /// #1139 — the probe's rim-vs-core asymmetry (−1 light in the core … +1 light
+  /// at the rim): the side-of-focus signal Smart Focus reads. Null for coarse
+  /// and backlash probes, a dropped probe, or an older daemon.
+  final double? asymmetry;
+
   const AutofocusProbe({
     required this.index,
     required this.phase,
@@ -56,6 +61,7 @@ class AutofocusProbe {
     required this.hfr,
     required this.stars,
     required this.kept,
+    this.asymmetry,
   });
 
   factory AutofocusProbe.fromJson(Map<String, dynamic> json) => AutofocusProbe(
@@ -65,6 +71,7 @@ class AutofocusProbe {
         hfr: _num(json, 'hfr') ?? 0,
         stars: _int(json, 'stars') ?? 0,
         kept: json['kept'] as bool? ?? true,
+        asymmetry: _num(json, 'asymmetry'),
       );
 }
 
