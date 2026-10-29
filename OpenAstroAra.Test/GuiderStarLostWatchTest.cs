@@ -117,7 +117,11 @@ namespace OpenAstroAra.Test {
             public void Dispose() => Service.Dispose();
         }
 
-        private static async Task<bool> WaitUntilAsync(Func<bool> condition, int timeoutMs = 10_000) {
+        // Longer than the recovery's own bounds: stopping PHD2 before a re-center waits up to 10 s for the
+        // stop_capture reply and up to 10 s more for the Stopped state (PHD2Guider.StopCapture). A 10 s wait
+        // gave up while a loaded CI runner was still inside those bounds (2026-10-28, three PRs in a row);
+        // a passing run returns as soon as the condition holds, so only a real failure waits this long.
+        private static async Task<bool> WaitUntilAsync(Func<bool> condition, int timeoutMs = 30_000) {
             var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);
             while (DateTime.UtcNow < deadline) {
                 if (condition()) {
@@ -136,18 +140,20 @@ namespace OpenAstroAra.Test {
             // The guider's Stop button waits for the app state to read Stopped, and a stop from LostLock
             // sends GuidingStopped (the marker the recovery must swallow exactly once); loop reports
             // Looping. The fake follows real PHD2 on all three.
+            // The events go out BEFORE the answer, as real PHD2 has emitted them by the time the stop is
+            // done: sent from a fire-and-forget task after it, a late AppState(Stopped) could overtake the
+            // restart's AppState(Guiding) on the event stream (the re-center is instant here), leave the
+            // client reading Stopped, and hang the restart's wait — the CI flake of 2026-10-28. A write
+            // only waits for the socket buffer, never for the client to handle the event.
             fake.OnRpc("stop_capture", req => {
+                fake.BroadcastAsync(PhdEvents.GuidingStopped()).GetAwaiter().GetResult();
+                fake.BroadcastAsync(PhdEvents.AppState("Stopped")).GetAwaiter().GetResult();
                 fake.OnRpc("get_app_state", JsonValue.Create("Stopped"));
-                // Sent after the answer: the RPC must not wait for its own events.
-                _ = Task.Run(async () => {
-                    await fake.BroadcastAsync(PhdEvents.GuidingStopped()).ConfigureAwait(false);
-                    await fake.BroadcastAsync(PhdEvents.AppState("Stopped")).ConfigureAwait(false);
-                });
                 return JsonValue.Create(0);
             });
             fake.OnRpc("loop", req => {
+                fake.BroadcastAsync(PhdEvents.AppState("Looping")).GetAwaiter().GetResult();
                 fake.OnRpc("get_app_state", JsonValue.Create("Looping"));
-                _ = Task.Run(() => fake.BroadcastAsync(PhdEvents.AppState("Looping")));
                 return JsonValue.Create(0);
             });
             // A restart that worked: PHD2 is guiding again and its first guide step lands while the
