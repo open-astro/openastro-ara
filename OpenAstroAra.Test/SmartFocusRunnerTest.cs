@@ -70,13 +70,14 @@ namespace OpenAstroAra.Test {
         private static FocusFeatureVector Features(double hfr, int stars) =>
             new(stars, hfr, hfr * 2.0, 0.9, 8.0, hfr * 2.0, 0, hfr * 2.0, 0, 0);
 
-        private static List<DetectedStar> Stars(int count, double hfr, double skew = 0.0) {
+        private static List<DetectedStar> Stars(int count, double hfr, double skew = 0.0, double asymmetry = 0.0) {
             var stars = new List<DetectedStar>(count);
             for (int i = 0; i < count; i++) {
                 stars.Add(new DetectedStar {
                     HFR = hfr, FWHM = hfr * 2.0, Roundness = 0.9, PeakToBackground = 8.0,
                     DonutOuterDiameter = hfr * 2.0, // consistent with Features() so a donut-keyed map reads it
                     RadialProfileSkew = skew,
+                    RimCoreAsymmetry = asymmetry,
                 });
             }
             return stars;
@@ -120,7 +121,8 @@ namespace OpenAstroAra.Test {
                 int upwardBacklash = 0,
                 (int Min, int Max)? travel = null,
                 int start = StartPosition,
-                Func<CancellationToken, Task<(int Min, int Max)?>>? travelRange = null) {
+                Func<CancellationToken, Task<(int Min, int Max)?>>? travelRange = null,
+                Func<int, double>? skyAsymmetry = null) {
             var store = new InMemoryProfileStore();
             store.PutAutofocusSettings(Settings(restoreOnFailure, telescopeType));
             if (calibration is not null) {
@@ -177,8 +179,9 @@ namespace OpenAstroAra.Test {
                     // The physical §59.3 side signal: the sky's skew depends on which side of the REAL
                     // best focus the focuser currently sits (0 when the rig carries no aberration).
                     var skew = skySkew?.Invoke(physical) ?? 0.0;
+                    var asymmetry = skyAsymmetry?.Invoke(physical) ?? 0.0;
                     return new StarDetectionResult {
-                        AverageHFR = hfr, DetectedStars = stars, StarList = Stars(stars, hfr, skew),
+                        AverageHFR = hfr, DetectedStars = stars, StarList = Stars(stars, hfr, skew, asymmetry),
                         NoiseFlooded = noiseFlooded?.Invoke(captures) ?? false,
                     };
                 });
@@ -471,6 +474,22 @@ namespace OpenAstroAra.Test {
             var fallback = rig.Events.Where(e => e.Type == WsEventCatalog.AutofocusFallbackClassic).ToList();
             Assert.That(fallback, Has.Count.EqualTo(1));
             Assert.That(fallback[0].Payload.GetProperty("reason").GetString(), Is.EqualTo("smart_focus_error"));
+        }
+
+        [Test]
+        public async Task Each_smart_shot_reports_its_rim_core_asymmetry() {
+            // #1139 — the shot_complete event and the run record carry the shot's asymmetry (this sky: −0.4
+            // above best, +0.4 below; the start sits above best).
+            var rig = Build(calibration: Calibration(), skyAsymmetry: p => p > CalibratedBest ? -0.4 : 0.4);
+            using var _ = rig.Service;
+
+            Assert.That(await rig.Service.RunAutofocusAsync(NoProgress, CancellationToken.None), Is.True);
+
+            var shots = rig.Events.Where(e => e.Type == WsEventCatalog.AutofocusShotComplete).ToList();
+            Assert.That(shots, Is.Not.Empty);
+            Assert.That(shots[0].Payload.GetProperty("asymmetry").GetDouble(), Is.EqualTo(-0.4), "shot 1, above best");
+            var recorded = rig.Tracker.Snapshot().Probes.Where(p => p.Phase == "smart").ToList();
+            Assert.That(recorded[0].Asymmetry, Is.EqualTo(-0.4));
         }
 
         [Test]

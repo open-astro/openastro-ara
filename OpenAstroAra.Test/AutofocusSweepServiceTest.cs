@@ -908,6 +908,51 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task The_run_record_carries_each_kept_probes_rim_core_asymmetry() {
+            // #1139 — a kept fine probe records its median rim-vs-core asymmetry (−0.3 below best, +0.3 above on
+            // this sky); a probe dropped for too few stars records none.
+            var settings = Settings(steps: 4, stepSize: 100);
+            var (focuser, moves) = Focuser();
+            int Current() => moves.Count == 0 ? StartPosition : moves[^1];
+            var best = StartPosition - 150;
+            var tracker = new AutofocusRunTracker();
+            using var svc = new AutofocusSweepService(
+                Profiles(settings).Object, focuser.Object, Frames().Object, tracker: tracker,
+                metric: (_, _) => {
+                    var position = Current();
+                    var delta = (position - best) / 100.0;
+                    var hfr = 1.5 + 0.2 * delta * delta;
+                    // The top probe sees only 2 stars and is dropped.
+                    var count = position == StartPosition + 400 ? 2 : 42;
+                    var asymmetry = position < best ? -0.3 : 0.3;
+                    var stars = new List<DetectedStar>();
+                    for (int i = 0; i < count; i++) {
+                        stars.Add(new DetectedStar { HFR = hfr, FWHM = hfr * 2, Roundness = 0.9, PeakToBackground = 8, RimCoreAsymmetry = asymmetry });
+                    }
+                    return Result(hfr, count, stars);
+                });
+
+            Assert.That(await svc.RunAutofocusAsync(NoProgress, CancellationToken.None), Is.True);
+
+            var fine = tracker.Snapshot().Probes.Where(p => p.Phase == "fine").ToList();
+            Assert.Multiple(() => {
+                Assert.That(fine.Single(p => p.Position == StartPosition + 400).Asymmetry, Is.Null, "the dropped probe");
+                Assert.That(fine.Where(p => p.Kept && p.Position < best).Select(p => p.Asymmetry), Is.All.EqualTo(-0.3));
+                Assert.That(fine.Where(p => p.Kept && p.Position > best).Select(p => p.Asymmetry), Is.All.EqualTo(0.3));
+            });
+        }
+
+        [Test]
+        public void The_tracker_rounds_a_probes_asymmetry_and_drops_a_non_finite_one() {
+            var tracker = new AutofocusRunTracker();
+            Assert.Multiple(() => {
+                Assert.That(tracker.AddProbe("fine", 100, 2.0, 40, true, 0.123456).Asymmetry, Is.EqualTo(0.123));
+                Assert.That(tracker.AddProbe("fine", 200, 2.0, 40, true, double.NaN).Asymmetry, Is.Null);
+                Assert.That(tracker.AddProbe("coarse", 300, 2.0, 0, true).Asymmetry, Is.Null);
+            });
+        }
+
+        [Test]
         public async Task Without_a_width_or_a_focuser_step_size_the_stored_step_size_is_the_wide_first_sweep() {
             // Moq profiles: no calibration, no optics; the EAF reports no µm/step → "default" = the stored 100.
             var settings = Settings(steps: 4, stepSize: 100);
