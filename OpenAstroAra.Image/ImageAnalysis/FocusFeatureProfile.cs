@@ -63,10 +63,10 @@ namespace OpenAstroAra.Image.ImageAnalysis {
         // NOT side candidates on their respective types — they're (near-)symmetric magnitude proxies, and
         // arm-separating on them usually means the sweep was skewed, not the optics.
         private static readonly string[] RefractorSideFeatures =
-            ["fwhm", "roundness", "peak_to_background", "radial_skew"];
+            ["fwhm", "roundness", "peak_to_background", "radial_skew", "rim_core_asymmetry"];
 
         private static readonly string[] ObstructedSideFeatures =
-            ["ring_thickness", "donut_shadow_depth", "radial_skew", "roundness", "peak_to_background"];
+            ["ring_thickness", "donut_shadow_depth", "radial_skew", "rim_core_asymmetry", "roundness", "peak_to_background"];
 
         /// <summary>The feature names the §59.3 side classifier may qualify for this type; empty for
         /// <see cref="TelescopeType.Other"/> (side classification disabled — direction stays heuristic).</summary>

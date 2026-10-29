@@ -49,12 +49,14 @@ namespace OpenAstroAra.Test {
         private Mock<IStorageCopyService> copy = null!;
         private Mock<IStorageDeviceService> devices = null!;
         private ActiveRunSessionRegistry runs = null!;
+        private Mock<ICameraService> camera = null!;
 
         [OneTimeSetUp]
         public async Task StartKestrel() {
             copy = new Mock<IStorageCopyService>();
             devices = new Mock<IStorageDeviceService>(MockBehavior.Strict);
             runs = new ActiveRunSessionRegistry();
+            camera = new Mock<ICameraService>();
             var builder = WebApplication.CreateSlimBuilder();
             builder.WebHost.UseUrls("http://127.0.0.1:0");
             builder.Services.AddSingleton(copy.Object);
@@ -64,7 +66,7 @@ namespace OpenAstroAra.Test {
             builder.Services.AddSingleton(Mock.Of<IDataManagerService>());
             builder.Services.AddSingleton(Mock.Of<IBackupService>());
             builder.Services.AddSingleton(Mock.Of<IBugReportService>());
-            builder.Services.AddSingleton(Mock.Of<ICameraService>());
+            builder.Services.AddSingleton(camera.Object);
             builder.Services.AddSingleton(Mock.Of<IProfileShareService>());
             builder.Services.AddSingleton(Mock.Of<IProfileStore>());
             builder.Services.AddSingleton(Mock.Of<ISkyCatalogService>());
@@ -95,6 +97,7 @@ namespace OpenAstroAra.Test {
         public void ResetMocks() {
             copy.Reset();
             copy.Setup(c => c.Status()).Returns(Preparing);
+            camera.Reset();
         }
 
         [Test]
@@ -153,6 +156,19 @@ namespace OpenAstroAra.Test {
             using var resp = await http.PostAsJsonAsync(route, new { uuid = "EBDF-D246" }, Json);
             Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.Conflict));
             Assert.That(await resp.Content.ReadAsStringAsync(), Does.Contain("disk-to-disk copy"));
+            // Strict mock: any helper call would have thrown.
+        }
+
+        [TestCase("/api/v1/storage/configure")]
+        [TestCase("/api/v1/storage/check")]
+        [TestCase("/api/v1/storage/eject")]
+        public async Task The_store_is_not_touched_while_a_frame_is_still_being_saved(string route) {
+            // Background frame saves: the camera is free, but a frame is still on its way to disk.
+            camera.Setup(c => c.IsFreeToCapture(It.IsAny<object>())).Returns(true);
+            camera.Setup(c => c.HasPendingFrameSaves).Returns(true);
+            using var resp = await http.PostAsJsonAsync(route, new { uuid = "EBDF-D246" }, Json);
+            Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.Conflict));
+            Assert.That(await resp.Content.ReadAsStringAsync(), Does.Contain("still being saved"));
             // Strict mock: any helper call would have thrown.
         }
     }

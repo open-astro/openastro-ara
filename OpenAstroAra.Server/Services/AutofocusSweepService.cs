@@ -285,13 +285,27 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
             // ±Steps·StepSize sweep nothing but unmeasurable probes.
             _tracker?.SetPhase("coarse");
             var travel = (_travelRange is null ? null : await _travelRange(token).ConfigureAwait(false)) ?? (0, int.MaxValue);
+            // A sweep wider than the travel cannot keep its probes inside it: the top ones would be refused
+            // past MaxStep (or clamped, which breaks the downward-only approach). Say so instead of sweeping.
+            var span = 2L * settings.Steps * settings.StepSize;
+            // Only a fully bounded travel can be compared: FocuserTravelAsync reports bounded, unbounded or none.
+            if (travel.Min != int.MinValue && travel.Max != int.MaxValue && span > (long)travel.Max - travel.Min) {
+                // An automatic step the user never set says so, and how to override it.
+                var fix = stepSource == "manual"
+                    ? "lower the step size or the number of steps"
+                    : $"the step size was chosen automatically ({stepSource}) — turn off Settings → Imaging → Autofocus → Automatic step size and set a smaller one, or use fewer steps";
+                return await FailAsync($"the sweep (±{settings.Steps} × {settings.StepSize} = {span} steps) is wider than the focuser's travel [{travel.Min}, {travel.Max}] — {fix}",
+                    restoreOnFailure, startPosition).ConfigureAwait(false);
+            }
+            // The overshoot every landing from above uses (one step, or 1.5× a measured backlash), read once.
+            var approach = ApproachOvershoot(settings);
             var coarse = await CoarseCentreAsync(settings, startPosition, travel, progress, token).ConfigureAwait(false);
             if (coarse is not int coarseCentre) {
                 // CoarseCentreAsync logged the reason and left it in _lastCoarseFailure for the run record.
                 return await FailAsync(_lastCoarseFailure ?? "coarse search found no measurable focus", restoreOnFailure, startPosition, alreadyLogged: true).ConfigureAwait(false);
             }
             // Every fine probe, and the overshoot above the top one, must stay inside the travel.
-            var centre = ClampSweepCentre(coarseCentre, settings, travel);
+            var centre = ClampSweepCentre(coarseCentre, settings, travel, approach);
             var points = new List<FocusPoint>(ProbeCount(settings));
             // §59.10 — retain each probe's (position, detected stars) for the end-of-sweep collimation read.
             // At completion we feed the evaluator the single MOST-DEFOCUSED probe's stars (widest, best-resolved
@@ -320,7 +334,9 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
                 // backlash while every other sample is approached downward — and the topmost point is
                 // one of the two boundary points that most influence the fit. Overshoot above, then
                 // enter the sweep moving down.
-                await _focuser.MoveFocuser(top + settings.StepSize, token).ConfigureAwait(false);
+                // Clamped: on a travel that holds the probes but not the overshoot above them, ClampSweepCentre
+                // can only keep the bottom probe inside it, and a focuser refuses a move past its MaxStep.
+                await _focuser.MoveFocuser((int)Math.Min((long)top + approach, travel.Max), token).ConfigureAwait(false);
                 for (var i = 0; i <= settings.Steps * 2; i++) {
                     token.ThrowIfCancellationRequested();
                     var position = top - i * settings.StepSize;
@@ -356,14 +372,17 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
                         // remaining points carry the fit. Too few survivors still fails below.
                         LogProbeSkipped(reached, stars, hfr);
                     }
-                    await RecordProbeAsync("fine", reached, hfr, stars, kept, totalProbes, kept ? frame : null).ConfigureAwait(false);
+                    // A kept probe's feature vector (the calibration sample) also gives the run record its
+                    // rim-vs-core asymmetry, the per-probe side signal the pane shows (#1139).
+                    var features = kept ? FocusFeatureExtractor.Extract(result) : null;
+                    await RecordProbeAsync("fine", reached, hfr, stars, kept, totalProbes, kept ? frame : null, features?.MedianRimCoreAsymmetry).ConfigureAwait(false);
                     if (!kept) {
                         continue;
                     }
                     points.Add(new FocusPoint(reached, hfr, stars));
                     pointBinned.Add(probeBinned);
                     probeStars.Add((reached, result.StarList));
-                    probeFeatures.Add((reached, FocusFeatureExtractor.Extract(result)));
+                    probeFeatures.Add((reached, features!));
                     frameWidth = frame.Width;
                     frameHeight = frame.Height;
                 }
@@ -409,7 +428,7 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
                 // Re-centre on that edge and sweep again rather than give up. Judged on the probes the fit
                 // used: a thin-wing probe the fit already distrusts must not steer the re-sweep either.
                 if (attempt < MaxSweepRecentres && EdgeMinimum(fitPoints) is int edge
-                        && ClampSweepCentre(edge, settings, travel) is var recentred && recentred != centre) {
+                        && ClampSweepCentre(edge, settings, travel, approach) is var recentred && recentred != centre) {
                     LogSweepRecentred(recentred, attempt + 1);
                     centre = recentred;
                     continue;
@@ -429,7 +448,7 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
                         LogStepResized(settings.StepSize, resized, measuredWidth, attempt + 1);
                         settings = settings with { StepSize = resized };
                         _tracker?.SetStepSize(resized, "measured");
-                        centre = ClampSweepCentre((int)Math.Round(fitPoints[sharpestAt].Position), settings, travel);
+                        centre = ClampSweepCentre((int)Math.Round(fitPoints[sharpestAt].Position), settings, travel, approach);
                         continue;
                     }
                 }
@@ -446,8 +465,8 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
             // final move matches the backlash baked into every sample. Unconditional: the sweep
             // ends at the bottom, so even a best at (or rounding to) the top edge needs the
             // overshoot — a direct move there would be upward, i.e. backlash-inconsistent.
-            await _focuser.MoveFocuser(best + settings.StepSize, token).ConfigureAwait(false);
-            var final = await _focuser.MoveFocuser(best, token).ConfigureAwait(false);
+            // The overshoot clears the backlash a previous calibration measured (ApproachOvershoot).
+            var final = await LandFromAboveAsync(best, new Landing(approach, travel), token).ConfigureAwait(false);
             LogSweepComplete(final, fit.PredictedHfr, fit.RSquared, fit.Method);
             // §59.12 — one confirmation frame AT best focus: the measured in-focus HFR (not the fit's
             // prediction) and the picture of the focused field the Smart Focus pane shows. Best-effort.
@@ -523,8 +542,9 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
     /// <summary>One probe into the run record + the §59.15 <c>step_complete</c> event; a kept fine probe's
     /// frame is rendered as the run's current picture. Smart shots record but don't publish here (they
     /// have their own <c>shot_complete</c>).</summary>
-    private async Task RecordProbeAsync(string phase, int position, double hfr, int stars, bool kept, int totalSteps, AnalysisFrame? frame) {
-        var probe = _tracker?.AddProbe(phase, position, hfr, stars, kept);
+    private async Task RecordProbeAsync(string phase, int position, double hfr, int stars, bool kept, int totalSteps, AnalysisFrame? frame,
+            double? asymmetry = null) {
+        var probe = _tracker?.AddProbe(phase, position, hfr, stars, kept, asymmetry);
         if (frame is not null) {
             RenderFrameQuietly(frame, position, hfr);
         }

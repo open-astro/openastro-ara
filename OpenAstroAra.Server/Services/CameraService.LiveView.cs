@@ -239,7 +239,7 @@ public sealed partial class CameraService {
             LiveViewStartRequestDto request, long session, BayerPattern? bayerPattern,
             CancellationToken token) {
         var consecutiveFailures = 0;
-        // The bin/gain/subframe are constant for a session, so ApplyExposureSettings (up to ~10
+        // The bin/gain/subframe are constant for a session, so ApplyExposureSettings (up to 18
         // Alpaca round-trips) only needs to run once — re-running it every frame is pure latency on
         // a slow bridge. Re-apply only when the device's settings may have changed under us: a manual
         // capture interleaving (gate contention) applies its own settings, and a frame error leaves
@@ -336,7 +336,7 @@ public sealed partial class CameraService {
         if (applySettings) {
             ApplyExposureSettings(client, new ExposureRequestDto(request.ExposureSec, request.Gain, BinX: request.BinX, BinY: request.BinY));
         }
-        // ApplyExposureSettings is up to 7 Alpaca round-trips with no ct hook; honor a stop that
+        // ApplyExposureSettings is up to 18 Alpaca round-trips with no ct hook; honor a stop that
         // arrived during it before kicking off an exposure we'd only abort on the first poll.
         token.ThrowIfCancellationRequested();
         // Same as the capture path: an abort that landed with nothing running must not skip this frame.

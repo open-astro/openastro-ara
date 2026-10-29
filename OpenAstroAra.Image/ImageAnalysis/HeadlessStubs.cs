@@ -141,6 +141,16 @@ namespace OpenAstroAra.Image.ImageAnalysis {
         /// side-of-focus classifier. The sign convention is rig-specific (depends on the aberration sign),
         /// so consumers must LEARN it from a calibration sweep's labelled arms, never assume it.</summary>
         public double RadialProfileSkew { get; set; }
+
+        /// <summary>§59.3 (#1139) — the rim-vs-core asymmetry coefficient, (rim − core) / (rim + core) of the mean
+        /// surface brightness in the core (r &lt; 0.3·R90) and the rim (0.6·R90 ≤ r ≤ 0.9·R90), R90 being the
+        /// radius holding 90% of the star's light. −1 = all the light in the core (a soft halo around it),
+        /// +1 = all at the rim (or a dark obstruction hole), ≈ 0 = an evenly lit disc. Like the skew it tells
+        /// the two sides of focus apart on a rig with spherical aberration, with a sign the side classifier
+        /// learns per rig; unlike the skew it is bounded and reads the core from the frame, so an obstruction
+        /// shadow below the detection threshold still counts. Not a focus measure: 0 on a star under 3 px
+        /// (R90), where there is no rim and core to compare.</summary>
+        public double RimCoreAsymmetry { get; set; }
     }
 
     public interface IStarDetection {

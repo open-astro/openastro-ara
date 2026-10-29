@@ -106,7 +106,8 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
             // §38.10 — resume-refinement deps, resolver-shaped to dodge the
             // construction cycles the other cross-service deps already dodge.
             Func<ICenteringService?>? centeringResolver = null,
-            Func<OpenAstroAra.Sequencer.SequenceItem.Autofocus.IAutofocusExecutor?>? autofocusResolver = null) {
+            Func<OpenAstroAra.Sequencer.SequenceItem.Autofocus.IAutofocusExecutor?>? autofocusResolver = null,
+            Func<ICameraService?>? cameraResolver = null) {
         _deserializer = deserializer;
         _ws = ws;
         _sequencesResolver = sequencesResolver;
@@ -120,6 +121,7 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         _runSessions = runSessions;
         _centeringResolver = centeringResolver;
         _autofocusResolver = autofocusResolver;
+        _cameraResolver = cameraResolver;
     }
 
     public Task<SequenceRunStateDto?> GetRunStateAsync(Guid id, CancellationToken ct) =>
@@ -949,6 +951,9 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
                 try {
                     await sequencer.Start(progress, skipIssuePrompt: true, run.Cts.Token);
                 } finally {
+                    // The last frames are still being written in the background: they land in this
+                    // run's session before it ends and before the terminal event reports the run.
+                    await FinishPendingSavesAsync(sequenceId, run.Cts.IsCancellationRequested);
                     await capCts.CancelAsync();
                     await capTask;
                     await pollTask;
@@ -1056,6 +1061,101 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
             return null;
         }
     }
+
+    private readonly Func<ICameraService?>? _cameraResolver;
+
+    /// <summary>How long a run's end waits for its last frames to be saved. A stalled drive must not keep
+    /// the run from ending; the saves carry on in the background.</summary>
+    internal TimeSpan PendingSavesWait { get; set; } = TimeSpan.FromMinutes(2);
+
+    /// <summary>The same wait for a run that was stopped, aborted or cut short by daemon shutdown: short
+    /// enough that shutdown (this plus the camera's own 30 s) stays inside systemd's 90 s stop timeout.</summary>
+    internal TimeSpan StoppedRunSavesWait { get; set; } = TimeSpan.FromSeconds(20);
+
+    /// <summary>The run's frames still being written in the background land before it ends; a frame
+    /// that can't be saved even now is dropped (the camera logs its id) and the user is told.</summary>
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Teardown must reach the terminal event whatever the saver does; a fault is logged.")]
+    private async Task FinishPendingSavesAsync(Guid sequenceId, bool cancelled) {
+        if (_cameraResolver?.Invoke() is not { } camera) {
+            return;
+        }
+        var wait = cancelled ? StoppedRunSavesWait : PendingSavesWait;
+        Task<int> finishing;
+        try {
+            finishing = camera.FinishPendingSavesAsync();
+        } catch (Exception ex) {
+            LogFinishSavesFailed(ex, sequenceId);
+            return;
+        }
+        try {
+            await ReportLostFramesAsync(sequenceId, await finishing.WaitAsync(wait).ConfigureAwait(false)).ConfigureAwait(false);
+        } catch (TimeoutException) {
+            LogPendingSavesStillRunning(sequenceId, wait.TotalSeconds);
+            // The run ends now; whatever the saver drops when the drive finally answers is still reported.
+            _ = ReportWhenSettledAsync(sequenceId, finishing);
+        } catch (Exception ex) {
+            LogFinishSavesFailed(ex, sequenceId);
+        }
+    }
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Background reporting after the run ended; a fault is logged.")]
+    private async Task ReportWhenSettledAsync(Guid sequenceId, Task<int> finishing) {
+        try {
+            await ReportLostFramesAsync(sequenceId, await finishing.ConfigureAwait(false)).ConfigureAwait(false);
+        } catch (Exception ex) {
+            LogFinishSavesFailed(ex, sequenceId);
+        }
+    }
+
+    private async Task ReportLostFramesAsync(Guid sequenceId, int lost) {
+        if (lost <= 0) {
+            return;
+        }
+        LogFramesLostAtRunEnd(sequenceId, lost);
+        await NotifyQuietlyAsync(lost == 1 ? "A frame couldn't be saved" : $"{lost} frames couldn't be saved",
+            $"{(lost == 1 ? "One frame" : $"{lost} frames")} from the run that just ended could not be saved to the storage drive "
+            + "and were dropped. Check the drive. A frame that was written but not catalogued is recovered when the daemon next starts.")
+            .ConfigureAwait(false);
+    }
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Notification store faults must never delay the run's teardown. Log-and-recover boundary.")]
+    private async Task NotifyQuietlyAsync(string title, string message) {
+        if (_notifications is null) {
+            return;
+        }
+        try {
+            await _notifications.CreateAsync(new NotificationDto(
+                Id: Guid.NewGuid(),
+                PostedUtc: DateTimeOffset.UtcNow,
+                Severity: NotificationSeverity.Warning,
+                Category: NotificationCategory.Sequence,
+                Title: title,
+                Message: message,
+                Read: false,
+                Dismissed: false,
+                DismissedUtc: null,
+                Payload: null,
+                RelatedEntityType: null,
+                RelatedEntityId: null), CancellationToken.None).ConfigureAwait(false);
+        } catch (Exception ex) {
+            LogLostFramesNotifyFailed(ex);
+        }
+    }
+
+    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Error, Message = "Sequence run {SequenceId} ended with {Count} frame(s) that could not be saved; they are dropped")]
+    private partial void LogFramesLostAtRunEnd(Guid sequenceId, int count);
+
+    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "Sequence run {SequenceId}: frames were still being saved after {Seconds} s; the run ends and they land when the drive responds")]
+    private partial void LogPendingSavesStillRunning(Guid sequenceId, double seconds);
+
+    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Error, Message = "Sequence run {SequenceId}: waiting for its last frames to be saved failed")]
+    private partial void LogFinishSavesFailed(Exception ex, Guid sequenceId);
+
+    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "Failed to post the dropped-frames notification")]
+    private partial void LogLostFramesNotifyFailed(Exception ex);
 
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Same best-effort catalog boundary as TryOpenRunSessionAsync, on the teardown side.")]

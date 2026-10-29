@@ -6818,6 +6818,13 @@ components:
           format: int32
         kept:
           type: boolean
+        asymmetry:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
     AutofocusRunDto:
       required:
         - state
@@ -9338,6 +9345,13 @@ components:
             - string
           format: double
         median_radial_skew:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+          default: 0
+        median_rim_core_asymmetry:
           pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
           type:
             - number

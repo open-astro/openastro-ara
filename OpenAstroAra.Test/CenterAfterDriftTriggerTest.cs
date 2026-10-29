@@ -367,6 +367,47 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_light_recorded_before_its_save_lands_is_solved_only_once_it_is_saved() {
+            // Sequence frames are saved in the background: the camera records the light at hand-off so
+            // the trigger sees it in capture order, and the solve waits for the catalog row.
+            var id = Guid.NewGuid();
+            var frames = new Mock<IFrameRepository>();
+            frames.Setup(f => f.GetAsync(id, It.IsAny<CancellationToken>())).ReturnsAsync(Frame(id, "/captures/m42.fits"));
+            var solver = new Mock<IPlateSolveService>();
+            solver.Setup(s => s.SolveImage(It.IsAny<OpenAstroAra.Image.Interfaces.IImageData>(), It.IsAny<Coordinates?>(), null, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new PlateSolveResult { Success = true, Coordinates = Target });
+            using var feed = new FrameSolveFeed(frames.Object, solver.Object, profileService: new HeadlessProfileService()) {
+                PixelLoader = (_, _) => Task.FromResult((new ushort[16], 4, 4, 1)),
+            };
+            var saved = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            feed.RecordLightSaved(id, saved.Task);
+            Assert.That(feed.LatestLight!.FrameId, Is.EqualTo(id), "recorded at once");
+            var solving = feed.SolveFrameAsync(id, CancellationToken.None);
+            await Task.Delay(200);
+            Assert.That(solving.IsCompleted, Is.False);
+            frames.Verify(f => f.GetAsync(id, It.IsAny<CancellationToken>()), Times.Never, "no catalog read before the save lands");
+
+            saved.SetResult();
+            Assert.That(await solving, Is.Not.Null);
+        }
+
+        [Test]
+        public async Task A_light_that_is_never_saved_is_reported_unsolved() {
+            var id = Guid.NewGuid();
+            var frames = new Mock<IFrameRepository>();
+            using var feed = new FrameSolveFeed(frames.Object, new Mock<IPlateSolveService>().Object, profileService: new HeadlessProfileService());
+            var saved = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            feed.RecordLightSaved(id, saved.Task);
+
+            var solving = feed.SolveFrameAsync(id, CancellationToken.None);
+            saved.SetException(new System.IO.IOException("the drive is gone"));
+
+            Assert.That(await solving, Is.Null);
+            frames.Verify(f => f.GetAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
+        }
+
+        [Test]
         public async Task The_frames_fits_binning_reaches_the_solver() {
             // #1136 bot round 3 — the feed built an empty ImageMetaData, so a 2x2 light solved at half
             // its true scale; the loader now carries XBINNING and the image must say 2.

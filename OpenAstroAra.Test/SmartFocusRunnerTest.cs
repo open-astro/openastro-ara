@@ -70,13 +70,14 @@ namespace OpenAstroAra.Test {
         private static FocusFeatureVector Features(double hfr, int stars) =>
             new(stars, hfr, hfr * 2.0, 0.9, 8.0, hfr * 2.0, 0, hfr * 2.0, 0, 0);
 
-        private static List<DetectedStar> Stars(int count, double hfr, double skew = 0.0) {
+        private static List<DetectedStar> Stars(int count, double hfr, double skew = 0.0, double asymmetry = 0.0) {
             var stars = new List<DetectedStar>(count);
             for (int i = 0; i < count; i++) {
                 stars.Add(new DetectedStar {
                     HFR = hfr, FWHM = hfr * 2.0, Roundness = 0.9, PeakToBackground = 8.0,
                     DonutOuterDiameter = hfr * 2.0, // consistent with Features() so a donut-keyed map reads it
                     RadialProfileSkew = skew,
+                    RimCoreAsymmetry = asymmetry,
                 });
             }
             return stars;
@@ -118,7 +119,11 @@ namespace OpenAstroAra.Test {
                 Func<int, double>? skySkew = null,
                 Func<int, bool>? noiseFlooded = null,
                 int upwardBacklash = 0,
-                (int Min, int Max)? travel = null) {
+                (int Min, int Max)? travel = null,
+                int start = StartPosition,
+                Func<CancellationToken, Task<(int Min, int Max)?>>? travelRange = null,
+                Func<int, double>? skyAsymmetry = null,
+                Action<string>? onEvent = null) {
             var store = new InMemoryProfileStore();
             store.PutAutofocusSettings(Settings(restoreOnFailure, telescopeType));
             if (calibration is not null) {
@@ -126,17 +131,20 @@ namespace OpenAstroAra.Test {
             }
 
             var moves = new List<int>();
-            var position = StartPosition;
-            // Where the optics really are: an upward move stops `upwardBacklash` short of the counter, a
-            // downward move lands on it (the sky answers from here, the counter reports `position`).
-            var physical = StartPosition;
+            var position = start;
+            // Where the optics really are: a gear train with `upwardBacklash` steps of play. The optics sit
+            // anywhere in [counter − play, counter] and move only when the counter pushes them: an upward move
+            // drags them to at least counter − play, a downward one pushes them to at most counter. A downward
+            // move shorter than the slack an upward one left therefore does not move them at all (the sky
+            // answers from here, the counter reports `position`).
+            var physical = start;
             var focuser = new Mock<IFocuserMediator>();
             focuser.Setup(f => f.GetInfo()).Returns(() => new FocuserInfo {
                 Connected = true, Position = position, Temperature = focuserTemperature,
             });
             focuser.Setup(f => f.MoveFocuser(It.IsAny<int>(), It.IsAny<CancellationToken>()))
                 .Returns<int, CancellationToken>((p, _) => {
-                    physical = p > position ? Math.Max(physical, p - upwardBacklash) : p;
+                    physical = p > position ? Math.Max(physical, p - upwardBacklash) : Math.Min(physical, p);
                     position = p;
                     moves.Add(p);
                     return Task.FromResult(p);
@@ -149,7 +157,7 @@ namespace OpenAstroAra.Test {
             var events = new List<(string Type, JsonElement Payload)>();
             var ws = new Mock<IWsBroadcaster>();
             ws.Setup(w => w.PublishAsync(It.IsAny<string>(), It.IsAny<JsonElement>(), It.IsAny<CancellationToken>()))
-                .Callback<string, JsonElement, CancellationToken>((t, p, _) => events.Add((t, p)))
+                .Callback<string, JsonElement, CancellationToken>((t, p, _) => { events.Add((t, p)); onEvent?.Invoke(t); })
                 .Returns(Task.CompletedTask);
 
             var posted = new List<NotificationDto>();
@@ -164,7 +172,7 @@ namespace OpenAstroAra.Test {
                 ws: ws.Object,
                 notifications: notifications.Object,
                 tracker: tracker,
-                travelRange: travel is null ? null : _ => Task.FromResult<(int Min, int Max)?>(travel),
+                travelRange: travelRange ?? (travel is null ? null : _ => Task.FromResult<(int Min, int Max)?>(travel)),
                 metric: (_, _) => {
                     captures++;
                     var hfr = skyHfr is null ? VCurveHfr(physical, realBest) : skyHfr(captures, physical);
@@ -172,8 +180,9 @@ namespace OpenAstroAra.Test {
                     // The physical §59.3 side signal: the sky's skew depends on which side of the REAL
                     // best focus the focuser currently sits (0 when the rig carries no aberration).
                     var skew = skySkew?.Invoke(physical) ?? 0.0;
+                    var asymmetry = skyAsymmetry?.Invoke(physical) ?? 0.0;
                     return new StarDetectionResult {
-                        AverageHFR = hfr, DetectedStars = stars, StarList = Stars(stars, hfr, skew),
+                        AverageHFR = hfr, DetectedStars = stars, StarList = Stars(stars, hfr, skew, asymmetry),
                         NoiseFlooded = noiseFlooded?.Invoke(captures) ?? false,
                     };
                 });
@@ -391,6 +400,132 @@ namespace OpenAstroAra.Test {
             Assert.That(fallback[0].Payload.GetProperty("reason").GetString(), Is.EqualTo("bracket_failed"));
             Assert.That(rig.Moves.Take(2), Does.Not.Contain(StartPosition - 200), "no bracket shot was taken");
             Assert.That(rig.Moves.Max(), Is.LessThanOrEqualTo(StartPosition + 50), "never past the travel");
+        }
+
+        [Test]
+        public async Task An_upward_smart_move_lands_from_above_through_the_measured_backlash() {
+            // §59.7 — shot 2 below best predicts an UPWARD move. Moved straight up, a focuser with 150 steps of
+            // play stops 150 short (HFR 1.95 against a 1.65 target). Landed from above through 1.5× the
+            // calibration's measured backlash (225 steps), the downward move takes the slack up and the optics
+            // sit where the counter says.
+            var rig = Build(calibration: Calibration() with { BacklashUpSteps = 150 }, upwardBacklash: 150, start: CalibratedBest - 300);
+            using var svc = rig.Service;
+
+            Assert.That(await svc.RunAutofocusAsync(NoProgress, CancellationToken.None), Is.True);
+
+            Assert.That(rig.Moves.Take(2), Is.EqualTo(new[] { CalibratedBest + 225, CalibratedBest }), "over the top by 1.5× the backlash, then down");
+            Assert.That(rig.CaptureCount(), Is.EqualTo(2), "in focus on shot 2: the optics really are at best");
+        }
+
+        [Test]
+        public async Task An_upward_reversal_lands_from_above() {
+            // The wrong-direction ladder: shot 2 goes DOWN (wrong side), the half-magnitude reversal goes UP
+            // from there, so it comes down onto its target from the measured backlash's overshoot.
+            var rig = Build(calibration: Calibration() with { BacklashUpSteps = 150 }, realBest: StartPosition + 150, upwardBacklash: 150);
+            using var _ = rig.Service;
+
+            Assert.That(await rig.Service.RunAutofocusAsync(NoProgress, CancellationToken.None), Is.True);
+
+            Assert.That(rig.Moves[0], Is.LessThan(StartPosition), "shot 2 went down, directly");
+            Assert.That(rig.Moves[1] - rig.Moves[2], Is.EqualTo(225), "the reversal came down from 225 above");
+            Assert.That(rig.Moves[2], Is.GreaterThan(StartPosition));
+        }
+
+        [Test]
+        public async Task An_upward_trim_lands_from_above_and_the_return_to_shot_two_is_direct() {
+            // Start below best: shot 2 and the +20% trim both go UP (each through the overshoot); the trim reads
+            // worse, so the return to shot 2 goes DOWN, directly.
+            var rig = Build(calibration: Calibration() with { BacklashUpSteps = 150 }, upwardBacklash: 150, start: CalibratedBest - 300,
+                skyHfr: (capture, _) => capture switch { 1 => 3.3, 2 => 1.7, _ => 1.9 });
+            using var _ = rig.Service;
+
+            Assert.That(await rig.Service.RunAutofocusAsync(NoProgress, CancellationToken.None), Is.True);
+
+            var m = rig.Moves;
+            Assert.That(m, Has.Count.EqualTo(5), "shot 2 (over, down), trim (over, down), back to shot 2");
+            Assert.Multiple(() => {
+                Assert.That(m[0] - m[1], Is.EqualTo(225), "shot 2 from above");
+                Assert.That(m[2] - m[3], Is.EqualTo(225), "the trim from above");
+                Assert.That(m[3], Is.GreaterThan(m[1]), "the trim went up");
+                Assert.That(m[4], Is.EqualTo(m[1]), "back to shot 2, directly");
+            });
+        }
+
+        [Test]
+        public async Task A_landing_at_the_top_of_the_travel_never_overshoots_past_it() {
+            var rig = Build(calibration: Calibration() with { BacklashUpSteps = 150 }, upwardBacklash: 150, start: CalibratedBest - 300,
+                travel: (0, CalibratedBest + 100));
+            using var _ = rig.Service;
+
+            await rig.Service.RunAutofocusAsync(NoProgress, CancellationToken.None);
+
+            Assert.That(rig.Moves.Max(), Is.LessThanOrEqualTo(CalibratedBest + 100));
+        }
+
+        [Test]
+        public async Task A_travel_read_fault_restores_and_falls_back_like_any_device_fault() {
+            // The travel is read inside the Smart run's fault boundary: a fault there restores the start and
+            // hands over to the Classic sweep (which fails on the same fault), never escaping the run.
+            var rig = Build(calibration: Calibration(),
+                travelRange: _ => Task.FromException<(int Min, int Max)?>(new InvalidOperationException("focuser went away")));
+            using var _ = rig.Service;
+
+            Assert.That(await rig.Service.RunAutofocusAsync(NoProgress, CancellationToken.None), Is.False);
+
+            var fallback = rig.Events.Where(e => e.Type == WsEventCatalog.AutofocusFallbackClassic).ToList();
+            Assert.That(fallback, Has.Count.EqualTo(1));
+            Assert.That(fallback[0].Payload.GetProperty("reason").GetString(), Is.EqualTo("smart_focus_error"));
+        }
+
+        [Test]
+        public async Task Each_smart_shot_reports_its_rim_core_asymmetry() {
+            // #1139 — the shot_complete event and the run record carry the shot's asymmetry (this sky: −0.4
+            // above best, +0.4 below; the start sits above best).
+            var rig = Build(calibration: Calibration(), skyAsymmetry: p => p > CalibratedBest ? -0.4 : 0.4);
+            using var _ = rig.Service;
+
+            Assert.That(await rig.Service.RunAutofocusAsync(NoProgress, CancellationToken.None), Is.True);
+
+            var shots = rig.Events.Where(e => e.Type == WsEventCatalog.AutofocusShotComplete).ToList();
+            Assert.That(shots, Is.Not.Empty);
+            Assert.That(shots[0].Payload.GetProperty("asymmetry").GetDouble(), Is.EqualTo(-0.4), "shot 1, above best");
+            var recorded = rig.Tracker.Snapshot().Probes.Where(p => p.Phase == "smart").ToList();
+            Assert.That(recorded[0].Asymmetry, Is.EqualTo(-0.4));
+        }
+
+        [Test]
+        public async Task A_starless_smart_shot_reports_no_asymmetry() {
+            // The empty feature vector's 0 is not a measurement: the shot event leaves the key out, and the run
+            // record (what the pane reads while the shot is current, before the Classic fallback replaces the
+            // Smart probes) stores null.
+            AutofocusProbeDto? recorded = null;
+            AutofocusRunTracker? tracker = null;
+            var rig = Build(calibration: Calibration(), starCount: 0, onEvent: type => {
+                if (type == WsEventCatalog.AutofocusShotComplete) {
+                    recorded = tracker!.Snapshot().Probes.First(p => p.Phase == "smart");
+                }
+            });
+            tracker = rig.Tracker;
+            using var _ = rig.Service;
+
+            await rig.Service.RunAutofocusAsync(NoProgress, CancellationToken.None);
+
+            var shot = rig.Events.First(e => e.Type == WsEventCatalog.AutofocusShotComplete);
+            Assert.That(shot.Payload.TryGetProperty("asymmetry", out var _), Is.False, "no stars, no asymmetry");
+            Assert.That(recorded, Is.Not.Null);
+            Assert.That(recorded!.Asymmetry, Is.Null, "the run record stores none either");
+        }
+
+        [Test]
+        public void ApproachOvershoot_clears_the_measured_backlash() {
+            Assert.Multiple(() => {
+                Assert.That(AutofocusSweepService.ApproachOvershoot(100, null), Is.EqualTo(100), "no measurement: one sweep step");
+                Assert.That(AutofocusSweepService.ApproachOvershoot(100, 48), Is.EqualTo(100), "a step already clears 1.5× a small backlash");
+                Assert.That(AutofocusSweepService.ApproachOvershoot(100, 150), Is.EqualTo(225), "1.5× the measured backlash");
+                Assert.That(AutofocusSweepService.ApproachOvershoot(0, null), Is.EqualTo(1), "never zero");
+            });
+            Assert.That(AutofocusSweepService.BracketMoves(1000, 200, 100, (0, int.MaxValue), approach: 225), Is.EqualTo((800, 1200, 1425)),
+                "the + side's overshoot clears the backlash too");
         }
 
         [Test]
