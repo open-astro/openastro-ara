@@ -492,6 +492,88 @@ namespace OpenAstroAra.Test {
             Assert.That(uniform, Is.LessThan(SkewOfRampedDonut(outward: false)));
         }
 
+        // ---- §59.3 rim-vs-core asymmetry (#1139) ----
+
+        /// <summary>A filled disc of <paramref name="radius"/> whose brightness at fractional radius t ∈ [0, 1]
+        /// is <paramref name="amplitude"/> × <paramref name="profile"/>(t).</summary>
+        private static void AddDisc(ushort[] frame, int width, int height, int cx, int cy,
+                double amplitude, double radius, Func<double, double> profile) {
+            int r = (int)Math.Ceiling(radius);
+            for (int dy = -r; dy <= r; dy++) {
+                int y = cy + dy;
+                if (y < 0 || y >= height) continue;
+                for (int dx = -r; dx <= r; dx++) {
+                    int x = cx + dx;
+                    if (x < 0 || x >= width) continue;
+                    double dist = Math.Sqrt(dx * dx + dy * dy);
+                    if (dist > radius) continue;
+                    int idx = y * width + x;
+                    frame[idx] = (ushort)Math.Min(ushort.MaxValue, frame[idx] + amplitude * profile(dist / radius));
+                }
+            }
+        }
+
+        private static double AsymmetryOfDisc(Func<double, double> profile) {
+            int w = 140, h = 140;
+            var frame = FlatField(w, h);
+            AddDisc(frame, w, h, 70, 70, amplitude: 6000, radius: 12, profile);
+            return DetectOne(frame, w, h).RimCoreAsymmetry;
+        }
+
+        [Test]
+        public void A_bright_rimmed_disc_reads_positive_and_a_bright_cored_one_negative() {
+            // The two sides of focus on a rig with spherical aberration: one shows the light piled at the
+            // edge, the other at the centre with a soft halo. The coefficient separates them by sign.
+            var brightRim = AsymmetryOfDisc(t => 0.2 + 0.8 * t * t * t * t);
+            var brightCore = AsymmetryOfDisc(t => 0.2 + 0.8 * (1 - t) * (1 - t));
+            Assert.Multiple(() => {
+                Assert.That(brightRim, Is.GreaterThan(0.3), "light piled at the rim");
+                Assert.That(brightCore, Is.LessThan(-0.3), "light piled at the core");
+                Assert.That(brightRim, Is.InRange(-1.0, 1.0));
+                Assert.That(brightCore, Is.InRange(-1.0, 1.0));
+            });
+        }
+
+        [Test]
+        public void A_uniform_disc_reads_near_zero() {
+            // Pure geometric defocus with no aberration: the same disc on both sides of focus, no side signal.
+            Assert.That(AsymmetryOfDisc(_ => 1.0), Is.EqualTo(0.0).Within(0.1));
+        }
+
+        [Test]
+        public void A_donut_with_a_dark_hole_reads_its_rim_bright_against_the_hole() {
+            // The obstruction shadow is below the detection threshold, so it is not in the star's blob: the
+            // core is sampled from the frame itself, or a donut would read as having no core at all.
+            int w = 140, h = 140;
+            var frame = FlatField(w, h);
+            AddDonut(frame, w, h, 70, 70, amplitude: 6000, innerRadius: 5, outerRadius: 12);
+            Assert.That(DetectOne(frame, w, h).RimCoreAsymmetry, Is.GreaterThan(0.8));
+        }
+
+        [Test]
+        public void A_star_too_small_to_have_a_rim_and_a_core_reads_zero() {
+            // An in-focus star spans a few pixels: there is no rim and core to compare, and the coefficient is
+            // not a focus measure (HFR is), so it reports 0 rather than pixel noise.
+            int w = 64, h = 64;
+            var frame = FlatField(w, h);
+            AddStar(frame, w, h, 32, 32, amplitude: 8000, sigmaX: 1.0, sigmaY: 1.0);
+            Assert.That(DetectOne(frame, w, h).RimCoreAsymmetry, Is.EqualTo(0.0));
+        }
+
+        [Test]
+        public void Extract_medians_the_signed_per_star_asymmetry() {
+            var result = new StarDetectionResult {
+                DetectedStars = 3,
+                AverageHFR = 4.0,
+                StarList = new List<DetectedStar> {
+                    new() { HFR = 4.0, FWHM = 8.0, Roundness = 0.9, PeakToBackground = 8.0, RimCoreAsymmetry = -0.6 },
+                    new() { HFR = 4.0, FWHM = 8.0, Roundness = 0.9, PeakToBackground = 8.0, RimCoreAsymmetry = 0.4 },
+                    new() { HFR = 4.0, FWHM = 8.0, Roundness = 0.9, PeakToBackground = 8.0, RimCoreAsymmetry = 0.5 },
+                },
+            };
+            Assert.That(FocusFeatureExtractor.Extract(result).MedianRimCoreAsymmetry, Is.EqualTo(0.4), "the sign survives the median");
+        }
+
         [Test]
         public void Extract_medians_the_signed_per_star_skews() {
             // The SIGN is the §59.3 side signal — aggregation must preserve it (a median of magnitudes

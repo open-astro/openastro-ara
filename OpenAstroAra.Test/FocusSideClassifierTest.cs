@@ -181,6 +181,22 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void A_refractor_separated_only_by_rim_core_asymmetry_still_classifies() {
+            // #1139 — a refractor whose arms differ in where the light sits (bright rim below best, bright
+            // core above) but not in skew: the rim-vs-core coefficient alone resolves the direction.
+            var samples = new List<FocusCalibrationSample>();
+            foreach (var m in new[] { 100.0, 200.0, 300.0 }) {
+                samples.Add(At(Best - m, Vec(m) with { MedianRimCoreAsymmetry = 0.5 }));
+                samples.Add(At(Best + m, Vec(m) with { MedianRimCoreAsymmetry = -0.5 }));
+            }
+
+            var classifier = FocusSideClassifier.Build(samples, Best, TelescopeType.Refractor)!;
+            Assert.That(classifier.QualifiedFeatureNames, Has.Count.EqualTo(1).And.Contains("rim_core_asymmetry"));
+            Assert.That(classifier.Classify(Vec(150) with { MedianRimCoreAsymmetry = 0.5 }, 150).Direction, Is.EqualTo(1), "below best → move up");
+            Assert.That(classifier.Classify(Vec(150) with { MedianRimCoreAsymmetry = -0.5 }, 150).Direction, Is.EqualTo(-1), "above best → move down");
+        }
+
+        [Test]
         public void Qualified_feature_names_report_what_the_rig_separates_on() {
             var classifier = FocusSideClassifier.Build(AberratedRig(), Best, TelescopeType.Sct)!;
             Assert.That(classifier.QualifiedFeatureNames, Does.Contain("radial_skew"));

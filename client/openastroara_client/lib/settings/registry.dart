@@ -632,8 +632,8 @@ const List<Setting> settingsRegistry = [
   Setting(
     id: 'session.storage.file_format',
     label: 'File format',
-    description: 'On-disk frame format. FITS is the de-facto astronomy standard and is always written uncompressed; XISF is PixInsight\'s native format and can be compressed losslessly.',
-    keywords: ['format', 'fits', 'xisf', 'pixinsight', 'file type', 'extension'],
+    description: 'On-disk frame format. FITS is the de-facto astronomy standard and is always written uncompressed; XISF is PixInsight\'s native format and can be compressed losslessly; Astro Pixel Processor, DeepSkyStacker and StackingWizard need FITS.',
+    keywords: ['format', 'fits', 'xisf', 'pixinsight', 'file type', 'extension', 'siril', 'deepskystacker', 'stackingwizard', 'astro pixel processor'],
     path: ['Settings', 'Your night', 'Storage'],
     type: SettingType.enumValue(['FITS', 'XISF']),
     defaultValue: 'FITS',
@@ -815,7 +815,7 @@ const List<Setting> settingsRegistry = [
   Setting(
     id: 'session.storage.backup_stream_folder',
     label: 'Backup folder',
-    description: 'Where streamed frames are written on this desktop, organized as <server>/<session>/<frame>.fits (or .xisf, matching the profile file format). Defaults to Documents/OpenAstroAra/Backups.',
+    description: 'Where streamed frames are written on this desktop, organized as <server>/<session>/<frame>.fits, or .xisf for an XISF frame; the extension follows each frame, so frames from before a format switch keep .fits. Defaults to Documents/OpenAstroAra/Backups.',
     keywords: ['backup', 'folder', 'path', 'directory', 'stream', 'destination', 'local'],
     path: ['Settings', 'Your night', 'Storage'],
     type: SettingType.string(),
