@@ -251,6 +251,18 @@ double moonBrighteningMag({
 double combineSkyMags(double a, double b) =>
     -2.5 * math.log(math.pow(10, -0.4 * a) + math.pow(10, -0.4 * b)) / math.ln10;
 
+/// THEOREM: the integration [snr] needs, in seconds, when the target delivers
+/// [targetRate] and the sky [skyRate] (same units, e.g. e⁻/s per pixel or per
+/// aperture): T = SNR² · (S_t + S_sky) / S_t². The read-noise and dark terms
+/// are dropped (the Glover floor makes subs sky-limited). Pinned against
+/// STScI's Pandeia engine in the #1140 parity test.
+double requiredIntegrationSeconds({
+  required double snr,
+  required double targetRate,
+  required double skyRate,
+}) =>
+    snr * snr * (targetRate + skyRate) / (targetRate * targetRate);
+
 /// The budget. [input] carries the rig + filter + the MOONLESS sky brightness
 /// (the same [OptimalSubInput] the Glover advisor builds — one flux chain);
 /// [surfaceBrightnessMagArcsec2] is the target's catalog (average) SB;
@@ -294,8 +306,8 @@ IntegrationBudget computeIntegrationBudget({
   IntegrationTier tier(String label, double offsetMag, double snrGoal) {
     final sb = surfaceBrightnessMagArcsec2 + offsetMag + extinctionMag;
     final sTarget = skyFluxEPerSecPerPx(_withSkyMag(input, sb));
-    // THEOREM: T = SNR² · (S_t + S_sky) / S_t², in seconds.
-    final tSec = snrGoal * snrGoal * (sTarget + sSky) / (sTarget * sTarget);
+    final tSec = requiredIntegrationSeconds(
+        snr: snrGoal, targetRate: sTarget, skyRate: sSky);
     final hours = tSec / 3600.0;
     return IntegrationTier(
       label: label,
