@@ -57,7 +57,9 @@ public sealed record BugReportSources(
         // apt's term.log is root:adm; history.log already records every install and removal.
         SystemFiles: ["/var/log/apt/history.log", "/var/log/dpkg.log"],
         Journal: (args, output, ct) => RunTool("journalctl", args, output, ct),
-        JournalUnits: ["openastroara-server", "alpacabridge", "openastro-guider"],
+        // power-watch logs the Pi's under-voltage and throttling changes where a rig installs it (the CM4
+        // does): the first thing to read after a brown-out night. Absent elsewhere: "-- No entries --".
+        JournalUnits: ["openastroara-server", "alpacabridge", "openastro-guider", "power-watch"],
         KernelRing: (_, output, ct) => RunTool("dmesg", ["--time-format", "iso"], output, ct));
 
     public static BugReportSources ForHost() => RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ? Linux : None;
