@@ -270,7 +270,8 @@ const Map<String, Help> helpRegistry = {
     title: 'Backup folder',
     body:
         'Streamed frames land here, organized by server and imaging session: '
-        '<folder>/<server>/<session-id>/<frame-id>.fits (or .xisf when the profile saves XISF). Pick a drive with room for a full '
+        '<folder>/<server>/<session-id>/<frame-id>.fits, or .xisf for an XISF frame. The extension follows each frame\'s own '
+        'format, so frames taken before a format switch keep theirs. Pick a drive with room for a full '
         'night of frames; if it fills, the stream surfaces the problem and stops pulling '
         '(Ara keeps the queue, so re-enabling resumes where it left off).',
     relatedSettings: ['session.storage.backup_stream'],
@@ -649,7 +650,8 @@ const Map<String, Help> helpRegistry = {
     body:
         'FITS is the historical standard for astronomy and the safest choice for downstream tools (DSS, Siril, PixInsight, AstroPixelProcessor — all read FITS). '
         'Ara always writes FITS uncompressed: PixInsight cannot open tile-compressed FITS.\n\n'
-        'XISF is PixInsight\'s native format and its author\'s recommended raw format; Siril reads it too, but fewer other tools do. '
+        'XISF is PixInsight\'s native format and its author\'s recommended raw format. Siril 1.2 and newer and KStars read it too, '
+        'but Astro Pixel Processor, DeepSkyStacker and StackingWizard do not: if you stack in one of those, keep FITS. '
         'XISF frames can be compressed losslessly (see Compression).\n\n'
         'Profiles that used the old FITS + RICE or FITS + gzip formats now write plain FITS.',
     relatedSettings: ['session.storage.file_format'],
@@ -661,7 +663,7 @@ const Map<String, Help> helpRegistry = {
         'Lossless compression applied as each XISF frame is written to disk. Shown only when the file format is XISF — FITS is always written uncompressed.\n\n'
         '* **Off**: No compression — biggest files.\n'
         '* **Lossless (Zstandard)**: Zstandard with byte shuffling. Pixels come back bit-for-bit. A 52 MB frame takes about 0.5 s and comes out at 22.5 MB on a Raspberry Pi CM4. Recommended.\n\n'
-        'PixInsight reads compressed XISF directly.',
+        'PixInsight reads compressed XISF directly. If another tool cannot open a compressed frame, turn compression off.',
     relatedSettings: ['session.storage.compression'],
   ),
   'session.storage.filename_template': Help(

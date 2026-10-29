@@ -59,13 +59,106 @@ namespace OpenAstroAra.Test {
                 IFrameRepository? frames = null, HeadlessSequencerFactory? factory = null,
                 UnattendedShutdownService? unattendedShutdown = null,
                 IProfileStore? profileStore = null, ICalibrationService? calibration = null,
-                INotificationService? notifications = null, string? templateOrigin = null) {
+                INotificationService? notifications = null, string? templateOrigin = null, ICameraService? camera = null) {
             factory ??= HeadlessSequencerFactory.WithDefaults();
             var deserializer = new SequenceBodyDeserializer(factory);
             var fake = new FakeSequenceService(id, body, templateOrigin);
             return new SequencerService(deserializer, ws: ws, sequencesResolver: () => fake, checkpoint: null,
                 frames: frames, unattendedShutdown: unattendedShutdown,
-                profileStore: profileStore, calibrationResolver: () => calibration, notifications: notifications);
+                profileStore: profileStore, calibrationResolver: () => calibration, notifications: notifications,
+                cameraResolver: () => camera);
+        }
+
+        [Test]
+        public async Task A_run_reports_its_end_only_after_its_last_frames_are_saved() {
+            // Background frame saves: the run's last frames are still being written when the engine
+            // returns; sequence.complete (and the session end) wait for them.
+            var id = Guid.NewGuid();
+            var ws = new RecordingWsBroadcaster();
+            var saves = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var camera = new Mock<ICameraService>();
+            camera.Setup(c => c.FinishPendingSavesAsync()).Returns(saves.Task);
+            var svc = BuildService(id, BuildBody(c => c.Items.Add(new WaitForTimeSpan { Time = 0 })), ws: ws, camera: camera.Object);
+
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            for (var i = 0; i < 250 && camera.Invocations.Count == 0; i++) {
+                await Task.Delay(20);
+            }
+            camera.Verify(c => c.FinishPendingSavesAsync(), Times.Once);
+            await Task.Delay(300);
+            Assert.That(ws.Events, Does.Not.Contain("sequence.complete"), "the run waits for its frames");
+
+            saves.SetResult(0);
+            await WaitForEventAsync(ws, "sequence.complete");
+            Assert.That((await WaitForTerminalAsync(svc, id))!.State, Is.EqualTo(SequenceRunState.Completed));
+        }
+
+        [Test]
+        public async Task A_stalled_drive_does_not_keep_a_run_from_ending() {
+            var id = Guid.NewGuid();
+            var ws = new RecordingWsBroadcaster();
+            var camera = new Mock<ICameraService>();
+            camera.Setup(c => c.FinishPendingSavesAsync()).Returns(new TaskCompletionSource<int>().Task); // never lands
+            var svc = BuildService(id, BuildBody(c => c.Items.Add(new WaitForTimeSpan { Time = 0 })), ws: ws, camera: camera.Object);
+            svc.PendingSavesWait = TimeSpan.FromMilliseconds(200);
+
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            await WaitForEventAsync(ws, "sequence.complete");
+            Assert.That((await WaitForTerminalAsync(svc, id))!.State, Is.EqualTo(SequenceRunState.Completed));
+        }
+
+        [Test]
+        public async Task A_stopped_run_waits_only_briefly_for_its_last_frames() {
+            // Stop, Abort or daemon shutdown: the drain is short so shutdown fits systemd's stop timeout.
+            var id = Guid.NewGuid();
+            var ws = new RecordingWsBroadcaster();
+            var camera = new Mock<ICameraService>();
+            camera.Setup(c => c.FinishPendingSavesAsync()).Returns(new TaskCompletionSource<int>().Task); // never lands
+            var svc = BuildService(id, BuildBody(c => c.Items.Add(new WaitForTimeSpan { Time = 30 })), ws: ws, camera: camera.Object);
+            svc.PendingSavesWait = TimeSpan.FromMinutes(10);
+            svc.StoppedRunSavesWait = TimeSpan.FromMilliseconds(200);
+
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            await WaitForStateAsync(svc, id, SequenceRunState.Running);
+            await svc.AbortAsync(id, null, CancellationToken.None);
+            Assert.That((await WaitForTerminalAsync(svc, id))!.State, Is.EqualTo(SequenceRunState.Stopped));
+        }
+
+        [Test]
+        public async Task Frames_dropped_after_the_run_stopped_waiting_are_still_reported() {
+            var id = Guid.NewGuid();
+            var ws = new RecordingWsBroadcaster();
+            var finishing = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var camera = new Mock<ICameraService>();
+            camera.Setup(c => c.FinishPendingSavesAsync()).Returns(finishing.Task);
+            var notifications = new Mock<INotificationService>();
+            var svc = BuildService(id, BuildBody(c => c.Items.Add(new WaitForTimeSpan { Time = 0 })), ws: ws,
+                notifications: notifications.Object, camera: camera.Object);
+            svc.PendingSavesWait = TimeSpan.FromMilliseconds(200);
+
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            await WaitForEventAsync(ws, "sequence.complete");
+            finishing.SetResult(1); // the stalled drive finally gave up on one frame
+            for (var i = 0; i < 100 && notifications.Invocations.Count == 0; i++) {
+                await Task.Delay(20);
+            }
+            notifications.Verify(n => n.CreateAsync(It.Is<NotificationDto>(d => d.Title == "A frame couldn't be saved"), It.IsAny<CancellationToken>()), Times.Once);
+        }
+
+        [Test]
+        public async Task Frames_dropped_at_the_end_of_a_run_are_reported_to_the_user() {
+            var id = Guid.NewGuid();
+            var ws = new RecordingWsBroadcaster();
+            var camera = new Mock<ICameraService>();
+            camera.Setup(c => c.FinishPendingSavesAsync()).ReturnsAsync(2);
+            var notifications = new Mock<INotificationService>();
+            var svc = BuildService(id, BuildBody(c => c.Items.Add(new WaitForTimeSpan { Time = 0 })), ws: ws,
+                notifications: notifications.Object, camera: camera.Object);
+
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            await WaitForEventAsync(ws, "sequence.complete");
+            notifications.Verify(n => n.CreateAsync(It.Is<NotificationDto>(d =>
+                d.Severity == NotificationSeverity.Warning && d.Title == "2 frames couldn't be saved"), It.IsAny<CancellationToken>()), Times.Once);
         }
 
         private static Mock<IProfileStore> ProfileWithCaptureDefault(string token) {

@@ -20,14 +20,17 @@ namespace OpenAstroAra.Server.Contracts;
 /// <summary>One focus probe of the current/last autofocus run. <c>Phase</c> is <c>coarse</c> (the
 /// software-binned search that centres the sweep), <c>fine</c> (a V-curve sample) or <c>smart</c>
 /// (a §59.2 Smart Focus shot). <c>Kept</c> is false for a probe the sweep measured but dropped (too
-/// few stars) — the chart still shows it, hollow, so the user sees where the sky gave nothing.</summary>
+/// few stars) — the chart still shows it, hollow, so the user sees where the sky gave nothing.
+/// <c>Asymmetry</c> (#1139) is the probe's median rim-vs-core asymmetry (−1 light in the core … +1 light at the
+/// rim), the side-of-focus signal Smart Focus reads; null for a coarse/backlash probe or a dropped one.</summary>
 public sealed record AutofocusProbeDto(
     int Index,
     string Phase,
     int Position,
     double Hfr,
     int Stars,
-    bool Kept);
+    bool Kept,
+    double? Asymmetry = null);
 
 /// <summary>A point of the fitted curve, sampled by the daemon so the client draws exactly the model
 /// the sweep used (parabolic, hyperbolic or trendlines) without re-deriving it.</summary>

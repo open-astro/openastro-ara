@@ -79,6 +79,7 @@ namespace OpenAstroAra.Image.ImageAnalysis {
             ("ring_thickness", f => f.MedianRingThickness),
             ("donut_shadow_depth", f => f.MedianDonutShadowDepth),
             ("radial_skew", f => f.MedianRadialSkew),
+            ("rim_core_asymmetry", f => f.MedianRimCoreAsymmetry),
         ];
 
         private sealed record QualifiedFeature(

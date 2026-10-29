@@ -238,12 +238,15 @@ public sealed partial class AutofocusSweepService {
         };
 
     /// <summary>Clamp a fine-sweep centre so every probe, from <c>centre − Steps·StepSize</c> up to the
-    /// overshoot at <c>centre + Steps·StepSize + StepSize</c>, lies inside <paramref name="travel"/>.
-    /// A travel too short for the whole sweep only keeps the bottom probe at or above the minimum.</summary>
-    internal static int ClampSweepCentre(int centre, AutofocusSettingsDto settings, (int Min, int Max) travel) {
+    /// overshoot at <c>centre + Steps·StepSize + approach</c>, lies inside <paramref name="travel"/>.
+    /// <paramref name="approach"/> is the run's backlash overshoot (<see cref="ApproachOvershoot(int, double?)"/>),
+    /// one step when not given. A travel that holds the probes but not the overshoot (a wider sweep fails before
+    /// this is reached) only keeps the bottom probe at or
+    /// above the minimum.</summary>
+    internal static int ClampSweepCentre(int centre, AutofocusSettingsDto settings, (int Min, int Max) travel, int? approach = null) {
         var halfWidth = settings.Steps * settings.StepSize;
         var lowest = travel.Min == int.MinValue ? int.MinValue : travel.Min + halfWidth;
-        var highest = travel.Max == int.MaxValue ? int.MaxValue : travel.Max - halfWidth - settings.StepSize;
+        var highest = travel.Max == int.MaxValue ? int.MaxValue : travel.Max - halfWidth - (approach ?? settings.StepSize);
         return highest >= lowest ? Math.Clamp(centre, lowest, highest) : Math.Max(centre, lowest);
     }
 
