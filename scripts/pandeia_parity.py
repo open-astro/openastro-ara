@@ -24,6 +24,8 @@ def run(mag, nint):
     src["spectrum"]["sed"] = {"sed_type": "flat", "unit": "fnu"}
     c["configuration"]["instrument"]["filter"] = "f200w"
     c["configuration"]["detector"].update({"readout_pattern": "rapid", "ngroup": 2, "nint": nint, "nexp": 1})
+    # background_subtraction False: Ara assumes a known sky, so no annulus estimate (and its noise) enters.
+    # The annulus is still set because Pandeia validates it against the aperture; it is not used.
     st = c["strategy"]; st["background_subtraction"] = False; st["aperture_size"] = 1.2; st["sky_annulus"] = [1.4, 1.7]
     for k in ("cosmic_rays_on", "dark_current_on", "readnoise_excess_additive_on", "flat_field_noise_on", "readnoise_on"):
         c["calculation"]["noise"][k] = False

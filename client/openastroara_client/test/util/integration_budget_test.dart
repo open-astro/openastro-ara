@@ -284,4 +284,19 @@ void main() {
       expect(tierProgress(bankedHours: 3, neededHours: 0, remainingTonightHours: 4), isNull);
     });
   });
+
+  group('#1140 equation edges', () {
+    test('a target with no light never reaches an SNR: infinity, not NaN', () {
+      expect(requiredIntegrationSeconds(snr: 5, targetRate: 0, skyRate: 0),
+          double.infinity);
+      expect(requiredIntegrationSeconds(snr: 5, targetRate: 0, skyRate: 3),
+          double.infinity);
+      expect(stackSnr(seconds: 100, targetRate: 0, skyRate: 0), 0);
+    });
+
+    test('stackSnr inverts requiredIntegrationSeconds', () {
+      final t = requiredIntegrationSeconds(snr: 7, targetRate: 2, skyRate: 30);
+      expect(stackSnr(seconds: t, targetRate: 2, skyRate: 30), closeTo(7, 1e-9));
+    });
+  });
 }

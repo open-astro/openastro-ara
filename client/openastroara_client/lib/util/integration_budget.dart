@@ -255,13 +255,29 @@ double combineSkyMags(double a, double b) =>
 /// [targetRate] and the sky [skyRate] (same units, e.g. e⁻/s per pixel or per
 /// aperture): T = SNR² · (S_t + S_sky) / S_t². The read-noise and dark terms
 /// are dropped (the Glover floor makes subs sky-limited). Pinned against
-/// STScI's Pandeia engine in the #1140 parity test.
+/// STScI's Pandeia engine in the #1140 parity test. A target that delivers no
+/// light never reaches any SNR: infinity (the tier reads "impractical"), never
+/// NaN.
 double requiredIntegrationSeconds({
   required double snr,
   required double targetRate,
   required double skyRate,
 }) =>
-    snr * snr * (targetRate + skyRate) / (targetRate * targetRate);
+    targetRate > 0
+        ? snr * snr * (targetRate + skyRate) / (targetRate * targetRate)
+        : double.infinity;
+
+/// THEOREM, solved for SNR: the stack SNR after [seconds] of integration,
+/// S_t·√T / √(S_t + S_sky) — the inverse of [requiredIntegrationSeconds],
+/// pinned to Pandeia by the same parity test. 0 when there is no light.
+double stackSnr({
+  required double seconds,
+  required double targetRate,
+  required double skyRate,
+}) =>
+    targetRate > 0 && seconds > 0
+        ? targetRate * math.sqrt(seconds) / math.sqrt(targetRate + skyRate)
+        : 0.0;
 
 /// The budget. [input] carries the rig + filter + the MOONLESS sky brightness
 /// (the same [OptimalSubInput] the Glover advisor builds — one flux chain);

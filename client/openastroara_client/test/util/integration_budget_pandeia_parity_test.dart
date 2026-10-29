@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/util/integration_budget.dart';
 
@@ -64,7 +62,8 @@ void main() {
         reason: 'integration time within 0.5 % of Pandeia (measured ≤ 0.25 %)',
       );
       // The same equation solved for SNR at Pandeia's time.
-      final snr = c.source * math.sqrt(c.seconds) / math.sqrt(c.source + c.sky);
+      final snr = stackSnr(
+          seconds: c.seconds, targetRate: c.source, skyRate: c.sky);
       expect(
         snr / c.pandeiaSnr,
         closeTo(1.0, 0.0025),
