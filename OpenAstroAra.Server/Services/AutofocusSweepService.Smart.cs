@@ -493,7 +493,7 @@ public sealed partial class AutofocusSweepService {
         var hfr = features.MedianHFR;
         LogSmartShot(shotIndex, position, hfr, features.StarCount, features.MedianRimCoreAsymmetry);
         await RecordProbeAsync("smart", position, hfr, features.StarCount, kept: true, totalSteps: SmartMaxShots, frame,
-            features.MedianRimCoreAsymmetry).ConfigureAwait(false);
+            features.StarCount > 0 ? features.MedianRimCoreAsymmetry : null).ConfigureAwait(false);
         return new SmartShot(hfr, features, result.NoiseFlooded);
     }
 
@@ -511,8 +511,12 @@ public sealed partial class AutofocusSweepService {
             ["hfr"] = double.IsFinite(shot.Hfr) ? Math.Round(shot.Hfr, 3) : 0.0,
             ["stars"] = shot.Features.StarCount,
             // #1139 — the shot's rim-vs-core asymmetry: which side of focus its stars look like they are on.
-            ["asymmetry"] = Math.Round(shot.Features.MedianRimCoreAsymmetry, 3),
         };
+        // A starless shot has no asymmetry to report (its vector is the empty one): the key is left out, as
+        // the run record leaves it null.
+        if (shot.Features.StarCount > 0) {
+            payload["asymmetry"] = Math.Round(shot.Features.MedianRimCoreAsymmetry, 3);
+        }
         if (predictedOffset is { } offset) {
             payload["predicted_offset"] = offset;
         }

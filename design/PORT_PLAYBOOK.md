@@ -9085,7 +9085,7 @@ WebSocket events:
 
 ```json
 { "type": "autofocus.started",         "payload": { "mode": "smart" | "classic", "filter": "L", "trigger": "..." } }
-{ "type": "autofocus.shot_complete",   "payload": { "shot_index": 1, "hfr": 1.85, "predicted_offset": -38, "stars": 487 } }
+{ "type": "autofocus.shot_complete",   "payload": { "shot_index": 1, "position": 14858, "hfr": 1.85, "stars": 487, "asymmetry": -0.42, "predicted_offset": -38, "direction_source": "classifier" } }
 { "type": "autofocus.step_complete",   "payload": { "step_index": 5, "position": 14820, "hfr": 1.43, "stars": 487 } }
 { "type": "autofocus.curve_fit",       "payload": { "algorithm": "parabolic", "r_squared": 0.94, "best_position": 14817 } }
 { "type": "autofocus.calibration_complete", "payload": { "best_position": 14817, "backlash_in": 23, "backlash_out": 18, "collimation_offset_pct": 4, "collimation_severity": "good" } }

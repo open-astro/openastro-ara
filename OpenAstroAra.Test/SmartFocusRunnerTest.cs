@@ -493,6 +493,18 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_starless_smart_shot_reports_no_asymmetry() {
+            // The empty feature vector's 0 is not a measurement: the shot event leaves the key out.
+            var rig = Build(calibration: Calibration(), starCount: 0);
+            using var _ = rig.Service;
+
+            await rig.Service.RunAutofocusAsync(NoProgress, CancellationToken.None);
+
+            var shot = rig.Events.First(e => e.Type == WsEventCatalog.AutofocusShotComplete);
+            Assert.That(shot.Payload.TryGetProperty("asymmetry", out var _), Is.False, "no stars, no asymmetry");
+        }
+
+        [Test]
         public void ApproachOvershoot_clears_the_measured_backlash() {
             Assert.Multiple(() => {
                 Assert.That(AutofocusSweepService.ApproachOvershoot(100, null), Is.EqualTo(100), "no measurement: one sweep step");
