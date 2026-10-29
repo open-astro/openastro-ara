@@ -294,6 +294,13 @@ void main() {
       expect(stackSnr(seconds: 100, targetRate: 0, skyRate: 0), 0);
     });
 
+    test('a NaN target rate reads impractical, and no time gives no SNR', () {
+      expect(requiredIntegrationSeconds(snr: 5, targetRate: double.nan, skyRate: 3),
+          double.infinity);
+      expect(stackSnr(seconds: 0, targetRate: 2, skyRate: 30), 0);
+      expect(stackSnr(seconds: -1, targetRate: 2, skyRate: 30), 0);
+    });
+
     test('stackSnr inverts requiredIntegrationSeconds', () {
       final t = requiredIntegrationSeconds(snr: 7, targetRate: 2, skyRate: 30);
       expect(stackSnr(seconds: t, targetRate: 2, skyRate: 30), closeTo(7, 1e-9));
