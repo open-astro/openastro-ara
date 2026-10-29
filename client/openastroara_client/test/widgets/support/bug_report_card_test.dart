@@ -34,20 +34,36 @@ class _FakeBugReportClient implements BugReportClient {
   bool throwOnPrepare;
   int prepareCalls = 0;
   int downloadCalls = 0;
+  int statusCalls = 0;
   String? lastDownloadId;
   String? lastMode;
+  DateTime? lastSince;
+  bool sinceSent = false;
+
+  /// What prepare answers first and then each status poll, in order; empty =
+  /// ready at once.
+  List<BugReportPreparation> script = [];
 
   @override
-  Future<BugReportPreparation> prepare({String mode = 'full'}) async {
+  Future<BugReportPreparation> prepare({String mode = 'full', DateTime? since}) async {
     prepareCalls++;
     lastMode = mode;
+    lastSince = since;
+    sinceSent = since != null;
     if (throwOnPrepare) throw Exception('prepare boom');
+    if (script.isNotEmpty) return script.removeAt(0);
     return BugReportPreparation(
       preparationId: 'abc-123',
       status: 'ready',
       estimatedSizeBytes: 262144,
       sharingMode: mode, // the daemon echoes the mode it built with
     );
+  }
+
+  @override
+  Future<BugReportPreparation> status(String preparationId) async {
+    statusCalls++;
+    return script.removeAt(0);
   }
 
   String? lastSavePath;
@@ -86,6 +102,7 @@ Widget _host(_FakeBugReportClient api, {ClientErrorLog? log, Directory? dir}) =>
           // channel under widget tests); the streaming download receives it.
           body: BugReportCard(
             savePathPicker: (_, name) async => '${(dir ?? _freshDir()).path}/$name',
+            pollInterval: const Duration(milliseconds: 10),
           ),
         ),
       ),
@@ -247,6 +264,94 @@ void main() {
 
     expect(find.text('Before you share this bug report'), findsNothing);
     expect(find.textContaining('Bug report failed'), findsOneWidget);
+    expect(api.downloadCalls, 0);
+  });
+
+  testWidgets('last night is the default: the whole rig since 24 h ago; Ara-only sends no range',
+      (tester) async {
+    final api = _FakeBugReportClient();
+    await tester.pumpWidget(_host(api));
+    expect(find.text('Last night (whole rig)'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Prepare & download'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(api.sinceSent, isTrue);
+    final ago = DateTime.now().toUtc().difference(api.lastSince!);
+    expect(ago.inMinutes, closeTo(24 * 60, 2));
+    await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    await tester.tap(find.byType(DropdownButton<int>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Ara logs only').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Prepare & download'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(api.sinceSent, isFalse);
+    await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+  });
+
+  testWidgets('a whole-rig bundle is polled while it packs, then the disclosure lists every source',
+      (tester) async {
+    final api = _FakeBugReportClient()
+      ..script = [
+        const BugReportPreparation(preparationId: 'rig-1', status: 'preparing', estimatedSizeBytes: 0),
+        const BugReportPreparation(preparationId: 'rig-1', status: 'preparing', estimatedSizeBytes: 50 * 1024 * 1024),
+        const BugReportPreparation(
+          preparationId: 'rig-1',
+          status: 'ready',
+          estimatedSizeBytes: 12 * 1024 * 1024,
+          sources: [
+            BugReportSourceSummary(source: 'ara', files: 2, bytes: 3 * 1024 * 1024),
+            BugReportSourceSummary(source: 'alpacabridge', files: 2, bytes: 40 * 1024 * 1024),
+            BugReportSourceSummary(source: 'guider', files: 3, bytes: 128 * 1024 * 1024, truncated: true),
+            BugReportSourceSummary(source: 'journal', files: 5, bytes: 2 * 1024 * 1024,
+                note: 'journalctl reported limited permissions'),
+          ],
+        ),
+      ];
+    await tester.pumpWidget(_host(api));
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Prepare & download'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 5));
+    expect(find.textContaining('Packing the logs on the rig'), findsOneWidget);
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.pump(const Duration(milliseconds: 400));
+
+    expect(api.statusCalls, 2, reason: 'polled until ready');
+    expect(find.text('Before you share this bug report'), findsOneWidget);
+    expect(find.textContaining('AlpacaBridge logs'), findsOneWidget);
+    expect(find.textContaining('guider (PHD2)'), findsOneWidget);
+    expect(find.textContaining('cut to their newest part'), findsOneWidget);
+    expect(find.textContaining('limited permissions'), findsOneWidget);
+    await tester.tap(find.widgetWithText(FilledButton, 'Download anyway'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(api.lastDownloadId, 'rig-1');
+  });
+
+  testWidgets('a bundle that fails to pack says why and never offers a download', (tester) async {
+    final api = _FakeBugReportClient()
+      ..script = [
+        const BugReportPreparation(preparationId: 'rig-2', status: 'preparing', estimatedSizeBytes: 0),
+        const BugReportPreparation(preparationId: 'rig-2', status: 'failed', estimatedSizeBytes: 0, error: 'the drive is full'),
+      ];
+    await tester.pumpWidget(_host(api));
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Prepare & download'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.pump(const Duration(milliseconds: 400));
+
+    expect(find.text('Before you share this bug report'), findsNothing);
+    expect(find.textContaining('the drive is full'), findsOneWidget);
     expect(api.downloadCalls, 0);
   });
 }

@@ -606,7 +606,7 @@ public partial class Program {
         // §54 real IBugReportService — bundles logs + profile.json + system info into a
         // ZIP under {profileDir}/bug-reports/ (replaces the former placeholder).
         builder.Services.AddSingleton<IBugReportService>(sp =>
-            new BugReportService(profileDir, sp.GetRequiredService<ILogger<BugReportService>>()));
+            new BugReportService(profileDir, sp.GetRequiredService<ILogger<BugReportService>>(), BugReportSources.ForHost()));
 
         builder.Services.AddSingleton<IProfileStore>(sp =>
             new FileProfileStore(profileDir, sp.GetService<ILogger<FileProfileStore>>()));
