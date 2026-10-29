@@ -510,10 +510,10 @@ public sealed partial class AutofocusSweepService {
             ["position"] = position,
             ["hfr"] = double.IsFinite(shot.Hfr) ? Math.Round(shot.Hfr, 3) : 0.0,
             ["stars"] = shot.Features.StarCount,
-            // #1139 — the shot's rim-vs-core asymmetry: which side of focus its stars look like they are on.
         };
-        // A starless shot has no asymmetry to report (its vector is the empty one): the key is left out, as
-        // the run record leaves it null.
+        // #1139 — the shot's rim-vs-core asymmetry: which side of focus its stars look like they are on. A
+        // starless shot has none to report (its vector is the empty one): the key is left out, as the run
+        // record leaves it null.
         if (shot.Features.StarCount > 0) {
             payload["asymmetry"] = Math.Round(shot.Features.MedianRimCoreAsymmetry, 3);
         }

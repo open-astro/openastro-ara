@@ -122,7 +122,8 @@ namespace OpenAstroAra.Test {
                 (int Min, int Max)? travel = null,
                 int start = StartPosition,
                 Func<CancellationToken, Task<(int Min, int Max)?>>? travelRange = null,
-                Func<int, double>? skyAsymmetry = null) {
+                Func<int, double>? skyAsymmetry = null,
+                Action<string>? onEvent = null) {
             var store = new InMemoryProfileStore();
             store.PutAutofocusSettings(Settings(restoreOnFailure, telescopeType));
             if (calibration is not null) {
@@ -156,7 +157,7 @@ namespace OpenAstroAra.Test {
             var events = new List<(string Type, JsonElement Payload)>();
             var ws = new Mock<IWsBroadcaster>();
             ws.Setup(w => w.PublishAsync(It.IsAny<string>(), It.IsAny<JsonElement>(), It.IsAny<CancellationToken>()))
-                .Callback<string, JsonElement, CancellationToken>((t, p, _) => events.Add((t, p)))
+                .Callback<string, JsonElement, CancellationToken>((t, p, _) => { events.Add((t, p)); onEvent?.Invoke(t); })
                 .Returns(Task.CompletedTask);
 
             var posted = new List<NotificationDto>();
@@ -494,14 +495,25 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public async Task A_starless_smart_shot_reports_no_asymmetry() {
-            // The empty feature vector's 0 is not a measurement: the shot event leaves the key out.
-            var rig = Build(calibration: Calibration(), starCount: 0);
+            // The empty feature vector's 0 is not a measurement: the shot event leaves the key out, and the run
+            // record (what the pane reads while the shot is current, before the Classic fallback replaces the
+            // Smart probes) stores null.
+            AutofocusProbeDto? recorded = null;
+            AutofocusRunTracker? tracker = null;
+            var rig = Build(calibration: Calibration(), starCount: 0, onEvent: type => {
+                if (type == WsEventCatalog.AutofocusShotComplete) {
+                    recorded = tracker!.Snapshot().Probes.First(p => p.Phase == "smart");
+                }
+            });
+            tracker = rig.Tracker;
             using var _ = rig.Service;
 
             await rig.Service.RunAutofocusAsync(NoProgress, CancellationToken.None);
 
             var shot = rig.Events.First(e => e.Type == WsEventCatalog.AutofocusShotComplete);
             Assert.That(shot.Payload.TryGetProperty("asymmetry", out var _), Is.False, "no stars, no asymmetry");
+            Assert.That(recorded, Is.Not.Null);
+            Assert.That(recorded!.Asymmetry, Is.Null, "the run record stores none either");
         }
 
         [Test]
