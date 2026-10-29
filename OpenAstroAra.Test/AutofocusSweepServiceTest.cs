@@ -296,6 +296,7 @@ namespace OpenAstroAra.Test {
 
             Assert.That(moves.DefaultIfEmpty(position).Max(), Is.LessThanOrEqualTo(500));
             Assert.That(tracker.Snapshot().Reason, Does.Contain("wider than the focuser's travel"));
+            Assert.That(tracker.Snapshot().Reason, Does.Contain("Automatic step size"), "an automatic step says how to override it");
         }
 
         private static int IndexOfRun(List<int> moves, int first, int second) {

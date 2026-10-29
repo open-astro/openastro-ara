@@ -288,8 +288,13 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
             // A sweep wider than the travel cannot keep its probes inside it: the top ones would be refused
             // past MaxStep (or clamped, which breaks the downward-only approach). Say so instead of sweeping.
             var span = 2L * settings.Steps * settings.StepSize;
+            // Only a fully bounded travel can be compared: FocuserTravelAsync reports bounded, unbounded or none.
             if (travel.Min != int.MinValue && travel.Max != int.MaxValue && span > (long)travel.Max - travel.Min) {
-                return await FailAsync($"the sweep (±{settings.Steps} × {settings.StepSize} = {span} steps) is wider than the focuser's travel [{travel.Min}, {travel.Max}] — lower the step size or the number of steps",
+                // An automatic step the user never set says so, and how to override it.
+                var fix = stepSource == "manual"
+                    ? "lower the step size or the number of steps"
+                    : $"the step size was chosen automatically ({stepSource}) — turn off Settings → Imaging → Autofocus → Automatic step size and set a smaller one, or use fewer steps";
+                return await FailAsync($"the sweep (±{settings.Steps} × {settings.StepSize} = {span} steps) is wider than the focuser's travel [{travel.Min}, {travel.Max}] — {fix}",
                     restoreOnFailure, startPosition).ConfigureAwait(false);
             }
             // The overshoot every landing from above uses (one step, or 1.5× a measured backlash), read once.
@@ -329,8 +334,8 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
                 // backlash while every other sample is approached downward — and the topmost point is
                 // one of the two boundary points that most influence the fit. Overshoot above, then
                 // enter the sweep moving down.
-                // Clamped: on a travel too short for the whole sweep ClampSweepCentre can only keep the bottom
-                // probe inside it, and a focuser refuses a move past its MaxStep.
+                // Clamped: on a travel that holds the probes but not the overshoot above them, ClampSweepCentre
+                // can only keep the bottom probe inside it, and a focuser refuses a move past its MaxStep.
                 await _focuser.MoveFocuser((int)Math.Min((long)top + approach, travel.Max), token).ConfigureAwait(false);
                 for (var i = 0; i <= settings.Steps * 2; i++) {
                     token.ThrowIfCancellationRequested();
