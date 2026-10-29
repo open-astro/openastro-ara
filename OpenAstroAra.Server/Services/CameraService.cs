@@ -752,7 +752,7 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
         Justification = "Catch-classify-rethrow boundary: any device/driver exception during expose/download is published as the §42.2 op_error fault and rethrown unchanged to the caller's existing boundary; genuine cancellation is filtered first. CA1031's catch-classify-rethrow boundary applies.")]
     private async Task<(ushort[] Pixels, int Width, int Height, DateTimeOffset CapturedAt)?> ExposeAndDownloadAsync(
             AlpacaCamera client, Guid frameId, ExposureRequestDto request, string kind, CancellationToken ct) {
-        // Entry checkpoint: ApplyExposureSettings is up to 7 synchronous Alpaca round-trips with no
+        // Entry checkpoint: ApplyExposureSettings is up to 18 synchronous Alpaca round-trips with no
         // ct hook, so honor a cancel that arrived before any device work begins. Inert for REST.
         ct.ThrowIfCancellationRequested();
         var announced = false;
@@ -781,11 +781,11 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
         var timing = System.Diagnostics.Stopwatch.StartNew();
         ApplyExposureSettings(client, request);
         var settingsMs = timing.ElapsedMilliseconds;
-        // Stamp NOW, after the settings round-trips (up to 7 Alpaca calls — seconds on a slow
+        // Stamp NOW, after the settings round-trips (up to 18 Alpaca calls — seconds on a slow
         // bridge): DATE-OBS feeds plate-solving, so the FITS header must carry the actual
         // exposure start, not the request-accepted time the §60.5 response reported.
         var capturedAt = DateTimeOffset.UtcNow;
-        // A sequencer cancel during the up-to-7 ApplyExposureSettings round-trips above shouldn't
+        // A sequencer cancel during the up-to-18 ApplyExposureSettings round-trips above shouldn't
         // still kick off an exposure we'd only abort on the first ImageReady poll. Inert for REST
         // (CancellationToken.None).
         ct.ThrowIfCancellationRequested();
@@ -909,7 +909,7 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
     /// </summary>
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Catalog-registration boundary: any DB failure after a successful FITS write degrades to an Error log naming the recoverable file (the §28.8 startup scan re-registers it) rather than faulting the capture worker. CA1031's log-and-recover boundary applies.")]
-    private async Task<bool> CaptureCoreAsync(AlpacaCamera client, Guid frameId, ExposureRequestDto request, string imageType, FrameType frameType, string targetName, CancellationToken ct, DateOnly? night = null) {
+    private async Task<bool> CaptureCoreAsync(AlpacaCamera client, Guid frameId, ExposureRequestDto request, string imageType, FrameType frameType, string targetName, CancellationToken ct, DateOnly? night = null, bool saveInBackground = false) {
         // §29 — per-frame pre-capture free-space check: the disk monitor polls every 60 s, and a
         // burst of large frames can fill the volume between ticks. Blocks BEFORE the shutter
         // opens (an exposure that can't be saved is wasted sky time) — but only when the volume
@@ -963,38 +963,80 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
             coolerOn = _runtime.CoolerStateKnown ? _runtime.CoolerOn : null;
         }
         var conditions = await ReadConditionsBestEffortAsync(ct).ConfigureAwait(false);
-        var storeTiming = System.Diagnostics.Stopwatch.StartNew();
-        var filePath = WriteFrame(frameId, pixels, width, height, applied, imageType, capturedAt, focuserPos,
-            targetName: targetName, sensorTemp: sensorTemp, tempSetPoint: tempSetPoint, conditions: conditions,
-            pointing: pointing, rotatorMechanicalDeg: rotatorDeg, night: night);
-        var writeMs = storeTiming.ElapsedMilliseconds;
+        var job = new FrameSaveJob {
+            FrameId = frameId, Pixels = pixels, Width = width, Height = height, Request = request, Applied = applied,
+            ImageType = imageType, FrameType = frameType, TargetName = targetName, CapturedAt = capturedAt,
+            FocuserPosition = focuserPos, RotatorDeg = rotatorDeg, Pointing = pointing, SensorTemp = sensorTemp,
+            TempSetPoint = tempSetPoint, CoolerSetpointC = CoolerSetpointFrom(coolerOn, tempSetPoint), Conditions = conditions,
+            Night = night, SessionId = CaptureSessionScope.Current, CcdTemperatureC = CachedCcdTemperature(),
+        };
+        if (saveInBackground) {
+            if (frameType == FrameType.Light) {
+                // Recorded now, in capture order and before the sequencer's next step looks: Center
+                // After Drift reads the latest light right after the exposure returns. The feed waits
+                // for the save itself before it reads the frame (job.Saved).
+                RecordLightBestEffort(job);
+            }
+            // The sequencer's next exposure starts while this one is written (CameraService.Saving.cs).
+            await EnqueueSaveAsync(job, ct).ConfigureAwait(false);
+            return true;
+        }
         try {
-            await RegisterFrameAsync(frameId, request, frameType, targetName, capturedAt, filePath, width, height, focuserPos, appliedBin: applied.BinX,
-                rotatorMechanicalDeg: rotatorDeg, coolerSetpointC: CoolerSetpointFrom(coolerOn, tempSetPoint)).ConfigureAwait(false);
+            await SaveFrameAsync(job).ConfigureAwait(false);
         } catch (Exception ex) {
+            job.Saved.TrySetException(ex);
+            if (job.FilePath is null || job.Registered) {
+                throw;
+            }
             // The FITS is on disk but invisible to the catalog; name the path so an operator can
             // recover it — and the §28.8 startup orphan scan re-registers it on the next boot.
-            LogCatalogRegistrationFailed(ex, frameId, filePath);
+            LogCatalogRegistrationFailed(ex, frameId, job.FilePath);
             return false;
         }
-        LogCaptureComplete(frameId, width, height, filePath);
-        LogCaptureStoreTiming(frameId, writeMs, storeTiming.ElapsedMilliseconds - writeMs);
-        PrewarmPreview(frameId);
+        if (frameType == FrameType.Light) {
+            RecordLightBestEffort(job); // saved inline: only a light that landed becomes the latest
+        }
+        return true;
+    }
+
+    // Null when the camera reports no CCD temperature — recorded as NULL, not a fabricated 0.0
+    // (the same honesty rule as gain, #670). _runtime is written under _gate; read it there too.
+    private double? CachedCcdTemperature() {
+        lock (_gate) {
+            return _runtime.CcdTemperature;
+        }
+    }
+
+    /// <summary>Enrichment once a frame is on disk and in the catalog, all off the capture path.</summary>
+    private void AfterFrameSaved(FrameSaveJob job) {
+        PrewarmPreview(job.FrameId);
         // #1140 P2 — the sky background is measured for EVERY frame type, off the capture path and
         // apart from the HFR queue: a flat or dark records its level, a starless or cloudy light
         // still has a background the calibration fit can read, and a light the 2-slot HFR queue
         // had to drop is measured all the same.
-        _ = Task.Run(() => MeasureBackgroundAsync(frameId, pixels), CancellationToken.None);
-        if (frameType == FrameType.Light) {
-            _savedLights?.RecordLightSaved(frameId);
+        _ = Task.Run(() => MeasureBackgroundAsync(job.FrameId, job.Pixels), CancellationToken.None);
+        if (job.FrameType == FrameType.Light) {
             // §59.5 — off the capture path: HFR/star analysis of a full frame takes real CPU
             // time, and delaying frame.complete (or the next exposure) for a statistic is the
             // wrong trade. The pixels are already in hand; the write-back lands as
             // frame.analyzed when done.
-            QueueFrameAnalysis(frameId, pixels, width, height,
-                string.IsNullOrWhiteSpace(request.FilterName) ? null : request.FilterName, request.ExposureSec);
+            QueueFrameAnalysis(job.FrameId, job.Pixels, job.Width, job.Height,
+                string.IsNullOrWhiteSpace(job.Request.FilterName) ? null : job.Request.FilterName, job.Request.ExposureSec);
         }
-        return true;
+        FrameSavedHook?.Invoke(job.FrameId);
+    }
+
+    // Test seam: runs last in the post-save enrichment.
+    internal Action<Guid>? FrameSavedHook { get; set; }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "The solve feed is enrichment for Center After Drift: its fault must never cost the frame.")]
+    private void RecordLightBestEffort(FrameSaveJob job) {
+        try {
+            _savedLights?.RecordLightSaved(job.FrameId, job.Saved.Task);
+        } catch (Exception ex) {
+            LogFrameEnrichmentFailed(ex, job.FrameId);
+        }
     }
 
     /// <summary>#1140 P2 — one count-array pass over the frame, written to the catalog row. Best
@@ -1167,28 +1209,54 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
     // must not abort the capture; subframe defaults to full sensor when unspecified. Subframe
     // bounds are deliberately NOT pre-validated: an out-of-bounds subframe logs + falls back to the
     // driver's current framing (per-setting-guarded strategy) rather than failing the capture.
+    //
+    // Each setting is read first and written only when the camera holds something else: on
+    // AlpacaBridge a read costs ~1 ms and a binning or subframe write ~47 ms (the SDK reconfigures),
+    // so rewriting all eight cost ~0.3 s of every frame on a CM4. Reading the camera, not a cache of
+    // what Ara last wrote, keeps this right after a bridge restart or another client's change.
     private void ApplyExposureSettings(AlpacaCamera client, ExposureRequestDto request) {
-        TrySet(() => client.BinX = (short)request.BinX, "BinX");
-        TrySet(() => client.BinY = (short)request.BinY, "BinY");
+        TrySet(() => WriteIfChanged(() => client.BinX, v => client.BinX = (short)v, request.BinX, "BinX"), "BinX");
+        TrySet(() => WriteIfChanged(() => client.BinY, v => client.BinY = (short)v, request.BinY, "BinY"), "BinY");
         if (request.Gain is int gain) {
-            TrySet(() => client.Gain = (short)gain, "Gain");
+            TrySet(() => WriteIfChanged(() => client.Gain, v => client.Gain = (short)v, gain, "Gain"), "Gain");
         }
         if (request.CameraOffset is int cameraOffset) {
-            TrySet(() => client.Offset = cameraOffset, "Offset");
+            TrySet(() => WriteIfChanged(() => client.Offset, v => client.Offset = v, cameraOffset, "Offset"), "Offset");
         }
         TrySet(() => {
             var maxX = client.CameraXSize / request.BinX;
             var maxY = client.CameraYSize / request.BinY;
             var startX = Math.Clamp(request.OffsetX ?? 0, 0, Math.Max(0, maxX - 1));
             var startY = Math.Clamp(request.OffsetY ?? 0, 0, Math.Max(0, maxY - 1));
-            client.StartX = startX;
-            client.StartY = startY;
+            WriteIfChanged(() => client.StartX, v => client.StartX = v, startX, "StartX");
+            WriteIfChanged(() => client.StartY, v => client.StartY = v, startY, "StartY");
             // Clamp to at least 1px so an off-sensor offset can't drive NumX/NumY negative (the
             // driver throw would be logged as "unsupported", which would be misleading).
-            client.NumX = Math.Max(1, Math.Min(request.Width ?? maxX, maxX - startX));
-            client.NumY = Math.Max(1, Math.Min(request.Height ?? maxY, maxY - startY));
+            WriteIfChanged(() => client.NumX, v => client.NumX = v, Math.Max(1, Math.Min(request.Width ?? maxX, maxX - startX)), "NumX");
+            WriteIfChanged(() => client.NumY, v => client.NumY = v, Math.Max(1, Math.Min(request.Height ?? maxY, maxY - startY)), "NumY");
         }, "subframe");
     }
+
+    // A setting that can't be read is written, as before this check existed.
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "A failed read only means 'unknown': the write goes ahead and the per-setting TrySet boundary handles its own failure.")]
+    private void WriteIfChanged(Func<int> read, Action<int> write, int wanted, string setting) {
+        int current;
+        try {
+            current = read();
+        } catch (Exception ex) {
+            // Visible when timing frames: a driver whose reads always fail gets every write again.
+            LogExposureSettingUnread(ex, setting);
+            write(wanted);
+            return;
+        }
+        if (current != wanted) {
+            write(wanted);
+        }
+    }
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Camera setting {Setting} could not be read before the exposure; writing it")]
+    private partial void LogExposureSettingUnread(Exception ex, string setting);
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Per-setting write boundary: an optional exposure setting unsupported by the driver throws; it is logged and skipped so the capture proceeds with device defaults. CA1031's log-and-recover boundary applies.")]
@@ -1333,7 +1401,10 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
         // not a directory of UUIDs. Any failure in naming falls back to the
         // id-based name: naming must never cost a frame.
         var path = ResolveTemplatedPath(dir, frameId, request, imageType, capturedAt, targetName, sensorTemp, night, options.Extension);
-        using var fits = FrameFileWriter.Create(path, width, height, options);
+        using var file = FrameFileWriter.Create(path, width, height, options);
+        // A NaN reading (a rotator, a sensor, a weather station) is skipped, not thrown, so it costs
+        // only its own card, never the frame (see FiniteHeaderWriter; its Dispose leaves the file open).
+        using var fits = new FiniteHeaderWriter(file);
         fits.WriteImageData(pixels);
         // FITS convention + case-sensitive calibration matchers/plate-solvers want an uppercase
         // IMAGETYP; Validate() accepts the type case-insensitively, so normalize here at the write.
@@ -1437,11 +1508,7 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Header enrichment is best-effort by design: profile reads can throw arbitrary IO exceptions and a missing optional header must never fail the frame write. CA1031's log-and-recover boundary applies.")]
-    private void WriteStandardHeaders(IFrameFileWriter fits, ExposureRequestDto request, string? targetName, double? sensorTemp, double? tempSetPoint, ObservingConditionsDto? conditions, DateTimeOffset capturedAt, FramePointing? pointing = null) {
-        // A NaN reading is skipped, not thrown, so it costs only its own card (see FiniteHeaderWriter;
-        // its Dispose leaves the real writer open).
-        using var finite = new FiniteHeaderWriter(fits);
-        fits = finite;
+    private void WriteStandardHeaders(FiniteHeaderWriter fits, ExposureRequestDto request, string? targetName, double? sensorTemp, double? tempSetPoint, ObservingConditionsDto? conditions, DateTimeOffset capturedAt, FramePointing? pointing = null) {
         try {
             // §29.2 — the user chooses which optional groups their frames
             // carry (Files & headers panel). All-on is the default; the off
@@ -1598,7 +1665,7 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
     /// </summary>
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Best-effort ephemeris for optional headers: any math fault must never fail the frame write. CA1031's log-and-recover boundary applies.")]
-    private void WriteEphemerisHeaders(IFrameFileWriter fits, SiteSettingsDto site, DateTimeOffset capturedAt) {
+    private void WriteEphemerisHeaders(FiniteHeaderWriter fits, SiteSettingsDto site, DateTimeOffset capturedAt) {
         try {
             // The frame's own capture instant — wall-clock at header-write
             // time would drift by the exposure length plus readout.
@@ -1762,7 +1829,9 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
             var candidate = Path.Combine(rootDir, relative + extension);
             var parent = Path.GetDirectoryName(candidate);
             if (parent is not null) Directory.CreateDirectory(parent);
-            for (var n = 2; File.Exists(candidate); n++) {
+            // Taken in either container: thumbnails and previews are keyed on the stem, so a
+            // format switch must not put Light.fits and Light.xisf side by side.
+            for (var n = 2; FrameStemTaken(candidate); n++) {
                 candidate = Path.Combine(rootDir, $"{relative} ({n}){extension}");
             }
             return candidate;
@@ -1770,6 +1839,11 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
             LogTemplateNamingFailed(ex, frameId);
             return fallback;
         }
+    }
+
+    private static bool FrameStemTaken(string candidate) {
+        var stem = Path.ChangeExtension(candidate, null);
+        return FrameFileReader.FrameExtensions.Any(ext => File.Exists(stem + ext));
     }
 
     // Session-scoped counter: monotonic per daemon lifetime, seeded from the
@@ -1824,23 +1898,20 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
     // appliedBin: the binning the driver ACTUALLY used (read back after the exposure, like XBINNING in
     // the header), not the requested one — a driver can coerce a 2 to 1, and the #1140 pixel scale
     // must follow the frame. Null = no read-back available (the request's value is the best we have).
-    internal async Task RegisterFrameAsync(Guid frameId, ExposureRequestDto request, FrameType frameType, string targetName, DateTimeOffset capturedAt, string filePath, int width, int height, int? focuserPosition = null, int? appliedBin = null, double? rotatorMechanicalDeg = null, double? coolerSetpointC = null) {
+    internal async Task RegisterFrameAsync(Guid frameId, ExposureRequestDto request, FrameType frameType, string targetName, DateTimeOffset capturedAt, string filePath, int width, int height, int? focuserPosition = null, int? appliedBin = null, double? rotatorMechanicalDeg = null, double? coolerSetpointC = null, Guid? sessionId = null, double? ccdTemperatureC = null) {
         // §40/§50 — a capture that runs INSIDE a sequence run carries the run's
         // catalog session via the ambient CaptureSessionScope (AsyncLocal set by
         // the run worker); everything else — the REST snapshot path — falls back
         // to the shared manual-capture bucket as before.
-        var sessionId = CaptureSessionScope.Current
+        // A background save passes the session it was captured in: the run may have moved on by now.
+        sessionId ??= CaptureSessionScope.Current
             ?? await _frames!.EnsureManualCaptureSessionAsync(CancellationToken.None).ConfigureAwait(false);
         var fileSize = new FileInfo(filePath).Length;
-        double? ccdTemp;
-        lock (_gate) {
-            // Null when the camera reports no CCD temperature — recorded as NULL,
-            // not a fabricated 0.0 (the same honesty rule as gain, #670).
-            ccdTemp = _runtime.CcdTemperature; // _runtime is written under _gate; read it there too
-        }
+        // A background save passes the reading taken at capture; registration may run a frame later.
+        var ccdTemp = ccdTemperatureC ?? CachedCcdTemperature();
         await _frames!.InsertAsync(new FrameDto(
             Id: frameId,
-            SessionId: sessionId,
+            SessionId: sessionId.Value,
             TargetName: targetName,
             FrameType: frameType,
             FilterName: string.IsNullOrWhiteSpace(request.FilterName) ? null : request.FilterName,
@@ -2455,6 +2526,13 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
             IdempotencyKey: idempotencyKey);
 
     public void Dispose() {
+        lock (_gate) {
+            if (_disposed) {
+                return;
+            }
+        }
+        // The run's last frames land before the camera goes (bounded; a stuck save is logged).
+        FinishPendingSavesForDispose();
         AlpacaCamera? client;
         lock (_gate) {
             if (_disposed) {

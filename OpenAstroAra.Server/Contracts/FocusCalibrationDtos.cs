@@ -39,7 +39,10 @@ public sealed record FocusCalibrationSampleDto(
     // §59.3 — appended with a default so a pre-skew profile.json (or hand-built DTO) reads as 0; a flat-0
     // skew auto-fails the side-classifier's separation gate, and the next successful sweep re-records with
     // real values, so old calibrations self-heal rather than needing a migration.
-    double MedianRadialSkew = 0.0) {
+    double MedianRadialSkew = 0.0,
+    // #1139 — the rim-vs-core asymmetry, appended the same way: a calibration recorded before it reads 0 (no
+    // separation, so the classifier never qualifies it) until the next sweep re-records.
+    double MedianRimCoreAsymmetry = 0.0) {
 
     /// <summary>Flatten a probe's measured feature vector into the wire shape (the sweep's store path).</summary>
     public static FocusCalibrationSampleDto From(int focuserPosition, FocusFeatureVector features) {
@@ -55,7 +58,8 @@ public sealed record FocusCalibrationSampleDto(
             MedianDonutInnerDiameter: features.MedianDonutInnerDiameter,
             MedianRingThickness: features.MedianRingThickness,
             MedianDonutShadowDepth: features.MedianDonutShadowDepth,
-            MedianRadialSkew: features.MedianRadialSkew);
+            MedianRadialSkew: features.MedianRadialSkew,
+            MedianRimCoreAsymmetry: features.MedianRimCoreAsymmetry);
     }
 
     /// <summary>Rebuild the Image-layer sample this DTO stores — the <c>FocusInverseMap.Build</c> load path
@@ -65,7 +69,7 @@ public sealed record FocusCalibrationSampleDto(
         new FocusFeatureVector(
             StarCount, MedianHfr, MedianFwhm, MedianRoundness, MedianPeakToBackground,
             MedianDonutOuterDiameter, MedianDonutInnerDiameter, MedianRingThickness,
-            MedianDonutShadowDepth, MedianRadialSkew));
+            MedianDonutShadowDepth, MedianRadialSkew, MedianRimCoreAsymmetry));
 }
 
 /// <summary>
@@ -95,9 +99,10 @@ public sealed record FocusCalibrationSampleDto(
 /// 0 = none detected. Null when the probe could not measure (too few stars, no usable model) or on a calibration
 /// recorded before this field existed. Only the upward direction matters: every other move approaches from above.</param>
 /// <param name="BacklashVerified">True when a compensated upward move (best + <see cref="BacklashUpSteps"/>) landed back
-/// at the baseline HFR. Recorded for the run record and the user only: since 2026-10-17 Smart Focus enters its + bracket
-/// shot from above (an overshoot of one bracket) and no longer compensates an upward move, so nothing acts on this
-/// pair (#1385 — the probe at the V's flat bottom verified 0 on a ZWO EAF that then landed ≈ 40 steps short).</param>
+/// at the baseline HFR. Recorded for the run record. Moves are never compensated by adding steps: every landing comes
+/// down from above, and <see cref="BacklashUpSteps"/> only sizes that overshoot (1.5×, never less than one sweep step;
+/// <c>AutofocusSweepService.ApproachOvershoot</c>), so an under-measured value (#1385: 0 on a ZWO EAF that landed
+/// ≈ 40 steps short) still leaves the one-step floor.</param>
 public sealed record FocusCalibrationDto(
     IReadOnlyList<FocusCalibrationSampleDto> Samples,
     DateTimeOffset CalibratedUtc,

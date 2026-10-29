@@ -216,6 +216,98 @@ namespace OpenAstroAra.Test {
             Assert.That(Current(), Is.EqualTo(11_700).Within(30));
         }
 
+        [Test]
+        public async Task The_sweep_overshoots_by_the_measured_backlash_and_stays_inside_the_travel() {
+            // §59.7 — a calibration that measured 150 steps of backlash: the sweep's entry and its final landing
+            // come down from 1.5× that (225) above, and the centre clamp leaves room for it under the travel's
+            // top (the overshoot used to be one step, and the clamp reserved one step).
+            const int maxPosition = 12_000;
+            var (focuser, moves) = Focuser();
+            int Current() => moves.Count == 0 ? StartPosition : moves[^1];
+            var profiles = Profiles(Settings(steps: 4, stepSize: 100));
+            // No samples: the Smart path has no map to run on, so the Classic sweep runs with this backlash.
+            profiles.Setup(p => p.GetFocusCalibration()).Returns(new FocusCalibrationDto([], DateTimeOffset.UnixEpoch, null, null, BacklashUpSteps: 150));
+            using var svc = new AutofocusSweepService(
+                profiles.Object, focuser.Object, Frames().Object,
+                metric: VCurveMetric(Current, 11_700),
+                coarseMetric: (_, _) => 1e6 - Current(),
+                travelRange: _ => Task.FromResult<(int Min, int Max)?>((0, maxPosition)));
+
+            var ok = await svc.RunAutofocusAsync(NoProgress, CancellationToken.None);
+
+            Assert.That(ok, Is.True);
+            Assert.That(moves.Max(), Is.LessThanOrEqualTo(maxPosition), "the larger overshoot stays inside the travel");
+            // The centre clamps to 12 000 − 4·100 − 225 = 11 375, so the probes run 11 775 down to 10 975.
+            var top = IndexOfRun(moves, 11_775, 11_675);
+            Assert.That(top, Is.GreaterThan(0), "the fine sweep ran from 11 775 down");
+            Assert.That(moves[top - 1], Is.EqualTo(11_775 + 225), "entered from 225 above the top probe");
+            var bottom = moves.IndexOf(10_975, top);
+            Assert.That(bottom, Is.GreaterThan(top));
+            Assert.That(moves[bottom + 1] - moves[bottom + 2], Is.EqualTo(225), "the final landing comes down from 225 above best");
+            Assert.That(Current(), Is.EqualTo(11_700).Within(30));
+        }
+
+        [Test]
+        public async Task On_a_travel_too_short_for_the_sweep_the_entry_overshoot_stops_at_the_top() {
+            // Travel 0..1000 cannot hold ±4·100 plus a 225-step overshoot: the centre clamps to 400 (the bottom
+            // probe at 0), the top probe sits at 800, and the entry must stop at 1000, not 1025.
+            const int maxPosition = 1_000;
+            var moves = new List<int>();
+            var position = 500; // inside the travel
+            var focuser = new Mock<IFocuserMediator>();
+            focuser.Setup(f => f.GetInfo()).Returns(() => new FocuserInfo { Connected = true, Position = position, Temperature = double.NaN });
+            focuser.Setup(f => f.MoveFocuser(It.IsAny<int>(), It.IsAny<CancellationToken>()))
+                .Returns<int, CancellationToken>((p, _) => { position = p; moves.Add(p); return Task.FromResult(p); });
+            int Current() => position;
+            var profiles = Profiles(Settings(steps: 4, stepSize: 100));
+            profiles.Setup(p => p.GetFocusCalibration()).Returns(new FocusCalibrationDto([], DateTimeOffset.UnixEpoch, null, null, BacklashUpSteps: 150));
+            using var svc = new AutofocusSweepService(
+                profiles.Object, focuser.Object, Frames().Object,
+                metric: VCurveMetric(Current, 450),
+                coarseMetric: (_, _) => Current(),
+                travelRange: _ => Task.FromResult<(int Min, int Max)?>((0, maxPosition)));
+
+            await svc.RunAutofocusAsync(NoProgress, CancellationToken.None);
+
+            var top = IndexOfRun(moves, 800, 700);
+            Assert.That(top, Is.GreaterThan(0), "the fine sweep ran from 800 down");
+            Assert.That(moves[top - 1], Is.EqualTo(maxPosition), "entered from the top of the travel, not 800 + 225");
+        }
+
+        [Test]
+        public async Task A_sweep_wider_than_the_travel_fails_without_moving_past_it() {
+            // ±4·100 spans 800 steps; a 0..500 travel cannot hold it, so the sweep says so instead of commanding
+            // probes above MaxStep.
+            var moves = new List<int>();
+            var position = 250;
+            var focuser = new Mock<IFocuserMediator>();
+            focuser.Setup(f => f.GetInfo()).Returns(() => new FocuserInfo { Connected = true, Position = position, Temperature = double.NaN });
+            focuser.Setup(f => f.MoveFocuser(It.IsAny<int>(), It.IsAny<CancellationToken>()))
+                .Returns<int, CancellationToken>((p, _) => { position = p; moves.Add(p); return Task.FromResult(p); });
+            var tracker = new AutofocusRunTracker();
+            using var svc = new AutofocusSweepService(
+                Profiles(Settings(steps: 4, stepSize: 100)).Object, focuser.Object, Frames().Object,
+                tracker: tracker,
+                metric: VCurveMetric(() => position, 250),
+                coarseMetric: (_, _) => position,
+                travelRange: _ => Task.FromResult<(int Min, int Max)?>((0, 500)));
+
+            Assert.That(await svc.RunAutofocusAsync(NoProgress, CancellationToken.None), Is.False);
+
+            Assert.That(moves.DefaultIfEmpty(position).Max(), Is.LessThanOrEqualTo(500));
+            Assert.That(tracker.Snapshot().Reason, Does.Contain("wider than the focuser's travel"));
+            Assert.That(tracker.Snapshot().Reason, Does.Contain("Automatic step size"), "an automatic step says how to override it");
+        }
+
+        private static int IndexOfRun(List<int> moves, int first, int second) {
+            for (int i = 0; i + 1 < moves.Count; i++) {
+                if (moves[i] == first && moves[i + 1] == second) {
+                    return i;
+                }
+            }
+            return -1;
+        }
+
         [TestCase(true, 30_000, 0, 30_000)]
         [TestCase(false, 30_000, int.MinValue, int.MaxValue)] // relative focuser: no travel stop
         [TestCase(true, 0, null, null)]       // range not reported yet
@@ -813,6 +905,51 @@ namespace OpenAstroAra.Test {
             Assert.That(ok, Is.True);
             Assert.That(moves[0], Is.EqualTo(StartPosition + 500));
             Assert.That(moves.GetRange(1, 9).Zip(moves.GetRange(2, 8), (a, b) => a - b), Has.All.EqualTo(100));
+        }
+
+        [Test]
+        public async Task The_run_record_carries_each_kept_probes_rim_core_asymmetry() {
+            // #1139 — a kept fine probe records its median rim-vs-core asymmetry (−0.3 below best, +0.3 above on
+            // this sky); a probe dropped for too few stars records none.
+            var settings = Settings(steps: 4, stepSize: 100);
+            var (focuser, moves) = Focuser();
+            int Current() => moves.Count == 0 ? StartPosition : moves[^1];
+            var best = StartPosition - 150;
+            var tracker = new AutofocusRunTracker();
+            using var svc = new AutofocusSweepService(
+                Profiles(settings).Object, focuser.Object, Frames().Object, tracker: tracker,
+                metric: (_, _) => {
+                    var position = Current();
+                    var delta = (position - best) / 100.0;
+                    var hfr = 1.5 + 0.2 * delta * delta;
+                    // The top probe sees only 2 stars and is dropped.
+                    var count = position == StartPosition + 400 ? 2 : 42;
+                    var asymmetry = position < best ? -0.3 : 0.3;
+                    var stars = new List<DetectedStar>();
+                    for (int i = 0; i < count; i++) {
+                        stars.Add(new DetectedStar { HFR = hfr, FWHM = hfr * 2, Roundness = 0.9, PeakToBackground = 8, RimCoreAsymmetry = asymmetry });
+                    }
+                    return Result(hfr, count, stars);
+                });
+
+            Assert.That(await svc.RunAutofocusAsync(NoProgress, CancellationToken.None), Is.True);
+
+            var fine = tracker.Snapshot().Probes.Where(p => p.Phase == "fine").ToList();
+            Assert.Multiple(() => {
+                Assert.That(fine.Single(p => p.Position == StartPosition + 400).Asymmetry, Is.Null, "the dropped probe");
+                Assert.That(fine.Where(p => p.Kept && p.Position < best).Select(p => p.Asymmetry), Is.All.EqualTo(-0.3));
+                Assert.That(fine.Where(p => p.Kept && p.Position > best).Select(p => p.Asymmetry), Is.All.EqualTo(0.3));
+            });
+        }
+
+        [Test]
+        public void The_tracker_rounds_a_probes_asymmetry_and_drops_a_non_finite_one() {
+            var tracker = new AutofocusRunTracker();
+            Assert.Multiple(() => {
+                Assert.That(tracker.AddProbe("fine", 100, 2.0, 40, true, 0.123456).Asymmetry, Is.EqualTo(0.123));
+                Assert.That(tracker.AddProbe("fine", 200, 2.0, 40, true, double.NaN).Asymmetry, Is.Null);
+                Assert.That(tracker.AddProbe("coarse", 300, 2.0, 0, true).Asymmetry, Is.Null);
+            });
         }
 
         [Test]

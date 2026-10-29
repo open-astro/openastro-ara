@@ -25,9 +25,12 @@ using System.Threading.Tasks;
 
 namespace OpenAstroAra.Server.Services;
 
-/// <summary>The side the camera's capture path writes to: one call per saved LIGHT frame.</summary>
+/// <summary>The side the camera's capture path writes to: one call per LIGHT frame, in capture order.</summary>
 public interface ISavedLightSink {
-    void RecordLightSaved(Guid frameId);
+    /// <param name="saved">Completes once the frame is on disk and in the catalog (faults when it never
+    /// is). Sequence frames are saved in the background, so a light is recorded before its save lands;
+    /// null means it is already saved.</param>
+    void RecordLightSaved(Guid frameId, Task? saved = null);
 }
 
 /// <summary>
@@ -48,6 +51,8 @@ public sealed partial class FrameSolveFeed : IFrameSolveFeed, ISavedLightSink, I
     private readonly SemaphoreSlim _solveGate = new(1, 1);
     private long _sequence;
     private SavedLight? _latest;
+    // Lights recorded before their background save landed, by id; removed once it does.
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<Guid, Task> _pendingSaves = new();
 
     public FrameSolveFeed(IFrameRepository? frames = null, IPlateSolveService? solver = null,
             IProfileService? profileService = null, Func<ITelescopeMediator?>? telescope = null,
@@ -62,7 +67,14 @@ public sealed partial class FrameSolveFeed : IFrameSolveFeed, ISavedLightSink, I
 
     public SavedLight? LatestLight => Volatile.Read(ref _latest);
 
-    public void RecordLightSaved(Guid frameId) {
+    public void RecordLightSaved(Guid frameId, Task? saved = null) {
+        if (saved is { IsCompleted: false }) {
+            _pendingSaves[frameId] = saved;
+            // Gone once the save settles either way: a solve asking later reads the catalog, where a
+            // frame that was never saved is simply missing (reported unsolved).
+            _ = saved.ContinueWith(_ => _pendingSaves.TryRemove(frameId, out var _), CancellationToken.None,
+                TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+        }
         var seq = Interlocked.Increment(ref _sequence);
         Volatile.Write(ref _latest, new SavedLight(frameId, seq, _clock()));
     }
@@ -78,6 +90,15 @@ public sealed partial class FrameSolveFeed : IFrameSolveFeed, ISavedLightSink, I
         }
         await _solveGate.WaitAsync(ct).ConfigureAwait(false);
         try {
+            if (_pendingSaves.TryGetValue(frameId, out var saved)) {
+                try {
+                    // The light was recorded at hand-off; its file and catalog row land with the save.
+                    await saved.WaitAsync(ct).ConfigureAwait(false);
+                } catch (Exception ex) when (ex is not OperationCanceledException) {
+                    LogFrameNeverSaved(frameId);
+                    return null;
+                }
+            }
             var frame = await _frames.GetAsync(frameId, ct).ConfigureAwait(false);
             if (frame is null || string.IsNullOrWhiteSpace(frame.FilePath)) {
                 LogFrameMissing(frameId);
@@ -126,6 +147,9 @@ public sealed partial class FrameSolveFeed : IFrameSolveFeed, ISavedLightSink, I
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Center after drift: frame {FrameId} is not in the catalog (or has no file) — not solved")]
     private partial void LogFrameMissing(Guid frameId);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Center after drift: frame {FrameId} was never saved — not solved")]
+    private partial void LogFrameNeverSaved(Guid frameId);
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Center after drift: frame {FrameId} did not plate-solve")]
     private partial void LogSolveFailed(Guid frameId);

@@ -288,7 +288,7 @@ namespace OpenAstroAra.Image.ImageAnalysis {
             // A single-pixel-tight star yields HFR 0; clamp to a small floor so it's a usable focus metric.
             double hfr = Math.Max(0.5, sumFR / sumF);
 
-            var (outerDiameter, innerDiameter, shadowDepth, centroidOffsetX, centroidOffsetY, radialSkew) =
+            var (outerDiameter, innerDiameter, shadowDepth, centroidOffsetX, centroidOffsetY, radialSkew, rimCore) =
                 DonutGeometry(blob, pixels, width, cx, cy, background);
 
             return new DetectedStar {
@@ -311,6 +311,7 @@ namespace OpenAstroAra.Image.ImageAnalysis {
                 DonutCentroidOffsetX = centroidOffsetX,
                 DonutCentroidOffsetY = centroidOffsetY,
                 RadialProfileSkew = radialSkew,
+                RimCoreAsymmetry = rimCore,
             };
         }
 
@@ -344,7 +345,7 @@ namespace OpenAstroAra.Image.ImageAnalysis {
         private const int DonutMinInnerRadiusBins = 2;
 
         private static (double OuterDiameter, double InnerDiameter, double ShadowDepth,
-                double CentroidOffsetX, double CentroidOffsetY, double RadialProfileSkew) DonutGeometry(
+                double CentroidOffsetX, double CentroidOffsetY, double RadialProfileSkew, double RimCoreAsymmetry) DonutGeometry(
                 ReadOnlySpan<int> blob, ReadOnlySpan<ushort> pixels, int width, double cx, double cy, double background) {
             double maxR = 0;
             foreach (int p in blob) {
@@ -382,7 +383,7 @@ namespace OpenAstroAra.Image.ImageAnalysis {
                 }
             }
             if (peakSb <= 0) {
-                return (0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
+                return (0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
             }
 
             // §59.3 — the radial-profile SKEW: the third standardized moment of the blob's radial flux
@@ -505,7 +506,68 @@ namespace OpenAstroAra.Image.ImageAnalysis {
                     offsetY = (wY / wSum) - cy;
                 }
             }
-            return (2.0 * outerBin, 2.0 * innerBin, shadowDepth, offsetX, offsetY, radialSkew);
+            var rimCore = RimCoreAsymmetry(flux, pixels, width, cx, cy, background);
+            return (2.0 * outerBin, 2.0 * innerBin, shadowDepth, offsetX, offsetY, radialSkew, rimCore);
+        }
+
+        // §59.3 (#1139) — below this R90 (pixels) a star has no rim and core to compare: the coefficient reads 0.
+        private const double RimCoreMinR90 = 3.0;
+        private const double CoreFraction = 0.3;
+        private const double RimInnerFraction = 0.6;
+        private const double RimOuterFraction = 0.9;
+
+        /// <summary>The rim-vs-core asymmetry (see <see cref="DetectedStar.RimCoreAsymmetry"/>). R90 comes from the
+        /// blob's radial flux (<paramref name="flux"/>, one bin per pixel of radius); the core and rim brightness are
+        /// sampled straight from the frame, so an obstruction shadow below the detection threshold — absent from the
+        /// blob — still reads as a dark core.</summary>
+        private static double RimCoreAsymmetry(ReadOnlySpan<double> flux, ReadOnlySpan<ushort> pixels, int width,
+                double cx, double cy, double background) {
+            double total = 0;
+            foreach (var f in flux) {
+                total += Math.Max(0.0, f);
+            }
+            if (total <= 0) {
+                return 0.0;
+            }
+            // R90, interpolated inside the bin that crosses 90% (bin b covers radii [b, b + 1)).
+            double target = 0.9 * total, cumulative = 0, r90 = flux.Length;
+            for (int b = 0; b < flux.Length; b++) {
+                double f = Math.Max(0.0, flux[b]);
+                if (cumulative + f >= target) {
+                    r90 = b + (f > 0 ? (target - cumulative) / f : 0.0);
+                    break;
+                }
+                cumulative += f;
+            }
+            if (r90 < RimCoreMinR90) {
+                return 0.0;
+            }
+            double coreR = CoreFraction * r90, rimR0 = RimInnerFraction * r90, rimR1 = RimOuterFraction * r90;
+            double coreR2 = coreR * coreR, rimR02 = rimR0 * rimR0, rimR12 = rimR1 * rimR1;
+            int height = pixels.Length / width;
+            double coreSum = 0, rimSum = 0;
+            int coreN = 0, rimN = 0;
+            int x0 = Math.Max(0, (int)Math.Floor(cx - rimR1)), x1 = Math.Min(width - 1, (int)Math.Ceiling(cx + rimR1));
+            int y0 = Math.Max(0, (int)Math.Floor(cy - rimR1)), y1 = Math.Min(height - 1, (int)Math.Ceiling(cy + rimR1));
+            for (int y = y0; y <= y1; y++) {
+                for (int x = x0; x <= x1; x++) {
+                    double dx = x - cx, dy = y - cy;
+                    double r2 = (dx * dx) + (dy * dy);
+                    double localFlux = pixels[(y * width) + x] - background;
+                    if (r2 < coreR2) {
+                        coreSum += localFlux;
+                        coreN++;
+                    } else if (r2 >= rimR02 && r2 <= rimR12) {
+                        rimSum += localFlux;
+                        rimN++;
+                    }
+                }
+            }
+            if (coreN == 0 || rimN == 0) {
+                return 0.0;
+            }
+            double core = Math.Max(0.0, coreSum / coreN), rim = Math.Max(0.0, rimSum / rimN);
+            return core + rim > 0 ? (rim - core) / (rim + core) : 0.0;
         }
 
         // For a 2D Gaussian the flux-weighted radial second moment ⟨r²⟩ = cxx + cyy equals 2σ², so

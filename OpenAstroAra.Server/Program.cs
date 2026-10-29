@@ -936,7 +936,9 @@ public partial class Program {
                 // §38.10 — resume-refinement deps (re-center + refocus before the
                 // gate releases), resolver-shaped like the §35 centering seam.
                 () => sp.GetService<ICenteringService>(),
-                () => sp.GetService<OpenAstroAra.Sequencer.SequenceItem.Autofocus.IAutofocusExecutor>()));
+                () => sp.GetService<OpenAstroAra.Sequencer.SequenceItem.Autofocus.IAutofocusExecutor>(),
+                // Background frame saves: a run waits for its last frames before it ends.
+                () => sp.GetService<ICameraService>()));
         builder.Services.AddSingleton<ISequencerService>(sp => sp.GetRequiredService<SequencerService>());
         // The same singleton as a hosted service so its IHostedService.StopAsync
         // cancels any in-flight sequence runs on daemon shutdown.

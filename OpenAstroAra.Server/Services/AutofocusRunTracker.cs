@@ -146,9 +146,10 @@ public sealed class AutofocusRunTracker {
         }
     }
 
-    public AutofocusProbeDto AddProbe(string phase, int position, double hfr, int stars, bool kept) {
+    public AutofocusProbeDto AddProbe(string phase, int position, double hfr, int stars, bool kept, double? asymmetry = null) {
         lock (_gate) {
-            var probe = new AutofocusProbeDto(_probes.Count + 1, phase, position, Finite(hfr), stars, kept);
+            var probe = new AutofocusProbeDto(_probes.Count + 1, phase, position, Finite(hfr), stars, kept,
+                asymmetry is double a && double.IsFinite(a) ? Math.Round(a, 3) : null);
             _probes.Add(probe);
             // Progress counts the fine sweep's probes, or a Smart run's shots (out of SmartMaxShots).
             if (phase is "fine" or "smart") {
