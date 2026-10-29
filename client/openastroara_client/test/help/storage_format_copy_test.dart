@@ -21,6 +21,24 @@ void main() {
     for (final text in [help, setting]) {
       expect(text, contains('.fits'));
       expect(text, contains('.xisf'));
+      expect(text, isNot(contains('profile')),
+          reason: 'the extension follows each frame, not the profile');
+    }
+  });
+
+  test('file-format copy names the stackers that need FITS', () {
+    final help = helpRegistry['session.storage.file_format']!.body;
+    final setting = settingsRegistry
+        .singleWhere((s) => s.id == 'session.storage.file_format')
+        .description;
+    for (final text in [help, setting]) {
+      for (final app in [
+        'Astro Pixel Processor',
+        'DeepSkyStacker',
+        'StackingWizard',
+      ]) {
+        expect(text, contains(app));
+      }
     }
   });
 }

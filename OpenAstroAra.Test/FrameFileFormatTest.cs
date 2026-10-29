@@ -459,6 +459,60 @@ namespace OpenAstroAra.Test {
             Assert.That(xisf, Is.EquivalentTo(fits));
         }
 
+        // ---- #1456 review notes ------------------------------------------------------------
+
+        [Test]
+        public void A_nan_rotator_reading_costs_only_its_own_card_in_either_container() {
+            // ROTATOR is written before the optional-header pass; a driver that reports NaN must
+            // not cost the frame there either.
+            string Write(FrameWriteOptions options) => _camera.WriteFrame(Guid.NewGuid(), Pattern(8, 8), 8, 8,
+                new ExposureRequestDto(ExposureSec: 60, Gain: 100), "LIGHT", Captured, focuserPosition: 100,
+                rotatorMechanicalDeg: double.NaN, options: options);
+            foreach (var options in new[] { FrameWriteOptions.PlainFits, new FrameWriteOptions(FrameFileFormat.Xisf, true) }) {
+                var headers = FrameFileReader.ReadHeaders(Write(options));
+                Assert.That(headers.ContainsKey("ROTATOR"), Is.False, options.Extension);
+                Assert.That(headers["FOCUSPOS"], Is.EqualTo("100"), options.Extension);
+                Assert.That(headers.ContainsKey("SWCREATE"), Is.True, $"{options.Extension}: the optional pass still runs");
+            }
+        }
+
+        [Test]
+        public void A_format_switch_does_not_reuse_the_other_containers_name() {
+            // The default template has no per-frame token, so the second frame's name collides
+            // with the first's. Thumbnails and previews are keyed on the stem, so Light.fits and
+            // Light.xisf side by side would share them.
+            UseStorage("fits", "zstd");
+            var fits = Capture(Pattern(8, 8), 8, 8);
+            UseStorage("xisf", "zstd");
+            var xisf = Capture(Pattern(8, 8), 8, 8);
+            UseStorage("fits", "zstd");
+            var fitsAgain = Capture(Pattern(8, 8), 8, 8);
+            var stem = Path.Combine(Path.GetDirectoryName(fits)!, Path.GetFileNameWithoutExtension(fits));
+            Assert.Multiple(() => {
+                Assert.That(xisf, Is.EqualTo(stem + " (2).xisf"));
+                Assert.That(fitsAgain, Is.EqualTo(stem + " (3).fits"));
+            });
+        }
+
+        [Test]
+        public void An_int32_xisf_property_never_carries_a_fraction() {
+            var path = Path.Combine(_root, "bin.xisf");
+            using (var writer = FrameFileWriter.Create(path, 2, 2, new FrameWriteOptions(FrameFileFormat.Xisf, false))) {
+                writer.WriteImageData(new ushort[4]);
+                writer.SetHeader("XBINNING", 2.0, "binning X");
+                writer.SetHeader("YBINNING", 2.5, "binning Y");
+                writer.Complete();
+            }
+            var image = XISF.ReadHeader(path).Image!;
+            var ns = image.Name.Namespace;
+            string? Property(string id) => image.Elements(ns + "Property").FirstOrDefault(p => p.Attribute("id")?.Value == id)?.Attribute("value")?.Value;
+            Assert.Multiple(() => {
+                Assert.That(Property("Instrument:Camera:XBinning"), Is.EqualTo("2"), "a whole double lands as the Int32 it is");
+                Assert.That(Property("Instrument:Camera:YBinning"), Is.Null, "a fraction is no Int32; the property is left out");
+                Assert.That(FrameFileReader.ReadHeaders(path)["YBINNING"], Is.EqualTo("2.5"), "the keyword still carries what was written");
+            });
+        }
+
         private sealed class RecordingLogger : Microsoft.Extensions.Logging.ILogger<CameraService> {
             public List<string> Messages { get; } = new();
             public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;

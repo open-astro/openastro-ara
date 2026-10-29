@@ -88,10 +88,10 @@ internal static class FrameFileWriter {
 }
 
 /// <summary>
-/// The optional-header pass's view of a frame writer: a non-finite reading (a weather station's NaN
-/// humidity) is left out the way a missing reading is. Both writers refuse NaN/±Infinity as CFITSIO
-/// does, and inside the one try block of the header pass that refusal used to cost every header
-/// after it, the sun and moon cards included. It does not own the inner writer.
+/// The capture path's view of a frame writer: a non-finite reading (a weather station's NaN
+/// humidity, a rotator's NaN angle) is left out the way a missing reading is. Both writers refuse
+/// NaN/±Infinity as CFITSIO does; in the frame's own cards that refusal cost the frame, and inside
+/// the optional-header pass's try block every header after it. It does not own the inner writer.
 /// </summary>
 internal sealed class FiniteHeaderWriter : IFrameFileWriter {
     private readonly IFrameFileWriter _inner;
@@ -324,6 +324,12 @@ internal sealed class XisfFrameWriter : IFrameFileWriter {
             case int whole:
                 header.AddImageProperty(id, whole * property.Scale, card.Comment, autoaddfits: false);
                 break;
+            case double number when property.Type == "Int32":
+                // Only a whole value is an Int32; a fraction keeps its FITS keyword and no property.
+                if (number == Math.Floor(number) && number is >= int.MinValue and <= int.MaxValue) {
+                    header.AddImageProperty(id, (int)number, card.Comment, autoaddfits: false);
+                }
+                break;
             case double number:
                 header.AddImageProperty(id, number * property.Scale, card.Comment, autoaddfits: false);
                 break;
@@ -407,6 +413,9 @@ internal static class FrameFileReader {
     public const string XisfExtension = ".xisf";
 
     private static readonly string[] FitsExtensions = [".fits", ".fit", ".fts"];
+
+    /// <summary>Every frame extension the reader knows, FITS and XISF.</summary>
+    public static readonly IReadOnlyList<string> FrameExtensions = [.. FitsExtensions, XisfExtension];
 
     public static bool IsXisf(string path) =>
         path.EndsWith(XisfExtension, StringComparison.OrdinalIgnoreCase);

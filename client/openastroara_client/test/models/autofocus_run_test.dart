@@ -88,4 +88,17 @@ void main() {
     expect(run.reason, contains('measurable'));
     expect(run.restoredPosition, 10000);
   });
+
+  test('a probe carries its rim-vs-core asymmetry when the daemon sends one', () {
+    final run = AutofocusRun.fromJson({
+      'state': 'complete',
+      'probes': [
+        {'index': 1, 'phase': 'smart', 'position': 10100, 'hfr': 2.4, 'stars': 80, 'kept': true, 'asymmetry': -0.42},
+        {'index': 2, 'phase': 'coarse', 'position': 9000, 'hfr': 6.1, 'stars': 0, 'kept': true},
+      ],
+      'fit': null,
+    });
+    expect(run.probes[0].asymmetry, -0.42);
+    expect(run.probes[1].asymmetry, isNull, reason: 'coarse probes and older daemons carry none');
+  });
 }
