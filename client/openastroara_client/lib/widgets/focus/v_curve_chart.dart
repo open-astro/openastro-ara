@@ -210,7 +210,9 @@ class VCurveChart extends StatelessWidget {
   static String tooltipText(double x, double y, List<AutofocusProbe> probes) {
     final base = '${x.round()} · HFR ${y.toStringAsFixed(2)}';
     for (final p in probes) {
-      if (p.position.toDouble() == x && p.hfr == y && p.asymmetry != null) {
+      // Within half a step and a hair of HFR, not exact equality: the spot is built from the probe, but a
+      // future rounding of the spots must not silently lose the match.
+      if ((p.position - x).abs() < 0.5 && (p.hfr - y).abs() < 1e-6 && p.asymmetry != null) {
         final a = p.asymmetry!;
         return '$base · rim/core ${a >= 0 ? '+' : ''}${a.toStringAsFixed(2)}';
       }
