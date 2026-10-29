@@ -190,7 +190,7 @@ class VCurveChart extends StatelessWidget {
             touchTooltipData: LineTouchTooltipData(
               getTooltipItems: (touched) => touched
                   .map((t) => LineTooltipItem(
-                        '${t.x.round()} · HFR ${t.y.toStringAsFixed(2)}',
+                        tooltipText(t.x, t.y, sweep),
                         const TextStyle(fontSize: 11, color: AraColors.textPrimary),
                       ))
                   .toList(),
@@ -201,6 +201,21 @@ class VCurveChart extends StatelessWidget {
         duration: const Duration(milliseconds: 150),
       ),
     );
+  }
+
+  /// A touched point's tooltip: position and HFR, plus the probe's rim-vs-core
+  /// asymmetry when the point is a probe that carries one (#1139) — which side
+  /// of focus its stars look like they are on. Fit-curve points have none.
+  @visibleForTesting
+  static String tooltipText(double x, double y, List<AutofocusProbe> probes) {
+    final base = '${x.round()} · HFR ${y.toStringAsFixed(2)}';
+    for (final p in probes) {
+      if (p.position.toDouble() == x && p.hfr == y && p.asymmetry != null) {
+        final a = p.asymmetry!;
+        return '$base · rim/core ${a >= 0 ? '+' : ''}${a.toStringAsFixed(2)}';
+      }
+    }
+    return base;
   }
 
   static LineChartBarData _dots(List<FlSpot> spots,

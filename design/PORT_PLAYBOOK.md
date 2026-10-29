@@ -8776,7 +8776,7 @@ Server runs a traditional 9-step Classic AF curve. At each step it records a fea
 - **Donut outer diameter** (obstructed scopes — SCT, Mak, RC, Newtonian)
 - **Donut inner diameter** (central obstruction shadow)
 - **Donut ring thickness** = outer − inner
-- **Asymmetry coefficient** — intra-focal vs extra-focal star profiles differ; this disambiguates "which side of focus" we're on
+- **Asymmetry coefficient** — intra-focal vs extra-focal star profiles differ; this disambiguates "which side of focus" we're on. Defined (#1139, 2026-10-28) as the rim-vs-core ratio **A = (rim − core) / (rim + core)**, per star, of the mean surface brightness in the core (r < 0.3·R90) and the rim (0.6·R90 ≤ r ≤ 0.9·R90), R90 being the radius that holds 90% of the star's light; the frame's value is the median over its stars. −1 = light in the core with a soft halo, +1 = light at the rim (or a dark obstruction hole), ≈ 0 = an evenly lit disc. The core is sampled from the frame, not only the detected blob, so an obstruction shadow below the detection threshold still reads dark. Not a focus measure (HFR/FWHM are): stars under 3 px (R90) read 0. Like the radial-profile skew, its sign per side depends on the rig's spherical aberration, so the side classifier learns it from the calibration sweep's labelled arms; both are candidates for refractors and obstructed scopes. Shown per probe in the run record (the V-curve tooltip) and on each Smart shot
 - **Median star roundness**
 - **Background-corrected star peak**
 - **Stars detected count**

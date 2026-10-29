@@ -39,7 +39,10 @@ public sealed record FocusCalibrationSampleDto(
     // §59.3 — appended with a default so a pre-skew profile.json (or hand-built DTO) reads as 0; a flat-0
     // skew auto-fails the side-classifier's separation gate, and the next successful sweep re-records with
     // real values, so old calibrations self-heal rather than needing a migration.
-    double MedianRadialSkew = 0.0) {
+    double MedianRadialSkew = 0.0,
+    // #1139 — the rim-vs-core asymmetry, appended the same way: a calibration recorded before it reads 0 (no
+    // separation, so the classifier never qualifies it) until the next sweep re-records.
+    double MedianRimCoreAsymmetry = 0.0) {
 
     /// <summary>Flatten a probe's measured feature vector into the wire shape (the sweep's store path).</summary>
     public static FocusCalibrationSampleDto From(int focuserPosition, FocusFeatureVector features) {
@@ -55,7 +58,8 @@ public sealed record FocusCalibrationSampleDto(
             MedianDonutInnerDiameter: features.MedianDonutInnerDiameter,
             MedianRingThickness: features.MedianRingThickness,
             MedianDonutShadowDepth: features.MedianDonutShadowDepth,
-            MedianRadialSkew: features.MedianRadialSkew);
+            MedianRadialSkew: features.MedianRadialSkew,
+            MedianRimCoreAsymmetry: features.MedianRimCoreAsymmetry);
     }
 
     /// <summary>Rebuild the Image-layer sample this DTO stores — the <c>FocusInverseMap.Build</c> load path
@@ -65,7 +69,7 @@ public sealed record FocusCalibrationSampleDto(
         new FocusFeatureVector(
             StarCount, MedianHfr, MedianFwhm, MedianRoundness, MedianPeakToBackground,
             MedianDonutOuterDiameter, MedianDonutInnerDiameter, MedianRingThickness,
-            MedianDonutShadowDepth, MedianRadialSkew));
+            MedianDonutShadowDepth, MedianRadialSkew, MedianRimCoreAsymmetry));
 }
 
 /// <summary>

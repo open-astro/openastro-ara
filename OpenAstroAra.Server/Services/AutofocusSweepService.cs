@@ -367,14 +367,17 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
                         // remaining points carry the fit. Too few survivors still fails below.
                         LogProbeSkipped(reached, stars, hfr);
                     }
-                    await RecordProbeAsync("fine", reached, hfr, stars, kept, totalProbes, kept ? frame : null).ConfigureAwait(false);
+                    // A kept probe's feature vector (the calibration sample) also gives the run record its
+                    // rim-vs-core asymmetry, the per-probe side signal the pane shows (#1139).
+                    var features = kept ? FocusFeatureExtractor.Extract(result) : null;
+                    await RecordProbeAsync("fine", reached, hfr, stars, kept, totalProbes, kept ? frame : null, features?.MedianRimCoreAsymmetry).ConfigureAwait(false);
                     if (!kept) {
                         continue;
                     }
                     points.Add(new FocusPoint(reached, hfr, stars));
                     pointBinned.Add(probeBinned);
                     probeStars.Add((reached, result.StarList));
-                    probeFeatures.Add((reached, FocusFeatureExtractor.Extract(result)));
+                    probeFeatures.Add((reached, features!));
                     frameWidth = frame.Width;
                     frameHeight = frame.Height;
                 }
@@ -534,8 +537,9 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
     /// <summary>One probe into the run record + the §59.15 <c>step_complete</c> event; a kept fine probe's
     /// frame is rendered as the run's current picture. Smart shots record but don't publish here (they
     /// have their own <c>shot_complete</c>).</summary>
-    private async Task RecordProbeAsync(string phase, int position, double hfr, int stars, bool kept, int totalSteps, AnalysisFrame? frame) {
-        var probe = _tracker?.AddProbe(phase, position, hfr, stars, kept);
+    private async Task RecordProbeAsync(string phase, int position, double hfr, int stars, bool kept, int totalSteps, AnalysisFrame? frame,
+            double? asymmetry = null) {
+        var probe = _tracker?.AddProbe(phase, position, hfr, stars, kept, asymmetry);
         if (frame is not null) {
             RenderFrameQuietly(frame, position, hfr);
         }

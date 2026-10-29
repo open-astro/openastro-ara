@@ -491,8 +491,9 @@ public sealed partial class AutofocusSweepService {
         // not the detector's AverageHFR — Smart decisions ride on one frame per step, so the median's
         // outlier resistance matters more here than in the 9-probe sweep.
         var hfr = features.MedianHFR;
-        LogSmartShot(shotIndex, position, hfr, features.StarCount);
-        await RecordProbeAsync("smart", position, hfr, features.StarCount, kept: true, totalSteps: SmartMaxShots, frame).ConfigureAwait(false);
+        LogSmartShot(shotIndex, position, hfr, features.StarCount, features.MedianRimCoreAsymmetry);
+        await RecordProbeAsync("smart", position, hfr, features.StarCount, kept: true, totalSteps: SmartMaxShots, frame,
+            features.MedianRimCoreAsymmetry).ConfigureAwait(false);
         return new SmartShot(hfr, features, result.NoiseFlooded);
     }
 
@@ -509,6 +510,8 @@ public sealed partial class AutofocusSweepService {
             ["position"] = position,
             ["hfr"] = double.IsFinite(shot.Hfr) ? Math.Round(shot.Hfr, 3) : 0.0,
             ["stars"] = shot.Features.StarCount,
+            // #1139 — the shot's rim-vs-core asymmetry: which side of focus its stars look like they are on.
+            ["asymmetry"] = Math.Round(shot.Features.MedianRimCoreAsymmetry, 3),
         };
         if (predictedOffset is { } offset) {
             payload["predicted_offset"] = offset;
@@ -583,8 +586,8 @@ public sealed partial class AutofocusSweepService {
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Information, Message = "Smart Focus skipped: calibration is thermally stale ({DriftC:0.#} °C drift > {LimitC} °C) — running the Classic sweep")]
     private partial void LogSmartSkippedStale(double driftC, double limitC);
 
-    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Information, Message = "Smart Focus shot {Shot}: position {Position} HFR {Hfr:0.###} ({Stars} stars)")]
-    private partial void LogSmartShot(int shot, int position, double hfr, int stars);
+    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Information, Message = "Smart Focus shot {Shot}: position {Position} HFR {Hfr:0.###} ({Stars} stars, rim-core asymmetry {Asymmetry:+0.00;-0.00;0.00})")]
+    private partial void LogSmartShot(int shot, int position, double hfr, int stars, double asymmetry);
 
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Information, Message = "Smart Focus direction {Direction:+#;-#} read from the frame (confidence {Confidence:0.##}, features: {Features}) — §59.3 side classifier")]
     private partial void LogSmartDirectionClassified(int direction, double confidence, string features);
