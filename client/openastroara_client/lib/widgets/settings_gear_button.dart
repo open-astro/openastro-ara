@@ -17,9 +17,7 @@ class SettingsGearButton extends ConsumerWidget {
     return IconButton(
       icon: Icon(open ? Icons.settings : Icons.settings_outlined,
           size: 22, color: open ? AraColors.accentInfo : null),
-      tooltip: Theme.of(context).platform == TargetPlatform.macOS
-          ? 'Settings (⌘,)'
-          : 'Settings (Ctrl+,)',
+      tooltip: 'Settings',
       onPressed: () =>
           ref.read(selectedTabIndexProvider.notifier).select(kOptionsTabIndex),
     );
