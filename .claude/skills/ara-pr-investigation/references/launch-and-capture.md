@@ -63,7 +63,7 @@ launch the `.app` detached:
 cd "$WT/client/openastroara_client"
 flutter pub get
 flutter build macos --debug; echo "build exit $?"
-open build/macos/Build/Products/Debug/openastroara.app
+open "build/macos/Build/Products/Debug/OpenAstro Ara.app"
 ```
 
 - An app launched with `open` needs macOS **Local Network** permission before

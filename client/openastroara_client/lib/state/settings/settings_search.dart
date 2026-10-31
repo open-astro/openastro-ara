@@ -282,13 +282,13 @@ const List<SettingsSearchEntry> _navEntries = <SettingsSearchEntry>[
   ),
   SettingsSearchEntry(
     tabIndex: kSetupTabIndex,
-    label: 'Go to Setup',
+    label: 'Go to Checklist',
     groupLabel: 'Navigate',
     keywords: ['setup', 'tonight', 'checklist', 'polar align', 'polar alignment', 'connect equipment', 'calibration', 'focusing', 'focus', 'autofocus', 'v-curve', 'guide camera focus'],
   ),
   SettingsSearchEntry(
     tabIndex: kRunTabIndex,
-    label: 'Go to Run',
+    label: 'Go to Sequence',
     groupLabel: 'Navigate',
     keywords: ['run', 'sequencer', 'sequence', 'session', 'start', 'progress'],
   ),
@@ -300,7 +300,7 @@ const List<SettingsSearchEntry> _navEntries = <SettingsSearchEntry>[
   ),
   SettingsSearchEntry(
     tabIndex: kOptionsTabIndex,
-    label: 'Go to Options',
+    label: 'Go to Settings',
     groupLabel: 'Navigate',
     keywords: ['options', 'settings', 'preferences', 'configuration'],
   ),

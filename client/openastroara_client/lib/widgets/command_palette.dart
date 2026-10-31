@@ -28,9 +28,9 @@ import 'sky_atlas/session_plan_dialog.dart';
 
 /// §61 ⌘K command palette. Opens as a centered dialog, indexes
 /// `settingsTree` via `buildSearchIndex()`, and on enter/click jumps to
-/// the matching settings panel (selects the Options tab + sets
+/// the matching settings panel (selects the Settings tab + sets
 /// `selectedSettingsPanelProvider`). §61.10 slice 1 adds tab NAVIGATION
-/// hits ("Go to Run", …) that switch the main tab instead.
+/// hits ("Go to Sequence", …) that switch the main tab instead.
 ///
 /// Future §61.10 phases extend the corpus further — sequence templates
 /// (§38), sky-atlas targets (§36), equipment ops like "Park now", etc.
@@ -139,12 +139,12 @@ class _CommandPaletteDialogState extends ConsumerState<_CommandPaletteDialog> {
     if (entry.settingId != null) {
       ref.read(highlightedSettingProvider.notifier).highlight(entry.settingId!);
     }
-    // Switch to the Options tab so the panel is visible.
+    // Switch to the Settings tab so the panel is visible.
     ref.read(selectedTabIndexProvider.notifier).select(kOptionsTabIndex);
     Navigator.of(context).pop();
   }
 
-  /// The Run tab's lifecycle-key gate (a saved, non-draft sequence selected
+  /// The Sequence tab's lifecycle-key gate (a saved, non-draft sequence selected
   /// on a connected rig, no command in flight), with a sentence where the
   /// keys stay silent — ⌘K has no toolbar in view to explain itself.
   static bool _runArmed(BuildContext rootContext, ProviderContainer container) {
@@ -157,7 +157,7 @@ class _CommandPaletteDialogState extends ConsumerState<_CommandPaletteDialog> {
     return armed;
   }
 
-  /// The run state is autoDispose and only the Run tab keeps it alive; when
+  /// The run state is autoDispose and only the Sequence tab keeps it alive; when
   /// that tab was never built a bare read sees loading. Hold a listen and
   /// wait for the value before branching (r2 note). A failed load branches on
   /// null, which the helpers treat as "not running".
@@ -181,7 +181,7 @@ class _CommandPaletteDialogState extends ConsumerState<_CommandPaletteDialog> {
 
   // The id → launcher switch for the palette's action hits. Mirrors the
   // top-bar buttons in app_shell.dart — same routes, same dialog. The run
-  // actions (#1154) go through the Run tab's own helpers, so ⌘K and the key
+  // actions (#1154) go through the Sequence tab's own helpers, so ⌘K and the key
   // shortcuts take exactly one path to the daemon.
   static void _runAction(BuildContext rootContext, ProviderContainer container, String actionId) {
     if (actionId.startsWith(templateActionPrefix)) {

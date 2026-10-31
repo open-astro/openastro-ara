@@ -16,18 +16,21 @@ import '../../state/equipment/weather_state.dart';
 import '../../state/faults/faults_state.dart';
 import '../../state/settings/settings_nav.dart';
 import '../../state/ws/ws_providers.dart';
+import '../../theme/ara_colors.dart';
 import '../equipment_chip.dart';
+import 'equipment_glyphs.dart';
 import '../status_indicator.dart';
 import 'guider_chip.dart';
 
 /// Maps a single-instance device's resolved status to the top-bar chip's dot.
-/// Pure → unit-testable. Connected → green (amber while a move/op is in flight),
+/// Pure → unit-testable. Connected → green (blinking green while exposing, slewing
+/// or moving),
 /// connecting → info, error → error, disconnected/unknown/null → grey.
 StatusLevel equipmentStatusLevel(EquipmentDeviceStatus? status) {
   if (status == null) return StatusLevel.disconnected;
   return switch (status.connectionState) {
     EquipmentConnectionState.connected =>
-      status.isBusy ? StatusLevel.busy : StatusLevel.connected,
+      status.isBusy ? StatusLevel.active : StatusLevel.connected,
     EquipmentConnectionState.connecting => StatusLevel.info,
     EquipmentConnectionState.error => StatusLevel.error,
     EquipmentConnectionState.disconnected ||
@@ -51,7 +54,7 @@ StatusLevel equipmentChipLevel<T extends EquipmentDeviceStatus>(
 /// The §25.3 top-bar equipment chips, in device-type order: each shows live
 /// connection status (green dot when connected) and, on tap, jumps to that
 /// device's Settings panel to connect/control it. GUIDE keeps its bespoke
-/// [GuiderChip] (own status type + OpenAstro Guider dialog); SW is multi-instance.
+/// [GuiderChip] (own status type; it opens the guider panel too); SW is multi-instance.
 class TopEquipmentChips extends StatelessWidget {
   const TopEquipmentChips({super.key});
 
@@ -61,60 +64,62 @@ class TopEquipmentChips extends StatelessWidget {
       children: [
         EquipmentStatusChip(
             icon: Icons.camera_alt,
-            label: 'CAM',
+            label: 'Camera',
             panelId: 'eq.camera',
             faultTypes: const {'camera'},
             watchLevel: (ref) => equipmentChipLevel(ref.watch(cameraStatusProvider))),
         EquipmentStatusChip(
             icon: Icons.filter_alt,
-            label: 'FW',
+            glyph: const EquipmentGlyph.filterWheel(color: AraColors.textPrimary),
+            label: 'Filter Wheel',
             panelId: 'eq.filterwheel',
             faultTypes: const {'filterwheel'},
             watchLevel: (ref) => equipmentChipLevel(ref.watch(filterWheelProvider))),
         EquipmentStatusChip(
             icon: Icons.adjust,
-            label: 'FOC',
+            label: 'Focuser',
             panelId: 'eq.focuser',
             faultTypes: const {'focuser'},
             watchLevel: (ref) => equipmentChipLevel(ref.watch(focuserProvider))),
         EquipmentStatusChip(
             icon: Icons.public,
-            label: 'MOUNT',
+            glyph: const EquipmentGlyph.telescope(color: AraColors.textPrimary),
+            label: 'Mount',
             panelId: 'eq.mount',
             faultTypes: const {'telescope'},
             watchLevel: (ref) => equipmentChipLevel(ref.watch(mountProvider))),
         EquipmentStatusChip(
             icon: Icons.rotate_right,
-            label: 'ROT',
+            label: 'Rotator',
             panelId: 'eq.rotator',
             faultTypes: const {'rotator'},
             watchLevel: (ref) => equipmentChipLevel(ref.watch(rotatorProvider))),
         const GuiderChip(),
         EquipmentStatusChip(
             icon: Icons.wb_sunny,
-            label: 'FLAT',
+            label: 'Flat Panel',
             panelId: 'eq.flat',
             // One physical device under two wire tokens (the reconnector
             // grouping) — the chip listens on both.
             faultTypes: const {'covercalibrator', 'flatdevice'},
             watchLevel: (ref) =>
                 equipmentChipLevel(ref.watch(flatPanelProvider))),
-        const SwitchStatusChip(icon: Icons.power, label: 'SW'),
+        const SwitchStatusChip(icon: Icons.power, label: 'Switch'),
         EquipmentStatusChip(
             icon: Icons.cloud_outlined,
-            label: 'WX',
+            label: 'Weather',
             panelId: 'eq.weather',
             faultTypes: const {'observingconditions'},
             watchLevel: (ref) => equipmentChipLevel(ref.watch(weatherProvider))),
         EquipmentStatusChip(
             icon: Icons.shield_outlined,
-            label: 'SAFE',
+            label: 'Safety',
             panelId: 'eq.safety',
             faultTypes: const {'safetymonitor'},
             watchLevel: (ref) => equipmentChipLevel(ref.watch(safetyMonitorProvider))),
         EquipmentStatusChip(
             icon: Icons.home_outlined,
-            label: 'DOME',
+            label: 'Dome',
             panelId: 'eq.dome',
             faultTypes: const {'dome'},
             watchLevel: (ref) => equipmentChipLevel(ref.watch(domeProvider))),
@@ -127,7 +132,7 @@ class TopEquipmentChips extends StatelessWidget {
 /// provider (called in build, so the watch registers a dependency) and maps it
 /// to the dot; on tap it jumps to the device's Settings panel. One widget serves
 /// every single-instance device — mirroring [GuiderChip], which is bespoke only
-/// because the guider has its own status type + OpenAstro Guider dialog.
+/// because the guider has its own status type.
 ///
 /// [faultTypes] are the device's `DeviceType` wire tokens in the §42 fault
 /// channel; a standing fault on any of them blends into the dot worst-of, so a
@@ -135,6 +140,7 @@ class TopEquipmentChips extends StatelessWidget {
 /// connection status still reads healthy.
 class EquipmentStatusChip extends ConsumerWidget {
   final IconData icon;
+  final Widget? glyph;
   final String label;
   final String panelId;
   final StatusLevel Function(WidgetRef ref) watchLevel;
@@ -143,6 +149,7 @@ class EquipmentStatusChip extends ConsumerWidget {
   const EquipmentStatusChip({
     super.key,
     required this.icon,
+    this.glyph,
     required this.label,
     required this.panelId,
     required this.watchLevel,
@@ -159,6 +166,7 @@ class EquipmentStatusChip extends ConsumerWidget {
         : StatusLevel.disconnected;
     return EquipmentChip(
       icon: icon,
+      glyph: glyph,
       label: label,
       status: level,
       onTap: () => openSettingsPanel(ref, panelId),

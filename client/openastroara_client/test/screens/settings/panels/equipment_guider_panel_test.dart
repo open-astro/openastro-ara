@@ -1,6 +1,12 @@
+import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/widgets/equipment/guider_calibration_dialog.dart';
+import 'package:openastroara/state/settings/panel_save_registry.dart';
+import 'package:openastroara/widgets/settings/editable_field.dart';
+import 'package:openastroara/widgets/equipment/guider_dialog.dart';
 import 'package:openastroara/models/guider_equipment_choices.dart';
 import 'package:openastroara/models/server.dart';
 import 'package:openastroara/screens/settings/panels/equipment_guider_panel.dart';
@@ -38,13 +44,18 @@ class _FakeProfileApi extends ProfileApi {
   _FakeProfileApi(this.stored) : super(_server);
   Phd2Settings stored;
   Phd2Settings? lastPut;
+  int puts = 0;
+  bool failGet = false;
   @override
-  Future<Phd2Settings> getPhd2Settings() async => stored;
+  Future<Phd2Settings> getPhd2Settings() async =>
+      failGet ? throw DioException(requestOptions: RequestOptions(path: "/profile/phd2")) : stored.copyWith();
   @override
   Future<Phd2Settings> putPhd2Settings(Phd2Settings value) async {
     lastPut = value;
+    puts++;
     stored = value;
-    return value;
+    // A new object, like the real API's parsed echo (not the instance sent).
+    return value.copyWith();
   }
 
   @override
@@ -118,10 +129,10 @@ typedef _Harness = ({
   _FakeAlpacaNames names,
 });
 
-Future<_Harness> _pump(WidgetTester tester, Phd2Settings stored) async {
+Future<_Harness> _pump(WidgetTester tester, Phd2Settings stored, {ValueListenable<bool>? show, bool failLoad = false}) async {
   await tester.binding.setSurfaceSize(const Size(1600, 2400));
   addTearDown(() => tester.binding.setSurfaceSize(null));
-  final profile = _FakeProfileApi(stored);
+  final profile = _FakeProfileApi(stored)..failGet = failLoad;
   final equipment = _FakeEquipmentApi();
   final names = _FakeAlpacaNames();
   await tester.pumpWidget(
@@ -132,7 +143,17 @@ Future<_Harness> _pump(WidgetTester tester, Phd2Settings stored) async {
         guiderEquipmentApiFactoryProvider.overrideWithValue((_) => equipment),
         alpacaDeviceNamesApiProvider.overrideWithValue(names),
       ],
-      child: const MaterialApp(home: Scaffold(body: EquipmentGuiderPanel())),
+      child: MaterialApp(
+        home: Scaffold(
+          body: show == null
+              ? const EquipmentGuiderPanel()
+              // Lets a test take the panel away while the app (and its providers) stay up.
+              : ValueListenableBuilder<bool>(
+                  valueListenable: show,
+                  builder: (_, visible, _) => visible ? const EquipmentGuiderPanel() : const SizedBox(),
+                ),
+        ),
+      ),
     ),
   );
   await tester.pumpAndSettle();
@@ -192,6 +213,106 @@ void main() {
           isNull);
       expect(describeUnservedAlpacaSelection(const Phd2Settings()), isNull);
     });
+  });
+
+  testWidgets('the panel embeds the guider link and the calibration screen entry (no popup)',
+      (tester) async {
+    await _pump(tester, const Phd2Settings());
+    expect(find.byType(GuiderConnectionSection), findsOneWidget);
+    expect(find.byType(GuiderCalibrationSection), findsOneWidget);
+  });
+
+  testWidgets('the guider profile is a picker with Automatic first, not a free-text field',
+      (tester) async {
+    await _pump(tester, const Phd2Settings());
+    final row = find.byKey(const ValueKey('guider_profile_picker'));
+    expect(row, findsOneWidget);
+    expect(find.descendant(of: row, matching: find.text('Automatic')), findsOneWidget,
+        reason: 'no guider connected: nothing to name yet');
+    expect(find.widgetWithText(EditableTextRow, 'Profile'), findsNothing);
+  });
+
+  test('Automatic names the profile the guider is using; a pinned profile it no longer lists stays visible', () {
+    expect(guiderProfileItems(0, const {1: 'Default', 4: 'Skywatcher 72ED'}, 'Skywatcher 72ED'),
+        {0: 'Automatic (Skywatcher 72ED)', 1: 'Default', 4: 'Skywatcher 72ED'});
+    expect(guiderProfileItems(0, const {}, null), {0: 'Automatic'});
+    expect(guiderProfileItems(9, const {1: 'Default'}, 'Default'),
+        {0: 'Automatic', 1: 'Default', 9: 'Profile #9'},
+        reason: 'while a profile is pinned, the guider is on the pin, not on what Automatic would pick');
+    expect(guiderProfileItems(4, const {4: 'Skywatcher 72ED'}, 'Skywatcher 72ED'),
+        {0: 'Automatic', 4: 'Skywatcher 72ED'});
+  });
+
+  testWidgets('a change saves on its own, like the device pages: no Save button, nothing saved on load',
+      (tester) async {
+    final h = await _pump(tester, const Phd2Settings(ditherEnabled: true));
+    expect(h.profile.lastPut, isNull, reason: 'loading the page saves nothing');
+    expect(find.textContaining('Not saved'), findsNothing, reason: 'loading is not an edit');
+    final container = ProviderScope.containerOf(tester.element(find.byType(EquipmentGuiderPanel)));
+    expect(container.read(panelSaveActionProvider), isNull, reason: 'no header Save button');
+
+    final toggle = find.descendant(
+        of: find.widgetWithText(SettingsSwitchRow, 'Enable dithering'), matching: find.byType(Switch));
+    await tester.ensureVisible(toggle);
+    await tester.tap(toggle);
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+    expect(h.profile.lastPut?.ditherEnabled, isFalse);
+    await tester.pump(const Duration(seconds: 2));
+    expect(h.profile.puts, 1, reason: 'one edit is one save: the server echo must not schedule another');
+  });
+
+  testWidgets('leaving the page right after an edit still saves it', (tester) async {
+    final show = ValueNotifier(true);
+    final h = await _pump(tester, const Phd2Settings(ditherEnabled: true), show: show);
+    final toggle = find.descendant(
+        of: find.widgetWithText(SettingsSwitchRow, 'Enable dithering'), matching: find.byType(Switch));
+    await tester.ensureVisible(toggle);
+    await tester.tap(toggle);
+    await tester.pump(); // well inside the save delay
+    show.value = false; // the user opens another Settings page
+    await tester.pumpAndSettle();
+    expect(find.byType(EquipmentGuiderPanel), findsNothing);
+    expect(h.profile.lastPut?.ditherEnabled, isFalse);
+  });
+
+  testWidgets('a write that changes nothing (another screen re-loading the settings) saves nothing',
+      (tester) async {
+    final h = await _pump(tester, const Phd2Settings(ditherEnabled: true));
+    final container = ProviderScope.containerOf(tester.element(find.byType(EquipmentGuiderPanel)));
+    container.read(phd2SettingsProvider.notifier).setDitherEnabled(true);
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+    expect(h.profile.lastPut, isNull);
+  });
+
+  testWidgets('Apply to guider is one save: the pending auto-save does not send it again', (tester) async {
+    final h = await _pump(tester,
+        const Phd2Settings(guiderCamera: 'Alpaca Camera [127.0.0.1:6800/0]', guiderMount: 'Alpaca Mount [127.0.0.1:6800/1]', ditherEnabled: true));
+    final toggle = find.descendant(
+        of: find.widgetWithText(SettingsSwitchRow, 'Enable dithering'), matching: find.byType(Switch));
+    await tester.ensureVisible(toggle);
+    await tester.tap(toggle);
+    await tester.pump(); // the auto-save is pending
+    await tester.ensureVisible(find.text('Apply to guider'));
+    await tester.tap(find.text('Apply to guider'));
+    await tester.pump(const Duration(seconds: 2));
+    await tester.pumpAndSettle();
+    expect(h.equipment.calls, contains('push'));
+    expect(h.profile.puts, 1);
+  });
+
+  testWidgets('when the settings could not load, an edit says it was not saved instead of vanishing',
+      (tester) async {
+    final h = await _pump(tester, const Phd2Settings(ditherEnabled: true), failLoad: true);
+    final toggle = find.descendant(
+        of: find.widgetWithText(SettingsSwitchRow, 'Enable dithering'), matching: find.byType(Switch));
+    await tester.ensureVisible(toggle);
+    await tester.tap(toggle);
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+    expect(h.profile.lastPut, isNull, reason: 'never overwrite the rig with settings that did not load');
+    expect(find.textContaining('Not saved'), findsWidgets);
   });
 
   testWidgets('a mount on another server than the camera gets a cross-server warning',

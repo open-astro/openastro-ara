@@ -51,4 +51,17 @@ void main() {
         dio: Dio()..httpClientAdapter = _StubAdapter(const {'host': 'h', 'port': 4400}));
     expect((await api.getPhd2Settings()).guiderCameraAlpacaUniqueId, '');
   });
+
+  test('phd2_profile_id: a picked guider profile round-trips, Automatic (0) goes out as null', () async {
+    final adapter = _StubAdapter(const {'host': 'h', 'port': 4400, 'phd2_profile_id': 3});
+    final api = ProfileApi(const AraServer(hostname: 'x', port: 80),
+        dio: Dio()..httpClientAdapter = adapter);
+    expect((await api.getPhd2Settings()).guiderProfileId, 3);
+
+    await api.putPhd2Settings(const Phd2Settings(guiderProfileId: 5));
+    expect((adapter.lastBody as Map<String, dynamic>)['phd2_profile_id'], 5);
+    await api.putPhd2Settings(const Phd2Settings());
+    expect((adapter.lastBody as Map<String, dynamic>)['phd2_profile_id'], isNull,
+        reason: 'Automatic = the guider profile named after the Ara profile');
+  });
 }

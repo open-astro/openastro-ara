@@ -168,6 +168,46 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task The_guider_state_lists_the_guider_profiles_for_the_profile_picker() {
+            var (fake, svc) = await ConnectedServiceAsync().ConfigureAwait(false);
+            await using var _ = fake;
+            using var __ = svc;
+            var profiles = (await svc.GetAsync(CancellationToken.None).ConfigureAwait(false))!.Runtime.Profiles;
+            Assert.That(profiles, Is.Not.Null);
+            Assert.That(profiles!.Select(p => (p.Id, p.Name)), Does.Contain((1, "My Equipment")),
+                "the daemon's get_profiles list reaches the client, id + name");
+        }
+
+        [Test]
+        public async Task Reading_the_guider_state_while_the_profile_list_is_rebuilt_never_throws() {
+            // The guider rebuilds AvailableProfiles (Clear + Add) on its own thread during a connect or a
+            // profile switch; a GET polling at that moment must not enumerate the live collection.
+            // A guard on GuiderService reading ProfilesSnapshot: pointed back at the live collection, this
+            // fails with a torn read (ArgumentOutOfRange / "Collection was modified").
+            var (fake, svc) = await ConnectedServiceAsync().ConfigureAwait(false);
+            await using var _ = fake;
+            using var __ = svc;
+            var guider = svc.ConnectedGuiderOrNull()!;
+            using var stop = new CancellationTokenSource();
+            var churn = Task.Run(() => {
+                while (!stop.IsCancellationRequested) {
+                    guider.AvailableProfiles.Clear();
+                    for (var i = 0; i < 50; i++) {
+                        guider.AvailableProfiles.Add(new Phd2Profile { Id = i, Name = "p" + i });
+                    }
+                }
+            });
+            try {
+                for (var i = 0; i < 5000; i++) {
+                    await svc.GetAsync(CancellationToken.None).ConfigureAwait(false); // throws on a torn read
+                }
+            } finally {
+                await stop.CancelAsync().ConfigureAwait(false);
+                await churn.ConfigureAwait(false);
+            }
+        }
+
+        [Test]
         public async Task The_guider_state_carries_the_calibration_leg_until_calibration_ends() {
             var (fake, svc) = await ConnectedServiceAsync().ConfigureAwait(false);
             await using var _ = fake;

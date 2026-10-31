@@ -90,10 +90,10 @@ Widget _harness({
 }
 
 void main() {
-  testWidgets('shows the Tonight checklist with all four steps', (t) async {
+  testWidgets('shows the checklist with all four steps, no "Tonight" header', (t) async {
     await t.pumpWidget(_harness());
     await t.pump();
-    expect(find.text('Tonight'), findsOneWidget);
+    expect(find.text('Tonight'), findsNothing);
     expect(find.text('Connect equipment'), findsWidgets); // row + pane title
     expect(find.text('Smart Focus'), findsOneWidget);
     expect(find.text('Main scope and guide camera'), findsOneWidget);

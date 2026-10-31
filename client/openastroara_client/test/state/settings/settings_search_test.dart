@@ -89,11 +89,11 @@ void main() {
   });
 
   group('§61.10 navigation entries', () {
-    test('"go to run" surfaces the Run tab navigation hit first', () {
+    test('"go to sequence" surfaces the Sequence tab navigation hit first', () {
       final index = buildSearchIndex();
-      final results = searchSettings(index, 'go to run');
+      final results = searchSettings(index, 'go to sequence');
       expect(results, isNotEmpty);
-      expect(results.first.label, 'Go to Run');
+      expect(results.first.label, 'Go to Sequence');
       expect(results.first.tabIndex, kRunTabIndex);
     });
 

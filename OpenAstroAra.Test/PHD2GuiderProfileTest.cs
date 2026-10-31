@@ -106,6 +106,17 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void Resolve_a_pinned_profile_the_guider_no_longer_has_falls_back_to_Automatic() {
+            // The pin (phd2_profile_id) outlives a profile deleted on the guider side; connect must not
+            // keep trying the missing id (warning on every connect) but use the Ara-named twin.
+            var r = PHD2Guider.ResolveAraProfileSelection(
+                overrideProfileId: 9, selectedProfileId: 3, activeAraProfileName: "Rig", activeAraProfileId: RigId,
+                availableProfiles: Profiles((3, "Default"), (5, "Rig")));
+            Assert.That(r.Kind, Is.EqualTo(AraProfileActionKind.SelectByName));
+            Assert.That(r.Id, Is.EqualTo(5));
+        }
+
+        [Test]
         public void Resolve_override_already_selected_is_a_no_op() {
             var r = PHD2Guider.ResolveAraProfileSelection(
                 overrideProfileId: 7, selectedProfileId: 7, activeAraProfileName: "Rig", activeAraProfileId: RigId,

@@ -74,6 +74,22 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void Phd2_profile_id_is_the_guider_profile_override_and_null_or_0_means_automatic() {
+            var store = new InMemoryProfileStore();
+            using var svc = new StoreBackedProfileService(store);
+            var baseline = store.GetPhd2Settings();
+
+            store.PutPhd2Settings(baseline with { Phd2ProfileId = 7 });
+            Assert.That(svc.ActiveProfile.GuiderSettings.PHD2ProfileId, Is.EqualTo(7), "a picked guider profile pins it");
+
+            store.PutPhd2Settings(baseline with { Phd2ProfileId = null });
+            Assert.That(svc.ActiveProfile.GuiderSettings.PHD2ProfileId, Is.Null, "Automatic = the guider profile named after the Ara profile");
+
+            store.PutPhd2Settings(baseline with { Phd2ProfileId = 0 });
+            Assert.That(svc.ActiveProfile.GuiderSettings.PHD2ProfileId, Is.Null, "0 is not a guider profile id");
+        }
+
+        [Test]
         public void Phd2_section_maps_onto_GuiderSettings() {
             var store = new InMemoryProfileStore();
             using var svc = new StoreBackedProfileService(store);

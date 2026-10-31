@@ -21,10 +21,10 @@ import '../../widgets/preflight/preflight_checklist_card.dart';
 import '../calibration/calibration_screen.dart';
 
 /// Setup tab — the dusk ritual as a two-pane surface (§25 flow redesign).
-/// Left: the Tonight checklist (Connect equipment → Smart Focus → Polar align →
+/// Left: the checklist (Connect equipment → Smart Focus → Polar align →
 /// Calibration frames → Before you sleep), each row with a live readiness glyph. Right: the selected step's
 /// instrument. Gates are checkmarks, not dams — nothing here blocks; the rail
-/// order just reads as the night (Plan → Setup → Run → Live).
+/// order just reads as the night (Planning → Checklist → Sequence → Live).
 class SetupTab extends ConsumerStatefulWidget {
   const SetupTab({super.key});
 
@@ -59,13 +59,6 @@ class _SetupTabState extends ConsumerState<SetupTab> {
               child: ListView(
                 padding: const EdgeInsets.symmetric(vertical: 8),
                 children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-                    child: Text(
-                      'Tonight',
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                  ),
                   _ChecklistRow(
                     step: _SetupStep.connect,
                     selected: _selected,

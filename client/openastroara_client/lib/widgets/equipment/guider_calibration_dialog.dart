@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/calibration_status.dart';
 import '../../state/guider/guider_build_activity_state.dart';
 import '../../state/guider/guider_calibration_state.dart';
+import '../../theme/ara_colors.dart';
 
 /// Problem-detail `type` tokens the daemon puts on calibration-build 409s so
 /// the two user situations read differently (mirrors EquipmentEndpoints).
@@ -53,21 +54,17 @@ String describeCalibrationActionError(Object? error) {
   return 'The last guider request failed. Tap Refresh to recheck.';
 }
 
-/// Opens the §63.6 guider calibration dialog (dark-library / defect-map build +
-/// enable controls). Requires a connected guider; the dialog itself shows a
-/// "not connected" message when the daemon reports no guider.
-Future<void> showGuiderCalibrationDialog(BuildContext context) {
-  return showDialog<void>(context: context, builder: (_) => const _CalibrationDialog());
-}
-
-class _CalibrationDialog extends ConsumerStatefulWidget {
-  const _CalibrationDialog();
+/// The §63.6 guider calibration controls (dark-library / defect-map build +
+/// enable), embedded in the guider Settings panel. Shows a "connect the
+/// guider" message when the daemon reports no guider.
+class GuiderCalibrationSection extends ConsumerStatefulWidget {
+  const GuiderCalibrationSection({super.key});
   @override
-  ConsumerState<_CalibrationDialog> createState() => _CalibrationDialogState();
+  ConsumerState<GuiderCalibrationSection> createState() => _GuiderCalibrationSectionState();
 }
 
-class _CalibrationDialogState extends ConsumerState<_CalibrationDialog> {
-  // Starts locked: the dialog refreshes on mount (below), so a cached-data
+class _GuiderCalibrationSectionState extends ConsumerState<GuiderCalibrationSection> {
+  // Starts locked: the section refreshes on mount (below), so a cached-data
   // re-open can't expose actionable buttons before the first refresh lands.
   bool _refreshingUi = true;
 
@@ -75,7 +72,7 @@ class _CalibrationDialogState extends ConsumerState<_CalibrationDialog> {
   void initState() {
     super.initState();
     // The provider isn't autoDispose, so a re-open would otherwise show cached
-    // data silently — pull fresh status when the dialog mounts.
+    // data silently — pull fresh status when the section mounts.
     Future.microtask(_refresh);
   }
 
@@ -101,61 +98,53 @@ class _CalibrationDialogState extends ConsumerState<_CalibrationDialog> {
     // manual refresh is in flight.
     final locked = busy || _refreshingUi;
 
-    return AlertDialog(
-      title: const Text('Guider calibration'),
-      content: SizedBox(
-        width: 360,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (invalidated) ...[
-              _InvalidatedBanner(
-                onDismiss: () => ref
-                    .read(guiderDarkLibraryInvalidatedProvider.notifier)
-                    .dismiss(),
-              ),
-              const SizedBox(height: 12),
-            ],
-            if (busy && response == null)
-              const Padding(
-                padding: EdgeInsets.all(8),
-                child: Center(child: CircularProgressIndicator()),
-              )
-            else if (async.hasError)
-              // This replaces the last-known status (Riverpod 3's copyWithPrevious
-              // is internal); the error is transient and Refresh restores status.
-              // The describe helper upgrades the daemon's typed 409s (build busy /
-              // not connected) to actionable text; everything else stays neutral.
-              Text(
-                describeCalibrationActionError(async.error),
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
-              )
-            else if (response == null || !response.connected)
-              const Text('Connect the guider to manage calibration.')
-            else if (status == null)
-              // Connected, but the daemon returned no/malformed calibration status.
-              const Text('Calibration status unavailable — tap Refresh.')
-            else
-              _CalibrationBody(
-                status: status,
-                locked: locked,
-                builds: builds,
-                notifier: ref.read(guiderCalibrationProvider.notifier),
-              ),
-          ],
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: locked ? null : _refresh,
-          child: _refreshingUi
-              ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-              : const Text('Refresh'),
-        ),
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Close'),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (invalidated) ...[
+          _InvalidatedBanner(
+            onDismiss: () => ref
+                .read(guiderDarkLibraryInvalidatedProvider.notifier)
+                .dismiss(),
+          ),
+          const SizedBox(height: 12),
+        ],
+        if (busy && response == null)
+          const Padding(
+            padding: EdgeInsets.all(8),
+            child: Center(child: CircularProgressIndicator()),
+          )
+        else if (async.hasError)
+          // This replaces the last-known status (Riverpod 3's copyWithPrevious
+          // is internal); the error is transient and Refresh restores status.
+          // The describe helper upgrades the daemon's typed 409s (build busy /
+          // not connected) to actionable text; everything else stays neutral.
+          Text(
+            describeCalibrationActionError(async.error),
+            style: TextStyle(color: Theme.of(context).colorScheme.error),
+          )
+        else if (response == null || !response.connected)
+          const Text('Connect the guider to manage calibration.')
+        else if (status == null)
+          // Connected, but the daemon returned no/malformed calibration status.
+          const Text('Calibration status unavailable — tap Refresh.')
+        else
+          _CalibrationBody(
+            status: status,
+            locked: locked,
+            builds: builds,
+            notifier: ref.read(guiderCalibrationProvider.notifier),
+          ),
+        const SizedBox(height: 8),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton(
+            onPressed: locked ? null : _refresh,
+            child: _refreshingUi
+                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                : const Text('Refresh'),
+          ),
         ),
       ],
     );
@@ -182,7 +171,7 @@ class _CalibrationBody extends StatelessWidget {
     // onBuild/onToggle fire-and-forget via unawaited(). This is safe because
     // GuiderCalibrationNotifier._run wraps every action in try/catch and routes
     // failures to `state = AsyncValue.error(...)` — the returned future never
-    // throws past the notifier, and the error renders in this dialog's hasError
+    // throws past the notifier, and the error renders in this section's hasError
     // branch. Keep that contract if _run is ever refactored.
     final darkActivity = builds[CalibrationArtifact.darkLibrary];
     final defectActivity = builds[CalibrationArtifact.defectMap];
@@ -399,7 +388,13 @@ class _Artifact extends StatelessWidget {
       children: [
         Row(
           children: [
-            Expanded(child: Text(label, style: theme.textTheme.titleSmall)),
+            // Fixed label column, switch right after it — the Settings page's
+            // switch rows (SettingsSwitchRow) line up the same way.
+            SizedBox(
+              width: 280,
+              child: Text(label,
+                  style: theme.textTheme.bodyMedium?.copyWith(color: AraColors.textSecondary)),
+            ),
             Semantics(
               label: '$label auto-load',
               child: Switch(value: switchValue, onChanged: onToggle),

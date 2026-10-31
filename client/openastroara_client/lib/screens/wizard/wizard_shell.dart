@@ -249,7 +249,7 @@ class _WizardShellState extends ConsumerState<WizardShell> {
       } catch (e) {
         debugPrint('[wizard] guider profile push failed: $e');
         finishNotes.add('The guider profile push didn\'t complete — push it '
-            'from the Setup tab\'s Guider panel when the guider is reachable.');
+            'from Settings → OpenAstro Guider (the top-bar Guider button) when the guider is reachable.');
       }
       if (draft.guider.buildDarksOnFinish) {
         final calApi = ref.read(guiderCalibrationApiProvider);

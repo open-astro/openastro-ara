@@ -129,21 +129,15 @@ Widget _host(
         guiderDarkLibraryInvalidatedProvider
             .overrideWith(() => _StubInvalidation(invalidated)),
       ],
-      child: MaterialApp(
-        home: Scaffold(
-          body: Builder(
-            builder: (context) => ElevatedButton(
-              onPressed: () => showGuiderCalibrationDialog(context),
-              child: const Text('open'),
-            ),
-          ),
-        ),
+      // Embedded in the guider Settings panel now, not a popup.
+      child: const MaterialApp(
+        home: Scaffold(body: SingleChildScrollView(child: GuiderCalibrationSection())),
       ),
     );
 
 Future<void> _open(WidgetTester tester) async {
-  await tester.tap(find.text('open'));
   await tester.pumpAndSettle();
+  expect(find.byType(Dialog), findsNothing, reason: 'calibration is embedded, not a popup');
 }
 
 /// Answers the cover-the-scope confirmation that now precedes every build.
@@ -157,7 +151,6 @@ void main() {
   testWidgets('shows dark-library status + loaded detail when connected', (tester) async {
     await tester.pumpWidget(_host(_FakeCalibrationClient(_connected(darkExists: true, darkLoaded: true))));
     await _open(tester);
-    expect(find.text('Guider calibration'), findsOneWidget);
     expect(find.text('Dark library'), findsOneWidget);
     expect(find.text('Loaded'), findsWidgets);
     expect(find.textContaining('20 darks'), findsOneWidget);
@@ -269,7 +262,6 @@ void main() {
           CalibrationBuildActivity(phase: CalibrationBuildPhase.building),
     }));
     // No pumpAndSettle: the indeterminate build indicators animate forever.
-    await tester.tap(find.text('open'));
     for (var i = 0; i < 5; i++) {
       await tester.pump(const Duration(milliseconds: 100));
     }

@@ -1904,7 +1904,7 @@ backgrounded `flutter run` exits ("Lost connection to device") and takes the app
 ```bash
 cd client/openastroara_client
 flutter build macos --debug    # or: flutter run -d macos  (foreground only)
-open build/macos/Build/Products/Debug/openastroara.app
+open "build/macos/Build/Products/Debug/OpenAstro Ara.app"
 ```
 Every launch scans the network (nothing about the rig is stored, #1129) and you
 pick the rig from the list. A connected device's state lives daemon-side, so the
@@ -1986,10 +1986,10 @@ Use Material 3 `ThemeData` with these tokens. Material's default dark theme is t
 ### 25.3 Top equipment bar
 
 A horizontal `Row` of equipment "chips" — one per device type. Each chip:
-- Icon (Material icon for now)
-- Device-type label below the icon (small caps: "CAM", "FW", "FOC", "MOUNT", "ROT", "GUIDE", "DOME", "SW", "FLAT", "WX", "SAFE")
-- Colored dot indicator (top-right of icon): gray (disconnected), green (connected + idle), amber (busy), red (error)
-- Tap: opens chooser bottom sheet listing discovered Alpaca devices
+- Icon (Material icon; hand-drawn glyphs for Mount — a telescope — and Filter Wheel, which Material lacks)
+- Device name below the icon: "Camera", "Filter Wheel", "Focuser", "Mount", "Rotator", "Guider", "Flat Panel", "Switch", "Weather", "Safety", "Dome". Every chip is the same width so the icons are evenly spaced; below 600 px wide the name is dropped (icon only) and stays as the tooltip
+- Colored dot indicator (top-right of icon): gray (disconnected), green (connected + idle), blinking green (connected and working: exposing, slewing, moving), amber (needs a look), red (error)
+- Tap: opens that device's Settings page (connect + its settings)
 - Long-press / right-click: disconnect, or open device-specific properties panel
 
 Order (left-to-right, mirroring NINA's bar):
@@ -2034,14 +2034,14 @@ Five tabs along the top of the center area:
    - **Frame (toggle)** — overlays the **profile-derived FOV** (camera sensor + pixel size + telescope effective focal length → the exact field rectangle this rig captures), plus rotation + mosaic panel grid (§47). Output: **"Add to Sequence" / "Build Mosaic Sequence."** Sensor geometry is cached in the profile on first camera connect, so framing works without the camera connected / offline (see Camera/Telescope settings + PORT_DECISIONS §36/§25.5).
    - Tap an object → details panel + Frame / Add-to-Sequence actions (no cross-tab "Set as Target" handoff — it's all here)
    - Aladin logo + CDS attribution preserved at bottom-right per Aladin's GPLv3 license terms (see §17 + §36)
-3. **Sequencer**
+3. **Sequence** (was Sequencer / Run)
    - Tree view of: Areas → Targets → Instructions (NINA's hierarchy)
    - Drag-and-drop reordering within a level
    - Per-instruction editor pane on the right when selected
    - Top toolbar: New / Load / Save / Validate / Run / Pause / Abort
    - Below toolbar: progress bar + currently-executing instruction label
-4. **Options**
-   - Tree-based settings: Equipment (per device type), Imaging, Plate Solving, Astrometry, File Saving, Telescope, Astronomy, Sequence, Application
+4. **Settings** (opened from a gear in the top bar, not the rail)
+   - Tree-based settings: Imaging, Plate Solving, Astrometry, File Saving, Telescope, Astronomy, Sequence, Application. The per-device Equipment pages are opened from the top-bar chips (§25.3) and ⌘K, not listed in the tree
    - Right pane: settings for selected node
    - "Save Profile" / "Save Profile As..." buttons in the toolbar
 
@@ -12837,7 +12837,7 @@ cameras → main vs guide, guessed by sensor size with a swap affordance).
 
 Per assigned device: `needed` (facts Ara requires to image), `got` (read from Alpaca), and
 `missing` → card state ✅/⚠️. All assigned devices are connected and read **in parallel** on
-entering Screen 3. Finish is allowed with amber cards ("finish anyway") — the Setup tab
+entering Screen 3. Finish is allowed with amber cards ("finish anyway") — the Checklist tab
 checklist carries the ⚠️ forward. Darks-build failure (camera unreachable, saturated frames
 suggesting an uncovered scope) degrades to an amber "build darks later from the Guider panel"
 note; it never fails the wizard.
@@ -12849,7 +12849,7 @@ Finishing the wizard creates/updates the guider twin profile named after the wiz
 mount. The guider daemon speaks to ONE Alpaca server per profile, so when camera and mount
 live on different servers the CAMERA's server wins (the guide-setup-wizard rule shipped with
 PR #897; not yet paginated as a §63 subsection). Re-running the wizard on an existing profile updates
-the twin and offers a darks rebuild — never duplicates. The Setup tab's guiding step becomes a
+the twin and offers a darks rebuild — never duplicates. The Checklist tab's guiding step becomes a
 checklist that is already green, with re-run entry points for hardware changes.
 
 ### 76.5 Slice plan (each a gated PR)

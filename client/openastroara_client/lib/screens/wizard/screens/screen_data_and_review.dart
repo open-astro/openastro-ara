@@ -312,7 +312,7 @@ class _ReviewSection extends ConsumerWidget {
                   label: const Text('Edit'),
                 )
               else
-                Text('Defaults · edit later in Options',
+                Text('Defaults · edit later in Settings',
                     style: Theme.of(context)
                         .textTheme
                         .bodySmall

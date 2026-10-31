@@ -30,7 +30,7 @@ sudo apt install openastroara-server
 #    narrower than 0.5°); the one the profile's optics call for is marked
 #    Recommended, and several can coexist for several rigs. They install under
 #    /var/lib/astap (the profile's index path,
-#    Options → Plate solving), one subdirectory per package, and the daemon passes
+#    Settings → Plate solving), one subdirectory per package, and the daemon passes
 #    the right one to astap_cli with -d/-D per solve. The download needs the Pi
 #    online once and ~1.7 GB free on the root volume; the daemon refuses it with a
 #    clear message otherwise.

@@ -1,46 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../models/equipment_device_status.dart';
 import '../../models/guider_status.dart';
 import '../../state/guider/guider_state.dart';
-import 'guider_calibration_dialog.dart';
-
-/// Opens the §63 guider connect/disconnect dialog.
-Future<void> showGuiderDialog(BuildContext context) {
-  // The builder's context is intentionally unused: `_GuiderDialog` is a
-  // ConsumerWidget that resolves `ref`/Navigator from its own subtree under the
-  // navigator + ProviderScope (which sit above MaterialApp), so it needs nothing
-  // from the caller's context.
-  return showDialog<void>(context: context, builder: (_) => const _GuiderDialog());
-}
-
-/// Human-readable link-state label.
-String guiderConnectionLabel(GuiderConnectionState state) {
-  switch (state) {
-    case GuiderConnectionState.connected:
-      return 'Connected';
-    case GuiderConnectionState.connecting:
-      return 'Connecting…';
-    case GuiderConnectionState.disconnected:
-      return 'Disconnected';
-    case GuiderConnectionState.error:
-      return 'Error';
-    case GuiderConnectionState.unknown:
-      return 'Unknown';
-  }
-}
+import '../../theme/ara_colors.dart';
+import 'equipment_state_chip.dart';
 
 /// Human-readable runtime-phase label (one wording for every screen, #1364).
 String guiderRuntimeLabel(GuiderRuntimeState state) => guiderRuntimeText(state);
 
-class _GuiderDialog extends ConsumerStatefulWidget {
-  const _GuiderDialog();
+/// The §63 guider link: status rows plus Refresh and Connect/Disconnect. Lives
+/// at the top of the guider's Settings panel, where the top-bar GUIDE chip
+/// lands like every other device chip.
+class GuiderConnectionSection extends ConsumerStatefulWidget {
+  const GuiderConnectionSection({super.key});
 
   @override
-  ConsumerState<_GuiderDialog> createState() => _GuiderDialogState();
+  ConsumerState<GuiderConnectionSection> createState() => _GuiderConnectionSectionState();
 }
 
-class _GuiderDialogState extends ConsumerState<_GuiderDialog> {
+class _GuiderConnectionSectionState extends ConsumerState<GuiderConnectionSection> {
   // Local feedback for a manual Refresh: the notifier's refresh() deliberately
   // doesn't emit a loading state (so the body doesn't flash blank), so the
   // button tracks its own in-flight flag to disable + spinner.
@@ -63,62 +43,81 @@ class _GuiderDialogState extends ConsumerState<_GuiderDialog> {
     final status = async.asData?.value;
     final connected = status?.isConnected ?? false;
     final actionsLocked = busy || _refreshing;
+    final text = Theme.of(context).textTheme;
 
-    return AlertDialog(
-      title: const Text('Guider'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (busy && status == null)
-            const Padding(
-              padding: EdgeInsets.all(8),
-              child: Center(child: CircularProgressIndicator()),
-            )
-          else if (async.hasError)
-            Text(
-              // Don't interpolate the raw error — a DioException can carry URLs/
-              // headers/stack excerpts into a user-visible string.
-              'Could not reach the guider. Check the connection and try again.',
-              style: TextStyle(color: Theme.of(context).colorScheme.error),
-            )
-          else if (status == null)
-            const Text('No guider configured on this server.')
-          else
-            _StatusBody(status: status),
-          if (connected && !busy)
-            Align(
-              alignment: Alignment.centerLeft,
-              child: TextButton.icon(
-                onPressed: () => showGuiderCalibrationDialog(context),
-                icon: const Icon(Icons.build, size: 16),
-                label: const Text('Calibration…'),
-              ),
-            ),
-        ],
+    // The same card as the mount / camera / focuser connection
+    // (EquipmentConnectionCard): name + link-state chip + link action, divider,
+    // then the live body.
+    return Card(
+      color: AraColors.bgPanel,
+      margin: const EdgeInsets.only(top: 4, bottom: 8),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
+        child: busy && status == null
+            ? const Padding(
+                padding: EdgeInsets.all(12),
+                child: Center(child: CircularProgressIndicator()),
+              )
+            : async.hasError
+                ? Row(
+                    children: [
+                      const Icon(Icons.error_outline, color: AraColors.accentError, size: 20),
+                      const SizedBox(width: 8),
+                      // Don't interpolate the raw error — a DioException can carry URLs/
+                      // headers/stack excerpts into a user-visible string.
+                      const Expanded(
+                        child: Text('Could not reach the guider. Check the connection and try again.'),
+                      ),
+                      TextButton(
+                        onPressed: actionsLocked ? null : _refresh,
+                        child: _refreshing ? const _BusySpinner() : const Text('Retry'),
+                      ),
+                    ],
+                  )
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(status?.name ?? 'OpenAstro Guider', style: text.titleMedium),
+                          ),
+                          EquipmentStateChip(state: _chipState(status?.connectionState)),
+                          if (connected)
+                            IconButton(
+                              tooltip: 'Disconnect',
+                              icon: busy ? const _BusySpinner() : const Icon(Icons.link_off, size: 18),
+                              onPressed: actionsLocked ? null : () => notifier.disconnect(),
+                            )
+                          else
+                            IconButton(
+                              tooltip: 'Connect',
+                              icon: busy ? const _BusySpinner() : const Icon(Icons.link, size: 18),
+                              onPressed: actionsLocked ? null : () => notifier.connect(),
+                            ),
+                        ],
+                      ),
+                      const Divider(height: 20, color: AraColors.border),
+                      if (status == null)
+                        Text('No guider configured on this server.',
+                            style: text.bodySmall?.copyWith(color: AraColors.textSecondary))
+                      else if (!connected)
+                        Text('Not connected.',
+                            style: text.bodySmall?.copyWith(color: AraColors.textSecondary))
+                      else
+                        _StatusBody(status: status),
+                    ],
+                  ),
       ),
-      actions: [
-        TextButton(
-          onPressed: actionsLocked ? null : _refresh,
-          child: _refreshing ? const _BusySpinner() : const Text('Refresh'),
-        ),
-        if (connected)
-          FilledButton(
-            onPressed: actionsLocked ? null : () => notifier.disconnect(),
-            child: busy ? const _BusySpinner() : const Text('Disconnect'),
-          )
-        else
-          FilledButton(
-            onPressed: actionsLocked ? null : () => notifier.connect(),
-            child: busy ? const _BusySpinner() : const Text('Connect'),
-          ),
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Close'),
-        ),
-      ],
     );
   }
+
+  static EquipmentConnectionState _chipState(GuiderConnectionState? s) => switch (s) {
+        GuiderConnectionState.connected => EquipmentConnectionState.connected,
+        GuiderConnectionState.connecting => EquipmentConnectionState.connecting,
+        GuiderConnectionState.error => EquipmentConnectionState.error,
+        _ => EquipmentConnectionState.disconnected,
+      };
 }
 
 class _BusySpinner extends StatelessWidget {
@@ -139,7 +138,6 @@ class _StatusBody extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _row(context, 'Link', guiderConnectionLabel(status.connectionState)),
         _row(context, 'State', guiderRuntimeLabel(status.runtimeState)),
         if (status.currentProfile != null) _row(context, 'Profile', status.currentProfile!),
         if (rms != null) _row(context, 'RMS', '${rms.toStringAsFixed(2)}"'),
@@ -147,15 +145,17 @@ class _StatusBody extends StatelessWidget {
     );
   }
 
+  // Label left, value right — the mount / camera / focuser card rows.
   Widget _row(BuildContext context, String label, String value) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: Row(
         children: [
-          SizedBox(width: 64, child: Text(label, style: Theme.of(context).textTheme.bodySmall)),
-          Expanded(child: Text(value, style: Theme.of(context).textTheme.bodyMedium)),
+          Expanded(child: Text(label)),
+          Text(value),
         ],
       ),
     );
   }
+
 }

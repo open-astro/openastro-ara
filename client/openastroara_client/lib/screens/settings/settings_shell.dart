@@ -92,7 +92,7 @@ class _SettingsTree extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.symmetric(vertical: 8),
       children: [
-        for (final group in settingsTree) ...[
+        for (final group in settingsSidebarGroups) ...[
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
             child: Text(

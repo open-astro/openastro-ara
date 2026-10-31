@@ -158,7 +158,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
         /// <summary>
         /// Decide what profile action a guider connect should take (§63.4), pure + socket-free so the connect
         /// path's choice is unit-testable. Precedence: an explicit <paramref name="overrideProfileId"/> (the
-        /// inherited <c>GuiderSettings.PHD2ProfileId</c> — the user's manual override) wins and selects by id;
+        /// inherited <c>GuiderSettings.PHD2ProfileId</c> — the user's manual override) the guider still lists wins and selects by id;
         /// otherwise the ARA profile maps to its id-suffixed <c>ara-&lt;slug&gt;-&lt;id8&gt;</c> PHD2 profile
         /// (guider-e-3c, collision-free), selected by name if it already exists or created if not. When the
         /// target is already the selected profile, the result is <see cref="AraProfileActionKind.None"/> so
@@ -171,7 +171,9 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             System.Guid activeAraProfileId,
             IReadOnlyList<Phd2Profile> availableProfiles) {
 
-            if (overrideProfileId.HasValue) {
+            // A pin the guider no longer lists (deleted on its side) falls back to the name mapping below,
+            // rather than failing the switch and warning on every connect.
+            if (overrideProfileId.HasValue && availableProfiles.Any(p => p.Id == overrideProfileId.Value)) {
                 return selectedProfileId == overrideProfileId.Value
                     ? new AraProfileSelection(AraProfileActionKind.None, 0, string.Empty)
                     : new AraProfileSelection(AraProfileActionKind.SelectById, overrideProfileId.Value, string.Empty);

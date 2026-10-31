@@ -90,6 +90,10 @@ class Phd2Settings {
   // the guider's own 95% buries stars in read noise on many guide cameras.
   final int guideCameraGain;
 
+  // The guider profile picked in Settings (the daemon's profile id); 0 =
+  // Automatic, the guider profile named after the Ara profile. Sent as null when 0.
+  final int guiderProfileId;
+
   const Phd2Settings({
     this.host = 'localhost',
     this.port = 4400,
@@ -121,6 +125,7 @@ class Phd2Settings {
     this.guideExposureMaxMs = 6000,
     this.guideExposureMs = 0,
     this.guideCameraGain = 50,
+    this.guiderProfileId = 0,
   });
 
   Phd2Settings copyWith({
@@ -154,6 +159,7 @@ class Phd2Settings {
     int? guideExposureMaxMs,
     int? guideExposureMs,
     int? guideCameraGain,
+    int? guiderProfileId,
   }) =>
       Phd2Settings(
         host: host ?? this.host,
@@ -188,6 +194,7 @@ class Phd2Settings {
         guideExposureMaxMs: guideExposureMaxMs ?? this.guideExposureMaxMs,
         guideExposureMs: guideExposureMs ?? this.guideExposureMs,
         guideCameraGain: guideCameraGain ?? this.guideCameraGain,
+        guiderProfileId: guiderProfileId ?? this.guiderProfileId,
       );
 }
 
@@ -210,10 +217,10 @@ class Phd2SettingsNotifier extends Notifier<Phd2Settings>
     state = state.copyWith(port: v);
   }
 
-  void setPhd2Profile(String s) {
-    final v = s.trim();
-    if (v.isEmpty) return;
-    state = state.copyWith(phd2Profile: v);
+  /// The guider profile to select on connect; 0 = Automatic.
+  void setGuiderProfileId(int v) {
+    if (v < 0) return;
+    state = state.copyWith(guiderProfileId: v);
   }
 
   void setDitherEnabled(bool v) => state = state.copyWith(ditherEnabled: v);

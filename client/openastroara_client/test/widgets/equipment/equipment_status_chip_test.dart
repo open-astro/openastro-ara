@@ -27,7 +27,8 @@ void main() {
       expect(
           equipmentStatusLevel(
               _FakeStatus(EquipmentConnectionState.connected, isBusy: true)),
-          StatusLevel.busy);
+          StatusLevel.active,
+          reason: 'exposing / slewing / moving is a good state: blinking green, not amber');
       expect(equipmentStatusLevel(_FakeStatus(EquipmentConnectionState.connecting)),
           StatusLevel.info);
       expect(equipmentStatusLevel(_FakeStatus(EquipmentConnectionState.error)),
@@ -131,7 +132,7 @@ void main() {
         home: Scaffold(
           body: EquipmentStatusChip(
             icon: Icons.camera_alt,
-            label: 'CAM',
+            label: 'Camera',
             panelId: 'eq.camera',
             watchLevel: (_) => StatusLevel.connected,
           ),
@@ -139,8 +140,8 @@ void main() {
       ),
     ));
 
-    expect(find.text('CAM'), findsOneWidget);
-    await tester.tap(find.text('CAM'));
+    expect(find.text('Camera'), findsOneWidget);
+    await tester.tap(find.text('Camera'));
     await tester.pump();
 
     expect(container.read(selectedSettingsPanelProvider), 'eq.camera');

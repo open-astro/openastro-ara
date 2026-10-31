@@ -12188,6 +12188,13 @@ components:
             - string
           format: int32
           default: 50
+        phd2_profile_id:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - 'null'
+            - integer
+            - string
+          format: int32
     PlanningFilterDto:
       required:
         - name

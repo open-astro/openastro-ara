@@ -515,7 +515,7 @@ bool lifecycleArmed(ProviderReader read) {
 /// redesign): when polar alignment hasn't reached the green zone this
 /// session, confirm before starting — the gate SUGGESTS, it never blocks
 /// (planning-only rigs, permanent piers and daytime tests all run fine
-/// unaligned). "Go to Setup" jumps to the checklist instead. Public: the
+/// unaligned). "Go to Checklist" jumps to the checklist instead. Public: the
 /// tab's keyboard shortcuts drive the same path as the Run button.
 Future<void> preflightAndRunSequence(BuildContext context, ProviderReader read) async {
   final aligned =
@@ -540,7 +540,7 @@ Future<void> preflightAndRunSequence(BuildContext context, ProviderReader read) 
           TextButton(
             onPressed: () =>
                 Navigator.of(dialogContext).pop(_PreflightChoice.goToSetup),
-            child: const Text('Go to Setup'),
+            child: const Text('Go to Checklist'),
           ),
           FilledButton(
             onPressed: () =>

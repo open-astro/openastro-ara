@@ -271,7 +271,7 @@ class _StopMountListenerState extends ConsumerState<StopMountListener> {
         const SnackBar(
           content: Text(
             'No paused run to act on — nothing was running, or the pause '
-            'has not landed yet. Use the Run tab for sequence control.',
+            'has not landed yet. Use the Sequence tab for sequence control.',
           ),
         ),
       );

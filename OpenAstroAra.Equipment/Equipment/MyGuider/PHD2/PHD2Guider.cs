@@ -276,6 +276,10 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
 
         public AsyncObservableCollection<Phd2Profile> AvailableProfiles { get; private set; } = new AsyncObservableCollection<Phd2Profile>();
 
+        /// <summary>The same profiles as an immutable list, swapped in whole after each refresh: safe to read from
+        /// another thread (a status GET) while <see cref="AvailableProfiles"/> is being cleared and refilled.</summary>
+        public IReadOnlyList<Phd2Profile> ProfilesSnapshot { get; private set; } = Array.Empty<Phd2Profile>();
+
         private TaskCompletionSource<bool>? _tcs;
 
         private bool initialized;
@@ -1528,6 +1532,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             foreach (var profile in getProfilesResponse.result) {
                 AvailableProfiles.Add(new Phd2Profile { Name = profile.name, Id = profile.id ?? 0 });
             }
+            ProfilesSnapshot = AvailableProfiles.ToArray();
             SelectedProfile = AvailableProfiles.FirstOrDefault(x => x.Id == _activeProfile?.id);
         }
 

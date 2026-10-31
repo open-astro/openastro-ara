@@ -23,6 +23,7 @@ import '../widgets/safety_alarm_listener.dart';
 import '../widgets/stop_mount_overlay.dart';
 import '../widgets/equipment/equipment_status_chip.dart';
 import '../widgets/help_dialog.dart';
+import '../widgets/settings_gear_button.dart';
 import '../widgets/launchpad_button.dart';
 import '../widgets/ws_connection_indicator.dart';
 import 'calibration/calibration_screen.dart';
@@ -56,14 +57,14 @@ class AppShell extends ConsumerStatefulWidget {
 class _AppShellState extends ConsumerState<AppShell> {
   static const _tabs = <_TabSpec>[
     _TabSpec(icon: Icons.public, label: 'Planning', body: PlanningTab()),
-    _TabSpec(icon: Icons.checklist, label: 'Setup', body: SetupTab()),
+    _TabSpec(icon: Icons.checklist, label: 'Checklist', body: SetupTab()),
     _TabSpec(
       icon: Icons.play_circle_outline,
-      label: 'Run',
+      label: 'Sequence',
       body: SequencerTab(),
     ),
     _TabSpec(icon: Icons.camera_alt, label: 'Live', body: ImagingTab()),
-    _TabSpec(icon: Icons.settings, label: 'Options', body: OptionsTab()),
+    _TabSpec(icon: Icons.settings, label: 'Settings', body: OptionsTab()),
   ];
 
   @override
@@ -80,20 +81,20 @@ class _AppShellState extends ConsumerState<AppShell> {
     // to update the constant trips this in debug instead of silently navigating
     // to the wrong tab.
     assert(
-      _tabs[kOptionsTabIndex].label == 'Options',
-      'kOptionsTabIndex must point at the Options tab — update it if _tabs is reordered.',
+      _tabs[kOptionsTabIndex].label == 'Settings' && kOptionsTabIndex == _tabs.length - 1,
+      'kOptionsTabIndex must point at the Settings tab, the last one (the rail lists the tabs before it).',
     );
     assert(
-      _tabs[kRunTabIndex].label == 'Run',
-      'kRunTabIndex must point at the Run tab — update it if _tabs is reordered.',
+      _tabs[kRunTabIndex].label == 'Sequence',
+      'kRunTabIndex must point at the Sequence tab — update it if _tabs is reordered.',
     );
     assert(
       _tabs[kPlanningTabIndex].label == 'Planning',
       'kPlanningTabIndex must point at the Planning tab — update it if _tabs is reordered.',
     );
     assert(
-      _tabs[kSetupTabIndex].label == 'Setup',
-      'kSetupTabIndex must point at the Setup tab — update it if _tabs is reordered.',
+      _tabs[kSetupTabIndex].label == 'Checklist',
+      'kSetupTabIndex must point at the Checklist tab — update it if _tabs is reordered.',
     );
     assert(
       _tabs[kLiveTabIndex].label == 'Live',
@@ -150,13 +151,15 @@ class _AppShellState extends ConsumerState<AppShell> {
                           child: Row(
                             children: [
                               NavigationRail(
-                                selectedIndex: selectedTab,
+                                // Settings opens from the top-bar gear, so the
+                                // rail lists the workflow tabs only.
+                                selectedIndex: railIndexFor(selectedTab),
                                 onDestinationSelected: (i) => ref
                                     .read(selectedTabIndexProvider.notifier)
                                     .select(i),
                                 labelType: NavigationRailLabelType.all,
                                 destinations: [
-                                  for (final t in _tabs)
+                                  for (final t in _tabs.take(kOptionsTabIndex))
                                     NavigationRailDestination(
                                       icon: Icon(t.icon),
                                       label: Text(t.label),
@@ -287,6 +290,7 @@ class _TopEquipmentBar extends StatelessWidget {
               },
             ),
           ),
+          const SettingsGearButton(),
           // §61.1 — visible magnifying-glass icon on the right side of the
           // top bar. Opens the same `showCommandPalette` dialog that ⌘K
           // launches; tooltip surfaces the platform-correct shortcut so

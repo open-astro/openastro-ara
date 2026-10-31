@@ -6,10 +6,15 @@ import '../app_shell_state.dart';
 /// the selected-panel id state. Phase 12h.3 wires the §61 smart-search
 /// ⌘K cross-cutting that uses this same tree to deep-link to any setting.
 
-/// The app-shell tab index of the **Options** (Settings) tab. Named rather
-/// than a bare literal so a tab reorder is a one-line change (the command
-/// palette uses the same index, app_shell.dart).
+/// The app-shell tab index of the **Settings** tab (opened from the top-bar
+/// gear, not the rail). Named rather than a bare literal so a tab reorder is a
+/// one-line change (the command palette uses the same index, app_shell.dart).
+/// It must stay the last tab: the rail lists the tabs before it.
 const int kOptionsTabIndex = 4;
+
+/// The rail destination for app-shell tab [tab]: the same index for the
+/// workflow tabs, none while Settings (top-bar gear) is showing.
+int? railIndexFor(int tab) => tab == kOptionsTabIndex ? null : tab;
 
 /// The app-shell tab index of the **Run** (sequencer) tab — used by every
 /// "...and jump to the Run tab" flow (Planning's create-run, the calibration
@@ -20,13 +25,14 @@ const int kRunTabIndex = 2;
 /// The app-shell tab indices of the **Planning**, **Setup** and **Live** tabs
 /// — guarded by the same app_shell asserts, so every tab constant fails
 /// loudly on a rail reorder. Setup landed with the §25 flow redesign (the
-/// rail reads as the night: Plan → Setup → Run → Live → Options).
+/// rail reads as the night: Planning → Checklist → Sequence → Live; Settings is the
+/// top-bar gear).
 const int kPlanningTabIndex = 0;
 const int kSetupTabIndex = 1;
 const int kLiveTabIndex = 3;
 
 /// Jump straight to the settings panel [panelId] (a [settingsTree] id):
-/// selects it and brings the Options tab forward — the same navigation the
+/// selects it and brings the Settings tab forward — the same navigation the
 /// ⌘K command palette and the top-bar equipment chips use.
 void openSettingsPanel(WidgetRef ref, String panelId) {
   ref.read(selectedSettingsPanelProvider.notifier).select(panelId);
@@ -282,6 +288,11 @@ final highlightedSettingProvider =
     NotifierProvider<HighlightedSettingNotifier, String?>(
       HighlightedSettingNotifier.new,
     );
+
+/// The Options sidebar: [settingsTree] without Equipment, whose panels the
+/// top-bar device chips (and search) open directly.
+final List<SettingsGroup> settingsSidebarGroups =
+    settingsTree.where((g) => g.id != 'equipment').toList(growable: false);
 
 SettingsPanelInfo? findPanelInfo(String id) {
   for (final g in settingsTree) {

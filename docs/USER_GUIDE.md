@@ -51,8 +51,9 @@ safety policies, storage, and optional sky-data downloads. Notes:
 
 ## 3. Connecting equipment
 
-The top bar shows a chip per device (camera, mount, filter wheel, focuser, rotator, guider, …).
-Tap a chip to connect/disconnect and open its control panel. Everything speaks **ASCOM Alpaca**;
+The top bar shows a button per device (Camera, Filter Wheel, Focuser, Mount, Rotator, Guider, …),
+with a status dot that blinks green while the device is working. Tap one to open its Settings page,
+where you connect/disconnect it and use its controls. Everything speaks **ASCOM Alpaca**;
 devices are discovered on the LAN, and the daemon remembers your choices for auto-connect on boot.
 
 - **Camera** — cooler on/off with a target set-point ("Cooling to −10.0 °C" shows next to the live
@@ -61,7 +62,8 @@ devices are discovered on the LAN, and the daemon remembers your choices for aut
 - **Mount** — slew/park/tracking controls plus a big Stop. Ara's meridian-flip handling is on the
   Sequencer side (see §7).
 - **Guider** — Ara drives a separate guiding daemon (openastro-guider, a PHD2 fork) over its own
-  port. The guider chip connects it; the Calibration dialog builds its **dark library / defect
+  port. The top-bar Guider button opens its Settings page: connect it from the connection card
+  there, and the page's Calibration section builds its **dark library / defect
   map** — you'll be asked to confirm the scope is covered first, and the build shows live progress —
   and can also **delete** either artifact (with confirmation). The daemon's own equipment (guide
   camera, mount, rotator, Alpaca server) is configured entirely from **Settings → Guider → Guider
@@ -74,9 +76,9 @@ devices are discovered on the LAN, and the daemon remembers your choices for aut
 If a device drops mid-session, the daemon attempts hot-reconnects and raises a diagnostic; the
 health pill (see §9) turns amber/red until it clears.
 
-### Smart Focus (Setup → Smart Focus)
+### Smart Focus (Checklist → Smart Focus)
 
-The Setup tab's checklist has a **Smart Focus** step between Connect equipment and Polar align.
+The Checklist tab has a **Smart Focus** step between Connect equipment and Polar align.
 
 - **Main telescope** — **Run autofocus** starts the daemon's sweep with your autofocus settings and
   shows it live: the coarse search, then every probe on the V-curve, the fitted curve and the best
@@ -198,7 +200,7 @@ framing/focus loop when you need to point or focus by eye.
   guiding continues (multi-star takes effect the next time the guider connects). Setting a row back
   to the guider's (or **All guider's**) only stops Ara sending it: the guider keeps whatever value it has,
   including one Ara sent before.
-- **Guiding Assistant.** The Guide camera dialog's assistant button (also under Setup → Smart Focus →
+- **Guiding Assistant.** The Guide camera dialog's assistant button (also under Checklist → Smart Focus →
   Guide camera) runs PHD2's Guiding Assistant from Ara. Loop, pick a star and calibrate once (start
   guiding, or let a run do it), then choose how long to sample (two minutes is plenty) and whether to
   measure Dec backlash, and press **Start**. Guiding is held off while the star drifts; the dialog shows
@@ -296,7 +298,7 @@ Ara assumes you're asleep while it works:
   tries to restart the guider daemon in the background. A *wedged* guider (socket alive, RPC
   unresponsive) is caught the same way by an active liveness ping. When recovery succeeds, ARA
   reconnects automatically within your "guider retry timeout" window and notifies you — just
-  Resume the paused run; if it can't reconnect in time, reconnect manually (Equipment → Guider).
+  Resume the paused run; if it can't reconnect in time, reconnect manually (the top-bar Guider button → the connection card).
   The daemon restart only applies when the profile's guider host is the SBC itself (`localhost`,
   its own name or address). A guider running on **another machine** (PHD2 on a laptop, say) is
   not ARA's to restart: you get a "Guider connection lost" notification, ARA keeps retrying the

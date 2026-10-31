@@ -89,7 +89,7 @@ curl http://localhost:5555/healthz   # → "ok"
   `OPENASTROARA_PROFILE_DIR=/tmp/ara dotnet run --project OpenAstroAra.Server`.
 - No auth — the daemon assumes a trusted LAN (playbook §67).
 - **Synthetic sky (Development only).** The Alpaca camera simulator renders noise, so the
-  focus instruments (Setup → Smart Focus) cannot be seen working against it. With
+  focus instruments (Checklist → Smart Focus) cannot be seen working against it. With
   `OPENASTROARA_SYNTHETIC_SKY=best=24600,hfr=1.4,scale=350` (all three keys optional) the
   daemon renders a star field in place of camera frames: autofocus probes blur with the
   simulator focuser's distance from `best`, and the guide-camera focus loop draws from a field
@@ -99,7 +99,7 @@ curl http://localhost:5555/healthz   # → "ok"
   With the synthetic sky on, the by-hand rotation readout (Plan → **Rotate camera**) reads its
   "solved" position angle from `<profile dir>/synthetic-position-angle` (one number, degrees) on
   every solve instead of plate-solving — edit the file to stand in for turning the camera.
-  The Bahtinov mask readout (Setup → Smart Focus → Main telescope → Bahtinov mask) sees one
+  The Bahtinov mask readout (Checklist → Smart Focus → Main telescope → Bahtinov mask) sees one
   bright mask star whose central spike sits 2.5 px off the X per pixel of HFR growth, zero at
   `best` — move the simulator focuser to watch the offset follow.
 - The solution builds with `TreatWarningsAsErrors=true` + `AnalysisMode=All`. If your
@@ -330,7 +330,7 @@ For a session that outlives the terminal, build once and launch the `.app` detac
 
 ```bash
 flutter build macos --debug
-open build/macos/Build/Products/Debug/openastroara.app
+open "build/macos/Build/Products/Debug/OpenAstro Ara.app"
 ```
 
 **macOS Local Network gotcha:** an app launched with `open` (or from Finder) is its
