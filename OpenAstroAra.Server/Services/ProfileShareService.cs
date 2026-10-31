@@ -175,6 +175,9 @@ public sealed class ProfileShareService : IProfileShareService {
             Host = "",
             Port = DefaultPhd2Port,
             Phd2Profile = "",
+            // Guider profile ids are small per-rig integers: the donor's id can name a
+            // different profile on the recipient's guider, so the share falls back to Automatic.
+            Phd2ProfileId = null,
             GuideFocalLength = 0,
             GuidePixelSize = 0,
         },

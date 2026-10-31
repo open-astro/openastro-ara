@@ -86,7 +86,8 @@ public class ProfileShareServiceTest {
             SettlePixels: 1.5, SettleTimeSec: 10, SettleTimeoutSec: 60,
             ForceCalibrationEachSession: false,
             GuideFocalLength: 240, GuidePixelSize: 3.75, RaAggressiveness: 0.9,
-            DecAggressiveness: 0.7, MinimumMove: 0.15, DecGuideMode: "auto"),
+            DecAggressiveness: 0.7, MinimumMove: 0.15, DecGuideMode: "auto",
+            Phd2ProfileId: 2),
         EquipmentConnection: new(
             Camera: true, Mount: true, Focuser: true, FilterWheel: true,
             Rotator: true, Guider: false, FlatPanel: true, Dome: false,
@@ -154,6 +155,8 @@ public class ProfileShareServiceTest {
         var phd2 = settings.GetProperty("phd2");
         phd2.GetProperty("host").GetString().Should().BeEmpty();
         phd2.GetProperty("phd2_profile").GetString().Should().BeEmpty();
+        phd2.GetProperty("phd2_profile_id").ValueKind.Should().Be(JsonValueKind.Null,
+            "guider profile ids are small per-rig integers; the donor's id can name a different profile on the recipient's guider");
         phd2.GetProperty("port").GetInt32().Should().Be(4400);
         phd2.GetProperty("guide_focal_length").GetInt32().Should().Be(0);
         phd2.GetProperty("guide_pixel_size").GetDouble().Should().Be(0);
