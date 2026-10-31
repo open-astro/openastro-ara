@@ -1987,18 +1987,18 @@ Use Material 3 `ThemeData` with these tokens. Material's default dark theme is t
 
 A horizontal `Row` of equipment "chips" — one per device type. Each chip:
 - Icon (Material icon; hand-drawn glyphs for Mount — a telescope — and Filter Wheel, which Material lacks)
-- Device name below the icon: "Camera", "Filter Wheel", "Focuser", "Mount", "Rotator", "Guider", "Flat Panel", "Switch", "Weather", "Safety", "Dome". Every chip is the same width so the icons are evenly spaced; below 600 px wide the name is dropped (icon only) and stays as the tooltip
+- Device name below the icon: "Camera", "Mount", "Guider", "Focuser", "Filter Wheel", "Rotator", "Flat Panel", "Switch", "Weather", "Safety", "Dome". Every chip is the same width so the icons are evenly spaced; below 600 px wide the name is dropped (icon only) and stays as the tooltip
 - Colored dot indicator (top-right of icon): gray (disconnected), green (connected + idle), blinking green (connected and working: exposing, slewing, moving), amber (needs a look), red (error)
 - Tap: opens that device's Settings page (connect + its settings)
 - Long-press / right-click: disconnect, or open device-specific properties panel
 
-Order (left-to-right, mirroring NINA's bar):
+Order (left-to-right, the most used first, then the rest in device-type order):
 1. Camera
-2. Filter Wheel
-3. Focuser
-4. Mount (telescope)
-5. Rotator
-6. Guider (PHD2)
+2. Mount (telescope)
+3. Guider (PHD2)
+4. Focuser
+5. Filter Wheel
+6. Rotator
 7. Flat Panel
 8. Switch
 9. Weather

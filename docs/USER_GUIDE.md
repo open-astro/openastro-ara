@@ -51,7 +51,7 @@ safety policies, storage, and optional sky-data downloads. Notes:
 
 ## 3. Connecting equipment
 
-The top bar shows a button per device (Camera, Filter Wheel, Focuser, Mount, Rotator, Guider, …),
+The top bar shows a button per device (Camera, Mount, Guider, Focuser, Filter Wheel, Rotator, …),
 with a status dot that blinks green while the device is working. Tap one to open its Settings page,
 where you connect/disconnect it and use its controls. Everything speaks **ASCOM Alpaca**;
 devices are discovered on the LAN, and the daemon remembers your choices for auto-connect on boot.

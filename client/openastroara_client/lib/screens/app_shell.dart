@@ -259,7 +259,7 @@ class _TopEquipmentBar extends StatelessWidget {
             child: SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               padding: EdgeInsets.symmetric(horizontal: 8),
-              // Per §25.3 device-type order; each chip is live (status dot) +
+              // Per §25.3 order (most used first); each chip is live (status dot) +
               // clickable (routes to its Settings panel). See TopEquipmentChips.
               child: TopEquipmentChips(),
             ),

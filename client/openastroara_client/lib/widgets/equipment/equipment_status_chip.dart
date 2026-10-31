@@ -51,7 +51,8 @@ StatusLevel equipmentChipLevel<T extends EquipmentDeviceStatus>(
       error: (_, _) => StatusLevel.error,
     );
 
-/// The §25.3 top-bar equipment chips, in device-type order: each shows live
+/// The §25.3 top-bar equipment chips, the most used first (Camera, Mount,
+/// Guider, Focuser), then the rest in device-type order: each shows live
 /// connection status (green dot when connected) and, on tap, jumps to that
 /// device's Settings panel to connect/control it. GUIDE keeps its bespoke
 /// [GuiderChip] (own status type; it opens the guider panel too); SW is multi-instance.
@@ -69,12 +70,13 @@ class TopEquipmentChips extends StatelessWidget {
             faultTypes: const {'camera'},
             watchLevel: (ref) => equipmentChipLevel(ref.watch(cameraStatusProvider))),
         EquipmentStatusChip(
-            icon: Icons.filter_alt,
-            glyph: const EquipmentGlyph.filterWheel(color: AraColors.textPrimary),
-            label: 'Filter Wheel',
-            panelId: 'eq.filterwheel',
-            faultTypes: const {'filterwheel'},
-            watchLevel: (ref) => equipmentChipLevel(ref.watch(filterWheelProvider))),
+            icon: Icons.public,
+            glyph: const EquipmentGlyph.telescope(color: AraColors.textPrimary),
+            label: 'Mount',
+            panelId: 'eq.mount',
+            faultTypes: const {'telescope'},
+            watchLevel: (ref) => equipmentChipLevel(ref.watch(mountProvider))),
+        const GuiderChip(),
         EquipmentStatusChip(
             icon: Icons.adjust,
             label: 'Focuser',
@@ -82,19 +84,18 @@ class TopEquipmentChips extends StatelessWidget {
             faultTypes: const {'focuser'},
             watchLevel: (ref) => equipmentChipLevel(ref.watch(focuserProvider))),
         EquipmentStatusChip(
-            icon: Icons.public,
-            glyph: const EquipmentGlyph.telescope(color: AraColors.textPrimary),
-            label: 'Mount',
-            panelId: 'eq.mount',
-            faultTypes: const {'telescope'},
-            watchLevel: (ref) => equipmentChipLevel(ref.watch(mountProvider))),
+            icon: Icons.filter_alt,
+            glyph: const EquipmentGlyph.filterWheel(color: AraColors.textPrimary),
+            label: 'Filter Wheel',
+            panelId: 'eq.filterwheel',
+            faultTypes: const {'filterwheel'},
+            watchLevel: (ref) => equipmentChipLevel(ref.watch(filterWheelProvider))),
         EquipmentStatusChip(
             icon: Icons.rotate_right,
             label: 'Rotator',
             panelId: 'eq.rotator',
             faultTypes: const {'rotator'},
             watchLevel: (ref) => equipmentChipLevel(ref.watch(rotatorProvider))),
-        const GuiderChip(),
         EquipmentStatusChip(
             icon: Icons.wb_sunny,
             label: 'Flat Panel',

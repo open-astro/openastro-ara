@@ -31,14 +31,17 @@ void main() {
     expect(find.byTooltip('Filter Wheel'), findsOneWidget);
   });
 
-  testWidgets('the top bar names every device in full', (tester) async {
+  testWidgets('the top bar names every device in full, the most used first', (tester) async {
     await _pumpAt(tester, 1600, const TopEquipmentChips());
-    for (final name in const [
-      'Camera', 'Filter Wheel', 'Focuser', 'Mount', 'Rotator', 'Guider',
+    const order = [
+      'Camera', 'Mount', 'Guider', 'Focuser', 'Filter Wheel', 'Rotator',
       'Flat Panel', 'Switch', 'Weather', 'Safety', 'Dome',
-    ]) {
+    ];
+    for (final name in order) {
       expect(find.text(name), findsOneWidget, reason: name);
     }
+    final xs = [for (final name in order) tester.getCenter(find.text(name)).dx];
+    expect(xs, orderedEquals([...xs]..sort()), reason: 'left to right: $order');
   });
 
   testWidgets('every chip is the same width, whatever its name, so the icons are evenly spaced', (tester) async {
