@@ -264,9 +264,20 @@ class _TopEquipmentBar extends StatelessWidget {
               child: TopEquipmentChips(),
             ),
           ),
-          // Night mode toggle — sits right beside the equipment chips (the
-          // DOME chip is the last one) so it's reachable in one tap from any
-          // tab; the same as the Ctrl+N / Cmd+N hotkey.
+          // §61.1 — visible magnifying-glass icon on the right side of the
+          // top bar. Opens the same `showCommandPalette` dialog that ⌘K
+          // launches; tooltip surfaces the platform-correct shortcut so
+          // keyboard-first users learn it.
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 2),
+            child: IconButton(
+              icon: const Icon(Icons.search, size: 22),
+              tooltip: 'Search settings ($shortcutLabel)',
+              onPressed: () => showCommandPalette(context),
+            ),
+          ),
+          // Night mode toggle — one tap from any tab; the same as the
+          // Ctrl+N / Cmd+N hotkey.
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 2),
             child: Consumer(
@@ -290,18 +301,10 @@ class _TopEquipmentBar extends StatelessWidget {
               },
             ),
           ),
-          const SettingsGearButton(),
-          // §61.1 — visible magnifying-glass icon on the right side of the
-          // top bar. Opens the same `showCommandPalette` dialog that ⌘K
-          // launches; tooltip surfaces the platform-correct shortcut so
-          // keyboard-first users learn it.
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            child: IconButton(
-              icon: const Icon(Icons.search, size: 22),
-              tooltip: 'Search settings ($shortcutLabel)',
-              onPressed: () => showCommandPalette(context),
-            ),
+          // Settings last, at the right edge.
+          const Padding(
+            padding: EdgeInsets.only(right: 6),
+            child: SettingsGearButton(),
           ),
         ],
       ),
