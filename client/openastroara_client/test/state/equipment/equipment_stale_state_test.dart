@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:fake_async/fake_async.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/discovered_device.dart';
@@ -17,6 +18,7 @@ class _FlakyMountApi implements EquipmentDeviceClient<MountStatus> {
   @override
   Future<void> forget() async {}
   bool failing = false;
+  String runtimeState = 'idle';
   int statusReads = 0;
 
   @override
@@ -28,7 +30,7 @@ class _FlakyMountApi implements EquipmentDeviceClient<MountStatus> {
       name: 'EQ6-R',
       connectionState: EquipmentConnectionState.connected,
       capabilities: null,
-      runtimeState: 'idle',
+      runtimeState: runtimeState,
       rightAscensionHours: null,
       declinationDegrees: null,
       tracking: true,
@@ -125,6 +127,31 @@ void main() {
         expect(container.read(mountProvider).hasError, isFalse,
             reason: 'round $round: a recovered blip must clear the count');
       }
+    });
+  });
+
+  test('a busy reading outlasting the settle-poll falls back to the liveness poll',
+      () {
+    // An exposure longer than the ~60 s settle cap (or a rig restarted
+    // mid-exposure) used to leave the device unpolled, so the chip blinked
+    // "exposing" forever. The reading must keep refreshing at the live cadence.
+    fakeAsync((async) {
+      final api = _FlakyMountApi()..runtimeState = 'slewing';
+      final container = ProviderContainer(overrides: [
+        mountApiProvider.overrideWithValue(api),
+        wsEventsProvider.overrideWith((ref) => const Stream<WsEvent>.empty()),
+      ]);
+      container.listen(mountProvider, (_, _) {});
+      async.flushMicrotasks();
+      expect(container.read(mountProvider).value?.isBusy, isTrue);
+
+      async.elapse(EquipmentDeviceNotifier.settleInterval *
+          (EquipmentDeviceNotifier.maxSettlePolls + 2));
+      api.runtimeState = 'idle';
+      async.elapse(EquipmentDeviceNotifier.livePollInterval * 2);
+
+      expect(container.read(mountProvider).value?.isBusy, isFalse);
+      container.dispose();
     });
   });
 }

@@ -28,7 +28,7 @@ abstract class EquipmentDeviceNotifier<T extends EquipmentDeviceStatus>
   /// Upper bound on settle-poll ticks (~60 s at [settleInterval]). A device
   /// wedged in `connecting` — or a daemon that never settles it — must not keep
   /// the timer (and its network reads) alive for the whole session. After the cap
-  /// the poll stops; the card holds its last state and the user can refresh.
+  /// the poll stops (a connected device drops to the liveness poll instead).
   static const int maxSettlePolls = 40;
 
   /// Cadence of the background liveness poll that keeps a CONNECTED device's
@@ -354,6 +354,9 @@ abstract class EquipmentDeviceNotifier<T extends EquipmentDeviceStatus>
       // for the whole session (e.g. the network dropped after the connect 202).
       if (_settleTicks >= maxSettlePolls) {
         _cancelSettle();
+        // A connected device still busy (an exposure past the cap) drops to the
+        // liveness poll, so its reading can't freeze on "exposing".
+        if (state.value?.isConnected ?? false) _armLive();
         return;
       }
       _settleTicks++;
