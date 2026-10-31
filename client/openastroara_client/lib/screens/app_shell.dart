@@ -85,6 +85,9 @@ class _AppShellState extends ConsumerState<AppShell> {
     super.dispose();
   }
 
+  void _openSettings() =>
+      ref.read(selectedTabIndexProvider.notifier).select(kOptionsTabIndex);
+
   @override
   Widget build(BuildContext context) {
     final selectedTab = ref.watch(selectedTabIndexProvider);
@@ -159,6 +162,15 @@ class _AppShellState extends ConsumerState<AppShell> {
                       control: true,
                     ): () =>
                         showCommandPalette(context),
+                    // ⌘, / Ctrl+, — the platform-standard Settings shortcut.
+                    const SingleActivator(
+                      LogicalKeyboardKey.comma,
+                      meta: true,
+                    ): _openSettings,
+                    const SingleActivator(
+                      LogicalKeyboardKey.comma,
+                      control: true,
+                    ): _openSettings,
                   },
                   child: Focus(
                     focusNode: _focus,
