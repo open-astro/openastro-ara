@@ -41,6 +41,9 @@ abstract class EquipmentDeviceNotifier<T extends EquipmentDeviceStatus>
   // Fast, capped poll while a device is mid-connect (drives it to settlement).
   Timer? _settleTimer;
   int _settleTicks = 0;
+  // The settle cap tripped on a connected device that is still busy: keep it on
+  // the liveness poll until it goes idle, rather than re-arming a fresh budget.
+  bool _busyCapSpent = false;
   // Slow, uncapped poll while a device is connected (keeps the live reading fresh).
   Timer? _liveTimer;
   // True while a manual (timer/user) refresh is in flight — a second is dropped so
@@ -99,6 +102,7 @@ abstract class EquipmentDeviceNotifier<T extends EquipmentDeviceStatus>
     // threshold on a device that has failed once on its current link.
     _consecutiveReadFailures = 0;
     _generation++;
+    _busyCapSpent = false;
     _cancelAllPolls();
     // Tear down both timers when the notifier is disposed OR rebuilt. Riverpod
     // invokes and CLEARS onDispose callbacks on each rebuild before re-running
@@ -211,7 +215,11 @@ abstract class EquipmentDeviceNotifier<T extends EquipmentDeviceStatus>
     try {
       await action(api);
       if (ref.mounted) {
-        if (pollAfter) _armSettle();
+        if (pollAfter) {
+          // A new command starts a new busy period: track it at the fast cadence.
+          _busyCapSpent = false;
+          _armSettle();
+        }
         await refresh(api);
       }
       return true;
@@ -323,7 +331,12 @@ abstract class EquipmentDeviceNotifier<T extends EquipmentDeviceStatus>
     // Fast-poll (settle cadence) while connecting OR while connected-but-busy (a
     // focuser moving, a dome slewing) so the panel tracks the device to rest; the
     // slow liveness-poll otherwise; nothing when disconnected/errored.
-    if (status.isConnecting || (status.isConnected && status.isBusy)) {
+    final busy = status.isConnected && status.isBusy;
+    if (!busy) _busyCapSpent = false;
+    if (busy && _busyCapSpent) {
+      _cancelSettle();
+      _armLive();
+    } else if (status.isConnecting || busy) {
       _cancelLive();
       _armSettle();
     } else if (status.isConnected) {
@@ -356,7 +369,10 @@ abstract class EquipmentDeviceNotifier<T extends EquipmentDeviceStatus>
         _cancelSettle();
         // A connected device still busy (an exposure past the cap) drops to the
         // liveness poll, so its reading can't freeze on "exposing".
-        if (state.value?.isConnected ?? false) _armLive();
+        if (state.value?.isConnected ?? false) {
+          _busyCapSpent = true;
+          _armLive();
+        }
         return;
       }
       _settleTicks++;

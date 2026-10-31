@@ -154,4 +154,38 @@ void main() {
       container.dispose();
     });
   });
+
+  test('a device still busy after the settle cap stays on the liveness cadence',
+      () {
+    // Once the cap is spent, a still-busy reading must not re-arm a fresh
+    // settle budget: a long exposure (or a dome stuck "slewing") would otherwise
+    // be read every 1.5 s for most of the session.
+    fakeAsync((async) {
+      final api = _FlakyMountApi()..runtimeState = 'slewing';
+      final container = ProviderContainer(overrides: [
+        mountApiProvider.overrideWithValue(api),
+        wsEventsProvider.overrideWith((ref) => const Stream<WsEvent>.empty()),
+      ]);
+      container.listen(mountProvider, (_, _) {});
+      async.flushMicrotasks();
+      async.elapse(EquipmentDeviceNotifier.settleInterval *
+          (EquipmentDeviceNotifier.maxSettlePolls + 1));
+
+      final readsAtCap = api.statusReads;
+      async.elapse(EquipmentDeviceNotifier.livePollInterval * 4);
+      expect(api.statusReads - readsAtCap, 4,
+          reason: 'one read per liveness tick while the device stays busy');
+
+      // Going idle and then busy again (a new slew) gets the fast poll back.
+      api.runtimeState = 'idle';
+      async.elapse(EquipmentDeviceNotifier.livePollInterval);
+      api.runtimeState = 'slewing';
+      async.elapse(EquipmentDeviceNotifier.livePollInterval);
+      final readsAtNewSlew = api.statusReads;
+      async.elapse(EquipmentDeviceNotifier.settleInterval * 4);
+      expect(api.statusReads - readsAtNewSlew, 4,
+          reason: 'a new busy period starts a fresh settle budget');
+      container.dispose();
+    });
+  });
 }
