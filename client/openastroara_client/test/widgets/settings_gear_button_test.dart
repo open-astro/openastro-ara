@@ -19,8 +19,8 @@ void main() {
       container: container,
       child: const MaterialApp(home: Scaffold(body: SettingsGearButton())),
     ));
-    expect(find.byTooltip('Settings'), findsOneWidget);
-    await tester.tap(find.byTooltip('Settings'));
+    expect(find.byTooltip('Settings (Ctrl+,)'), findsOneWidget);
+    await tester.tap(find.byTooltip('Settings (Ctrl+,)'));
     await tester.pump();
     expect(container.read(selectedTabIndexProvider), kOptionsTabIndex);
   });

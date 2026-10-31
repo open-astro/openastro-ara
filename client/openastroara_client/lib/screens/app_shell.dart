@@ -67,6 +67,9 @@ class _AppShellState extends ConsumerState<AppShell> {
     _TabSpec(icon: Icons.settings, label: 'Settings', body: OptionsTab()),
   ];
 
+  void _openSettings() =>
+      ref.read(selectedTabIndexProvider.notifier).select(kOptionsTabIndex);
+
   @override
   Widget build(BuildContext context) {
     final selectedTab = ref.watch(selectedTabIndexProvider);
@@ -129,7 +132,7 @@ class _AppShellState extends ConsumerState<AppShell> {
                 child: SafeArea(
                 child: CallbackShortcuts(
                   // §61 ⌘K on macOS, Ctrl+K elsewhere — both bound so the palette
-                  // is reachable regardless of host platform.
+                  // is reachable regardless of host platform. Same for ⌘, below.
                   bindings: <ShortcutActivator, VoidCallback>{
                     const SingleActivator(
                       LogicalKeyboardKey.keyK,
@@ -141,6 +144,15 @@ class _AppShellState extends ConsumerState<AppShell> {
                       control: true,
                     ): () =>
                         showCommandPalette(context),
+                    // ⌘, / Ctrl+, — the platform-standard Settings shortcut.
+                    const SingleActivator(
+                      LogicalKeyboardKey.comma,
+                      meta: true,
+                    ): _openSettings,
+                    const SingleActivator(
+                      LogicalKeyboardKey.comma,
+                      control: true,
+                    ): _openSettings,
                   },
                   child: Focus(
                     autofocus: true,
