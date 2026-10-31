@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/state/setup/setup_readiness.dart';
 import 'package:openastroara/models/polar_align.dart';
 import 'package:openastroara/models/ws_event.dart';
 import 'package:openastroara/state/polar_align/polar_align_state.dart';
@@ -150,13 +151,28 @@ void main() {
       expect(fresh.phase, PolarAlignStates.adjusting);
       expect(fresh.totalErrorArcmin, 5.0);
       expect(fresh.errorReason, isNull);
-      expect(fresh.zone, isNull);
+      expect(fresh.zone, 'green', reason: "the snapshot's own error, not a previous run's zone");
       expect(fresh.consecutiveSolveFailures, 0);
       expect(fresh.iteration, 0);
     });
 
+    test('reopening the panel after aligning keeps the Checklist step done', () {
+      // The panel resyncs from REST on open; the snapshot carries the error but
+      // no zone, so the green zone (and the Checklist tick) used to vanish.
+      final reopened = liveFromStatus(PolarAlignStatus.fromJson(const {
+        'state': 'stopped',
+        'current_error_arcmin': 3.2,
+      }));
+      expect(polarAlignStepState(reopened), SetupStepState.done);
+      expect(liveFromStatus(PolarAlignStatus.fromJson(const {'state': 'stopped', 'current_error_arcmin': 30.0})).zone,
+          'yellow');
+      expect(liveFromStatus(PolarAlignStatus.fromJson(const {'state': 'stopped', 'current_error_arcmin': 90.0})).zone,
+          'red');
+    });
+
     test('a null-error snapshot clears previous error values', () {
       final idle = liveFromStatus(PolarAlignStatus.fromJson(const {'state': 'idle'}));
+      expect(idle.zone, isNull);
       expect(idle.totalErrorArcmin, isNull);
       expect(idle.altErrorArcmin, isNull);
       expect(idle.azErrorArcmin, isNull);
