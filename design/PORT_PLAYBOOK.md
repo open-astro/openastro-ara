@@ -3191,7 +3191,7 @@ No user-facing knobs for rotation cadence / size cap in the initial release — 
 
 Splash → network scan → user picks the rig (no auth per §67) → Profile box pre-selects last-used profile → click [Image] → main app. **Three taps from cold-launch to imaging.**
 
-Nothing about the rig is stored on the client (#1129): its address and even its name can change between nights (backyard, remote site, a new DHCP lease), so every launch scans (mDNS plus the subnet sweep; on iOS the sweep alone, since iOS refuses raw multicast without Apple's multicast entitlement). A typed address is used for that session only. Versions before #1129 saved the list with addresses; the first launch of a newer client deletes it. The scan never picks a rig on its own, even when only one answers: a site can have four or five rigs, some not up yet, so the user always taps the one they mean. Once connected, a dropped link (Wi-Fi blip, Pi reboot) reconnects to that same rig automatically, with backoff.
+Nothing about the rig is stored on the client (#1129): its address and even its name can change between nights (backyard, remote site, a new DHCP lease), so every launch scans (mDNS plus the subnet sweep; on iOS the system's Bonjour browse via NWBrowser, then the subnet sweep if it finds nothing, since iOS refuses raw multicast without Apple's multicast entitlement). A typed address is used for that session only. Versions before #1129 saved the list with addresses; the first launch of a newer client deletes it. The scan never picks a rig on its own, even when only one answers: a site can have four or five rigs, some not up yet, so the user always taps the one they mean. Once connected, a dropped link (Wi-Fi blip, Pi reboot) reconnects to that same rig automatically, with backoff.
 
 ### 30.4 Add a Profile
 
@@ -3756,7 +3756,7 @@ ARA does NOT advertise WoL support. A future release may add a Settings → Syst
 
 **DHCP behavior:**
 
-Since #1129 the client stores no address: every launch scans (mDNS plus the subnet sweep; the sweep alone on iOS), so a new DHCP lease (router reboot, lease expiration, manual ifdown/up) needs no client-side mitigation. For SSH and other by-hand access docs/DEPLOY.md still suggests:
+Since #1129 the client stores no address: every launch scans (mDNS plus the subnet sweep; on iOS the Bonjour browse via NWBrowser, then the subnet sweep if it finds nothing), so a new DHCP lease (router reboot, lease expiration, manual ifdown/up) needs no client-side mitigation. For SSH and other by-hand access docs/DEPLOY.md still suggests:
 
 1. **DHCP reservation by MAC** on the home router — the Pi keeps the same IP across reboots
 2. **mDNS hostname `araserver.local`** — `avahi-daemon` ships with Trixie; ARA Core publishes `_openastroara._tcp.local` per §30.7.1 + §32.3

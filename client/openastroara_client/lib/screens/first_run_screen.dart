@@ -104,19 +104,30 @@ class _FirstRunScreenState extends ConsumerState<FirstRunScreen> {
                   : const SizedBox.shrink(),
             ),
             Expanded(
-              child: _discovered.isEmpty
-                  ? const Center(
-                      child: Padding(
-                        padding: EdgeInsets.all(16),
-                        child: Text(
-                          'Looking for servers… rescanning every few seconds.\n'
-                          'If yours doesn’t appear, tap ⟳ (top right) or add it '
-                          'manually below.',
-                          textAlign: TextAlign.center,
+              // Pull down to rescan, the same as ⟳ (the list must always
+              // scroll for the gesture to work when it is empty or short).
+              child: RefreshIndicator(
+                onRefresh: () async {
+                  _rescan();
+                  await Future<void>.delayed(const Duration(seconds: 1));
+                },
+                child: _discovered.isEmpty
+                  ? ListView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      children: const [
+                        Padding(
+                          padding: EdgeInsets.all(16),
+                          child: Text(
+                            'Looking for servers… rescanning every few seconds.\n'
+                            'If yours doesn’t appear, pull down, tap ⟳ (top right) '
+                            'or add it manually below.',
+                            textAlign: TextAlign.center,
+                          ),
                         ),
-                      ),
+                      ],
                     )
                   : ListView(
+                      physics: const AlwaysScrollableScrollPhysics(),
                       children: _discovered
                           .map(
                             (s) => ListTile(
@@ -133,6 +144,7 @@ class _FirstRunScreenState extends ConsumerState<FirstRunScreen> {
                           )
                           .toList(),
                     ),
+              ),
             ),
             const Divider(),
             Text(
