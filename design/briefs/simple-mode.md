@@ -1,6 +1,6 @@
 # Simple Mode: design brief
 
-Shaped 2026-11-01 (`/impeccable shape simple-mode`). Paperclip: ALP-4810. Rendered reference: [`design/preview/ara-design-preview.html`](../preview/ara-design-preview.html), Simple Mode toggle. Visual rules live in `DESIGN.md` ("Simple Mode: Image First"), and product decisions live in `PRODUCT.md`. Nothing here is implemented yet.
+Shaped 2026-11-01 (`/impeccable shape simple-mode`). Paperclip: ALP-4810. Rendered reference: [`design/preview/ara-design-preview.html`](../preview/ara-design-preview.html), Simple Mode toggle. Visual rules live in `DESIGN.md` ("Simple Mode: Image First"), and product decisions live in `PRODUCT.md`. The two-rail layout and Preview are prototyped on `feat/simple-mode` behind an experimental toggle (approved 2026-11-01); the other modes are not built yet.
 
 ## Job and audience
 
@@ -16,19 +16,25 @@ Shaped 2026-11-01 (`/impeccable shape simple-mode`). Paperclip: ALP-4810. Render
 ## Direction
 
 - **Image first:** the latest frame fills the screen.
-- **Controls:** they float on translucent panels (layout C in `DESIGN.md`):
-  - **top:** a status strip, with the attention banner centred under it when needed;
-  - **right column, 168 px wide:** the mode's panel (in Preview: controls on top, the last frame's facts at the bottom), then the mode list, then Emergency Stop;
-  - **bottom row, 56 px tall:** stats, the guiding graph and the histogram, each once it has data.
-- **Clean view:** clicking the image hides every panel, Emergency Stop included; any alert stays. Clicking again brings them back.
+- **Simpler than ASIAir, not a copy of it.**
+- **Controls:** they float on translucent panels (the two-rail layout in `DESIGN.md`):
+  - **top:** a status strip (device dots, Night mode, ⋯), with the attention banner centred under it when needed;
+  - **top-left:** the camera status pill, at most 300 px wide;
+  - **right rail, 72 px wide and only as tall as its controls:** the mode name (tap for the five modes as a grid), the shutter, the settings chip ("5 s · 100");
+  - **bottom right:** the compact Emergency Stop on its own, a 60 px STOP with a 2 s hold;
+  - **left rail:** Sky, Info and Library; Info shows the last frame's facts as one line under the strip, aligned right;
+  - **bottom row, 56 px tall:** the guiding graph and the histogram at equal width, each once it has data;
+  - **popovers** (the mode grid, settings, a mode's panel) open left of the right rail and never move it.
+- **Fixed slots:** nothing shifts when state changes; a panel with no data is not drawn.
+- **Immersive view:** clicking the image hides every panel, Emergency Stop included; the status pill and any alert stay. Clicking again brings them back.
 - **Status strip:** only connected devices show.
 - **Unchanged:** colours, status dots, Night-mode behaviour and Emergency Stop are as in the full UI.
 
 ## Scope
 
-- **One screen:** a mode list with Preview · Focus · Polar align · Target · Run.
-- **Settings:** open from the gear. "Show all options" switches to the full UI. In slice 1 the gear, the device dots and ⌘K also switch to the full UI on the matching Settings page; a settings sheet over Simple Mode comes later.
-- **Getting in:** a Simple Mode icon in the full UI's top-right cluster, between Night mode and the gear.
+- **One screen:** a mode grid with Preview · Focus · Polar align · Target · Run.
+- **Settings:** open from ⋯. "Show all options" switches to the full UI. In slice 1 Settings, the device dots and ⌘K also switch to the full UI on the matching Settings page; a settings sheet over Simple Mode comes later.
+- **Getting in:** turn on Settings → System → Experimental → Simple Mode (off by default, per client), then use the frame icon in the full UI's top-right cluster, between Night mode and the gear.
 - **Run:** a quick plan builder only. It sets exposure and frame count per filter for the current target, and autofocus, dither and flats follow the profile's defaults. The sequence editor stays in the full UI only.
 - **Phones:** they run Simple Mode only, with no Sequence tab, once Simple Mode exists. Until then, PR #1474's phone layout stands.
 - **Desktop default:** the full UI stays the default on desktop.
@@ -38,30 +44,35 @@ Shaped 2026-11-01 (`/impeccable shape simple-mode`). Paperclip: ALP-4810. Render
 
 | Where | What |
 |---|---|
-| Top | Status strip: device dots, target and state, Show all options, search, Night mode, gear |
+| Top | Status strip: device dots, Night mode, ⋯ |
+| Top-left, under the strip | Camera status pill |
+| Top-right, under the strip | Info line (when on) |
 | Centre, under the strip | Attention banner, when something needs the person |
-| Right column | The mode's panel; the mode list; Emergency Stop |
-| Bottom row | Stats: guiding graph (RMS, RA/Dec trace) and histogram |
-
-The histogram is left out.
+| Left rail | Sky, Info, Library |
+| Right rail | Mode name, shutter, settings chip |
+| Bottom right | Emergency Stop |
+| Bottom row | Guiding graph (RMS, RA/Dec trace) and histogram |
+| Centre, over the image | Run's plan sheet; Night done when the plan finishes |
 
 ## Interaction
 
 - **Size:** targets are at least 44 px, with 14 px text.
 - **⌘K search:** finds every setting, including ones Simple Mode hides, and opens them in a sheet over Simple Mode without leaving it.
 - **Night mode:** every panel must still read through the red filter.
-- **Shortcuts:** none for now; the clean view toggles only by clicking the image.
+- **Shortcuts:** none for now; the immersive view toggles only by clicking the image.
 
 ## Mode screens (decided 2026-11-01)
 
 - **Mode order:** Preview · Focus · Polar align · Target · Run.
-- **Preview:** shoot and loop. One panel: Exposure, Filter, a capture shutter and Loop/Single on top; after a frame, its facts (HFR, stars, exposure, gain · offset, clipped) at the bottom. Single saves the frame (the daemon registers every Take One); Loop is live view and saves nothing. No Save frame button.
-- **Polar align:** a target drawn on the image (crosshair, 10′ ring, current pole, arrow). The right column shows the error, the zone (under 10′ green, under 60′ amber, otherwise red), the altitude and azimuth corrections, and Stop.
-- **Focus:** a zoomed star with its HFR ring, the HFR, the focus curve, the position, Autofocus, and four nudge steps.
-- **Target:** a full-screen planetarium. Tap an object, then Go to (slew and plate-solve centre). Search sits under the status strip.
-- **Run finished:** a Night done summary (frames per filter, integration, best HFR, issues, flats, mount parked, then Image Library and New plan).
-- **No rig / no frame:** tonight's planetarium behind a Connect to your rig card (discovered rigs, Add by address). Device dots go grey, the switcher dims, and Emergency Stop shows disabled.
-- **Always visible in both modes:** Emergency Stop, the attention banner, device status dots, Night mode and the Simple ↔ full UI switch.
+- **Mode panels:** every mode except Preview opens its panel to the left of the right rail, a floating card like the settings popover, level with the rail's top. Run uses a centred sheet instead (decided 2026-11-01).
+- **Preview:** shoot and loop, from the right rail: the shutter and the settings chip (Exposure, Gain, Filter, Loop/Single). The last frame's facts (HFR, stars, exposure · filter, gain · offset, clipped) come from Info. Single saves the frame (the daemon registers every Take One); Loop is live view and saves nothing. No Save frame button.
+- **Polar align:** a target drawn on the image (crosshair, 10′ ring, current pole, arrow). The mode panel shows the error, the zone (under 10′ green, under 60′ amber, otherwise red), the altitude and azimuth corrections, and Stop.
+- **Focus:** a zoomed star with its HFR ring top-left; the mode panel shows the HFR, the focus curve, the position, Autofocus, and four nudge steps.
+- **Target:** a full-screen planetarium. Tap an object, then Go to (slew and plate-solve centre). Search sits in the mode panel.
+- **Run:** the quick plan builder as a sheet centred over the image, the rails still visible; Start imaging closes it.
+- **Run finished:** a Night done summary, in the same centred sheet (frames per filter, integration, best HFR, issues, flats, mount parked, then Image Library and New plan).
+- **No rig / no frame:** tonight's planetarium behind a Connect to your rig card (discovered rigs, Add by address). Device dots go grey, the mode name dims, and Emergency Stop shows disabled.
+- **Always visible in both modes:** Emergency Stop (except in the immersive view), the attention banner, device status dots, Night mode and the Simple ↔ full UI switch.
 
 ## Errors, horizon and the way out (decided 2026-11-01)
 
@@ -72,3 +83,4 @@ The histogram is left out.
 ## Still open
 
 - Exact copy for every state and error, written against the daemon's real failure reasons.
+- Where the attention banner goes while the Info line is showing (both sit under the strip).
