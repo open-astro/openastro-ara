@@ -3,10 +3,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/sequence/imaging_run_body.dart';
 import 'package:openastroara/models/sequence/sequence_summary.dart';
+import 'package:openastroara/models/sky_model_calibration.dart';
 import 'package:openastroara/screens/simple/simple_run_panel.dart';
 import 'package:openastroara/services/sequence_api.dart';
 import 'package:openastroara/state/sequencer/sequence_list_state.dart';
+import 'package:openastroara/state/planning/sky_model_calibration_state.dart';
+import 'package:openastroara/state/settings/camera_electronics_state.dart';
 import 'package:openastroara/state/settings/filter_set_state.dart';
+import 'package:openastroara/state/settings/optics_settings_state.dart';
+import 'package:openastroara/state/settings/site_settings_state.dart';
 import 'package:openastroara/state/sky_atlas/planetarium_selection_state.dart';
 
 const _m31 = PlanetariumSelection(
@@ -70,9 +75,41 @@ class _Filters extends FilterSetNotifier {
   FilterSetSettings build() => const FilterSetSettings(filters: _lrgb);
 }
 
+// A configured rig, so the suggested sub lengths compute (as in
+// target_plan_dialog_test).
+class _Optics extends OpticsSettingsNotifier {
+  @override
+  OpticsSettings build() => const OpticsSettings(
+      focalLengthMm: 447, reducerFactor: 1.0, sensorWidthPx: 6248, sensorHeightPx: 4176, pixelSizeUm: 3.76, apertureMm: 91);
+}
+
+class _Electronics extends CameraElectronicsNotifier {
+  @override
+  CameraElectronics build() =>
+      const CameraElectronics(readNoiseE: 0.7, fullWellE: 50000, electronsPerAdu: 0.8, quantumEfficiencyPeak: 0.8);
+}
+
+class _Site extends SiteSettingsNotifier {
+  @override
+  SiteSettings build() => SiteSettings(bortleClass: 6);
+}
+
+class _NoSkyModel extends SkyModelCalibrationNotifier {
+  @override
+  Future<SkyModelCalibration?> build() async => null;
+}
+
+final _rig = <Object>[
+  opticsSettingsProvider.overrideWith(_Optics.new),
+  cameraElectronicsProvider.overrideWith(_Electronics.new),
+  siteSettingsProvider.overrideWith(_Site.new),
+  skyModelCalibrationProvider.overrideWith(_NoSkyModel.new),
+];
+
 Future<ProviderContainer> _pump(WidgetTester tester, _Seq seq, Widget child,
-    {PlanetariumSelection? sel = _m31}) async {
+    {PlanetariumSelection? sel = _m31, List<Object> overrides = const []}) async {
   final container = ProviderContainer(overrides: [
+    ...overrides.cast(),
     sequenceApiProvider.overrideWith((ref) => seq),
     planetariumSelectionProvider.overrideWith(() => _Sel(sel)),
     filterSetProvider.overrideWith(_Filters.new),
@@ -130,6 +167,24 @@ void main() {
     expect(simpleRunSummary(run, _imaging(100, state: SequenceRunState.completed)), 'Done');
     // A run started elsewhere: just its frames.
     expect(simpleRunSummary(const SimpleRun(), _imaging(7)), '7 frames');
+  });
+
+  test('the hint: rows that differ, grouped by length; null when all match', () {
+    const lrgb = [
+      FilterPlanStep(filterName: 'L', exposureSeconds: 5, frameCount: 15),
+      FilterPlanStep(filterName: 'R', exposureSeconds: 180, frameCount: 15),
+      FilterPlanStep(filterName: 'G', exposureSeconds: 5, frameCount: 15),
+      FilterPlanStep(filterName: 'B', exposureSeconds: 5, frameCount: 15),
+    ];
+    expect(simpleRunSuggestion(lrgb, [120, 180, 180, 180]), 'L 2 min · GB 3 min');
+    expect(simpleRunSuggestion(lrgb, [5, 180, 5, 5]), isNull);
+    const narrow = [
+      FilterPlanStep(filterName: 'Ha', exposureSeconds: 60, frameCount: 30),
+      FilterPlanStep(filterName: 'OIII', exposureSeconds: 60, frameCount: 30),
+    ];
+    expect(simpleRunSuggestion(narrow, [300, 300]), 'Ha/OIII 5 min');
+    const osc = [FilterPlanStep(filterName: '', exposureSeconds: 5, frameCount: 60)];
+    expect(simpleRunSuggestion(osc, [90]), '90 s');
   });
 
   test('durations read in hours and minutes', () {
@@ -225,6 +280,20 @@ void main() {
       expect(find.text('60 frames'), findsOneWidget);
       expect(find.text('Tap the shutter to start imaging'), findsOneWidget);
       expect(find.text('Start imaging'), findsNothing);
+      // An unconfigured rig has no suggestion beyond the default: no hint.
+      expect(find.byKey(const Key('simple-run-use-suggested')), findsNothing);
+    });
+
+    testWidgets('a configured rig gets the suggested subs in one line; Use all takes them', (tester) async {
+      final c = await _pump(tester, _Seq(), SimpleRunSheet(onOpenTarget: () {}, onLibrary: () {}), overrides: _rig);
+      expect(find.textContaining('Suggested: '), findsOneWidget);
+      final before = c.read(simpleRunPlanProvider).map((s) => s.exposureSeconds).toList();
+      expect(before.toSet(), {5.0}, reason: 'rows start at the profile default');
+      await tester.tap(find.byKey(const Key('simple-run-use-suggested')));
+      await tester.pumpAndSettle();
+      final after = c.read(simpleRunPlanProvider).map((s) => s.exposureSeconds).toList();
+      expect(after.every((s) => s >= 30 && s <= 600), isTrue, reason: 'the plan clamp: $after');
+      expect(find.textContaining('Suggested: '), findsNothing, reason: 'every row matches now');
     });
 
     testWidgets('a removed row leaves the plan; the last row stays', (tester) async {

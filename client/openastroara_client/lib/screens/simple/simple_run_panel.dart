@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/sequence/imaging_run_body.dart';
 import '../../models/sequence/sequence_summary.dart';
 import '../../services/sequence_api.dart' show SequenceClient;
+import '../../state/planning/sky_model_calibration_state.dart';
 import '../../state/sequencer/create_imaging_run.dart';
 import '../../state/sequencer/sequence_list_state.dart';
 import '../../state/settings/filter_set_state.dart';
@@ -16,7 +17,7 @@ import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
 import '../../util/friendly_error.dart';
 import '../../widgets/sequencer/target_plan_dialog.dart'
-    show planOptionsAvailable;
+    show planOptionsAvailable, suggestedSubSeconds;
 import 'simple_preview_panel.dart'
     show
         SimplePresetTile,
@@ -31,9 +32,10 @@ import 'simple_target_panel.dart' show simpleTargetStatus;
 /// narrowband filters, else every filter; one row with no filter name when
 /// there is no choice to make (OSC). Tonight's frames split evenly. Pure —
 /// unit-tested.
-// shortcut: subs are the profile's default exposure, not the plan chooser's
-// sky-based suggestion, and frames don't fit the dark window; reuse
-// target_plan_dialog's _steps when the sheet should be smarter.
+// Subs start at the profile's default exposure; the sheet offers the
+// suggested ones (simpleRunSuggestion).
+// shortcut: frames don't fit the dark window; reuse target_plan_dialog's
+// _steps split when the sheet should be smarter.
 List<FilterPlanStep> simpleRunDefaultPlan(
   List<PlanningFilter> filters,
   double exposureSeconds,
@@ -80,6 +82,25 @@ List<int> simpleRunProgress(List<FilterPlanStep> steps, int captured) {
         return done;
       }(),
   ];
+}
+
+/// The plan's one-line hint: the suggested sub length of every row that
+/// differs from it, rows sharing a length together ("L 120 s · GB 180 s",
+/// "Ha/OIII 300 s"); null when every row already matches. Pure —
+/// unit-tested.
+String? simpleRunSuggestion(List<FilterPlanStep> steps, List<double> suggested) {
+  final byLength = <double, List<String>>{};
+  for (var i = 0; i < steps.length; i++) {
+    if (suggested[i] == steps[i].exposureSeconds) continue;
+    (byLength[suggested[i]] ??= []).add(steps[i].filterName);
+  }
+  if (byLength.isEmpty) return null;
+  String len(double s) => formatExposure(Duration(milliseconds: (s * 1000).round()));
+  return byLength.entries.map((e) {
+    final names = e.value.where((n) => n.isNotEmpty).toList();
+    final joined = names.join(names.every((n) => n.length == 1) ? '' : '/');
+    return joined.isEmpty ? len(e.key) : '$joined ${len(e.key)}';
+  }).join(' · ');
 }
 
 int _total(List<FilterPlanStep> steps) =>
@@ -413,6 +434,26 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
       0.0,
       (t, s) => t + s.exposureSeconds * s.frameCount,
     );
+    final k =
+        ref.watch(skyModelCalibrationProvider).value?.appliedK ?? const {};
+    final suggested = [
+      for (final s in steps)
+        suggestedSubSeconds(
+          ref,
+          // The unnamed row (no filter choice) is the set's one filter.
+          filterName: s.filterName.isEmpty
+              ? filters.firstOrNull?.name ?? ''
+              : s.filterName,
+          raDeg: sel.raJ2000Hours * 15,
+          decDeg: sel.decJ2000Deg,
+          defaultExposure:
+              ref.watch(imagingDefaultsProvider).defaultExposure.inMilliseconds /
+              1000,
+          skyCalibrationK: k,
+        ),
+    ];
+    final hint = simpleRunSuggestion(steps, suggested);
+    Duration dur(double s) => Duration(milliseconds: (s * 1000).round());
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -443,8 +484,14 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
                   value: Duration(
                     milliseconds: (steps[i].exposureSeconds * 1000).round(),
                   ),
-                  options: exposurePresets(minSec: 1, maxSec: 0),
-                  format: formatExposure,
+                  // The suggestion is listed, and marked, even off the presets.
+                  options: {
+                    ...exposurePresets(minSec: 1, maxSec: 0),
+                    dur(suggested[i]),
+                  }.toList()..sort(),
+                  format: (d) => d == dur(suggested[i])
+                      ? '${formatExposure(d)} · suggested'
+                      : formatExposure(d),
                   onSelected: (d) =>
                       plan.setExposure(i, d.inMilliseconds / 1000),
                 ),
@@ -495,6 +542,21 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
                 ),
               ),
             ),
+          ),
+        if (hint != null)
+          Row(
+            children: [
+              Expanded(child: Text('Suggested: $hint', style: _dim)),
+              TextButton(
+                key: const Key('simple-run-use-suggested'),
+                onPressed: () {
+                  for (var i = 0; i < steps.length; i++) {
+                    plan.setExposure(i, suggested[i]);
+                  }
+                },
+                child: const Text('Use all'),
+              ),
+            ],
           ),
         Row(
           children: [
