@@ -24,7 +24,14 @@ import UIKit
         return
       }
       let scene = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first
-      switch scene?.effectiveGeometry.interfaceOrientation {
+      // effectiveGeometry is iOS 16+; the deployment target is 15.
+      let orientation: UIInterfaceOrientation?
+      if #available(iOS 16.0, *) {
+        orientation = scene?.effectiveGeometry.interfaceOrientation
+      } else {
+        orientation = scene?.interfaceOrientation
+      }
+      switch orientation {
       case .landscapeLeft: result("landscapeLeft")
       case .landscapeRight: result("landscapeRight")
       case .portrait, .portraitUpsideDown: result("portrait")
