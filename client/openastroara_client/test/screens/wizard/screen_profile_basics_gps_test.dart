@@ -43,6 +43,38 @@ void main() {
     return container;
   }
 
+  testWidgets('Bortle/SQM fields validate and never save out-of-range', (
+    tester,
+  ) async {
+    final container = await pump(tester);
+    final site = container.read(wizardControllerProvider).draft.site;
+    Future<void> type(String key, String v) async {
+      await tester.ensureVisible(find.byKey(ValueKey(key)));
+      await tester.enterText(find.byKey(ValueKey(key)), v);
+      await tester.pump();
+    }
+
+    // Seeded from the current site settings (default Bortle 6, SQM unset).
+    expect(find.text('6'), findsOneWidget);
+    expect(site.bortleClass, isNull);
+
+    await type('wiz-bortle', '10');
+    expect(find.text('Enter a whole number from 1 to 9.'), findsOneWidget);
+    expect(site.bortleClass, isNull);
+    await type('wiz-bortle', '3');
+    expect(find.text('Enter a whole number from 1 to 9.'), findsNothing);
+    expect(site.bortleClass, 3);
+
+    await type('wiz-sqm', '15');
+    expect(find.text('Enter a value from 16 to 22.5, or leave empty.'),
+        findsOneWidget);
+    expect(site.sqmMagPerArcsec2, isNull);
+    await type('wiz-sqm', '21.4');
+    expect(site.sqmMagPerArcsec2, 21.4);
+    await type('wiz-sqm', '');
+    expect(site.sqmMagPerArcsec2, 0);
+  });
+
   testWidgets('Fill from GPS fills the fields and the draft from the fix', (
     tester,
   ) async {
