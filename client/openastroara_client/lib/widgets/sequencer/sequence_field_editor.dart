@@ -21,7 +21,9 @@ import '../../models/sequence/nina_dom.dart';
 import '../../models/sequence/instruction_style.dart';
 import '../../models/sequence/node_display.dart' show nodeLabel, nodeIcon, shortTypeName;
 import '../../models/sequence/trigger_catalog.dart';
+import '../../models/switch_device.dart';
 import '../../state/equipment/filter_choices_state.dart';
+import '../../state/equipment/switch_state.dart';
 import '../../state/sequencer/sequence_editor_state.dart';
 import '../../theme/ara_colors.dart';
 import 'optimal_sub_advisor.dart';
@@ -127,6 +129,7 @@ class SequenceFieldEditor extends ConsumerWidget {
             key: ValueKey('${selectedPath.join(".")}/${field.key}'),
             field: field,
             value: node[field.key],
+            node: node,
             enabled: field.enabledWhen?.call(node) ?? true,
             onChanged: (v) => notifier.setNodeField(selectedPath, field.key, v),
           ),
@@ -556,12 +559,17 @@ class _FieldControl extends StatelessWidget {
     required this.field,
     required this.value,
     required this.onChanged,
+    this.node,
     this.enabled = true,
   });
 
   final InstructionField field;
   final Object? value;
   final ValueChanged<Object?> onChanged;
+
+  /// The node the field belongs to; the switch port picker reads its sibling
+  /// `AlpacaDeviceNumber` from it.
+  final Map<String, dynamic>? node;
 
   /// When false the input widgets are truly disabled (`enabled: false` /
   /// `onChanged: null`), not just dimmed — so a greyed field can't be edited via
@@ -662,24 +670,17 @@ class _FieldControl extends StatelessWidget {
           ),
         );
       case InstructionFieldType.integer:
-        if (field.min != null || field.max != null) {
-          return _labelled(
-            _NumField(
-              // Same defensive fallback as the number case above.
-              value: value is num ? value as num : (field.min ?? 0),
-              isInt: true,
-              min: field.min,
-              max: field.max,
-              enabled: enabled,
-              onChanged: (v) => onChanged(v.toInt()),
-            ),
-          );
-        }
+        return _labelled(_integerEditor());
+      case InstructionFieldType.switchDevice:
+      case InstructionFieldType.switchPort:
         return _labelled(
-          _textField(
-            initial: value == null ? '' : '$value',
-            keyboard: const TextInputType.numberWithOptions(signed: true),
-            parse: (s) => int.tryParse(s),
+          _SwitchPicker(
+            port: field.type == InstructionFieldType.switchPort,
+            value: value,
+            deviceNumber: node?['AlpacaDeviceNumber'],
+            enabled: enabled,
+            onChanged: onChanged,
+            fallback: _integerEditor(),
           ),
         );
       case InstructionFieldType.text:
@@ -827,10 +828,134 @@ class _FieldControl extends StatelessWidget {
     style: const TextStyle(color: AraColors.textSecondary, fontSize: 12),
   );
 
+  Widget _integerEditor() {
+    if (field.min != null || field.max != null) {
+      return _NumField(
+        // Same defensive fallback as the number case above.
+        value: value is num ? value as num : (field.min ?? 0),
+        isInt: true,
+        min: field.min,
+        max: field.max,
+        enabled: enabled,
+        onChanged: (v) => onChanged(v.toInt()),
+      );
+    }
+    return _textField(
+      initial: value == null ? '' : '$value',
+      keyboard: const TextInputType.numberWithOptions(signed: true),
+      parse: (s) => int.tryParse(s),
+    );
+  }
+
   Widget _labelled(Widget control) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [_label(), const SizedBox(height: 4), control],
   );
+}
+
+/// Set Switch Value's `AlpacaDeviceNumber` ([port] false) and `SwitchIndex`
+/// ([port] true): the switch and its writable port picked by name from
+/// [switchListProvider]. Stored values stay the same ints and are never
+/// rewritten; one the list cannot match is shown as an extra "(not connected)" /
+/// "(not available)" item. Resolution is the daemon's (`TargetConnectionLocked`):
+/// only connected switches count, for -1, an explicit number and ambiguity.
+/// While the list is loading, errored or empty, or no connected switch resolves
+/// for the port, [fallback] (the integer editor) is shown instead.
+class _SwitchPicker extends ConsumerWidget {
+  const _SwitchPicker({
+    required this.port,
+    required this.value,
+    required this.deviceNumber,
+    required this.enabled,
+    required this.onChanged,
+    required this.fallback,
+  });
+
+  final bool port;
+  final Object? value;
+  final Object? deviceNumber;
+  final bool enabled;
+  final ValueChanged<Object?> onChanged;
+  final Widget fallback;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final switches = ref.watch(switchListProvider).asData?.value;
+    if (switches == null || switches.isEmpty) return fallback;
+    final n = deviceNumber is num ? (deviceNumber as num).toInt() : -1;
+    return port ? _portPicker(switches, n) : _devicePicker(switches, n);
+  }
+
+  static int _byDeviceId(SwitchDevice a, SwitchDevice b) =>
+      a.deviceId.compareTo(b.deviceId);
+
+  Widget _devicePicker(List<SwitchDevice> switches, int n) {
+    final selected = n < -1 ? -1 : n;
+    final numbers = {for (final s in switches) s.alpacaDeviceNumber}.toList()
+      ..sort();
+    String label(int number) {
+      final same = switches
+          .where((s) => s.alpacaDeviceNumber == number)
+          .toList();
+      final connected = same.where((s) => s.isConnected).toList()
+        ..sort(_byDeviceId);
+      if (connected.length > 1) {
+        return '${connected.map((s) => s.name).join(' / ')} (#$number, ambiguous)';
+      }
+      if (connected.isEmpty) {
+        return '${same.first.name} (#$number, not connected)';
+      }
+      return '${connected.first.name} (#$number)';
+    }
+
+    return _dropdown<int>(
+      selected: selected,
+      items: {
+        -1: 'First switch',
+        if (selected != -1 && !numbers.contains(selected))
+          selected: 'Switch #$selected (not connected)',
+        for (final number in numbers) number: label(number),
+      },
+    );
+  }
+
+  Widget _portPicker(List<SwitchDevice> switches, int n) {
+    final connected = switches.where((s) => s.isConnected).toList()
+      ..sort((a, b) {
+        final byNumber = a.alpacaDeviceNumber.compareTo(b.alpacaDeviceNumber);
+        return byNumber != 0 ? byNumber : _byDeviceId(a, b);
+      });
+    final matches = n < 0
+        ? connected.take(1).toList()
+        : connected.where((s) => s.alpacaDeviceNumber == n).toList();
+    if (matches.length != 1) return fallback; // none connected, or ambiguous
+    final ports = matches.first.ports.where((p) => p.canWrite).toList();
+    final index = value is num ? (value as num).toInt() : 0;
+    return _dropdown<int>(
+      selected: index,
+      items: {
+        if (index >= ports.length)
+          index: 'Writable port #$index (not available)',
+        for (var i = 0; i < ports.length; i++) i: ports[i].label,
+      },
+    );
+  }
+
+  Widget _dropdown<T>({required T selected, required Map<T, String> items}) =>
+      DropdownButton<T>(
+        value: selected,
+        isExpanded: true,
+        dropdownColor: AraColors.bgPanel,
+        items: [
+          for (final e in items.entries)
+            DropdownMenuItem(value: e.key, child: Text(e.value)),
+        ],
+        onChanged: enabled
+            ? (v) {
+                if (v != null) onChanged(v);
+              }
+            : null,
+      );
 }
 
 /// `SwitchFilter.Filter` picker. Sources the filter names from

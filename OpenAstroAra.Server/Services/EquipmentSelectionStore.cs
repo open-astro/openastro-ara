@@ -29,12 +29,14 @@ namespace OpenAstroAra.Server.Services;
 /// </summary>
 public interface IEquipmentSelectionStore {
     /// <summary>Record (upsert) the device most recently connected. Single-instance types keep one
-    /// entry per type (newest wins); <see cref="DeviceType.Switch"/> is multi-instance so each switch
-    /// is remembered independently (keyed by its Alpaca device number). Best-effort: a write failure is
+    /// entry per group (newest wins; FlatDevice and CoverCalibrator are one group);
+    /// <see cref="DeviceType.Switch"/> is multi-instance so each switch is remembered independently
+    /// (keyed by its endpoint). Best-effort: a write failure is
     /// logged and swallowed so it never fails the connect that triggered it.</summary>
     Task RememberAsync(DiscoveredDeviceDto device, CancellationToken ct);
 
-    /// <summary>Every remembered device — one per single-instance type, plus each remembered switch.
+    /// <summary>Every remembered device — one per single-instance group (the later entry in file
+    /// order when an older file holds two), plus each remembered switch.
     /// Each entry carries its own <see cref="DiscoveredDeviceDto.Type"/> and Alpaca device number.
     /// Empty when nothing has been connected yet.</summary>
     Task<IReadOnlyList<DiscoveredDeviceDto>> GetAllAsync(CancellationToken ct);
@@ -61,7 +63,7 @@ public interface IEquipmentSelectionStore {
 /// <summary>
 /// File-backed <see cref="IEquipmentSelectionStore"/>: one <c>equipment-selection.json</c> under the
 /// profile dir mapping a per-device key → the last <see cref="DiscoveredDeviceDto"/> connected for it
-/// (device-type name for single-instance types; <c>Switch:{deviceNumber}</c> per switch).
+/// (device-type name for single-instance types, one entry per group; <c>Switch:{endpoint}</c> per switch).
 /// Writes are atomic (temp file + rename) and serialized by a semaphore so two concurrent connects
 /// can't tear the file. Mirrors the <see cref="ClientSettingsService"/> persistence pattern.
 /// </summary>
@@ -106,6 +108,9 @@ public sealed partial class EquipmentSelectionStore : IEquipmentSelectionStore, 
                 // device-number-keyed entries this and later remembers write.
                 map.Remove(DeviceType.Switch.ToString());
             }
+            else {
+                RemoveGroup(map, device.Type);
+            }
             map[KeyFor(device)] = device;
             var json = JsonSerializer.Serialize(map, JsonOptions);
             await File.WriteAllTextAsync(tmp, json, Encoding.UTF8, ct).ConfigureAwait(false);
@@ -135,10 +140,15 @@ public sealed partial class EquipmentSelectionStore : IEquipmentSelectionStore, 
         try {
             var map = await ReadLocked(ct).ConfigureAwait(false);
             var oldEndpoint = DiscoveredDeviceEndpoint.KeyOf(from);
-            foreach (var key in map.Where(kv => Canonical(kv.Value.Type) == Canonical(from.Type)
-                                             && DiscoveredDeviceEndpoint.KeyOf(kv.Value) == oldEndpoint)
-                                   .Select(kv => kv.Key).ToList()) {
-                map.Remove(key);
+            if (from.Type == DeviceType.Switch) {
+                // Only the old address's entry: another server's switch with the same UniqueId stays.
+                foreach (var key in map.Where(kv => Canonical(kv.Value.Type) == Canonical(from.Type)
+                                                 && DiscoveredDeviceEndpoint.KeyOf(kv.Value) == oldEndpoint)
+                                       .Select(kv => kv.Key).ToList()) {
+                    map.Remove(key);
+                }
+            } else {
+                RemoveGroup(map, from.Type);
             }
             map[KeyFor(to)] = to;
             var json = JsonSerializer.Serialize(map, JsonOptions);
@@ -234,6 +244,14 @@ public sealed partial class EquipmentSelectionStore : IEquipmentSelectionStore, 
     // FlatDevice/CoverCalibrator collapse — shared definition on DeviceTypeExtensions.
     private static DeviceType Canonical(DeviceType t) => t.Canonical();
 
+    // Single-instance types hold one entry per canonical group: drop every entry of it, any key.
+    private static void RemoveGroup(Dictionary<string, DiscoveredDeviceDto> map, DeviceType type) {
+        foreach (var key in map.Where(kv => Canonical(kv.Value.Type) == Canonical(type))
+                               .Select(kv => kv.Key).ToList()) {
+            map.Remove(key);
+        }
+    }
+
     // Best-effort removal of the temp file after a failed atomic write.
     private static void SafeDeleteTmp(string tmp) {
         try {
@@ -262,10 +280,16 @@ public sealed partial class EquipmentSelectionStore : IEquipmentSelectionStore, 
         // wins over a legacy alias, independent of dictionary iteration order: once an exact-keyed
         // entry is seen for a canonical key it locks it, and a non-canonical alias never overwrites
         // an exact one. (A canonical key is unique in the source dict, so at most one entry is exact
-        // per key.) Single-instance types are always exact, so this is a no-op for them.
+        // per key.) A single-instance group is keyed by its canonical token and the later entry in file
+        // order wins: this version never writes two, so a second one came from an older daemon, whose
+        // newer write is appended after the earlier key.
         var canonical = new Dictionary<string, DiscoveredDeviceDto>();
         var lockedByExactKey = new HashSet<string>();
         foreach (var (rawKey, device) in raw) {
+            if (device.Type != DeviceType.Switch) {
+                canonical[Canonical(device.Type).ToString()] = device;
+                continue;
+            }
             var key = KeyFor(device);
             if (lockedByExactKey.Contains(key)) {
                 continue; // the canonical entry already won this key
@@ -278,7 +302,8 @@ public sealed partial class EquipmentSelectionStore : IEquipmentSelectionStore, 
         return canonical.Values.ToList();
     }
 
-    // Upsert/dedup key: single-instance types collapse to one entry per type (newest wins);
+    // Upsert/dedup key: single-instance types collapse to one entry per group (Remember/Relocate clear
+    // the group first, so the token key is the device's own type);
     // Switch is multi-instance, so each switch is kept independently by its PHYSICAL endpoint
     // (host:port + device number — globally unique, unlike the bare device number, and stable
     // unlike the UniqueId, which bridges have been observed renaming across versions). Legacy

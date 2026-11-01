@@ -924,7 +924,7 @@ void _preferLocalSubnetTests() {
   group('iOS discovery', () {
     tearDown(() => debugDefaultTargetPlatformOverride = null);
 
-    test('iOS never opens the multicast socket and sweeps at once', () async {
+    test('iOS never opens the multicast socket and sweeps as soon as the Bonjour browse comes back empty', () async {
       debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
       var mdnsClients = 0;
       const rig = AraServer(hostname: 'rig.test', port: 5555);
@@ -934,6 +934,7 @@ void _preferLocalSubnetTests() {
           return _AsyncSendErrorMdns();
         },
         localAddresses: () async => const ['192.0.2.10'],
+        nativeBrowse: () async => const [],
         sweepSource: () => Stream.value(rig),
       );
       final sw = Stopwatch()..start();
@@ -941,6 +942,26 @@ void _preferLocalSubnetTests() {
       expect(mdnsClients, 0);
       expect(sw.elapsed, lessThan(ServerDiscoveryService.mdnsGracePeriod),
           reason: 'no mDNS grace wait before the sweep');
+      expect(svc.localNetworkBlocked.value, isFalse);
+    });
+
+    test("iOS lists the rigs the system's Bonjour browse finds, other subnets included", () async {
+      // The subnet sweep only walks the phone's own /24, so a rig on another
+      // VLAN (mDNS reflected by the router) was found by the Mac and never by
+      // the iPhone. iOS's own Bonjour API needs no multicast entitlement.
+      debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+      final svc = ServerDiscoveryService(
+        mdnsClientFactory: () => throw StateError('iOS must not open mDNS'),
+        localAddresses: () async => const ['192.0.2.10'],
+        nativeBrowse: () async => [
+          {'name': 'openastro', 'host': '198.51.100.20', 'port': 5555},
+          {'name': 'broken', 'host': null, 'port': 5555},
+        ],
+        sweepSource: () => const Stream<AraServer>.empty(),
+      );
+      expect(await svc.discover().toList(), [
+        const AraServer(hostname: '198.51.100.20', port: 5555, mdnsName: 'openastro'),
+      ]);
       expect(svc.localNetworkBlocked.value, isFalse);
     });
 
