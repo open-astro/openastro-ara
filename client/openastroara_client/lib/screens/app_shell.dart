@@ -22,6 +22,7 @@ import '../widgets/emergency_stop_button.dart';
 import '../widgets/safety_alarm_listener.dart';
 import '../widgets/stop_mount_overlay.dart';
 import '../widgets/equipment/equipment_status_chip.dart';
+import '../widgets/equipment_chip.dart' show kEquipmentChipCompactWidth;
 import '../widgets/help_dialog.dart';
 import '../widgets/settings_gear_button.dart';
 import '../widgets/launchpad_button.dart';
@@ -70,6 +71,8 @@ class _AppShellState extends ConsumerState<AppShell> {
   @override
   Widget build(BuildContext context) {
     final selectedTab = ref.watch(selectedTabIndexProvider);
+    final narrow =
+        MediaQuery.sizeOf(context).width < kEquipmentChipCompactWidth;
     // Visited tabs are provider state marked from select() (#1111 PR C), so
     // this build has no side effects and no post-frame setState. The union
     // with selectedTab keeps the invariant even if the two providers ever
@@ -146,10 +149,16 @@ class _AppShellState extends ConsumerState<AppShell> {
                     autofocus: true,
                     child: Column(
                       children: [
-                        const _TopEquipmentBar(),
+                        _TopEquipmentBar(showChips: !narrow),
                         Expanded(
                           child: Row(
                             children: [
+                              // A phone-width window swaps the bars: the
+                              // devices stand in a column here and the tabs
+                              // move to a bottom bar (below).
+                              if (narrow)
+                                const _DeviceColumn()
+                              else
                               NavigationRail(
                                 // Settings opens from the top-bar gear, so the
                                 // rail lists the workflow tabs only.
@@ -196,6 +205,25 @@ class _AppShellState extends ConsumerState<AppShell> {
                           ),
                         ),
                         const _BottomStatusBar(),
+                        if (narrow)
+                          NavigationBar(
+                            // Settings (from the gear) has no tab here:
+                            // nothing is highlighted while it shows.
+                            selectedIndex: railIndexFor(selectedTab) ?? 0,
+                            indicatorColor: railIndexFor(selectedTab) == null
+                                ? Colors.transparent
+                                : null,
+                            onDestinationSelected: (i) => ref
+                                .read(selectedTabIndexProvider.notifier)
+                                .select(i),
+                            destinations: [
+                              for (final t in _tabs.take(kOptionsTabIndex))
+                                NavigationDestination(
+                                  icon: Icon(t.icon),
+                                  label: t.label,
+                                ),
+                            ],
+                          ),
                       ],
                     ),
                   ),
@@ -240,7 +268,10 @@ class _TabSpec {
 }
 
 class _TopEquipmentBar extends StatelessWidget {
-  const _TopEquipmentBar();
+  const _TopEquipmentBar({required this.showChips});
+
+  /// False on a phone-width window, where the devices sit in [_DeviceColumn].
+  final bool showChips;
 
   @override
   Widget build(BuildContext context) {
@@ -248,13 +279,14 @@ class _TopEquipmentBar extends StatelessWidget {
         ? '⌘K'
         : 'Ctrl+K';
     return Container(
-      height: 64,
+      height: showChips ? 64 : 48,
       decoration: const BoxDecoration(
         color: AraColors.bgPanel,
         border: Border(bottom: BorderSide(color: AraColors.border)),
       ),
       child: Row(
         children: [
+          if (!showChips) const Spacer() else
           const Expanded(
             child: SingleChildScrollView(
               scrollDirection: Axis.horizontal,
@@ -310,6 +342,21 @@ class _TopEquipmentBar extends StatelessWidget {
       ),
     );
   }
+}
+
+/// The device chips standing in a column down the left edge, for a
+/// phone-width window (the tabs take the bottom bar there).
+class _DeviceColumn extends StatelessWidget {
+  const _DeviceColumn();
+
+  @override
+  Widget build(BuildContext context) => const ColoredBox(
+        color: AraColors.bgPanel,
+        child: SingleChildScrollView(
+          padding: EdgeInsets.symmetric(vertical: 4),
+          child: TopEquipmentChips(direction: Axis.vertical),
+        ),
+      );
 }
 
 class _BottomStatusBar extends StatelessWidget {

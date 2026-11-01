@@ -57,11 +57,16 @@ StatusLevel equipmentChipLevel<T extends EquipmentDeviceStatus>(
 /// device's Settings panel to connect/control it. GUIDE keeps its bespoke
 /// [GuiderChip] (own status type; it opens the guider panel too); SW is multi-instance.
 class TopEquipmentChips extends StatelessWidget {
-  const TopEquipmentChips({super.key});
+  const TopEquipmentChips({super.key, this.direction = Axis.horizontal});
+
+  /// A row in the top bar; a column down the side on a phone-width window.
+  final Axis direction;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
+    return Flex(
+      direction: direction,
+      mainAxisSize: MainAxisSize.min,
       children: [
         EquipmentStatusChip(
             icon: Icons.camera_alt,
