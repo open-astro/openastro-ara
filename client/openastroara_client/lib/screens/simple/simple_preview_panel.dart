@@ -21,8 +21,8 @@ const kSimpleText = TextStyle(
 );
 
 /// Room the full last-frame facts take at the bottom of the capture panel (a
-/// caption and three rows, with the divider); shorter columns get two rows.
-const double kSimpleFactsHeight = 116;
+/// caption and five rows, with the divider); shorter columns get two rows.
+const double kSimpleFactsHeight = 166;
 
 /// What the capture panel needs to show without scrolling: two 48 px fields,
 /// the shutter, Loop / Single and the shot status line, with padding.
@@ -125,6 +125,14 @@ class _LastFrameFacts extends ConsumerWidget {
     final hfr = analysed?.hfr?.toStringAsFixed(2) ?? '—';
     final stars = analysed?.stars?.toString() ?? '—';
     final exposure = '${seconds(params.exposure)} · ${params.filterSlot}';
+    // The frame's own header values, not the controls' (they can differ when
+    // the shot came from a sequence).
+    final gainOffset = analysed?.gain == null
+        ? '—'
+        : '${analysed!.gain} · ${analysed.offset ?? '—'}';
+    final clipped = analysed == null
+        ? '—'
+        : '${(analysed.highClipFraction * 100).toStringAsFixed(analysed.highClipFraction < 0.001 ? 0 : 2)} %';
     if (compact) {
       return Column(
         mainAxisSize: MainAxisSize.min,
@@ -144,6 +152,8 @@ class _LastFrameFacts extends ConsumerWidget {
         row('HFR', hfr),
         row('Stars', stars),
         row('Exposure', exposure),
+        row('Gain · offset', gainOffset),
+        row('Clipped', clipped),
       ],
     );
   }

@@ -80,7 +80,7 @@ void main() {
         (tester) async {
       await _pump(tester, size);
       expect(tester.takeException(), isNull, reason: 'no overflow');
-      for (final label in ['Show all options', 'Preview', 'Polar align', 'Focus', 'Target', 'Run', 'Loop', 'Single']) {
+      for (final label in ['Show all options', 'Preview', 'Focus', 'Polar align', 'Target', 'Run', 'Loop', 'Single']) {
         expect(find.text(label), findsOneWidget, reason: label);
       }
       expect(find.byType(EmergencyStopButton), findsOneWidget);
@@ -193,14 +193,17 @@ void main() {
     }
   });
 
-  testWidgets('device dots use the agreed icons: focus corners, toggle, shield with check; guider, panel and dome glyphs',
-      (tester) async {
+  testWidgets('Simple Mode shows only connected gear: nothing connected, no dots', (tester) async {
     await _pump(tester, const Size(1470, 854));
-    expect(tester.takeException(), isNull);
-    for (final icon in [Icons.center_focus_strong, Icons.toggle_on, Icons.verified_user]) {
-      expect(find.byIcon(icon), findsOneWidget, reason: '$icon');
+    for (final device in ['Camera', 'Mount', 'Guider', 'Focuser', 'Switches', 'Dome']) {
+      expect(find.byTooltip(device), findsNothing, reason: '$device is not connected');
     }
-    expect(find.byType(EquipmentGlyph), findsNWidgets(5), reason: 'mount, guider, filter wheel, flat panel, dome');
+  });
+
+  testWidgets('modes read Preview, Focus, Polar align, Target, Run, top to bottom', (tester) async {
+    await _pump(tester, const Size(1470, 854));
+    final ys = [for (final m in ['Preview', 'Focus', 'Polar align', 'Target', 'Run']) tester.getCenter(find.text(m)).dy];
+    expect(ys, orderedEquals([...ys]..sort()));
   });
 
   testWidgets('the shot status counts down while exposing instead of freezing on its first value',
@@ -233,13 +236,11 @@ void main() {
     Rect at(Finder f) => tester.getRect(f);
     final ready = at(find.text('Ready'));
     final options = at(find.text('Show all options'));
-    final camera = at(find.byTooltip('Camera'));
 
     container.read(captureProgressProvider.notifier).beginExposing(const Duration(seconds: 5));
     await tester.pump();
     expect(at(find.text('Taking a frame')).topLeft, ready.topLeft);
     expect(at(find.text('Show all options')), options);
-    expect(at(find.byTooltip('Camera')), camera);
     final label = find.ancestor(of: find.text('Taking a frame'), matching: find.byKey(const Key('simple-activity')));
     final labelBefore = ready.width;
     expect(at(label).width, isNot(lessThan(labelBefore)), reason: 'a fixed slot, not sized to the text');
@@ -272,7 +273,7 @@ void main() {
     await tester.pump(const Duration(seconds: 5));
   });
 
-  testWidgets('a tap on the frame hides every panel but Emergency Stop, a second brings them back',
+  testWidgets('a tap on the frame hides every panel, Emergency Stop included; a second brings them back',
       (tester) async {
     final container = await _pump(tester, const Size(1470, 854));
     container.read(lastCapturedFrameIdProvider.notifier).set('frame-1');
@@ -283,8 +284,8 @@ void main() {
     await tester.tapAt(const Offset(500, 400));
     await tester.pump(const Duration(milliseconds: 300));
     expect(_panelOpacity(tester), 0);
-    expect(find.byType(EmergencyStopButton).hitTestable(), findsOneWidget,
-        reason: 'Emergency Stop stays in the clean view');
+    expect(find.byType(EmergencyStopButton).hitTestable(), findsNothing,
+        reason: 'the immersive view hides Emergency Stop too');
     expect(find.text('Show all options').hitTestable(), findsNothing,
         reason: 'hidden panels take no taps');
 

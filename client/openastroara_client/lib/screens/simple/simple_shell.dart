@@ -21,7 +21,8 @@ import '../../theme/ara_metrics.dart';
 import '../../widgets/command_palette.dart';
 import '../../widgets/emergency_stop_button.dart';
 import '../../widgets/equipment/equipment_status_chip.dart';
-import '../../widgets/equipment_chip.dart' show EquipmentChipCompact;
+import '../../widgets/equipment_chip.dart'
+    show EquipmentChipCompact, EquipmentChipHideDisconnected;
 import '../../widgets/imaging/frame_viewer.dart';
 import '../../widgets/imaging/guiding_strip.dart';
 import '../../widgets/imaging/histogram_strip.dart' show frameHistogramProvider;
@@ -40,7 +41,7 @@ const double kSimpleBarHeight = 56;
 const double kSimpleColumnWidth = 168;
 
 /// The modes on the switcher, in the decided order.
-enum SimpleModeScreen { preview, polarAlign, focus, target, run }
+enum SimpleModeScreen { preview, focus, polarAlign, target, run }
 
 extension on SimpleModeScreen {
   String get label => switch (this) {
@@ -73,8 +74,8 @@ void leaveSimpleMode(WidgetRef ref, int tab) {
 /// Simple Mode (ALP-4810, layout C): the latest frame fills the window and
 /// the controls float over it on translucent panels — a status strip on top,
 /// the Preview column on the right, guiding, the mode switcher and Emergency
-/// Stop along the bottom. Tapping the frame hides every panel except
-/// Emergency Stop.
+/// Stop along the bottom. Tapping the frame hides every panel, Emergency
+/// Stop included (the immersive view); another tap brings them back.
 ///
 /// Slice 1 builds Preview only; the other modes open their full-UI tab. Any
 /// tab jump made from here (the gear, a device dot, ⌘K) also returns to the
@@ -180,18 +181,18 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                             height: kSimpleBarHeight,
                             child: _StatsRow(),
                           ),
+                          // Emergency Stop fades with the rest in the clean
+                          // view; a tap on the frame brings everything back.
+                          // Ring included, the same box as the column above it.
+                          Positioned(
+                            right: kSimpleInset,
+                            bottom: kSimpleInset,
+                            width: kSimpleColumnWidth,
+                            height: kSimpleBarHeight,
+                            child: EmergencyStopButton(simple: true),
+                          ),
                         ],
                       ),
-                    ),
-                    // Emergency Stop never hides, not even in the clean view.
-                    // Ring included, the same box as the column above it
-                    // and the bottom-row panels beside it.
-                    const Positioned(
-                      right: kSimpleInset,
-                      bottom: kSimpleInset,
-                      width: kSimpleColumnWidth,
-                      height: kSimpleBarHeight,
-                      child: EmergencyStopButton(simple: true),
                     ),
                   ],
                 ),
@@ -269,13 +270,16 @@ class _StatusStrip extends ConsumerWidget {
           Expanded(
             child: Row(
               children: [
-                // Device dots only: the names would crowd the strip.
+                // Device dots only (the names would crowd the strip), and
+                // only for gear that's connected; a fault still shows.
                 const Flexible(
                   child: EquipmentChipCompact(
                     compact: true,
                     child: SingleChildScrollView(
                       scrollDirection: Axis.horizontal,
-                      child: TopEquipmentChips(),
+                      child: EquipmentChipHideDisconnected(
+                        child: TopEquipmentChips(),
+                      ),
                     ),
                   ),
                 ),
