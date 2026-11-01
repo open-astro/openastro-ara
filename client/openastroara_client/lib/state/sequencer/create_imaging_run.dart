@@ -142,6 +142,13 @@ Future<ImagingRunResult?> createImagingRun(
   // (the Tonight's Sky panel shows its own confirmation card with a
   // "View in Run" action instead of yanking the user away mid-planning).
   bool jumpToRun = true,
+  // Simple Mode's Run: a per-filter plan already made (skips the plan
+  // chooser), the sub length and frame count of a run without one, and a run
+  // of its own even with a sequence open.
+  List<FilterPlanStep>? filterPlan,
+  double? exposureSeconds,
+  int? frameCount,
+  bool appendToOpen = true,
 }) async {
   // Pin the autoDispose API for the whole create. With no widget watching
   // it (the coordinate-entry dialog, a Tonight's Sky row whose panel just
@@ -163,6 +170,10 @@ Future<ImagingRunResult?> createImagingRun(
       mosaicPanels: mosaicPanels,
       mosaicGrid: mosaicGrid,
       jumpToRun: jumpToRun,
+      filterPlan: filterPlan,
+      exposureOverride: exposureSeconds,
+      frameCountOverride: frameCount,
+      appendToOpen: appendToOpen,
     );
   } finally {
     keepApi.close();
@@ -179,6 +190,10 @@ Future<ImagingRunResult?> _createImagingRunPinned(
   List<({double raDeg, double decDeg})> mosaicPanels = const [],
   ({int cols, int rows, double overlapPercent})? mosaicGrid,
   bool jumpToRun = true,
+  List<FilterPlanStep>? filterPlan,
+  double? exposureOverride,
+  int? frameCountOverride,
+  bool appendToOpen = true,
 }) async {
   final api = ref.read(sequenceApiProvider);
   final container = ProviderScope.containerOf(ref.context, listen: false);
@@ -205,7 +220,9 @@ Future<ImagingRunResult?> _createImagingRunPinned(
   if (api == null) {
     // No daemon to ask what the rig has — settings are the best we know.
     final rig = rigCapabilitiesFromSettings(container.read(phd2SettingsProvider));
-    final choice = await _choosePlan(
+    final choice = filterPlan != null
+        ? TargetPlanChoice(filterPlan: filterPlan, guide: rig.guider)
+        : await _choosePlan(
       ref,
       container,
       targetName: targetName,
@@ -217,8 +234,11 @@ Future<ImagingRunResult?> _createImagingRunPinned(
     if (choice == null) return ImagingRunResult.userCancelled;
     final defaults = container.read(imagingDefaultsProvider);
     final af = container.read(autofocusSettingsProvider);
-    final exposureSeconds = defaults.defaultExposure.inMilliseconds /
-        Duration.millisecondsPerSecond;
+    final exposureSeconds = exposureOverride ??
+        defaults.defaultExposure.inMilliseconds / Duration.millisecondsPerSecond;
+    final frameCount = frameCountOverride ??
+        defaultFrameCount(exposureSeconds,
+            remainingDarkHours: remainingDarkHours);
     final afEvery = af.everyNHours > 0 && exposureSeconds > 0
         ? math.max(1, ((af.everyNHours * 3600.0) / exposureSeconds).ceil())
         : null;
@@ -230,8 +250,7 @@ Future<ImagingRunResult?> _createImagingRunPinned(
       gain: defaults.defaultGain,
       offset: defaults.defaultOffset,
       binning: defaults.defaultBin,
-      frameCount: defaultFrameCount(exposureSeconds,
-          remainingDarkHours: remainingDarkHours),
+      frameCount: frameCount,
       coolToC: defaults.coolerTargetC,
       warmAtEnd: defaults.warmupAtSessionEnd,
       autofocusEveryNExposures: afEvery,
@@ -256,8 +275,7 @@ Future<ImagingRunResult?> _createImagingRunPinned(
           gain: defaults.defaultGain,
           offset: defaults.defaultOffset,
           binning: defaults.defaultBin,
-          frameCount: defaultFrameCount(exposureSeconds,
-              remainingDarkHours: remainingDarkHours),
+          frameCount: frameCount,
           autofocusEveryNExposures: afEvery,
           positionAngleDeg: positionAngleDeg,
           filterPlan: choice.filterPlan,
@@ -275,7 +293,7 @@ Future<ImagingRunResult?> _createImagingRunPinned(
     // became its own draft and the Run tab only showed the last — "I added
     // all 4 and they don't show up in the Run".
     final selectedId = container.read(selectedSequenceIdProvider);
-    if (selectedId != null && isDraftSequenceId(selectedId)) {
+    if (appendToOpen && selectedId != null && isDraftSequenceId(selectedId)) {
       final appended = await _appendToDraft(container, selectedId, [
         for (final p in panels)
           buildTargetBlock(
@@ -286,8 +304,7 @@ Future<ImagingRunResult?> _createImagingRunPinned(
             gain: defaults.defaultGain,
             offset: defaults.defaultOffset,
             binning: defaults.defaultBin,
-            frameCount: defaultFrameCount(exposureSeconds,
-                remainingDarkHours: remainingDarkHours),
+            frameCount: frameCount,
             autofocusEveryNExposures: afEvery,
             positionAngleDeg: positionAngleDeg,
             filterPlan: choice.filterPlan,
@@ -322,14 +339,16 @@ Future<ImagingRunResult?> _createImagingRunPinned(
   // would otherwise bake the CLIENT'S constructor defaults into the run. Pull
   // them fresh here; a failure keeps whatever the notifiers already hold (the
   // same best-effort contract the panels use).
-  await _hydratePlanningSettings(container);
+  await hydratePlanningSettings(container);
   // The rig cooks the run: guiding only with a guider, filter switches only
   // with a wheel, autofocus only with a focuser (see RigCapabilities).
   final rig = await readRigCapabilities(container);
 
   // §Run smart targets — offer the SHO / LRGB / single-filter plan chooser
   // when the filter set gives a real choice. Null = the user cancelled.
-  final choice = await _choosePlan(
+  final choice = filterPlan != null
+        ? TargetPlanChoice(filterPlan: filterPlan, guide: rig.guider)
+        : await _choosePlan(
     ref,
     container,
     targetName: targetName,
@@ -343,9 +362,9 @@ Future<ImagingRunResult?> _createImagingRunPinned(
 
   final defaults = container.read(imagingDefaultsProvider);
   final af = container.read(autofocusSettingsProvider);
-  final exposureSeconds =
+  final exposureSeconds = exposureOverride ??
       defaults.defaultExposure.inMilliseconds / Duration.millisecondsPerSecond;
-  final frameCount = defaultFrameCount(
+  final frameCount = frameCountOverride ?? defaultFrameCount(
     exposureSeconds,
     remainingDarkHours: remainingDarkHours,
   );
@@ -359,7 +378,7 @@ Future<ImagingRunResult?> _createImagingRunPinned(
   final selectedId = container.read(selectedSequenceIdProvider);
   // A selected local draft can't take a daemon-side append — fall through to
   // creating a fresh sequence on the daemon instead.
-  if (selectedId != null && !isDraftSequenceId(selectedId)) {
+  if (appendToOpen && selectedId != null && !isDraftSequenceId(selectedId)) {
     final blocks = [
       for (final p in panels)
         buildTargetBlock(
@@ -502,7 +521,7 @@ Future<ImagingRunResult?> _createImagingRunPinned(
 /// active server's profile (imaging defaults + autofocus + the filter set and
 /// OpenAstro Guider settings the plan chooser reads). No server → no-op; a transport
 /// failure keeps the notifiers' current state.
-Future<void> _hydratePlanningSettings(ProviderContainer container) async {
+Future<void> hydratePlanningSettings(ProviderContainer container) async {
   final server = container.read(activeServerProvider);
   if (server == null) return;
   final api = ProfileApi(server);

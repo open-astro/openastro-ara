@@ -442,7 +442,8 @@ class SequenceRunStateInfo {
       other.instructionsTotal == instructionsTotal &&
       other.currentInstructionDescription == currentInstructionDescription &&
       other.estimatedTotalSeconds == estimatedTotalSeconds &&
-      other.estimatedRemainingSeconds == estimatedRemainingSeconds;
+      other.estimatedRemainingSeconds == estimatedRemainingSeconds &&
+      other.framesCaptured == framesCaptured;
 
   @override
   int get hashCode => Object.hash(
@@ -457,7 +458,8 @@ class SequenceRunStateInfo {
       instructionsTotal,
       currentInstructionDescription,
       estimatedTotalSeconds,
-      estimatedRemainingSeconds);
+      estimatedRemainingSeconds,
+      framesCaptured);
 }
 
 /// One row in the sequence list — daemon's `SequenceListItemDto`.

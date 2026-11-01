@@ -15,6 +15,7 @@ import '../../state/imaging/last_frame_state.dart';
 import '../../state/imaging/live_view_state.dart';
 import '../../state/night_mode_state.dart';
 import '../../state/polar_align/polar_align_state.dart';
+import '../../state/sequencer/sequence_list_state.dart';
 import '../../state/sky_atlas/planetarium_selection_state.dart';
 import '../../state/settings/settings_nav.dart';
 import '../../state/simple_mode_state.dart';
@@ -33,6 +34,7 @@ import '../library/image_library_screen.dart';
 import '../shell_listeners.dart';
 import 'simple_focus_panel.dart';
 import 'simple_polar_panel.dart';
+import 'simple_run_panel.dart';
 import 'simple_target_panel.dart';
 import 'simple_preview_panel.dart';
 
@@ -106,8 +108,8 @@ enum _Popover { none, modes, settings }
 /// beside the rail and close with a tap on the image. Tapping the image with
 /// nothing open hides everything (the immersive view).
 ///
-/// All modes but Run so far; Run opens its full-UI tab, and so does any tab
-/// jump made from here (Settings, a device dot, ⌘K).
+/// All five modes stay here; any tab jump made from here (Settings, a
+/// device dot, ⌘K) opens the full UI.
 class SimpleShell extends ConsumerStatefulWidget {
   const SimpleShell({
     super.key,
@@ -195,6 +197,14 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     final showSky =
         _sky || !hasFrame || _mode == SimpleModeScreen.target;
     final panels = !_clean || showSky;
+    // Only Run reads the sequencer (reading it adopts a run in progress).
+    final runActive =
+        _mode == SimpleModeScreen.run &&
+        (ref.watch(sequenceRunStateProvider).value?.state?.isActive ?? false);
+    final runSheet =
+        _mode == SimpleModeScreen.run &&
+        _popover == _Popover.settings &&
+        !runActive;
     final motion = MediaQuery.disableAnimationsOf(context)
         ? Duration.zero
         : const Duration(milliseconds: 220);
@@ -350,11 +360,36 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                   popover: _popover,
                                   onModes: () => _toggle(_Popover.modes),
                                   onSettings: () => _toggle(_Popover.settings),
+                                  onPanel: (open) => setState(
+                                    () => _popover = open
+                                        ? _Popover.settings
+                                        : _Popover.none,
+                                  ),
                                 ),
                               ),
                             ),
                           ),
-                          if (_popover != _Popover.none)
+                          // Run's plan and Night done: a sheet centred over
+                          // the image; while imaging, its panel sits beside
+                          // the rail like any mode's.
+                          if (runSheet)
+                            Positioned.fill(
+                              child: Center(
+                                child: SimpleRunSheet(
+                                  onOpenTarget: () => setState(() {
+                                    _mode = SimpleModeScreen.target;
+                                    _popover = _Popover.settings;
+                                  }),
+                                  onLibrary: () => Navigator.of(context).push(
+                                    MaterialPageRoute<void>(
+                                      builder: (_) =>
+                                          const ImageLibraryScreen(),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            )
+                          else if (_popover != _Popover.none)
                             Positioned(
                               left: 0,
                               top: 0,
@@ -383,6 +418,8 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                           const SimplePolarPanel(),
                                         SimpleModeScreen.target =>
                                           const SimpleTargetPanel(),
+                                        SimpleModeScreen.run =>
+                                          const SimpleRunPanel(),
                                         _ => const SizedBox(
                                           width: 280,
                                           child: SimpleSettingsPopover(),
@@ -649,12 +686,16 @@ class _RightRail extends ConsumerWidget {
     required this.popover,
     required this.onModes,
     required this.onSettings,
+    required this.onPanel,
   });
 
   final SimpleModeScreen mode;
   final _Popover popover;
   final VoidCallback onModes;
   final VoidCallback onSettings;
+
+  /// Opens (true) or closes the mode's panel, for Run's shutter.
+  final ValueChanged<bool> onPanel;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -703,6 +744,7 @@ class _RightRail extends ConsumerWidget {
           switch (mode) {
             SimpleModeScreen.polarAlign => const SimplePolarShutter(),
             SimpleModeScreen.target => const SimpleTargetShutter(),
+            SimpleModeScreen.run => SimpleRunShutter(onPanel: onPanel),
             _ => const SimpleShutter(),
           },
           _RailButton(
@@ -713,6 +755,10 @@ class _RightRail extends ConsumerWidget {
               SimpleModeScreen.focus => simpleFocusSummary(ref),
               SimpleModeScreen.target => simpleTargetSummary(
                 ref.watch(planetariumSelectionProvider),
+              ),
+              SimpleModeScreen.run => simpleRunSummary(
+                ref.watch(simpleRunProvider),
+                ref.watch(sequenceRunStateProvider).value,
               ),
               SimpleModeScreen.polarAlign => simplePolarSummary(
                 ref.watch(simplePolarSettingsProvider).value ??
@@ -729,8 +775,7 @@ class _RightRail extends ConsumerWidget {
   }
 }
 
-/// The five modes as a grid beside the rail. All but Run are built; Run
-/// opens its full-UI tab for now.
+/// The five modes as a grid beside the rail.
 class _ModeGrid extends ConsumerWidget {
   const _ModeGrid({required this.current, required this.onPicked});
 
@@ -742,6 +787,7 @@ class _ModeGrid extends ConsumerWidget {
     SimpleModeScreen.focus,
     SimpleModeScreen.polarAlign,
     SimpleModeScreen.target,
+    SimpleModeScreen.run,
   };
 
   @override

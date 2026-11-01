@@ -162,8 +162,13 @@ void main() {
     await tester.pump();
     await tester.tap(find.text('Run'));
     await tester.pump();
-    expect(container.read(simpleModeProvider).value, isFalse, reason: 'Run opens the full UI for now');
-    expect(container.read(selectedTabIndexProvider), kRunTabIndex);
+    expect(container.read(simpleModeProvider).value, isTrue, reason: 'Run stays in Simple Mode');
+    expect(find.descendant(of: find.byKey(const Key('simple-mode')), matching: find.text('Run')), findsOneWidget);
+    // Run opens on its sheet, centred; with nothing picked it points to Target.
+    expect(find.text('No target yet'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('simple-run-open-target')));
+    await tester.pump();
+    expect(find.descendant(of: find.byKey(const Key('simple-mode')), matching: find.text('Target')), findsOneWidget);
   });
 
   testWidgets('Focus stays in Simple Mode: the rail reads Focus, its panel opens left of the rail; the chip is the Focus chip',

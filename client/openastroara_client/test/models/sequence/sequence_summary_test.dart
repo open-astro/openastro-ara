@@ -83,4 +83,13 @@ void main() {
       expect(older.currentTargetName, 'Helix Nebula');
     });
   });
+
+  test('run states differing only in frames captured are not equal', () {
+    // A poll that only files another frame must still notify its watchers
+    // (Simple Mode's "Stop after this frame" waits on exactly that).
+    const a = SequenceRunStateInfo(sequenceId: 's', framesCaptured: 23);
+    const b = SequenceRunStateInfo(sequenceId: 's', framesCaptured: 24);
+    expect(a == b, isFalse);
+    expect(a.hashCode == b.hashCode, isFalse);
+  });
 }
