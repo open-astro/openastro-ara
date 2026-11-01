@@ -26,10 +26,11 @@ Duration _exposure(PolarAlignSettings s) =>
 
 bool _single(PolarAlignSettings s) => s.loopMode == PolarAlignLoopModes.single;
 
-/// "5s · Single": the rail chip's caption in Polar align, the routine's setup
-/// (as Preview's chip reads "5s · 100"). Pure — unit-tested.
+/// "45 s" over "Single": the rail chip's caption in Polar align, the
+/// routine's setup on two lines (one doesn't fit the 60 px chip). Pure —
+/// unit-tested.
 String simplePolarSummary(PolarAlignSettings s) =>
-    '${formatExposure(_exposure(s))} · ${_single(s) ? 'Single' : 'Loop'}';
+    '${formatExposure(_exposure(s))}\n${_single(s) ? 'Single' : 'Loop'}';
 
 /// The profile's polar-align settings (exposure, Loop/Single, tolerance). A
 /// save applies to the routine's next frame; a failed save rolls back.

@@ -65,9 +65,9 @@ Future<_Api?> _pump(WidgetTester tester, PolarAlignLive live,
 
 void main() {
   test('simplePolarSummary: the settings, tight enough for the 60 px chip', () {
-    expect(simplePolarSummary(const PolarAlignSettings()), '1s · Loop');
-    expect(simplePolarSummary(const PolarAlignSettings(exposureSeconds: 5, loopMode: PolarAlignLoopModes.single)),
-        '5s · Single');
+    expect(simplePolarSummary(const PolarAlignSettings()), '1 s\nLoop');
+    expect(simplePolarSummary(const PolarAlignSettings(exposureSeconds: 45, loopMode: PolarAlignLoopModes.single)),
+        '45 s\nSingle');
   });
 
   test('simplePolarPhase names each phase', () {
@@ -81,7 +81,7 @@ void main() {
     final api = await _pump(tester, const PolarAlignLive());
     expect(find.text('Ready'), findsNothing);
     expect(find.text('Start'), findsNothing);
-    expect(find.text('1s'), findsOneWidget);
+    expect(find.text('1 s'), findsOneWidget);
     await tester.tap(find.text('Single'));
     await tester.pumpAndSettle();
     expect(api!.calls, ['save 1.0 single']);
@@ -92,7 +92,7 @@ void main() {
     expect(find.text('14.4′'), findsOneWidget);
     expect(find.text('Lower 3.2′'), findsOneWidget);
     expect(find.text('Move west 14.1′'), findsOneWidget);
-    expect(find.text('1s'), findsOneWidget, reason: 'the settings stay, for the next frame');
+    expect(find.text('1 s'), findsOneWidget, reason: 'the settings stay, for the next frame');
     expect(tester.widget<FilledButton>(find.byKey(const Key('simple-polar-done'))).onPressed, isNull);
     await tester.tap(find.byKey(const Key('simple-polar-stop')));
     await tester.pump();

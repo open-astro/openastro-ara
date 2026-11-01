@@ -496,17 +496,18 @@ class _StatusStrip extends ConsumerWidget {
   }
 }
 
-/// One labelled rail button: an icon over a short caption.
+/// One labelled rail button: an icon over a short caption, or (no icon) a
+/// caption of up to two lines.
 class _RailButton extends StatelessWidget {
   const _RailButton({
     super.key,
-    required this.icon,
+    this.icon,
     required this.label,
     required this.onTap,
     this.selected = false,
   });
 
-  final IconData icon;
+  final IconData? icon;
   final String label;
   final VoidCallback onTap;
   final bool selected;
@@ -528,17 +529,20 @@ class _RailButton extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(
-                icon,
-                size: 24,
-                color: selected
-                    ? AraColors.textPrimary
-                    : AraColors.textSecondary,
-              ),
-              const SizedBox(height: 2),
+              if (icon != null) ...[
+                Icon(
+                  icon,
+                  size: 24,
+                  color: selected
+                      ? AraColors.textPrimary
+                      : AraColors.textSecondary,
+                ),
+                const SizedBox(height: 2),
+              ],
               Text(
                 label,
-                maxLines: 1,
+                maxLines: icon == null ? 2 : 1,
+                textAlign: TextAlign.center,
                 overflow: TextOverflow.ellipsis,
                 style: AraText.caption.copyWith(
                   color: selected
@@ -665,7 +669,8 @@ class _RightRail extends ConsumerWidget {
               : const SimpleShutter(),
           _RailButton(
             key: const Key('simple-settings'),
-            icon: Icons.tune,
+            // P.A.'s setup takes two lines, so it has no icon.
+            icon: mode == SimpleModeScreen.polarAlign ? null : Icons.tune,
             label: switch (mode) {
               SimpleModeScreen.focus => simpleFocusSummary(ref),
               SimpleModeScreen.polarAlign => simplePolarSummary(

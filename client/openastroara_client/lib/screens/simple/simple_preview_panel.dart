@@ -36,7 +36,7 @@ class _PreviewShot extends Notifier<PreviewShot> {
   void set(PreviewShot v) => state = v;
 }
 
-/// "5s · 100": the settings chip's caption on the rail.
+/// "5 s · 100": the settings chip's caption on the rail.
 String simpleSettingsSummary(WidgetRef ref) {
   final p = ref.watch(exposureControllerProvider);
   return '${formatExposure(p.exposure)} · ${p.gain}';
@@ -248,13 +248,12 @@ class SimpleShutter extends ConsumerWidget {
   }
 }
 
-/// "5s", "0.5s", "2min" — how the exposure reads in Simple Mode (the unit
-/// on the number, so it fits the 60 px chip).
+/// "5 s", "0.5 s", "2 min" — how the exposure reads on its tile and list.
 String formatExposure(Duration d) {
   final ms = d.inMilliseconds;
-  if (ms >= 60000 && ms % 60000 == 0) return '${ms ~/ 60000}min';
-  if (ms % 1000 == 0) return '${ms ~/ 1000}s';
-  return '${(ms / 1000).toString()}s';
+  if (ms >= 60000 && ms % 60000 == 0) return '${ms ~/ 60000} min';
+  if (ms % 1000 == 0) return '${ms ~/ 1000} s';
+  return '${(ms / 1000).toString()} s';
 }
 
 const _kExposurePresetsMs = [
@@ -462,8 +461,8 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
               'Taking a frame',
               p.exposureRemaining == null
                   ? 'Starting…'
-                  // Whole seconds, rounded up: "1s left" until it's done.
-                  : '${(p.exposureRemaining!.inMilliseconds / 1000).ceil()}s left',
+                  // Whole seconds, rounded up: "1 s left" until it's done.
+                  : '${(p.exposureRemaining!.inMilliseconds / 1000).ceil()} s left',
               AraColors.accentConnected,
             ),
             CapturePhase.downloading => (
