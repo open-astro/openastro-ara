@@ -22,6 +22,8 @@ import '../widgets/emergency_stop_button.dart';
 import '../widgets/safety_alarm_listener.dart';
 import '../widgets/stop_mount_overlay.dart';
 import '../widgets/equipment/equipment_status_chip.dart';
+import 'package:flutter/foundation.dart' show defaultTargetPlatform;
+import '../services/notch_side.dart';
 import '../widgets/equipment_chip.dart' show kEquipmentChipCompactWidth;
 import '../widgets/help_dialog.dart';
 import '../widgets/settings_gear_button.dart';
@@ -351,21 +353,59 @@ class _TopEquipmentBar extends StatelessWidget {
 /// status bar, the home indicator) are painted in the bars' colour instead of
 /// left black, so the shell reads as full screen while its content stays clear
 /// of them.
-class _EdgeToEdge extends StatelessWidget {
+class _EdgeToEdge extends StatefulWidget {
   const _EdgeToEdge({required this.child});
 
   final Widget child;
 
   @override
-  Widget build(BuildContext context) => ColoredBox(
-        color: AraColors.bgPanel,
-        child: SafeArea(
-          child: ColoredBox(
-            color: Theme.of(context).scaffoldBackgroundColor,
-            child: child,
-          ),
+  State<_EdgeToEdge> createState() => _EdgeToEdgeState();
+}
+
+class _EdgeToEdgeState extends State<_EdgeToEdge> with WidgetsBindingObserver {
+  NotchSide _notch = NotchSide.unknown;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _probe();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  // A rotation changes the window's metrics: ask again which side the island is on.
+  @override
+  void didChangeMetrics() => _probe();
+
+  Future<void> _probe() async {
+    if (defaultTargetPlatform != TargetPlatform.iOS) return;
+    final side = await NotchSideProbe.side();
+    if (mounted && side != _notch) setState(() => _notch = side);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final pad = MediaQuery.paddingOf(context);
+    // Equal side margins = iOS's symmetric landscape reservation; only then is
+    // the side without the island free to use.
+    final symmetric = pad.left > 0 && pad.left == pad.right;
+    return ColoredBox(
+      color: AraColors.bgPanel,
+      child: SafeArea(
+        left: !(symmetric && _notch == NotchSide.right),
+        right: !(symmetric && _notch == NotchSide.left),
+        child: ColoredBox(
+          color: Theme.of(context).scaffoldBackgroundColor,
+          child: widget.child,
         ),
-      );
+      ),
+    );
+  }
 }
 
 /// The device chips standing in a column down the left edge, for a

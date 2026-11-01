@@ -1,10 +1,13 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/screens/app_shell.dart';
+import 'package:openastroara/services/notch_side.dart';
 import 'package:openastroara/state/app_shell_state.dart';
 import 'package:openastroara/theme/ara_colors.dart';
 import 'package:openastroara/widgets/equipment/equipment_status_chip.dart';
+import 'package:openastroara/widgets/settings_gear_button.dart';
 
 /// Opens on Sequence: Planning's planetarium server and Live's guiding poll
 /// leave periodic timers running after the test.
@@ -94,6 +97,44 @@ void main() {
     final edge = find.ancestor(of: find.byType(SafeArea).first, matching: find.byType(ColoredBox)).first;
     expect(tester.widget<ColoredBox>(edge).color, AraColors.bgPanel);
     expect(tester.getRect(edge), const Rect.fromLTWH(0, 0, 852, 393));
+  });
+
+  group('a landscape iPhone keeps its margin on the Dynamic Island side only', () {
+    setUp(() => debugDefaultTargetPlatformOverride = TargetPlatform.iOS);
+    tearDown(() {
+      debugDefaultTargetPlatformOverride = null;
+      NotchSideProbe.interfaceOrientation = NotchSideProbe.query;
+    });
+
+    Future<void> pumpTurned(WidgetTester tester, String orientation) async {
+      NotchSideProbe.interfaceOrientation = () async => orientation;
+      await _pumpAt(tester, const Size(852, 393),
+          padding: const FakeViewPadding(left: 59, right: 59, bottom: 21));
+      await tester.pump();
+    }
+
+    double gearRight(WidgetTester tester) => tester.getRect(find.byType(SettingsGearButton)).right;
+
+    testWidgets('island on the left: the right edge is used', (tester) async {
+      await pumpTurned(tester, 'landscapeRight');
+      expect(tester.getRect(find.byType(NavigationRail)).left, 59);
+      expect(gearRight(tester), greaterThan(852 - 59), reason: 'into the old right margin');
+      debugDefaultTargetPlatformOverride = null;
+    });
+
+    testWidgets('island on the right: the left edge is used', (tester) async {
+      await pumpTurned(tester, 'landscapeLeft');
+      expect(tester.getRect(find.byType(NavigationRail)).left, 0);
+      expect(gearRight(tester), lessThanOrEqualTo(852 - 59));
+      debugDefaultTargetPlatformOverride = null;
+    });
+
+    testWidgets('side unknown: both margins stay', (tester) async {
+      await pumpTurned(tester, 'unknown');
+      expect(tester.getRect(find.byType(NavigationRail)).left, 59);
+      expect(gearRight(tester), lessThanOrEqualTo(852 - 59));
+      debugDefaultTargetPlatformOverride = null;
+    });
   });
 
   testWidgets('a desktop-width window keeps the side rail and the top device bar', (tester) async {
