@@ -8,7 +8,12 @@ import 'package:openastroara/models/equipment_device_status.dart';
 import 'package:openastroara/models/mount_status.dart';
 import 'package:openastroara/screens/simple/simple_target_panel.dart';
 import 'package:openastroara/services/autofocus_api.dart' show AutofocusJob;
+import 'package:openastroara/models/verify_position_result.dart';
 import 'package:openastroara/services/center_api.dart';
+import 'package:openastroara/services/plate_solve_api.dart';
+import 'package:openastroara/state/plate_solve/plate_solve_api_state.dart';
+import 'package:openastroara/state/sky_atlas/sky_atlas_state.dart' show planetariumCommandProvider;
+import 'package:openastroara/util/apparent_place.dart';
 import 'package:openastroara/state/equipment/mount_state.dart';
 import 'package:openastroara/state/sky_atlas/planetarium_selection_state.dart';
 
@@ -66,7 +71,7 @@ class _Mount extends MountNotifier {
 
   @override
   Future<bool> slewTo(double raHours, double decDegrees, {bool sync = false, bool force = false}) async {
-    calls.add('slew $raHours $decDegrees${force ? ' force' : ''}');
+    calls.add('${sync ? 'sync' : 'slew'} $raHours $decDegrees${force ? ' force' : ''}');
     if (refuse && !force) {
       throw DioException(
         requestOptions: RequestOptions(path: '/slew'),
@@ -86,6 +91,31 @@ class _Mount extends MountNotifier {
   }
 }
 
+class _Solve implements PlateSolveApi {
+  _Solve(this.result, {this.error});
+  final VerifyPositionResult result;
+  final Object? error;
+  @override
+  Future<VerifyPositionResult> verifyPosition({double? exposureSeconds}) async {
+    if (error != null) throw error!;
+    return result;
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+const _solved = VerifyPositionResult(
+  success: true,
+  solvedRaHours: 0.712,
+  solvedDecDegrees: 41.269,
+  mountRaHours: 0.75,
+  mountDecDegrees: 41.0,
+  solvedToMountArcmin: 18.2,
+  exposureSeconds: 2,
+  mountEpoch: 'JNOW',
+);
+
 class _Sel extends PlanetariumSelectionNotifier {
   _Sel(this.value);
   final PlanetariumSelection? value;
@@ -94,11 +124,12 @@ class _Sel extends PlanetariumSelectionNotifier {
 }
 
 Future<(_Mount, ProviderContainer)> _pump(WidgetTester tester, Widget child,
-    {PlanetariumSelection? sel, MountStatus? mount, bool refuse = false, _Center? center}) async {
+    {PlanetariumSelection? sel, MountStatus? mount, bool refuse = false, _Center? center, _Solve? solve}) async {
   final m = _Mount(mount, refuse: refuse);
   final container = ProviderContainer(overrides: [
     mountProvider.overrideWith(() => m),
     centerApiProvider.overrideWithValue(center ?? _Center(m.calls)),
+    if (solve != null) plateSolveApiProvider.overrideWithValue(solve),
     planetariumSelectionProvider.overrideWith(() => _Sel(sel)),
   ]);
   addTearDown(container.dispose);
@@ -222,6 +253,41 @@ void main() {
       expect(calls, ['center 0.71 41.27'], reason: 'then it centres');
       await tester.pump(const Duration(seconds: 2));
       expect(c.read(simpleGoToProvider), isA<SimpleCentered>());
+    });
+  });
+
+  group('Solve', () {
+    testWidgets('solves where the scope points, centres the sky there, and shows the mount\'s offset', (tester) async {
+      final (_, c) = await _pump(tester, const SimpleTargetPanel(), mount: _mount(), solve: _Solve(_solved));
+      final sent = <Map<String, Object?>?>[];
+      c.listen(planetariumCommandProvider, (_, cmd) => sent.add(cmd));
+      await tester.tap(find.byKey(const Key('simple-target-solve')));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Solved: RA 00h42m'), findsOneWidget);
+      expect(find.textContaining('off by 18′'), findsOneWidget);
+      expect(sent.single, {'type': 'goto', 'ra': closeTo(0.712 * 15, 1e-9), 'dec': 41.269});
+    });
+
+    testWidgets('Sync tells the mount where it really points, in the mount\'s own epoch', (tester) async {
+      final (m, _) = await _pump(tester, const SimpleTargetPanel(), mount: _mount(), solve: _Solve(_solved));
+      await tester.tap(find.byKey(const Key('simple-target-solve')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('simple-target-sync')));
+      await tester.pumpAndSettle();
+      final now = j2000ToApparent(0.712 * 15, 41.269, atUtc: DateTime.now().toUtc());
+      final parts = m.calls.single.split(' ');
+      expect(parts.first, 'sync');
+      expect(double.parse(parts[1]), closeTo(now.raDeg / 15, 1e-3));
+      expect(double.parse(parts[2]), closeTo(now.decDeg, 1e-3));
+      expect(find.text('Synced'), findsOneWidget);
+    });
+
+    testWidgets('a failed solve says why', (tester) async {
+      await _pump(tester, const SimpleTargetPanel(), mount: _mount(),
+          solve: _Solve(_solved, error: PlateSolveException('The solver found too few stars.')));
+      await tester.tap(find.byKey(const Key('simple-target-solve')));
+      await tester.pumpAndSettle();
+      expect(find.text('The solver found too few stars.'), findsOneWidget);
     });
   });
 }

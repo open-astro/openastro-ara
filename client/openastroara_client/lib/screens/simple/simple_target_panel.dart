@@ -6,7 +6,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/equipment_device_status.dart';
 import '../../services/equipment_device_api.dart'
     show describeEquipmentError, isRunInProgressRefusal;
+import '../../models/verify_position_result.dart';
 import '../../services/center_api.dart';
+import '../../services/plate_solve_api.dart' show PlateSolveException;
+import '../../state/plate_solve/plate_solve_api_state.dart';
+import '../../state/sky_atlas/sky_atlas_state.dart' show planetariumCommandProvider;
+import '../../util/apparent_place.dart';
+import '../../util/friendly_error.dart';
+import '../../widgets/imaging/polar_align_panel.dart' show formatDecDms, formatRaHms;
 import '../../state/equipment/mount_state.dart';
 import '../../state/sky_atlas/planetarium_selection_state.dart';
 import '../../theme/ara_colors.dart';
@@ -146,6 +153,85 @@ final simpleGoToProvider = NotifierProvider<SimpleGoToNotifier, SimpleGoTo?>(
   SimpleGoToNotifier.new,
 );
 
+/// Where Solve stands: solving, solved (with Sync offered, then synced), or
+/// why it failed. Null: not asked.
+sealed class SimpleSolve {
+  const SimpleSolve();
+}
+
+class SimpleSolving extends SimpleSolve {
+  const SimpleSolving();
+}
+
+class SimpleSolved extends SimpleSolve {
+  const SimpleSolved(this.result, {this.synced = false});
+  final VerifyPositionResult result;
+  final bool synced;
+}
+
+class SimpleSolveFailed extends SimpleSolve {
+  const SimpleSolveFailed(this.message);
+  final String message;
+}
+
+/// Solve: a 2 s frame plate-solved by the server (§57.4 verify position),
+/// the sky centred on the result; Sync then tells the mount where it really
+/// points.
+class SimpleSolveNotifier extends Notifier<SimpleSolve?> {
+  @override
+  SimpleSolve? build() => null;
+
+  Future<void> solve() async {
+    final api = ref.read(plateSolveApiProvider);
+    if (api == null || state is SimpleSolving) return;
+    state = const SimpleSolving();
+    try {
+      final r = await api.verifyPosition();
+      final ra = r.solvedRaHours, dec = r.solvedDecDegrees;
+      if (!r.success || ra == null || dec == null) {
+        state = SimpleSolveFailed(r.note ?? 'The frame did not solve.');
+        return;
+      }
+      state = SimpleSolved(r);
+      ref
+          .read(planetariumCommandProvider.notifier)
+          .send({'type': 'goto', 'ra': ra * 15, 'dec': dec});
+    } on PlateSolveException catch (e) {
+      state = SimpleSolveFailed(e.message);
+    } catch (e) {
+      state = SimpleSolveFailed(friendlyError(e, action: 'solve'));
+    }
+  }
+
+  /// Sync the mount to the solve, in the mount's own system (the solve is
+  /// J2000; most mounts work of date).
+  Future<void> sync() async {
+    final current = state;
+    if (current is! SimpleSolved) return;
+    final r = current.result;
+    var ra = r.solvedRaHours! * 15, dec = r.solvedDecDegrees!;
+    if (r.mountEpoch != 'J2000') {
+      final now = j2000ToApparent(ra, dec, atUtc: DateTime.now().toUtc());
+      ra = now.raDeg;
+      dec = now.decDeg;
+    }
+    try {
+      await ref
+          .read(mountProvider.notifier)
+          .slewTo(ra / 15, dec, sync: true);
+      state = SimpleSolved(r, synced: true);
+    } catch (e) {
+      state = SimpleSolveFailed(
+        "Couldn't sync: ${describeEquipmentError(e)}",
+      );
+    }
+  }
+}
+
+final simpleSolveProvider = NotifierProvider<SimpleSolveNotifier, SimpleSolve?>(
+  SimpleSolveNotifier.new,
+);
+
 /// The rail's shutter in Target: goes to the selected object and centres it;
 /// while the mount slews or the centring runs, its red square stops both.
 /// Off with nothing to go to (no selection, no mount, or an object below the
@@ -204,6 +290,7 @@ class _SimpleTargetPanelState extends ConsumerState<SimpleTargetPanel> {
   Widget build(BuildContext context) {
     final sel = ref.watch(planetariumSelectionProvider);
     final outcome = ref.watch(simpleGoToProvider);
+    final solve = ref.watch(simpleSolveProvider);
     final mount = ref.watch(mountProvider).value;
     final connected =
         mount?.connectionState == EquipmentConnectionState.connected;
@@ -259,6 +346,56 @@ class _SimpleTargetPanelState extends ConsumerState<SimpleTargetPanel> {
                 ),
               ),
             ],
+            FilledButton.tonal(
+              key: const Key('simple-target-solve'),
+              onPressed: solve is SimpleSolving
+                  ? null
+                  : () => ref.read(simpleSolveProvider.notifier).solve(),
+              child: Text(solve is SimpleSolving ? 'Solving…' : 'Solve'),
+            ),
+            switch (solve) {
+              SimpleSolved(:final result, :final synced) => Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                spacing: AraSpace.s8,
+                children: [
+                  Text(
+                    'Solved: RA ${formatRaHms(result.solvedRaHours! * 15)}, '
+                    'Dec ${formatDecDms(result.solvedDecDegrees!)}',
+                    style: kSimpleText,
+                  ),
+                  if (result.solvedToMountArcmin case final off?)
+                    Text(
+                      'The mount is off by ${off.round()}′',
+                      style: kSimpleText.copyWith(
+                        color: AraColors.textSecondary,
+                      ),
+                    ),
+                  synced
+                      ? Text(
+                          'Synced',
+                          style: kSimpleText.copyWith(
+                            color: AraColors.accentConnected,
+                          ),
+                        )
+                      : FilledButton.tonal(
+                          key: const Key('simple-target-sync'),
+                          onPressed: connected
+                              ? () => ref
+                                    .read(simpleSolveProvider.notifier)
+                                    .sync()
+                              : null,
+                          child: const Text('Sync'),
+                        ),
+                ],
+              ),
+              SimpleSolveFailed(:final message) => Text(
+                message,
+                style: kSimpleText.copyWith(color: AraColors.accentError),
+                maxLines: 4,
+                overflow: TextOverflow.ellipsis,
+              ),
+              _ => const SizedBox.shrink(),
+            },
             if (!connected)
               Text(
                 'No mount connected',
