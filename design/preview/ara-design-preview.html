@@ -167,7 +167,7 @@
   .s-mode.open { color: var(--info); } .s-mode.open svg { fill: var(--info); transform: rotate(180deg); }
   .s-shut { width: 60px; height: 60px; padding: 0; border-radius: 50%; border: 3px solid var(--text); background: transparent; display: grid; place-items: center; cursor: pointer; }
   .s-shut span { width: 40px; height: 40px; border-radius: 50%; background: var(--text); }
-  .s-shut.run span { width: 22px; height: 22px; border-radius: 3px; }
+  .s-shut.run span { width: 22px; height: 22px; border-radius: 3px; background: var(--err); }
   .s-shut:focus-visible { outline: 2px solid var(--info); outline-offset: 3px; }
 
   /* popovers and mode panels: left of the right rail, level with its top; the rail never moves */
@@ -588,7 +588,7 @@
               <div class="dir"><span class="sub">Azimuth</span><span style="display:flex;align-items:center;gap:4px"><svg><use href="#i-left"/></svg>Move west 14.1′</span></div>
               <div><span class="lbl">Exposure</span><div class="s-val">1 s<svg><use href="#i-expand"/></svg></div></div>
               <div class="s-seg" role="group" aria-label="Polar align shot"><span class="on">Loop</span><span>Single</span></div>
-              <div class="row2" style="margin-top:4px"><button class="ghost">Stop</button><button class="go" disabled style="opacity:.45">Done</button></div>
+              <div class="row2" style="margin-top:4px"><button class="go" disabled style="opacity:.45;background:var(--ok)">Done</button></div>
             </div>
             <div class="p s-pop s-mp" data-v="target t-fail t-horizon">
               <div class="s-search"><svg><use href="#i-search"/></svg><span data-v="target t-fail">M31</span><span data-v="t-horizon">M33</span></div>
