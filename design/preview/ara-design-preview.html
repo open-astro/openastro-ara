@@ -100,9 +100,7 @@
   .pulse { display: inline-flex; align-items: center; gap: 6px; }
   .pulse i { width: 8px; height: 8px; border-radius: 50%; background: var(--info); }
 
-  /* ---------- Simple Mode: image first ---------- */
-  .simple-app { position: relative; height: 574px; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
-  .simple-app > .sky { position: absolute; inset: 0; }
+  /* ---------- Overlay pieces (phone Companion Mode and the component samples) ---------- */
   .ov { position: absolute; background: var(--scrim); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); border-radius: 10px; font-size: 14px; }
   .ov-top { left: 12px; right: 12px; top: 12px; min-height: 56px; display: flex; align-items: center; gap: 16px; padding: 6px 8px 6px 14px; }
   .ov-top .devs { display: flex; gap: 14px; }
@@ -110,200 +108,145 @@
   .ov-top .devs .dot { border-color: #1f1f1f; }
   .ov-top .tgt { font-size: 15px; font-weight: 600; }
   .ov-top .grow { flex: 1; }
-  .ov-top .all { color: var(--info); font-size: 14px; padding: 0 8px; white-space: nowrap; }
-  .ov-attn { left: 50%; top: 80px; transform: translateX(-50%); display: flex; gap: 10px; align-items: center; padding: 12px 16px; border: 1px solid var(--busy); background: rgba(58, 44, 10, .86); }
-  .ov-attn svg { width: 20px; height: 20px; fill: var(--busy); flex: none; }
-  .ov-attn b { font-weight: 600; }
-  .ov-attn span { color: var(--text2); font-size: 13px; }
-  .ov-right { right: 12px; top: 50%; transform: translateY(-50%); width: 92px; display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 16px 0; }
   .shutter { width: 64px; height: 64px; border-radius: 50%; border: 3px solid var(--text); background: transparent; display: grid; place-items: center; cursor: pointer; }
   .shutter span { width: 22px; height: 22px; display: flex; gap: 6px; justify-content: center; }
   .shutter span i { width: 7px; height: 22px; background: var(--text); border-radius: 2px; }
   .shutter:focus-visible { outline: 2px solid var(--info); outline-offset: 3px; }
-  .ov-right .opt { min-height: 44px; width: 72px; border-radius: 10px; background: rgba(51,51,51,.8); display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 14px; }
-  .ov-right .opt small { font-size: 11px; color: var(--text2); }
   .ov-read { left: 12px; bottom: 12px; padding: 14px 18px; display: flex; flex-direction: column; gap: 8px; min-width: 290px; }
   .ov-read .big { font-size: 40px; font-weight: 300; line-height: 1; letter-spacing: -.5px; }
   .ov-read .sub { color: var(--text2); }
   .bar { height: 6px; background: rgba(64,64,64,.9); border-radius: 3px; } .bar i { display: block; height: 100%; width: 39%; background: var(--ok); border-radius: 3px; }
-  .ov-read .stats { display: flex; gap: 16px; color: var(--text); }
-  .ov-read .stats span b { display: block; font-size: 11px; font-weight: 600; letter-spacing: .6px; color: var(--text2); text-transform: uppercase; }
-  .ov-stop { right: 12px; bottom: 12px; background: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
-  .ov-stop .estop { padding: 12px 20px; font-size: 14px; border-radius: 24px; }
-  .ov-stop .estop svg { width: 20px; height: 20px; }
-  .ov-hint { right: 120px; bottom: 18px; background: none; backdrop-filter: none; -webkit-backdrop-filter: none; color: var(--text2); font-size: 12px; }
 
-
-  .ov-modes { left: 50%; bottom: 12px; transform: translateX(-50%); display: flex; padding: 4px; gap: 2px; }
-  .ov-modes span { min-height: 44px; display: flex; align-items: center; padding: 0 16px; border-radius: 8px; color: var(--text2); font-size: 14px; white-space: nowrap; }
-  .ov-modes span.on { background: var(--sel); color: #fff; }
-  .ov-guide { right: 116px; top: 80px; width: 230px; padding: 10px 12px 8px; }
-  .ov-guide .hd { display: flex; justify-content: space-between; font-size: 12px; color: var(--text2); margin-bottom: 4px; }
-  .ov-guide svg { display: block; width: 100%; height: 64px; }
-  .ov-plan { right: 12px; top: 80px; bottom: 76px; width: 330px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
-  .ov-plan .hd { font-size: 15px; font-weight: 600; }
-  .ov-plan .sub { color: var(--text2); font-size: 13px; }
-  .plan-row { display: grid; grid-template-columns: 44px 1fr 1fr 28px; gap: 8px; align-items: center; }
-  .plan-row .f { min-height: 44px; display: grid; place-items: center; border-radius: 10px; background: rgba(51,51,51,.85); font-weight: 600; }
-  .plan-row .v { min-height: 44px; display: flex; align-items: center; justify-content: center; border-radius: 10px; background: rgba(51,51,51,.85); font-variant-numeric: tabular-nums; }
-  .plan-row .x { color: var(--text2); text-align: center; }
-  .plan-add { color: var(--info); min-height: 44px; display: flex; align-items: center; }
-  .plan-total { margin-top: auto; display: flex; justify-content: space-between; color: var(--text2); font-size: 13px; }
-  #simple.planning .ov-right, #simple.planning .ov-guide, #simple.planning .ov-attn { display: none; }
-  #simple:not(.planning) .ov-plan { display: none; }
-  @media (max-width: 900px) { .ov-guide, .ov-modes { display: none; } }
-
-  /* ===== Simple Mode layouts A and B: one inset, one radius, one control height ===== */
-  .sm { --in: 16px; --r: 10px; --h: 48px; position: relative; height: 680px; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; font-size: 14px; }
-  .sm > .sky { position: absolute; inset: 0; }
-  .sm .p { position: absolute; background: var(--scrim); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+  /* ===== Simple Mode: two rails (feat/simple-mode, approved 2026-11-01) ===== */
+  .sm { --in: 16px; --bar: 56px; --rail: 72px; --stop: 60px; --top: calc(2 * var(--in) + var(--bar)); position: relative; height: 680px; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; font-size: 14px; }
+  .sm [hidden] { display: none !important; }
+  .sm > .sky, .sm > .atlas { position: absolute; inset: 0; cursor: pointer; }
+  .sm .p { position: absolute; background: var(--scrim); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); border-radius: 10px; }
   .sm .lbl { font-size: 11px; font-weight: 600; letter-spacing: .6px; text-transform: uppercase; color: var(--text2); }
+  .sm .sub { color: var(--text2); font-variant-numeric: tabular-nums; }
+  .sm .tgt { font-size: 15px; font-weight: 600; white-space: nowrap; }
+  .sm .st { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
+  .sm .st i { width: 10px; height: 10px; border-radius: 50%; }
+  .sm .link { color: var(--info); white-space: nowrap; }
   .sm .devs { display: flex; gap: 14px; align-items: center; }
   .sm .devs .ic { width: 22px; height: 22px; }
   .sm .devs .dot { border-color: #222; }
-  .sm .vsep { width: 1px; align-self: stretch; background: rgba(160,160,160,.25); margin: 10px 0; }
-  .sm .tgt { font-size: 15px; font-weight: 600; white-space: nowrap; }
-  .sm .st { display: inline-flex; align-items: center; gap: 8px; color: var(--text); white-space: nowrap; }
-  .sm .st i { width: 10px; height: 10px; border-radius: 50%; }
-  .sm .link { color: var(--info); white-space: nowrap; }
-  .sm .ib { width: var(--h); height: var(--h); display: grid; place-items: center; color: var(--text); flex: none; }
+  .sm .ib { width: 48px; height: 48px; display: grid; place-items: center; color: var(--text); flex: none; }
   .sm .ib svg { width: 22px; height: 22px; fill: currentColor; }
-  .sm .attn2 { display: flex; gap: 10px; align-items: center; padding: 0 16px; height: var(--h); border-radius: var(--r); background: rgba(58,44,10,.9); border: 1px solid var(--busy); }
-  .sm .attn2 svg { width: 20px; height: 20px; fill: var(--busy); flex: none; }
-  .sm .attn2 span { color: var(--text2); }
-  .sm .tile { height: 56px; width: 100%; border-radius: var(--r); background: rgba(64,64,64,.55); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; }
-  .sm .tile b { font-weight: 500; font-variant-numeric: tabular-nums; }
-  .sm .tile .lbl { font-size: 10px; letter-spacing: .5px; }
-  .sm .shut { width: 68px; height: 68px; border-radius: 50%; border: 3px solid var(--text); display: grid; place-items: center; background: rgba(26,26,26,.4); cursor: pointer; flex: none; }
-  .sm .shut span { display: flex; gap: 6px; } .sm .shut span i { width: 7px; height: 24px; border-radius: 2px; background: var(--text); }
-  .sm .shut:focus-visible { outline: 2px solid var(--info); outline-offset: 3px; }
-  .sm .modes2 { display: flex; gap: 2px; padding: 4px; border-radius: var(--r); }
-  .sm .modes2 span { height: 40px; display: flex; align-items: center; padding: 0 14px; border-radius: 7px; color: var(--text2); white-space: nowrap; }
-  .sm .modes2 span.on { background: var(--sel); color: #fff; }
-  .sm .es { height: var(--h); display: inline-flex; align-items: center; gap: 8px; padding: 0 18px; border: 0; border-radius: var(--r); background: var(--err); color: #fff; font: 600 14px var(--sys); white-space: nowrap; cursor: pointer; }
-  .sm .es svg { width: 20px; height: 20px; fill: #fff; }
-  .sm .es.heavy { box-shadow: 0 0 0 2px #1a1a1a, 0 0 0 3px var(--err); }
-  .sm .cd { font-size: 30px; font-weight: 300; line-height: 1; font-variant-numeric: tabular-nums; letter-spacing: -.3px; }
-  .sm .sub { color: var(--text2); font-variant-numeric: tabular-nums; }
-  .sm .bar2 { height: 4px; border-radius: 2px; background: rgba(96,96,96,.6); } .sm .bar2 i { display: block; height: 100%; width: 39%; border-radius: 2px; background: var(--ok); }
-  .sm .stats2 { display: flex; gap: 18px; font-variant-numeric: tabular-nums; }
-  .sm .stats2 > span { display: flex; flex-direction: column; gap: 1px; }
-  .sm .trace { display: block; width: 100%; height: 44px; }
-  .sm .plan2 { display: flex; flex-direction: column; gap: 10px; padding: 16px; }
-  .sm .plan2 .hd { font-size: 15px; font-weight: 600; }
+  .sm .go { height: 48px; border: 0; border-radius: 10px; background: var(--btn); color: #fff; font: 500 14px var(--sys); cursor: pointer; }
+  .sm .go:hover { background: var(--sel); }
+  .sm .ghost { height: 48px; border-radius: 10px; border: 1px solid rgba(160,160,160,.35); background: transparent; color: var(--text); font: 500 14px var(--sys); padding: 0 16px; cursor: pointer; }
+  .sm .row2 { display: flex; gap: 8px; } .sm .row2 > * { flex: 1; }
+  .sm .kv { display: flex; justify-content: space-between; gap: 12px; font-variant-numeric: tabular-nums; }
+  .sm .kv span:first-child { color: var(--text2); }
+  .sm .hr { height: 1px; background: rgba(160,160,160,.2); }
+  .sm .big2 { font-size: 30px; font-weight: 300; line-height: 1; font-variant-numeric: tabular-nums; }
+
+  /* the strip, the camera status pill, Info */
+  .s-strip { left: var(--in); right: var(--in); top: var(--in); height: var(--bar); display: flex; align-items: center; gap: 4px; padding: 0 4px 0 16px; }
+  .s-strip .grow { flex: 1; }
+  .s-pill { left: var(--in); top: var(--top); max-width: 300px; height: 48px; display: flex; align-items: center; gap: 8px; padding: 0 16px; white-space: nowrap; transition: top .22s ease-out; }
+  .s-pill > i { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+  .s-pill .pb { width: 60px; height: 4px; border-radius: 2px; background: rgba(64,64,64,.8); margin-left: 4px; flex: none; }
+  .s-pill .pb i { display: block; height: 100%; width: 40%; border-radius: 2px; background: var(--sel); }
+  .s-info { right: var(--in); top: var(--top); max-width: calc(100% - 3 * var(--in) - 300px); height: 40px; display: flex; align-items: center; gap: 16px; padding: 0 16px; white-space: nowrap; overflow: hidden; font-variant-numeric: tabular-nums; }
+  .s-info small { font-size: 11.5px; color: var(--text2); margin-right: 4px; }
+
+  /* the rails: each only as tall as its controls, centred in its column */
+  .s-col { position: absolute; width: var(--rail); display: flex; align-items: center; }
+  .s-col.l { left: var(--in); top: var(--top); bottom: var(--top); }
+  .s-col.r { right: var(--in); top: var(--top); bottom: calc(2 * var(--in) + var(--stop)); }
+  .s-anchor { position: relative; width: 100%; }
+  .sm .s-rail { position: relative; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 6px; }
+  .s-col.r .s-rail { gap: 8px; }
+  .s-rb { width: 60px; height: 56px; border-radius: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; color: var(--text2); font-size: 11.5px; white-space: nowrap; overflow: hidden; cursor: pointer; }
+  .s-rb svg { width: 24px; height: 24px; fill: currentColor; }
+  .s-rb.on { background: rgba(25,118,210,.25); color: var(--text); }
+  .s-mode { width: 60px; height: 48px; border-radius: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; font-weight: 600; white-space: nowrap; cursor: pointer; }
+  .s-mode span { max-width: 56px; overflow: hidden; text-overflow: ellipsis; } /* the app ellipsizes too: "Polar align" doesn't fit 60 px */
+  .s-mode svg { width: 18px; height: 18px; fill: var(--text2); }
+  .s-mode.open { color: var(--info); } .s-mode.open svg { fill: var(--info); transform: rotate(180deg); }
+  .s-shut { width: 60px; height: 60px; padding: 0; border-radius: 50%; border: 3px solid var(--text); background: transparent; display: grid; place-items: center; cursor: pointer; }
+  .s-shut span { width: 40px; height: 40px; border-radius: 50%; background: var(--text); }
+  .s-shut.run span { width: 22px; height: 22px; border-radius: 3px; }
+  .s-shut:focus-visible { outline: 2px solid var(--info); outline-offset: 3px; }
+
+  /* popovers and mode panels: left of the right rail, level with its top; the rail never moves */
+  .sm .s-pop { right: calc(100% + var(--in)); top: 0; }
+  .s-grid { width: 316px; padding: 8px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .s-grid span { height: 52px; border-radius: 8px; background: rgba(64,64,64,.55); display: flex; align-items: center; gap: 8px; padding: 0 12px; cursor: pointer; }
+  .s-grid span.on { background: var(--sel); }
+  .s-grid svg { width: 20px; height: 20px; fill: var(--text); flex: none; }
+  .s-set { width: 280px; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+  .s-set .pair2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .s-val { height: 48px; border-radius: 8px; background: rgba(64,64,64,.55); display: flex; align-items: center; justify-content: space-between; padding: 0 8px 0 12px; font-variant-numeric: tabular-nums; margin-top: 4px; }
+  .s-val svg { width: 18px; height: 18px; fill: var(--text2); }
+  .s-seg { display: flex; height: 44px; border-radius: 8px; overflow: hidden; background: rgba(64,64,64,.55); }
+  .s-seg span { flex: 1; display: grid; place-items: center; color: var(--text2); }
+  .s-seg span.on { background: var(--sel); color: #fff; }
+  .s-mp { width: 280px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
+  .s-mp .zone { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; }
+  .s-mp .zone i { width: 10px; height: 10px; border-radius: 50%; }
+  .s-mp .dir { display: flex; align-items: center; justify-content: space-between; font-variant-numeric: tabular-nums; }
+  .s-mp .dir svg { width: 20px; height: 20px; fill: var(--text); }
+  .s-mp svg.curve { width: 100%; height: 100px; display: block; }
+  .s-mp .nudge { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+  .s-mp .nudge span { height: 44px; border-radius: 8px; background: rgba(64,64,64,.55); display: grid; place-items: center; }
+  .s-mp .nudge svg { width: 20px; height: 20px; fill: var(--text); }
+  .s-search { height: 48px; border-radius: 8px; background: rgba(64,64,64,.55); display: flex; align-items: center; gap: 10px; padding: 0 12px; color: var(--text2); }
+  .s-search svg { width: 20px; height: 20px; fill: currentColor; }
+
+  /* Stop on its own at the bottom right, under the rail: a 60 px square with the 2 px gap and red ring */
+  .s-stop { position: absolute; right: calc(var(--in) + (var(--rail) - var(--stop)) / 2); bottom: var(--in); width: var(--stop); height: var(--stop); padding: 2px; border: 1px solid var(--err); border-radius: 13px; background: var(--bg); }
+  .s-stop button { width: 100%; height: 100%; border: 0; border-radius: 10px; background: var(--err); color: #fff; font: 700 12px var(--sys); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; cursor: pointer; }
+  .s-stop svg { width: 20px; height: 20px; fill: #fff; }
+
+  /* guiding and the histogram: equal width, each only once it has data */
+  .s-stats { position: absolute; left: var(--in); right: calc(2 * var(--in) + var(--rail)); bottom: var(--in); height: var(--bar); display: flex; gap: var(--in); }
+  .sm .s-stats .p { position: relative; flex: 1; max-width: 520px; display: flex; align-items: center; gap: 14px; padding: 0 16px; }
+  .s-stats .gl { display: flex; flex-direction: column; flex: none; }
+  .s-stats svg { flex: 1; min-width: 0; height: 32px; }
+
+  /* centred things */
+  .s-attn { left: 50%; transform: translateX(-50%); top: var(--top); height: 48px; display: flex; gap: 10px; align-items: center; padding: 0 16px; background: rgba(58,44,10,.9) !important; border: 1px solid var(--busy); white-space: nowrap; }
+  .s-attn svg { width: 20px; height: 20px; fill: var(--busy); flex: none; }
+  .s-attn span { color: var(--text2); }
+  .sm .s-hint { left: 50%; top: 50%; transform: translate(-50%, -50%); background: none; -webkit-backdrop-filter: none; backdrop-filter: none; font-size: 20px; letter-spacing: 2px; color: rgba(224,224,224,.5); pointer-events: none; white-space: nowrap; }
+  .s-sheet { left: 50%; top: 50%; transform: translate(-50%, -50%); width: 400px; padding: 18px; display: flex; flex-direction: column; gap: 10px; }
+  .s-sheet .hd { font-size: 16px; font-weight: 600; }
   .sm .prow { display: grid; grid-template-columns: 48px 1fr 1fr 32px; gap: 8px; align-items: center; }
   .sm .prow > span { height: 44px; border-radius: 8px; background: rgba(64,64,64,.55); display: grid; place-items: center; font-variant-numeric: tabular-nums; }
   .sm .prow > span:first-child { font-weight: 600; }
   .sm .prow .rm { background: none; color: var(--text2); }
   .sm .prow .rm svg { width: 18px; height: 18px; fill: currentColor; }
-  .sm .total { display: flex; justify-content: space-between; color: var(--text2); margin-top: auto; }
-  .sm .go { height: var(--h); border: 0; border-radius: var(--r); background: var(--btn); color: #fff; font: 500 14px var(--sys); cursor: pointer; }
-  .sm .go:hover { background: var(--sel); }
+  .sm .e-card { left: 50%; top: 50%; transform: translate(-50%, -50%); width: 380px; padding: 20px; display: flex; flex-direction: column; gap: 12px; }
+  .sm .e-card .hd { font-size: 18px; font-weight: 600; }
+  .sm .rig { display: flex; align-items: center; gap: 12px; padding: 8px 8px 8px 14px; border-radius: 10px; background: rgba(64,64,64,.55); }
+  .sm .rig .grow { flex: 1; }
 
-  /* A · Viewfinder: full-width top and bottom bars flush to the edge, one control rail on the right */
-  .lay-a .a-top { left: 0; right: 0; top: 0; height: 56px; display: flex; align-items: center; gap: 16px; padding: 0 4px 0 var(--in); }
-  .lay-a .a-top .grow { flex: 1; }
-  .lay-a .a-attn { left: var(--in); top: calc(56px + var(--in)); background: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
-  .lay-a .a-rail { right: 0; top: 56px; bottom: 80px; width: 104px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 0 12px; border-left: 1px solid rgba(160,160,160,.12); }
-  .lay-a .a-bot { left: 0; right: 0; bottom: 0; height: 80px; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 16px; padding: 0 var(--in); border-top: 1px solid rgba(160,160,160,.12); }
-  .lay-a .a-bot .left { display: flex; align-items: center; gap: 20px; min-width: 0; }
-  .lay-a .a-bot .left .read { display: flex; flex-direction: column; gap: 6px; min-width: 150px; }
-  .lay-a .a-bot .guide { width: 180px; display: flex; flex-direction: column; gap: 2px; }
-  .lay-a .a-bot .right { justify-self: end; display: flex; align-items: center; gap: 16px; }
-  .lay-a .a-top, .lay-a .a-rail, .lay-a .a-bot { border-radius: 0; }
-  .lay-a .p-plan { right: 0; top: 56px; bottom: 80px; width: 360px; border-left: 1px solid rgba(160,160,160,.12); }
+  /* drawn on the image: planetarium, polar-align target, zoomed focus star */
+  .sm .atlas { background: radial-gradient(ellipse at 50% 120%, #1b2230 0, #11151d 45%, #0b0d12 80%); overflow: hidden; }
+  .sm .atlas i { position: absolute; border-radius: 50%; background: #dfe6f0; }
+  .sm .atlas svg.const { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .sm .obj { position: absolute; display: flex; align-items: center; gap: 6px; color: var(--text2); font-size: 12px; transform: translate(-7px, -7px); }
+  .sm .obj b { width: 14px; height: 14px; border-radius: 50%; border: 1.5px solid #9fb3cc; flex: none; }
+  .sm .obj.sel b { width: 22px; height: 22px; border: 2px solid var(--info); margin: -4px; }
+  .sm .obj.sel { color: var(--text); font-weight: 600; }
+  .sm .pa-ov { position: absolute; left: 50%; top: 50%; width: 420px; height: 420px; transform: translate(-50%, -50%); pointer-events: none; }
+  .sm .f-star { left: calc(2 * var(--in) + var(--rail)); top: calc(var(--top) + 48px + var(--in)); width: 240px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+  .sm .f-star .zoom { height: 180px; border-radius: 8px; background: #050505; position: relative; overflow: hidden; }
+  .sm .f-star .zoom::before { content: ""; position: absolute; left: 50%; top: 50%; width: 46px; height: 46px; transform: translate(-50%, -50%); border-radius: 50%; background: radial-gradient(circle, #fff 0, rgba(255,255,255,.85) 18%, rgba(220,220,220,.35) 45%, transparent 70%); }
+  .sm .f-star .zoom::after { content: ""; position: absolute; left: 50%; top: 50%; width: 64px; height: 64px; transform: translate(-50%, -50%); border-radius: 50%; border: 1px dashed rgba(66,165,245,.8); }
 
-  /* B · Corners: four corner panels on one inset, all bottoms on one line */
-  .lay-b .p { border-radius: var(--r); }
-  .lay-b .b-tl { left: var(--in); top: var(--in); height: 56px; display: flex; align-items: center; gap: 14px; padding: 0 16px; }
-  .lay-b .b-tr { right: var(--in); top: var(--in); height: 56px; display: flex; align-items: center; padding: 0 4px 0 16px; gap: 4px; }
-  .lay-b .b-attn { left: var(--in); top: calc(56px + 2 * var(--in) - 4px); background: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
-  .lay-b .b-bl { left: var(--in); bottom: var(--in); width: 330px; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
-  .lay-b .b-bl .top { display: flex; align-items: flex-end; justify-content: space-between; }
-  .lay-b .b-bc { left: 50%; transform: translateX(-50%); bottom: var(--in); }
-  .lay-b .b-br { right: var(--in); bottom: var(--in); width: 236px; padding: 16px; display: flex; flex-direction: column; align-items: center; gap: 14px; }
-  .lay-b .b-br .tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; width: 100%; }
-  .lay-b .b-br .es { width: 100%; justify-content: center; }
-  .lay-b .p-plan { right: var(--in); top: calc(56px + 2 * var(--in)); bottom: var(--in); width: 360px; }
-  @media (max-width: 1000px) { .sm .modes2 span { padding: 0 9px; } .lay-a .a-bot .guide { display: none; } .lay-b .b-bc { display: none; } }
-
-  /* C · the Before placement with A's discipline: floating panels, one inset, one radius, aligned edges */
-  .lay-c .p { border-radius: var(--r); }
-  .lay-c .c-top { left: var(--in); right: var(--in); top: var(--in); height: 56px; display: flex; align-items: center; gap: 16px; padding: 0 4px 0 16px; }
-  .lay-c .c-top .grow { flex: 1; }
-  .lay-c .c-attn { left: 50%; transform: translateX(-50%); top: calc(56px + 2 * var(--in)); background: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
-  .lay-c .c-guide { left: var(--in); bottom: var(--in); height: 56px; width: 340px; padding: 0 16px; display: flex; align-items: center; gap: 14px; }
-  .lay-c .c-guide .gl { display: flex; flex-direction: column; gap: 1px; flex: none; }
-  .lay-c .c-guide .trace { flex: 1; width: auto; height: 32px; }
-  .lay-c .c-rail { right: var(--in); top: calc(56px + 2 * var(--in) + 164px + var(--in)); bottom: calc(56px + 2 * var(--in)); width: 168px; padding: 12px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; }
-  .lay-c .c-stop { right: var(--in); bottom: var(--in); width: 168px; background: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
-  .lay-c .c-stop .es { width: 100%; height: 56px; justify-content: center; }
-  .lay-c .c-read { right: var(--in); top: calc(56px + 2 * var(--in)); width: 168px; height: 164px; padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; }
-  .lay-c .c-read .kv { display: flex; justify-content: space-between; font-variant-numeric: tabular-nums; }
-  .lay-c .c-read .kv .lbl { align-self: center; }
-  .lay-c .tile { height: var(--h); }
-  .lay-c .c-modes { left: 50%; transform: translateX(-50%); bottom: var(--in); height: 56px; align-items: center; }
-  .lay-c .c-stop { right: var(--in); bottom: var(--in); background: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
-  .lay-c .c-stop .es { height: 56px; }
-  .lay-c .p-plan { right: var(--in); top: calc(56px + 2 * var(--in)); bottom: calc(56px + 2 * var(--in)); width: 360px; }
-  @media (max-width: 1000px) { .lay-c .c-modes { display: none; } }
-
-  /* C · tap the image to hide the panels; Emergency Stop and any attention banner stay */
-  .lay-c > .sky { cursor: pointer; }
-  .lay-c .p { transition: opacity .22s cubic-bezier(.16, 1, .3, 1); }
-  .lay-c.clean .p:not(.c-stop):not(.c-attn) { opacity: 0; pointer-events: none; }
-  .lay-c .c-hint { left: 50%; transform: translateX(-50%); bottom: var(--in); height: 40px; padding: 0 16px; display: flex; align-items: center; color: var(--text2); font-size: 13px; opacity: 0; pointer-events: none; }
-  .lay-c.clean.hinting .c-hint { opacity: 1; }
-  @media (prefers-reduced-motion: reduce) { .lay-c .p { transition: none; } }
-
-  /* C · per-mode views (Preview · Polar align · Focus · Target · Run) */
-  .lay-c [hidden] { display: none !important; }
-  .lay-c .atlas { position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 120%, #1b2230 0, #11151d 45%, #0b0d12 80%); overflow: hidden; }
-  .lay-c .atlas i { position: absolute; border-radius: 50%; background: #dfe6f0; }
-  .lay-c .atlas svg.const { position: absolute; inset: 0; width: 100%; height: 100%; }
-  .lay-c .obj { position: absolute; display: flex; align-items: center; gap: 6px; color: var(--text2); font-size: 12px; transform: translate(-7px, -7px); }
-  .lay-c .obj b { width: 14px; height: 14px; border-radius: 50%; border: 1.5px solid #9fb3cc; flex: none; }
-  .lay-c .obj.sel b { width: 22px; height: 22px; border: 2px solid var(--info); margin: -4px; }
-  .lay-c .obj.sel { color: var(--text); font-weight: 600; }
-  .lay-c .t-card { left: 52%; top: 46%; width: 260px; padding: 14px 16px; display: flex; flex-direction: column; gap: 6px; }
-  .lay-c .t-search { left: var(--in); top: calc(56px + 2 * var(--in)); height: var(--h); width: 260px; display: flex; align-items: center; gap: 10px; padding: 0 14px; color: var(--text2); }
-  .lay-c .t-search svg { width: 20px; height: 20px; fill: currentColor; }
-  .lay-c .ghost { height: var(--h); border-radius: var(--r); border: 1px solid rgba(160,160,160,.35); background: transparent; color: var(--text); font: 500 14px var(--sys); padding: 0 16px; cursor: pointer; }
-  .lay-c .row2 { display: flex; gap: 8px; }
-  .lay-c .row2 > * { flex: 1; }
-  .lay-c .loop { display: flex; width: 100%; height: 40px; border-radius: 8px; overflow: hidden; background: rgba(64,64,64,.55); }
-  .lay-c .loop span { flex: 1; display: grid; place-items: center; color: var(--text2); }
-  .lay-c .loop span.on { background: var(--sel); color: #fff; }
-  .lay-c .shut.cap span { width: 46px; height: 46px; border-radius: 50%; background: var(--text); display: block; }
-  .lay-c .pa-ov { position: absolute; left: 50%; top: 50%; width: 420px; height: 420px; transform: translate(-50%, -50%); pointer-events: none; }
-  .lay-c .c-err { right: var(--in); top: calc(56px + 2 * var(--in)); width: 168px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
-  .lay-c .big2 { font-size: 30px; font-weight: 300; line-height: 1; font-variant-numeric: tabular-nums; }
-  .lay-c .zone { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; }
-  .lay-c .zone i { width: 10px; height: 10px; border-radius: 50%; }
-  .lay-c .dir { display: flex; align-items: center; justify-content: space-between; font-variant-numeric: tabular-nums; }
-  .lay-c .dir svg { width: 20px; height: 20px; fill: var(--text); }
-  .lay-c .f-star { left: var(--in); top: calc(56px + 2 * var(--in)); width: 240px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
-  .lay-c .f-star .zoom { height: 200px; border-radius: 8px; background: #050505; position: relative; overflow: hidden; }
-  .lay-c .f-star .zoom::before { content: ""; position: absolute; left: 50%; top: 50%; width: 46px; height: 46px; transform: translate(-50%, -50%); border-radius: 50%; background: radial-gradient(circle, #fff 0, rgba(255,255,255,.85) 18%, rgba(220,220,220,.35) 45%, transparent 70%); }
-  .lay-c .f-star .zoom::after { content: ""; position: absolute; left: 50%; top: 50%; width: 64px; height: 64px; transform: translate(-50%, -50%); border-radius: 50%; border: 1px dashed rgba(66,165,245,.8); }
-  .lay-c .f-panel { right: var(--in); top: calc(56px + 2 * var(--in)); bottom: calc(56px + 2 * var(--in)); width: 168px; padding: 14px 12px; display: flex; flex-direction: column; gap: 10px; }
-  .lay-c .f-panel svg.curve { width: 100%; height: 110px; display: block; }
-  .lay-c .nudge { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
-  .lay-c .nudge span { height: 44px; border-radius: 8px; background: rgba(64,64,64,.55); display: grid; place-items: center; }
-  .lay-c .nudge svg { width: 20px; height: 20px; fill: var(--text); }
-  .lay-c .c-done { right: var(--in); top: calc(56px + 2 * var(--in)); bottom: calc(56px + 2 * var(--in)); width: 320px; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
-  .lay-c .c-done .kv { display: flex; justify-content: space-between; font-variant-numeric: tabular-nums; }
-  .lay-c .c-done .kv span:first-child { color: var(--text2); }
-  .lay-c .c-done .hr { height: 1px; background: rgba(160,160,160,.2); }
-  .lay-c .e-card { left: 50%; top: 50%; transform: translate(-50%, -50%); width: 380px; padding: 20px; display: flex; flex-direction: column; gap: 12px; }
-  .lay-c .e-card .hd { font-size: 18px; font-weight: 600; }
-  .lay-c .rig { display: flex; align-items: center; gap: 12px; padding: 8px 8px 8px 14px; border-radius: var(--r); background: rgba(64,64,64,.55); }
-  .lay-c .rig .grow { flex: 1; }
-  .lay-c .c-modes span { cursor: pointer; }
-  .lay-c .c-modes span:hover:not(.on) { color: var(--text); }
-  .lay-c.offline .c-modes { opacity: .45; }
-  .lay-c.offline .devs .dot { background: var(--off) !important; animation: none; }
-  .lay-c.offline .c-stop { opacity: .5; }
+  /* immersive view: everything fades, Stop too; the status pill moves up into the corner and any banner stays */
+  .sm .fade { transition: opacity .22s cubic-bezier(.16, 1, .3, 1); }
+  .sm.clean .fade { opacity: 0; pointer-events: none; }
+  .sm.clean .s-pill { top: var(--in); }
+  @media (prefers-reduced-motion: reduce) { .sm .fade, .s-pill { transition: none; } }
+  .sm.offline .devs .dot { background: var(--off) !important; animation: none; }
+  .sm.offline .s-mode { opacity: .45; }
+  .sm.offline .s-stop { opacity: .5; }
+  @media (max-width: 1000px) { .s-info small { display: none; } }
   /* ---------- Phones ---------- */
   .phones { display: flex; flex-wrap: wrap; gap: 32px; align-items: flex-start; }
   .phone-wrap figcaption { margin-top: 10px; max-width: 300px; }
@@ -382,7 +325,7 @@
     .pair { grid-template-columns: 1fr; }
   }
   @media (max-width: 700px) {
-    .ov-right { display: none; } .ov-read { min-width: 0; right: 12px; bottom: 80px; }
+    .ov-read { min-width: 0; right: 12px; bottom: 80px; }
     .ov-top .devs { display: none; }
   }
 </style>
@@ -431,6 +374,14 @@
   <symbol id="i-dl" viewBox="0 0 24 24"><path d="M18.41 7.41 17 6l-6 6 6 6 1.41-1.41L13.83 12zM12.41 7.41 11 6l-6 6 6 6 1.41-1.41L7.83 12z"/></symbol>
   <symbol id="i-dr" viewBox="0 0 24 24"><path d="M5.59 7.41 7 6l6 6-6 6-1.41-1.41L10.17 12zm6 0L13 6l6 6-6 6-1.41-1.41L16.17 12z"/></symbol>
   <symbol id="i-wifi" viewBox="0 0 24 24"><path d="M1 9l2 2a12.73 12.73 0 0 1 18 0l2-2C16.93 2.93 7.08 2.93 1 9zm8 8 3 3 3-3a4.24 4.24 0 0 0-6 0zm-4-4 2 2a7.07 7.07 0 0 1 10 0l2-2C15.14 9.14 8.87 9.14 5 13z"/></symbol>
+  <!-- Simple Mode rails and mode grid (Material: info_outline, more_horiz, expand_more, visibility_outlined, explore_outlined, travel_explore, playlist_play) -->
+  <symbol id="i-info" viewBox="0 0 24 24"><path d="M11 7h2v2h-2zm0 4h2v6h-2zm1-9C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/></symbol>
+  <symbol id="i-more" viewBox="0 0 24 24"><path d="M6 10c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm12 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm-6 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></symbol>
+  <symbol id="i-expand" viewBox="0 0 24 24"><path d="M16.59 8.59 12 13.17 7.41 8.59 6 10l6 6 6-6z"/></symbol>
+  <symbol id="i-eye" viewBox="0 0 24 24"><path d="M12 6a9.77 9.77 0 0 1 8.82 5.5C19.17 14.87 15.79 17 12 17s-7.17-2.13-8.82-5.5A9.77 9.77 0 0 1 12 6m0-2C7 4 2.73 7.11 1 11.5 2.73 15.89 7 19 12 19s9.27-3.11 11-7.5C21.27 7.11 17 4 12 4zm0 5a2.5 2.5 0 0 1 0 5 2.5 2.5 0 0 1 0-5m0-2c-2.48 0-4.5 2.02-4.5 4.5S9.52 16 12 16s4.5-2.02 4.5-4.5S14.48 7 12 7z"/></symbol>
+  <symbol id="i-explore" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-5.5-2.5 7.51-3.49L17.5 6.5 9.99 9.99 6.5 17.5zm5.5-6.6c.61 0 1.1.49 1.1 1.1s-.49 1.1-1.1 1.1-1.1-.49-1.1-1.1.49-1.1 1.1-1.1z"/></symbol>
+  <symbol id="i-travel" viewBox="0 0 24 24"><path d="M19.3 16.9c.4-.7.7-1.5.7-2.4 0-2.5-2-4.5-4.5-4.5S11 12 11 14.5s2 4.5 4.5 4.5c.9 0 1.7-.3 2.4-.7l3.2 3.2 1.4-1.4-3.2-3.2zm-3.8.1c-1.4 0-2.5-1.1-2.5-2.5s1.1-2.5 2.5-2.5 2.5 1.1 2.5 2.5-1.1 2.5-2.5 2.5zM12 20v2C6.48 22 2 17.52 2 12S6.48 2 12 2c4.84 0 8.87 3.44 9.8 8h-2.07A8 8 0 0 0 15 4.59V5c0 1.1-.9 2-2 2h-2v2c0 .55-.45 1-1 1H8v2h2v3H9l-4.79-4.79C4.08 10.79 4 11.38 4 12c0 4.41 3.59 8 8 8z"/></symbol>
+  <symbol id="i-playlist" viewBox="0 0 24 24"><path d="M19 9H2v2h17V9zm0-4H2v2h17V5zM2 15h13v-2H2v2zm15-2v6l5-3-5-3z"/></symbol>
 </svg>
 
 <div class="page">
@@ -456,13 +407,24 @@
         <button data-mode="full" aria-pressed="true">Full UI (default)</button>
         <button data-mode="simple" aria-pressed="false">Simple Mode</button>
       </div>
-      <div class="seg" role="group" aria-label="Simple Mode view" id="smode-seg" hidden>
-        <button data-smode="run" aria-pressed="true">Run</button>
-        <button data-smode="plan" aria-pressed="false">Run plan</button>
-        <button data-smode="done" aria-pressed="false">Night done</button>
-        <button data-smode="empty" aria-pressed="false">No rig</button>
+      <div class="seg" role="group" aria-label="Simple Mode: Preview states" id="smode-seg" hidden>
+        <button data-smode="idle" aria-pressed="false">No frame</button>
+        <button data-smode="taking" aria-pressed="false">Taking a frame</button>
+        <button data-smode="frame" aria-pressed="true">Frame + Info</button>
+        <button data-smode="grid" aria-pressed="false">Mode grid</button>
+        <button data-smode="settings" aria-pressed="false">Settings</button>
+        <button data-smode="clean" aria-pressed="false">Immersive</button>
+      </div>
+      <div class="seg" role="group" aria-label="Simple Mode: mode screens" id="smode-seg2" hidden>
+        <button data-smode="focus" aria-pressed="false">Focus</button>
+        <button data-smode="pa" aria-pressed="false">Polar align</button>
+        <button data-smode="target" aria-pressed="false">Target</button>
         <button data-smode="t-fail" aria-pressed="false">Solve failed</button>
         <button data-smode="t-horizon" aria-pressed="false">Below horizon</button>
+        <button data-smode="plan" aria-pressed="false">Run plan</button>
+        <button data-smode="run" aria-pressed="false">Running</button>
+        <button data-smode="done" aria-pressed="false">Night done</button>
+        <button data-smode="empty" aria-pressed="false">No rig</button>
       </div>
       <div class="seg" role="group" aria-label="Night mode">
         <button data-night="off" aria-pressed="true">Night mode off</button>
@@ -531,82 +493,24 @@
         </div>
       </div>
 
-      <!-- Simple Mode: image first -->
-      <div class="sm lay-c" id="simpleC" hidden>
-        <div class="sky" data-v="run plan done preview pa focus"><div class="galaxy" style="width:50%;height:17%"></div></div>
-        <div class="p c-top">
-          <div class="devs"><div class="ic" title="Camera"><svg><use href="#i-cam"/></svg><i class="dot g-ok blink"></i></div><div class="ic" title="Mount"><svg><use href="#i-mount"/></svg><i class="dot g-ok"></i></div><div class="ic" title="Guider"><svg><use href="#i-guide"/></svg><i class="dot g-busy"></i></div><div class="ic" title="Focuser"><svg><use href="#i-focus"/></svg><i class="dot g-ok"></i></div><div class="ic" title="Filter Wheel"><svg><use href="#i-filter"/></svg><i class="dot g-ok"></i></div></div>
-          <div class="vsep"></div>
-          <span class="tgt" id="c-tgt">M31 Andromeda</span>
-          <span class="st" id="c-st"><i class="g-busy"></i>Attention</span>
-          <span class="grow"></span>
-          <span class="link">Show all options</span>
-          <div class="ib"><svg><use href="#i-search"/></svg></div>
-          <div class="ib"><svg><use href="#i-moon"/></svg></div>
-          <div class="ib"><svg><use href="#i-gear"/></svg></div>
-        </div>
-        <div class="p c-attn" data-v="run"><div class="attn2"><svg><use href="#i-warn"/></svg><b>Guiding lost. Retrying (2 of 5).</b><span>Exposures paused.</span></div></div>
-        <div class="p c-guide" data-v="run plan"><div class="gl"><span class="lbl">Guiding</span><span class="sub">RMS 0.62″</span></div><svg class="trace" viewBox="0 0 180 44" preserveAspectRatio="none" aria-label="Guiding trace"><line x1="0" y1="22" x2="180" y2="22" stroke="#555" stroke-width="1"/><polyline fill="none" stroke="#42A5F5" stroke-width="1.5" points="0,21 10,24 20,19 30,23 40,21 50,25 60,20 70,22 80,18 90,24 100,21 110,20 120,17 130,27 140,31 150,36 160,13 170,21 180,22"/><polyline fill="none" stroke="#E0E0E0" stroke-width="1.2" stroke-dasharray="3 2" points="0,23 10,21 20,24 30,20 40,23 50,21 60,24 70,20 80,23 90,21 100,24 110,22 120,20 130,25 140,28 150,32 160,17 170,23 180,22"/></svg></div>
-        <div class="p c-rail" data-v="run">
-          <div class="tile"><span class="lbl">Exposure</span><b>300 s</b></div>
-          <div class="tile"><span class="lbl">Filter</span><b>L</b></div>
-          <button class="shut" aria-label="Pause"><span><i></i><i></i></span></button>
-          <div class="tile"><span class="lbl">Gain</span><b>100</b></div>
-        </div>
-
-        <div class="atlas" data-v="target t-fail t-horizon empty">
+      <!-- Simple Mode: two rails (feat/simple-mode, approved 2026-11-01) -->
+      <div class="sm" id="simpleS" hidden>
+        <div class="sky" data-v="taking frame grid settings clean focus pa plan run done"><div class="galaxy" style="width:50%;height:17%"></div></div>
+        <div class="atlas" data-v="idle target t-fail t-horizon empty">
           <svg class="const" viewBox="0 0 1000 680" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
             <polyline fill="none" stroke="rgba(120,150,190,.35)" stroke-width="1" points="300,170 380,215 470,240 560,300 640,330"/>
             <polyline fill="none" stroke="rgba(120,150,190,.35)" stroke-width="1" points="470,240 455,330 430,420"/>
             <polyline fill="none" stroke="rgba(120,150,190,.35)" stroke-width="1" points="700,140 760,190 820,170 870,230"/>
             <path d="M0 600 Q 500 540 1000 610" fill="none" stroke="rgba(66,165,245,.35)" stroke-width="1" stroke-dasharray="4 4"/>
           </svg>
-          <div class="obj sel" data-v="target t-fail" style="left:52%;top:40%"><b></b>M31</div>
-          <div class="obj" data-v="t-horizon" style="left:52%;top:40%"><b></b>M31</div>
-          <div class="obj" data-v="target t-fail" style="left:61%;top:84%"><b></b>M33</div>
-          <div class="obj sel" data-v="t-horizon" style="left:61%;top:84%"><b></b>M33</div>
-          <div class="obj" data-v="target t-fail t-horizon" style="left:30%;top:28%"><b></b>NGC 7000</div>
-          <div class="obj" data-v="target t-fail t-horizon" style="left:78%;top:24%"><b></b>M45</div>
+          <div class="obj sel" data-v="target t-fail" style="left:46%;top:40%"><b></b>M31</div>
+          <div class="obj" data-v="t-horizon" style="left:46%;top:40%"><b></b>M31</div>
+          <div class="obj" data-v="target t-fail" style="left:55%;top:84%"><b></b>M33</div>
+          <div class="obj sel" data-v="t-horizon" style="left:55%;top:84%"><b></b>M33</div>
+          <div class="obj" data-v="target t-fail t-horizon" style="left:26%;top:28%"><b></b>NGC 7000</div>
+          <div class="obj" data-v="target t-fail t-horizon" style="left:66%;top:22%"><b></b>M45</div>
         </div>
-        <div class="p t-search" data-v="target t-fail t-horizon"><svg><use href="#i-search"/></svg>Search objects</div>
-        <div class="p t-card" data-v="target">
-          <span class="tgt">M31 · Andromeda Galaxy</span>
-          <span class="sub">62° up · best until 01:40 · sets 04:10</span>
-          <button class="go" style="margin-top:6px">Go to M31</button>
-          <span class="sub" style="font-size:12px">Slews, then centres with a plate solve.</span>
-        </div>
-
-        <div class="p t-card" data-v="t-fail">
-          <span class="tgt">Plate solve failed</span>
-          <span class="sub">Too few stars in a 2 s frame. The mount is near M31 but not centred.</span>
-          <div class="row2" style="margin-top:6px"><button class="go">Retry with 10 s</button><button class="ghost">Cancel</button></div>
-        </div>
-        <div class="p t-card" data-v="t-horizon" style="top:62%">
-          <span class="tgt">M33 · Triangulum Galaxy</span>
-          <span class="sub">Below your horizon until 22:40</span>
-          <button class="go" disabled style="margin-top:6px;opacity:.45;cursor:not-allowed">Go to now</button>
-          <button class="ghost">Go to at 22:40</button>
-          <span class="sub" style="font-size:12px">Waits, then slews and centres on its own.</span>
-        </div>
-        <div class="p e-card" data-v="empty">
-          <span class="hd">Connect to your rig</span>
-          <span class="sub">Rigs found on your network</span>
-          <div class="rig"><span class="st"><i class="g-ok"></i></span><div class="grow"><b>ara-pi.local</b><div class="sub" style="font-size:12px">OpenAstro Ara · 10.0.50.20</div></div><button class="go" style="padding:0 18px">Connect</button></div>
-          <span class="link">Add a rig by address</span>
-        </div>
-        <div class="p c-read" data-v="preview">
-          <div class="sub">Last frame</div>
-          <div class="kv"><span class="lbl">HFR</span><span>2.31</span></div>
-          <div class="kv"><span class="lbl">Stars</span><span>1,842</span></div>
-          <div class="kv"><span class="lbl">Exposure</span><span>10 s · L</span></div>
-          <div class="kv"><span class="lbl">Saved</span><span>No</span></div>
-        </div>
-        <div class="p c-rail" data-v="preview">
-          <div class="tile"><span class="lbl">Exposure</span><b>10 s</b></div>
-          <div class="tile"><span class="lbl">Filter</span><b>L</b></div>
-          <button class="shut cap" aria-label="Take a frame"><span></span></button>
-          <div class="loop" role="group" aria-label="Loop"><span class="on">Loop</span><span>Single</span></div>
-        </div>
+        <div class="p s-hint" data-v="idle">Tap the shutter to take a frame</div>
         <svg class="pa-ov" data-v="pa" viewBox="0 0 420 420" aria-hidden="true">
           <circle cx="210" cy="210" r="60" fill="none" stroke="rgba(76,175,80,.7)" stroke-width="1.5" stroke-dasharray="5 4"/>
           <line x1="190" y1="210" x2="230" y2="210" stroke="#E0E0E0" stroke-width="1.5"/><line x1="210" y1="190" x2="210" y2="230" stroke="#E0E0E0" stroke-width="1.5"/>
@@ -617,36 +521,123 @@
           <text x="336" y="160" fill="#E0E0E0" font-size="13" font-family="system-ui">Pole now</text>
           <text x="150" y="292" fill="#A0A0A0" font-size="13" font-family="system-ui">Inside the ring: under 10′</text>
         </svg>
-        <div class="p c-err" data-v="pa">
-          <span class="lbl">Polar error</span>
-          <span class="big2">14′ 30″</span>
-          <span class="zone"><i class="g-busy"></i>Keep adjusting</span>
-          <div class="hr" style="height:1px;background:rgba(160,160,160,.2)"></div>
-          <div class="dir"><span class="sub">Altitude</span><span style="display:flex;align-items:center;gap:4px"><svg><use href="#i-up"/></svg>3.2′</span></div>
-          <div class="dir"><span class="sub">Azimuth</span><span style="display:flex;align-items:center;gap:4px"><svg><use href="#i-left"/></svg>14.1′</span></div>
-          <button class="ghost" style="margin-top:4px">Stop</button>
-        </div>
-        <div class="p f-star" data-v="focus">
+        <div class="p f-star fade" data-v="focus">
           <span class="lbl">Star, zoomed</span>
           <div class="zoom"></div>
           <span class="sub">HFR ring: 2.31 px</span>
         </div>
-        <div class="p f-panel" data-v="focus">
-          <span class="lbl">HFR</span>
-          <span class="big2">2.31</span>
-          <svg class="curve" viewBox="0 0 144 110" aria-label="Focus curve">
-            <path d="M8 14 Q 72 150 136 18" fill="none" stroke="rgba(66,165,245,.8)" stroke-width="1.5"/>
-            <g fill="#E0E0E0"><circle cx="10" cy="18" r="2.5"/><circle cx="28" cy="40" r="2.5"/><circle cx="46" cy="60" r="2.5"/><circle cx="62" cy="74" r="2.5"/><circle cx="76" cy="80" r="2.5"/><circle cx="92" cy="72" r="2.5"/><circle cx="108" cy="58" r="2.5"/><circle cx="124" cy="38" r="2.5"/></g>
-            <line x1="74" y1="6" x2="74" y2="104" stroke="rgba(76,175,80,.7)" stroke-dasharray="3 3"/>
-          </svg>
-          <span class="sub" style="font-variant-numeric:tabular-nums">Position 12,480</span>
-          <button class="go">Autofocus</button>
-          <div class="nudge" role="group" aria-label="Move focuser">
-            <span title="In, large"><svg><use href="#i-dl"/></svg></span><span title="In, small"><svg><use href="#i-l"/></svg></span><span title="Out, small"><svg><use href="#i-r"/></svg></span><span title="Out, large"><svg><use href="#i-dr"/></svg></span>
+
+        <div class="p s-strip fade">
+          <div class="devs"><div class="ic" title="Camera"><svg><use href="#i-cam"/></svg><i class="dot g-ok blink"></i></div><div class="ic" title="Mount"><svg><use href="#i-mount"/></svg><i class="dot g-ok"></i></div><div class="ic" title="Guider"><svg><use href="#i-guide"/></svg><i class="dot g-busy"></i></div><div class="ic" title="Focuser"><svg><use href="#i-focus"/></svg><i class="dot g-ok"></i></div><div class="ic" title="Filter Wheel"><svg><use href="#i-filter"/></svg><i class="dot g-ok"></i></div></div>
+          <span class="grow"></span>
+          <div class="ib" title="Night mode"><svg><use href="#i-moon"/></svg></div>
+          <div class="ib" title="More: Search settings, Settings, Show all options"><svg><use href="#i-more"/></svg></div>
+        </div>
+        <div class="p s-pill" id="s-pill" aria-live="polite"></div>
+        <div class="p s-info fade" data-v="frame grid settings clean">
+          <span><small>HFR</small>2.31</span><span><small>Stars</small>1,842</span><span><small>Exposure</small>5 s · L</span><span><small>Gain · offset</small>100 · 10</span><span><small>Clipped</small>0.02 %</span>
+        </div>
+        <div class="p s-attn" data-v="run"><svg><use href="#i-warn"/></svg><b>Guiding lost. Retrying (2 of 5).</b><span>Exposures paused.</span></div>
+
+        <div class="s-col l fade">
+          <div class="p s-rail">
+            <div class="s-rb" id="s-sky"><svg><use href="#i-public"/></svg>Sky</div>
+            <div class="s-rb" id="s-info"><svg><use href="#i-info"/></svg>Info</div>
+            <div class="s-rb"><svg><use href="#i-lib"/></svg>Library</div>
           </div>
         </div>
-        <div class="p c-done" data-v="done">
-          <span class="tgt" style="font-size:17px">Night done</span>
+
+        <div class="s-col r fade">
+          <div class="s-anchor">
+            <div class="p s-rail">
+              <div class="s-mode" id="s-mode" role="button"><span id="s-mode-name">Preview</span><svg><use href="#i-expand"/></svg></div>
+              <button class="s-shut" id="s-shut" aria-label="Take a frame"><span></span></button>
+              <div class="s-rb" id="s-chip"><svg><use href="#i-tune"/></svg>5 s · 100</div>
+            </div>
+
+            <div class="p s-pop s-grid" data-v="grid" id="s-grid">
+              <span data-go="frame" class="on"><svg><use href="#i-eye"/></svg>Preview</span>
+              <span data-go="focus"><svg><use href="#i-focus"/></svg>Focus</span>
+              <span data-go="pa"><svg><use href="#i-explore"/></svg>Polar align</span>
+              <span data-go="target"><svg><use href="#i-travel"/></svg>Target</span>
+              <span data-go="plan"><svg><use href="#i-playlist"/></svg>Run</span>
+            </div>
+            <div class="p s-pop s-set" data-v="settings">
+              <span style="font-weight:600">Preview settings</span>
+              <div class="pair2">
+                <div><span class="lbl">Exposure</span><div class="s-val">5 s<svg><use href="#i-expand"/></svg></div></div>
+                <div><span class="lbl">Gain</span><div class="s-val">100<svg><use href="#i-expand"/></svg></div></div>
+              </div>
+              <div><span class="lbl">Filter</span><div class="s-val">L · Luminance<svg><use href="#i-expand"/></svg></div></div>
+              <div class="s-seg" role="group" aria-label="Shot"><span class="on">Loop</span><span>Single</span></div>
+            </div>
+
+            <div class="p s-pop s-mp" data-v="focus">
+              <span class="lbl">HFR</span>
+              <span class="big2">2.31</span>
+              <svg class="curve" viewBox="0 0 248 100" preserveAspectRatio="none" aria-label="Focus curve">
+                <path d="M8 12 Q 124 140 240 16" fill="none" stroke="rgba(66,165,245,.8)" stroke-width="1.5"/>
+                <g fill="#E0E0E0"><circle cx="12" cy="16" r="2.5"/><circle cx="42" cy="38" r="2.5"/><circle cx="74" cy="56" r="2.5"/><circle cx="104" cy="68" r="2.5"/><circle cx="130" cy="73" r="2.5"/><circle cx="158" cy="66" r="2.5"/><circle cx="188" cy="52" r="2.5"/><circle cx="218" cy="34" r="2.5"/></g>
+                <line x1="128" y1="4" x2="128" y2="96" stroke="rgba(76,175,80,.7)" stroke-dasharray="3 3"/>
+              </svg>
+              <span class="sub">Position 12,480</span>
+              <button class="go">Autofocus</button>
+              <div class="nudge" role="group" aria-label="Move focuser">
+                <span title="In, large"><svg><use href="#i-dl"/></svg></span><span title="In, small"><svg><use href="#i-l"/></svg></span><span title="Out, small"><svg><use href="#i-r"/></svg></span><span title="Out, large"><svg><use href="#i-dr"/></svg></span>
+              </div>
+            </div>
+            <div class="p s-pop s-mp" data-v="pa">
+              <span class="lbl">Polar error</span>
+              <span class="big2">14′ 30″</span>
+              <span class="zone"><i class="g-busy"></i>Keep adjusting</span>
+              <div class="hr"></div>
+              <div class="dir"><span class="sub">Altitude</span><span style="display:flex;align-items:center;gap:4px"><svg><use href="#i-up"/></svg>3.2′</span></div>
+              <div class="dir"><span class="sub">Azimuth</span><span style="display:flex;align-items:center;gap:4px"><svg><use href="#i-left"/></svg>14.1′</span></div>
+              <button class="ghost" style="margin-top:4px">Stop</button>
+            </div>
+            <div class="p s-pop s-mp" data-v="target t-fail t-horizon">
+              <div class="s-search"><svg><use href="#i-search"/></svg><span data-v="target t-fail">M31</span><span data-v="t-horizon">M33</span></div>
+              <div class="hr"></div>
+              <div data-v="target" style="display:flex;flex-direction:column;gap:6px">
+                <span class="tgt">M31 · Andromeda Galaxy</span>
+                <span class="sub">62° up · best until 01:40 · sets 04:10</span>
+                <button class="go" style="margin-top:6px">Go to M31</button>
+                <span class="sub" style="font-size:12px">Slews, then centres with a plate solve.</span>
+              </div>
+              <div data-v="t-fail" style="display:flex;flex-direction:column;gap:6px">
+                <span class="tgt">Plate solve failed</span>
+                <span class="sub">Too few stars in a 2 s frame. The mount is near M31 but not centred.</span>
+                <div class="row2" style="margin-top:6px"><button class="go">Retry with 10 s</button><button class="ghost">Cancel</button></div>
+              </div>
+              <div data-v="t-horizon" style="display:flex;flex-direction:column;gap:6px">
+                <span class="tgt">M33 · Triangulum Galaxy</span>
+                <span class="sub">Below your horizon until 22:40</span>
+                <button class="go" disabled style="margin-top:6px;opacity:.45;cursor:not-allowed">Go to now</button>
+                <button class="ghost">Go to at 22:40</button>
+                <span class="sub" style="font-size:12px">Waits, then slews and centres on its own.</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="s-stats fade">
+          <div class="p" data-v="frame grid settings clean run"><div class="gl"><span>Guiding</span><span class="sub">RMS 0.62″</span></div><svg viewBox="0 0 180 44" preserveAspectRatio="none" aria-label="Guiding trace"><line x1="0" y1="22" x2="180" y2="22" stroke="#555" stroke-width="1"/><polyline fill="none" stroke="#42A5F5" stroke-width="1.5" points="0,21 10,24 20,19 30,23 40,21 50,25 60,20 70,22 80,18 90,24 100,21 110,20 120,17 130,27 140,31 150,36 160,13 170,21 180,22"/><polyline fill="none" stroke="#E0E0E0" stroke-width="1.2" stroke-dasharray="3 2" points="0,23 10,21 20,24 30,20 40,23 50,21 60,24 70,20 80,23 90,21 100,24 110,22 120,20 130,25 140,28 150,32 160,17 170,23 180,22"/></svg></div>
+          <div class="p" data-v="taking frame grid settings clean run focus"><div class="gl"><span>Histogram</span><span class="sub">peak 1,210</span></div><svg viewBox="0 0 180 44" preserveAspectRatio="none" aria-label="Histogram"><path d="M0 44 L20 42 L40 36 L55 12 L62 4 L72 18 L90 34 L120 41 L180 44 Z" fill="rgba(224,224,224,.35)"/></svg></div>
+        </div>
+
+        <div class="p s-sheet" data-v="plan">
+          <div class="hd">Tonight's plan · M31</div>
+          <div class="sub">Autofocus, dither and flats follow your profile.</div>
+          <div class="prow"><span>L</span><span>300 s</span><span>× 40</span><span class="rm"><svg><use href="#i-x"/></svg></span></div>
+          <div class="prow"><span>R</span><span>180 s</span><span>× 20</span><span class="rm"><svg><use href="#i-x"/></svg></span></div>
+          <div class="prow"><span>G</span><span>180 s</span><span>× 20</span><span class="rm"><svg><use href="#i-x"/></svg></span></div>
+          <div class="prow"><span>B</span><span>180 s</span><span>× 20</span><span class="rm"><svg><use href="#i-x"/></svg></span></div>
+          <span class="link" style="height:44px;display:flex;align-items:center">Add filter</span>
+          <div class="kv"><span>100 frames</span><span class="sub">6 h 20 min · ends 04:35</span></div>
+          <button class="go">Start imaging</button>
+        </div>
+        <div class="p s-sheet" data-v="done">
+          <span class="hd">Night done</span>
           <span class="sub">M31 · 21:12 – 04:31</span>
           <div class="hr"></div>
           <div class="kv"><span>Luminance</span><span>40 × 300 s</span></div>
@@ -659,32 +650,20 @@
           <div class="kv"><span>Issues</span><span>Guiding lost twice, recovered</span></div>
           <div class="kv"><span>Flats</span><span>Captured</span></div>
           <div class="kv"><span>Mount</span><span>Parked</span></div>
-          <div class="row2" style="margin-top:auto"><button class="ghost">Image Library</button><button class="go">New plan</button></div>
+          <div class="row2" style="margin-top:6px"><button class="ghost">Image Library</button><button class="go">New plan</button></div>
         </div>
-        <div class="p c-hint" aria-live="polite">Tap the image to show the controls</div>
-        <div class="p c-stop"><button class="es"><svg><use href="#i-report"/></svg>Emergency Stop</button></div>
-        <div class="p p-plan plan2" data-v="plan">
-          <div class="hd">Tonight's plan · M31</div>
-          <div class="sub">Autofocus, dither and flats follow your profile.</div>
-          <div class="prow"><span>L</span><span>300 s</span><span>× 40</span><span class="rm"><svg><use href="#i-x"/></svg></span></div>
-          <div class="prow"><span>R</span><span>180 s</span><span>× 20</span><span class="rm"><svg><use href="#i-x"/></svg></span></div>
-          <div class="prow"><span>G</span><span>180 s</span><span>× 20</span><span class="rm"><svg><use href="#i-x"/></svg></span></div>
-          <div class="prow"><span>B</span><span>180 s</span><span>× 20</span><span class="rm"><svg><use href="#i-x"/></svg></span></div>
-          <span class="link" style="height:44px;display:flex;align-items:center">Add filter</span>
-          <div class="total"><span>100 frames</span><span class="sub">6 h 20 min · ends 04:35</span></div>
-          <button class="go">Start imaging</button>
+        <div class="p e-card" data-v="empty">
+          <span class="hd">Connect to your rig</span>
+          <span class="sub">Rigs found on your network</span>
+          <div class="rig"><span class="st"><i class="g-ok"></i></span><div class="grow"><b>ara-pi.local</b><div class="sub" style="font-size:12px">OpenAstro Ara · 10.0.50.20</div></div><button class="go" style="padding:0 18px">Connect</button></div>
+          <span class="link">Add a rig by address</span>
         </div>
-        <div class="p c-read" data-v="run">
-          <div><div class="sub">Next frame in</div><div style="display:flex;align-items:baseline;justify-content:space-between"><span class="cd">02:14</span><span class="sub">47/120</span></div></div>
-          <div class="bar2"><i></i></div>
-          <div class="kv"><span class="lbl">HFR</span><span>2.31</span></div>
-          <div class="kv"><span class="lbl">Sensor</span><span>−10 °C</span></div>
-        </div>
-        <div class="p c-modes modes2" id="c-modes"><span data-go="preview">Preview</span><span data-go="pa">Polar align</span><span data-go="focus">Focus</span><span data-go="target">Target</span><span data-go="run" class="on">Run</span></div>
+
+        <div class="s-stop fade"><button title="Hold 2 s to stop everything"><svg><use href="#i-report"/></svg>STOP</button></div>
       </div>
 
     </div>
-    <p class="note" style="margin-top:10px">Simple Mode, layout C (ALP-4810): the frame fills the screen; a status strip on top; the attention banner centred under it when something needs you; a right column of Next frame, controls and Emergency Stop, all 168 px wide; a bottom row of guiding, the mode switcher (Preview · Polar align · Focus · Target · Run) and Stop, all 56 px tall. One 16 px inset and 10 px corners throughout. Click the image to hide the panels; Emergency Stop and any alert stay. "Simple: Run plan" shows the quick plan builder. Click a mode on the switcher (Preview, Polar align, Focus, Target, Run) to see its screen; the buttons above show Run plan, Night done and No rig.</p>
+    <p class="note" style="margin-top:10px">Simple Mode, two rails (ALP-4810, the prototype on <code>feat/simple-mode</code>): the frame fills the screen; the strip on top shows connected gear, Night mode and ⋯; the camera status pill sits top-left (at most 300 px) and Info is one line top-right. The right rail holds the mode, the shutter and the settings chip, only as tall as its controls; Stop sits alone at the bottom right (2 s hold). The left rail holds Sky, Info and Library. Guiding and the histogram share the bottom row, each once it has data. Popovers and mode panels open left of the right rail and never move it; Run's plan and Night done are a sheet centred over the image. Click the mode name, the settings chip or a mode in the grid; click the image to close a popover, or with none open to switch the immersive view.</p>
   </section>
 
   <section id="phone">
@@ -884,40 +863,60 @@
     fn(b.dataset[attr]);
   }));
   let MODE = 'full';
-    const showSimple = () => { document.getElementById('simpleC').hidden = MODE !== 'simple'; };
-  groups('mode', m => { MODE = m; document.getElementById('full').hidden = m !== 'full'; showSimple(); document.getElementById('smode-seg').hidden = m !== 'simple'; });
+  const S = document.getElementById('simpleS');
+  groups('mode', m => {
+    MODE = m;
+    document.getElementById('full').hidden = m !== 'full';
+    S.hidden = m !== 'simple';
+    document.getElementById('smode-seg').hidden = document.getElementById('smode-seg2').hidden = m !== 'simple';
+  });
+  // mode: the rail's mode name; pill: [dot, label, detail, bar] or null (idle shows nothing); sky/info: the left rail's lit buttons
+  const P = { taking: ['g-ok', 'Taking a frame', '3 s left', true], ready: ['g-ok', 'Frame ready'], loop: ['g-ok', 'Looping'] };
   const VIEWS = {
-    run: ['M31 Andromeda', 'g-busy', 'Attention', 'run'], plan: ['M31 Andromeda', 'g-ok', 'Ready', 'run'],
-    done: ['M31 Andromeda', 'g-ok', 'Done', 'run'], preview: ['M31 Andromeda', 'g-ok', 'Previewing', 'preview'],
-    pa: ['Polar alignment', 'g-busy', 'Adjusting', 'pa'], focus: ['M31 Andromeda', 'g-busy', 'Focusing', 'focus'],
-    target: ['Choose a target', 'g-ok', 'Ready', 'target'], 't-fail': ['M31 Andromeda', 'g-busy', 'Solve failed', 'target'], 't-horizon': ['Choose a target', 'g-ok', 'Ready', 'target'], empty: ['No rig connected', 'g-off', 'Offline', null] };
+    idle: { mode: 'Preview', sky: true }, taking: { mode: 'Preview', pill: P.taking, shut: true },
+    frame: { mode: 'Preview', pill: P.ready, info: true }, grid: { mode: 'Preview', pill: P.ready, info: true },
+    settings: { mode: 'Preview', pill: P.ready, info: true }, clean: { mode: 'Preview', pill: P.loop, info: true, shut: true },
+    focus: { mode: 'Focus', pill: P.loop, shut: true }, pa: { mode: 'Polar align', pill: P.loop, shut: true },
+    target: { mode: 'Target', sky: true }, 't-fail': { mode: 'Target', sky: true }, 't-horizon': { mode: 'Target', sky: true },
+    plan: { mode: 'Run' }, run: { mode: 'Run', pill: ['g-ok', 'Taking a frame', '2:14 left', true], shut: true }, done: { mode: 'Run' },
+    empty: { mode: 'Preview', sky: true } };
+  let VIEW;
   const setView = v => {
-    const c = document.getElementById('simpleC'), [tgt, cls, st, mode] = VIEWS[v];
-    // toggleAttribute, not .hidden: SVG elements have no hidden property, so the polar-align overlay never hid
-    c.querySelectorAll('[data-v]').forEach(el => el.toggleAttribute('hidden', !el.dataset.v.split(' ').includes(v)));
-    c.classList.toggle('offline', v === 'empty'); c.classList.remove('clean');
-    document.getElementById('c-tgt').textContent = tgt;
-    document.getElementById('c-st').innerHTML = `<i class="${cls}"></i>${st}`;
-    document.querySelectorAll('#c-modes span').forEach(x => x.classList.toggle('on', x.dataset.go === mode));
+    const o = VIEWS[v];
+    VIEW = v;
+    // toggleAttribute, not .hidden: SVG elements have no hidden property
+    S.querySelectorAll('[data-v]').forEach(el => el.toggleAttribute('hidden', !el.dataset.v.split(' ').includes(v)));
+    S.classList.toggle('offline', v === 'empty');
+    S.classList.toggle('clean', v === 'clean');
+    const pill = document.getElementById('s-pill');
+    pill.toggleAttribute('hidden', !o.pill);
+    if (o.pill) { const [dot, label, detail, bar] = o.pill; pill.innerHTML = `<i class="${dot}"></i>${label}${detail ? ` <span class="sub">${detail}</span>` : ''}${bar ? '<span class="pb"><i></i></span>' : ''}`; }
+    document.getElementById('s-mode-name').textContent = o.mode;
+    document.getElementById('s-mode').classList.toggle('open', v === 'grid');
+    document.getElementById('s-chip').classList.toggle('on', v === 'settings');
+    document.getElementById('s-sky').classList.toggle('on', !!o.sky);
+    document.getElementById('s-info').classList.toggle('on', !!o.info);
+    const shut = document.getElementById('s-shut');
+    shut.classList.toggle('run', !!o.shut);
+    shut.setAttribute('aria-label', o.shut ? 'Stop' : 'Take a frame');
+    S.querySelectorAll('#s-grid span').forEach(x => x.classList.toggle('on', VIEWS[x.dataset.go].mode === o.mode));
     document.querySelectorAll('[data-smode]').forEach(x => x.setAttribute('aria-pressed', x.dataset.smode === v));
   };
   groups('smode', setView);
-  document.querySelectorAll('#c-modes span').forEach(x => x.addEventListener('click', () => { if (!document.getElementById('simpleC').classList.contains('offline')) setView(x.dataset.go); }));
-  setView('run');
+  const live = () => VIEW !== 'empty';
+  document.getElementById('s-mode').addEventListener('click', () => live() && setView(VIEW === 'grid' ? 'frame' : 'grid'));
+  document.getElementById('s-chip').addEventListener('click', () => live() && setView(VIEW === 'settings' ? 'frame' : 'settings'));
+  document.getElementById('s-shut').addEventListener('click', () => live() && setView(VIEWS[VIEW].shut ? 'frame' : 'taking'));
+  S.querySelectorAll('#s-grid span').forEach(x => x.addEventListener('click', () => setView(x.dataset.go)));
+  // A tap on the image closes an open popover; with none open it switches the immersive view (only over a frame)
+  S.querySelector(':scope > .sky').addEventListener('click', () => {
+    if (VIEW === 'grid' || VIEW === 'settings') setView('frame');
+    else if (VIEW === 'clean') setView('frame');
+    else if (VIEW === 'frame') setView('clean');
+  });
+  setView('frame');
   groups('night', v => document.querySelectorAll('#stage, .night-target').forEach(el => el.classList.toggle('night', v === 'on')));
-  groups('estop', v => document.querySelectorAll('#stage .estop, #stage .es').forEach(el => el.classList.toggle('heavy', v === 'heavy')));
-
-  // Layout C: a tap on the image hides every panel except Emergency Stop and the attention banner
-  (() => {
-    const c = document.getElementById('simpleC');
-    let t;
-    c.querySelector(':scope > .sky').addEventListener('click', () => {
-      const clean = c.classList.toggle('clean');
-      clearTimeout(t);
-      c.classList.toggle('hinting', clean);
-      if (clean) t = setTimeout(() => c.classList.remove('hinting'), 2200);
-    });
-  })();
+  groups('estop', v => document.querySelectorAll('#stage .estop').forEach(el => el.classList.toggle('heavy', v === 'heavy')));
 </script>
 </body>
 </html>
