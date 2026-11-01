@@ -339,6 +339,9 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
                   Expanded(
                     child: FilledButton(
                       key: const Key('simple-polar-done'),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: AraColors.accentConnected,
+                      ),
                       onPressed:
                           !_busy &&
                               total != null &&

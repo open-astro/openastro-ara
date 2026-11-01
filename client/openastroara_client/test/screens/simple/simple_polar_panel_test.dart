@@ -95,6 +95,8 @@ void main() {
     expect(find.text('Move west 14.1′'), findsOneWidget);
     expect(find.text('1 s'), findsOneWidget, reason: 'the settings stay, for the next frame');
     expect(tester.widget<FilledButton>(find.byKey(const Key('simple-polar-done'))).onPressed, isNull);
+    expect(tester.widget<FilledButton>(find.byKey(const Key('simple-polar-done'))).style?.backgroundColor?.resolve({}),
+        AraColors.accentConnected, reason: 'Done is green');
     expect(find.byKey(const Key('simple-polar-stop')), findsNothing);
     expect(find.byKey(const Key('simple-polar-capture')), findsNothing, reason: 'Loop shoots on its own');
     expect(api!.calls, isEmpty);

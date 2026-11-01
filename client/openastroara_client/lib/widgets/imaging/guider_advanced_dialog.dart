@@ -336,6 +336,7 @@ class _GuiderAdvancedPanelState extends ConsumerState<GuiderAdvancedPanel> {
               ),
               const Spacer(),
               TextButton(
+                style: TextButton.styleFrom(foregroundColor: AraColors.accentConnected),
                 onPressed: () => Navigator.of(context).maybePop(),
                 child: const Text('Done'),
               ),
