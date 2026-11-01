@@ -69,11 +69,13 @@ Future<ProviderContainer> _pump(WidgetTester tester,
     {SequenceDetail? detail,
     NodePath? select,
     bool connectedWheel = false,
-    List<SwitchDevice>? switches}) async {
+    List<SwitchDevice>? switches,
+    bool switchListFails = false}) async {
   final container = ProviderContainer(overrides: [
     if (connectedWheel) filterWheelProvider.overrideWith(_ConnectedWheel.new),
     if (switches != null)
       switchListProvider.overrideWith(() => _KnownSwitches(switches)),
+    if (switchListFails) switchListProvider.overrideWith(_FailedSwitches.new),
   ]);
   addTearDown(container.dispose);
   if (detail != null) {
@@ -116,6 +118,12 @@ class _KnownSwitches extends SwitchListNotifier {
   final List<SwitchDevice> _switches;
   @override
   Future<List<SwitchDevice>> build() async => _switches;
+}
+
+/// A switch list whose fetch failed.
+class _FailedSwitches extends SwitchListNotifier {
+  @override
+  Future<List<SwitchDevice>> build() async => throw StateError('daemon down');
 }
 
 SwitchPort _port(int id, String name, {bool canWrite = true, double max = 1}) =>
@@ -1198,6 +1206,34 @@ void main() {
       );
       await tester.pump();
       expect(_nodeAt(c, [0])['AlpacaDeviceNumber'], 2);
+    });
+
+    testWidgets('a failed switch list keeps both number fields editable', (
+      tester,
+    ) async {
+      // Falsified by: a picker that treats an errored list as "no switch" with an
+      // empty dropdown instead of the integer fields.
+      final c = await _pump(
+        tester,
+        detail: _detailWith(_setSwitch),
+        select: const [0],
+        switchListFails: true,
+      );
+      await tester.pumpAndSettle();
+      for (final (key, text, field, want) in [
+        (deviceField, '2', 'AlpacaDeviceNumber', 2),
+        (portField, '3', 'SwitchIndex', 3),
+      ]) {
+        await tester.enterText(
+          find.descendant(
+            of: find.byKey(key),
+            matching: find.byType(TextField),
+          ),
+          text,
+        );
+        await tester.pump();
+        expect(_nodeAt(c, [0])[field], want);
+      }
     });
   });
 }
