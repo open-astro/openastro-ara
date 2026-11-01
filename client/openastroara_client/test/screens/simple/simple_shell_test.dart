@@ -185,6 +185,44 @@ void main() {
     expect(find.byType(EquipmentGlyph), findsNWidgets(5), reason: 'mount, guider, filter wheel, flat panel, dome');
   });
 
+  testWidgets('the shot status counts down while exposing instead of freezing on its first value',
+      (tester) async {
+    final container = await _pump(tester, const Size(1470, 854));
+    container.read(captureProgressProvider.notifier).beginExposing(const Duration(seconds: 5));
+    await tester.pump();
+    final first = tester.widget<LinearProgressIndicator>(find.byType(LinearProgressIndicator)).value!;
+    final firstText = tester.widget<Text>(find.textContaining('s left')).data;
+
+    await tester.pump(const Duration(seconds: 2));
+    expect(tester.widget<LinearProgressIndicator>(find.byType(LinearProgressIndicator)).value,
+        greaterThan(first), reason: 'the bar advances');
+    expect(tester.widget<Text>(find.textContaining('s left')).data, isNot(firstText),
+        reason: 'the remaining time counts down');
+
+    container.read(captureProgressProvider.notifier).reset();
+    await tester.pump(const Duration(seconds: 1));
+  });
+
+  testWidgets('nothing in the strip moves when Ready changes to Taking a frame', (tester) async {
+    final container = await _pump(tester, const Size(1470, 854));
+    Rect at(Finder f) => tester.getRect(f);
+    final ready = at(find.text('Ready'));
+    final options = at(find.text('Show all options'));
+    final camera = at(find.byTooltip('Camera'));
+
+    container.read(captureProgressProvider.notifier).beginExposing(const Duration(seconds: 5));
+    await tester.pump();
+    expect(at(find.text('Taking a frame')).topLeft, ready.topLeft);
+    expect(at(find.text('Show all options')), options);
+    expect(at(find.byTooltip('Camera')), camera);
+    final label = find.ancestor(of: find.text('Taking a frame'), matching: find.byKey(const Key('simple-activity')));
+    final labelBefore = ready.width;
+    expect(at(label).width, isNot(lessThan(labelBefore)), reason: 'a fixed slot, not sized to the text');
+
+    container.read(captureProgressProvider.notifier).reset();
+    await tester.pump(const Duration(seconds: 1));
+  });
+
   testWidgets('a tap on the frame hides every panel but Emergency Stop, a second brings them back',
       (tester) async {
     final container = await _pump(tester, const Size(1470, 854));

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -249,12 +251,40 @@ class _Shutter extends StatelessWidget {
 /// The shot in flight, in one line under the switch: the full UI's progress
 /// card (with its own Cancel and Retry) is too wide for the column, so the
 /// shutter cancels and retakes instead.
-class _CaptureStatus extends ConsumerWidget {
+class _CaptureStatus extends ConsumerStatefulWidget {
   const _CaptureStatus();
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_CaptureStatus> createState() => _CaptureStatusState();
+}
+
+class _CaptureStatusState extends ConsumerState<_CaptureStatus> {
+  Timer? _tick;
+
+  @override
+  void dispose() {
+    _tick?.cancel();
+    super.dispose();
+  }
+
+  /// The bar and remaining time are elapsed-based and the daemon's progress
+  /// poll is slow, so rebuild ~4×/s while a shot is active (as the full UI's
+  /// progress card does) — otherwise both freeze on their first value.
+  void _syncTick(bool active) {
+    if (active && _tick == null) {
+      _tick = Timer.periodic(const Duration(milliseconds: 250), (_) {
+        if (mounted) setState(() {});
+      });
+    } else if (!active) {
+      _tick?.cancel();
+      _tick = null;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final p = ref.watch(captureProgressProvider);
+    _syncTick(p.isActive);
     final (String? text, Color color) = switch (p.phase) {
       CapturePhase.exposing => (
         p.exposureRemaining == null

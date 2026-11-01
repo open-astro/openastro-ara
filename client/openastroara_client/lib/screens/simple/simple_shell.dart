@@ -270,22 +270,30 @@ class _StatusStrip extends ConsumerWidget {
       padding: const EdgeInsets.only(left: 8, right: 4),
       child: Row(
         children: [
-          // Device dots only: the names would crowd the strip.
-          const Flexible(
-            child: EquipmentChipCompact(
-              compact: true,
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: TopEquipmentChips(),
-              ),
+          // Dots, divider and activity share one Expanded so the dots never
+          // split leftover space with a Spacer: the activity text changing
+          // width can't move anything.
+          Expanded(
+            child: Row(
+              children: [
+                // Device dots only: the names would crowd the strip.
+                const Flexible(
+                  child: EquipmentChipCompact(
+                    compact: true,
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: TopEquipmentChips(),
+                    ),
+                  ),
+                ),
+                const SizedBox(
+                  height: 24,
+                  child: VerticalDivider(width: 24, color: AraColors.border),
+                ),
+                const _ActivityLabel(),
+              ],
             ),
           ),
-          const SizedBox(
-            height: 24,
-            child: VerticalDivider(width: 24, color: AraColors.border),
-          ),
-          const _ActivityLabel(),
-          const Spacer(),
           TextButton(
             onPressed: () =>
                 leaveSimpleMode(ref, SimpleModeScreen.preview.fullUiTab),
@@ -327,13 +335,23 @@ class _ActivityLabel extends ConsumerWidget {
         : capturing
         ? ('Taking a frame', AraColors.accentConnected)
         : ('Ready', AraColors.textSecondary);
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(Icons.circle, size: 8, color: color),
-        const SizedBox(width: AraSpace.s8),
-        Text(text, style: kSimpleText),
-      ],
+    // A fixed slot sized for the longest state, so the strip holds still.
+    return SizedBox(
+      key: const Key('simple-activity'),
+      width: 150,
+      child: Row(
+        children: [
+          Icon(Icons.circle, size: 8, color: color),
+          const SizedBox(width: AraSpace.s8),
+          Flexible(
+            child: Text(
+              text,
+              style: kSimpleText,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
