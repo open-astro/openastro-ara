@@ -1,6 +1,5 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart' show Ticker;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../state/imaging/capture_progress_state.dart';
@@ -131,6 +130,30 @@ class _LastFrameFacts extends ConsumerWidget {
   }
 }
 
+/// True from the tap on the square until the daemon has answered the abort:
+/// the abort is a round trip to the rig (about a second), and the shutter
+/// and status should answer the tap, not the reply.
+final _stoppingProvider = NotifierProvider<_Stopping, bool>(_Stopping.new);
+
+class _Stopping extends Notifier<bool> {
+  @override
+  bool build() => false;
+  void set(bool v) => state = v;
+}
+
+/// Cancels the shot in flight with immediate feedback. The capture state
+/// itself still waits for the daemon (cancelCapture keeps tracking the shot
+/// if the abort didn't go through, so its frame isn't orphaned).
+Future<void> _stop(BuildContext context, WidgetRef ref) async {
+  final stopping = ref.read(_stoppingProvider.notifier);
+  stopping.set(true);
+  try {
+    await cancelCapture(context, ref);
+  } finally {
+    stopping.set(false);
+  }
+}
+
 class _PreviewControls extends ConsumerWidget {
   const _PreviewControls();
 
@@ -141,6 +164,7 @@ class _PreviewControls extends ConsumerWidget {
     final shot = ref.watch(previewShotProvider);
     final looping = ref.watch(liveViewControllerProvider);
     final capturing = ref.watch(captureProgressProvider).isCapturing;
+    final stopping = ref.watch(_stoppingProvider);
     return SingleChildScrollView(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -158,19 +182,21 @@ class _PreviewControls extends ConsumerWidget {
           const SizedBox(height: AraSpace.s16),
           Center(
             child: _Shutter(
-              running: looping || capturing,
-              onPressed: switch (shot) {
-                PreviewShot.loop => () => toggleLiveView(
-                  context,
-                  ref,
-                  !looping,
-                ),
-                // The square stops the shot in flight, like a loop.
-                PreviewShot.single =>
-                  capturing
-                      ? () => cancelCapture(context, ref)
-                      : () => takeOne(context, ref),
-              },
+              running: (looping || capturing) && !stopping,
+              onPressed: stopping
+                  ? null
+                  : switch (shot) {
+                      PreviewShot.loop => () => toggleLiveView(
+                        context,
+                        ref,
+                        !looping,
+                      ),
+                      // The square stops the shot in flight, like a loop.
+                      PreviewShot.single =>
+                        capturing
+                            ? () => _stop(context, ref)
+                            : () => takeOne(context, ref),
+                    },
             ),
           ),
           const SizedBox(height: AraSpace.s16),
@@ -258,55 +284,60 @@ class _CaptureStatus extends ConsumerStatefulWidget {
   ConsumerState<_CaptureStatus> createState() => _CaptureStatusState();
 }
 
-class _CaptureStatusState extends ConsumerState<_CaptureStatus> {
-  Timer? _tick;
+class _CaptureStatusState extends ConsumerState<_CaptureStatus>
+    with SingleTickerProviderStateMixin {
+  late final Ticker _ticker = createTicker((_) => setState(() {}));
 
   @override
   void dispose() {
-    _tick?.cancel();
+    _ticker.dispose();
     super.dispose();
   }
 
   /// The bar and remaining time are elapsed-based and the daemon's progress
-  /// poll is slow, so rebuild ~4×/s while a shot is active (as the full UI's
-  /// progress card does) — otherwise both freeze on their first value.
+  /// poll is slow, so redraw every frame while a shot is active — a smooth
+  /// bar instead of one that freezes, or steps 4×/s.
   void _syncTick(bool active) {
-    if (active && _tick == null) {
-      _tick = Timer.periodic(const Duration(milliseconds: 250), (_) {
-        if (mounted) setState(() {});
-      });
-    } else if (!active) {
-      _tick?.cancel();
-      _tick = null;
+    if (active && !_ticker.isActive) {
+      _ticker.start();
+    } else if (!active && _ticker.isActive) {
+      _ticker.stop();
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final p = ref.watch(captureProgressProvider);
+    final stopping = ref.watch(_stoppingProvider);
     _syncTick(p.isActive);
-    final (String? text, Color color) = switch (p.phase) {
-      CapturePhase.exposing => (
-        p.exposureRemaining == null
-            ? 'Starting…'
-            : '${(p.exposureRemaining!.inMilliseconds / 1000).toStringAsFixed(1)} s left',
-        AraColors.textSecondary,
-      ),
-      CapturePhase.downloading => ('Downloading…', AraColors.textSecondary),
-      CapturePhase.done => ('Frame ready', AraColors.accentConnected),
-      CapturePhase.failed => (
-        p.error ?? 'Capture failed',
-        AraColors.accentError,
-      ),
-      CapturePhase.idle => (null, AraColors.textSecondary),
-    };
+    final (String? text, Color color) = stopping
+        ? ('Stopping…', AraColors.textSecondary)
+        : switch (p.phase) {
+            CapturePhase.exposing => (
+              p.exposureRemaining == null
+                  ? 'Starting…'
+                  // Whole seconds, rounded up: "1 s left" until it's done.
+                  : '${(p.exposureRemaining!.inMilliseconds / 1000).ceil()} s left',
+              AraColors.textSecondary,
+            ),
+            CapturePhase.downloading => (
+              'Downloading…',
+              AraColors.textSecondary,
+            ),
+            CapturePhase.done => ('Frame ready', AraColors.accentConnected),
+            CapturePhase.failed => (
+              p.error ?? 'Capture failed',
+              AraColors.accentError,
+            ),
+            CapturePhase.idle => (null, AraColors.textSecondary),
+          };
     if (text == null) return const SizedBox.shrink();
     return Padding(
       padding: const EdgeInsets.only(top: AraSpace.s12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (p.phase == CapturePhase.exposing)
+          if (!stopping && p.phase == CapturePhase.exposing)
             ClipRRect(
               borderRadius: BorderRadius.circular(4),
               child: LinearProgressIndicator(

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/main.dart' show isShell, shellFor;
+import 'package:openastroara/models/server.dart';
+import 'package:openastroara/state/saved_server_state.dart';
 import 'package:openastroara/screens/app_shell.dart';
 import 'package:openastroara/screens/simple/simple_preview_panel.dart';
 import 'package:openastroara/screens/simple/simple_shell.dart';
@@ -44,7 +46,8 @@ final _someSteps = [
     GuideStep(at: DateTime(2026, 11, 1, 22, 0, i), raPx: (i % 5 - 2) * 0.3, decPx: (i % 3 - 1) * 0.2),
 ];
 
-Future<ProviderContainer> _pump(WidgetTester tester, Size size, {List<GuideStep> steps = const []}) async {
+Future<ProviderContainer> _pump(WidgetTester tester, Size size,
+    {List<GuideStep> steps = const [], AraServer? server}) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
@@ -52,6 +55,7 @@ Future<ProviderContainer> _pump(WidgetTester tester, Size size, {List<GuideStep>
     simpleModePrefsProvider.overrideWithValue(_MemPrefs()),
     selectedTabIndexProvider.overrideWith(_StartOnLive.new),
     guideStepsProvider.overrideWith(() => _Steps(steps)),
+    if (server != null) activeServerProvider.overrideWithValue(server),
   ]);
   addTearDown(container.dispose);
   await container.read(simpleModeProvider.future);
@@ -198,6 +202,13 @@ void main() {
         greaterThan(first), reason: 'the bar advances');
     expect(tester.widget<Text>(find.textContaining('s left')).data, isNot(firstText),
         reason: 'the remaining time counts down');
+    expect(tester.widget<Text>(find.textContaining('s left')).data, matches(RegExp(r'^\d+ s left$')),
+        reason: 'whole seconds only');
+
+    final before = tester.widget<LinearProgressIndicator>(find.byType(LinearProgressIndicator)).value!;
+    await tester.pump(const Duration(milliseconds: 16));
+    expect(tester.widget<LinearProgressIndicator>(find.byType(LinearProgressIndicator)).value,
+        greaterThan(before), reason: 'the bar moves every frame, not in steps');
 
     container.read(captureProgressProvider.notifier).reset();
     await tester.pump(const Duration(seconds: 1));
@@ -221,6 +232,30 @@ void main() {
 
     container.read(captureProgressProvider.notifier).reset();
     await tester.pump(const Duration(seconds: 1));
+  });
+
+  testWidgets('stopping a shot answers on the tap, before the daemon replies', (tester) async {
+    // Requests from the test's fake-async zone never reach a socket, so the
+    // abort POST stays in flight: exactly the slow-rig case.
+    final container = await _pump(tester, const Size(1470, 854),
+        server: const AraServer(hostname: '127.0.0.1', port: 9));
+    container.read(captureProgressProvider.notifier).beginExposing(const Duration(seconds: 30));
+    await tester.pump();
+    expect(find.bySemanticsLabel('Stop'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('simple-shutter')));
+    await tester.pump();
+    expect(find.text('Stopping…'), findsOneWidget, reason: 'feedback on the tap');
+    expect(find.bySemanticsLabel('Stop'), findsNothing, reason: 'the square gives way at once');
+
+    // Let the abort time out and every request drain before teardown.
+    await tester.pump(const Duration(seconds: 5));
+    container.read(captureProgressProvider.notifier).reset();
+    await tester.pumpWidget(const SizedBox());
+    // With a server set, root providers start their polls; dispose them here,
+    // before the pending-timer check (the tearDown dispose is then a no-op).
+    container.dispose();
+    await tester.pump(const Duration(seconds: 5));
   });
 
   testWidgets('a tap on the frame hides every panel but Emergency Stop, a second brings them back',
