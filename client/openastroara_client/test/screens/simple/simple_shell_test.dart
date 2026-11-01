@@ -160,10 +160,10 @@ void main() {
 
     await tester.tap(find.byKey(const Key('simple-mode')));
     await tester.pump();
-    await tester.tap(find.text('Target'));
+    await tester.tap(find.text('Run'));
     await tester.pump();
-    expect(container.read(simpleModeProvider).value, isFalse, reason: 'Target opens the full UI for now');
-    expect(container.read(selectedTabIndexProvider), kPlanningTabIndex);
+    expect(container.read(simpleModeProvider).value, isFalse, reason: 'Run opens the full UI for now');
+    expect(container.read(selectedTabIndexProvider), kRunTabIndex);
   });
 
   testWidgets('Focus stays in Simple Mode: the rail reads Focus, its panel opens left of the rail; the chip is the Focus chip',
@@ -240,6 +240,24 @@ void main() {
     final p = tester.renderObject<RenderParagraph>(find.descendant(of: chip, matching: find.byType(RichText)));
     expect(p.text.toPlainText(), '45 s\nSingle');
     expect(p.didExceedMaxLines, isFalse, reason: 'cut');
+  });
+
+  testWidgets('Target stays in Simple Mode on the sky; a tap on the sky keeps its panel', (tester) async {
+    final container = await _pump(tester, const Size(1024, 768));
+    await _frame(tester, container);
+    await tester.tap(find.byKey(const Key('simple-mode')));
+    await tester.pump();
+    await tester.tap(find.text('Target'));
+    await tester.pump();
+    expect(container.read(simpleModeProvider).value, isTrue, reason: 'no jump to the full UI');
+    expect(find.byKey(const Key('sky')), findsOneWidget, reason: 'the planetarium, even over a frame');
+    final chip = find.byKey(const Key('simple-settings'));
+    expect(find.descendant(of: chip, matching: find.text('None')), findsOneWidget);
+    final rail = _panelOf(tester, find.byKey(const Key('simple-shutter')));
+    expect(_panelOf(tester, find.byKey(const Key('simple-target-search'))).right, rail.left - kSimpleInset);
+    await tester.tap(find.byKey(const Key('simple-frame')), warnIfMissed: false);
+    await tester.pump();
+    expect(find.byKey(const Key('simple-target-search')), findsOneWidget, reason: 'picking in the sky keeps the panel');
   });
 
   testWidgets('the settings chip opens Exposure and Gain side by side from lists, Filter and Loop/Single',

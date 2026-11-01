@@ -22,6 +22,7 @@ import '../../state/saved_server_state.dart';
 import '../../state/sequencer/create_imaging_run.dart';
 import '../../state/settings/optics_settings_state.dart';
 import '../../state/settings/site_settings_state.dart';
+import '../../state/sky_atlas/planetarium_selection_state.dart';
 import '../../state/sky_atlas/site_location_state.dart';
 import '../../state/sky_atlas/sky_atlas_state.dart';
 import '../../state/sky_atlas/target_resolve_state.dart';
@@ -273,6 +274,13 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
       _lastDebugLine = line;
       return;
     }
+    // Simple Mode (bare): the page's selection, for the app's Target panel.
+    if (event['type'] == 'selection') {
+      ref
+          .read(planetariumSelectionProvider.notifier)
+          .set(PlanetariumSelection.tryFromJson(event['object']));
+      return;
+    }
     if (event['type'] == 'displayPref') {
       final layers = event['layers'];
       if (layers is Map) {
@@ -512,6 +520,14 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
       // forwarded command for a fresh one. (updateShouldNotify ignores the null,
       // so clear() doesn't re-wake this listener.)
       ref.read(planetariumCommandProvider.notifier).clear();
+    });
+    // A search typed in Simple Mode's Target panel runs through this view's
+    // own search, as if typed in its search bar.
+    ref.listen<String?>(planetariumSearchProvider, (_, q) {
+      if (q == null) return;
+      ref.read(planetariumSearchProvider.notifier).clear();
+      _searchCtrl.text = q;
+      unawaited(_submitSearch());
     });
 
     // Site / optics edits made in Options reach the page even with no daemon

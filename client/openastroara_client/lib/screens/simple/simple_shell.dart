@@ -15,6 +15,7 @@ import '../../state/imaging/last_frame_state.dart';
 import '../../state/imaging/live_view_state.dart';
 import '../../state/night_mode_state.dart';
 import '../../state/polar_align/polar_align_state.dart';
+import '../../state/sky_atlas/planetarium_selection_state.dart';
 import '../../state/settings/settings_nav.dart';
 import '../../state/simple_mode_state.dart';
 import '../../theme/ara_colors.dart';
@@ -32,6 +33,7 @@ import '../library/image_library_screen.dart';
 import '../shell_listeners.dart';
 import 'simple_focus_panel.dart';
 import 'simple_polar_panel.dart';
+import 'simple_target_panel.dart';
 import 'simple_preview_panel.dart';
 
 /// Inset from the frame edge and between panels.
@@ -104,8 +106,8 @@ enum _Popover { none, modes, settings }
 /// beside the rail and close with a tap on the image. Tapping the image with
 /// nothing open hides everything (the immersive view).
 ///
-/// Preview, Focus and Polar align so far; the other modes open their full-UI
-/// tab, and so does any tab jump made from here (Settings, a device dot, ⌘K).
+/// All modes but Run so far; Run opens its full-UI tab, and so does any tab
+/// jump made from here (Settings, a device dot, ⌘K).
 class SimpleShell extends ConsumerStatefulWidget {
   const SimpleShell({
     super.key,
@@ -167,6 +169,8 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
   /// A tap on the image closes what's open, or else toggles the immersive
   /// view (only once there is a frame to look at).
   void _tapImage(bool hasFrame) => setState(() {
+    // In Target a tap picks an object in the sky; the panel stays.
+    if (_mode == SimpleModeScreen.target) return;
     if (_popover != _Popover.none) {
       _popover = _Popover.none;
     } else if (hasFrame) {
@@ -187,7 +191,9 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
         polarFrame ||
         ref.watch(lastCapturedFrameIdProvider) != null ||
         ref.watch(liveViewControllerProvider);
-    final showSky = _sky || !hasFrame;
+    // Target works on the sky.
+    final showSky =
+        _sky || !hasFrame || _mode == SimpleModeScreen.target;
     final panels = !_clean || showSky;
     final motion = MediaQuery.disableAnimationsOf(context)
         ? Duration.zero
@@ -374,6 +380,8 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                           const SimpleFocusPanel(),
                                         SimpleModeScreen.polarAlign =>
                                           const SimplePolarPanel(),
+                                        SimpleModeScreen.target =>
+                                          const SimpleTargetPanel(),
                                         _ => const SizedBox(
                                           width: 280,
                                           child: SimpleSettingsPopover(),
@@ -691,15 +699,20 @@ class _RightRail extends ConsumerWidget {
               ),
             ),
           ),
-          mode == SimpleModeScreen.polarAlign
-              ? const SimplePolarShutter()
-              : const SimpleShutter(),
+          switch (mode) {
+            SimpleModeScreen.polarAlign => const SimplePolarShutter(),
+            SimpleModeScreen.target => const SimpleTargetShutter(),
+            _ => const SimpleShutter(),
+          },
           _RailButton(
             key: const Key('simple-settings'),
             // P.A.'s setup takes two lines, so it has no icon.
             icon: mode == SimpleModeScreen.polarAlign ? null : Icons.tune,
             label: switch (mode) {
               SimpleModeScreen.focus => simpleFocusSummary(ref),
+              SimpleModeScreen.target => simpleTargetSummary(
+                ref.watch(planetariumSelectionProvider),
+              ),
               SimpleModeScreen.polarAlign => simplePolarSummary(
                 ref.watch(simplePolarSettingsProvider).value ??
                     const PolarAlignSettings(),
@@ -715,8 +728,8 @@ class _RightRail extends ConsumerWidget {
   }
 }
 
-/// The five modes as a grid beside the rail. Preview, Focus and Polar align
-/// are built; the others open their full-UI tab for now.
+/// The five modes as a grid beside the rail. All but Run are built; Run
+/// opens its full-UI tab for now.
 class _ModeGrid extends ConsumerWidget {
   const _ModeGrid({required this.current, required this.onPicked});
 
@@ -727,6 +740,7 @@ class _ModeGrid extends ConsumerWidget {
     SimpleModeScreen.preview,
     SimpleModeScreen.focus,
     SimpleModeScreen.polarAlign,
+    SimpleModeScreen.target,
   };
 
   @override
