@@ -600,8 +600,7 @@
               <div data-v="target" style="display:flex;flex-direction:column;gap:6px">
                 <span class="tgt">M31 · Andromeda Galaxy</span>
                 <span class="sub">62° up · best until 01:40 · sets 04:10</span>
-                <button class="go" style="margin-top:6px">Go to M31</button>
-                <span class="sub" style="font-size:12px">Slews, then centres with a plate solve.</span>
+                <span class="sub" style="font-size:12px">The shutter goes to it; the server centres with a plate solve.</span>
               </div>
               <div data-v="t-fail" style="display:flex;flex-direction:column;gap:6px">
                 <span class="tgt">Plate solve failed</span>
@@ -876,7 +875,7 @@
     frame: { mode: 'Preview', pill: P.ready, info: true }, grid: { mode: 'Preview', pill: P.ready, info: true },
     settings: { mode: 'Preview', pill: P.ready, info: true }, clean: { mode: 'Preview', pill: P.loop, info: true, shut: true },
     focus: { mode: 'Focus', chip: 'Auto', pill: P.loop, shut: true }, pa: { mode: 'Polar align', rail: 'P.A.', chip: '1 s\nLoop', chipIcon: false, pill: P.loop, shut: true },
-    target: { mode: 'Target', sky: true }, 't-fail': { mode: 'Target', sky: true }, 't-horizon': { mode: 'Target', sky: true },
+    target: { mode: 'Target', chip: 'M31', sky: true }, 't-fail': { mode: 'Target', chip: 'M31', sky: true }, 't-horizon': { mode: 'Target', chip: 'M33', sky: true },
     plan: { mode: 'Run' }, run: { mode: 'Run', pill: ['g-ok', 'Taking a frame', '2:14 left', true], shut: true }, done: { mode: 'Run' },
     empty: { mode: 'Preview', sky: true } };
   let VIEW;
@@ -892,7 +891,7 @@
     if (o.pill) { const [dot, label, detail, bar] = o.pill; pill.innerHTML = `<i class="${dot}"></i>${label}${detail ? ` <span class="sub">${detail}</span>` : ''}${bar ? '<span class="pb"><i></i></span>' : ''}`; }
     document.getElementById('s-mode-name').textContent = o.rail || o.mode;
     document.getElementById('s-mode').classList.toggle('open', v === 'grid');
-    document.getElementById('s-chip').classList.toggle('on', v === 'settings' || v === 'focus' || v === 'pa');
+    document.getElementById('s-chip').classList.toggle('on', v === 'settings' || v === 'focus' || v === 'pa' || v.startsWith('t'));
     const chip = document.getElementById('s-chip');
     chip.lastChild.textContent = o.chip || '5 s · 100';
     chip.style.whiteSpace = o.chip && o.chip.includes('\n') ? 'pre' : '';
