@@ -327,6 +327,14 @@
     .ov-read { min-width: 0; right: 12px; bottom: 80px; }
     .ov-top .devs { display: none; }
   }
+  .s-prog .frow { display: grid; grid-template-columns: 24px 1fr 64px; gap: 8px; align-items: center; font-variant-numeric: tabular-nums; }
+  .s-prog .frow b { font-weight: 600; }
+  .s-prog .bar { height: 6px; border-radius: 3px; background: rgba(64,64,64,.8); overflow: hidden; }
+  .s-prog .bar i { display: block; height: 100%; background: var(--ok); }
+  .s-prog .bar i.now { background: var(--sel); }
+  .s-prog .frow span:last-child { text-align: right; color: var(--text2); }
+  .sm .stopb { height: 48px; border-radius: 10px; border: 1px solid var(--err); background: transparent; color: var(--text); font: 500 14px var(--sys); cursor: pointer; }
+  .s-ask { border: 1px solid var(--busy); border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 8px; background: rgba(58,44,10,.6); }
 </style>
 </head>
 <body>
@@ -421,7 +429,10 @@
         <button data-smode="t-fail" aria-pressed="false">Solve failed</button>
         <button data-smode="t-horizon" aria-pressed="false">Below horizon</button>
         <button data-smode="plan" aria-pressed="false">Run plan</button>
-        <button data-smode="run" aria-pressed="false">Running</button>
+        <button data-smode="run" aria-pressed="false">Imaging</button>
+        <button data-smode="prog" aria-pressed="false">Run progress</button>
+        <button data-smode="prog-stop" aria-pressed="false">Red square tapped</button>
+        <button data-smode="run-attn" aria-pressed="false">Guiding lost</button>
         <button data-smode="done" aria-pressed="false">Night done</button>
         <button data-smode="empty" aria-pressed="false">No rig</button>
       </div>
@@ -494,7 +505,7 @@
 
       <!-- Simple Mode: two rails (feat/simple-mode, approved 2026-11-01) -->
       <div class="sm" id="simpleS" hidden>
-        <div class="sky" data-v="taking frame grid settings clean focus pa plan run done"><div class="galaxy" style="width:50%;height:17%"></div></div>
+        <div class="sky" data-v="taking frame grid settings clean focus pa plan run prog prog-stop run-attn done"><div class="galaxy" style="width:50%;height:17%"></div></div>
         <div class="atlas" data-v="idle target t-fail t-horizon empty">
           <svg class="const" viewBox="0 0 1000 680" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
             <polyline fill="none" stroke="rgba(120,150,190,.35)" stroke-width="1" points="300,170 380,215 470,240 560,300 640,330"/>
@@ -529,7 +540,7 @@
           <span><small>HFR</small>2.31</span><span><small>Stars</small>1,842</span><span><small>Exposure</small>5 s · L</span><span><small>Gain · offset</small>100 · 10</span><span><small>Clipped</small>0.02 %</span>
         </div>
         <div class="p s-info s-sys fade" data-v="frame"><span><small>Storage</small>412 GB free</span><span><small>CPU</small>23 %</span><span><small>Memory</small>512 MB</span><span><small>Up</small>3 h 12 min</span></div>
-        <div class="p s-attn" data-v="run"><svg><use href="#i-warn"/></svg><b>Guiding lost. Retrying (2 of 5).</b><span>Exposures paused.</span></div>
+        <div class="p s-attn" data-v="run-attn"><svg><use href="#i-warn"/></svg><b>Guiding lost. Retrying (2 of 5).</b><span>Exposures paused.</span></div>
 
         <div class="s-col l fade">
           <div class="p s-rail">
@@ -594,6 +605,25 @@
               <div class="s-seg" role="group" aria-label="Polar align shot"><span class="on">Loop</span><span>Single</span></div>
               <div class="row2" style="margin-top:4px"><button class="go" disabled style="opacity:.45;background:var(--ok)">Done</button></div>
             </div>
+            <div class="p s-pop s-mp s-prog" data-v="prog prog-stop">
+              <span class="lbl">Imaging M31</span>
+              <span class="big2">23 / 100</span>
+              <span class="sub">Ends 04:35 · 4 h 50 min left</span>
+              <div class="hr"></div>
+              <div class="frow"><b>L</b><div class="bar"><i class="now" style="width:57%"></i></div><span>23 / 40</span></div>
+              <div class="frow"><b>R</b><div class="bar"><i style="width:0"></i></div><span>0 / 20</span></div>
+              <div class="frow"><b>G</b><div class="bar"><i style="width:0"></i></div><span>0 / 20</span></div>
+              <div class="frow"><b>B</b><div class="bar"><i style="width:0"></i></div><span>0 / 20</span></div>
+              <div class="hr"></div>
+              <div class="kv"><span>Last frame</span><span>HFR 2.04 · 1,912 stars</span></div>
+              <div data-v="prog"><button class="ghost" style="width:100%">Pause</button><span class="sub" style="font-size:12px;display:block;margin-top:6px">The red square stops the run.</span></div>
+              <div data-v="prog-stop" class="s-ask">
+                <b>Stop the run?</b>
+                <span class="sub" style="font-size:12px">23 frames are saved. The mount keeps tracking.</span>
+                <button class="go">Stop after this frame</button>
+                <div class="row2"><button class="stopb">Stop now</button><button class="ghost">Keep going</button></div>
+              </div>
+            </div>
             <div class="p s-pop s-mp" data-v="target t-fail t-horizon">
               <div class="s-search"><svg><use href="#i-search"/></svg><span data-v="target t-fail">M31</span><span data-v="t-horizon">M33</span></div>
               <div class="hr"></div>
@@ -619,8 +649,8 @@
         </div>
 
         <div class="s-stats fade">
-          <div class="p" data-v="frame grid settings clean run"><div class="gl"><span>Guiding</span><span class="sub">RMS 0.62″</span></div><svg viewBox="0 0 180 44" preserveAspectRatio="none" aria-label="Guiding trace"><line x1="0" y1="22" x2="180" y2="22" stroke="#555" stroke-width="1"/><polyline fill="none" stroke="#42A5F5" stroke-width="1.5" points="0,21 10,24 20,19 30,23 40,21 50,25 60,20 70,22 80,18 90,24 100,21 110,20 120,17 130,27 140,31 150,36 160,13 170,21 180,22"/><polyline fill="none" stroke="#E0E0E0" stroke-width="1.2" stroke-dasharray="3 2" points="0,23 10,21 20,24 30,20 40,23 50,21 60,24 70,20 80,23 90,21 100,24 110,22 120,20 130,25 140,28 150,32 160,17 170,23 180,22"/></svg></div>
-          <div class="p" data-v="taking frame grid settings clean run focus"><div class="gl"><span>Histogram</span><span class="sub">peak 1,210</span></div><svg viewBox="0 0 180 44" preserveAspectRatio="none" aria-label="Histogram"><path d="M0 44 L20 42 L40 36 L55 12 L62 4 L72 18 L90 34 L120 41 L180 44 Z" fill="rgba(224,224,224,.35)"/></svg></div>
+          <div class="p" data-v="frame grid settings clean run prog prog-stop run-attn"><div class="gl"><span>Guiding</span><span class="sub">RMS 0.62″</span></div><svg viewBox="0 0 180 44" preserveAspectRatio="none" aria-label="Guiding trace"><line x1="0" y1="22" x2="180" y2="22" stroke="#555" stroke-width="1"/><polyline fill="none" stroke="#42A5F5" stroke-width="1.5" points="0,21 10,24 20,19 30,23 40,21 50,25 60,20 70,22 80,18 90,24 100,21 110,20 120,17 130,27 140,31 150,36 160,13 170,21 180,22"/><polyline fill="none" stroke="#E0E0E0" stroke-width="1.2" stroke-dasharray="3 2" points="0,23 10,21 20,24 30,20 40,23 50,21 60,24 70,20 80,23 90,21 100,24 110,22 120,20 130,25 140,28 150,32 160,17 170,23 180,22"/></svg></div>
+          <div class="p" data-v="taking frame grid settings clean run prog prog-stop run-attn focus"><div class="gl"><span>Histogram</span><span class="sub">peak 1,210</span></div><svg viewBox="0 0 180 44" preserveAspectRatio="none" aria-label="Histogram"><path d="M0 44 L20 42 L40 36 L55 12 L62 4 L72 18 L90 34 L120 41 L180 44 Z" fill="rgba(224,224,224,.35)"/></svg></div>
         </div>
 
         <div class="p s-sheet" data-v="plan">
@@ -632,7 +662,7 @@
           <div class="prow"><span>B</span><span>180 s</span><span>× 20</span><span class="rm"><svg><use href="#i-x"/></svg></span></div>
           <span class="link" style="height:44px;display:flex;align-items:center">Add filter</span>
           <div class="kv"><span>100 frames</span><span class="sub">6 h 20 min · ends 04:35</span></div>
-          <button class="go">Start imaging</button>
+          <div class="sub" style="display:flex;align-items:center;justify-content:center;height:48px;border-radius:10px;background:rgba(64,64,64,.35)">Tap the shutter to start imaging</div>
         </div>
         <div class="p s-sheet" data-v="done">
           <span class="hd">Night done</span>
@@ -869,14 +899,16 @@
     document.getElementById('smode-seg').hidden = document.getElementById('smode-seg2').hidden = m !== 'simple';
   });
   // mode: the mode (rail: its shorter rail label, when the name doesn't fit 60 px); pill: [dot, label, detail, bar] or null (idle shows nothing); sky/info: the left rail's lit buttons
-  const P = { taking: ['g-ok', 'Taking a frame', '3 s left', true], ready: ['g-ok', 'Frame ready'], loop: ['g-ok', 'Looping'] };
+  const P = { img: ['g-ok', 'L 23 of 40', '2:14 left', true], taking: ['g-ok', 'Taking a frame', '3 s left', true], ready: ['g-ok', 'Frame ready'], loop: ['g-ok', 'Looping'] };
   const VIEWS = {
     idle: { mode: 'Preview', sky: true }, taking: { mode: 'Preview', pill: P.taking, shut: true },
     frame: { mode: 'Preview', pill: P.ready, info: true }, grid: { mode: 'Preview', pill: P.ready, info: true },
     settings: { mode: 'Preview', pill: P.ready, info: true }, clean: { mode: 'Preview', pill: P.loop, info: true, shut: true },
     focus: { mode: 'Focus', chip: 'Auto', pill: P.loop, shut: true }, pa: { mode: 'Polar align', rail: 'P.A.', chip: '1 s\nLoop', chipIcon: false, pill: P.loop, shut: true },
     target: { mode: 'Target', chip: 'M31', sky: true }, 't-fail': { mode: 'Target', chip: 'M31', sky: true }, 't-horizon': { mode: 'Target', chip: 'M33', sky: true },
-    plan: { mode: 'Run' }, run: { mode: 'Run', pill: ['g-ok', 'Taking a frame', '2:14 left', true], shut: true }, done: { mode: 'Run' },
+    plan: { mode: 'Run', chip: 'Plan' }, run: { mode: 'Run', pill: P.img, chip: '23 / 100', shut: true },
+    prog: { mode: 'Run', pill: P.img, chip: '23 / 100', shut: true }, 'prog-stop': { mode: 'Run', pill: P.img, chip: '23 / 100', shut: true },
+    'run-attn': { mode: 'Run', pill: ['g-busy', 'Waiting for guiding'], chip: '23 / 100', shut: true }, done: { mode: 'Run', chip: 'Done' },
     empty: { mode: 'Preview', sky: true } };
   let VIEW;
   const setView = v => {
@@ -891,7 +923,7 @@
     if (o.pill) { const [dot, label, detail, bar] = o.pill; pill.innerHTML = `<i class="${dot}"></i>${label}${detail ? ` <span class="sub">${detail}</span>` : ''}${bar ? '<span class="pb"><i></i></span>' : ''}`; }
     document.getElementById('s-mode-name').textContent = o.rail || o.mode;
     document.getElementById('s-mode').classList.toggle('open', v === 'grid');
-    document.getElementById('s-chip').classList.toggle('on', ['settings', 'focus', 'pa', 'target', 't-fail', 't-horizon'].includes(v));
+    document.getElementById('s-chip').classList.toggle('on', ['settings', 'focus', 'pa', 'target', 't-fail', 't-horizon', 'plan', 'prog', 'prog-stop'].includes(v));
     const chip = document.getElementById('s-chip');
     chip.lastChild.textContent = o.chip || '5 s · 100';
     chip.style.whiteSpace = o.chip && o.chip.includes('\n') ? 'pre' : '';
@@ -908,8 +940,12 @@
   groups('smode', setView);
   const live = () => VIEW !== 'empty';
   document.getElementById('s-mode').addEventListener('click', () => live() && setView(VIEW === 'grid' ? 'frame' : 'grid'));
-  document.getElementById('s-chip').addEventListener('click', () => live() && setView(VIEW === 'settings' ? 'frame' : 'settings'));
-  document.getElementById('s-shut').addEventListener('click', () => live() && setView(VIEWS[VIEW].shut ? 'frame' : 'taking'));
+  // In Run the chip opens the plan sheet before a run and the progress panel during one
+  const RUN_CHIP = { plan: 'frame', run: 'prog', prog: 'run', 'prog-stop': 'run', 'run-attn': 'prog', done: 'plan' };
+  document.getElementById('s-chip').addEventListener('click', () => live() && setView(RUN_CHIP[VIEW] || (VIEW === 'settings' ? 'frame' : 'settings')));
+  // The shutter always starts; in Run its red square asks before stopping
+  const RUN_SHUT = { plan: 'run', run: 'prog-stop', prog: 'prog-stop', 'run-attn': 'prog-stop', 'prog-stop': 'prog-stop' };
+  document.getElementById('s-shut').addEventListener('click', () => live() && setView(RUN_SHUT[VIEW] || (VIEWS[VIEW].shut ? 'frame' : 'taking')));
   S.querySelectorAll('#s-grid span').forEach(x => x.addEventListener('click', () => setView(x.dataset.go)));
   // A tap on the image closes an open popover; with none open it switches the immersive view (only over a frame)
   S.querySelector(':scope > .sky').addEventListener('click', () => {
