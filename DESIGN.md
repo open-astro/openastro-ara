@@ -307,7 +307,7 @@ An inline warning built from three parts: an amber or red icon, a coloured outli
 - **Do** write labels in product voice: verbs, sentence case, no NINA or daemon enum names.
 
 ### Don't:
-- **Don't** change the full UI's layout while Simple Mode is being built. Simple Mode is additive: new work goes into Simple Mode, and the full UI (PR #1474's shell) stays as it is for now.
+- **Don't** change the full UI's layout while Simple Mode is being built. Simple Mode is additive: new work goes into Simple Mode, and the full UI (PR #1474's shell) stays as it is for now. The one approved exception is the heavier Emergency Stop (ALP-4812), which applies to the full UI too.
 - **Don't** use colour for decoration, branding flourishes or emphasis that isn't a state.
 - **Don't** add shadows or glows to separate surfaces; use a tonal step and a Hairline.
 - **Don't** let any state fall back to plain grey text without a designed look.
