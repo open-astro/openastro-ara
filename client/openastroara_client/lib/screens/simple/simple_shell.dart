@@ -181,7 +181,6 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
         ? Duration.zero
         : const Duration(milliseconds: 220);
     const railTop = kSimpleInset * 2 + kSimpleBarHeight;
-    const besideRail = kSimpleInset * 2 + kSimpleRailWidth;
     return Theme(
       data: simpleTheme(Theme.of(context)),
       child: Scaffold(
@@ -270,10 +269,12 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                               ),
                             ),
                           // Guiding and the histogram along the bottom, each
-                          // once it has data, centred between the rails.
+                          // once it has data: 16 px from the edge and from Stop.
                           const Positioned(
-                            left: besideRail,
-                            right: besideRail,
+                            left: kSimpleInset,
+                            right:
+                                kSimpleInset * 2 +
+                                (kSimpleRailWidth + kSimpleStopSize) / 2,
                             bottom: kSimpleInset,
                             height: kSimpleBarHeight,
                             child: _StatsRow(),

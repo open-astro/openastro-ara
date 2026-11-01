@@ -265,28 +265,28 @@ void main() {
     expect(find.byKey(const Key('sky')), findsNothing);
   });
 
-  group('guiding and the histogram fill the bottom row, centred between the rails', () {
+  group('guiding and the histogram fill the bottom row, 16 px from the edge and from Stop', () {
     const size = Size(1024, 768);
-    const edge = kSimpleInset * 2 + kSimpleRailWidth;
     final histogram = FrameHistogram(
       bins: List<int>.generate(256, (i) => i < 40 ? 1000 - (i - 20).abs() * 40 : 0),
       minAdu: 0, minCount: 0, maxAdu: 65535, maxCount: 1000, meanAdu: 900, stdDev: 50, median: 880, mad: 30,
       lowClipFraction: 0, highClipFraction: 0, width: 100, height: 100, bitDepth: 16);
     Rect guiding(WidgetTester t) => _panelOf(t, find.byKey(const Key('simple-guide-trace')));
     Rect hist(WidgetTester t) => _panelOf(t, find.byKey(const Key('simple-histogram')));
+    double end(WidgetTester t) => t.getRect(find.byType(EmergencyStopButton)).left - kSimpleInset;
 
     testWidgets('guiding alone fills the row', (tester) async {
       await _pump(tester, size, steps: _someSteps);
-      expect(guiding(tester), Rect.fromLTRB(edge, size.height - kSimpleInset - kSimpleBarHeight,
-          size.width - edge, size.height - kSimpleInset));
+      expect(guiding(tester), Rect.fromLTRB(kSimpleInset, size.height - kSimpleInset - kSimpleBarHeight,
+          end(tester), size.height - kSimpleInset));
     });
 
     testWidgets('the histogram alone fills the row', (tester) async {
       final c = await _pump(tester, size, histogram: histogram);
       await _frame(tester, c);
       await tester.pump();
-      expect(hist(tester).left, edge);
-      expect(hist(tester).right, size.width - edge);
+      expect(hist(tester).left, kSimpleInset);
+      expect(hist(tester).right, end(tester));
     });
 
     testWidgets('both split it equally, guiding on the left', (tester) async {
@@ -294,8 +294,8 @@ void main() {
       await _frame(tester, c);
       await tester.pump();
       final g = guiding(tester), h = hist(tester);
-      expect(g.left, edge);
-      expect(h.right, size.width - edge);
+      expect(g.left, kSimpleInset);
+      expect(h.right, end(tester));
       expect(h.left - g.right, kSimpleInset);
       expect(g.width, closeTo(h.width, 0.5));
     });
