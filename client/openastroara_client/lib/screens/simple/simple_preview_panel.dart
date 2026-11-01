@@ -57,28 +57,32 @@ class SimplePreviewPanel extends StatelessWidget {
           ref.watch(liveViewControllerProvider);
       return LayoutBuilder(
         builder: (context, box) {
-          // A short column (an iPad in landscape) gets the two-row facts.
-          // Decided by the column's height, so it doesn't flip when a frame
-          // lands.
-          final compact =
-              box.maxHeight < kSimpleCaptureHeight + kSimpleFactsHeight;
+          // Too short for the controls at all: let them scroll, no facts.
+          if (box.maxHeight < kSimpleCaptureHeight) {
+            return const SimplePanel(
+              padding: EdgeInsets.all(AraSpace.s12),
+              child: SingleChildScrollView(child: _PreviewControls()),
+            );
+          }
           // One panel the full height of the column: the controls at the top,
-          // where they never move, and the last frame's facts at the bottom.
+          // where they never move, and the last frame's facts filling what's
+          // left below them, as many rows as fit.
           return SimplePanel(
             padding: const EdgeInsets.all(AraSpace.s12),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Expanded(child: _PreviewControls()),
-                if (hasFrame) ...[
-                  const Divider(height: AraSpace.s16, color: AraColors.border),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AraSpace.s4,
-                    ),
-                    child: _LastFrameFacts(compact: compact),
-                  ),
-                ],
+                const _PreviewControls(),
+                Expanded(
+                  child: hasFrame
+                      ? LayoutBuilder(
+                          builder: (context, room) => Align(
+                            alignment: Alignment.bottomCenter,
+                            child: _LastFrameFacts(height: room.maxHeight),
+                          ),
+                        )
+                      : const SizedBox.shrink(),
+                ),
               ],
             ),
           );
@@ -88,11 +92,16 @@ class SimplePreviewPanel extends StatelessWidget {
   );
 }
 
-class _LastFrameFacts extends ConsumerWidget {
-  const _LastFrameFacts({required this.compact});
+/// One facts row: 3 px above and below 14 px text.
+const double _kFactRow = 26;
 
-  /// Two rows, no caption: HFR and stars together, then the exposure.
-  final bool compact;
+class _LastFrameFacts extends ConsumerWidget {
+  const _LastFrameFacts({required this.height});
+
+  /// The room under the controls. The facts show as many rows as fit, most
+  /// useful first, with the caption when everything fits; at least two rows
+  /// (HFR and stars together, then the exposure).
+  final double height;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -106,8 +115,9 @@ class _LastFrameFacts extends ConsumerWidget {
     String seconds(Duration d) => d.inMilliseconds % 1000 == 0
         ? '${d.inSeconds} s'
         : '${d.inMilliseconds / 1000} s';
-    Widget row(String label, String value) => Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3),
+    Widget row(String label, String value) => Container(
+      height: _kFactRow,
+      alignment: Alignment.center,
       child: Row(
         children: [
           // The label gives way first on a narrow column; the value stays.
@@ -142,8 +152,40 @@ class _LastFrameFacts extends ConsumerWidget {
     final clipped = analysed == null
         ? '—'
         : '${(analysed.highClipFraction * 100).toStringAsFixed(analysed.highClipFraction < 0.001 ? 0 : 2)} %';
-    if (compact) {
-      return Column(
+    final rows = [
+      row('HFR', hfr),
+      row('Stars', stars),
+      row('Exposure', exposure),
+      row('Gain · offset', gainOffset),
+      row('Clipped', clipped),
+    ];
+    const divider = Divider(height: AraSpace.s16, color: AraColors.border);
+    final fit = ((height - AraSpace.s16) / _kFactRow).floor();
+    final caption = Text(
+      looping ? 'Live view' : 'Last frame',
+      style: AraText.caption,
+    );
+    final Widget body;
+    if (fit >= rows.length + 1) {
+      body = Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SizedBox(
+            height: _kFactRow,
+            child: Align(alignment: Alignment.centerLeft, child: caption),
+          ),
+          ...rows,
+        ],
+      );
+    } else if (fit >= 3) {
+      body = Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: rows.take(fit).toList(),
+      );
+    } else if (fit >= 2) {
+      body = Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -151,18 +193,20 @@ class _LastFrameFacts extends ConsumerWidget {
           row(looping ? 'Live view' : 'Last frame', exposure),
         ],
       );
+    } else if (fit == 1) {
+      body = row('HFR $hfr', '★ $stars');
+    } else {
+      return const SizedBox.shrink();
     }
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(looping ? 'Live view' : 'Last frame', style: AraText.caption),
-        const SizedBox(height: 4),
-        row('HFR', hfr),
-        row('Stars', stars),
-        row('Exposure', exposure),
-        row('Gain · offset', gainOffset),
-        row('Clipped', clipped),
+        divider,
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: AraSpace.s4),
+          child: body,
+        ),
       ],
     );
   }
@@ -203,68 +247,63 @@ class _PreviewControls extends ConsumerWidget {
     final looping = ref.watch(liveViewControllerProvider);
     final capturing = ref.watch(captureProgressProvider).isCapturing;
     final stopping = ref.watch(_stoppingProvider);
-    return SingleChildScrollView(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          DurationSecondsField(
-            label: 'Exposure (s)',
-            value: params.exposure,
-            onChanged: ctrl.setExposure,
-          ),
-          const SizedBox(height: AraSpace.s8),
-          FilterDropdown(
-            value: params.filterSlot,
-            onChanged: ctrl.setFilterSlot,
-          ),
-          const SizedBox(height: AraSpace.s16),
-          Center(
-            child: _Shutter(
-              running: (looping || capturing) && !stopping,
-              onPressed: stopping
-                  ? null
-                  : switch (shot) {
-                      PreviewShot.loop => () => toggleLiveView(
-                        context,
-                        ref,
-                        !looping,
-                      ),
-                      // The square stops the shot in flight, like a loop.
-                      PreviewShot.single =>
-                        capturing
-                            ? () => _stop(context, ref)
-                            : () => takeOne(context, ref),
-                    },
-            ),
-          ),
-          const SizedBox(height: AraSpace.s16),
-          // Switching while a loop runs would strand it with no stop.
-          Container(
-            decoration: BoxDecoration(
-              color: kSimpleTileFill,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Row(
-              children: [
-                for (final (v, label) in const [
-                  (PreviewShot.loop, 'Loop'),
-                  (PreviewShot.single, 'Single'),
-                ])
-                  Expanded(
-                    child: SimpleSegment(
-                      label: label,
-                      selected: shot == v,
-                      radius: 8,
-                      onTap: looping
-                          ? null
-                          : () => ref.read(previewShotProvider.notifier).set(v),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        DurationSecondsField(
+          label: 'Exposure (s)',
+          value: params.exposure,
+          onChanged: ctrl.setExposure,
+        ),
+        const SizedBox(height: AraSpace.s8),
+        FilterDropdown(value: params.filterSlot, onChanged: ctrl.setFilterSlot),
+        const SizedBox(height: AraSpace.s16),
+        Center(
+          child: _Shutter(
+            running: (looping || capturing) && !stopping,
+            onPressed: stopping
+                ? null
+                : switch (shot) {
+                    PreviewShot.loop => () => toggleLiveView(
+                      context,
+                      ref,
+                      !looping,
                     ),
-                  ),
-              ],
-            ),
+                    // The square stops the shot in flight, like a loop.
+                    PreviewShot.single =>
+                      capturing
+                          ? () => _stop(context, ref)
+                          : () => takeOne(context, ref),
+                  },
           ),
-        ],
-      ),
+        ),
+        const SizedBox(height: AraSpace.s16),
+        // Switching while a loop runs would strand it with no stop.
+        Container(
+          decoration: BoxDecoration(
+            color: kSimpleTileFill,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            children: [
+              for (final (v, label) in const [
+                (PreviewShot.loop, 'Loop'),
+                (PreviewShot.single, 'Single'),
+              ])
+                Expanded(
+                  child: SimpleSegment(
+                    label: label,
+                    selected: shot == v,
+                    radius: 8,
+                    onTap: looping
+                        ? null
+                        : () => ref.read(previewShotProvider.notifier).set(v),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

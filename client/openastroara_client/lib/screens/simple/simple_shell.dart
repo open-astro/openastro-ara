@@ -474,12 +474,27 @@ class _StatsRow extends ConsumerWidget {
     final histogram = id == null
         ? null
         : ref.watch(frameHistogramProvider(id)).asData?.value;
+    // Each panel is capped so a lone one is a compact panel, not a bar
+    // across the row.
     return Row(
       spacing: kSimpleInset,
       children: [
-        if (guiding) const Expanded(flex: 3, child: _GuidingBar()),
+        if (guiding)
+          Flexible(
+            flex: 3,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 520),
+              child: const _GuidingBar(),
+            ),
+          ),
         if (histogram != null)
-          Expanded(flex: 2, child: _HistogramBar(histogram)),
+          Flexible(
+            flex: 2,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 340),
+              child: _HistogramBar(histogram),
+            ),
+          ),
       ],
     );
   }
@@ -525,8 +540,25 @@ class _HistogramBar extends StatelessWidget {
   );
 }
 
-/// The frame's histogram as a filled curve, square-root scaled so the faint
-/// tail stays visible next to the sky peak.
+/// The span of [bins] worth drawing: from the first to the last bin holding
+/// at least 0.1 % of the peak, padded 10 % each side. A frame uses a sliver of
+/// the 16-bit range, so plotting it all draws a spike.
+@visibleForTesting
+(int, int) histogramRange(List<int> bins) {
+  if (bins.isEmpty) return (0, 0);
+  final peak = bins.reduce(math.max);
+  if (peak == 0) return (0, bins.length - 1);
+  final floor = peak / 1000;
+  var lo = bins.indexWhere((b) => b >= floor);
+  var hi = bins.lastIndexWhere((b) => b >= floor);
+  final pad = ((hi - lo) * 0.1).ceil();
+  lo = math.max(0, lo - pad);
+  hi = math.min(bins.length - 1, hi + pad);
+  return (lo, hi);
+}
+
+/// The frame's histogram as a filled curve over the range it uses,
+/// square-root scaled so the faint tail stays visible next to the sky peak.
 class _HistogramPainter extends CustomPainter {
   _HistogramPainter(this.bins);
 
@@ -537,9 +569,11 @@ class _HistogramPainter extends CustomPainter {
     if (bins.isEmpty) return;
     final peak = math.sqrt(bins.reduce(math.max).toDouble());
     if (peak == 0) return;
+    final (lo, hi) = histogramRange(bins);
+    final span = math.max(1, hi - lo);
     final path = Path()..moveTo(0, size.height);
-    for (var i = 0; i < bins.length; i++) {
-      final x = bins.length == 1 ? 0.0 : size.width * i / (bins.length - 1);
+    for (var i = lo; i <= hi; i++) {
+      final x = size.width * (i - lo) / span;
       path.lineTo(x, size.height - math.sqrt(bins[i]) / peak * size.height);
     }
     path

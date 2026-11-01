@@ -195,41 +195,56 @@ class _EmergencyStopButtonState extends ConsumerState<EmergencyStopButton>
     final red = Theme.of(context).colorScheme.error;
     final simple = widget.simple;
     final radius = simple ? 10.0 : 16.0;
-    final button = FilledButton.icon(
-      onPressed: _inFlight ? null : _onPressed,
-      icon: _inFlight
-          ? SizedBox(
-              width: simple ? 18 : 14,
-              height: simple ? 18 : 14,
-              child: const CircularProgressIndicator(strokeWidth: 2),
-            )
-          : Icon(Icons.report, size: simple ? 20 : 16),
-      label: Text(
-        _inFlight
-            ? 'Stopping…'
-            : _holding
-            ? 'Hold to confirm'
-            : 'Emergency Stop',
+    final icon = _inFlight
+        ? SizedBox(
+            width: simple ? 18 : 14,
+            height: simple ? 18 : 14,
+            child: const CircularProgressIndicator(strokeWidth: 2),
+          )
+        : Icon(Icons.report, size: simple ? 20 : 16);
+    final label = Text(
+      _inFlight
+          ? 'Stopping…'
+          : _holding
+          ? 'Hold to confirm'
+          : 'Emergency Stop',
+      maxLines: 1,
+    );
+    final style = FilledButton.styleFrom(
+      backgroundColor: red,
+      foregroundColor: Theme.of(context).colorScheme.onError,
+      padding: EdgeInsets.symmetric(
+        horizontal: simple ? 8 : 18,
+        vertical: simple ? 0 : 7,
       ),
-      style: FilledButton.styleFrom(
-        backgroundColor: red,
-        foregroundColor: Theme.of(context).colorScheme.onError,
-        padding: EdgeInsets.symmetric(
-          horizontal: simple ? 8 : 18,
-          vertical: simple ? 0 : 7,
-        ),
-        minimumSize: Size(0, simple ? 56 : 0),
-        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-        visualDensity: simple ? VisualDensity.standard : VisualDensity.compact,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(radius),
-        ),
-        textStyle: TextStyle(
-          fontSize: simple ? 14 : 13,
-          fontWeight: FontWeight.w600,
-        ),
+      minimumSize: Size(0, simple ? 50 : 0),
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      visualDensity: simple ? VisualDensity.standard : VisualDensity.compact,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(radius),
+      ),
+      textStyle: TextStyle(
+        fontSize: simple ? 14 : 13,
+        fontWeight: FontWeight.w600,
       ),
     );
+    // Simple Mode stacks the icon over the label: the 168 px column is too
+    // narrow for both on one line without crowding them.
+    final button = simple
+        ? FilledButton(
+            onPressed: _inFlight ? null : _onPressed,
+            style: style,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [icon, const SizedBox(height: 2), label],
+            ),
+          )
+        : FilledButton.icon(
+            onPressed: _inFlight ? null : _onPressed,
+            style: style,
+            icon: icon,
+            label: label,
+          );
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: simple ? 0 : 8),
       // The ring: a 2 px dark gap, then 1 px of Fault Red around it.

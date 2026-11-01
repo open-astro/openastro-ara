@@ -166,22 +166,22 @@ void main() {
   testWidgets('panels with nothing to show stay hidden: no guiding data, no frame yet', (tester) async {
     final container = await _pump(tester, const Size(1470, 854));
     expect(find.text('Guiding'), findsNothing);
-    expect(find.text('Last frame'), findsNothing);
+    expect(find.textContaining('HFR'), findsNothing);
     expect(find.byKey(const Key('simple-shutter')), findsOneWidget, reason: 'the controls stay');
 
     final shutterBefore = tester.getRect(find.byKey(const Key('simple-shutter')));
 
     container.read(lastCapturedFrameIdProvider.notifier).set('frame-1');
     await tester.pump();
-    expect(find.text('Last frame'), findsOneWidget);
+    expect(find.textContaining('HFR'), findsOneWidget);
     expect(tester.getRect(find.byKey(const Key('simple-shutter'))), shutterBefore,
         reason: 'the capture controls stay put when the facts panel appears');
     Rect panelOf(Finder f) =>
         tester.getRect(find.ancestor(of: f, matching: find.byType(SimplePanel)).first);
     final controls = panelOf(find.byKey(const Key('simple-shutter')));
-    expect(panelOf(find.text('Last frame')), controls,
+    expect(panelOf(find.textContaining('HFR')), controls,
         reason: 'the facts live inside the capture panel, not a panel of their own');
-    expect(tester.getRect(find.text('Last frame')).top,
+    expect(tester.getRect(find.textContaining('HFR')).top,
         greaterThan(tester.getRect(find.byKey(const Key('simple-shutter'))).bottom),
         reason: 'at the bottom, under the controls');
     expect(controls.top, kSimpleInset * 2 + kSimpleBarHeight, reason: 'the capture panel reaches the top');
@@ -300,6 +300,46 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(find.text('Clipped'), findsNothing, reason: 'two rows on the short window');
     expect(find.textContaining('HFR'), findsOneWidget);
+    // A real iPad loses ~24 px to the status bar.
+    await tester.pumpWidget(const SizedBox());
+    container = await _pump(tester, const Size(1024, 744));
+    container.read(lastCapturedFrameIdProvider.notifier).set('frame-1');
+    await tester.pump();
+    expect(tester.takeException(), isNull, reason: 'facts shrink, never overflow');
+    expect(find.textContaining('HFR'), findsOneWidget);
+  });
+
+  testWidgets('Emergency Stop has its icon above the label, centred, with room either side', (tester) async {
+    await _pump(tester, const Size(1470, 854));
+    final stop = find.byType(EmergencyStopButton);
+    final icon = tester.getRect(find.descendant(of: stop, matching: find.byIcon(Icons.report)));
+    final label = tester.getRect(find.descendant(of: stop, matching: find.text('Emergency Stop')));
+    expect(icon.bottom, lessThanOrEqualTo(label.top), reason: 'icon over the label');
+    expect(icon.center.dx, closeTo(label.center.dx, 1), reason: 'both centred');
+  });
+
+  test('the histogram plots only the range the frame uses', () {
+    final bins = List<int>.filled(256, 0);
+    for (var i = 20; i < 40; i++) {
+      bins[i] = 1000 - (i - 30).abs() * 90;
+    }
+    final (lo, hi) = histogramRange(bins);
+    expect(lo, inInclusiveRange(15, 20));
+    expect(hi, inInclusiveRange(39, 45));
+    expect(histogramRange(const []), (0, 0));
+  });
+
+  testWidgets('a lone histogram is a compact panel, not a bar across the row', (tester) async {
+    final container = await _pump(tester, const Size(1470, 854));
+    container.read(lastCapturedFrameIdProvider.notifier).set('frame-1');
+    await tester.pump();
+    // No server in tests, so no histogram arrives; the cap is checked on guiding instead.
+    await tester.pumpWidget(const SizedBox());
+    final c2 = await _pump(tester, const Size(1470, 854), steps: _someSteps);
+    final guiding = tester.getRect(find.ancestor(
+        of: find.byKey(const Key('simple-guide-trace')), matching: find.byType(SimplePanel)).first);
+    expect(guiding.width, lessThanOrEqualTo(520));
+    c2.read(captureProgressProvider);
   });
 
   testWidgets('a tap on the frame hides every panel, Emergency Stop included; a second brings them back',
