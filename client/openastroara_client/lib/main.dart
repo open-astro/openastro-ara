@@ -139,8 +139,8 @@ class _RootRouter extends ConsumerWidget {
     // the profile box: with servers saved the flow would otherwise resume one
     // step in, and "back to the launchpad" should mean screen one.
     final serverChooserRequested = ref.watch(serverChooserRequestedProvider);
-    // ALP-4810 — the per-client Simple Mode pref picks which shell shows.
-    final shell = shellFor(simple: ref.watch(simpleModeProvider).value ?? false);
+    // ALP-4810 — Simple Mode (behind its experimental toggle) picks the shell.
+    final shell = shellFor(simple: ref.watch(simpleModeActiveProvider));
     final Widget routed = saved.when(
       data: (servers) => offline
           // Offline still gets a profile step: pick which CACHED profile to

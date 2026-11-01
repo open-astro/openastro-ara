@@ -31,3 +31,40 @@ class SimpleModeController extends AsyncNotifier<bool> {
 final simpleModeProvider = AsyncNotifierProvider<SimpleModeController, bool>(
   SimpleModeController.new,
 );
+
+/// The prefs file backing [simpleModeFeatureProvider]; overridden in tests.
+final simpleModeFeaturePrefsProvider = Provider<SimpleModePrefsService>(
+  (ref) => SimpleModePrefsService(fileName: 'simple_mode_feature.json'),
+);
+
+/// Experimental feature toggle (Settings → System → Experimental): Simple
+/// Mode is only reachable while this is on. Off by default and per client;
+/// turning it off drops back to the full UI without touching the mode pref.
+class SimpleModeFeatureController extends AsyncNotifier<bool> {
+  bool? _pending;
+
+  @override
+  Future<bool> build() async {
+    final loaded = await ref.read(simpleModeFeaturePrefsProvider).load();
+    return _pending ?? loaded;
+  }
+
+  Future<void> set(bool on) async {
+    _pending = on;
+    state = AsyncData(on);
+    await ref.read(simpleModeFeaturePrefsProvider).save(on);
+  }
+}
+
+final simpleModeFeatureProvider =
+    AsyncNotifierProvider<SimpleModeFeatureController, bool>(
+      SimpleModeFeatureController.new,
+    );
+
+/// Whether the Simple Mode shell shows: the feature is on AND the client
+/// chose Simple Mode.
+final simpleModeActiveProvider = Provider<bool>(
+  (ref) =>
+      (ref.watch(simpleModeFeatureProvider).value ?? false) &&
+      (ref.watch(simpleModeProvider).value ?? false),
+);

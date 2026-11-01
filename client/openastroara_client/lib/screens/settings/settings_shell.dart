@@ -25,6 +25,7 @@ import 'panels/imaging_plate_solve_panel.dart';
 import 'panels/camera_electronics_panel.dart';
 import 'panels/filter_set_panel.dart';
 import 'panels/about_panel.dart';
+import 'panels/experimental_panel.dart';
 import 'panels/optics_panel.dart';
 import 'panels/profile_active_panel.dart';
 import 'panels/profile_wizard_panel.dart';
@@ -265,6 +266,7 @@ class _PanelBody extends StatelessWidget {
       'sky.data' => const SkyDataPanel(),
       'profile.active' => const ProfileActivePanel(),
       'profile.wizard' => const ProfileWizardPanel(),
+      'app.experimental' => const ExperimentalPanel(),
       'app.changelog' => const AboutPanel(),
       'support.logs' => const SupportTab(),
       _ => GenericPlaceholderPanel(

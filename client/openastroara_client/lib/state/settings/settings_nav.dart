@@ -241,6 +241,11 @@ const List<SettingsGroup> settingsTree = <SettingsGroup>[
         label: 'Sky data',
         groupId: 'system',
       ),
+      SettingsPanelInfo(
+        id: 'app.experimental',
+        label: 'Experimental',
+        groupId: 'system',
+      ),
       SettingsPanelInfo(id: 'app.changelog', label: 'About', groupId: 'system'),
     ],
   ),

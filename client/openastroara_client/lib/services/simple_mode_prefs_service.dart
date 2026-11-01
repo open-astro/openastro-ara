@@ -11,17 +11,22 @@ import 'package:path_provider/path_provider.dart';
 class SimpleModePrefsService {
   /// [supportDir] overrides the app-support directory lookup (tests use a
   /// temp dir; production uses path_provider).
-  SimpleModePrefsService({Future<Directory> Function()? supportDir})
-    : _supportDir = supportDir ?? getApplicationSupportDirectory;
+  ///
+  /// [fileName] picks the flag's file: `simple_mode.json` for the mode
+  /// itself, `simple_mode_feature.json` for the experimental feature toggle.
+  SimpleModePrefsService({
+    Future<Directory> Function()? supportDir,
+    this.fileName = 'simple_mode.json',
+  }) : _supportDir = supportDir ?? getApplicationSupportDirectory;
 
   final Future<Directory> Function() _supportDir;
-  static const _fileName = 'simple_mode.json';
+  final String fileName;
   // Serializes save() calls so a fast toggle burst can't interleave writes.
   Future<void> _chain = Future<void>.value();
 
   Future<File> _file() async {
     final dir = await _supportDir();
-    return File('${dir.path}/$_fileName');
+    return File('${dir.path}/$fileName');
   }
 
   /// The saved flag, or false (the full UI, the desktop default) when nothing

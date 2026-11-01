@@ -347,11 +347,8 @@ class _TopEquipmentBar extends StatelessWidget {
               },
             ),
           ),
-          // ALP-4810 — into Simple Mode; the one added control in the full UI.
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 2),
-            child: SimpleModeSwitchButton(),
-          ),
+          // ALP-4810 — into Simple Mode, behind Settings → System → Experimental.
+          const SimpleModeSwitchButton(),
           // Settings last, at the right edge.
           const Padding(
             padding: EdgeInsets.only(right: 6),
