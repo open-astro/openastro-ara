@@ -262,7 +262,7 @@ Simple Mode (see PRODUCT.md) puts the latest frame first. It is simpler than ASI
 - **Top:** a full-width status strip, 56 px tall: the device dots (connected gear only; a fault still shows), then Night mode and ⋯ (Search settings, Settings, Show all options).
 - **Camera status:** a pill at the top-left, 16 px under the strip and at most 300 px wide, like a camera's REC light: "Taking a frame · 3 s left" with a thin bar, Looping, Stopping…, Frame ready, or why it failed; nothing while idle. It stays in the immersive view and moves up into the corner.
 - **Right rail (72 px wide, only as tall as its controls, centred between the strip and Stop), from the top:**
-  - the mode name. A tap opens the five modes as a grid beside the rail: Preview, Focus, Polar align, Target, Run;
+  - the mode name. Polar align shows as "P.A." here, since the full name doesn't fit 60 px; the grid keeps "Polar align". A tap opens the five modes as a grid beside the rail: Preview, Focus, Polar align, Target, Run;
   - the shutter (60 px). In Single it takes a saved frame, as Take One does today; in Loop it runs live view, whose frames are not saved. While it works it shows a square that cancels;
   - the settings chip ("5 s · 100"). Its popover holds Exposure and Gain side by side (preset lists trimmed to the camera's limits), Filter, and Loop / Single. There is no Save frame button.
 - **Popovers** (the mode grid, settings, and a mode's panel) open to the left of the right rail, level with its top, 16 px from it. Opening one never moves the rail. A tap on the image closes an open popover.

@@ -63,7 +63,7 @@ Shaped 2026-11-01 (`/impeccable shape simple-mode`). Paperclip: ALP-4810. Render
 
 ## Mode screens (decided 2026-11-01)
 
-- **Mode order:** Preview · Focus · Polar align · Target · Run.
+- **Mode order:** Preview · Focus · Polar align · Target · Run. On the right rail Polar align reads "P.A." (the full name doesn't fit 60 px); the mode grid spells it out.
 - **Mode panels:** every mode except Preview opens its panel to the left of the right rail, a floating card like the settings popover, level with the rail's top. Run uses a centred sheet instead (decided 2026-11-01).
 - **Preview:** shoot and loop, from the right rail: the shutter and the settings chip (Exposure, Gain, Filter, Loop/Single). The last frame's facts (HFR, stars, exposure · filter, gain · offset, clipped) come from Info. Single saves the frame (the daemon registers every Take One); Loop is live view and saves nothing. No Save frame button.
 - **Polar align:** a target drawn on the image (crosshair, 10′ ring, current pole, arrow). The mode panel shows the error, the zone (under 10′ green, under 60′ amber, otherwise red), the altitude and azimuth corrections, and Stop.

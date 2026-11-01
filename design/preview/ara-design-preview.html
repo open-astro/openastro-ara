@@ -163,7 +163,6 @@
   .s-rb svg { width: 24px; height: 24px; fill: currentColor; }
   .s-rb.on { background: rgba(25,118,210,.25); color: var(--text); }
   .s-mode { width: 60px; height: 48px; border-radius: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; font-weight: 600; white-space: nowrap; cursor: pointer; }
-  .s-mode span { max-width: 56px; overflow: hidden; text-overflow: ellipsis; } /* the app ellipsizes too: "Polar align" doesn't fit 60 px */
   .s-mode svg { width: 18px; height: 18px; fill: var(--text2); }
   .s-mode.open { color: var(--info); } .s-mode.open svg { fill: var(--info); transform: rotate(180deg); }
   .s-shut { width: 60px; height: 60px; padding: 0; border-radius: 50%; border: 3px solid var(--text); background: transparent; display: grid; place-items: center; cursor: pointer; }
@@ -870,13 +869,13 @@
     S.hidden = m !== 'simple';
     document.getElementById('smode-seg').hidden = document.getElementById('smode-seg2').hidden = m !== 'simple';
   });
-  // mode: the rail's mode name; pill: [dot, label, detail, bar] or null (idle shows nothing); sky/info: the left rail's lit buttons
+  // mode: the mode (rail: its shorter rail label, when the name doesn't fit 60 px); pill: [dot, label, detail, bar] or null (idle shows nothing); sky/info: the left rail's lit buttons
   const P = { taking: ['g-ok', 'Taking a frame', '3 s left', true], ready: ['g-ok', 'Frame ready'], loop: ['g-ok', 'Looping'] };
   const VIEWS = {
     idle: { mode: 'Preview', sky: true }, taking: { mode: 'Preview', pill: P.taking, shut: true },
     frame: { mode: 'Preview', pill: P.ready, info: true }, grid: { mode: 'Preview', pill: P.ready, info: true },
     settings: { mode: 'Preview', pill: P.ready, info: true }, clean: { mode: 'Preview', pill: P.loop, info: true, shut: true },
-    focus: { mode: 'Focus', pill: P.loop, shut: true }, pa: { mode: 'Polar align', pill: P.loop, shut: true },
+    focus: { mode: 'Focus', pill: P.loop, shut: true }, pa: { mode: 'Polar align', rail: 'P.A.', pill: P.loop, shut: true },
     target: { mode: 'Target', sky: true }, 't-fail': { mode: 'Target', sky: true }, 't-horizon': { mode: 'Target', sky: true },
     plan: { mode: 'Run' }, run: { mode: 'Run', pill: ['g-ok', 'Taking a frame', '2:14 left', true], shut: true }, done: { mode: 'Run' },
     empty: { mode: 'Preview', sky: true } };
@@ -891,7 +890,7 @@
     const pill = document.getElementById('s-pill');
     pill.toggleAttribute('hidden', !o.pill);
     if (o.pill) { const [dot, label, detail, bar] = o.pill; pill.innerHTML = `<i class="${dot}"></i>${label}${detail ? ` <span class="sub">${detail}</span>` : ''}${bar ? '<span class="pb"><i></i></span>' : ''}`; }
-    document.getElementById('s-mode-name').textContent = o.mode;
+    document.getElementById('s-mode-name').textContent = o.rail || o.mode;
     document.getElementById('s-mode').classList.toggle('open', v === 'grid');
     document.getElementById('s-chip').classList.toggle('on', v === 'settings');
     document.getElementById('s-sky').classList.toggle('on', !!o.sky);
