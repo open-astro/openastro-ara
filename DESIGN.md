@@ -258,8 +258,9 @@ Material segmented buttons and choice chips. Selected segments use Selection Blu
 ### Simple Mode: Image First (proposed, layout C)
 Simple Mode (see PRODUCT.md) puts the latest frame first, ASIAir-style. The image fills the window edge to edge, and the controls float over it on translucent panels:
 - **Panels:** every panel uses `overlay-scrim` (Night Floor at 72 %), 10 px corners and no border, sits 16 px from the frame edge and 16 px from its neighbours, and shares edges with the panels beside it.
-- **Top:** a full-width status strip (56 px) with the device dots (connected gear only; a fault still shows), a divider, the target and its state in a fixed-width slot, then Show all options, search, Night mode and the Settings gear.
+- **Top:** a full-width status strip (56 px) with the device dots (connected gear only; a fault still shows), then Show all options, search, Night mode and the Settings gear.
 - **Centre:** the attention banner, centred 16 px under the status strip, only when something needs the person.
+- **Camera status:** a pill at the top-left of the image, 16 px under the strip, like a camera's REC light: "Taking a frame · 3 s left" with a thin bar, Looping, Stopping…, Frame ready, or why it failed; nothing while idle. It stays in the immersive view (decided 2026-11-01).
 - **Right column (168 px wide, one shared edge), from the top:**
   - the mode's panel, the full height down to the mode list. In Preview: the controls at the top (Exposure and Filter as 48 px tiles, the shutter, Loop / Single, a one-line shot status), and once a frame exists its facts at the bottom of the same panel (two rows on a short window). Controls never move when facts appear;
   - the mode list (Preview · Focus · Polar align · Target · Run), labelled 40 px rows pinned above Emergency Stop;
