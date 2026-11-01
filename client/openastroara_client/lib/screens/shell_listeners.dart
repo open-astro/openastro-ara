@@ -14,9 +14,12 @@ import '../widgets/time_sync_on_connect.dart';
 /// moved out of AppShell unchanged so SimpleShell gets the same modals,
 /// alarms and overlays.
 class ShellListeners extends StatelessWidget {
-  const ShellListeners({super.key, required this.child});
+  const ShellListeners({super.key, required this.child, this.quiet = false});
 
   final Widget child;
+
+  /// Simple Mode: the listeners that only inform stay off screen (no popups).
+  final bool quiet;
 
   @override
   Widget build(BuildContext context) {
@@ -46,7 +49,7 @@ class ShellListeners extends StatelessWidget {
                   child: SafetyAlarmListener(
                     // §57 — the Stop Mount panic overlay surfaces over every
                     // tab while the daemon reports an autonomous slew.
-                    child: StopMountListener(child: child),
+                    child: StopMountListener(quiet: quiet, child: child),
                   ),
                 ),
               ),

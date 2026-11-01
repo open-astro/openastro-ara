@@ -30,7 +30,11 @@ abstract final class SlewWsEvents {
 class StopMountListener extends ConsumerStatefulWidget {
   final Widget child;
 
-  const StopMountListener({super.key, required this.child});
+  /// Simple Mode (no popups): no slewing banner and no "Mount stopped"
+  /// dialog. Its own shutter stops a Go to, and Stop is always out.
+  final bool quiet;
+
+  const StopMountListener({super.key, required this.child, this.quiet = false});
 
   @override
   ConsumerState<StopMountListener> createState() => _StopMountListenerState();
@@ -109,10 +113,12 @@ class _StopMountListenerState extends ConsumerState<StopMountListener> {
           // requested after the abort and lands at an instruction boundary).
           _pausedRunIds.clear();
           _awaitingPause = true;
-          _showStoppedModal(
-            haltedRa: _numOrNull(event.payload['halted_ra_hours']),
-            haltedDec: _numOrNull(event.payload['halted_dec_degrees']),
-          );
+          if (!widget.quiet) {
+            _showStoppedModal(
+              haltedRa: _numOrNull(event.payload['halted_ra_hours']),
+              haltedDec: _numOrNull(event.payload['halted_dec_degrees']),
+            );
+          }
         case SequenceWsEvents.paused:
           if (_awaitingPause && event.payload['sequence_id'] is String) {
             final id = event.payload['sequence_id'] as String;
@@ -157,7 +163,7 @@ class _StopMountListenerState extends ConsumerState<StopMountListener> {
         fit: StackFit.expand,
         children: [
           widget.child,
-          if (_slewing)
+          if (_slewing && !widget.quiet)
           Positioned(
             top: 0,
             left: 0,

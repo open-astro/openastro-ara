@@ -204,6 +204,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
       child: Scaffold(
         backgroundColor: AraColors.bgPrimary,
         body: ShellListeners(
+          quiet: true,
           child: CallbackShortcuts(
             bindings: <ShortcutActivator, VoidCallback>{
               const SingleActivator(LogicalKeyboardKey.keyK, meta: true): () =>
