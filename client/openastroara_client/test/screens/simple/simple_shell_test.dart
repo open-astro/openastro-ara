@@ -206,8 +206,8 @@ void main() {
     container.read(captureProgressProvider.notifier).beginExposing(const Duration(seconds: 5));
     await tester.pump();
     final status = _panelOf(tester, find.text('Taking a frame'));
-    expect(status.bottom, 768 - kSimpleInset * 2 - kSimpleBarHeight, reason: 'above the stats row');
-    expect(status.right, 1024 - kSimpleInset * 2 - kSimpleRailWidth, reason: 'beside the rail');
+    expect(status.topLeft, const Offset(kSimpleInset, kSimpleInset * 2 + kSimpleBarHeight),
+        reason: 'top-left, under the strip');
 
     await tester.tapAt(const Offset(400, 400));
     await tester.pump(const Duration(milliseconds: 300));
@@ -215,7 +215,7 @@ void main() {
     expect(find.byType(EmergencyStopButton).hitTestable(), findsNothing);
     expect(find.byKey(const Key('simple-shutter')).hitTestable(), findsNothing);
     final corner = _panelOf(tester, find.text('Taking a frame'));
-    expect(corner.bottomRight, const Offset(1024 - kSimpleInset, 768 - kSimpleInset));
+    expect(corner.topLeft, const Offset(kSimpleInset, kSimpleInset));
 
     await tester.tapAt(const Offset(400, 400));
     await tester.pump(const Duration(milliseconds: 300));

@@ -85,7 +85,7 @@ enum _Popover { none, modes, settings }
 /// shutter is always out. A right rail holds the mode (tap for the five
 /// modes), a settings chip, the shutter and Stop; a left rail holds Info and
 /// the Library; guiding and the histogram run along the bottom once they
-/// have data; a small status sits bottom-right. Settings and modes open
+/// have data; a small status sits top-left. Settings and modes open
 /// beside the rail and close with a tap on the image. Tapping the image with
 /// nothing open hides everything (the immersive view).
 ///
@@ -223,11 +223,11 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                           ),
                         ),
                       ),
-                    // The camera's status, bottom-right above the stats; it
-                    // stays in the immersive view and drops into the corner.
+                    // The camera's status, top-left under the strip; it stays
+                    // in the immersive view and moves up into the corner.
                     AnimatedPositioned(
-                      right: panels ? besideRail : kSimpleInset,
-                      bottom: panels ? railTop : kSimpleInset,
+                      left: kSimpleInset,
+                      top: panels ? railTop : kSimpleInset,
                       duration: motion,
                       curve: Curves.easeOut,
                       child: const SimpleStatusPill(),
