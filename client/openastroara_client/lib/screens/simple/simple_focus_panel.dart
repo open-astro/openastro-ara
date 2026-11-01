@@ -7,6 +7,7 @@ import '../../models/focuser_status.dart';
 import '../../services/equipment_device_api.dart' show describeEquipmentError;
 import '../../state/equipment/focuser_state.dart';
 import '../../state/focus/autofocus_live_state.dart';
+import '../../state/focus/bahtinov_focus_state.dart';
 import '../../state/settings/autofocus_settings_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
@@ -23,11 +24,17 @@ double? simpleFocusHfr(AutofocusRun run) {
   return kept.isEmpty ? null : kept.last.hfr;
 }
 
-/// "HFR 2.31" (or "Focus" before there is one): the rail chip's caption in
-/// Focus mode.
+/// "Auto" or "Manual": the rail chip's caption in Focus mode. The method is
+/// the one Smart Focus would use: the user's pick, else autofocus with a
+/// focuser connected, by hand without (as `MainFocusCard` decides).
 String simpleFocusSummary(WidgetRef ref) {
-  final hfr = simpleFocusHfr(ref.watch(autofocusLiveProvider).run);
-  return hfr == null ? 'Focus' : 'HFR ${hfr.toStringAsFixed(2)}';
+  final connected =
+      ref.watch(focuserProvider).asData?.value?.connectionState ==
+      EquipmentConnectionState.connected;
+  final method =
+      ref.watch(mainFocusMethodProvider) ??
+      (connected ? MainFocusMethod.autofocus : MainFocusMethod.bahtinov);
+  return method == MainFocusMethod.autofocus ? 'Auto' : 'Manual';
 }
 
 /// The target a nudge of [delta] steps sends: an absolute focuser goes to

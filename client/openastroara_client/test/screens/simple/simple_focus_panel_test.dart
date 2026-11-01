@@ -7,6 +7,7 @@ import 'package:openastroara/models/focuser_status.dart';
 import 'package:openastroara/screens/simple/simple_focus_panel.dart';
 import 'package:openastroara/state/equipment/focuser_state.dart';
 import 'package:openastroara/state/focus/autofocus_live_state.dart';
+import 'package:openastroara/state/focus/bahtinov_focus_state.dart';
 
 FocuserStatus _focuser({int? position = 1000, bool absolute = true, int max = 1100, String runtime = 'idle'}) =>
     FocuserStatus(
@@ -40,6 +41,13 @@ class _Focuser extends FocuserNotifier {
     moves.add(targetPosition);
     return true;
   }
+}
+
+class _Pick extends MainFocusMethodNotifier {
+  _Pick(this.method);
+  final MainFocusMethod method;
+  @override
+  MainFocusMethod? build() => method;
 }
 
 class _Live extends AutofocusLiveNotifier {
@@ -137,5 +145,31 @@ void main() {
     expect(l.cancels, 1);
     await tester.tap(find.byIcon(Icons.chevron_left));
     expect(f.moves, isEmpty);
+  });
+
+  group('the rail chip reads the focus method', () {
+    Future<void> chip(WidgetTester tester, FocuserStatus? focuser, {MainFocusMethod? pick}) async {
+      await tester.pumpWidget(ProviderScope(
+        overrides: [
+          focuserProvider.overrideWith(() => _Focuser(focuser)),
+          if (pick != null) mainFocusMethodProvider.overrideWith(() => _Pick(pick)),
+        ],
+        child: MaterialApp(home: Consumer(builder: (context, ref, _) => Text(simpleFocusSummary(ref)))),
+      ));
+      await tester.pump();
+    }
+
+    testWidgets('Auto with a focuser to drive', (tester) async {
+      await chip(tester, _focuser());
+      expect(find.text('Auto'), findsOneWidget);
+    });
+    testWidgets('Manual without one', (tester) async {
+      await chip(tester, null);
+      expect(find.text('Manual'), findsOneWidget);
+    });
+    testWidgets('Manual when the Bahtinov mask was picked', (tester) async {
+      await chip(tester, _focuser(), pick: MainFocusMethod.bahtinov);
+      expect(find.text('Manual'), findsOneWidget);
+    });
   });
 }
