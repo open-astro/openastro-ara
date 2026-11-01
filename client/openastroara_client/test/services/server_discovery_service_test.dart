@@ -924,7 +924,7 @@ void _preferLocalSubnetTests() {
   group('iOS discovery', () {
     tearDown(() => debugDefaultTargetPlatformOverride = null);
 
-    test('iOS never opens the multicast socket and sweeps at once', () async {
+    test('iOS never opens the multicast socket and sweeps as soon as the Bonjour browse comes back empty', () async {
       debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
       var mdnsClients = 0;
       const rig = AraServer(hostname: 'rig.test', port: 5555);
@@ -934,6 +934,7 @@ void _preferLocalSubnetTests() {
           return _AsyncSendErrorMdns();
         },
         localAddresses: () async => const ['192.0.2.10'],
+        nativeBrowse: () async => const [],
         sweepSource: () => Stream.value(rig),
       );
       final sw = Stopwatch()..start();

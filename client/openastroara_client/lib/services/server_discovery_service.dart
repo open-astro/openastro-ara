@@ -303,8 +303,9 @@ class ServerDiscoveryService {
       // hits. A join that only replayed a finished run must not block the
       // fresh sweep this pass is entitled to.
       if (joinSub != null && !(_sweepRun?.finished ?? true)) return;
-      // iOS has no mDNS answer to cut sweeping short, so each ~4 s pass would
-      // start a fresh 254-host sweep for as long as the scan screen is open.
+      // On iOS a pass whose Bonjour browse finds nothing has no answer to cut
+      // sweeping short, so each ~4 s pass would start a fresh 254-host sweep
+      // for as long as the scan screen is open.
       // A pass that joined a recent sweep (in flight or finished within
       // [sweepReplayWindow]) already carries its hits; don't start another.
       if (!rawMulticastAllowed && joinSub != null) return;
