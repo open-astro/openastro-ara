@@ -244,7 +244,7 @@ Controls behave like labelled hardware: each one names its state and shows it wi
 - **Destructive:** Fault Red fill (the theme's `error`), with the action named in the label.
 
 ### Emergency Stop (signature)
-A filled Fault Red button with a report icon and the label "Emergency Stop", in the bottom status bar on every tab, right after the connection indicator. While a stop is in flight it shows a spinner and "Stopping…". It confirms in a dialog ("Stop everything now?") whose confirm button is filled red and labelled EMERGENCY STOP. It is the heaviest control on any screen: no other control at rest is filled red.
+A filled Fault Red button with a report icon and the label "Emergency Stop", in the bottom status bar on every tab, right after the connection indicator. While a stop is in flight it shows a spinner and "Stopping…". It confirms by holding: pressing reads "Hold to confirm" while a lighter fill sweeps across, and 2 s of holding sends the stop; letting go early sends nothing. Keyboard and screen-reader activation, which can't hold, get a dialog ("Stop everything now?") whose confirm button is filled red and labelled EMERGENCY STOP (decided 2026-11-01). It carries a ring: a 2 px dark gap, then 1 px of Fault Red (ALP-4812). It is the heaviest control on any screen: no other control at rest is filled red.
 
 ### Equipment Chip (signature)
 A fixed 76 px-wide tile in the top bar (48 px when compact), so the icons sit evenly spaced. It has a 28 px device icon in Starlight Text, a 10 px status dot at its top-right corner (2 px Panel Grey ring), and the device name underneath in label-small Dim Text. Mount and Filter Wheel use hand-drawn glyphs (a telescope on a tripod, a five-slot filter wheel) because Material Icons has neither. The dot blinks green (700 ms) while the device is connected and working; amber stays for states that need a look. Tapping opens the device's Settings page, and long-press is supported. When compact the name is dropped and lives on as the tooltip.
@@ -258,18 +258,20 @@ Material segmented buttons and choice chips. Selected segments use Selection Blu
 ### Simple Mode: Image First (proposed, layout C)
 Simple Mode (see PRODUCT.md) puts the latest frame first, ASIAir-style. The image fills the window edge to edge, and the controls float over it on translucent panels:
 - **Panels:** every panel uses `overlay-scrim` (Night Floor at 72 %), 10 px corners and no border, sits 16 px from the frame edge and 16 px from its neighbours, and shares edges with the panels beside it.
-- **Top:** a full-width status strip (56 px) with the device dots, a divider, the target and its state, then Show all options, search, Night mode and the Settings gear.
+- **Top:** a full-width status strip (56 px) with the device dots (connected gear only; a fault still shows), a divider, the target and its state in a fixed-width slot, then Show all options, search, Night mode and the Settings gear.
 - **Centre:** the attention banner, centred 16 px under the status strip, only when something needs the person.
 - **Right column (168 px wide, one shared edge), from the top:**
-  - the Next frame box: countdown with frame x/y, a progress bar, then HFR and sensor temperature as label/value rows;
-  - the controls panel: Exposure, Filter, the shutter and Gain, as 48 px labelled tiles;
-  - Emergency Stop, detached, full column width, 56 px tall, in solid Fault Red.
-- **Bottom row (56 px tall, one shared bottom edge):** the guiding bar on the left ("Guiding", the RMS, then the RA/Dec trace), the mode switcher in the centre (Preview · Polar align · Focus · Target · Run), and Emergency Stop on the right.
+  - the mode's panel, the full height down to the mode list. In Preview: the controls at the top (Exposure and Filter as 48 px tiles, the shutter, Loop / Single, a one-line shot status), and once a frame exists its facts at the bottom of the same panel (two rows on a short window). Controls never move when facts appear;
+  - the mode list (Preview · Focus · Polar align · Target · Run), labelled 40 px rows pinned above Emergency Stop;
+  - Emergency Stop, 168 × 56 including its ring, in solid Fault Red.
+- **Bottom row (56 px tall, left of the column):** stats. The guiding graph ("Guiding", the RMS, the RA/Dec trace) and the frame's histogram, side by side; each appears only once it has data (decided 2026-11-01).
 - **Run plan:** the quick plan builder takes over the right column above Emergency Stop. It lists exposure and frame count per filter for the current target, then Start imaging. Autofocus, dither and flats follow the profile.
-- **Clean view:** a tap or click on the image fades every panel out (220 ms ease-out, instant with reduced motion) so the frame shows fullscreen. Emergency Stop and any attention banner stay. A tap brings the panels back, and a short hint says so. There is no keyboard shortcut for now.
+- **Clean (immersive) view:** a tap or click on the image fades every panel out, Emergency Stop included (220 ms ease-out, instant with reduced motion), so the frame shows fullscreen; any attention banner stays. A tap brings the panels back. There is no keyboard shortcut for now.
+- **No frame yet:** tonight's planetarium (sky only, no in-page controls) fills the window behind the panels.
+- **Empty panels hide:** a panel with nothing to show (guiding with no data, frame facts with no frame) is not drawn.
 
-**Modes.** The switcher reads Preview · Polar align · Focus · Target · Run. Each mode swaps the right column and, where needed, draws on the image. The status strip, mode switcher and Emergency Stop never move.
-- **Preview:** the right column shows the last frame's facts (HFR, stars, exposure, saved or not) and the controls: Exposure, Filter, a capture shutter, and Loop or Single. Single takes a saved frame, as Take One does today; Loop runs live view, whose frames are not saved. There is no Save frame button (decided 2026-11-01).
+**Modes.** The mode list reads Preview · Focus · Polar align · Target · Run. Each mode swaps the panel above the list and, where needed, draws on the image. The status strip, mode list and Emergency Stop never move.
+- **Preview:** the panel shows the controls and, under them, the last frame's facts (HFR, stars, exposure, gain · offset, clipped). The controls are Exposure, Filter, a capture shutter, and Loop or Single. Single takes a saved frame, as Take One does today; Loop runs live view, whose frames are not saved. There is no Save frame button (decided 2026-11-01).
 - **Polar align:** a crosshair and a 10′ target ring are drawn on the live frame, with the current pole position and a dashed arrow to the target. The right column shows the polar error, its zone (green under 10′, amber under 60′, red beyond, matching the server's thresholds), the altitude and azimuth corrections as drawn arrows, and Stop.
 - **Focus:** a zoomed star with its HFR ring sits top-left. The right column shows the HFR, the focus curve as it builds, the focuser position, an Autofocus button and four nudge buttons (in large, in small, out small, out large).
 - **Target:** the image area becomes the planetarium, full screen. The person taps an object, and a card shows its altitude and best time, with Go to (slew, then centre with a plate solve). There is a search panel under the status strip. An object below the horizon (or the custom horizon) shows Go to disabled with the reason and when it rises, plus "Go to at <time>", which waits and then slews.

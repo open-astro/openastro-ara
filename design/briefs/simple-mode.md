@@ -18,14 +18,15 @@ Shaped 2026-11-01 (`/impeccable shape simple-mode`). Paperclip: ALP-4810. Render
 - **Image first:** the latest frame fills the screen.
 - **Controls:** they float on translucent panels (layout C in `DESIGN.md`):
   - **top:** a status strip, with the attention banner centred under it when needed;
-  - **right column, 168 px wide:** Next frame, then controls (Exposure, Filter, shutter, Gain), then Emergency Stop;
-  - **bottom row, 56 px tall:** the guiding bar, the mode switcher and Stop.
-- **Clean view:** clicking the image hides every panel except Emergency Stop and any alert. Clicking again brings them back.
+  - **right column, 168 px wide:** the mode's panel (in Preview: controls on top, the last frame's facts at the bottom), then the mode list, then Emergency Stop;
+  - **bottom row, 56 px tall:** stats, the guiding graph and the histogram, each once it has data.
+- **Clean view:** clicking the image hides every panel, Emergency Stop included; any alert stays. Clicking again brings them back.
+- **Status strip:** only connected devices show.
 - **Unchanged:** colours, status dots, Night-mode behaviour and Emergency Stop are as in the full UI.
 
 ## Scope
 
-- **One screen:** a mode switcher with Preview · Polar align · Focus · Target · Run.
+- **One screen:** a mode list with Preview · Focus · Polar align · Target · Run.
 - **Settings:** open from the gear. "Show all options" switches to the full UI. In slice 1 the gear, the device dots and ⌘K also switch to the full UI on the matching Settings page; a settings sheet over Simple Mode comes later.
 - **Getting in:** a Simple Mode icon in the full UI's top-right cluster, between Night mode and the gear.
 - **Run:** a quick plan builder only. It sets exposure and frame count per filter for the current target, and autofocus, dither and flats follow the profile's defaults. The sequence editor stays in the full UI only.
@@ -39,9 +40,8 @@ Shaped 2026-11-01 (`/impeccable shape simple-mode`). Paperclip: ALP-4810. Render
 |---|---|
 | Top | Status strip: device dots, target and state, Show all options, search, Night mode, gear |
 | Centre, under the strip | Attention banner, when something needs the person |
-| Right column | Next frame (countdown, frame x/y, progress, HFR, sensor temperature); controls; Emergency Stop |
-| Bottom-left | Guiding bar (RMS and RA/Dec trace) |
-| Bottom-centre | Mode switcher |
+| Right column | The mode's panel; the mode list; Emergency Stop |
+| Bottom row | Stats: guiding graph (RMS, RA/Dec trace) and histogram |
 
 The histogram is left out.
 
@@ -54,8 +54,8 @@ The histogram is left out.
 
 ## Mode screens (decided 2026-11-01)
 
-- **Mode order:** Preview · Polar align · Focus · Target · Run.
-- **Preview:** shoot and loop. The right column holds last-frame facts (HFR, stars, exposure, saved), then Exposure, Filter, a capture shutter and Loop/Single. Single saves the frame (the daemon registers every Take One); Loop is live view and saves nothing. No Save frame button.
+- **Mode order:** Preview · Focus · Polar align · Target · Run.
+- **Preview:** shoot and loop. One panel: Exposure, Filter, a capture shutter and Loop/Single on top; after a frame, its facts (HFR, stars, exposure, gain · offset, clipped) at the bottom. Single saves the frame (the daemon registers every Take One); Loop is live view and saves nothing. No Save frame button.
 - **Polar align:** a target drawn on the image (crosshair, 10′ ring, current pole, arrow). The right column shows the error, the zone (under 10′ green, under 60′ amber, otherwise red), the altitude and azimuth corrections, and Stop.
 - **Focus:** a zoomed star with its HFR ring, the HFR, the focus curve, the position, Autofocus, and four nudge steps.
 - **Target:** a full-screen planetarium. Tap an object, then Go to (slew and plate-solve centre). Search sits under the status strip.
