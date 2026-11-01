@@ -96,6 +96,21 @@ class SimpleShell extends ConsumerStatefulWidget {
 class _SimpleShellState extends ConsumerState<SimpleShell> {
   bool _clean = false;
 
+  // Like ASIAir: the system status bar (clock, battery, Wi-Fi) is hidden
+  // while Simple Mode shows, and comes back for the full UI. A swipe from the
+  // edge still reveals it briefly (sticky). A no-op on desktop.
+  @override
+  void initState() {
+    super.initState();
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+  }
+
+  @override
+  void dispose() {
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     ref.listen(selectedTabIndexProvider, (previous, next) {

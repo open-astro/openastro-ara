@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/main.dart' show isShell, shellFor;
@@ -340,6 +341,22 @@ void main() {
         of: find.byKey(const Key('simple-guide-trace')), matching: find.byType(SimplePanel)).first);
     expect(guiding.width, lessThanOrEqualTo(520));
     c2.read(captureProgressProvider);
+  });
+
+  testWidgets('Simple Mode hides the system status bar (clock, battery, Wi-Fi) and gives it back on leaving',
+      (tester) async {
+    final calls = <MethodCall>[];
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+      if (call.method.startsWith('SystemChrome.setEnabledSystemUIMode')) calls.add(call);
+      return null;
+    });
+    addTearDown(() => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, null));
+
+    await _pump(tester, const Size(1024, 768));
+    expect(calls.map((c) => c.arguments).toList(), ['SystemUiMode.immersiveSticky']);
+
+    await tester.pumpWidget(const SizedBox());
+    expect(calls.last.arguments, 'SystemUiMode.edgeToEdge', reason: 'the full UI gets its status bar back');
   });
 
   testWidgets('a tap on the frame hides every panel, Emergency Stop included; a second brings them back',
