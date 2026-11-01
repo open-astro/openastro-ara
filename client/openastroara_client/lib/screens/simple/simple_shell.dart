@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/frame_histogram.dart';
 import '../../models/guider_status.dart';
+import '../../models/polar_align.dart';
 import '../../state/app_shell_state.dart';
 import '../../state/guider/guide_step_state.dart';
 import '../../state/guider/guider_state.dart';
@@ -659,14 +660,17 @@ class _RightRail extends ConsumerWidget {
               ),
             ),
           ),
-          const SimpleShutter(),
+          mode == SimpleModeScreen.polarAlign
+              ? const SimplePolarShutter()
+              : const SimpleShutter(),
           _RailButton(
             key: const Key('simple-settings'),
             icon: Icons.tune,
             label: switch (mode) {
               SimpleModeScreen.focus => simpleFocusSummary(ref),
               SimpleModeScreen.polarAlign => simplePolarSummary(
-                ref.watch(polarAlignLiveProvider),
+                ref.watch(simplePolarSettingsProvider).value ??
+                    const PolarAlignSettings(),
               ),
               _ => simpleSettingsSummary(ref),
             },

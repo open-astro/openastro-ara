@@ -11,8 +11,9 @@ import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
 import '../../util/friendly_error.dart';
 import '../../widgets/imaging/polar_align_panel.dart';
-import 'simple_preview_panel.dart' show kSimpleText;
-import 'simple_shell.dart' show SimplePanel;
+import 'simple_preview_panel.dart'
+    show SimplePresetTile, SimpleShutterButton, exposurePresets, formatExposure, kSimpleText;
+import 'simple_shell.dart' show SimplePanel, SimpleSegment, kSimpleTileFill;
 
 /// True while the server runs any phase of the routine.
 bool simplePolarActive(PolarAlignLive live) =>
@@ -20,12 +21,89 @@ bool simplePolarActive(PolarAlignLive live) =>
     live.phase == PolarAlignStates.adjusting ||
     live.phase == PolarAlignStates.paused;
 
-/// "14′" while the routine has an error to show, else "Ready": the rail
-/// chip's caption in Polar align. Pure — unit-tested.
-String simplePolarSummary(PolarAlignLive live) {
-  final total = live.totalErrorArcmin;
-  if (!simplePolarActive(live) || total == null) return 'Ready';
-  return '${total.toStringAsFixed(total < 10 ? 1 : 0)}′';
+Duration _exposure(PolarAlignSettings s) =>
+    Duration(milliseconds: (s.exposureSeconds * 1000).round());
+
+bool _single(PolarAlignSettings s) => s.loopMode == PolarAlignLoopModes.single;
+
+/// "1 s · Loop": the rail chip's caption in Polar align, the routine's setup
+/// (as Preview's chip reads "5 s · 100"). Pure — unit-tested.
+String simplePolarSummary(PolarAlignSettings s) =>
+    '${formatExposure(_exposure(s))} · ${_single(s) ? 'Single' : 'Loop'}';
+
+/// The profile's polar-align settings (exposure, Loop/Single, tolerance). A
+/// save applies to the routine's next frame; a failed save rolls back.
+class SimplePolarSettings extends AsyncNotifier<PolarAlignSettings> {
+  @override
+  Future<PolarAlignSettings> build() async {
+    final api = ref.watch(polarAlignApiProvider);
+    if (api == null) return const PolarAlignSettings();
+    try {
+      return await api.getSettings();
+    } catch (_) {
+      return const PolarAlignSettings();
+    }
+  }
+
+  Future<void> save(PolarAlignSettings next) async {
+    final api = ref.read(polarAlignApiProvider);
+    final previous = state.value ?? const PolarAlignSettings();
+    state = AsyncData(next);
+    if (api == null) return;
+    try {
+      state = AsyncData(await api.putSettings(next));
+    } catch (_) {
+      state = AsyncData(previous);
+      rethrow;
+    }
+  }
+}
+
+final simplePolarSettingsProvider =
+    AsyncNotifierProvider<SimplePolarSettings, PolarAlignSettings>(
+      SimplePolarSettings.new,
+    );
+
+/// The rail's shutter in Polar align: starts the routine; while it runs, the
+/// square stops it (Loop) or each tap takes the next frame (Single).
+class SimplePolarShutter extends ConsumerWidget {
+  const SimplePolarShutter({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final api = ref.watch(polarAlignApiProvider);
+    final active = simplePolarActive(ref.watch(polarAlignLiveProvider));
+    final single = _single(
+      ref.watch(simplePolarSettingsProvider).value ??
+          const PolarAlignSettings(),
+    );
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    Future<void> run(String action, Future<void> Function() op) async {
+      try {
+        await op();
+      } catch (e) {
+        messenger?.showSnackBar(
+          SnackBar(content: Text(friendlyError(e, action: action))),
+        );
+      }
+    }
+
+    return SimpleShutterButton(
+      running: active && !single,
+      label: !active
+          ? 'Start polar alignment'
+          : single
+          ? 'Take a frame'
+          : 'Stop',
+      onPressed: api == null
+          ? null
+          : !active
+          ? () => run('start polar alignment', api.start)
+          : single
+          ? () => run('take a frame', api.requestCapture)
+          : () => run('stop polar alignment', api.stop),
+    );
+  }
 }
 
 /// The phase in words. Pure — unit-tested.
@@ -48,9 +126,10 @@ final simplePolarFrameProvider = FutureProvider.autoDispose<Uint8List?>((
   return api?.getLiveFrame();
 });
 
-/// Polar align's panel beside the right rail: the phase, the total error with
-/// its zone, the bullseye, the altitude and azimuth turns, Start, then Stop
-/// and Done (once inside the profile's tolerance).
+/// Polar align's panel beside the right rail: the routine's settings
+/// (exposure, Loop/Single); while it runs, the phase, the total error with its
+/// zone, the bullseye, the altitude and azimuth turns, then Stop and Done
+/// (once inside the profile's tolerance). The rail's shutter starts it.
 class SimplePolarPanel extends ConsumerStatefulWidget {
   const SimplePolarPanel({super.key});
 
@@ -61,7 +140,6 @@ class SimplePolarPanel extends ConsumerStatefulWidget {
 class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
   bool _busy = false;
   String? _error;
-  double _tolerance = const PolarAlignSettings().targetToleranceArcmin;
 
   @override
   void initState() {
@@ -70,7 +148,7 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
   }
 
   /// The WS stream may have skipped past routine events fired before this
-  /// panel opened: seed from REST, and read the profile's tolerance.
+  /// panel opened: seed from REST.
   Future<void> _hydrate() async {
     final api = ref.read(polarAlignApiProvider);
     if (api == null) return;
@@ -79,8 +157,6 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
       if (status != null && mounted) {
         ref.read(polarAlignLiveProvider.notifier).hydrateFromStatus(status);
       }
-      final settings = await api.getSettings();
-      if (mounted) setState(() => _tolerance = settings.targetToleranceArcmin);
     } catch (_) {
       // Best effort: the panel still follows the WS stream.
     }
@@ -106,10 +182,17 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
     }
   }
 
+  void _save(PolarAlignSettings next) => _run(
+    'save the polar-align settings',
+    (_) => ref.read(simplePolarSettingsProvider.notifier).save(next),
+  );
+
   @override
   Widget build(BuildContext context) {
     final live = ref.watch(polarAlignLiveProvider);
-    final connected = ref.watch(polarAlignApiProvider) != null;
+    final settings =
+        ref.watch(simplePolarSettingsProvider).value ??
+        const PolarAlignSettings();
     final southern = ref.watch(siteSettingsProvider).latitudeDeg < 0;
     final active = simplePolarActive(live);
     final total = live.totalErrorArcmin;
@@ -154,7 +237,8 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           spacing: AraSpace.s8,
           children: [
-            Text(simplePolarPhase(live), style: kSimpleText),
+            if (active || live.phase == PolarAlignStates.failed)
+              Text(simplePolarPhase(live), style: kSimpleText),
             if (active && total != null) ...[
               Row(
                 spacing: AraSpace.s8,
@@ -209,15 +293,39 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
                 maxLines: 4,
                 overflow: TextOverflow.ellipsis,
               ),
-            if (!active)
-              FilledButton(
-                key: const Key('simple-polar-start'),
-                onPressed: connected && !_busy
-                    ? () => _run('start polar alignment', (api) => api.start())
-                    : null,
-                child: const Text('Start'),
-              )
-            else
+            SimplePresetTile<Duration>(
+              key: const Key('simple-polar-exposure'),
+              label: 'Exposure',
+              value: _exposure(settings),
+              options: exposurePresets(minSec: 0, maxSec: 60),
+              format: formatExposure,
+              onSelected: (d) => _save(
+                settings.copyWith(exposureSeconds: d.inMilliseconds / 1000),
+              ),
+            ),
+            Container(
+              decoration: BoxDecoration(
+                color: kSimpleTileFill,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  for (final (mode, label) in const [
+                    (PolarAlignLoopModes.loop, 'Loop'),
+                    (PolarAlignLoopModes.single, 'Single'),
+                  ])
+                    Expanded(
+                      child: SimpleSegment(
+                        label: label,
+                        selected: settings.loopMode == mode,
+                        radius: 8,
+                        onTap: () => _save(settings.copyWith(loopMode: mode)),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            if (active)
               Row(
                 spacing: AraSpace.s8,
                 children: [
@@ -237,7 +345,9 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
                     child: FilledButton(
                       key: const Key('simple-polar-done'),
                       onPressed:
-                          !_busy && total != null && total < _tolerance
+                          !_busy &&
+                              total != null &&
+                              total < settings.targetToleranceArcmin
                           ? () => _run(
                               'complete polar alignment',
                               (api) => api.complete(),

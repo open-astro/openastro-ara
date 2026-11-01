@@ -155,7 +155,7 @@ class SimpleSettingsPopover extends ConsumerWidget {
             spacing: AraSpace.s8,
             children: [
               Expanded(
-                child: _PresetTile<Duration>(
+                child: SimplePresetTile<Duration>(
                   key: const Key('simple-exposure'),
                   label: 'Exposure',
                   value: params.exposure,
@@ -168,7 +168,7 @@ class SimpleSettingsPopover extends ConsumerWidget {
                 ),
               ),
               Expanded(
-                child: _PresetTile<int>(
+                child: SimplePresetTile<int>(
                   key: const Key('simple-gain'),
                   label: 'Gain',
                   value: params.gain,
@@ -232,7 +232,7 @@ class SimpleShutter extends ConsumerWidget {
     final looping = ref.watch(liveViewControllerProvider);
     final capturing = ref.watch(captureProgressProvider).isCapturing;
     final stopping = ref.watch(_stoppingProvider);
-    return _Shutter(
+    return SimpleShutterButton(
       running: (looping || capturing) && !stopping,
       onPressed: stopping
           ? null
@@ -263,7 +263,6 @@ const _kExposurePresetsMs = [
 
 /// The exposure list, trimmed to the camera's reported range (0 = not
 /// reported, no limit on that side).
-@visibleForTesting
 List<Duration> exposurePresets({
   required double minSec,
   required double maxSec,
@@ -300,8 +299,8 @@ List<int> gainPresets({required int min, required int max}) => [
 
 /// A labelled 48 px tile that opens a list to pick from. The current value
 /// stays listed even when it isn't a preset (set in the full UI, say).
-class _PresetTile<T> extends StatelessWidget {
-  const _PresetTile({
+class SimplePresetTile<T> extends StatelessWidget {
+  const SimplePresetTile({
     super.key,
     required this.label,
     required this.value,
@@ -368,11 +367,19 @@ class _PresetTile<T> extends StatelessWidget {
 
 /// The round capture button: a white disc to shoot, a square while a loop or
 /// exposure runs.
-class _Shutter extends StatelessWidget {
-  const _Shutter({required this.running, required this.onPressed});
+class SimpleShutterButton extends StatelessWidget {
+  const SimpleShutterButton({
+    super.key,
+    required this.running,
+    required this.onPressed,
+    this.label,
+  });
 
   final bool running;
   final VoidCallback? onPressed;
+
+  /// What a tap does, for screen readers; defaults to Stop / Take a frame.
+  final String? label;
 
   @override
   Widget build(BuildContext context) {
@@ -380,7 +387,7 @@ class _Shutter extends StatelessWidget {
     final fg = enabled ? AraColors.textPrimary : AraColors.textDisabled;
     return Semantics(
       button: true,
-      label: running ? 'Stop' : 'Take a frame',
+      label: label ?? (running ? 'Stop' : 'Take a frame'),
       child: InkResponse(
         key: const Key('simple-shutter'),
         onTap: onPressed,
