@@ -34,6 +34,8 @@
     color: var(--txt); -webkit-font-smoothing: antialiased; font-size: 13px; }
   #stel-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
   .ui { position: absolute; z-index: 10; }
+  /* ?bare=1 (Simple Mode): sky only, the app's own panels float over it. */
+  .bare .ui { display: none !important; }
   button { font: inherit; font-size: 13px; font-weight: 500; color: var(--txt); background: transparent;
     border: none; border-radius: 8px; padding: 6px 11px; cursor: pointer;
     transition: background .15s ease, color .15s ease; }
@@ -290,6 +292,7 @@ var D2R = Math.PI / 180.0;
 
 function mjdFromUnixMs(ms) { return ms / 86400000.0 + 40587.0; }
 function qp(name, dflt) { var v = new URLSearchParams(location.search).get(name); return v === null ? dflt : v; }
+if (qp('bare', '0') === '1') document.documentElement.classList.add('bare');
 
 // Config from the URL (the Flutter app injects these when it loads the page).
 var LAT = parseFloat(qp('lat', '0'));

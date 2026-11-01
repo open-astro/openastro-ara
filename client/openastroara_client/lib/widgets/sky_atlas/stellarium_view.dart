@@ -59,7 +59,11 @@ import 'tonight_sky_panel.dart';
 /// recentre button) ride [planetariumCommandProvider] over the loopback server,
 /// since there is no Dart→page JS bridge.
 class StellariumView extends ConsumerStatefulWidget {
-  const StellariumView({super.key});
+  const StellariumView({super.key, this.bare = false});
+
+  /// Sky only: no search bar, docked panels or in-page controls. Simple Mode
+  /// shows it behind its own panels, which would otherwise collide with them.
+  final bool bare;
 
   @override
   ConsumerState<StellariumView> createState() => _StellariumViewState();
@@ -159,6 +163,7 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
                   // Debug builds only: the page posts renderer telemetry back
                   // (FOV, canvas, errors) which _onPageEvent prints.
                   if (kDebugMode) 'debug': '1',
+                  if (widget.bare) 'bare': '1',
                 }.entries
                 .map((e) => '${e.key}=${Uri.encodeQueryComponent(e.value)}')
                 .join('&');
@@ -572,6 +577,12 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
             ),
     );
 
+    if (widget.bare) {
+      return ColoredBox(
+        color: AraColors.bgPrimary,
+        child: Column(children: [planetarium]),
+      );
+    }
     return ColoredBox(
       color: AraColors.bgPrimary,
       child: Column(

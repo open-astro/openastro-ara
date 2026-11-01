@@ -77,7 +77,10 @@ void leaveSimpleMode(WidgetRef ref, int tab) {
 /// tab jump made from here (the gear, a device dot, ⌘K) also returns to the
 /// full UI, since Settings has no Simple Mode surface yet.
 class SimpleShell extends ConsumerStatefulWidget {
-  const SimpleShell({super.key, this.planetarium = const StellariumView()});
+  const SimpleShell({
+    super.key,
+    this.planetarium = const StellariumView(bare: true),
+  });
 
   /// Shown behind the panels until there is a frame (brief: "No rig / no
   /// frame: tonight's planetarium"); tests pass a stand-in for the webview.
