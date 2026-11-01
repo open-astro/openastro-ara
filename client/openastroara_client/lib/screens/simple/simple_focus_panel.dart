@@ -23,6 +23,13 @@ double? simpleFocusHfr(AutofocusRun run) {
   return kept.isEmpty ? null : kept.last.hfr;
 }
 
+/// "HFR 2.31" (or "Focus" before there is one): the rail chip's caption in
+/// Focus mode.
+String simpleFocusSummary(WidgetRef ref) {
+  final hfr = simpleFocusHfr(ref.watch(autofocusLiveProvider).run);
+  return hfr == null ? 'Focus' : 'HFR ${hfr.toStringAsFixed(2)}';
+}
+
 /// The target a nudge of [delta] steps sends: an absolute focuser goes to
 /// position + delta (clamped when the range is known), a relative one moves
 /// by delta. Null when an absolute focuser has no position yet. Pure —

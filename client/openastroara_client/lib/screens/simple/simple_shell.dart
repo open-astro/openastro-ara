@@ -86,7 +86,8 @@ void leaveSimpleMode(WidgetRef ref, int tab) {
   ref.read(simpleModeProvider.notifier).set(false);
 }
 
-/// The one popover open beside a rail, if any.
+/// The one popover open beside a rail, if any. [settings] is the chip's: the
+/// current mode's options (Preview's exposure, Focus's panel).
 enum _Popover { none, modes, settings }
 
 /// Simple Mode (ALP-4810): the latest frame fills the window and only the
@@ -316,10 +317,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                               ),
                             ),
                           ),
-                          // An open popover, else the mode's own panel, in the
-                          // one slot beside the rail.
-                          if (_popover != _Popover.none ||
-                              _mode == SimpleModeScreen.focus)
+                          if (_popover != _Popover.none)
                             Positioned(
                               left: 0,
                               top: 0,
@@ -328,20 +326,24 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                 targetAnchor: Alignment.topLeft,
                                 followerAnchor: Alignment.topRight,
                                 offset: const Offset(-kSimpleInset, 0),
-                                child: switch (_popover) {
-                                  _Popover.modes => _ModeGrid(
-                                    current: _mode,
-                                    onPicked: (m) => setState(() {
-                                      _popover = _Popover.none;
-                                      _mode = m;
-                                    }),
-                                  ),
-                                  _Popover.settings => const SizedBox(
-                                    width: 280,
-                                    child: SimpleSettingsPopover(),
-                                  ),
-                                  _Popover.none => const SimpleFocusPanel(),
-                                },
+                                child: _popover == _Popover.modes
+                                    ? _ModeGrid(
+                                        current: _mode,
+                                        // Focus opens on its panel; Preview's
+                                        // controls are already on the rail.
+                                        onPicked: (m) => setState(() {
+                                          _mode = m;
+                                          _popover = m == SimpleModeScreen.focus
+                                              ? _Popover.settings
+                                              : _Popover.none;
+                                        }),
+                                      )
+                                    : _mode == SimpleModeScreen.focus
+                                    ? const SimpleFocusPanel()
+                                    : const SizedBox(
+                                        width: 280,
+                                        child: SimpleSettingsPopover(),
+                                      ),
                               ),
                             ),
                           // Stop on its own at the bottom, under the rail.
@@ -658,7 +660,9 @@ class _RightRail extends ConsumerWidget {
           _RailButton(
             key: const Key('simple-settings'),
             icon: Icons.tune,
-            label: simpleSettingsSummary(ref),
+            label: mode == SimpleModeScreen.focus
+                ? simpleFocusSummary(ref)
+                : simpleSettingsSummary(ref),
             selected: popover == _Popover.settings,
             onTap: onSettings,
           ),

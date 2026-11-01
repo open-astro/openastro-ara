@@ -145,7 +145,7 @@ void main() {
     expect(container.read(selectedTabIndexProvider), kPlanningTabIndex);
   });
 
-  testWidgets('Focus stays in Simple Mode: the rail reads Focus, its panel opens left of the rail; settings take the slot while open',
+  testWidgets('Focus stays in Simple Mode: the rail reads Focus, its panel opens left of the rail; the chip is the Focus chip',
       (tester) async {
     final container = await _pump(tester, const Size(1024, 768));
     await tester.tap(find.byKey(const Key('simple-mode')));
@@ -159,20 +159,25 @@ void main() {
     expect(panel.right, rail.left - kSimpleInset, reason: 'left of the rail');
     expect(panel.top, rail.top, reason: 'level with its top');
 
-    await tester.tap(find.byKey(const Key('simple-settings')));
+    // The chip speaks for the mode: Focus's summary, not Preview's exposure.
+    final chip = find.byKey(const Key('simple-settings'));
+    expect(find.descendant(of: chip, matching: find.text(_summary(container))), findsNothing);
+    expect(find.descendant(of: chip, matching: find.text('Focus')), findsOneWidget, reason: 'no HFR yet');
+    await tester.tap(chip);
     await tester.pump();
-    expect(find.byKey(const Key('simple-autofocus')), findsNothing, reason: 'settings take the slot');
-    expect(find.text('Exposure'), findsOneWidget);
+    expect(find.byKey(const Key('simple-autofocus')), findsNothing, reason: 'the chip hides the Focus panel');
+    expect(find.text('Exposure'), findsNothing, reason: "never Preview's settings in Focus");
     expect(_panelOf(tester, find.byKey(const Key('simple-shutter'))), rail, reason: 'the rail never moves');
-    await tester.tap(find.byKey(const Key('simple-settings')));
+    await tester.tap(chip);
     await tester.pump();
-    expect(find.byKey(const Key('simple-autofocus')), findsOneWidget, reason: 'and the Focus panel is back');
+    expect(find.byKey(const Key('simple-autofocus')), findsOneWidget, reason: 'and shows it again');
 
     await tester.tap(find.byKey(const Key('simple-mode')));
     await tester.pump();
     await tester.tap(find.text('Preview').first);
     await tester.pump();
     expect(find.byKey(const Key('simple-autofocus')), findsNothing, reason: 'Preview has no panel');
+    expect(find.descendant(of: chip, matching: find.text(_summary(container))), findsOneWidget);
   });
 
   testWidgets('the settings chip opens Exposure and Gain side by side from lists, Filter and Loop/Single',
