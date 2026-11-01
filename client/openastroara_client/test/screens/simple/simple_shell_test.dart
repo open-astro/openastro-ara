@@ -194,7 +194,7 @@ void main() {
     expect(container.read(simpleModeProvider).value, isTrue, reason: 'no jump to the full UI');
     expect(find.descendant(of: find.byKey(const Key('simple-mode')), matching: find.text('P.A.')), findsOneWidget);
     final chip = find.byKey(const Key('simple-settings'));
-    expect(find.descendant(of: chip, matching: find.text('1 s · Loop')), findsOneWidget);
+    expect(find.descendant(of: chip, matching: find.text('1s · Loop')), findsOneWidget);
     final rail = _panelOf(tester, find.byKey(const Key('simple-shutter')));
     final panel = _panelOf(tester, find.byKey(const Key('simple-polar-exposure')));
     expect(panel.right, rail.left - kSimpleInset);

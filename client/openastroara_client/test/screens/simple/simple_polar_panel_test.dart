@@ -64,10 +64,10 @@ Future<_Api?> _pump(WidgetTester tester, PolarAlignLive live,
 }
 
 void main() {
-  test('simplePolarSummary: the settings, like Preview\'s chip', () {
-    expect(simplePolarSummary(const PolarAlignSettings()), '1 s · Loop');
-    expect(simplePolarSummary(const PolarAlignSettings(exposureSeconds: 0.5, loopMode: PolarAlignLoopModes.single)),
-        '0.5 s · Single');
+  test('simplePolarSummary: the settings, tight enough for the 60 px chip', () {
+    expect(simplePolarSummary(const PolarAlignSettings()), '1s · Loop');
+    expect(simplePolarSummary(const PolarAlignSettings(exposureSeconds: 5, loopMode: PolarAlignLoopModes.single)),
+        '5s · Single');
   });
 
   test('simplePolarPhase names each phase', () {
