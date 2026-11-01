@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../services/server_api.dart';
+import '../theme/ara_colors.dart';
 import '../state/saved_server_state.dart';
 import '../util/friendly_error.dart';
 import '../state/ws/client_session_state.dart';
@@ -12,8 +13,14 @@ import '../state/ws/client_session_state.dart';
 /// parks the mount, and switches the flat panel light off. The snackbar
 /// reports honestly what each rung did (a dead mount says so instead of
 /// pretending it parked).
+///
+/// Heavier than any other control (ALP-4812): a ring of Fault Red set off by
+/// a dark gap. [simple] is Simple Mode's version — 56 px tall, 10 px corners,
+/// 14 px text — matching the design preview.
 class EmergencyStopButton extends ConsumerStatefulWidget {
-  const EmergencyStopButton({super.key});
+  const EmergencyStopButton({super.key, this.simple = false});
+
+  final bool simple;
 
   @override
   ConsumerState<EmergencyStopButton> createState() =>
@@ -115,24 +122,44 @@ class _EmergencyStopButtonState extends ConsumerState<EmergencyStopButton> {
 
   @override
   Widget build(BuildContext context) {
+    final red = Theme.of(context).colorScheme.error;
+    final simple = widget.simple;
+    final radius = simple ? 10.0 : 16.0;
+    final button = FilledButton.icon(
+      onPressed: _inFlight ? null : _confirmAndStop,
+      icon: _inFlight
+          ? SizedBox(
+              width: simple ? 18 : 14,
+              height: simple ? 18 : 14,
+              child: const CircularProgressIndicator(strokeWidth: 2),
+            )
+          : Icon(Icons.report, size: simple ? 20 : 16),
+      label: Text(_inFlight ? 'Stopping…' : 'Emergency Stop'),
+      style: FilledButton.styleFrom(
+        backgroundColor: red,
+        foregroundColor: Theme.of(context).colorScheme.onError,
+        padding: EdgeInsets.symmetric(
+            horizontal: 18, vertical: simple ? 0 : 7),
+        minimumSize: Size(0, simple ? 56 : 0),
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        visualDensity: simple ? VisualDensity.standard : VisualDensity.compact,
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(radius)),
+        textStyle: TextStyle(
+            fontSize: simple ? 14 : 13, fontWeight: FontWeight.w600),
+      ),
+    );
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8),
-      child: FilledButton.icon(
-        onPressed: _inFlight ? null : _confirmAndStop,
-        icon: _inFlight
-            ? const SizedBox(
-                width: 14,
-                height: 14,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              )
-            : const Icon(Icons.report, size: 16),
-        label: Text(_inFlight ? 'Stopping…' : 'Emergency Stop'),
-        style: FilledButton.styleFrom(
-          backgroundColor: Theme.of(context).colorScheme.error,
-          foregroundColor: Theme.of(context).colorScheme.onError,
-          visualDensity: VisualDensity.compact,
-          textStyle: Theme.of(context).textTheme.bodySmall,
+      padding: EdgeInsets.symmetric(horizontal: simple ? 0 : 8),
+      // The ring: a 2 px dark gap, then 1 px of Fault Red around it.
+      child: Container(
+        padding: const EdgeInsets.all(2),
+        decoration: BoxDecoration(
+          color: simple ? AraColors.bgPrimary : AraColors.bgPanel,
+          borderRadius: BorderRadius.circular(radius + 3),
+          border: Border.all(color: red),
         ),
+        child: button,
       ),
     );
   }

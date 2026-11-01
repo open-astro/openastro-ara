@@ -11,7 +11,7 @@ import '../../widgets/imaging/capture_progress_card.dart';
 import '../../widgets/imaging/exposure_controls_panel.dart';
 import '../../widgets/imaging/histogram_strip.dart' show frameHistogramProvider;
 import '../imaging_actions.dart';
-import 'simple_shell.dart' show SimplePanel;
+import 'simple_shell.dart' show SimplePanel, SimpleSegment, kSimpleTileFill;
 
 /// Simple Mode body text: 14 px minimum (brief), tabular for live numbers.
 const kSimpleText = TextStyle(
@@ -24,8 +24,9 @@ const kSimpleText = TextStyle(
 /// runs live view, whose frames are not saved.
 enum PreviewShot { loop, single }
 
-final previewShotProvider =
-    NotifierProvider<_PreviewShot, PreviewShot>(_PreviewShot.new);
+final previewShotProvider = NotifierProvider<_PreviewShot, PreviewShot>(
+  _PreviewShot.new,
+);
 
 class _PreviewShot extends Notifier<PreviewShot> {
   @override
@@ -40,22 +41,24 @@ class SimplePreviewPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => const Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          SimplePanel(
-            padding: EdgeInsets.symmetric(
-                horizontal: AraSpace.s16, vertical: AraSpace.s12),
-            child: _LastFrameFacts(),
-          ),
-          SizedBox(height: 16),
-          Expanded(
-            child: SimplePanel(
-              padding: EdgeInsets.all(AraSpace.s12),
-              child: _PreviewControls(),
-            ),
-          ),
-        ],
-      );
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      SimplePanel(
+        padding: EdgeInsets.symmetric(
+          horizontal: AraSpace.s16,
+          vertical: AraSpace.s12,
+        ),
+        child: _LastFrameFacts(),
+      ),
+      SizedBox(height: 16),
+      Expanded(
+        child: SimplePanel(
+          padding: EdgeInsets.all(AraSpace.s12),
+          child: _PreviewControls(),
+        ),
+      ),
+    ],
+  );
 }
 
 class _LastFrameFacts extends ConsumerWidget {
@@ -74,22 +77,22 @@ class _LastFrameFacts extends ConsumerWidget {
         ? '${d.inSeconds} s'
         : '${d.inMilliseconds / 1000} s';
     Widget row(String label, String value) => Padding(
-          padding: const EdgeInsets.symmetric(vertical: 3),
-          child: Row(
-            children: [
-              Text(label, style: AraText.caption),
-              const SizedBox(width: AraSpace.s8),
-              Expanded(
-                child: Text(
-                  value,
-                  style: kSimpleText,
-                  textAlign: TextAlign.end,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        children: [
+          Text(label, style: AraText.caption),
+          const SizedBox(width: AraSpace.s8),
+          Expanded(
+            child: Text(
+              value,
+              style: kSimpleText,
+              textAlign: TextAlign.end,
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
-        );
+        ],
+      ),
+    );
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -134,24 +137,41 @@ class _PreviewControls extends ConsumerWidget {
             child: _Shutter(
               running: looping || capturing,
               onPressed: switch (shot) {
-                PreviewShot.loop => () => toggleLiveView(context, ref, !looping),
+                PreviewShot.loop => () => toggleLiveView(
+                  context,
+                  ref,
+                  !looping,
+                ),
                 PreviewShot.single =>
                   capturing ? null : () => takeOne(context, ref),
               },
             ),
           ),
           const SizedBox(height: AraSpace.s16),
-          SegmentedButton<PreviewShot>(
-            showSelectedIcon: false,
-            segments: const [
-              ButtonSegment(value: PreviewShot.loop, label: Text('Loop')),
-              ButtonSegment(value: PreviewShot.single, label: Text('Single')),
-            ],
-            selected: {shot},
-            // Switching while a loop runs would strand it with no stop.
-            onSelectionChanged: looping
-                ? null
-                : (s) => ref.read(previewShotProvider.notifier).set(s.first),
+          // Switching while a loop runs would strand it with no stop.
+          Container(
+            decoration: BoxDecoration(
+              color: kSimpleTileFill,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              children: [
+                for (final (v, label) in const [
+                  (PreviewShot.loop, 'Loop'),
+                  (PreviewShot.single, 'Single'),
+                ])
+                  Expanded(
+                    child: SimpleSegment(
+                      label: label,
+                      selected: shot == v,
+                      radius: 8,
+                      onTap: looping
+                          ? null
+                          : () => ref.read(previewShotProvider.notifier).set(v),
+                    ),
+                  ),
+              ],
+            ),
           ),
           CaptureProgressCard(
             onRetry: () => takeOne(context, ref),

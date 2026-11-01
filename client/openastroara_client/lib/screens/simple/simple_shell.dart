@@ -37,25 +37,24 @@ enum SimpleModeScreen { preview, polarAlign, focus, target, run }
 
 extension on SimpleModeScreen {
   String get label => switch (this) {
-        SimpleModeScreen.preview => 'Preview',
-        SimpleModeScreen.polarAlign => 'Polar align',
-        SimpleModeScreen.focus => 'Focus',
-        SimpleModeScreen.target => 'Target',
-        SimpleModeScreen.run => 'Run',
-      };
+    SimpleModeScreen.preview => 'Preview',
+    SimpleModeScreen.polarAlign => 'Polar align',
+    SimpleModeScreen.focus => 'Focus',
+    SimpleModeScreen.target => 'Target',
+    SimpleModeScreen.run => 'Run',
+  };
 
   /// The full-UI tab "Show all options" opens for this mode (brief: Preview,
   /// Polar align and Focus open Live; Target opens Planning).
   // shortcut: Run always opens Sequence; the brief wants Live while a run is
   // imaging — switch on the sequence state when the Run screen is built.
   int get fullUiTab => switch (this) {
-        SimpleModeScreen.preview ||
-        SimpleModeScreen.polarAlign ||
-        SimpleModeScreen.focus =>
-          kLiveTabIndex,
-        SimpleModeScreen.target => kPlanningTabIndex,
-        SimpleModeScreen.run => kRunTabIndex,
-      };
+    SimpleModeScreen.preview ||
+    SimpleModeScreen.polarAlign ||
+    SimpleModeScreen.focus => kLiveTabIndex,
+    SimpleModeScreen.target => kPlanningTabIndex,
+    SimpleModeScreen.run => kRunTabIndex,
+  };
 }
 
 /// Leave Simple Mode for the full UI, showing [tab].
@@ -89,72 +88,80 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
       ref.read(simpleModeProvider.notifier).set(false);
     });
     final panels = !_clean;
-    return Scaffold(
-      backgroundColor: AraColors.bgPrimary,
-      body: ShellListeners(
-        child: CallbackShortcuts(
-          bindings: <ShortcutActivator, VoidCallback>{
-            const SingleActivator(LogicalKeyboardKey.keyK, meta: true): () =>
-                showCommandPalette(context),
-            const SingleActivator(LogicalKeyboardKey.keyK, control: true):
-                () => showCommandPalette(context),
-          },
-          child: Focus(
-            autofocus: true,
-            child: SafeArea(
-              child: Stack(
-                children: [
-                  Positioned.fill(
-                    child: GestureDetector(
-                      key: const Key('simple-frame'),
-                      behavior: HitTestBehavior.opaque,
-                      onTap: () => setState(() => _clean = !_clean),
-                      child: const FrameViewer(),
+    return Theme(
+      data: simpleTheme(Theme.of(context)),
+      child: Scaffold(
+        backgroundColor: AraColors.bgPrimary,
+        body: ShellListeners(
+          child: CallbackShortcuts(
+            bindings: <ShortcutActivator, VoidCallback>{
+              const SingleActivator(LogicalKeyboardKey.keyK, meta: true): () =>
+                  showCommandPalette(context),
+              const SingleActivator(
+                LogicalKeyboardKey.keyK,
+                control: true,
+              ): () =>
+                  showCommandPalette(context),
+            },
+            child: Focus(
+              autofocus: true,
+              child: SafeArea(
+                child: Stack(
+                  children: [
+                    Positioned.fill(
+                      child: GestureDetector(
+                        key: const Key('simple-frame'),
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () => setState(() => _clean = !_clean),
+                        child: const FrameViewer(),
+                      ),
                     ),
-                  ),
-                  _Fade(
-                    visible: panels,
-                    child: const Stack(
-                      children: [
-                        Positioned(
-                          left: kSimpleInset,
-                          right: kSimpleInset,
-                          top: kSimpleInset,
-                          height: kSimpleBarHeight,
-                          child: _StatusStrip(),
-                        ),
-                        Positioned(
-                          right: kSimpleInset,
-                          top: kSimpleInset * 2 + kSimpleBarHeight,
-                          bottom: kSimpleInset * 2 + kSimpleBarHeight,
-                          width: kSimpleColumnWidth,
-                          child: SimplePreviewPanel(),
-                        ),
-                        Positioned(
-                          left: kSimpleInset,
-                          bottom: kSimpleInset,
-                          height: kSimpleBarHeight,
-                          width: 260,
-                          child: _GuidingBar(),
-                        ),
-                        Positioned(
-                          left: 0,
-                          right: 0,
-                          bottom: kSimpleInset,
-                          height: kSimpleBarHeight,
-                          child: Center(child: _ModeSwitcher()),
-                        ),
-                      ],
+                    _Fade(
+                      visible: panels,
+                      child: const Stack(
+                        children: [
+                          Positioned(
+                            left: kSimpleInset,
+                            right: kSimpleInset,
+                            top: kSimpleInset,
+                            height: kSimpleBarHeight,
+                            child: _StatusStrip(),
+                          ),
+                          Positioned(
+                            right: kSimpleInset,
+                            top: kSimpleInset * 2 + kSimpleBarHeight,
+                            bottom: kSimpleInset * 2 + kSimpleBarHeight,
+                            width: kSimpleColumnWidth,
+                            child: SimplePreviewPanel(),
+                          ),
+                          Positioned(
+                            left: kSimpleInset,
+                            bottom: kSimpleInset,
+                            height: kSimpleBarHeight,
+                            width: 260,
+                            child: _GuidingBar(),
+                          ),
+                          Positioned(
+                            left: 0,
+                            right: 0,
+                            bottom: kSimpleInset,
+                            height: kSimpleBarHeight,
+                            child: Center(child: _ModeSwitcher()),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                  // Emergency Stop never hides, not even in the clean view.
-                  const Positioned(
-                    right: kSimpleInset,
-                    bottom: kSimpleInset,
-                    height: kSimpleBarHeight,
-                    child: Center(child: EmergencyStopButton()),
-                  ),
-                ],
+                    // Emergency Stop never hides, not even in the clean view.
+                    // Its 3 px ring sits outside the 56 px button, like the
+                    // preview's box-shadow, so the button lines up with the row.
+                    const Positioned(
+                      right: kSimpleInset - 3,
+                      bottom: kSimpleInset - 3,
+                      height: kSimpleBarHeight + 6,
+                      child: Center(child: EmergencyStopButton(simple: true)),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -198,13 +205,13 @@ class SimplePanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        padding: padding,
-        decoration: BoxDecoration(
-          color: AraColors.overlayScrim,
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: child,
-      );
+    padding: padding,
+    decoration: BoxDecoration(
+      color: AraColors.overlayScrim,
+      borderRadius: BorderRadius.circular(10),
+    ),
+    child: child,
+  );
 }
 
 class _StatusStrip extends ConsumerWidget {
@@ -323,23 +330,106 @@ class _ModeSwitcher extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return SimplePanel(
-      padding: const EdgeInsets.symmetric(horizontal: AraSpace.s8),
+      padding: const EdgeInsets.all(AraSpace.s4),
       child: Row(
         mainAxisSize: MainAxisSize.min,
+        spacing: 2,
         children: [
           for (final m in SimpleModeScreen.values)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 2),
-              child: m == SimpleModeScreen.preview
-                  ? FilledButton(onPressed: () {}, child: Text(m.label))
-                  // Not built yet in Simple Mode: open its full-UI tab.
-                  : TextButton(
-                      onPressed: () => leaveSimpleMode(ref, m.fullUiTab),
-                      child: Text(m.label),
-                    ),
+            SimpleSegment(
+              label: m.label,
+              selected: m == SimpleModeScreen.preview,
+              radius: 7,
+              // Not built yet in Simple Mode: open its full-UI tab.
+              onTap: m == SimpleModeScreen.preview
+                  ? null
+                  : () => leaveSimpleMode(ref, m.fullUiTab),
             ),
         ],
       ),
     );
   }
 }
+
+/// One segment of a Simple Mode switch (the mode switcher, Loop / Single):
+/// 40 px tall with square-ish corners, Selection Blue when selected.
+class SimpleSegment extends StatelessWidget {
+  const SimpleSegment({
+    super.key,
+    required this.label,
+    required this.selected,
+    required this.radius,
+    this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final double radius;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    button: true,
+    selected: selected,
+    child: Material(
+      color: selected ? AraColors.selectionBg : Colors.transparent,
+      borderRadius: BorderRadius.circular(radius),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(radius),
+        child: Container(
+          height: 40,
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          alignment: Alignment.center,
+          child: Text(
+            label,
+            maxLines: 1,
+            style: kSimpleText.copyWith(
+              color: selected ? AraColors.selectionFg : AraColors.textSecondary,
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+/// Simple Mode's density (DESIGN.md "Two Densities"): 10 px corners on
+/// buttons and fields instead of Material's pills, 44 px minimum targets,
+/// fields as borderless tiles.
+ThemeData simpleTheme(ThemeData base) {
+  const shape = RoundedRectangleBorder(
+    borderRadius: BorderRadius.all(Radius.circular(10)),
+  );
+  final buttons = ButtonStyle(
+    shape: const WidgetStatePropertyAll(shape),
+    minimumSize: const WidgetStatePropertyAll(Size(0, 44)),
+  );
+  const tile = OutlineInputBorder(
+    borderRadius: BorderRadius.all(Radius.circular(10)),
+    borderSide: BorderSide.none,
+  );
+  return base.copyWith(
+    filledButtonTheme: FilledButtonThemeData(
+      style: buttons.merge(base.filledButtonTheme.style),
+    ),
+    textButtonTheme: TextButtonThemeData(
+      style: buttons.merge(base.textButtonTheme.style),
+    ),
+    outlinedButtonTheme: OutlinedButtonThemeData(
+      style: buttons.merge(base.outlinedButtonTheme.style),
+    ),
+    inputDecorationTheme: base.inputDecorationTheme.copyWith(
+      filled: true,
+      fillColor: kSimpleTileFill,
+      border: tile,
+      enabledBorder: tile,
+      focusedBorder: tile.copyWith(
+        borderSide: const BorderSide(color: AraColors.accentInfo),
+      ),
+    ),
+  );
+}
+
+/// The tile fill behind Simple Mode's fields and switches (Hairline at 55 %).
+const kSimpleTileFill = Color(0x8C404040);

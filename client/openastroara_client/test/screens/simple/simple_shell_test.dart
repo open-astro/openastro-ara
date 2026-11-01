@@ -62,11 +62,34 @@ void main() {
       }
       expect(find.byType(EmergencyStopButton), findsOneWidget);
       expect(find.byKey(const Key('simple-shutter')), findsOneWidget);
-      final stop = tester.getRect(find.byType(EmergencyStopButton));
+      final stop = tester.getRect(find.descendant(
+          of: find.byType(EmergencyStopButton), matching: find.byType(FilledButton)));
       expect(stop.right, lessThanOrEqualTo(size.width - kSimpleInset + 0.5));
       expect(stop.bottom, lessThanOrEqualTo(size.height - kSimpleInset + 0.5));
     });
   }
+
+  testWidgets('Emergency Stop is the heavier Simple Mode version: 56 px, 10 px corners, a red ring',
+      (tester) async {
+    await _pump(tester, const Size(1470, 854));
+    final button = find.descendant(
+        of: find.byType(EmergencyStopButton), matching: find.byType(FilledButton));
+    expect(tester.getSize(button).height, 56);
+    final shape = tester.widget<FilledButton>(button).style!.shape!.resolve({})!;
+    expect((shape as RoundedRectangleBorder).borderRadius, BorderRadius.circular(10));
+    final ring = tester.widget<Container>(find.descendant(
+        of: find.byType(EmergencyStopButton), matching: find.byType(Container)).first);
+    expect((ring.decoration! as BoxDecoration).border, isNotNull);
+  });
+
+  testWidgets('buttons use 10 px corners, not Material pills', (tester) async {
+    await _pump(tester, const Size(1470, 854));
+    final context = tester.element(find.text('Show all options'));
+    final shape = TextButtonTheme.of(context).style!.shape!.resolve({});
+    expect(shape, isA<RoundedRectangleBorder>());
+    expect((shape! as RoundedRectangleBorder).borderRadius, BorderRadius.circular(10));
+    expect(find.byType(SegmentedButton<Object>), findsNothing);
+  });
 
   testWidgets('a tap on the frame hides every panel but Emergency Stop, a second brings them back',
       (tester) async {
