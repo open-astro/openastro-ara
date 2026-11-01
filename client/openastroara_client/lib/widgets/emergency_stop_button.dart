@@ -239,8 +239,8 @@ class _EmergencyStopButtonState extends ConsumerState<EmergencyStopButton>
         fontWeight: compact ? FontWeight.w700 : FontWeight.w600,
       ),
     );
-    // Simple Mode stacks the icon over the label: the 168 px column is too
-    // narrow for both on one line without crowding them.
+    // Simple Mode stacks the icon over the label: the 60 px compact square
+    // has no room for both on one line.
     final button = simple
         ? FilledButton(
             onPressed: _inFlight ? null : _onPressed,
