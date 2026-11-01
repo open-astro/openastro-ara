@@ -28,6 +28,7 @@ import '../../widgets/imaging/histogram_strip.dart' show frameHistogramProvider;
 import '../../widgets/sky_atlas/stellarium_view.dart';
 import '../library/image_library_screen.dart';
 import '../shell_listeners.dart';
+import 'simple_focus_panel.dart';
 import 'simple_preview_panel.dart';
 
 /// Inset from the frame edge and between panels.
@@ -96,8 +97,8 @@ enum _Popover { none, modes, settings }
 /// beside the rail and close with a tap on the image. Tapping the image with
 /// nothing open hides everything (the immersive view).
 ///
-/// Preview only so far; the other modes open their full-UI tab, and so does
-/// any tab jump made from here (Settings, a device dot, ⌘K).
+/// Preview and Focus so far; the other modes open their full-UI tab, and so
+/// does any tab jump made from here (Settings, a device dot, ⌘K).
 class SimpleShell extends ConsumerStatefulWidget {
   const SimpleShell({
     super.key,
@@ -119,6 +120,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
   /// The planetarium on demand (the left rail's Sky), over any frame.
   bool _sky = false;
   _Popover _popover = _Popover.none;
+  SimpleModeScreen _mode = SimpleModeScreen.preview;
 
   /// Ties the popovers to the right rail's top-left corner.
   final _railLink = LayerLink();
@@ -306,6 +308,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                               child: CompositedTransformTarget(
                                 link: _railLink,
                                 child: _RightRail(
+                                  mode: _mode,
                                   popover: _popover,
                                   onModes: () => _toggle(_Popover.modes),
                                   onSettings: () => _toggle(_Popover.settings),
@@ -313,7 +316,10 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                               ),
                             ),
                           ),
-                          if (_popover != _Popover.none)
+                          // An open popover, else the mode's own panel, in the
+                          // one slot beside the rail.
+                          if (_popover != _Popover.none ||
+                              _mode == SimpleModeScreen.focus)
                             Positioned(
                               left: 0,
                               top: 0,
@@ -322,16 +328,20 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                 targetAnchor: Alignment.topLeft,
                                 followerAnchor: Alignment.topRight,
                                 offset: const Offset(-kSimpleInset, 0),
-                                child: _popover == _Popover.modes
-                                    ? _ModeGrid(
-                                        onPicked: () => setState(
-                                          () => _popover = _Popover.none,
-                                        ),
-                                      )
-                                    : const SizedBox(
-                                        width: 280,
-                                        child: SimpleSettingsPopover(),
-                                      ),
+                                child: switch (_popover) {
+                                  _Popover.modes => _ModeGrid(
+                                    current: _mode,
+                                    onPicked: (m) => setState(() {
+                                      _popover = _Popover.none;
+                                      _mode = m;
+                                    }),
+                                  ),
+                                  _Popover.settings => const SizedBox(
+                                    width: 280,
+                                    child: SimpleSettingsPopover(),
+                                  ),
+                                  _Popover.none => const SimpleFocusPanel(),
+                                },
                               ),
                             ),
                           // Stop on its own at the bottom, under the rail.
@@ -589,11 +599,13 @@ class _LeftRail extends StatelessWidget {
 /// under it; Stop sits on its own below.
 class _RightRail extends ConsumerWidget {
   const _RightRail({
+    required this.mode,
     required this.popover,
     required this.onModes,
     required this.onSettings,
   });
 
+  final SimpleModeScreen mode;
   final _Popover popover;
   final VoidCallback onModes;
   final VoidCallback onSettings;
@@ -610,7 +622,7 @@ class _RightRail extends ConsumerWidget {
           // The mode on top of the shutter; the settings chip under it.
           Semantics(
             button: true,
-            label: 'Mode: Preview',
+            label: 'Mode: ${mode.label}',
             child: InkWell(
               key: const Key('simple-mode'),
               onTap: onModes,
@@ -622,7 +634,7 @@ class _RightRail extends ConsumerWidget {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Text(
-                      SimpleModeScreen.preview.label,
+                      mode.label,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: kSimpleText.copyWith(
@@ -656,12 +668,15 @@ class _RightRail extends ConsumerWidget {
   }
 }
 
-/// The five modes as a grid beside the rail. Preview is built; the others
-/// open their full-UI tab for now.
+/// The five modes as a grid beside the rail. Preview and Focus are built; the
+/// others open their full-UI tab for now.
 class _ModeGrid extends ConsumerWidget {
-  const _ModeGrid({required this.onPicked});
+  const _ModeGrid({required this.current, required this.onPicked});
 
-  final VoidCallback onPicked;
+  final SimpleModeScreen current;
+  final ValueChanged<SimpleModeScreen> onPicked;
+
+  static const _built = {SimpleModeScreen.preview, SimpleModeScreen.focus};
 
   @override
   Widget build(BuildContext context, WidgetRef ref) => SimplePanel(
@@ -677,15 +692,17 @@ class _ModeGrid extends ConsumerWidget {
               width: 138,
               height: 52,
               child: Material(
-                color: m == SimpleModeScreen.preview
+                color: m == current
                     ? AraColors.selectionBg
                     : kSimpleTileFill,
                 borderRadius: BorderRadius.circular(8),
                 child: InkWell(
                   borderRadius: BorderRadius.circular(8),
                   onTap: () {
-                    onPicked();
-                    if (m != SimpleModeScreen.preview) {
+                    if (_built.contains(m)) {
+                      onPicked(m);
+                    } else {
+                      onPicked(current);
                       leaveSimpleMode(ref, m.fullUiTab);
                     }
                   },

@@ -145,6 +145,36 @@ void main() {
     expect(container.read(selectedTabIndexProvider), kPlanningTabIndex);
   });
 
+  testWidgets('Focus stays in Simple Mode: the rail reads Focus, its panel opens left of the rail; settings take the slot while open',
+      (tester) async {
+    final container = await _pump(tester, const Size(1024, 768));
+    await tester.tap(find.byKey(const Key('simple-mode')));
+    await tester.pump();
+    await tester.tap(find.text('Focus'));
+    await tester.pump();
+    expect(container.read(simpleModeProvider).value, isTrue, reason: 'no jump to the full UI');
+    expect(find.descendant(of: find.byKey(const Key('simple-mode')), matching: find.text('Focus')), findsOneWidget);
+    final rail = _panelOf(tester, find.byKey(const Key('simple-shutter')));
+    final panel = _panelOf(tester, find.byKey(const Key('simple-autofocus')));
+    expect(panel.right, rail.left - kSimpleInset, reason: 'left of the rail');
+    expect(panel.top, rail.top, reason: 'level with its top');
+
+    await tester.tap(find.byKey(const Key('simple-settings')));
+    await tester.pump();
+    expect(find.byKey(const Key('simple-autofocus')), findsNothing, reason: 'settings take the slot');
+    expect(find.text('Exposure'), findsOneWidget);
+    expect(_panelOf(tester, find.byKey(const Key('simple-shutter'))), rail, reason: 'the rail never moves');
+    await tester.tap(find.byKey(const Key('simple-settings')));
+    await tester.pump();
+    expect(find.byKey(const Key('simple-autofocus')), findsOneWidget, reason: 'and the Focus panel is back');
+
+    await tester.tap(find.byKey(const Key('simple-mode')));
+    await tester.pump();
+    await tester.tap(find.text('Preview').first);
+    await tester.pump();
+    expect(find.byKey(const Key('simple-autofocus')), findsNothing, reason: 'Preview has no panel');
+  });
+
   testWidgets('the settings chip opens Exposure and Gain side by side from lists, Filter and Loop/Single',
       (tester) async {
     final container = await _pump(tester, const Size(1024, 768));
