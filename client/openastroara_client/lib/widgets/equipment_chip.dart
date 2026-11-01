@@ -4,8 +4,8 @@ import '../theme/ara_colors.dart';
 import 'status_indicator.dart';
 
 /// One chip in the §25.3 top equipment bar — icon + device name + colored
-/// status dot. Below [kEquipmentChipCompactWidth] (phones) the name is dropped
-/// and lives on as the tooltip. Tap = open chooser; long-press = disconnect /
+/// status dot. On a phone (shortest side below [kEquipmentChipCompactWidth],
+/// either orientation) the name is dropped and lives on as the tooltip. Tap = open chooser; long-press = disconnect /
 /// properties. Per-device wiring lands in Phase 12c (Imaging tab + chooser
 /// flows); this widget is the visual primitive used everywhere.
 const double kEquipmentChipCompactWidth = 600;
@@ -36,7 +36,9 @@ class EquipmentChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final compact = MediaQuery.sizeOf(context).width < kEquipmentChipCompactWidth;
+    // shortestSide, not width: a phone in landscape is wide enough for the
+    // desktop layout but not for eleven named chips plus the top-bar icons.
+    final compact = MediaQuery.sizeOf(context).shortestSide < kEquipmentChipCompactWidth;
     return Semantics(
       label: '$label (${status.name})',
       // Either tap or long-press makes this chip interactive.

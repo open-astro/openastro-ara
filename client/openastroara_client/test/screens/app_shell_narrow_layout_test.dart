@@ -61,6 +61,21 @@ void main() {
     expect(container.read(selectedTabIndexProvider), 1);
   });
 
+  testWidgets('a phone in landscape fits every device in the top bar (icons only)', (tester) async {
+    await _pumpAt(tester, const Size(852, 393));
+
+    expect(find.byType(NavigationRail), findsOneWidget, reason: 'wide enough for the desktop layout');
+    for (final device in [
+      'Camera', 'Mount', 'Guider', 'Focuser', 'Filter Wheel', 'Rotator',
+      'Flat Panel', 'Switch', 'Weather', 'Safety', 'Dome',
+    ]) {
+      expect(tester.getRect(find.byTooltip(device)).right, lessThanOrEqualTo(852), reason: '$device on screen');
+    }
+    expect(tester.getRect(find.byTooltip('Dome')).right,
+        lessThan(tester.getRect(find.byTooltip(RegExp('^Search')).first).left),
+        reason: 'the devices stop before search, night mode and Settings');
+  });
+
   testWidgets('a desktop-width window keeps the side rail and the top device bar', (tester) async {
     await _pumpAt(tester, const Size(1600, 1000));
 
