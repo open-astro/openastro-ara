@@ -66,8 +66,10 @@ void main() {
     expect(site.bortleClass, 3);
 
     await type('wiz-sqm', '15');
-    expect(find.text('Enter a value from 16 to 22.5, or leave empty.'),
-        findsOneWidget);
+    expect(
+      find.text('Enter a value from 16 to 22.5, or leave empty.'),
+      findsOneWidget,
+    );
     expect(site.sqmMagPerArcsec2, isNull);
     await type('wiz-sqm', '21.4');
     expect(site.sqmMagPerArcsec2, 21.4);
