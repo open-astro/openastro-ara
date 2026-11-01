@@ -9,6 +9,7 @@ import '../../models/guider_status.dart';
 import '../../state/guider/guide_step_state.dart';
 import '../../state/guider/guider_state.dart';
 import '../../state/imaging/capture_progress_state.dart';
+import '../../state/imaging/last_frame_state.dart';
 import '../../state/imaging/live_view_state.dart';
 import '../../state/night_mode_state.dart';
 import '../../state/settings/settings_nav.dart';
@@ -22,6 +23,7 @@ import '../../widgets/equipment_chip.dart' show EquipmentChipCompact;
 import '../../widgets/imaging/frame_viewer.dart';
 import '../../widgets/imaging/guiding_strip.dart';
 import '../../widgets/settings_gear_button.dart';
+import '../../widgets/sky_atlas/stellarium_view.dart';
 import '../shell_listeners.dart';
 import 'simple_preview_panel.dart';
 
@@ -75,7 +77,11 @@ void leaveSimpleMode(WidgetRef ref, int tab) {
 /// tab jump made from here (the gear, a device dot, ⌘K) also returns to the
 /// full UI, since Settings has no Simple Mode surface yet.
 class SimpleShell extends ConsumerStatefulWidget {
-  const SimpleShell({super.key});
+  const SimpleShell({super.key, this.planetarium = const StellariumView()});
+
+  /// Shown behind the panels until there is a frame (brief: "No rig / no
+  /// frame: tonight's planetarium"); tests pass a stand-in for the webview.
+  final Widget planetarium;
 
   @override
   ConsumerState<SimpleShell> createState() => _SimpleShellState();
@@ -89,7 +95,12 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     ref.listen(selectedTabIndexProvider, (previous, next) {
       ref.read(simpleModeProvider.notifier).set(false);
     });
-    final panels = !_clean;
+    // Until a frame exists (none taken, no loop running) the sky stands in
+    // for it, so there is no clean view to toggle either.
+    final hasFrame =
+        ref.watch(lastCapturedFrameIdProvider) != null ||
+        ref.watch(liveViewControllerProvider);
+    final panels = !_clean || !hasFrame;
     return Theme(
       data: simpleTheme(Theme.of(context)),
       child: Scaffold(
@@ -110,14 +121,27 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
               child: SafeArea(
                 child: Stack(
                   children: [
-                    Positioned.fill(
-                      child: GestureDetector(
-                        key: const Key('simple-frame'),
-                        behavior: HitTestBehavior.opaque,
-                        onTap: () => setState(() => _clean = !_clean),
-                        child: const FrameViewer(),
+                    if (hasFrame)
+                      Positioned.fill(
+                        child: GestureDetector(
+                          key: const Key('simple-frame'),
+                          behavior: HitTestBehavior.opaque,
+                          onTap: () => setState(() => _clean = !_clean),
+                          child: const FrameViewer(),
+                        ),
+                      )
+                    else
+                      // The planetarium's own search row sits under the
+                      // status strip, and its right edge stops short of the
+                      // column so nothing of it hides behind a panel.
+                      Positioned(
+                        key: const Key('simple-planetarium'),
+                        left: 0,
+                        top: kSimpleInset * 2 + kSimpleBarHeight,
+                        right: kSimpleColumnWidth + kSimpleInset * 2,
+                        bottom: 0,
+                        child: widget.planetarium,
                       ),
-                    ),
                     _Fade(
                       visible: panels,
                       child: Stack(
@@ -169,14 +193,13 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                       ),
                     ),
                     // Emergency Stop never hides, not even in the clean view.
-                    // Its 3 px ring sits outside the 56 px button, like the
-                    // preview's box-shadow, so the button lines up with the row.
+                    // Ring included, the same box as the column above it
+                    // and the bottom-row panels beside it.
                     const Positioned(
-                      right: kSimpleInset - 3,
-                      bottom: kSimpleInset - 3,
-                      // Full column width, like the panels above it.
-                      width: kSimpleColumnWidth + 6,
-                      height: kSimpleBarHeight + 6,
+                      right: kSimpleInset,
+                      bottom: kSimpleInset,
+                      width: kSimpleColumnWidth,
+                      height: kSimpleBarHeight,
                       child: EmergencyStopButton(simple: true),
                     ),
                   ],

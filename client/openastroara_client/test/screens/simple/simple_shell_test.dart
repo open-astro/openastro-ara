@@ -8,6 +8,7 @@ import 'package:openastroara/screens/simple/simple_shell.dart';
 import 'package:openastroara/services/simple_mode_prefs_service.dart';
 import 'package:openastroara/state/app_shell_state.dart';
 import 'package:openastroara/state/imaging/capture_progress_state.dart';
+import 'package:openastroara/state/imaging/last_frame_state.dart';
 import 'package:openastroara/widgets/imaging/capture_progress_card.dart';
 import 'package:openastroara/state/settings/settings_nav.dart';
 import 'package:openastroara/state/simple_mode_state.dart';
@@ -41,7 +42,7 @@ Future<ProviderContainer> _pump(WidgetTester tester, Size size) async {
   await container.read(simpleModeProvider.future);
   await tester.pumpWidget(UncontrolledProviderScope(
     container: container,
-    child: const MaterialApp(home: SimpleShell()),
+    child: const MaterialApp(home: SimpleShell(planetarium: SizedBox(key: Key('sky')))),
   ));
   await tester.pump();
   return container;
@@ -77,10 +78,13 @@ void main() {
     await _pump(tester, const Size(1470, 854));
     final button = find.descendant(
         of: find.byType(EmergencyStopButton), matching: find.byType(FilledButton));
-    expect(tester.getSize(button), const Size(kSimpleColumnWidth, 56),
-        reason: 'the same width as the column above it');
-    expect(tester.getRect(button).right,
-        tester.getRect(find.byType(SimplePreviewPanel)).right);
+    final stop = tester.getRect(find.byType(EmergencyStopButton));
+    final column = tester.getRect(find.byType(SimplePreviewPanel));
+    expect(stop.size, const Size(kSimpleColumnWidth, kSimpleBarHeight),
+        reason: 'ring included, the same box as the column and the bottom row');
+    expect(stop.left, column.left);
+    expect(stop.right, column.right);
+    expect(tester.getSize(button).width, kSimpleColumnWidth - 6);
     final shape = tester.widget<FilledButton>(button).style!.shape!.resolve({})!;
     expect((shape as RoundedRectangleBorder).borderRadius, BorderRadius.circular(10));
     final ring = tester.widget<Container>(find.descendant(
@@ -125,9 +129,21 @@ void main() {
     });
   }
 
-  testWidgets('a tap on the frame hides every panel but Emergency Stop, a second brings them back',
+  testWidgets('with no frame yet the planetarium fills the image area, beside the column and under the strip',
       (tester) async {
     await _pump(tester, const Size(1470, 854));
+    expect(find.text('No frame yet'), findsNothing);
+    final sky = tester.getRect(find.byKey(const Key('sky')));
+    expect(sky.top, kSimpleInset * 2 + kSimpleBarHeight);
+    expect(sky.right, lessThanOrEqualTo(tester.getRect(find.byType(SimplePreviewPanel)).left));
+  });
+
+  testWidgets('a tap on the frame hides every panel but Emergency Stop, a second brings them back',
+      (tester) async {
+    final container = await _pump(tester, const Size(1470, 854));
+    container.read(lastCapturedFrameIdProvider.notifier).set('frame-1');
+    await tester.pump();
+    expect(find.byKey(const Key('sky')), findsNothing, reason: 'the frame replaces the sky');
     expect(_panelOpacity(tester), 1);
 
     await tester.tapAt(const Offset(500, 400));
