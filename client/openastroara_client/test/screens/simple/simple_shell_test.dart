@@ -175,6 +175,21 @@ void main() {
     expect(find.text('Loop'), findsNothing, reason: 'a tap on the image closes it');
   });
 
+  testWidgets('opening the modes or the settings never moves the rail', (tester) async {
+    await _pump(tester, const Size(1024, 768));
+    Rect rail() => _panelOf(tester, find.byKey(const Key('simple-shutter')));
+    final before = rail();
+    await tester.tap(find.byKey(const Key('simple-settings')));
+    await tester.pump();
+    expect(rail(), before, reason: 'settings open');
+    final popover = tester.getRect(find.byType(SimpleSettingsPopover));
+    expect(popover.top, before.top, reason: 'level with the rail top');
+    expect(popover.right, before.left - kSimpleInset, reason: 'beside it');
+    await tester.tap(find.byKey(const Key('simple-mode')));
+    await tester.pump();
+    expect(rail(), before, reason: 'modes open');
+  });
+
   testWidgets('Info shows the last frame facts as one line under the strip, clear of the status pill', (tester) async {
     final container = await _pump(tester, const Size(1024, 768));
     await _frame(tester, container);

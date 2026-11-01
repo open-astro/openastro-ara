@@ -120,6 +120,9 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
   bool _sky = false;
   _Popover _popover = _Popover.none;
 
+  /// Ties the popovers to the right rail's top-left corner.
+  final _railLink = LayerLink();
+
   // The system status bar (clock, battery, Wi-Fi) is hidden while Simple
   // Mode shows and comes back for the full UI; an edge swipe still reveals
   // it briefly (sticky). A no-op on desktop.
@@ -288,46 +291,47 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                               ),
                             ),
                           ),
-                          // The right rail: only as tall as its controls,
-                          // centred between the strip and Stop, with its
-                          // popover (modes or settings) opening beside it,
-                          // level with its top.
+                          // The right rail: only as tall as its controls and
+                          // centred between the strip and Stop. Its popover
+                          // (modes or settings) follows the rail's top-left
+                          // corner, so opening one never moves the rail.
                           Positioned(
                             right: kSimpleInset,
                             top: railTop,
                             bottom: kSimpleInset * 2 + kSimpleStopSize,
-                            left: 0,
-                            child: Align(
-                              alignment: Alignment.centerRight,
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                spacing: kSimpleInset,
-                                children: [
-                                  if (_popover == _Popover.modes)
-                                    _ModeGrid(
-                                      onPicked: () => setState(
-                                        () => _popover = _Popover.none,
-                                      ),
-                                    ),
-                                  if (_popover == _Popover.settings)
-                                    const SizedBox(
-                                      width: 280,
-                                      child: SimpleSettingsPopover(),
-                                    ),
-                                  SizedBox(
-                                    width: kSimpleRailWidth,
-                                    child: _RightRail(
-                                      popover: _popover,
-                                      onModes: () => _toggle(_Popover.modes),
-                                      onSettings: () =>
-                                          _toggle(_Popover.settings),
-                                    ),
-                                  ),
-                                ],
+                            width: kSimpleRailWidth,
+                            child: Center(
+                              child: CompositedTransformTarget(
+                                link: _railLink,
+                                child: _RightRail(
+                                  popover: _popover,
+                                  onModes: () => _toggle(_Popover.modes),
+                                  onSettings: () => _toggle(_Popover.settings),
+                                ),
                               ),
                             ),
                           ),
+                          if (_popover != _Popover.none)
+                            Positioned(
+                              left: 0,
+                              top: 0,
+                              child: CompositedTransformFollower(
+                                link: _railLink,
+                                targetAnchor: Alignment.topLeft,
+                                followerAnchor: Alignment.topRight,
+                                offset: const Offset(-kSimpleInset, 0),
+                                child: _popover == _Popover.modes
+                                    ? _ModeGrid(
+                                        onPicked: () => setState(
+                                          () => _popover = _Popover.none,
+                                        ),
+                                      )
+                                    : const SizedBox(
+                                        width: 280,
+                                        child: SimpleSettingsPopover(),
+                                      ),
+                              ),
+                            ),
                           // Stop on its own at the bottom, under the rail.
                           const Positioned(
                             right:
