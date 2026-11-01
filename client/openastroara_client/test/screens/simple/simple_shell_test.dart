@@ -313,7 +313,7 @@ void main() {
   testWidgets('System shows the server\'s figures as a line under Info\'s slot, and hides', (tester) async {
     const size = Size(1470, 854);
     await _pump(tester, size,
-        internal: const ServerInternalState(uptimeSeconds: 11520, cpuPercent: 23.4, processorCount: 4, loadAverage1Min: 5.2),
+        internal: const ServerInternalState(uptimeSeconds: 11520, cpuPercent: 23.4, workingSetBytes: 512 * 1048576),
         storage: const StorageSpace(saveDirectory: '/data', isFallback: false, freeBytes: 412 * 1073741824, totalBytes: 900 * 1073741824));
     expect(find.byKey(const Key('simple-system-line')), findsNothing);
     expect(_panelOf(tester, find.byKey(const Key('simple-system'))), _panelOf(tester, find.byKey(const Key('simple-sky'))),
@@ -321,12 +321,15 @@ void main() {
     await tester.tap(find.byKey(const Key('simple-system')));
     await tester.pump();
     await tester.pump(); // the storage read resolves
-    final line = tester.getRect(find.byKey(const Key('simple-system-line')));
-    expect(line.right, size.width - kSimpleInset);
-    expect(line.top, kSimpleInset * 2 + kSimpleBarHeight + 40 + 8, reason: "under Info's slot, Info off or on");
-    for (final t in ['412 GB free', 'Ara CPU', '23 %', '5.2', '3 h 12 min']) {
-      expect(find.descendant(of: find.byKey(const Key('simple-system-line')), matching: find.textContaining(t)), findsWidgets,
-          reason: t);
+    final rect = tester.getRect(find.byKey(const Key('simple-system-line')));
+    expect(rect.right, size.width - kSimpleInset);
+    expect(rect.top, kSimpleInset * 2 + kSimpleBarHeight + 40 + 8, reason: "under Info's slot, Info off or on");
+    final line = find.byKey(const Key('simple-system-line'));
+    for (final t in ['412 GB free', 'CPU 23 %', 'Memory 512 MB', '3 h 12 min']) {
+      expect(find.descendant(of: line, matching: find.textContaining(t)), findsWidgets, reason: t);
+    }
+    for (final t in ['Load', 'Ara CPU']) {
+      expect(find.descendant(of: line, matching: find.textContaining(t)), findsNothing, reason: t);
     }
     await tester.tap(find.byKey(const Key('simple-system')));
     await tester.pump();
@@ -564,6 +567,8 @@ void main() {
     expect(simpleFree(412 * 1073741824), '412 GB free');
     expect(simpleFree(1536 * 1048576), '1.5 GB free');
     expect(simpleFree(null), 'Unplugged');
+    expect(simpleMemory(512 * 1048576), '512 MB');
+    expect(simpleMemory(1536 * 1048576), '1.5 GB');
   });
 
   test('preset lists stay inside what the camera reports', () {

@@ -64,8 +64,18 @@ String simpleFree(int? bytes) {
   return '${gb.toStringAsFixed(gb >= 100 ? 0 : 1)} GB free';
 }
 
+/// "512 MB" under 1 GB, "1.5 GB" from there: memory in use. Pure —
+/// unit-tested.
+String simpleMemory(int bytes) {
+  const mb = 1048576;
+  return bytes < 1024 * mb
+      ? '${(bytes / mb).round()} MB'
+      : '${(bytes / (1024 * mb)).toStringAsFixed(1)} GB';
+}
+
 /// The server's figures as one line under Info's slot, turned on from the
-/// left rail's System: storage free, Ara's CPU, load and uptime. Re-read
+/// left rail's System: storage free, CPU, memory and uptime. CPU and memory
+/// are Ara's own process until the server reports the whole Pi. Re-read
 /// every 5 s while it shows.
 class SimpleSystemPanel extends ConsumerStatefulWidget {
   const SimpleSystemPanel({super.key});
@@ -97,17 +107,11 @@ class _SimpleSystemPanelState extends ConsumerState<SimpleSystemPanel> {
     final state = ref.watch(serverInternalStateProvider).value;
     final storage = ref.watch(storageSpaceProvider);
     final cpu = state?.cpuPercent;
-    final load = state?.loadAverage1Min;
-    final busy = load != null && state != null && load > state.processorCount;
     final facts = [
-      (
-        'Storage',
-        storage.hasValue ? simpleFree(storage.value?.freeBytes) : '—',
-        false,
-      ),
-      ('Ara CPU', cpu == null ? '—' : '${cpu.round()} %', false),
-      ('Load', load == null ? '—' : load.toStringAsFixed(1), busy),
-      ('Up', state == null ? '—' : simpleUptime(state.uptimeSeconds), false),
+      ('Storage', storage.hasValue ? simpleFree(storage.value?.freeBytes) : '—'),
+      ('CPU', cpu == null ? '—' : '${cpu.round()} %'),
+      ('Memory', state == null ? '—' : simpleMemory(state.workingSetBytes)),
+      ('Up', state == null ? '—' : simpleUptime(state.uptimeSeconds)),
     ];
     return SimplePanel(
       key: const Key('simple-system-line'),
@@ -119,17 +123,12 @@ class _SimpleSystemPanelState extends ConsumerState<SimpleSystemPanel> {
           child: Row(
             spacing: AraSpace.s16,
             children: [
-              for (final (label, value, warn) in facts)
+              for (final (label, value) in facts)
                 Text.rich(
                   TextSpan(
                     children: [
                       TextSpan(text: '$label ', style: AraText.caption),
-                      TextSpan(
-                        text: value,
-                        style: warn
-                            ? kSimpleText.copyWith(color: AraColors.accentBusy)
-                            : kSimpleText,
-                      ),
+                      TextSpan(text: value, style: kSimpleText),
                     ],
                   ),
                 ),
