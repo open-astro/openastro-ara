@@ -133,18 +133,26 @@ void main() {
     await tester.pump(const Duration(seconds: 1));
   });
 
-  for (final width in const [1470.0, 1100.0, 1024.0]) {
-    testWidgets('at $width the guiding bar is up to 340 px with its trace and clears the centred switcher',
+  for (final size in const [Size(1470, 854), Size(1024, 768)]) {
+    testWidgets('at $size the modes sit in the column above Emergency Stop and the bottom row is stats',
         (tester) async {
-      await _pump(tester, Size(width, 768), steps: _someSteps);
-      final trace = find.byKey(const Key('simple-guide-trace'));
-      expect(trace, findsOneWidget);
-      final guiding = tester.getRect(find.ancestor(of: trace, matching: find.byType(SimplePanel)).first);
-      final preview = tester.getRect(find.ancestor(of: find.text('Preview'), matching: find.byType(SimplePanel)).first);
-      expect(guiding.width, lessThanOrEqualTo(340));
-      if (width >= 1470) expect(guiding.width, 340);
-      expect(guiding.right, lessThan(preview.left), reason: 'no overlap');
-      expect(preview.center.dx, closeTo(width / 2, 1), reason: 'switcher centred');
+      final container = await _pump(tester, size, steps: _someSteps);
+      container.read(lastCapturedFrameIdProvider.notifier).set('frame-1');
+      await tester.pump();
+      expect(tester.takeException(), isNull, reason: 'no overflow');
+      Rect panelOf(Finder f) =>
+          tester.getRect(find.ancestor(of: f, matching: find.byType(SimplePanel)).first);
+      final modes = panelOf(find.text('Polar align'));
+      final column = tester.getRect(find.byType(SimplePreviewPanel));
+      final stop = tester.getRect(find.byType(EmergencyStopButton));
+      expect(modes.left, column.left);
+      expect(modes.right, column.right);
+      expect(stop.top - modes.bottom, kSimpleInset);
+      final guiding = panelOf(find.byKey(const Key('simple-guide-trace')));
+      expect(guiding.bottom, stop.bottom, reason: 'stats share the bottom row');
+      expect(guiding.right, lessThanOrEqualTo(column.left - kSimpleInset));
+      expect(find.byKey(const Key('simple-shutter')).hitTestable(), findsOneWidget,
+          reason: 'the capture controls stay reachable on a short window');
     });
   }
 
@@ -173,10 +181,15 @@ void main() {
         tester.getRect(find.ancestor(of: f, matching: find.byType(SimplePanel)).first);
     final facts = panelOf(find.text('Last frame'));
     final controls = panelOf(find.byKey(const Key('simple-shutter')));
+    final modes = panelOf(find.text('Polar align'));
     final stop = tester.getRect(find.byType(EmergencyStopButton));
-    expect(controls.top - facts.bottom, stop.top - controls.bottom,
-        reason: 'the same gap above and below the capture panel');
-    expect(stop.top - controls.bottom, kSimpleInset);
+    for (final gap in [
+      controls.top - facts.bottom,
+      modes.top - controls.bottom,
+      stop.top - modes.bottom,
+    ]) {
+      expect(gap, kSimpleInset, reason: 'one 16 px gap all the way down the column');
+    }
   });
 
   testWidgets('device dots use the agreed icons: focus corners, toggle, shield with check; guider, panel and dome glyphs',

@@ -20,9 +20,14 @@ const kSimpleText = TextStyle(
   fontFeatures: [FontFeature.tabularFigures()],
 );
 
-/// Height of the last-frame facts slot at the top of the column (DESIGN.md
-/// layout C: 164 px).
-const double kSimpleFactsHeight = 164;
+/// Height of the last-frame facts slot at the top of the column: a caption
+/// and three rows, or two rows without the caption when the column is short.
+const double kSimpleFactsHeight = 124;
+const double kSimpleFactsCompactHeight = 72;
+
+/// What the capture panel needs to show without scrolling: two 48 px fields,
+/// the shutter, Loop / Single and the shot status line, with padding.
+const double kSimpleCaptureHeight = 300;
 
 /// Single takes a saved frame (the daemon registers every Take One); Loop
 /// runs live view, whose frames are not saved.
@@ -51,40 +56,54 @@ class SimplePreviewPanel extends StatelessWidget {
       final hasFrame =
           ref.watch(lastCapturedFrameIdProvider) != null ||
           ref.watch(liveViewControllerProvider);
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // The slot is always reserved so the controls never move when the
-          // first frame lands; only the panel inside it waits for a frame.
-          SizedBox(
-            height: kSimpleFactsHeight,
-            // The panel fills the slot, so the gap below it is the same 16 px
-            // as everywhere else in the column.
-            child: hasFrame
-                ? const SimplePanel(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: AraSpace.s16,
-                      vertical: AraSpace.s12,
-                    ),
-                    child: _LastFrameFacts(),
-                  )
-                : null,
-          ),
-          const SizedBox(height: 16),
-          const Expanded(
-            child: SimplePanel(
-              padding: EdgeInsets.all(AraSpace.s12),
-              child: _PreviewControls(),
-            ),
-          ),
-        ],
+      return LayoutBuilder(
+        builder: (context, box) {
+          // A short column (an iPad in landscape) shrinks the facts, never the
+          // controls. Decided by the column's height, so it doesn't flip when
+          // a frame lands.
+          final compact =
+              box.maxHeight < kSimpleFactsHeight + 16 + kSimpleCaptureHeight;
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // The slot is always reserved so the controls never move when the
+              // first frame lands; only the panel inside it waits for a frame.
+              SizedBox(
+                height: compact
+                    ? kSimpleFactsCompactHeight
+                    : kSimpleFactsHeight,
+                // The panel fills the slot, so the gap below it is the same 16 px
+                // as everywhere else in the column.
+                child: hasFrame
+                    ? SimplePanel(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: AraSpace.s16,
+                          vertical: compact ? AraSpace.s8 : AraSpace.s12,
+                        ),
+                        child: _LastFrameFacts(compact: compact),
+                      )
+                    : null,
+              ),
+              const SizedBox(height: 16),
+              const Expanded(
+                child: SimplePanel(
+                  padding: EdgeInsets.all(AraSpace.s12),
+                  child: _PreviewControls(),
+                ),
+              ),
+            ],
+          );
+        },
       );
     },
   );
 }
 
 class _LastFrameFacts extends ConsumerWidget {
-  const _LastFrameFacts();
+  const _LastFrameFacts({required this.compact});
+
+  /// Two rows, no caption: HFR and stars together, then the exposure.
+  final bool compact;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -115,16 +134,28 @@ class _LastFrameFacts extends ConsumerWidget {
         ],
       ),
     );
+    final hfr = analysed?.hfr?.toStringAsFixed(2) ?? '—';
+    final stars = analysed?.stars?.toString() ?? '—';
+    final exposure = '${seconds(params.exposure)} · ${params.filterSlot}';
+    if (compact) {
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          row('HFR $hfr', '★ $stars'),
+          row(looping ? 'Live view' : 'Last frame', exposure),
+        ],
+      );
+    }
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text(looping ? 'Live view' : 'Last frame', style: AraText.caption),
         const SizedBox(height: 4),
-        row('HFR', analysed?.hfr?.toStringAsFixed(2) ?? '—'),
-        row('Stars', analysed?.stars?.toString() ?? '—'),
-        row('Exposure', '${seconds(params.exposure)} · ${params.filterSlot}'),
-        row('Saved', looping ? 'No' : (id == null ? '—' : 'Yes')),
+        row('HFR', hfr),
+        row('Stars', stars),
+        row('Exposure', exposure),
       ],
     );
   }

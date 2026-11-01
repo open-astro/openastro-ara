@@ -1,10 +1,12 @@
 import 'dart:io' show Platform;
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../state/app_shell_state.dart';
+import '../../models/frame_histogram.dart';
 import '../../models/guider_status.dart';
 import '../../state/guider/guide_step_state.dart';
 import '../../state/guider/guider_state.dart';
@@ -22,6 +24,7 @@ import '../../widgets/equipment/equipment_status_chip.dart';
 import '../../widgets/equipment_chip.dart' show EquipmentChipCompact;
 import '../../widgets/imaging/frame_viewer.dart';
 import '../../widgets/imaging/guiding_strip.dart';
+import '../../widgets/imaging/histogram_strip.dart' show frameHistogramProvider;
 import '../../widgets/settings_gear_button.dart';
 import '../../widgets/sky_atlas/stellarium_view.dart';
 import '../shell_listeners.dart';
@@ -156,36 +159,26 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                             top: kSimpleInset * 2 + kSimpleBarHeight,
                             bottom: kSimpleInset * 2 + kSimpleBarHeight,
                             width: kSimpleColumnWidth,
-                            child: SimplePreviewPanel(),
-                          ),
-                          // The bottom row: guiding up to 340 px, then the
-                          // switcher; an equal empty slot on the right (under
-                          // Emergency Stop) keeps the switcher centred, and
-                          // both slots shrink alike on a narrow window.
-                          Positioned(
-                            left: kSimpleInset,
-                            right: kSimpleInset,
-                            bottom: kSimpleInset,
-                            height: kSimpleBarHeight,
-                            child: Row(
+                            // The mode's panels, then the mode list pinned to
+                            // the bottom so it never moves between modes.
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
-                                Flexible(
-                                  child: Align(
-                                    alignment: Alignment.centerLeft,
-                                    child: ConstrainedBox(
-                                      constraints: BoxConstraints(
-                                        maxWidth: 340,
-                                      ),
-                                      child: _GuidingBar(),
-                                    ),
-                                  ),
-                                ),
-                                SizedBox(width: kSimpleInset),
-                                _ModeSwitcher(),
-                                SizedBox(width: kSimpleInset),
-                                Flexible(child: SizedBox(width: 340)),
+                                Expanded(child: SimplePreviewPanel()),
+                                SizedBox(height: kSimpleInset),
+                                _ModeList(),
                               ],
                             ),
+                          ),
+                          // The bottom row is for stats: the guiding graph and
+                          // the histogram, side by side left of the column,
+                          // each only once it has something to show.
+                          Positioned(
+                            left: kSimpleInset,
+                            right: kSimpleColumnWidth + kSimpleInset * 2,
+                            bottom: kSimpleInset,
+                            height: kSimpleBarHeight,
+                            child: _StatsRow(),
                           ),
                         ],
                       ),
@@ -456,15 +449,15 @@ class _TracePainter extends CustomPainter {
   bool shouldRepaint(_TracePainter old) => old._steps != _steps;
 }
 
-class _ModeSwitcher extends ConsumerWidget {
-  const _ModeSwitcher();
+class _ModeList extends ConsumerWidget {
+  const _ModeList();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return SimplePanel(
       padding: const EdgeInsets.all(AraSpace.s4),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         spacing: 2,
         children: [
           for (final m in SimpleModeScreen.values)
@@ -472,6 +465,7 @@ class _ModeSwitcher extends ConsumerWidget {
               label: m.label,
               selected: m == SimpleModeScreen.preview,
               radius: 7,
+              alignment: Alignment.centerLeft,
               // Not built yet in Simple Mode: open its full-UI tab.
               onTap: m == SimpleModeScreen.preview
                   ? null
@@ -483,6 +477,105 @@ class _ModeSwitcher extends ConsumerWidget {
   }
 }
 
+/// Guiding and the histogram along the bottom. Each panel waits for data, and
+/// whichever shows takes the row (both: guiding gets the larger share).
+class _StatsRow extends ConsumerWidget {
+  const _StatsRow();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final status = ref.watch(guiderStatusProvider).asData?.value;
+    final guiding =
+        status?.runtimeState == GuiderRuntimeState.guiding ||
+        ref.watch(guideStepsProvider).isNotEmpty;
+    // The histogram is for saved frames (the daemon analyses those).
+    final id = ref.watch(liveViewControllerProvider)
+        ? null
+        : ref.watch(lastCapturedFrameIdProvider);
+    final histogram = id == null
+        ? null
+        : ref.watch(frameHistogramProvider(id)).asData?.value;
+    return Row(
+      spacing: kSimpleInset,
+      children: [
+        if (guiding) const Expanded(flex: 3, child: _GuidingBar()),
+        if (histogram != null)
+          Expanded(flex: 2, child: _HistogramBar(histogram)),
+      ],
+    );
+  }
+}
+
+class _HistogramBar extends StatelessWidget {
+  const _HistogramBar(this.h);
+
+  final FrameHistogram h;
+
+  @override
+  Widget build(BuildContext context) => SimplePanel(
+    padding: const EdgeInsets.symmetric(horizontal: AraSpace.s16),
+    child: Row(
+      children: [
+        Flexible(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Histogram', style: kSimpleText),
+              Text(
+                'Median ${h.median.round()}',
+                style: AraText.caption,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 14),
+        Expanded(
+          child: SizedBox(
+            height: 36,
+            child: CustomPaint(
+              key: const Key('simple-histogram'),
+              painter: _HistogramPainter(h.bins),
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+/// The frame's histogram as a filled curve, square-root scaled so the faint
+/// tail stays visible next to the sky peak.
+class _HistogramPainter extends CustomPainter {
+  _HistogramPainter(this.bins);
+
+  final List<int> bins;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (bins.isEmpty) return;
+    final peak = math.sqrt(bins.reduce(math.max).toDouble());
+    if (peak == 0) return;
+    final path = Path()..moveTo(0, size.height);
+    for (var i = 0; i < bins.length; i++) {
+      final x = bins.length == 1 ? 0.0 : size.width * i / (bins.length - 1);
+      path.lineTo(x, size.height - math.sqrt(bins[i]) / peak * size.height);
+    }
+    path
+      ..lineTo(size.width, size.height)
+      ..close();
+    canvas.drawPath(
+      path,
+      Paint()..color = AraColors.textPrimary.withAlpha(140),
+    );
+  }
+
+  @override
+  bool shouldRepaint(_HistogramPainter old) => old.bins != bins;
+}
+
 /// One segment of a Simple Mode switch (the mode switcher, Loop / Single):
 /// 40 px tall with square-ish corners, Selection Blue when selected.
 class SimpleSegment extends StatelessWidget {
@@ -492,9 +585,11 @@ class SimpleSegment extends StatelessWidget {
     required this.selected,
     required this.radius,
     this.onTap,
+    this.alignment = Alignment.center,
   });
 
   final String label;
+  final Alignment alignment;
   final bool selected;
   final double radius;
   final VoidCallback? onTap;
@@ -512,7 +607,7 @@ class SimpleSegment extends StatelessWidget {
         child: Container(
           height: 40,
           padding: const EdgeInsets.symmetric(horizontal: 14),
-          alignment: Alignment.center,
+          alignment: alignment,
           child: Text(
             label,
             maxLines: 1,
@@ -554,6 +649,9 @@ ThemeData simpleTheme(ThemeData base) {
       style: buttons.merge(base.outlinedButtonTheme.style),
     ),
     inputDecorationTheme: base.inputDecorationTheme.copyWith(
+      // 48 px tiles (DESIGN.md layout C), label inside.
+      isDense: true,
+      contentPadding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
       filled: true,
       fillColor: kSimpleTileFill,
       border: tile,
