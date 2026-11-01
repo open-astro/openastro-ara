@@ -62,7 +62,12 @@ The histogram is left out.
 - **No rig / no frame:** tonight's planetarium behind a Connect to your rig card (discovered rigs, Add by address). Device dots go grey, the switcher dims, and Emergency Stop shows disabled.
 - **Always visible in both modes:** Emergency Stop, the attention banner, device status dots, Night mode and the Simple ↔ full UI switch.
 
+## Errors, horizon and the way out (decided 2026-11-01)
+
+- **Errors inside a mode** (plate solve failed, autofocus failed, slew failed): while the person works a mode, the error shows inside that mode's panel, naming the cause and the fix, with a Retry (for example "Too few stars in a 2 s frame", then "Retry with 10 s"). During an unattended run the same errors use the centred attention banner.
+- **Below the horizon (including the custom horizon):** Go to is disabled with the reason ("Below your horizon until 22:40"), and "Go to at 22:40" waits, then slews and centres on its own.
+- **Show all options** opens the matching full-UI tab: Preview, Polar align and Focus open Live; Target opens Planning; Run opens Live while imaging and Sequence when idle.
+
 ## Still open
 
-- Exact copy for each state, and the error states inside each mode (solve failed, autofocus failed, slew blocked by the horizon).
-- How Simple Mode's "Show all options" lands in the full UI (which tab opens).
+- Exact copy for every state and error, written against the daemon's real failure reasons.

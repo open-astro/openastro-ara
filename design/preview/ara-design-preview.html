@@ -454,6 +454,8 @@
         <button data-smode="plan" aria-pressed="false">Run plan</button>
         <button data-smode="done" aria-pressed="false">Night done</button>
         <button data-smode="empty" aria-pressed="false">No rig</button>
+        <button data-smode="t-fail" aria-pressed="false">Solve failed</button>
+        <button data-smode="t-horizon" aria-pressed="false">Below horizon</button>
       </div>
       <div class="seg" role="group" aria-label="Night mode">
         <button data-night="off" aria-pressed="true">Night mode off</button>
@@ -539,24 +541,39 @@
           <div class="tile"><span class="lbl">Gain</span><b>100</b></div>
         </div>
 
-        <div class="atlas" data-v="target empty">
+        <div class="atlas" data-v="target t-fail t-horizon empty">
           <svg class="const" viewBox="0 0 1000 680" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
             <polyline fill="none" stroke="rgba(120,150,190,.35)" stroke-width="1" points="300,170 380,215 470,240 560,300 640,330"/>
             <polyline fill="none" stroke="rgba(120,150,190,.35)" stroke-width="1" points="470,240 455,330 430,420"/>
             <polyline fill="none" stroke="rgba(120,150,190,.35)" stroke-width="1" points="700,140 760,190 820,170 870,230"/>
             <path d="M0 600 Q 500 540 1000 610" fill="none" stroke="rgba(66,165,245,.35)" stroke-width="1" stroke-dasharray="4 4"/>
           </svg>
-          <div class="obj sel" data-v="target" style="left:52%;top:40%"><b></b>M31</div>
-          <div class="obj" data-v="target" style="left:61%;top:52%"><b></b>M33</div>
-          <div class="obj" data-v="target" style="left:30%;top:28%"><b></b>NGC 7000</div>
-          <div class="obj" data-v="target" style="left:78%;top:24%"><b></b>M45</div>
+          <div class="obj sel" data-v="target t-fail" style="left:52%;top:40%"><b></b>M31</div>
+          <div class="obj" data-v="t-horizon" style="left:52%;top:40%"><b></b>M31</div>
+          <div class="obj" data-v="target t-fail" style="left:61%;top:84%"><b></b>M33</div>
+          <div class="obj sel" data-v="t-horizon" style="left:61%;top:84%"><b></b>M33</div>
+          <div class="obj" data-v="target t-fail t-horizon" style="left:30%;top:28%"><b></b>NGC 7000</div>
+          <div class="obj" data-v="target t-fail t-horizon" style="left:78%;top:24%"><b></b>M45</div>
         </div>
-        <div class="p t-search" data-v="target"><svg><use href="#i-search"/></svg>Search objects</div>
+        <div class="p t-search" data-v="target t-fail t-horizon"><svg><use href="#i-search"/></svg>Search objects</div>
         <div class="p t-card" data-v="target">
           <span class="tgt">M31 · Andromeda Galaxy</span>
           <span class="sub">62° up · best until 01:40 · sets 04:10</span>
           <button class="go" style="margin-top:6px">Go to M31</button>
           <span class="sub" style="font-size:12px">Slews, then centres with a plate solve.</span>
+        </div>
+
+        <div class="p t-card" data-v="t-fail">
+          <span class="tgt">Plate solve failed</span>
+          <span class="sub">Too few stars in a 2 s frame. The mount is near M31 but not centred.</span>
+          <div class="row2" style="margin-top:6px"><button class="go">Retry with 10 s</button><button class="ghost">Cancel</button></div>
+        </div>
+        <div class="p t-card" data-v="t-horizon" style="top:62%">
+          <span class="tgt">M33 · Triangulum Galaxy</span>
+          <span class="sub">Below your horizon until 22:40</span>
+          <button class="go" disabled style="margin-top:6px;opacity:.45;cursor:not-allowed">Go to now</button>
+          <button class="ghost">Go to at 22:40</button>
+          <span class="sub" style="font-size:12px">Waits, then slews and centres on its own.</span>
         </div>
         <div class="p e-card" data-v="empty">
           <span class="hd">Connect to your rig</span>
@@ -861,7 +878,7 @@
     run: ['M31 Andromeda', 'g-busy', 'Attention', 'run'], plan: ['M31 Andromeda', 'g-ok', 'Ready', 'run'],
     done: ['M31 Andromeda', 'g-ok', 'Done', 'run'], preview: ['M31 Andromeda', 'g-ok', 'Previewing', 'preview'],
     pa: ['Polar alignment', 'g-busy', 'Adjusting', 'pa'], focus: ['M31 Andromeda', 'g-busy', 'Focusing', 'focus'],
-    target: ['Choose a target', 'g-ok', 'Ready', 'target'], empty: ['No rig connected', 'g-off', 'Offline', null] };
+    target: ['Choose a target', 'g-ok', 'Ready', 'target'], 't-fail': ['M31 Andromeda', 'g-busy', 'Solve failed', 'target'], 't-horizon': ['Choose a target', 'g-ok', 'Ready', 'target'], empty: ['No rig connected', 'g-off', 'Offline', null] };
   const setView = v => {
     const c = document.getElementById('simpleC'), [tgt, cls, st, mode] = VIEWS[v];
     c.querySelectorAll('[data-v]').forEach(el => el.hidden = !el.dataset.v.split(' ').includes(v));

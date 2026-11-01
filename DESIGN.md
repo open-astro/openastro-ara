@@ -272,8 +272,10 @@ Simple Mode (see PRODUCT.md) puts the latest frame first, ASIAir-style. The imag
 - **Preview:** the right column shows the last frame's facts (HFR, stars, exposure, saved or not) and the controls: Exposure, Filter, a capture shutter, Loop or Single, and Save frame. Frames are not saved unless the person taps Save.
 - **Polar align:** a crosshair and a 10′ target ring are drawn on the live frame, with the current pole position and a dashed arrow to the target. The right column shows the polar error, its zone (green under 10′, amber under 60′, red beyond, matching the server's thresholds), the altitude and azimuth corrections as drawn arrows, and Stop.
 - **Focus:** a zoomed star with its HFR ring sits top-left. The right column shows the HFR, the focus curve as it builds, the focuser position, an Autofocus button and four nudge buttons (in large, in small, out small, out large).
-- **Target:** the image area becomes the planetarium, full screen. The person taps an object, and a card shows its altitude and best time, with Go to (slew, then centre with a plate solve). There is a search panel under the status strip.
+- **Target:** the image area becomes the planetarium, full screen. The person taps an object, and a card shows its altitude and best time, with Go to (slew, then centre with a plate solve). There is a search panel under the status strip. An object below the horizon (or the custom horizon) shows Go to disabled with the reason and when it rises, plus "Go to at <time>", which waits and then slews.
 - **Run:** as described above. When the plan finishes, a Night done summary takes the right column: frames per filter, integration, best HFR, issues during the night, flats, mount parked, then Image Library and New plan.
+
+**Errors.** While the person works a mode, errors (solve, autofocus, slew) show inside that mode's panel with the cause, the fix and Retry. During an unattended run they use the centred attention banner.
 
 **No rig connected.** The planetarium of tonight's sky fills the image area with a centred card: rigs found on the network with Connect, and Add a rig by address. Device dots go grey, the mode switcher dims, and Emergency Stop shows disabled.
 
