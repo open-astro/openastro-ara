@@ -2,12 +2,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 /// What the planetarium has selected, as its page reports it in Simple Mode
 /// (`?bare=1` hides the page's own info panel and posts a `selection` event).
-/// [raHours]/[decDeg] are JNOW, ready to slew to.
+/// [raHours]/[decDeg] are JNOW, ready to slew to; [raJ2000Hours]/
+/// [decJ2000Deg] are what plate-solve centring takes.
 class PlanetariumSelection {
   final String name;
   final String kind;
   final double raHours;
   final double decDeg;
+  final double raJ2000Hours;
+  final double decJ2000Deg;
 
   /// Altitude now, degrees; at or below 0 the object is under the horizon.
   final double? altDeg;
@@ -23,6 +26,8 @@ class PlanetariumSelection {
     required this.kind,
     required this.raHours,
     required this.decDeg,
+    required this.raJ2000Hours,
+    required this.decJ2000Deg,
     required this.maxAltDeg,
     this.altDeg,
     this.rise,
@@ -44,6 +49,9 @@ class PlanetariumSelection {
       kind: json['kind'] is String ? json['kind'] as String : '',
       raHours: ra,
       decDeg: dec,
+      // An older page sends JNOW only; close enough to start a centring.
+      raJ2000Hours: n('raJ2000Hours') ?? ra,
+      decJ2000Deg: n('decJ2000Deg') ?? dec,
       altDeg: n('altDeg'),
       maxAltDeg: maxAlt,
       rise: riseMs == null

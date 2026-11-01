@@ -390,6 +390,7 @@ function setLayer(name, on) {
 // into a small info panel and offer Center (lock the view on it) + GoTo (slew
 // the connected mount to it via the daemon REST API).
 var selRaHours = null, selDecDeg = null;   // last selection's JNOW coords, for GoTo
+var selRaJ2000Hours = null, selDecJ2000Deg = null;   // and J2000, for plate-solve centring
 var selVisible = false;                     // does it ever rise above the site horizon?
 var selAltDeg = null;                       // current altitude (deg); ≤0 = below horizon now
 var selRiseStr = null;                      // tonight's rise time, formatted, or null
@@ -450,6 +451,8 @@ function renderInfo(sel) {
     var radec = sel.getInfo('radec');
     // Frame this object too (J2000), so the framing box follows the selection.
     var icrf = stel.c2s(radec);
+    selRaJ2000Hours = stel.anp(icrf[0]) * 12 / Math.PI;
+    selDecJ2000Deg = stel.anpm(icrf[1]) * 180 / Math.PI;
     setFrameTarget(stel.anp(icrf[0]) / D2R, stel.anpm(icrf[1]) / D2R, names.length ? names[0] : 'Target');
     var jnow = stel.c2s(stel.convertFrame(stel.core.observer, 'ICRF', 'JNOW', radec));
     var ra = stel.anp(jnow[0]), dec = stel.anpm(jnow[1]);
@@ -491,6 +494,7 @@ function renderInfo(sel) {
   postSelection(selRaHours == null ? null : {
     name: document.getElementById('i-name').textContent, kind: typeStr,
     raHours: selRaHours, decDeg: selDecDeg, altDeg: selAltDeg,
+    raJ2000Hours: selRaJ2000Hours, decJ2000Deg: selDecJ2000Deg,
     maxAltDeg: 90 - Math.abs(LAT - selDecDeg), riseMs: riseMs,
   });
 

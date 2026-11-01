@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/equipment_device_status.dart';
 import '../../services/equipment_device_api.dart'
     show describeEquipmentError, isRunInProgressRefusal;
+import '../../services/center_api.dart';
 import '../../state/equipment/mount_state.dart';
 import '../../state/sky_atlas/planetarium_selection_state.dart';
 import '../../theme/ara_colors.dart';
@@ -30,55 +33,123 @@ String simpleTargetStatus(PlanetariumSelection s) {
   return '${(s.altDeg ?? 0).round()}° up · max ${s.maxAltDeg.round()}°';
 }
 
-/// The last Go to's outcome, for the panel: nothing, a failure to show, or a
-/// refusal because a sequence is running (the panel offers "Slew anyway").
-sealed class SimpleSlewOutcome {
-  const SimpleSlewOutcome();
+/// Where the last Go to stands, for the panel and the shutter: centring
+/// (the plate-solve job), centred, failed, or refused because a sequence is
+/// running (the panel offers "Slew anyway"). Null: nothing in hand.
+sealed class SimpleGoTo {
+  const SimpleGoTo();
 }
 
-class SimpleSlewFailed extends SimpleSlewOutcome {
-  const SimpleSlewFailed(this.message);
+class SimpleCentering extends SimpleGoTo {
+  const SimpleCentering(this.jobId, {this.done = 0, this.total = 0});
+  final String jobId;
+  final int done;
+  final int total;
+}
+
+class SimpleCentered extends SimpleGoTo {
+  const SimpleCentered();
+}
+
+class SimpleGoToFailed extends SimpleGoTo {
+  const SimpleGoToFailed(this.message);
   final String message;
 }
 
-class SimpleSlewNeedsForce extends SimpleSlewOutcome {
-  const SimpleSlewNeedsForce();
+class SimpleGoToNeedsForce extends SimpleGoTo {
+  const SimpleGoToNeedsForce();
 }
 
-class SimpleSlewNotifier extends Notifier<SimpleSlewOutcome?> {
+/// Go to and centre: unpark (a parked mount ignores slews), slew (the daemon
+/// refuses while a sequence runs, until forced), then the plate-solve
+/// centring job on the J2000 position, polled every second.
+class SimpleGoToNotifier extends Notifier<SimpleGoTo?> {
+  Timer? _poll;
+
   @override
-  SimpleSlewOutcome? build() {
+  SimpleGoTo? build() {
+    ref.onDispose(() => _poll?.cancel());
     // A new selection starts clean.
     ref.watch(planetariumSelectionProvider);
+    _poll?.cancel();
     return null;
   }
 
-  /// Unpark (a parked mount ignores slews), then slew to the selection.
   Future<void> goTo({bool force = false}) async {
     final s = ref.read(planetariumSelectionProvider);
     if (s == null) return;
     final mount = ref.read(mountProvider.notifier);
+    _poll?.cancel();
     state = null;
     try {
       if (ref.read(mountProvider).value?.parked ?? false) await mount.unpark();
-      final sent = await mount.slewTo(s.raHours, s.decDeg, force: force);
-      if (!sent) state = const SimpleSlewFailed('The mount is busy. Try again.');
+      if (!await mount.slewTo(s.raHours, s.decDeg, force: force)) {
+        state = const SimpleGoToFailed('The mount is busy. Try again.');
+        return;
+      }
+      final api = ref.read(centerApiProvider);
+      if (api == null) return;
+      final job = await api.start(s.raJ2000Hours, s.decJ2000Deg);
+      state = SimpleCentering(job.jobId, total: job.total);
+      _poll = Timer.periodic(const Duration(seconds: 1), (_) => _check(api));
     } catch (e) {
       state = isRunInProgressRefusal(e)
-          ? const SimpleSlewNeedsForce()
-          : SimpleSlewFailed("Couldn't go to ${s.name}: ${describeEquipmentError(e)}");
+          ? const SimpleGoToNeedsForce()
+          : SimpleGoToFailed(
+              "Couldn't go to ${s.name}: ${describeEquipmentError(e)}",
+            );
     }
+  }
+
+  Future<void> _check(CenterClient api) async {
+    final current = state;
+    if (current is! SimpleCentering) return _poll?.cancel();
+    try {
+      final job = await api.job(current.jobId);
+      if (state is! SimpleCentering) return;
+      switch (job?.state) {
+        case 'complete':
+          _poll?.cancel();
+          state = const SimpleCentered();
+        case 'failed' || 'cancelled' || null:
+          _poll?.cancel();
+          state = SimpleGoToFailed(
+            job == null
+                ? 'Lost track of the centring (the server restarted).'
+                : "Couldn't centre: ${job.errorMessage ?? job.state}",
+          );
+        default:
+          state = SimpleCentering(
+            current.jobId,
+            done: job!.done,
+            total: job.total,
+          );
+      }
+    } catch (_) {
+      // A missed poll is retried on the next tick.
+    }
+  }
+
+  /// The red square: cancel the centring job, if any, and abort the slew.
+  Future<void> stop() async {
+    final current = state;
+    _poll?.cancel();
+    state = null;
+    if (current is SimpleCentering) {
+      await ref.read(centerApiProvider)?.cancel(current.jobId);
+    }
+    await ref.read(mountProvider.notifier).abortSlew();
   }
 }
 
-final simpleSlewProvider =
-    NotifierProvider<SimpleSlewNotifier, SimpleSlewOutcome?>(
-      SimpleSlewNotifier.new,
-    );
+final simpleGoToProvider = NotifierProvider<SimpleGoToNotifier, SimpleGoTo?>(
+  SimpleGoToNotifier.new,
+);
 
-/// The rail's shutter in Target: goes to the selected object; while the mount
-/// slews, its red square aborts the slew. Off with nothing to go to (no
-/// selection, no mount, or an object below the horizon).
+/// The rail's shutter in Target: goes to the selected object and centres it;
+/// while the mount slews or the centring runs, its red square stops both.
+/// Off with nothing to go to (no selection, no mount, or an object below the
+/// horizon).
 class SimpleTargetShutter extends ConsumerWidget {
   const SimpleTargetShutter({super.key});
 
@@ -86,26 +157,28 @@ class SimpleTargetShutter extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final mount = ref.watch(mountProvider).value;
     final sel = ref.watch(planetariumSelectionProvider);
+    final goTo = ref.watch(simpleGoToProvider);
     final connected =
         mount?.connectionState == EquipmentConnectionState.connected;
-    final slewing = connected && mount!.isBusy;
+    final running =
+        (connected && mount!.isBusy) || goTo is SimpleCentering;
     final canGo = connected && sel != null && !sel.belowHorizon;
     return SimpleShutterButton(
-      running: slewing,
-      label: slewing ? 'Stop the slew' : 'Go to ${sel?.name ?? 'the target'}',
-      onPressed: slewing
-          ? () => ref.read(mountProvider.notifier).abortSlew()
+      running: running,
+      label: running ? 'Stop' : 'Go to ${sel?.name ?? 'the target'}',
+      onPressed: running
+          ? () => ref.read(simpleGoToProvider.notifier).stop()
           : canGo
-          ? () => ref.read(simpleSlewProvider.notifier).goTo()
+          ? () => ref.read(simpleGoToProvider.notifier).goTo()
           : null,
     );
   }
 }
 
 /// Target's panel beside the right rail: a search, then the selected object
-/// (name, type, altitude, or why it can't be reached), the last Go to's
-/// failure, and "Slew anyway" when a running sequence refused it. The rail's
-/// shutter does the Go to.
+/// (name, type, altitude, or why it can't be reached), where the Go to and
+/// centre stands, and "Slew anyway" when a running sequence refused it. The
+/// rail's shutter does the Go to.
 class SimpleTargetPanel extends ConsumerStatefulWidget {
   const SimpleTargetPanel({super.key});
 
@@ -130,7 +203,7 @@ class _SimpleTargetPanelState extends ConsumerState<SimpleTargetPanel> {
   @override
   Widget build(BuildContext context) {
     final sel = ref.watch(planetariumSelectionProvider);
-    final outcome = ref.watch(simpleSlewProvider);
+    final outcome = ref.watch(simpleGoToProvider);
     final mount = ref.watch(mountProvider).value;
     final connected =
         mount?.connectionState == EquipmentConnectionState.connected;
@@ -192,13 +265,23 @@ class _SimpleTargetPanelState extends ConsumerState<SimpleTargetPanel> {
                 style: kSimpleText.copyWith(color: AraColors.textSecondary),
               ),
             switch (outcome) {
-              SimpleSlewFailed(:final message) => Text(
+              SimpleCentering(:final done, :final total) => Text(
+                total > 0
+                    ? 'Centering · solve ${done + 1} of $total'
+                    : 'Centering…',
+                style: kSimpleText,
+              ),
+              SimpleCentered() => Text(
+                'Centered on ${sel?.name ?? 'the target'}',
+                style: kSimpleText.copyWith(color: AraColors.accentConnected),
+              ),
+              SimpleGoToFailed(:final message) => Text(
                 message,
                 style: kSimpleText.copyWith(color: AraColors.accentError),
                 maxLines: 4,
                 overflow: TextOverflow.ellipsis,
               ),
-              SimpleSlewNeedsForce() => Column(
+              SimpleGoToNeedsForce() => Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 spacing: AraSpace.s8,
                 children: [
@@ -209,7 +292,7 @@ class _SimpleTargetPanelState extends ConsumerState<SimpleTargetPanel> {
                   FilledButton.tonal(
                     key: const Key('simple-target-force'),
                     onPressed: () => ref
-                        .read(simpleSlewProvider.notifier)
+                        .read(simpleGoToProvider.notifier)
                         .goTo(force: true),
                     child: const Text('Slew anyway'),
                   ),

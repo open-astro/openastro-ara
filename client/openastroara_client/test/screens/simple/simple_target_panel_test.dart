@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -5,6 +7,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/equipment_device_status.dart';
 import 'package:openastroara/models/mount_status.dart';
 import 'package:openastroara/screens/simple/simple_target_panel.dart';
+import 'package:openastroara/services/autofocus_api.dart' show AutofocusJob;
+import 'package:openastroara/services/center_api.dart';
 import 'package:openastroara/state/equipment/mount_state.dart';
 import 'package:openastroara/state/sky_atlas/planetarium_selection_state.dart';
 
@@ -22,10 +26,30 @@ MountStatus _mount({String runtime = 'tracking', bool parked = false}) => MountS
     );
 
 const _m31 = PlanetariumSelection(
-    name: 'M31', kind: 'Galaxy', raHours: 0.73, decDeg: 41.4, altDeg: 62.4, maxAltDeg: 74.2);
+    name: 'M31', kind: 'Galaxy', raHours: 0.73, decDeg: 41.4, raJ2000Hours: 0.71, decJ2000Deg: 41.27, altDeg: 62.4, maxAltDeg: 74.2);
 final _m33Below = PlanetariumSelection(
-    name: 'M33', kind: 'Galaxy', raHours: 1.6, decDeg: 30.8, altDeg: -12, maxAltDeg: 60, rise: DateTime(2026, 11, 2, 22, 40));
-const _southern = PlanetariumSelection(name: 'NGC 104', kind: 'Cluster', raHours: 0.4, decDeg: -72, altDeg: -40, maxAltDeg: -20);
+    name: 'M33', kind: 'Galaxy', raHours: 1.6, decDeg: 30.8, raJ2000Hours: 1.56, decJ2000Deg: 30.66, altDeg: -12, maxAltDeg: 60, rise: DateTime(2026, 11, 2, 22, 40));
+const _southern = PlanetariumSelection(
+    name: 'NGC 104', kind: 'Cluster', raHours: 0.4, decDeg: -72, raJ2000Hours: 0.4, decJ2000Deg: -72, altDeg: -40, maxAltDeg: -20);
+
+class _Center implements CenterClient {
+  _Center(this.calls);
+  final List<String> calls;
+  String state = 'running';
+  @override
+  Future<AutofocusJob> start(double ra, double dec) async {
+    calls.add('center $ra $dec');
+    return const AutofocusJob(jobId: 'j1', state: 'running', total: 3);
+  }
+
+  @override
+  Future<AutofocusJob?> job(String id) async => AutofocusJob(jobId: id, state: state, done: 1, total: 3,
+      errorMessage: state == 'failed' ? 'Too few stars' : null);
+  @override
+  Future<void> cancel(String id) async => calls.add('cancel $id');
+  @override
+  void close() {}
+}
 
 class _Mount extends MountNotifier {
   _Mount(this.status, {this.refuse = false});
@@ -70,10 +94,11 @@ class _Sel extends PlanetariumSelectionNotifier {
 }
 
 Future<(_Mount, ProviderContainer)> _pump(WidgetTester tester, Widget child,
-    {PlanetariumSelection? sel, MountStatus? mount, bool refuse = false}) async {
+    {PlanetariumSelection? sel, MountStatus? mount, bool refuse = false, _Center? center}) async {
   final m = _Mount(mount, refuse: refuse);
   final container = ProviderContainer(overrides: [
     mountProvider.overrideWith(() => m),
+    centerApiProvider.overrideWithValue(center ?? _Center(m.calls)),
     planetariumSelectionProvider.overrideWith(() => _Sel(sel)),
   ]);
   addTearDown(container.dispose);
@@ -101,8 +126,10 @@ void main() {
 
   test('a page selection parses; no position or nothing selected is null', () {
     final s = PlanetariumSelection.tryFromJson(
-        {'name': 'M31', 'kind': 'Galaxy', 'raHours': 0.73, 'decDeg': 41.4, 'altDeg': 62.4, 'maxAltDeg': 74.2, 'riseMs': null});
+        {'name': 'M31', 'kind': 'Galaxy', 'raHours': 0.73, 'decDeg': 41.4, 'raJ2000Hours': 0.71, 'decJ2000Deg': 41.27,
+         'altDeg': 62.4, 'maxAltDeg': 74.2, 'riseMs': null});
     expect(s!.name, 'M31');
+    expect(s.raJ2000Hours, 0.71);
     expect(s.belowHorizon, isFalse);
     expect(PlanetariumSelection.tryFromJson(null), isNull);
     expect(PlanetariumSelection.tryFromJson({'name': 'x'}), isNull);
@@ -121,15 +148,37 @@ void main() {
       await _pump(tester, const SimpleTargetShutter(), sel: _m33Below, mount: _mount());
       expect(_shutter(tester).onTap, isNull);
     });
-    testWidgets('slews to it, unparking first', (tester) async {
-      final (m, _) = await _pump(tester, const SimpleTargetShutter(), sel: _m31, mount: _mount(parked: true));
+    testWidgets('goes to it and centres it: unpark, slew, then the centring job (J2000)', (tester) async {
+      final (m, c) = await _pump(tester, const SimpleTargetShutter(), sel: _m31, mount: _mount(parked: true));
       await tester.tap(find.byKey(const Key('simple-shutter')));
-      await tester.pumpAndSettle();
-      expect(m.calls, ['unpark', 'slew 0.73 41.4']);
+      await tester.pump();
+      await tester.pump();
+      expect(m.calls, ['unpark', 'slew 0.73 41.4', 'center 0.71 41.27']);
+      expect(c.read(simpleGoToProvider), isA<SimpleCentering>());
+      expect(find.bySemanticsLabel('Stop'), findsOneWidget, reason: 'the red square while it centres');
+      await tester.tap(find.byKey(const Key('simple-shutter')));
+      await tester.pump();
+      expect(m.calls.skip(3), ['cancel j1', 'abort']);
+      expect(c.read(simpleGoToProvider), isNull);
+    });
+    testWidgets('a finished centring says so; a failed one says why', (tester) async {
+      final calls = <String>[];
+      final center = _Center(calls);
+      final (_, c) = await _pump(tester, const SimpleTargetPanel(), sel: _m31, mount: _mount(), center: center);
+      unawaited(c.read(simpleGoToProvider.notifier).goTo());
+      await tester.pump();
+      center.state = 'complete';
+      await tester.pump(const Duration(seconds: 2));
+      expect(find.text('Centered on M31'), findsOneWidget);
+      unawaited(c.read(simpleGoToProvider.notifier).goTo());
+      await tester.pump();
+      center.state = 'failed';
+      await tester.pump(const Duration(seconds: 2));
+      expect(find.textContaining('Too few stars'), findsOneWidget);
     });
     testWidgets('while it slews, the square aborts', (tester) async {
       final (m, _) = await _pump(tester, const SimpleTargetShutter(), sel: _m31, mount: _mount(runtime: 'slewing'));
-      expect(find.bySemanticsLabel('Stop the slew'), findsOneWidget);
+      expect(find.bySemanticsLabel('Stop'), findsOneWidget);
       await tester.tap(find.byKey(const Key('simple-shutter')));
       await tester.pumpAndSettle();
       expect(m.calls, ['abort']);
@@ -154,12 +203,15 @@ void main() {
       expect(find.text('Below your horizon · rises 22:40'), findsOneWidget);
     });
     testWidgets('a running sequence refuses: Slew anyway forces it', (tester) async {
+      final calls = <String>[];
+      final center = _Center(calls)..state = 'complete';
       final (m, c) = await _pump(
         tester,
         const Column(mainAxisSize: MainAxisSize.min, children: [SimpleTargetPanel(), SimpleTargetShutter()]),
         sel: _m31,
         mount: _mount(),
         refuse: true,
+        center: center,
       );
       await tester.tap(find.byKey(const Key('simple-shutter')));
       await tester.pumpAndSettle();
@@ -167,7 +219,9 @@ void main() {
       await tester.tap(find.byKey(const Key('simple-target-force')));
       await tester.pumpAndSettle();
       expect(m.calls, ['slew 0.73 41.4', 'slew 0.73 41.4 force']);
-      expect(c.read(simpleSlewProvider), isNull);
+      expect(calls, ['center 0.71 41.27'], reason: 'then it centres');
+      await tester.pump(const Duration(seconds: 2));
+      expect(c.read(simpleGoToProvider), isA<SimpleCentered>());
     });
   });
 }
