@@ -65,8 +65,8 @@ final simplePolarSettingsProvider =
       SimplePolarSettings.new,
     );
 
-/// The rail's shutter in Polar align: starts the routine; while it runs, the
-/// square stops it (Loop) or each tap takes the next frame (Single).
+/// The rail's shutter in Polar align: starts the routine; while it runs, its
+/// square stops it.
 class SimplePolarShutter extends ConsumerWidget {
   const SimplePolarShutter({super.key});
 
@@ -74,10 +74,6 @@ class SimplePolarShutter extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final api = ref.watch(polarAlignApiProvider);
     final active = simplePolarActive(ref.watch(polarAlignLiveProvider));
-    final single = _single(
-      ref.watch(simplePolarSettingsProvider).value ??
-          const PolarAlignSettings(),
-    );
     final messenger = ScaffoldMessenger.maybeOf(context);
     Future<void> run(String action, Future<void> Function() op) async {
       try {
@@ -90,19 +86,13 @@ class SimplePolarShutter extends ConsumerWidget {
     }
 
     return SimpleShutterButton(
-      running: active && !single,
-      label: !active
-          ? 'Start polar alignment'
-          : single
-          ? 'Take a frame'
-          : 'Stop',
+      running: active,
+      label: active ? 'Stop' : 'Start polar alignment',
       onPressed: api == null
           ? null
-          : !active
-          ? () => run('start polar alignment', api.start)
-          : single
-          ? () => run('take a frame', api.requestCapture)
-          : () => run('stop polar alignment', api.stop),
+          : active
+          ? () => run('stop polar alignment', api.stop)
+          : () => run('start polar alignment', api.start),
     );
   }
 }
@@ -129,8 +119,9 @@ final simplePolarFrameProvider = FutureProvider.autoDispose<Uint8List?>((
 
 /// Polar align's panel beside the right rail: the routine's settings
 /// (exposure, Loop/Single); while it runs, the phase, the total error with its
-/// zone, the bullseye, the altitude and azimuth turns, then Stop and Done
-/// (once inside the profile's tolerance). The rail's shutter starts it.
+/// zone, the bullseye, the altitude and azimuth turns, Take frame (Single) and
+/// Done (once inside the profile's tolerance). The rail's shutter starts and
+/// stops it.
 class SimplePolarPanel extends ConsumerStatefulWidget {
   const SimplePolarPanel({super.key});
 
@@ -330,18 +321,21 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
               Row(
                 spacing: AraSpace.s8,
                 children: [
-                  Expanded(
-                    child: FilledButton.tonal(
-                      key: const Key('simple-polar-stop'),
-                      onPressed: _busy
-                          ? null
-                          : () => _run(
-                              'stop polar alignment',
-                              (api) => api.stop(),
-                            ),
-                      child: const Text('Stop'),
+                  // Single waits for a tap before each frame; Loop shoots on
+                  // its own.
+                  if (_single(settings))
+                    Expanded(
+                      child: FilledButton.tonal(
+                        key: const Key('simple-polar-capture'),
+                        onPressed: _busy
+                            ? null
+                            : () => _run(
+                                'take a frame',
+                                (api) => api.requestCapture(),
+                              ),
+                        child: const Text('Take frame'),
+                      ),
                     ),
-                  ),
                   Expanded(
                     child: FilledButton(
                       key: const Key('simple-polar-done'),

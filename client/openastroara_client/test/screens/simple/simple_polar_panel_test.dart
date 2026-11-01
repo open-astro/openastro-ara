@@ -87,16 +87,23 @@ void main() {
     expect(api!.calls, ['save 1.0 single']);
   });
 
-  testWidgets('adjusting: the error, the turns, Stop; Done waits for the tolerance', (tester) async {
+  testWidgets('adjusting: the error, the turns, no Stop (the shutter stops it); Done waits for the tolerance', (tester) async {
     final api = await _pump(tester, _adjusting);
     expect(find.text('14.4′'), findsOneWidget);
     expect(find.text('Lower 3.2′'), findsOneWidget);
     expect(find.text('Move west 14.1′'), findsOneWidget);
     expect(find.text('1 s'), findsOneWidget, reason: 'the settings stay, for the next frame');
     expect(tester.widget<FilledButton>(find.byKey(const Key('simple-polar-done'))).onPressed, isNull);
-    await tester.tap(find.byKey(const Key('simple-polar-stop')));
+    expect(find.byKey(const Key('simple-polar-stop')), findsNothing);
+    expect(find.byKey(const Key('simple-polar-capture')), findsNothing, reason: 'Loop shoots on its own');
+    expect(api!.calls, isEmpty);
+  });
+
+  testWidgets('Single running: Take frame takes the next one', (tester) async {
+    final api = await _pump(tester, _adjusting, loopMode: PolarAlignLoopModes.single);
+    await tester.tap(find.byKey(const Key('simple-polar-capture')));
     await tester.pump();
-    expect(api!.calls, ['stop']);
+    expect(api!.calls, ['capture']);
   });
 
   testWidgets('inside the tolerance Done completes it', (tester) async {
@@ -136,12 +143,12 @@ void main() {
       await tester.pump();
       expect(api!.calls, ['stop']);
     });
-    testWidgets('Single running: each tap takes the next frame', (tester) async {
+    testWidgets('Single running: the square stops it too', (tester) async {
       final api = await shutter(tester, _adjusting, loopMode: PolarAlignLoopModes.single);
-      expect(find.bySemanticsLabel('Take a frame'), findsOneWidget);
+      expect(find.bySemanticsLabel('Stop'), findsOneWidget);
       await tester.tap(find.byKey(const Key('simple-shutter')));
       await tester.pump();
-      expect(api!.calls, ['capture']);
+      expect(api!.calls, ['stop']);
     });
     testWidgets('no server: off', (tester) async {
       await shutter(tester, const PolarAlignLive(), server: false);
