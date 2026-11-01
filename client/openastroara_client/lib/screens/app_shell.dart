@@ -66,6 +66,28 @@ class _AppShellState extends ConsumerState<AppShell> {
     _TabSpec(icon: Icons.settings, label: 'Options', body: OptionsTab()),
   ];
 
+  // §61 — the shell's shortcuts only see keys when focus is inside it. The
+  // root NightHotkey's autofocus wins first, so a plain `autofocus` here is
+  // ignored; take focus explicitly once mounted.
+  final _focus = FocusNode(debugLabel: 'AppShell');
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _focus.requestFocus();
+    });
+  }
+
+  @override
+  void dispose() {
+    _focus.dispose();
+    super.dispose();
+  }
+
+  void _openSettings() =>
+      ref.read(selectedTabIndexProvider.notifier).select(kOptionsTabIndex);
+
   @override
   Widget build(BuildContext context) {
     final selectedTab = ref.watch(selectedTabIndexProvider);
@@ -140,9 +162,18 @@ class _AppShellState extends ConsumerState<AppShell> {
                       control: true,
                     ): () =>
                         showCommandPalette(context),
+                    // ⌘, / Ctrl+, — the platform-standard Settings shortcut.
+                    const SingleActivator(
+                      LogicalKeyboardKey.comma,
+                      meta: true,
+                    ): _openSettings,
+                    const SingleActivator(
+                      LogicalKeyboardKey.comma,
+                      control: true,
+                    ): _openSettings,
                   },
                   child: Focus(
-                    autofocus: true,
+                    focusNode: _focus,
                     child: Column(
                       children: [
                         const _TopEquipmentBar(),
