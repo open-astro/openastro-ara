@@ -25,7 +25,7 @@ Shaped 2026-11-01 (`/impeccable shape simple-mode`). Paperclip: ALP-4810. Render
 
 ## Scope
 
-- **One screen:** a mode switcher with Polar align · Target · Focus · Preview · Run.
+- **One screen:** a mode switcher with Preview · Polar align · Focus · Target · Run.
 - **Settings:** open from the gear. "Show all options" switches to the full UI.
 - **Run:** a quick plan builder only. It sets exposure and frame count per filter for the current target, and autofocus, dither and flats follow the profile's defaults. The sequence editor stays in the full UI only.
 - **Phones:** they run Simple Mode only, with no Sequence tab, once Simple Mode exists. Until then, PR #1474's phone layout stands.

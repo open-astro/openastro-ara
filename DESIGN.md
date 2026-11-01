@@ -264,7 +264,7 @@ Simple Mode (see PRODUCT.md) puts the latest frame first, ASIAir-style. The imag
   - the Next frame box: countdown with frame x/y, a progress bar, then HFR and sensor temperature as label/value rows;
   - the controls panel: Exposure, Filter, the shutter and Gain, as 48 px labelled tiles;
   - Emergency Stop, detached, full column width, 56 px tall, in solid Fault Red.
-- **Bottom row (56 px tall, one shared bottom edge):** the guiding bar on the left ("Guiding", the RMS, then the RA/Dec trace), the mode switcher in the centre (Polar align · Target · Focus · Preview · Run), and Emergency Stop on the right.
+- **Bottom row (56 px tall, one shared bottom edge):** the guiding bar on the left ("Guiding", the RMS, then the RA/Dec trace), the mode switcher in the centre (Preview · Polar align · Focus · Target · Run), and Emergency Stop on the right.
 - **Run plan:** the quick plan builder takes over the right column above Emergency Stop. It lists exposure and frame count per filter for the current target, then Start imaging. Autofocus, dither and flats follow the profile.
 - **Clean view:** a tap or click on the image fades every panel out (220 ms ease-out, instant with reduced motion) so the frame shows fullscreen. Emergency Stop and any attention banner stay. A tap brings the panels back, and a short hint says so. There is no keyboard shortcut for now.
 
