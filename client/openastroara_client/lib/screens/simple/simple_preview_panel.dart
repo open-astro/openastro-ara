@@ -22,11 +22,12 @@ const kSimpleText = TextStyle(
 
 /// Room the full last-frame facts take at the bottom of the capture panel (a
 /// caption and five rows, with the divider); shorter columns get two rows.
-const double kSimpleFactsHeight = 166;
+const double kSimpleFactsHeight = 160;
 
-/// What the capture panel needs to show without scrolling: two 48 px fields,
-/// the shutter, Loop / Single and the shot status line, with padding.
-const double kSimpleCaptureHeight = 300;
+/// What the capture controls need without scrolling: two 48 px fields, the
+/// shutter and Loop / Single, with the panel's padding (the shot status
+/// lives in the pill on the image, not here).
+const double kSimpleCaptureHeight = 268;
 
 /// Single takes a saved frame (the daemon registers every Take One); Loop
 /// runs live view, whose frames are not saved.
@@ -109,7 +110,15 @@ class _LastFrameFacts extends ConsumerWidget {
       padding: const EdgeInsets.symmetric(vertical: 3),
       child: Row(
         children: [
-          Text(label, style: AraText.caption),
+          // The label gives way first on a narrow column; the value stays.
+          Flexible(
+            child: Text(
+              label,
+              style: AraText.caption,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
           const SizedBox(width: AraSpace.s8),
           Expanded(
             child: Text(

@@ -284,6 +284,24 @@ void main() {
     await tester.pump(const Duration(seconds: 5));
   });
 
+  testWidgets('the Mac window shows all five frame facts; the iPad landscape gets two rows', (tester) async {
+    var container = await _pump(tester, const Size(1470, 854));
+    container.read(lastCapturedFrameIdProvider.notifier).set('frame-1');
+    await tester.pump();
+    expect(tester.takeException(), isNull);
+    for (final row in ['HFR', 'Stars', 'Exposure', 'Gain · offset', 'Clipped']) {
+      expect(find.text(row), findsOneWidget, reason: '$row on the Mac window');
+    }
+
+    await tester.pumpWidget(const SizedBox());
+    container = await _pump(tester, const Size(1024, 768));
+    container.read(lastCapturedFrameIdProvider.notifier).set('frame-1');
+    await tester.pump();
+    expect(tester.takeException(), isNull);
+    expect(find.text('Clipped'), findsNothing, reason: 'two rows on the short window');
+    expect(find.textContaining('HFR'), findsOneWidget);
+  });
+
   testWidgets('a tap on the frame hides every panel, Emergency Stop included; a second brings them back',
       (tester) async {
     final container = await _pump(tester, const Size(1470, 854));
