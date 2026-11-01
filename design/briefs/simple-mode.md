@@ -23,7 +23,7 @@ Shaped 2026-11-01 (`/impeccable shape simple-mode`). Paperclip: ALP-4810. Render
   - **right rail, 72 px wide and only as tall as its controls:** the mode name (tap for the five modes as a grid), the shutter, the settings chip (the current mode's options: "5 s · 100" in Preview, "Auto" or "Manual" in Focus);
   - **bottom right:** the compact Emergency Stop on its own, a 60 px STOP with a 2 s hold;
   - **left rail:** Sky, Info and Library; Info shows the last frame's facts as one line under the strip, aligned right;
-  - **bottom row, 56 px tall, centred between the rails:** the guiding graph and the histogram, each once it has data; a lone one fills the row, both split it equally with guiding on the left;
+  - **bottom row, 56 px tall, 16 px from the left edge and from Stop:** the guiding graph and the histogram, each once it has data; a lone one fills the row, both split it equally with guiding on the left;
   - **popovers** (the mode grid, settings, a mode's panel) open left of the right rail and never move it.
 - **Fixed slots:** nothing shifts when state changes; a panel with no data is not drawn.
 - **Immersive view:** clicking the image hides every panel, Emergency Stop included; the status pill and any alert stay. Clicking again brings them back.

@@ -201,7 +201,7 @@
   .s-stop svg { width: 20px; height: 20px; fill: #fff; }
 
   /* guiding and the histogram: equal width, each only once it has data */
-  .s-stats { position: absolute; left: calc(2 * var(--in) + var(--rail)); right: calc(2 * var(--in) + var(--rail)); bottom: var(--in); height: var(--bar); display: flex; gap: var(--in); }
+  .s-stats { position: absolute; left: var(--in); right: calc(2 * var(--in) + (var(--rail) + var(--stop)) / 2); bottom: var(--in); height: var(--bar); display: flex; gap: var(--in); }
   .sm .s-stats .p { position: relative; flex: 1; display: flex; align-items: center; gap: 14px; padding: 0 16px; }
   .s-stats .gl { display: flex; flex-direction: column; flex: none; }
   .s-stats svg { flex: 1; min-width: 0; height: 32px; }
