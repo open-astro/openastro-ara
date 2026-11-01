@@ -131,15 +131,10 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                         ),
                       )
                     else
-                      // The planetarium's own search row sits under the
-                      // status strip, and its right edge stops short of the
-                      // column so nothing of it hides behind a panel.
-                      Positioned(
+                      // Full bleed like a frame, so the panels keep their
+                      // places; the sky simply stands in for the image.
+                      Positioned.fill(
                         key: const Key('simple-planetarium'),
-                        left: 0,
-                        top: kSimpleInset * 2 + kSimpleBarHeight,
-                        right: kSimpleColumnWidth + kSimpleInset * 2,
-                        bottom: 0,
                         child: widget.planetarium,
                       ),
                     _Fade(
@@ -348,6 +343,8 @@ class _GuidingBar extends ConsumerWidget {
     final status = ref.watch(guiderStatusProvider).asData?.value;
     final steps = ref.watch(guideStepsProvider);
     final guiding = status?.runtimeState == GuiderRuntimeState.guiding;
+    // Nothing to show until the guider has produced a step or is guiding.
+    if (!guiding && steps.isEmpty) return const SizedBox.shrink();
     return SimplePanel(
       padding: const EdgeInsets.symmetric(horizontal: AraSpace.s16),
       child: Row(

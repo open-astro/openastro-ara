@@ -39,24 +39,35 @@ class SimplePreviewPanel extends StatelessWidget {
   const SimplePreviewPanel({super.key});
 
   @override
-  Widget build(BuildContext context) => const Column(
-    crossAxisAlignment: CrossAxisAlignment.stretch,
-    children: [
-      SimplePanel(
-        padding: EdgeInsets.symmetric(
-          horizontal: AraSpace.s16,
-          vertical: AraSpace.s12,
-        ),
-        child: _LastFrameFacts(),
-      ),
-      SizedBox(height: 16),
-      Expanded(
-        child: SimplePanel(
-          padding: EdgeInsets.all(AraSpace.s12),
-          child: _PreviewControls(),
-        ),
-      ),
-    ],
+  Widget build(BuildContext context) => Consumer(
+    builder: (context, ref, _) {
+      // The facts panel waits for something to describe: a saved frame
+      // or a running loop.
+      final hasFrame =
+          ref.watch(lastCapturedFrameIdProvider) != null ||
+          ref.watch(liveViewControllerProvider);
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (hasFrame) ...[
+            const SimplePanel(
+              padding: EdgeInsets.symmetric(
+                horizontal: AraSpace.s16,
+                vertical: AraSpace.s12,
+              ),
+              child: _LastFrameFacts(),
+            ),
+            const SizedBox(height: 16),
+          ],
+          const Expanded(
+            child: SimplePanel(
+              padding: EdgeInsets.all(AraSpace.s12),
+              child: _PreviewControls(),
+            ),
+          ),
+        ],
+      );
+    },
   );
 }
 

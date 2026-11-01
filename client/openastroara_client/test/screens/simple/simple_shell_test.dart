@@ -7,6 +7,7 @@ import 'package:openastroara/screens/simple/simple_preview_panel.dart';
 import 'package:openastroara/screens/simple/simple_shell.dart';
 import 'package:openastroara/services/simple_mode_prefs_service.dart';
 import 'package:openastroara/state/app_shell_state.dart';
+import 'package:openastroara/state/guider/guide_step_state.dart';
 import 'package:openastroara/state/imaging/capture_progress_state.dart';
 import 'package:openastroara/state/imaging/last_frame_state.dart';
 import 'package:openastroara/widgets/imaging/capture_progress_card.dart';
@@ -30,13 +31,26 @@ class _StartOnLive extends SelectedTabIndexNotifier {
   int build() => kLiveTabIndex;
 }
 
-Future<ProviderContainer> _pump(WidgetTester tester, Size size) async {
+class _Steps extends GuideStepNotifier {
+  _Steps(this.steps);
+  final List<GuideStep> steps;
+  @override
+  List<GuideStep> build() => steps;
+}
+
+final _someSteps = [
+  for (var i = 0; i < 20; i++)
+    GuideStep(at: DateTime(2026, 11, 1, 22, 0, i), raPx: (i % 5 - 2) * 0.3, decPx: (i % 3 - 1) * 0.2),
+];
+
+Future<ProviderContainer> _pump(WidgetTester tester, Size size, {List<GuideStep> steps = const []}) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
   final container = ProviderContainer(overrides: [
     simpleModePrefsProvider.overrideWithValue(_MemPrefs()),
     selectedTabIndexProvider.overrideWith(_StartOnLive.new),
+    guideStepsProvider.overrideWith(() => _Steps(steps)),
   ]);
   addTearDown(container.dispose);
   await container.read(simpleModeProvider.future);
@@ -61,7 +75,7 @@ void main() {
         (tester) async {
       await _pump(tester, size);
       expect(tester.takeException(), isNull, reason: 'no overflow');
-      for (final label in ['Show all options', 'Preview', 'Polar align', 'Focus', 'Target', 'Run', 'Loop', 'Single', 'Guiding']) {
+      for (final label in ['Show all options', 'Preview', 'Polar align', 'Focus', 'Target', 'Run', 'Loop', 'Single']) {
         expect(find.text(label), findsOneWidget, reason: label);
       }
       expect(find.byType(EmergencyStopButton), findsOneWidget);
@@ -117,7 +131,7 @@ void main() {
   for (final width in const [1470.0, 1100.0, 1024.0]) {
     testWidgets('at $width the guiding bar is up to 340 px with its trace and clears the centred switcher',
         (tester) async {
-      await _pump(tester, Size(width, 768));
+      await _pump(tester, Size(width, 768), steps: _someSteps);
       final trace = find.byKey(const Key('simple-guide-trace'));
       expect(trace, findsOneWidget);
       final guiding = tester.getRect(find.ancestor(of: trace, matching: find.byType(SimplePanel)).first);
@@ -133,9 +147,19 @@ void main() {
       (tester) async {
     await _pump(tester, const Size(1470, 854));
     expect(find.text('No frame yet'), findsNothing);
-    final sky = tester.getRect(find.byKey(const Key('sky')));
-    expect(sky.top, kSimpleInset * 2 + kSimpleBarHeight);
-    expect(sky.right, lessThanOrEqualTo(tester.getRect(find.byType(SimplePreviewPanel)).left));
+    expect(tester.getRect(find.byKey(const Key('sky'))), const Rect.fromLTWH(0, 0, 1470, 854),
+        reason: 'full bleed, like a frame, so the panels keep their places');
+  });
+
+  testWidgets('panels with nothing to show stay hidden: no guiding data, no frame yet', (tester) async {
+    final container = await _pump(tester, const Size(1470, 854));
+    expect(find.text('Guiding'), findsNothing);
+    expect(find.text('Last frame'), findsNothing);
+    expect(find.byKey(const Key('simple-shutter')), findsOneWidget, reason: 'the controls stay');
+
+    container.read(lastCapturedFrameIdProvider.notifier).set('frame-1');
+    await tester.pump();
+    expect(find.text('Last frame'), findsOneWidget);
   });
 
   testWidgets('a tap on the frame hides every panel but Emergency Stop, a second brings them back',
