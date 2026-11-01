@@ -282,14 +282,14 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                 child: SimpleInfoPanel(),
                               ),
                             ),
-                          // System: the server's figures on the line under
-                          // Info's slot (a fixed slot, Info on or off).
+                          // System: the server's figures under the strip, or
+                          // under Info while Info shows.
                           if (_system)
-                            const Positioned(
+                            Positioned(
                               left: kSimpleInset * 2 + kSimpleStatusMaxWidth,
                               right: kSimpleInset,
-                              top: railTop + 40 + AraSpace.s8,
-                              child: Align(
+                              top: _info ? railTop + 40 + AraSpace.s8 : railTop,
+                              child: const Align(
                                 alignment: Alignment.centerRight,
                                 child: SimpleSystemPanel(),
                               ),

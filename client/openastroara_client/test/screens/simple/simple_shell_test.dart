@@ -310,7 +310,7 @@ void main() {
     expect(find.byType(SimpleInfoPanel), findsNothing);
   });
 
-  testWidgets('System shows the server\'s figures as a line under Info\'s slot, and hides', (tester) async {
+  testWidgets('System shows the server\'s figures under the strip (under Info when it shows), and hides', (tester) async {
     const size = Size(1470, 854);
     await _pump(tester, size,
         internal: const ServerInternalState(uptimeSeconds: 11520, cpuPercent: 23.4, workingSetBytes: 512 * 1048576),
@@ -323,7 +323,8 @@ void main() {
     await tester.pump(); // the storage read resolves
     final rect = tester.getRect(find.byKey(const Key('simple-system-line')));
     expect(rect.right, size.width - kSimpleInset);
-    expect(rect.top, kSimpleInset * 2 + kSimpleBarHeight + 40 + 8, reason: "under Info's slot, Info off or on");
+    const top = kSimpleInset * 2 + kSimpleBarHeight;
+    expect(rect.top, top, reason: 'alone, right under the strip');
     final line = find.byKey(const Key('simple-system-line'));
     for (final t in ['412 GB free', 'CPU 23 %', 'Memory 512 MB', '3 h 12 min']) {
       expect(find.descendant(of: line, matching: find.textContaining(t)), findsWidgets, reason: t);
@@ -331,6 +332,9 @@ void main() {
     for (final t in ['Load', 'Ara CPU']) {
       expect(find.descendant(of: line, matching: find.textContaining(t)), findsNothing, reason: t);
     }
+    await tester.tap(find.byKey(const Key('simple-info')));
+    await tester.pump();
+    expect(tester.getRect(find.byKey(const Key('simple-system-line'))).top, top + 40 + 8, reason: 'under Info');
     await tester.tap(find.byKey(const Key('simple-system')));
     await tester.pump();
     expect(find.byKey(const Key('simple-system-line')), findsNothing);
