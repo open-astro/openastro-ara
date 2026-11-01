@@ -5673,7 +5673,7 @@ Multi-select frames via Shift+Click (desktop) or long-press + tap (mobile):
 
 When mobile builds are enabled, no server changes are needed — the same WILMA codebase compiles for iOS/Android with platform-detection-driven shell selection per §41.4. The spec below describes the *intended* mobile UX; treat as future design with current API forward-compatibility.
 
-WILMA on iOS/Android runs in **Companion Mode** — same Flutter codebase as the desktop client, but the UI is tailored for phone/tablet form factors and many "configuration" workflows are intentionally absent (replaced by a "Open ARA on your desktop to do this" prompt). The phone is for monitoring, viewing, and emergencies — not for planning tomorrow's session.
+WILMA on iOS/Android runs in **Companion Mode** — same Flutter codebase as the desktop client, but the UI is tailored for phone/tablet form factors and sequence-building workflows are intentionally absent for now (replaced by a "Open ARA on your desktop to do this" prompt). The phone covers setup, sky browsing, monitoring, viewing, and emergencies; building sequences stays on the desktop.
 
 ### 41.1 Mobile companion — what it CAN do
 
@@ -5692,15 +5692,15 @@ WILMA on iOS/Android runs in **Companion Mode** — same Flutter codebase as the
 | **Rate + tag frames** | Touch-friendly star rating + tag chips |
 | **Download FITS for off-device processing** | Save to platform Files / Photos / share sheet |
 | **Server connection management** | Same Settings → Server panel as desktop (§30.6); no token UX per §67 |
+| **Profile setup wizard** | Same wizard as desktop (§37), laid out for phone screens |
+| **Sky Atlas + Tonight's Sky** | Same as desktop (§36) — the embedded Stellarium Web Engine planetarium |
+| **Plate-solve + autofocus configuration** | Same settings as desktop, including the ASTAP path |
 
-### 41.2 Mobile companion — what it explicitly does NOT do
+### 41.2 Mobile companion — what it explicitly does NOT do (for now)
 
 | Capability | Why excluded | What user sees |
 |---|---|---|
 | Sequence editor | Drag-drop instruction tree is bad UX on a 6-inch screen | "Sequence editing requires the ARA desktop app — open WILMA on your Mac, PC, or Linux machine to edit sequences." Quick-share link button to open desktop on the same Wi-Fi. |
-| Profile / equipment configuration wizard | 18-screen wizard cramming into phone = pain | Same redirect message |
-| Sky Atlas (full Aladin Lite + Tonight's Sky) | Aladin Lite WebView with 21-survey browsing is computationally heavy on phones + 500MB+ tile bundling cost | Same redirect; users who want sky atlas on mobile run Stellarium or SkySafari standalone |
-| ASTAP path / autofocus / plate-solve config | Settings | Same redirect |
 | Sequence templates / instantiation | Editor-adjacent | Same redirect |
 
 When a mobile user taps something disallowed, they get a polite modal with a "Copy link to send to your desktop" option that puts an ARA-protocol URL on the clipboard (e.g., `araapp://session/123/edit`) that the desktop app can pick up.
@@ -5733,7 +5733,7 @@ Shared:
 
 Different:
 - Top-level navigation (tabs vs nav rail)
-- Some screens entirely (sequence editor absent on mobile, Aladin tab absent)
+- Some screens entirely (sequence editor and templates absent on mobile)
 - Modal sizing (full-screen on mobile, dialog on desktop)
 - Gesture handling (touch-first on mobile, mouse-first on desktop)
 
