@@ -169,15 +169,21 @@ void main() {
     expect(find.text('Loop'), findsNothing, reason: 'a tap on the image closes it');
   });
 
-  testWidgets('Info shows the last frame facts as one centred line under the strip', (tester) async {
+  testWidgets('Info shows the last frame facts as one line in the strip, clear of the status pill', (tester) async {
     final container = await _pump(tester, const Size(1024, 768));
     await _frame(tester, container);
     await tester.tap(find.byKey(const Key('simple-info')));
     await tester.pump();
     final line = tester.getRect(find.byType(SimpleInfoPanel));
     expect(line.height, 40, reason: 'one line');
-    expect(line.center.dx, closeTo(1024 / 2, 1), reason: 'centred');
-    expect(line.top, kSimpleInset * 2 + kSimpleBarHeight, reason: 'under the strip');
+    final strip = _panelOf(tester, find.byKey(const Key('simple-more')));
+    expect(strip.contains(line.center), isTrue, reason: 'in the status strip');
+    container.read(captureProgressProvider.notifier).beginExposing(const Duration(seconds: 5));
+    await tester.pump();
+    final pill = _panelOf(tester, find.text('Taking a frame'));
+    expect(pill.overlaps(line), isFalse, reason: 'never on top of the status pill');
+    container.read(captureProgressProvider.notifier).reset();
+    await tester.pump(const Duration(seconds: 1));
     for (final fact in ['HFR', 'Stars', 'Exposure', 'Gain · offset', 'Clipped']) {
       expect(find.textContaining(fact, findRichText: true), findsOneWidget, reason: fact);
     }

@@ -41,7 +41,8 @@ String simpleSettingsSummary(WidgetRef ref) {
   return '${formatExposure(p.exposure)} · ${p.gain}';
 }
 
-/// The last frame's facts as one line, opened from the left rail's Info:
+/// The last frame's facts as one line in the status strip, turned on from
+/// the left rail's Info:
 /// HFR, stars, exposure · filter, gain · offset and clipped highlights.
 class SimpleInfoPanel extends ConsumerWidget {
   const SimpleInfoPanel({super.key});
@@ -70,26 +71,24 @@ class SimpleInfoPanel extends ConsumerWidget {
       ('Gain · offset', gainOffset),
       ('Clipped', clipped),
     ];
-    return SimplePanel(
-      padding: const EdgeInsets.symmetric(horizontal: AraSpace.s16),
-      child: SizedBox(
-        height: 40,
-        child: SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            spacing: AraSpace.s16,
-            children: [
-              for (final (label, value) in facts)
-                Text.rich(
-                  TextSpan(
-                    children: [
-                      TextSpan(text: '$label ', style: AraText.caption),
-                      TextSpan(text: value, style: kSimpleText),
-                    ],
-                  ),
+    // In the middle of the status strip: a line of text, no panel of its own.
+    return SizedBox(
+      height: 40,
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          spacing: AraSpace.s16,
+          children: [
+            for (final (label, value) in facts)
+              Text.rich(
+                TextSpan(
+                  children: [
+                    TextSpan(text: '$label ', style: AraText.caption),
+                    TextSpan(text: value, style: kSimpleText),
+                  ],
                 ),
-            ],
-          ),
+              ),
+          ],
         ),
       ),
     );

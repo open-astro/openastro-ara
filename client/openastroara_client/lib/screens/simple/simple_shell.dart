@@ -239,12 +239,12 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                       visible: panels,
                       child: Stack(
                         children: [
-                          const Positioned(
+                          Positioned(
                             left: kSimpleInset,
                             right: kSimpleInset,
                             top: kSimpleInset,
                             height: kSimpleBarHeight,
-                            child: _StatusStrip(),
+                            child: _StatusStrip(info: _info),
                           ),
                           // Guiding and the histogram along the bottom, each
                           // once it has data.
@@ -273,15 +273,6 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                               ),
                             ),
                           ),
-                          // Info: the last frame's facts as one line, centred
-                          // under the strip.
-                          if (_info)
-                            const Positioned(
-                              left: besideRail,
-                              right: besideRail,
-                              top: railTop,
-                              child: Center(child: SimpleInfoPanel()),
-                            ),
                           // The right rail: only as tall as its controls,
                           // centred between the strip and Stop, with its
                           // popover (modes or settings) opening beside it,
@@ -392,7 +383,11 @@ class SimplePanel extends StatelessWidget {
 /// Device dots (connected gear only), night mode and ⋯ (search, Settings,
 /// Show all options).
 class _StatusStrip extends ConsumerWidget {
-  const _StatusStrip();
+  const _StatusStrip({required this.info});
+
+  /// Info is on: the last frame's facts sit in the middle of the strip, in
+  /// line with the dots and buttons, so they can't land on the status pill.
+  final bool info;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -405,7 +400,7 @@ class _StatusStrip extends ConsumerWidget {
       child: Row(
         children: [
           // Only gear that's connected; a fault still shows.
-          const Expanded(
+          const Flexible(
             child: Align(
               alignment: Alignment.centerLeft,
               child: EquipmentChipCompact(
@@ -418,6 +413,12 @@ class _StatusStrip extends ConsumerWidget {
                 ),
               ),
             ),
+          ),
+          Expanded(
+            flex: 3,
+            child: info
+                ? const Center(child: SimpleInfoPanel())
+                : const SizedBox.shrink(),
           ),
           IconButton(
             icon: Icon(
