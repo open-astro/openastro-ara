@@ -875,7 +875,7 @@
     idle: { mode: 'Preview', sky: true }, taking: { mode: 'Preview', pill: P.taking, shut: true },
     frame: { mode: 'Preview', pill: P.ready, info: true }, grid: { mode: 'Preview', pill: P.ready, info: true },
     settings: { mode: 'Preview', pill: P.ready, info: true }, clean: { mode: 'Preview', pill: P.loop, info: true, shut: true },
-    focus: { mode: 'Focus', pill: P.loop, shut: true }, pa: { mode: 'Polar align', rail: 'P.A.', pill: P.loop, shut: true },
+    focus: { mode: 'Focus', chip: 'HFR 2.31', pill: P.loop, shut: true }, pa: { mode: 'Polar align', rail: 'P.A.', pill: P.loop, shut: true },
     target: { mode: 'Target', sky: true }, 't-fail': { mode: 'Target', sky: true }, 't-horizon': { mode: 'Target', sky: true },
     plan: { mode: 'Run' }, run: { mode: 'Run', pill: ['g-ok', 'Taking a frame', '2:14 left', true], shut: true }, done: { mode: 'Run' },
     empty: { mode: 'Preview', sky: true } };
@@ -892,7 +892,8 @@
     if (o.pill) { const [dot, label, detail, bar] = o.pill; pill.innerHTML = `<i class="${dot}"></i>${label}${detail ? ` <span class="sub">${detail}</span>` : ''}${bar ? '<span class="pb"><i></i></span>' : ''}`; }
     document.getElementById('s-mode-name').textContent = o.rail || o.mode;
     document.getElementById('s-mode').classList.toggle('open', v === 'grid');
-    document.getElementById('s-chip').classList.toggle('on', v === 'settings');
+    document.getElementById('s-chip').classList.toggle('on', v === 'settings' || v === 'focus');
+    document.getElementById('s-chip').lastChild.textContent = o.chip || '5 s · 100';
     document.getElementById('s-sky').classList.toggle('on', !!o.sky);
     document.getElementById('s-info').classList.toggle('on', !!o.info);
     const shut = document.getElementById('s-shut');

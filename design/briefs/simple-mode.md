@@ -20,7 +20,7 @@ Shaped 2026-11-01 (`/impeccable shape simple-mode`). Paperclip: ALP-4810. Render
 - **Controls:** they float on translucent panels (the two-rail layout in `DESIGN.md`):
   - **top:** a status strip (device dots, Night mode, ⋯), with the attention banner centred under it when needed;
   - **top-left:** the camera status pill, at most 300 px wide;
-  - **right rail, 72 px wide and only as tall as its controls:** the mode name (tap for the five modes as a grid), the shutter, the settings chip ("5 s · 100");
+  - **right rail, 72 px wide and only as tall as its controls:** the mode name (tap for the five modes as a grid), the shutter, the settings chip (the current mode's options: "5 s · 100" in Preview, "HFR 2.31" in Focus);
   - **bottom right:** the compact Emergency Stop on its own, a 60 px STOP with a 2 s hold;
   - **left rail:** Sky, Info and Library; Info shows the last frame's facts as one line under the strip, aligned right;
   - **bottom row, 56 px tall:** the guiding graph and the histogram at equal width, each once it has data;
