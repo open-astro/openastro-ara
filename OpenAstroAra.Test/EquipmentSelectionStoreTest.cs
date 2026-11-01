@@ -13,11 +13,15 @@
 #endregion "copyright"
 
 using Microsoft.Extensions.Logging.Abstractions;
+using Moq;
 using NUnit.Framework;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Services;
+using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -345,6 +349,127 @@ namespace OpenAstroAra.Test {
             await File.WriteAllTextAsync(Path.Combine(_dir, EquipmentSelectionStore.FileName), "{ not json");
             var all = await _store.GetAllAsync(CancellationToken.None);
             Assert.That(all, Is.Empty);
+        }
+
+        // ── #1157: one remembered device per single-instance group ──
+        // Single-instance types (one mediator each) keep the bare "<Type>" key and exactly ONE entry per
+        // canonical group (FlatDevice and CoverCalibrator are one group) after every write; a file that
+        // still holds two (written by an older daemon) reads as one: the later entry in file order.
+
+        // The file's keys, sorted and comma-joined.
+        private string RawKeys() {
+            using var doc = JsonDocument.Parse(File.ReadAllText(Path.Combine(_dir, EquipmentSelectionStore.FileName)));
+            return string.Join(",", doc.RootElement.EnumerateObject().Select(p => p.Name).OrderBy(k => k, StringComparer.Ordinal));
+        }
+
+        private static string Ids(IEnumerable<DiscoveredDeviceDto> devices) => string.Join(",", devices.Select(d => d.UniqueId));
+
+        private static string Entry(string type, string id, int number = 0, string host = "host") =>
+            $"{{ \"UniqueId\": \"{id}\", \"Name\": \"{id}\", \"Type\": \"{type}\", \"HostName\": \"{host}\", " +
+            $"\"IpAddress\": \"127.0.0.1\", \"IpPort\": 11111, \"AlpacaDeviceNumber\": {number}, \"UseHttps\": false }}";
+
+        private async Task<string> FlatGroupIds() =>
+            Ids((await _store.GetAllAsync(CancellationToken.None)).Where(d => d.Type.Canonical() == DeviceType.CoverCalibrator));
+
+        [Test]
+        public async Task Remember_keeps_one_entry_for_the_FlatDevice_CoverCalibrator_group() {
+            // Falsified by: RememberAsync upserting only its own raw-Type key, so a panel remembered as
+            // FlatDevice and another as CoverCalibrator are two entries on disk and boot dials the one
+            // flat-panel service twice (the second connect replaces the first).
+            await _store.RememberAsync(Device(DeviceType.FlatDevice, "flat-old", "old", number: 0), CancellationToken.None);
+            await _store.RememberAsync(Device(DeviceType.CoverCalibrator, "flat-new", "new", number: 1), CancellationToken.None);
+
+            Assert.That(RawKeys(), Is.EqualTo("CoverCalibrator"), "the write clears the whole group");
+            Assert.That(await FlatGroupIds(), Is.EqualTo("flat-new"), "the newest pick supersedes the group");
+        }
+
+        [Test]
+        public async Task Remember_keys_a_switch_by_its_endpoint() {
+            // PIN (passes before #1157): the group rule must leave the switch key exactly as it is.
+            // Falsified by: a KeyFor that changes the Switch format (e.g. canonicalising it differently).
+            await _store.RememberAsync(Device(DeviceType.Switch, "sw-a", "PowerBox", number: 4), CancellationToken.None);
+
+            Assert.That(RawKeys(), Is.EqualTo("Switch:HOST:11111:4"));
+        }
+
+        [Test]
+        public async Task GetAll_reads_a_legacy_bare_type_entry() {
+            // PIN (passes before #1157): a pre-upgrade file stays readable, so auto-connect still finds
+            // the focuser on the first boot after the upgrade.
+            // Falsified by: a reader that drops bare "<Type>" keys.
+            await File.WriteAllTextAsync(Path.Combine(_dir, EquipmentSelectionStore.FileName),
+                $"{{ \"Focuser\": {Entry("Focuser", "foc-legacy")} }}");
+
+            var all = await _store.GetAllAsync(CancellationToken.None);
+
+            Assert.That(string.Join(",", all.Select(d => $"{d.Type}/{d.UniqueId}")), Is.EqualTo("Focuser/foc-legacy"));
+        }
+
+        [TestCase("CoverCalibrator", "FlatDevice")]
+        [TestCase("FlatDevice", "CoverCalibrator")]
+        public async Task GetAll_keeps_the_later_entry_of_a_group_from_an_older_file(string first, string second) {
+            // An older daemon can leave a FlatDevice AND a CoverCalibrator entry. It dialled both in file order,
+            // so the later one held the panel after its boot; the upgrade keeps that one, whatever its token.
+            // Falsified by: GetAll returning one entry per raw Type (boot dials the panel twice), or a rule
+            // that prefers a token (one of the two cases picks the earlier entry).
+            await File.WriteAllTextAsync(Path.Combine(_dir, EquipmentSelectionStore.FileName),
+                $"{{ \"{first}\": {Entry(first, "flat-earlier", 0)}, \"{second}\": {Entry(second, "flat-later", 1)} }}");
+
+            Assert.That(await FlatGroupIds(), Is.EqualTo("flat-later"));
+        }
+
+        [Test]
+        public async Task GetAll_prefers_the_entry_an_older_daemon_wrote_after_a_downgrade() {
+            // This daemon leaves one CoverCalibrator entry; after a downgrade, an older daemon remembers a panel
+            // discovered as FlatDevice. Its RememberAsync only does map["FlatDevice"] = device, which appends
+            // the new key after the CoverCalibrator one. Back on this version, boot must dial that newer panel.
+            // Falsified by: GetAll returning both entries, or one that prefers the CoverCalibrator token.
+            await _store.RememberAsync(Device(DeviceType.CoverCalibrator, "flat-before-downgrade", "a", number: 0), CancellationToken.None);
+            var path = Path.Combine(_dir, EquipmentSelectionStore.FileName);
+            var json = await File.ReadAllTextAsync(path);
+            var olderDaemonWrite = json.TrimEnd().TrimEnd('}') + $", \"FlatDevice\": {Entry("FlatDevice", "flat-after-downgrade", 1, "other")} }}";
+            await File.WriteAllTextAsync(path, olderDaemonWrite);
+
+            Assert.That(await FlatGroupIds(), Is.EqualTo("flat-after-downgrade"));
+        }
+
+        [Test]
+        public async Task Relocate_clears_the_whole_single_instance_group() {
+            // An older file holds a FlatDevice at host-a and a CoverCalibrator at host-b; GetAll hands boot the
+            // CoverCalibrator (the later entry) and FindMovedAsync relocates it to localhost.
+            // Falsified by: RelocateAsync removing only the group's entries at the OLD endpoint, which leaves
+            // the FlatDevice at host-a beside the moved panel: two entries in one group after a write.
+            await File.WriteAllTextAsync(Path.Combine(_dir, EquipmentSelectionStore.FileName),
+                $"{{ \"FlatDevice\": {Entry("FlatDevice", "flat-a", 0, "host-a")}, \"CoverCalibrator\": {Entry("CoverCalibrator", "flat-b", 0, "host-b")} }}");
+            var origin = Device(DeviceType.CoverCalibrator, "flat-b", "flat-b", host: "host-b");
+            var moved = origin with { HostName = "localhost", IpAddress = "127.0.0.1", IpPort = 32323 };
+
+            await _store.RelocateAsync(origin, moved, CancellationToken.None);
+
+            Assert.That(RawKeys(), Is.EqualTo("CoverCalibrator"));
+            var group = (await _store.GetAllAsync(CancellationToken.None)).Where(d => d.Type.Canonical() == DeviceType.CoverCalibrator);
+            Assert.That(string.Join(",", group.Select(d => $"{d.UniqueId}@{d.HostName}:{d.IpPort}")), Is.EqualTo("flat-b@localhost:32323"));
+        }
+
+        [Test]
+        public async Task Reconnect_dispatches_the_flat_panel_once_when_both_group_tokens_are_remembered() {
+            // The reconnect path (manual /reconnect, the §42.3 fault ladder) reads the real store.
+            // Falsified by: the store returning one entry per raw Type token, so ReconnectAsync's group
+            // filter picks up both and dispatches the one flat-panel service twice.
+            await _store.RememberAsync(Device(DeviceType.FlatDevice, "flat-old", "old", number: 0), CancellationToken.None);
+            await _store.RememberAsync(Device(DeviceType.CoverCalibrator, "flat-new", "new", number: 1), CancellationToken.None);
+            var flat = new Mock<IFlatDeviceService>();
+            flat.Setup(s => s.ConnectAsync(It.IsAny<ConnectRequestDto>(), null, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new OperationAcceptedDto(Guid.Empty, "connect", DateTimeOffset.UnixEpoch, null));
+            var sp = new Mock<IServiceProvider>();
+            sp.Setup(s => s.GetService(typeof(IFlatDeviceService))).Returns(flat.Object);
+            var reconnector = new EquipmentReconnector(sp.Object, _store, NullLogger<EquipmentReconnector>.Instance);
+
+            var outcome = await reconnector.ReconnectAsync(DeviceType.CoverCalibrator, CancellationToken.None);
+
+            Assert.That(outcome.Attempted, Is.EqualTo(1));
+            flat.Verify(s => s.ConnectAsync(It.Is<ConnectRequestDto>(c => c.Device.UniqueId == "flat-new"), null, It.IsAny<CancellationToken>()), Times.Once);
+            flat.Verify(s => s.ConnectAsync(It.IsAny<ConnectRequestDto>(), null, It.IsAny<CancellationToken>()), Times.Once);
         }
     }
 }

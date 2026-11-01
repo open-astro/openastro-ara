@@ -78,6 +78,14 @@ enum InstructionFieldType {
   /// An `InputCoordinates` object (decomposed RA/Dec).
   coordinates,
 
+  /// A Set Switch Value switch number (`-1` = first connected switch), picked by
+  /// name from the daemon's switch list; an integer field while the list is unknown.
+  switchDevice,
+
+  /// A Set Switch Value writable-port index, picked by name from the resolved
+  /// switch; an integer field (with [InstructionField.min]) when none resolves.
+  switchPort,
+
   /// A `FilterInfo` object, resolved from the connected filter wheel (nullable
   /// until the user picks one in the editor).
   filter,
@@ -213,7 +221,8 @@ class InstructionField {
        assert(
          (min == null && max == null) ||
              type == InstructionFieldType.number ||
-             type == InstructionFieldType.integer,
+             type == InstructionFieldType.integer ||
+             type == InstructionFieldType.switchPort,
          'min/max only apply to a number or integer field',
        ),
        // The numeric text formatters reject "-", so a negative min would trap
@@ -930,13 +939,13 @@ const List<InstructionDef> instructionCatalog = [
       InstructionField(
         'AlpacaDeviceNumber',
         'Switch device (-1 = first)',
-        InstructionFieldType.integer,
+        InstructionFieldType.switchDevice,
         defaultValue: -1,
       ),
       InstructionField(
         'SwitchIndex',
         'Writable port #',
-        InstructionFieldType.integer,
+        InstructionFieldType.switchPort,
         defaultValue: 0,
         min: 0,
       ),
