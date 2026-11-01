@@ -4,21 +4,19 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/main.dart' show isShell, shellFor;
 import 'package:openastroara/models/server.dart';
-import 'package:openastroara/state/saved_server_state.dart';
 import 'package:openastroara/screens/app_shell.dart';
 import 'package:openastroara/screens/simple/simple_preview_panel.dart';
-import 'package:openastroara/state/imaging/exposure_state.dart';
 import 'package:openastroara/screens/simple/simple_shell.dart';
 import 'package:openastroara/services/simple_mode_prefs_service.dart';
 import 'package:openastroara/state/app_shell_state.dart';
 import 'package:openastroara/state/guider/guide_step_state.dart';
 import 'package:openastroara/state/imaging/capture_progress_state.dart';
+import 'package:openastroara/state/imaging/exposure_state.dart';
 import 'package:openastroara/state/imaging/last_frame_state.dart';
-import 'package:openastroara/widgets/imaging/capture_progress_card.dart';
+import 'package:openastroara/state/saved_server_state.dart';
 import 'package:openastroara/state/settings/settings_nav.dart';
 import 'package:openastroara/state/simple_mode_state.dart';
 import 'package:openastroara/widgets/emergency_stop_button.dart';
-import 'package:openastroara/widgets/settings_gear_button.dart';
 
 class _MemPrefs extends SimpleModePrefsService {
   bool value = true;
@@ -68,256 +66,254 @@ Future<ProviderContainer> _pump(WidgetTester tester, Size size,
   return container;
 }
 
-double _panelOpacity(WidgetTester tester) => tester
-    .widget<AnimatedOpacity>(find.ancestor(
-      of: find.text('Show all options'),
-      matching: find.byType(AnimatedOpacity),
-    ))
-    .opacity;
+Future<void> _frame(WidgetTester tester, ProviderContainer c) async {
+  c.read(lastCapturedFrameIdProvider.notifier).set('frame-1');
+  await tester.pump();
+}
+
+Rect _panelOf(WidgetTester tester, Finder f) =>
+    tester.getRect(find.ancestor(of: f, matching: find.byType(SimplePanel)).first);
+
+/// What the settings chip should read for the current exposure parameters.
+String _summary(ProviderContainer c) {
+  final p = c.read(exposureControllerProvider);
+  return '${formatExposure(p.exposure)} · ${p.gain}';
+}
 
 void main() {
-  for (final size in const [Size(1470, 854), Size(1024, 768), Size(1100, 700)]) {
-    testWidgets('lays out the strip, Preview column, switcher and Stop at $size',
+  for (final size in const [Size(1024, 768), Size(1024, 744), Size(1470, 854)]) {
+    testWidgets('at $size: right rail (mode, settings, shutter, Stop) and left rail (Sky, Info, Library)',
         (tester) async {
-      await _pump(tester, size);
+      await _pump(tester, size, steps: _someSteps);
       expect(tester.takeException(), isNull, reason: 'no overflow');
-      for (final label in ['Show all options', 'Preview', 'Focus', 'Polar align', 'Target', 'Run', 'Loop', 'Single']) {
-        expect(find.text(label), findsOneWidget, reason: label);
+      final right = _panelOf(tester, find.byKey(const Key('simple-shutter')));
+      expect(right.width, kSimpleRailWidth);
+      expect(right.right, size.width - kSimpleInset);
+      for (final key in ['simple-mode', 'simple-settings']) {
+        expect(_panelOf(tester, find.byKey(Key(key))), right, reason: '$key on the right rail');
       }
-      expect(find.byType(EmergencyStopButton), findsOneWidget);
-      expect(find.byKey(const Key('simple-shutter')), findsOneWidget);
-      final stop = tester.getRect(find.descendant(
-          of: find.byType(EmergencyStopButton), matching: find.byType(FilledButton)));
-      expect(stop.right, lessThanOrEqualTo(size.width - kSimpleInset + 0.5));
-      expect(stop.bottom, lessThanOrEqualTo(size.height - kSimpleInset + 0.5));
+      final stop = tester.getRect(find.byType(EmergencyStopButton));
+      expect(stop.size, const Size(60, 60));
+      expect(right.contains(stop.center), isTrue, reason: 'Stop at the foot of the rail');
+      final left = _panelOf(tester, find.byKey(const Key('simple-sky')));
+      expect(left.left, kSimpleInset);
+      for (final key in ['simple-info', 'simple-library']) {
+        expect(_panelOf(tester, find.byKey(Key(key))), left, reason: '$key on the left rail');
+      }
     });
   }
 
-  testWidgets('Emergency Stop is the heavier Simple Mode version: 56 px, 10 px corners, a red ring',
-      (tester) async {
-    await _pump(tester, const Size(1470, 854));
-    final button = find.descendant(
-        of: find.byType(EmergencyStopButton), matching: find.byType(FilledButton));
-    final stop = tester.getRect(find.byType(EmergencyStopButton));
-    final column = tester.getRect(find.byType(SimplePreviewPanel));
-    expect(stop.size, const Size(kSimpleColumnWidth, kSimpleBarHeight),
-        reason: 'ring included, the same box as the column and the bottom row');
-    expect(stop.left, column.left);
-    expect(stop.right, column.right);
-    expect(tester.getSize(button).width, kSimpleColumnWidth - 6);
-    final shape = tester.widget<FilledButton>(button).style!.shape!.resolve({})!;
-    expect((shape as RoundedRectangleBorder).borderRadius, BorderRadius.circular(10));
-    final ring = tester.widget<Container>(find.descendant(
-        of: find.byType(EmergencyStopButton), matching: find.byType(Container)).first);
-    expect((ring.decoration! as BoxDecoration).border, isNotNull);
+  testWidgets('at rest only the essentials show: no mode list, no settings, no info', (tester) async {
+    await _pump(tester, const Size(1024, 768));
+    for (final hidden in ['Focus', 'Polar align', 'Target', 'Run', 'Exposure', 'Gain', 'Loop', 'HFR', 'Guiding']) {
+      expect(find.text(hidden), findsNothing, reason: '$hidden is one tap away, not out');
+    }
+    expect(find.text('Tap the shutter to take a frame'), findsOneWidget);
+    expect(find.byKey(const Key('sky')), findsOneWidget, reason: 'the sky until there is a frame');
   });
 
-  testWidgets('buttons use 10 px corners, not Material pills', (tester) async {
-    await _pump(tester, const Size(1470, 854));
-    final context = tester.element(find.text('Show all options'));
-    final shape = TextButtonTheme.of(context).style!.shape!.resolve({});
-    expect(shape, isA<RoundedRectangleBorder>());
-    expect((shape! as RoundedRectangleBorder).borderRadius, BorderRadius.circular(10));
-    expect(find.byType(SegmentedButton<Object>), findsNothing);
+  testWidgets('the mode name opens the five modes in order; picking one closes them', (tester) async {
+    final container = await _pump(tester, const Size(1024, 768));
+    await tester.tap(find.byKey(const Key('simple-mode')));
+    await tester.pump();
+    final modes = ['Preview', 'Focus', 'Polar align', 'Target', 'Run'];
+    final order = [for (final m in modes) tester.getTopLeft(find.text(m).last)];
+    for (var i = 1; i < order.length; i++) {
+      final before = order[i - 1], now = order[i];
+      expect(now.dy > before.dy || (now.dy == before.dy && now.dx > before.dx), isTrue,
+          reason: '${modes[i]} after ${modes[i - 1]}');
+    }
+    await tester.tap(find.text('Preview').last);
+    await tester.pump();
+    expect(find.text('Focus'), findsNothing, reason: 'closed');
+
+    await tester.tap(find.byKey(const Key('simple-mode')));
+    await tester.pump();
+    await tester.tap(find.text('Target'));
+    await tester.pump();
+    expect(container.read(simpleModeProvider).value, isFalse, reason: 'Target opens the full UI for now');
+    expect(container.read(selectedTabIndexProvider), kPlanningTabIndex);
   });
 
-  testWidgets('a shot in flight shows its status in the pill, not the wide progress card',
+  testWidgets('the settings chip opens Exposure and Gain side by side from lists, Filter and Loop/Single',
       (tester) async {
-    final container = await _pump(tester, const Size(1470, 854));
+    final container = await _pump(tester, const Size(1024, 768));
+    expect(find.text(_summary(container)), findsOneWidget, reason: 'the chip reads the settings');
+    await tester.tap(find.byKey(const Key('simple-settings')));
+    await tester.pump();
+    expect(tester.takeException(), isNull);
+    final exposure = tester.getRect(find.byKey(const Key('simple-exposure')));
+    final gain = tester.getRect(find.byKey(const Key('simple-gain')));
+    expect(exposure.top, gain.top, reason: 'side by side');
+    expect(find.text('Filter'), findsOneWidget);
+    expect(find.text('Loop'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('simple-exposure')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('10 s').last);
+    await tester.pumpAndSettle();
+    expect(container.read(exposureControllerProvider).exposure, const Duration(seconds: 10));
+    await tester.tap(find.byKey(const Key('simple-gain')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('200').last);
+    await tester.pumpAndSettle();
+    expect(container.read(exposureControllerProvider).gain, 200);
+    expect(find.text('10 s · 200'), findsOneWidget, reason: 'the chip follows');
+
+    await tester.tapAt(const Offset(400, 400));
+    await tester.pump();
+    expect(find.text('Loop'), findsNothing, reason: 'a tap on the image closes it');
+  });
+
+  testWidgets('Info shows the last frame facts beside the left rail', (tester) async {
+    final container = await _pump(tester, const Size(1024, 768));
+    await _frame(tester, container);
+    await tester.tap(find.byKey(const Key('simple-info')));
+    await tester.pump();
+    for (final row in ['HFR', 'Stars', 'Exposure', 'Gain · offset', 'Clipped']) {
+      expect(find.text(row), findsOneWidget, reason: row);
+    }
+    await tester.tap(find.byKey(const Key('simple-info')));
+    await tester.pump();
+    expect(find.text('HFR'), findsNothing);
+  });
+
+  testWidgets('Sky shows the planetarium over a frame, and back', (tester) async {
+    final container = await _pump(tester, const Size(1024, 768));
+    await _frame(tester, container);
+    expect(find.byKey(const Key('sky')), findsNothing);
+    await tester.tap(find.byKey(const Key('simple-sky')));
+    await tester.pump();
+    expect(find.byKey(const Key('sky')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('simple-sky')));
+    await tester.pump();
+    expect(find.byKey(const Key('sky')), findsNothing);
+  });
+
+  testWidgets('guiding runs along the bottom, left of the rail, once it has data', (tester) async {
+    await _pump(tester, const Size(1024, 768), steps: _someSteps);
+    final guiding = _panelOf(tester, find.byKey(const Key('simple-guide-trace')));
+    expect(guiding.bottom, 768 - kSimpleInset);
+    expect(guiding.right, lessThanOrEqualTo(1024 - kSimpleInset * 2 - kSimpleRailWidth));
+    expect(guiding.width, lessThanOrEqualTo(520));
+  });
+
+  testWidgets('a tap on the image hides everything (Stop too); the status stays and drops into the corner',
+      (tester) async {
+    final container = await _pump(tester, const Size(1024, 768));
+    await _frame(tester, container);
     container.read(captureProgressProvider.notifier).beginExposing(const Duration(seconds: 5));
     await tester.pump();
-    expect(tester.takeException(), isNull, reason: 'no overflow');
-    expect(find.byType(CaptureProgressCard), findsNothing);
-    expect(find.textContaining(RegExp(r'Starting…|s left')), findsOneWidget);
-    expect(find.bySemanticsLabel('Stop'), findsOneWidget, reason: 'the shutter cancels the shot');
+    final status = _panelOf(tester, find.text('Taking a frame'));
+    expect(status.bottom, 768 - kSimpleInset * 2 - kSimpleBarHeight, reason: 'above the stats row');
+    expect(status.right, 1024 - kSimpleInset * 2 - kSimpleRailWidth, reason: 'beside the rail');
+
+    await tester.tapAt(const Offset(400, 400));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.byType(EmergencyStopButton).hitTestable(), findsNothing);
+    expect(find.byKey(const Key('simple-shutter')).hitTestable(), findsNothing);
+    final corner = _panelOf(tester, find.text('Taking a frame'));
+    expect(corner.bottomRight, const Offset(1024 - kSimpleInset, 768 - kSimpleInset));
+
+    await tester.tapAt(const Offset(400, 400));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.byType(EmergencyStopButton).hitTestable(), findsOneWidget);
     container.read(captureProgressProvider.notifier).reset();
     await tester.pump(const Duration(seconds: 1));
   });
 
-  for (final size in const [Size(1470, 854), Size(1024, 768)]) {
-    testWidgets('at $size the modes sit in the column above Emergency Stop and the bottom row is stats',
-        (tester) async {
-      final container = await _pump(tester, size, steps: _someSteps);
-      container.read(lastCapturedFrameIdProvider.notifier).set('frame-1');
-      await tester.pump();
-      expect(tester.takeException(), isNull, reason: 'no overflow');
-      Rect panelOf(Finder f) =>
-          tester.getRect(find.ancestor(of: f, matching: find.byType(SimplePanel)).first);
-      final modes = panelOf(find.text('Polar align'));
-      final column = tester.getRect(find.byType(SimplePreviewPanel));
-      final stop = tester.getRect(find.byType(EmergencyStopButton));
-      expect(modes.left, column.left);
-      expect(modes.right, column.right);
-      expect(stop.top - modes.bottom, kSimpleInset);
-      final guiding = panelOf(find.byKey(const Key('simple-guide-trace')));
-      expect(guiding.bottom, stop.bottom, reason: 'stats share the bottom row');
-      expect(guiding.right, lessThanOrEqualTo(column.left - kSimpleInset));
-      expect(find.byKey(const Key('simple-shutter')).hitTestable(), findsOneWidget,
-          reason: 'the capture controls stay reachable on a short window');
-    });
-  }
-
-  testWidgets('with no frame yet the planetarium fills the image area, beside the column and under the strip',
-      (tester) async {
-    await _pump(tester, const Size(1470, 854));
-    expect(find.text('No frame yet'), findsNothing);
-    expect(tester.getRect(find.byKey(const Key('sky'))), const Rect.fromLTWH(0, 0, 1470, 854),
-        reason: 'full bleed, like a frame, so the panels keep their places');
-  });
-
-  testWidgets('panels with nothing to show stay hidden: no guiding data, no frame yet', (tester) async {
-    final container = await _pump(tester, const Size(1470, 854));
-    expect(find.text('Guiding'), findsNothing);
-    expect(find.textContaining('HFR'), findsNothing);
-    expect(find.byKey(const Key('simple-shutter')), findsOneWidget, reason: 'the controls stay');
-
-    final shutterBefore = tester.getRect(find.byKey(const Key('simple-shutter')));
-
-    container.read(lastCapturedFrameIdProvider.notifier).set('frame-1');
-    await tester.pump();
-    expect(find.textContaining('HFR'), findsOneWidget);
-    expect(tester.getRect(find.byKey(const Key('simple-shutter'))), shutterBefore,
-        reason: 'the capture controls stay put when the facts panel appears');
-    Rect panelOf(Finder f) =>
-        tester.getRect(find.ancestor(of: f, matching: find.byType(SimplePanel)).first);
-    final controls = panelOf(find.byKey(const Key('simple-shutter')));
-    expect(panelOf(find.textContaining('HFR')), controls,
-        reason: 'the facts live inside the capture panel, not a panel of their own');
-    expect(tester.getRect(find.textContaining('HFR')).top,
-        greaterThan(tester.getRect(find.byKey(const Key('simple-shutter'))).bottom),
-        reason: 'at the bottom, under the controls');
-    expect(controls.top, kSimpleInset * 2 + kSimpleBarHeight, reason: 'the capture panel reaches the top');
-    final modes = panelOf(find.text('Polar align'));
-    final stop = tester.getRect(find.byType(EmergencyStopButton));
-    for (final gap in [modes.top - controls.bottom, stop.top - modes.bottom]) {
-      expect(gap, kSimpleInset, reason: 'one 16 px gap down the column');
-    }
-  });
-
-  testWidgets('Simple Mode shows only connected gear: nothing connected, no dots', (tester) async {
-    await _pump(tester, const Size(1470, 854));
-    for (final device in ['Camera', 'Mount', 'Guider', 'Focuser', 'Switches', 'Dome']) {
-      expect(find.byTooltip(device), findsNothing, reason: '$device is not connected');
-    }
-  });
-
-  testWidgets('modes read Preview, Focus, Polar align, Target, Run, top to bottom', (tester) async {
-    await _pump(tester, const Size(1470, 854));
-    final ys = [for (final m in ['Preview', 'Focus', 'Polar align', 'Target', 'Run']) tester.getCenter(find.text(m)).dy];
-    expect(ys, orderedEquals([...ys]..sort()));
-  });
-
-  testWidgets('the shot status counts down while exposing instead of freezing on its first value',
-      (tester) async {
-    final container = await _pump(tester, const Size(1470, 854));
+  testWidgets('the shot status counts down in whole seconds with a smooth bar', (tester) async {
+    final container = await _pump(tester, const Size(1024, 768));
     container.read(captureProgressProvider.notifier).beginExposing(const Duration(seconds: 5));
     await tester.pump();
     final first = tester.widget<LinearProgressIndicator>(find.byType(LinearProgressIndicator)).value!;
     final firstText = tester.widget<Text>(find.textContaining('s left')).data;
-
     await tester.pump(const Duration(seconds: 2));
-    expect(tester.widget<LinearProgressIndicator>(find.byType(LinearProgressIndicator)).value,
-        greaterThan(first), reason: 'the bar advances');
-    expect(tester.widget<Text>(find.textContaining('s left')).data, isNot(firstText),
-        reason: 'the remaining time counts down');
-    expect(tester.widget<Text>(find.textContaining('s left')).data, matches(RegExp(r'^\d+ s left$')),
-        reason: 'whole seconds only');
-
+    expect(tester.widget<LinearProgressIndicator>(find.byType(LinearProgressIndicator)).value, greaterThan(first));
+    final text = tester.widget<Text>(find.textContaining('s left')).data;
+    expect(text, isNot(firstText));
+    expect(text, matches(RegExp(r'^\d+ s left$')));
     final before = tester.widget<LinearProgressIndicator>(find.byType(LinearProgressIndicator)).value!;
     await tester.pump(const Duration(milliseconds: 16));
-    expect(tester.widget<LinearProgressIndicator>(find.byType(LinearProgressIndicator)).value,
-        greaterThan(before), reason: 'the bar moves every frame, not in steps');
-
-    container.read(captureProgressProvider.notifier).reset();
-    await tester.pump(const Duration(seconds: 1));
-  });
-
-  testWidgets('the camera status is a pill at the top-left of the image, and the panels hold still',
-      (tester) async {
-    final container = await _pump(tester, const Size(1470, 854));
-    expect(find.text('Ready'), findsNothing, reason: 'nothing to say while idle');
-    final options = tester.getRect(find.text('Show all options'));
-    final shutter = tester.getRect(find.byKey(const Key('simple-shutter')));
-
-    container.read(captureProgressProvider.notifier).beginExposing(const Duration(seconds: 5));
-    await tester.pump();
-    final pill = tester.getRect(find.ancestor(of: find.text('Taking a frame'), matching: find.byType(SimplePanel)).first);
-    expect(pill.topLeft, const Offset(kSimpleInset, kSimpleInset * 2 + kSimpleBarHeight));
-    expect(tester.getRect(find.text('Show all options')), options);
-    expect(tester.getRect(find.byKey(const Key('simple-shutter'))), shutter);
-
-    container.read(lastCapturedFrameIdProvider.notifier).set('frame-1');
-    await tester.pump();
-    await tester.tapAt(const Offset(700, 450));
-    await tester.pump(const Duration(milliseconds: 300));
-    expect(find.text('Show all options').hitTestable(), findsNothing, reason: 'immersive view on');
-    expect(find.text('Taking a frame').hitTestable(), findsOneWidget,
-        reason: 'the status stays in the immersive view');
-    await tester.pump(const Duration(milliseconds: 300)); // let the move finish
-    final immersive = tester.getRect(find.ancestor(of: find.text('Taking a frame'), matching: find.byType(SimplePanel)).first);
-    expect(immersive.topLeft, const Offset(kSimpleInset, kSimpleInset),
-        reason: 'with the strip gone the pill moves up into its corner');
-
+    expect(tester.widget<LinearProgressIndicator>(find.byType(LinearProgressIndicator)).value, greaterThan(before));
     container.read(captureProgressProvider.notifier).reset();
     await tester.pump(const Duration(seconds: 1));
   });
 
   testWidgets('stopping a shot answers on the tap, before the daemon replies', (tester) async {
-    // Requests from the test's fake-async zone never reach a socket, so the
-    // abort POST stays in flight: exactly the slow-rig case.
-    final container = await _pump(tester, const Size(1470, 854),
+    // Requests from the fake-async zone never reach a socket, so the abort
+    // stays in flight: the slow-rig case.
+    final container = await _pump(tester, const Size(1024, 768),
         server: const AraServer(hostname: '127.0.0.1', port: 9));
     container.read(captureProgressProvider.notifier).beginExposing(const Duration(seconds: 30));
     await tester.pump();
     expect(find.bySemanticsLabel('Stop'), findsOneWidget);
-
     await tester.tap(find.byKey(const Key('simple-shutter')));
     await tester.pump();
-    expect(find.text('Stopping…'), findsOneWidget, reason: 'feedback on the tap');
-    expect(find.bySemanticsLabel('Stop'), findsNothing, reason: 'the square gives way at once');
-
-    // Let the abort time out and every request drain before teardown.
+    expect(find.text('Stopping…'), findsOneWidget);
+    expect(find.bySemanticsLabel('Stop'), findsNothing);
     await tester.pump(const Duration(seconds: 5));
     container.read(captureProgressProvider.notifier).reset();
     await tester.pumpWidget(const SizedBox());
-    // With a server set, root providers start their polls; dispose them here,
-    // before the pending-timer check (the tearDown dispose is then a no-op).
     container.dispose();
     await tester.pump(const Duration(seconds: 5));
   });
 
-  testWidgets('the frame facts show as many rows as fit, without overflowing, Mac to iPad', (tester) async {
-    var container = await _pump(tester, const Size(1470, 854));
-    container.read(lastCapturedFrameIdProvider.notifier).set('frame-1');
+  testWidgets('Stop is the compact STOP, reading HOLD while held', (tester) async {
+    await _pump(tester, const Size(1024, 768));
+    expect(find.descendant(of: find.byType(EmergencyStopButton), matching: find.text('STOP')), findsOneWidget);
+    final gesture = await tester.startGesture(tester.getCenter(find.byType(EmergencyStopButton)));
     await tester.pump();
-    expect(tester.takeException(), isNull);
-    for (final row in ['HFR', 'Stars', 'Gain · offset', 'Clipped']) {
-      expect(find.text(row), findsOneWidget, reason: '$row on the Mac window');
-    }
-    expect(find.text('Exposure'), findsNWidgets(2), reason: 'the tile and the facts row');
-
-    await tester.pumpWidget(const SizedBox());
-    container = await _pump(tester, const Size(1024, 768));
-    container.read(lastCapturedFrameIdProvider.notifier).set('frame-1');
-    await tester.pump();
-    expect(tester.takeException(), isNull);
-    expect(find.textContaining('HFR'), findsOneWidget);
-    // A real iPad loses ~24 px to the status bar.
-    await tester.pumpWidget(const SizedBox());
-    container = await _pump(tester, const Size(1024, 744));
-    container.read(lastCapturedFrameIdProvider.notifier).set('frame-1');
-    await tester.pump();
-    expect(tester.takeException(), isNull, reason: 'facts shrink, never overflow');
-    expect(find.textContaining('HFR'), findsOneWidget);
+    expect(find.text('HOLD'), findsOneWidget);
+    await gesture.up();
+    await tester.pump(const Duration(seconds: 3));
+    expect(find.text('STOP'), findsOneWidget);
   });
 
-  testWidgets('Emergency Stop has its icon above the label, centred, with room either side', (tester) async {
-    await _pump(tester, const Size(1470, 854));
-    final stop = find.byType(EmergencyStopButton);
-    final icon = tester.getRect(find.descendant(of: stop, matching: find.byIcon(Icons.report)));
-    final label = tester.getRect(find.descendant(of: stop, matching: find.text('Emergency Stop')));
-    expect(icon.bottom, lessThanOrEqualTo(label.top), reason: 'icon over the label');
-    expect(icon.center.dx, closeTo(label.center.dx, 1), reason: 'both centred');
+  testWidgets('⋯ holds Settings and Show all options, which return to the full UI', (tester) async {
+    final container = await _pump(tester, const Size(1024, 768));
+    await tester.tap(find.byKey(const Key('simple-more')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Settings'));
+    await tester.pumpAndSettle();
+    expect(container.read(simpleModeProvider).value, isFalse);
+    expect(container.read(selectedTabIndexProvider), kOptionsTabIndex);
+
+    await container.read(simpleModeProvider.notifier).set(true);
+    await tester.tap(find.byKey(const Key('simple-more')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Show all options'));
+    await tester.pumpAndSettle();
+    expect(container.read(simpleModeProvider).value, isFalse);
+    expect(container.read(selectedTabIndexProvider), kLiveTabIndex);
+  });
+
+  testWidgets('only connected gear shows in the strip', (tester) async {
+    await _pump(tester, const Size(1024, 768));
+    for (final device in ['Camera', 'Mount', 'Guider', 'Focuser', 'Switches', 'Dome']) {
+      expect(find.byTooltip(device), findsNothing, reason: '$device is not connected');
+    }
+  });
+
+  testWidgets('Simple Mode hides the system status bar and gives it back on leaving', (tester) async {
+    final calls = <MethodCall>[];
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+      if (call.method.startsWith('SystemChrome.setEnabledSystemUIMode')) calls.add(call);
+      return null;
+    });
+    addTearDown(() => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, null));
+    await _pump(tester, const Size(1024, 768));
+    expect(calls.map((c) => c.arguments).toList(), ['SystemUiMode.immersiveSticky']);
+    await tester.pumpWidget(const SizedBox());
+    expect(calls.last.arguments, 'SystemUiMode.edgeToEdge');
+  });
+
+  testWidgets('buttons use 10 px corners, not Material pills', (tester) async {
+    await _pump(tester, const Size(1024, 768));
+    final context = tester.element(find.byKey(const Key('simple-mode')));
+    final shape = TextButtonTheme.of(context).style!.shape!.resolve({});
+    expect((shape! as RoundedRectangleBorder).borderRadius, BorderRadius.circular(10));
   });
 
   test('the histogram plots only the range the frame uses', () {
@@ -331,105 +327,12 @@ void main() {
     expect(histogramRange(const []), (0, 0));
   });
 
-  testWidgets('a lone histogram is a compact panel, not a bar across the row', (tester) async {
-    final container = await _pump(tester, const Size(1470, 854));
-    container.read(lastCapturedFrameIdProvider.notifier).set('frame-1');
-    await tester.pump();
-    // No server in tests, so no histogram arrives; the cap is checked on guiding instead.
-    await tester.pumpWidget(const SizedBox());
-    final c2 = await _pump(tester, const Size(1470, 854), steps: _someSteps);
-    final guiding = tester.getRect(find.ancestor(
-        of: find.byKey(const Key('simple-guide-trace')), matching: find.byType(SimplePanel)).first);
-    expect(guiding.width, lessThanOrEqualTo(520));
-    c2.read(captureProgressProvider);
-  });
-
-  testWidgets('Simple Mode hides the system status bar (clock, battery, Wi-Fi) and gives it back on leaving',
-      (tester) async {
-    final calls = <MethodCall>[];
-    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
-      if (call.method.startsWith('SystemChrome.setEnabledSystemUIMode')) calls.add(call);
-      return null;
-    });
-    addTearDown(() => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, null));
-
-    await _pump(tester, const Size(1024, 768));
-    expect(calls.map((c) => c.arguments).toList(), ['SystemUiMode.immersiveSticky']);
-
-    await tester.pumpWidget(const SizedBox());
-    expect(calls.last.arguments, 'SystemUiMode.edgeToEdge', reason: 'the full UI gets its status bar back');
-  });
-
-  testWidgets('Exposure and Gain are side-by-side tiles picked from preset lists; no Filter', (tester) async {
-    final container = await _pump(tester, const Size(1024, 768));
-    expect(find.text('Filter'), findsNothing);
-    final exposure = tester.getRect(find.byKey(const Key('simple-exposure')));
-    final gain = tester.getRect(find.byKey(const Key('simple-gain')));
-    expect(exposure.top, gain.top, reason: 'side by side');
-    expect(exposure.right, lessThan(gain.left));
-
-    await tester.tap(find.byKey(const Key('simple-exposure')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('10 s').last);
-    await tester.pumpAndSettle();
-    expect(container.read(exposureControllerProvider).exposure, const Duration(seconds: 10));
-
-    await tester.tap(find.byKey(const Key('simple-gain')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('200').last);
-    await tester.pumpAndSettle();
-    expect(container.read(exposureControllerProvider).gain, 200);
-  });
-
   test('preset lists stay inside what the camera reports', () {
     expect(exposurePresets(minSec: 1, maxSec: 60), allOf(contains(const Duration(seconds: 1)),
         contains(const Duration(seconds: 60)), isNot(contains(const Duration(milliseconds: 500))),
         isNot(contains(const Duration(seconds: 120)))));
     expect(gainPresets(min: 0, max: 100), [0, 50, 100]);
-    expect(gainPresets(min: 0, max: 0), contains(100), reason: 'range not reported: the usual presets');
-  });
-
-  testWidgets('a tap on the frame hides every panel, Emergency Stop included; a second brings them back',
-      (tester) async {
-    final container = await _pump(tester, const Size(1470, 854));
-    container.read(lastCapturedFrameIdProvider.notifier).set('frame-1');
-    await tester.pump();
-    expect(find.byKey(const Key('sky')), findsNothing, reason: 'the frame replaces the sky');
-    expect(_panelOpacity(tester), 1);
-
-    await tester.tapAt(const Offset(500, 400));
-    await tester.pump(const Duration(milliseconds: 300));
-    expect(_panelOpacity(tester), 0);
-    expect(find.byType(EmergencyStopButton).hitTestable(), findsNothing,
-        reason: 'the immersive view hides Emergency Stop too');
-    expect(find.text('Show all options').hitTestable(), findsNothing,
-        reason: 'hidden panels take no taps');
-
-    await tester.tapAt(const Offset(500, 400));
-    await tester.pump(const Duration(milliseconds: 300));
-    expect(_panelOpacity(tester), 1);
-  });
-
-  testWidgets('the gear returns to the full UI on Settings', (tester) async {
-    final container = await _pump(tester, const Size(1470, 854));
-    await tester.tap(find.byType(SettingsGearButton));
-    await tester.pump();
-    expect(container.read(simpleModeProvider).value, isFalse);
-    expect(container.read(selectedTabIndexProvider), kOptionsTabIndex);
-  });
-
-  testWidgets('Show all options opens Live; Target opens Planning', (tester) async {
-    final container = await _pump(tester, const Size(1470, 854));
-    await tester.tap(find.text('Show all options'));
-    await tester.pump();
-    expect(container.read(simpleModeProvider).value, isFalse);
-    expect(container.read(selectedTabIndexProvider), kLiveTabIndex);
-
-    await container.read(simpleModeProvider.notifier).set(true);
-    await tester.tap(find.text('Target'));
-    await tester.pump();
-    expect(container.read(simpleModeProvider).value, isFalse);
-    expect(container.read(selectedTabIndexProvider), kPlanningTabIndex);
+    expect(gainPresets(min: 0, max: 0), contains(100));
   });
 
   test('the router picks the shell from the pref, and both shells maximize the window', () {

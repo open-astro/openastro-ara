@@ -1,13 +1,13 @@
-import 'dart:io' show Platform;
+import 'package:flutter/material.dart';
+
 import 'dart:math' as math;
 
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../state/app_shell_state.dart';
 import '../../models/frame_histogram.dart';
 import '../../models/guider_status.dart';
+import '../../state/app_shell_state.dart';
 import '../../state/guider/guide_step_state.dart';
 import '../../state/guider/guider_state.dart';
 import '../../state/imaging/last_frame_state.dart';
@@ -25,21 +25,21 @@ import '../../widgets/equipment_chip.dart'
 import '../../widgets/imaging/frame_viewer.dart';
 import '../../widgets/imaging/guiding_strip.dart';
 import '../../widgets/imaging/histogram_strip.dart' show frameHistogramProvider;
-import '../../widgets/settings_gear_button.dart';
 import '../../widgets/sky_atlas/stellarium_view.dart';
+import '../library/image_library_screen.dart';
 import '../shell_listeners.dart';
 import 'simple_preview_panel.dart';
 
-/// Panel inset from the frame edge and between panels (DESIGN.md layout C).
+/// Inset from the frame edge and between panels.
 const double kSimpleInset = 16;
 
-/// Height of the status strip and of every bottom-row panel.
+/// Height of the status strip and of the bottom stats panels.
 const double kSimpleBarHeight = 56;
 
-/// Width of the right column.
-const double kSimpleColumnWidth = 168;
+/// Width of the left and right rails.
+const double kSimpleRailWidth = 72;
 
-/// The modes on the switcher, in the decided order.
+/// The modes, in the decided order.
 enum SimpleModeScreen { preview, focus, polarAlign, target, run }
 
 extension on SimpleModeScreen {
@@ -51,8 +51,16 @@ extension on SimpleModeScreen {
     SimpleModeScreen.run => 'Run',
   };
 
-  /// The full-UI tab "Show all options" opens for this mode (brief: Preview,
-  /// Polar align and Focus open Live; Target opens Planning).
+  IconData get icon => switch (this) {
+    SimpleModeScreen.preview => Icons.visibility_outlined,
+    SimpleModeScreen.focus => Icons.center_focus_strong,
+    SimpleModeScreen.polarAlign => Icons.explore_outlined,
+    SimpleModeScreen.target => Icons.travel_explore,
+    SimpleModeScreen.run => Icons.playlist_play,
+  };
+
+  /// The full-UI tab a mode opens until its Simple Mode screen exists
+  /// (brief: Preview, Polar align and Focus open Live; Target opens Planning).
   // shortcut: Run always opens Sequence; the brief wants Live while a run is
   // imaging — switch on the sequence state when the Run screen is built.
   int get fullUiTab => switch (this) {
@@ -70,23 +78,27 @@ void leaveSimpleMode(WidgetRef ref, int tab) {
   ref.read(simpleModeProvider.notifier).set(false);
 }
 
-/// Simple Mode (ALP-4810, layout C): the latest frame fills the window and
-/// the controls float over it on translucent panels — a status strip on top,
-/// the Preview column on the right, guiding, the mode switcher and Emergency
-/// Stop along the bottom. Tapping the frame hides every panel, Emergency
-/// Stop included (the immersive view); another tap brings them back.
+/// The one popover open beside a rail, if any.
+enum _Popover { none, modes, settings }
+
+/// Simple Mode (ALP-4810): the latest frame fills the window and only the
+/// shutter is always out. A right rail holds the mode (tap for the five
+/// modes), a settings chip, the shutter and Stop; a left rail holds Info and
+/// the Library; guiding and the histogram run along the bottom once they
+/// have data; a small status sits bottom-right. Settings and modes open
+/// beside the rail and close with a tap on the image. Tapping the image with
+/// nothing open hides everything (the immersive view).
 ///
-/// Slice 1 builds Preview only; the other modes open their full-UI tab. Any
-/// tab jump made from here (the gear, a device dot, ⌘K) also returns to the
-/// full UI, since Settings has no Simple Mode surface yet.
+/// Preview only so far; the other modes open their full-UI tab, and so does
+/// any tab jump made from here (Settings, a device dot, ⌘K).
 class SimpleShell extends ConsumerStatefulWidget {
   const SimpleShell({
     super.key,
     this.planetarium = const StellariumView(bare: true),
   });
 
-  /// Shown behind the panels until there is a frame (brief: "No rig / no
-  /// frame: tonight's planetarium"); tests pass a stand-in for the webview.
+  /// Shown behind the panels until there is a frame; tests pass a stand-in
+  /// for the webview.
   final Widget planetarium;
 
   @override
@@ -95,10 +107,15 @@ class SimpleShell extends ConsumerStatefulWidget {
 
 class _SimpleShellState extends ConsumerState<SimpleShell> {
   bool _clean = false;
+  bool _info = false;
 
-  // Like ASIAir: the system status bar (clock, battery, Wi-Fi) is hidden
-  // while Simple Mode shows, and comes back for the full UI. A swipe from the
-  // edge still reveals it briefly (sticky). A no-op on desktop.
+  /// The planetarium on demand (the left rail's Sky), over any frame.
+  bool _sky = false;
+  _Popover _popover = _Popover.none;
+
+  // The system status bar (clock, battery, Wi-Fi) is hidden while Simple
+  // Mode shows and comes back for the full UI; an edge swipe still reveals
+  // it briefly (sticky). A no-op on desktop.
   @override
   void initState() {
     super.initState();
@@ -111,17 +128,34 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     super.dispose();
   }
 
+  void _toggle(_Popover p) =>
+      setState(() => _popover = _popover == p ? _Popover.none : p);
+
+  /// A tap on the image closes what's open, or else toggles the immersive
+  /// view (only once there is a frame to look at).
+  void _tapImage(bool hasFrame) => setState(() {
+    if (_popover != _Popover.none) {
+      _popover = _Popover.none;
+    } else if (hasFrame) {
+      _clean = !_clean;
+    }
+  });
+
   @override
   Widget build(BuildContext context) {
     ref.listen(selectedTabIndexProvider, (previous, next) {
       ref.read(simpleModeProvider.notifier).set(false);
     });
-    // Until a frame exists (none taken, no loop running) the sky stands in
-    // for it, so there is no clean view to toggle either.
     final hasFrame =
         ref.watch(lastCapturedFrameIdProvider) != null ||
         ref.watch(liveViewControllerProvider);
-    final panels = !_clean || !hasFrame;
+    final showSky = _sky || !hasFrame;
+    final panels = !_clean || showSky;
+    final motion = MediaQuery.disableAnimationsOf(context)
+        ? Duration.zero
+        : const Duration(milliseconds: 220);
+    const railTop = kSimpleInset * 2 + kSimpleBarHeight;
+    const besideRail = kSimpleInset * 2 + kSimpleRailWidth;
     return Theme(
       data: simpleTheme(Theme.of(context)),
       child: Scaffold(
@@ -142,34 +176,42 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
               child: SafeArea(
                 child: Stack(
                   children: [
-                    if (hasFrame)
-                      Positioned.fill(
-                        child: GestureDetector(
-                          key: const Key('simple-frame'),
-                          behavior: HitTestBehavior.opaque,
-                          onTap: () => setState(() => _clean = !_clean),
-                          child: const FrameViewer(),
-                        ),
-                      )
-                    else
-                      // Full bleed like a frame, so the panels keep their
-                      // places; the sky simply stands in for the image.
-                      Positioned.fill(
-                        key: const Key('simple-planetarium'),
-                        child: widget.planetarium,
+                    Positioned.fill(
+                      child: GestureDetector(
+                        key: const Key('simple-frame'),
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () => _tapImage(!showSky),
+                        child: !showSky
+                            ? const FrameViewer()
+                            // The sky: asked for, or standing in until there
+                            // is a frame.
+                            : KeyedSubtree(
+                                key: const Key('simple-planetarium'),
+                                child: widget.planetarium,
+                              ),
                       ),
-                    // The camera's status, top-left on the image; outside the
-                    // fade, so it stays in the immersive view.
-                    // Under the strip, or up in the corner when the immersive
-                    // view hides the strip, moving with the panels' fade.
+                    ),
+                    if (!hasFrame)
+                      const Positioned.fill(
+                        child: IgnorePointer(
+                          child: Center(
+                            child: Text(
+                              'Tap the shutter to take a frame',
+                              style: TextStyle(
+                                fontSize: 20,
+                                letterSpacing: 2,
+                                color: Color(0x80E0E0E0),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    // The camera's status, bottom-right above the stats; it
+                    // stays in the immersive view and drops into the corner.
                     AnimatedPositioned(
-                      left: kSimpleInset,
-                      top: panels
-                          ? kSimpleInset * 2 + kSimpleBarHeight
-                          : kSimpleInset,
-                      duration: MediaQuery.disableAnimationsOf(context)
-                          ? Duration.zero
-                          : const Duration(milliseconds: 220),
+                      right: panels ? besideRail : kSimpleInset,
+                      bottom: panels ? railTop : kSimpleInset,
+                      duration: motion,
                       curve: Curves.easeOut,
                       child: const SimpleStatusPill(),
                     ),
@@ -177,49 +219,74 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                       visible: panels,
                       child: Stack(
                         children: [
-                          Positioned(
+                          const Positioned(
                             left: kSimpleInset,
                             right: kSimpleInset,
                             top: kSimpleInset,
                             height: kSimpleBarHeight,
                             child: _StatusStrip(),
                           ),
-                          Positioned(
-                            right: kSimpleInset,
-                            top: kSimpleInset * 2 + kSimpleBarHeight,
-                            bottom: kSimpleInset * 2 + kSimpleBarHeight,
-                            width: kSimpleColumnWidth,
-                            // The mode's panels, then the mode list pinned to
-                            // the bottom so it never moves between modes.
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                Expanded(child: SimplePreviewPanel()),
-                                SizedBox(height: kSimpleInset),
-                                _ModeList(),
-                              ],
-                            ),
-                          ),
-                          // The bottom row is for stats: the guiding graph and
-                          // the histogram, side by side left of the column,
-                          // each only once it has something to show.
-                          Positioned(
+                          // Guiding and the histogram along the bottom, each
+                          // once it has data.
+                          const Positioned(
                             left: kSimpleInset,
-                            right: kSimpleColumnWidth + kSimpleInset * 2,
+                            right: besideRail,
                             bottom: kSimpleInset,
                             height: kSimpleBarHeight,
                             child: _StatsRow(),
                           ),
-                          // Emergency Stop fades with the rest in the clean
-                          // view; a tap on the frame brings everything back.
-                          // Ring included, the same box as the column above it.
+                          Positioned(
+                            left: kSimpleInset,
+                            top: railTop,
+                            bottom: railTop,
+                            width: kSimpleRailWidth,
+                            child: Align(
+                              alignment: Alignment.centerLeft,
+                              child: _LeftRail(
+                                info: _info,
+                                sky: showSky,
+                                onInfo: () => setState(() => _info = !_info),
+                                // With no frame there is only the sky.
+                                onSky: hasFrame
+                                    ? () => setState(() => _sky = !_sky)
+                                    : null,
+                              ),
+                            ),
+                          ),
+                          if (_info)
+                            const Positioned(
+                              left: besideRail,
+                              top: railTop,
+                              width: 240,
+                              child: SimpleInfoPanel(),
+                            ),
                           Positioned(
                             right: kSimpleInset,
+                            top: railTop,
                             bottom: kSimpleInset,
-                            width: kSimpleColumnWidth,
-                            height: kSimpleBarHeight,
-                            child: EmergencyStopButton(simple: true),
+                            width: kSimpleRailWidth,
+                            child: _RightRail(
+                              popover: _popover,
+                              onModes: () => _toggle(_Popover.modes),
+                              onSettings: () => _toggle(_Popover.settings),
+                            ),
                           ),
+                          if (_popover == _Popover.modes)
+                            Positioned(
+                              right: besideRail,
+                              top: railTop,
+                              child: _ModeGrid(
+                                onPicked: () =>
+                                    setState(() => _popover = _Popover.none),
+                              ),
+                            ),
+                          if (_popover == _Popover.settings)
+                            const Positioned(
+                              right: besideRail,
+                              top: railTop,
+                              width: 280,
+                              child: SimpleSettingsPopover(),
+                            ),
                         ],
                       ),
                     ),
@@ -234,7 +301,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
   }
 }
 
-/// Fades the panels out for the clean view (220 ms, instant with reduced
+/// Fades the panels out for the immersive view (220 ms, instant with reduced
 /// motion) and stops them taking taps while hidden.
 class _Fade extends StatelessWidget {
   const _Fade({required this.visible, required this.child});
@@ -277,14 +344,13 @@ class SimplePanel extends StatelessWidget {
   );
 }
 
+/// Device dots (connected gear only), night mode and ⋯ (search, Settings,
+/// Show all options).
 class _StatusStrip extends ConsumerWidget {
   const _StatusStrip();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final shortcut = Theme.of(context).platform == TargetPlatform.macOS
-        ? '⌘K'
-        : 'Ctrl+K';
     final night = switch (ref.watch(nightModeProvider)) {
       AsyncData(:final value) => value,
       _ => false,
@@ -293,37 +359,20 @@ class _StatusStrip extends ConsumerWidget {
       padding: const EdgeInsets.only(left: 8, right: 4),
       child: Row(
         children: [
-          // Dots, divider and activity share one Expanded so the dots never
-          // split leftover space with a Spacer: the activity text changing
-          // width can't move anything.
-          Expanded(
-            child: Row(
-              children: [
-                // Device dots only (the names would crowd the strip), and
-                // only for gear that's connected; a fault still shows.
-                const Flexible(
-                  child: EquipmentChipCompact(
-                    compact: true,
-                    child: SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: EquipmentChipHideDisconnected(
-                        child: TopEquipmentChips(),
-                      ),
-                    ),
+          // Only gear that's connected; a fault still shows.
+          const Expanded(
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: EquipmentChipCompact(
+                compact: true,
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: EquipmentChipHideDisconnected(
+                    child: TopEquipmentChips(),
                   ),
                 ),
-              ],
+              ),
             ),
-          ),
-          TextButton(
-            onPressed: () =>
-                leaveSimpleMode(ref, SimpleModeScreen.preview.fullUiTab),
-            child: const Text('Show all options'),
-          ),
-          IconButton(
-            icon: const Icon(Icons.search, size: 22),
-            tooltip: 'Search settings ($shortcut)',
-            onPressed: () => showCommandPalette(context),
           ),
           IconButton(
             icon: Icon(
@@ -331,16 +380,286 @@ class _StatusStrip extends ConsumerWidget {
               size: 22,
               color: night ? AraColors.accentInfo : null,
             ),
-            tooltip: night
-                ? 'Night mode on (${Platform.isMacOS ? '⌘' : 'Ctrl+'}N)'
-                : 'Night mode (${Platform.isMacOS ? '⌘' : 'Ctrl+'}N)',
+            tooltip: night ? 'Night mode on' : 'Night mode',
             onPressed: () => ref.read(nightModeProvider.notifier).set(!night),
           ),
-          const SettingsGearButton(),
+          PopupMenuButton<String>(
+            key: const Key('simple-more'),
+            tooltip: 'More',
+            icon: const Icon(Icons.more_horiz, size: 22),
+            position: PopupMenuPosition.under,
+            shape: const RoundedRectangleBorder(
+              borderRadius: BorderRadius.all(Radius.circular(10)),
+            ),
+            onSelected: (v) => switch (v) {
+              'search' => showCommandPalette(context),
+              'settings' =>
+                ref
+                    .read(selectedTabIndexProvider.notifier)
+                    .select(kOptionsTabIndex),
+              _ => leaveSimpleMode(ref, SimpleModeScreen.preview.fullUiTab),
+            },
+            itemBuilder: (_) => const [
+              PopupMenuItem(
+                value: 'search',
+                height: 44,
+                child: Text('Search settings', style: kSimpleText),
+              ),
+              PopupMenuItem(
+                value: 'settings',
+                height: 44,
+                child: Text('Settings', style: kSimpleText),
+              ),
+              PopupMenuItem(
+                value: 'all',
+                height: 44,
+                child: Text('Show all options', style: kSimpleText),
+              ),
+            ],
+          ),
         ],
       ),
     );
   }
+}
+
+/// One labelled rail button: an icon over a short caption.
+class _RailButton extends StatelessWidget {
+  const _RailButton({
+    super.key,
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.selected = false,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final bool selected;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    button: true,
+    selected: selected,
+    label: label,
+    child: Material(
+      color: selected ? const Color(0x401976D2) : Colors.transparent,
+      borderRadius: BorderRadius.circular(8),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: SizedBox(
+          width: 60,
+          height: 56,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                icon,
+                size: 24,
+                color: selected
+                    ? AraColors.textPrimary
+                    : AraColors.textSecondary,
+              ),
+              const SizedBox(height: 2),
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AraText.caption.copyWith(
+                  color: selected
+                      ? AraColors.textPrimary
+                      : AraColors.textSecondary,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+class _LeftRail extends StatelessWidget {
+  const _LeftRail({
+    required this.info,
+    required this.sky,
+    required this.onInfo,
+    required this.onSky,
+  });
+
+  final bool info;
+  final bool sky;
+  final VoidCallback onInfo;
+  final VoidCallback? onSky;
+
+  @override
+  Widget build(BuildContext context) => SimplePanel(
+    padding: const EdgeInsets.symmetric(vertical: AraSpace.s8, horizontal: 6),
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      spacing: 4,
+      children: [
+        _RailButton(
+          key: const Key('simple-sky'),
+          icon: Icons.public,
+          label: 'Sky',
+          selected: sky,
+          onTap: onSky ?? () {},
+        ),
+        _RailButton(
+          key: const Key('simple-info'),
+          icon: Icons.info_outline,
+          label: 'Info',
+          selected: info,
+          onTap: onInfo,
+        ),
+        _RailButton(
+          key: const Key('simple-library'),
+          icon: Icons.photo_library_outlined,
+          label: 'Library',
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(builder: (_) => const ImageLibraryScreen()),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+/// The mode (tap for the five), the settings chip, the shutter and, at the
+/// foot, Stop.
+class _RightRail extends ConsumerWidget {
+  const _RightRail({
+    required this.popover,
+    required this.onModes,
+    required this.onSettings,
+  });
+
+  final _Popover popover;
+  final VoidCallback onModes;
+  final VoidCallback onSettings;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final modesOpen = popover == _Popover.modes;
+    return SimplePanel(
+      padding: const EdgeInsets.symmetric(vertical: AraSpace.s8, horizontal: 6),
+      child: Column(
+        spacing: AraSpace.s8,
+        children: [
+          Semantics(
+            button: true,
+            label: 'Mode: Preview',
+            child: InkWell(
+              key: const Key('simple-mode'),
+              onTap: onModes,
+              borderRadius: BorderRadius.circular(8),
+              child: SizedBox(
+                width: 60,
+                height: 48,
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      SimpleModeScreen.preview.label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: kSimpleText.copyWith(
+                        fontWeight: FontWeight.w600,
+                        color: modesOpen ? AraColors.accentInfo : null,
+                      ),
+                    ),
+                    Icon(
+                      modesOpen ? Icons.expand_less : Icons.expand_more,
+                      size: 18,
+                      color: modesOpen
+                          ? AraColors.accentInfo
+                          : AraColors.textSecondary,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          _RailButton(
+            key: const Key('simple-settings'),
+            icon: Icons.tune,
+            label: simpleSettingsSummary(ref),
+            selected: popover == _Popover.settings,
+            onTap: onSettings,
+          ),
+          const SimpleShutter(),
+          const Spacer(),
+          const SizedBox(
+            width: 60,
+            height: 60,
+            child: EmergencyStopButton(compact: true),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The five modes as a grid beside the rail. Preview is built; the others
+/// open their full-UI tab for now.
+class _ModeGrid extends ConsumerWidget {
+  const _ModeGrid({required this.onPicked});
+
+  final VoidCallback onPicked;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) => SimplePanel(
+    padding: const EdgeInsets.all(AraSpace.s8),
+    child: SizedBox(
+      width: 300,
+      child: Wrap(
+        spacing: AraSpace.s8,
+        runSpacing: AraSpace.s8,
+        children: [
+          for (final m in SimpleModeScreen.values)
+            SizedBox(
+              width: 138,
+              height: 52,
+              child: Material(
+                color: m == SimpleModeScreen.preview
+                    ? AraColors.selectionBg
+                    : kSimpleTileFill,
+                borderRadius: BorderRadius.circular(8),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(8),
+                  onTap: () {
+                    onPicked();
+                    if (m != SimpleModeScreen.preview) {
+                      leaveSimpleMode(ref, m.fullUiTab);
+                    }
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: Row(
+                      spacing: AraSpace.s8,
+                      children: [
+                        Icon(m.icon, size: 20, color: AraColors.textPrimary),
+                        Flexible(
+                          child: Text(
+                            m.label,
+                            style: kSimpleText,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    ),
+  );
 }
 
 class _GuidingBar extends ConsumerWidget {
@@ -441,34 +760,6 @@ class _TracePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_TracePainter old) => old._steps != _steps;
-}
-
-class _ModeList extends ConsumerWidget {
-  const _ModeList();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return SimplePanel(
-      padding: const EdgeInsets.all(AraSpace.s4),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        spacing: 2,
-        children: [
-          for (final m in SimpleModeScreen.values)
-            SimpleSegment(
-              label: m.label,
-              selected: m == SimpleModeScreen.preview,
-              radius: 7,
-              alignment: Alignment.centerLeft,
-              // Not built yet in Simple Mode: open its full-UI tab.
-              onTap: m == SimpleModeScreen.preview
-                  ? null
-                  : () => leaveSimpleMode(ref, m.fullUiTab),
-            ),
-        ],
-      ),
-    );
-  }
 }
 
 /// Guiding and the histogram along the bottom. Each panel waits for data, and

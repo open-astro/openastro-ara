@@ -23,9 +23,17 @@ import '../state/ws/client_session_state.dart';
 /// a dark gap. [simple] is Simple Mode's version — 56 px tall, 10 px corners,
 /// 14 px text — matching the design preview.
 class EmergencyStopButton extends ConsumerStatefulWidget {
-  const EmergencyStopButton({super.key, this.simple = false});
+  const EmergencyStopButton({
+    super.key,
+    this.simple = false,
+    this.compact = false,
+  });
 
   final bool simple;
+
+  /// Simple Mode's rail version: a 60 px square reading STOP (HOLD while
+  /// held), same hold-to-confirm.
+  final bool compact;
 
   @override
   ConsumerState<EmergencyStopButton> createState() =>
@@ -193,7 +201,8 @@ class _EmergencyStopButtonState extends ConsumerState<EmergencyStopButton>
   @override
   Widget build(BuildContext context) {
     final red = Theme.of(context).colorScheme.error;
-    final simple = widget.simple;
+    final compact = widget.compact;
+    final simple = widget.simple || compact;
     final radius = simple ? 10.0 : 16.0;
     final icon = _inFlight
         ? SizedBox(
@@ -203,7 +212,9 @@ class _EmergencyStopButtonState extends ConsumerState<EmergencyStopButton>
           )
         : Icon(Icons.report, size: simple ? 20 : 16);
     final label = Text(
-      _inFlight
+      compact
+          ? (_inFlight ? '…' : (_holding ? 'HOLD' : 'STOP'))
+          : _inFlight
           ? 'Stopping…'
           : _holding
           ? 'Hold to confirm'
@@ -214,18 +225,18 @@ class _EmergencyStopButtonState extends ConsumerState<EmergencyStopButton>
       backgroundColor: red,
       foregroundColor: Theme.of(context).colorScheme.onError,
       padding: EdgeInsets.symmetric(
-        horizontal: simple ? 8 : 18,
+        horizontal: compact ? 0 : (simple ? 8 : 18),
         vertical: simple ? 0 : 7,
       ),
-      minimumSize: Size(0, simple ? 50 : 0),
+      minimumSize: Size(0, compact ? 54 : (simple ? 50 : 0)),
       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
       visualDensity: simple ? VisualDensity.standard : VisualDensity.compact,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(radius),
       ),
       textStyle: TextStyle(
-        fontSize: simple ? 14 : 13,
-        fontWeight: FontWeight.w600,
+        fontSize: compact ? 12 : (simple ? 14 : 13),
+        fontWeight: compact ? FontWeight.w700 : FontWeight.w600,
       ),
     );
     // Simple Mode stacks the icon over the label: the 168 px column is too

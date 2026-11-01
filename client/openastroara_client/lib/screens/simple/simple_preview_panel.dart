@@ -9,6 +9,7 @@ import '../../state/imaging/live_view_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
 import '../../state/equipment/camera_state.dart';
+import '../../widgets/imaging/exposure_controls_panel.dart' show FilterDropdown;
 import '../../widgets/imaging/histogram_strip.dart' show frameHistogramProvider;
 import '../imaging_actions.dart';
 import 'simple_shell.dart' show SimplePanel, SimpleSegment, kSimpleTileFill;
@@ -19,15 +20,6 @@ const kSimpleText = TextStyle(
   color: AraColors.textPrimary,
   fontFeatures: [FontFeature.tabularFigures()],
 );
-
-/// Room the full last-frame facts take at the bottom of the capture panel (a
-/// caption and five rows, with the divider); shorter columns get two rows.
-const double kSimpleFactsHeight = 160;
-
-/// What the capture controls need without scrolling: two 48 px fields, the
-/// shutter and Loop / Single, with the panel's padding (the shot status
-/// lives in the pill on the image, not here).
-const double kSimpleCaptureHeight = 268;
 
 /// Single takes a saved frame (the daemon registers every Take One); Loop
 /// runs live view, whose frames are not saved.
@@ -43,65 +35,16 @@ class _PreviewShot extends Notifier<PreviewShot> {
   void set(PreviewShot v) => state = v;
 }
 
-/// The right column in Preview: the last frame's facts on top, then
-/// Exposure, Filter, the shutter and Loop / Single.
-class SimplePreviewPanel extends StatelessWidget {
-  const SimplePreviewPanel({super.key});
-
-  @override
-  Widget build(BuildContext context) => Consumer(
-    builder: (context, ref, _) {
-      // The facts wait for something to describe: a saved frame or a loop.
-      final hasFrame =
-          ref.watch(lastCapturedFrameIdProvider) != null ||
-          ref.watch(liveViewControllerProvider);
-      return LayoutBuilder(
-        builder: (context, box) {
-          // Too short for the controls at all: let them scroll, no facts.
-          if (box.maxHeight < kSimpleCaptureHeight) {
-            return const SimplePanel(
-              padding: EdgeInsets.all(AraSpace.s12),
-              child: SingleChildScrollView(child: _PreviewControls()),
-            );
-          }
-          // One panel the full height of the column: the controls at the top,
-          // where they never move, and the last frame's facts filling what's
-          // left below them, as many rows as fit.
-          return SimplePanel(
-            padding: const EdgeInsets.all(AraSpace.s12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const _PreviewControls(),
-                Expanded(
-                  child: hasFrame
-                      ? LayoutBuilder(
-                          builder: (context, room) => Align(
-                            alignment: Alignment.bottomCenter,
-                            child: _LastFrameFacts(height: room.maxHeight),
-                          ),
-                        )
-                      : const SizedBox.shrink(),
-                ),
-              ],
-            ),
-          );
-        },
-      );
-    },
-  );
+/// "5 s · 100": the settings chip's caption on the rail.
+String simpleSettingsSummary(WidgetRef ref) {
+  final p = ref.watch(exposureControllerProvider);
+  return '${formatExposure(p.exposure)} · ${p.gain}';
 }
 
-/// One facts row: 3 px above and below 14 px text.
-const double _kFactRow = 26;
-
-class _LastFrameFacts extends ConsumerWidget {
-  const _LastFrameFacts({required this.height});
-
-  /// The room under the controls. The facts show as many rows as fit, most
-  /// useful first, with the caption when everything fits; at least two rows
-  /// (HFR and stars together, then the exposure).
-  final double height;
+/// The last frame's facts, opened from the left rail's Info: HFR, stars,
+/// exposure, gain · offset and clipped highlights.
+class SimpleInfoPanel extends ConsumerWidget {
+  const SimpleInfoPanel({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -112,15 +55,10 @@ class _LastFrameFacts extends ConsumerWidget {
     final analysed = (looping || id == null)
         ? null
         : ref.watch(frameHistogramProvider(id)).asData?.value;
-    String seconds(Duration d) => d.inMilliseconds % 1000 == 0
-        ? '${d.inSeconds} s'
-        : '${d.inMilliseconds / 1000} s';
-    Widget row(String label, String value) => Container(
-      height: _kFactRow,
-      alignment: Alignment.center,
+    Widget row(String label, String value) => SizedBox(
+      height: 28,
       child: Row(
         children: [
-          // The label gives way first on a narrow column; the value stays.
           Flexible(
             child: Text(
               label,
@@ -141,73 +79,39 @@ class _LastFrameFacts extends ConsumerWidget {
         ],
       ),
     );
-    final hfr = analysed?.hfr?.toStringAsFixed(2) ?? '—';
-    final stars = analysed?.stars?.toString() ?? '—';
-    final exposure = '${seconds(params.exposure)} · ${params.filterSlot}';
-    // The frame's own header values, not the controls' (they can differ when
-    // the shot came from a sequence).
+    // The frame's own header values, not the controls' (they differ when the
+    // shot came from a sequence).
     final gainOffset = analysed?.gain == null
         ? '—'
         : '${analysed!.gain} · ${analysed.offset ?? '—'}';
     final clipped = analysed == null
         ? '—'
         : '${(analysed.highClipFraction * 100).toStringAsFixed(analysed.highClipFraction < 0.001 ? 0 : 2)} %';
-    final rows = [
-      row('HFR', hfr),
-      row('Stars', stars),
-      row('Exposure', exposure),
-      row('Gain · offset', gainOffset),
-      row('Clipped', clipped),
-    ];
-    const divider = Divider(height: AraSpace.s16, color: AraColors.border);
-    final fit = ((height - AraSpace.s16) / _kFactRow).floor();
-    final caption = Text(
-      looping ? 'Live view' : 'Last frame',
-      style: AraText.caption,
-    );
-    final Widget body;
-    if (fit >= rows.length + 1) {
-      body = Column(
+    return SimplePanel(
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+      child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          SizedBox(
-            height: _kFactRow,
-            child: Align(alignment: Alignment.centerLeft, child: caption),
+          Text(
+            id == null && !looping
+                ? 'No frame yet'
+                : looping
+                ? 'Live view'
+                : 'Last frame',
+            style: AraText.caption,
           ),
-          ...rows,
+          const SizedBox(height: 4),
+          row('HFR', analysed?.hfr?.toStringAsFixed(2) ?? '—'),
+          row('Stars', analysed?.stars?.toString() ?? '—'),
+          row(
+            'Exposure',
+            '${formatExposure(params.exposure)} · ${params.filterSlot}',
+          ),
+          row('Gain · offset', gainOffset),
+          row('Clipped', clipped),
         ],
-      );
-    } else if (fit >= 3) {
-      body = Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: rows.take(fit).toList(),
-      );
-    } else if (fit >= 2) {
-      body = Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          row('HFR $hfr', '★ $stars'),
-          row(looping ? 'Live view' : 'Last frame', exposure),
-        ],
-      );
-    } else if (fit == 1) {
-      body = row('HFR $hfr', '★ $stars');
-    } else {
-      return const SizedBox.shrink();
-    }
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        divider,
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: AraSpace.s4),
-          child: body,
-        ),
-      ],
+      ),
     );
   }
 }
@@ -236,8 +140,10 @@ Future<void> _stop(BuildContext context, WidgetRef ref) async {
   }
 }
 
-class _PreviewControls extends ConsumerWidget {
-  const _PreviewControls();
+/// The mode's settings, opened from the rail's chip: Exposure and Gain side
+/// by side (picked from lists), Filter, and Loop / Single.
+class SimpleSettingsPopover extends ConsumerWidget {
+  const SimpleSettingsPopover({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -245,97 +151,117 @@ class _PreviewControls extends ConsumerWidget {
     final ctrl = ref.read(exposureControllerProvider.notifier);
     final shot = ref.watch(previewShotProvider);
     final looping = ref.watch(liveViewControllerProvider);
-    final capturing = ref.watch(captureProgressProvider).isCapturing;
-    final stopping = ref.watch(_stoppingProvider);
     final caps = ref.watch(cameraStatusProvider).asData?.value?.capabilities;
     // Named gains (a camera with gain modes) are picked by index.
     final namedGains = caps?.gains ?? const <String>[];
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        // Picked from lists, side by side: no typing at the telescope.
-        Row(
-          spacing: AraSpace.s8,
-          children: [
-            Expanded(
-              child: _PresetTile<Duration>(
-                key: const Key('simple-exposure'),
-                label: 'Exposure',
-                value: params.exposure,
-                options: exposurePresets(
-                  minSec: caps?.minExposureSec ?? 0,
-                  maxSec: caps?.maxExposureSec ?? 0,
-                ),
-                format: formatExposure,
-                onSelected: ctrl.setExposure,
-              ),
+    return SimplePanel(
+      padding: const EdgeInsets.all(AraSpace.s12),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        spacing: AraSpace.s8,
+        children: [
+          const Text(
+            'Preview settings',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: AraColors.textPrimary,
             ),
-            Expanded(
-              child: _PresetTile<int>(
-                key: const Key('simple-gain'),
-                label: 'Gain',
-                value: params.gain,
-                options: namedGains.isNotEmpty
-                    ? [for (var i = 0; i < namedGains.length; i++) i]
-                    : gainPresets(
-                        min: caps?.minGain ?? 0,
-                        max: caps?.maxGain ?? 0,
-                      ),
-                format: (g) => namedGains.isNotEmpty && g < namedGains.length
-                    ? namedGains[g]
-                    : '$g',
-                onSelected: ctrl.setGain,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: AraSpace.s16),
-        Center(
-          child: _Shutter(
-            running: (looping || capturing) && !stopping,
-            onPressed: stopping
-                ? null
-                : switch (shot) {
-                    PreviewShot.loop => () => toggleLiveView(
-                      context,
-                      ref,
-                      !looping,
-                    ),
-                    // The square stops the shot in flight, like a loop.
-                    PreviewShot.single =>
-                      capturing
-                          ? () => _stop(context, ref)
-                          : () => takeOne(context, ref),
-                  },
           ),
-        ),
-        const SizedBox(height: AraSpace.s16),
-        // Switching while a loop runs would strand it with no stop.
-        Container(
-          decoration: BoxDecoration(
-            color: kSimpleTileFill,
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Row(
+          Row(
+            spacing: AraSpace.s8,
             children: [
-              for (final (v, label) in const [
-                (PreviewShot.loop, 'Loop'),
-                (PreviewShot.single, 'Single'),
-              ])
-                Expanded(
-                  child: SimpleSegment(
-                    label: label,
-                    selected: shot == v,
-                    radius: 8,
-                    onTap: looping
-                        ? null
-                        : () => ref.read(previewShotProvider.notifier).set(v),
+              Expanded(
+                child: _PresetTile<Duration>(
+                  key: const Key('simple-exposure'),
+                  label: 'Exposure',
+                  value: params.exposure,
+                  options: exposurePresets(
+                    minSec: caps?.minExposureSec ?? 0,
+                    maxSec: caps?.maxExposureSec ?? 0,
                   ),
+                  format: formatExposure,
+                  onSelected: ctrl.setExposure,
                 ),
+              ),
+              Expanded(
+                child: _PresetTile<int>(
+                  key: const Key('simple-gain'),
+                  label: 'Gain',
+                  value: params.gain,
+                  options: namedGains.isNotEmpty
+                      ? [for (var i = 0; i < namedGains.length; i++) i]
+                      : gainPresets(
+                          min: caps?.minGain ?? 0,
+                          max: caps?.maxGain ?? 0,
+                        ),
+                  format: (g) => namedGains.isNotEmpty && g < namedGains.length
+                      ? namedGains[g]
+                      : '$g',
+                  onSelected: ctrl.setGain,
+                ),
+              ),
             ],
           ),
-        ),
-      ],
+          FilterDropdown(
+            value: params.filterSlot,
+            onChanged: ctrl.setFilterSlot,
+          ),
+          // Switching while a loop runs would strand it with no stop.
+          Container(
+            decoration: BoxDecoration(
+              color: kSimpleTileFill,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              children: [
+                for (final (v, label) in const [
+                  (PreviewShot.loop, 'Loop'),
+                  (PreviewShot.single, 'Single'),
+                ])
+                  Expanded(
+                    child: SimpleSegment(
+                      label: label,
+                      selected: shot == v,
+                      radius: 8,
+                      onTap: looping
+                          ? null
+                          : () => ref.read(previewShotProvider.notifier).set(v),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The shutter on the rail: takes a frame (Single) or starts and stops the
+/// loop (Loop); while a shot runs its square stops it.
+class SimpleShutter extends ConsumerWidget {
+  const SimpleShutter({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final shot = ref.watch(previewShotProvider);
+    final looping = ref.watch(liveViewControllerProvider);
+    final capturing = ref.watch(captureProgressProvider).isCapturing;
+    final stopping = ref.watch(_stoppingProvider);
+    return _Shutter(
+      running: (looping || capturing) && !stopping,
+      onPressed: stopping
+          ? null
+          : switch (shot) {
+              PreviewShot.loop => () => toggleLiveView(context, ref, !looping),
+              // The square stops the shot in flight, like a loop.
+              PreviewShot.single =>
+                capturing
+                    ? () => _stop(context, ref)
+                    : () => takeOne(context, ref),
+            },
     );
   }
 }
@@ -476,18 +402,18 @@ class _Shutter extends StatelessWidget {
       child: InkResponse(
         key: const Key('simple-shutter'),
         onTap: onPressed,
-        radius: 40,
+        radius: 36,
         child: Container(
-          width: 68,
-          height: 68,
+          width: 60,
+          height: 60,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             border: Border.all(color: fg, width: 3),
           ),
           alignment: Alignment.center,
           child: Container(
-            width: running ? 24 : 46,
-            height: running ? 24 : 46,
+            width: running ? 22 : 40,
+            height: running ? 22 : 40,
             decoration: BoxDecoration(
               color: fg,
               shape: running ? BoxShape.rectangle : BoxShape.circle,
@@ -500,8 +426,8 @@ class _Shutter extends StatelessWidget {
   }
 }
 
-/// What the camera is doing, as a pill at the top-left of the image (like a
-/// camera's REC light): looping, taking a frame with its countdown and bar,
+/// What the camera is doing, as a small pill bottom-right on the image (like
+/// a camera's REC light): looping, taking a frame with its countdown and bar,
 /// stopping, frame ready, or why it failed. Nothing while idle. It sits
 /// outside the panels, so it stays in the immersive view.
 class SimpleStatusPill extends ConsumerStatefulWidget {
