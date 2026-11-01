@@ -413,7 +413,7 @@
       "name": "Simple Mode Overlay",
       "kind": "custom",
       "refersTo": "button-primary-simple",
-      "description": "Translucent panel floating over the full-bleed frame in Simple Mode (layout C: 16 px inset, 10 px corners, shared edges).",
+      "description": "Translucent panel floating over the full-bleed frame in Simple Mode (two-rail layout: 16 px inset, 10 px corners).",
       "html": "<div class=\"ds-ov-wrap\"><div class=\"ds-ov\"><span class=\"ds-ov-num\">02:14</span><span class=\"ds-ov-sub\">Frame 47 of 120</span><button class=\"ds-ov-btn\">Pause</button></div></div>",
       "css": ".ds-ov-wrap{background:radial-gradient(ellipse at 50% 45%,#3a3a3a 0,#1a1a1a 40%,#0d0d0d 75%);padding:40px;border-radius:10px} .ds-ov{font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;display:inline-flex;flex-direction:column;gap:8px;background:rgba(26,26,26,.72);border-radius:10px;padding:14px 16px;color:#E0E0E0;font-size:14px;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)} .ds-ov-num{font-size:32px;font-weight:300;font-variant-numeric:tabular-nums} .ds-ov-sub{color:#A0A0A0} .ds-ov-btn{min-height:44px;border:0;border-radius:10px;background:#1565C0;color:#fff;font:500 14px system-ui;cursor:pointer} .ds-ov-btn:hover{background:#1976D2} .ds-ov-btn:focus-visible{outline:2px solid #42A5F5;outline-offset:2px}"
     }
