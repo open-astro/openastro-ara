@@ -129,7 +129,7 @@ class _AppShellState extends ConsumerState<AppShell> {
               // §57 — the Stop Mount panic overlay surfaces over every tab
               // while the daemon reports an autonomous slew in progress.
               child: StopMountListener(
-                child: SafeArea(
+                child: _EdgeToEdge(
                 child: CallbackShortcuts(
                   // §61 ⌘K on macOS, Ctrl+K elsewhere — both bound so the palette
                   // is reachable regardless of host platform.
@@ -152,6 +152,9 @@ class _AppShellState extends ConsumerState<AppShell> {
                         _TopEquipmentBar(showChips: !narrow),
                         Expanded(
                           child: Row(
+                            // Stretch so the device column fills the height
+                            // and starts at the top, like the rail.
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
                               // A phone-width window swaps the bars: the
                               // devices stand in a column here and the tabs
@@ -342,6 +345,27 @@ class _TopEquipmentBar extends StatelessWidget {
       ),
     );
   }
+}
+
+/// [SafeArea] whose margins (a phone's notch on both sides in landscape, the
+/// status bar, the home indicator) are painted in the bars' colour instead of
+/// left black, so the shell reads as full screen while its content stays clear
+/// of them.
+class _EdgeToEdge extends StatelessWidget {
+  const _EdgeToEdge({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => ColoredBox(
+        color: AraColors.bgPanel,
+        child: SafeArea(
+          child: ColoredBox(
+            color: Theme.of(context).scaffoldBackgroundColor,
+            child: child,
+          ),
+        ),
+      );
 }
 
 /// The device chips standing in a column down the left edge, for a

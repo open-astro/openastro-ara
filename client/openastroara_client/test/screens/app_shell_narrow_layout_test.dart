@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/screens/app_shell.dart';
 import 'package:openastroara/state/app_shell_state.dart';
+import 'package:openastroara/theme/ara_colors.dart';
 import 'package:openastroara/widgets/equipment/equipment_status_chip.dart';
 
 /// Opens on Sequence: Planning's planetarium server and Live's guiding poll
@@ -12,8 +13,9 @@ class _StartOnSequence extends SelectedTabIndexNotifier {
   int build() => 2;
 }
 
-Future<ProviderContainer> _pumpAt(WidgetTester tester, Size size) async {
+Future<ProviderContainer> _pumpAt(WidgetTester tester, Size size, {FakeViewPadding? padding}) async {
   tester.view.physicalSize = size;
+  if (padding != null) tester.view.padding = padding;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
   // The test font is taller than the real one.
@@ -74,6 +76,24 @@ void main() {
     expect(tester.getRect(find.byTooltip('Dome')).right,
         lessThan(tester.getRect(find.byTooltip(RegExp('^Search')).first).left),
         reason: 'the devices stop before search, night mode and Settings');
+  });
+
+  testWidgets('the device column starts right under the top bar', (tester) async {
+    await _pumpAt(tester, const Size(400, 860));
+    final barBottom = tester.getRect(find.byTooltip(RegExp('^Search')).first).bottom;
+    expect(tester.getRect(find.byTooltip('Camera')).top - barBottom, lessThan(16),
+        reason: 'not floating in the middle of the column');
+  });
+
+  testWidgets("the notch and home-indicator margins are painted in the bars' colour, not left black",
+      (tester) async {
+    // A landscape iPhone reports a notch inset on both sides and the home
+    // indicator below; the content stays inside them, the margins match the bars.
+    await _pumpAt(tester, const Size(852, 393),
+        padding: const FakeViewPadding(left: 59, right: 59, bottom: 21));
+    final edge = find.ancestor(of: find.byType(SafeArea).first, matching: find.byType(ColoredBox)).first;
+    expect(tester.widget<ColoredBox>(edge).color, AraColors.bgPanel);
+    expect(tester.getRect(edge), const Rect.fromLTWH(0, 0, 852, 393));
   });
 
   testWidgets('a desktop-width window keeps the side rail and the top device bar', (tester) async {
