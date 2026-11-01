@@ -255,16 +255,20 @@ A pill (12 px radius) with a 10 px status dot followed by a label in body-small.
 ### Switches and Segmented Controls
 Material segmented buttons and choice chips. Selected segments use Selection Blue with white text, and outlines use Hairline. Segments name their states ("Cooler On" / "Off"), never a bare toggle.
 
-### Simple Mode: Image First (proposed)
-Simple Mode (see PRODUCT.md) puts the latest frame first, ASIAir-style. The image fills the window edge to edge, and the controls float over it on translucent overlays instead of sitting in panels beside it:
-- overlays use `overlay-scrim` (Night Floor at 72 %), 10 px corners and no border, so the frame shows through around them;
-- a slim top strip carries the device status dots, the target and the session state;
-- the main actions (capture or pause, the exposure setting) sit in an overlay at one edge;
-- live readouts (frame count, next-frame countdown, HFR, guiding, temperature) sit in a small overlay in a corner;
-- the attention banner and Emergency Stop keep their solid colours on top of everything.
+### Simple Mode: Image First (proposed, layout C)
+Simple Mode (see PRODUCT.md) puts the latest frame first, ASIAir-style. The image fills the window edge to edge, and the controls float over it on translucent panels:
+- **Panels:** every panel uses `overlay-scrim` (Night Floor at 72 %), 10 px corners and no border, sits 16 px from the frame edge and 16 px from its neighbours, and shares edges with the panels beside it.
+- **Top:** a full-width status strip (56 px) with the device dots, a divider, the target and its state, then Show all options, search, Night mode and the Settings gear.
+- **Centre:** the attention banner, centred 16 px under the status strip, only when something needs the person.
+- **Right column (168 px wide, one shared edge), from the top:**
+  - the Next frame box: countdown with frame x/y, a progress bar, then HFR and sensor temperature as label/value rows;
+  - the controls panel: Exposure, Filter, the shutter and Gain, as 48 px labelled tiles;
+  - Emergency Stop, detached, full column width, 56 px tall, in solid Fault Red.
+- **Bottom row (56 px tall, one shared bottom edge):** the guiding bar on the left ("Guiding", the RMS, then the RA/Dec trace), the mode switcher in the centre (Polar align · Target · Focus · Preview · Run), and Emergency Stop on the right.
+- **Run plan:** the quick plan builder takes over the right column above Emergency Stop. It lists exposure and frame count per filter for the current target, then Start imaging. Autofocus, dither and flats follow the profile.
+- **Clean view:** a tap or click on the image fades every panel out (220 ms ease-out, instant with reduced motion) so the frame shows fullscreen. Emergency Stop and any attention banner stay. A tap brings the panels back, and a short hint says so. There is no keyboard shortcut for now.
 
-Targets are at least 44 px tall, with 14 px body text and spacing from the top of the scale (12–24 px). Colours and status dots behave exactly as in the full UI. Phone Companion Mode uses the same image-first layout. Which controls Simple Mode keeps is still open (ALP-4810).
-
+Targets are at least 44 px tall, with 14 px body text. Colours and status dots behave exactly as in the full UI. Phone Companion Mode uses the same image-first idea in a portrait arrangement. The rendered reference is `design/preview/ara-design-preview.html`. Each mode's own screen (Polar align, Target, Focus, Preview) is not designed yet (ALP-4810).
 ### Cards / Containers
 - **Corner Style:** 6 px.
 - **Background:** Panel Grey.

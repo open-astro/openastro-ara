@@ -1,0 +1,730 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ara Design Preview</title>
+<style>
+  /* Every value is a DESIGN.md token (lib/theme/ara_colors.dart + ara_metrics.dart) */
+  :root {
+    --bg: #1A1A1A; --panel: #262626; --panel-alt: #2E2E2E; --input: #333333; --border: #404040;
+    --text: #E0E0E0; --text2: #A0A0A0; --text3: #606060;
+    --ok: #4CAF50; --busy: #FFB300; --err: #E53935; --info: #42A5F5; --off: #606060;
+    --sel: #1976D2; --btn: #1565C0;
+    --scrim: rgba(26, 26, 26, 0.72);
+    --sys: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --mono: ui-monospace, "SF Mono", Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #0E0E0E; color: var(--text); font: 13px/1.45 var(--sys); }
+  .page { max-width: 1320px; margin: 0 auto; padding: 32px 16px 80px; }
+  header h1 { font-size: 22px; font-weight: 600; margin: 0 0 6px; }
+  header p { color: var(--text2); margin: 0; max-width: 82ch; }
+  nav.toc { display: flex; flex-wrap: wrap; gap: 8px; margin: 20px 0 8px; }
+  nav.toc a { color: var(--text2); text-decoration: none; border: 1px solid var(--border); border-radius: 12px; padding: 4px 10px; font-size: 12px; }
+  nav.toc a:hover { color: var(--text); border-color: var(--text2); }
+  section { margin-top: 48px; }
+  h2 { font-size: 16px; font-weight: 600; margin: 0 0 4px; }
+  .note { color: var(--text2); margin: 0 0 16px; max-width: 84ch; }
+  .tag { display: inline-block; font-size: 10.5px; letter-spacing: .5px; text-transform: uppercase; padding: 1px 7px; border-radius: 10px; border: 1px solid var(--border); color: var(--text2); margin-left: 6px; vertical-align: 2px; }
+  .tag.now { color: var(--ok); border-color: var(--ok); }
+  .tag.prop { color: var(--busy); border-color: var(--busy); }
+  .num { font-variant-numeric: tabular-nums; }
+  .controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 14px; }
+  .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 18px; overflow: hidden; }
+  .seg button { background: transparent; color: var(--text); border: 0; padding: 7px 14px; font: 13px var(--sys); cursor: pointer; }
+  .seg button + button { border-left: 1px solid var(--border); }
+  .seg button[aria-pressed="true"] { background: var(--sel); color: #fff; }
+  .seg button:focus-visible { outline: 2px solid var(--info); outline-offset: -2px; }
+  .night { filter: url(#night); }
+
+  /* ---- shared pieces ---- */
+  .ic { position: relative; width: 28px; height: 28px; flex: none; }
+  .ic svg { width: 100%; height: 100%; fill: var(--text); }
+  .dot { position: absolute; top: -2px; right: -2px; width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--panel); }
+  .dot.blink { animation: blink .7s ease-in-out infinite alternate; }
+  @keyframes blink { from { opacity: 1 } to { opacity: .25 } }
+  @media (prefers-reduced-motion: reduce) { .dot.blink { animation: none; } }
+  .g-ok { background: var(--ok) } .g-busy { background: var(--busy) } .g-off { background: var(--off) } .g-err { background: var(--err) }
+  .iconbtn { width: 36px; height: 36px; display: grid; place-items: center; border-radius: 18px; color: var(--text); flex: none; }
+  .iconbtn svg { width: 22px; height: 22px; fill: currentColor; }
+  .iconbtn.lit { color: var(--info); }
+  .estop { display: inline-flex; align-items: center; gap: 6px; background: var(--err); color: #fff; border: 0; border-radius: 16px; padding: 5px 12px; font: 600 12px var(--sys); cursor: pointer; white-space: nowrap; }
+  .estop svg { width: 16px; height: 16px; fill: #fff; }
+  .estop.heavy { padding: 7px 18px; font-size: 13px; box-shadow: 0 0 0 2px var(--panel), 0 0 0 3px var(--err); }
+  .state { display: inline-flex; align-items: center; gap: 8px; padding: 4px 10px; border-radius: 12px; font-size: 12px; background: var(--panel-alt); white-space: nowrap; }
+  .state i { width: 10px; height: 10px; border-radius: 50%; }
+  .section { font-size: 11px; font-weight: 600; letter-spacing: .6px; text-transform: uppercase; color: var(--text2); }
+  .title { font-size: 15px; font-weight: 600; }
+  .row { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid var(--border); }
+  .row span:first-child { color: var(--text2); }
+  .attn { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--busy); border-radius: 6px; background: rgba(255,179,0,.10); }
+  .attn svg { width: 18px; height: 18px; fill: var(--busy); flex: none; margin-top: 1px; }
+  .attn b { display: block; font-weight: 600; }
+  .attn span { color: var(--text2); font-size: 11.5px; }
+  .b { border: 0; font: 500 13px var(--sys); cursor: pointer; border-radius: 18px; padding: 7px 14px; }
+  .b.primary { background: var(--btn); color: #fff; } .b.primary:hover { background: var(--sel); }
+  .b.outline { background: transparent; color: var(--text); border: 1px solid var(--border); }
+  .b:focus-visible, .sb:focus-visible { outline: 2px solid var(--info); outline-offset: 2px; }
+
+  /* Sky image: deterministic stars + a galaxy */
+  .sky { position: relative; overflow: hidden; background: radial-gradient(ellipse at 50% 50%, #161616 0, #0c0c0c 70%); }
+  .sky .galaxy { position: absolute; left: 50%; top: 50%; width: 46%; height: 16%; transform: translate(-50%, -50%) rotate(-32deg); border-radius: 50%;
+    background: radial-gradient(ellipse at center, rgba(255,250,240,.95) 0, rgba(235,225,210,.55) 8%, rgba(190,180,170,.28) 30%, rgba(120,115,110,.12) 55%, transparent 72%); }
+  .sky i { position: absolute; border-radius: 50%; background: #e8e8e8; }
+
+  /* ---------- Full UI, desktop (PR #1474 shell) ---------- */
+  .app { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+  .topbar { height: 64px; background: var(--panel); border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 6px 0 8px; }
+  .chips { flex: 1; display: flex; overflow: hidden; }
+  .eq { width: 76px; flex: none; display: flex; flex-direction: column; align-items: center; padding: 6px 8px; border-radius: 6px; }
+  .eq:hover { background: var(--panel-alt); }
+  .eq .lb { font-size: 11px; font-weight: 500; letter-spacing: .5px; color: var(--text2); margin-top: 2px; white-space: nowrap; max-width: 60px; overflow: hidden; text-overflow: clip; }
+  .eq .lb.fit { font-size: 9.5px; letter-spacing: .2px; }
+  .main { display: grid; grid-template-columns: 80px 1fr 280px; height: 470px; }
+  .rail { background: var(--panel); border-right: 1px solid var(--border); padding: 10px 0; display: flex; flex-direction: column; align-items: center; gap: 12px; }
+  .dest { display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 12px; color: var(--text2); }
+  .dest .pill { width: 56px; height: 32px; border-radius: 16px; display: grid; place-items: center; }
+  .dest .pill svg { width: 22px; height: 22px; fill: var(--text2); }
+  .dest.on .pill { background: var(--sel); } .dest.on .pill svg { fill: #fff; } .dest.on { color: var(--text); }
+  .center { padding: 12px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+  .center .sky { flex: 1; border: 1px solid var(--border); border-radius: 6px; }
+  .cap { position: absolute; left: 10px; bottom: 8px; font-size: 11.5px; color: var(--text2); }
+  .hist { height: 34px; border: 1px solid var(--border); border-radius: 6px; background: var(--panel); position: relative; overflow: hidden; flex: none; }
+  .hist::after { content: ""; position: absolute; left: 14%; bottom: 0; width: 26%; height: 85%; background: rgba(224,224,224,.28); clip-path: polygon(0 100%, 18% 25%, 30% 0, 50% 45%, 100% 100%); }
+  .side { background: var(--panel); border-left: 1px solid var(--border); padding: 12px; display: flex; flex-direction: column; gap: 14px; }
+  .bottombar { height: 40px; background: var(--panel); border-top: 1px solid var(--border); display: flex; align-items: center; gap: 12px; padding: 0 8px; font-size: 12px; color: var(--text2); }
+  .bottombar .grow { flex: 1; }
+  .launch { display: inline-flex; align-items: center; gap: 6px; color: var(--info); font-size: 12.5px; }
+  .launch svg { width: 18px; height: 18px; fill: currentColor; }
+  .pulse { display: inline-flex; align-items: center; gap: 6px; }
+  .pulse i { width: 8px; height: 8px; border-radius: 50%; background: var(--info); }
+
+  /* ---------- Simple Mode: image first ---------- */
+  .simple-app { position: relative; height: 574px; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+  .simple-app > .sky { position: absolute; inset: 0; }
+  .ov { position: absolute; background: var(--scrim); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); border-radius: 10px; font-size: 14px; }
+  .ov-top { left: 12px; right: 12px; top: 12px; min-height: 56px; display: flex; align-items: center; gap: 16px; padding: 6px 8px 6px 14px; }
+  .ov-top .devs { display: flex; gap: 14px; }
+  .ov-top .devs .ic { width: 24px; height: 24px; }
+  .ov-top .devs .dot { border-color: #1f1f1f; }
+  .ov-top .tgt { font-size: 15px; font-weight: 600; }
+  .ov-top .grow { flex: 1; }
+  .ov-top .all { color: var(--info); font-size: 14px; padding: 0 8px; white-space: nowrap; }
+  .ov-attn { left: 50%; top: 80px; transform: translateX(-50%); display: flex; gap: 10px; align-items: center; padding: 12px 16px; border: 1px solid var(--busy); background: rgba(58, 44, 10, .86); }
+  .ov-attn svg { width: 20px; height: 20px; fill: var(--busy); flex: none; }
+  .ov-attn b { font-weight: 600; }
+  .ov-attn span { color: var(--text2); font-size: 13px; }
+  .ov-right { right: 12px; top: 50%; transform: translateY(-50%); width: 92px; display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 16px 0; }
+  .shutter { width: 64px; height: 64px; border-radius: 50%; border: 3px solid var(--text); background: transparent; display: grid; place-items: center; cursor: pointer; }
+  .shutter span { width: 22px; height: 22px; display: flex; gap: 6px; justify-content: center; }
+  .shutter span i { width: 7px; height: 22px; background: var(--text); border-radius: 2px; }
+  .shutter:focus-visible { outline: 2px solid var(--info); outline-offset: 3px; }
+  .ov-right .opt { min-height: 44px; width: 72px; border-radius: 10px; background: rgba(51,51,51,.8); display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 14px; }
+  .ov-right .opt small { font-size: 11px; color: var(--text2); }
+  .ov-read { left: 12px; bottom: 12px; padding: 14px 18px; display: flex; flex-direction: column; gap: 8px; min-width: 290px; }
+  .ov-read .big { font-size: 40px; font-weight: 300; line-height: 1; letter-spacing: -.5px; }
+  .ov-read .sub { color: var(--text2); }
+  .bar { height: 6px; background: rgba(64,64,64,.9); border-radius: 3px; } .bar i { display: block; height: 100%; width: 39%; background: var(--ok); border-radius: 3px; }
+  .ov-read .stats { display: flex; gap: 16px; color: var(--text); }
+  .ov-read .stats span b { display: block; font-size: 11px; font-weight: 600; letter-spacing: .6px; color: var(--text2); text-transform: uppercase; }
+  .ov-stop { right: 12px; bottom: 12px; background: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
+  .ov-stop .estop { padding: 12px 20px; font-size: 14px; border-radius: 24px; }
+  .ov-stop .estop svg { width: 20px; height: 20px; }
+  .ov-hint { right: 120px; bottom: 18px; background: none; backdrop-filter: none; -webkit-backdrop-filter: none; color: var(--text2); font-size: 12px; }
+
+
+  .ov-modes { left: 50%; bottom: 12px; transform: translateX(-50%); display: flex; padding: 4px; gap: 2px; }
+  .ov-modes span { min-height: 44px; display: flex; align-items: center; padding: 0 16px; border-radius: 8px; color: var(--text2); font-size: 14px; white-space: nowrap; }
+  .ov-modes span.on { background: var(--sel); color: #fff; }
+  .ov-guide { right: 116px; top: 80px; width: 230px; padding: 10px 12px 8px; }
+  .ov-guide .hd { display: flex; justify-content: space-between; font-size: 12px; color: var(--text2); margin-bottom: 4px; }
+  .ov-guide svg { display: block; width: 100%; height: 64px; }
+  .ov-plan { right: 12px; top: 80px; bottom: 76px; width: 330px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+  .ov-plan .hd { font-size: 15px; font-weight: 600; }
+  .ov-plan .sub { color: var(--text2); font-size: 13px; }
+  .plan-row { display: grid; grid-template-columns: 44px 1fr 1fr 28px; gap: 8px; align-items: center; }
+  .plan-row .f { min-height: 44px; display: grid; place-items: center; border-radius: 10px; background: rgba(51,51,51,.85); font-weight: 600; }
+  .plan-row .v { min-height: 44px; display: flex; align-items: center; justify-content: center; border-radius: 10px; background: rgba(51,51,51,.85); font-variant-numeric: tabular-nums; }
+  .plan-row .x { color: var(--text2); text-align: center; }
+  .plan-add { color: var(--info); min-height: 44px; display: flex; align-items: center; }
+  .plan-total { margin-top: auto; display: flex; justify-content: space-between; color: var(--text2); font-size: 13px; }
+  #simple.planning .ov-right, #simple.planning .ov-guide, #simple.planning .ov-attn { display: none; }
+  #simple:not(.planning) .ov-plan { display: none; }
+  @media (max-width: 900px) { .ov-guide, .ov-modes { display: none; } }
+
+  /* ===== Simple Mode layouts A and B: one inset, one radius, one control height ===== */
+  .sm { --in: 16px; --r: 10px; --h: 48px; position: relative; height: 640px; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; font-size: 14px; }
+  .sm > .sky { position: absolute; inset: 0; }
+  .sm .p { position: absolute; background: var(--scrim); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+  .sm .lbl { font-size: 11px; font-weight: 600; letter-spacing: .6px; text-transform: uppercase; color: var(--text2); }
+  .sm .devs { display: flex; gap: 14px; align-items: center; }
+  .sm .devs .ic { width: 22px; height: 22px; }
+  .sm .devs .dot { border-color: #222; }
+  .sm .vsep { width: 1px; align-self: stretch; background: rgba(160,160,160,.25); margin: 10px 0; }
+  .sm .tgt { font-size: 15px; font-weight: 600; white-space: nowrap; }
+  .sm .st { display: inline-flex; align-items: center; gap: 8px; color: var(--text); white-space: nowrap; }
+  .sm .st i { width: 10px; height: 10px; border-radius: 50%; }
+  .sm .link { color: var(--info); white-space: nowrap; }
+  .sm .ib { width: var(--h); height: var(--h); display: grid; place-items: center; color: var(--text); flex: none; }
+  .sm .ib svg { width: 22px; height: 22px; fill: currentColor; }
+  .sm .attn2 { display: flex; gap: 10px; align-items: center; padding: 0 16px; height: var(--h); border-radius: var(--r); background: rgba(58,44,10,.9); border: 1px solid var(--busy); }
+  .sm .attn2 svg { width: 20px; height: 20px; fill: var(--busy); flex: none; }
+  .sm .attn2 span { color: var(--text2); }
+  .sm .tile { height: 56px; width: 100%; border-radius: var(--r); background: rgba(64,64,64,.55); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; }
+  .sm .tile b { font-weight: 500; font-variant-numeric: tabular-nums; }
+  .sm .tile .lbl { font-size: 10px; letter-spacing: .5px; }
+  .sm .shut { width: 68px; height: 68px; border-radius: 50%; border: 3px solid var(--text); display: grid; place-items: center; background: rgba(26,26,26,.4); cursor: pointer; flex: none; }
+  .sm .shut span { display: flex; gap: 6px; } .sm .shut span i { width: 7px; height: 24px; border-radius: 2px; background: var(--text); }
+  .sm .shut:focus-visible { outline: 2px solid var(--info); outline-offset: 3px; }
+  .sm .modes2 { display: flex; gap: 2px; padding: 4px; border-radius: var(--r); }
+  .sm .modes2 span { height: 40px; display: flex; align-items: center; padding: 0 14px; border-radius: 7px; color: var(--text2); white-space: nowrap; }
+  .sm .modes2 span.on { background: var(--sel); color: #fff; }
+  .sm .es { height: var(--h); display: inline-flex; align-items: center; gap: 8px; padding: 0 18px; border: 0; border-radius: var(--r); background: var(--err); color: #fff; font: 600 14px var(--sys); white-space: nowrap; cursor: pointer; }
+  .sm .es svg { width: 20px; height: 20px; fill: #fff; }
+  .sm .es.heavy { box-shadow: 0 0 0 2px #1a1a1a, 0 0 0 3px var(--err); }
+  .sm .cd { font-size: 30px; font-weight: 300; line-height: 1; font-variant-numeric: tabular-nums; letter-spacing: -.3px; }
+  .sm .sub { color: var(--text2); font-variant-numeric: tabular-nums; }
+  .sm .bar2 { height: 4px; border-radius: 2px; background: rgba(96,96,96,.6); } .sm .bar2 i { display: block; height: 100%; width: 39%; border-radius: 2px; background: var(--ok); }
+  .sm .stats2 { display: flex; gap: 18px; font-variant-numeric: tabular-nums; }
+  .sm .stats2 > span { display: flex; flex-direction: column; gap: 1px; }
+  .sm .trace { display: block; width: 100%; height: 44px; }
+  .sm .plan2 { display: flex; flex-direction: column; gap: 10px; padding: 16px; }
+  .sm .plan2 .hd { font-size: 15px; font-weight: 600; }
+  .sm .prow { display: grid; grid-template-columns: 48px 1fr 1fr 32px; gap: 8px; align-items: center; }
+  .sm .prow > span { height: 44px; border-radius: 8px; background: rgba(64,64,64,.55); display: grid; place-items: center; font-variant-numeric: tabular-nums; }
+  .sm .prow > span:first-child { font-weight: 600; }
+  .sm .prow .rm { background: none; color: var(--text2); }
+  .sm .prow .rm svg { width: 18px; height: 18px; fill: currentColor; }
+  .sm .total { display: flex; justify-content: space-between; color: var(--text2); margin-top: auto; }
+  .sm .go { height: var(--h); border: 0; border-radius: var(--r); background: var(--btn); color: #fff; font: 500 14px var(--sys); cursor: pointer; }
+  .sm .go:hover { background: var(--sel); }
+  .sm:not(.planning) .p-plan { display: none; }
+  .sm.planning .run-only { display: none; }
+
+  /* A · Viewfinder: full-width top and bottom bars flush to the edge, one control rail on the right */
+  .lay-a .a-top { left: 0; right: 0; top: 0; height: 56px; display: flex; align-items: center; gap: 16px; padding: 0 4px 0 var(--in); }
+  .lay-a .a-top .grow { flex: 1; }
+  .lay-a .a-attn { left: var(--in); top: calc(56px + var(--in)); background: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
+  .lay-a .a-rail { right: 0; top: 56px; bottom: 80px; width: 104px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 0 12px; border-left: 1px solid rgba(160,160,160,.12); }
+  .lay-a .a-bot { left: 0; right: 0; bottom: 0; height: 80px; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 16px; padding: 0 var(--in); border-top: 1px solid rgba(160,160,160,.12); }
+  .lay-a .a-bot .left { display: flex; align-items: center; gap: 20px; min-width: 0; }
+  .lay-a .a-bot .left .read { display: flex; flex-direction: column; gap: 6px; min-width: 150px; }
+  .lay-a .a-bot .guide { width: 180px; display: flex; flex-direction: column; gap: 2px; }
+  .lay-a .a-bot .right { justify-self: end; display: flex; align-items: center; gap: 16px; }
+  .lay-a .a-top, .lay-a .a-rail, .lay-a .a-bot { border-radius: 0; }
+  .lay-a .p-plan { right: 0; top: 56px; bottom: 80px; width: 360px; border-left: 1px solid rgba(160,160,160,.12); }
+
+  /* B · Corners: four corner panels on one inset, all bottoms on one line */
+  .lay-b .p { border-radius: var(--r); }
+  .lay-b .b-tl { left: var(--in); top: var(--in); height: 56px; display: flex; align-items: center; gap: 14px; padding: 0 16px; }
+  .lay-b .b-tr { right: var(--in); top: var(--in); height: 56px; display: flex; align-items: center; padding: 0 4px 0 16px; gap: 4px; }
+  .lay-b .b-attn { left: var(--in); top: calc(56px + 2 * var(--in) - 4px); background: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
+  .lay-b .b-bl { left: var(--in); bottom: var(--in); width: 330px; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+  .lay-b .b-bl .top { display: flex; align-items: flex-end; justify-content: space-between; }
+  .lay-b .b-bc { left: 50%; transform: translateX(-50%); bottom: var(--in); }
+  .lay-b .b-br { right: var(--in); bottom: var(--in); width: 236px; padding: 16px; display: flex; flex-direction: column; align-items: center; gap: 14px; }
+  .lay-b .b-br .tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; width: 100%; }
+  .lay-b .b-br .es { width: 100%; justify-content: center; }
+  .lay-b .p-plan { right: var(--in); top: calc(56px + 2 * var(--in)); bottom: var(--in); width: 360px; }
+  @media (max-width: 1000px) { .sm .modes2 span { padding: 0 9px; } .lay-a .a-bot .guide { display: none; } .lay-b .b-bc { display: none; } }
+
+  /* C · the Before placement with A's discipline: floating panels, one inset, one radius, aligned edges */
+  .lay-c .p { border-radius: var(--r); }
+  .lay-c .c-top { left: var(--in); right: var(--in); top: var(--in); height: 56px; display: flex; align-items: center; gap: 16px; padding: 0 4px 0 16px; }
+  .lay-c .c-top .grow { flex: 1; }
+  .lay-c .c-attn { left: 50%; transform: translateX(-50%); top: calc(56px + 2 * var(--in)); background: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
+  .lay-c .c-guide { left: var(--in); bottom: var(--in); height: 56px; width: 340px; padding: 0 16px; display: flex; align-items: center; gap: 14px; }
+  .lay-c .c-guide .gl { display: flex; flex-direction: column; gap: 1px; flex: none; }
+  .lay-c .c-guide .trace { flex: 1; width: auto; height: 32px; }
+  .lay-c .c-rail { right: var(--in); top: calc(56px + 2 * var(--in) + 164px + var(--in)); bottom: calc(56px + 2 * var(--in)); width: 168px; padding: 12px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; }
+  .lay-c .c-stop { right: var(--in); bottom: var(--in); width: 168px; background: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
+  .lay-c .c-stop .es { width: 100%; height: 56px; justify-content: center; }
+  .lay-c .c-read { right: var(--in); top: calc(56px + 2 * var(--in)); width: 168px; height: 164px; padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; }
+  .lay-c .c-read .kv { display: flex; justify-content: space-between; font-variant-numeric: tabular-nums; }
+  .lay-c .c-read .kv .lbl { align-self: center; }
+  .lay-c .tile { height: var(--h); }
+  .lay-c .c-modes { left: 50%; transform: translateX(-50%); bottom: var(--in); height: 56px; align-items: center; }
+  .lay-c .c-stop { right: var(--in); bottom: var(--in); background: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
+  .lay-c .c-stop .es { height: 56px; }
+  .lay-c .p-plan { right: var(--in); top: calc(56px + 2 * var(--in)); bottom: calc(56px + 2 * var(--in)); width: 360px; }
+  .lay-c.planning .c-read { display: none; }
+  @media (max-width: 1000px) { .lay-c .c-modes { display: none; } }
+
+  /* C · tap the image to hide the panels; Emergency Stop and any attention banner stay */
+  .lay-c > .sky { cursor: pointer; }
+  .lay-c .p { transition: opacity .22s cubic-bezier(.16, 1, .3, 1); }
+  .lay-c.clean .p:not(.c-stop):not(.c-attn) { opacity: 0; pointer-events: none; }
+  .lay-c .c-hint { left: 50%; transform: translateX(-50%); bottom: var(--in); height: 40px; padding: 0 16px; display: flex; align-items: center; color: var(--text2); font-size: 13px; opacity: 0; pointer-events: none; }
+  .lay-c.clean.hinting .c-hint { opacity: 1; }
+  @media (prefers-reduced-motion: reduce) { .lay-c .p { transition: none; } }
+  /* ---------- Phones ---------- */
+  .phones { display: flex; flex-wrap: wrap; gap: 32px; align-items: flex-start; }
+  .phone-wrap figcaption { margin-top: 10px; max-width: 300px; }
+  .phone-wrap figcaption b { display: block; font-size: 14px; }
+  .phone-wrap figcaption span { color: var(--text2); }
+  .phone-wrap { margin: 0; }
+  .phone { width: 300px; height: 620px; border: 1px solid var(--border); border-radius: 30px; background: var(--panel); overflow: hidden; display: flex; flex-direction: column; position: relative; }
+  .p-safe { height: 30px; background: var(--panel); flex: none; }
+  .p-top { height: 48px; background: var(--panel); border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: flex-end; padding: 0 4px; flex: none; }
+  .p-mid { flex: 1; display: flex; min-height: 0; background: var(--bg); }
+  .p-col { width: 48px; background: var(--panel); border-right: 1px solid var(--border); display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 8px 0; flex: none; overflow: hidden; }
+  .p-col .ic { width: 26px; height: 26px; }
+  .p-content { flex: 1; padding: 8px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+  .p-content .sky { flex: 1; border: 1px solid var(--border); border-radius: 6px; }
+  .p-status { height: 40px; background: var(--panel); border-top: 1px solid var(--border); display: flex; align-items: center; gap: 8px; padding: 0 8px; font-size: 11px; color: var(--text2); flex: none; }
+  .p-nav { height: 64px; background: var(--panel); border-top: 1px solid var(--border); display: grid; grid-template-columns: repeat(4, 1fr); flex: none; }
+  .p-nav span { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; font-size: 11px; color: var(--text2); }
+  .p-nav span .pill { width: 52px; height: 28px; border-radius: 14px; display: grid; place-items: center; }
+  .p-nav span.on .pill { background: var(--sel); } .p-nav span.on { color: var(--text); }
+  .p-nav svg { width: 20px; height: 20px; fill: currentColor; }
+  .p-home { height: 20px; background: var(--panel); flex: none; }
+  /* phone image-first */
+  .phone.full { background: #000; }
+  .phone.full > .sky { position: absolute; inset: 0; }
+  .phone .ov-top { left: 10px; right: 10px; top: 38px; min-height: 48px; gap: 10px; padding: 4px 6px 4px 12px; }
+  .phone .ov-top .devs { gap: 10px; }
+  .phone .ov-top .devs .ic { width: 20px; height: 20px; }
+  .phone .ov-read { left: 10px; right: 10px; bottom: 110px; min-width: 0; padding: 12px 14px; }
+  .phone .ov-read .big { font-size: 34px; }
+  .phone .p-actions { position: absolute; left: 10px; right: 10px; bottom: 30px; display: flex; gap: 10px; align-items: center; justify-content: space-between; }
+  .phone .p-actions .shutter { width: 60px; height: 60px; background: var(--scrim); }
+  .phone .p-actions .opt { min-height: 44px; padding: 0 14px; border-radius: 10px; background: var(--scrim); display: flex; align-items: center; font-size: 14px; }
+  .phone .p-actions .estop { padding: 12px 16px; font-size: 14px; border-radius: 22px; }
+
+  /* ---------- Specimens ---------- */
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; }
+  .sw { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: var(--panel); }
+  .sw .chip { height: 56px; }
+  .sw .chip.scrim { background: linear-gradient(var(--scrim), var(--scrim)), repeating-linear-gradient(45deg, #777 0 6px, #333 6px 12px); }
+  .sw .meta { padding: 8px 10px; }
+  .sw .meta b { display: block; font-size: 13px; }
+  .sw .meta code { font: 11px var(--mono); color: var(--text2); }
+  .sw .meta p { margin: 4px 0 0; font-size: 11.5px; color: var(--text2); }
+  .group-label { margin: 18px 0 8px; }
+  .type-row { display: grid; grid-template-columns: 180px 1fr; gap: 16px; align-items: baseline; padding: 10px 0; border-bottom: 1px solid var(--border); }
+  .type-row code { font: 11px var(--mono); color: var(--text2); }
+  .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .panelbox { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+  .panelbox h3 { margin: 0; font-size: 13px; font-weight: 600; }
+  .line { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  .d-seg { display: inline-flex; border: 1px solid var(--border); border-radius: 16px; overflow: hidden; font-size: 12px; }
+  .d-seg span { padding: 5px 12px; } .d-seg span + span { border-left: 1px solid var(--border); } .d-seg span.on { background: var(--sel); color: #fff; }
+  .d-field { background: var(--input); border: 1px solid var(--border); border-radius: 4px; padding: 6px 8px; width: 120px; color: var(--text); font: 13px var(--sys); }
+  .sb { min-height: 44px; border: 0; border-radius: 10px; padding: 12px 20px; font: 500 14px var(--sys); cursor: pointer; }
+  .sb.primary { background: var(--btn); color: #fff; } .sb.primary:hover { background: var(--sel); }
+  .sb.outline { background: transparent; color: var(--text); border: 1px solid var(--border); }
+  .r-seg { display: inline-flex; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; font-size: 14px; }
+  .r-seg span { min-height: 44px; display: flex; align-items: center; padding: 0 16px; } .r-seg span + span { border-left: 1px solid var(--border); } .r-seg span.on { background: var(--sel); color: #fff; }
+  .shapes { display: flex; flex-wrap: wrap; gap: 16px; }
+  .shape { width: 110px; text-align: center; color: var(--text2); font-size: 11.5px; }
+  .shape div { height: 64px; background: var(--panel-alt); border: 1px solid var(--border); margin-bottom: 6px; }
+  .space-row { display: flex; align-items: center; gap: 12px; padding: 4px 0; }
+  .space-row i { display: block; height: 14px; background: var(--sel); border-radius: 2px; }
+  .space-row code { font: 11px var(--mono); color: var(--text2); width: 60px; }
+  .rules { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+  .rule { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 14px; }
+  .rule b { display: block; margin-bottom: 4px; }
+  .rule p { margin: 0; color: var(--text2); font-size: 12.5px; }
+  .nightdemo { display: flex; gap: 16px; margin-top: 10px; }
+  .nightdemo > div { flex: 1; background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 10px; display: flex; flex-direction: column; gap: 6px; font-size: 12px; }
+  .nightdemo span { display: inline-flex; align-items: center; gap: 6px; }
+  .nightdemo i { width: 10px; height: 10px; border-radius: 50%; }
+
+  @media (max-width: 1100px) {
+    .main { grid-template-columns: 80px 1fr; } .side { display: none; }
+    .pair { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 700px) {
+    .ov-right { display: none; } .ov-read { min-width: 0; right: 12px; bottom: 80px; }
+    .ov-top .devs { display: none; }
+  }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <!-- Night mode: the app's exact matrix (lib/widgets/night_filter.dart) -->
+  <filter id="night" color-interpolation-filters="sRGB">
+    <feColorMatrix type="matrix" values="0.30 0.59 0.11 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0"/>
+  </filter>
+  <symbol id="i-cam" viewBox="0 0 24 24"><path d="M9 3 7.17 5H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-3.17L15 3H9zm3 15a5 5 0 1 1 0-10 5 5 0 0 1 0 10z"/></symbol>
+  <!-- hand-drawn style glyphs, as PR #1474 adds: telescope on tripod, 5-slot filter wheel -->
+  <symbol id="i-mount" viewBox="0 0 24 24"><path d="M3.2 9.6 15.8 3.4l1.6 3.3L4.8 12.9z"/><path d="m17.9 2.3 2.3-1.1 2.4 4.9-2.3 1.1z"/><path d="M10.6 11.4h2l3.6 10.4h-2l-1.4-4.1h-.4v4.1h-1.9v-4.1h-.4l-1.4 4.1H6.7z"/></symbol>
+  <symbol id="i-filter" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M12 1.5a10.5 10.5 0 1 1 0 21 10.5 10.5 0 0 1 0-21zM12 4a2.6 2.6 0 1 0 0 5.2A2.6 2.6 0 0 0 12 4zm6.3 4.6a2.6 2.6 0 1 0 0 5.2 2.6 2.6 0 0 0 0-5.2zM5.7 8.6a2.6 2.6 0 1 0 0 5.2 2.6 2.6 0 0 0 0-5.2zm2.4 6.8a2.6 2.6 0 1 0 0 5.2 2.6 2.6 0 0 0 0-5.2zm7.8 0a2.6 2.6 0 1 0 0 5.2 2.6 2.6 0 0 0 0-5.2z"/></symbol>
+  <symbol id="i-guide" viewBox="0 0 24 24"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zm8.94 3A9 9 0 0 0 13 3.06V1h-2v2.06A9 9 0 0 0 3.06 11H1v2h2.06A9 9 0 0 0 11 20.94V23h2v-2.06A9 9 0 0 0 20.94 13H23v-2h-2.06zM12 19a7 7 0 1 1 0-14 7 7 0 0 1 0 14z"/></symbol>
+  <symbol id="i-focus" viewBox="0 0 24 24"><path d="M5 15H3v4a2 2 0 0 0 2 2h4v-2H5v-4zM5 5h4V3H5a2 2 0 0 0-2 2v4h2V5zm14-2h-4v2h4v4h2V5a2 2 0 0 0-2-2zm0 16h-4v2h4a2 2 0 0 0 2-2v-4h-2v4zM12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z"/></symbol>
+  <symbol id="i-rot" viewBox="0 0 24 24"><path d="M12 4V1L8 5l4 4V6a6 6 0 1 1-6 6H4a8 8 0 1 0 8-8z"/></symbol>
+  <symbol id="i-panel" viewBox="0 0 24 24"><path d="M3 5h18v14H3V5zm2 2v10h14V7H5zm2 2h10v6H7V9z"/></symbol>
+  <symbol id="i-switch" viewBox="0 0 24 24"><path d="M17 7H7a5 5 0 0 0 0 10h10a5 5 0 0 0 0-10zm0 8a3 3 0 1 1 0-6 3 3 0 0 1 0 6z"/></symbol>
+  <symbol id="i-weather" viewBox="0 0 24 24"><path d="M19.35 10.04A7.49 7.49 0 0 0 12 4C9.11 4 6.6 5.64 5.35 8.04A6 6 0 0 0 6 20h13a5 5 0 0 0 .35-9.96z"/></symbol>
+  <symbol id="i-safety" viewBox="0 0 24 24"><path d="M12 1 3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/></symbol>
+  <symbol id="i-dome" viewBox="0 0 24 24"><path d="M12 3a9 9 0 0 0-9 9v2h18v-2a9 9 0 0 0-9-9zm-1 2.1V12H8.2A7 7 0 0 1 11 5.1zM2 16h20v4H2z"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 9 9c0-.46-.04-.92-.1-1.36A5.39 5.39 0 0 1 12.36 3.1 9.3 9.3 0 0 0 12 3z"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 1 0-.7.7l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9z"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 24 24"><path d="M19.14 12.94a7.07 7.07 0 0 0 0-1.88l2.03-1.58a.5.5 0 0 0 .12-.64l-1.92-3.32a.5.5 0 0 0-.61-.22l-2.39.96a7 7 0 0 0-1.62-.94l-.36-2.54a.5.5 0 0 0-.5-.42h-3.84a.5.5 0 0 0-.5.42l-.36 2.54a7 7 0 0 0-1.62.94l-2.39-.96a.5.5 0 0 0-.61.22L2.73 8.84a.5.5 0 0 0 .12.64l2.03 1.58a7.07 7.07 0 0 0 0 1.88l-2.03 1.58a.5.5 0 0 0-.12.64l1.92 3.32c.13.22.39.3.61.22l2.39-.96c.5.38 1.04.7 1.62.94l.36 2.54c.05.24.25.42.5.42h3.84c.25 0 .45-.18.5-.42l.36-2.54a7 7 0 0 0 1.62-.94l2.39.96c.22.08.48 0 .61-.22l1.92-3.32a.5.5 0 0 0-.12-.64l-2.03-1.58zM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z"/></symbol>
+  <symbol id="i-public" viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm-1 17.93A8 8 0 0 1 4 12c0-.62.08-1.21.21-1.79L9 15v1a2 2 0 0 0 2 2v1.93zm6.9-2.54A2 2 0 0 0 16 16h-1v-3a1 1 0 0 0-1-1H8v-2h2a1 1 0 0 0 1-1V7h2a2 2 0 0 0 2-2v-.41a7.98 7.98 0 0 1 2.9 12.8z"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M22 7h-9v2h9V7zm0 8h-9v2h9v-2zM5.54 11 2 7.46l1.41-1.41 2.12 2.12 4.24-4.24 1.41 1.41L5.54 11zm0 8L2 15.46l1.41-1.41 2.12 2.12 4.24-4.24 1.41 1.41L5.54 19z"/></symbol>
+  <symbol id="i-seq" viewBox="0 0 24 24"><path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z"/></symbol>
+  <symbol id="i-live" viewBox="0 0 24 24"><path d="M12 9a3.2 3.2 0 1 0 0 6.4A3.2 3.2 0 0 0 12 9zm-3-7L7.17 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-3.17L15 2H9zm3 15a5 5 0 1 1 0-10 5 5 0 0 1 0 10z"/></symbol>
+  <symbol id="i-report" viewBox="0 0 24 24"><path d="M15.73 3H8.27L3 8.27v7.46L8.27 21h7.46L21 15.73V8.27L15.73 3zM12 17.3a1.3 1.3 0 1 1 0-2.6 1.3 1.3 0 0 1 0 2.6zm1-4.3h-2V7h2v6z"/></symbol>
+  <symbol id="i-warn" viewBox="0 0 24 24"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></symbol>
+  <symbol id="i-lib" viewBox="0 0 24 24"><path d="M4 6H2v14a2 2 0 0 0 2 2h14v-2H4V6zm16-4H8a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2z"/></symbol>
+  <symbol id="i-help" viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm1 17h-2v-2h2v2zm2.07-7.75-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26A2 2 0 1 0 10 9H8a4 4 0 1 1 7.07 2.25z"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></symbol>
+  <symbol id="i-wifi" viewBox="0 0 24 24"><path d="M1 9l2 2a12.73 12.73 0 0 1 18 0l2-2C16.93 2.93 7.08 2.93 1 9zm8 8 3 3 3-3a4.24 4.24 0 0 0-6 0zm-4-4 2 2a7.07 7.07 0 0 1 10 0l2-2C15.14 9.14 8.87 9.14 5 13z"/></symbol>
+</svg>
+
+<div class="page">
+  <header>
+    <h1>Ara design preview</h1>
+    <p>DESIGN.md drawn as screens. The full UI follows the shell in PR #1474 (top-bar devices with names, Settings gear, rail Planning → Checklist → Sequence → Live, phone layout below 600 px). Simple Mode is image-first: the frame fills the screen and the controls float on translucent overlays. Colours, sizes and radii come from the theme code. I haven't run the app, so the full UI is close, not exact. <span class="tag prop">proposed</span> marks what doesn't exist in code.</p>
+  </header>
+  <nav class="toc" aria-label="Sections">
+    <a href="#screens">Desktop: full UI vs Simple Mode</a>
+    <a href="#phone">Phone</a>
+    <a href="#components">Components</a>
+    <a href="#colors">Colours</a>
+    <a href="#type">Type</a>
+    <a href="#shape">Shape and spacing</a>
+    <a href="#rules">Named rules</a>
+  </nav>
+
+  <section id="screens">
+    <h2>Desktop: the same session in both modes</h2>
+    <p class="note">The Camera dot blinks green because it's exposing (PR #1474's working state); amber on Guider means it needs a look.</p>
+    <div class="controls">
+      <div class="seg" role="group" aria-label="Mode">
+        <button data-mode="full" aria-pressed="true">Full UI (default)</button>
+        <button data-mode="simple" aria-pressed="false">Simple Mode</button>
+      </div>
+      <div class="seg" role="group" aria-label="Simple Mode view" id="smode-seg" hidden>
+        <button data-smode="run" aria-pressed="true">Simple: running</button>
+        <button data-smode="plan" aria-pressed="false">Simple: Run plan</button>
+      </div>
+      <div class="seg" role="group" aria-label="Night mode">
+        <button data-night="off" aria-pressed="true">Night mode off</button>
+        <button data-night="on" aria-pressed="false">Night mode on</button>
+      </div>
+      <div class="seg" role="group" aria-label="Emergency Stop">
+        <button data-estop="now" aria-pressed="true">Emergency Stop: today</button>
+        <button data-estop="heavy" aria-pressed="false">Heavier (ALP-4812)</button>
+      </div>
+    </div>
+
+    <div id="stage">
+      <!-- Full UI (PR #1474 shell) -->
+      <div class="app" id="full">
+        <div class="topbar">
+          <div class="chips" id="chips"></div>
+          <div class="iconbtn" title="Search settings (⌘K)"><svg><use href="#i-search"/></svg></div>
+          <div class="iconbtn" title="Night mode (⌘N)"><svg><use href="#i-moon"/></svg></div>
+          <div class="iconbtn" title="Settings"><svg><use href="#i-gear"/></svg></div>
+        </div>
+        <div class="main">
+          <div class="rail">
+            <div class="dest"><div class="pill"><svg><use href="#i-public"/></svg></div>Planning</div>
+            <div class="dest"><div class="pill"><svg><use href="#i-check"/></svg></div>Checklist</div>
+            <div class="dest"><div class="pill"><svg><use href="#i-seq"/></svg></div>Sequence</div>
+            <div class="dest on"><div class="pill"><svg><use href="#i-live"/></svg></div>Live</div>
+          </div>
+          <div class="center">
+            <div class="attn"><svg><use href="#i-warn"/></svg><div><b>Guiding lost. Retrying (2 of 5).</b><span>Exposures are paused until the guide star is found again.</span></div></div>
+            <div class="sky"><div class="galaxy"></div><span class="cap num">Frame 47 · L · 300 s · HFR 2.31 · 1,842 stars</span></div>
+            <div class="hist"></div>
+          </div>
+          <div class="side">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <div class="title">M31 Andromeda</div>
+              <span class="state"><i class="g-busy"></i>Attention</span>
+            </div>
+            <div>
+              <div class="section">Sequence</div>
+              <div class="row"><span>Frame</span><span class="num">47 / 120</span></div>
+              <div class="row"><span>Next exposure</span><span class="num">02:14</span></div>
+              <div class="row"><span>Filter</span><span>Luminance</span></div>
+            </div>
+            <div>
+              <div class="section">Quality</div>
+              <div class="row"><span>HFR</span><span class="num">2.31 px</span></div>
+              <div class="row"><span>Guide RMS</span><span class="num">0.62″</span></div>
+              <div class="row"><span>Sensor</span><span class="num">−10.0 °C</span></div>
+            </div>
+            <div style="display:flex;gap:8px"><button class="b primary">Pause</button><button class="b outline">Skip target</button></div>
+          </div>
+        </div>
+        <div class="bottombar">
+          <span class="pulse"><svg width="16" height="16" style="fill:var(--ok)"><use href="#i-wifi"/></svg>Connected</span>
+          <button class="estop"><svg><use href="#i-report"/></svg>Emergency Stop</button>
+          <span class="pulse"><i></i>Backup streaming</span>
+          <span class="grow"></span>
+          <span class="launch"><svg><use href="#i-lib"/></svg>Image Library</span>
+          <span class="launch"><svg><use href="#i-help"/></svg>Help</span>
+        </div>
+      </div>
+
+      <!-- Simple Mode: image first -->
+      <div class="sm lay-c" id="simpleC" hidden>
+        <div class="sky"><div class="galaxy" style="width:50%;height:17%"></div></div>
+        <div class="p c-top">
+          <div class="devs"><div class="ic" title="Camera"><svg><use href="#i-cam"/></svg><i class="dot g-ok blink"></i></div><div class="ic" title="Mount"><svg><use href="#i-mount"/></svg><i class="dot g-ok"></i></div><div class="ic" title="Guider"><svg><use href="#i-guide"/></svg><i class="dot g-busy"></i></div><div class="ic" title="Focuser"><svg><use href="#i-focus"/></svg><i class="dot g-ok"></i></div><div class="ic" title="Filter Wheel"><svg><use href="#i-filter"/></svg><i class="dot g-ok"></i></div></div>
+          <div class="vsep"></div>
+          <span class="tgt">M31 Andromeda</span>
+          <span class="st"><i class="g-busy"></i>Attention</span>
+          <span class="grow"></span>
+          <span class="link">Show all options</span>
+          <div class="ib"><svg><use href="#i-search"/></svg></div>
+          <div class="ib"><svg><use href="#i-moon"/></svg></div>
+          <div class="ib"><svg><use href="#i-gear"/></svg></div>
+        </div>
+        <div class="p c-attn run-only"><div class="attn2"><svg><use href="#i-warn"/></svg><b>Guiding lost. Retrying (2 of 5).</b><span>Exposures paused.</span></div></div>
+        <div class="p c-guide"><div class="gl"><span class="lbl">Guiding</span><span class="sub">RMS 0.62″</span></div><svg class="trace" viewBox="0 0 180 44" preserveAspectRatio="none" aria-label="Guiding trace"><line x1="0" y1="22" x2="180" y2="22" stroke="#555" stroke-width="1"/><polyline fill="none" stroke="#42A5F5" stroke-width="1.5" points="0,21 10,24 20,19 30,23 40,21 50,25 60,20 70,22 80,18 90,24 100,21 110,20 120,17 130,27 140,31 150,36 160,13 170,21 180,22"/><polyline fill="none" stroke="#E0E0E0" stroke-width="1.2" stroke-dasharray="3 2" points="0,23 10,21 20,24 30,20 40,23 50,21 60,24 70,20 80,23 90,21 100,24 110,22 120,20 130,25 140,28 150,32 160,17 170,23 180,22"/></svg></div>
+        <div class="p c-rail run-only">
+          <div class="tile"><span class="lbl">Exposure</span><b>300 s</b></div>
+          <div class="tile"><span class="lbl">Filter</span><b>L</b></div>
+          <button class="shut" aria-label="Pause"><span><i></i><i></i></span></button>
+          <div class="tile"><span class="lbl">Gain</span><b>100</b></div>
+        </div>
+        <div class="p c-hint" aria-live="polite">Tap the image to show the controls</div>
+        <div class="p c-stop"><button class="es"><svg><use href="#i-report"/></svg>Emergency Stop</button></div>
+        <div class="p p-plan plan2">
+          <div class="hd">Tonight's plan · M31</div>
+          <div class="sub">Autofocus, dither and flats follow your profile.</div>
+          <div class="prow"><span>L</span><span>300 s</span><span>× 40</span><span class="rm"><svg><use href="#i-x"/></svg></span></div>
+          <div class="prow"><span>R</span><span>180 s</span><span>× 20</span><span class="rm"><svg><use href="#i-x"/></svg></span></div>
+          <div class="prow"><span>G</span><span>180 s</span><span>× 20</span><span class="rm"><svg><use href="#i-x"/></svg></span></div>
+          <div class="prow"><span>B</span><span>180 s</span><span>× 20</span><span class="rm"><svg><use href="#i-x"/></svg></span></div>
+          <span class="link" style="height:44px;display:flex;align-items:center">Add filter</span>
+          <div class="total"><span>100 frames</span><span class="sub">6 h 20 min · ends 04:35</span></div>
+          <button class="go">Start imaging</button>
+        </div>
+        <div class="p c-read">
+          <div><div class="sub">Next frame in</div><div style="display:flex;align-items:baseline;justify-content:space-between"><span class="cd">02:14</span><span class="sub">47/120</span></div></div>
+          <div class="bar2"><i></i></div>
+          <div class="kv"><span class="lbl">HFR</span><span>2.31</span></div>
+          <div class="kv"><span class="lbl">Sensor</span><span>−10 °C</span></div>
+        </div>
+        <div class="p c-modes modes2"><span>Polar align</span><span>Target</span><span>Focus</span><span>Preview</span><span class="on">Run</span></div>
+      </div>
+
+    </div>
+    <p class="note" style="margin-top:10px">Simple Mode, layout C (ALP-4810): the frame fills the screen; a status strip on top; the attention banner centred under it when something needs you; a right column of Next frame, controls and Emergency Stop, all 168 px wide; a bottom row of guiding, the mode switcher (Polar align · Target · Focus · Preview · Run) and Stop, all 56 px tall. One 16 px inset and 10 px corners throughout. Click the image to hide the panels; Emergency Stop and any alert stay. "Simple: Run plan" shows the quick plan builder.</p>
+  </section>
+
+  <section id="phone">
+    <h2>Phone</h2>
+    <p class="note">Left: what PR #1474 gives a phone today (the full UI folded below 600 px). Right: the proposed image-first Companion Mode, the same idea as desktop Simple Mode.</p>
+    <div class="phones night-target">
+      <figure class="phone-wrap">
+        <div class="phone">
+          <div class="p-safe"></div>
+          <div class="p-top">
+            <div class="iconbtn"><svg><use href="#i-search"/></svg></div>
+            <div class="iconbtn"><svg><use href="#i-moon"/></svg></div>
+            <div class="iconbtn"><svg><use href="#i-gear"/></svg></div>
+          </div>
+          <div class="p-mid">
+            <div class="p-col" id="phone-col"></div>
+            <div class="p-content">
+              <div class="sky"><div class="galaxy" style="width:80%;height:14%"></div></div>
+              <div class="row"><span>Frame</span><span class="num">47 / 120</span></div>
+              <div class="row"><span>Next</span><span class="num">02:14</span></div>
+            </div>
+          </div>
+          <div class="p-status"><svg width="14" height="14" style="fill:var(--ok)"><use href="#i-wifi"/></svg><button class="estop" style="font-size:11px;padding:4px 10px"><svg><use href="#i-report"/></svg>Emergency Stop</button></div>
+          <div class="p-nav">
+            <span><div class="pill"><svg><use href="#i-public"/></svg></div>Planning</span>
+            <span><div class="pill"><svg><use href="#i-check"/></svg></div>Checklist</span>
+            <span><div class="pill"><svg><use href="#i-seq"/></svg></div>Sequence</span>
+            <span class="on"><div class="pill"><svg><use href="#i-live"/></svg></div>Live</span>
+          </div>
+          <div class="p-home"></div>
+        </div>
+        <figcaption><b>Today: PR #1474 narrow layout <span class="tag now">in PR</span></b><span>Bottom tab bar, device column down the left, search / night / Settings top right.</span></figcaption>
+      </figure>
+
+      <figure class="phone-wrap">
+        <div class="phone full">
+          <div class="sky"><div class="galaxy" style="width:95%;height:16%"></div></div>
+          <div class="ov ov-top">
+            <div class="devs" id="phone-devs"></div>
+            <span class="grow"></span>
+            <div class="iconbtn"><svg><use href="#i-moon"/></svg></div>
+            <div class="iconbtn"><svg><use href="#i-gear"/></svg></div>
+          </div>
+          <div class="ov ov-read">
+            <div style="display:flex;justify-content:space-between;align-items:center"><span class="tgt" style="font-weight:600">M31 Andromeda</span><span class="state" style="background:rgba(46,46,46,.8)"><i class="g-ok"></i>Running</span></div>
+            <div class="big num">02:14</div>
+            <div class="bar"><i></i></div>
+            <div class="sub num">Frame 47 of 120 · HFR 2.31 · −10 °C</div>
+          </div>
+          <div class="p-actions">
+            <div class="opt num">300 s · L</div>
+            <button class="shutter" aria-label="Pause"><span><i></i><i></i></span></button>
+            <button class="estop"><svg><use href="#i-report"/></svg>Stop</button>
+          </div>
+        </div>
+        <figcaption><b>Companion Mode, image first <span class="tag prop">proposed</span></b><span>The frame fills the phone; status on top, readouts and the shutter at the bottom within thumb reach, Stop always there.</span></figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section id="components">
+    <h2>Components at both densities</h2>
+    <p class="note">Same colours and states; Simple Mode only changes size, corners and type, and puts its controls on overlays.</p>
+    <div class="pair night-target">
+      <div class="panelbox">
+        <h3>Full UI <span class="tag now">in code</span></h3>
+        <div class="line"><button class="b primary">Start sequence</button><button class="b outline">Cancel</button></div>
+        <div class="line"><span class="d-seg"><span class="on">Cooler on</span><span>Off</span></span><input class="d-field num" value="300 s" aria-label="Exposure"></div>
+        <div class="line">
+          <span class="state"><i class="g-ok"></i>Running</span>
+          <span class="state"><i class="g-busy"></i>Attention</span>
+          <span class="state"><i class="g-err"></i>Failed</span>
+          <span class="state"><i class="g-off"></i>Offline</span>
+        </div>
+        <div class="line" id="chip-samples"></div>
+      </div>
+      <div class="panelbox" style="background:none;border-color:var(--border);position:relative;overflow:hidden">
+        <div class="sky" style="position:absolute;inset:0"><div class="galaxy"></div></div>
+        <h3 style="position:relative">Simple Mode overlays <span class="tag prop">proposed</span></h3>
+        <div class="line" style="position:relative">
+          <div class="ov" style="position:relative;padding:12px;display:flex;gap:12px;align-items:center">
+            <button class="shutter" aria-label="Pause" style="width:56px;height:56px"><span><i></i><i></i></span></button>
+            <button class="sb primary">Start imaging</button>
+          </div>
+        </div>
+        <div class="line" style="position:relative">
+          <div class="ov" style="position:relative;padding:8px"><span class="r-seg" style="border-color:transparent"><span class="on">Cooler on</span><span>Off</span></span></div>
+          <div class="ov" style="position:relative;padding:10px 14px"><span class="state" style="background:none;font-size:14px;padding:0"><i class="g-ok"></i>Running</span></div>
+        </div>
+        <div class="line" style="position:relative"><button class="estop" style="padding:12px 20px;font-size:14px;border-radius:24px"><svg><use href="#i-report"/></svg>Emergency Stop</button></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="colors">
+    <h2>Colours</h2>
+    <p class="note">Neutral greys carry the interface; colour appears only when it means a state.</p>
+    <div class="section group-label">Neutral</div><div class="grid" id="neutral"></div>
+    <div class="section group-label">Primary and selection</div><div class="grid" id="primary"></div>
+    <div class="section group-label">Status</div><div class="grid" id="status"></div>
+  </section>
+
+  <section id="type">
+    <h2>Type</h2>
+    <p class="note">The platform's system font, small and dense in the full UI. Hierarchy comes from weight and bright-versus-dim.</p>
+    <div class="type-row"><code>Title · 600 · 15px</code><span style="font-size:15px;font-weight:600">M31 Andromeda Galaxy</span></div>
+    <div class="type-row"><code>Section · 600 · 11px</code><span class="section">Sequence</span></div>
+    <div class="type-row"><code>Body · 400 · 13px</code><span>Exposures are paused until the guide star is found again.</span></div>
+    <div class="type-row"><code>Caption · 400 · 11.5px</code><span style="font-size:11.5px;color:var(--text2)">Last solved 2 min ago</span></div>
+    <div class="type-row"><code>Numeric · tabular</code><span class="num">02:14 · 47 / 120 · −10.0 °C · 0.62″</span></div>
+    <div class="type-row"><code>Label · 500 · 11px</code><span style="font-size:11px;font-weight:500;letter-spacing:.5px;color:var(--text2)">Filter Wheel</span></div>
+    <div class="type-row"><code>Mono · paths only</code><span style="font:11px var(--mono);color:var(--text2)">/mnt/usb/ara/2026-11-01/M31/L_0047.fits</span></div>
+    <div class="type-row"><code>Body (Simple) · 14px</code><span style="font-size:14px">Frame 47 of 120 · Luminance <span class="tag prop">proposed</span></span></div>
+  </section>
+
+  <section id="shape">
+    <h2>Shape and spacing</h2>
+    <div class="pair">
+      <div class="panelbox">
+        <h3>Corner radii</h3>
+        <div class="shapes">
+          <div class="shape"><div style="border-radius:4px"></div>4 px · fields</div>
+          <div class="shape"><div style="border-radius:6px"></div>6 px · cards, buttons</div>
+          <div class="shape"><div style="border-radius:8px"></div>8 px · containers</div>
+          <div class="shape"><div style="border-radius:12px"></div>12 px · state pills</div>
+          <div class="shape"><div style="border-radius:10px;border-color:var(--busy)"></div>10 px · Simple Mode</div>
+        </div>
+      </div>
+      <div class="panelbox">
+        <h3>Spacing scale</h3>
+        <div class="space-row"><code>4</code><i style="width:4px"></i></div>
+        <div class="space-row"><code>8</code><i style="width:8px"></i></div>
+        <div class="space-row"><code>12</code><i style="width:12px"></i></div>
+        <div class="space-row"><code>16</code><i style="width:16px"></i></div>
+        <div class="space-row"><code>24</code><i style="width:24px"></i></div>
+        <p class="note" style="margin:0">Full UI mostly 8–16. Simple Mode 12–24.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="rules">
+    <h2>Named rules</h2>
+    <div class="rules">
+      <div class="rule"><b>State-Only Colour</b><p>An accent appears only when it means a state: a dot, a state chip, a destructive action.</p></div>
+      <div class="rule"><b>Brightness-First</b><p>Night mode removes hue, so states must differ by brightness too. Left: normal. Right: the app's night filter.</p>
+        <div class="nightdemo">
+          <div><span><i class="g-ok"></i>Connected</span><span><i class="g-busy"></i>Busy</span><span><i class="g-err"></i>Fault</span><span><i class="g-off"></i>Offline</span></div>
+          <div class="night"><span><i class="g-ok"></i>Connected</span><span><i class="g-busy"></i>Busy</span><span><i class="g-err"></i>Fault</span><span><i class="g-off"></i>Offline</span></div>
+        </div>
+      </div>
+      <div class="rule"><b>Steady Digits</b><p>Every live number uses tabular figures, so a countdown never shifts its neighbours.</p></div>
+      <div class="rule"><b>No-Glow</b><p>No shadows. Surfaces separate by a 1 px hairline and a grey step. Simple Mode's overlays are the one translucent surface.</p></div>
+      <div class="rule"><b>One Ramp</b><p>New screens use the shared type sizes, not per-widget 11/12/13 px styles.</p></div>
+      <div class="rule"><b>Two Densities</b><p>Full UI dense. Simple Mode and phones roomy and image-first. Same colours, rules and Emergency Stop.</p></div>
+    </div>
+  </section>
+</div>
+
+<script>
+  // PR #1474 device order and the session's states (camera exposing = blinking green)
+  const DEVICES = [
+    ['Camera','i-cam','g-ok blink'],['Mount','i-mount','g-ok'],['Guider','i-guide','g-busy'],['Focuser','i-focus','g-ok'],
+    ['Filter Wheel','i-filter','g-ok'],['Rotator','i-rot','g-off'],['Flat Panel','i-panel','g-off'],['Switch','i-switch','g-off'],
+    ['Weather','i-weather','g-ok'],['Safety','i-safety','g-ok'],['Dome','i-dome','g-off']];
+  const chip = ([n, ic, st]) => `<div class="eq" title="${n}"><div class="ic"><svg><use href="#${ic}"/></svg><i class="dot ${st}"></i></div><div class="lb${n.length > 8 ? ' fit' : ''}">${n}</div></div>`;
+  const iconOnly = ([n, ic, st]) => `<div class="ic" title="${n}"><svg><use href="#${ic}"/></svg><i class="dot ${st}"></i></div>`;
+  document.getElementById('chips').innerHTML = DEVICES.map(chip).join('');
+  document.getElementById('chip-samples').innerHTML = DEVICES.slice(0, 5).map(chip).join('');
+  document.getElementById('phone-col').innerHTML = DEVICES.map(iconOnly).join('');
+  document.getElementById('simple-devs').innerHTML = DEVICES.slice(0, 5).map(iconOnly).join('');
+  document.getElementById('phone-devs').innerHTML = DEVICES.slice(0, 4).map(iconOnly).join('');
+
+  // Deterministic star fields
+  document.querySelectorAll('.sky').forEach((f, n) => {
+    let s = 11 + n * 17;
+    const r = () => (s = (s * 9301 + 49297) % 233280) / 233280;
+    for (let i = 0; i < 140; i++) {
+      const d = document.createElement('i'), big = r() < 0.06, size = big ? 3 : (r() < 0.5 ? 1.5 : 2);
+      d.style.cssText = `left:${(r() * 100).toFixed(2)}%;top:${(r() * 100).toFixed(2)}%;width:${size}px;height:${size}px;opacity:${(0.3 + r() * 0.7).toFixed(2)}${big ? ';box-shadow:0 0 4px rgba(255,255,255,.6)' : ''}`;
+      f.appendChild(d);
+    }
+  });
+
+  // Swatches straight from the tokens
+  const sw = {
+    neutral: [['Night Floor','bg-primary','#1A1A1A','App background'],['Panel Grey','bg-panel','#262626','Bars, rail, cards, safe areas'],['Panel Alt','bg-panel-alt','#2E2E2E','Hover, alternate rows'],['Input Well','bg-input','#333333','Fields, tracks'],['Hairline','border','#404040','Borders, dividers'],['Starlight Text','text-primary','#E0E0E0','Primary text, icons'],['Dim Text','text-secondary','#A0A0A0','Labels, device names'],['Faint Text','text-disabled','#606060','Disabled, empty'],['Overlay Scrim','overlay-scrim','rgba(26,26,26,.72)','Simple Mode overlays (proposed)','scrim']],
+    primary: [['Console Blue','button-primary','#1565C0','Main action of a pane'],['Selection Blue','selection-bg','#1976D2','Selected tab, segment'],['Sky Info Blue','accent-info','#42A5F5','Info, links, lit Settings gear']],
+    status: [['Connected Green','accent-connected','#4CAF50','Connected; blinks while working'],['Dew Amber','accent-busy / warning','#FFB300','Needs a look; warning with icon + text'],['Fault Red','accent-error','#E53935','Faults, destructive, Emergency Stop'],['Unplugged Grey','accent-disconnected','#606060','Disconnected, off']]
+  };
+  for (const [id, list] of Object.entries(sw)) {
+    document.getElementById(id).innerHTML = list.map(([n, t, h, use, cls]) =>
+      `<div class="sw"><div class="chip ${cls || ''}" style="${cls ? '' : 'background:' + h}"></div><div class="meta"><b>${n}</b><code>${t} · ${h}</code><p>${use}</p></div></div>`).join('');
+  }
+
+  // Toggles
+  const groups = (attr, fn) => document.querySelectorAll(`[data-${attr}]`).forEach(b => b.addEventListener('click', () => {
+    document.querySelectorAll(`[data-${attr}]`).forEach(x => x.setAttribute('aria-pressed', x === b));
+    fn(b.dataset[attr]);
+  }));
+  let MODE = 'full';
+    const showSimple = () => { document.getElementById('simpleC').hidden = MODE !== 'simple'; };
+  groups('mode', m => { MODE = m; document.getElementById('full').hidden = m !== 'full'; showSimple(); document.getElementById('smode-seg').hidden = m !== 'simple'; });
+  groups('smode', v => { ['simpleC'].forEach(id => document.getElementById(id).classList.toggle('planning', v === 'plan'));  });
+  groups('night', v => document.querySelectorAll('#stage, .night-target').forEach(el => el.classList.toggle('night', v === 'on')));
+  groups('estop', v => document.querySelectorAll('#stage .estop, #stage .es').forEach(el => el.classList.toggle('heavy', v === 'heavy')));
+
+  // Layout C: a tap on the image hides every panel except Emergency Stop and the attention banner
+  (() => {
+    const c = document.getElementById('simpleC');
+    let t;
+    c.querySelector(':scope > .sky').addEventListener('click', () => {
+      const clean = c.classList.toggle('clean');
+      clearTimeout(t);
+      c.classList.toggle('hinting', clean);
+      if (clean) t = setTimeout(() => c.classList.remove('hinting'), 2200);
+    });
+  })();
+</script>
+</body>
+</html>
