@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/main.dart' show isShell, shellFor;
@@ -393,34 +392,4 @@ void main() {
     expect(isShell(const AppShell()), isTrue);
     expect(isShell(const SizedBox()), isFalse);
   });
-
-  List<MethodCall> recordSystemUiCalls(WidgetTester tester) {
-    final calls = <MethodCall>[];
-    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
-      if (call.method.startsWith('SystemChrome.setEnabledSystemUI')) {
-        calls.add(call);
-      }
-      return null;
-    });
-    addTearDown(() => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, null));
-    return calls;
-  }
-
-  testWidgets('on a tablet Simple Mode hides the status bar and brings it back on exit', (tester) async {
-    final calls = recordSystemUiCalls(tester);
-    await _pump(tester, const Size(1180, 820));
-    expect(calls.map((c) => c.arguments), [SystemUiMode.immersiveSticky.toString()]);
-    calls.clear();
-    await tester.pumpWidget(const SizedBox());
-    expect(calls.map((c) => c.arguments), [
-      [for (final o in SystemUiOverlay.values) o.toString()],
-    ], reason: 'leaving restores the default overlays');
-  }, variant: const TargetPlatformVariant({TargetPlatform.iOS, TargetPlatform.android}));
-
-  testWidgets('on the Mac Simple Mode leaves the system UI alone', (tester) async {
-    final calls = recordSystemUiCalls(tester);
-    await _pump(tester, const Size(1470, 854));
-    await tester.pumpWidget(const SizedBox());
-    expect(calls, isEmpty);
-  }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
 }

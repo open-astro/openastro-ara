@@ -1,7 +1,6 @@
 import 'dart:io' show Platform;
 import 'dart:math' as math;
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -96,31 +95,6 @@ class SimpleShell extends ConsumerStatefulWidget {
 
 class _SimpleShellState extends ConsumerState<SimpleShell> {
   bool _clean = false;
-
-  // The tablet's status bar (clock, battery, Wi-Fi) goes, as on ASIAIR;
-  // a swipe from the edge brings it back for a moment.
-  static bool get _touch =>
-      defaultTargetPlatform == TargetPlatform.iOS ||
-      defaultTargetPlatform == TargetPlatform.android;
-
-  @override
-  void initState() {
-    super.initState();
-    if (_touch) {
-      SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
-    }
-  }
-
-  @override
-  void dispose() {
-    if (_touch) {
-      SystemChrome.setEnabledSystemUIMode(
-        SystemUiMode.manual,
-        overlays: SystemUiOverlay.values,
-      );
-    }
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
