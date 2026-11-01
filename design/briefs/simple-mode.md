@@ -18,9 +18,9 @@ Shaped 2026-11-01 (`/impeccable shape simple-mode`). Paperclip: ALP-4810. Render
 - **Image first:** the latest frame fills the screen.
 - **Simpler than ASIAir, not a copy of it.**
 - **Controls:** they float on translucent panels (the two-rail layout in `DESIGN.md`):
-  - **top:** a status strip (device dots, Night mode, ⋯), with the attention banner centred under it when needed;
+  - **top:** a status strip (device dots, Search, Night mode, Show all options, Settings), with the attention banner centred under it when needed;
   - **top-left:** the camera status pill, at most 300 px wide;
-  - **right rail, 72 px wide and only as tall as its controls:** the mode name (tap for the five modes as a grid), the shutter, the settings chip (the current mode's options: "5 s · 100" in Preview, "HFR 2.31" in Focus);
+  - **right rail, 72 px wide and only as tall as its controls:** the mode name (tap for the five modes as a grid), the shutter, the settings chip (the current mode's options: "5 s · 100" in Preview, "Auto" or "Manual" in Focus);
   - **bottom right:** the compact Emergency Stop on its own, a 60 px STOP with a 2 s hold;
   - **left rail:** Sky, Info and Library; Info shows the last frame's facts as one line under the strip, aligned right;
   - **bottom row, 56 px tall:** the guiding graph and the histogram at equal width, each once it has data;
@@ -33,7 +33,7 @@ Shaped 2026-11-01 (`/impeccable shape simple-mode`). Paperclip: ALP-4810. Render
 ## Scope
 
 - **One screen:** a mode grid with Preview · Focus · Polar align · Target · Run.
-- **Settings:** open from ⋯. "Show all options" switches to the full UI. In slice 1 Settings, the device dots and ⌘K also switch to the full UI on the matching Settings page; a settings sheet over Simple Mode comes later.
+- **Settings:** open from the strip's gear. "Show all options" switches to the full UI. In slice 1 Settings, the device dots and ⌘K also switch to the full UI on the matching Settings page; a settings sheet over Simple Mode comes later.
 - **Getting in:** turn on Settings → System → Experimental → Simple Mode (off by default, per client), then use the frame icon in the full UI's top-right cluster, between Night mode and the gear.
 - **Run:** a quick plan builder only. It sets exposure and frame count per filter for the current target, and autofocus, dither and flats follow the profile's defaults. The sequence editor stays in the full UI only.
 - **Phones:** they run Simple Mode only, with no Sequence tab, once Simple Mode exists. Until then, PR #1474's phone layout stands.
@@ -44,7 +44,7 @@ Shaped 2026-11-01 (`/impeccable shape simple-mode`). Paperclip: ALP-4810. Render
 
 | Where | What |
 |---|---|
-| Top | Status strip: device dots, Night mode, ⋯ |
+| Top | Status strip: device dots, Search, Night mode, Show all options, Settings |
 | Top-left, under the strip | Camera status pill |
 | Top-right, under the strip | Info line (when on) |
 | Centre, under the strip | Attention banner, when something needs the person |
