@@ -490,25 +490,27 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
             children: [
               Icon(Icons.circle, size: 10, color: dot),
               const SizedBox(width: AraSpace.s8),
+              // One text, so the label keeps its room and only the detail's
+              // tail is cut (two Flexibles halved the space: "Taking a fr…").
               Flexible(
-                child: Text(
-                  label,
+                child: Text.rich(
+                  TextSpan(
+                    text: label,
+                    children: [
+                      if (detail != null) ...[
+                        const WidgetSpan(child: SizedBox(width: AraSpace.s8)),
+                        TextSpan(
+                          text: detail,
+                          style: const TextStyle(color: AraColors.textSecondary),
+                        ),
+                      ],
+                    ],
+                  ),
                   style: kSimpleText,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
-              if (detail != null) ...[
-                const SizedBox(width: AraSpace.s8),
-                Flexible(
-                  child: Text(
-                    detail,
-                    style: kSimpleText.copyWith(color: AraColors.textSecondary),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
               if (exposing) ...[
                 const SizedBox(width: AraSpace.s12),
                 SizedBox(

@@ -413,8 +413,8 @@ class SimplePanel extends StatelessWidget {
   );
 }
 
-/// Device dots (connected gear only), night mode and ⋯ (search, Settings,
-/// Show all options).
+/// Device dots (connected gear only), then Search, Night mode, Show all
+/// options and Settings, in the full UI's top-bar order.
 class _StatusStrip extends ConsumerWidget {
   const _StatusStrip();
 
@@ -444,6 +444,11 @@ class _StatusStrip extends ConsumerWidget {
             ),
           ),
           IconButton(
+            icon: const Icon(Icons.search, size: 22),
+            tooltip: 'Search settings',
+            onPressed: () => showCommandPalette(context),
+          ),
+          IconButton(
             icon: Icon(
               night ? Icons.nights_stay : Icons.nights_stay_outlined,
               size: 22,
@@ -452,39 +457,19 @@ class _StatusStrip extends ConsumerWidget {
             tooltip: night ? 'Night mode on' : 'Night mode',
             onPressed: () => ref.read(nightModeProvider.notifier).set(!night),
           ),
-          PopupMenuButton<String>(
-            key: const Key('simple-more'),
-            tooltip: 'More',
-            icon: const Icon(Icons.more_horiz, size: 22),
-            position: PopupMenuPosition.under,
-            shape: const RoundedRectangleBorder(
-              borderRadius: BorderRadius.all(Radius.circular(10)),
-            ),
-            onSelected: (v) => switch (v) {
-              'search' => showCommandPalette(context),
-              'settings' =>
-                ref
-                    .read(selectedTabIndexProvider.notifier)
-                    .select(kOptionsTabIndex),
-              _ => leaveSimpleMode(ref, SimpleModeScreen.preview.fullUiTab),
-            },
-            itemBuilder: (_) => const [
-              PopupMenuItem(
-                value: 'search',
-                height: 44,
-                child: Text('Search settings', style: kSimpleText),
-              ),
-              PopupMenuItem(
-                value: 'settings',
-                height: 44,
-                child: Text('Settings', style: kSimpleText),
-              ),
-              PopupMenuItem(
-                value: 'all',
-                height: 44,
-                child: Text('Show all options', style: kSimpleText),
-              ),
-            ],
+          // The full UI's Simple Mode button, mirrored: the way back.
+          IconButton(
+            icon: const Icon(Icons.fit_screen, size: 22),
+            tooltip: 'Show all options',
+            onPressed: () =>
+                leaveSimpleMode(ref, SimpleModeScreen.preview.fullUiTab),
+          ),
+          IconButton(
+            icon: const Icon(Icons.settings_outlined, size: 22),
+            tooltip: 'Settings',
+            onPressed: () => ref
+                .read(selectedTabIndexProvider.notifier)
+                .select(kOptionsTabIndex),
           ),
         ],
       ),

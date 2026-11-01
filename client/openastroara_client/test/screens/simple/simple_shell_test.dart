@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -162,7 +163,8 @@ void main() {
     // The chip speaks for the mode: Focus's summary, not Preview's exposure.
     final chip = find.byKey(const Key('simple-settings'));
     expect(find.descendant(of: chip, matching: find.text(_summary(container))), findsNothing);
-    expect(find.descendant(of: chip, matching: find.text('Focus')), findsOneWidget, reason: 'no HFR yet');
+    expect(find.descendant(of: chip, matching: find.text('Manual')), findsOneWidget,
+        reason: 'no focuser connected, so focus is by hand');
     await tester.tap(chip);
     await tester.pump();
     expect(find.byKey(const Key('simple-autofocus')), findsNothing, reason: 'the chip hides the Focus panel');
@@ -236,7 +238,7 @@ void main() {
     expect(line.right, 1024 - kSimpleInset, reason: 'aligned right');
     container.read(captureProgressProvider.notifier).beginExposing(const Duration(seconds: 5));
     await tester.pump();
-    final pill = _panelOf(tester, find.text('Taking a frame'));
+    final pill = _panelOf(tester, find.textContaining('Taking a frame'));
     expect(pill.overlaps(line), isFalse, reason: 'never on top of the status pill');
     container.read(captureProgressProvider.notifier).reset();
     await tester.pump(const Duration(seconds: 1));
@@ -274,7 +276,7 @@ void main() {
     await _frame(tester, container);
     container.read(captureProgressProvider.notifier).beginExposing(const Duration(seconds: 5));
     await tester.pump();
-    final status = _panelOf(tester, find.text('Taking a frame'));
+    final status = _panelOf(tester, find.textContaining('Taking a frame'));
     expect(status.topLeft, const Offset(kSimpleInset, kSimpleInset * 2 + kSimpleBarHeight),
         reason: 'top-left, under the strip');
 
@@ -283,7 +285,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.byType(EmergencyStopButton).hitTestable(), findsNothing);
     expect(find.byKey(const Key('simple-shutter')).hitTestable(), findsNothing);
-    final corner = _panelOf(tester, find.text('Taking a frame'));
+    final corner = _panelOf(tester, find.textContaining('Taking a frame'));
     expect(corner.topLeft, const Offset(kSimpleInset, kSimpleInset));
 
     await tester.tapAt(const Offset(400, 400));
@@ -298,15 +300,34 @@ void main() {
     container.read(captureProgressProvider.notifier).beginExposing(const Duration(seconds: 5));
     await tester.pump();
     final first = tester.widget<LinearProgressIndicator>(find.byType(LinearProgressIndicator)).value!;
-    final firstText = tester.widget<Text>(find.textContaining('s left')).data;
+    String left() => RegExp(r'\d+ s left').firstMatch(
+        tester.widget<Text>(find.textContaining('s left')).textSpan!.toPlainText())![0]!;
+    final firstText = left();
     await tester.pump(const Duration(seconds: 2));
     expect(tester.widget<LinearProgressIndicator>(find.byType(LinearProgressIndicator)).value, greaterThan(first));
-    final text = tester.widget<Text>(find.textContaining('s left')).data;
+    final text = left();
     expect(text, isNot(firstText));
     expect(text, matches(RegExp(r'^\d+ s left$')));
     final before = tester.widget<LinearProgressIndicator>(find.byType(LinearProgressIndicator)).value!;
     await tester.pump(const Duration(milliseconds: 16));
     expect(tester.widget<LinearProgressIndicator>(find.byType(LinearProgressIndicator)).value, greaterThan(before));
+    container.read(captureProgressProvider.notifier).reset();
+    await tester.pump(const Duration(seconds: 1));
+  });
+
+  testWidgets('the status pill never cuts its label short while the whole line fits', (tester) async {
+    // Half-size test glyphs: "Taking a frame  3 s left" fits the 300 px pill.
+    tester.platformDispatcher.textScaleFactorTestValue = 0.5;
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    final container = await _pump(tester, const Size(1024, 768));
+    container.read(captureProgressProvider.notifier).beginExposing(const Duration(seconds: 5));
+    await tester.pump();
+    final texts = find.descendant(of: find.byType(SimpleStatusPill), matching: find.byType(RichText));
+    expect(texts, findsWidgets);
+    for (final e in texts.evaluate()) {
+      final p = e.renderObject! as RenderParagraph;
+      expect(p.didExceedMaxLines, isFalse, reason: '"${p.text.toPlainText()}" is cut');
+    }
     container.read(captureProgressProvider.notifier).reset();
     await tester.pump(const Duration(seconds: 1));
   });
@@ -341,19 +362,23 @@ void main() {
     expect(find.text('STOP'), findsOneWidget);
   });
 
-  testWidgets('⋯ holds Settings and Show all options, which return to the full UI', (tester) async {
+  testWidgets('the strip has Search, Night mode, the full UI and Settings out, in the full UI\'s order', (tester) async {
     final container = await _pump(tester, const Size(1024, 768));
-    await tester.tap(find.byKey(const Key('simple-more')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Settings'));
+    expect(find.byKey(const Key('simple-more')), findsNothing, reason: 'nothing hides under ⋯');
+    final order = ['Search settings', 'Night mode', 'Show all options', 'Settings'];
+    final xs = [for (final t in order) tester.getCenter(find.byTooltip(t)).dx];
+    for (var i = 1; i < xs.length; i++) {
+      expect(xs[i], greaterThan(xs[i - 1]), reason: '${order[i]} after ${order[i - 1]}');
+    }
+
+    await tester.tap(find.byTooltip('Settings'));
     await tester.pumpAndSettle();
     expect(container.read(simpleModeProvider).value, isFalse);
     expect(container.read(selectedTabIndexProvider), kOptionsTabIndex);
 
     await container.read(simpleModeProvider.notifier).set(true);
-    await tester.tap(find.byKey(const Key('simple-more')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Show all options'));
+    await tester.tap(find.byTooltip('Show all options'));
     await tester.pumpAndSettle();
     expect(container.read(simpleModeProvider).value, isFalse);
     expect(container.read(selectedTabIndexProvider), kLiveTabIndex);
