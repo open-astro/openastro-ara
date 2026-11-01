@@ -86,7 +86,7 @@ class TopEquipmentChips extends StatelessWidget {
             watchLevel: (ref) => equipmentChipLevel(ref.watch(mountProvider))),
         const GuiderChip(),
         EquipmentStatusChip(
-            icon: Icons.adjust,
+            icon: Icons.center_focus_strong,
             label: 'Focuser',
             panelId: 'eq.focuser',
             faultTypes: const {'focuser'},
@@ -106,6 +106,7 @@ class TopEquipmentChips extends StatelessWidget {
             watchLevel: (ref) => equipmentChipLevel(ref.watch(rotatorProvider))),
         EquipmentStatusChip(
             icon: Icons.wb_sunny,
+            glyph: const EquipmentGlyph.flatPanel(color: AraColors.textPrimary),
             label: 'Flat Panel',
             panelId: 'eq.flat',
             // One physical device under two wire tokens (the reconnector
@@ -113,7 +114,7 @@ class TopEquipmentChips extends StatelessWidget {
             faultTypes: const {'covercalibrator', 'flatdevice'},
             watchLevel: (ref) =>
                 equipmentChipLevel(ref.watch(flatPanelProvider))),
-        const SwitchStatusChip(icon: Icons.power, label: 'Switch'),
+        const SwitchStatusChip(icon: Icons.toggle_on, label: 'Switch'),
         EquipmentStatusChip(
             icon: Icons.cloud_outlined,
             label: 'Weather',
@@ -121,13 +122,14 @@ class TopEquipmentChips extends StatelessWidget {
             faultTypes: const {'observingconditions'},
             watchLevel: (ref) => equipmentChipLevel(ref.watch(weatherProvider))),
         EquipmentStatusChip(
-            icon: Icons.shield_outlined,
+            icon: Icons.verified_user,
             label: 'Safety',
             panelId: 'eq.safety',
             faultTypes: const {'safetymonitor'},
             watchLevel: (ref) => equipmentChipLevel(ref.watch(safetyMonitorProvider))),
         EquipmentStatusChip(
             icon: Icons.home_outlined,
+            glyph: const EquipmentGlyph.dome(color: AraColors.textPrimary),
             label: 'Dome',
             panelId: 'eq.dome',
             faultTypes: const {'dome'},

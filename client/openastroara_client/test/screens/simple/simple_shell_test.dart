@@ -14,6 +14,7 @@ import 'package:openastroara/widgets/imaging/capture_progress_card.dart';
 import 'package:openastroara/state/settings/settings_nav.dart';
 import 'package:openastroara/state/simple_mode_state.dart';
 import 'package:openastroara/widgets/emergency_stop_button.dart';
+import 'package:openastroara/widgets/equipment/equipment_glyphs.dart';
 import 'package:openastroara/widgets/settings_gear_button.dart';
 
 class _MemPrefs extends SimpleModePrefsService {
@@ -172,6 +173,16 @@ void main() {
     expect(controls.top - facts.bottom, stop.top - controls.bottom,
         reason: 'the same gap above and below the capture panel');
     expect(stop.top - controls.bottom, kSimpleInset);
+  });
+
+  testWidgets('device dots use the agreed icons: focus corners, toggle, shield with check, panel and dome glyphs',
+      (tester) async {
+    await _pump(tester, const Size(1470, 854));
+    expect(tester.takeException(), isNull);
+    for (final icon in [Icons.center_focus_strong, Icons.toggle_on, Icons.verified_user, Icons.gps_fixed]) {
+      expect(find.byIcon(icon), findsOneWidget, reason: '$icon');
+    }
+    expect(find.byType(EquipmentGlyph), findsNWidgets(4), reason: 'mount, filter wheel, flat panel, dome');
   });
 
   testWidgets('a tap on the frame hides every panel but Emergency Stop, a second brings them back',
