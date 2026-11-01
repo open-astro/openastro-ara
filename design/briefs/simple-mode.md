@@ -30,6 +30,7 @@ Shaped 2026-11-01 (`/impeccable shape simple-mode`). Paperclip: ALP-4810. Render
 - **Run:** a quick plan builder only. It sets exposure and frame count per filter for the current target, and autofocus, dither and flats follow the profile's defaults. The sequence editor stays in the full UI only.
 - **Phones:** they run Simple Mode only, with no Sequence tab, once Simple Mode exists. Until then, PR #1474's phone layout stands.
 - **Desktop default:** the full UI stays the default on desktop.
+- **Full UI untouched:** the full UI keeps its current layout (PR #1474's shell). Every change this brief leads to lands in Simple Mode only.
 
 ## On the image during a run
 
@@ -50,10 +51,18 @@ The histogram is left out.
 - **Night mode:** every panel must still read through the red filter.
 - **Shortcuts:** none for now; the clean view toggles only by clicking the image.
 
-## Open: a builder must not invent these
+## Mode screens (decided 2026-11-01)
 
-- What each mode's own screen shows: Polar align, Target, Focus and Preview each need a pass.
-- The order of the modes. The current order follows the night's workflow.
-- Which controls stay visible in both modes.
-- The empty state: no rig connected, no frame yet.
-- What Run shows after the plan finishes.
+- **Mode order:** Preview · Polar align · Focus · Target · Run.
+- **Preview:** shoot and loop. The right column holds last-frame facts (HFR, stars, exposure, saved), then Exposure, Filter, a capture shutter, Loop/Single and Save frame. Nothing is saved unless the person taps Save.
+- **Polar align:** a target drawn on the image (crosshair, 10′ ring, current pole, arrow). The right column shows the error, the zone (under 10′ green, under 60′ amber, otherwise red), the altitude and azimuth corrections, and Stop.
+- **Focus:** a zoomed star with its HFR ring, the HFR, the focus curve, the position, Autofocus, and four nudge steps.
+- **Target:** a full-screen planetarium. Tap an object, then Go to (slew and plate-solve centre). Search sits under the status strip.
+- **Run finished:** a Night done summary (frames per filter, integration, best HFR, issues, flats, mount parked, then Image Library and New plan).
+- **No rig / no frame:** tonight's planetarium behind a Connect to your rig card (discovered rigs, Add by address). Device dots go grey, the switcher dims, and Emergency Stop shows disabled.
+- **Always visible in both modes:** Emergency Stop, the attention banner, device status dots, Night mode and the Simple ↔ full UI switch.
+
+## Still open
+
+- Exact copy for each state, and the error states inside each mode (solve failed, autofocus failed, slew blocked by the horizon).
+- How Simple Mode's "Show all options" lands in the full UI (which tab opens).

@@ -154,7 +154,7 @@
   @media (max-width: 900px) { .ov-guide, .ov-modes { display: none; } }
 
   /* ===== Simple Mode layouts A and B: one inset, one radius, one control height ===== */
-  .sm { --in: 16px; --r: 10px; --h: 48px; position: relative; height: 640px; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; font-size: 14px; }
+  .sm { --in: 16px; --r: 10px; --h: 48px; position: relative; height: 680px; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; font-size: 14px; }
   .sm > .sky { position: absolute; inset: 0; }
   .sm .p { position: absolute; background: var(--scrim); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
   .sm .lbl { font-size: 11px; font-weight: 600; letter-spacing: .6px; text-transform: uppercase; color: var(--text2); }
@@ -199,8 +199,6 @@
   .sm .total { display: flex; justify-content: space-between; color: var(--text2); margin-top: auto; }
   .sm .go { height: var(--h); border: 0; border-radius: var(--r); background: var(--btn); color: #fff; font: 500 14px var(--sys); cursor: pointer; }
   .sm .go:hover { background: var(--sel); }
-  .sm:not(.planning) .p-plan { display: none; }
-  .sm.planning .run-only { display: none; }
 
   /* A · Viewfinder: full-width top and bottom bars flush to the edge, one control rail on the right */
   .lay-a .a-top { left: 0; right: 0; top: 0; height: 56px; display: flex; align-items: center; gap: 16px; padding: 0 4px 0 var(--in); }
@@ -248,7 +246,6 @@
   .lay-c .c-stop { right: var(--in); bottom: var(--in); background: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
   .lay-c .c-stop .es { height: 56px; }
   .lay-c .p-plan { right: var(--in); top: calc(56px + 2 * var(--in)); bottom: calc(56px + 2 * var(--in)); width: 360px; }
-  .lay-c.planning .c-read { display: none; }
   @media (max-width: 1000px) { .lay-c .c-modes { display: none; } }
 
   /* C · tap the image to hide the panels; Emergency Stop and any attention banner stay */
@@ -258,6 +255,55 @@
   .lay-c .c-hint { left: 50%; transform: translateX(-50%); bottom: var(--in); height: 40px; padding: 0 16px; display: flex; align-items: center; color: var(--text2); font-size: 13px; opacity: 0; pointer-events: none; }
   .lay-c.clean.hinting .c-hint { opacity: 1; }
   @media (prefers-reduced-motion: reduce) { .lay-c .p { transition: none; } }
+
+  /* C · per-mode views (Preview · Polar align · Focus · Target · Run) */
+  .lay-c [hidden] { display: none !important; }
+  .lay-c .atlas { position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 120%, #1b2230 0, #11151d 45%, #0b0d12 80%); overflow: hidden; }
+  .lay-c .atlas i { position: absolute; border-radius: 50%; background: #dfe6f0; }
+  .lay-c .atlas svg.const { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .lay-c .obj { position: absolute; display: flex; align-items: center; gap: 6px; color: var(--text2); font-size: 12px; transform: translate(-7px, -7px); }
+  .lay-c .obj b { width: 14px; height: 14px; border-radius: 50%; border: 1.5px solid #9fb3cc; flex: none; }
+  .lay-c .obj.sel b { width: 22px; height: 22px; border: 2px solid var(--info); margin: -4px; }
+  .lay-c .obj.sel { color: var(--text); font-weight: 600; }
+  .lay-c .t-card { left: 52%; top: 46%; width: 260px; padding: 14px 16px; display: flex; flex-direction: column; gap: 6px; }
+  .lay-c .t-search { left: var(--in); top: calc(56px + 2 * var(--in)); height: var(--h); width: 260px; display: flex; align-items: center; gap: 10px; padding: 0 14px; color: var(--text2); }
+  .lay-c .t-search svg { width: 20px; height: 20px; fill: currentColor; }
+  .lay-c .ghost { height: var(--h); border-radius: var(--r); border: 1px solid rgba(160,160,160,.35); background: transparent; color: var(--text); font: 500 14px var(--sys); padding: 0 16px; cursor: pointer; }
+  .lay-c .row2 { display: flex; gap: 8px; }
+  .lay-c .row2 > * { flex: 1; }
+  .lay-c .loop { display: flex; width: 100%; height: 40px; border-radius: 8px; overflow: hidden; background: rgba(64,64,64,.55); }
+  .lay-c .loop span { flex: 1; display: grid; place-items: center; color: var(--text2); }
+  .lay-c .loop span.on { background: var(--sel); color: #fff; }
+  .lay-c .shut.cap span { width: 46px; height: 46px; border-radius: 50%; background: var(--text); display: block; }
+  .lay-c .pa-ov { position: absolute; left: 50%; top: 50%; width: 420px; height: 420px; transform: translate(-50%, -50%); pointer-events: none; }
+  .lay-c .c-err { right: var(--in); top: calc(56px + 2 * var(--in)); width: 168px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
+  .lay-c .big2 { font-size: 30px; font-weight: 300; line-height: 1; font-variant-numeric: tabular-nums; }
+  .lay-c .zone { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; }
+  .lay-c .zone i { width: 10px; height: 10px; border-radius: 50%; }
+  .lay-c .dir { display: flex; align-items: center; justify-content: space-between; font-variant-numeric: tabular-nums; }
+  .lay-c .dir svg { width: 20px; height: 20px; fill: var(--text); }
+  .lay-c .f-star { left: var(--in); top: calc(56px + 2 * var(--in)); width: 240px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+  .lay-c .f-star .zoom { height: 200px; border-radius: 8px; background: #050505; position: relative; overflow: hidden; }
+  .lay-c .f-star .zoom::before { content: ""; position: absolute; left: 50%; top: 50%; width: 46px; height: 46px; transform: translate(-50%, -50%); border-radius: 50%; background: radial-gradient(circle, #fff 0, rgba(255,255,255,.85) 18%, rgba(220,220,220,.35) 45%, transparent 70%); }
+  .lay-c .f-star .zoom::after { content: ""; position: absolute; left: 50%; top: 50%; width: 64px; height: 64px; transform: translate(-50%, -50%); border-radius: 50%; border: 1px dashed rgba(66,165,245,.8); }
+  .lay-c .f-panel { right: var(--in); top: calc(56px + 2 * var(--in)); bottom: calc(56px + 2 * var(--in)); width: 168px; padding: 14px 12px; display: flex; flex-direction: column; gap: 10px; }
+  .lay-c .f-panel svg.curve { width: 100%; height: 110px; display: block; }
+  .lay-c .nudge { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+  .lay-c .nudge span { height: 44px; border-radius: 8px; background: rgba(64,64,64,.55); display: grid; place-items: center; }
+  .lay-c .nudge svg { width: 20px; height: 20px; fill: var(--text); }
+  .lay-c .c-done { right: var(--in); top: calc(56px + 2 * var(--in)); bottom: calc(56px + 2 * var(--in)); width: 320px; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+  .lay-c .c-done .kv { display: flex; justify-content: space-between; font-variant-numeric: tabular-nums; }
+  .lay-c .c-done .kv span:first-child { color: var(--text2); }
+  .lay-c .c-done .hr { height: 1px; background: rgba(160,160,160,.2); }
+  .lay-c .e-card { left: 50%; top: 50%; transform: translate(-50%, -50%); width: 380px; padding: 20px; display: flex; flex-direction: column; gap: 12px; }
+  .lay-c .e-card .hd { font-size: 18px; font-weight: 600; }
+  .lay-c .rig { display: flex; align-items: center; gap: 12px; padding: 8px 8px 8px 14px; border-radius: var(--r); background: rgba(64,64,64,.55); }
+  .lay-c .rig .grow { flex: 1; }
+  .lay-c .c-modes span { cursor: pointer; }
+  .lay-c .c-modes span:hover:not(.on) { color: var(--text); }
+  .lay-c.offline .c-modes { opacity: .45; }
+  .lay-c.offline .devs .dot { background: var(--off) !important; animation: none; }
+  .lay-c.offline .c-stop { opacity: .5; }
   /* ---------- Phones ---------- */
   .phones { display: flex; flex-wrap: wrap; gap: 32px; align-items: flex-start; }
   .phone-wrap figcaption { margin-top: 10px; max-width: 300px; }
@@ -371,6 +417,12 @@
   <symbol id="i-lib" viewBox="0 0 24 24"><path d="M4 6H2v14a2 2 0 0 0 2 2h14v-2H4V6zm16-4H8a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2z"/></symbol>
   <symbol id="i-help" viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm1 17h-2v-2h2v2zm2.07-7.75-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26A2 2 0 1 0 10 9H8a4 4 0 1 1 7.07 2.25z"/></symbol>
   <symbol id="i-x" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></symbol>
+  <symbol id="i-up" viewBox="0 0 24 24"><path d="M4 12l1.41 1.41L11 7.83V20h2V7.83l5.58 5.59L20 12l-8-8-8 8z"/></symbol>
+  <symbol id="i-left" viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></symbol>
+  <symbol id="i-l" viewBox="0 0 24 24"><path d="M15.41 7.41 14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></symbol>
+  <symbol id="i-r" viewBox="0 0 24 24"><path d="M10 6 8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></symbol>
+  <symbol id="i-dl" viewBox="0 0 24 24"><path d="M18.41 7.41 17 6l-6 6 6 6 1.41-1.41L13.83 12zM12.41 7.41 11 6l-6 6 6 6 1.41-1.41L7.83 12z"/></symbol>
+  <symbol id="i-dr" viewBox="0 0 24 24"><path d="M5.59 7.41 7 6l6 6-6 6-1.41-1.41L10.17 12zm6 0L13 6l6 6-6 6-1.41-1.41L16.17 12z"/></symbol>
   <symbol id="i-wifi" viewBox="0 0 24 24"><path d="M1 9l2 2a12.73 12.73 0 0 1 18 0l2-2C16.93 2.93 7.08 2.93 1 9zm8 8 3 3 3-3a4.24 4.24 0 0 0-6 0zm-4-4 2 2a7.07 7.07 0 0 1 10 0l2-2C15.14 9.14 8.87 9.14 5 13z"/></symbol>
 </svg>
 
@@ -398,8 +450,10 @@
         <button data-mode="simple" aria-pressed="false">Simple Mode</button>
       </div>
       <div class="seg" role="group" aria-label="Simple Mode view" id="smode-seg" hidden>
-        <button data-smode="run" aria-pressed="true">Simple: running</button>
-        <button data-smode="plan" aria-pressed="false">Simple: Run plan</button>
+        <button data-smode="run" aria-pressed="true">Run</button>
+        <button data-smode="plan" aria-pressed="false">Run plan</button>
+        <button data-smode="done" aria-pressed="false">Night done</button>
+        <button data-smode="empty" aria-pressed="false">No rig</button>
       </div>
       <div class="seg" role="group" aria-label="Night mode">
         <button data-night="off" aria-pressed="true">Night mode off</button>
@@ -464,29 +518,123 @@
 
       <!-- Simple Mode: image first -->
       <div class="sm lay-c" id="simpleC" hidden>
-        <div class="sky"><div class="galaxy" style="width:50%;height:17%"></div></div>
+        <div class="sky" data-v="run plan done preview pa focus"><div class="galaxy" style="width:50%;height:17%"></div></div>
         <div class="p c-top">
           <div class="devs"><div class="ic" title="Camera"><svg><use href="#i-cam"/></svg><i class="dot g-ok blink"></i></div><div class="ic" title="Mount"><svg><use href="#i-mount"/></svg><i class="dot g-ok"></i></div><div class="ic" title="Guider"><svg><use href="#i-guide"/></svg><i class="dot g-busy"></i></div><div class="ic" title="Focuser"><svg><use href="#i-focus"/></svg><i class="dot g-ok"></i></div><div class="ic" title="Filter Wheel"><svg><use href="#i-filter"/></svg><i class="dot g-ok"></i></div></div>
           <div class="vsep"></div>
-          <span class="tgt">M31 Andromeda</span>
-          <span class="st"><i class="g-busy"></i>Attention</span>
+          <span class="tgt" id="c-tgt">M31 Andromeda</span>
+          <span class="st" id="c-st"><i class="g-busy"></i>Attention</span>
           <span class="grow"></span>
           <span class="link">Show all options</span>
           <div class="ib"><svg><use href="#i-search"/></svg></div>
           <div class="ib"><svg><use href="#i-moon"/></svg></div>
           <div class="ib"><svg><use href="#i-gear"/></svg></div>
         </div>
-        <div class="p c-attn run-only"><div class="attn2"><svg><use href="#i-warn"/></svg><b>Guiding lost. Retrying (2 of 5).</b><span>Exposures paused.</span></div></div>
-        <div class="p c-guide"><div class="gl"><span class="lbl">Guiding</span><span class="sub">RMS 0.62″</span></div><svg class="trace" viewBox="0 0 180 44" preserveAspectRatio="none" aria-label="Guiding trace"><line x1="0" y1="22" x2="180" y2="22" stroke="#555" stroke-width="1"/><polyline fill="none" stroke="#42A5F5" stroke-width="1.5" points="0,21 10,24 20,19 30,23 40,21 50,25 60,20 70,22 80,18 90,24 100,21 110,20 120,17 130,27 140,31 150,36 160,13 170,21 180,22"/><polyline fill="none" stroke="#E0E0E0" stroke-width="1.2" stroke-dasharray="3 2" points="0,23 10,21 20,24 30,20 40,23 50,21 60,24 70,20 80,23 90,21 100,24 110,22 120,20 130,25 140,28 150,32 160,17 170,23 180,22"/></svg></div>
-        <div class="p c-rail run-only">
+        <div class="p c-attn" data-v="run"><div class="attn2"><svg><use href="#i-warn"/></svg><b>Guiding lost. Retrying (2 of 5).</b><span>Exposures paused.</span></div></div>
+        <div class="p c-guide" data-v="run plan"><div class="gl"><span class="lbl">Guiding</span><span class="sub">RMS 0.62″</span></div><svg class="trace" viewBox="0 0 180 44" preserveAspectRatio="none" aria-label="Guiding trace"><line x1="0" y1="22" x2="180" y2="22" stroke="#555" stroke-width="1"/><polyline fill="none" stroke="#42A5F5" stroke-width="1.5" points="0,21 10,24 20,19 30,23 40,21 50,25 60,20 70,22 80,18 90,24 100,21 110,20 120,17 130,27 140,31 150,36 160,13 170,21 180,22"/><polyline fill="none" stroke="#E0E0E0" stroke-width="1.2" stroke-dasharray="3 2" points="0,23 10,21 20,24 30,20 40,23 50,21 60,24 70,20 80,23 90,21 100,24 110,22 120,20 130,25 140,28 150,32 160,17 170,23 180,22"/></svg></div>
+        <div class="p c-rail" data-v="run">
           <div class="tile"><span class="lbl">Exposure</span><b>300 s</b></div>
           <div class="tile"><span class="lbl">Filter</span><b>L</b></div>
           <button class="shut" aria-label="Pause"><span><i></i><i></i></span></button>
           <div class="tile"><span class="lbl">Gain</span><b>100</b></div>
         </div>
+
+        <div class="atlas" data-v="target empty">
+          <svg class="const" viewBox="0 0 1000 680" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+            <polyline fill="none" stroke="rgba(120,150,190,.35)" stroke-width="1" points="300,170 380,215 470,240 560,300 640,330"/>
+            <polyline fill="none" stroke="rgba(120,150,190,.35)" stroke-width="1" points="470,240 455,330 430,420"/>
+            <polyline fill="none" stroke="rgba(120,150,190,.35)" stroke-width="1" points="700,140 760,190 820,170 870,230"/>
+            <path d="M0 600 Q 500 540 1000 610" fill="none" stroke="rgba(66,165,245,.35)" stroke-width="1" stroke-dasharray="4 4"/>
+          </svg>
+          <div class="obj sel" data-v="target" style="left:52%;top:40%"><b></b>M31</div>
+          <div class="obj" data-v="target" style="left:61%;top:52%"><b></b>M33</div>
+          <div class="obj" data-v="target" style="left:30%;top:28%"><b></b>NGC 7000</div>
+          <div class="obj" data-v="target" style="left:78%;top:24%"><b></b>M45</div>
+        </div>
+        <div class="p t-search" data-v="target"><svg><use href="#i-search"/></svg>Search objects</div>
+        <div class="p t-card" data-v="target">
+          <span class="tgt">M31 · Andromeda Galaxy</span>
+          <span class="sub">62° up · best until 01:40 · sets 04:10</span>
+          <button class="go" style="margin-top:6px">Go to M31</button>
+          <span class="sub" style="font-size:12px">Slews, then centres with a plate solve.</span>
+        </div>
+        <div class="p e-card" data-v="empty">
+          <span class="hd">Connect to your rig</span>
+          <span class="sub">Rigs found on your network</span>
+          <div class="rig"><span class="st"><i class="g-ok"></i></span><div class="grow"><b>ara-pi.local</b><div class="sub" style="font-size:12px">OpenAstro Ara · 10.0.50.20</div></div><button class="go" style="padding:0 18px">Connect</button></div>
+          <span class="link">Add a rig by address</span>
+        </div>
+        <div class="p c-read" data-v="preview">
+          <div class="sub">Last frame</div>
+          <div class="kv"><span class="lbl">HFR</span><span>2.31</span></div>
+          <div class="kv"><span class="lbl">Stars</span><span>1,842</span></div>
+          <div class="kv"><span class="lbl">Exposure</span><span>10 s · L</span></div>
+          <div class="kv"><span class="lbl">Saved</span><span>No</span></div>
+        </div>
+        <div class="p c-rail" data-v="preview">
+          <div class="tile"><span class="lbl">Exposure</span><b>10 s</b></div>
+          <div class="tile"><span class="lbl">Filter</span><b>L</b></div>
+          <button class="shut cap" aria-label="Take a frame"><span></span></button>
+          <div class="loop" role="group" aria-label="Loop"><span class="on">Loop</span><span>Single</span></div>
+          <span class="link">Save frame</span>
+        </div>
+        <svg class="pa-ov" data-v="pa" viewBox="0 0 420 420" aria-hidden="true">
+          <circle cx="210" cy="210" r="60" fill="none" stroke="rgba(76,175,80,.7)" stroke-width="1.5" stroke-dasharray="5 4"/>
+          <line x1="190" y1="210" x2="230" y2="210" stroke="#E0E0E0" stroke-width="1.5"/><line x1="210" y1="190" x2="210" y2="230" stroke="#E0E0E0" stroke-width="1.5"/>
+          <circle cx="210" cy="210" r="8" fill="none" stroke="#E0E0E0" stroke-width="1.5"/>
+          <line x1="318" y1="168" x2="226" y2="206" stroke="#FFB300" stroke-width="1.5" stroke-dasharray="6 4"/>
+          <polygon points="222,208 234,199 232,212" fill="#FFB300"/>
+          <circle cx="322" cy="166" r="9" fill="none" stroke="#FFB300" stroke-width="2"/>
+          <text x="336" y="160" fill="#E0E0E0" font-size="13" font-family="system-ui">Pole now</text>
+          <text x="150" y="292" fill="#A0A0A0" font-size="13" font-family="system-ui">Inside the ring: under 10′</text>
+        </svg>
+        <div class="p c-err" data-v="pa">
+          <span class="lbl">Polar error</span>
+          <span class="big2">14′ 30″</span>
+          <span class="zone"><i class="g-busy"></i>Keep adjusting</span>
+          <div class="hr" style="height:1px;background:rgba(160,160,160,.2)"></div>
+          <div class="dir"><span class="sub">Altitude</span><span style="display:flex;align-items:center;gap:4px"><svg><use href="#i-up"/></svg>3.2′</span></div>
+          <div class="dir"><span class="sub">Azimuth</span><span style="display:flex;align-items:center;gap:4px"><svg><use href="#i-left"/></svg>14.1′</span></div>
+          <button class="ghost" style="margin-top:4px">Stop</button>
+        </div>
+        <div class="p f-star" data-v="focus">
+          <span class="lbl">Star, zoomed</span>
+          <div class="zoom"></div>
+          <span class="sub">HFR ring: 2.31 px</span>
+        </div>
+        <div class="p f-panel" data-v="focus">
+          <span class="lbl">HFR</span>
+          <span class="big2">2.31</span>
+          <svg class="curve" viewBox="0 0 144 110" aria-label="Focus curve">
+            <path d="M8 14 Q 72 150 136 18" fill="none" stroke="rgba(66,165,245,.8)" stroke-width="1.5"/>
+            <g fill="#E0E0E0"><circle cx="10" cy="18" r="2.5"/><circle cx="28" cy="40" r="2.5"/><circle cx="46" cy="60" r="2.5"/><circle cx="62" cy="74" r="2.5"/><circle cx="76" cy="80" r="2.5"/><circle cx="92" cy="72" r="2.5"/><circle cx="108" cy="58" r="2.5"/><circle cx="124" cy="38" r="2.5"/></g>
+            <line x1="74" y1="6" x2="74" y2="104" stroke="rgba(76,175,80,.7)" stroke-dasharray="3 3"/>
+          </svg>
+          <span class="sub" style="font-variant-numeric:tabular-nums">Position 12,480</span>
+          <button class="go">Autofocus</button>
+          <div class="nudge" role="group" aria-label="Move focuser">
+            <span title="In, large"><svg><use href="#i-dl"/></svg></span><span title="In, small"><svg><use href="#i-l"/></svg></span><span title="Out, small"><svg><use href="#i-r"/></svg></span><span title="Out, large"><svg><use href="#i-dr"/></svg></span>
+          </div>
+        </div>
+        <div class="p c-done" data-v="done">
+          <span class="tgt" style="font-size:17px">Night done</span>
+          <span class="sub">M31 · 21:12 – 04:31</span>
+          <div class="hr"></div>
+          <div class="kv"><span>Luminance</span><span>40 × 300 s</span></div>
+          <div class="kv"><span>Red</span><span>20 × 180 s</span></div>
+          <div class="kv"><span>Green</span><span>20 × 180 s</span></div>
+          <div class="kv"><span>Blue</span><span>20 × 180 s</span></div>
+          <div class="hr"></div>
+          <div class="kv"><span>Integration</span><span>6 h 12 min</span></div>
+          <div class="kv"><span>Best HFR</span><span>1.98</span></div>
+          <div class="kv"><span>Issues</span><span>Guiding lost twice, recovered</span></div>
+          <div class="kv"><span>Flats</span><span>Captured</span></div>
+          <div class="kv"><span>Mount</span><span>Parked</span></div>
+          <div class="row2" style="margin-top:auto"><button class="ghost">Image Library</button><button class="go">New plan</button></div>
+        </div>
         <div class="p c-hint" aria-live="polite">Tap the image to show the controls</div>
         <div class="p c-stop"><button class="es"><svg><use href="#i-report"/></svg>Emergency Stop</button></div>
-        <div class="p p-plan plan2">
+        <div class="p p-plan plan2" data-v="plan">
           <div class="hd">Tonight's plan · M31</div>
           <div class="sub">Autofocus, dither and flats follow your profile.</div>
           <div class="prow"><span>L</span><span>300 s</span><span>× 40</span><span class="rm"><svg><use href="#i-x"/></svg></span></div>
@@ -497,17 +645,17 @@
           <div class="total"><span>100 frames</span><span class="sub">6 h 20 min · ends 04:35</span></div>
           <button class="go">Start imaging</button>
         </div>
-        <div class="p c-read">
+        <div class="p c-read" data-v="run">
           <div><div class="sub">Next frame in</div><div style="display:flex;align-items:baseline;justify-content:space-between"><span class="cd">02:14</span><span class="sub">47/120</span></div></div>
           <div class="bar2"><i></i></div>
           <div class="kv"><span class="lbl">HFR</span><span>2.31</span></div>
           <div class="kv"><span class="lbl">Sensor</span><span>−10 °C</span></div>
         </div>
-        <div class="p c-modes modes2"><span>Polar align</span><span>Target</span><span>Focus</span><span>Preview</span><span class="on">Run</span></div>
+        <div class="p c-modes modes2" id="c-modes"><span data-go="preview">Preview</span><span data-go="pa">Polar align</span><span data-go="focus">Focus</span><span data-go="target">Target</span><span data-go="run" class="on">Run</span></div>
       </div>
 
     </div>
-    <p class="note" style="margin-top:10px">Simple Mode, layout C (ALP-4810): the frame fills the screen; a status strip on top; the attention banner centred under it when something needs you; a right column of Next frame, controls and Emergency Stop, all 168 px wide; a bottom row of guiding, the mode switcher (Polar align · Target · Focus · Preview · Run) and Stop, all 56 px tall. One 16 px inset and 10 px corners throughout. Click the image to hide the panels; Emergency Stop and any alert stay. "Simple: Run plan" shows the quick plan builder.</p>
+    <p class="note" style="margin-top:10px">Simple Mode, layout C (ALP-4810): the frame fills the screen; a status strip on top; the attention banner centred under it when something needs you; a right column of Next frame, controls and Emergency Stop, all 168 px wide; a bottom row of guiding, the mode switcher (Polar align · Target · Focus · Preview · Run) and Stop, all 56 px tall. One 16 px inset and 10 px corners throughout. Click the image to hide the panels; Emergency Stop and any alert stay. "Simple: Run plan" shows the quick plan builder. Click a mode on the switcher (Preview, Polar align, Focus, Target, Run) to see its screen; the buttons above show Run plan, Night done and No rig.</p>
   </section>
 
   <section id="phone">
@@ -680,7 +828,7 @@
   document.getElementById('phone-devs').innerHTML = DEVICES.slice(0, 4).map(iconOnly).join('');
 
   // Deterministic star fields
-  document.querySelectorAll('.sky').forEach((f, n) => {
+  document.querySelectorAll('.sky, .atlas').forEach((f, n) => {
     let s = 11 + n * 17;
     const r = () => (s = (s * 9301 + 49297) % 233280) / 233280;
     for (let i = 0; i < 140; i++) {
@@ -709,7 +857,23 @@
   let MODE = 'full';
     const showSimple = () => { document.getElementById('simpleC').hidden = MODE !== 'simple'; };
   groups('mode', m => { MODE = m; document.getElementById('full').hidden = m !== 'full'; showSimple(); document.getElementById('smode-seg').hidden = m !== 'simple'; });
-  groups('smode', v => { ['simpleC'].forEach(id => document.getElementById(id).classList.toggle('planning', v === 'plan'));  });
+  const VIEWS = {
+    run: ['M31 Andromeda', 'g-busy', 'Attention', 'run'], plan: ['M31 Andromeda', 'g-ok', 'Ready', 'run'],
+    done: ['M31 Andromeda', 'g-ok', 'Done', 'run'], preview: ['M31 Andromeda', 'g-ok', 'Previewing', 'preview'],
+    pa: ['Polar alignment', 'g-busy', 'Adjusting', 'pa'], focus: ['M31 Andromeda', 'g-busy', 'Focusing', 'focus'],
+    target: ['Choose a target', 'g-ok', 'Ready', 'target'], empty: ['No rig connected', 'g-off', 'Offline', null] };
+  const setView = v => {
+    const c = document.getElementById('simpleC'), [tgt, cls, st, mode] = VIEWS[v];
+    c.querySelectorAll('[data-v]').forEach(el => el.hidden = !el.dataset.v.split(' ').includes(v));
+    c.classList.toggle('offline', v === 'empty'); c.classList.remove('clean');
+    document.getElementById('c-tgt').textContent = tgt;
+    document.getElementById('c-st').innerHTML = `<i class="${cls}"></i>${st}`;
+    document.querySelectorAll('#c-modes span').forEach(x => x.classList.toggle('on', x.dataset.go === mode));
+    document.querySelectorAll('[data-smode]').forEach(x => x.setAttribute('aria-pressed', x.dataset.smode === v));
+  };
+  groups('smode', setView);
+  document.querySelectorAll('#c-modes span').forEach(x => x.addEventListener('click', () => { if (!document.getElementById('simpleC').classList.contains('offline')) setView(x.dataset.go); }));
+  setView('run');
   groups('night', v => document.querySelectorAll('#stage, .night-target').forEach(el => el.classList.toggle('night', v === 'on')));
   groups('estop', v => document.querySelectorAll('#stage .estop, #stage .es').forEach(el => el.classList.toggle('heavy', v === 'heavy')));
 
