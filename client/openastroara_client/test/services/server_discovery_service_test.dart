@@ -944,6 +944,26 @@ void _preferLocalSubnetTests() {
       expect(svc.localNetworkBlocked.value, isFalse);
     });
 
+    test("iOS lists the rigs the system's Bonjour browse finds, other subnets included", () async {
+      // The subnet sweep only walks the phone's own /24, so a rig on another
+      // VLAN (mDNS reflected by the router) was found by the Mac and never by
+      // the iPhone. iOS's own Bonjour API needs no multicast entitlement.
+      debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+      final svc = ServerDiscoveryService(
+        mdnsClientFactory: () => throw StateError('iOS must not open mDNS'),
+        localAddresses: () async => const ['192.0.2.10'],
+        nativeBrowse: () async => [
+          {'name': 'openastro', 'host': '198.51.100.20', 'port': 5555},
+          {'name': 'broken', 'host': null, 'port': 5555},
+        ],
+        sweepSource: () => const Stream<AraServer>.empty(),
+      );
+      expect(await svc.discover().toList(), [
+        const AraServer(hostname: '198.51.100.20', port: 5555, mdnsName: 'openastro'),
+      ]);
+      expect(svc.localNetworkBlocked.value, isFalse);
+    });
+
     test('blocked only when nothing on the subnet answered and the OS refused', () {
       expect(ServerDiscoveryService.sweepSaysBlocked(anyHostAnswered: false, blockedFailures: 40), isTrue);
       expect(ServerDiscoveryService.sweepSaysBlocked(anyHostAnswered: true, blockedFailures: 40), isFalse,
