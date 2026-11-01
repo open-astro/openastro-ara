@@ -270,9 +270,9 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                               ),
                             ),
                           // Guiding and the histogram along the bottom, each
-                          // once it has data.
+                          // once it has data, centred between the rails.
                           const Positioned(
-                            left: kSimpleInset,
+                            left: besideRail,
                             right: besideRail,
                             bottom: kSimpleInset,
                             height: kSimpleBarHeight,
@@ -839,25 +839,12 @@ class _StatsRow extends ConsumerWidget {
     final histogram = id == null
         ? null
         : ref.watch(frameHistogramProvider(id)).asData?.value;
-    // The two share the row equally (same size), each capped so a lone one
-    // is a panel, not a bar across the row.
+    // A lone one fills the row; both split it equally, guiding on the left.
     return Row(
       spacing: kSimpleInset,
       children: [
-        if (guiding)
-          Flexible(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 520),
-              child: const _GuidingBar(),
-            ),
-          ),
-        if (histogram != null)
-          Flexible(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 520),
-              child: _HistogramBar(histogram),
-            ),
-          ),
+        if (guiding) const Expanded(child: _GuidingBar()),
+        if (histogram != null) Expanded(child: _HistogramBar(histogram)),
       ],
     );
   }

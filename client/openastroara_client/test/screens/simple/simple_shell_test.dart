@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/main.dart' show isShell, shellFor;
+import 'package:openastroara/models/frame_histogram.dart';
 import 'package:openastroara/models/server.dart';
 import 'package:openastroara/screens/app_shell.dart';
 import 'package:openastroara/screens/simple/simple_preview_panel.dart';
@@ -18,6 +19,7 @@ import 'package:openastroara/state/saved_server_state.dart';
 import 'package:openastroara/state/settings/settings_nav.dart';
 import 'package:openastroara/state/simple_mode_state.dart';
 import 'package:openastroara/widgets/emergency_stop_button.dart';
+import 'package:openastroara/widgets/imaging/histogram_strip.dart' show frameHistogramProvider;
 import 'package:openastroara/widgets/night_hotkey.dart';
 
 class _MemPrefs extends SimpleModePrefsService {
@@ -48,7 +50,7 @@ final _someSteps = [
 ];
 
 Future<ProviderContainer> _pump(WidgetTester tester, Size size,
-    {List<GuideStep> steps = const [], AraServer? server}) async {
+    {List<GuideStep> steps = const [], AraServer? server, FrameHistogram? histogram}) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
@@ -57,6 +59,7 @@ Future<ProviderContainer> _pump(WidgetTester tester, Size size,
     selectedTabIndexProvider.overrideWith(_StartOnLive.new),
     guideStepsProvider.overrideWith(() => _Steps(steps)),
     if (server != null) activeServerProvider.overrideWithValue(server),
+    if (histogram != null) frameHistogramProvider.overrideWith((ref, id) async => histogram),
   ]);
   addTearDown(container.dispose);
   await container.read(simpleModeProvider.future);
@@ -262,12 +265,40 @@ void main() {
     expect(find.byKey(const Key('sky')), findsNothing);
   });
 
-  testWidgets('guiding runs along the bottom, left of the rail, once it has data', (tester) async {
-    await _pump(tester, const Size(1024, 768), steps: _someSteps);
-    final guiding = _panelOf(tester, find.byKey(const Key('simple-guide-trace')));
-    expect(guiding.bottom, 768 - kSimpleInset);
-    expect(guiding.right, lessThanOrEqualTo(1024 - kSimpleInset * 2 - kSimpleRailWidth));
-    expect(guiding.width, lessThanOrEqualTo(520));
+  group('guiding and the histogram fill the bottom row, centred between the rails', () {
+    const size = Size(1024, 768);
+    const edge = kSimpleInset * 2 + kSimpleRailWidth;
+    final histogram = FrameHistogram(
+      bins: List<int>.generate(256, (i) => i < 40 ? 1000 - (i - 20).abs() * 40 : 0),
+      minAdu: 0, minCount: 0, maxAdu: 65535, maxCount: 1000, meanAdu: 900, stdDev: 50, median: 880, mad: 30,
+      lowClipFraction: 0, highClipFraction: 0, width: 100, height: 100, bitDepth: 16);
+    Rect guiding(WidgetTester t) => _panelOf(t, find.byKey(const Key('simple-guide-trace')));
+    Rect hist(WidgetTester t) => _panelOf(t, find.byKey(const Key('simple-histogram')));
+
+    testWidgets('guiding alone fills the row', (tester) async {
+      await _pump(tester, size, steps: _someSteps);
+      expect(guiding(tester), Rect.fromLTRB(edge, size.height - kSimpleInset - kSimpleBarHeight,
+          size.width - edge, size.height - kSimpleInset));
+    });
+
+    testWidgets('the histogram alone fills the row', (tester) async {
+      final c = await _pump(tester, size, histogram: histogram);
+      await _frame(tester, c);
+      await tester.pump();
+      expect(hist(tester).left, edge);
+      expect(hist(tester).right, size.width - edge);
+    });
+
+    testWidgets('both split it equally, guiding on the left', (tester) async {
+      final c = await _pump(tester, size, steps: _someSteps, histogram: histogram);
+      await _frame(tester, c);
+      await tester.pump();
+      final g = guiding(tester), h = hist(tester);
+      expect(g.left, edge);
+      expect(h.right, size.width - edge);
+      expect(h.left - g.right, kSimpleInset);
+      expect(g.width, closeTo(h.width, 0.5));
+    });
   });
 
   testWidgets('a tap on the image hides everything (Stop too); the status stays and drops into the corner',
