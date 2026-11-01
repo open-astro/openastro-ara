@@ -19,6 +19,10 @@ const kSimpleText = TextStyle(
   fontFeatures: [FontFeature.tabularFigures()],
 );
 
+/// Height of the last-frame facts slot at the top of the column (DESIGN.md
+/// layout C: 164 px).
+const double kSimpleFactsHeight = 164;
+
 /// Single takes a saved frame (the daemon registers every Take One); Loop
 /// runs live view, whose frames are not saved.
 enum PreviewShot { loop, single }
@@ -49,16 +53,24 @@ class SimplePreviewPanel extends StatelessWidget {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (hasFrame) ...[
-            const SimplePanel(
-              padding: EdgeInsets.symmetric(
-                horizontal: AraSpace.s16,
-                vertical: AraSpace.s12,
-              ),
-              child: _LastFrameFacts(),
-            ),
-            const SizedBox(height: 16),
-          ],
+          // The slot is always reserved so the controls never move when the
+          // first frame lands; only the panel inside it waits for a frame.
+          SizedBox(
+            height: kSimpleFactsHeight,
+            child: hasFrame
+                ? const Align(
+                    alignment: Alignment.topCenter,
+                    child: SimplePanel(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: AraSpace.s16,
+                        vertical: AraSpace.s12,
+                      ),
+                      child: _LastFrameFacts(),
+                    ),
+                  )
+                : null,
+          ),
+          const SizedBox(height: 16),
           const Expanded(
             child: SimplePanel(
               padding: EdgeInsets.all(AraSpace.s12),

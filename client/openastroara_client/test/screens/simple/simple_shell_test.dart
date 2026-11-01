@@ -157,9 +157,13 @@ void main() {
     expect(find.text('Last frame'), findsNothing);
     expect(find.byKey(const Key('simple-shutter')), findsOneWidget, reason: 'the controls stay');
 
+    final shutterBefore = tester.getRect(find.byKey(const Key('simple-shutter')));
+
     container.read(lastCapturedFrameIdProvider.notifier).set('frame-1');
     await tester.pump();
     expect(find.text('Last frame'), findsOneWidget);
+    expect(tester.getRect(find.byKey(const Key('simple-shutter'))), shutterBefore,
+        reason: 'the capture controls stay put when the facts panel appears');
   });
 
   testWidgets('a tap on the frame hides every panel but Emergency Stop, a second brings them back',
