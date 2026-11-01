@@ -49,6 +49,8 @@ SiteSettings applyDraftToSite(SiteSettings base, ProfileDraft d) {
     defaultHorizonAltitudeDeg: d.site.hardMinAltitudeDeg,
     maxSequenceRuntimeMin: d.site.maxSequenceRuntimeMin,
     softWarningAltitudeDeg: d.site.softWarningAltitudeDeg,
+    bortleClass: d.site.bortleClass,
+    sqmMagPerArcsec2: d.site.sqmMagPerArcsec2,
     twilightDefinition: switch (d.site.twilight) {
       TwilightOption.civil => TwilightDefinition.civil,
       TwilightOption.nautical => TwilightDefinition.nautical,

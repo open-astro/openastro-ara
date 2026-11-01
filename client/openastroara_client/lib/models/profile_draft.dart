@@ -323,6 +323,9 @@ class SitePreferences {
   TwilightOption? twilight;
   int? maxSequenceRuntimeMin;
   double? softWarningAltitudeDeg;
+  // Sky darkness (null keeps base). SQM 0 = not measured (Bortle-derived).
+  int? bortleClass;
+  double? sqmMagPerArcsec2;
 }
 
 /// Mirrors the site section's `TwilightDefinition` (mapped in wizard_save) — how
