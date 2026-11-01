@@ -18,6 +18,7 @@ colors:
   accent-disconnected: "#606060"
   selection-bg: "#1976D2"
   selection-fg: "#FFFFFF"
+  overlay-scrim: "rgba(26, 26, 26, 0.72)"
   button-primary: "#1565C0"
   button-secondary: "#424242"
 typography:
@@ -45,7 +46,7 @@ typography:
     fontFeature: "tnum"
   label:
     fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
-    fontSize: "10px"
+    fontSize: "11px"
     fontWeight: 500
     letterSpacing: "0.5px"
   body-simple:
@@ -96,7 +97,7 @@ components:
     typography: "{typography.label}"
     rounded: "{rounded.sm}"
     padding: "6px 8px"
-    width: "64px"
+    width: "76px"
   status-indicator:
     textColor: "{colors.text-primary}"
     rounded: "{rounded.pill}"
@@ -134,7 +135,7 @@ The app runs on Material 3 (dark) with the Ara tokens below, on desktop and mobi
 - Attention states are unmissable: icon + colour + text.
 - Emergency Stop: filled red, always visible, on every tab.
 - Instrument-like controls: named switch states, status dots, tabular numbers.
-- Two densities: the dense full UI, and a roomy Simple Mode (44 px targets, 10 px corners, 14 px type).
+- Two densities: the dense full UI, and a roomy, image-first Simple Mode (the frame fills the screen; controls float on translucent overlays; 44 px targets, 10 px corners, 14 px type).
 
 ## Colors
 
@@ -148,7 +149,7 @@ A near-black neutral ramp carries everything; saturated status accents carry mea
 - **Sky Info Blue** (`accent-info`): informational state, links and the active Night-mode toggle. Also the theme's `secondary`.
 
 ### Status
-- **Connected Green** (`accent-connected`): device connected, step done, healthy readout.
+- **Connected Green** (`accent-connected`): device connected, step done, healthy readout. A device that is connected and working (exposing, slewing, moving) blinks its dot in this green (the `active` status).
 - **Dew Amber** (`accent-busy`, `accent-warning`): busy, working, needs a look. The two tokens share a value but stay separate roles. Busy is a state dot; warning is an inline icon + colour + text surface.
 - **Fault Red** (`accent-error`): faults, failures, destructive actions and Emergency Stop. The theme's `error`.
 - **Unplugged Grey** (`accent-disconnected`): disconnected or off. The same value as `text-disabled`, deliberately: "not there" reads as absent, not as an alarm.
@@ -181,7 +182,7 @@ A near-black neutral ramp carries everything; saturated status accents carry mea
 - **Body** (400, 13px): default row and body text.
 - **Caption** (400, 11.5px, Dim Text): the secondary line under a body row.
 - **Numeric** (400, 13px, tabular figures): timers, counts, temperatures, HFR, RMS. Anything that updates live.
-- **Label** (500, 10px, 0.5px tracking, uppercase): equipment-chip labels under icons.
+- **Label** (500, 11px, 0.5px tracking, Material label-small): device names under the equipment-button icons, in plain case ("Filter Wheel"), scaled down to fit rather than widening the button.
 
 ### Named Rules
 **The Steady Digits Rule.** Every number that updates live uses tabular figures. A countdown never shifts its neighbours.
@@ -190,11 +191,18 @@ A near-black neutral ramp carries everything; saturated status accents carry mea
 
 ## Layout
 
-The desktop shell follows NINA's arrangement:
-- a 64 px top bar of equipment chips, with the Night-mode toggle beside them;
-- a navigation rail on the left (icons with labels);
-- the active tab in the centre;
-- a 40 px bottom status bar holding connection state and Emergency Stop.
+The shell (reference: PR #1474, open as of 2026-11-01) follows NINA's arrangement:
+- **Top bar (64 px):** device buttons first, then search, Night mode and a Settings gear at the right edge. The buttons run in order of use: Camera, Mount, Guider, Focuser, Filter Wheel, Rotator, Flat Panel, Switch, Weather, Safety, Dome.
+- **Navigation rail (left):** the night's workflow only, Planning → Checklist → Sequence → Live. Settings is not on the rail; it opens from the gear, which lights in Sky Info Blue while Settings shows.
+- **Centre:** the active tab.
+- **Bottom status bar (40 px):** the connection indicator, then Emergency Stop, the backup-stream pulse, and the launchers right-anchored.
+
+Below 600 px of window width (a phone in portrait) the same shell folds:
+- the tabs move to a bottom navigation bar, under the status bar;
+- the device buttons stand in a column down the left edge;
+- the top bar shrinks to 48 px and keeps search, Night mode and the gear.
+
+Wherever the eleven named device buttons don't fit (shortest side under 600 px, an iPad in portrait, a narrowed window) they show icons only, with the name as a tooltip, so none is pushed off screen. Safe-area margins (notch, status bar, home indicator) take the Panel Grey of the bars instead of black.
 
 Spacing uses one scale: 4 / 8 / 12 / 16 / 24 px.
 
@@ -203,17 +211,17 @@ Responsive behaviour is keyed to the window, not the device:
 - Instrument panes sit side by side (picture | readout) from 760 px of pane width, and stack below that.
 - In a short window they stay side by side down to 600 px, because stacking would scroll.
 
-Phones run Companion Mode (see PRODUCT.md).
+Phones run Companion Mode (see PRODUCT.md). PR #1474's narrow layout is the shell phones get today.
 
 ### Named Rules
-**The Two Densities Rule.** The full UI is dense: 11–15 px type and 4–8 px corners. Simple Mode is roomy: every interactive target is at least 44 px tall, corners are 10 px, and body text is 14 px. Both densities share the same colours, the same named rules and the same Emergency Stop. Phones run Companion Mode, which builds on Simple Mode, so phones always get the roomy density. Simple Mode is not built yet; this is its target, and it moves away from the current code on purpose.
+**The Two Densities Rule.** The full UI is dense: 11–15 px type and 4–8 px corners. Simple Mode is roomy and image-first: the frame fills the window, controls float on translucent overlays, every interactive target is at least 44 px tall, corners are 10 px, and body text is 14 px. Both densities share the same colours, the same named rules and the same Emergency Stop. Phones run Companion Mode, which builds on Simple Mode, so phones always get the roomy density. Simple Mode is not built yet; this is its target, and it moves away from the current code on purpose.
 
 ## Elevation & Depth
 
 Flat. Depth comes from tonal layering: Night Floor, then Panel Grey, then Panel Alt. Hairline borders separate surfaces. App bars render at elevation 0, cards are bordered rather than lifted, and no surface casts a shadow. Material dialogs and snackbars keep their framework defaults.
 
 ### Named Rules
-**The No-Glow Rule.** Surfaces don't cast shadows or glow. A panel is separated by a 1 px Hairline and a tonal step, nothing more.
+**The No-Glow Rule.** Surfaces don't cast shadows or glow. A panel is separated by a 1 px Hairline and a tonal step, nothing more. The one exception is Simple Mode's overlays: they float over the image on a translucent scrim, still with no shadow.
 
 ## Shapes
 
@@ -236,10 +244,10 @@ Controls behave like labelled hardware: each one names its state and shows it wi
 - **Destructive:** Fault Red fill (the theme's `error`), with the action named in the label.
 
 ### Emergency Stop (signature)
-A filled Fault Red button with a report icon and the label "Emergency Stop", in the bottom status bar on every tab. While a stop is in flight it shows a spinner and "Stopping…". It confirms in a dialog ("Stop everything now?") whose confirm button is filled red and labelled EMERGENCY STOP. It is the heaviest control on any screen: no other control at rest is filled red.
+A filled Fault Red button with a report icon and the label "Emergency Stop", in the bottom status bar on every tab, right after the connection indicator. While a stop is in flight it shows a spinner and "Stopping…". It confirms in a dialog ("Stop everything now?") whose confirm button is filled red and labelled EMERGENCY STOP. It is the heaviest control on any screen: no other control at rest is filled red.
 
 ### Equipment Chip (signature)
-A 64 px-wide tile in the top bar: a 28 px device icon in Starlight Text, a 10 px status dot at its top-right corner, and an uppercase 10 px label underneath. Tapping it connects the device or opens its control panel. It also supports long-press. Its semantics label carries the device name and status.
+A fixed 76 px-wide tile in the top bar (48 px when compact), so the icons sit evenly spaced. It has a 28 px device icon in Starlight Text, a 10 px status dot at its top-right corner (2 px Panel Grey ring), and the device name underneath in label-small Dim Text. Mount and Filter Wheel use hand-drawn glyphs (a telescope on a tripod, a five-slot filter wheel) because Material Icons has neither. The dot blinks green (700 ms) while the device is connected and working; amber stays for states that need a look. Tapping opens the device's Settings page, and long-press is supported. When compact the name is dropped and lives on as the tooltip.
 
 ### Status Indicator / State Chip
 A pill (12 px radius) with a 10 px status dot followed by a label in body-small. The label truncates with an ellipsis in tight rows. The design rule: every state (idle, offline, draft, running, paused, attention, failed, done) has a designed look; nothing falls back to plain grey text.
@@ -247,8 +255,15 @@ A pill (12 px radius) with a 10 px status dot followed by a label in body-small.
 ### Switches and Segmented Controls
 Material segmented buttons and choice chips. Selected segments use Selection Blue with white text, and outlines use Hairline. Segments name their states ("Cooler On" / "Off"), never a bare toggle.
 
-### Simple Mode Density
-Simple Mode (see PRODUCT.md) keeps the full UI's components but draws them roomier. Buttons, chips, segments and fields are at least 44 px tall, with 10 px corners and 14 px body text. Spacing moves up the scale (12–24 px instead of 8–16). Colours, status dots, the attention banner and Emergency Stop behave exactly as in the full UI. Phone Companion Mode uses this density too.
+### Simple Mode: Image First (proposed)
+Simple Mode (see PRODUCT.md) puts the latest frame first, ASIAir-style. The image fills the window edge to edge, and the controls float over it on translucent overlays instead of sitting in panels beside it:
+- overlays use `overlay-scrim` (Night Floor at 72 %), 10 px corners and no border, so the frame shows through around them;
+- a slim top strip carries the device status dots, the target and the session state;
+- the main actions (capture or pause, the exposure setting) sit in an overlay at one edge;
+- live readouts (frame count, next-frame countdown, HFR, guiding, temperature) sit in a small overlay in a corner;
+- the attention banner and Emergency Stop keep their solid colours on top of everything.
+
+Targets are at least 44 px tall, with 14 px body text and spacing from the top of the scale (12–24 px). Colours and status dots behave exactly as in the full UI. Phone Companion Mode uses the same image-first layout. Which controls Simple Mode keeps is still open (ALP-4810).
 
 ### Cards / Containers
 - **Corner Style:** 6 px.
@@ -261,7 +276,7 @@ Simple Mode (see PRODUCT.md) keeps the full UI's components but draws them roomi
 Filled with Input Well, using the outline border. Focus uses the Material 3 primary focus outline in Console Blue.
 
 ### Navigation
-A navigation rail on Panel Grey with labels always shown. The selected destination gets a Selection Blue indicator with white icons, and unselected items use Dim Text. ⌘K / Ctrl-K opens a command palette that searches every setting.
+A navigation rail on Panel Grey with labels always shown: Planning, Checklist, Sequence, Live. The selected destination gets a Selection Blue indicator with white icons, and unselected items use Dim Text. Settings opens from the top-bar gear, and its sidebar has no Equipment group, because each device button opens that device's page. Below 600 px wide the same four tabs move to a Material bottom navigation bar, and nothing is highlighted while Settings shows. ⌘K / Ctrl-K opens a command palette that searches every setting.
 
 ### Attention Banner
 An inline warning built from three parts: an amber or red icon, a coloured outline or tint, and a sentence that says what happened and what Ara is doing about it ("Guiding lost. Retrying (2 of 5)."). Full-screen alarm modals are reserved for safety events.
