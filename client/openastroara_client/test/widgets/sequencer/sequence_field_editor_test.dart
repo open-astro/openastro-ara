@@ -8,7 +8,9 @@ import 'package:openastroara/models/sequence/trigger_catalog.dart';
 import 'package:openastroara/models/sequence/sequence_summary.dart';
 import 'package:openastroara/models/equipment_device_status.dart';
 import 'package:openastroara/models/filter_wheel_status.dart';
+import 'package:openastroara/models/switch_device.dart';
 import 'package:openastroara/state/equipment/filter_wheel_state.dart';
+import 'package:openastroara/state/equipment/switch_state.dart';
 import 'package:openastroara/state/settings/filter_wheel_labels_state.dart';
 import 'package:openastroara/state/sequencer/sequence_editor_state.dart';
 import 'package:openastroara/widgets/sequencer/sequence_field_editor.dart';
@@ -26,6 +28,8 @@ const _slew =
     'OpenAstroAra.Sequencer.SequenceItem.Telescope.SlewScopeToRaDec, OpenAstroAra.Sequencer';
 const _switchFilter =
     'OpenAstroAra.Sequencer.SequenceItem.FilterWheel.SwitchFilter, OpenAstroAra.Sequencer';
+const _setSwitch =
+    'OpenAstroAra.Sequencer.SequenceItem.Switch.SetSwitchValue, OpenAstroAra.Sequencer';
 const _altitude =
     'OpenAstroAra.Sequencer.Conditions.AltitudeCondition, OpenAstroAra.Sequencer';
 
@@ -64,9 +68,12 @@ SequenceDetail sampleDetail() => SequenceDetail(
 Future<ProviderContainer> _pump(WidgetTester tester,
     {SequenceDetail? detail,
     NodePath? select,
-    bool connectedWheel = false}) async {
+    bool connectedWheel = false,
+    List<SwitchDevice>? switches}) async {
   final container = ProviderContainer(overrides: [
     if (connectedWheel) filterWheelProvider.overrideWith(_ConnectedWheel.new),
+    if (switches != null)
+      switchListProvider.overrideWith(() => _KnownSwitches(switches)),
   ]);
   addTearDown(container.dispose);
   if (detail != null) {
@@ -101,6 +108,70 @@ class _ConnectedWheel extends FilterWheelNotifier {
         ],
       );
 }
+
+/// The daemon's switch list (`GET /equipment/switch`) as a fixed set, so the
+/// SetSwitchValue picker can be driven without a server.
+class _KnownSwitches extends SwitchListNotifier {
+  _KnownSwitches(this._switches);
+  final List<SwitchDevice> _switches;
+  @override
+  Future<List<SwitchDevice>> build() async => _switches;
+}
+
+SwitchPort _port(int id, String name, {bool canWrite = true, double max = 1}) =>
+    SwitchPort(
+      id: id,
+      name: name,
+      value: 0,
+      min: 0,
+      max: max,
+      canWrite: canWrite,
+    );
+
+// PowerBox #0: two writable ports around a read-only one, so a port's writable
+// index (what SwitchIndex stores) differs from its ASCOM id. RelayBox #3: one
+// unnamed writable port.
+final _hubs = [
+  SwitchDevice(
+    deviceId: 'pb',
+    alpacaDeviceNumber: 0,
+    name: 'PowerBox',
+    connectionState: SwitchConnectionState.connected,
+    ports: [
+      _port(0, 'Dew A'),
+      _port(1, 'Input V', canWrite: false, max: 15),
+      _port(2, 'Dew B', max: 255),
+    ],
+  ),
+  SwitchDevice(
+    deviceId: 'rb',
+    alpacaDeviceNumber: 3,
+    name: 'RelayBox',
+    connectionState: SwitchConnectionState.connected,
+    ports: [_port(0, '')],
+  ),
+];
+
+/// A one-instruction sequence holding a SetSwitchValue with the given stored
+/// AlpacaDeviceNumber / SwitchIndex (a sequence saved before the picker).
+SequenceDetail _setSwitchWith({required int device, required int index}) =>
+    SequenceDetail(
+      id: 's',
+      body: {
+        r'$type': 'OpenAstroAra.Sequencer.Container.SequentialContainer, OpenAstroAra.Sequencer',
+        'Name': 'root',
+        'Items': {
+          r'$type': itemsWrapperType,
+          r'$values': [
+            {
+              ..._node(_setSwitch),
+              'AlpacaDeviceNumber': device,
+              'SwitchIndex': index,
+            },
+          ],
+        },
+      },
+    );
 
 Map<String, dynamic> _nodeAt(ProviderContainer c, NodePath p) =>
     nodeAt(c.read(sequenceEditorProvider)!.body, p)!;
@@ -909,6 +980,135 @@ void main() {
       }
       await tester.pump();
       expect(find.textContaining('No filters configured'), findsOneWidget);
+    });
+  });
+
+  // #1157 — SetSwitchValue picks its hub and port by name from the daemon's
+  // switch list instead of raw numbers. The stored fields stay the same ints
+  // (AlpacaDeviceNumber, SwitchIndex = index among WRITABLE ports), so saved and
+  // NINA-imported sequences load unchanged.
+  group('switch picker (SetSwitchValue)', () {
+    const deviceField = ValueKey('0/AlpacaDeviceNumber');
+    const portField = ValueKey('0/SwitchIndex');
+
+    testWidgets(
+      'lists the known switches by name and writes the picked number',
+      (tester) async {
+        // Falsified by: AlpacaDeviceNumber rendered as a bare integer field, so
+        // no switch name is offered and the user must know the device number.
+        final c = await _pump(
+          tester,
+          detail: _detailWith(_setSwitch),
+          select: const [0],
+          switches: _hubs,
+        );
+        await tester.pumpAndSettle(); // the switch list resolves
+        await tester.tap(find.byKey(deviceField));
+        await tester.pumpAndSettle();
+        expect(find.text('PowerBox (#0)'), findsWidgets);
+        await tester.tap(find.text('RelayBox (#3)').last);
+        await tester.pumpAndSettle();
+        expect(_nodeAt(c, [0])['AlpacaDeviceNumber'], 3);
+      },
+    );
+
+    testWidgets(
+      "lists only the picked switch's writable ports and writes the writable index",
+      (tester) async {
+        // Falsified by: SwitchIndex rendered as a bare integer field, or a picker
+        // that writes the ASCOM port id (2) instead of the writable index (1).
+        final c = await _pump(
+          tester,
+          detail: _setSwitchWith(device: 0, index: 0),
+          select: const [0],
+          switches: _hubs,
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(portField));
+        await tester.pumpAndSettle();
+        expect(find.text('Input V'), findsNothing); // read-only: not offered
+        expect(find.text('Dew B'), findsWidgets);
+        await tester.tap(find.text('Dew B').last);
+        await tester.pumpAndSettle();
+        expect(_nodeAt(c, [0])['SwitchIndex'], 1);
+        expect(_nodeAt(c, [0])['AlpacaDeviceNumber'], 0);
+      },
+    );
+
+    testWidgets(
+      'the default -1 reads as the first switch and offers its ports',
+      (tester) async {
+        // Falsified by: the default rendered as the number -1. "First" is the
+        // lowest-numbered connected switch, the daemon's own -1 rule.
+        await _pump(
+          tester,
+          detail: _detailWith(_setSwitch),
+          select: const [0],
+          switches: _hubs,
+        );
+        await tester.pumpAndSettle();
+        expect(find.text('First switch'), findsOneWidget);
+        await tester.tap(find.byKey(portField));
+        await tester.pumpAndSettle();
+        expect(find.text('Dew A'), findsWidgets);
+      },
+    );
+
+    testWidgets('a stored switch that is not known stays shown and unchanged', (
+      tester,
+    ) async {
+      // Falsified by: a picker that blanks or rewrites a stored device number
+      // it cannot find (a sequence built on another rig, or a hub that is off).
+      final c = await _pump(
+        tester,
+        detail: _setSwitchWith(device: 7, index: 4),
+        select: const [0],
+        switches: _hubs,
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Switch #7 (not connected)'), findsOneWidget);
+      expect(_nodeAt(c, [0])['AlpacaDeviceNumber'], 7);
+      expect(_nodeAt(c, [0])['SwitchIndex'], 4);
+    });
+
+    testWidgets(
+      'a stored port past the writable list stays shown and unchanged',
+      (tester) async {
+        // Falsified by: a port picker that drops a stored index it has no port for.
+        final c = await _pump(
+          tester,
+          detail: _setSwitchWith(device: 3, index: 5),
+          select: const [0],
+          switches: _hubs,
+        );
+        await tester.pumpAndSettle();
+        expect(find.text('Writable port #5 (not available)'), findsOneWidget);
+        expect(_nodeAt(c, [0])['SwitchIndex'], 5);
+      },
+    );
+
+    testWidgets('with no switch known the number fields stay editable', (
+      tester,
+    ) async {
+      // PIN (passes before the picker): offline editing (no daemon, or no hub
+      // connected) keeps the raw integer fields.
+      // Falsified by: a picker that replaces the fields with an empty dropdown.
+      final c = await _pump(
+        tester,
+        detail: _detailWith(_setSwitch),
+        select: const [0],
+        switches: const [],
+      );
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.descendant(
+          of: find.byKey(deviceField),
+          matching: find.byType(TextField),
+        ),
+        '2',
+      );
+      await tester.pump();
+      expect(_nodeAt(c, [0])['AlpacaDeviceNumber'], 2);
     });
   });
 }
