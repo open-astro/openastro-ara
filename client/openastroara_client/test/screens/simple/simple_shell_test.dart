@@ -16,7 +16,6 @@ import 'package:openastroara/widgets/imaging/capture_progress_card.dart';
 import 'package:openastroara/state/settings/settings_nav.dart';
 import 'package:openastroara/state/simple_mode_state.dart';
 import 'package:openastroara/widgets/emergency_stop_button.dart';
-import 'package:openastroara/widgets/equipment/equipment_glyphs.dart';
 import 'package:openastroara/widgets/settings_gear_button.dart';
 
 class _MemPrefs extends SimpleModePrefsService {
@@ -120,7 +119,7 @@ void main() {
     expect(find.byType(SegmentedButton<Object>), findsNothing);
   });
 
-  testWidgets('a shot in flight shows one status line in the column, not the wide progress card',
+  testWidgets('a shot in flight shows its status in the pill, not the wide progress card',
       (tester) async {
     final container = await _pump(tester, const Size(1470, 854));
     container.read(captureProgressProvider.notifier).beginExposing(const Duration(seconds: 5));
@@ -231,19 +230,27 @@ void main() {
     await tester.pump(const Duration(seconds: 1));
   });
 
-  testWidgets('nothing in the strip moves when Ready changes to Taking a frame', (tester) async {
+  testWidgets('the camera status is a pill at the top-left of the image, and the panels hold still',
+      (tester) async {
     final container = await _pump(tester, const Size(1470, 854));
-    Rect at(Finder f) => tester.getRect(f);
-    final ready = at(find.text('Ready'));
-    final options = at(find.text('Show all options'));
+    expect(find.text('Ready'), findsNothing, reason: 'nothing to say while idle');
+    final options = tester.getRect(find.text('Show all options'));
+    final shutter = tester.getRect(find.byKey(const Key('simple-shutter')));
 
     container.read(captureProgressProvider.notifier).beginExposing(const Duration(seconds: 5));
     await tester.pump();
-    expect(at(find.text('Taking a frame')).topLeft, ready.topLeft);
-    expect(at(find.text('Show all options')), options);
-    final label = find.ancestor(of: find.text('Taking a frame'), matching: find.byKey(const Key('simple-activity')));
-    final labelBefore = ready.width;
-    expect(at(label).width, isNot(lessThan(labelBefore)), reason: 'a fixed slot, not sized to the text');
+    final pill = tester.getRect(find.ancestor(of: find.text('Taking a frame'), matching: find.byType(SimplePanel)).first);
+    expect(pill.topLeft, const Offset(kSimpleInset, kSimpleInset * 2 + kSimpleBarHeight));
+    expect(tester.getRect(find.text('Show all options')), options);
+    expect(tester.getRect(find.byKey(const Key('simple-shutter'))), shutter);
+
+    container.read(lastCapturedFrameIdProvider.notifier).set('frame-1');
+    await tester.pump();
+    await tester.tapAt(const Offset(700, 450));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text('Show all options').hitTestable(), findsNothing, reason: 'immersive view on');
+    expect(find.text('Taking a frame').hitTestable(), findsOneWidget,
+        reason: 'the status stays in the immersive view');
 
     container.read(captureProgressProvider.notifier).reset();
     await tester.pump(const Duration(seconds: 1));

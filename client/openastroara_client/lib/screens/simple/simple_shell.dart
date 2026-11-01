@@ -10,7 +10,6 @@ import '../../models/frame_histogram.dart';
 import '../../models/guider_status.dart';
 import '../../state/guider/guide_step_state.dart';
 import '../../state/guider/guider_state.dart';
-import '../../state/imaging/capture_progress_state.dart';
 import '../../state/imaging/last_frame_state.dart';
 import '../../state/imaging/live_view_state.dart';
 import '../../state/night_mode_state.dart';
@@ -144,6 +143,13 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                         key: const Key('simple-planetarium'),
                         child: widget.planetarium,
                       ),
+                    // The camera's status, top-left on the image; outside the
+                    // fade, so it stays in the immersive view.
+                    const Positioned(
+                      left: kSimpleInset,
+                      top: kSimpleInset * 2 + kSimpleBarHeight,
+                      child: SimpleStatusPill(),
+                    ),
                     _Fade(
                       visible: panels,
                       child: Stack(
@@ -283,11 +289,6 @@ class _StatusStrip extends ConsumerWidget {
                     ),
                   ),
                 ),
-                const SizedBox(
-                  height: 24,
-                  child: VerticalDivider(width: 24, color: AraColors.border),
-                ),
-                const _ActivityLabel(),
               ],
             ),
           ),
@@ -313,40 +314,6 @@ class _StatusStrip extends ConsumerWidget {
             onPressed: () => ref.read(nightModeProvider.notifier).set(!night),
           ),
           const SettingsGearButton(),
-        ],
-      ),
-    );
-  }
-}
-
-/// What the camera is doing, in the strip after the device dots.
-class _ActivityLabel extends ConsumerWidget {
-  const _ActivityLabel();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final looping = ref.watch(liveViewControllerProvider);
-    final capturing = ref.watch(captureProgressProvider).isCapturing;
-    final (text, color) = looping
-        ? ('Looping', AraColors.accentConnected)
-        : capturing
-        ? ('Taking a frame', AraColors.accentConnected)
-        : ('Ready', AraColors.textSecondary);
-    // A fixed slot sized for the longest state, so the strip holds still.
-    return SizedBox(
-      key: const Key('simple-activity'),
-      width: 150,
-      child: Row(
-        children: [
-          Icon(Icons.circle, size: 8, color: color),
-          const SizedBox(width: AraSpace.s8),
-          Flexible(
-            child: Text(
-              text,
-              style: kSimpleText,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
         ],
       ),
     );

@@ -254,7 +254,6 @@ class _PreviewControls extends ConsumerWidget {
               ],
             ),
           ),
-          const _CaptureStatus(),
         ],
       ),
     );
@@ -303,17 +302,18 @@ class _Shutter extends StatelessWidget {
   }
 }
 
-/// The shot in flight, in one line under the switch: the full UI's progress
-/// card (with its own Cancel and Retry) is too wide for the column, so the
-/// shutter cancels and retakes instead.
-class _CaptureStatus extends ConsumerStatefulWidget {
-  const _CaptureStatus();
+/// What the camera is doing, as a pill at the top-left of the image (like a
+/// camera's REC light): looping, taking a frame with its countdown and bar,
+/// stopping, frame ready, or why it failed. Nothing while idle. It sits
+/// outside the panels, so it stays in the immersive view.
+class SimpleStatusPill extends ConsumerStatefulWidget {
+  const SimpleStatusPill({super.key});
 
   @override
-  ConsumerState<_CaptureStatus> createState() => _CaptureStatusState();
+  ConsumerState<SimpleStatusPill> createState() => _SimpleStatusPillState();
 }
 
-class _CaptureStatusState extends ConsumerState<_CaptureStatus>
+class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
     with SingleTickerProviderStateMixin {
   late final Ticker _ticker = createTicker((_) => setState(() {}));
 
@@ -338,51 +338,81 @@ class _CaptureStatusState extends ConsumerState<_CaptureStatus>
   Widget build(BuildContext context) {
     final p = ref.watch(captureProgressProvider);
     final stopping = ref.watch(_stoppingProvider);
+    final looping = ref.watch(liveViewControllerProvider);
     _syncTick(p.isActive);
-    final (String? text, Color color) = stopping
-        ? ('Stopping…', AraColors.textSecondary)
+    final exposing = !stopping && p.phase == CapturePhase.exposing;
+    final (String? label, String? detail, Color dot) = stopping
+        ? ('Stopping…', null, AraColors.textSecondary)
         : switch (p.phase) {
             CapturePhase.exposing => (
+              'Taking a frame',
               p.exposureRemaining == null
                   ? 'Starting…'
                   // Whole seconds, rounded up: "1 s left" until it's done.
                   : '${(p.exposureRemaining!.inMilliseconds / 1000).ceil()} s left',
-              AraColors.textSecondary,
+              AraColors.accentConnected,
             ),
             CapturePhase.downloading => (
               'Downloading…',
-              AraColors.textSecondary,
+              null,
+              AraColors.accentConnected,
             ),
-            CapturePhase.done => ('Frame ready', AraColors.accentConnected),
+            CapturePhase.done => (
+              'Frame ready',
+              null,
+              AraColors.accentConnected,
+            ),
             CapturePhase.failed => (
-              p.error ?? 'Capture failed',
+              'Capture failed',
+              p.error,
               AraColors.accentError,
             ),
-            CapturePhase.idle => (null, AraColors.textSecondary),
+            CapturePhase.idle =>
+              looping
+                  ? ('Looping', null, AraColors.accentConnected)
+                  : (null, null, AraColors.textSecondary),
           };
-    if (text == null) return const SizedBox.shrink();
-    return Padding(
-      padding: const EdgeInsets.only(top: AraSpace.s12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          if (!stopping && p.phase == CapturePhase.exposing)
-            ClipRRect(
-              borderRadius: BorderRadius.circular(4),
-              child: LinearProgressIndicator(
-                value: (p.displayProgressPct ?? 0) / 100,
-                minHeight: 6,
-                backgroundColor: kSimpleTileFill,
-              ),
-            ),
-          const SizedBox(height: AraSpace.s4),
-          Text(
-            text,
-            style: AraText.caption.copyWith(color: color),
-            maxLines: 3,
-            overflow: TextOverflow.ellipsis,
+    if (label == null) return const SizedBox.shrink();
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 460),
+      child: SimplePanel(
+        padding: const EdgeInsets.symmetric(horizontal: AraSpace.s16),
+        child: SizedBox(
+          height: 48,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.circle, size: 10, color: dot),
+              const SizedBox(width: AraSpace.s8),
+              Text(label, style: kSimpleText),
+              if (detail != null) ...[
+                const SizedBox(width: AraSpace.s8),
+                Flexible(
+                  child: Text(
+                    detail,
+                    style: kSimpleText.copyWith(color: AraColors.textSecondary),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+              if (exposing) ...[
+                const SizedBox(width: AraSpace.s12),
+                SizedBox(
+                  width: 120,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(2),
+                    child: LinearProgressIndicator(
+                      value: (p.displayProgressPct ?? 0) / 100,
+                      minHeight: 4,
+                      backgroundColor: kSimpleTileFill,
+                    ),
+                  ),
+                ),
+              ],
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
