@@ -20,10 +20,9 @@ const kSimpleText = TextStyle(
   fontFeatures: [FontFeature.tabularFigures()],
 );
 
-/// Height of the last-frame facts slot at the top of the column: a caption
-/// and three rows, or two rows without the caption when the column is short.
-const double kSimpleFactsHeight = 124;
-const double kSimpleFactsCompactHeight = 72;
+/// Room the full last-frame facts take at the bottom of the capture panel (a
+/// caption and three rows, with the divider); shorter columns get two rows.
+const double kSimpleFactsHeight = 116;
 
 /// What the capture panel needs to show without scrolling: two 48 px fields,
 /// the shutter, Loop / Single and the shot status line, with padding.
@@ -51,47 +50,36 @@ class SimplePreviewPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Consumer(
     builder: (context, ref, _) {
-      // The facts panel waits for something to describe: a saved frame
-      // or a running loop.
+      // The facts wait for something to describe: a saved frame or a loop.
       final hasFrame =
           ref.watch(lastCapturedFrameIdProvider) != null ||
           ref.watch(liveViewControllerProvider);
       return LayoutBuilder(
         builder: (context, box) {
-          // A short column (an iPad in landscape) shrinks the facts, never the
-          // controls. Decided by the column's height, so it doesn't flip when
-          // a frame lands.
+          // A short column (an iPad in landscape) gets the two-row facts.
+          // Decided by the column's height, so it doesn't flip when a frame
+          // lands.
           final compact =
-              box.maxHeight < kSimpleFactsHeight + 16 + kSimpleCaptureHeight;
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // The slot is always reserved so the controls never move when the
-              // first frame lands; only the panel inside it waits for a frame.
-              SizedBox(
-                height: compact
-                    ? kSimpleFactsCompactHeight
-                    : kSimpleFactsHeight,
-                // The panel fills the slot, so the gap below it is the same 16 px
-                // as everywhere else in the column.
-                child: hasFrame
-                    ? SimplePanel(
-                        padding: EdgeInsets.symmetric(
-                          horizontal: AraSpace.s16,
-                          vertical: compact ? AraSpace.s8 : AraSpace.s12,
-                        ),
-                        child: _LastFrameFacts(compact: compact),
-                      )
-                    : null,
-              ),
-              const SizedBox(height: 16),
-              const Expanded(
-                child: SimplePanel(
-                  padding: EdgeInsets.all(AraSpace.s12),
-                  child: _PreviewControls(),
-                ),
-              ),
-            ],
+              box.maxHeight < kSimpleCaptureHeight + kSimpleFactsHeight;
+          // One panel the full height of the column: the controls at the top,
+          // where they never move, and the last frame's facts at the bottom.
+          return SimplePanel(
+            padding: const EdgeInsets.all(AraSpace.s12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Expanded(child: _PreviewControls()),
+                if (hasFrame) ...[
+                  const Divider(height: AraSpace.s16, color: AraColors.border),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AraSpace.s4,
+                    ),
+                    child: _LastFrameFacts(compact: compact),
+                  ),
+                ],
+              ],
+            ),
           );
         },
       );

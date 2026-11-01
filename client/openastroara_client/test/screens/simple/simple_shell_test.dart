@@ -179,16 +179,17 @@ void main() {
         reason: 'the capture controls stay put when the facts panel appears');
     Rect panelOf(Finder f) =>
         tester.getRect(find.ancestor(of: f, matching: find.byType(SimplePanel)).first);
-    final facts = panelOf(find.text('Last frame'));
     final controls = panelOf(find.byKey(const Key('simple-shutter')));
+    expect(panelOf(find.text('Last frame')), controls,
+        reason: 'the facts live inside the capture panel, not a panel of their own');
+    expect(tester.getRect(find.text('Last frame')).top,
+        greaterThan(tester.getRect(find.byKey(const Key('simple-shutter'))).bottom),
+        reason: 'at the bottom, under the controls');
+    expect(controls.top, kSimpleInset * 2 + kSimpleBarHeight, reason: 'the capture panel reaches the top');
     final modes = panelOf(find.text('Polar align'));
     final stop = tester.getRect(find.byType(EmergencyStopButton));
-    for (final gap in [
-      controls.top - facts.bottom,
-      modes.top - controls.bottom,
-      stop.top - modes.bottom,
-    ]) {
-      expect(gap, kSimpleInset, reason: 'one 16 px gap all the way down the column');
+    for (final gap in [modes.top - controls.bottom, stop.top - modes.bottom]) {
+      expect(gap, kSimpleInset, reason: 'one 16 px gap down the column');
     }
   });
 
