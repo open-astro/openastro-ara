@@ -139,7 +139,7 @@ class _EmergencyStopButtonState extends ConsumerState<EmergencyStopButton> {
         backgroundColor: red,
         foregroundColor: Theme.of(context).colorScheme.onError,
         padding: EdgeInsets.symmetric(
-            horizontal: 18, vertical: simple ? 0 : 7),
+            horizontal: simple ? 8 : 18, vertical: simple ? 0 : 7),
         minimumSize: Size(0, simple ? 56 : 0),
         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
         visualDensity: simple ? VisualDensity.standard : VisualDensity.compact,

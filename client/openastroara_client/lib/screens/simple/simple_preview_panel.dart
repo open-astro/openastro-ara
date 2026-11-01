@@ -7,7 +7,6 @@ import '../../state/imaging/last_frame_state.dart';
 import '../../state/imaging/live_view_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
-import '../../widgets/imaging/capture_progress_card.dart';
 import '../../widgets/imaging/exposure_controls_panel.dart';
 import '../../widgets/imaging/histogram_strip.dart' show frameHistogramProvider;
 import '../imaging_actions.dart';
@@ -142,8 +141,11 @@ class _PreviewControls extends ConsumerWidget {
                   ref,
                   !looping,
                 ),
+                // The square stops the shot in flight, like a loop.
                 PreviewShot.single =>
-                  capturing ? null : () => takeOne(context, ref),
+                  capturing
+                      ? () => cancelCapture(context, ref)
+                      : () => takeOne(context, ref),
               },
             ),
           ),
@@ -173,10 +175,7 @@ class _PreviewControls extends ConsumerWidget {
               ],
             ),
           ),
-          CaptureProgressCard(
-            onRetry: () => takeOne(context, ref),
-            onCancel: () => cancelCapture(context, ref),
-          ),
+          const _CaptureStatus(),
         ],
       ),
     );
@@ -220,6 +219,58 @@ class _Shutter extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// The shot in flight, in one line under the switch: the full UI's progress
+/// card (with its own Cancel and Retry) is too wide for the column, so the
+/// shutter cancels and retakes instead.
+class _CaptureStatus extends ConsumerWidget {
+  const _CaptureStatus();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final p = ref.watch(captureProgressProvider);
+    final (String? text, Color color) = switch (p.phase) {
+      CapturePhase.exposing => (
+        p.exposureRemaining == null
+            ? 'Starting…'
+            : '${(p.exposureRemaining!.inMilliseconds / 1000).toStringAsFixed(1)} s left',
+        AraColors.textSecondary,
+      ),
+      CapturePhase.downloading => ('Downloading…', AraColors.textSecondary),
+      CapturePhase.done => ('Frame ready', AraColors.accentConnected),
+      CapturePhase.failed => (
+        p.error ?? 'Capture failed',
+        AraColors.accentError,
+      ),
+      CapturePhase.idle => (null, AraColors.textSecondary),
+    };
+    if (text == null) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: AraSpace.s12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (p.phase == CapturePhase.exposing)
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: (p.displayProgressPct ?? 0) / 100,
+                minHeight: 6,
+                backgroundColor: kSimpleTileFill,
+              ),
+            ),
+          const SizedBox(height: AraSpace.s4),
+          Text(
+            text,
+            style: AraText.caption.copyWith(color: color),
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
       ),
     );
   }

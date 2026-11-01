@@ -5,6 +5,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../state/app_shell_state.dart';
+import '../../models/guider_status.dart';
+import '../../state/guider/guide_step_state.dart';
 import '../../state/guider/guider_state.dart';
 import '../../state/imaging/capture_progress_state.dart';
 import '../../state/imaging/live_view_state.dart';
@@ -118,7 +120,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                     ),
                     _Fade(
                       visible: panels,
-                      child: const Stack(
+                      child: Stack(
                         children: [
                           Positioned(
                             left: kSimpleInset,
@@ -134,19 +136,34 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                             width: kSimpleColumnWidth,
                             child: SimplePreviewPanel(),
                           ),
+                          // The bottom row: guiding up to 340 px, then the
+                          // switcher; an equal empty slot on the right (under
+                          // Emergency Stop) keeps the switcher centred, and
+                          // both slots shrink alike on a narrow window.
                           Positioned(
                             left: kSimpleInset,
+                            right: kSimpleInset,
                             bottom: kSimpleInset,
                             height: kSimpleBarHeight,
-                            width: 260,
-                            child: _GuidingBar(),
-                          ),
-                          Positioned(
-                            left: 0,
-                            right: 0,
-                            bottom: kSimpleInset,
-                            height: kSimpleBarHeight,
-                            child: Center(child: _ModeSwitcher()),
+                            child: Row(
+                              children: [
+                                Flexible(
+                                  child: Align(
+                                    alignment: Alignment.centerLeft,
+                                    child: ConstrainedBox(
+                                      constraints: BoxConstraints(
+                                        maxWidth: 340,
+                                      ),
+                                      child: _GuidingBar(),
+                                    ),
+                                  ),
+                                ),
+                                SizedBox(width: kSimpleInset),
+                                _ModeSwitcher(),
+                                SizedBox(width: kSimpleInset),
+                                Flexible(child: SizedBox(width: 340)),
+                              ],
+                            ),
                           ),
                         ],
                       ),
@@ -157,8 +174,10 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                     const Positioned(
                       right: kSimpleInset - 3,
                       bottom: kSimpleInset - 3,
+                      // Full column width, like the panels above it.
+                      width: kSimpleColumnWidth + 6,
                       height: kSimpleBarHeight + 6,
-                      child: Center(child: EmergencyStopButton(simple: true)),
+                      child: EmergencyStopButton(simple: true),
                     ),
                   ],
                 ),
@@ -304,24 +323,96 @@ class _GuidingBar extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final status = ref.watch(guiderStatusProvider).asData?.value;
+    final steps = ref.watch(guideStepsProvider);
+    final guiding = status?.runtimeState == GuiderRuntimeState.guiding;
     return SimplePanel(
       padding: const EdgeInsets.symmetric(horizontal: AraSpace.s16),
       child: Row(
         children: [
-          const Text('Guiding', style: kSimpleText),
-          const SizedBox(width: AraSpace.s12),
+          Flexible(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Guiding', style: kSimpleText),
+                Text(
+                  guiding
+                      ? 'RMS ${GuidingStrip.fmt(status?.rmsTotalArcsec, '″')}'
+                      : GuidingStrip.stateLabel(status),
+                  style: AraText.caption,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 14),
           Expanded(
-            child: Text(
-              '${GuidingStrip.stateLabel(status)} · RMS '
-              '${GuidingStrip.fmt(status?.rmsTotalArcsec, '″')}',
-              style: kSimpleText.copyWith(color: AraColors.textSecondary),
-              overflow: TextOverflow.ellipsis,
+            child: SizedBox(
+              height: 32,
+              child: CustomPaint(
+                key: const Key('simple-guide-trace'),
+                painter: _TracePainter(steps),
+              ),
             ),
           ),
         ],
       ),
     );
   }
+}
+
+/// The last minute or so of RA (blue) and Dec (red) guide error, centred on
+/// zero and scaled to the largest excursion shown.
+class _TracePainter extends CustomPainter {
+  _TracePainter(List<GuideStep> steps)
+    : _steps = steps.length > _kShown
+          ? steps.sublist(steps.length - _kShown)
+          : steps;
+
+  static const _kShown = 60;
+  final List<GuideStep> _steps;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final mid = size.height / 2;
+    canvas.drawLine(
+      Offset(0, mid),
+      Offset(size.width, mid),
+      Paint()..color = AraColors.border,
+    );
+    if (_steps.length < 2) return;
+    var peak = 1.0;
+    for (final s in _steps) {
+      for (final v in [s.raPx, s.decPx]) {
+        if (v != null && v.abs() > peak) peak = v.abs();
+      }
+    }
+    void line(double? Function(GuideStep) value, Color color) {
+      final path = Path();
+      var started = false;
+      for (var i = 0; i < _steps.length; i++) {
+        final v = value(_steps[i]);
+        if (v == null) continue;
+        final p = Offset(size.width * i / (_kShown - 1), mid - v / peak * mid);
+        started ? path.lineTo(p.dx, p.dy) : path.moveTo(p.dx, p.dy);
+        started = true;
+      }
+      canvas.drawPath(
+        path,
+        Paint()
+          ..color = color
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.5,
+      );
+    }
+
+    line((s) => s.raPx, AraColors.accentInfo);
+    line((s) => s.decPx, AraColors.accentError);
+  }
+
+  @override
+  bool shouldRepaint(_TracePainter old) => old._steps != _steps;
 }
 
 class _ModeSwitcher extends ConsumerWidget {
@@ -405,7 +496,9 @@ ThemeData simpleTheme(ThemeData base) {
     shape: const WidgetStatePropertyAll(shape),
     minimumSize: const WidgetStatePropertyAll(Size(0, 44)),
   );
-  const tile = OutlineInputBorder(
+  // Underline-style (not outline) so the label sits inside the tile instead
+  // of straddling its top edge.
+  const tile = UnderlineInputBorder(
     borderRadius: BorderRadius.all(Radius.circular(10)),
     borderSide: BorderSide.none,
   );

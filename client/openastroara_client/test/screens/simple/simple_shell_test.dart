@@ -3,9 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/main.dart' show isShell, shellFor;
 import 'package:openastroara/screens/app_shell.dart';
+import 'package:openastroara/screens/simple/simple_preview_panel.dart';
 import 'package:openastroara/screens/simple/simple_shell.dart';
 import 'package:openastroara/services/simple_mode_prefs_service.dart';
 import 'package:openastroara/state/app_shell_state.dart';
+import 'package:openastroara/state/imaging/capture_progress_state.dart';
+import 'package:openastroara/widgets/imaging/capture_progress_card.dart';
 import 'package:openastroara/state/settings/settings_nav.dart';
 import 'package:openastroara/state/simple_mode_state.dart';
 import 'package:openastroara/widgets/emergency_stop_button.dart';
@@ -74,7 +77,10 @@ void main() {
     await _pump(tester, const Size(1470, 854));
     final button = find.descendant(
         of: find.byType(EmergencyStopButton), matching: find.byType(FilledButton));
-    expect(tester.getSize(button).height, 56);
+    expect(tester.getSize(button), const Size(kSimpleColumnWidth, 56),
+        reason: 'the same width as the column above it');
+    expect(tester.getRect(button).right,
+        tester.getRect(find.byType(SimplePreviewPanel)).right);
     final shape = tester.widget<FilledButton>(button).style!.shape!.resolve({})!;
     expect((shape as RoundedRectangleBorder).borderRadius, BorderRadius.circular(10));
     final ring = tester.widget<Container>(find.descendant(
@@ -90,6 +96,34 @@ void main() {
     expect((shape! as RoundedRectangleBorder).borderRadius, BorderRadius.circular(10));
     expect(find.byType(SegmentedButton<Object>), findsNothing);
   });
+
+  testWidgets('a shot in flight shows one status line in the column, not the wide progress card',
+      (tester) async {
+    final container = await _pump(tester, const Size(1470, 854));
+    container.read(captureProgressProvider.notifier).beginExposing(const Duration(seconds: 5));
+    await tester.pump();
+    expect(tester.takeException(), isNull, reason: 'no overflow');
+    expect(find.byType(CaptureProgressCard), findsNothing);
+    expect(find.textContaining(RegExp(r'Starting…|s left')), findsOneWidget);
+    expect(find.bySemanticsLabel('Stop'), findsOneWidget, reason: 'the shutter cancels the shot');
+    container.read(captureProgressProvider.notifier).reset();
+    await tester.pump(const Duration(seconds: 1));
+  });
+
+  for (final width in const [1470.0, 1100.0, 1024.0]) {
+    testWidgets('at $width the guiding bar is up to 340 px with its trace and clears the centred switcher',
+        (tester) async {
+      await _pump(tester, Size(width, 768));
+      final trace = find.byKey(const Key('simple-guide-trace'));
+      expect(trace, findsOneWidget);
+      final guiding = tester.getRect(find.ancestor(of: trace, matching: find.byType(SimplePanel)).first);
+      final preview = tester.getRect(find.ancestor(of: find.text('Preview'), matching: find.byType(SimplePanel)).first);
+      expect(guiding.width, lessThanOrEqualTo(340));
+      if (width >= 1470) expect(guiding.width, 340);
+      expect(guiding.right, lessThan(preview.left), reason: 'no overlap');
+      expect(preview.center.dx, closeTo(width / 2, 1), reason: 'switcher centred');
+    });
+  }
 
   testWidgets('a tap on the frame hides every panel but Emergency Stop, a second brings them back',
       (tester) async {
