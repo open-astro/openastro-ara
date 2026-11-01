@@ -351,9 +351,10 @@ namespace OpenAstroAra.Test {
             Assert.That(all, Is.Empty);
         }
 
-        // ── #1157: the endpoint key generalised from Switch to every device type ──
-        // Single-instance types (one mediator each) keep ONE remembered device per canonical group,
-        // keyed "<CanonicalType>:<endpoint>" like a switch; bare "<Type>" keys are read-only aliases.
+        // ── #1157: one remembered device per single-instance group ──
+        // Single-instance types (one mediator each) keep the bare "<Type>" key and exactly ONE entry per
+        // canonical group (FlatDevice and CoverCalibrator are one group) after every write; a file that
+        // still holds two (written by an older daemon) reads as one: the later entry in file order.
 
         // The file's keys, sorted and comma-joined.
         private string RawKeys() {
@@ -363,34 +364,28 @@ namespace OpenAstroAra.Test {
 
         private static string Ids(IEnumerable<DiscoveredDeviceDto> devices) => string.Join(",", devices.Select(d => d.UniqueId));
 
-        private static string Entry(string type, string id, int number = 0) =>
-            $"{{ \"UniqueId\": \"{id}\", \"Name\": \"{id}\", \"Type\": \"{type}\", \"HostName\": \"host\", " +
+        private static string Entry(string type, string id, int number = 0, string host = "host") =>
+            $"{{ \"UniqueId\": \"{id}\", \"Name\": \"{id}\", \"Type\": \"{type}\", \"HostName\": \"{host}\", " +
             $"\"IpAddress\": \"127.0.0.1\", \"IpPort\": 11111, \"AlpacaDeviceNumber\": {number}, \"UseHttps\": false }}";
+
+        private async Task<string> FlatGroupIds() =>
+            Ids((await _store.GetAllAsync(CancellationToken.None)).Where(d => d.Type.Canonical() == DeviceType.CoverCalibrator));
 
         [Test]
         public async Task Remember_keeps_one_entry_for_the_FlatDevice_CoverCalibrator_group() {
-            // Falsified by: KeyFor keying a single-instance device by its raw Type token, so a panel
-            // remembered as FlatDevice and another as CoverCalibrator are two entries and boot dials the
-            // one flat-panel service twice (the second connect replaces the first).
+            // Falsified by: RememberAsync upserting only its own raw-Type key, so a panel remembered as
+            // FlatDevice and another as CoverCalibrator are two entries on disk and boot dials the one
+            // flat-panel service twice (the second connect replaces the first).
             await _store.RememberAsync(Device(DeviceType.FlatDevice, "flat-old", "old", number: 0), CancellationToken.None);
             await _store.RememberAsync(Device(DeviceType.CoverCalibrator, "flat-new", "new", number: 1), CancellationToken.None);
 
-            var group = (await _store.GetAllAsync(CancellationToken.None))
-                .Where(d => d.Type.Canonical() == DeviceType.CoverCalibrator).ToList();
-            Assert.That(Ids(group), Is.EqualTo("flat-new"), "the newest pick supersedes the group");
-        }
-
-        [Test]
-        public async Task Remember_keys_a_single_instance_type_by_its_endpoint() {
-            // Falsified by: KeyFor returning the bare type name for every type but Switch.
-            await _store.RememberAsync(Device(DeviceType.Camera, "cam-1", "cam", number: 2), CancellationToken.None);
-
-            Assert.That(RawKeys(), Is.EqualTo("Camera:HOST:11111:2"));
+            Assert.That(RawKeys(), Is.EqualTo("CoverCalibrator"), "the write clears the whole group");
+            Assert.That(await FlatGroupIds(), Is.EqualTo("flat-new"), "the newest pick supersedes the group");
         }
 
         [Test]
         public async Task Remember_keys_a_switch_by_its_endpoint() {
-            // PIN (passes before #1157): the generalised key must leave the switch key exactly as it is.
+            // PIN (passes before #1157): the group rule must leave the switch key exactly as it is.
             // Falsified by: a KeyFor that changes the Switch format (e.g. canonicalising it differently).
             await _store.RememberAsync(Device(DeviceType.Switch, "sw-a", "PowerBox", number: 4), CancellationToken.None);
 
@@ -398,25 +393,10 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public async Task Remember_replaces_a_legacy_bare_type_entry() {
-            // A file written before #1157 keyed the one camera under the bare "Camera" key.
-            // Falsified by: Remember writing the bare key again instead of dropping every entry of the
-            // group and writing the canonical endpoint key.
-            await File.WriteAllTextAsync(Path.Combine(_dir, EquipmentSelectionStore.FileName),
-                $"{{ \"Camera\": {Entry("Camera", "cam-legacy")} }}");
-
-            await _store.RememberAsync(Device(DeviceType.Camera, "cam-new", "new", number: 1), CancellationToken.None);
-
-            Assert.That(RawKeys(), Is.EqualTo("Camera:HOST:11111:1"));
-            var cams = (await _store.GetAllAsync(CancellationToken.None)).Where(d => d.Type == DeviceType.Camera).ToList();
-            Assert.That(Ids(cams), Is.EqualTo("cam-new"));
-        }
-
-        [Test]
         public async Task GetAll_reads_a_legacy_bare_type_entry() {
             // PIN (passes before #1157): a pre-upgrade file stays readable, so auto-connect still finds
             // the focuser on the first boot after the upgrade.
-            // Falsified by: a reader that drops non-canonical (bare "<Type>") keys instead of re-keying them.
+            // Falsified by: a reader that drops bare "<Type>" keys.
             await File.WriteAllTextAsync(Path.Combine(_dir, EquipmentSelectionStore.FileName),
                 $"{{ \"Focuser\": {Entry("Focuser", "foc-legacy")} }}");
 
@@ -425,32 +405,50 @@ namespace OpenAstroAra.Test {
             Assert.That(string.Join(",", all.Select(d => $"{d.Type}/{d.UniqueId}")), Is.EqualTo("Focuser/foc-legacy"));
         }
 
-        [Test]
-        public async Task GetAll_keeps_one_device_per_group_from_a_legacy_file() {
-            // A pre-upgrade file can hold a bare "FlatDevice" AND a bare "CoverCalibrator" entry.
-            // Falsified by: GetAll re-keying by raw Type, which returns both and boot connects the panel
-            // service twice. The canonical token (CoverCalibrator) wins, independent of file order.
+        [TestCase("CoverCalibrator", "FlatDevice")]
+        [TestCase("FlatDevice", "CoverCalibrator")]
+        public async Task GetAll_keeps_the_later_entry_of_a_group_from_an_older_file(string first, string second) {
+            // An older daemon can leave a FlatDevice AND a CoverCalibrator entry. It dialled both in file order,
+            // so the later one held the panel after its boot; the upgrade keeps that one, whatever its token.
+            // Falsified by: GetAll returning one entry per raw Type (boot dials the panel twice), or a rule
+            // that prefers a token (one of the two cases picks the earlier entry).
             await File.WriteAllTextAsync(Path.Combine(_dir, EquipmentSelectionStore.FileName),
-                $"{{ \"CoverCalibrator\": {Entry("CoverCalibrator", "flat-cc", 1)}, \"FlatDevice\": {Entry("FlatDevice", "flat-fd", 0)} }}");
+                $"{{ \"{first}\": {Entry(first, "flat-earlier", 0)}, \"{second}\": {Entry(second, "flat-later", 1)} }}");
 
-            var group = (await _store.GetAllAsync(CancellationToken.None))
-                .Where(d => d.Type.Canonical() == DeviceType.CoverCalibrator).ToList();
-
-            Assert.That(Ids(group), Is.EqualTo("flat-cc"));
+            Assert.That(await FlatGroupIds(), Is.EqualTo("flat-later"));
         }
 
         [Test]
-        public async Task Relocate_rekeys_a_legacy_bare_type_entry_to_its_new_endpoint() {
-            // Falsified by: RelocateAsync writing KeyFor(to) as the bare type name, so the moved camera
-            // keeps a legacy key and the next reader must alias it again.
+        public async Task GetAll_prefers_the_entry_an_older_daemon_wrote_after_a_downgrade() {
+            // This daemon leaves one CoverCalibrator entry; after a downgrade, an older daemon remembers a panel
+            // discovered as FlatDevice. Its RememberAsync only does map["FlatDevice"] = device, which appends
+            // the new key after the CoverCalibrator one. Back on this version, boot must dial that newer panel.
+            // Falsified by: GetAll returning both entries, or one that prefers the CoverCalibrator token.
+            await _store.RememberAsync(Device(DeviceType.CoverCalibrator, "flat-before-downgrade", "a", number: 0), CancellationToken.None);
+            var path = Path.Combine(_dir, EquipmentSelectionStore.FileName);
+            var json = await File.ReadAllTextAsync(path);
+            var olderDaemonWrite = json.TrimEnd().TrimEnd('}') + $", \"FlatDevice\": {Entry("FlatDevice", "flat-after-downgrade", 1, "other")} }}";
+            await File.WriteAllTextAsync(path, olderDaemonWrite);
+
+            Assert.That(await FlatGroupIds(), Is.EqualTo("flat-after-downgrade"));
+        }
+
+        [Test]
+        public async Task Relocate_clears_the_whole_single_instance_group() {
+            // An older file holds a FlatDevice at host-a and a CoverCalibrator at host-b; GetAll hands boot the
+            // CoverCalibrator (the later entry) and FindMovedAsync relocates it to localhost.
+            // Falsified by: RelocateAsync removing only the group's entries at the OLD endpoint, which leaves
+            // the FlatDevice at host-a beside the moved panel: two entries in one group after a write.
             await File.WriteAllTextAsync(Path.Combine(_dir, EquipmentSelectionStore.FileName),
-                $"{{ \"Camera\": {Entry("Camera", "cam-1")} }}");
-            var origin = Device(DeviceType.Camera, "cam-1", "cam-1");
+                $"{{ \"FlatDevice\": {Entry("FlatDevice", "flat-a", 0, "host-a")}, \"CoverCalibrator\": {Entry("CoverCalibrator", "flat-b", 0, "host-b")} }}");
+            var origin = Device(DeviceType.CoverCalibrator, "flat-b", "flat-b", host: "host-b");
             var moved = origin with { HostName = "localhost", IpAddress = "127.0.0.1", IpPort = 32323 };
 
             await _store.RelocateAsync(origin, moved, CancellationToken.None);
 
-            Assert.That(RawKeys(), Is.EqualTo("Camera:LOCALHOST:32323:0"));
+            Assert.That(RawKeys(), Is.EqualTo("CoverCalibrator"));
+            var group = (await _store.GetAllAsync(CancellationToken.None)).Where(d => d.Type.Canonical() == DeviceType.CoverCalibrator);
+            Assert.That(string.Join(",", group.Select(d => $"{d.UniqueId}@{d.HostName}:{d.IpPort}")), Is.EqualTo("flat-b@localhost:32323"));
         }
 
         [Test]

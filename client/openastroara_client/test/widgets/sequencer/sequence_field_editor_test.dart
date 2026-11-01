@@ -1087,6 +1087,95 @@ void main() {
       },
     );
 
+    // The daemon resolves a number against CONNECTED switches only
+    // (SwitchService TargetConnectionLocked): for -1, for an explicit n and for
+    // the ambiguity check. The picker uses the same rule.
+    final offHub = SwitchDevice(
+      deviceId: 'pb',
+      alpacaDeviceNumber: 0,
+      name: 'PowerBox',
+      connectionState: SwitchConnectionState.disconnected,
+      ports: const [], // the daemon projects no ports for a switch that is not connected
+    );
+
+    testWidgets('-1 skips a lower-numbered switch that is not connected', (
+      tester,
+    ) async {
+      // Falsified by: a "first switch" that is the lowest number among KNOWN
+      // switches; the daemon would write RelayBox (#3), the picker would show
+      // PowerBox's ports.
+      await _pump(
+        tester,
+        detail: _detailWith(_setSwitch),
+        select: const [0],
+        switches: [offHub, _hubs[1]],
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(portField));
+      await tester.pumpAndSettle();
+      expect(find.text('Port 0'), findsWidgets);
+    });
+
+    testWidgets(
+      'a known switch that is not connected keeps the integer port field',
+      (tester) async {
+        // Falsified by: no picker (no name shown), or a port dropdown that is
+        // empty for a switch whose ports the daemon does not list.
+        final c = await _pump(
+          tester,
+          detail: _setSwitchWith(device: 0, index: 2),
+          select: const [0],
+          switches: [offHub, _hubs[1]],
+        );
+        await tester.pumpAndSettle();
+        expect(find.text('PowerBox (#0, not connected)'), findsOneWidget);
+        await tester.enterText(
+          find.descendant(
+            of: find.byKey(portField),
+            matching: find.byType(TextField),
+          ),
+          '3',
+        );
+        await tester.pump();
+        expect(_nodeAt(c, [0])['SwitchIndex'], 3);
+      },
+    );
+
+    testWidgets(
+      'a number is ambiguous only when two connected switches share it',
+      (tester) async {
+        // Falsified by: no picker, or an ambiguity check over KNOWN switches (the
+        // daemon writes the one connected RelayBox #3; it refuses only #0 here).
+        await _pump(
+          tester,
+          detail: _detailWith(_setSwitch),
+          select: const [0],
+          switches: [
+            ..._hubs,
+            SwitchDevice(
+              deviceId: 'aux',
+              alpacaDeviceNumber: 0,
+              name: 'AuxBox',
+              connectionState: SwitchConnectionState.connected,
+              ports: [_port(0, 'Heater')],
+            ),
+            SwitchDevice(
+              deviceId: 'old',
+              alpacaDeviceNumber: 3,
+              name: 'OldRelay',
+              connectionState: SwitchConnectionState.disconnected,
+              ports: const [],
+            ),
+          ],
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(deviceField));
+        await tester.pumpAndSettle();
+        expect(find.text('AuxBox / PowerBox (#0, ambiguous)'), findsWidgets);
+        expect(find.text('RelayBox (#3)'), findsWidgets);
+      },
+    );
+
     testWidgets('with no switch known the number fields stay editable', (
       tester,
     ) async {
