@@ -251,6 +251,10 @@ void main() {
     expect(find.text('Show all options').hitTestable(), findsNothing, reason: 'immersive view on');
     expect(find.text('Taking a frame').hitTestable(), findsOneWidget,
         reason: 'the status stays in the immersive view');
+    await tester.pump(const Duration(milliseconds: 300)); // let the move finish
+    final immersive = tester.getRect(find.ancestor(of: find.text('Taking a frame'), matching: find.byType(SimplePanel)).first);
+    expect(immersive.topLeft, const Offset(kSimpleInset, kSimpleInset),
+        reason: 'with the strip gone the pill moves up into its corner');
 
     container.read(captureProgressProvider.notifier).reset();
     await tester.pump(const Duration(seconds: 1));

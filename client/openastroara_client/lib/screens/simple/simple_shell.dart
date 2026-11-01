@@ -145,10 +145,18 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                       ),
                     // The camera's status, top-left on the image; outside the
                     // fade, so it stays in the immersive view.
-                    const Positioned(
+                    // Under the strip, or up in the corner when the immersive
+                    // view hides the strip, moving with the panels' fade.
+                    AnimatedPositioned(
                       left: kSimpleInset,
-                      top: kSimpleInset * 2 + kSimpleBarHeight,
-                      child: SimpleStatusPill(),
+                      top: panels
+                          ? kSimpleInset * 2 + kSimpleBarHeight
+                          : kSimpleInset,
+                      duration: MediaQuery.disableAnimationsOf(context)
+                          ? Duration.zero
+                          : const Duration(milliseconds: 220),
+                      curve: Curves.easeOut,
+                      child: const SimpleStatusPill(),
                     ),
                     _Fade(
                       visible: panels,
