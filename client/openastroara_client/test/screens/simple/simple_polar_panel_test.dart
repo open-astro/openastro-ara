@@ -81,7 +81,7 @@ void main() {
     final api = await _pump(tester, const PolarAlignLive());
     expect(find.text('Ready'), findsNothing);
     expect(find.text('Start'), findsNothing);
-    expect(find.text('1 s'), findsOneWidget);
+    expect(find.text('1s'), findsOneWidget);
     await tester.tap(find.text('Single'));
     await tester.pumpAndSettle();
     expect(api!.calls, ['save 1.0 single']);
@@ -92,7 +92,7 @@ void main() {
     expect(find.text('14.4′'), findsOneWidget);
     expect(find.text('Lower 3.2′'), findsOneWidget);
     expect(find.text('Move west 14.1′'), findsOneWidget);
-    expect(find.text('1 s'), findsOneWidget, reason: 'the settings stay, for the next frame');
+    expect(find.text('1s'), findsOneWidget, reason: 'the settings stay, for the next frame');
     expect(tester.widget<FilledButton>(find.byKey(const Key('simple-polar-done'))).onPressed, isNull);
     await tester.tap(find.byKey(const Key('simple-polar-stop')));
     await tester.pump();

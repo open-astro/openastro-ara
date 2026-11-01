@@ -222,7 +222,7 @@ void main() {
 
     await tester.tap(find.byKey(const Key('simple-exposure')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('10 s').last);
+    await tester.tap(find.text('10s').last);
     await tester.pumpAndSettle();
     expect(container.read(exposureControllerProvider).exposure, const Duration(seconds: 10));
     await tester.tap(find.byKey(const Key('simple-gain')));
@@ -230,7 +230,7 @@ void main() {
     await tester.tap(find.text('200').last);
     await tester.pumpAndSettle();
     expect(container.read(exposureControllerProvider).gain, 200);
-    expect(find.text('10 s · 200'), findsOneWidget, reason: 'the chip follows');
+    expect(find.text('10s · 200'), findsOneWidget, reason: 'the chip follows');
 
     await tester.tapAt(const Offset(400, 400));
     await tester.pump();
@@ -353,14 +353,14 @@ void main() {
     container.read(captureProgressProvider.notifier).beginExposing(const Duration(seconds: 5));
     await tester.pump();
     final first = tester.widget<LinearProgressIndicator>(find.byType(LinearProgressIndicator)).value!;
-    String left() => RegExp(r'\d+ s left').firstMatch(
+    String left() => RegExp(r'\d+s left').firstMatch(
         tester.widget<Text>(find.textContaining('s left')).textSpan!.toPlainText())![0]!;
     final firstText = left();
     await tester.pump(const Duration(seconds: 2));
     expect(tester.widget<LinearProgressIndicator>(find.byType(LinearProgressIndicator)).value, greaterThan(first));
     final text = left();
     expect(text, isNot(firstText));
-    expect(text, matches(RegExp(r'^\d+ s left$')));
+    expect(text, matches(RegExp(r'^\d+s left$')));
     final before = tester.widget<LinearProgressIndicator>(find.byType(LinearProgressIndicator)).value!;
     await tester.pump(const Duration(milliseconds: 16));
     expect(tester.widget<LinearProgressIndicator>(find.byType(LinearProgressIndicator)).value, greaterThan(before));
@@ -369,7 +369,7 @@ void main() {
   });
 
   testWidgets('the status pill never cuts its label short while the whole line fits', (tester) async {
-    // Half-size test glyphs: "Taking a frame  3 s left" fits the 300 px pill.
+    // Half-size test glyphs: "Taking a frame  3s left" fits the 300 px pill.
     tester.platformDispatcher.textScaleFactorTestValue = 0.5;
     addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
     final container = await _pump(tester, const Size(1024, 768));
@@ -497,6 +497,12 @@ void main() {
     expect(lo, inInclusiveRange(15, 20));
     expect(hi, inInclusiveRange(39, 45));
     expect(histogramRange(const []), (0, 0));
+  });
+
+  test('Simple Mode writes time with the unit on the number: 5s, 0.5s, 2min', () {
+    expect(formatExposure(const Duration(seconds: 5)), '5s');
+    expect(formatExposure(const Duration(milliseconds: 500)), '0.5s');
+    expect(formatExposure(const Duration(minutes: 2)), '2min');
   });
 
   test('preset lists stay inside what the camera reports', () {
