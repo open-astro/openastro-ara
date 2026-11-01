@@ -56,6 +56,24 @@ void main() {
       expect(out.twilightDefinition, TwilightDefinition.civil);
     });
 
+    test('applyDraftToSite maps Bortle + SQM; null keeps base; SQM 0 clears', () {
+      final d = ProfileDraft();
+      d.site
+        ..bortleClass = 3
+        ..sqmMagPerArcsec2 = 21.4;
+      final out = applyDraftToSite(const SiteSettings(), d);
+      expect(out.bortleClass, 3);
+      expect(out.sqmMagPerArcsec2, 21.4);
+
+      const base = SiteSettings(bortleClass: 4, sqmMagPerArcsec2: 20.5);
+      final kept = applyDraftToSite(base, ProfileDraft());
+      expect(kept.bortleClass, 4);
+      expect(kept.sqmMagPerArcsec2, 20.5);
+
+      final cleared = applyDraftToSite(base, ProfileDraft()..site.sqmMagPerArcsec2 = 0);
+      expect(cleared.sqmMagPerArcsec2, 0);
+    });
+
     test('applyDraftToSite leaves base untouched when the draft is empty', () {
       const base = SiteSettings(siteName: 'Existing', latitudeDeg: 12.0);
       final out = applyDraftToSite(base, ProfileDraft());
