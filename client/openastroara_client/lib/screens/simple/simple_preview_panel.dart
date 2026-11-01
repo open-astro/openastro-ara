@@ -41,8 +41,8 @@ String simpleSettingsSummary(WidgetRef ref) {
   return '${formatExposure(p.exposure)} · ${p.gain}';
 }
 
-/// The last frame's facts, opened from the left rail's Info: HFR, stars,
-/// exposure, gain · offset and clipped highlights.
+/// The last frame's facts as one line, opened from the left rail's Info:
+/// HFR, stars, exposure · filter, gain · offset and clipped highlights.
 class SimpleInfoPanel extends ConsumerWidget {
   const SimpleInfoPanel({super.key});
 
@@ -55,30 +55,6 @@ class SimpleInfoPanel extends ConsumerWidget {
     final analysed = (looping || id == null)
         ? null
         : ref.watch(frameHistogramProvider(id)).asData?.value;
-    Widget row(String label, String value) => SizedBox(
-      height: 28,
-      child: Row(
-        children: [
-          Flexible(
-            child: Text(
-              label,
-              style: AraText.caption,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          const SizedBox(width: AraSpace.s8),
-          Expanded(
-            child: Text(
-              value,
-              style: kSimpleText,
-              textAlign: TextAlign.end,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-        ],
-      ),
-    );
     // The frame's own header values, not the controls' (they differ when the
     // shot came from a sequence).
     final gainOffset = analysed?.gain == null
@@ -87,30 +63,34 @@ class SimpleInfoPanel extends ConsumerWidget {
     final clipped = analysed == null
         ? '—'
         : '${(analysed.highClipFraction * 100).toStringAsFixed(analysed.highClipFraction < 0.001 ? 0 : 2)} %';
+    final facts = [
+      ('HFR', analysed?.hfr?.toStringAsFixed(2) ?? '—'),
+      ('Stars', analysed?.stars?.toString() ?? '—'),
+      ('Exposure', '${formatExposure(params.exposure)} · ${params.filterSlot}'),
+      ('Gain · offset', gainOffset),
+      ('Clipped', clipped),
+    ];
     return SimplePanel(
-      padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            id == null && !looping
-                ? 'No frame yet'
-                : looping
-                ? 'Live view'
-                : 'Last frame',
-            style: AraText.caption,
+      padding: const EdgeInsets.symmetric(horizontal: AraSpace.s16),
+      child: SizedBox(
+        height: 40,
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            spacing: AraSpace.s16,
+            children: [
+              for (final (label, value) in facts)
+                Text.rich(
+                  TextSpan(
+                    children: [
+                      TextSpan(text: '$label ', style: AraText.caption),
+                      TextSpan(text: value, style: kSimpleText),
+                    ],
+                  ),
+                ),
+            ],
           ),
-          const SizedBox(height: 4),
-          row('HFR', analysed?.hfr?.toStringAsFixed(2) ?? '—'),
-          row('Stars', analysed?.stars?.toString() ?? '—'),
-          row(
-            'Exposure',
-            '${formatExposure(params.exposure)} · ${params.filterSlot}',
-          ),
-          row('Gain · offset', gainOffset),
-          row('Clipped', clipped),
-        ],
+        ),
       ),
     );
   }

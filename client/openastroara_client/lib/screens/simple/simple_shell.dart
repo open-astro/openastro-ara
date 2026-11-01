@@ -39,6 +39,9 @@ const double kSimpleBarHeight = 56;
 /// Width of the left and right rails.
 const double kSimpleRailWidth = 72;
 
+/// Side of the compact Stop at the bottom right.
+const double kSimpleStopSize = 60;
+
 /// The modes, in the decided order.
 enum SimpleModeScreen { preview, focus, polarAlign, target, run }
 
@@ -270,40 +273,65 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                               ),
                             ),
                           ),
+                          // Info: the last frame's facts as one line, centred
+                          // under the strip.
                           if (_info)
                             const Positioned(
                               left: besideRail,
+                              right: besideRail,
                               top: railTop,
-                              width: 240,
-                              child: SimpleInfoPanel(),
+                              child: Center(child: SimpleInfoPanel()),
                             ),
+                          // The right rail: only as tall as its controls,
+                          // centred between the strip and Stop, with its
+                          // popover (modes or settings) opening beside it,
+                          // level with its top.
                           Positioned(
                             right: kSimpleInset,
                             top: railTop,
-                            bottom: kSimpleInset,
-                            width: kSimpleRailWidth,
-                            child: _RightRail(
-                              popover: _popover,
-                              onModes: () => _toggle(_Popover.modes),
-                              onSettings: () => _toggle(_Popover.settings),
-                            ),
-                          ),
-                          if (_popover == _Popover.modes)
-                            Positioned(
-                              right: besideRail,
-                              top: railTop,
-                              child: _ModeGrid(
-                                onPicked: () =>
-                                    setState(() => _popover = _Popover.none),
+                            bottom: kSimpleInset * 2 + kSimpleStopSize,
+                            left: 0,
+                            child: Align(
+                              alignment: Alignment.centerRight,
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                spacing: kSimpleInset,
+                                children: [
+                                  if (_popover == _Popover.modes)
+                                    _ModeGrid(
+                                      onPicked: () => setState(
+                                        () => _popover = _Popover.none,
+                                      ),
+                                    ),
+                                  if (_popover == _Popover.settings)
+                                    const SizedBox(
+                                      width: 280,
+                                      child: SimpleSettingsPopover(),
+                                    ),
+                                  SizedBox(
+                                    width: kSimpleRailWidth,
+                                    child: _RightRail(
+                                      popover: _popover,
+                                      onModes: () => _toggle(_Popover.modes),
+                                      onSettings: () =>
+                                          _toggle(_Popover.settings),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
-                          if (_popover == _Popover.settings)
-                            const Positioned(
-                              right: besideRail,
-                              top: railTop,
-                              width: 280,
-                              child: SimpleSettingsPopover(),
-                            ),
+                          ),
+                          // Stop on its own at the bottom, under the rail.
+                          const Positioned(
+                            right:
+                                kSimpleInset +
+                                (kSimpleRailWidth - kSimpleStopSize) / 2,
+                            bottom: kSimpleInset,
+                            width: kSimpleStopSize,
+                            height: kSimpleStopSize,
+                            child: EmergencyStopButton(compact: true),
+                          ),
                         ],
                       ),
                     ),
@@ -545,8 +573,8 @@ class _LeftRail extends StatelessWidget {
   );
 }
 
-/// The mode (tap for the five), the settings chip, the shutter and, at the
-/// foot, Stop.
+/// The mode (tap for the five), the settings chip and the shutter; Stop
+/// sits on its own below.
 class _RightRail extends ConsumerWidget {
   const _RightRail({
     required this.popover,
@@ -564,6 +592,7 @@ class _RightRail extends ConsumerWidget {
     return SimplePanel(
       padding: const EdgeInsets.symmetric(vertical: AraSpace.s8, horizontal: 6),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         spacing: AraSpace.s8,
         children: [
           Semantics(
@@ -608,12 +637,6 @@ class _RightRail extends ConsumerWidget {
             onTap: onSettings,
           ),
           const SimpleShutter(),
-          const Spacer(),
-          const SizedBox(
-            width: 60,
-            height: 60,
-            child: EmergencyStopButton(compact: true),
-          ),
         ],
       ),
     );
@@ -797,14 +820,13 @@ class _StatsRow extends ConsumerWidget {
     final histogram = id == null
         ? null
         : ref.watch(frameHistogramProvider(id)).asData?.value;
-    // Each panel is capped so a lone one is a compact panel, not a bar
-    // across the row.
+    // The two share the row equally (same size), each capped so a lone one
+    // is a panel, not a bar across the row.
     return Row(
       spacing: kSimpleInset,
       children: [
         if (guiding)
           Flexible(
-            flex: 3,
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 520),
               child: const _GuidingBar(),
@@ -812,9 +834,8 @@ class _StatsRow extends ConsumerWidget {
           ),
         if (histogram != null)
           Flexible(
-            flex: 2,
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 340),
+              constraints: const BoxConstraints(maxWidth: 520),
               child: _HistogramBar(histogram),
             ),
           ),

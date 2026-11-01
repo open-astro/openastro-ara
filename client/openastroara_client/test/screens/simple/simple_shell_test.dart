@@ -83,7 +83,7 @@ String _summary(ProviderContainer c) {
 
 void main() {
   for (final size in const [Size(1024, 768), Size(1024, 744), Size(1470, 854)]) {
-    testWidgets('at $size: right rail (mode, settings, shutter, Stop) and left rail (Sky, Info, Library)',
+    testWidgets('at $size: compact right rail (mode, settings, shutter), Stop below, left rail (Sky, Info, Library)',
         (tester) async {
       await _pump(tester, size, steps: _someSteps);
       expect(tester.takeException(), isNull, reason: 'no overflow');
@@ -95,7 +95,10 @@ void main() {
       }
       final stop = tester.getRect(find.byType(EmergencyStopButton));
       expect(stop.size, const Size(60, 60));
-      expect(right.contains(stop.center), isTrue, reason: 'Stop at the foot of the rail');
+      expect(stop.bottom, size.height - kSimpleInset, reason: 'Stop on its own at the bottom');
+      expect(stop.center.dx, closeTo(right.center.dx, 0.5), reason: 'under the rail');
+      expect(right.height, lessThan(320), reason: 'the rail is only as tall as its controls');
+      expect(right.bottom, lessThan(stop.top));
       final left = _panelOf(tester, find.byKey(const Key('simple-sky')));
       expect(left.left, kSimpleInset);
       for (final key in ['simple-info', 'simple-library']) {
@@ -166,17 +169,21 @@ void main() {
     expect(find.text('Loop'), findsNothing, reason: 'a tap on the image closes it');
   });
 
-  testWidgets('Info shows the last frame facts beside the left rail', (tester) async {
+  testWidgets('Info shows the last frame facts as one centred line under the strip', (tester) async {
     final container = await _pump(tester, const Size(1024, 768));
     await _frame(tester, container);
     await tester.tap(find.byKey(const Key('simple-info')));
     await tester.pump();
-    for (final row in ['HFR', 'Stars', 'Exposure', 'Gain · offset', 'Clipped']) {
-      expect(find.text(row), findsOneWidget, reason: row);
+    final line = tester.getRect(find.byType(SimpleInfoPanel));
+    expect(line.height, 40, reason: 'one line');
+    expect(line.center.dx, closeTo(1024 / 2, 1), reason: 'centred');
+    expect(line.top, kSimpleInset * 2 + kSimpleBarHeight, reason: 'under the strip');
+    for (final fact in ['HFR', 'Stars', 'Exposure', 'Gain · offset', 'Clipped']) {
+      expect(find.textContaining(fact, findRichText: true), findsOneWidget, reason: fact);
     }
     await tester.tap(find.byKey(const Key('simple-info')));
     await tester.pump();
-    expect(find.text('HFR'), findsNothing);
+    expect(find.byType(SimpleInfoPanel), findsNothing);
   });
 
   testWidgets('Sky shows the planetarium over a frame, and back', (tester) async {
