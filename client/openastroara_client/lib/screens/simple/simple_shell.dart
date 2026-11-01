@@ -39,6 +39,10 @@ const double kSimpleBarHeight = 56;
 /// Width of the left and right rails.
 const double kSimpleRailWidth = 72;
 
+/// The status pill's widest (top-left under the strip); Info starts right of
+/// it.
+const double kSimpleStatusMaxWidth = 300;
+
 /// Side of the compact Stop at the bottom right.
 const double kSimpleStopSize = 60;
 
@@ -239,13 +243,24 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                       visible: panels,
                       child: Stack(
                         children: [
-                          Positioned(
+                          const Positioned(
                             left: kSimpleInset,
                             right: kSimpleInset,
                             top: kSimpleInset,
                             height: kSimpleBarHeight,
-                            child: _StatusStrip(info: _info),
+                            child: _StatusStrip(),
                           ),
+                          // Info: the last frame's facts as one line under the
+                          // strip, centred in the room right of the status
+                          // pill's slot so the two never meet, however much
+                          // gear fills the strip.
+                          if (_info)
+                            const Positioned(
+                              left: kSimpleInset * 2 + kSimpleStatusMaxWidth,
+                              right: besideRail,
+                              top: railTop,
+                              child: Center(child: SimpleInfoPanel()),
+                            ),
                           // Guiding and the histogram along the bottom, each
                           // once it has data.
                           const Positioned(
@@ -383,11 +398,7 @@ class SimplePanel extends StatelessWidget {
 /// Device dots (connected gear only), night mode and ⋯ (search, Settings,
 /// Show all options).
 class _StatusStrip extends ConsumerWidget {
-  const _StatusStrip({required this.info});
-
-  /// Info is on: the last frame's facts sit in the middle of the strip, in
-  /// line with the dots and buttons, so they can't land on the status pill.
-  final bool info;
+  const _StatusStrip();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -400,7 +411,7 @@ class _StatusStrip extends ConsumerWidget {
       child: Row(
         children: [
           // Only gear that's connected; a fault still shows.
-          const Flexible(
+          const Expanded(
             child: Align(
               alignment: Alignment.centerLeft,
               child: EquipmentChipCompact(
@@ -413,12 +424,6 @@ class _StatusStrip extends ConsumerWidget {
                 ),
               ),
             ),
-          ),
-          Expanded(
-            flex: 3,
-            child: info
-                ? const Center(child: SimpleInfoPanel())
-                : const SizedBox.shrink(),
           ),
           IconButton(
             icon: Icon(
@@ -574,8 +579,8 @@ class _LeftRail extends StatelessWidget {
   );
 }
 
-/// The shutter, then the mode (tap for the five) and the settings chip under
-/// it; Stop sits on its own below.
+/// The mode (tap for the five) on top of the shutter, the settings chip
+/// under it; Stop sits on its own below.
 class _RightRail extends ConsumerWidget {
   const _RightRail({
     required this.popover,
@@ -596,8 +601,7 @@ class _RightRail extends ConsumerWidget {
         mainAxisSize: MainAxisSize.min,
         spacing: AraSpace.s8,
         children: [
-          // The shutter first; the on-demand options (mode, settings) under it.
-          const SimpleShutter(),
+          // The mode on top of the shutter; the settings chip under it.
           Semantics(
             button: true,
             label: 'Mode: Preview',
@@ -632,6 +636,7 @@ class _RightRail extends ConsumerWidget {
               ),
             ),
           ),
+          const SimpleShutter(),
           _RailButton(
             key: const Key('simple-settings'),
             icon: Icons.tune,

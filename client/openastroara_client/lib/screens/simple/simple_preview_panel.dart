@@ -12,7 +12,8 @@ import '../../state/equipment/camera_state.dart';
 import '../../widgets/imaging/exposure_controls_panel.dart' show FilterDropdown;
 import '../../widgets/imaging/histogram_strip.dart' show frameHistogramProvider;
 import '../imaging_actions.dart';
-import 'simple_shell.dart' show SimplePanel, SimpleSegment, kSimpleTileFill;
+import 'simple_shell.dart'
+    show SimplePanel, SimpleSegment, kSimpleStatusMaxWidth, kSimpleTileFill;
 
 /// Simple Mode body text: 14 px minimum (brief), tabular for live numbers.
 const kSimpleText = TextStyle(
@@ -41,8 +42,8 @@ String simpleSettingsSummary(WidgetRef ref) {
   return '${formatExposure(p.exposure)} · ${p.gain}';
 }
 
-/// The last frame's facts as one line in the status strip, turned on from
-/// the left rail's Info:
+/// The last frame's facts as one line under the strip, turned on from the
+/// left rail's Info:
 /// HFR, stars, exposure · filter, gain · offset and clipped highlights.
 class SimpleInfoPanel extends ConsumerWidget {
   const SimpleInfoPanel({super.key});
@@ -71,24 +72,26 @@ class SimpleInfoPanel extends ConsumerWidget {
       ('Gain · offset', gainOffset),
       ('Clipped', clipped),
     ];
-    // In the middle of the status strip: a line of text, no panel of its own.
-    return SizedBox(
-      height: 40,
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(
-          spacing: AraSpace.s16,
-          children: [
-            for (final (label, value) in facts)
-              Text.rich(
-                TextSpan(
-                  children: [
-                    TextSpan(text: '$label ', style: AraText.caption),
-                    TextSpan(text: value, style: kSimpleText),
-                  ],
+    return SimplePanel(
+      padding: const EdgeInsets.symmetric(horizontal: AraSpace.s16),
+      child: SizedBox(
+        height: 40,
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            spacing: AraSpace.s16,
+            children: [
+              for (final (label, value) in facts)
+                Text.rich(
+                  TextSpan(
+                    children: [
+                      TextSpan(text: '$label ', style: AraText.caption),
+                      TextSpan(text: value, style: kSimpleText),
+                    ],
+                  ),
                 ),
-              ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -477,7 +480,7 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
           };
     if (label == null) return const SizedBox.shrink();
     return ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 460),
+      constraints: const BoxConstraints(maxWidth: kSimpleStatusMaxWidth),
       child: SimplePanel(
         padding: const EdgeInsets.symmetric(horizontal: AraSpace.s16),
         child: SizedBox(
@@ -487,7 +490,14 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
             children: [
               Icon(Icons.circle, size: 10, color: dot),
               const SizedBox(width: AraSpace.s8),
-              Text(label, style: kSimpleText),
+              Flexible(
+                child: Text(
+                  label,
+                  style: kSimpleText,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
               if (detail != null) ...[
                 const SizedBox(width: AraSpace.s8),
                 Flexible(
@@ -502,7 +512,7 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
               if (exposing) ...[
                 const SizedBox(width: AraSpace.s12),
                 SizedBox(
-                  width: 120,
+                  width: 60,
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(2),
                     child: LinearProgressIndicator(

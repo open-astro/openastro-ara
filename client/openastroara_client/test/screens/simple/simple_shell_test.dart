@@ -96,8 +96,8 @@ void main() {
       final shutter = tester.getRect(find.byKey(const Key('simple-shutter')));
       final mode = tester.getRect(find.byKey(const Key('simple-mode')));
       final settings = tester.getRect(find.byKey(const Key('simple-settings')));
-      expect(shutter.bottom, lessThanOrEqualTo(mode.top), reason: 'options under the shutter');
-      expect(mode.bottom, lessThanOrEqualTo(settings.top));
+      expect(mode.bottom, lessThanOrEqualTo(shutter.top), reason: 'the mode on top of the shutter');
+      expect(shutter.bottom, lessThanOrEqualTo(settings.top), reason: 'settings under it');
       final stop = tester.getRect(find.byType(EmergencyStopButton));
       expect(stop.size, const Size(60, 60));
       expect(stop.bottom, size.height - kSimpleInset, reason: 'Stop on its own at the bottom');
@@ -175,15 +175,14 @@ void main() {
     expect(find.text('Loop'), findsNothing, reason: 'a tap on the image closes it');
   });
 
-  testWidgets('Info shows the last frame facts as one line in the strip, clear of the status pill', (tester) async {
+  testWidgets('Info shows the last frame facts as one line under the strip, clear of the status pill', (tester) async {
     final container = await _pump(tester, const Size(1024, 768));
     await _frame(tester, container);
     await tester.tap(find.byKey(const Key('simple-info')));
     await tester.pump();
     final line = tester.getRect(find.byType(SimpleInfoPanel));
     expect(line.height, 40, reason: 'one line');
-    final strip = _panelOf(tester, find.byKey(const Key('simple-more')));
-    expect(strip.contains(line.center), isTrue, reason: 'in the status strip');
+    expect(line.top, kSimpleInset * 2 + kSimpleBarHeight, reason: 'under the strip, not in it');
     container.read(captureProgressProvider.notifier).beginExposing(const Duration(seconds: 5));
     await tester.pump();
     final pill = _panelOf(tester, find.text('Taking a frame'));
