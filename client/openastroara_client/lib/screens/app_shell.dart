@@ -24,7 +24,8 @@ import '../widgets/stop_mount_overlay.dart';
 import '../widgets/equipment/equipment_status_chip.dart';
 import 'package:flutter/foundation.dart' show defaultTargetPlatform;
 import '../services/notch_side.dart';
-import '../widgets/equipment_chip.dart' show kEquipmentChipCompactWidth;
+import '../widgets/equipment_chip.dart'
+    show EquipmentChipCompact, kEquipmentChipCompactWidth, kEquipmentChipWidth;
 import '../widgets/help_dialog.dart';
 import '../widgets/settings_gear_button.dart';
 import '../widgets/launchpad_button.dart';
@@ -292,13 +293,22 @@ class _TopEquipmentBar extends StatelessWidget {
       child: Row(
         children: [
           if (!showChips) const Spacer() else
-          const Expanded(
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              padding: EdgeInsets.symmetric(horizontal: 8),
-              // Per §25.3 order (most used first); each chip is live (status dot) +
-              // clickable (routes to its Settings panel). See TopEquipmentChips.
-              child: TopEquipmentChips(),
+          Expanded(
+            // Names only when every named chip fits; otherwise icons only, so
+            // no device is pushed off screen (an iPad in portrait, a phone in
+            // landscape, a narrowed desktop window).
+            child: LayoutBuilder(
+              builder: (context, constraints) => EquipmentChipCompact(
+                compact: constraints.maxWidth <
+                    TopEquipmentChips.count * kEquipmentChipWidth + 16,
+                child: const SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  padding: EdgeInsets.symmetric(horizontal: 8),
+                  // Per §25.3 order (most used first); each chip is live (status dot) +
+                  // clickable (routes to its Settings panel). See TopEquipmentChips.
+                  child: TopEquipmentChips(),
+                ),
+              ),
             ),
           ),
           // §61.1 — visible magnifying-glass icon on the right side of the

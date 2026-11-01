@@ -62,6 +62,9 @@ class TopEquipmentChips extends StatelessWidget {
   /// A row in the top bar; a column down the side on a phone-width window.
   final Axis direction;
 
+  /// How many chips [build] lays out, for the room a named row needs.
+  static const int count = 11;
+
   @override
   Widget build(BuildContext context) {
     return Flex(

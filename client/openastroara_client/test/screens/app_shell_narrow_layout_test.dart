@@ -137,6 +137,18 @@ void main() {
     });
   });
 
+  testWidgets('an iPad in portrait fits every device in the top bar', (tester) async {
+    // 768 pt wide: wider than a phone, too narrow for eleven named buttons.
+    await _pumpAt(tester, const Size(768, 1024));
+    final search = tester.getRect(find.byTooltip(RegExp('^Search')).first).left;
+    for (final device in [
+      'Camera', 'Mount', 'Guider', 'Focuser', 'Filter Wheel', 'Rotator',
+      'Flat Panel', 'Switch', 'Weather', 'Safety', 'Dome',
+    ]) {
+      expect(tester.getRect(find.byTooltip(device)).right, lessThan(search), reason: '$device before search');
+    }
+  });
+
   testWidgets('a desktop-width window keeps the side rail and the top device bar', (tester) async {
     await _pumpAt(tester, const Size(1600, 1000));
 

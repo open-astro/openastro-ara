@@ -40,6 +40,7 @@ void main() {
     for (final name in order) {
       expect(find.text(name), findsOneWidget, reason: name);
     }
+    expect(TopEquipmentChips.count, order.length, reason: 'the top bar sizes its named row from count');
     final xs = [for (final name in order) tester.getCenter(find.text(name)).dx];
     expect(xs, orderedEquals([...xs]..sort()), reason: 'left to right: $order');
   });
