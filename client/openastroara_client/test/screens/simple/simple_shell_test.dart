@@ -17,6 +17,7 @@ import 'package:openastroara/state/saved_server_state.dart';
 import 'package:openastroara/state/settings/settings_nav.dart';
 import 'package:openastroara/state/simple_mode_state.dart';
 import 'package:openastroara/widgets/emergency_stop_button.dart';
+import 'package:openastroara/widgets/night_hotkey.dart';
 
 class _MemPrefs extends SimpleModePrefsService {
   bool value = true;
@@ -307,6 +308,30 @@ void main() {
     expect(calls.map((c) => c.arguments).toList(), ['SystemUiMode.immersiveSticky']);
     await tester.pumpWidget(const SizedBox());
     expect(calls.last.arguments, 'SystemUiMode.edgeToEdge');
+  });
+
+  testWidgets('the shell takes focus from the root NightHotkey, so ⌘, (Settings) reaches it', (tester) async {
+    tester.view.physicalSize = const Size(1024, 768);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final container = ProviderContainer(overrides: [
+      simpleModePrefsProvider.overrideWithValue(_MemPrefs()),
+      selectedTabIndexProvider.overrideWith(_StartOnLive.new),
+    ]);
+    addTearDown(container.dispose);
+    await container.read(simpleModeProvider.future);
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: const MaterialApp(
+        home: NightHotkey(child: SimpleShell(planetarium: SizedBox())),
+      ),
+    ));
+    await tester.pump();
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.comma);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
+    await tester.pump();
+    expect(container.read(selectedTabIndexProvider), kOptionsTabIndex);
   });
 
   testWidgets('buttons use 10 px corners, not Material pills', (tester) async {

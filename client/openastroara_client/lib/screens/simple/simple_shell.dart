@@ -116,17 +116,30 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
   // The system status bar (clock, battery, Wi-Fi) is hidden while Simple
   // Mode shows and comes back for the full UI; an edge swipe still reveals
   // it briefly (sticky). A no-op on desktop.
+  // §61 — the shortcuts only see keys when focus is inside the shell, and
+  // the root NightHotkey's autofocus wins first; take focus explicitly once
+  // mounted (as AppShell does).
+  final _focus = FocusNode(debugLabel: 'SimpleShell');
+
   @override
   void initState() {
     super.initState();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _focus.requestFocus();
+    });
   }
 
   @override
   void dispose() {
+    _focus.dispose();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     super.dispose();
   }
+
+  // ⌘, / Ctrl+, opens Settings, which (for now) returns to the full UI.
+  void _openSettings() =>
+      ref.read(selectedTabIndexProvider.notifier).select(kOptionsTabIndex);
 
   void _toggle(_Popover p) =>
       setState(() => _popover = _popover == p ? _Popover.none : p);
@@ -170,9 +183,13 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                 control: true,
               ): () =>
                   showCommandPalette(context),
+              const SingleActivator(LogicalKeyboardKey.comma, meta: true):
+                  _openSettings,
+              const SingleActivator(LogicalKeyboardKey.comma, control: true):
+                  _openSettings,
             },
             child: Focus(
-              autofocus: true,
+              focusNode: _focus,
               child: SafeArea(
                 child: Stack(
                   children: [
