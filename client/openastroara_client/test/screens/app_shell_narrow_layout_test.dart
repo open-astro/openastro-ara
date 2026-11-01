@@ -72,7 +72,7 @@ void main() {
     expect(find.byType(NavigationRail), findsOneWidget, reason: 'wide enough for the desktop layout');
     for (final device in [
       'Camera', 'Mount', 'Guider', 'Focuser', 'Filter Wheel', 'Rotator',
-      'Flat Panel', 'Switch', 'Weather', 'Safety', 'Dome',
+      'Flat Panel', 'Switches', 'Weather', 'Safety', 'Dome',
     ]) {
       expect(tester.getRect(find.byTooltip(device)).right, lessThanOrEqualTo(852), reason: '$device on screen');
     }
@@ -143,7 +143,7 @@ void main() {
     final search = tester.getRect(find.byTooltip(RegExp('^Search')).first).left;
     for (final device in [
       'Camera', 'Mount', 'Guider', 'Focuser', 'Filter Wheel', 'Rotator',
-      'Flat Panel', 'Switch', 'Weather', 'Safety', 'Dome',
+      'Flat Panel', 'Switches', 'Weather', 'Safety', 'Dome',
     ]) {
       expect(tester.getRect(find.byTooltip(device)).right, lessThan(search), reason: '$device before search');
     }

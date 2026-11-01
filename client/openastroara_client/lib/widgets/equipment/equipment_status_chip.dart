@@ -114,7 +114,7 @@ class TopEquipmentChips extends StatelessWidget {
             faultTypes: const {'covercalibrator', 'flatdevice'},
             watchLevel: (ref) =>
                 equipmentChipLevel(ref.watch(flatPanelProvider))),
-        const SwitchStatusChip(icon: Icons.toggle_on, label: 'Switch'),
+        const SwitchStatusChip(icon: Icons.toggle_on, label: 'Switches'),
         EquipmentStatusChip(
             icon: Icons.cloud_outlined,
             label: 'Weather',

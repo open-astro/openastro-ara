@@ -175,14 +175,14 @@ void main() {
     expect(stop.top - controls.bottom, kSimpleInset);
   });
 
-  testWidgets('device dots use the agreed icons: focus corners, toggle, shield with check, panel and dome glyphs',
+  testWidgets('device dots use the agreed icons: focus corners, toggle, shield with check; guider, panel and dome glyphs',
       (tester) async {
     await _pump(tester, const Size(1470, 854));
     expect(tester.takeException(), isNull);
-    for (final icon in [Icons.center_focus_strong, Icons.toggle_on, Icons.verified_user, Icons.gps_fixed]) {
+    for (final icon in [Icons.center_focus_strong, Icons.toggle_on, Icons.verified_user]) {
       expect(find.byIcon(icon), findsOneWidget, reason: '$icon');
     }
-    expect(find.byType(EquipmentGlyph), findsNWidgets(4), reason: 'mount, filter wheel, flat panel, dome');
+    expect(find.byType(EquipmentGlyph), findsNWidgets(5), reason: 'mount, guider, filter wheel, flat panel, dome');
   });
 
   testWidgets('a tap on the frame hides every panel but Emergency Stop, a second brings them back',

@@ -44,7 +44,7 @@ extension InstructionCategoryLabel on InstructionCategory {
     InstructionCategory.rotator => 'Rotator',
     InstructionCategory.telescope => 'Telescope',
     InstructionCategory.guider => 'Guider',
-    InstructionCategory.switchDevice => 'Switch',
+    InstructionCategory.switchDevice => 'Switches',
     InstructionCategory.calibration => 'Calibration',
     InstructionCategory.utility => 'Utility',
     InstructionCategory.container => 'Containers',
