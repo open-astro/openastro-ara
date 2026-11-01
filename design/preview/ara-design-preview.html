@@ -891,7 +891,7 @@
     if (o.pill) { const [dot, label, detail, bar] = o.pill; pill.innerHTML = `<i class="${dot}"></i>${label}${detail ? ` <span class="sub">${detail}</span>` : ''}${bar ? '<span class="pb"><i></i></span>' : ''}`; }
     document.getElementById('s-mode-name').textContent = o.rail || o.mode;
     document.getElementById('s-mode').classList.toggle('open', v === 'grid');
-    document.getElementById('s-chip').classList.toggle('on', v === 'settings' || v === 'focus' || v === 'pa' || v.startsWith('t'));
+    document.getElementById('s-chip').classList.toggle('on', ['settings', 'focus', 'pa', 'target', 't-fail', 't-horizon'].includes(v));
     const chip = document.getElementById('s-chip');
     chip.lastChild.textContent = o.chip || '5 s · 100';
     chip.style.whiteSpace = o.chip && o.chip.includes('\n') ? 'pre' : '';
