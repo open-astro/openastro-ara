@@ -18,9 +18,6 @@ class EquipmentGlyph extends StatelessWidget {
   /// A flat panel seen face on: a frame round a lit panel.
   const EquipmentGlyph.flatPanel({super.key, this.size = 28, required this.color}) : _paint = _flatPanel;
 
-  /// A guide star held in a reticle: the guider chip.
-  const EquipmentGlyph.guider({super.key, this.size = 28, required this.color}) : _paint = _guider;
-
   /// An observatory dome on its wall, with the shutter slit open.
   const EquipmentGlyph.dome({super.key, this.size = 28, required this.color}) : _paint = _dome;
 
@@ -79,33 +76,6 @@ class EquipmentGlyph extends StatelessWidget {
       ..addRect(Rect.fromLTRB(5 * u, 7 * u, 19 * u, 17 * u));
     c.drawPath(frame, fill);
     c.drawRect(Rect.fromLTRB(7 * u, 9 * u, 17 * u, 15 * u), fill);
-  }
-
-  static void _guider(Canvas c, Size s, Paint stroke, Paint fill) {
-    final u = s.width / 24;
-    // The reticle: a ring with four ticks reaching out to the edges.
-    c.drawCircle(Offset(12 * u, 12 * u), 6.5 * u,
-        Paint()
-          ..color = fill.color
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 1.6 * u);
-    for (final r in [
-      Rect.fromLTRB(11 * u, 2 * u, 13 * u, 7 * u),
-      Rect.fromLTRB(11 * u, 17 * u, 13 * u, 22 * u),
-      Rect.fromLTRB(2 * u, 11 * u, 7 * u, 13 * u),
-      Rect.fromLTRB(17 * u, 11 * u, 22 * u, 13 * u),
-    ]) {
-      c.drawRect(r, fill);
-    }
-    // The guide star: a five-point star in the middle.
-    final star = Path();
-    for (var i = 0; i < 10; i++) {
-      final a = -math.pi / 2 + i * math.pi / 5;
-      final r = (i.isEven ? 3.6 : 1.5) * u;
-      final p = Offset(12 * u + r * math.cos(a), 12 * u + r * math.sin(a));
-      i == 0 ? star.moveTo(p.dx, p.dy) : star.lineTo(p.dx, p.dy);
-    }
-    c.drawPath(star..close(), fill);
   }
 
   static void _dome(Canvas c, Size s, Paint stroke, Paint fill) {

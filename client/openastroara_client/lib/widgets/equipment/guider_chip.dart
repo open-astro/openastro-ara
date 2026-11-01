@@ -5,9 +5,7 @@ import '../../models/guider_status.dart';
 import '../../state/guider/guider_state.dart';
 import '../../state/settings/settings_nav.dart';
 import '../../state/ws/ws_providers.dart';
-import '../../theme/ara_colors.dart';
 import '../equipment_chip.dart';
-import 'equipment_glyphs.dart';
 import '../status_indicator.dart';
 
 /// Maps the guider's async status to the chip's status dot. Pure so the
@@ -71,8 +69,7 @@ class GuiderChip extends ConsumerWidget {
         ? guiderChipLevel(ref.watch(guiderStatusProvider))
         : StatusLevel.disconnected;
     return EquipmentChip(
-      icon: Icons.gps_fixed,
-      glyph: const EquipmentGlyph.guider(color: AraColors.textPrimary),
+      icon: Icons.track_changes,
       label: 'Guider',
       status: level,
       onTap: () => openSettingsPanel(ref, 'eq.guider'),
