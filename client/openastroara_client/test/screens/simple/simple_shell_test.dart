@@ -1,0 +1,118 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/main.dart' show isShell, shellFor;
+import 'package:openastroara/screens/app_shell.dart';
+import 'package:openastroara/screens/simple/simple_shell.dart';
+import 'package:openastroara/services/simple_mode_prefs_service.dart';
+import 'package:openastroara/state/app_shell_state.dart';
+import 'package:openastroara/state/settings/settings_nav.dart';
+import 'package:openastroara/state/simple_mode_state.dart';
+import 'package:openastroara/widgets/emergency_stop_button.dart';
+import 'package:openastroara/widgets/settings_gear_button.dart';
+
+class _MemPrefs extends SimpleModePrefsService {
+  bool value = true;
+  @override
+  Future<bool> load() async => value;
+  @override
+  Future<void> save(bool enabled) async => value = enabled;
+}
+
+/// Simple Mode is entered from the full UI's Live tab (the switch button
+/// points it there), so start the tab state where the switch leaves it.
+class _StartOnLive extends SelectedTabIndexNotifier {
+  @override
+  int build() => kLiveTabIndex;
+}
+
+Future<ProviderContainer> _pump(WidgetTester tester, Size size) async {
+  tester.view.physicalSize = size;
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.reset);
+  final container = ProviderContainer(overrides: [
+    simpleModePrefsProvider.overrideWithValue(_MemPrefs()),
+    selectedTabIndexProvider.overrideWith(_StartOnLive.new),
+  ]);
+  addTearDown(container.dispose);
+  await container.read(simpleModeProvider.future);
+  await tester.pumpWidget(UncontrolledProviderScope(
+    container: container,
+    child: const MaterialApp(home: SimpleShell()),
+  ));
+  await tester.pump();
+  return container;
+}
+
+double _panelOpacity(WidgetTester tester) => tester
+    .widget<AnimatedOpacity>(find.ancestor(
+      of: find.text('Show all options'),
+      matching: find.byType(AnimatedOpacity),
+    ))
+    .opacity;
+
+void main() {
+  for (final size in const [Size(1470, 854), Size(1024, 768), Size(1100, 700)]) {
+    testWidgets('lays out the strip, Preview column, switcher and Stop at $size',
+        (tester) async {
+      await _pump(tester, size);
+      expect(tester.takeException(), isNull, reason: 'no overflow');
+      for (final label in ['Show all options', 'Preview', 'Polar align', 'Focus', 'Target', 'Run', 'Loop', 'Single', 'Guiding']) {
+        expect(find.text(label), findsOneWidget, reason: label);
+      }
+      expect(find.byType(EmergencyStopButton), findsOneWidget);
+      expect(find.byKey(const Key('simple-shutter')), findsOneWidget);
+      final stop = tester.getRect(find.byType(EmergencyStopButton));
+      expect(stop.right, lessThanOrEqualTo(size.width - kSimpleInset + 0.5));
+      expect(stop.bottom, lessThanOrEqualTo(size.height - kSimpleInset + 0.5));
+    });
+  }
+
+  testWidgets('a tap on the frame hides every panel but Emergency Stop, a second brings them back',
+      (tester) async {
+    await _pump(tester, const Size(1470, 854));
+    expect(_panelOpacity(tester), 1);
+
+    await tester.tapAt(const Offset(500, 400));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(_panelOpacity(tester), 0);
+    expect(find.byType(EmergencyStopButton).hitTestable(), findsOneWidget,
+        reason: 'Emergency Stop stays in the clean view');
+    expect(find.text('Show all options').hitTestable(), findsNothing,
+        reason: 'hidden panels take no taps');
+
+    await tester.tapAt(const Offset(500, 400));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(_panelOpacity(tester), 1);
+  });
+
+  testWidgets('the gear returns to the full UI on Settings', (tester) async {
+    final container = await _pump(tester, const Size(1470, 854));
+    await tester.tap(find.byType(SettingsGearButton));
+    await tester.pump();
+    expect(container.read(simpleModeProvider).value, isFalse);
+    expect(container.read(selectedTabIndexProvider), kOptionsTabIndex);
+  });
+
+  testWidgets('Show all options opens Live; Target opens Planning', (tester) async {
+    final container = await _pump(tester, const Size(1470, 854));
+    await tester.tap(find.text('Show all options'));
+    await tester.pump();
+    expect(container.read(simpleModeProvider).value, isFalse);
+    expect(container.read(selectedTabIndexProvider), kLiveTabIndex);
+
+    await container.read(simpleModeProvider.notifier).set(true);
+    await tester.tap(find.text('Target'));
+    await tester.pump();
+    expect(container.read(simpleModeProvider).value, isFalse);
+    expect(container.read(selectedTabIndexProvider), kPlanningTabIndex);
+  });
+
+  test('the router picks the shell from the pref, and both shells maximize the window', () {
+    expect(shellFor(simple: true), isA<SimpleShell>());
+    expect(shellFor(simple: false), isA<AppShell>());
+    expect(isShell(const SimpleShell()), isTrue);
+    expect(isShell(const AppShell()), isTrue);
+    expect(isShell(const SizedBox()), isFalse);
+  });
+}

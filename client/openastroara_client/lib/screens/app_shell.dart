@@ -9,18 +9,10 @@ import '../state/night_mode_state.dart';
 import '../state/settings/settings_nav.dart';
 import '../theme/ara_colors.dart';
 import '../widgets/notifications/notification_center.dart';
-import '../widgets/auto_flats_prompt_listener.dart';
-import '../widgets/manual_filter_swap_listener.dart';
-import '../widgets/pending_profile_replay_listener.dart';
-import '../widgets/preflight_checklist_listener.dart';
-import '../widgets/session_ended_summary_listener.dart';
 import '../widgets/backup_stream_chip.dart';
 import '../widgets/command_palette.dart';
-import '../widgets/connection_policy_listener.dart';
-import '../widgets/time_sync_on_connect.dart';
 import '../widgets/emergency_stop_button.dart';
-import '../widgets/safety_alarm_listener.dart';
-import '../widgets/stop_mount_overlay.dart';
+import 'shell_listeners.dart';
 import '../widgets/equipment/equipment_status_chip.dart';
 import 'package:flutter/foundation.dart' show defaultTargetPlatform;
 import '../services/notch_side.dart';
@@ -28,6 +20,7 @@ import '../widgets/equipment_chip.dart'
     show EquipmentChipCompact, kEquipmentChipCompactWidth, kEquipmentChipWidth;
 import '../widgets/help_dialog.dart';
 import '../widgets/settings_gear_button.dart';
+import '../widgets/simple_mode_switch_button.dart';
 import '../widgets/launchpad_button.dart';
 import '../widgets/ws_connection_indicator.dart';
 import 'calibration/calibration_screen.dart';
@@ -133,27 +126,9 @@ class _AppShellState extends ConsumerState<AppShell> {
       // session transferred) listen here, at the always-alive shell level.
       // §48 — the "capture calibration tonight?" prompt nests inside for the
       // same reason: it must fire no matter which tab is showing.
-      body: PendingProfileReplayListener(
-        // §58.14 / #1138 — the bedtime card: the pre-sleep checklist, once per
-        // night after dark with a sequence running, whatever tab is showing.
-        child: PreflightChecklistListener(
-        // §58.13 / #1138 — the morning card: a run that ended while nobody was
-        // watching is summarised once on reconnect, whatever tab is showing.
-        child: SessionEndedSummaryListener(
-        child: ManualFilterSwapListener(
-        // #1298 — the manual filter wheel's "install the X filter" prompt must
-        // reach the user on whatever tab is showing.
-        child: ConnectionPolicyListener(
-        // §31.1 — push this device's clock on every transition into connected
-        // (no-ops when the daemon already holds a fresh, trustworthy sync).
-        child: TimeSyncOnConnectListener(
-          child: AutoFlatsPromptListener(
-            // §35.5 — the audible safety alarm's modal (safety.unsafe /
-            // safety.emergency_stop) must fire no matter which tab is showing.
-            child: SafetyAlarmListener(
-              // §57 — the Stop Mount panic overlay surfaces over every tab
-              // while the daemon reports an autonomous slew in progress.
-              child: StopMountListener(
+      // The always-alive listeners (policy modals, alarms, Stop Mount, ...)
+      // are shared with SimpleShell so both shells react the same way.
+      body: ShellListeners(
                 child: _EdgeToEdge(
                 child: CallbackShortcuts(
                   // §61 ⌘K on macOS, Ctrl+K elsewhere — both bound so the palette
@@ -267,13 +242,6 @@ class _AppShellState extends ConsumerState<AppShell> {
                 ),
               ),
             ),
-          ),
-        ),
-        ),
-        ),
-        ),
-      ),
-      )),
     );
   }
 }
@@ -378,6 +346,11 @@ class _TopEquipmentBar extends StatelessWidget {
                 );
               },
             ),
+          ),
+          // ALP-4810 — into Simple Mode; the one added control in the full UI.
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 2),
+            child: SimpleModeSwitchButton(),
           ),
           // Settings last, at the right edge.
           const Padding(

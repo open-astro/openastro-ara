@@ -24,6 +24,10 @@ class AraColors {
   static const bgInput = Color(0xFF333333);
   static const border = Color(0xFF404040);
 
+  /// Simple Mode's floating panels: [bgPrimary] at 72 % over the frame
+  /// (DESIGN.md `overlay-scrim`).
+  static const overlayScrim = Color(0xB81A1A1A);
+
   // Text
   static const textPrimary = Color(0xFFE0E0E0);
   static const textSecondary = Color(0xFFA0A0A0);
