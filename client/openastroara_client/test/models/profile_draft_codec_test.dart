@@ -86,7 +86,9 @@ void main() {
     d.site
       ..hardMinAltitudeDeg = 20
       ..twilight = TwilightOption.astronomical
-      ..maxSequenceRuntimeMin = 480;
+      ..maxSequenceRuntimeMin = 480
+      ..bortleClass = 3
+      ..sqmMagPerArcsec2 = 21.4;
 
     final back = profileDraftFromJson(profileDraftToJson(d));
 
@@ -118,6 +120,8 @@ void main() {
     expect(back.imagingDefaults.exposure, const Duration(seconds: 180));
     expect(back.safety.onUnsafe, UnsafeConditionAction.parkOnly);
     expect(back.site.twilight, TwilightOption.astronomical);
+    expect(back.site.bortleClass, 3);
+    expect(back.site.sqmMagPerArcsec2, 21.4);
   });
 
   test('#1137: an empty draft round-trips to an empty draft; garbage decodes to defaults', () {

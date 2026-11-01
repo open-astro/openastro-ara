@@ -147,8 +147,13 @@ class SiteSettingsNotifier extends Notifier<SiteSettings>
     state = state.copyWith(defaultHorizonAltitudeDeg: v);
   }
 
+  static bool isValidBortle(int v) => v >= 1 && v <= 9;
+
+  /// 0 = not measured; else 16..22.5 (shared with the wizard form).
+  static bool isValidSqm(double v) => v == 0 || (v >= 16 && v <= 22.5);
+
   void setBortleClass(int v) {
-    if (v < 1 || v > 9) return;
+    if (!isValidBortle(v)) return;
     state = state.copyWith(bortleClass: v);
   }
 
@@ -156,7 +161,7 @@ class SiteSettingsNotifier extends Notifier<SiteSettings>
   /// roughly 16 (city core) to 22.2 (the darkest sites on Earth) - readings
   /// outside that are meter noise/typos and are rejected.
   void setSqmMagPerArcsec2(double v) {
-    if (v != 0 && (v < 16 || v > 22.5)) return;
+    if (!isValidSqm(v)) return;
     state = state.copyWith(sqmMagPerArcsec2: v);
   }
 

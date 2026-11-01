@@ -151,6 +151,8 @@ Map<String, dynamic> profileDraftToJson(ProfileDraft d) {
       'twilight': d.site.twilight?.name,
       'max_sequence_runtime_min': d.site.maxSequenceRuntimeMin,
       'soft_warning_altitude_deg': d.site.softWarningAltitudeDeg,
+      'bortle_class': d.site.bortleClass,
+      'sqm_mag_per_arcsec2': d.site.sqmMagPerArcsec2,
     }),
   };
 }
@@ -366,5 +368,7 @@ ProfileDraft profileDraftFromJson(Map<String, dynamic> json) {
   d.site.twilight = enumByName(TwilightOption.values, str(st, 'twilight'));
   d.site.maxSequenceRuntimeMin = integer(st, 'max_sequence_runtime_min');
   d.site.softWarningAltitudeDeg = dbl(st, 'soft_warning_altitude_deg');
+  d.site.bortleClass = integer(st, 'bortle_class');
+  d.site.sqmMagPerArcsec2 = dbl(st, 'sqm_mag_per_arcsec2');
   return d;
 }

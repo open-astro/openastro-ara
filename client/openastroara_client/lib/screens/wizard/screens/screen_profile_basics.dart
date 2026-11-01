@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lat_lng_to_timezone/lat_lng_to_timezone.dart' as tz_map;
 
 import '../../../models/profile_draft.dart';
+import '../../../state/settings/site_settings_state.dart';
 import '../../../state/wizard_state.dart';
 import '../../../theme/ara_colors.dart';
 import '../../../util/gps_site_fill.dart';
@@ -93,6 +94,9 @@ class _ScreenProfileBasicsState extends ConsumerState<ScreenProfileBasics> {
   /// field remounts with the new value (remounting via _gpsFill would reset
   /// the lat/lng field mid-typing).
   int _tzFill = 0;
+
+  String? _bortleError;
+  String? _sqmError;
 
   /// True once the user types in the timezone field themselves — manual
   /// coordinate edits then stop overwriting their choice (a remote-hosted rig
@@ -238,6 +242,46 @@ class _ScreenProfileBasicsState extends ConsumerState<ScreenProfileBasics> {
               const TextInputType.numberWithOptions(signed: true, decimal: true),
           inputFormatters: WizardInput.signedDecimal,
           onChanged: (v) => _setDouble(v, (d) => _draft.altitudeMeters = d),
+        ),
+        WizardTextField(
+          key: const ValueKey('wiz-bortle'),
+          label: 'Bortle class (1-9)',
+          initialValue: (_draft.site.bortleClass ??
+                  ref.read(siteSettingsProvider).bortleClass)
+              .toString(),
+          keyboardType: TextInputType.number,
+          inputFormatters: WizardInput.unsignedInt,
+          errorText: _bortleError,
+          helperText: 'Sky darkness: 1 darkest, 9 inner city.',
+          onChanged: (v) => setState(() {
+            final n = int.tryParse(v.trim());
+            _bortleError = n != null && !SiteSettingsNotifier.isValidBortle(n)
+                ? 'Enter a whole number from 1 to 9.'
+                : null;
+            // Blank or out-of-range is never saved (null keeps the base).
+            _draft.site.bortleClass = _bortleError == null ? n : null;
+          }),
+        ),
+        WizardTextField(
+          key: const ValueKey('wiz-sqm'),
+          label: 'SQM reading (mag/arcsec²), optional',
+          initialValue: () {
+            final v = _draft.site.sqmMagPerArcsec2 ??
+                ref.read(siteSettingsProvider).sqmMagPerArcsec2;
+            return v == 0 ? null : v.toString();
+          }(),
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          inputFormatters: WizardInput.unsignedDecimal,
+          errorText: _sqmError,
+          helperText: 'Leave empty if not measured (Bortle is used). 16 to 22.5.',
+          onChanged: (v) => setState(() {
+            final t = v.trim();
+            final n = t.isEmpty ? 0.0 : double.tryParse(t);
+            _sqmError = n != null && !SiteSettingsNotifier.isValidSqm(n)
+                ? 'Enter a value from 16 to 22.5, or leave empty.'
+                : null;
+            _draft.site.sqmMagPerArcsec2 = _sqmError == null ? n : null;
+          }),
         ),
         WizardTextField(
           key: ValueKey('wiz-tz-$_gpsFill-$_tzFill'),
