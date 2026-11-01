@@ -1,11 +1,15 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart' show Ticker;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../services/storage_space_api.dart';
 import '../../state/imaging/capture_progress_state.dart';
 import '../../state/imaging/exposure_state.dart';
 import '../../state/imaging/last_frame_state.dart';
 import '../../state/imaging/live_view_state.dart';
+import '../../state/stats/server_internal_state_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
 import '../../state/equipment/camera_state.dart';
@@ -40,6 +44,101 @@ class _PreviewShot extends Notifier<PreviewShot> {
 String simpleSettingsSummary(WidgetRef ref) {
   final p = ref.watch(exposureControllerProvider);
   return '${formatExposure(p.exposure)} · ${p.gain}';
+}
+
+/// "3 h 12 min", "5 min", "2 d 4 h": uptime as Simple Mode writes time.
+/// Pure — unit-tested.
+String simpleUptime(double seconds) {
+  final s = seconds.floor();
+  final d = s ~/ 86400, h = (s % 86400) ~/ 3600, m = (s % 3600) ~/ 60;
+  if (d > 0) return '$d d $h h';
+  if (h > 0) return '$h h $m min';
+  return '$m min';
+}
+
+/// "412 GB free" (whole GB from 100 up, one decimal below), or "Unplugged"
+/// when the save drive can't be read. Pure — unit-tested.
+String simpleFree(int? bytes) {
+  if (bytes == null) return 'Unplugged';
+  final gb = bytes / 1073741824;
+  return '${gb.toStringAsFixed(gb >= 100 ? 0 : 1)} GB free';
+}
+
+/// The server's figures as one line under Info's slot, turned on from the
+/// left rail's System: storage free, Ara's CPU, load and uptime. Re-read
+/// every 5 s while it shows.
+class SimpleSystemPanel extends ConsumerStatefulWidget {
+  const SimpleSystemPanel({super.key});
+
+  @override
+  ConsumerState<SimpleSystemPanel> createState() => _SimpleSystemPanelState();
+}
+
+class _SimpleSystemPanelState extends ConsumerState<SimpleSystemPanel> {
+  late final Timer _poll = Timer.periodic(const Duration(seconds: 5), (_) {
+    unawaited(ref.read(serverInternalStateProvider.notifier).refresh());
+    ref.invalidate(storageSpaceProvider);
+  });
+
+  @override
+  void initState() {
+    super.initState();
+    _poll; // start it
+  }
+
+  @override
+  void dispose() {
+    _poll.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final state = ref.watch(serverInternalStateProvider).value;
+    final storage = ref.watch(storageSpaceProvider);
+    final cpu = state?.cpuPercent;
+    final load = state?.loadAverage1Min;
+    final busy = load != null && state != null && load > state.processorCount;
+    final facts = [
+      (
+        'Storage',
+        storage.hasValue ? simpleFree(storage.value?.freeBytes) : '—',
+        false,
+      ),
+      ('Ara CPU', cpu == null ? '—' : '${cpu.round()} %', false),
+      ('Load', load == null ? '—' : load.toStringAsFixed(1), busy),
+      ('Up', state == null ? '—' : simpleUptime(state.uptimeSeconds), false),
+    ];
+    return SimplePanel(
+      key: const Key('simple-system-line'),
+      padding: const EdgeInsets.symmetric(horizontal: AraSpace.s16),
+      child: SizedBox(
+        height: 40,
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            spacing: AraSpace.s16,
+            children: [
+              for (final (label, value, warn) in facts)
+                Text.rich(
+                  TextSpan(
+                    children: [
+                      TextSpan(text: '$label ', style: AraText.caption),
+                      TextSpan(
+                        text: value,
+                        style: warn
+                            ? kSimpleText.copyWith(color: AraColors.accentBusy)
+                            : kSimpleText,
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 /// The last frame's facts as one line under the strip, turned on from the

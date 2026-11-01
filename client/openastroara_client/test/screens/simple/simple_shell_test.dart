@@ -6,6 +6,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/main.dart' show isShell, shellFor;
 import 'package:openastroara/models/frame_histogram.dart';
 import 'package:openastroara/models/server.dart';
+import 'package:openastroara/models/stats/server_internal_state.dart';
+import 'package:openastroara/services/storage_space_api.dart';
+import 'package:openastroara/state/stats/server_internal_state_state.dart';
 import 'package:openastroara/screens/app_shell.dart';
 import 'package:openastroara/models/polar_align.dart';
 import 'package:openastroara/screens/simple/simple_polar_panel.dart';
@@ -39,6 +42,15 @@ class _StartOnLive extends SelectedTabIndexNotifier {
   int build() => kLiveTabIndex;
 }
 
+class _Internal extends ServerInternalStateNotifier {
+  _Internal(this.value);
+  final ServerInternalState value;
+  @override
+  Future<ServerInternalState?> build() async => value;
+  @override
+  Future<void> refresh() async {}
+}
+
 class _Steps extends GuideStepNotifier {
   _Steps(this.steps);
   final List<GuideStep> steps;
@@ -52,7 +64,8 @@ final _someSteps = [
 ];
 
 Future<ProviderContainer> _pump(WidgetTester tester, Size size,
-    {List<GuideStep> steps = const [], AraServer? server, FrameHistogram? histogram}) async {
+    {List<GuideStep> steps = const [], AraServer? server, FrameHistogram? histogram,
+    ServerInternalState? internal, StorageSpace? storage}) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
@@ -62,6 +75,8 @@ Future<ProviderContainer> _pump(WidgetTester tester, Size size,
     guideStepsProvider.overrideWith(() => _Steps(steps)),
     if (server != null) activeServerProvider.overrideWithValue(server),
     if (histogram != null) frameHistogramProvider.overrideWith((ref, id) async => histogram),
+    if (internal != null) serverInternalStateProvider.overrideWith(() => _Internal(internal)),
+    if (storage != null) storageSpaceProvider.overrideWith((ref) async => storage),
   ]);
   addTearDown(container.dispose);
   await container.read(simpleModeProvider.future);
@@ -295,6 +310,29 @@ void main() {
     expect(find.byType(SimpleInfoPanel), findsNothing);
   });
 
+  testWidgets('System shows the server\'s figures as a line under Info\'s slot, and hides', (tester) async {
+    const size = Size(1470, 854);
+    await _pump(tester, size,
+        internal: const ServerInternalState(uptimeSeconds: 11520, cpuPercent: 23.4, processorCount: 4, loadAverage1Min: 5.2),
+        storage: const StorageSpace(saveDirectory: '/data', isFallback: false, freeBytes: 412 * 1073741824, totalBytes: 900 * 1073741824));
+    expect(find.byKey(const Key('simple-system-line')), findsNothing);
+    expect(_panelOf(tester, find.byKey(const Key('simple-system'))), _panelOf(tester, find.byKey(const Key('simple-sky'))),
+        reason: 'on the left rail');
+    await tester.tap(find.byKey(const Key('simple-system')));
+    await tester.pump();
+    await tester.pump(); // the storage read resolves
+    final line = tester.getRect(find.byKey(const Key('simple-system-line')));
+    expect(line.right, size.width - kSimpleInset);
+    expect(line.top, kSimpleInset * 2 + kSimpleBarHeight + 40 + 8, reason: "under Info's slot, Info off or on");
+    for (final t in ['412 GB free', 'Ara CPU', '23 %', '5.2', '3 h 12 min']) {
+      expect(find.descendant(of: find.byKey(const Key('simple-system-line')), matching: find.textContaining(t)), findsWidgets,
+          reason: t);
+    }
+    await tester.tap(find.byKey(const Key('simple-system')));
+    await tester.pump();
+    expect(find.byKey(const Key('simple-system-line')), findsNothing);
+  });
+
   testWidgets('Sky shows the planetarium over a frame, and back', (tester) async {
     final container = await _pump(tester, const Size(1024, 768));
     await _frame(tester, container);
@@ -517,6 +555,15 @@ void main() {
     expect(lo, inInclusiveRange(15, 20));
     expect(hi, inInclusiveRange(39, 45));
     expect(histogramRange(const []), (0, 0));
+  });
+
+  test('System figures read like the rest of Simple Mode', () {
+    expect(simpleUptime(11520), '3 h 12 min');
+    expect(simpleUptime(300), '5 min');
+    expect(simpleUptime(2 * 86400 + 4 * 3600), '2 d 4 h');
+    expect(simpleFree(412 * 1073741824), '412 GB free');
+    expect(simpleFree(1536 * 1048576), '1.5 GB free');
+    expect(simpleFree(null), 'Unplugged');
   });
 
   test('preset lists stay inside what the camera reports', () {

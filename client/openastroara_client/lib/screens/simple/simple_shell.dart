@@ -123,6 +123,7 @@ class SimpleShell extends ConsumerStatefulWidget {
 class _SimpleShellState extends ConsumerState<SimpleShell> {
   bool _clean = false;
   bool _info = false;
+  bool _system = false;
 
   /// The planetarium on demand (the left rail's Sky), over any frame.
   bool _sky = false;
@@ -281,6 +282,18 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                 child: SimpleInfoPanel(),
                               ),
                             ),
+                          // System: the server's figures on the line under
+                          // Info's slot (a fixed slot, Info on or off).
+                          if (_system)
+                            const Positioned(
+                              left: kSimpleInset * 2 + kSimpleStatusMaxWidth,
+                              right: kSimpleInset,
+                              top: railTop + 40 + AraSpace.s8,
+                              child: Align(
+                                alignment: Alignment.centerRight,
+                                child: SimpleSystemPanel(),
+                              ),
+                            ),
                           // Guiding and the histogram along the bottom, each
                           // once it has data: 16 px from the edge and from Stop.
                           const Positioned(
@@ -301,8 +314,11 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                               alignment: Alignment.centerLeft,
                               child: _LeftRail(
                                 info: _info,
+                                system: _system,
                                 sky: showSky,
                                 onInfo: () => setState(() => _info = !_info),
+                                onSystem: () =>
+                                    setState(() => _system = !_system),
                                 // With no frame there is only the sky.
                                 onSky: hasFrame
                                     ? () => setState(() => _sky = !_sky)
@@ -561,14 +577,18 @@ class _RailButton extends StatelessWidget {
 class _LeftRail extends StatelessWidget {
   const _LeftRail({
     required this.info,
+    required this.system,
     required this.sky,
     required this.onInfo,
+    required this.onSystem,
     required this.onSky,
   });
 
   final bool info;
+  final bool system;
   final bool sky;
   final VoidCallback onInfo;
+  final VoidCallback onSystem;
   final VoidCallback? onSky;
 
   @override
@@ -591,6 +611,13 @@ class _LeftRail extends StatelessWidget {
           label: 'Info',
           selected: info,
           onTap: onInfo,
+        ),
+        _RailButton(
+          key: const Key('simple-system'),
+          icon: Icons.memory,
+          label: 'System',
+          selected: system,
+          onTap: onSystem,
         ),
         _RailButton(
           key: const Key('simple-library'),
