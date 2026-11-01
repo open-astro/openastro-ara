@@ -7,6 +7,7 @@ import 'package:openastroara/models/server.dart';
 import 'package:openastroara/state/saved_server_state.dart';
 import 'package:openastroara/screens/app_shell.dart';
 import 'package:openastroara/screens/simple/simple_preview_panel.dart';
+import 'package:openastroara/state/imaging/exposure_state.dart';
 import 'package:openastroara/screens/simple/simple_shell.dart';
 import 'package:openastroara/services/simple_mode_prefs_service.dart';
 import 'package:openastroara/state/app_shell_state.dart';
@@ -285,21 +286,21 @@ void main() {
     await tester.pump(const Duration(seconds: 5));
   });
 
-  testWidgets('the Mac window shows all five frame facts; the iPad landscape gets two rows', (tester) async {
+  testWidgets('the frame facts show as many rows as fit, without overflowing, Mac to iPad', (tester) async {
     var container = await _pump(tester, const Size(1470, 854));
     container.read(lastCapturedFrameIdProvider.notifier).set('frame-1');
     await tester.pump();
     expect(tester.takeException(), isNull);
-    for (final row in ['HFR', 'Stars', 'Exposure', 'Gain · offset', 'Clipped']) {
+    for (final row in ['HFR', 'Stars', 'Gain · offset', 'Clipped']) {
       expect(find.text(row), findsOneWidget, reason: '$row on the Mac window');
     }
+    expect(find.text('Exposure'), findsNWidgets(2), reason: 'the tile and the facts row');
 
     await tester.pumpWidget(const SizedBox());
     container = await _pump(tester, const Size(1024, 768));
     container.read(lastCapturedFrameIdProvider.notifier).set('frame-1');
     await tester.pump();
     expect(tester.takeException(), isNull);
-    expect(find.text('Clipped'), findsNothing, reason: 'two rows on the short window');
     expect(find.textContaining('HFR'), findsOneWidget);
     // A real iPad loses ~24 px to the status bar.
     await tester.pumpWidget(const SizedBox());
@@ -357,6 +358,35 @@ void main() {
 
     await tester.pumpWidget(const SizedBox());
     expect(calls.last.arguments, 'SystemUiMode.edgeToEdge', reason: 'the full UI gets its status bar back');
+  });
+
+  testWidgets('Exposure and Gain are side-by-side tiles picked from preset lists; no Filter', (tester) async {
+    final container = await _pump(tester, const Size(1024, 768));
+    expect(find.text('Filter'), findsNothing);
+    final exposure = tester.getRect(find.byKey(const Key('simple-exposure')));
+    final gain = tester.getRect(find.byKey(const Key('simple-gain')));
+    expect(exposure.top, gain.top, reason: 'side by side');
+    expect(exposure.right, lessThan(gain.left));
+
+    await tester.tap(find.byKey(const Key('simple-exposure')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('10 s').last);
+    await tester.pumpAndSettle();
+    expect(container.read(exposureControllerProvider).exposure, const Duration(seconds: 10));
+
+    await tester.tap(find.byKey(const Key('simple-gain')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('200').last);
+    await tester.pumpAndSettle();
+    expect(container.read(exposureControllerProvider).gain, 200);
+  });
+
+  test('preset lists stay inside what the camera reports', () {
+    expect(exposurePresets(minSec: 1, maxSec: 60), allOf(contains(const Duration(seconds: 1)),
+        contains(const Duration(seconds: 60)), isNot(contains(const Duration(milliseconds: 500))),
+        isNot(contains(const Duration(seconds: 120)))));
+    expect(gainPresets(min: 0, max: 100), [0, 50, 100]);
+    expect(gainPresets(min: 0, max: 0), contains(100), reason: 'range not reported: the usual presets');
   });
 
   testWidgets('a tap on the frame hides every panel, Emergency Stop included; a second brings them back',

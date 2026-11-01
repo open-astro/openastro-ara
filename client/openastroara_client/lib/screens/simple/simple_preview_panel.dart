@@ -8,7 +8,7 @@ import '../../state/imaging/last_frame_state.dart';
 import '../../state/imaging/live_view_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
-import '../../widgets/imaging/exposure_controls_panel.dart';
+import '../../state/equipment/camera_state.dart';
 import '../../widgets/imaging/histogram_strip.dart' show frameHistogramProvider;
 import '../imaging_actions.dart';
 import 'simple_shell.dart' show SimplePanel, SimpleSegment, kSimpleTileFill;
@@ -247,16 +247,48 @@ class _PreviewControls extends ConsumerWidget {
     final looping = ref.watch(liveViewControllerProvider);
     final capturing = ref.watch(captureProgressProvider).isCapturing;
     final stopping = ref.watch(_stoppingProvider);
+    final caps = ref.watch(cameraStatusProvider).asData?.value?.capabilities;
+    // Named gains (a camera with gain modes) are picked by index.
+    final namedGains = caps?.gains ?? const <String>[];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        DurationSecondsField(
-          label: 'Exposure (s)',
-          value: params.exposure,
-          onChanged: ctrl.setExposure,
+        // Picked from lists, side by side: no typing at the telescope.
+        Row(
+          spacing: AraSpace.s8,
+          children: [
+            Expanded(
+              child: _PresetTile<Duration>(
+                key: const Key('simple-exposure'),
+                label: 'Exposure',
+                value: params.exposure,
+                options: exposurePresets(
+                  minSec: caps?.minExposureSec ?? 0,
+                  maxSec: caps?.maxExposureSec ?? 0,
+                ),
+                format: formatExposure,
+                onSelected: ctrl.setExposure,
+              ),
+            ),
+            Expanded(
+              child: _PresetTile<int>(
+                key: const Key('simple-gain'),
+                label: 'Gain',
+                value: params.gain,
+                options: namedGains.isNotEmpty
+                    ? [for (var i = 0; i < namedGains.length; i++) i]
+                    : gainPresets(
+                        min: caps?.minGain ?? 0,
+                        max: caps?.maxGain ?? 0,
+                      ),
+                format: (g) => namedGains.isNotEmpty && g < namedGains.length
+                    ? namedGains[g]
+                    : '$g',
+                onSelected: ctrl.setGain,
+              ),
+            ),
+          ],
         ),
-        const SizedBox(height: AraSpace.s8),
-        FilterDropdown(value: params.filterSlot, onChanged: ctrl.setFilterSlot),
         const SizedBox(height: AraSpace.s16),
         Center(
           child: _Shutter(
@@ -304,6 +336,124 @@ class _PreviewControls extends ConsumerWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// "5 s", "0.5 s", "2 min" — how the exposure reads on its tile and list.
+String formatExposure(Duration d) {
+  final ms = d.inMilliseconds;
+  if (ms >= 60000 && ms % 60000 == 0) return '${ms ~/ 60000} min';
+  if (ms % 1000 == 0) return '${ms ~/ 1000} s';
+  return '${(ms / 1000).toString()} s';
+}
+
+const _kExposurePresetsMs = [
+  100, 200, 500, 1000, 2000, 3000, 5000, 10000, 15000, 20000, 30000, //
+  45000, 60000, 90000, 120000, 180000, 240000, 300000, 600000,
+];
+
+/// The exposure list, trimmed to the camera's reported range (0 = not
+/// reported, no limit on that side).
+@visibleForTesting
+List<Duration> exposurePresets({
+  required double minSec,
+  required double maxSec,
+}) => [
+  for (final ms in _kExposurePresetsMs)
+    if ((minSec <= 0 || ms >= minSec * 1000) &&
+        (maxSec <= 0 || ms <= maxSec * 1000))
+      Duration(milliseconds: ms),
+];
+
+const _kGainPresets = [
+  0,
+  50,
+  100,
+  120,
+  150,
+  200,
+  250,
+  300,
+  350,
+  400,
+  450,
+  500,
+  600,
+];
+
+/// The gain list, trimmed to the camera's reported range (max 0 = not
+/// reported: the usual presets up to 300).
+@visibleForTesting
+List<int> gainPresets({required int min, required int max}) => [
+  for (final g in _kGainPresets)
+    if (max <= 0 ? g <= 300 : g >= min && g <= max) g,
+];
+
+/// A labelled 48 px tile that opens a list to pick from. The current value
+/// stays listed even when it isn't a preset (set in the full UI, say).
+class _PresetTile<T> extends StatelessWidget {
+  const _PresetTile({
+    super.key,
+    required this.label,
+    required this.value,
+    required this.options,
+    required this.format,
+    required this.onSelected,
+  });
+
+  final String label;
+  final T value;
+  final List<T> options;
+  final String Function(T) format;
+  final ValueChanged<T> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final items = options.contains(value) ? options : [value, ...options];
+    return PopupMenuButton<T>(
+      tooltip: label,
+      initialValue: value,
+      onSelected: onSelected,
+      position: PopupMenuPosition.under,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.all(Radius.circular(10)),
+      ),
+      constraints: const BoxConstraints(minWidth: 96, maxHeight: 360),
+      itemBuilder: (_) => [
+        for (final o in items)
+          PopupMenuItem<T>(
+            value: o,
+            height: 44,
+            child: Text(format(o), style: kSimpleText),
+          ),
+      ],
+      child: Container(
+        height: 48,
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        decoration: BoxDecoration(
+          color: kSimpleTileFill,
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              label,
+              style: AraText.caption,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            Text(
+              format(value),
+              style: kSimpleText,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
