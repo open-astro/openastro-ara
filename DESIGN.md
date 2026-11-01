@@ -269,7 +269,7 @@ Simple Mode (see PRODUCT.md) puts the latest frame first, ASIAir-style. The imag
 - **Clean view:** a tap or click on the image fades every panel out (220 ms ease-out, instant with reduced motion) so the frame shows fullscreen. Emergency Stop and any attention banner stay. A tap brings the panels back, and a short hint says so. There is no keyboard shortcut for now.
 
 **Modes.** The switcher reads Preview · Polar align · Focus · Target · Run. Each mode swaps the right column and, where needed, draws on the image. The status strip, mode switcher and Emergency Stop never move.
-- **Preview:** the right column shows the last frame's facts (HFR, stars, exposure, saved or not) and the controls: Exposure, Filter, a capture shutter, Loop or Single, and Save frame. Frames are not saved unless the person taps Save.
+- **Preview:** the right column shows the last frame's facts (HFR, stars, exposure, saved or not) and the controls: Exposure, Filter, a capture shutter, and Loop or Single. Single takes a saved frame, as Take One does today; Loop runs live view, whose frames are not saved. There is no Save frame button (decided 2026-11-01).
 - **Polar align:** a crosshair and a 10′ target ring are drawn on the live frame, with the current pole position and a dashed arrow to the target. The right column shows the polar error, its zone (green under 10′, amber under 60′, red beyond, matching the server's thresholds), the altitude and azimuth corrections as drawn arrows, and Stop.
 - **Focus:** a zoomed star with its HFR ring sits top-left. The right column shows the HFR, the focus curve as it builds, the focuser position, an Autofocus button and four nudge buttons (in large, in small, out small, out large).
 - **Target:** the image area becomes the planetarium, full screen. The person taps an object, and a card shows its altitude and best time, with Go to (slew, then centre with a plate solve). There is a search panel under the status strip. An object below the horizon (or the custom horizon) shows Go to disabled with the reason and when it rises, plus "Go to at <time>", which waits and then slews.
@@ -309,7 +309,7 @@ An inline warning built from three parts: an amber or red icon, a coloured outli
 - **Do** write labels in product voice: verbs, sentence case, no NINA or daemon enum names.
 
 ### Don't:
-- **Don't** change the full UI's layout while Simple Mode is being built. Simple Mode is additive: new work goes into Simple Mode, and the full UI (PR #1474's shell) stays as it is for now. The one approved exception is the heavier Emergency Stop (ALP-4812), which applies to the full UI too.
+- **Don't** change the full UI's layout while Simple Mode is being built. Simple Mode is additive: new work goes into Simple Mode, and the full UI (PR #1474's shell) stays as it is for now. Two exceptions are approved: the heavier Emergency Stop (ALP-4812), which applies to the full UI too, and a Simple Mode icon in the full UI's top-right cluster, between Night mode and the gear (decided 2026-11-01).
 - **Don't** use colour for decoration, branding flourishes or emphasis that isn't a state.
 - **Don't** add shadows or glows to separate surfaces; use a tonal step and a Hairline.
 - **Don't** let any state fall back to plain grey text without a designed look.

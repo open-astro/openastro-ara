@@ -26,7 +26,8 @@ Shaped 2026-11-01 (`/impeccable shape simple-mode`). Paperclip: ALP-4810. Render
 ## Scope
 
 - **One screen:** a mode switcher with Preview · Polar align · Focus · Target · Run.
-- **Settings:** open from the gear. "Show all options" switches to the full UI.
+- **Settings:** open from the gear. "Show all options" switches to the full UI. In slice 1 the gear, the device dots and ⌘K also switch to the full UI on the matching Settings page; a settings sheet over Simple Mode comes later.
+- **Getting in:** a Simple Mode icon in the full UI's top-right cluster, between Night mode and the gear.
 - **Run:** a quick plan builder only. It sets exposure and frame count per filter for the current target, and autofocus, dither and flats follow the profile's defaults. The sequence editor stays in the full UI only.
 - **Phones:** they run Simple Mode only, with no Sequence tab, once Simple Mode exists. Until then, PR #1474's phone layout stands.
 - **Desktop default:** the full UI stays the default on desktop.
@@ -54,7 +55,7 @@ The histogram is left out.
 ## Mode screens (decided 2026-11-01)
 
 - **Mode order:** Preview · Polar align · Focus · Target · Run.
-- **Preview:** shoot and loop. The right column holds last-frame facts (HFR, stars, exposure, saved), then Exposure, Filter, a capture shutter, Loop/Single and Save frame. Nothing is saved unless the person taps Save.
+- **Preview:** shoot and loop. The right column holds last-frame facts (HFR, stars, exposure, saved), then Exposure, Filter, a capture shutter and Loop/Single. Single saves the frame (the daemon registers every Take One); Loop is live view and saves nothing. No Save frame button.
 - **Polar align:** a target drawn on the image (crosshair, 10′ ring, current pole, arrow). The right column shows the error, the zone (under 10′ green, under 60′ amber, otherwise red), the altitude and azimuth corrections, and Stop.
 - **Focus:** a zoomed star with its HFR ring, the HFR, the focus curve, the position, Autofocus, and four nudge steps.
 - **Target:** a full-screen planetarium. Tap an object, then Go to (slew and plate-solve centre). Search sits under the status strip.
