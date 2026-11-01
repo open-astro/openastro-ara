@@ -1,0 +1,285 @@
+---
+name: OpenAstro Ara
+description: Dark observatory console for running a headless astrophotography rig through the night.
+colors:
+  bg-primary: "#1A1A1A"
+  bg-panel: "#262626"
+  bg-panel-alt: "#2E2E2E"
+  bg-input: "#333333"
+  border: "#404040"
+  text-primary: "#E0E0E0"
+  text-secondary: "#A0A0A0"
+  text-disabled: "#606060"
+  accent-connected: "#4CAF50"
+  accent-busy: "#FFB300"
+  accent-warning: "#FFB300"
+  accent-error: "#E53935"
+  accent-info: "#42A5F5"
+  accent-disconnected: "#606060"
+  selection-bg: "#1976D2"
+  selection-fg: "#FFFFFF"
+  button-primary: "#1565C0"
+  button-secondary: "#424242"
+typography:
+  title:
+    fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    fontSize: "15px"
+    fontWeight: 600
+  section:
+    fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    fontSize: "11px"
+    fontWeight: 600
+    letterSpacing: "0.6px"
+  body:
+    fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    fontSize: "13px"
+    fontWeight: 400
+  caption:
+    fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    fontSize: "11.5px"
+    fontWeight: 400
+  numeric:
+    fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    fontSize: "13px"
+    fontWeight: 400
+    fontFeature: "tnum"
+  label:
+    fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    fontSize: "10px"
+    fontWeight: 500
+    letterSpacing: "0.5px"
+  body-simple:
+    fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    fontSize: "14px"
+    fontWeight: 400
+  mono:
+    fontFamily: "ui-monospace, SF Mono, Menlo, monospace"
+    fontSize: "11px"
+rounded:
+  xs: "4px"
+  sm: "6px"
+  md: "8px"
+  pill: "12px"
+  simple: "10px"
+spacing:
+  s4: "4px"
+  s8: "8px"
+  s12: "12px"
+  s16: "16px"
+  s24: "24px"
+components:
+  button-primary:
+    backgroundColor: "{colors.button-primary}"
+    textColor: "{colors.selection-fg}"
+  button-secondary:
+    backgroundColor: "{colors.button-secondary}"
+    textColor: "{colors.text-primary}"
+  button-emergency-stop:
+    backgroundColor: "{colors.accent-error}"
+    textColor: "{colors.selection-fg}"
+    padding: "0 8px"
+  button-primary-simple:
+    backgroundColor: "{colors.button-primary}"
+    textColor: "{colors.selection-fg}"
+    typography: "{typography.body-simple}"
+    rounded: "{rounded.simple}"
+    height: "44px"
+  card:
+    backgroundColor: "{colors.bg-panel}"
+    rounded: "{rounded.sm}"
+  input:
+    backgroundColor: "{colors.bg-input}"
+    textColor: "{colors.text-primary}"
+    rounded: "{rounded.xs}"
+  equipment-chip:
+    textColor: "{colors.text-secondary}"
+    typography: "{typography.label}"
+    rounded: "{rounded.sm}"
+    padding: "6px 8px"
+    width: "64px"
+  status-indicator:
+    textColor: "{colors.text-primary}"
+    rounded: "{rounded.pill}"
+    padding: "6px 10px"
+  nav-rail:
+    backgroundColor: "{colors.bg-panel}"
+    textColor: "{colors.text-secondary}"
+  nav-rail-selected:
+    backgroundColor: "{colors.selection-bg}"
+    textColor: "{colors.selection-fg}"
+  top-bar:
+    backgroundColor: "{colors.bg-panel}"
+    height: "64px"
+  bottom-status-bar:
+    backgroundColor: "{colors.bg-panel}"
+    height: "40px"
+---
+
+# Design System: OpenAstro Ara
+
+## Overview
+
+**Creative North Star: "The Observatory Console"**
+
+Ara looks like the dark instrument panel at the telescope. Surfaces are neutral greys stepped a few points apart. Information is dense, in the NINA tradition: small type, tight spacing, panels separated by hairline borders. Colour belongs to the equipment and the session. A green dot means connected, amber means busy or needs a look, red means fault or stop. Nothing else is coloured. At rest the screen is quiet, so a change of state is the loudest thing on it.
+
+One idea is borrowed from a cockpit. When something needs the person (often checking in at 3 a.m.), it must be impossible to miss: icon, colour and words together, never colour alone. Emergency Stop is the heaviest control on every screen. Controls behave like labelled hardware: switches name their states, readouts carry a status dot, and numbers use tabular figures so they don't jitter while they update.
+
+The app runs on Material 3 (dark) with the Ara tokens below, on desktop and mobile, so the UI must survive Night mode. Night mode folds every pixel's luminance into the red channel, and the interface then reads by brightness alone.
+
+**Key Characteristics:**
+- Neutral grey surfaces with tonal steps and 1 px borders; no shadows.
+- Colour only through semantic status roles, never as decoration.
+- Dense, small type ramp (11–15 px) on one spacing scale (4 / 8 / 12 / 16 / 24).
+- Attention states are unmissable: icon + colour + text.
+- Emergency Stop: filled red, always visible, on every tab.
+- Instrument-like controls: named switch states, status dots, tabular numbers.
+- Two densities: the dense full UI, and a roomy Simple Mode (44 px targets, 10 px corners, 14 px type).
+
+## Colors
+
+A near-black neutral ramp carries everything; saturated status accents carry meaning.
+
+### Primary
+- **Console Blue** (`button-primary`): the primary filled action ("Start sequence", "Save"). Used sparingly; most actions are secondary or text buttons.
+- **Selection Blue** (`selection-bg`): the selected navigation-rail destination, selected segments and selected rows, with white (`selection-fg`) on top.
+
+### Secondary
+- **Sky Info Blue** (`accent-info`): informational state, links and the active Night-mode toggle. Also the theme's `secondary`.
+
+### Status
+- **Connected Green** (`accent-connected`): device connected, step done, healthy readout.
+- **Dew Amber** (`accent-busy`, `accent-warning`): busy, working, needs a look. The two tokens share a value but stay separate roles. Busy is a state dot; warning is an inline icon + colour + text surface.
+- **Fault Red** (`accent-error`): faults, failures, destructive actions and Emergency Stop. The theme's `error`.
+- **Unplugged Grey** (`accent-disconnected`): disconnected or off. The same value as `text-disabled`, deliberately: "not there" reads as absent, not as an alarm.
+
+### Neutral
+- **Night Floor** (`bg-primary`): the app background and scaffold.
+- **Panel Grey** (`bg-panel`): side panels, top bar, bottom status bar, cards, navigation rail.
+- **Panel Alt** (`bg-panel-alt`): alternate rows, hover and the highest surface container.
+- **Input Well** (`bg-input`): text fields, dropdowns, progress tracks.
+- **Hairline** (`border`): panel borders, dividers and every control outline (pinned to `outlineVariant`, so chips and outlined controls match).
+- **Starlight Text** (`text-primary`): primary text and icons.
+- **Dim Text** (`text-secondary`): labels, captions, secondary lines. The most-used colour in the app.
+- **Faint Text** (`text-disabled`): disabled text and empty values.
+
+### Named Rules
+**The State-Only Colour Rule.** An accent appears only through a semantic role: a state dot, a state chip, a category hue or a destructive action. If it doesn't mean something, it is grey.
+
+**The Brightness-First Rule.** Every state must still read in Night mode, where hue is gone and only luminance remains. A connected dot must stay brighter than a border. Never tell two states apart by hue alone.
+
+## Typography
+
+**Body Font:** the platform's system UI font (Material default: SF on Apple, Segoe UI on Windows, Roboto elsewhere)
+**Mono Font:** the platform monospace, for file paths, FITS headers and histogram labels only
+
+**Character:** small, neutral and legible in the dark. Hierarchy comes from weight and dim-versus-bright, not from size jumps.
+
+### Hierarchy
+- **Title** (600, 15px): pane and dialog titles.
+- **Section** (600, 11px, 0.6px tracking, uppercase): group headers such as palette categories and inspector sections.
+- **Body** (400, 13px): default row and body text.
+- **Caption** (400, 11.5px, Dim Text): the secondary line under a body row.
+- **Numeric** (400, 13px, tabular figures): timers, counts, temperatures, HFR, RMS. Anything that updates live.
+- **Label** (500, 10px, 0.5px tracking, uppercase): equipment-chip labels under icons.
+
+### Named Rules
+**The Steady Digits Rule.** Every number that updates live uses tabular figures. A countdown never shifts its neighbours.
+
+**The One Ramp Rule.** New and redesigned surfaces use the `AraText` ramp above, not per-widget 11/12/13 px styles. The ramp is being adopted incrementally, and older widgets still carry ad-hoc sizes (12 px is common).
+
+## Layout
+
+The desktop shell follows NINA's arrangement:
+- a 64 px top bar of equipment chips, with the Night-mode toggle beside them;
+- a navigation rail on the left (icons with labels);
+- the active tab in the centre;
+- a 40 px bottom status bar holding connection state and Emergency Stop.
+
+Spacing uses one scale: 4 / 8 / 12 / 16 / 24 px.
+
+Responsive behaviour is keyed to the window, not the device:
+- Under 820 px of window height, a pane goes compact: tighter padding, secondary lines dropped.
+- Instrument panes sit side by side (picture | readout) from 760 px of pane width, and stack below that.
+- In a short window they stay side by side down to 600 px, because stacking would scroll.
+
+Phones run Companion Mode (see PRODUCT.md).
+
+### Named Rules
+**The Two Densities Rule.** The full UI is dense: 11–15 px type and 4–8 px corners. Simple Mode is roomy: every interactive target is at least 44 px tall, corners are 10 px, and body text is 14 px. Both densities share the same colours, the same named rules and the same Emergency Stop. Phones run Companion Mode, which builds on Simple Mode, so phones always get the roomy density. Simple Mode is not built yet; this is its target, and it moves away from the current code on purpose.
+
+## Elevation & Depth
+
+Flat. Depth comes from tonal layering: Night Floor, then Panel Grey, then Panel Alt. Hairline borders separate surfaces. App bars render at elevation 0, cards are bordered rather than lifted, and no surface casts a shadow. Material dialogs and snackbars keep their framework defaults.
+
+### Named Rules
+**The No-Glow Rule.** Surfaces don't cast shadows or glow. A panel is separated by a 1 px Hairline and a tonal step, nothing more.
+
+## Shapes
+
+Gently rounded and small, matching the dense layout:
+- 4 px on fields and small controls;
+- 6 px on cards, equipment chips and ink highlights (the most common radius);
+- 8 px on larger containers;
+- a 12 px pill on status indicators and state chips.
+
+Status dots are 10 px circles. On an equipment chip the dot carries a 2 px ring in the panel colour, so it reads as a badge sitting on the icon.
+
+## Components
+
+Controls behave like labelled hardware: each one names its state and shows it with a dot or a fill.
+
+### Buttons
+- **Shape:** Material 3 filled and text buttons on the theme radius.
+- **Primary:** Console Blue fill, white text. Reserved for the main action of a pane.
+- **Secondary:** text or outlined buttons, with Hairline outlines. The `button-secondary` grey exists but is rarely used.
+- **Destructive:** Fault Red fill (the theme's `error`), with the action named in the label.
+
+### Emergency Stop (signature)
+A filled Fault Red button with a report icon and the label "Emergency Stop", in the bottom status bar on every tab. While a stop is in flight it shows a spinner and "Stopping…". It confirms in a dialog ("Stop everything now?") whose confirm button is filled red and labelled EMERGENCY STOP. It is the heaviest control on any screen: no other control at rest is filled red.
+
+### Equipment Chip (signature)
+A 64 px-wide tile in the top bar: a 28 px device icon in Starlight Text, a 10 px status dot at its top-right corner, and an uppercase 10 px label underneath. Tapping it connects the device or opens its control panel. It also supports long-press. Its semantics label carries the device name and status.
+
+### Status Indicator / State Chip
+A pill (12 px radius) with a 10 px status dot followed by a label in body-small. The label truncates with an ellipsis in tight rows. The design rule: every state (idle, offline, draft, running, paused, attention, failed, done) has a designed look; nothing falls back to plain grey text.
+
+### Switches and Segmented Controls
+Material segmented buttons and choice chips. Selected segments use Selection Blue with white text, and outlines use Hairline. Segments name their states ("Cooler On" / "Off"), never a bare toggle.
+
+### Simple Mode Density
+Simple Mode (see PRODUCT.md) keeps the full UI's components but draws them roomier. Buttons, chips, segments and fields are at least 44 px tall, with 10 px corners and 14 px body text. Spacing moves up the scale (12–24 px instead of 8–16). Colours, status dots, the attention banner and Emergency Stop behave exactly as in the full UI. Phone Companion Mode uses this density too.
+
+### Cards / Containers
+- **Corner Style:** 6 px.
+- **Background:** Panel Grey.
+- **Shadow Strategy:** none (see Elevation & Depth).
+- **Border:** 1 px Hairline.
+- **Internal Padding:** 8–16 px from the spacing scale.
+
+### Inputs / Fields
+Filled with Input Well, using the outline border. Focus uses the Material 3 primary focus outline in Console Blue.
+
+### Navigation
+A navigation rail on Panel Grey with labels always shown. The selected destination gets a Selection Blue indicator with white icons, and unselected items use Dim Text. ⌘K / Ctrl-K opens a command palette that searches every setting.
+
+### Attention Banner
+An inline warning built from three parts: an amber or red icon, a coloured outline or tint, and a sentence that says what happened and what Ara is doing about it ("Guiding lost. Retrying (2 of 5)."). Full-screen alarm modals are reserved for safety events.
+
+## Do's and Don'ts
+
+### Do:
+- **Do** pair every warning or fault with icon + colour + text. Colour alone never carries a message.
+- **Do** keep Emergency Stop filled red, visible on every tab and heavier than any other control.
+- **Do** use `AraColors`, `AraSpace` and `AraText` tokens. Accents come only through semantic roles.
+- **Do** use tabular figures for any live number.
+- **Do** check every new state in Night mode: it must still be distinguishable by brightness.
+- **Do** write labels in product voice: verbs, sentence case, no NINA or daemon enum names.
+
+### Don't:
+- **Don't** use colour for decoration, branding flourishes or emphasis that isn't a state.
+- **Don't** add shadows or glows to separate surfaces; use a tonal step and a Hairline.
+- **Don't** let any state fall back to plain grey text without a designed look.
+- **Don't** fill any control other than Emergency Stop and confirmed destructive actions with Fault Red.
+- **Don't** copy NINA's icons, splash, imagery or wordmark (see PRODUCT.md).
+- **Don't** hard-code colours outside `lib/theme/`. A few widgets still do, and they should migrate to tokens.

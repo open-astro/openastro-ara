@@ -1,0 +1,468 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-01T04:39:28+00:00",
+  "title": "Design System: OpenAstro Ara",
+  "extensions": {
+    "colorMeta": {
+      "bg-primary": {
+        "role": "neutral",
+        "displayName": "Night Floor",
+        "canonical": "#1A1A1A",
+        "tonalRamp": [
+          "oklch(15% 0.000 90)",
+          "oklch(26% 0.000 90)",
+          "oklch(38% 0.000 90)",
+          "oklch(49% 0.000 90)",
+          "oklch(61% 0.000 90)",
+          "oklch(72% 0.000 90)",
+          "oklch(84% 0.000 90)",
+          "oklch(95% 0.000 90)"
+        ]
+      },
+      "bg-panel": {
+        "role": "neutral",
+        "displayName": "Panel Grey",
+        "canonical": "#262626",
+        "tonalRamp": [
+          "oklch(15% 0.000 90)",
+          "oklch(26% 0.000 90)",
+          "oklch(38% 0.000 90)",
+          "oklch(49% 0.000 90)",
+          "oklch(61% 0.000 90)",
+          "oklch(72% 0.000 90)",
+          "oklch(84% 0.000 90)",
+          "oklch(95% 0.000 90)"
+        ]
+      },
+      "bg-panel-alt": {
+        "role": "neutral",
+        "displayName": "Panel Alt",
+        "canonical": "#2E2E2E",
+        "tonalRamp": [
+          "oklch(15% 0.000 90)",
+          "oklch(26% 0.000 90)",
+          "oklch(38% 0.000 90)",
+          "oklch(49% 0.000 90)",
+          "oklch(61% 0.000 90)",
+          "oklch(72% 0.000 90)",
+          "oklch(84% 0.000 90)",
+          "oklch(95% 0.000 90)"
+        ]
+      },
+      "bg-input": {
+        "role": "neutral",
+        "displayName": "Input Well",
+        "canonical": "#333333",
+        "tonalRamp": [
+          "oklch(15% 0.000 90)",
+          "oklch(26% 0.000 90)",
+          "oklch(38% 0.000 90)",
+          "oklch(49% 0.000 90)",
+          "oklch(61% 0.000 90)",
+          "oklch(72% 0.000 90)",
+          "oklch(84% 0.000 90)",
+          "oklch(95% 0.000 90)"
+        ]
+      },
+      "border": {
+        "role": "neutral",
+        "displayName": "Hairline",
+        "canonical": "#404040",
+        "tonalRamp": [
+          "oklch(15% 0.000 90)",
+          "oklch(26% 0.000 90)",
+          "oklch(38% 0.000 90)",
+          "oklch(49% 0.000 90)",
+          "oklch(61% 0.000 90)",
+          "oklch(72% 0.000 90)",
+          "oklch(84% 0.000 90)",
+          "oklch(95% 0.000 90)"
+        ]
+      },
+      "text-primary": {
+        "role": "neutral",
+        "displayName": "Starlight Text",
+        "canonical": "#E0E0E0",
+        "tonalRamp": [
+          "oklch(15% 0.000 90)",
+          "oklch(26% 0.000 90)",
+          "oklch(38% 0.000 90)",
+          "oklch(49% 0.000 90)",
+          "oklch(61% 0.000 90)",
+          "oklch(72% 0.000 90)",
+          "oklch(84% 0.000 90)",
+          "oklch(95% 0.000 90)"
+        ]
+      },
+      "text-secondary": {
+        "role": "neutral",
+        "displayName": "Dim Text",
+        "canonical": "#A0A0A0",
+        "tonalRamp": [
+          "oklch(15% 0.000 90)",
+          "oklch(26% 0.000 90)",
+          "oklch(38% 0.000 90)",
+          "oklch(49% 0.000 90)",
+          "oklch(61% 0.000 90)",
+          "oklch(72% 0.000 90)",
+          "oklch(84% 0.000 90)",
+          "oklch(95% 0.000 90)"
+        ]
+      },
+      "text-disabled": {
+        "role": "neutral",
+        "displayName": "Faint Text",
+        "canonical": "#606060",
+        "tonalRamp": [
+          "oklch(15% 0.000 90)",
+          "oklch(26% 0.000 90)",
+          "oklch(38% 0.000 90)",
+          "oklch(49% 0.000 90)",
+          "oklch(61% 0.000 90)",
+          "oklch(72% 0.000 90)",
+          "oklch(84% 0.000 90)",
+          "oklch(95% 0.000 90)"
+        ]
+      },
+      "accent-connected": {
+        "role": "status",
+        "displayName": "Connected Green",
+        "canonical": "#4CAF50",
+        "tonalRamp": [
+          "oklch(15% 0.060 144)",
+          "oklch(26% 0.083 144)",
+          "oklch(38% 0.105 144)",
+          "oklch(49% 0.127 144)",
+          "oklch(61% 0.150 144)",
+          "oklch(72% 0.153 144)",
+          "oklch(84% 0.131 144)",
+          "oklch(95% 0.108 144)"
+        ]
+      },
+      "accent-busy": {
+        "role": "status",
+        "displayName": "Dew Amber",
+        "canonical": "#FFB300",
+        "tonalRamp": [
+          "oklch(15% 0.043 78)",
+          "oklch(26% 0.057 78)",
+          "oklch(38% 0.081 78)",
+          "oklch(49% 0.104 78)",
+          "oklch(61% 0.127 78)",
+          "oklch(72% 0.151 78)",
+          "oklch(84% 0.167 78)",
+          "oklch(95% 0.143 78)"
+        ]
+      },
+      "accent-warning": {
+        "role": "status",
+        "displayName": "Dew Amber (warning)",
+        "canonical": "#FFB300",
+        "tonalRamp": [
+          "oklch(15% 0.043 78)",
+          "oklch(26% 0.057 78)",
+          "oklch(38% 0.081 78)",
+          "oklch(49% 0.104 78)",
+          "oklch(61% 0.127 78)",
+          "oklch(72% 0.151 78)",
+          "oklch(84% 0.167 78)",
+          "oklch(95% 0.143 78)"
+        ]
+      },
+      "accent-error": {
+        "role": "status",
+        "displayName": "Fault Red",
+        "canonical": "#E53935",
+        "tonalRamp": [
+          "oklch(15% 0.094 27)",
+          "oklch(26% 0.123 27)",
+          "oklch(38% 0.151 27)",
+          "oklch(49% 0.180 27)",
+          "oklch(61% 0.209 27)",
+          "oklch(72% 0.181 27)",
+          "oklch(84% 0.152 27)",
+          "oklch(95% 0.123 27)"
+        ]
+      },
+      "accent-info": {
+        "role": "secondary",
+        "displayName": "Sky Info Blue",
+        "canonical": "#42A5F5",
+        "tonalRamp": [
+          "oklch(15% 0.051 247)",
+          "oklch(26% 0.071 247)",
+          "oklch(38% 0.091 247)",
+          "oklch(49% 0.112 247)",
+          "oklch(61% 0.132 247)",
+          "oklch(72% 0.145 247)",
+          "oklch(84% 0.125 247)",
+          "oklch(95% 0.104 247)"
+        ]
+      },
+      "accent-disconnected": {
+        "role": "status",
+        "displayName": "Unplugged Grey",
+        "canonical": "#606060",
+        "tonalRamp": [
+          "oklch(15% 0.000 90)",
+          "oklch(26% 0.000 90)",
+          "oklch(38% 0.000 90)",
+          "oklch(49% 0.000 90)",
+          "oklch(61% 0.000 90)",
+          "oklch(72% 0.000 90)",
+          "oklch(84% 0.000 90)",
+          "oklch(95% 0.000 90)"
+        ]
+      },
+      "selection-bg": {
+        "role": "primary",
+        "displayName": "Selection Blue",
+        "canonical": "#1976D2",
+        "tonalRamp": [
+          "oklch(15% 0.082 253)",
+          "oklch(26% 0.104 253)",
+          "oklch(38% 0.127 253)",
+          "oklch(49% 0.149 253)",
+          "oklch(61% 0.155 253)",
+          "oklch(72% 0.133 253)",
+          "oklch(84% 0.110 253)",
+          "oklch(95% 0.088 253)"
+        ]
+      },
+      "selection-fg": {
+        "role": "neutral",
+        "displayName": "Selection White",
+        "canonical": "#FFFFFF",
+        "tonalRamp": [
+          "oklch(15% 0.000 90)",
+          "oklch(26% 0.000 90)",
+          "oklch(38% 0.000 90)",
+          "oklch(49% 0.000 90)",
+          "oklch(61% 0.000 90)",
+          "oklch(72% 0.000 90)",
+          "oklch(84% 0.000 90)",
+          "oklch(95% 0.000 90)"
+        ]
+      },
+      "button-primary": {
+        "role": "primary",
+        "displayName": "Console Blue",
+        "canonical": "#1565C0",
+        "tonalRamp": [
+          "oklch(15% 0.090 256)",
+          "oklch(26% 0.112 256)",
+          "oklch(38% 0.134 256)",
+          "oklch(49% 0.156 256)",
+          "oklch(61% 0.142 256)",
+          "oklch(72% 0.120 256)",
+          "oklch(84% 0.098 256)",
+          "oklch(95% 0.076 256)"
+        ]
+      },
+      "button-secondary": {
+        "role": "neutral",
+        "displayName": "Secondary Grey",
+        "canonical": "#424242",
+        "tonalRamp": [
+          "oklch(15% 0.000 90)",
+          "oklch(26% 0.000 90)",
+          "oklch(38% 0.000 90)",
+          "oklch(49% 0.000 90)",
+          "oklch(61% 0.000 90)",
+          "oklch(72% 0.000 90)",
+          "oklch(84% 0.000 90)",
+          "oklch(95% 0.000 90)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "title": {
+        "displayName": "Title",
+        "purpose": "Pane and dialog titles."
+      },
+      "section": {
+        "displayName": "Section",
+        "purpose": "Uppercase group headers."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Default row and body text."
+      },
+      "caption": {
+        "displayName": "Caption",
+        "purpose": "Secondary line under a body row."
+      },
+      "numeric": {
+        "displayName": "Numeric",
+        "purpose": "Live numbers with tabular figures."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Uppercase equipment-chip labels."
+      },
+      "mono": {
+        "displayName": "Mono",
+        "purpose": "File paths, FITS headers, histogram labels."
+      },
+      "body-simple": {
+        "displayName": "Body (Simple Mode)",
+        "purpose": "Default text in Simple Mode."
+      }
+    },
+    "shadows": [],
+    "motion": [],
+    "breakpoints": [
+      {
+        "name": "short-height",
+        "value": "820px (window height)"
+      },
+      {
+        "name": "side-by-side",
+        "value": "760px (pane width)"
+      },
+      {
+        "name": "side-by-side-short",
+        "value": "600px (pane width, short window)"
+      }
+    ],
+    "nightMode": {
+      "filter": "luminance (0.30R+0.59G+0.11B) into red; green and blue zeroed",
+      "source": "client/openastroara_client/lib/widgets/night_filter.dart"
+    }
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Main action of a pane; used sparingly.",
+      "html": "<button class=\"ds-btn-primary\">Start sequence</button>",
+      "css": ".ds-btn-primary{font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;background:#1565C0;color:#FFFFFF;border:0;border-radius:20px;padding:10px 20px;font-size:14px;font-weight:500;cursor:pointer;transition:background .15s} .ds-btn-primary:hover{background:#1976D2} .ds-btn-primary:focus-visible{outline:2px solid #42A5F5;outline-offset:2px} .ds-btn-primary:active{background:#0D47A1}"
+    },
+    {
+      "name": "Primary Button (Simple Mode)",
+      "kind": "button",
+      "refersTo": "button-primary-simple",
+      "description": "Simple Mode's roomy primary action: 44 px tall, 10 px corners, 14 px text.",
+      "html": "<button class=\"ds-btn-simple\">Start imaging</button>",
+      "css": ".ds-btn-simple{font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;background:#1565C0;color:#FFFFFF;border:0;border-radius:10px;min-height:44px;padding:12px 20px;font-size:14px;font-weight:500;cursor:pointer;transition:background .15s} .ds-btn-simple:hover{background:#1976D2} .ds-btn-simple:focus-visible{outline:2px solid #42A5F5;outline-offset:2px} .ds-btn-simple:active{background:#0D47A1}"
+    },
+    {
+      "name": "Emergency Stop",
+      "kind": "button",
+      "refersTo": "button-emergency-stop",
+      "description": "Filled red stop in the bottom status bar on every tab; the heaviest control on screen.",
+      "html": "<button class=\"ds-estop\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"currentColor\" aria-hidden=\"true\"><path d=\"M15.73 3H8.27L3 8.27v7.46L8.27 21h7.46L21 15.73V8.27L15.73 3zM12 17.3a1.3 1.3 0 1 1 0-2.6 1.3 1.3 0 0 1 0 2.6zm1-4.3h-2V7h2v6z\"/></svg>Emergency Stop</button>",
+      "css": ".ds-estop{font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;display:inline-flex;align-items:center;gap:8px;background:#E53935;color:#FFFFFF;border:0;border-radius:20px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;transition:filter .15s} .ds-estop:hover{filter:brightness(1.1)} .ds-estop:focus-visible{outline:2px solid #FFFFFF;outline-offset:2px}"
+    },
+    {
+      "name": "Equipment Chip",
+      "kind": "custom",
+      "refersTo": "equipment-chip",
+      "description": "Top-bar device tile: icon, status dot, uppercase label.",
+      "html": "<button class=\"ds-eqchip\"><span class=\"ds-eqchip-ic\"><svg width=\"28\" height=\"28\" viewBox=\"0 0 24 24\" fill=\"#E0E0E0\" aria-hidden=\"true\"><path d=\"M9 3 7.17 5H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-3.17L15 3H9zm3 15a5 5 0 1 1 0-10 5 5 0 0 1 0 10z\"/></svg><i class=\"ds-eqchip-dot\"></i></span><span class=\"ds-eqchip-lb\">CAMERA</span></button>",
+      "css": ".ds-eqchip{font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;width:64px;display:inline-flex;flex-direction:column;align-items:center;padding:6px 8px;background:#262626;border:0;border-radius:6px;cursor:pointer} .ds-eqchip:hover{background:#2E2E2E} .ds-eqchip:focus-visible{outline:2px solid #42A5F5} .ds-eqchip-ic{position:relative;display:block} .ds-eqchip-dot{position:absolute;top:-2px;right:-2px;width:10px;height:10px;border-radius:50%;background:#4CAF50;border:2px solid #262626} .ds-eqchip-lb{margin-top:2px;font-size:10px;font-weight:500;letter-spacing:.5px;color:#A0A0A0}"
+    },
+    {
+      "name": "State Chip",
+      "kind": "chip",
+      "refersTo": "status-indicator",
+      "description": "Pill with status dot and label; every state has a designed look.",
+      "html": "<span class=\"ds-state\"><i></i>Running</span>",
+      "css": ".ds-state{font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;display:inline-flex;align-items:center;gap:8px;padding:6px 10px;border-radius:12px;font-size:12px;color:#E0E0E0;background:#262626} .ds-state i{width:10px;height:10px;border-radius:50%;background:#4CAF50} .ds-state:hover{background:#2E2E2E}"
+    },
+    {
+      "name": "Segmented Switch",
+      "kind": "custom",
+      "refersTo": "nav-rail-selected",
+      "description": "Instrument-style switch that names its states.",
+      "html": "<div class=\"ds-seg\" role=\"group\"><button class=\"on\" aria-pressed=\"true\">Cooler on</button><button aria-pressed=\"false\">Off</button></div>",
+      "css": ".ds-seg{display:inline-flex;border:1px solid #404040;border-radius:20px;overflow:hidden} .ds-seg button{font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;background:transparent;color:#E0E0E0;border:0;padding:6px 14px;font-size:13px;cursor:pointer} .ds-seg button+button{border-left:1px solid #404040} .ds-seg button.on{background:#1976D2;color:#FFFFFF} .ds-seg button:hover:not(.on){background:#2E2E2E} .ds-seg button:focus-visible{outline:2px solid #42A5F5;outline-offset:-2px}"
+    },
+    {
+      "name": "Text Field",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Filled field on the input well with an outline border.",
+      "html": "<input class=\"ds-input\" value=\"300 s\" aria-label=\"Exposure\">",
+      "css": ".ds-input{font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;background:#333333;color:#E0E0E0;border:1px solid #404040;border-radius:4px;padding:8px 10px;font-size:13px;font-variant-numeric:tabular-nums;width:140px} .ds-input:hover{border-color:#A0A0A0} .ds-input:focus-visible{outline:none;border-color:#1565C0;box-shadow:0 0 0 1px #1565C0}"
+    },
+    {
+      "name": "Attention Banner",
+      "kind": "custom",
+      "refersTo": "card",
+      "description": "Icon + colour + text warning; says what happened and what Ara is doing.",
+      "html": "<div class=\"ds-attn\" role=\"status\"><svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"#FFB300\" aria-hidden=\"true\"><path d=\"M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z\"/></svg><div><b>Guiding lost. Retrying (2 of 5).</b><span>Exposures are paused until the star is found again.</span></div></div>",
+      "css": ".ds-attn{font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;display:flex;gap:10px;align-items:flex-start;max-width:420px;padding:10px 12px;border:1px solid #FFB300;border-radius:6px;background:rgba(255,179,0,.10);color:#E0E0E0;font-size:13px} .ds-attn b{display:block;font-weight:600} .ds-attn span{color:#A0A0A0;font-size:11.5px}"
+    },
+    {
+      "name": "Panel Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "Flat bordered panel; tonal step, no shadow.",
+      "html": "<div class=\"ds-card\"><div class=\"ds-card-sec\">GUIDE RMS</div><div class=\"ds-card-v\">0.62″</div></div>",
+      "css": ".ds-card{font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;background:#262626;border:1px solid #404040;border-radius:6px;padding:8px 12px;width:160px;color:#E0E0E0} .ds-card-sec{font-size:11px;font-weight:600;letter-spacing:.6px;color:#A0A0A0} .ds-card-v{font-size:16px;font-variant-numeric:tabular-nums}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Observatory Console",
+    "overview": "**Creative North Star: \"The Observatory Console\"**\n\nAra looks like the dark instrument panel at the telescope. Surfaces are neutral greys stepped a few points apart. Information is dense, in the NINA tradition: small type, tight spacing, panels separated by hairline borders. Colour belongs to the equipment and the session. A green dot means connected, amber means busy or needs a look, red means fault or stop. Nothing else is coloured. At rest the screen is quiet, so a change of state is the loudest thing on it.\n\nOne idea is borrowed from a cockpit. When something needs the person (often checking in at 3 a.m.), it must be impossible to miss: icon, colour and words together, never colour alone. Emergency Stop is the heaviest control on every screen. Controls behave like labelled hardware: switches name their states, readouts carry a status dot, and numbers use tabular figures so they don't jitter while they update.\n\nThe app runs on Material 3 (dark) with the Ara tokens below, on desktop and mobile, so the UI must survive Night mode. Night mode folds every pixel's luminance into the red channel, and the interface then reads by brightness alone.",
+    "keyCharacteristics": [
+      "Neutral grey surfaces with tonal steps and 1 px borders; no shadows.",
+      "Colour only through semantic status roles, never as decoration.",
+      "Dense, small type ramp (11–15 px) on one spacing scale (4 / 8 / 12 / 16 / 24).",
+      "Attention states are unmissable: icon + colour + text.",
+      "Emergency Stop: filled red, always visible, on every tab.",
+      "Instrument-like controls: named switch states, status dots, tabular numbers.",
+      "Two densities: the dense full UI, and a roomy Simple Mode (44 px targets, 10 px corners, 14 px type)."
+    ],
+    "rules": [
+      {
+        "name": "The State-Only Colour Rule",
+        "body": "An accent appears only through a semantic role: a state dot, a state chip, a category hue or a destructive action. If it doesn't mean something, it is grey.",
+        "section": "colors"
+      },
+      {
+        "name": "The Brightness-First Rule",
+        "body": "Every state must still read in Night mode, where hue is gone and only luminance remains. A connected dot must stay brighter than a border. Never tell two states apart by hue alone.",
+        "section": "colors"
+      },
+      {
+        "name": "The Steady Digits Rule",
+        "body": "Every number that updates live uses tabular figures. A countdown never shifts its neighbours.",
+        "section": "typography"
+      },
+      {
+        "name": "The One Ramp Rule",
+        "body": "New and redesigned surfaces use the `AraText` ramp above, not per-widget 11/12/13 px styles. The ramp is being adopted incrementally, and older widgets still carry ad-hoc sizes (12 px is common).",
+        "section": "typography"
+      },
+      {
+        "name": "The No-Glow Rule",
+        "body": "Surfaces don't cast shadows or glow. A panel is separated by a 1 px Hairline and a tonal step, nothing more.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Two Densities Rule",
+        "body": "The full UI is dense: 11–15 px type and 4–8 px corners. Simple Mode is roomy: every interactive target is at least 44 px tall, corners are 10 px, and body text is 14 px. Both densities share the same colours, the same named rules and the same Emergency Stop. Phones run Companion Mode, which builds on Simple Mode, so phones always get the roomy density. Simple Mode is not built yet; this is its target, and it moves away from the current code on purpose.",
+        "section": "layout"
+      }
+    ],
+    "dos": [
+      "Do pair every warning or fault with icon + colour + text. Colour alone never carries a message.",
+      "Do keep Emergency Stop filled red, visible on every tab and heavier than any other control.",
+      "Do use `AraColors`, `AraSpace` and `AraText` tokens. Accents come only through semantic roles.",
+      "Do use tabular figures for any live number.",
+      "Do check every new state in Night mode: it must still be distinguishable by brightness.",
+      "Do write labels in product voice: verbs, sentence case, no NINA or daemon enum names."
+    ],
+    "donts": [
+      "Don't use colour for decoration, branding flourishes or emphasis that isn't a state.",
+      "Don't add shadows or glows to separate surfaces; use a tonal step and a Hairline.",
+      "Don't let any state fall back to plain grey text without a designed look.",
+      "Don't fill any control other than Emergency Stop and confirmed destructive actions with Fault Red.",
+      "Don't copy NINA's icons, splash, imagery or wordmark (see PRODUCT.md).",
+      "Don't hard-code colours outside `lib/theme/`. A few widgets still do, and they should migrate to tokens."
+    ]
+  }
+}
