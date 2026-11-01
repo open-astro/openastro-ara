@@ -231,7 +231,6 @@
   .sm .obj b { width: 14px; height: 14px; border-radius: 50%; border: 1.5px solid #9fb3cc; flex: none; }
   .sm .obj.sel b { width: 22px; height: 22px; border: 2px solid var(--info); margin: -4px; }
   .sm .obj.sel { color: var(--text); font-weight: 600; }
-  .sm .pa-ov { position: absolute; left: 50%; top: 50%; width: 420px; height: 420px; transform: translate(-50%, -50%); pointer-events: none; }
   .sm .f-star { left: calc(2 * var(--in) + var(--rail)); top: calc(var(--top) + 48px + var(--in)); width: 240px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
   .sm .f-star .zoom { height: 180px; border-radius: 8px; background: #050505; position: relative; overflow: hidden; }
   .sm .f-star .zoom::before { content: ""; position: absolute; left: 50%; top: 50%; width: 46px; height: 46px; transform: translate(-50%, -50%); border-radius: 50%; background: radial-gradient(circle, #fff 0, rgba(255,255,255,.85) 18%, rgba(220,220,220,.35) 45%, transparent 70%); }
@@ -509,16 +508,6 @@
           <div class="obj" data-v="target t-fail t-horizon" style="left:66%;top:22%"><b></b>M45</div>
         </div>
         <div class="p s-hint" data-v="idle">Tap the shutter to take a frame</div>
-        <svg class="pa-ov" data-v="pa" viewBox="0 0 420 420" aria-hidden="true">
-          <circle cx="210" cy="210" r="60" fill="none" stroke="rgba(76,175,80,.7)" stroke-width="1.5" stroke-dasharray="5 4"/>
-          <line x1="190" y1="210" x2="230" y2="210" stroke="#E0E0E0" stroke-width="1.5"/><line x1="210" y1="190" x2="210" y2="230" stroke="#E0E0E0" stroke-width="1.5"/>
-          <circle cx="210" cy="210" r="8" fill="none" stroke="#E0E0E0" stroke-width="1.5"/>
-          <line x1="318" y1="168" x2="226" y2="206" stroke="#FFB300" stroke-width="1.5" stroke-dasharray="6 4"/>
-          <polygon points="222,208 234,199 232,212" fill="#FFB300"/>
-          <circle cx="322" cy="166" r="9" fill="none" stroke="#FFB300" stroke-width="2"/>
-          <text x="336" y="160" fill="#E0E0E0" font-size="13" font-family="system-ui">Pole now</text>
-          <text x="150" y="292" fill="#A0A0A0" font-size="13" font-family="system-ui">Inside the ring: under 10′</text>
-        </svg>
         <div class="p f-star fade" data-v="focus">
           <span class="lbl">Star, zoomed</span>
           <div class="zoom"></div>
@@ -589,11 +578,15 @@
             <div class="p s-pop s-mp" data-v="pa">
               <span class="lbl">Polar error</span>
               <span class="big2">14′ 30″</span>
-              <span class="zone"><i class="g-busy"></i>Keep adjusting</span>
+              <span class="zone"><i class="g-busy"></i>Adjusting</span>
+              <svg viewBox="0 0 140 140" style="width:140px;height:140px;align-self:center" aria-label="Bullseye">
+                <g fill="none" stroke="rgba(160,160,160,.5)"><circle cx="70" cy="70" r="66"/><circle cx="70" cy="70" r="44"/><circle cx="70" cy="70" r="22"/><line x1="4" y1="70" x2="136" y2="70"/><line x1="70" y1="4" x2="70" y2="136"/></g>
+                <line x1="70" y1="70" x2="40" y2="58" stroke="rgba(255,179,0,.4)" stroke-width="2.5"/><circle cx="40" cy="58" r="8" fill="#FFB300"/>
+              </svg>
               <div class="hr"></div>
-              <div class="dir"><span class="sub">Altitude</span><span style="display:flex;align-items:center;gap:4px"><svg><use href="#i-up"/></svg>3.2′</span></div>
-              <div class="dir"><span class="sub">Azimuth</span><span style="display:flex;align-items:center;gap:4px"><svg><use href="#i-left"/></svg>14.1′</span></div>
-              <button class="ghost" style="margin-top:4px">Stop</button>
+              <div class="dir"><span class="sub">Altitude</span><span style="display:flex;align-items:center;gap:4px"><svg style="transform:rotate(180deg)"><use href="#i-up"/></svg>Lower 3.2′</span></div>
+              <div class="dir"><span class="sub">Azimuth</span><span style="display:flex;align-items:center;gap:4px"><svg><use href="#i-left"/></svg>Move west 14.1′</span></div>
+              <div class="row2" style="margin-top:4px"><button class="ghost">Stop</button><button class="go" disabled style="opacity:.45">Done</button></div>
             </div>
             <div class="p s-pop s-mp" data-v="target t-fail t-horizon">
               <div class="s-search"><svg><use href="#i-search"/></svg><span data-v="target t-fail">M31</span><span data-v="t-horizon">M33</span></div>
@@ -876,7 +869,7 @@
     idle: { mode: 'Preview', sky: true }, taking: { mode: 'Preview', pill: P.taking, shut: true },
     frame: { mode: 'Preview', pill: P.ready, info: true }, grid: { mode: 'Preview', pill: P.ready, info: true },
     settings: { mode: 'Preview', pill: P.ready, info: true }, clean: { mode: 'Preview', pill: P.loop, info: true, shut: true },
-    focus: { mode: 'Focus', chip: 'Auto', pill: P.loop, shut: true }, pa: { mode: 'Polar align', rail: 'P.A.', pill: P.loop, shut: true },
+    focus: { mode: 'Focus', chip: 'Auto', pill: P.loop, shut: true }, pa: { mode: 'Polar align', rail: 'P.A.', chip: '14′', pill: P.loop, shut: true },
     target: { mode: 'Target', sky: true }, 't-fail': { mode: 'Target', sky: true }, 't-horizon': { mode: 'Target', sky: true },
     plan: { mode: 'Run' }, run: { mode: 'Run', pill: ['g-ok', 'Taking a frame', '2:14 left', true], shut: true }, done: { mode: 'Run' },
     empty: { mode: 'Preview', sky: true } };
@@ -893,7 +886,7 @@
     if (o.pill) { const [dot, label, detail, bar] = o.pill; pill.innerHTML = `<i class="${dot}"></i>${label}${detail ? ` <span class="sub">${detail}</span>` : ''}${bar ? '<span class="pb"><i></i></span>' : ''}`; }
     document.getElementById('s-mode-name').textContent = o.rail || o.mode;
     document.getElementById('s-mode').classList.toggle('open', v === 'grid');
-    document.getElementById('s-chip').classList.toggle('on', v === 'settings' || v === 'focus');
+    document.getElementById('s-chip').classList.toggle('on', v === 'settings' || v === 'focus' || v === 'pa');
     document.getElementById('s-chip').lastChild.textContent = o.chip || '5 s · 100';
     document.getElementById('s-sky').classList.toggle('on', !!o.sky);
     document.getElementById('s-info').classList.toggle('on', !!o.info);
