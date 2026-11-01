@@ -201,8 +201,8 @@
   .s-stop svg { width: 20px; height: 20px; fill: #fff; }
 
   /* guiding and the histogram: equal width, each only once it has data */
-  .s-stats { position: absolute; left: var(--in); right: calc(2 * var(--in) + var(--rail)); bottom: var(--in); height: var(--bar); display: flex; gap: var(--in); }
-  .sm .s-stats .p { position: relative; flex: 1; max-width: 520px; display: flex; align-items: center; gap: 14px; padding: 0 16px; }
+  .s-stats { position: absolute; left: calc(2 * var(--in) + var(--rail)); right: calc(2 * var(--in) + var(--rail)); bottom: var(--in); height: var(--bar); display: flex; gap: var(--in); }
+  .sm .s-stats .p { position: relative; flex: 1; display: flex; align-items: center; gap: 14px; padding: 0 16px; }
   .s-stats .gl { display: flex; flex-direction: column; flex: none; }
   .s-stats svg { flex: 1; min-width: 0; height: 32px; }
 
@@ -339,7 +339,7 @@
   <!-- hand-drawn style glyphs, as PR #1474 adds: telescope on tripod, 5-slot filter wheel -->
   <symbol id="i-mount" viewBox="0 0 24 24"><path d="M3.2 9.6 15.8 3.4l1.6 3.3L4.8 12.9z"/><path d="m17.9 2.3 2.3-1.1 2.4 4.9-2.3 1.1z"/><path d="M10.6 11.4h2l3.6 10.4h-2l-1.4-4.1h-.4v4.1h-1.9v-4.1h-.4l-1.4 4.1H6.7z"/></symbol>
   <symbol id="i-filter" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M12 1.5a10.5 10.5 0 1 1 0 21 10.5 10.5 0 0 1 0-21zM12 4a2.6 2.6 0 1 0 0 5.2A2.6 2.6 0 0 0 12 4zm6.3 4.6a2.6 2.6 0 1 0 0 5.2 2.6 2.6 0 0 0 0-5.2zM5.7 8.6a2.6 2.6 0 1 0 0 5.2 2.6 2.6 0 0 0 0-5.2zm2.4 6.8a2.6 2.6 0 1 0 0 5.2 2.6 2.6 0 0 0 0-5.2zm7.8 0a2.6 2.6 0 1 0 0 5.2 2.6 2.6 0 0 0 0-5.2z"/></symbol>
-  <symbol id="i-guide" viewBox="0 0 24 24"><path d="M11 2h2v5h-2zM11 17h2v5h-2zM2 11h5v2H2zM17 11h5v2h-5z"/><path d="M12 8.4l.95 2.3 2.47.2-1.88 1.62.57 2.42L12 13.64l-2.11 1.3.57-2.42-1.88-1.62 2.47-.2z"/><path d="M12 4.7a7.3 7.3 0 1 0 0 14.6 7.3 7.3 0 0 0 0-14.6zm0 1.6a5.7 5.7 0 1 1 0 11.4 5.7 5.7 0 0 1 0-11.4z"/></symbol>
+  <symbol id="i-guide" viewBox="0 0 24 24"><path d="M19.07 4.93l-1.41 1.41C19.1 7.79 20 9.79 20 12c0 4.42-3.58 8-8 8s-8-3.58-8-8c0-4.08 3.05-7.44 7-7.93v2.02C8.16 6.57 6 9.03 6 12c0 3.31 2.69 6 6 6s6-2.69 6-6c0-1.66-.67-3.16-1.76-4.24l-1.41 1.41C15.55 9.9 16 10.9 16 12c0 2.21-1.79 4-4 4s-4-1.79-4-4c0-1.86 1.28-3.41 3-3.86v2.14c-.6.35-1 .98-1 1.72 0 1.1.9 2 2 2s2-.9 2-2c0-.74-.4-1.38-1-1.72V2h-1C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10c0-2.76-1.12-5.26-2.93-7.07z"/></symbol>
   <symbol id="i-focus" viewBox="0 0 24 24"><path d="M5 15H3v4a2 2 0 0 0 2 2h4v-2H5v-4zM5 5h4V3H5a2 2 0 0 0-2 2v4h2V5zm14-2h-4v2h4v4h2V5a2 2 0 0 0-2-2zm0 16h-4v2h4a2 2 0 0 0 2-2v-4h-2v4zM12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z"/></symbol>
   <symbol id="i-rot" viewBox="0 0 24 24"><path d="M12 4V1L8 5l4 4V6a6 6 0 1 1-6 6H4a8 8 0 1 0 8-8z"/></symbol>
   <symbol id="i-panel" viewBox="0 0 24 24"><path d="M3 5h18v14H3V5zm2 2v10h14V7H5zm2 2h10v6H7V9z"/></symbol>
