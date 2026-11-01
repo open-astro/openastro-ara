@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -8,11 +10,14 @@ import '../util/friendly_error.dart';
 import '../state/ws/client_session_state.dart';
 
 /// §35.3 — the persistent big red button, always visible in the bottom
-/// status bar. Tap → confirm ("Stop everything now?") → the daemon aborts
+/// status bar. Press and hold for 2 s ("Hold to confirm", a fill sweeping
+/// across) → the daemon aborts
 /// the running sequence, aborts the in-flight exposure, stops guiding,
 /// parks the mount, and switches the flat panel light off. The snackbar
 /// reports honestly what each rung did (a dead mount says so instead of
-/// pretending it parked).
+/// pretending it parked). Letting go early sends nothing. Keyboard and
+/// screen-reader activation can't hold, so they get the confirm dialog
+/// ("Stop everything now?") instead.
 ///
 /// Heavier than any other control (ALP-4812): a ring of Fault Red set off by
 /// a dark gap. [simple] is Simple Mode's version — 56 px tall, 10 px corners,
@@ -27,15 +32,69 @@ class EmergencyStopButton extends ConsumerStatefulWidget {
       _EmergencyStopButtonState();
 }
 
-class _EmergencyStopButtonState extends ConsumerState<EmergencyStopButton> {
+/// How long the press has to be held.
+const kEmergencyStopHold = Duration(seconds: 2);
+
+class _EmergencyStopButtonState extends ConsumerState<EmergencyStopButton>
+    with SingleTickerProviderStateMixin {
   bool _inFlight = false;
+
+  /// Runs while the button is held; reaching the end is the confirmation.
+  late final AnimationController _hold =
+      AnimationController(vsync: this, duration: kEmergencyStopHold)
+        ..addStatusListener((status) {
+          if (status == AnimationStatus.completed) {
+            _hold.value = 0;
+            setState(() => _holding = false);
+            _stop();
+          }
+        });
+
+  /// Set by a pointer press so the button's own onPressed (which fires on
+  /// release) doesn't also open the dialog meant for keyboard and screen
+  /// readers.
+  bool _viaPointer = false;
+
+  /// The press is down and counting: the label reads "Hold to confirm".
+  bool _holding = false;
+
+  @override
+  void dispose() {
+    _hold.dispose();
+    super.dispose();
+  }
+
+  void _pressDown(PointerDownEvent _) {
+    _viaPointer = true;
+    if (_inFlight) return;
+    setState(() => _holding = true);
+    _hold.forward(from: 0);
+  }
+
+  void _pressEnd(PointerEvent _) {
+    // A release short of 2 s sends nothing.
+    if (_holding) {
+      setState(() => _holding = false);
+      _hold.reverse();
+    }
+    // onPressed (if the release counts as a tap) runs in this same dispatch.
+    scheduleMicrotask(() => _viaPointer = false);
+  }
+
+  void _onPressed() {
+    if (_viaPointer) return;
+    _confirmAndStop();
+  }
 
   Future<void> _confirmAndStop() async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        icon: Icon(Icons.warning_amber_rounded,
-            color: Theme.of(dialogContext).colorScheme.error, size: 32),
+        icon: Icon(
+          Icons.warning_amber_rounded,
+          color: Theme.of(dialogContext).colorScheme.error,
+          size: 32,
+        ),
         title: const Text('Stop everything now?'),
         content: const Text(
           'This aborts the running sequence and the in-flight exposure, '
@@ -58,30 +117,41 @@ class _EmergencyStopButtonState extends ConsumerState<EmergencyStopButton> {
       ),
     );
     if (confirmed != true || !mounted) return;
+    await _stop();
+  }
 
+  Future<void> _stop() async {
+    if (_inFlight) return;
     final server = ref.read(activeServerProvider);
     final messenger = ScaffoldMessenger.of(context);
     if (server == null) {
       messenger.showSnackBar(
-          const SnackBar(content: Text('No server connected — nothing to stop.')));
+        const SnackBar(content: Text('No server connected — nothing to stop.')),
+      );
       return;
     }
     setState(() => _inFlight = true);
     try {
-      final result =
-          await ref.read(serverApiFactoryProvider)(server).emergencyStop();
-      messenger.showSnackBar(SnackBar(
-        duration: const Duration(seconds: 10),
-        content: Text(_summarize(result)),
-      ));
+      final result = await ref
+          .read(serverApiFactoryProvider)(server)
+          .emergencyStop();
+      messenger.showSnackBar(
+        SnackBar(
+          duration: const Duration(seconds: 10),
+          content: Text(_summarize(result)),
+        ),
+      );
     } catch (e) {
-      messenger.showSnackBar(SnackBar(
-        duration: const Duration(seconds: 10),
-        content: Text(
+      messenger.showSnackBar(
+        SnackBar(
+          duration: const Duration(seconds: 10),
+          content: Text(
             'EMERGENCY STOP FAILED — '
             '${friendlyError(e, action: 'reach the rig')} '
-            'Check your rig manually.'),
-      ));
+            'Check your rig manually.',
+          ),
+        ),
+      );
     } finally {
       if (mounted) setState(() => _inFlight = false);
     }
@@ -126,7 +196,7 @@ class _EmergencyStopButtonState extends ConsumerState<EmergencyStopButton> {
     final simple = widget.simple;
     final radius = simple ? 10.0 : 16.0;
     final button = FilledButton.icon(
-      onPressed: _inFlight ? null : _confirmAndStop,
+      onPressed: _inFlight ? null : _onPressed,
       icon: _inFlight
           ? SizedBox(
               width: simple ? 18 : 14,
@@ -134,19 +204,30 @@ class _EmergencyStopButtonState extends ConsumerState<EmergencyStopButton> {
               child: const CircularProgressIndicator(strokeWidth: 2),
             )
           : Icon(Icons.report, size: simple ? 20 : 16),
-      label: Text(_inFlight ? 'Stopping…' : 'Emergency Stop'),
+      label: Text(
+        _inFlight
+            ? 'Stopping…'
+            : _holding
+            ? 'Hold to confirm'
+            : 'Emergency Stop',
+      ),
       style: FilledButton.styleFrom(
         backgroundColor: red,
         foregroundColor: Theme.of(context).colorScheme.onError,
         padding: EdgeInsets.symmetric(
-            horizontal: simple ? 8 : 18, vertical: simple ? 0 : 7),
+          horizontal: simple ? 8 : 18,
+          vertical: simple ? 0 : 7,
+        ),
         minimumSize: Size(0, simple ? 56 : 0),
         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
         visualDensity: simple ? VisualDensity.standard : VisualDensity.compact,
         shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(radius)),
+          borderRadius: BorderRadius.circular(radius),
+        ),
         textStyle: TextStyle(
-            fontSize: simple ? 14 : 13, fontWeight: FontWeight.w600),
+          fontSize: simple ? 14 : 13,
+          fontWeight: FontWeight.w600,
+        ),
       ),
     );
     return Padding(
@@ -159,7 +240,33 @@ class _EmergencyStopButtonState extends ConsumerState<EmergencyStopButton> {
           borderRadius: BorderRadius.circular(radius + 3),
           border: Border.all(color: red),
         ),
-        child: button,
+        child: Listener(
+          onPointerDown: _pressDown,
+          onPointerUp: _pressEnd,
+          onPointerCancel: _pressEnd,
+          child: Stack(
+            fit: StackFit.passthrough,
+            children: [
+              button,
+              // The hold's progress, sweeping left to right over the red.
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(radius),
+                    child: AnimatedBuilder(
+                      animation: _hold,
+                      builder: (context, _) => FractionallySizedBox(
+                        alignment: Alignment.centerLeft,
+                        widthFactor: _hold.value,
+                        child: const ColoredBox(color: Color(0x40FFFFFF)),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

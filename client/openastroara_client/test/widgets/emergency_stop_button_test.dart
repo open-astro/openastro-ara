@@ -61,11 +61,48 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  group('EmergencyStopButton (§35.3)', () {
+  /// Keyboard Enter / a screen reader's activate: no hold possible, so the
+  /// button falls back to the confirm dialog.
+  Future<void> activateWithoutPointer(WidgetTester tester) async {
+    tester.widget<FilledButton>(find.descendant(
+            of: find.byType(EmergencyStopButton), matching: find.byType(FilledButton)))
+        .onPressed!();
+  }
+
+  group('EmergencyStopButton hold to confirm', () {
+    testWidgets('pressing shows Hold to confirm; holding 2 s stops with no dialog', (tester) async {
+      await pumpButton(tester);
+      final gesture = await tester.startGesture(tester.getCenter(find.byType(EmergencyStopButton)));
+      await tester.pump();
+      expect(find.text('Hold to confirm'), findsOneWidget);
+      await tester.pump(const Duration(milliseconds: 1000));
+      expect(fake.calls, 0, reason: 'not yet: a 2 s hold');
+      await tester.pump(const Duration(milliseconds: 1100));
+      expect(fake.calls, 1);
+      expect(find.text('Stop everything now?'), findsNothing, reason: 'the hold is the confirmation');
+      await gesture.up();
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Emergency stop executed'), findsOneWidget);
+    });
+
+    testWidgets('letting go early sends nothing and opens no dialog', (tester) async {
+      await pumpButton(tester);
+      final gesture = await tester.startGesture(tester.getCenter(find.byType(EmergencyStopButton)));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 1500));
+      await gesture.up();
+      await tester.pump(const Duration(seconds: 3));
+      expect(fake.calls, 0);
+      expect(find.text('Stop everything now?'), findsNothing);
+      expect(find.text('Emergency Stop'), findsOneWidget, reason: 'back to its label');
+    });
+  });
+
+  group('EmergencyStopButton (§35.3), keyboard / screen-reader path', () {
     testWidgets('cancel in the confirm dialog sends nothing', (tester) async {
       await pumpButton(tester);
 
-      await tester.tap(find.text('Emergency Stop'));
+      await activateWithoutPointer(tester);
       await tester.pumpAndSettle();
       expect(find.text('Stop everything now?'), findsOneWidget);
 
@@ -79,7 +116,7 @@ void main() {
         (tester) async {
       await pumpButton(tester);
 
-      await tester.tap(find.text('Emergency Stop'));
+      await activateWithoutPointer(tester);
       await tester.pumpAndSettle();
       await tester.tap(find.text('EMERGENCY STOP'));
       await tester.pumpAndSettle();
@@ -103,7 +140,7 @@ void main() {
         failedRungs: ['stop_guiding', 'park'],
       );
 
-      await tester.tap(find.text('Emergency Stop'));
+      await activateWithoutPointer(tester);
       await tester.pumpAndSettle();
       await tester.tap(find.text('EMERGENCY STOP'));
       await tester.pumpAndSettle();
