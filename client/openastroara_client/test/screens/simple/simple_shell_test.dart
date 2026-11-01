@@ -93,6 +93,11 @@ void main() {
       for (final key in ['simple-mode', 'simple-settings']) {
         expect(_panelOf(tester, find.byKey(Key(key))), right, reason: '$key on the right rail');
       }
+      final shutter = tester.getRect(find.byKey(const Key('simple-shutter')));
+      final mode = tester.getRect(find.byKey(const Key('simple-mode')));
+      final settings = tester.getRect(find.byKey(const Key('simple-settings')));
+      expect(shutter.bottom, lessThanOrEqualTo(mode.top), reason: 'options under the shutter');
+      expect(mode.bottom, lessThanOrEqualTo(settings.top));
       final stop = tester.getRect(find.byType(EmergencyStopButton));
       expect(stop.size, const Size(60, 60));
       expect(stop.bottom, size.height - kSimpleInset, reason: 'Stop on its own at the bottom');
@@ -121,13 +126,14 @@ void main() {
     await tester.tap(find.byKey(const Key('simple-mode')));
     await tester.pump();
     final modes = ['Preview', 'Focus', 'Polar align', 'Target', 'Run'];
-    final order = [for (final m in modes) tester.getTopLeft(find.text(m).last)];
+    // .first: the grid sits before the rail (whose label also reads Preview).
+    final order = [for (final m in modes) tester.getTopLeft(find.text(m).first)];
     for (var i = 1; i < order.length; i++) {
       final before = order[i - 1], now = order[i];
       expect(now.dy > before.dy || (now.dy == before.dy && now.dx > before.dx), isTrue,
           reason: '${modes[i]} after ${modes[i - 1]}');
     }
-    await tester.tap(find.text('Preview').last);
+    await tester.tap(find.text('Preview').first);
     await tester.pump();
     expect(find.text('Focus'), findsNothing, reason: 'closed');
 

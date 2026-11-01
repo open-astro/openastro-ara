@@ -574,8 +574,8 @@ class _LeftRail extends StatelessWidget {
   );
 }
 
-/// The mode (tap for the five), the settings chip and the shutter; Stop
-/// sits on its own below.
+/// The shutter, then the mode (tap for the five) and the settings chip under
+/// it; Stop sits on its own below.
 class _RightRail extends ConsumerWidget {
   const _RightRail({
     required this.popover,
@@ -596,6 +596,8 @@ class _RightRail extends ConsumerWidget {
         mainAxisSize: MainAxisSize.min,
         spacing: AraSpace.s8,
         children: [
+          // The shutter first; the on-demand options (mode, settings) under it.
+          const SimpleShutter(),
           Semantics(
             button: true,
             label: 'Mode: Preview',
@@ -637,7 +639,6 @@ class _RightRail extends ConsumerWidget {
             selected: popover == _Popover.settings,
             onTap: onSettings,
           ),
-          const SimpleShutter(),
         ],
       ),
     );
