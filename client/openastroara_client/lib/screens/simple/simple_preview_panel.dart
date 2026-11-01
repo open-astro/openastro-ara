@@ -57,16 +57,15 @@ class SimplePreviewPanel extends StatelessWidget {
           // first frame lands; only the panel inside it waits for a frame.
           SizedBox(
             height: kSimpleFactsHeight,
+            // The panel fills the slot, so the gap below it is the same 16 px
+            // as everywhere else in the column.
             child: hasFrame
-                ? const Align(
-                    alignment: Alignment.topCenter,
-                    child: SimplePanel(
-                      padding: EdgeInsets.symmetric(
-                        horizontal: AraSpace.s16,
-                        vertical: AraSpace.s12,
-                      ),
-                      child: _LastFrameFacts(),
+                ? const SimplePanel(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: AraSpace.s16,
+                      vertical: AraSpace.s12,
                     ),
+                    child: _LastFrameFacts(),
                   )
                 : null,
           ),

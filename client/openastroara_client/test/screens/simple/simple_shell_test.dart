@@ -164,6 +164,14 @@ void main() {
     expect(find.text('Last frame'), findsOneWidget);
     expect(tester.getRect(find.byKey(const Key('simple-shutter'))), shutterBefore,
         reason: 'the capture controls stay put when the facts panel appears');
+    Rect panelOf(Finder f) =>
+        tester.getRect(find.ancestor(of: f, matching: find.byType(SimplePanel)).first);
+    final facts = panelOf(find.text('Last frame'));
+    final controls = panelOf(find.byKey(const Key('simple-shutter')));
+    final stop = tester.getRect(find.byType(EmergencyStopButton));
+    expect(controls.top - facts.bottom, stop.top - controls.bottom,
+        reason: 'the same gap above and below the capture panel');
+    expect(stop.top - controls.bottom, kSimpleInset);
   });
 
   testWidgets('a tap on the frame hides every panel but Emergency Stop, a second brings them back',
