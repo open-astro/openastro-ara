@@ -881,7 +881,8 @@
     target: ['Choose a target', 'g-ok', 'Ready', 'target'], 't-fail': ['M31 Andromeda', 'g-busy', 'Solve failed', 'target'], 't-horizon': ['Choose a target', 'g-ok', 'Ready', 'target'], empty: ['No rig connected', 'g-off', 'Offline', null] };
   const setView = v => {
     const c = document.getElementById('simpleC'), [tgt, cls, st, mode] = VIEWS[v];
-    c.querySelectorAll('[data-v]').forEach(el => el.hidden = !el.dataset.v.split(' ').includes(v));
+    // toggleAttribute, not .hidden: SVG elements have no hidden property, so the polar-align overlay never hid
+    c.querySelectorAll('[data-v]').forEach(el => el.toggleAttribute('hidden', !el.dataset.v.split(' ').includes(v)));
     c.classList.toggle('offline', v === 'empty'); c.classList.remove('clean');
     document.getElementById('c-tgt').textContent = tgt;
     document.getElementById('c-st').innerHTML = `<i class="${cls}"></i>${st}`;
