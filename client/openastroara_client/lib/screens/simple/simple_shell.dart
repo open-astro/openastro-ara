@@ -13,6 +13,7 @@ import '../../state/guider/guider_state.dart';
 import '../../state/imaging/last_frame_state.dart';
 import '../../state/imaging/live_view_state.dart';
 import '../../state/night_mode_state.dart';
+import '../../state/polar_align/polar_align_state.dart';
 import '../../state/settings/settings_nav.dart';
 import '../../state/simple_mode_state.dart';
 import '../../theme/ara_colors.dart';
@@ -29,6 +30,7 @@ import '../../widgets/sky_atlas/stellarium_view.dart';
 import '../library/image_library_screen.dart';
 import '../shell_listeners.dart';
 import 'simple_focus_panel.dart';
+import 'simple_polar_panel.dart';
 import 'simple_preview_panel.dart';
 
 /// Inset from the frame edge and between panels.
@@ -58,6 +60,9 @@ extension on SimpleModeScreen {
     SimpleModeScreen.target => 'Target',
     SimpleModeScreen.run => 'Run',
   };
+
+  /// The name on the 60 px rail, where "Polar align" doesn't fit.
+  String get railLabel => this == SimpleModeScreen.polarAlign ? 'P.A.' : label;
 
   IconData get icon => switch (this) {
     SimpleModeScreen.preview => Icons.visibility_outlined,
@@ -98,8 +103,8 @@ enum _Popover { none, modes, settings }
 /// beside the rail and close with a tap on the image. Tapping the image with
 /// nothing open hides everything (the immersive view).
 ///
-/// Preview and Focus so far; the other modes open their full-UI tab, and so
-/// does any tab jump made from here (Settings, a device dot, ⌘K).
+/// Preview, Focus and Polar align so far; the other modes open their full-UI
+/// tab, and so does any tab jump made from here (Settings, a device dot, ⌘K).
 class SimpleShell extends ConsumerStatefulWidget {
   const SimpleShell({
     super.key,
@@ -172,7 +177,12 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     ref.listen(selectedTabIndexProvider, (previous, next) {
       ref.read(simpleModeProvider.notifier).set(false);
     });
+    // Polar align shows its own camera's frames while the routine runs.
+    final polarFrame =
+        _mode == SimpleModeScreen.polarAlign &&
+        simplePolarActive(ref.watch(polarAlignLiveProvider));
     final hasFrame =
+        polarFrame ||
         ref.watch(lastCapturedFrameIdProvider) != null ||
         ref.watch(liveViewControllerProvider);
     final showSky = _sky || !hasFrame;
@@ -211,7 +221,9 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                         behavior: HitTestBehavior.opaque,
                         onTap: () => _tapImage(!showSky),
                         child: !showSky
-                            ? const FrameViewer()
+                            ? (polarFrame
+                                  ? const SimplePolarFrame()
+                                  : const FrameViewer())
                             // The sky: asked for, or standing in until there
                             // is a frame.
                             : KeyedSubtree(
@@ -330,21 +342,26 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                 child: _popover == _Popover.modes
                                     ? _ModeGrid(
                                         current: _mode,
-                                        // Focus opens on its panel; Preview's
+                                        // A mode opens on its panel; Preview's
                                         // controls are already on the rail.
                                         onPicked: (m) => setState(() {
                                           _mode = m;
-                                          _popover = m == SimpleModeScreen.focus
-                                              ? _Popover.settings
-                                              : _Popover.none;
+                                          _popover =
+                                              m == SimpleModeScreen.preview
+                                              ? _Popover.none
+                                              : _Popover.settings;
                                         }),
                                       )
-                                    : _mode == SimpleModeScreen.focus
-                                    ? const SimpleFocusPanel()
-                                    : const SizedBox(
-                                        width: 280,
-                                        child: SimpleSettingsPopover(),
-                                      ),
+                                    : switch (_mode) {
+                                        SimpleModeScreen.focus =>
+                                          const SimpleFocusPanel(),
+                                        SimpleModeScreen.polarAlign =>
+                                          const SimplePolarPanel(),
+                                        _ => const SizedBox(
+                                          width: 280,
+                                          child: SimpleSettingsPopover(),
+                                        ),
+                                      },
                               ),
                             ),
                           // Stop on its own at the bottom, under the rail.
@@ -622,7 +639,7 @@ class _RightRail extends ConsumerWidget {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Text(
-                      mode.label,
+                      mode.railLabel,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: kSimpleText.copyWith(
@@ -646,9 +663,13 @@ class _RightRail extends ConsumerWidget {
           _RailButton(
             key: const Key('simple-settings'),
             icon: Icons.tune,
-            label: mode == SimpleModeScreen.focus
-                ? simpleFocusSummary(ref)
-                : simpleSettingsSummary(ref),
+            label: switch (mode) {
+              SimpleModeScreen.focus => simpleFocusSummary(ref),
+              SimpleModeScreen.polarAlign => simplePolarSummary(
+                ref.watch(polarAlignLiveProvider),
+              ),
+              _ => simpleSettingsSummary(ref),
+            },
             selected: popover == _Popover.settings,
             onTap: onSettings,
           ),
@@ -658,15 +679,19 @@ class _RightRail extends ConsumerWidget {
   }
 }
 
-/// The five modes as a grid beside the rail. Preview and Focus are built; the
-/// others open their full-UI tab for now.
+/// The five modes as a grid beside the rail. Preview, Focus and Polar align
+/// are built; the others open their full-UI tab for now.
 class _ModeGrid extends ConsumerWidget {
   const _ModeGrid({required this.current, required this.onPicked});
 
   final SimpleModeScreen current;
   final ValueChanged<SimpleModeScreen> onPicked;
 
-  static const _built = {SimpleModeScreen.preview, SimpleModeScreen.focus};
+  static const _built = {
+    SimpleModeScreen.preview,
+    SimpleModeScreen.focus,
+    SimpleModeScreen.polarAlign,
+  };
 
   @override
   Widget build(BuildContext context, WidgetRef ref) => SimplePanel(

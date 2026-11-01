@@ -95,6 +95,15 @@ Offset bullseyeDotFraction(double? azErrArcmin, double? altErrArcmin, double ran
   return Offset(az / len, -alt / len);
 }
 
+/// Altitude knob direction for the current error (§45 design: decoupled
+/// knob directions, since chasing one coupled 2-D error is what makes people
+/// feel lost). Positive = axis above the pole → lower. Pure.
+(IconData, String) polarAltHint(double? alt) {
+  if (alt == null) return (Icons.remove, '—');
+  if (alt.abs() <= 0.05) return (Icons.check, 'On target');
+  return alt > 0 ? (Icons.arrow_downward, 'Lower') : (Icons.arrow_upward, 'Raise');
+}
+
 /// Azimuth knob direction for the current error: positive = axis east of the
 /// pole → move west. The arrow points the way that direction lies for someone
 /// facing the pole: west is on the LEFT facing the NCP and on the RIGHT facing
@@ -808,7 +817,7 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
               IntrinsicHeight(
                 child: Row(
                   children: [
-                    Expanded(child: _axisStat('Altitude', live.altErrorArcmin, _altHint(live.altErrorArcmin), color)),
+                    Expanded(child: _axisStat('Altitude', live.altErrorArcmin, polarAltHint(live.altErrorArcmin), color)),
                     const VerticalDivider(width: 1, color: Color(0x1FFFFFFF)),
                     Expanded(child: _axisStat('Azimuth', live.azErrorArcmin, polarAzHint(live.azErrorArcmin, southern: _southern), color)),
                   ],
@@ -869,7 +878,7 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
               ],
             ),
           ),
-          Expanded(child: _axisStat('Altitude', live.altErrorArcmin, _altHint(live.altErrorArcmin), color)),
+          Expanded(child: _axisStat('Altitude', live.altErrorArcmin, polarAltHint(live.altErrorArcmin), color)),
           Expanded(child: _axisStat('Azimuth', live.azErrorArcmin, polarAzHint(live.azErrorArcmin, southern: _southern), color)),
         ],
       );
@@ -1088,14 +1097,6 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
     );
   }
 
-  /// Decoupled knob directions (§45 design: chasing one coupled 2-D error is
-  /// what makes people feel lost). Positive alt = axis above the pole → lower;
-  /// positive az = axis east of the pole → move west.
-  static (IconData, String) _altHint(double? alt) {
-    if (alt == null) return (Icons.remove, '—');
-    if (alt.abs() <= 0.05) return (Icons.check, 'On target');
-    return alt > 0 ? (Icons.arrow_downward, 'Lower') : (Icons.arrow_upward, 'Raise');
-  }
 
 
   /// Exposure box + Loop/Single switch. Saved to the profile; a running

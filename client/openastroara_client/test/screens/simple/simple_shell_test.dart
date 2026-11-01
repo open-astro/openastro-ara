@@ -185,6 +185,28 @@ void main() {
     expect(find.descendant(of: chip, matching: find.text(_summary(container))), findsOneWidget);
   });
 
+  testWidgets('Polar align stays in Simple Mode: the rail reads P.A., the chip Ready and toggles its panel', (tester) async {
+    final container = await _pump(tester, const Size(1024, 768));
+    await tester.tap(find.byKey(const Key('simple-mode')));
+    await tester.pump();
+    await tester.tap(find.text('Polar align'));
+    await tester.pump();
+    expect(container.read(simpleModeProvider).value, isTrue, reason: 'no jump to the full UI');
+    expect(find.descendant(of: find.byKey(const Key('simple-mode')), matching: find.text('P.A.')), findsOneWidget);
+    final chip = find.byKey(const Key('simple-settings'));
+    expect(find.descendant(of: chip, matching: find.text('Ready')), findsOneWidget);
+    final rail = _panelOf(tester, find.byKey(const Key('simple-shutter')));
+    final panel = _panelOf(tester, find.byKey(const Key('simple-polar-start')));
+    expect(panel.right, rail.left - kSimpleInset);
+    expect(panel.top, rail.top);
+    await tester.tap(chip);
+    await tester.pump();
+    expect(find.byKey(const Key('simple-polar-start')), findsNothing);
+    await tester.tap(chip);
+    await tester.pump();
+    expect(find.byKey(const Key('simple-polar-start')), findsOneWidget);
+  });
+
   testWidgets('the settings chip opens Exposure and Gain side by side from lists, Filter and Loop/Single',
       (tester) async {
     final container = await _pump(tester, const Size(1024, 768));
