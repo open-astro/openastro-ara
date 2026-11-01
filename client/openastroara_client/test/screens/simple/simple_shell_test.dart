@@ -198,6 +198,7 @@ void main() {
     final line = tester.getRect(find.byType(SimpleInfoPanel));
     expect(line.height, 40, reason: 'one line');
     expect(line.top, kSimpleInset * 2 + kSimpleBarHeight, reason: 'under the strip, not in it');
+    expect(line.right, 1024 - kSimpleInset, reason: 'aligned right');
     container.read(captureProgressProvider.notifier).beginExposing(const Duration(seconds: 5));
     await tester.pump();
     final pill = _panelOf(tester, find.text('Taking a frame'));

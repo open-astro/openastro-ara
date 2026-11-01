@@ -254,15 +254,17 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                             child: _StatusStrip(),
                           ),
                           // Info: the last frame's facts as one line under the
-                          // strip, centred in the room right of the status
-                          // pill's slot so the two never meet, however much
-                          // gear fills the strip.
+                          // strip, at the right edge; it starts right of the
+                          // status pill's slot so the two never meet.
                           if (_info)
                             const Positioned(
                               left: kSimpleInset * 2 + kSimpleStatusMaxWidth,
-                              right: besideRail,
+                              right: kSimpleInset,
                               top: railTop,
-                              child: Center(child: SimpleInfoPanel()),
+                              child: Align(
+                                alignment: Alignment.centerRight,
+                                child: SimpleInfoPanel(),
+                              ),
                             ),
                           // Guiding and the histogram along the bottom, each
                           // once it has data.
