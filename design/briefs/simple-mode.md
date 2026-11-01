@@ -20,7 +20,7 @@ Shaped 2026-11-01 (`/impeccable shape simple-mode`). Paperclip: ALP-4810. Render
 - **Controls:** they float on translucent panels (the two-rail layout in `DESIGN.md`):
   - **top:** a status strip (device dots, Search, Night mode, Show all options, Settings), with the attention banner centred under it when needed;
   - **top-left:** the camera status pill, at most 300 px wide;
-  - **right rail, 72 px wide and only as tall as its controls:** the mode name (tap for the five modes as a grid), the shutter, the settings chip (the current mode's options: "5 s · 100" in Preview, "Auto" or "Manual" in Focus);
+  - **right rail, 72 px wide and only as tall as its controls:** the mode name (tap for the five modes as a grid), the shutter, the settings chip (the current mode's options: "5s · 100" in Preview, "Auto" or "Manual" in Focus);
   - **bottom right:** the compact Emergency Stop on its own, a 60 px STOP with a 2 s hold;
   - **left rail:** Sky, Info and Library; Info shows the last frame's facts as one line under the strip, aligned right;
   - **bottom row, 56 px tall, 16 px from the left edge and from Stop:** the guiding graph and the histogram, each once it has data; a lone one fills the row, both split it equally with guiding on the left;
@@ -66,7 +66,7 @@ Shaped 2026-11-01 (`/impeccable shape simple-mode`). Paperclip: ALP-4810. Render
 - **Mode order:** Preview · Focus · Polar align · Target · Run. On the right rail Polar align reads "P.A." (the full name doesn't fit 60 px); the mode grid spells it out.
 - **Mode panels:** every mode except Preview opens its panel to the left of the right rail, a floating card like the settings popover, level with the rail's top. Run uses a centred sheet instead (decided 2026-11-01).
 - **Preview:** shoot and loop, from the right rail: the shutter and the settings chip (Exposure, Gain, Filter, Loop/Single). The last frame's facts (HFR, stars, exposure · filter, gain · offset, clipped) come from Info. Single saves the frame (the daemon registers every Take One); Loop is live view and saves nothing. No Save frame button.
-- **Polar align:** the polar-align camera's frames fill the image while it runs (nothing drawn on them). The shutter starts the routine (its square stops a Loop; in Single each tap takes the next frame). The mode panel holds Exposure and Loop/Single, and while it runs the error, the zone (under 10′ green, under 60′ amber, otherwise red), the bullseye, the altitude and azimuth turns, Stop and Done. The rail reads "P.A."; the chip reads "1 s · Loop".
+- **Polar align:** the polar-align camera's frames fill the image while it runs (nothing drawn on them). The shutter starts the routine (its square stops a Loop; in Single each tap takes the next frame). The mode panel holds Exposure and Loop/Single, and while it runs the error, the zone (under 10′ green, under 60′ amber, otherwise red), the bullseye, the altitude and azimuth turns, Stop and Done. The rail reads "P.A."; the chip reads "1s · Loop".
 - **Focus:** a zoomed star with its HFR ring top-left; the mode panel shows the HFR, the focus curve, the position, Autofocus, and four nudge steps.
 - **Target:** a full-screen planetarium. Tap an object, then Go to (slew and plate-solve centre). Search sits in the mode panel.
 - **Run:** the quick plan builder as a sheet centred over the image, the rails still visible; Start imaging closes it.
@@ -76,7 +76,7 @@ Shaped 2026-11-01 (`/impeccable shape simple-mode`). Paperclip: ALP-4810. Render
 
 ## Errors, horizon and the way out (decided 2026-11-01)
 
-- **Errors inside a mode** (plate solve failed, autofocus failed, slew failed): while the person works a mode, the error shows inside that mode's panel, naming the cause and the fix, with a Retry (for example "Too few stars in a 2 s frame", then "Retry with 10 s"). During an unattended run the same errors use the centred attention banner.
+- **Errors inside a mode** (plate solve failed, autofocus failed, slew failed): while the person works a mode, the error shows inside that mode's panel, naming the cause and the fix, with a Retry (for example "Too few stars in a 2s frame", then "Retry with 10s"). During an unattended run the same errors use the centred attention banner.
 - **Below the horizon (including the custom horizon):** Go to is disabled with the reason ("Below your horizon until 22:40"), and "Go to at 22:40" waits, then slews and centres on its own.
 - **Show all options** opens the matching full-UI tab: Preview, Polar align and Focus open Live; Target opens Planning; Run opens Live while imaging and Sequence when idle.
 
