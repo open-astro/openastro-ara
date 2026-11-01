@@ -11,6 +11,7 @@ import 'package:flutter/foundation.dart'
         debugPrint,
         defaultTargetPlatform,
         visibleForTesting;
+import 'package:flutter/services.dart' show MethodChannel, MissingPluginException, PlatformException;
 import 'package:multicast_dns/multicast_dns.dart';
 
 import '../models/server.dart';
@@ -63,6 +64,7 @@ class ServerDiscoveryService {
     Future<List<String>> Function()? localAddresses,
     @visibleForTesting this.sweepHosts,
     @visibleForTesting this.probeHost,
+    @visibleForTesting this.nativeBrowse,
   }) : _mdnsClientFactory = mdnsClientFactory ?? _platformMdnsClient,
        _localAddresses = localAddresses ?? _localIPv4Addresses;
 
@@ -72,6 +74,43 @@ class ServerDiscoveryService {
   /// refusals — and the iOS banner verdict it writes (#1129 review).
   final Future<List<String>> Function()? sweepHosts;
   final Future<ProbeResult> Function(String host)? probeHost;
+
+  /// Test seam for the iOS Bonjour browse: the rigs the runner resolved, as
+  /// `{name, host, port}` maps.
+  final Future<List<Object?>> Function()? nativeBrowse;
+
+  /// iOS's own Bonjour API (NWBrowser in the Runner): it needs only
+  /// `NSBonjourServices` + Local Network, not the multicast entitlement, and
+  /// sees what the system's mDNSResponder sees — a rig on another VLAN whose
+  /// mDNS the router reflects, which the /24 sweep never reaches.
+  static const _bonjourChannel = MethodChannel('openastroara/bonjour');
+
+  /// How long the iOS browse listens; inside [mdnsGracePeriod].
+  static const Duration _bonjourWindow = Duration(milliseconds: 2000);
+
+  static Future<List<Object?>> _channelBrowse() async {
+    try {
+      return await _bonjourChannel.invokeListMethod<Object?>('browse', {
+            'type': '_openastroara._tcp',
+            'timeoutMs': _bonjourWindow.inMilliseconds,
+          }) ??
+          const [];
+    } on MissingPluginException {
+      return const []; // an embedding without the handler: the sweep still runs
+    } on PlatformException {
+      return const [];
+    }
+  }
+
+  Stream<AraServer> _bonjourDiscover() async* {
+    for (final r in await (nativeBrowse ?? _channelBrowse)()) {
+      if (r is! Map) continue;
+      final host = r['host'], port = r['port'], name = r['name'];
+      if (host is String && port is int) {
+        yield AraServer(hostname: host, port: port, mdnsName: name is String ? name : null);
+      }
+    }
+  }
 
   /// `multicast_dns` binds with `reusePort: true`, which `dart:io` rejects on
   /// Android, so on Android the browse died in `start()` every pass and logged
@@ -157,7 +196,8 @@ class ServerDiscoveryService {
   /// `com.apple.developer.networking.multicast` entitlement — even with
   /// Local Network allowed (`NSBonjourServices` only covers Apple's own
   /// Bonjour API, which `multicast_dns` does not use). The send always fails
-  /// there, so the browse is skipped and the subnet sweep runs at once; its
+  /// there, so iOS browses through that API instead ([_bonjourDiscover]) and
+  /// the subnet sweep follows when it comes back empty. The raw send's
   /// failure was also what raised a false "iOS is blocking local network
   /// access" banner while the sweep had found the rig (#1129).
   @visibleForTesting
@@ -263,8 +303,9 @@ class ServerDiscoveryService {
       // hits. A join that only replayed a finished run must not block the
       // fresh sweep this pass is entitled to.
       if (joinSub != null && !(_sweepRun?.finished ?? true)) return;
-      // iOS has no mDNS answer to cut sweeping short, so each ~4 s pass would
-      // start a fresh 254-host sweep for as long as the scan screen is open.
+      // On iOS a pass whose Bonjour browse finds nothing has no answer to cut
+      // sweeping short, so each ~4 s pass would start a fresh 254-host sweep
+      // for as long as the scan screen is open.
       // A pass that joined a recent sweep (in flight or finished within
       // [sweepReplayWindow]) already carries its hits; don't start another.
       if (!rawMulticastAllowed && joinSub != null) return;
@@ -298,8 +339,7 @@ class ServerDiscoveryService {
       sweepSub = null;
     }
 
-    mdnsSub = (mdnsSource ??
-            (rawMulticastAllowed ? _mdnsDiscover : () => const Stream<AraServer>.empty()))()
+    mdnsSub = (mdnsSource ?? (rawMulticastAllowed ? _mdnsDiscover : _bonjourDiscover))()
         .listen(
       (s) {
         if (!sawMdnsResult) {

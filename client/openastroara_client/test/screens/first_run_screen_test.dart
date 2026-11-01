@@ -53,6 +53,23 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
   });
 
+  testWidgets('pulling the list down rescans, like ⟳', (tester) async {
+    final fake = _FakeDiscovery();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [discoveryServiceProvider.overrideWithValue(fake)],
+        child: const MaterialApp(home: FirstRunScreen()),
+      ),
+    );
+    await tester.pump();
+
+    await tester.fling(find.textContaining('Looking for servers'), const Offset(0, 300), 1000);
+    await tester.pumpAndSettle();
+    expect(fake.resets, 1);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
   testWidgets('a Local Network block shows how to allow it, and clears',
       (tester) async {
     // #1111 — on macOS a denied Local Network prompt made every mDNS send
