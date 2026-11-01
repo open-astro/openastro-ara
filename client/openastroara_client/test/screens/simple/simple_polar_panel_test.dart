@@ -7,6 +7,7 @@ import 'package:openastroara/models/polar_align.dart';
 import 'package:openastroara/screens/simple/simple_polar_panel.dart';
 import 'package:openastroara/services/polar_align_api.dart';
 import 'package:openastroara/state/polar_align/polar_align_state.dart';
+import 'package:openastroara/theme/ara_colors.dart';
 
 class _Api implements PolarAlignClient {
   final calls = <String>[];
@@ -149,6 +150,24 @@ void main() {
       await tester.tap(find.byKey(const Key('simple-shutter')));
       await tester.pump();
       expect(api!.calls, ['stop']);
+    });
+    testWidgets('the stop square is red, the start disc white', (tester) async {
+      Color fill() => tester
+          .widgetList<Container>(find.descendant(of: find.byKey(const Key('simple-shutter')), matching: find.byType(Container)))
+          .map((c) => (c.decoration as BoxDecoration?)?.color)
+          .whereType<Color>()
+          .single;
+      await shutter(tester, _adjusting);
+      expect(fill(), AraColors.accentError);
+    });
+    testWidgets('idle: the start disc is white', (tester) async {
+      Color fill() => tester
+          .widgetList<Container>(find.descendant(of: find.byKey(const Key('simple-shutter')), matching: find.byType(Container)))
+          .map((c) => (c.decoration as BoxDecoration?)?.color)
+          .whereType<Color>()
+          .single;
+      await shutter(tester, const PolarAlignLive());
+      expect(fill(), AraColors.textPrimary);
     });
     testWidgets('no server: off', (tester) async {
       await shutter(tester, const PolarAlignLive(), server: false);

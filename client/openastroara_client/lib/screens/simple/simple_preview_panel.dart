@@ -365,8 +365,8 @@ class SimplePresetTile<T> extends StatelessWidget {
   }
 }
 
-/// The round capture button: a white disc to shoot, a square while a loop or
-/// exposure runs.
+/// The round capture button: a white disc to start, a red square to stop
+/// whatever it started (DESIGN.md: the start button always stops).
 class SimpleShutterButton extends StatelessWidget {
   const SimpleShutterButton({
     super.key,
@@ -404,7 +404,8 @@ class SimpleShutterButton extends StatelessWidget {
             width: running ? 22 : 40,
             height: running ? 22 : 40,
             decoration: BoxDecoration(
-              color: fg,
+              // The stop square is red: stop reads as stop.
+              color: running && enabled ? AraColors.accentError : fg,
               shape: running ? BoxShape.rectangle : BoxShape.circle,
               borderRadius: running ? BorderRadius.circular(4) : null,
             ),
