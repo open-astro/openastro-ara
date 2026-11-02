@@ -5,6 +5,7 @@ import 'package:flutter/semantics.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../services/server_api.dart';
+import '../state/equipment/camera_state.dart';
 import '../theme/ara_colors.dart';
 import '../state/saved_server_state.dart';
 import '../util/friendly_error.dart';
@@ -180,6 +181,10 @@ class _EmergencyStopButtonState extends ConsumerState<EmergencyStopButton>
       final result = await ref
           .read(serverApiFactoryProvider)(server)
           .emergencyStop();
+      // The cooler toggle polls every 15 s; show the stop's cooler-off now.
+      if (ref.exists(cameraStatusProvider)) {
+        unawaited(ref.read(cameraStatusProvider.notifier).refresh());
+      }
       // A rung that failed keeps its pill up until it is read.
       notify(
         _summarize(result),
