@@ -1,0 +1,959 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ara Design Preview</title>
+<style>
+  /* Every value is a DESIGN.md token (lib/theme/ara_colors.dart + ara_metrics.dart) */
+  :root {
+    --bg: #1A1A1A; --panel: #262626; --panel-alt: #2E2E2E; --input: #333333; --border: #404040;
+    --text: #E0E0E0; --text2: #A0A0A0; --text3: #606060;
+    --ok: #4CAF50; --busy: #FFB300; --err: #E53935; --stop-red: #D32F2F; --info: #42A5F5; --off: #606060;
+    --sel: #1976D2; --btn: #1565C0;
+    --scrim: rgba(26, 26, 26, 0.90);
+    --sys: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --mono: ui-monospace, "SF Mono", Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #0E0E0E; color: var(--text); font: 13px/1.45 var(--sys); }
+  .page { max-width: 1320px; margin: 0 auto; padding: 32px 16px 80px; }
+  header h1 { font-size: 22px; font-weight: 600; margin: 0 0 6px; }
+  header p { color: var(--text2); margin: 0; max-width: 82ch; }
+  nav.toc { display: flex; flex-wrap: wrap; gap: 8px; margin: 20px 0 8px; }
+  nav.toc a { color: var(--text2); text-decoration: none; border: 1px solid var(--border); border-radius: 12px; padding: 4px 10px; font-size: 12px; }
+  nav.toc a:hover { color: var(--text); border-color: var(--text2); }
+  section { margin-top: 48px; }
+  h2 { font-size: 16px; font-weight: 600; margin: 0 0 4px; }
+  .note { color: var(--text2); margin: 0 0 16px; max-width: 84ch; }
+  .tag { display: inline-block; font-size: 11px; letter-spacing: .5px; text-transform: uppercase; padding: 1px 7px; border-radius: 10px; border: 1px solid var(--border); color: var(--text2); margin-left: 6px; vertical-align: 2px; }
+  .tag.now { color: var(--ok); border-color: var(--ok); }
+  .tag.prop { color: var(--busy); border-color: var(--busy); }
+  .num { font-variant-numeric: tabular-nums; }
+  .controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 14px; }
+  .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 18px; overflow: hidden; }
+  .seg button { background: transparent; color: var(--text); border: 0; padding: 7px 14px; font: 13px var(--sys); cursor: pointer; }
+  .seg button + button { border-left: 1px solid var(--border); }
+  .seg button[aria-pressed="true"] { background: var(--sel); color: #fff; }
+  .seg button:focus-visible { outline: 2px solid var(--info); outline-offset: -2px; }
+  .night { filter: url(#night); }
+
+  /* ---- shared pieces ---- */
+  .ic { position: relative; width: 28px; height: 28px; flex: none; }
+  .ic svg { width: 100%; height: 100%; fill: var(--text); }
+  .dot { position: absolute; top: -2px; right: -2px; width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--panel); }
+  .dot.blink { animation: blink .7s ease-in-out infinite alternate; }
+  @keyframes blink { from { opacity: 1 } to { opacity: .25 } }
+  @media (prefers-reduced-motion: reduce) { .dot.blink { animation: none; } }
+  .g-ok { background: var(--ok) } .g-busy { background: var(--busy) } .g-off { background: var(--off) } .g-err { background: var(--err) }
+  .iconbtn { width: 36px; height: 36px; display: grid; place-items: center; border-radius: 18px; color: var(--text); flex: none; }
+  .iconbtn svg { width: 22px; height: 22px; fill: currentColor; }
+  .iconbtn.lit { color: var(--info); }
+  .estop { display: inline-flex; align-items: center; gap: 6px; background: var(--err); color: #fff; border: 0; border-radius: 16px; padding: 5px 12px; font: 600 12px var(--sys); cursor: pointer; white-space: nowrap; }
+  .estop svg { width: 16px; height: 16px; fill: #fff; }
+  .estop.heavy { padding: 7px 18px; font-size: 13px; box-shadow: 0 0 0 2px var(--panel), 0 0 0 3px var(--err); }
+  .state { display: inline-flex; align-items: center; gap: 8px; padding: 4px 10px; border-radius: 12px; font-size: 12px; background: var(--panel-alt); white-space: nowrap; }
+  .state i { width: 10px; height: 10px; border-radius: 50%; }
+  .section { font-size: 11px; font-weight: 600; letter-spacing: .6px; text-transform: uppercase; color: var(--text2); }
+  .title { font-size: 15px; font-weight: 600; }
+  .row { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid var(--border); }
+  .row span:first-child { color: var(--text2); }
+  .attn { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--busy); border-radius: 6px; background: rgba(255,179,0,.10); }
+  .attn svg { width: 18px; height: 18px; fill: var(--busy); flex: none; margin-top: 1px; }
+  .attn b { display: block; font-weight: 600; }
+  .attn span { color: var(--text2); font-size: 11.5px; }
+  .b { border: 0; font: 500 13px var(--sys); cursor: pointer; border-radius: 18px; padding: 7px 14px; }
+  .b.primary { background: var(--btn); color: #fff; } .b.primary:hover { background: var(--sel); }
+  .b.outline { background: transparent; color: var(--text); border: 1px solid var(--border); }
+  .b:focus-visible, .sb:focus-visible { outline: 2px solid var(--info); outline-offset: 2px; }
+
+  /* Sky image: deterministic stars + a galaxy */
+  .sky { position: relative; overflow: hidden; background: radial-gradient(ellipse at 50% 50%, #161616 0, #0c0c0c 70%); }
+  .sky .galaxy { position: absolute; left: 50%; top: 50%; width: 46%; height: 16%; transform: translate(-50%, -50%) rotate(-32deg); border-radius: 50%;
+    background: radial-gradient(ellipse at center, rgba(255,250,240,.95) 0, rgba(235,225,210,.55) 8%, rgba(190,180,170,.28) 30%, rgba(120,115,110,.12) 55%, transparent 72%); }
+  .sky i { position: absolute; border-radius: 50%; background: #e8e8e8; }
+
+  /* ---------- Full UI, desktop (PR #1474 shell) ---------- */
+  .app { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+  .topbar { height: 64px; background: var(--panel); border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 6px 0 8px; }
+  .chips { flex: 1; display: flex; overflow: hidden; }
+  .eq { width: 76px; flex: none; display: flex; flex-direction: column; align-items: center; padding: 6px 8px; border-radius: 6px; }
+  .eq:hover { background: var(--panel-alt); }
+  .eq .lb { font-size: 11px; font-weight: 500; letter-spacing: .5px; color: var(--text2); margin-top: 2px; white-space: nowrap; max-width: 60px; overflow: hidden; text-overflow: clip; }
+  .eq .lb.fit { font-size: 11px; letter-spacing: .2px; }
+  .main { display: grid; grid-template-columns: 80px 1fr 280px; height: 470px; }
+  .rail { background: var(--panel); border-right: 1px solid var(--border); padding: 10px 0; display: flex; flex-direction: column; align-items: center; gap: 12px; }
+  .dest { display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 12px; color: var(--text2); }
+  .dest .pill { width: 56px; height: 32px; border-radius: 16px; display: grid; place-items: center; }
+  .dest .pill svg { width: 22px; height: 22px; fill: var(--text2); }
+  .dest.on .pill { background: var(--sel); } .dest.on .pill svg { fill: #fff; } .dest.on { color: var(--text); }
+  .center { padding: 12px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+  .center .sky { flex: 1; border: 1px solid var(--border); border-radius: 6px; }
+  .cap { position: absolute; left: 10px; bottom: 8px; font-size: 11.5px; color: var(--text2); }
+  .hist { height: 34px; border: 1px solid var(--border); border-radius: 6px; background: var(--panel); position: relative; overflow: hidden; flex: none; }
+  .hist::after { content: ""; position: absolute; left: 14%; bottom: 0; width: 26%; height: 85%; background: rgba(224,224,224,.28); clip-path: polygon(0 100%, 18% 25%, 30% 0, 50% 45%, 100% 100%); }
+  .side { background: var(--panel); border-left: 1px solid var(--border); padding: 12px; display: flex; flex-direction: column; gap: 14px; }
+  .bottombar { height: 40px; background: var(--panel); border-top: 1px solid var(--border); display: flex; align-items: center; gap: 12px; padding: 0 8px; font-size: 12px; color: var(--text2); }
+  .bottombar .grow { flex: 1; }
+  .launch { display: inline-flex; align-items: center; gap: 6px; color: var(--info); font-size: 12.5px; }
+  .launch svg { width: 18px; height: 18px; fill: currentColor; }
+  .pulse { display: inline-flex; align-items: center; gap: 6px; }
+  .pulse i { width: 8px; height: 8px; border-radius: 50%; background: var(--info); }
+
+  /* ---------- Overlay pieces (phone Companion Mode and the component samples) ---------- */
+  .ov { position: absolute; background: var(--scrim); border-radius: 10px; font-size: 14px; }
+  .ov-top { left: 12px; right: 12px; top: 12px; min-height: 56px; display: flex; align-items: center; gap: 16px; padding: 6px 8px 6px 14px; }
+  .ov-top .devs { display: flex; gap: 14px; }
+  .ov-top .devs .ic { width: 24px; height: 24px; }
+  .ov-top .devs .dot { border-color: #1f1f1f; }
+  .ov-top .tgt { font-size: 15px; font-weight: 600; }
+  .ov-top .grow { flex: 1; }
+  .shutter { width: 64px; height: 64px; border-radius: 50%; border: 3px solid var(--text); background: transparent; display: grid; place-items: center; cursor: pointer; }
+  .shutter span { width: 22px; height: 22px; display: flex; gap: 6px; justify-content: center; }
+  .shutter span i { width: 7px; height: 22px; background: var(--text); border-radius: 2px; }
+  .shutter:focus-visible { outline: 2px solid var(--info); outline-offset: 3px; }
+  .ov-read { left: 12px; bottom: 12px; padding: 14px 18px; display: flex; flex-direction: column; gap: 8px; min-width: 290px; }
+  .ov-read .big { font-size: 40px; font-weight: 300; line-height: 1; letter-spacing: -.5px; }
+  .ov-read .sub { color: var(--text2); }
+  .bar { height: 6px; background: rgba(64,64,64,.9); border-radius: 3px; } .bar i { display: block; height: 100%; width: 39%; background: var(--ok); border-radius: 3px; }
+
+  /* ===== Simple Mode: two rails (feat/simple-mode, approved 2026-11-01) ===== */
+  .sm { --in: 16px; --bar: 56px; --rail: 72px; --stop: 60px; --top: calc(2 * var(--in) + var(--bar)); position: relative; height: 680px; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; font-size: 14px; }
+  .sm [hidden] { display: none !important; }
+  .sm > .sky, .sm > .atlas { position: absolute; inset: 0; cursor: pointer; }
+  .sm .p { position: absolute; background: var(--scrim); border-radius: 10px; }
+  .sm .lbl { font-size: 11px; font-weight: 600; letter-spacing: .6px; text-transform: uppercase; color: var(--text2); }
+  .sm .sub { color: var(--text2); font-variant-numeric: tabular-nums; }
+  .sm .tgt { font-size: 15px; font-weight: 600; white-space: nowrap; }
+  .sm .st { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
+  .sm .st i { width: 10px; height: 10px; border-radius: 50%; }
+  .sm .link { color: var(--info); white-space: nowrap; }
+  .sm .devs { display: flex; gap: 14px; align-items: center; }
+  .sm .devs .ic { width: 22px; height: 22px; }
+  .sm .devs .dot { border-color: #222; }
+  .sm .ib { width: 48px; height: 48px; display: grid; place-items: center; color: var(--text); flex: none; }
+  .sm .ib svg { width: 22px; height: 22px; fill: currentColor; }
+  .sm .go { height: 48px; border: 0; border-radius: 10px; background: var(--btn); color: #fff; font: 500 14px var(--sys); cursor: pointer; }
+  .sm .go:hover { background: var(--sel); }
+  .sm .ghost { height: 48px; border-radius: 10px; border: 1px solid rgba(160,160,160,.35); background: transparent; color: var(--text); font: 500 14px var(--sys); padding: 0 16px; cursor: pointer; }
+  .sm .row2 { display: flex; gap: 8px; } .sm .row2 > * { flex: 1; }
+  .sm .kv { display: flex; justify-content: space-between; gap: 12px; font-variant-numeric: tabular-nums; }
+  .sm .kv span:first-child { color: var(--text2); }
+  .sm .hr { height: 1px; background: rgba(160,160,160,.2); }
+  .sm .big2 { font-size: 30px; font-weight: 300; line-height: 1; font-variant-numeric: tabular-nums; }
+
+  /* the strip, the camera status pill, Info */
+  .s-strip { left: var(--in); right: var(--in); top: var(--in); height: var(--bar); display: flex; align-items: center; gap: 4px; padding: 0 4px 0 16px; }
+  .s-strip .grow { flex: 1; }
+  .s-pill { right: var(--in); top: var(--top); max-width: 300px; height: 48px; display: flex; align-items: center; gap: 8px; padding: 0 16px; white-space: nowrap; transition: top .22s ease-out; }
+  .s-pill > i { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+  .s-pill .pb { width: 60px; height: 4px; border-radius: 2px; background: rgba(64,64,64,.8); margin-left: 4px; flex: none; }
+  .s-pill .pb i { display: block; height: 100%; width: 40%; border-radius: 2px; background: var(--sel); }
+  .s-info { right: var(--in); top: var(--top); max-width: calc(100% - 3 * var(--in) - 300px); height: 40px; display: flex; align-items: center; gap: 16px; padding: 0 16px; white-space: nowrap; overflow: hidden; font-variant-numeric: tabular-nums; }
+  .s-info small { font-size: 11.5px; color: var(--text2); margin-right: 4px; }
+  .s-sys { top: calc(var(--top) + 40px + 8px); }
+
+  /* the rails: each only as tall as its controls, centred in its column */
+  .s-col { position: absolute; width: var(--rail); display: flex; align-items: center; }
+  .s-col.l { left: var(--in); top: var(--top); bottom: var(--top); }
+  .s-col.r { right: var(--in); top: var(--top); bottom: calc(2 * var(--in) + var(--stop)); }
+  .s-anchor { position: relative; width: 100%; }
+  .sm .s-rail { position: relative; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 6px; }
+  .s-col.r .s-rail { gap: 8px; }
+  .s-rb { width: 60px; height: 56px; border-radius: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; color: var(--text2); font-size: 11.5px; white-space: nowrap; overflow: hidden; cursor: pointer; }
+  .s-rb svg { width: 24px; height: 24px; fill: currentColor; }
+  .s-rb.on { background: rgba(25,118,210,.25); color: var(--text); }
+  .s-mode { width: 60px; height: 48px; border-radius: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; font-weight: 600; white-space: nowrap; cursor: pointer; }
+  .s-mode svg { width: 18px; height: 18px; fill: var(--text2); }
+  .s-mode.open { color: var(--info); } .s-mode.open svg { fill: var(--info); transform: rotate(180deg); }
+  .s-shut { width: 60px; height: 60px; padding: 0; border-radius: 50%; border: 3px solid var(--text); background: transparent; display: grid; place-items: center; cursor: pointer; }
+  .s-shut span { width: 40px; height: 40px; border-radius: 50%; background: var(--text); }
+  .s-shut.run span { width: 22px; height: 22px; border-radius: 3px; background: var(--err); }
+  .s-shut:focus-visible { outline: 2px solid var(--info); outline-offset: 3px; }
+
+  /* popovers and mode panels: left of the right rail, level with its top; the rail never moves */
+  .sm .s-pop { right: calc(100% + var(--in)); top: 0; }
+  .s-grid { width: 316px; padding: 8px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .s-grid span { height: 52px; border-radius: 8px; background: rgba(64,64,64,.55); display: flex; align-items: center; gap: 8px; padding: 0 12px; cursor: pointer; }
+  .s-grid span.on { background: var(--sel); }
+  .s-grid svg { width: 20px; height: 20px; fill: var(--text); flex: none; }
+  .s-set { width: 280px; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+  .s-set .pair2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .s-val { height: 48px; border-radius: 8px; background: rgba(64,64,64,.55); display: flex; align-items: center; justify-content: space-between; padding: 0 8px 0 12px; font-variant-numeric: tabular-nums; margin-top: 4px; }
+  .s-val svg { width: 18px; height: 18px; fill: var(--text2); }
+  .s-seg { display: flex; height: 44px; border-radius: 8px; overflow: hidden; background: rgba(64,64,64,.55); }
+  .s-seg span { flex: 1; display: grid; place-items: center; color: var(--text2); }
+  .s-seg span.on { background: var(--sel); color: #fff; }
+  .s-mp { width: 280px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
+  .s-mp .zone { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; }
+  .s-mp .zone i { width: 10px; height: 10px; border-radius: 50%; }
+  .s-mp .dir { display: flex; align-items: center; justify-content: space-between; font-variant-numeric: tabular-nums; }
+  .s-mp .dir svg { width: 20px; height: 20px; fill: var(--text); }
+  .s-mp svg.curve { width: 100%; height: 100px; display: block; }
+  .s-mp .nudge { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+  .s-mp .nudge span { height: 44px; border-radius: 8px; background: rgba(64,64,64,.55); display: grid; place-items: center; }
+  .s-mp .nudge svg { width: 20px; height: 20px; fill: var(--text); }
+  .s-search { height: 48px; border-radius: 8px; background: rgba(64,64,64,.55); display: flex; align-items: center; gap: 10px; padding: 0 12px; color: var(--text2); }
+  .s-search svg { width: 20px; height: 20px; fill: currentColor; }
+
+  /* Stop on its own at the bottom right, under the rail: a 60 px square with the 2 px gap and red ring */
+  .s-stop { position: absolute; right: calc(var(--in) + (var(--rail) - var(--stop)) / 2); bottom: var(--in); width: var(--stop); height: var(--stop); padding: 2px; border: 1px solid var(--stop-red); border-radius: 13px; background: var(--bg); }
+  .s-stop button { width: 100%; height: 100%; border: 0; border-radius: 10px; background: var(--stop-red); color: #fff; font: 700 12px var(--sys); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; cursor: pointer; }
+  .s-stop svg { width: 20px; height: 20px; fill: #fff; }
+
+  /* guiding and the histogram: equal width, each only once it has data */
+  .s-stats { position: absolute; left: var(--in); right: calc(2 * var(--in) + (var(--rail) + var(--stop)) / 2); bottom: var(--in); height: var(--bar); display: flex; gap: var(--in); }
+  .sm .s-stats .p { position: relative; flex: 1; display: flex; align-items: center; gap: 14px; padding: 0 16px; }
+  .s-stats .gl { display: flex; flex-direction: column; flex: none; }
+  .s-stats svg { flex: 1; min-width: 0; height: 32px; }
+
+  /* centred things */
+  .s-attn { left: 50%; transform: translateX(-50%); top: var(--top); height: 48px; display: flex; gap: 10px; align-items: center; padding: 0 16px; background: rgba(58,44,10,.9) !important; border: 1px solid var(--busy); white-space: nowrap; }
+  .s-attn svg { width: 20px; height: 20px; fill: var(--busy); flex: none; }
+  .s-attn span { color: var(--text2); }
+  .sm .s-hint { left: 50%; top: 50%; transform: translate(-50%, -50%); background: none; -webkit-backdrop-filter: none; backdrop-filter: none; font-size: 20px; letter-spacing: 2px; color: var(--text2); pointer-events: none; white-space: nowrap; }
+  .s-sheet { left: 50%; top: 50%; transform: translate(-50%, -50%); width: 400px; padding: 18px; display: flex; flex-direction: column; gap: 10px; }
+  .s-sheet .hd { font-size: 16px; font-weight: 600; }
+  .sm .prow { display: grid; grid-template-columns: 48px 1fr 1fr 32px; gap: 8px; align-items: center; }
+  .sm .prow > span { height: 44px; border-radius: 8px; background: rgba(64,64,64,.55); display: grid; place-items: center; font-variant-numeric: tabular-nums; }
+  .sm .prow > span:first-child { font-weight: 600; }
+  .sm .prow .rm { background: none; color: var(--text2); }
+  .sm .prow .rm svg { width: 18px; height: 18px; fill: currentColor; }
+  .sm .e-card { left: 50%; top: 50%; transform: translate(-50%, -50%); width: 380px; padding: 20px; display: flex; flex-direction: column; gap: 12px; }
+  .sm .e-card .hd { font-size: 18px; font-weight: 600; }
+  .sm .rig { display: flex; align-items: center; gap: 12px; padding: 8px 8px 8px 14px; border-radius: 10px; background: rgba(64,64,64,.55); }
+  .sm .rig .grow { flex: 1; }
+
+  /* drawn on the image: planetarium, polar-align target, zoomed focus star */
+  .sm .atlas { background: radial-gradient(ellipse at 50% 120%, #1b2230 0, #11151d 45%, #0b0d12 80%); overflow: hidden; }
+  .sm .atlas i { position: absolute; border-radius: 50%; background: #dfe6f0; }
+  .sm .atlas svg.const { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .sm .obj { position: absolute; display: flex; align-items: center; gap: 6px; color: var(--text2); font-size: 12px; transform: translate(-7px, -7px); }
+  .sm .obj b { width: 14px; height: 14px; border-radius: 50%; border: 1.5px solid #9fb3cc; flex: none; }
+  .sm .obj.sel b { width: 22px; height: 22px; border: 2px solid var(--info); margin: -4px; }
+  .sm .obj.sel { color: var(--text); font-weight: 600; }
+  .sm .f-star { left: calc(2 * var(--in) + var(--rail)); top: calc(var(--top) + 48px + var(--in)); width: 240px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+  .sm .f-star .zoom { height: 180px; border-radius: 8px; background: #050505; position: relative; overflow: hidden; }
+  .sm .f-star .zoom::before { content: ""; position: absolute; left: 50%; top: 50%; width: 46px; height: 46px; transform: translate(-50%, -50%); border-radius: 50%; background: radial-gradient(circle, #fff 0, rgba(255,255,255,.85) 18%, rgba(220,220,220,.35) 45%, transparent 70%); }
+  .sm .f-star .zoom::after { content: ""; position: absolute; left: 50%; top: 50%; width: 64px; height: 64px; transform: translate(-50%, -50%); border-radius: 50%; border: 1px dashed rgba(66,165,245,.8); }
+
+  /* immersive view: everything fades, Stop too; the status pill moves up into the corner and any banner stays */
+  .sm .fade { transition: opacity .22s cubic-bezier(.16, 1, .3, 1); }
+  .sm.clean .fade { opacity: 0; pointer-events: none; }
+  .sm.clean .s-pill { top: var(--in); }
+  @media (prefers-reduced-motion: reduce) { .sm .fade, .s-pill { transition: none; } }
+  .sm.offline .devs .dot { background: var(--off) !important; animation: none; }
+  .sm.offline .s-mode { opacity: .45; }
+  .sm.offline .s-stop { opacity: .5; }
+  @media (max-width: 1000px) { .s-info small { display: none; } }
+  /* ---------- Phones ---------- */
+  .phones { display: flex; flex-wrap: wrap; gap: 32px; align-items: flex-start; }
+  .phone-wrap figcaption { margin-top: 10px; max-width: 300px; }
+  .phone-wrap figcaption b { display: block; font-size: 14px; }
+  .phone-wrap figcaption span { color: var(--text2); }
+  .phone-wrap { margin: 0; }
+  .phone { width: 300px; height: 620px; border: 1px solid var(--border); border-radius: 30px; background: var(--panel); overflow: hidden; display: flex; flex-direction: column; position: relative; }
+  .p-safe { height: 30px; background: var(--panel); flex: none; }
+  .p-top { height: 48px; background: var(--panel); border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: flex-end; padding: 0 4px; flex: none; }
+  .p-mid { flex: 1; display: flex; min-height: 0; background: var(--bg); }
+  .p-col { width: 48px; background: var(--panel); border-right: 1px solid var(--border); display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 8px 0; flex: none; overflow: hidden; }
+  .p-col .ic { width: 26px; height: 26px; }
+  .p-content { flex: 1; padding: 8px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+  .p-content .sky { flex: 1; border: 1px solid var(--border); border-radius: 6px; }
+  .p-status { height: 40px; background: var(--panel); border-top: 1px solid var(--border); display: flex; align-items: center; gap: 8px; padding: 0 8px; font-size: 11px; color: var(--text2); flex: none; }
+  .p-nav { height: 64px; background: var(--panel); border-top: 1px solid var(--border); display: grid; grid-template-columns: repeat(4, 1fr); flex: none; }
+  .p-nav span { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; font-size: 11px; color: var(--text2); }
+  .p-nav span .pill { width: 52px; height: 28px; border-radius: 14px; display: grid; place-items: center; }
+  .p-nav span.on .pill { background: var(--sel); } .p-nav span.on { color: var(--text); }
+  .p-nav svg { width: 20px; height: 20px; fill: currentColor; }
+  .p-home { height: 20px; background: var(--panel); flex: none; }
+  /* phone image-first */
+  .phone.full { background: #000; }
+  .phone.full > .sky { position: absolute; inset: 0; }
+  .phone .ov-top { left: 10px; right: 10px; top: 38px; min-height: 48px; gap: 10px; padding: 4px 6px 4px 12px; }
+  .phone .ov-top .devs { gap: 10px; }
+  .phone .ov-top .devs .ic { width: 20px; height: 20px; }
+  .phone .ov-read { left: 10px; right: 10px; bottom: 110px; min-width: 0; padding: 12px 14px; }
+  .phone .ov-read .big { font-size: 34px; }
+  .phone .p-actions { position: absolute; left: 10px; right: 10px; bottom: 30px; display: flex; gap: 10px; align-items: center; justify-content: space-between; }
+  .phone .p-actions .shutter { width: 60px; height: 60px; background: var(--scrim); }
+  .phone .p-actions .opt { min-height: 44px; padding: 0 14px; border-radius: 10px; background: var(--scrim); display: flex; align-items: center; font-size: 14px; }
+  .phone .p-actions .estop { padding: 12px 16px; font-size: 14px; border-radius: 22px; }
+
+  /* ---------- Specimens ---------- */
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; }
+  .sw { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: var(--panel); }
+  .sw .chip { height: 56px; }
+  .sw .chip.scrim { background: linear-gradient(var(--scrim), var(--scrim)), repeating-linear-gradient(45deg, #777 0 6px, #333 6px 12px); }
+  .sw .meta { padding: 8px 10px; }
+  .sw .meta b { display: block; font-size: 13px; }
+  .sw .meta code { font: 11px var(--mono); color: var(--text2); }
+  .sw .meta p { margin: 4px 0 0; font-size: 11.5px; color: var(--text2); }
+  .group-label { margin: 18px 0 8px; }
+  .type-row { display: grid; grid-template-columns: 180px 1fr; gap: 16px; align-items: baseline; padding: 10px 0; border-bottom: 1px solid var(--border); }
+  .type-row code { font: 11px var(--mono); color: var(--text2); }
+  .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .panelbox { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+  .panelbox h3 { margin: 0; font-size: 13px; font-weight: 600; }
+  .line { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  .d-seg { display: inline-flex; border: 1px solid var(--border); border-radius: 16px; overflow: hidden; font-size: 12px; }
+  .d-seg span { padding: 5px 12px; } .d-seg span + span { border-left: 1px solid var(--border); } .d-seg span.on { background: var(--sel); color: #fff; }
+  .d-field { background: var(--input); border: 1px solid var(--border); border-radius: 4px; padding: 6px 8px; width: 120px; color: var(--text); font: 13px var(--sys); }
+  .sb { min-height: 44px; border: 0; border-radius: 10px; padding: 12px 20px; font: 500 14px var(--sys); cursor: pointer; }
+  .sb.primary { background: var(--btn); color: #fff; } .sb.primary:hover { background: var(--sel); }
+  .sb.outline { background: transparent; color: var(--text); border: 1px solid var(--border); }
+  .r-seg { display: inline-flex; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; font-size: 14px; }
+  .r-seg span { min-height: 44px; display: flex; align-items: center; padding: 0 16px; } .r-seg span + span { border-left: 1px solid var(--border); } .r-seg span.on { background: var(--sel); color: #fff; }
+  .shapes { display: flex; flex-wrap: wrap; gap: 16px; }
+  .shape { width: 110px; text-align: center; color: var(--text2); font-size: 11.5px; }
+  .shape div { height: 64px; background: var(--panel-alt); border: 1px solid var(--border); margin-bottom: 6px; }
+  .space-row { display: flex; align-items: center; gap: 12px; padding: 4px 0; }
+  .space-row i { display: block; height: 14px; background: var(--sel); border-radius: 2px; }
+  .space-row code { font: 11px var(--mono); color: var(--text2); width: 60px; }
+  .rules { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+  .rule { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 14px; }
+  .rule b { display: block; margin-bottom: 4px; }
+  .rule p { margin: 0; color: var(--text2); font-size: 12.5px; }
+  .nightdemo { display: flex; gap: 16px; margin-top: 10px; }
+  .nightdemo > div { flex: 1; background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 10px; display: flex; flex-direction: column; gap: 6px; font-size: 12px; }
+  .nightdemo span { display: inline-flex; align-items: center; gap: 6px; }
+  .nightdemo i { width: 10px; height: 10px; border-radius: 50%; }
+
+  @media (max-width: 1100px) {
+    .main { grid-template-columns: 80px 1fr; } .side { display: none; }
+    .pair { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 700px) {
+    .ov-read { min-width: 0; right: 12px; bottom: 80px; }
+    .ov-top .devs { display: none; }
+  }
+  .s-prog .frow { display: grid; grid-template-columns: 24px 1fr 64px; gap: 8px; align-items: center; font-variant-numeric: tabular-nums; }
+  .s-prog .frow b { font-weight: 600; }
+  .s-prog .bar { height: 6px; border-radius: 3px; background: rgba(64,64,64,.8); overflow: hidden; }
+  .s-prog .bar i { display: block; height: 100%; background: var(--ok); }
+  .s-prog .bar i.now { background: var(--sel); }
+  .s-prog .frow span:last-child { text-align: right; color: var(--text2); }
+  .sm .stopb { height: 48px; border-radius: 10px; border: 1px solid var(--err); background: transparent; color: var(--text); font: 500 14px var(--sys); cursor: pointer; }
+  .s-trk { position: absolute; right: var(--in); top: var(--top); width: var(--rail); height: 100px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; white-space: nowrap; overflow: hidden; cursor: pointer; }
+  .s-tiles { position: absolute; left: var(--in); bottom: calc(2 * var(--in) + var(--bar)); display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+  .s-tiles .r { display: flex; gap: 8px; }
+  .s-tiles .f { width: 72px; height: 56px; padding: 0 4px; border-radius: 10px; background: var(--scrim); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; border: 1px solid var(--border); white-space: nowrap; overflow: hidden; }
+  .s-tiles .f small { font-size: 11px; color: var(--text2); } .s-tiles .f b { font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .s-trk b { font-size: 14px; } .s-trk small { font-size: 11.5px; color: var(--text2); }
+  .s-trk i { position: absolute; left: 0; bottom: 0; height: 3px; }
+  .s-shut { position: relative; }
+  .s-shut.play span, .s-shut.go2 span { width: 0; height: 0; border-radius: 0; background: none; border-left: 24px solid var(--text); border-top: 15px solid transparent; border-bottom: 15px solid transparent; margin-left: 6px; }
+  .s-shut.go2 { border-color: var(--ok); } .s-shut.play { border-color: var(--busy); }
+  .s-shut.off { border-color: var(--text3); cursor: default; } .s-shut.off span { width: 0; height: 0; border-radius: 0; background: none; border-left: 24px solid var(--text3); border-top: 15px solid transparent; border-bottom: 15px solid transparent; margin-left: 6px; }
+  .s-shut.pz { border-color: rgba(224,224,224,.25); }
+  .s-shut.pz span { width: 26px; height: 26px; border-radius: 0; background: linear-gradient(90deg, var(--text) 0 35%, transparent 35% 65%, var(--text) 65%); }
+  .s-shut.pz::after, .s-shut.hd::after { content: ''; position: absolute; inset: -3px; border-radius: 50%; -webkit-mask: radial-gradient(circle, transparent 27px, #000 28px); mask: radial-gradient(circle, transparent 27px, #000 28px); }
+  .s-shut.pz::after { background: conic-gradient(var(--sel) 0 40%, transparent 40%); }
+  .s-shut.hd::after { background: conic-gradient(var(--err) 0 55%, transparent 55%); }
+  .s-holdlbl { position: absolute; right: calc(100% + 18px); top: 94px; transform: translateY(-50%); white-space: nowrap; padding: 8px 12px; border: 1px solid var(--err); }
+  .s-skypick { left: 50%; bottom: 40px; transform: translateX(-50%); display: flex; align-items: center; gap: 16px; padding: 10px 10px 10px 16px; white-space: nowrap; }
+  .s-ask { border: 1px solid var(--busy); border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 8px; background: rgba(58,44,10,.6); }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <!-- Night mode: the app's exact matrix (lib/widgets/night_filter.dart) -->
+  <filter id="night" color-interpolation-filters="sRGB">
+    <feColorMatrix type="matrix" values="0.30 0.59 0.11 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0"/>
+  </filter>
+  <symbol id="i-cam" viewBox="0 0 24 24"><path d="M9 3 7.17 5H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-3.17L15 3H9zm3 15a5 5 0 1 1 0-10 5 5 0 0 1 0 10z"/></symbol>
+  <!-- hand-drawn style glyphs, as PR #1474 adds: telescope on tripod, 5-slot filter wheel -->
+  <symbol id="i-mount" viewBox="0 0 24 24"><path d="M3.2 9.6 15.8 3.4l1.6 3.3L4.8 12.9z"/><path d="m17.9 2.3 2.3-1.1 2.4 4.9-2.3 1.1z"/><path d="M10.6 11.4h2l3.6 10.4h-2l-1.4-4.1h-.4v4.1h-1.9v-4.1h-.4l-1.4 4.1H6.7z"/></symbol>
+  <symbol id="i-filter" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M12 1.5a10.5 10.5 0 1 1 0 21 10.5 10.5 0 0 1 0-21zM12 4a2.6 2.6 0 1 0 0 5.2A2.6 2.6 0 0 0 12 4zm6.3 4.6a2.6 2.6 0 1 0 0 5.2 2.6 2.6 0 0 0 0-5.2zM5.7 8.6a2.6 2.6 0 1 0 0 5.2 2.6 2.6 0 0 0 0-5.2zm2.4 6.8a2.6 2.6 0 1 0 0 5.2 2.6 2.6 0 0 0 0-5.2zm7.8 0a2.6 2.6 0 1 0 0 5.2 2.6 2.6 0 0 0 0-5.2z"/></symbol>
+  <symbol id="i-guide" viewBox="0 0 24 24"><path d="M19.07 4.93l-1.41 1.41C19.1 7.79 20 9.79 20 12c0 4.42-3.58 8-8 8s-8-3.58-8-8c0-4.08 3.05-7.44 7-7.93v2.02C8.16 6.57 6 9.03 6 12c0 3.31 2.69 6 6 6s6-2.69 6-6c0-1.66-.67-3.16-1.76-4.24l-1.41 1.41C15.55 9.9 16 10.9 16 12c0 2.21-1.79 4-4 4s-4-1.79-4-4c0-1.86 1.28-3.41 3-3.86v2.14c-.6.35-1 .98-1 1.72 0 1.1.9 2 2 2s2-.9 2-2c0-.74-.4-1.38-1-1.72V2h-1C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10c0-2.76-1.12-5.26-2.93-7.07z"/></symbol>
+  <symbol id="i-focus" viewBox="0 0 24 24"><path d="M5 15H3v4a2 2 0 0 0 2 2h4v-2H5v-4zM5 5h4V3H5a2 2 0 0 0-2 2v4h2V5zm14-2h-4v2h4v4h2V5a2 2 0 0 0-2-2zm0 16h-4v2h4a2 2 0 0 0 2-2v-4h-2v4zM12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z"/></symbol>
+  <symbol id="i-rot" viewBox="0 0 24 24"><path d="M12 4V1L8 5l4 4V6a6 6 0 1 1-6 6H4a8 8 0 1 0 8-8z"/></symbol>
+  <symbol id="i-panel" viewBox="0 0 24 24"><path d="M3 5h18v14H3V5zm2 2v10h14V7H5zm2 2h10v6H7V9z"/></symbol>
+  <symbol id="i-switch" viewBox="0 0 24 24"><path d="M17 7H7a5 5 0 0 0 0 10h10a5 5 0 0 0 0-10zm0 8a3 3 0 1 1 0-6 3 3 0 0 1 0 6z"/></symbol>
+  <symbol id="i-weather" viewBox="0 0 24 24"><path d="M19.35 10.04A7.49 7.49 0 0 0 12 4C9.11 4 6.6 5.64 5.35 8.04A6 6 0 0 0 6 20h13a5 5 0 0 0 .35-9.96z"/></symbol>
+  <symbol id="i-safety" viewBox="0 0 24 24"><path d="M12 1 3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/></symbol>
+  <symbol id="i-dome" viewBox="0 0 24 24"><path d="M12 3a9 9 0 0 0-9 9v2h18v-2a9 9 0 0 0-9-9zm-1 2.1V12H8.2A7 7 0 0 1 11 5.1zM2 16h20v4H2z"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M19.78 17.51c-2.47 0-6.57-1.33-8.68-5.43-2.33-4.51-.5-8.48.53-10.07C6.27 2.2 1.98 6.59 1.98 12c0 .14.02.28.02.42.61-.26 1.28-.42 1.98-.42 0-3.09 1.73-5.77 4.3-7.1-.5 2.19-.54 5.04 1.04 8.1 1.57 3.04 4.18 4.95 6.8 5.86-1.23.74-2.65 1.15-4.13 1.15-.5 0-1-.05-1.48-.14-.37.7-.94 1.27-1.64 1.64.98.32 2.03.5 3.11.5 3.5 0 6.58-1.8 8.37-4.52-.17.01-.37.02-.57.02z"/><path d="M7 16h-.18C6.4 14.84 5.3 14 4 14c-1.66 0-3 1.34-3 3s1.34 3 3 3h3c1.1 0 2-.9 2-2s-.9-2-2-2z"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 1 0-.7.7l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9z"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 24 24"><path d="M19.14 12.94a7.07 7.07 0 0 0 0-1.88l2.03-1.58a.5.5 0 0 0 .12-.64l-1.92-3.32a.5.5 0 0 0-.61-.22l-2.39.96a7 7 0 0 0-1.62-.94l-.36-2.54a.5.5 0 0 0-.5-.42h-3.84a.5.5 0 0 0-.5.42l-.36 2.54a7 7 0 0 0-1.62.94l-2.39-.96a.5.5 0 0 0-.61.22L2.73 8.84a.5.5 0 0 0 .12.64l2.03 1.58a7.07 7.07 0 0 0 0 1.88l-2.03 1.58a.5.5 0 0 0-.12.64l1.92 3.32c.13.22.39.3.61.22l2.39-.96c.5.38 1.04.7 1.62.94l.36 2.54c.05.24.25.42.5.42h3.84c.25 0 .45-.18.5-.42l.36-2.54a7 7 0 0 0 1.62-.94l2.39.96c.22.08.48 0 .61-.22l1.92-3.32a.5.5 0 0 0-.12-.64l-2.03-1.58zM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z"/></symbol>
+  <symbol id="i-public" viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm-1 17.93A8 8 0 0 1 4 12c0-.62.08-1.21.21-1.79L9 15v1a2 2 0 0 0 2 2v1.93zm6.9-2.54A2 2 0 0 0 16 16h-1v-3a1 1 0 0 0-1-1H8v-2h2a1 1 0 0 0 1-1V7h2a2 2 0 0 0 2-2v-.41a7.98 7.98 0 0 1 2.9 12.8z"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M22 7h-9v2h9V7zm0 8h-9v2h9v-2zM5.54 11 2 7.46l1.41-1.41 2.12 2.12 4.24-4.24 1.41 1.41L5.54 11zm0 8L2 15.46l1.41-1.41 2.12 2.12 4.24-4.24 1.41 1.41L5.54 19z"/></symbol>
+  <symbol id="i-seq" viewBox="0 0 24 24"><path d="M0 0h24v24H0z" fill="none"/><path d="M10 16.5l6-4.5-6-4.5v9zM12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/></symbol>
+  <symbol id="i-live" viewBox="0 0 24 24"><path d="M12 9a3.2 3.2 0 1 0 0 6.4A3.2 3.2 0 0 0 12 9zm-3-7L7.17 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-3.17L15 2H9zm3 15a5 5 0 1 1 0-10 5 5 0 0 1 0 10z"/></symbol>
+  <symbol id="i-report" viewBox="0 0 24 24"><path d="M15.73 3H8.27L3 8.27v7.46L8.27 21h7.46L21 15.73V8.27L15.73 3zM12 17.3a1.3 1.3 0 1 1 0-2.6 1.3 1.3 0 0 1 0 2.6zm1-4.3h-2V7h2v6z"/></symbol>
+  <symbol id="i-warn" viewBox="0 0 24 24"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></symbol>
+  <symbol id="i-lib" viewBox="0 0 24 24"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M20 4v12H8V4h12m0-2H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-8.5 9.67l1.69 2.26 2.48-3.1L19 15H9zM2 6v14c0 1.1.9 2 2 2h14v-2H4V6H2z"/></symbol>
+  <symbol id="i-cloudup" viewBox="0 0 24 24"><path d="M0 0h24v24H0z" fill="none"/><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM14 13v4h-4v-4H7l5-5 5 5h-3z"/></symbol>
+  <symbol id="i-flare" viewBox="0 0 24 24"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M7 11H1v2h6v-2zm2.17-3.24L7.05 5.64 5.64 7.05l2.12 2.12 1.41-1.41zM13 1h-2v6h2V1zm5.36 6.05l-1.41-1.41-2.12 2.12 1.41 1.41 2.12-2.12zM17 11v2h6v-2h-6zm-5-2c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3zm2.83 7.24l2.12 2.12 1.41-1.41-2.12-2.12-1.41 1.41zm-9.19.71l1.41 1.41 2.12-2.12-1.41-1.41-2.12 2.12zM11 23h2v-6h-2v6z"/></symbol>
+  <symbol id="i-insights" viewBox="0 0 24 24"><path d="M21,8c-1.45,0-2.26,1.44-1.93,2.51l-3.55,3.56c-0.3-0.09-0.74-0.09-1.04,0l-2.55-2.55C12.27,10.45,11.46,9,10,9 c-1.45,0-2.27,1.44-1.93,2.52l-4.56,4.55C2.44,15.74,1,16.55,1,18c0,1.1,0.9,2,2,2c1.45,0,2.26-1.44,1.93-2.51l4.55-4.56 c0.3,0.09,0.74,0.09,1.04,0l2.55,2.55C12.73,16.55,13.54,18,15,18c1.45,0,2.27-1.44,1.93-2.52l3.56-3.55 C21.56,12.26,23,11.45,23,10C23,8.9,22.1,8,21,8z"/><polygon points="15,9 15.94,6.93 18,6 15.94,5.07 15,3 14.08,5.07 12,6 14.08,6.93"/><polygon points="3.5,11 4,9 6,8.5 4,8 3.5,6 3,8 1,8.5 3,9"/></symbol>
+  <symbol id="i-rocket" viewBox="0 0 24 24"><path d="M6,15c-0.83,0-1.58,0.34-2.12,0.88C2.7,17.06,2,22,2,22s4.94-0.7,6.12-1.88C8.66,19.58,9,18.83,9,18C9,16.34,7.66,15,6,15 z M6.71,18.71c-0.28,0.28-2.17,0.76-2.17,0.76s0.47-1.88,0.76-2.17C5.47,17.11,5.72,17,6,17c0.55,0,1,0.45,1,1 C7,18.28,6.89,18.53,6.71,18.71z M17.42,13.65L17.42,13.65c6.36-6.36,4.24-11.31,4.24-11.31s-4.95-2.12-11.31,4.24l-2.49-0.5 C7.21,5.95,6.53,6.16,6.05,6.63L2,10.69l5,2.14L11.17,17l2.14,5l4.05-4.05c0.47-0.47,0.68-1.15,0.55-1.81L17.42,13.65z M7.41,10.83L5.5,10.01l1.97-1.97l1.44,0.29C8.34,9.16,7.83,10.03,7.41,10.83z M13.99,18.5l-0.82-1.91 c0.8-0.42,1.67-0.93,2.49-1.5l0.29,1.44L13.99,18.5z M16,12.24c-1.32,1.32-3.38,2.4-4.04,2.73l-2.93-2.93 c0.32-0.65,1.4-2.71,2.73-4.04c4.68-4.68,8.23-3.99,8.23-3.99S20.68,7.56,16,12.24z M15,11c1.1,0,2-0.9,2-2s-0.9-2-2-2s-2,0.9-2,2 S13.9,11,15,11z"/></symbol>
+  <symbol id="i-tune" viewBox="0 0 24 24"><path d="M0 0h24v24H0z" fill="none"/><path d="M3 17v2h6v-2H3zM3 5v2h10V5H3zm10 16v-2h8v-2h-8v-2h-2v6h2zM7 9v2H3v2h4v2h2V9H7zm14 4v-2H11v2h10zm-6-4h2V7h4V5h-4V3h-2v6z"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24"><path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.89 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/></symbol>
+  <symbol id="i-fit" viewBox="0 0 24 24"><path d="M6,16h12V8H6V16z M8,10h8v4H8V10z M4,15H2v3c0,1.1,0.9,2,2,2h3v-2H4V15z M4,6h3V4H4C2.9,4,2,4.9,2,6v3h2V6z M20,4h-3v2h3v3 h2V6C22,4.9,21.1,4,20,4z M20,18h-3v2h3c1.1,0,2-0.9,2-2v-3h-2V18z"/></symbol>
+  <symbol id="i-help" viewBox="0 0 24 24"><path d="M0 0h24v24H0z" fill="none"/><path d="M11 18h2v-2h-2v2zm1-16C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm0-14c-2.21 0-4 1.79-4 4h2c0-1.1.9-2 2-2s2 .9 2 2c0 2-3 1.75-3 5h2c0-2.25 3-2.5 3-5 0-2.21-1.79-4-4-4z"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></symbol>
+  <symbol id="i-up" viewBox="0 0 24 24"><path d="M4 12l1.41 1.41L11 7.83V20h2V7.83l5.58 5.59L20 12l-8-8-8 8z"/></symbol>
+  <symbol id="i-left" viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></symbol>
+  <symbol id="i-l" viewBox="0 0 24 24"><path d="M15.41 7.41 14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></symbol>
+  <symbol id="i-r" viewBox="0 0 24 24"><path d="M10 6 8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></symbol>
+  <symbol id="i-dl" viewBox="0 0 24 24"><path d="M18.41 7.41 17 6l-6 6 6 6 1.41-1.41L13.83 12zM12.41 7.41 11 6l-6 6 6 6 1.41-1.41L7.83 12z"/></symbol>
+  <symbol id="i-dr" viewBox="0 0 24 24"><path d="M5.59 7.41 7 6l6 6-6 6-1.41-1.41L10.17 12zm6 0L13 6l6 6-6 6-1.41-1.41L16.17 12z"/></symbol>
+  <symbol id="i-memory" viewBox="0 0 24 24"><path d="M15 9H9v6h6V9zm-2 4h-2v-2h2v2zm8-2V9h-2V7c0-1.1-.9-2-2-2h-2V3h-2v2h-2V3H9v2H7c-1.1 0-2 .9-2 2v2H3v2h2v2H3v2h2v2c0 1.1.9 2 2 2h2v2h2v-2h2v2h2v-2h2c1.1 0 2-.9 2-2v-2h2v-2h-2v-2h2zm-4 6H7V7h10v10z"/></symbol>
+  <symbol id="i-wifi" viewBox="0 0 24 24"><path d="M1 9l2 2a12.73 12.73 0 0 1 18 0l2-2C16.93 2.93 7.08 2.93 1 9zm8 8 3 3 3-3a4.24 4.24 0 0 0-6 0zm-4-4 2 2a7.07 7.07 0 0 1 10 0l2-2C15.14 9.14 8.87 9.14 5 13z"/></symbol>
+  <!-- Simple Mode rails and mode grid (Material: info_outline, expand_more, visibility_outlined, explore_outlined, travel_explore, playlist_play) -->
+  <symbol id="i-info" viewBox="0 0 24 24"><path d="M11 7h2v2h-2zm0 4h2v6h-2zm1-9C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/></symbol>
+  <symbol id="i-expand" viewBox="0 0 24 24"><path d="M16.59 8.59 12 13.17 7.41 8.59 6 10l6 6 6-6z"/></symbol>
+  <symbol id="i-eye" viewBox="0 0 24 24"><path d="M12 6a9.77 9.77 0 0 1 8.82 5.5C19.17 14.87 15.79 17 12 17s-7.17-2.13-8.82-5.5A9.77 9.77 0 0 1 12 6m0-2C7 4 2.73 7.11 1 11.5 2.73 15.89 7 19 12 19s9.27-3.11 11-7.5C21.27 7.11 17 4 12 4zm0 5a2.5 2.5 0 0 1 0 5 2.5 2.5 0 0 1 0-5m0-2c-2.48 0-4.5 2.02-4.5 4.5S9.52 16 12 16s4.5-2.02 4.5-4.5S14.48 7 12 7z"/></symbol>
+  <symbol id="i-explore" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-5.5-2.5 7.51-3.49L17.5 6.5 9.99 9.99 6.5 17.5zm5.5-6.6c.61 0 1.1.49 1.1 1.1s-.49 1.1-1.1 1.1-1.1-.49-1.1-1.1.49-1.1 1.1-1.1z"/></symbol>
+  <symbol id="i-travel" viewBox="0 0 24 24"><path d="M19.3 16.9c.4-.7.7-1.5.7-2.4 0-2.5-2-4.5-4.5-4.5S11 12 11 14.5s2 4.5 4.5 4.5c.9 0 1.7-.3 2.4-.7l3.2 3.2 1.4-1.4-3.2-3.2zm-3.8.1c-1.4 0-2.5-1.1-2.5-2.5s1.1-2.5 2.5-2.5 2.5 1.1 2.5 2.5-1.1 2.5-2.5 2.5zM12 20v2C6.48 22 2 17.52 2 12S6.48 2 12 2c4.84 0 8.87 3.44 9.8 8h-2.07A8 8 0 0 0 15 4.59V5c0 1.1-.9 2-2 2h-2v2c0 .55-.45 1-1 1H8v2h2v3H9l-4.79-4.79C4.08 10.79 4 11.38 4 12c0 4.41 3.59 8 8 8z"/></symbol>
+  <symbol id="i-playlist" viewBox="0 0 24 24"><path d="M19 9H2v2h17V9zm0-4H2v2h17V5zM2 15h13v-2H2v2zm15-2v6l5-3-5-3z"/></symbol>
+</svg>
+
+<div class="page">
+  <header>
+    <h1>Ara design preview</h1>
+    <p>DESIGN.md drawn as screens. The full UI follows the shell in PR #1474 (top-bar devices with names, Settings gear, rail Planning → Checklist → Sequence → Live, phone layout below 600 px). Simple Mode is image-first: the frame fills the screen and the controls float on translucent overlays. Colours, sizes and radii come from the theme code. I haven't run the app, so the full UI is close, not exact. <span class="tag prop">proposed</span> marks what doesn't exist in code.</p>
+  </header>
+  <nav class="toc" aria-label="Sections">
+    <a href="#screens">Desktop: full UI vs Simple Mode</a>
+    <a href="#phone">Phone</a>
+    <a href="#components">Components</a>
+    <a href="#colors">Colours</a>
+    <a href="#type">Type</a>
+    <a href="#shape">Shape and spacing</a>
+    <a href="#rules">Named rules</a>
+  </nav>
+
+  <section id="screens">
+    <h2>Desktop: the same session in both modes</h2>
+    <p class="note">The Camera dot blinks green because it's exposing (PR #1474's working state); amber on Guider means it needs a look.</p>
+    <div class="controls">
+      <div class="seg" role="group" aria-label="Mode">
+        <button data-mode="full" aria-pressed="true">Full UI (default)</button>
+        <button data-mode="simple" aria-pressed="false">Simple Mode</button>
+      </div>
+      <div class="seg" role="group" aria-label="Simple Mode: Preview states" id="smode-seg" hidden>
+        <button data-smode="idle" aria-pressed="false">No frame</button>
+        <button data-smode="taking" aria-pressed="false">Taking a frame</button>
+        <button data-smode="frame" aria-pressed="true">Frame + Info + System</button>
+        <button data-smode="grid" aria-pressed="false">Mode grid</button>
+        <button data-smode="settings" aria-pressed="false">Settings</button>
+        <button data-smode="clean" aria-pressed="false">Immersive</button>
+      </div>
+      <div class="seg" role="group" aria-label="Simple Mode: mode screens" id="smode-seg2" hidden>
+        <button data-smode="focus" aria-pressed="false">Focus</button>
+        <button data-smode="pa" aria-pressed="false">Polar align</button>
+        <button data-smode="pick" aria-pressed="false">Sky: object picked</button>
+        <button data-smode="plan" aria-pressed="false">Plan</button>
+        <button data-smode="ready" aria-pressed="false">Plan ready</button>
+        <button data-smode="run" aria-pressed="false">Imaging</button>
+        <button data-smode="hold" aria-pressed="false">Holding to stop</button>
+        <button data-smode="paused" aria-pressed="false">Paused</button>
+        <button data-smode="prog" aria-pressed="false">Plan running</button>
+        <button data-smode="run-attn" aria-pressed="false">Guiding lost</button>
+        <button data-smode="done" aria-pressed="false">Night done</button>
+        <button data-smode="empty" aria-pressed="false">No rig</button>
+      </div>
+      <div class="seg" role="group" aria-label="Night mode">
+        <button data-night="off" aria-pressed="true">Night mode off</button>
+        <button data-night="on" aria-pressed="false">Night mode on</button>
+      </div>
+      <div class="seg" role="group" aria-label="Emergency Stop">
+        <button data-estop="now" aria-pressed="true">Emergency Stop: today</button>
+        <button data-estop="heavy" aria-pressed="false">Heavier (ALP-4812)</button>
+      </div>
+    </div>
+
+    <div id="stage">
+      <!-- Full UI (PR #1474 shell) -->
+      <div class="app" id="full">
+        <div class="topbar">
+          <div class="chips" id="chips"></div>
+          <div class="iconbtn" title="Search settings (⌘K)"><svg><use href="#i-search"/></svg></div>
+          <div class="iconbtn" title="Night mode (⌘N)"><svg><use href="#i-moon"/></svg></div>
+          <div class="iconbtn" title="Simple Mode"><svg><use href="#i-fit"/></svg></div>
+          <div class="iconbtn" title="Settings"><svg><use href="#i-gear"/></svg></div>
+        </div>
+        <div class="main">
+          <div class="rail">
+            <div class="dest"><div class="pill"><svg><use href="#i-public"/></svg></div>Planning</div>
+            <div class="dest"><div class="pill"><svg><use href="#i-check"/></svg></div>Checklist</div>
+            <div class="dest"><div class="pill"><svg><use href="#i-seq"/></svg></div>Sequence</div>
+            <div class="dest on"><div class="pill"><svg><use href="#i-live"/></svg></div>Live</div>
+          </div>
+          <div class="center">
+            <div class="attn"><svg><use href="#i-warn"/></svg><div><b>Guiding lost. Retrying (2 of 5).</b><span>Exposures are paused until the guide star is found again.</span></div></div>
+            <div class="sky"><div class="galaxy"></div><span class="cap num">Frame 47 · L · 300 s · HFR 2.31 · 1,842 stars</span></div>
+            <div class="hist"></div>
+          </div>
+          <div class="side">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <div class="title">M31 Andromeda</div>
+              <span class="state"><i class="g-busy"></i>Attention</span>
+            </div>
+            <div>
+              <div class="section">Sequence</div>
+              <div class="row"><span>Frame</span><span class="num">47 / 120</span></div>
+              <div class="row"><span>Next exposure</span><span class="num">02:14</span></div>
+              <div class="row"><span>Filter</span><span>Luminance</span></div>
+            </div>
+            <div>
+              <div class="section">Quality</div>
+              <div class="row"><span>HFR</span><span class="num">2.31 px</span></div>
+              <div class="row"><span>Guide RMS</span><span class="num">0.62″</span></div>
+              <div class="row"><span>Sensor</span><span class="num">−10.0 °C</span></div>
+            </div>
+            <div style="display:flex;gap:8px"><button class="b primary">Pause</button><button class="b outline">Skip target</button></div>
+          </div>
+        </div>
+        <div class="bottombar">
+          <span class="pulse"><i style="background:var(--ok)"></i>Server connected</span>
+          <button class="estop"><svg><use href="#i-report"/></svg>Emergency Stop</button>
+          <span class="pulse" style="color:var(--info)"><svg width="16" height="16" style="fill:currentColor"><use href="#i-cloudup"/></svg>Backup: 2 pending</span>
+          <span class="grow"></span>
+          <span class="launch"><svg><use href="#i-lib"/></svg>Image Library</span>
+          <span class="launch"><svg><use href="#i-flare"/></svg>Calibration</span>
+          <span class="launch"><svg><use href="#i-insights"/></svg>Stats</span>
+          <span class="launch"><svg><use href="#i-rocket"/></svg>Launchpad</span>
+          <span class="launch"><svg><use href="#i-tune"/></svg>Run profile wizard</span>
+          <span class="launch" style="position:relative;color:var(--text2)" title="Notifications"><svg><use href="#i-bell"/></svg><b style="position:absolute;top:-5px;left:10px;min-width:16px;height:16px;border-radius:8px;background:var(--err);color:#fff;font-size:11px;line-height:16px;text-align:center">2</b></span>
+          <span class="launch" style="color:var(--text2)" title="Help"><svg><use href="#i-help"/></svg></span>
+        </div>
+      </div>
+
+      <!-- Simple Mode: two rails (feat/simple-mode, approved 2026-11-01) -->
+      <div class="sm" id="simpleS" hidden>
+        <div class="sky" data-v="taking frame grid settings clean focus pa plan ready run hold paused prog run-attn done"><div class="galaxy" style="width:50%;height:17%"></div></div>
+        <div class="atlas" data-v="idle pick empty">
+          <svg class="const" viewBox="0 0 1000 680" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+            <polyline fill="none" stroke="rgba(120,150,190,.35)" stroke-width="1" points="300,170 380,215 470,240 560,300 640,330"/>
+            <polyline fill="none" stroke="rgba(120,150,190,.35)" stroke-width="1" points="470,240 455,330 430,420"/>
+            <polyline fill="none" stroke="rgba(120,150,190,.35)" stroke-width="1" points="700,140 760,190 820,170 870,230"/>
+            <path d="M0 600 Q 500 540 1000 610" fill="none" stroke="rgba(66,165,245,.35)" stroke-width="1" stroke-dasharray="4 4"/>
+          </svg>
+          <div class="obj sel" data-v="pick" style="left:46%;top:40%"><b></b>M31</div>
+          <div class="obj" data-v="pick" style="left:55%;top:84%"><b></b>M33</div>
+          <div class="obj" data-v="pick" style="left:26%;top:28%"><b></b>NGC 7000</div>
+          <div class="obj" data-v="pick" style="left:66%;top:22%"><b></b>M45</div>
+        </div>
+        <div class="p s-hint" data-v="idle">Tap the shutter to take a frame</div>
+        <div class="p s-skypick" data-v="pick"><div><b>M31 · Andromeda Galaxy</b><div class="sub" style="font-size:12px">Galaxy · 62° up · max 74°</div></div><button class="go" style="padding:0 18px">Image this</button></div>
+        <div class="p f-star fade" data-v="focus">
+          <span class="lbl">Star, zoomed</span>
+          <div class="zoom"></div>
+          <span class="sub">HFR ring: 2.31 px</span>
+        </div>
+
+        <div class="p s-strip fade">
+          <div class="devs"><div class="ic" title="Camera"><svg><use href="#i-cam"/></svg><i class="dot g-ok blink"></i></div><div class="ic" title="Mount"><svg><use href="#i-mount"/></svg><i class="dot g-ok"></i></div><div class="ic" title="Guider"><svg><use href="#i-guide"/></svg><i class="dot g-busy"></i></div><div class="ic" title="Focuser"><svg><use href="#i-focus"/></svg><i class="dot g-ok"></i></div><div class="ic" title="Filter Wheel"><svg><use href="#i-filter"/></svg><i class="dot g-ok"></i></div></div>
+          <span class="grow"></span>
+          <div class="ib" title="Search settings"><svg><use href="#i-search"/></svg></div>
+          <div class="ib" title="Night mode"><svg><use href="#i-moon"/></svg></div>
+          <div class="ib" title="Show all options"><svg><use href="#i-fit"/></svg></div>
+          <div class="ib" title="Settings"><svg><use href="#i-gear"/></svg></div>
+        </div>
+        <div class="p s-pill" id="s-pill" aria-live="polite"></div>
+        <div class="p s-trk" data-v="ready" style="border:1px solid var(--ok)"><b>M31</b><span>0 / 60</span><small>L · 2 min</small><small>2 h 45 min</small></div>
+        <div class="p s-trk" data-v="run hold prog" style="border:1px solid var(--sel)"><b>M31</b><span>23 / 60</span><small>R · 3 min</small><small>1 h 40 min</small><i style="width:38%;background:var(--sel)"></i></div>
+        <div class="p s-trk" data-v="paused" style="border:1px solid var(--busy)"><b>M31</b><span>24 / 60</span><small>R · 3 min</small><small style="color:var(--busy)">Paused</small><i style="width:40%;background:var(--busy)"></i></div>
+        <div class="p s-trk" data-v="done" style="border:1px solid var(--ok)"><b>M31</b><span>60 / 60</span><small>B · 3 min</small><small>Done</small><i style="width:100%;background:var(--ok)"></i></div>
+        <div class="s-tiles fade" data-v="frame grid settings clean">
+          <div class="r" data-v="frame"><div class="f"><small>Storage</small><b>412 GB free</b></div><div class="f"><small>CPU</small><b>23 %</b></div><div class="f"><small>Memory</small><b>512 MB</b></div><div class="f"><small>Up</small><b>3 h 12 min</b></div></div>
+          <div class="r"><div class="f"><small>HFR</small><b>2.31</b></div><div class="f"><small>Stars</small><b>1,842</b></div><div class="f"><small>Exposure</small><b>5 s · L</b></div><div class="f"><small>Gain · offset</small><b>100 · 10</b></div><div class="f"><small>Clipped</small><b>0.02 %</b></div></div>
+        </div>
+        <div class="p s-attn" data-v="run-attn"><svg><use href="#i-warn"/></svg><b>Guiding lost. Retrying (2 of 5).</b><span>Exposures paused.</span></div>
+
+        <div class="s-col l fade">
+          <div class="p s-rail">
+            <div class="s-rb" id="s-sky"><svg><use href="#i-public"/></svg>Sky</div>
+            <div class="s-rb" id="s-info"><svg><use href="#i-info"/></svg>Info</div>
+            <div class="s-rb" id="s-sys"><svg><use href="#i-memory"/></svg>System</div>
+            <div class="s-rb"><svg><use href="#i-lib"/></svg>Library</div>
+          </div>
+        </div>
+
+        <div class="s-col r fade">
+          <div class="s-anchor">
+            <div class="p s-rail">
+              <div class="s-mode" id="s-mode" role="button"><span id="s-mode-name">Preview</span><svg><use href="#i-expand"/></svg></div>
+              <button class="s-shut" id="s-shut" aria-label="Take a frame"><span></span></button>
+              <div class="s-rb" id="s-chip"><svg><use href="#i-tune"/></svg>5 s · 100</div>
+            </div>
+
+            <div class="p s-holdlbl" data-v="hold">Hold to stop</div>
+            <div class="p s-pop s-grid" data-v="grid" id="s-grid">
+              <span data-go="frame" class="on"><svg><use href="#i-eye"/></svg>Preview</span>
+              <span data-go="focus"><svg><use href="#i-focus"/></svg>Focus</span>
+              <span data-go="pa"><svg><use href="#i-explore"/></svg>Polar align</span>
+              <span data-go="plan"><svg><use href="#i-playlist"/></svg>Plan</span>
+            </div>
+            <div class="p s-pop s-set" data-v="settings">
+              <span style="font-weight:600">Preview settings</span>
+              <div class="pair2">
+                <div><span class="lbl">Exposure</span><div class="s-val">5 s<svg><use href="#i-expand"/></svg></div></div>
+                <div><span class="lbl">Gain</span><div class="s-val">100<svg><use href="#i-expand"/></svg></div></div>
+              </div>
+              <div><span class="lbl">Filter</span><div class="s-val">L · Luminance<svg><use href="#i-expand"/></svg></div></div>
+              <div class="s-seg" role="group" aria-label="Shot"><span class="on">Loop</span><span>Single</span></div>
+            </div>
+
+            <div class="p s-pop s-mp" data-v="focus">
+              <span class="lbl">HFR</span>
+              <span class="big2">2.31</span>
+              <svg class="curve" viewBox="0 0 248 100" preserveAspectRatio="none" aria-label="Focus curve">
+                <path d="M8 12 Q 124 140 240 16" fill="none" stroke="rgba(66,165,245,.8)" stroke-width="1.5"/>
+                <g fill="#E0E0E0"><circle cx="12" cy="16" r="2.5"/><circle cx="42" cy="38" r="2.5"/><circle cx="74" cy="56" r="2.5"/><circle cx="104" cy="68" r="2.5"/><circle cx="130" cy="73" r="2.5"/><circle cx="158" cy="66" r="2.5"/><circle cx="188" cy="52" r="2.5"/><circle cx="218" cy="34" r="2.5"/></g>
+                <line x1="128" y1="4" x2="128" y2="96" stroke="rgba(76,175,80,.7)" stroke-dasharray="3 3"/>
+              </svg>
+              <span class="sub">Position 12,480</span>
+              <button class="go">Autofocus</button>
+              <div class="nudge" role="group" aria-label="Move focuser">
+                <span title="In, large"><svg><use href="#i-dl"/></svg></span><span title="In, small"><svg><use href="#i-l"/></svg></span><span title="Out, small"><svg><use href="#i-r"/></svg></span><span title="Out, large"><svg><use href="#i-dr"/></svg></span>
+              </div>
+            </div>
+            <div class="p s-pop s-mp" data-v="pa">
+              <span class="lbl">Polar error</span>
+              <span class="big2">14′ 30″</span>
+              <span class="zone"><i class="g-busy"></i>Adjusting</span>
+              <svg viewBox="0 0 140 140" style="width:140px;height:140px;align-self:center" aria-label="Bullseye">
+                <g fill="none" stroke="rgba(160,160,160,.5)"><circle cx="70" cy="70" r="66"/><circle cx="70" cy="70" r="44"/><circle cx="70" cy="70" r="22"/><line x1="4" y1="70" x2="136" y2="70"/><line x1="70" y1="4" x2="70" y2="136"/></g>
+                <line x1="70" y1="70" x2="40" y2="58" stroke="rgba(255,179,0,.4)" stroke-width="2.5"/><circle cx="40" cy="58" r="8" fill="#FFB300"/>
+              </svg>
+              <div class="hr"></div>
+              <div class="dir"><span class="sub">Altitude</span><span style="display:flex;align-items:center;gap:4px"><svg style="transform:rotate(180deg)"><use href="#i-up"/></svg>Lower 3.2′</span></div>
+              <div class="dir"><span class="sub">Azimuth</span><span style="display:flex;align-items:center;gap:4px"><svg><use href="#i-left"/></svg>Move west 14.1′</span></div>
+              <div><span class="lbl">Exposure</span><div class="s-val">1 s<svg><use href="#i-expand"/></svg></div></div>
+              <div class="s-seg" role="group" aria-label="Polar align shot"><span class="on">Loop</span><span>Single</span></div>
+              <div class="row2" style="margin-top:4px"><button class="go" disabled style="opacity:.45;background:var(--ok)">Done</button></div>
+            </div>
+            <div class="p s-pop s-mp s-prog" data-v="prog">
+              <span class="lbl">Imaging M31</span>
+              <span class="big2">23 / 60</span>
+              <span class="sub">Ends 23:52 · 1 h 40 min left</span>
+              <div class="hr"></div>
+              <div class="frow"><b>L</b><div class="bar"><i style="width:100%"></i></div><span>15 / 15</span></div>
+              <div class="frow"><b>R</b><div class="bar"><i class="now" style="width:53%"></i></div><span>8 / 15</span></div>
+              <div class="frow"><b>G</b><div class="bar"><i style="width:0"></i></div><span>0 / 15</span></div>
+              <div class="frow"><b>B</b><div class="bar"><i style="width:0"></i></div><span>0 / 15</span></div>
+              <div class="hr"></div>
+              <div class="kv"><span>Last frame</span><span>HFR 2.04 · 1,912 stars</span></div>
+              <span class="sub" style="font-size:12px">Tap the shutter to pause after this frame; hold it to stop.</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="s-stats fade">
+          <div class="p" data-v="frame grid settings clean run hold paused prog run-attn"><div class="gl"><span>Guiding</span><span class="sub">RMS 0.62″</span></div><svg viewBox="0 0 180 44" preserveAspectRatio="none" aria-label="Guiding trace"><line x1="0" y1="22" x2="180" y2="22" stroke="#555" stroke-width="1"/><polyline fill="none" stroke="#42A5F5" stroke-width="1.5" points="0,21 10,24 20,19 30,23 40,21 50,25 60,20 70,22 80,18 90,24 100,21 110,20 120,17 130,27 140,31 150,36 160,13 170,21 180,22"/><polyline fill="none" stroke="#E0E0E0" stroke-width="1.2" stroke-dasharray="3 2" points="0,23 10,21 20,24 30,20 40,23 50,21 60,24 70,20 80,23 90,21 100,24 110,22 120,20 130,25 140,28 150,32 160,17 170,23 180,22"/></svg></div>
+          <div class="p" data-v="taking frame grid settings clean run hold paused prog run-attn focus"><div class="gl"><span>Histogram</span><span class="sub">peak 1,210</span></div><svg viewBox="0 0 180 44" preserveAspectRatio="none" aria-label="Histogram"><path d="M0 44 L20 42 L40 36 L55 12 L62 4 L72 18 L90 34 L120 41 L180 44 Z" fill="rgba(224,224,224,.35)"/></svg></div>
+        </div>
+
+        <div class="p s-sheet" data-v="plan">
+          <div class="hd">Tonight's plan</div>
+          <div class="s-search"><svg><use href="#i-search"/></svg><span>Search objects</span></div>
+          <div style="display:flex;justify-content:space-between;align-items:center"><div><b>M31</b><div class="sub">62° up · max 74°</div></div><span class="link" style="height:44px;display:flex;align-items:center">Pick in Sky</span></div>
+          <div class="hr"></div>
+          <div class="prow"><span>L</span><span>2 min</span><span>× 15</span><span class="rm"><svg><use href="#i-x"/></svg></span></div>
+          <div class="prow"><span>R</span><span>3 min</span><span>× 15</span><span class="rm"><svg><use href="#i-x"/></svg></span></div>
+          <div class="prow"><span>G</span><span>3 min</span><span>× 15</span><span class="rm"><svg><use href="#i-x"/></svg></span></div>
+          <div class="prow"><span>B</span><span>3 min</span><span>× 15</span><span class="rm"><svg><use href="#i-x"/></svg></span></div>
+          <span class="link" style="height:44px;display:flex;align-items:center">Add filter</span>
+          <div class="kv"><span>60 frames</span><span class="sub">2 h 45 min</span></div>
+          <button class="go">Create plan</button>
+        </div>
+        <div class="p s-sheet" data-v="done">
+          <span class="hd">Night done</span>
+          <span class="sub">M31 · 21:12 – 04:31</span>
+          <div class="hr"></div>
+          <div class="kv"><span>Luminance</span><span>40 × 300 s</span></div>
+          <div class="kv"><span>Red</span><span>20 × 180 s</span></div>
+          <div class="kv"><span>Green</span><span>20 × 180 s</span></div>
+          <div class="kv"><span>Blue</span><span>20 × 180 s</span></div>
+          <div class="hr"></div>
+          <div class="kv"><span>Integration</span><span>6 h 12 min</span></div>
+          <div class="kv"><span>Best HFR</span><span>1.98</span></div>
+          <div class="kv"><span>Issues</span><span>Guiding lost twice, recovered</span></div>
+          <div class="kv"><span>Flats</span><span>Captured</span></div>
+          <div class="kv"><span>Mount</span><span>Parked</span></div>
+          <div class="row2" style="margin-top:6px"><button class="ghost">Image Library</button><button class="go">New plan</button></div>
+        </div>
+        <div class="p e-card" data-v="empty">
+          <span class="hd">Connect to your rig</span>
+          <span class="sub">Rigs found on your network</span>
+          <div class="rig"><span class="st"><i class="g-ok"></i></span><div class="grow"><b>ara-pi.local</b><div class="sub" style="font-size:12px">OpenAstro Ara · 10.0.50.20</div></div><button class="go" style="padding:0 18px">Connect</button></div>
+          <span class="link">Add a rig by address</span>
+        </div>
+
+        <div class="s-stop fade"><button title="Hold 2 s to stop everything"><svg><use href="#i-report"/></svg>STOP</button></div>
+      </div>
+
+    </div>
+    <p class="note" style="margin-top:10px">Simple Mode, two rails (ALP-4810, the prototype on <code>feat/simple-mode</code>): the frame fills the screen; the strip on top shows connected gear, then Search, Night mode, Show all options and Settings; the camera status pill sits top-right (at most 300 px). The right rail holds the mode, the shutter and the settings chip, only as tall as its controls; Stop sits alone at the bottom right (2 s hold). The left rail holds Sky, Info and Library. Guiding and the histogram share the bottom row, each once it has data. Popovers and mode panels open left of the right rail and never move it; Plan's sheet and Night done are a sheet centred over the image. Click the mode name, the settings chip or a mode in the grid; click the image to close a popover, or with none open to switch the immersive view.</p>
+  </section>
+
+  <section id="phone">
+    <h2>Phone</h2>
+    <p class="note">Left: what PR #1474 gives a phone today (the full UI folded below 600 px). Right: the proposed image-first Companion Mode, the same idea as desktop Simple Mode.</p>
+    <div class="phones night-target">
+      <figure class="phone-wrap">
+        <div class="phone">
+          <div class="p-safe"></div>
+          <div class="p-top">
+            <div class="iconbtn"><svg><use href="#i-search"/></svg></div>
+            <div class="iconbtn"><svg><use href="#i-moon"/></svg></div>
+            <div class="iconbtn"><svg><use href="#i-gear"/></svg></div>
+          </div>
+          <div class="p-mid">
+            <div class="p-col" id="phone-col"></div>
+            <div class="p-content">
+              <div class="sky"><div class="galaxy" style="width:80%;height:14%"></div></div>
+              <div class="row"><span>Frame</span><span class="num">47 / 120</span></div>
+              <div class="row"><span>Next</span><span class="num">02:14</span></div>
+            </div>
+          </div>
+          <div class="p-status"><svg width="14" height="14" style="fill:var(--ok)"><use href="#i-wifi"/></svg><button class="estop" style="font-size:11px;padding:4px 10px"><svg><use href="#i-report"/></svg>Emergency Stop</button></div>
+          <div class="p-nav">
+            <span><div class="pill"><svg><use href="#i-public"/></svg></div>Planning</span>
+            <span><div class="pill"><svg><use href="#i-check"/></svg></div>Checklist</span>
+            <span><div class="pill"><svg><use href="#i-seq"/></svg></div>Sequence</span>
+            <span class="on"><div class="pill"><svg><use href="#i-live"/></svg></div>Live</span>
+          </div>
+          <div class="p-home"></div>
+        </div>
+        <figcaption><b>Today: PR #1474 narrow layout <span class="tag now">in PR</span></b><span>Bottom tab bar, device column down the left, search / night / Settings top right.</span></figcaption>
+      </figure>
+
+      <figure class="phone-wrap">
+        <div class="phone full">
+          <div class="sky"><div class="galaxy" style="width:95%;height:16%"></div></div>
+          <div class="ov ov-top">
+            <div class="devs" id="phone-devs"></div>
+            <span class="grow"></span>
+            <div class="iconbtn"><svg><use href="#i-moon"/></svg></div>
+            <div class="iconbtn"><svg><use href="#i-gear"/></svg></div>
+          </div>
+          <div class="ov ov-read">
+            <div style="display:flex;justify-content:space-between;align-items:center"><span class="tgt" style="font-weight:600">M31 Andromeda</span><span class="state" style="background:rgba(46,46,46,.8)"><i class="g-ok"></i>Running</span></div>
+            <div class="big num">02:14</div>
+            <div class="bar"><i></i></div>
+            <div class="sub num">Frame 47 of 120 · HFR 2.31 · −10 °C</div>
+          </div>
+          <div class="p-actions">
+            <div class="opt num">300 s · L</div>
+            <button class="shutter" aria-label="Pause"><span><i></i><i></i></span></button>
+            <button class="estop"><svg><use href="#i-report"/></svg>Stop</button>
+          </div>
+        </div>
+        <figcaption><b>Companion Mode, image first <span class="tag prop">proposed</span></b><span>The frame fills the phone; status on top, readouts and the shutter at the bottom within thumb reach, Stop always there.</span></figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section id="components">
+    <h2>Components at both densities</h2>
+    <p class="note">Same colours and states; Simple Mode only changes size, corners and type, and puts its controls on overlays.</p>
+    <div class="pair night-target">
+      <div class="panelbox">
+        <h3>Full UI <span class="tag now">in code</span></h3>
+        <div class="line"><button class="b primary">Start sequence</button><button class="b outline">Cancel</button></div>
+        <div class="line"><span class="d-seg"><span class="on">Cooler on</span><span>Off</span></span><input class="d-field num" value="300 s" aria-label="Exposure"></div>
+        <div class="line">
+          <span class="state"><i class="g-ok"></i>Running</span>
+          <span class="state"><i class="g-busy"></i>Attention</span>
+          <span class="state"><i class="g-err"></i>Failed</span>
+          <span class="state"><i class="g-off"></i>Offline</span>
+        </div>
+        <div class="line" id="chip-samples"></div>
+      </div>
+      <div class="panelbox" style="background:none;border-color:var(--border);position:relative;overflow:hidden">
+        <div class="sky" style="position:absolute;inset:0"><div class="galaxy"></div></div>
+        <h3 style="position:relative">Simple Mode overlays <span class="tag now">in PR #1480</span></h3>
+        <div class="line" style="position:relative">
+          <div class="ov" style="position:relative;padding:12px;display:flex;gap:12px;align-items:center">
+            <button class="shutter" aria-label="Pause" style="width:56px;height:56px"><span><i></i><i></i></span></button>
+            <button class="sb primary">Start imaging</button>
+          </div>
+        </div>
+        <div class="line" style="position:relative">
+          <div class="ov" style="position:relative;padding:8px"><span class="r-seg" style="border-color:transparent"><span class="on">Cooler on</span><span>Off</span></span></div>
+          <div class="ov" style="position:relative;padding:10px 14px"><span class="state" style="background:none;font-size:14px;padding:0"><i class="g-ok"></i>Running</span></div>
+        </div>
+        <div class="line" style="position:relative"><button class="estop" style="padding:12px 20px;font-size:14px;border-radius:24px"><svg><use href="#i-report"/></svg>Emergency Stop</button></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="colors">
+    <h2>Colours</h2>
+    <p class="note">Neutral greys carry the interface; colour appears only when it means a state.</p>
+    <div class="section group-label">Neutral</div><div class="grid" id="neutral"></div>
+    <div class="section group-label">Primary and selection</div><div class="grid" id="primary"></div>
+    <div class="section group-label">Status</div><div class="grid" id="status"></div>
+  </section>
+
+  <section id="type">
+    <h2>Type</h2>
+    <p class="note">The platform's system font, small and dense in the full UI. Hierarchy comes from weight and bright-versus-dim.</p>
+    <div class="type-row"><code>Title · 600 · 15px</code><span style="font-size:15px;font-weight:600">M31 Andromeda Galaxy</span></div>
+    <div class="type-row"><code>Section · 600 · 11px</code><span class="section">Sequence</span></div>
+    <div class="type-row"><code>Body · 400 · 13px</code><span>Exposures are paused until the guide star is found again.</span></div>
+    <div class="type-row"><code>Caption · 400 · 11.5px</code><span style="font-size:11.5px;color:var(--text2)">Last solved 2 min ago</span></div>
+    <div class="type-row"><code>Numeric · tabular</code><span class="num">02:14 · 47 / 120 · −10.0 °C · 0.62″</span></div>
+    <div class="type-row"><code>Label · 500 · 11px</code><span style="font-size:11px;font-weight:500;letter-spacing:.5px;color:var(--text2)">Filter Wheel</span></div>
+    <div class="type-row"><code>Mono · paths only</code><span style="font:11px var(--mono);color:var(--text2)">/mnt/usb/ara/2026-11-01/M31/L_0047.fits</span></div>
+    <div class="type-row"><code>Body (Simple) · 14px</code><span style="font-size:14px">Frame 47 of 120 · Luminance</span></div>
+  </section>
+
+  <section id="shape">
+    <h2>Shape and spacing</h2>
+    <div class="pair">
+      <div class="panelbox">
+        <h3>Corner radii</h3>
+        <div class="shapes">
+          <div class="shape"><div style="border-radius:4px"></div>4 px · fields</div>
+          <div class="shape"><div style="border-radius:6px"></div>6 px · cards, buttons</div>
+          <div class="shape"><div style="border-radius:8px"></div>8 px · containers</div>
+          <div class="shape"><div style="border-radius:12px"></div>12 px · state pills</div>
+          <div class="shape"><div style="border-radius:10px;border-color:var(--busy)"></div>10 px · Simple Mode</div>
+        </div>
+      </div>
+      <div class="panelbox">
+        <h3>Spacing scale</h3>
+        <div class="space-row"><code>4</code><i style="width:4px"></i></div>
+        <div class="space-row"><code>8</code><i style="width:8px"></i></div>
+        <div class="space-row"><code>12</code><i style="width:12px"></i></div>
+        <div class="space-row"><code>16</code><i style="width:16px"></i></div>
+        <div class="space-row"><code>24</code><i style="width:24px"></i></div>
+        <p class="note" style="margin:0">Full UI mostly 8–16. Simple Mode 12–24.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="rules">
+    <h2>Named rules</h2>
+    <div class="rules">
+      <div class="rule"><b>State-Only Colour</b><p>An accent appears only when it means a state: a dot, a state chip, a destructive action.</p></div>
+      <div class="rule"><b>Brightness-First</b><p>Night mode removes hue, so states must differ by brightness too. Left: normal. Right: the app's night filter.</p>
+        <div class="nightdemo">
+          <div><span><i class="g-ok"></i>Connected</span><span><i class="g-busy"></i>Busy</span><span><i class="g-err"></i>Fault</span><span><i class="g-off"></i>Offline</span></div>
+          <div class="night"><span><i class="g-ok"></i>Connected</span><span><i class="g-busy"></i>Busy</span><span><i class="g-err"></i>Fault</span><span><i class="g-off"></i>Offline</span></div>
+        </div>
+      </div>
+      <div class="rule"><b>Steady Digits</b><p>Every live number uses tabular figures, so a countdown never shifts its neighbours.</p></div>
+      <div class="rule"><b>No-Glow</b><p>No shadows. Surfaces separate by a 1 px hairline and a grey step. Simple Mode's overlays are the one translucent surface.</p></div>
+      <div class="rule"><b>One Ramp</b><p>New screens use the shared type sizes, not per-widget 11/12/13 px styles.</p></div>
+      <div class="rule"><b>Two Densities</b><p>Full UI dense. Simple Mode and phones roomy and image-first. Same colours, rules and Emergency Stop.</p></div>
+    </div>
+  </section>
+</div>
+
+<script>
+  // PR #1474 device order and the session's states (camera exposing = blinking green)
+  const DEVICES = [
+    ['Camera','i-cam','g-ok blink'],['Mount','i-mount','g-ok'],['Guider','i-guide','g-busy'],['Focuser','i-focus','g-ok'],
+    ['Filter Wheel','i-filter','g-ok'],['Rotator','i-rot','g-off'],['Flat Panel','i-panel','g-off'],['Switches','i-switch','g-off'],
+    ['Weather','i-weather','g-ok'],['Safety','i-safety','g-ok'],['Dome','i-dome','g-off']];
+  const chip = ([n, ic, st]) => `<div class="eq" title="${n}"><div class="ic"><svg><use href="#${ic}"/></svg><i class="dot ${st}"></i></div><div class="lb${n.length > 8 ? ' fit' : ''}">${n}</div></div>`;
+  const iconOnly = ([n, ic, st]) => `<div class="ic" title="${n}"><svg><use href="#${ic}"/></svg><i class="dot ${st}"></i></div>`;
+  document.getElementById('chips').innerHTML = DEVICES.map(chip).join('');
+  document.getElementById('chip-samples').innerHTML = DEVICES.slice(0, 5).map(chip).join('');
+  document.getElementById('phone-col').innerHTML = DEVICES.map(iconOnly).join('');
+  document.getElementById('phone-devs').innerHTML = DEVICES.slice(0, 4).map(iconOnly).join('');
+
+  // Deterministic star fields
+  document.querySelectorAll('.sky, .atlas').forEach((f, n) => {
+    let s = 11 + n * 17;
+    const r = () => (s = (s * 9301 + 49297) % 233280) / 233280;
+    for (let i = 0; i < 140; i++) {
+      const d = document.createElement('i'), big = r() < 0.06, size = big ? 3 : (r() < 0.5 ? 1.5 : 2);
+      d.style.cssText = `left:${(r() * 100).toFixed(2)}%;top:${(r() * 100).toFixed(2)}%;width:${size}px;height:${size}px;opacity:${(0.3 + r() * 0.7).toFixed(2)}${big ? ';box-shadow:0 0 4px rgba(255,255,255,.6)' : ''}`;
+      f.appendChild(d);
+    }
+  });
+
+  // Swatches straight from the tokens
+  const sw = {
+    neutral: [['Night Floor','bg-primary','#1A1A1A','App background'],['Panel Grey','bg-panel','#262626','Bars, rail, cards, safe areas'],['Panel Alt','bg-panel-alt','#2E2E2E','Hover, alternate rows'],['Input Well','bg-input','#333333','Fields, tracks'],['Hairline','border','#404040','Borders, dividers'],['Starlight Text','text-primary','#E0E0E0','Primary text, icons'],['Dim Text','text-secondary','#A0A0A0','Labels, device names'],['Faint Text','text-disabled','#606060','Disabled, empty'],['Overlay Scrim','overlay-scrim','rgba(26,26,26,.72)','Simple Mode overlays (proposed)','scrim']],
+    primary: [['Console Blue','button-primary','#1565C0','Main action of a pane'],['Selection Blue','selection-bg','#1976D2','Selected tab, segment'],['Sky Info Blue','accent-info','#42A5F5','Info, links, lit Settings gear']],
+    status: [['Connected Green','accent-connected','#4CAF50','Connected; blinks while working'],['Dew Amber','accent-busy / warning','#FFB300','Needs a look; warning with icon + text'],['Fault Red','accent-error','#E53935','Faults, destructive, Emergency Stop'],['Unplugged Grey','accent-disconnected','#606060','Disconnected, off']]
+  };
+  for (const [id, list] of Object.entries(sw)) {
+    document.getElementById(id).innerHTML = list.map(([n, t, h, use, cls]) =>
+      `<div class="sw"><div class="chip ${cls || ''}" style="${cls ? '' : 'background:' + h}"></div><div class="meta"><b>${n}</b><code>${t} · ${h}</code><p>${use}</p></div></div>`).join('');
+  }
+
+  // Toggles
+  const groups = (attr, fn) => document.querySelectorAll(`[data-${attr}]`).forEach(b => b.addEventListener('click', () => {
+    document.querySelectorAll(`[data-${attr}]`).forEach(x => x.setAttribute('aria-pressed', x === b));
+    fn(b.dataset[attr]);
+  }));
+  let MODE = 'full';
+  const S = document.getElementById('simpleS');
+  groups('mode', m => {
+    MODE = m;
+    document.getElementById('full').hidden = m !== 'full';
+    S.hidden = m !== 'simple';
+    document.getElementById('smode-seg').hidden = document.getElementById('smode-seg2').hidden = m !== 'simple';
+  });
+  // mode: the mode (rail: its shorter rail label, when the name doesn't fit 60 px); pill: [dot, label, detail, bar] or null (idle shows nothing); sky/info: the left rail's lit buttons
+  const P = { img: ['g-ok', 'Taking a frame', '72 s left', true], taking: ['g-ok', 'Taking a frame', '3 s left', true], ready: ['g-ok', 'Frame ready'], loop: ['g-ok', 'Looping'] };
+  const VIEWS = {
+    idle: { mode: 'Preview', sky: true }, taking: { mode: 'Preview', pill: P.taking, shut: true },
+    frame: { mode: 'Preview', pill: P.ready, info: true }, grid: { mode: 'Preview', pill: P.ready, info: true },
+    settings: { mode: 'Preview', pill: P.ready, info: true }, clean: { mode: 'Preview', pill: P.loop, info: true, shut: true },
+    focus: { mode: 'Focus', chip: 'Auto', pill: P.loop, shut: true }, pa: { mode: 'Polar align', rail: 'P.A.', chip: '1 s\nLoop', chipIcon: false, pill: P.loop, shut: true },
+    pick: { mode: 'Preview', sky: true },
+    plan: { mode: 'Plan', chip: '2 h\n45 min', chipIcon: false, sh: 'off' }, ready: { mode: 'Plan', chip: '2 h\n45 min', chipIcon: false, sh: 'go2' },
+    run: { mode: 'Plan', pill: P.img, chip: '2 h\n45 min', chipIcon: false, sh: 'pz' }, hold: { mode: 'Plan', pill: P.img, chip: '2 h\n45 min', chipIcon: false, sh: 'hd' },
+    paused: { mode: 'Plan', pill: ['g-busy', 'Paused'], chip: '2 h\n45 min', chipIcon: false, sh: 'play' }, prog: { mode: 'Plan', pill: P.img, chip: '2 h\n45 min', chipIcon: false, sh: 'pz' },
+    'run-attn': { mode: 'Plan', pill: ['g-busy', 'Waiting for guiding'], chip: '2 h\n45 min', chipIcon: false, sh: 'pz' }, done: { mode: 'Plan', chip: '2 h\n45 min', chipIcon: false },
+    empty: { mode: 'Preview', sky: true } };
+  let VIEW;
+  const setView = v => {
+    const o = VIEWS[v];
+    VIEW = v;
+    // toggleAttribute, not .hidden: SVG elements have no hidden property
+    S.querySelectorAll('[data-v]').forEach(el => el.toggleAttribute('hidden', !el.dataset.v.split(' ').includes(v)));
+    S.classList.toggle('offline', v === 'empty');
+    S.classList.toggle('clean', v === 'clean');
+    const pill = document.getElementById('s-pill');
+    pill.toggleAttribute('hidden', !o.pill);
+    if (o.pill) { const [dot, label, detail, bar] = o.pill; pill.innerHTML = `<i class="${dot}"></i>${label}${detail ? ` <span class="sub">${detail}</span>` : ''}${bar ? '<span class="pb"><i></i></span>' : ''}`; }
+    document.getElementById('s-mode-name').textContent = o.rail || o.mode;
+    document.getElementById('s-mode').classList.toggle('open', v === 'grid');
+    document.getElementById('s-chip').classList.toggle('on', ['settings', 'focus', 'pa', 'plan', 'prog'].includes(v));
+    const chip = document.getElementById('s-chip');
+    chip.lastChild.textContent = o.chip || '5 s · 100';
+    chip.style.whiteSpace = o.chip && o.chip.includes('\n') ? 'pre' : '';
+    chip.firstChild.style.display = o.chipIcon === false ? 'none' : '';
+    document.getElementById('s-sky').classList.toggle('on', !!o.sky);
+    document.getElementById('s-info').classList.toggle('on', !!o.info);
+    document.getElementById('s-sys').classList.toggle('on', v === 'frame');
+    const shut = document.getElementById('s-shut');
+    shut.classList.toggle('run', !!o.shut);
+    ['go2', 'pz', 'hd', 'play', 'off'].forEach(c => shut.classList.toggle(c, o.sh === c || (c === 'pz' && o.sh === 'hd')));
+    shut.setAttribute('aria-label', o.shut ? 'Stop' : 'Take a frame');
+    S.querySelectorAll('#s-grid span').forEach(x => x.classList.toggle('on', VIEWS[x.dataset.go].mode === o.mode));
+    document.querySelectorAll('[data-smode]').forEach(x => x.setAttribute('aria-pressed', x.dataset.smode === v));
+  };
+  groups('smode', setView);
+  const live = () => VIEW !== 'empty';
+  document.getElementById('s-mode').addEventListener('click', () => live() && setView(VIEW === 'grid' ? 'frame' : 'grid'));
+  // In Plan the chip (and the tracker) opens the plan sheet before a run and the progress panel during one
+  const RUN_CHIP = { plan: 'ready', ready: 'plan', run: 'prog', prog: 'run', paused: 'prog', 'run-attn': 'prog', done: 'done' };
+  document.getElementById('s-chip').addEventListener('click', () => live() && setView(RUN_CHIP[VIEW] || (VIEW === 'settings' ? 'frame' : 'settings')));
+  // The shutter always starts; in Plan it then pauses and resumes (a 2 s hold stops: see Holding to stop)
+  const RUN_SHUT = { ready: 'run', run: 'paused', prog: 'paused', 'run-attn': 'paused', paused: 'run' };
+  document.getElementById('s-shut').addEventListener('click', () => live() && setView(RUN_SHUT[VIEW] || (VIEWS[VIEW].shut ? 'frame' : 'taking')));
+  S.querySelectorAll('#s-grid span').forEach(x => x.addEventListener('click', () => setView(x.dataset.go)));
+  // A tap on the image closes an open popover; with none open it switches the immersive view (only over a frame)
+  S.querySelector(':scope > .sky').addEventListener('click', () => {
+    if (VIEW === 'grid' || VIEW === 'settings') setView('frame');
+    else if (VIEW === 'clean') setView('frame');
+    else if (VIEW === 'frame') setView('clean');
+  });
+  setView('frame');
+  groups('night', v => document.querySelectorAll('#stage, .night-target').forEach(el => el.classList.toggle('night', v === 'on')));
+  groups('estop', v => document.querySelectorAll('#stage .estop').forEach(el => el.classList.toggle('heavy', v === 'heavy')));
+</script>
+</body>
+</html>
