@@ -664,6 +664,23 @@ void main() {
     });
   }
 
+  for (final size in const [Size(1024, 768), Size(1470, 854)]) {
+    testWidgets('at $size: the Settings menu pushes the Autopilot offer aside, and it comes back', (tester) async {
+      await _pump(tester, size);
+      final offer = find.byKey(const Key('autopilot-offer'));
+      final centred = tester.getRect(offer).center.dx;
+      await tester.tap(find.byTooltip('Settings'));
+      await tester.pumpAndSettle();
+      final menu = tester.getRect(find.byKey(const Key('simple-menu')));
+      final moved = tester.getRect(offer);
+      expect(moved.right, lessThanOrEqualTo(menu.left - kSimpleInset), reason: 'beside the menu, not under it');
+      expect(moved.left, greaterThanOrEqualTo(0));
+      await tester.tap(find.byTooltip('Settings'));
+      await tester.pumpAndSettle();
+      expect(tester.getRect(offer).center.dx, closeTo(centred, 0.5), reason: 'centred again');
+    });
+  }
+
   testWidgets('the Autopilot offer can be dismissed', (tester) async {
     await _pump(tester, const Size(1024, 768));
     await tester.tap(find.byTooltip('Not now'));

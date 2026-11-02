@@ -169,18 +169,26 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
   final _rightRailKey = GlobalKey();
   final _autopilotRowKey = GlobalKey();
 
+  /// The Settings menu's width, measured the same way: the Autopilot row
+  /// moves left of it while it shows.
+  double _menuWidth = 0;
+  final _menuKey = GlobalKey();
+
   void _measure() => WidgetsBinding.instance.addPostFrameCallback((_) {
     final rail = _leftRailKey.currentContext?.size?.height;
     final right = _rightRailKey.currentContext?.size?.height;
     final row = _autopilotRowKey.currentContext?.size?.height;
+    final menu = _menuKey.currentContext?.size?.width ?? 0;
     if (!mounted) return;
     if ((rail != null && rail != _leftRailHeight) ||
         (right != null && right != _rightRailHeight) ||
-        (row != null && row != _autopilotRowHeight)) {
+        (row != null && row != _autopilotRowHeight) ||
+        menu != _menuWidth) {
       setState(() {
         _leftRailHeight = rail ?? _leftRailHeight;
         _rightRailHeight = right ?? _rightRailHeight;
         _autopilotRowHeight = row ?? _autopilotRowHeight;
+        _menuWidth = menu;
       });
     }
   });
@@ -645,6 +653,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                   right: kSimpleInset,
                                   top: railTop,
                                   child: _SettingsMenu(
+                                    key: _menuKey,
                                     onClose: () => setState(
                                       () => _popover = _Popover.none,
                                     ),
@@ -709,11 +718,17 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                   ),
                                 ),
                               // Autopilot's steps, or the offer to start it, centred
-                              // under the strip.
+                              // under the strip; the Settings menu pushes it left.
                               if (autopilotRow)
-                                Positioned(
+                                AnimatedPositioned(
+                                  duration: motion,
+                                  curve: Curves.easeOut,
                                   left: 0,
-                                  right: 0,
+                                  right:
+                                      _popover == _Popover.menu &&
+                                          _menuWidth > 0
+                                      ? kSimpleInset * 2 + _menuWidth
+                                      : 0,
                                   top: railTop,
                                   child: Center(
                                     child: KeyedSubtree(
@@ -1578,7 +1593,11 @@ ThemeData simpleTheme(ThemeData base) {
 /// The top bar's Settings menu: the rig's figures (System), the rig and
 /// profile with the way to change them, and the rest of Settings.
 class _SettingsMenu extends ConsumerWidget {
-  const _SettingsMenu({required this.onClose, required this.onSettings});
+  const _SettingsMenu({
+    super.key,
+    required this.onClose,
+    required this.onSettings,
+  });
 
   final VoidCallback onClose;
   final VoidCallback onSettings;
