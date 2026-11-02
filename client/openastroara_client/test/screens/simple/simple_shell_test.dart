@@ -947,7 +947,7 @@ void main() {
     expect(rect.right, size.width - kSimpleInset, reason: 'the width of the window');
     final blur = tester.widget<BackdropFilter>(find.descendant(of: sheet, matching: find.byType(BackdropFilter)));
     expect(blur.filter, ImageFilter.blur(sigmaX: 5, sigmaY: 5));
-    final box = tester.widget<Container>(find.byKey(const Key('simple-menu-surface')));
+    final box = tester.widget<Container>(find.descendant(of: sheet, matching: find.byKey(const Key('simple-frosted-surface'))));
     expect((box.decoration! as BoxDecoration).color, AraColors.overlayScrim);
     for (final t in ['Devices', 'Rig']) {
       expect(find.descendant(of: sheet, matching: find.text(t)), findsWidgets, reason: t);
@@ -1106,6 +1106,11 @@ void main() {
     expect(find.byType(SettingsShell), findsNothing);
     expect(find.byKey(const Key('simple-device-camera')), findsOneWidget);
     expect(c.read(simpleModeProvider).value, isTrue);
+    // The same look as the Settings sheet: the 90 % panel over a 5 px blur.
+    final window = find.ancestor(of: find.byKey(const Key('simple-device-camera')), matching: find.byType(BackdropFilter));
+    expect(tester.widget<BackdropFilter>(window).filter, ImageFilter.blur(sigmaX: 5, sigmaY: 5));
+    final surface = find.descendant(of: window, matching: find.byKey(const Key('simple-frosted-surface')));
+    expect((tester.widget<Container>(surface).decoration! as BoxDecoration).color, AraColors.overlayScrim);
     await tester.tapAt(const Offset(512, 700)); // the image closes it
     await tester.pump();
     expect(find.byKey(const Key('simple-device-camera')), findsNothing);

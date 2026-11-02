@@ -798,7 +798,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                   left: kSimpleInset,
                                   top: railTop,
                                   width: 360 * simpleRailScale(context),
-                                  child: const SimplePanel(
+                                  child: const SimpleFrostedPanel(
                                     padding: EdgeInsets.all(AraSpace.s16),
                                     child: SimpleCameraWindow(),
                                   ),
@@ -951,6 +951,29 @@ class SimplePanel extends StatelessWidget {
       borderRadius: BorderRadius.circular(10),
     ),
     child: child,
+  );
+}
+
+/// The Settings sheet's and the device windows' look: the 90 % panel scrim
+/// over a 5 px blur of the image behind (user, 2026-11-03).
+class SimpleFrostedPanel extends StatelessWidget {
+  const SimpleFrostedPanel({super.key, required this.child, this.padding});
+
+  final Widget child;
+  final EdgeInsetsGeometry? padding;
+
+  @override
+  Widget build(BuildContext context) => ClipRRect(
+    borderRadius: BorderRadius.circular(10),
+    child: BackdropFilter(
+      filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+      child: Container(
+        key: const Key('simple-frosted-surface'),
+        padding: padding,
+        decoration: const BoxDecoration(color: AraColors.overlayScrim),
+        child: child,
+      ),
+    ),
   );
 }
 
@@ -1675,98 +1698,88 @@ class _SettingsSheetState extends ConsumerState<_SettingsSheet> {
     ];
     // A narrow window (Split View, a phone) keeps only the sections' icons.
     final narrow = MediaQuery.sizeOf(context).width < 600;
-    return ClipRRect(
+    return SimpleFrostedPanel(
       key: const Key('simple-menu'),
-      borderRadius: BorderRadius.circular(10),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
-        child: Container(
-          key: const Key('simple-menu-surface'),
-          decoration: const BoxDecoration(color: AraColors.overlayScrim),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              SizedBox(
-                width: narrow ? 60 : 200 * simpleRailScale(context),
-                child: ListView(
-                  padding: const EdgeInsets.all(AraSpace.s8),
-                  children: [
-                    for (final (name, icon, device) in sections)
-                      Padding(
-                        padding: EdgeInsets.only(
-                          bottom: 4,
-                          left: device && !narrow ? AraSpace.s16 : 0,
-                        ),
-                        child: Material(
-                          color: _section == name
-                              ? AraColors.selectionTint
-                              : Colors.transparent,
-                          borderRadius: BorderRadius.circular(8),
-                          child: InkWell(
-                            key: Key('simple-menu-nav-$name'),
-                            borderRadius: BorderRadius.circular(8),
-                            onTap: () => setState(() => _section = name),
-                            child: Semantics(
-                              selected: _section == name,
-                              label: narrow ? name : null,
-                              child: ConstrainedBox(
-                                constraints: const BoxConstraints(
-                                  minHeight: 44,
-                                ),
-                                child: Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: AraSpace.s12,
-                                    vertical: AraSpace.s8,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SizedBox(
+            width: narrow ? 60 : 200 * simpleRailScale(context),
+            child: ListView(
+              padding: const EdgeInsets.all(AraSpace.s8),
+              children: [
+                for (final (name, icon, device) in sections)
+                  Padding(
+                    padding: EdgeInsets.only(
+                      bottom: 4,
+                      left: device && !narrow ? AraSpace.s16 : 0,
+                    ),
+                    child: Material(
+                      color: _section == name
+                          ? AraColors.selectionTint
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(8),
+                      child: InkWell(
+                        key: Key('simple-menu-nav-$name'),
+                        borderRadius: BorderRadius.circular(8),
+                        onTap: () => setState(() => _section = name),
+                        child: Semantics(
+                          selected: _section == name,
+                          label: narrow ? name : null,
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(minHeight: 44),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: AraSpace.s12,
+                                vertical: AraSpace.s8,
+                              ),
+                              child: Row(
+                                spacing: AraSpace.s12,
+                                children: [
+                                  Icon(
+                                    icon,
+                                    size: 20,
+                                    color: _section == name
+                                        ? AraColors.accentInfo
+                                        : AraColors.textPrimary,
                                   ),
-                                  child: Row(
-                                    spacing: AraSpace.s12,
-                                    children: [
-                                      Icon(
-                                        icon,
-                                        size: 20,
-                                        color: _section == name
-                                            ? AraColors.accentInfo
-                                            : AraColors.textPrimary,
-                                      ),
-                                      if (!narrow)
-                                        Expanded(
-                                          child: Text(
-                                            name,
-                                            style: kSimpleText.copyWith(
-                                              color: _section == name
-                                                  ? AraColors.accentInfo
-                                                  : null,
-                                            ),
-                                          ),
+                                  if (!narrow)
+                                    Expanded(
+                                      child: Text(
+                                        name,
+                                        style: kSimpleText.copyWith(
+                                          color: _section == name
+                                              ? AraColors.accentInfo
+                                              : null,
                                         ),
-                                    ],
-                                  ),
-                                ),
+                                      ),
+                                    ),
+                                ],
                               ),
                             ),
                           ),
                         ),
                       ),
-                  ],
-                ),
-              ),
-              const VerticalDivider(width: 1, color: AraColors.border),
-              Expanded(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(AraSpace.s16),
-                  child: switch (_section) {
-                    'Rig' => _ThisRig(
-                      onClose: widget.onClose,
-                      onLogs: widget.onLogs,
                     ),
-                    'Camera' => const SimpleCameraWindow(),
-                    _ => _Gear(onOpen: (id) => setState(() => _section = id)),
-                  },
-                ),
-              ),
-            ],
+                  ),
+              ],
+            ),
           ),
-        ),
+          const VerticalDivider(width: 1, color: AraColors.border),
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(AraSpace.s16),
+              child: switch (_section) {
+                'Rig' => _ThisRig(
+                  onClose: widget.onClose,
+                  onLogs: widget.onLogs,
+                ),
+                'Camera' => const SimpleCameraWindow(),
+                _ => _Gear(onOpen: (id) => setState(() => _section = id)),
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
