@@ -964,6 +964,12 @@ void main() {
     for (final t in ['412 GB free', '23 %', '512 MB', '3 h 12 min']) {
       expect(find.descendant(of: line, matching: find.text(t)), findsOneWidget, reason: t);
     }
+    // Spread across the page like the mock, not bunched on the left.
+    final tiles = [for (final t in ['Storage', 'CPU', 'Memory', 'Up']) tester.getRect(find.descendant(of: line, matching: find.text(t)))];
+    final row = tester.getRect(line);
+    final page = tester.getRect(find.ancestor(of: line, matching: find.byType(Column)).first);
+    expect(row.width, closeTo(page.width, 1), reason: 'the tiles fill the page width');
+    expect(tiles.last.center.dx - tiles.first.center.dx, greaterThan(page.width * 0.6));
     for (final t in ['astro', 'Backyard Rig', 'Change profile', 'Change rig', 'Permanent pier', 'Simple Mode', 'Logs & bug report']) {
       expect(find.descendant(of: sheet, matching: find.text(t)), findsWidgets, reason: t);
     }

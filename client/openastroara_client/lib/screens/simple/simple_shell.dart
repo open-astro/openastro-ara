@@ -1964,10 +1964,7 @@ class _ThisRig extends ConsumerWidget {
       spacing: AraSpace.s8,
       children: [
         const Text('This rig', style: kSimpleText),
-        const SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: SimpleSystemPanel(),
-        ),
+        const SimpleSystemPanel(expand: true),
         fact('Rig', server == null ? '—' : server.mdnsName ?? server.hostname),
         fact('Profile', profile ?? '—'),
         if (running)

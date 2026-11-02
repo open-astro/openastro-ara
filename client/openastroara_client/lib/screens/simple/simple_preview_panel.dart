@@ -81,7 +81,10 @@ String simpleMemory(int bytes) {
 /// are Ara's own process until the server reports the whole Pi. Re-read
 /// every 5 s while it shows.
 class SimpleSystemPanel extends ConsumerStatefulWidget {
-  const SimpleSystemPanel({super.key});
+  const SimpleSystemPanel({super.key, this.expand = false});
+
+  /// Spread the tiles across the width they're given (Settings › This rig).
+  final bool expand;
 
   @override
   ConsumerState<SimpleSystemPanel> createState() => _SimpleSystemPanelState();
@@ -119,7 +122,11 @@ class _SimpleSystemPanelState extends ConsumerState<SimpleSystemPanel> {
       ('Memory', state == null ? '—' : simpleMemory(state.workingSetBytes)),
       ('Up', state == null ? '—' : simpleUptime(state.uptimeSeconds)),
     ];
-    return SimpleFactTiles(key: const Key('simple-system-line'), facts: facts);
+    return SimpleFactTiles(
+      key: const Key('simple-system-line'),
+      facts: facts,
+      expand: widget.expand,
+    );
   }
 }
 
@@ -162,9 +169,12 @@ class SimpleInfoPanel extends ConsumerWidget {
 /// the tiles would squeeze it back down, so the facts read as one list
 /// instead, a label and value per line (WCAG 1.4.4).
 class SimpleFactTiles extends StatelessWidget {
-  const SimpleFactTiles({super.key, required this.facts});
+  const SimpleFactTiles({super.key, required this.facts, this.expand = false});
 
   final List<(String, String)> facts;
+
+  /// Equal tiles across the full width instead of 72 px each.
+  final bool expand;
 
   static final _value = kSimpleText.copyWith(
     fontSize: 13,
@@ -205,32 +215,34 @@ class SimpleFactTiles extends StatelessWidget {
   }
 
   Widget _tiles() => Row(
-    mainAxisSize: MainAxisSize.min,
+    mainAxisSize: expand ? MainAxisSize.max : MainAxisSize.min,
     spacing: AraSpace.s8,
-    children: [
-      for (final (label, value) in facts)
-        Container(
-          width: kSimpleRailWidth,
-          height: 56,
-          padding: const EdgeInsets.symmetric(horizontal: 4),
-          decoration: _box,
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            spacing: 1,
-            children: [
-              FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Text(label, style: AraText.caption, maxLines: 1),
-              ),
-              FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Text(value, style: _value, maxLines: 1),
-              ),
-            ],
-          ),
-        ),
-    ],
+    children: [for (final (label, value) in facts) _tile(label, value)],
   );
+
+  Widget _tile(String label, String value) {
+    final tile = Container(
+      width: expand ? null : kSimpleRailWidth,
+      height: 56,
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      decoration: _box,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        spacing: 1,
+        children: [
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(label, style: AraText.caption, maxLines: 1),
+          ),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(value, style: _value, maxLines: 1),
+          ),
+        ],
+      ),
+    );
+    return expand ? Expanded(child: tile) : tile;
+  }
 }
 
 /// True from the tap on the square until the daemon has answered the abort:
