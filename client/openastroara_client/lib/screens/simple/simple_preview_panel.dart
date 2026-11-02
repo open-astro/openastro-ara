@@ -116,7 +116,10 @@ class _SimpleSystemPanelState extends ConsumerState<SimpleSystemPanel> {
     final storage = ref.watch(storageSpaceProvider);
     final cpu = state?.cpuPercent;
     final facts = [
-      ('Storage', storage.hasValue ? simpleFree(storage.value?.freeBytes) : '—'),
+      (
+        'Storage',
+        storage.hasValue ? simpleFree(storage.value?.freeBytes) : '—',
+      ),
       ('CPU', cpu == null ? '—' : '${cpu.round()} %'),
       ('Memory', state == null ? '—' : simpleMemory(state.workingSetBytes)),
       ('Up', state == null ? '—' : simpleUptime(state.uptimeSeconds)),
@@ -635,8 +638,10 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
         padding: const EdgeInsets.symmetric(horizontal: AraSpace.s16),
         child: Stack(
           children: [
-            SizedBox(
+            Container(
               height: kSimpleStatusHeight,
+              // With the bar, the words move up so the two sit together.
+              padding: EdgeInsets.only(bottom: stepProgress == null ? 0 : 9),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -688,7 +693,7 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
               Positioned(
                 left: 0,
                 right: 0,
-                bottom: 6,
+                bottom: 10,
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(2),
                   child: LinearProgressIndicator(

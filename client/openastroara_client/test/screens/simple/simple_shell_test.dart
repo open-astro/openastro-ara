@@ -887,6 +887,10 @@ void main() {
     expect(pill.height, kSimpleStatusHeight, reason: 'the bar sits inside the pill, which keeps its height');
     expect(tester.getRect(bar).bottom, lessThanOrEqualTo(pill.bottom));
     expect(tester.getRect(bar).top, greaterThan(pill.center.dy), reason: 'along its foot');
+    // The words and the bar sit together in the middle: no empty band above the words.
+    final words = tester.getRect(find.descendant(of: find.byType(SimpleStatusPill), matching: find.textContaining('Cooling camera')));
+    expect((words.top - pill.top) - (pill.bottom - tester.getRect(bar).bottom), lessThan(3),
+        reason: 'words $words, bar ${tester.getRect(bar)}, pill $pill');
   });
 
   testWidgets('a scheduled plan waiting on the rig: the pill says when it starts', (tester) async {
