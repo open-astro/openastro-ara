@@ -455,8 +455,16 @@ void main() {
       await tester.tap(find.text('Plan').first);
       await tester.pump();
       final sheet = tester.getRect(find.byType(SimpleRunSheet));
+      final squares = tester.getRect(find.byKey(const Key('simple-run-tracker')));
       expect(sheet.top, greaterThanOrEqualTo(kSimpleInset * 3 + kSimpleBarHeight + kSimpleStatusHeight),
           reason: 'under the status pill');
+      expect(sheet.top, greaterThan(squares.bottom), reason: 'under the plan squares');
+      // Ten queued: the squares stop short of the status pill's slot and the
+      // rest fold into one "+N" square.
+      expect(squares.left, greaterThanOrEqualTo(kSimpleInset * 2 + kSimpleStatusMaxWidth),
+          reason: 'clear of the status pill');
+      expect(find.descendant(of: find.byKey(const Key('simple-run-tracker')), matching: find.textContaining('+')),
+          findsOneWidget);
       expect(sheet.bottom, lessThanOrEqualTo(size.height - kSimpleInset * 2 - kSimpleBarHeight),
           reason: 'above the bottom row');
       final queue = tester.getRect(find.text('QUEUE'));
@@ -466,6 +474,25 @@ void main() {
       } else {
         expect(queue.bottom, lessThan(search.top), reason: 'on top');
       }
+    });
+  }
+
+  for (final size in const [Size(1024, 768), Size(768, 1024)]) {
+    testWidgets('at $size: in Autopilot the plan squares stay clear of the step strip', (tester) async {
+      await _pump(tester, size,
+          plan: SimpleRun(sequenceId: 'seq-1', targets: [
+            for (var i = 1; i <= 6; i++)
+              SimpleTarget(name: 'M$i', steps: const [FilterPlanStep(filterName: 'L', exposureSeconds: 120, frameCount: 30)]),
+          ]));
+      await tester.tap(find.byKey(const Key('autopilot-start')));
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('autopilot-skip')));
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('autopilot-skip')));
+      await tester.pump();
+      final strip = tester.getRect(find.byKey(const Key('autopilot-strip')));
+      final squares = tester.getRect(find.byKey(const Key('simple-run-tracker')));
+      expect(squares.overlaps(strip), isFalse, reason: 'strip $strip, squares $squares');
     });
   }
 

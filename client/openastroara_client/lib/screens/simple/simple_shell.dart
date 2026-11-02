@@ -141,6 +141,21 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
   /// Plan's sheet open over a run in progress, to add to the queue.
   bool _adding = false;
 
+  /// The Autopilot strip's laid-out width, so the plan squares stop short of
+  /// it; measured after each frame it shows.
+  Size _strip = Size.zero;
+  final _stripKey = GlobalKey();
+
+  Widget _measured(Widget strip) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final size = _stripKey.currentContext?.size;
+      if (mounted && size != null && size != _strip) {
+        setState(() => _strip = size);
+      }
+    });
+    return KeyedSubtree(key: _stripKey, child: strip);
+  }
+
   /// The Autopilot offer was dismissed (until Simple Mode opens again).
   bool _offerDismissed = false;
 
@@ -250,6 +265,25 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     final runActive =
         shown == SimpleModeScreen.plan &&
         (ref.watch(sequenceRunStateProvider).value?.state?.isActive ?? false);
+    final planSquares =
+        simpleRunPhase(
+          ref.watch(simpleRunProvider),
+          ref.watch(sequenceRunStateProvider).value,
+        ) !=
+        SimpleRunPhase.none;
+    const railTop = kSimpleInset * 2 + kSimpleBarHeight;
+    final width = MediaQuery.sizeOf(context).width;
+    // The plan squares sit right of Autopilot's strip, or under it when the
+    // window leaves no room beside it (portrait).
+    const pillEnd = kSimpleInset * 2 + kSimpleStatusMaxWidth;
+    final beside = _mode == SimpleModeScreen.autopilot
+        ? (width + _strip.width) / 2 + kSimpleInset
+        : 0.0;
+    final underStrip = width - kSimpleInset - beside < kSimpleRailWidth;
+    final squaresLeft = underStrip ? pillEnd : math.max(pillEnd, beside);
+    final squaresTop = underStrip
+        ? railTop + _strip.height + kSimpleInset
+        : railTop;
     final runSheet =
         shown == SimpleModeScreen.plan &&
         ((_popover == _Popover.settings && !runActive) || _adding);
@@ -257,7 +291,6 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     final motion = MediaQuery.disableAnimationsOf(context)
         ? Duration.zero
         : const Duration(milliseconds: 220);
-    const railTop = kSimpleInset * 2 + kSimpleBarHeight;
     return Theme(
       data: simpleTheme(Theme.of(context)),
       child: Scaffold(
@@ -432,7 +465,12 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                             Positioned(
                               left: 0,
                               right: 0,
-                              top: railTop + kSimpleStatusHeight + kSimpleInset,
+                              // Under the plan squares once there is a queue.
+                              top: planSquares
+                                  ? squaresTop +
+                                        kSimplePlanSquareHeight +
+                                        kSimpleInset
+                                  : railTop + kSimpleStatusHeight + kSimpleInset,
                               bottom: kSimpleInset * 2 + kSimpleBarHeight,
                               child: Center(
                                 child: SimpleRunSheet(
@@ -516,7 +554,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                               top: railTop,
                               child: Center(
                                 child: _mode == SimpleModeScreen.autopilot
-                                    ? const AutopilotStrip()
+                                    ? _measured(const AutopilotStrip())
                                     : AutopilotOffer(
                                         onStart: _startAutopilot,
                                         onDismiss: () => setState(
@@ -527,12 +565,18 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                             ),
                           // The plan square hugs the top-right corner, under the
                           // strip; queued plans will join to its left.
+                          // Its room ends at the status pill's slot, and in
+                          // Autopilot at the step strip.
                           if (shown == SimpleModeScreen.plan)
                             Positioned(
+                              left: squaresLeft,
                               right: kSimpleInset,
-                              top: railTop,
-                              child: SimpleRunTracker(
-                                onTap: () => _toggle(_Popover.settings),
+                              top: squaresTop,
+                              child: Align(
+                                alignment: Alignment.topRight,
+                                child: SimpleRunTracker(
+                                  onTap: () => _toggle(_Popover.settings),
+                                ),
                               ),
                             ),
                           // The sky's pick, offered to Plan.

@@ -751,18 +751,63 @@ class _SimpleRunTrackerState extends ConsumerState<SimpleRunTracker> {
       );
     }
 
-    return Row(
-      key: const Key('simple-run-tracker'),
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      spacing: 6,
-      children: [
-        // The queue runs right to left: the first target sits in the corner.
-        for (var i = run.targets.length - 1; i >= 0; i--) square(i),
-      ],
+    // As many squares as fit the room the shell gives; past that, the target
+    // in hand and those after it, then one "+N" square for the rest
+    // (finished targets drop out first).
+    return LayoutBuilder(
+      builder: (context, box) {
+        final fit = math.max(
+          1,
+          ((box.maxWidth + _kSquareGap) / (kSimpleRailWidth + _kSquareGap))
+              .floor(),
+        );
+        final all = run.targets.length;
+        final shown = all <= fit
+            ? [for (var i = 0; i < all; i++) i]
+            : [
+                for (var i = cur; i < math.min(all, cur + fit - 1); i++) i,
+              ];
+        final rest = [
+          for (var i = shown.isEmpty ? 0 : shown.last + 1; i < all; i++) i,
+        ];
+        return Row(
+          key: const Key('simple-run-tracker'),
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          spacing: _kSquareGap,
+          children: [
+            if (all > fit && rest.isNotEmpty)
+              _PlanSquare(
+                name: '+${rest.length}',
+                label: '${rest.length} more in the queue',
+                frames: 'queued',
+                last: simpleRunDuration(
+                  rest.fold(
+                    0.0,
+                    (t, i) =>
+                        t +
+                        run.targets[i].steps.fold(
+                          0.0,
+                          (u, s) => u + s.exposureSeconds * s.frameCount,
+                        ),
+                  ),
+                ),
+                color: AraColors.accentConnected,
+                onTap: widget.onTap,
+              ),
+            // The queue runs right to left: the first target sits in the corner.
+            for (final i in shown.reversed) square(i),
+          ],
+        );
+      },
     );
   }
 }
+
+const double _kSquareGap = 6;
+
+/// A plan square's height (Plan's sheet starts below the squares).
+const double kSimplePlanSquareHeight = 100;
 
 /// One plan square: the target's tag, frames, filter · sub and time, a bar
 /// filling while it images.
@@ -805,7 +850,7 @@ class _PlanSquare extends StatelessWidget {
         onTap: onTap,
         child: Container(
           width: kSimpleRailWidth,
-          height: 100,
+          height: kSimplePlanSquareHeight,
           clipBehavior: Clip.antiAlias,
           decoration: BoxDecoration(
             color: AraColors.overlayScrim,
