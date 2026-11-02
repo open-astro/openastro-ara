@@ -8,6 +8,8 @@ import 'package:dio/dio.dart';
 import 'package:openastroara/models/sequence/imaging_run_body.dart';
 import 'package:openastroara/models/sequence/sequence_summary.dart';
 import 'package:openastroara/models/sequence/nina_dom.dart' show childrenOf;
+import 'package:openastroara/models/sequence/instruction_catalog.dart' show waitForTimeType;
+import 'package:openastroara/util/tonight_sky_local.dart' show darkStart;
 import 'package:openastroara/models/sky_model_calibration.dart';
 import 'package:openastroara/screens/simple/simple_plan_panel.dart';
 import 'package:openastroara/services/sequence_api.dart';
@@ -168,6 +170,13 @@ class _Electronics extends CameraElectronicsNotifier {
 class _Site extends SiteSettingsNotifier {
   @override
   SiteSettings build() => SiteSettings(bortleClass: 6);
+}
+
+class _SiteAt extends SiteSettingsNotifier {
+  _SiteAt(this.site);
+  final SiteSettings site;
+  @override
+  SiteSettings build() => site;
 }
 
 class _NoSkyModel extends SkyModelCalibrationNotifier {
@@ -483,6 +492,59 @@ void main() {
       await tester.pumpAndSettle();
       expect(seq.calls, ['create M31', 'start seq-1']);
       expect(created, 1);
+    });
+
+    group('a scheduled start', () {
+      // 20:00 UTC on Jan 14 at an Atlanta-ish site: daylight, dark falls that evening.
+      final nowUtc = DateTime.utc(2026, 1, 14, 20);
+      const site = SiteSettings(latitudeDeg: 34, longitudeDeg: -84, twilightDefinition: TwilightDefinition.astronomical);
+      final dark = darkStart(site, nowUtc)!.toLocal();
+      String hhmm(DateTime t) => '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+      final overrides = <Object>[
+        siteSettingsProvider.overrideWith(() => _SiteAt(site)),
+        clockProvider.overrideWithValue(() => nowUtc.toLocal()),
+      ];
+      String go(WidgetTester tester) =>
+          (tester.widget<FilledButton>(find.byKey(const Key('simple-run-start'))).child! as Text).data!;
+
+      testWidgets('before dark the green button starts at dark; the plan waits on the rig, cooling 15 min early',
+          (tester) async {
+        final seq = _Seq();
+        await _pump(tester, seq,
+            SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}, onLibrary: () {}),
+            overrides: overrides);
+        expect(go(tester), 'Start at ${hhmm(dark)}');
+        expect(find.text('Starts at dark (${hhmm(dark)})'), findsOneWidget);
+        await tester.tap(find.byKey(const Key('simple-run-start')));
+        await tester.pumpAndSettle();
+        expect(seq.calls, ['create M31', 'update seq-1', 'start seq-1']);
+        final first = childrenOf(seq.bodies['seq-1']!).first;
+        expect(first[r'$type'], waitForTimeType);
+        final lead = dark.subtract(const Duration(minutes: 15));
+        expect((first['Hours'], first['Minutes']), (lead.hour, lead.minute), reason: 'cooling starts 15 min early');
+      });
+
+      testWidgets('Start now instead: today\'s Create and start; Wait for dark brings it back; Pick a time shows '
+          'the wheel', (tester) async {
+        final seq = _Seq();
+        await _pump(tester, seq,
+            SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}, onLibrary: () {}),
+            overrides: overrides);
+        await tester.tap(find.byKey(const Key('simple-run-start-now')));
+        await tester.pump();
+        expect(go(tester), 'Create and start');
+        await tester.tap(find.byKey(const Key('simple-run-wait-dark')));
+        await tester.pump();
+        expect(go(tester), 'Start at ${hhmm(dark)}');
+        await tester.tap(find.byKey(const Key('simple-run-pick-time')));
+        await tester.pump();
+        expect(find.byKey(const Key('simple-run-time-picker')), findsOneWidget);
+        await tester.tap(find.byKey(const Key('simple-run-start-now')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('simple-run-start')));
+        await tester.pumpAndSettle();
+        expect(seq.calls, ['create M31', 'start seq-1'], reason: 'starting now leaves the plan as it was');
+      });
     });
 
     testWidgets('tonight\'s best: up to four suggestions, one tap picks the target', (tester) async {

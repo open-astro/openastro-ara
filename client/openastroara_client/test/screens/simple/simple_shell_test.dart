@@ -4,6 +4,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/sequence/imaging_run_body.dart';
+import 'package:openastroara/models/sequence/sequence_summary.dart';
+import 'package:openastroara/state/sequencer/sequence_list_state.dart';
 import 'package:openastroara/screens/simple/simple_plan_panel.dart';
 import 'package:openastroara/state/sky_atlas/planetarium_selection_state.dart';
 import 'package:openastroara/main.dart' show isShell, shellFor;
@@ -71,7 +73,7 @@ final _someSteps = [
 
 Future<ProviderContainer> _pump(WidgetTester tester, Size size,
     {List<GuideStep> steps = const [], AraServer? server, FrameHistogram? histogram,
-    ServerInternalState? internal, StorageSpace? storage, SimpleRun? plan}) async {
+    ServerInternalState? internal, StorageSpace? storage, SimpleRun? plan, SequenceRunStateInfo? runState, bool queueing = false}) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
@@ -83,7 +85,8 @@ Future<ProviderContainer> _pump(WidgetTester tester, Size size,
     if (histogram != null) frameHistogramProvider.overrideWith((ref, id) async => histogram),
     if (internal != null) serverInternalStateProvider.overrideWith(() => _Internal(internal)),
     if (storage != null) storageSpaceProvider.overrideWith((ref) async => storage),
-    if (plan != null) simpleRunProvider.overrideWith(() => _Plan(plan)),
+    if (plan != null) simpleRunProvider.overrideWith(() => queueing ? _Queueing(plan) : _Plan(plan)),
+    if (runState != null) sequenceRunStateProvider.overrideWith(() => _RunState(runState)),
   ]);
   addTearDown(container.dispose);
   await container.read(simpleModeProvider.future);
@@ -100,6 +103,27 @@ class _Plan extends SimpleRunNotifier {
   final SimpleRun value;
   @override
   SimpleRun build() => value;
+}
+
+/// Add to queue without a daemon: the picked target joins the queue.
+class _Queueing extends _Plan {
+  _Queueing(super.value);
+  @override
+  Future<bool> create(WidgetRef ref, {bool first = false}) async {
+    final sel = ref.read(planetariumSelectionProvider)!;
+    state = SimpleRun(sequenceId: 'seq-1', targets: [
+      ...state.targets,
+      SimpleTarget(name: sel.name, steps: const [FilterPlanStep(filterName: 'L', exposureSeconds: 120, frameCount: 30)]),
+    ]);
+    return true;
+  }
+}
+
+class _RunState extends SequenceRunStateNotifier {
+  _RunState(this.value);
+  final SequenceRunStateInfo value;
+  @override
+  Future<SequenceRunStateInfo?> build() async => value;
 }
 
 Future<void> _frame(WidgetTester tester, ProviderContainer c) async {
@@ -396,6 +420,100 @@ void main() {
     expect(find.byKey(const Key('autopilot-strip')), findsNothing);
   });
 
+  for (final (size, scale, queued) in const [
+    (Size(1024, 768), 1.0, 0),
+    (Size(1024, 768), 1.0, 1),
+    (Size(768, 1024), 1.0, 1),
+    (Size(1024, 768), 1.3, 1),
+    (Size(1024, 768), 1.0, 10),
+    (Size(768, 1024), 1.0, 10),
+  ]) {
+    testWidgets('at $size, text ${scale}x, in Autopilot\'s Plan step ($queued queued) the settings '
+        'chip, a tap on the image and the mode button all put the sheet away', (tester) async {
+      tester.platformDispatcher.textScaleFactorTestValue = scale;
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      final container = await _pump(tester, size,
+          plan: queued == 0
+              ? null
+              : SimpleRun(sequenceId: 'seq-1', targets: [
+                  for (var i = 1; i <= queued; i++)
+                    SimpleTarget(name: 'M$i', steps: const [FilterPlanStep(filterName: 'L', exposureSeconds: 120, frameCount: 30)]),
+                ]));
+      await _frame(tester, container);
+      await tester.tap(find.byKey(const Key('autopilot-start')));
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('autopilot-skip')));
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('autopilot-skip')));
+      await tester.pump();
+      final sheet = find.text("Tonight's plan");
+      expect(sheet, findsOneWidget);
+      // Each tap must land on its control, not on whatever covers it.
+      Future<void> tap(Finder f) async {
+        final box = tester.renderObject(f);
+        expect(tester.hitTestOnBinding(tester.getCenter(f)).path.any((e) => e.target == box), isTrue,
+            reason: '$f is covered');
+        await tester.tap(f);
+        await tester.pump();
+      }
+
+      await tap(find.byKey(const Key('simple-settings')));
+      expect(sheet, findsNothing, reason: 'the chip puts it away');
+      await tap(find.byKey(const Key('simple-settings')));
+      expect(sheet, findsOneWidget, reason: 'and brings it back');
+      // Beside the sheet's top, above the left rail: the image.
+      final sheetBox = tester.getRect(find.byType(SimpleRunSheet));
+      await tester.tapAt(Offset((sheetBox.left + kSimpleInset) / 2, sheetBox.top + 8));
+      await tester.pump();
+      expect(sheet, findsNothing, reason: 'a tap on the image puts it away');
+      await tap(find.byKey(const Key('simple-settings')));
+      await tap(find.byKey(const Key('simple-mode')));
+      expect(sheet, findsNothing, reason: 'the modes replace it');
+      expect(find.text('Autopilot'), findsOneWidget, reason: 'the modes are open');
+      await tap(find.ancestor(of: find.text('Focus'), matching: find.byType(InkWell)).first);
+      expect(find.byKey(const Key('autopilot-strip')), findsNothing, reason: 'Focus picked: Autopilot left');
+      expect(find.byType(SimpleFocusPanel), findsOneWidget);
+    });
+  }
+
+  testWidgets('in Autopilot\'s Plan step over the sky, after Add to queue ten times, the chip and the modes still '
+      'put the sheet away', (tester) async {
+    await _pump(tester, const Size(1024, 768), plan: const SimpleRun(), queueing: true);
+    await tester.tap(find.byKey(const Key('autopilot-start')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('autopilot-skip')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('autopilot-skip')));
+    await tester.pump();
+    final c = ProviderScope.containerOf(tester.element(find.byType(SimpleShell)));
+    for (var i = 1; i <= 10; i++) {
+      c.read(planetariumSelectionProvider.notifier).set(PlanetariumSelection(
+          name: 'M$i', kind: 'Galaxy', raHours: 0.7, decDeg: 41, raJ2000Hours: 0.7, decJ2000Deg: 41, altDeg: 60,
+          maxAltDeg: 70));
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('simple-run-queue')));
+      await tester.pumpAndSettle();
+    }
+    expect(c.read(simpleRunProvider).targets, hasLength(10));
+    final sheet = find.text("Tonight's plan");
+    expect(sheet, findsOneWidget, reason: 'the sheet stays up while queueing');
+    Future<void> tap(Finder f) async {
+      final box = tester.renderObject(f);
+      expect(tester.hitTestOnBinding(tester.getCenter(f)).path.any((e) => e.target == box), isTrue,
+          reason: '$f is covered');
+      await tester.tap(f);
+      await tester.pump();
+    }
+
+    await tap(find.byKey(const Key('simple-settings')));
+    expect(sheet, findsNothing, reason: 'the chip puts it away');
+    await tap(find.byKey(const Key('simple-settings')));
+    await tap(find.byKey(const Key('simple-mode')));
+    expect(sheet, findsNothing, reason: 'the modes replace it');
+    await tap(find.ancestor(of: find.text('Focus'), matching: find.byType(InkWell)).first);
+    expect(find.byKey(const Key('autopilot-strip')), findsNothing, reason: 'Focus picked: Autopilot left');
+  });
+
   testWidgets('Autopilot picked from the modes stays in Simple Mode and starts, as the offer does', (tester) async {
     final container = await _pump(tester, const Size(1024, 768));
     await tester.tap(find.byKey(const Key('simple-mode')));
@@ -501,6 +619,10 @@ void main() {
       await tester.pump();
       expect(find.descendant(of: find.byType(SimpleRunPanel), matching: find.textContaining('QUEUE · 10 targets')),
           findsOneWidget);
+      // The queue panel stops above the plan squares, scrolling inside.
+      expect(tester.takeException(), isNull, reason: 'no overflow');
+      final panel = tester.getRect(find.ancestor(of: find.byType(SimpleRunPanel), matching: find.byType(Scrollable)).first);
+      expect(panel.bottom, lessThanOrEqualTo(squares.top - kSimpleInset), reason: 'panel $panel, squares $squares');
     });
   }
 
@@ -678,6 +800,44 @@ void main() {
     expect(tester.widget<LinearProgressIndicator>(find.byType(LinearProgressIndicator)).value, greaterThan(before));
     container.read(captureProgressProvider.notifier).reset();
     await tester.pump(const Duration(seconds: 1));
+  });
+
+  testWidgets('while a plan runs and the camera is idle, the status pill says which step is running', (tester) async {
+    final container = await _pump(tester, const Size(1024, 768),
+        plan: const SimpleRun(sequenceId: 'seq-1', started: true, targets: [
+          SimpleTarget(name: 'M31', steps: [FilterPlanStep(filterName: 'L', exposureSeconds: 120, frameCount: 30)]),
+        ]),
+        runState: const SequenceRunStateInfo(
+            sequenceId: 'seq-1', state: SequenceRunState.running, currentInstructionDescription: 'Cooling camera to -10 °C'));
+    await tester.pump();
+    String pill() => find
+        .descendant(of: find.byType(SimpleStatusPill), matching: find.byType(RichText))
+        .evaluate()
+        .map((e) => (e.widget as RichText).text.toPlainText())
+        .join();
+    expect(pill(), contains('Plan'));
+    expect(pill(), contains('Cooling camera to -10 °C'));
+    // A frame in hand: the camera's own countdown wins.
+    container.read(captureProgressProvider.notifier).beginExposing(const Duration(seconds: 5));
+    await tester.pump();
+    expect(pill(), contains('Taking a frame'));
+    container.read(captureProgressProvider.notifier).reset();
+    await tester.pump(const Duration(seconds: 1));
+  });
+
+  testWidgets('a scheduled plan waiting on the rig: the pill says when it starts', (tester) async {
+    final at = DateTime.now().add(const Duration(hours: 2));
+    await _pump(tester, const Size(1024, 768),
+        plan: SimpleRun(sequenceId: 'seq-1', started: true, startAt: at, targets: const [
+          SimpleTarget(name: 'M31', steps: [FilterPlanStep(filterName: 'L', exposureSeconds: 120, frameCount: 30)]),
+        ]),
+        runState: const SequenceRunStateInfo(
+            sequenceId: 'seq-1', state: SequenceRunState.running, currentInstructionDescription: 'Wait for time'));
+    await tester.pump();
+    final hhmm = '${at.hour.toString().padLeft(2, '0')}:${at.minute.toString().padLeft(2, '0')}';
+    expect(
+        find.descendant(of: find.byType(SimpleStatusPill), matching: find.textContaining('Starts at $hhmm')),
+        findsOneWidget);
   });
 
   testWidgets('the status pill never cuts its label short while the whole line fits', (tester) async {

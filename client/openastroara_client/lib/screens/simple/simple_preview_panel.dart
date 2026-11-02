@@ -9,6 +9,8 @@ import '../../state/imaging/capture_progress_state.dart';
 import '../../state/imaging/exposure_state.dart';
 import '../../state/imaging/last_frame_state.dart';
 import '../../state/imaging/live_view_state.dart';
+import '../../state/sequencer/sequence_list_state.dart';
+import '../../models/sequence/sequence_summary.dart';
 import '../../state/stats/server_internal_state_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
@@ -16,6 +18,7 @@ import '../../state/equipment/camera_state.dart';
 import '../../widgets/imaging/exposure_controls_panel.dart' show FilterDropdown;
 import '../../widgets/imaging/histogram_strip.dart' show frameHistogramProvider;
 import '../imaging_actions.dart';
+import 'simple_plan_panel.dart' show simpleRunProvider;
 import 'simple_shell.dart'
     show
         SimplePanel,
@@ -563,6 +566,16 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
     final p = ref.watch(captureProgressProvider);
     final stopping = ref.watch(_stoppingProvider);
     final looping = ref.watch(liveViewControllerProvider);
+    final run = ref.watch(sequenceRunStateProvider).value;
+    // A scheduled plan waits on the rig: it says when it starts instead.
+    final startAt = ref.watch(simpleRunProvider.select((r) => r.startAt));
+    final step = startAt != null && startAt.isAfter(DateTime.now())
+        ? 'Starts at ${startAt.hour.toString().padLeft(2, '0')}:'
+              '${startAt.minute.toString().padLeft(2, '0')}'
+        : run?.currentInstructionDescription;
+    final paused =
+        run?.state == SequenceRunState.paused ||
+        run?.state == SequenceRunState.pausedAwaitingUser;
     _syncTick(p.isActive);
     final exposing = !stopping && p.phase == CapturePhase.exposing;
     final (String? label, String? detail, Color dot) = stopping
@@ -594,6 +607,16 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
             CapturePhase.idle =>
               looping
                   ? ('Looping', null, AraColors.accentConnected)
+                  // Between frames a running plan says what it's doing
+                  // (cooling, slewing, centring, focusing).
+                  : (run?.state?.isActive ?? false) &&
+                        step != null &&
+                        step.isNotEmpty
+                  ? (
+                      paused ? 'Plan paused' : 'Plan',
+                      step,
+                      paused ? AraColors.accentBusy : AraColors.accentInfo,
+                    )
                   : (null, null, AraColors.textSecondary),
           };
     if (label == null) return const SizedBox.shrink();

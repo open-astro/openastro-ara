@@ -331,6 +331,36 @@ void main() {
     });
   });
 
+  group('scheduleRunBody', () {
+    Map<String, dynamic> body({double? cool}) => buildImagingRunBody(
+        raDeg: 10, decDeg: 41, targetName: 'M31', exposureSeconds: 120, frameCount: 10, coolToC: cool);
+    List<String> types(Map<String, dynamic> b) => [for (final c in childrenOf(b)) c[r'$type'] as String];
+    (int, int, int) clock(Map<String, dynamic> w) => (w['Hours'] as int, w['Minutes'] as int, w['Seconds'] as int);
+
+    test('with a cooler: wait until 15 min before, cool, wait until the start, then the rest', () {
+      final b = scheduleRunBody(body(cool: -10), DateTime(2026, 11, 2, 21, 47));
+      final t = types(b);
+      expect(t.take(3), [waitForTimeType, coolCameraType, waitForTimeType]);
+      expect(t[3], unparkScopeType);
+      expect(clock(childrenOf(b)[0]), (21, 32, 0));
+      expect(clock(childrenOf(b)[2]), (21, 47, 0));
+    });
+
+    test('without a cooler: one wait first', () {
+      final b = scheduleRunBody(body(), DateTime(2026, 11, 3, 0, 10));
+      expect(types(b).take(2), [waitForTimeType, unparkScopeType]);
+      expect(clock(childrenOf(b)[0]), (0, 10, 0));
+    });
+
+    test('scheduling again replaces the waits; no start time removes them', () {
+      final once = scheduleRunBody(body(cool: -10), DateTime(2026, 11, 2, 21, 47));
+      final again = scheduleRunBody(once, DateTime(2026, 11, 2, 23, 0));
+      expect(types(again).where((t) => t == waitForTimeType), hasLength(2));
+      expect(clock(childrenOf(again)[2]), (23, 0, 0));
+      expect(types(scheduleRunBody(again, null)), types(body(cool: -10)));
+    });
+  });
+
   group('defaultFrameCount', () {
     test('fills the remaining dark window, clamped to a sane range', () {
       // 6.2 h at 120 s/sub = 186 subs → within range.

@@ -24,6 +24,17 @@ void main() {
     twilightDefinition: TwilightDefinition.astronomical,
     softWarningAltitudeDeg: 30,
   );
+  test('darkStart: the first minute tonight the sun is below the twilight line; null once dark', () {
+    // 20:00 UTC Jan 14 is 15:00 local, daylight at the site.
+    final at = darkStart(site, DateTime.utc(2026, 1, 14, 20))!;
+    double sun(DateTime t) => sunMoonAltitudeDeg(t, site.latitudeDeg, site.longitudeDeg).sunAltDeg;
+    expect(sun(at), lessThan(-18));
+    expect(sun(at.subtract(const Duration(minutes: 1))), greaterThanOrEqualTo(-18));
+    expect(at.isAfter(DateTime.utc(2026, 1, 14, 23)) && at.isBefore(DateTime.utc(2026, 1, 15, 1)), isTrue,
+        reason: 'early evening local: $at');
+    expect(darkStart(site, DateTime.utc(2026, 1, 15, 3)), isNull, reason: 'already dark');
+  });
+
   // RedCat-51-ish train on an APS-C-ish sensor.
   const optics = OpticsSettings(
     focalLengthMm: 250,

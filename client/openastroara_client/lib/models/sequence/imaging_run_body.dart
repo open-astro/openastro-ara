@@ -526,6 +526,39 @@ Map<String, dynamic>? removeTargetFromRunBody(
   return withChildren(root, childrenOf(root)..removeAt(index));
 }
 
+/// A scheduled start: the run waits until [startAt] (the daemon's clock),
+/// cooling 15 minutes before so the camera is cold on time. Replaces the
+/// waits of an earlier schedule; a null [startAt] just removes them.
+// shortcut: hours and minutes are the client's wall clock, so the daemon's
+// clock must be in the same time zone; send a UTC instant once the daemon
+// can take one.
+Map<String, dynamic> scheduleRunBody(
+  Map<String, dynamic> root,
+  DateTime? startAt,
+) {
+  final children = childrenOf(root)
+      .where((c) => c[r'$type'] != waitForTimeType)
+      .toList();
+  if (startAt != null) {
+    Map<String, dynamic> waitUntil(DateTime t) => _item(waitForTimeType)
+      ..['Hours'] = t.hour
+      ..['Minutes'] = t.minute
+      ..['Seconds'] = 0;
+    final cool = children.indexWhere((c) => c[r'$type'] == coolCameraType);
+    if (cool < 0) {
+      children.insert(0, waitUntil(startAt));
+    } else {
+      children
+        ..insert(cool + 1, waitUntil(startAt))
+        ..insert(
+          cool,
+          waitUntil(startAt.subtract(const Duration(minutes: 15))),
+        );
+    }
+  }
+  return withChildren(root, children);
+}
+
 Map<String, dynamic> _item(String type) {
   final def = instructionForType(type);
   if (def == null) {

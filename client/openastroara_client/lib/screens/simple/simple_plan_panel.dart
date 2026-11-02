@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:dio/dio.dart';
+import 'package:flutter/cupertino.dart'
+    show CupertinoDatePicker, CupertinoDatePickerMode;
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart' show CustomSemanticsAction;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -19,6 +21,7 @@ import '../../state/setup/setup_readiness.dart';
 import '../../state/simple_mode_state.dart';
 import '../../state/settings/imaging_defaults_state.dart';
 import '../../state/settings/settings_nav.dart';
+import '../../state/settings/site_settings_state.dart';
 import '../../services/dso_catalog_service.dart' show designationKey;
 import '../../services/tonight_sky_api.dart';
 import '../../state/sky_atlas/planetarium_selection_state.dart';
@@ -26,6 +29,7 @@ import '../../state/sky_atlas/tonight_sky_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
 import '../../util/friendly_error.dart';
+import '../../util/tonight_sky_local.dart' show darkStart;
 import '../../widgets/sequencer/target_plan_dialog.dart'
     show planFrameCount, planOptionsAvailable, suggestedSubSeconds;
 import '../../state/ws/ws_providers.dart';
@@ -136,6 +140,13 @@ String simpleRunChip(SimpleRun run, List<FilterPlanStep> rows) =>
 
 String _hhmm(DateTime t) =>
     '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+
+/// [t]'s time of day at its next occurrence after [now], on the wheel's
+/// 5-minute grid.
+DateTime _nextAt(DateTime t, DateTime now) {
+  final at = DateTime(now.year, now.month, now.day, t.hour, t.minute ~/ 5 * 5);
+  return at.isAfter(now) ? at : at.add(const Duration(days: 1));
+}
 
 /// Tonight's dark hours left for the picked target, from the ranking; null
 /// when the ranking doesn't have it.
@@ -367,6 +378,7 @@ class SimpleRun {
     this.pausing = false,
     this.error,
     this.noStorage = false,
+    this.startAt,
   });
 
   final String? sequenceId;
@@ -380,6 +392,9 @@ class SimpleRun {
 
   /// The daemon refused for want of a storage disk: [error] offers Storage.
   final bool noStorage;
+
+  /// A scheduled start: the run waits on the rig until then.
+  final DateTime? startAt;
 
   /// Every target's rows, in order.
   List<FilterPlanStep> get steps => [for (final t in targets) ...t.steps];
@@ -397,6 +412,8 @@ class SimpleRun {
     bool? pausing,
     String? error,
     bool noStorage = false,
+    DateTime? startAt,
+    bool startNow = false,
   }) => SimpleRun(
     sequenceId: sequenceId,
     targets: targets ?? this.targets,
@@ -405,6 +422,7 @@ class SimpleRun {
     pausing: pausing ?? this.pausing,
     error: error,
     noStorage: noStorage,
+    startAt: startNow ? null : startAt ?? this.startAt,
   );
 }
 
@@ -628,9 +646,24 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
   }
 
   /// Create and start (or ▶ with a target picked and no plan yet); with a
-  /// queue, Start now: the target goes first.
-  Future<bool> createAndStart(WidgetRef ref) async {
+  /// queue, Start now: the target goes first. With [startAt] the run starts
+  /// at once but waits on the rig until then (cooling 15 min before).
+  Future<bool> createAndStart(WidgetRef ref, {DateTime? startAt}) async {
     if (!await create(ref, first: state.sequenceId != null)) return false;
+    final api = this.ref.read(sequenceApiProvider);
+    final id = state.sequenceId;
+    final active =
+        this.ref.read(sequenceRunStateProvider).value?.state?.isActive ?? false;
+    if (startAt != null && api != null && id != null && !active) {
+      try {
+        final body = (await api.getSequenceDetail(id)).body;
+        await api.updateSequence(id, body: scheduleRunBody(body, startAt));
+      } catch (e) {
+        state = state.copyWith(error: _why(e, 'schedule the start'));
+        return false;
+      }
+    }
+    state = state.copyWith(startAt: startAt, startNow: startAt == null);
     await start();
     return state.error == null;
   }
@@ -1236,6 +1269,12 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
   /// "M42 added · 3 in the queue", until the next pick.
   String? _added;
 
+  /// When the plan starts: at dark by default (before dark), now when
+  /// [_startNow], or at the [_pickedStart] the wheel set.
+  bool _startNow = false;
+  DateTime? _pickedStart;
+  bool _picking = false;
+
   @override
   void initState() {
     super.initState();
@@ -1349,6 +1388,12 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
     final imaging =
         ref.watch(sequenceRunStateProvider).value?.state?.isActive ?? false;
     final off = sel == null || sel.belowHorizon || run.busy || imaging;
+    final now = ref.watch(clockProvider)();
+    final dark = darkStart(
+      ref.watch(siteSettingsProvider),
+      now.toUtc(),
+    )?.toLocal();
+    final startAt = _startNow ? null : _pickedStart ?? dark;
     final queueOff = sel == null || sel.neverRises || run.busy;
     final best = (ref.watch(tonightSkyProvider).value ?? const [])
         .where((o) => o.maxAltitudeDeg > 0)
@@ -1593,6 +1638,60 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
             style: kSimpleText.copyWith(color: AraColors.accentConnected),
           ),
         if (run.error != null) _RunError(run),
+        if (editing == null && !imaging) ...[
+          Wrap(
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              Text(
+                startAt == null
+                    ? 'Starts now'
+                    : startAt == dark
+                    ? 'Starts at dark (${_hhmm(startAt)})'
+                    : 'Starts at ${_hhmm(startAt)}',
+                style: _dim,
+              ),
+              if (startAt != null)
+                TextButton(
+                  key: const Key('simple-run-start-now'),
+                  onPressed: () => setState(() {
+                    _startNow = true;
+                    _pickedStart = null;
+                    _picking = false;
+                  }),
+                  child: const Text('Start now instead'),
+                )
+              else if (dark != null)
+                TextButton(
+                  key: const Key('simple-run-wait-dark'),
+                  onPressed: () => setState(() => _startNow = false),
+                  child: Text('Wait for dark (${_hhmm(dark)})'),
+                ),
+              if (startAt == null || startAt == dark)
+                TextButton(
+                  key: const Key('simple-run-pick-time'),
+                  onPressed: () => setState(() {
+                    _picking = true;
+                    _startNow = false;
+                    _pickedStart = _nextAt(startAt ?? dark ?? now, now);
+                  }),
+                  child: const Text('Pick a time'),
+                ),
+            ],
+          ),
+          if (_picking)
+            SizedBox(
+              key: const Key('simple-run-time-picker'),
+              height: 132,
+              child: CupertinoDatePicker(
+                mode: CupertinoDatePickerMode.time,
+                use24hFormat: MediaQuery.alwaysUse24HourFormatOf(context),
+                minuteInterval: 5,
+                initialDateTime: _pickedStart,
+                onDateTimeChanged: (t) =>
+                    setState(() => _pickedStart = _nextAt(t, now)),
+              ),
+            ),
+        ],
         if (editing != null)
           Row(
             spacing: AraSpace.s8,
@@ -1657,12 +1756,17 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
                       : () async {
                           final ok = await ref
                               .read(simpleRunProvider.notifier)
-                              .createAndStart(ref);
+                              .createAndStart(
+                                ref,
+                                startAt: imaging ? null : startAt,
+                              );
                           if (ok) widget.onCreated();
                         },
                   child: Text(
                     run.busy
                         ? 'Starting…'
+                        : startAt != null && !imaging
+                        ? 'Start at ${_hhmm(startAt)}'
                         : run.sequenceId != null
                         ? 'Start now'
                         : 'Create and start',

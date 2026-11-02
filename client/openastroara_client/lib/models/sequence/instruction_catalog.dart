@@ -442,6 +442,8 @@ const String slewScopeToRaDecType =
 /// `imaging_run_body.dart` and `optimal_sub_advisor.dart`).
 const String takeExposureType =
     'OpenAstroAra.Sequencer.SequenceItem.Imaging.TakeExposure, OpenAstroAra.Sequencer';
+const String waitForTimeType =
+    'OpenAstroAra.Sequencer.SequenceItem.Utility.WaitForTime, OpenAstroAra.Sequencer';
 const String coolCameraType =
     'OpenAstroAra.Sequencer.SequenceItem.Camera.CoolCamera, OpenAstroAra.Sequencer';
 const String warmCameraType =
@@ -976,8 +978,7 @@ const List<InstructionDef> instructionCatalog = [
     ],
   ),
   InstructionDef(
-    type:
-        'OpenAstroAra.Sequencer.SequenceItem.Utility.WaitForTime, OpenAstroAra.Sequencer',
+    type: waitForTimeType,
     label: 'Wait (until time)',
     category: InstructionCategory.utility,
     icon: Icons.schedule_outlined,

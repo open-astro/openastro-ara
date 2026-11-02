@@ -169,22 +169,28 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     _adding = false;
   }
 
-  /// The left rail's and the Autopilot row's heights, measured after each
-  /// frame: the message pills start under the Autopilot row (its words wrap
-  /// on a narrow window) and stop above the left rail.
+  /// The rails' and the Autopilot row's heights, measured after each frame:
+  /// the message pills start under the Autopilot row (its words wrap on a
+  /// narrow window) and stop above the left rail; the right rail's panels
+  /// hang from its top and stop above the plan squares.
   double _leftRailHeight = 0;
+  double _rightRailHeight = 0;
   double _autopilotRowHeight = kSimpleAutopilotRowHeight;
   final _leftRailKey = GlobalKey();
+  final _rightRailKey = GlobalKey();
   final _autopilotRowKey = GlobalKey();
 
   void _measure() => WidgetsBinding.instance.addPostFrameCallback((_) {
     final rail = _leftRailKey.currentContext?.size?.height;
+    final right = _rightRailKey.currentContext?.size?.height;
     final row = _autopilotRowKey.currentContext?.size?.height;
     if (!mounted) return;
     if ((rail != null && rail != _leftRailHeight) ||
+        (right != null && right != _rightRailHeight) ||
         (row != null && row != _autopilotRowHeight)) {
       setState(() {
         _leftRailHeight = rail ?? _leftRailHeight;
+        _rightRailHeight = right ?? _rightRailHeight;
         _autopilotRowHeight = row ?? _autopilotRowHeight;
       });
     }
@@ -332,6 +338,23 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     final leftRailTop = _leftRailHeight == 0
         ? height
         : railTop + (height - railTop * 2 - _leftRailHeight) / 2;
+    // The right rail's panels run from its top down to the plan squares (or
+    // the bottom row), scrolling inside when taller.
+    final rightRailTop =
+        railTop +
+        (height -
+                railTop -
+                kSimpleInset * 2 -
+                kSimpleStopSize -
+                _rightRailHeight) /
+            2;
+    final popoverMaxHeight = _rightRailHeight == 0
+        ? double.infinity
+        : height -
+              kSimpleInset * 3 -
+              kSimpleBarHeight -
+              (planSquares ? kSimplePlanSquareHeight + kSimpleInset : 0) -
+              rightRailTop;
     final queuePanel = SimpleRunPanel(
       onAdd: () => _openSheet(),
       onEdit: (i) => _openSheet(edit: i),
@@ -521,6 +544,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                               child: CompositedTransformTarget(
                                 link: _railLink,
                                 child: _RightRail(
+                                  key: _rightRailKey,
                                   mode: shown,
                                   named: _mode == SimpleModeScreen.autopilot
                                       ? SimpleModeScreen.autopilot
@@ -580,41 +604,52 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                 targetAnchor: Alignment.topLeft,
                                 followerAnchor: Alignment.topRight,
                                 offset: const Offset(-kSimpleInset, 0),
-                                child: _popover == _Popover.queue
-                                    ? queuePanel
-                                    : _popover == _Popover.modes
-                                    ? _ModeGrid(
-                                        current: _mode,
-                                        // A mode opens on its panel; Preview's
-                                        // controls are already on the rail.
-                                        onPicked: (m) {
-                                          if (m == SimpleModeScreen.autopilot) {
-                                            return _startAutopilot();
-                                          }
-                                          setState(() {
-                                            _mode = m;
-                                            _popover =
-                                                m == SimpleModeScreen.preview
-                                                ? _Popover.none
-                                                : _Popover.settings;
-                                          });
-                                          // Picking a mode leaves Autopilot.
-                                          ref
-                                              .read(autopilotProvider.notifier)
-                                              .stop();
-                                        },
-                                      )
-                                    : switch (shown) {
-                                        SimpleModeScreen.focus =>
-                                          const SimpleFocusPanel(),
-                                        SimpleModeScreen.polarAlign =>
-                                          const SimplePolarPanel(),
-                                        SimpleModeScreen.plan => queuePanel,
-                                        _ => const SizedBox(
-                                          width: 280,
-                                          child: SimpleSettingsPopover(),
-                                        ),
-                                      },
+                                child: ConstrainedBox(
+                                  constraints: BoxConstraints(
+                                    maxHeight: popoverMaxHeight,
+                                  ),
+                                  child: SingleChildScrollView(
+                                    child: _popover == _Popover.queue
+                                        ? queuePanel
+                                        : _popover == _Popover.modes
+                                        ? _ModeGrid(
+                                            current: _mode,
+                                            // A mode opens on its panel; Preview's
+                                            // controls are already on the rail.
+                                            onPicked: (m) {
+                                              if (m ==
+                                                  SimpleModeScreen.autopilot) {
+                                                return _startAutopilot();
+                                              }
+                                              setState(() {
+                                                _mode = m;
+                                                _popover =
+                                                    m ==
+                                                        SimpleModeScreen.preview
+                                                    ? _Popover.none
+                                                    : _Popover.settings;
+                                              });
+                                              // Picking a mode leaves Autopilot.
+                                              ref
+                                                  .read(
+                                                    autopilotProvider.notifier,
+                                                  )
+                                                  .stop();
+                                            },
+                                          )
+                                        : switch (shown) {
+                                            SimpleModeScreen.focus =>
+                                              const SimpleFocusPanel(),
+                                            SimpleModeScreen.polarAlign =>
+                                              const SimplePolarPanel(),
+                                            SimpleModeScreen.plan => queuePanel,
+                                            _ => const SizedBox(
+                                              width: 280,
+                                              child: SimpleSettingsPopover(),
+                                            ),
+                                          },
+                                  ),
+                                ),
                               ),
                             ),
                           // Autopilot's steps, or the offer to start it, centred
@@ -990,6 +1025,7 @@ class _LeftRail extends StatelessWidget {
 /// under it; Stop sits on its own below.
 class _RightRail extends ConsumerWidget {
   const _RightRail({
+    super.key,
     required this.mode,
     this.named,
     required this.popover,
