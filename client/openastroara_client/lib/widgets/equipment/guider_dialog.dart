@@ -14,7 +14,12 @@ String guiderRuntimeLabel(GuiderRuntimeState state) => guiderRuntimeText(state);
 /// at the top of the guider's Settings panel, where the top-bar GUIDE chip
 /// lands like every other device chip.
 class GuiderConnectionSection extends ConsumerStatefulWidget {
-  const GuiderConnectionSection({super.key});
+  const GuiderConnectionSection({super.key, this.onBeforeConnect});
+
+  /// Awaited before a Connect. The guider page passes its pending auto-save,
+  /// so a Host/Port edit made within the save delay reaches the daemon before
+  /// the daemon reads the host it should connect to.
+  final Future<void> Function()? onBeforeConnect;
 
   @override
   ConsumerState<GuiderConnectionSection> createState() => _GuiderConnectionSectionState();
@@ -25,6 +30,11 @@ class _GuiderConnectionSectionState extends ConsumerState<GuiderConnectionSectio
   // doesn't emit a loading state (so the body doesn't flash blank), so the
   // button tracks its own in-flight flag to disable + spinner.
   bool _refreshing = false;
+
+  Future<void> _connect(GuiderStatusNotifier notifier) async {
+    await widget.onBeforeConnect?.call();
+    await notifier.connect();
+  }
 
   Future<void> _refresh() async {
     setState(() => _refreshing = true);
@@ -93,7 +103,7 @@ class _GuiderConnectionSectionState extends ConsumerState<GuiderConnectionSectio
                             IconButton(
                               tooltip: 'Connect',
                               icon: busy ? const _BusySpinner() : const Icon(Icons.link, size: 18),
-                              onPressed: actionsLocked ? null : () => notifier.connect(),
+                              onPressed: actionsLocked ? null : () => _connect(notifier),
                             ),
                         ],
                       ),

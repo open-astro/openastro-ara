@@ -8,14 +8,17 @@ import 'package:openastroara/state/settings/panel_save_registry.dart';
 import 'package:openastroara/widgets/settings/editable_field.dart';
 import 'package:openastroara/widgets/equipment/guider_dialog.dart';
 import 'package:openastroara/models/guider_equipment_choices.dart';
+import 'package:openastroara/models/guider_status.dart';
 import 'package:openastroara/models/server.dart';
 import 'package:openastroara/screens/settings/panels/equipment_guider_panel.dart';
 import 'package:openastroara/services/alpaca_device_names_api.dart';
+import 'package:openastroara/services/guider_api.dart';
 import 'package:openastroara/services/guider_equipment_api.dart';
 import 'package:openastroara/services/profile_api.dart';
 import 'package:openastroara/services/saved_server_service.dart';
 import 'package:openastroara/state/settings/equipment_connection_state.dart';
 import 'package:openastroara/state/guider/guider_equipment_state.dart';
+import 'package:openastroara/state/guider/guider_state.dart';
 import 'package:openastroara/state/profile_management_state.dart';
 import 'package:openastroara/state/saved_server_state.dart';
 import 'package:openastroara/state/settings/optics_settings_state.dart';
@@ -99,6 +102,32 @@ class _FakeEquipmentApi implements GuiderEquipmentClient {
   void close() {}
 }
 
+/// A guider that is configured but not connected, so the connection card
+/// shows Connect; records the host/port the notifier asked it to connect to.
+class _FakeGuiderApi implements GuiderClient {
+  String? lastHost;
+  int? lastPort;
+  @override
+  Future<GuiderStatus?> getStatus() async => const GuiderStatus(
+        name: 'OpenAstro Guider',
+        connectionState: GuiderConnectionState.disconnected,
+        runtimeState: GuiderRuntimeState.stopped,
+      );
+  @override
+  Future<void> connect({String host = kDefaultGuiderHost, int port = kDefaultGuiderPort}) async {
+    lastHost = host;
+    lastPort = port;
+  }
+  @override
+  Future<void> disconnect() async {}
+  @override
+  Future<void> startGuiding() async {}
+  @override
+  Future<void> stopGuiding() async {}
+  @override
+  void close() {}
+}
+
 class _FakeAlpacaNames extends AlpacaDeviceNamesClient {
   final calls = <String>[];
   /// While > 0, every lookup answers empty (an unreachable management API).
@@ -127,6 +156,7 @@ typedef _Harness = ({
   _FakeProfileApi profile,
   _FakeEquipmentApi equipment,
   _FakeAlpacaNames names,
+  _FakeGuiderApi guider,
 });
 
 Future<_Harness> _pump(WidgetTester tester, Phd2Settings stored, {ValueListenable<bool>? show, bool failLoad = false}) async {
@@ -135,6 +165,7 @@ Future<_Harness> _pump(WidgetTester tester, Phd2Settings stored, {ValueListenabl
   final profile = _FakeProfileApi(stored)..failGet = failLoad;
   final equipment = _FakeEquipmentApi();
   final names = _FakeAlpacaNames();
+  final guider = _FakeGuiderApi();
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
@@ -142,6 +173,7 @@ Future<_Harness> _pump(WidgetTester tester, Phd2Settings stored, {ValueListenabl
         profileApiProvider.overrideWithValue(profile),
         guiderEquipmentApiFactoryProvider.overrideWithValue((_) => equipment),
         alpacaDeviceNamesApiProvider.overrideWithValue(names),
+        guiderApiFactoryProvider.overrideWithValue((_) => guider),
       ],
       child: MaterialApp(
         home: Scaffold(
@@ -157,7 +189,7 @@ Future<_Harness> _pump(WidgetTester tester, Phd2Settings stored, {ValueListenabl
     ),
   );
   await tester.pumpAndSettle();
-  return (profile: profile, equipment: equipment, names: names);
+  return (profile: profile, equipment: equipment, names: names, guider: guider);
 }
 
 Future<void> _pick(WidgetTester tester, String rowKey, String item) async {
@@ -241,6 +273,9 @@ void main() {
         reason: 'while a profile is pinned, the guider is on the pin, not on what Automatic would pick');
     expect(guiderProfileItems(4, const {4: 'Skywatcher 72ED'}, 'Skywatcher 72ED'),
         {0: 'Automatic', 4: 'Skywatcher 72ED'});
+    expect(guiderProfileItems(0, const {0: 'No id', 1: 'Default'}, 'Default'),
+        {0: 'Automatic (Default)', 1: 'Default'},
+        reason: 'a guider profile without an id (the server maps it to 0) never replaces Automatic');
   });
 
   testWidgets('a change saves on its own, like the device pages: no Save button, nothing saved on load',
@@ -299,6 +334,20 @@ void main() {
     await tester.pump(const Duration(seconds: 2));
     await tester.pumpAndSettle();
     expect(h.equipment.calls, contains('push'));
+    expect(h.profile.puts, 1);
+  });
+
+  testWidgets('Connect sends a pending Host edit first, so the guider connects to the new host',
+      (tester) async {
+    final h = await _pump(tester, const Phd2Settings(host: 'old-sbc', port: 4400));
+    final container = ProviderScope.containerOf(tester.element(find.byType(EquipmentGuiderPanel)));
+    container.read(phd2SettingsProvider.notifier).setHost('new-sbc');
+    await tester.pump(); // inside the save delay
+    await tester.tap(find.byTooltip('Connect'));
+    await tester.pumpAndSettle();
+    expect(h.guider.lastHost, 'new-sbc');
+    expect(h.profile.puts, 1, reason: 'the flushed save is the one save; the timer must not send it again');
+    await tester.pump(const Duration(seconds: 1));
     expect(h.profile.puts, 1);
   });
 

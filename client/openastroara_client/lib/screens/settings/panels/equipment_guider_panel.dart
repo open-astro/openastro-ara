@@ -30,7 +30,9 @@ import '../../../widgets/settings/settings_row.dart';
 Map<int, String> guiderProfileItems(int pinned, Map<int, String> profiles, String? current) => {
       // Name the guider's profile only when Automatic is what put it there.
       0: pinned != 0 || current == null || current.isEmpty ? 'Automatic' : 'Automatic ($current)',
-      ...profiles,
+      // The server maps a guider profile without an id to 0, which would replace Automatic.
+      for (final e in profiles.entries)
+        if (e.key > 0) e.key: e.value,
       if (pinned != 0 && !profiles.containsKey(pinned)) pinned: 'Profile #$pinned',
     };
 
@@ -176,6 +178,15 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel> {
       _pendingFlush = null;
       _save();
     });
+  }
+
+  /// A Host/Port edit made within the save delay must reach the daemon before
+  /// Connect reads the host from it: send the pending save now and wait for it.
+  Future<void> _flushPendingSave() async {
+    if (!(_autoSave?.isActive ?? false)) return;
+    _autoSave!.cancel();
+    _pendingFlush = null;
+    await _save();
   }
 
   @override
@@ -374,7 +385,7 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel> {
       padding: const EdgeInsets.all(24),
       children: [
         const SettingsSectionHeader('Connection'),
-        const GuiderConnectionSection(),
+        GuiderConnectionSection(onBeforeConnect: _flushPendingSave),
         EditableTextRow(
           label: 'Host',
           helpKey: 'eq.guider.host',

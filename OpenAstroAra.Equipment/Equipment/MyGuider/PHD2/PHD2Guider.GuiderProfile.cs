@@ -172,8 +172,11 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             IReadOnlyList<Phd2Profile> availableProfiles) {
 
             // A pin the guider no longer lists (deleted on its side) falls back to the name mapping below,
-            // rather than failing the switch and warning on every connect.
-            if (overrideProfileId.HasValue && availableProfiles.Any(p => p.Id == overrideProfileId.Value)) {
+            // rather than failing the switch and warning on every connect. An EMPTY list is not "no longer
+            // listed": get_profiles failed or answered nothing, and the name path would then Create a twin
+            // beside the pinned profile. The pin is selected by id as before; the guider says if it is gone.
+            if (overrideProfileId.HasValue
+                && (availableProfiles.Count == 0 || availableProfiles.Any(p => p.Id == overrideProfileId.Value))) {
                 return selectedProfileId == overrideProfileId.Value
                     ? new AraProfileSelection(AraProfileActionKind.None, 0, string.Empty)
                     : new AraProfileSelection(AraProfileActionKind.SelectById, overrideProfileId.Value, string.Empty);

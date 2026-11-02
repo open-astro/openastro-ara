@@ -117,6 +117,17 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void Resolve_a_pinned_profile_with_no_profile_list_is_still_selected_by_id() {
+            // get_profiles failed or answered nothing. That is not "the guider no longer lists the pin", so
+            // the fallback must not take the name path, which would Create a twin beside the pinned profile.
+            var r = PHD2Guider.ResolveAraProfileSelection(
+                overrideProfileId: 9, selectedProfileId: 3, activeAraProfileName: "Rig", activeAraProfileId: RigId,
+                availableProfiles: Profiles());
+            Assert.That(r.Kind, Is.EqualTo(AraProfileActionKind.SelectById));
+            Assert.That(r.Id, Is.EqualTo(9));
+        }
+
+        [Test]
         public void Resolve_override_already_selected_is_a_no_op() {
             var r = PHD2Guider.ResolveAraProfileSelection(
                 overrideProfileId: 7, selectedProfileId: 7, activeAraProfileName: "Rig", activeAraProfileId: RigId,

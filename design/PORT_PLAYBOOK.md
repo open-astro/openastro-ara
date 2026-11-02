@@ -1987,7 +1987,7 @@ Use Material 3 `ThemeData` with these tokens. Material's default dark theme is t
 
 A horizontal `Row` of equipment "chips" — one per device type. Each chip:
 - Icon (Material icon; hand-drawn glyphs for Mount — a telescope — and Filter Wheel, which Material lacks)
-- Device name below the icon: "Camera", "Mount", "Guider", "Focuser", "Filter Wheel", "Rotator", "Flat Panel", "Switch", "Weather", "Safety", "Dome". Every chip is the same width so the icons are evenly spaced; below 600 px wide the name is dropped (icon only) and stays as the tooltip
+- Device name below the icon: "Camera", "Mount", "Guider", "Focuser", "Filter Wheel", "Rotator", "Flat Panel", "Switch", "Weather", "Safety", "Dome". Every chip is the same width so the icons are evenly spaced; below 600 px wide the name is dropped (icon only) and stays as the tooltip; wherever the eleven named chips do not fit the top bar (a landscape phone, an iPad in portrait, a narrowed desktop window) they also drop to icons only, so none is pushed off screen
 - Colored dot indicator (top-right of icon): gray (disconnected), green (connected + idle), blinking green (connected and working: exposing, slewing, moving), amber (needs a look), red (error)
 - Tap: opens that device's Settings page (connect + its settings)
 - Long-press / right-click: disconnect, or open device-specific properties panel
