@@ -426,7 +426,7 @@ void main() {
     expect(find.byKey(const Key('autopilot-offer')), findsNothing);
   });
 
-  testWidgets('the plan square hugs the top-right corner, under the strip', (tester) async {
+  testWidgets('the plan square hugs the bottom-right corner, above the bottom row', (tester) async {
     await _pump(tester, const Size(1024, 768),
         plan: const SimpleRun(sequenceId: 'seq-1', targets: [
           SimpleTarget(name: 'M31', steps: [FilterPlanStep(filterName: 'L', exposureSeconds: 120, frameCount: 30)]),
@@ -437,12 +437,14 @@ void main() {
     await tester.pump();
     final square = tester.getRect(find.byKey(const Key('simple-run-tracker')));
     expect(square.right, 1024 - kSimpleInset, reason: 'in the corner');
-    expect(square.top, kSimpleInset * 2 + kSimpleBarHeight, reason: 'under the strip');
+    expect(square.bottom, 768 - (kSimpleInset * 2 + kSimpleBarHeight), reason: 'just above the bottom row');
+    final rail = _panelOf(tester, find.byKey(const Key('simple-shutter')));
+    expect(square.top, greaterThan(rail.bottom), reason: 'below the right rail');
     expect(find.descendant(of: find.byKey(const Key('simple-run-tracker')), matching: find.text('0 / 30')), findsOneWidget);
   });
 
   for (final size in const [Size(1024, 768), Size(768, 1024)]) {
-    testWidgets('at $size: Plan\'s sheet clears the status pill, the plan squares and the bottom row; a plan '
+    testWidgets('at $size: Plan\'s sheet clears the status pill and the plan squares; a plan '
         'square opens the queue panel', (tester) async {
       // A long queue: taller than the room, so the sheet must scroll inside its slot.
       await _pump(tester, size,
@@ -458,15 +460,12 @@ void main() {
       final squares = tester.getRect(find.byKey(const Key('simple-run-tracker')));
       expect(sheet.top, greaterThanOrEqualTo(kSimpleInset * 3 + kSimpleBarHeight + kSimpleStatusHeight),
           reason: 'under the status pill');
-      expect(sheet.top, greaterThan(squares.bottom), reason: 'under the plan squares');
-      // Ten queued: the squares stop short of the status pill's slot and the
-      // rest fold into one "+N" square.
-      expect(squares.left, greaterThanOrEqualTo(kSimpleInset * 2 + kSimpleStatusMaxWidth),
-          reason: 'clear of the status pill');
+      expect(sheet.bottom, lessThanOrEqualTo(squares.top), reason: 'above the plan squares');
+      // Ten queued: the squares keep to the right half (the Info tiles have
+      // the left) and the rest fold into one "+N" square.
+      expect(squares.left, greaterThanOrEqualTo(size.width / 2), reason: 'the right half');
       expect(find.descendant(of: find.byKey(const Key('simple-run-tracker')), matching: find.textContaining('+')),
           findsOneWidget);
-      expect(sheet.bottom, lessThanOrEqualTo(size.height - kSimpleInset * 2 - kSimpleBarHeight),
-          reason: 'above the bottom row');
       // The queue isn't in the sheet: a plan square opens it in its own panel.
       expect(find.descendant(of: find.byType(SimpleRunSheet), matching: find.textContaining('QUEUE')),
           findsNothing);
@@ -615,8 +614,8 @@ void main() {
     container.read(captureProgressProvider.notifier).beginExposing(const Duration(seconds: 5));
     await tester.pump();
     final status = _panelOf(tester, find.textContaining('Taking a frame'));
-    expect(status.topLeft, const Offset(kSimpleInset, kSimpleInset * 2 + kSimpleBarHeight),
-        reason: 'top-left, under the strip');
+    expect(status.topRight, const Offset(1024 - kSimpleInset, kSimpleInset * 2 + kSimpleBarHeight),
+        reason: 'top-right, under the strip (messages have the top-left)');
 
     await tester.tapAt(const Offset(400, 400));
     await tester.pump(const Duration(milliseconds: 300));
@@ -624,7 +623,7 @@ void main() {
     expect(find.byType(EmergencyStopButton).hitTestable(), findsNothing);
     expect(find.byKey(const Key('simple-shutter')).hitTestable(), findsNothing);
     final corner = _panelOf(tester, find.textContaining('Taking a frame'));
-    expect(corner.topLeft, const Offset(kSimpleInset, kSimpleInset));
+    expect(corner.topRight, const Offset(1024 - kSimpleInset, kSimpleInset));
 
     await tester.tapAt(const Offset(400, 400));
     await tester.pump(const Duration(milliseconds: 300));

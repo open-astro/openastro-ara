@@ -162,21 +162,6 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     _adding = false;
   }
 
-  /// The Autopilot strip's laid-out width, so the plan squares stop short of
-  /// it; measured after each frame it shows.
-  Size _strip = Size.zero;
-  final _stripKey = GlobalKey();
-
-  Widget _measured(Widget strip) {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final size = _stripKey.currentContext?.size;
-      if (mounted && size != null && size != _strip) {
-        setState(() => _strip = size);
-      }
-    });
-    return KeyedSubtree(key: _stripKey, child: strip);
-  }
-
   /// The Autopilot offer was dismissed (until Simple Mode opens again).
   bool _offerDismissed = false;
 
@@ -298,17 +283,6 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
       onAdd: () => _openSheet(),
       onEdit: (i) => _openSheet(edit: i),
     );
-    // The plan squares sit right of Autopilot's strip, or under it when the
-    // window leaves no room beside it (portrait).
-    const pillEnd = kSimpleInset * 2 + kSimpleStatusMaxWidth;
-    final beside = _mode == SimpleModeScreen.autopilot
-        ? (width + _strip.width) / 2 + kSimpleInset
-        : 0.0;
-    final underStrip = width - kSimpleInset - beside < kSimpleRailWidth;
-    final squaresLeft = underStrip ? pillEnd : math.max(pillEnd, beside);
-    final squaresTop = underStrip
-        ? railTop + _strip.height + kSimpleInset
-        : railTop;
     final runSheet =
         shown == SimpleModeScreen.plan &&
         ((_popover == _Popover.settings && !runActive) || _adding);
@@ -389,14 +363,20 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                           ),
                         ),
                       ),
-                    // The camera's status, top-left under the strip; it stays
-                    // in the immersive view and moves up into the corner.
+                    // The camera's status, top-right under the strip (messages
+                    // have the top-left), at most half the row; it stays in
+                    // the immersive view and moves up into the corner.
                     AnimatedPositioned(
-                      left: kSimpleInset,
+                      right: kSimpleInset,
                       top: panels ? railTop : kSimpleInset,
                       duration: motion,
                       curve: Curves.easeOut,
-                      child: const SimpleStatusPill(),
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(
+                          maxWidth: (width - kSimpleInset * 3) / 2,
+                        ),
+                        child: const SimpleStatusPill(),
+                      ),
                     ),
                     _Fade(
                       visible: panels,
@@ -484,21 +464,20 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                           // Plan's sheet and Night done: a sheet centred over
                           // the image; while imaging, its panel sits beside
                           // the rail like any mode's.
-                          // Between the status pill and the bottom row; a
-                          // tall sheet scrolls inside.
+                          // Between the status pill and the bottom row (the
+                          // plan squares once there is a queue); a tall sheet
+                          // scrolls inside.
                           if (runSheet)
                             Positioned(
                               left: 0,
                               right: 0,
-                              // Under the plan squares once there is a queue.
-                              top: planSquares
-                                  ? squaresTop +
-                                        kSimplePlanSquareHeight +
-                                        kSimpleInset
-                                  : railTop +
-                                        kSimpleStatusHeight +
-                                        kSimpleInset,
-                              bottom: kSimpleInset * 2 + kSimpleBarHeight,
+                              top: railTop + kSimpleStatusHeight + kSimpleInset,
+                              bottom:
+                                  kSimpleInset * 2 +
+                                  kSimpleBarHeight +
+                                  (planSquares
+                                      ? kSimplePlanSquareHeight + kSimpleInset
+                                      : 0),
                               child: Center(
                                 child: SimpleRunSheet(
                                   editing: _editing,
@@ -579,7 +558,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                               top: railTop,
                               child: Center(
                                 child: _mode == SimpleModeScreen.autopilot
-                                    ? _measured(const AutopilotStrip())
+                                    ? const AutopilotStrip()
                                     : AutopilotOffer(
                                         onStart: _startAutopilot,
                                         onDismiss: () => setState(
@@ -588,17 +567,16 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                       ),
                               ),
                             ),
-                          // The plan square hugs the top-right corner, under the
-                          // strip; queued plans will join to its left.
-                          // Its room ends at the status pill's slot, and in
-                          // Autopilot at the step strip.
+                          // The plan squares hug the bottom-right corner, just
+                          // above the bottom row, growing left over the right
+                          // half (the Info tiles have the left).
                           if (shown == SimpleModeScreen.plan)
                             Positioned(
-                              left: squaresLeft,
+                              left: width / 2,
                               right: kSimpleInset,
-                              top: squaresTop,
+                              bottom: kSimpleInset * 2 + kSimpleBarHeight,
                               child: Align(
-                                alignment: Alignment.topRight,
+                                alignment: Alignment.bottomRight,
                                 child: SimpleRunTracker(
                                   onTap: () => _toggle(_Popover.queue),
                                 ),
