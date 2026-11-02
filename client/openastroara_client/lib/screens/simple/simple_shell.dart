@@ -38,6 +38,7 @@ import 'simple_message_pills.dart';
 import 'simple_polar_panel.dart';
 import 'simple_plan_panel.dart';
 import 'simple_preview_panel.dart';
+import 'simple_safety_alarm.dart';
 
 /// Inset from the frame edge and between panels.
 const double kSimpleInset = 16;
@@ -371,358 +372,384 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
       data: simpleTheme(Theme.of(context)),
       child: Scaffold(
         backgroundColor: AraColors.bgPrimary,
-        body: ShellListeners(
-          quiet: true,
-          child: CallbackShortcuts(
-            bindings: <ShortcutActivator, VoidCallback>{
-              const SingleActivator(LogicalKeyboardKey.keyK, meta: true): () =>
-                  showCommandPalette(context),
-              const SingleActivator(
-                LogicalKeyboardKey.keyK,
-                control: true,
-              ): () =>
-                  showCommandPalette(context),
-              const SingleActivator(LogicalKeyboardKey.comma, meta: true):
-                  _openSettings,
-              const SingleActivator(LogicalKeyboardKey.comma, control: true):
-                  _openSettings,
-              // Hold-to-stop for keyboards: ⌘. / Ctrl+. stops a run.
-              const SingleActivator(LogicalKeyboardKey.period, meta: true):
-                  _stopRun,
-              const SingleActivator(LogicalKeyboardKey.period, control: true):
-                  _stopRun,
-            },
-            child: Focus(
-              focusNode: _focus,
-              child: SafeArea(
-                child: Stack(
-                  children: [
-                    Positioned.fill(
-                      // Screen readers get the immersive toggle by name.
-                      child: Semantics(
-                        button: !showSky,
-                        label: showSky
-                            ? null
-                            : _clean
-                            ? 'Show controls'
-                            : 'Hide controls',
-                        child: GestureDetector(
-                          key: const Key('simple-frame'),
-                          behavior: HitTestBehavior.opaque,
-                          onTap: () => _tapImage(!showSky),
-                          child: !showSky
-                              ? (polarFrame
-                                    ? const SimplePolarFrame()
-                                    : const FrameViewer())
-                              // The sky: asked for, or standing in until there
-                              // is a frame.
-                              : KeyedSubtree(
-                                  key: const Key('simple-planetarium'),
-                                  child: widget.planetarium,
-                                ),
-                        ),
-                      ),
-                    ),
-                    if (!hasFrame)
-                      Positioned.fill(
-                        child: IgnorePointer(
-                          child: Center(
-                            child: Text(
-                              'Tap the shutter to take a frame',
-                              style: TextStyle(
-                                fontSize: 20,
-                                letterSpacing: 2,
-                                color: AraColors.textPrimary.withValues(
-                                  alpha: 0.5,
-                                ),
-                              ),
+        body: Stack(
+          children: [
+            ShellListeners(
+              quiet: true,
+              child: CallbackShortcuts(
+                bindings: <ShortcutActivator, VoidCallback>{
+                  const SingleActivator(
+                    LogicalKeyboardKey.keyK,
+                    meta: true,
+                  ): () =>
+                      showCommandPalette(context),
+                  const SingleActivator(
+                    LogicalKeyboardKey.keyK,
+                    control: true,
+                  ): () =>
+                      showCommandPalette(context),
+                  const SingleActivator(LogicalKeyboardKey.comma, meta: true):
+                      _openSettings,
+                  const SingleActivator(
+                    LogicalKeyboardKey.comma,
+                    control: true,
+                  ): _openSettings,
+                  // Hold-to-stop for keyboards: ⌘. / Ctrl+. stops a run.
+                  const SingleActivator(LogicalKeyboardKey.period, meta: true):
+                      _stopRun,
+                  const SingleActivator(
+                    LogicalKeyboardKey.period,
+                    control: true,
+                  ): _stopRun,
+                },
+                child: Focus(
+                  focusNode: _focus,
+                  child: SafeArea(
+                    child: Stack(
+                      children: [
+                        Positioned.fill(
+                          // Screen readers get the immersive toggle by name.
+                          child: Semantics(
+                            button: !showSky,
+                            label: showSky
+                                ? null
+                                : _clean
+                                ? 'Show controls'
+                                : 'Hide controls',
+                            child: GestureDetector(
+                              key: const Key('simple-frame'),
+                              behavior: HitTestBehavior.opaque,
+                              onTap: () => _tapImage(!showSky),
+                              child: !showSky
+                                  ? (polarFrame
+                                        ? const SimplePolarFrame()
+                                        : const FrameViewer())
+                                  // The sky: asked for, or standing in until there
+                                  // is a frame.
+                                  : KeyedSubtree(
+                                      key: const Key('simple-planetarium'),
+                                      child: widget.planetarium,
+                                    ),
                             ),
                           ),
                         ),
-                      ),
-                    // The message pills, top-left under the strip (under the
-                    // Autopilot strip when it shows), down to the left rail;
-                    // they stay in the immersive view.
-                    AnimatedPositioned(
-                      left: kSimpleInset,
-                      top: panels ? messagesTop : kSimpleInset,
-                      width: messagesWidth,
-                      duration: motion,
-                      curve: Curves.easeOut,
-                      child: SimpleMessagePills(
-                        maxHeight: panels
-                            ? leftRailTop - messagesTop - kSimpleInset
-                            : double.infinity,
-                      ),
-                    ),
-                    // The camera's status, top-right under the strip (messages
-                    // have the top-left), at most half the row; it stays in
-                    // the immersive view and moves up into the corner.
-                    AnimatedPositioned(
-                      right: kSimpleInset,
-                      top: panels ? railTop : kSimpleInset,
-                      duration: motion,
-                      curve: Curves.easeOut,
-                      child: ConstrainedBox(
-                        constraints: BoxConstraints(
-                          maxWidth: (width - kSimpleInset * 3) / 2,
-                        ),
-                        child: const SimpleStatusPill(),
-                      ),
-                    ),
-                    _Fade(
-                      visible: panels,
-                      child: Stack(
-                        children: [
-                          const Positioned(
-                            left: kSimpleInset,
-                            right: kSimpleInset,
-                            top: kSimpleInset,
-                            height: kSimpleBarHeight,
-                            child: _StatusStrip(),
-                          ),
-                          // Info and System: fact tiles hugging the bottom-left
-                          // corner, above the bottom row; System's row sits
-                          // above Info's.
-                          if (_info || _system)
-                            Positioned(
-                              left: kSimpleInset,
-                              bottom: kSimpleInset * 2 + kSimpleBarHeight,
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                spacing: AraSpace.s8,
-                                children: [
-                                  if (_system) const SimpleSystemPanel(),
-                                  if (_info) const SimpleInfoPanel(),
-                                ],
-                              ),
-                            ),
-                          // Guiding and the histogram along the bottom, each
-                          // once it has data: 16 px from the edge and from Stop.
-                          const Positioned(
-                            left: kSimpleInset,
-                            right:
-                                kSimpleInset * 2 +
-                                (kSimpleRailWidth + kSimpleStopSize) / 2,
-                            bottom: kSimpleInset,
-                            height: kSimpleBarHeight,
-                            child: _StatsRow(),
-                          ),
-                          Positioned(
-                            left: kSimpleInset,
-                            top: railTop,
-                            bottom: railTop,
-                            width: kSimpleRailWidth,
-                            child: Align(
-                              alignment: Alignment.centerLeft,
-                              child: KeyedSubtree(
-                                key: _leftRailKey,
-                                child: _LeftRail(
-                                  info: _info,
-                                  system: _system,
-                                  sky: showSky,
-                                  onInfo: () => setState(() => _info = !_info),
-                                  onSystem: () =>
-                                      setState(() => _system = !_system),
-                                  // With no frame there is only the sky.
-                                  onSky: hasFrame
-                                      ? () => setState(() => _sky = !_sky)
-                                      : null,
-                                ),
-                              ),
-                            ),
-                          ),
-                          // The right rail: only as tall as its controls and
-                          // centred between the strip and Stop. Its popover
-                          // (modes or settings) follows the rail's top-left
-                          // corner, so opening one never moves the rail.
-                          Positioned(
-                            right: kSimpleInset,
-                            top: railTop,
-                            bottom: kSimpleInset * 2 + kSimpleStopSize,
-                            width: kSimpleRailWidth,
-                            child: Center(
-                              child: CompositedTransformTarget(
-                                link: _railLink,
-                                child: _RightRail(
-                                  key: _rightRailKey,
-                                  mode: shown,
-                                  named: _mode == SimpleModeScreen.autopilot
-                                      ? SimpleModeScreen.autopilot
-                                      : null,
-                                  popover: _popover,
-                                  onModes: () => _toggle(_Popover.modes),
-                                  onSettings: () => _toggle(_Popover.settings),
-                                ),
-                              ),
-                            ),
-                          ),
-                          // Plan's sheet and Night done: a sheet centred over
-                          // the image; while imaging, its panel sits beside
-                          // the rail like any mode's.
-                          // Between the status pill and the bottom row (the
-                          // plan squares step aside while it shows); a tall
-                          // sheet scrolls inside.
-                          if (runSheet)
-                            Positioned(
-                              left: 0,
-                              right: 0,
-                              top: railTop + kSimpleStatusHeight + kSimpleInset,
-                              bottom: kSimpleInset * 2 + kSimpleBarHeight,
+                        if (!hasFrame)
+                          Positioned.fill(
+                            child: IgnorePointer(
                               child: Center(
-                                child: SimpleRunSheet(
-                                  editing: _editing,
-                                  onShowSky: () => setState(() => _sky = true),
-                                  onPickInSky: () => setState(() {
-                                    _sky = true;
-                                    _popover = _Popover.none;
-                                    _closeSheet();
-                                  }),
-                                  onCreated: () => setState(() {
-                                    _popover = _Popover.none;
-                                    _closeSheet();
-                                  }),
-                                  onLibrary: () => Navigator.of(context).push(
-                                    MaterialPageRoute<void>(
-                                      builder: (_) =>
-                                          const ImageLibraryScreen(),
+                                child: Text(
+                                  'Tap the shutter to take a frame',
+                                  style: TextStyle(
+                                    fontSize: 20,
+                                    letterSpacing: 2,
+                                    color: AraColors.textPrimary.withValues(
+                                      alpha: 0.5,
                                     ),
                                   ),
                                 ),
                               ),
-                            )
-                          else if (_popover != _Popover.none)
-                            Positioned(
-                              left: 0,
-                              top: 0,
-                              child: CompositedTransformFollower(
-                                link: _railLink,
-                                targetAnchor: Alignment.topLeft,
-                                followerAnchor: Alignment.topRight,
-                                offset: const Offset(-kSimpleInset, 0),
-                                child: ConstrainedBox(
-                                  constraints: BoxConstraints(
-                                    maxHeight: popoverMaxHeight,
-                                  ),
-                                  child: SingleChildScrollView(
-                                    child: _popover == _Popover.queue
-                                        ? queuePanel
-                                        : _popover == _Popover.modes
-                                        ? _ModeGrid(
-                                            current: _mode,
-                                            // A mode opens on its panel; Preview's
-                                            // controls are already on the rail.
-                                            onPicked: (m) {
-                                              if (m ==
-                                                  SimpleModeScreen.autopilot) {
-                                                return _startAutopilot();
-                                              }
-                                              setState(() {
-                                                _mode = m;
-                                                _popover =
-                                                    m ==
-                                                        SimpleModeScreen.preview
-                                                    ? _Popover.none
-                                                    : _Popover.settings;
-                                              });
-                                              // Picking a mode leaves Autopilot.
-                                              ref
-                                                  .read(
-                                                    autopilotProvider.notifier,
-                                                  )
-                                                  .stop();
-                                            },
-                                          )
-                                        : switch (shown) {
-                                            SimpleModeScreen.focus =>
-                                              const SimpleFocusPanel(),
-                                            SimpleModeScreen.polarAlign =>
-                                              const SimplePolarPanel(),
-                                            SimpleModeScreen.plan => queuePanel,
-                                            _ => const SizedBox(
-                                              width: 280,
-                                              child: SimpleSettingsPopover(),
-                                            ),
-                                          },
-                                  ),
-                                ),
-                              ),
                             ),
-                          // Autopilot's steps, or the offer to start it, centred
-                          // under the strip.
-                          if (autopilotRow)
-                            Positioned(
-                              left: 0,
-                              right: 0,
-                              top: railTop,
-                              child: Center(
-                                child: KeyedSubtree(
-                                  key: _autopilotRowKey,
-                                  child: _mode == SimpleModeScreen.autopilot
-                                      ? const AutopilotStrip()
-                                      : AutopilotOffer(
-                                          onStart: _startAutopilot,
-                                          onDismiss: () => setState(
-                                            () => _offerDismissed = true,
-                                          ),
-                                        ),
-                                ),
-                              ),
-                            ),
-                          // The plan squares hug the bottom-right corner, just
-                          // above the bottom row, growing left over the right
-                          // half (the Info tiles have the left).
-                          if (shown == SimpleModeScreen.plan && !runSheet)
-                            Positioned(
-                              left: width / 2,
-                              right: kSimpleInset,
-                              bottom: kSimpleInset * 2 + kSimpleBarHeight,
-                              child: Align(
-                                alignment: Alignment.bottomRight,
-                                child: SimpleRunTracker(
-                                  onTap: () => _toggle(_Popover.queue),
-                                ),
-                              ),
-                            ),
-                          // The sky's pick, offered to Plan.
-                          if (showSky && sel != null && !runSheet)
-                            Positioned(
-                              left: 0,
-                              right: 0,
-                              bottom: kSimpleInset * 2 + 40,
-                              child: Center(
-                                child: _SkyPick(
-                                  selection: sel,
-                                  onImage: () => setState(() {
-                                    _mode = SimpleModeScreen.plan;
-                                    // Over a run, the sheet adds to its queue.
-                                    _popover = runActive
-                                        ? _Popover.none
-                                        : _Popover.settings;
-                                    _adding = runActive;
-                                    _sky = false;
-                                  }),
-                                ),
-                              ),
-                            ),
-                          // Stop on its own at the bottom, under the rail.
-                          const Positioned(
-                            right:
-                                kSimpleInset +
-                                (kSimpleRailWidth - kSimpleStopSize) / 2,
-                            bottom: kSimpleInset,
-                            width: kSimpleStopSize,
-                            height: kSimpleStopSize,
-                            child: EmergencyStopButton(compact: true),
                           ),
-                        ],
-                      ),
+                        // The message pills, top-left under the strip (under the
+                        // Autopilot strip when it shows), down to the left rail;
+                        // they stay in the immersive view.
+                        AnimatedPositioned(
+                          left: kSimpleInset,
+                          top: panels ? messagesTop : kSimpleInset,
+                          width: messagesWidth,
+                          duration: motion,
+                          curve: Curves.easeOut,
+                          child: SimpleMessagePills(
+                            maxHeight: panels
+                                ? leftRailTop - messagesTop - kSimpleInset
+                                : double.infinity,
+                          ),
+                        ),
+                        // The camera's status, top-right under the strip (messages
+                        // have the top-left), at most half the row; it stays in
+                        // the immersive view and moves up into the corner.
+                        AnimatedPositioned(
+                          right: kSimpleInset,
+                          top: panels ? railTop : kSimpleInset,
+                          duration: motion,
+                          curve: Curves.easeOut,
+                          child: ConstrainedBox(
+                            constraints: BoxConstraints(
+                              maxWidth: (width - kSimpleInset * 3) / 2,
+                            ),
+                            child: const SimpleStatusPill(),
+                          ),
+                        ),
+                        _Fade(
+                          visible: panels,
+                          child: Stack(
+                            children: [
+                              const Positioned(
+                                left: kSimpleInset,
+                                right: kSimpleInset,
+                                top: kSimpleInset,
+                                height: kSimpleBarHeight,
+                                child: _StatusStrip(),
+                              ),
+                              // Info and System: fact tiles hugging the bottom-left
+                              // corner, above the bottom row; System's row sits
+                              // above Info's.
+                              if (_info || _system)
+                                Positioned(
+                                  left: kSimpleInset,
+                                  bottom: kSimpleInset * 2 + kSimpleBarHeight,
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    spacing: AraSpace.s8,
+                                    children: [
+                                      if (_system) const SimpleSystemPanel(),
+                                      if (_info) const SimpleInfoPanel(),
+                                    ],
+                                  ),
+                                ),
+                              // Guiding and the histogram along the bottom, each
+                              // once it has data: 16 px from the edge and from Stop.
+                              const Positioned(
+                                left: kSimpleInset,
+                                right:
+                                    kSimpleInset * 2 +
+                                    (kSimpleRailWidth + kSimpleStopSize) / 2,
+                                bottom: kSimpleInset,
+                                height: kSimpleBarHeight,
+                                child: _StatsRow(),
+                              ),
+                              Positioned(
+                                left: kSimpleInset,
+                                top: railTop,
+                                bottom: railTop,
+                                width: kSimpleRailWidth,
+                                child: Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: KeyedSubtree(
+                                    key: _leftRailKey,
+                                    child: _LeftRail(
+                                      info: _info,
+                                      system: _system,
+                                      sky: showSky,
+                                      onInfo: () =>
+                                          setState(() => _info = !_info),
+                                      onSystem: () =>
+                                          setState(() => _system = !_system),
+                                      // With no frame there is only the sky.
+                                      onSky: hasFrame
+                                          ? () => setState(() => _sky = !_sky)
+                                          : null,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              // The right rail: only as tall as its controls and
+                              // centred between the strip and Stop. Its popover
+                              // (modes or settings) follows the rail's top-left
+                              // corner, so opening one never moves the rail.
+                              Positioned(
+                                right: kSimpleInset,
+                                top: railTop,
+                                bottom: kSimpleInset * 2 + kSimpleStopSize,
+                                width: kSimpleRailWidth,
+                                child: Center(
+                                  child: CompositedTransformTarget(
+                                    link: _railLink,
+                                    child: _RightRail(
+                                      key: _rightRailKey,
+                                      mode: shown,
+                                      named: _mode == SimpleModeScreen.autopilot
+                                          ? SimpleModeScreen.autopilot
+                                          : null,
+                                      popover: _popover,
+                                      onModes: () => _toggle(_Popover.modes),
+                                      onSettings: () =>
+                                          _toggle(_Popover.settings),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              // Plan's sheet and Night done: a sheet centred over
+                              // the image; while imaging, its panel sits beside
+                              // the rail like any mode's.
+                              // Between the status pill and the bottom row (the
+                              // plan squares step aside while it shows); a tall
+                              // sheet scrolls inside.
+                              if (runSheet)
+                                Positioned(
+                                  left: 0,
+                                  right: 0,
+                                  top:
+                                      railTop +
+                                      kSimpleStatusHeight +
+                                      kSimpleInset,
+                                  bottom: kSimpleInset * 2 + kSimpleBarHeight,
+                                  child: Center(
+                                    child: SimpleRunSheet(
+                                      editing: _editing,
+                                      onShowSky: () =>
+                                          setState(() => _sky = true),
+                                      onPickInSky: () => setState(() {
+                                        _sky = true;
+                                        _popover = _Popover.none;
+                                        _closeSheet();
+                                      }),
+                                      onCreated: () => setState(() {
+                                        _popover = _Popover.none;
+                                        _closeSheet();
+                                      }),
+                                      onLibrary: () => Navigator.of(context)
+                                          .push(
+                                            MaterialPageRoute<void>(
+                                              builder: (_) =>
+                                                  const ImageLibraryScreen(),
+                                            ),
+                                          ),
+                                    ),
+                                  ),
+                                )
+                              else if (_popover != _Popover.none)
+                                Positioned(
+                                  left: 0,
+                                  top: 0,
+                                  child: CompositedTransformFollower(
+                                    link: _railLink,
+                                    targetAnchor: Alignment.topLeft,
+                                    followerAnchor: Alignment.topRight,
+                                    offset: const Offset(-kSimpleInset, 0),
+                                    child: ConstrainedBox(
+                                      constraints: BoxConstraints(
+                                        maxHeight: popoverMaxHeight,
+                                      ),
+                                      child: SingleChildScrollView(
+                                        child: _popover == _Popover.queue
+                                            ? queuePanel
+                                            : _popover == _Popover.modes
+                                            ? _ModeGrid(
+                                                current: _mode,
+                                                // A mode opens on its panel; Preview's
+                                                // controls are already on the rail.
+                                                onPicked: (m) {
+                                                  if (m ==
+                                                      SimpleModeScreen
+                                                          .autopilot) {
+                                                    return _startAutopilot();
+                                                  }
+                                                  setState(() {
+                                                    _mode = m;
+                                                    _popover =
+                                                        m ==
+                                                            SimpleModeScreen
+                                                                .preview
+                                                        ? _Popover.none
+                                                        : _Popover.settings;
+                                                  });
+                                                  // Picking a mode leaves Autopilot.
+                                                  ref
+                                                      .read(
+                                                        autopilotProvider
+                                                            .notifier,
+                                                      )
+                                                      .stop();
+                                                },
+                                              )
+                                            : switch (shown) {
+                                                SimpleModeScreen.focus =>
+                                                  const SimpleFocusPanel(),
+                                                SimpleModeScreen.polarAlign =>
+                                                  const SimplePolarPanel(),
+                                                SimpleModeScreen.plan =>
+                                                  queuePanel,
+                                                _ => const SizedBox(
+                                                  width: 280,
+                                                  child:
+                                                      SimpleSettingsPopover(),
+                                                ),
+                                              },
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              // Autopilot's steps, or the offer to start it, centred
+                              // under the strip.
+                              if (autopilotRow)
+                                Positioned(
+                                  left: 0,
+                                  right: 0,
+                                  top: railTop,
+                                  child: Center(
+                                    child: KeyedSubtree(
+                                      key: _autopilotRowKey,
+                                      child: _mode == SimpleModeScreen.autopilot
+                                          ? const AutopilotStrip()
+                                          : AutopilotOffer(
+                                              onStart: _startAutopilot,
+                                              onDismiss: () => setState(
+                                                () => _offerDismissed = true,
+                                              ),
+                                            ),
+                                    ),
+                                  ),
+                                ),
+                              // The plan squares hug the bottom-right corner, just
+                              // above the bottom row, growing left over the right
+                              // half (the Info tiles have the left).
+                              if (shown == SimpleModeScreen.plan && !runSheet)
+                                Positioned(
+                                  left: width / 2,
+                                  right: kSimpleInset,
+                                  bottom: kSimpleInset * 2 + kSimpleBarHeight,
+                                  child: Align(
+                                    alignment: Alignment.bottomRight,
+                                    child: SimpleRunTracker(
+                                      onTap: () => _toggle(_Popover.queue),
+                                    ),
+                                  ),
+                                ),
+                              // The sky's pick, offered to Plan.
+                              if (showSky && sel != null && !runSheet)
+                                Positioned(
+                                  left: 0,
+                                  right: 0,
+                                  bottom: kSimpleInset * 2 + 40,
+                                  child: Center(
+                                    child: _SkyPick(
+                                      selection: sel,
+                                      onImage: () => setState(() {
+                                        _mode = SimpleModeScreen.plan;
+                                        // Over a run, the sheet adds to its queue.
+                                        _popover = runActive
+                                            ? _Popover.none
+                                            : _Popover.settings;
+                                        _adding = runActive;
+                                        _sky = false;
+                                      }),
+                                    ),
+                                  ),
+                                ),
+                              // Stop on its own at the bottom, under the rail.
+                              const Positioned(
+                                right:
+                                    kSimpleInset +
+                                    (kSimpleRailWidth - kSimpleStopSize) / 2,
+                                bottom: kSimpleInset,
+                                width: kSimpleStopSize,
+                                height: kSimpleStopSize,
+                                child: EmergencyStopButton(compact: true),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
               ),
             ),
-          ),
+            // Over everything, outside the safe area: the one popup kept.
+            const SimpleSafetyAlarm(),
+          ],
         ),
       ),
     );

@@ -12,7 +12,10 @@ import '../state/alarm/safety_alarm_state.dart';
 class SafetyAlarmListener extends ConsumerStatefulWidget {
   final Widget child;
 
-  const SafetyAlarmListener({super.key, required this.child});
+  /// Simple Mode: no dialog; the shell shows its own full-screen alarm.
+  final bool quiet;
+
+  const SafetyAlarmListener({super.key, required this.child, this.quiet = false});
 
   @override
   ConsumerState<SafetyAlarmListener> createState() =>
@@ -27,7 +30,7 @@ class _SafetyAlarmListenerState extends ConsumerState<SafetyAlarmListener> {
     ref.listen(safetyAlarmProvider, (prev, next) {
       final wasActive = (prev?.pending ?? false) || (prev?.ringing ?? false);
       final isActive = next.pending || next.ringing;
-      if (isActive && !wasActive && !_dialogShowing) {
+      if (isActive && !wasActive && !_dialogShowing && !widget.quiet) {
         _showAlarmDialog();
       }
       if (!isActive && wasActive && _dialogShowing) {

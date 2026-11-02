@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/sequence/imaging_run_body.dart';
 import 'package:openastroara/models/sequence/sequence_summary.dart';
+import 'package:openastroara/state/alarm/safety_alarm_state.dart';
 import 'package:openastroara/state/sequencer/sequence_list_state.dart';
 import 'package:openastroara/screens/simple/simple_plan_panel.dart';
 import 'package:openastroara/state/sky_atlas/planetarium_selection_state.dart';
@@ -73,7 +74,7 @@ final _someSteps = [
 
 Future<ProviderContainer> _pump(WidgetTester tester, Size size,
     {List<GuideStep> steps = const [], AraServer? server, FrameHistogram? histogram,
-    ServerInternalState? internal, StorageSpace? storage, SimpleRun? plan, SequenceRunStateInfo? runState, bool queueing = false}) async {
+    ServerInternalState? internal, StorageSpace? storage, SimpleRun? plan, SequenceRunStateInfo? runState, bool queueing = false, bool manualAlarm = false}) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
@@ -87,6 +88,7 @@ Future<ProviderContainer> _pump(WidgetTester tester, Size size,
     if (storage != null) storageSpaceProvider.overrideWith((ref) async => storage),
     if (plan != null) simpleRunProvider.overrideWith(() => queueing ? _Queueing(plan) : _Plan(plan)),
     if (runState != null) sequenceRunStateProvider.overrideWith(() => _RunState(runState)),
+    if (manualAlarm) safetyAlarmProvider.overrideWith(_ManualAlarm.new),
   ]);
   addTearDown(container.dispose);
   await container.read(simpleModeProvider.future);
@@ -117,6 +119,18 @@ class _Queueing extends _Plan {
     ]);
     return true;
   }
+}
+
+/// Drives the safety alarm by hand: no WS, no player, no prefs.
+class _ManualAlarm extends SafetyAlarmController {
+  @override
+  SafetyAlarmState build() => const SafetyAlarmState();
+
+  void raise(String reason, {bool ringing = false}) =>
+      state = state.copyWith(pending: !ringing, ringing: ringing, reason: reason);
+
+  @override
+  void silence() => state = state.copyWith(pending: false, ringing: false);
 }
 
 class _RunState extends SequenceRunStateNotifier {
@@ -889,6 +903,31 @@ void main() {
         find.descendant(of: find.byType(SimpleStatusPill), matching: find.textContaining('Starts at $hhmm')),
         findsOneWidget);
   });
+
+  for (final size in const [Size(1024, 768), Size(768, 1024)]) {
+    testWidgets('at $size: the safety alarm covers the whole screen, no dialog, a red circled "!"; Silence closes it',
+        (tester) async {
+      final container = await _pump(tester, size, manualAlarm: true);
+      await _frame(tester, container);
+      // Even from the immersive view.
+      await tester.tapAt(Offset(size.width / 2, size.height / 2));
+      await tester.pump();
+      (container.read(safetyAlarmProvider.notifier) as _ManualAlarm).raise('EMERGENCY STOP triggered');
+      await tester.pump();
+      final alarm = find.byKey(const Key('simple-safety-alarm'));
+      expect(alarm, findsOneWidget);
+      expect(find.byType(AlertDialog), findsNothing, reason: 'no popup in Simple Mode');
+      expect(tester.getRect(alarm), Offset.zero & size, reason: 'full screen');
+      expect(find.descendant(of: alarm, matching: find.text('SAFETY ALERT')), findsOneWidget);
+      expect(find.descendant(of: alarm, matching: find.text('EMERGENCY STOP triggered')), findsOneWidget);
+      expect(find.descendant(of: alarm, matching: find.byIcon(Icons.error)), findsOneWidget);
+      expect(find.descendant(of: alarm, matching: find.byIcon(Icons.notifications_active)), findsNothing,
+          reason: 'not the bell');
+      await tester.tap(find.byKey(const Key('simple-safety-silence')));
+      await tester.pump();
+      expect(alarm, findsNothing);
+    });
+  }
 
   testWidgets('the status pill never cuts its label short while the whole line fits', (tester) async {
     // Half-size test glyphs: "Taking a frame  3 s left" fits the 300 px pill.

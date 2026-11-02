@@ -46,7 +46,9 @@ class ShellListeners extends StatelessWidget {
                   // §35.5 — the audible safety alarm's modal (safety.unsafe /
                   // safety.emergency_stop) must fire no matter which tab is
                   // showing.
+                  // Simple Mode draws its own, full screen (SimpleSafetyAlarm).
                   child: SafetyAlarmListener(
+                    quiet: quiet,
                     // §57 — the Stop Mount panic overlay surfaces over every
                     // tab while the daemon reports an autonomous slew.
                     child: StopMountListener(quiet: quiet, child: child),
