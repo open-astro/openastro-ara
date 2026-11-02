@@ -153,13 +153,16 @@ void main() {
     expect(find.byKey(const Key('sky')), findsOneWidget, reason: 'the sky until there is a frame');
   });
 
-  testWidgets('the mode name opens the four modes in order; picking one closes them', (tester) async {
+  testWidgets('the mode name opens the modes in order, Autopilot first; picking one closes them', (tester) async {
     final container = await _pump(tester, const Size(1024, 768));
     await tester.tap(find.byKey(const Key('simple-mode')));
     await tester.pump();
-    final modes = ['Preview', 'Focus', 'Polar align', 'Plan'];
-    // .first: the grid sits before the rail (whose label also reads Preview).
-    final order = [for (final m in modes) tester.getTopLeft(find.text(m).first)];
+    final modes = ['Autopilot', 'Preview', 'Focus', 'Polar align', 'Plan'];
+    // The grid's tile, not the rail's label (which also reads Preview): the leftmost match.
+    Offset tile(String m) => (find.text(m).evaluate().map((e) => tester.getTopLeft(find.byWidget(e.widget))).toList()
+          ..sort((a, b) => a.dx.compareTo(b.dx)))
+        .first;
+    final order = [for (final m in modes) tile(m)];
     for (var i = 1; i < order.length; i++) {
       final before = order[i - 1], now = order[i];
       expect(now.dy > before.dy || (now.dy == before.dy && now.dx > before.dx), isTrue,
@@ -335,6 +338,37 @@ void main() {
     await tester.tap(find.byKey(const Key('simple-mode')));
     await tester.pump();
     expect(rail(), before, reason: 'modes open');
+  });
+
+  testWidgets('with nothing done tonight Preview offers Autopilot; it walks Focus first, the rail reads Autopilot',
+      (tester) async {
+    await _pump(tester, const Size(1024, 768));
+    expect(find.byKey(const Key('autopilot-offer')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('autopilot-start')));
+    await tester.pump();
+    expect(find.byKey(const Key('autopilot-offer')), findsNothing);
+    expect(find.byKey(const Key('autopilot-strip')), findsOneWidget);
+    expect(find.descendant(of: find.byKey(const Key('simple-mode')), matching: find.text('Autopilot')), findsOneWidget);
+    expect(find.byKey(const Key('simple-autofocus')), findsOneWidget, reason: "Focus's panel, open");
+    await tester.tap(find.byKey(const Key('autopilot-skip')));
+    await tester.pump();
+    expect(find.byType(SimplePolarPanel), findsOneWidget, reason: "on to polar align's panel");
+    await tester.tap(find.byKey(const Key('autopilot-skip')));
+    await tester.pump();
+    expect(find.text("Tonight's plan"), findsOneWidget, reason: "then the plan's sheet");
+    // Picking a mode leaves Autopilot.
+    await tester.tap(find.byKey(const Key('simple-mode')));
+    await tester.pump();
+    await tester.tap(find.text('Preview').first);
+    await tester.pump();
+    expect(find.byKey(const Key('autopilot-strip')), findsNothing);
+  });
+
+  testWidgets('the Autopilot offer can be dismissed', (tester) async {
+    await _pump(tester, const Size(1024, 768));
+    await tester.tap(find.byTooltip('Not now'));
+    await tester.pump();
+    expect(find.byKey(const Key('autopilot-offer')), findsNothing);
   });
 
   testWidgets('the plan square hugs the top-right corner, under the strip', (tester) async {

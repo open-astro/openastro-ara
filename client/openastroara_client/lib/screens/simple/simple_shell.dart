@@ -32,6 +32,7 @@ import '../../widgets/imaging/histogram_strip.dart' show frameHistogramProvider;
 import '../../widgets/sky_atlas/stellarium_view.dart';
 import '../library/image_library_screen.dart';
 import '../shell_listeners.dart';
+import 'simple_autopilot.dart';
 import 'simple_focus_panel.dart';
 import 'simple_polar_panel.dart';
 import 'simple_plan_panel.dart';
@@ -54,10 +55,11 @@ const double kSimpleStatusMaxWidth = 300;
 const double kSimpleStopSize = 60;
 
 /// The modes, in the decided order.
-enum SimpleModeScreen { preview, focus, polarAlign, plan }
+enum SimpleModeScreen { autopilot, preview, focus, polarAlign, plan }
 
 extension on SimpleModeScreen {
   String get label => switch (this) {
+    SimpleModeScreen.autopilot => 'Autopilot',
     SimpleModeScreen.preview => 'Preview',
     SimpleModeScreen.polarAlign => 'Polar align',
     SimpleModeScreen.focus => 'Focus',
@@ -68,6 +70,7 @@ extension on SimpleModeScreen {
   String get railLabel => this == SimpleModeScreen.polarAlign ? 'P.A.' : label;
 
   IconData get icon => switch (this) {
+    SimpleModeScreen.autopilot => Icons.rocket_launch_outlined,
     SimpleModeScreen.preview => Icons.visibility_outlined,
     SimpleModeScreen.focus => Icons.center_focus_strong,
     SimpleModeScreen.polarAlign => Icons.explore_outlined,
@@ -79,6 +82,7 @@ extension on SimpleModeScreen {
   // shortcut: Run always opens Sequence; the brief wants Live while a run is
   // imaging — switch on the sequence state when the Run screen is built.
   int get fullUiTab => switch (this) {
+    SimpleModeScreen.autopilot ||
     SimpleModeScreen.preview ||
     SimpleModeScreen.polarAlign ||
     SimpleModeScreen.focus => kLiveTabIndex,
@@ -130,6 +134,28 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
   _Popover _popover = _Popover.none;
   SimpleModeScreen _mode = SimpleModeScreen.preview;
 
+  /// The Autopilot offer was dismissed (until Simple Mode opens again).
+  bool _offerDismissed = false;
+
+  /// What shows: the picked mode, or Autopilot's current step.
+  SimpleModeScreen _shown(AutopilotStep? step) =>
+      _mode != SimpleModeScreen.autopilot
+      ? _mode
+      : switch (step) {
+          AutopilotStep.focus => SimpleModeScreen.focus,
+          AutopilotStep.polarAlign => SimpleModeScreen.polarAlign,
+          AutopilotStep.plan => SimpleModeScreen.plan,
+          null => SimpleModeScreen.preview,
+        };
+
+  void _startAutopilot() {
+    setState(() {
+      _mode = SimpleModeScreen.autopilot;
+      _popover = _Popover.settings;
+    });
+    ref.read(autopilotProvider.notifier).start();
+  }
+
   /// Ties the popovers to the right rail's top-left corner.
   final _railLink = LayerLink();
 
@@ -162,7 +188,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
       ref.read(selectedTabIndexProvider.notifier).select(kOptionsTabIndex);
 
   void _stopRun() {
-    if (_mode != SimpleModeScreen.plan) return;
+    if (_shown(ref.read(autopilotProvider)) != SimpleModeScreen.plan) return;
     final phase = simpleRunPhase(
       ref.read(simpleRunProvider),
       ref.read(sequenceRunStateProvider).value,
@@ -192,9 +218,19 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     ref.listen(selectedTabIndexProvider, (previous, next) {
       ref.read(simpleModeProvider.notifier).set(false);
     });
+    // Autopilot opens each step on its panel, and ends on the plan.
+    ref.listen(autopilotProvider, (previous, next) {
+      if (_mode != SimpleModeScreen.autopilot) return;
+      setState(() {
+        if (next == null) _mode = SimpleModeScreen.plan;
+        _popover = next == null ? _Popover.none : _Popover.settings;
+      });
+    });
+    final pilot = ref.watch(autopilotProvider);
+    final shown = _shown(pilot);
     // Polar align shows its own camera's frames while the routine runs.
     final polarFrame =
-        _mode == SimpleModeScreen.polarAlign &&
+        shown == SimpleModeScreen.polarAlign &&
         simplePolarActive(ref.watch(polarAlignLiveProvider));
     final hasFrame =
         polarFrame ||
@@ -204,10 +240,10 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     final panels = !_clean || showSky;
     // Only Plan reads the sequencer (reading it adopts a run in progress).
     final runActive =
-        _mode == SimpleModeScreen.plan &&
+        shown == SimpleModeScreen.plan &&
         (ref.watch(sequenceRunStateProvider).value?.state?.isActive ?? false);
     final runSheet =
-        _mode == SimpleModeScreen.plan &&
+        shown == SimpleModeScreen.plan &&
         _popover == _Popover.settings &&
         !runActive;
     final sel = ref.watch(planetariumSelectionProvider);
@@ -358,7 +394,11 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                               child: CompositedTransformTarget(
                                 link: _railLink,
                                 child: _RightRail(
-                                  mode: _mode,
+                                  mode: shown,
+                                  railLabel:
+                                      _mode == SimpleModeScreen.autopilot
+                                      ? SimpleModeScreen.autopilot.label
+                                      : null,
                                   popover: _popover,
                                   onModes: () => _toggle(_Popover.modes),
                                   onSettings: () => _toggle(_Popover.settings),
@@ -404,15 +444,24 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                         current: _mode,
                                         // A mode opens on its panel; Preview's
                                         // controls are already on the rail.
-                                        onPicked: (m) => setState(() {
-                                          _mode = m;
-                                          _popover =
-                                              m == SimpleModeScreen.preview
-                                              ? _Popover.none
-                                              : _Popover.settings;
-                                        }),
+                                        onPicked: (m) {
+                                          if (m == SimpleModeScreen.autopilot) {
+                                            return _startAutopilot();
+                                          }
+                                          setState(() {
+                                            _mode = m;
+                                            _popover =
+                                                m == SimpleModeScreen.preview
+                                                ? _Popover.none
+                                                : _Popover.settings;
+                                          });
+                                          // Picking a mode leaves Autopilot.
+                                          ref
+                                              .read(autopilotProvider.notifier)
+                                              .stop();
+                                        },
                                       )
-                                    : switch (_mode) {
+                                    : switch (shown) {
                                         SimpleModeScreen.focus =>
                                           const SimpleFocusPanel(),
                                         SimpleModeScreen.polarAlign =>
@@ -426,9 +475,30 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                       },
                               ),
                             ),
+                          // Autopilot's steps, or the offer to start it, centred
+                          // under the strip.
+                          if (_mode == SimpleModeScreen.autopilot ||
+                              (!_offerDismissed &&
+                                  _mode == SimpleModeScreen.preview &&
+                                  autopilotOffered(ref)))
+                            Positioned(
+                              left: 0,
+                              right: 0,
+                              top: railTop,
+                              child: Center(
+                                child: _mode == SimpleModeScreen.autopilot
+                                    ? const AutopilotStrip()
+                                    : AutopilotOffer(
+                                        onStart: _startAutopilot,
+                                        onDismiss: () => setState(
+                                          () => _offerDismissed = true,
+                                        ),
+                                      ),
+                              ),
+                            ),
                           // The plan square hugs the top-right corner, under the
                           // strip; queued plans will join to its left.
-                          if (_mode == SimpleModeScreen.plan)
+                          if (shown == SimpleModeScreen.plan)
                             Positioned(
                               right: kSimpleInset,
                               top: railTop,
@@ -756,12 +826,16 @@ class _LeftRail extends StatelessWidget {
 class _RightRail extends ConsumerWidget {
   const _RightRail({
     required this.mode,
+    this.railLabel,
     required this.popover,
     required this.onModes,
     required this.onSettings,
   });
 
   final SimpleModeScreen mode;
+
+  /// Overrides the mode's name on the rail (Autopilot shows its own).
+  final String? railLabel;
   final _Popover popover;
   final VoidCallback onModes;
   final VoidCallback onSettings;
@@ -778,7 +852,7 @@ class _RightRail extends ConsumerWidget {
           // The mode on top of the shutter; the settings chip under it.
           Semantics(
             button: true,
-            label: 'Mode: ${mode.label}',
+            label: 'Mode: ${railLabel ?? mode.label}',
             child: InkWell(
               key: const Key('simple-mode'),
               onTap: onModes,
@@ -790,7 +864,7 @@ class _RightRail extends ConsumerWidget {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Text(
-                      mode.railLabel,
+                      railLabel ?? mode.railLabel,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: kSimpleText.copyWith(

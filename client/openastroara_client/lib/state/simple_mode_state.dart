@@ -68,3 +68,33 @@ final simpleModeActiveProvider = Provider<bool>(
       (ref.watch(simpleModeFeatureProvider).value ?? false) &&
       (ref.watch(simpleModeProvider).value ?? false),
 );
+
+/// The prefs file backing [simplePermanentPierProvider]; overridden in tests.
+final simplePermanentPierPrefsProvider = Provider<SimpleModePrefsService>(
+  (ref) => SimpleModePrefsService(fileName: 'simple_permanent_pier.json'),
+);
+
+/// The mount stays polar aligned (a permanent pier), so Simple Mode's
+/// Autopilot skips polar alignment. Off by default.
+// shortcut: saved on this client, not in the rig's profile; move it to the
+// profile once the daemon carries the setting (it belongs to the rig).
+class SimplePermanentPierController extends AsyncNotifier<bool> {
+  bool? _pending;
+
+  @override
+  Future<bool> build() async {
+    final loaded = await ref.read(simplePermanentPierPrefsProvider).load();
+    return _pending ?? loaded;
+  }
+
+  Future<void> set(bool on) async {
+    _pending = on;
+    state = AsyncData(on);
+    await ref.read(simplePermanentPierPrefsProvider).save(on);
+  }
+}
+
+final simplePermanentPierProvider =
+    AsyncNotifierProvider<SimplePermanentPierController, bool>(
+      SimplePermanentPierController.new,
+    );

@@ -11,6 +11,7 @@ import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
 import '../../util/friendly_error.dart';
 import '../../widgets/imaging/polar_align_panel.dart';
+import 'simple_autopilot.dart' show AutopilotStep, autopilotProvider;
 import 'simple_preview_panel.dart'
     show SimplePresetTile, SimpleShutterButton, exposurePresets, formatExposure, kSimpleText;
 import 'simple_shell.dart' show SimplePanel, SimpleSegment, kSimpleTileFill;
@@ -181,6 +182,8 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
 
   @override
   Widget build(BuildContext context) {
+    final autopilot =
+        ref.watch(autopilotProvider) == AutopilotStep.polarAlign;
     final live = ref.watch(polarAlignLiveProvider);
     final settings =
         ref.watch(simplePolarSettingsProvider).value ??
@@ -346,12 +349,18 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
                           !_busy &&
                               total != null &&
                               total < settings.targetToleranceArcmin
-                          ? () => _run(
-                              'complete polar alignment',
-                              (api) => api.complete(),
-                            )
+                          ? () async {
+                              await _run(
+                                'complete polar alignment',
+                                (api) => api.complete(),
+                              );
+                              // In Autopilot, Done moves on to the plan.
+                              if (autopilot && _error == null) {
+                                ref.read(autopilotProvider.notifier).next();
+                              }
+                            }
                           : null,
-                      child: const Text('Done'),
+                      child: Text(autopilot ? 'Done · Next: Plan' : 'Done'),
                     ),
                   ),
                 ],

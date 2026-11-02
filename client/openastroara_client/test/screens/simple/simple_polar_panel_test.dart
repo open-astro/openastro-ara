@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/screens/simple/simple_autopilot.dart';
 import 'package:openastroara/models/polar_align.dart';
 import 'package:openastroara/screens/simple/simple_polar_panel.dart';
 import 'package:openastroara/services/polar_align_api.dart';
@@ -117,6 +118,32 @@ void main() {
     await tester.tap(find.byKey(const Key('simple-polar-done')));
     await tester.pump();
     expect(api!.calls, ['complete']);
+  });
+
+  testWidgets('in Autopilot, Done reads Done · Next: Plan and moves on to the plan', (tester) async {
+    final api = _Api()..settings = PolarAlignSettings();
+    final c = ProviderContainer(overrides: [
+      polarAlignApiProvider.overrideWithValue(api),
+      polarAlignLiveProvider.overrideWith(() => _Live(const PolarAlignLive(
+          phase: PolarAlignStates.adjusting, altErrorArcmin: 0.3, azErrorArcmin: -0.5, totalErrorArcmin: 0.6))),
+    ]);
+    addTearDown(c.dispose);
+    c.read(autopilotProvider.notifier).back(); // no-op outside Autopilot
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: c,
+      child: const MaterialApp(home: Scaffold(body: Center(child: SimplePolarPanel()))),
+    ));
+    await tester.pumpAndSettle();
+    expect(find.text('Done'), findsOneWidget, reason: 'outside Autopilot');
+    c.read(autopilotProvider.notifier).start();
+    c.read(autopilotProvider.notifier).next(); // past Focus, to polar align
+    await tester.pumpAndSettle();
+    expect(c.read(autopilotProvider), AutopilotStep.polarAlign);
+    expect(find.text('Done · Next: Plan'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('simple-polar-done')));
+    await tester.pumpAndSettle();
+    expect(api.calls.last, 'complete');
+    expect(c.read(autopilotProvider), AutopilotStep.plan);
   });
 
   testWidgets('failed solves say so', (tester) async {

@@ -36,6 +36,19 @@ class ExperimentalPanel extends ConsumerWidget {
           value: on,
           onChanged: (v) => ref.read(simpleModeFeatureProvider.notifier).set(v),
         ),
+        if (on)
+          SwitchListTile(
+            key: const Key('experimental-permanent-pier'),
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Permanent pier'),
+            subtitle: const Text(
+              'The mount stays polar aligned, so Autopilot skips polar '
+              'alignment.',
+            ),
+            value: ref.watch(simplePermanentPierProvider).value ?? false,
+            onChanged: (v) =>
+                ref.read(simplePermanentPierProvider.notifier).set(v),
+          ),
       ],
     );
   }
