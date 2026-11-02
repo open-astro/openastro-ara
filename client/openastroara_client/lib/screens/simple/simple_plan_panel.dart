@@ -492,9 +492,9 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
         state = SimpleRun(sequenceId: r.sequenceId, targets: [target]);
       } else if (first && state.targets.isNotEmpty) {
         await _moveFirst(queue, target.name, state.targets.first.name);
-        state = state.copyWith(targets: [target, ...state.targets]);
+        state = state.copyWith(targets: [target, ...state.targets], busy: false);
       } else {
-        state = state.copyWith(targets: [...state.targets, target]);
+        state = state.copyWith(targets: [...state.targets, target], busy: false);
       }
       return true;
     } catch (e) {
@@ -534,7 +534,14 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
       } else if (removeTargetFromRunBody(body, name) case final next?) {
         await api.updateSequence(id, body: next);
       }
-      state = state.copyWith(targets: [...state.targets]..removeAt(i));
+      final left = [...state.targets]..removeAt(i);
+      if (left.isEmpty && !state.started) {
+        // Nothing left to run: the empty sequence goes too.
+        await api.deleteSequence(id);
+        state = const SimpleRun();
+      } else {
+        state = state.copyWith(targets: left);
+      }
     } catch (e) {
       state = state.copyWith(error: _why(e, 'remove it from the queue'));
     }
@@ -656,8 +663,8 @@ String _sub(FilterPlanStep s) {
 /// left in queue order: each target's tag, frames done of its total, the
 /// filter and sub length in hand, and the time (total before it starts, left
 /// while imaging). The target in hand is green ready, blue imaging, amber
-/// paused; the others green. Nothing without a plan. A tap on the one in
-/// hand: the sheet or the progress panel; on a queued one: Remove under it.
+/// paused; the others green. Nothing without a plan. A tap on any square:
+/// the sheet (where the queue is managed) or the progress panel.
 class SimpleRunTracker extends ConsumerStatefulWidget {
   const SimpleRunTracker({super.key, required this.onTap});
 
@@ -668,9 +675,6 @@ class SimpleRunTracker extends ConsumerStatefulWidget {
 }
 
 class _SimpleRunTrackerState extends ConsumerState<SimpleRunTracker> {
-  /// The queued square showing Remove, if any.
-  int? _picked;
-
   @override
   Widget build(BuildContext context) {
     final run = ref.watch(simpleRunProvider);
@@ -743,9 +747,7 @@ class _SimpleRunTrackerState extends ConsumerState<SimpleRunTracker> {
         fraction: inHand && phase != SimpleRunPhase.ready && total > 0
             ? got / total
             : null,
-        onTap: inHand || finished
-            ? widget.onTap
-            : () => setState(() => _picked = _picked == i ? null : i),
+        onTap: widget.onTap,
       );
     }
 
@@ -756,22 +758,7 @@ class _SimpleRunTrackerState extends ConsumerState<SimpleRunTracker> {
       spacing: 6,
       children: [
         // The queue runs right to left: the first target sits in the corner.
-        for (var i = run.targets.length - 1; i >= 0; i--)
-          Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              square(i),
-              if (_picked == i && i > cur && phase != SimpleRunPhase.done)
-                TextButton(
-                  key: const Key('simple-run-remove'),
-                  onPressed: () {
-                    setState(() => _picked = null);
-                    ref.read(simpleRunProvider.notifier).remove(i);
-                  },
-                  child: const Text('Remove'),
-                ),
-            ],
-          ),
+        for (var i = run.targets.length - 1; i >= 0; i--) square(i),
       ],
     );
   }
@@ -1098,6 +1085,9 @@ class SimpleRunSheet extends ConsumerStatefulWidget {
 class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
   final _query = TextEditingController();
 
+  /// "M42 added · 3 in the queue", until the next pick.
+  String? _added;
+
   @override
   void initState() {
     super.initState();
@@ -1137,6 +1127,9 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
   }
 
   Widget _plan(SimpleRun run) {
+    ref.listen(planetariumSelectionProvider, (_, next) {
+      if (next != null && _added != null) setState(() => _added = null);
+    });
     final sel = ref.watch(planetariumSelectionProvider);
     final steps = ref.watch(simpleRunPlanProvider);
     final plan = ref.read(simpleRunPlanProvider.notifier);
@@ -1208,6 +1201,7 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
       spacing: AraSpace.s8,
       children: [
         Text("Tonight's plan", style: _head),
+        if (run.targets.isNotEmpty) _QueueList(run: run),
         // Tonight's best, from the full UI's ranking: one tap picks a target.
         if (best.isNotEmpty) ...[
           Text("TONIGHT'S BEST", style: AraText.caption),
@@ -1415,6 +1409,11 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
             'Not polar aligned tonight',
             style: kSimpleText.copyWith(color: AraColors.accentBusy),
           ),
+        if (_added != null)
+          Text(
+            _added!,
+            style: kSimpleText.copyWith(color: AraColors.accentConnected),
+          ),
         if (run.error != null) _RunError(run),
         Row(
           spacing: AraSpace.s8,
@@ -1425,10 +1424,15 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
                 onPressed: queueOff
                     ? null
                     : () async {
+                        final name = sel.name;
                         final ok = await ref
                             .read(simpleRunProvider.notifier)
                             .create(ref);
-                        if (ok) widget.onCreated();
+                        if (!ok || !mounted) return;
+                        // The sheet stays up for the next pick.
+                        final n = ref.read(simpleRunProvider).targets.length;
+                        ref.read(planetariumSelectionProvider.notifier).set(null);
+                        setState(() => _added = '$name added · $n in the queue');
                       },
                 child: const Text('Add to queue'),
               ),
@@ -1458,6 +1462,69 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
             ),
           ],
         ),
+      ],
+    );
+  }
+}
+
+/// The sheet's QUEUE: each target with its tag, frames done of its total and
+/// time left, and × for one that hasn't started.
+class _QueueList extends ConsumerWidget {
+  const _QueueList({required this.run});
+  final SimpleRun run;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final info = ref.watch(sequenceRunStateProvider).value;
+    final ours = run.started && info?.sequenceId == run.sequenceId;
+    final captured = ours ? info?.framesCaptured ?? 0 : 0;
+    final progress = simpleTargetProgress(run.targets, captured);
+    final cur = simpleCurrentTarget(run.targets, captured);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text('QUEUE', style: AraText.caption),
+        for (var i = 0; i < run.targets.length; i++)
+          () {
+            final t = run.targets[i];
+            final got = progress[i].fold(0, (a, b) => a + b);
+            final left = [
+              for (var r = 0; r < t.steps.length; r++)
+                (t.steps[r].frameCount - progress[i][r]) *
+                    t.steps[r].exposureSeconds,
+            ].fold(0.0, (a, b) => a + b);
+            return Row(
+              spacing: AraSpace.s8,
+              children: [
+                Expanded(
+                  child: Text(
+                    t.tag ?? t.name,
+                    style: kSimpleText.copyWith(fontWeight: FontWeight.w600),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                Text('$got / ${_total(t.steps)}', style: _dim),
+                Text(simpleRunDuration(left), style: _dim),
+                SizedBox(
+                  width: 44,
+                  height: 44,
+                  child: !run.started || i > cur
+                      ? IconButton(
+                          key: Key('simple-run-remove-$i'),
+                          tooltip: 'Remove ${t.name} from the queue',
+                          icon: const Icon(Icons.close, size: 18),
+                          onPressed: run.busy
+                              ? null
+                              : () => ref
+                                    .read(simpleRunProvider.notifier)
+                                    .remove(i),
+                        )
+                      : null,
+                ),
+              ],
+            );
+          }(),
       ],
     );
   }

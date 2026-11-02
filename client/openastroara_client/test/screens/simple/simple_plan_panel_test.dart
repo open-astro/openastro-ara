@@ -442,10 +442,11 @@ void main() {
       expect(c.read(planetariumSearchProvider), 'M42');
     });
 
-    testWidgets('Add to queue creates the run without starting it; again it appends', (tester) async {
+    testWidgets('Add to queue creates the run without starting it and keeps the sheet up for the next pick; again it appends',
+        (tester) async {
       var created = 0;
       final seq = _Seq();
-      await _pump(
+      final c = await _pump(
           tester,
           seq,
           SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () => created++, onLibrary: () {}));
@@ -454,9 +455,21 @@ void main() {
       expect(find.text('Create and start'), findsOneWidget);
       await create(tester);
       expect(seq.calls, ['create M31']);
-      expect(created, 1);
+      expect(created, 0, reason: 'the sheet stays up while planning');
+      expect(find.text('M31 added · 1 in the queue'), findsOneWidget);
+      expect(c.read(planetariumSelectionProvider), isNull, reason: 'cleared for the next pick');
+      c.read(planetariumSelectionProvider.notifier).set(_m42);
+      await tester.pumpAndSettle();
+      expect(find.text('M31 added · 1 in the queue'), findsNothing, reason: 'a new pick clears the line');
       await create(tester);
       expect(seq.calls, ['create M31', 'update seq-1'], reason: 'the queue grows; nothing is replaced');
+      // Start now begins imaging: that closes it.
+      c.read(planetariumSelectionProvider.notifier).set(_m31);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('simple-run-start')));
+      await tester.pumpAndSettle();
+      expect(c.read(simpleRunProvider).busy, isFalse, reason: 'an append ends the busy state');
+      expect(created, 1);
     });
 
     testWidgets('Create and start creates the run and starts it, then closes the sheet', (tester) async {
@@ -558,10 +571,10 @@ void main() {
         name: 'Horsehead + Flame region (IC 434)', kind: 'HII', raHours: 5.68, decDeg: -2.45, raJ2000Hours: 5.68,
         decJ2000Deg: -2.45, altDeg: 30, maxAltDeg: 50, designations: ['IC0434']);
     final (_, _) = await run(tester, sel: region);
+    expect(find.text('Horsehead + Flame region (IC 434)'), findsWidgets, reason: 'the sheet');
     await create(tester);
     expect(find.descendant(of: find.byKey(const Key('simple-run-tracker')), matching: find.text('IC 434')),
         findsOneWidget);
-    expect(find.text('Horsehead + Flame region (IC 434)'), findsWidgets, reason: 'the sheet');
   });
 
   testWidgets('a long object name shows whole in the tracker, clear of its border', (tester) async {
@@ -688,15 +701,29 @@ void main() {
       expect(seq.calls.last, 'start seq-1');
     });
 
-    testWidgets('a queued square offers Remove, which takes it out of the sequence', (tester) async {
-      final (c, seq) = await run(tester);
+    testWidgets('every square opens the sheet; its queue list removes a target', (tester) async {
+      var taps = 0;
+      final seq = _Seq();
+      final c = await _pump(
+          tester,
+          seq,
+          SingleChildScrollView(
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}, onLibrary: () {}),
+              SimpleRunTracker(onTap: () => taps++),
+            ]),
+          ));
       await create(tester);
       await pick(tester, c, _m42);
       await create(tester);
       final tracker = find.byKey(const Key('simple-run-tracker'));
-      await tester.tap(find.descendant(of: tracker, matching: find.text('M42')));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const Key('simple-run-remove')));
+      for (final name in ['M31', 'M42']) {
+        await tester.tap(find.descendant(of: tracker, matching: find.text(name)));
+        await tester.pumpAndSettle();
+      }
+      expect(taps, 2, reason: 'the same for every square');
+      expect(find.text('QUEUE'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('simple-run-remove-1')));
       await tester.pumpAndSettle();
       expect(seq.targets('seq-1'), ['M31']);
       expect(c.read(simpleRunProvider).targets.map((t) => t.name), ['M31']);
@@ -774,7 +801,7 @@ void main() {
       final (_, seq) = await run(tester);
       await create(tester);
       expect(find.byKey(const Key('simple-run-tracker')), findsOneWidget);
-      expect(find.text('0 / 60'), findsOneWidget);
+      expect(find.descendant(of: find.byKey(const Key('simple-run-tracker')), matching: find.text('0 / 60')), findsOneWidget);
       expect(find.text('L · 5 s'), findsOneWidget);
       await tester.tap(find.byKey(const Key('simple-shutter')));
       await tester.pumpAndSettle();
@@ -813,7 +840,7 @@ void main() {
       await tester.tap(find.byKey(const Key('simple-shutter')));
       await tester.pumpAndSettle();
       await imaging(tester, c, seq, _imaging(23));
-      expect(find.text('23 / 60'), findsOneWidget);
+      expect(find.descendant(of: find.byKey(const Key('simple-run-tracker')), matching: find.text('23 / 60')), findsOneWidget);
       expect(find.text('R · 5 s'), findsOneWidget, reason: '15 per filter: frame 23 is on R');
       await tester.tap(find.byKey(const Key('simple-shutter')));
       await tester.pumpAndSettle();

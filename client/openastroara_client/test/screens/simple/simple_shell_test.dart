@@ -413,7 +413,7 @@ void main() {
     final square = tester.getRect(find.byKey(const Key('simple-run-tracker')));
     expect(square.right, 1024 - kSimpleInset, reason: 'in the corner');
     expect(square.top, kSimpleInset * 2 + kSimpleBarHeight, reason: 'under the strip');
-    expect(find.text('0 / 30'), findsOneWidget);
+    expect(find.descendant(of: find.byKey(const Key('simple-run-tracker')), matching: find.text('0 / 30')), findsOneWidget);
   });
 
   // Info and System: a tile per fact in the bottom-left corner, above the guiding and histogram row, growing
