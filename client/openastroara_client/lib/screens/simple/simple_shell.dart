@@ -1251,7 +1251,8 @@ class _HistogramPainter extends CustomPainter {
 }
 
 /// One segment of a Simple Mode switch (the mode switcher, Loop / Single):
-/// 40 px tall with square-ish corners, Selection Blue when selected.
+/// 44 px tall (the brief's touch minimum) with square-ish corners, Selection
+/// Blue when selected.
 class SimpleSegment extends StatelessWidget {
   const SimpleSegment({
     super.key,
@@ -1279,7 +1280,7 @@ class SimpleSegment extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(radius),
         child: Container(
-          height: 40,
+          height: 44,
           padding: const EdgeInsets.symmetric(horizontal: 14),
           alignment: alignment,
           child: Text(

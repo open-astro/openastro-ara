@@ -342,6 +342,17 @@ void main() {
     }
   });
 
+  testWidgets('the settings popover\'s segments (Loop / Single) are at least 44 px tall', (tester) async {
+    await _pump(tester, const Size(1024, 768));
+    await tester.tap(find.byKey(const Key('simple-settings')));
+    await tester.pump();
+    final segments = find.byType(SimpleSegment);
+    expect(segments, findsWidgets);
+    for (final e in segments.evaluate()) {
+      expect(tester.getSize(find.byWidget(e.widget)).height, greaterThanOrEqualTo(44));
+    }
+  });
+
   testWidgets('opening the modes or the settings never moves the rail', (tester) async {
     await _pump(tester, const Size(1024, 768));
     Rect rail() => _panelOf(tester, find.byKey(const Key('simple-shutter')));
