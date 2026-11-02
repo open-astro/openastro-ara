@@ -8,6 +8,7 @@ import 'package:openastroara/services/simple_mode_prefs_service.dart';
 import 'package:openastroara/state/polar_align/polar_align_state.dart';
 import 'package:openastroara/state/setup/setup_readiness.dart';
 import 'package:openastroara/state/simple_mode_state.dart';
+import 'package:openastroara/theme/ara_colors.dart';
 
 /// The checklist's focus and polar-align states, set by the test.
 class _Step extends Notifier<SetupStepState> {
@@ -121,7 +122,14 @@ void main() {
     await tester.tap(find.byKey(const Key('autopilot-skip')));
     await tester.pump();
     expect(c.read(autopilotProvider), AutopilotStep.polarAlign);
-    expect(find.byIcon(Icons.check_circle), findsOneWidget, reason: 'Focus ticked');
+    // Skipped, not done: amber, never the green tick.
+    expect(find.byIcon(Icons.check_circle), findsNothing);
+    expect(tester.widget<Icon>(find.byIcon(Icons.skip_next)).color, AraColors.accentBusy);
+    c.read(_focus.notifier).set(SetupStepState.done);
+    await tester.pump();
+    expect(tester.widget<Icon>(find.byIcon(Icons.check_circle)).color, AraColors.accentConnected,
+        reason: 'focused after all: green');
+    expect(find.byIcon(Icons.skip_next), findsNothing);
     await tester.tap(find.byKey(const Key('autopilot-back')));
     await tester.pump();
     expect(c.read(autopilotProvider), AutopilotStep.focus);

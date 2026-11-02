@@ -101,8 +101,9 @@ final autopilotProvider = NotifierProvider<AutopilotNotifier, AutopilotStep?>(
   AutopilotNotifier.new,
 );
 
-/// Autopilot's step strip, centred under the status strip: the steps with
-/// the done ones ticked and the current one lit, then Back and Skip.
+/// Autopilot's step strip, centred under the status strip: the steps behind
+/// ticked green when done tonight and amber when skipped, the current one
+/// lit, then Back and Skip.
 class AutopilotStrip extends ConsumerWidget {
   const AutopilotStrip({super.key});
 
@@ -111,6 +112,10 @@ class AutopilotStrip extends ConsumerWidget {
     final step = ref.watch(autopilotProvider);
     if (step == null) return const SizedBox.shrink();
     final pilot = ref.read(autopilotProvider.notifier);
+    final focused = ref.watch(setupFocusStateProvider) == SetupStepState.done;
+    final aligned =
+        ref.watch(setupPolarAlignStateProvider) == SetupStepState.done ||
+        (ref.watch(simplePermanentPierProvider).value ?? false);
     return SimplePanel(
       key: const Key('autopilot-strip'),
       padding: const EdgeInsets.symmetric(horizontal: AraSpace.s8),
@@ -129,7 +134,15 @@ class AutopilotStrip extends ConsumerWidget {
                     color: AraColors.textDisabled,
                   ),
                 ),
-              _Step(step: s, current: step),
+              _Step(
+                step: s,
+                current: step,
+                done: switch (s) {
+                  AutopilotStep.focus => focused,
+                  AutopilotStep.polarAlign => aligned,
+                  AutopilotStep.plan => false,
+                },
+              ),
             ],
             const SizedBox(width: AraSpace.s8),
             TextButton(
@@ -150,14 +163,17 @@ class AutopilotStrip extends ConsumerWidget {
 }
 
 class _Step extends StatelessWidget {
-  const _Step({required this.step, required this.current});
+  const _Step({required this.step, required this.current, required this.done});
 
   final AutopilotStep step;
   final AutopilotStep current;
 
+  /// Done tonight; a step behind the current one that isn't was skipped.
+  final bool done;
+
   @override
   Widget build(BuildContext context) {
-    final done = step.index < current.index;
+    final behind = step.index < current.index;
     final on = step == current;
     return Container(
       height: 36,
@@ -170,11 +186,17 @@ class _Step extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         spacing: 6,
         children: [
-          done
+          behind && done
               ? const Icon(
                   Icons.check_circle,
                   size: 20,
                   color: AraColors.accentConnected,
+                )
+              : behind
+              ? const Icon(
+                  Icons.skip_next,
+                  size: 20,
+                  color: AraColors.accentBusy,
                 )
               : Container(
                   width: 20,
