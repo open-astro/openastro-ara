@@ -109,7 +109,7 @@ String simpleRunDuration(double seconds) {
   return min >= 60 ? '${min ~/ 60} h ${min % 60} min' : '$min min';
 }
 
-/// The rail chip in Run: the plan's total imaging time, the created plan's
+/// The rail chip in Plan: the plan's total imaging time, the created plan's
 /// once there is one, else the sheet's rows; hours over minutes, as P.A.'s
 /// chip takes two lines in 60 px. Pure — unit-tested.
 String simpleRunChip(SimpleRun run, List<FilterPlanStep> rows) => simpleRunDuration(
@@ -213,7 +213,7 @@ class SimpleRun {
       );
 }
 
-/// What Run's shutter, tracker and sheet show.
+/// What Plan's shutter, tracker and sheet show.
 enum SimpleRunPhase { none, ready, imaging, pausing, paused, done }
 
 bool _paused(SequenceRunState? s) =>
@@ -477,7 +477,7 @@ class SimpleRunTracker extends ConsumerWidget {
 /// How long the shutter is held to stop a run (the Emergency Stop's hold).
 const kSimpleRunStopHold = kEmergencyStopHold;
 
-/// The rail's shutter in Run. Plan ready: a play triangle in a green ring;
+/// The rail's shutter in Plan. Plan ready: a play triangle in a green ring;
 /// a tap starts it. Imaging: pause bars, with a blue ring filling as the
 /// frame exposes; a tap pauses (after the frame in hand). Paused: a play
 /// triangle in an amber ring; a tap resumes. While imaging or paused, a
@@ -651,7 +651,7 @@ TextStyle get _head =>
 
 const _kFramePresets = [5, 10, 12, 15, 20, 30, 40, 60, 90, 120, 180, 240, 300];
 
-/// Run's sheet, centred over the image: the target (a search, or Pick in
+/// Plan's sheet, centred over the image: the target (a search, or Pick in
 /// Sky), a row per filter (sub length and frames), then Create plan (Save
 /// plan once one exists); once the run ends, Night done. The shutter starts
 /// the plan.
@@ -1028,7 +1028,7 @@ class _NightDone extends ConsumerWidget {
   }
 }
 
-/// Run's panel beside the rail while imaging: frames done of the plan, when
+/// Plan's panel beside the rail while imaging: frames done of the plan, when
 /// it ends, and a bar per filter. The shutter pauses and, held, stops.
 class SimpleRunPanel extends ConsumerWidget {
   const SimpleRunPanel({super.key});

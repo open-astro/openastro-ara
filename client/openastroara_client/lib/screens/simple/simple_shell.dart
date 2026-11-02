@@ -34,7 +34,7 @@ import '../library/image_library_screen.dart';
 import '../shell_listeners.dart';
 import 'simple_focus_panel.dart';
 import 'simple_polar_panel.dart';
-import 'simple_run_panel.dart';
+import 'simple_plan_panel.dart';
 import 'simple_preview_panel.dart';
 
 /// Inset from the frame edge and between panels.
@@ -54,14 +54,14 @@ const double kSimpleStatusMaxWidth = 300;
 const double kSimpleStopSize = 60;
 
 /// The modes, in the decided order.
-enum SimpleModeScreen { preview, focus, polarAlign, run }
+enum SimpleModeScreen { preview, focus, polarAlign, plan }
 
 extension on SimpleModeScreen {
   String get label => switch (this) {
     SimpleModeScreen.preview => 'Preview',
     SimpleModeScreen.polarAlign => 'Polar align',
     SimpleModeScreen.focus => 'Focus',
-    SimpleModeScreen.run => 'Run',
+    SimpleModeScreen.plan => 'Plan',
   };
 
   /// The name on the 60 px rail, where "Polar align" doesn't fit.
@@ -71,7 +71,7 @@ extension on SimpleModeScreen {
     SimpleModeScreen.preview => Icons.visibility_outlined,
     SimpleModeScreen.focus => Icons.center_focus_strong,
     SimpleModeScreen.polarAlign => Icons.explore_outlined,
-    SimpleModeScreen.run => Icons.playlist_play,
+    SimpleModeScreen.plan => Icons.playlist_play,
   };
 
   /// The full-UI tab a mode opens until its Simple Mode screen exists
@@ -82,7 +82,7 @@ extension on SimpleModeScreen {
     SimpleModeScreen.preview ||
     SimpleModeScreen.polarAlign ||
     SimpleModeScreen.focus => kLiveTabIndex,
-    SimpleModeScreen.run => kRunTabIndex,
+    SimpleModeScreen.plan => kRunTabIndex,
   };
 }
 
@@ -162,7 +162,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
       ref.read(selectedTabIndexProvider.notifier).select(kOptionsTabIndex);
 
   void _stopRun() {
-    if (_mode != SimpleModeScreen.run) return;
+    if (_mode != SimpleModeScreen.plan) return;
     final phase = simpleRunPhase(
       ref.read(simpleRunProvider),
       ref.read(sequenceRunStateProvider).value,
@@ -202,12 +202,12 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
         ref.watch(liveViewControllerProvider);
     final showSky = _sky || !hasFrame;
     final panels = !_clean || showSky;
-    // Only Run reads the sequencer (reading it adopts a run in progress).
+    // Only Plan reads the sequencer (reading it adopts a run in progress).
     final runActive =
-        _mode == SimpleModeScreen.run &&
+        _mode == SimpleModeScreen.plan &&
         (ref.watch(sequenceRunStateProvider).value?.state?.isActive ?? false);
     final runSheet =
-        _mode == SimpleModeScreen.run &&
+        _mode == SimpleModeScreen.plan &&
         _popover == _Popover.settings &&
         !runActive;
     final sel = ref.watch(planetariumSelectionProvider);
@@ -297,29 +297,20 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                             height: kSimpleBarHeight,
                             child: _StatusStrip(),
                           ),
-                          // Info: the last frame's facts as one line under the
-                          // strip, at the right edge; it starts right of the
-                          // status pill's slot so the two never meet.
-                          if (_info)
-                            const Positioned(
-                              left: kSimpleInset * 2 + kSimpleStatusMaxWidth,
-                              right: kSimpleInset,
-                              top: railTop,
-                              child: Align(
-                                alignment: Alignment.centerRight,
-                                child: SimpleInfoPanel(),
-                              ),
-                            ),
-                          // System: the server's figures under the strip, or
-                          // under Info while Info shows.
-                          if (_system)
+                          // Info and System: fact tiles hugging the bottom-right
+                          // corner, above the bottom row and left of the rail;
+                          // System's row sits above Info's.
+                          if (_info || _system)
                             Positioned(
-                              left: kSimpleInset * 2 + kSimpleStatusMaxWidth,
-                              right: kSimpleInset,
-                              top: _info ? railTop + 40 + AraSpace.s8 : railTop,
-                              child: const Align(
-                                alignment: Alignment.centerRight,
-                                child: SimpleSystemPanel(),
+                              right: kSimpleInset * 2 + kSimpleRailWidth,
+                              bottom: kSimpleInset * 2 + kSimpleBarHeight,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                spacing: AraSpace.s8,
+                                children: [
+                                  if (_system) const SimpleSystemPanel(),
+                                  if (_info) const SimpleInfoPanel(),
+                                ],
                               ),
                             ),
                           // Guiding and the histogram along the bottom, each
@@ -375,7 +366,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                               ),
                             ),
                           ),
-                          // Run's plan and Night done: a sheet centred over
+                          // Plan's sheet and Night done: a sheet centred over
                           // the image; while imaging, its panel sits beside
                           // the rail like any mode's.
                           if (runSheet)
@@ -426,7 +417,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                           const SimpleFocusPanel(),
                                         SimpleModeScreen.polarAlign =>
                                           const SimplePolarPanel(),
-                                        SimpleModeScreen.run =>
+                                        SimpleModeScreen.plan =>
                                           const SimpleRunPanel(),
                                         _ => const SizedBox(
                                           width: 280,
@@ -435,23 +426,17 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                       },
                               ),
                             ),
-                          // Run's plan tracker sits above the rail, so the
-                          // rail never moves for it.
-                          if (_mode == SimpleModeScreen.run)
+                          // The plan square hugs the top-right corner, under the
+                          // strip; queued plans will join to its left.
+                          if (_mode == SimpleModeScreen.plan)
                             Positioned(
-                              left: 0,
-                              top: 0,
-                              child: CompositedTransformFollower(
-                                link: _railLink,
-                                targetAnchor: Alignment.topLeft,
-                                followerAnchor: Alignment.bottomLeft,
-                                offset: const Offset(0, -AraSpace.s8),
-                                child: SimpleRunTracker(
-                                  onTap: () => _toggle(_Popover.settings),
-                                ),
+                              right: kSimpleInset,
+                              top: railTop,
+                              child: SimpleRunTracker(
+                                onTap: () => _toggle(_Popover.settings),
                               ),
                             ),
-                          // The sky's pick, offered to Run.
+                          // The sky's pick, offered to Plan.
                           if (showSky && sel != null && !runSheet)
                             Positioned(
                               left: 0,
@@ -461,7 +446,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                 child: _SkyPick(
                                   selection: sel,
                                   onImage: () => setState(() {
-                                    _mode = SimpleModeScreen.run;
+                                    _mode = SimpleModeScreen.plan;
                                     _popover = _Popover.settings;
                                     _sky = false;
                                   }),
@@ -493,7 +478,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
 }
 
 /// The object picked in the sky, over it: its name, type and altitude, and
-/// Image this, which opens Run's sheet with it.
+/// Image this, which opens Plan's sheet with it.
 class _SkyPick extends StatelessWidget {
   const _SkyPick({required this.selection, required this.onImage});
 
@@ -827,20 +812,20 @@ class _RightRail extends ConsumerWidget {
           ),
           switch (mode) {
             SimpleModeScreen.polarAlign => const SimplePolarShutter(),
-            SimpleModeScreen.run => const SimpleRunShutter(),
+            SimpleModeScreen.plan => const SimpleRunShutter(),
             _ => const SimpleShutter(),
           },
           _RailButton(
             key: const Key('simple-settings'),
-            // P.A.'s setup and Run's time take two lines, so they have no icon.
+            // P.A.'s setup and Plan's time take two lines, so they have no icon.
             icon:
                 mode == SimpleModeScreen.polarAlign ||
-                    mode == SimpleModeScreen.run
+                    mode == SimpleModeScreen.plan
                 ? null
                 : Icons.tune,
             label: switch (mode) {
               SimpleModeScreen.focus => simpleFocusSummary(ref),
-              SimpleModeScreen.run => simpleRunChip(
+              SimpleModeScreen.plan => simpleRunChip(
                 ref.watch(simpleRunProvider),
                 ref.watch(simpleRunPlanProvider),
               ),
@@ -870,7 +855,7 @@ class _ModeGrid extends ConsumerWidget {
     SimpleModeScreen.preview,
     SimpleModeScreen.focus,
     SimpleModeScreen.polarAlign,
-    SimpleModeScreen.run,
+    SimpleModeScreen.plan,
   };
 
   @override

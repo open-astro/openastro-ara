@@ -3,7 +3,8 @@ import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:openastroara/screens/simple/simple_run_panel.dart';
+import 'package:openastroara/models/sequence/imaging_run_body.dart';
+import 'package:openastroara/screens/simple/simple_plan_panel.dart';
 import 'package:openastroara/state/sky_atlas/planetarium_selection_state.dart';
 import 'package:openastroara/main.dart' show isShell, shellFor;
 import 'package:openastroara/models/frame_histogram.dart';
@@ -67,7 +68,7 @@ final _someSteps = [
 
 Future<ProviderContainer> _pump(WidgetTester tester, Size size,
     {List<GuideStep> steps = const [], AraServer? server, FrameHistogram? histogram,
-    ServerInternalState? internal, StorageSpace? storage}) async {
+    ServerInternalState? internal, StorageSpace? storage, SimpleRun? plan}) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
@@ -79,6 +80,7 @@ Future<ProviderContainer> _pump(WidgetTester tester, Size size,
     if (histogram != null) frameHistogramProvider.overrideWith((ref, id) async => histogram),
     if (internal != null) serverInternalStateProvider.overrideWith(() => _Internal(internal)),
     if (storage != null) storageSpaceProvider.overrideWith((ref) async => storage),
+    if (plan != null) simpleRunProvider.overrideWith(() => _Plan(plan)),
   ]);
   addTearDown(container.dispose);
   await container.read(simpleModeProvider.future);
@@ -88,6 +90,13 @@ Future<ProviderContainer> _pump(WidgetTester tester, Size size,
   ));
   await tester.pump();
   return container;
+}
+
+class _Plan extends SimpleRunNotifier {
+  _Plan(this.value);
+  final SimpleRun value;
+  @override
+  SimpleRun build() => value;
 }
 
 Future<void> _frame(WidgetTester tester, ProviderContainer c) async {
@@ -137,7 +146,7 @@ void main() {
 
   testWidgets('at rest only the essentials show: no mode list, no settings, no info', (tester) async {
     await _pump(tester, const Size(1024, 768));
-    for (final hidden in ['Focus', 'Polar align', 'Run', 'Exposure', 'Gain', 'Loop', 'HFR', 'Guiding']) {
+    for (final hidden in ['Focus', 'Polar align', 'Plan', 'Exposure', 'Gain', 'Loop', 'HFR', 'Guiding']) {
       expect(find.text(hidden), findsNothing, reason: '$hidden is one tap away, not out');
     }
     expect(find.text('Tap the shutter to take a frame'), findsOneWidget);
@@ -148,7 +157,7 @@ void main() {
     final container = await _pump(tester, const Size(1024, 768));
     await tester.tap(find.byKey(const Key('simple-mode')));
     await tester.pump();
-    final modes = ['Preview', 'Focus', 'Polar align', 'Run'];
+    final modes = ['Preview', 'Focus', 'Polar align', 'Plan'];
     // .first: the grid sits before the rail (whose label also reads Preview).
     final order = [for (final m in modes) tester.getTopLeft(find.text(m).first)];
     for (var i = 1; i < order.length; i++) {
@@ -162,11 +171,11 @@ void main() {
 
     await tester.tap(find.byKey(const Key('simple-mode')));
     await tester.pump();
-    await tester.tap(find.text('Run'));
+    await tester.tap(find.text('Plan'));
     await tester.pump();
-    expect(container.read(simpleModeProvider).value, isTrue, reason: 'Run stays in Simple Mode');
-    expect(find.descendant(of: find.byKey(const Key('simple-mode')), matching: find.text('Run')), findsOneWidget);
-    // Run opens on its sheet, centred; with nothing picked it asks for a target.
+    expect(container.read(simpleModeProvider).value, isTrue, reason: 'Plan stays in Simple Mode');
+    expect(find.descendant(of: find.byKey(const Key('simple-mode')), matching: find.text('Plan')), findsOneWidget);
+    // Plan opens on its sheet, centred; with nothing picked it asks for a target.
     expect(find.text('Search, or pick in the sky.'), findsOneWidget);
     // The chip reads the plan's total imaging time: 60 frames at the 5 s default.
     expect(find.descendant(of: find.byKey(const Key('simple-settings')), matching: find.text('5 min')), findsOneWidget);
@@ -271,7 +280,7 @@ void main() {
     expect(find.text('Galaxy · 62° up · max 74°'), findsOneWidget);
     await tester.tap(find.byKey(const Key('simple-sky-image-this')));
     await tester.pump();
-    expect(find.descendant(of: find.byKey(const Key('simple-mode')), matching: find.text('Run')), findsOneWidget);
+    expect(find.descendant(of: find.byKey(const Key('simple-mode')), matching: find.text('Plan')), findsOneWidget);
     expect(find.byKey(const Key('sky')), findsNothing, reason: 'back on the frame');
     expect(find.text("Tonight's plan"), findsOneWidget);
     expect(find.byKey(const Key('simple-sky-image-this')), findsNothing, reason: 'the sheet, not the card');
@@ -328,30 +337,46 @@ void main() {
     expect(rail(), before, reason: 'modes open');
   });
 
-  testWidgets('Info shows the last frame facts as one line under the strip, clear of the status pill', (tester) async {
+  testWidgets('the plan square hugs the top-right corner, under the strip', (tester) async {
+    await _pump(tester, const Size(1024, 768),
+        plan: const SimpleRun(sequenceId: 'seq-1', targetName: 'M31', steps: [
+          FilterPlanStep(filterName: 'L', exposureSeconds: 120, frameCount: 30),
+        ]));
+    await tester.tap(find.byKey(const Key('simple-mode')));
+    await tester.pump();
+    await tester.tap(find.text('Plan').first);
+    await tester.pump();
+    final square = tester.getRect(find.byKey(const Key('simple-run-tracker')));
+    expect(square.right, 1024 - kSimpleInset, reason: 'in the corner');
+    expect(square.top, kSimpleInset * 2 + kSimpleBarHeight, reason: 'under the strip');
+    expect(find.text('0 / 30'), findsOneWidget);
+  });
+
+  // Info and System: a tile per fact in the bottom-right corner, above the guiding and histogram row and left
+  // of the rail, growing left; System's row sits above Info's.
+  const tileRight = kSimpleInset * 2 + kSimpleRailWidth;
+  const tileBottom = kSimpleInset * 2 + kSimpleBarHeight;
+
+  testWidgets('Info shows the last frame facts as tiles in the bottom-right corner', (tester) async {
     final container = await _pump(tester, const Size(1024, 768));
     await _frame(tester, container);
     await tester.tap(find.byKey(const Key('simple-info')));
     await tester.pump();
-    final line = tester.getRect(find.byType(SimpleInfoPanel));
-    expect(line.height, 40, reason: 'one line');
-    expect(line.top, kSimpleInset * 2 + kSimpleBarHeight, reason: 'under the strip, not in it');
-    expect(line.right, 1024 - kSimpleInset, reason: 'aligned right');
-    container.read(captureProgressProvider.notifier).beginExposing(const Duration(seconds: 5));
-    await tester.pump();
-    final pill = _panelOf(tester, find.textContaining('Taking a frame'));
-    expect(pill.overlaps(line), isFalse, reason: 'never on top of the status pill');
-    container.read(captureProgressProvider.notifier).reset();
-    await tester.pump(const Duration(seconds: 1));
+    final row = tester.getRect(find.byType(SimpleInfoPanel));
+    expect(row.right, 1024 - tileRight, reason: 'hugs the corner, left of the rail');
+    expect(row.bottom, 768 - tileBottom, reason: 'just above the bottom row');
+    expect(row.height, 56, reason: 'one row of tiles');
     for (final fact in ['HFR', 'Stars', 'Exposure', 'Gain · offset', 'Clipped']) {
-      expect(find.textContaining(fact, findRichText: true), findsOneWidget, reason: fact);
+      expect(find.descendant(of: find.byType(SimpleInfoPanel), matching: find.text(fact)), findsOneWidget, reason: fact);
     }
+    // HFR nearest the corner.
+    expect(tester.getRect(find.text('HFR')).center.dx, greaterThan(tester.getRect(find.text('Clipped')).center.dx));
     await tester.tap(find.byKey(const Key('simple-info')));
     await tester.pump();
     expect(find.byType(SimpleInfoPanel), findsNothing);
   });
 
-  testWidgets('System shows the server\'s figures under the strip (under Info when it shows), and hides', (tester) async {
+  testWidgets('System shows the server\'s figures as tiles in the bottom-right corner (above Info when it shows)', (tester) async {
     const size = Size(1470, 854);
     await _pump(tester, size,
         internal: const ServerInternalState(uptimeSeconds: 11520, cpuPercent: 23.4, workingSetBytes: 512 * 1048576),
@@ -363,19 +388,18 @@ void main() {
     await tester.pump();
     await tester.pump(); // the storage read resolves
     final rect = tester.getRect(find.byKey(const Key('simple-system-line')));
-    expect(rect.right, size.width - kSimpleInset);
-    const top = kSimpleInset * 2 + kSimpleBarHeight;
-    expect(rect.top, top, reason: 'alone, right under the strip');
+    expect(rect.right, size.width - tileRight);
+    expect(rect.bottom, size.height - tileBottom, reason: 'alone, in the corner');
     final line = find.byKey(const Key('simple-system-line'));
-    for (final t in ['412 GB free', 'CPU 23 %', 'Memory 512 MB', '3 h 12 min']) {
-      expect(find.descendant(of: line, matching: find.textContaining(t)), findsWidgets, reason: t);
-    }
-    for (final t in ['Load', 'Ara CPU']) {
-      expect(find.descendant(of: line, matching: find.textContaining(t)), findsNothing, reason: t);
+    for (final t in ['Storage', '412 GB free', 'CPU', '23 %', 'Memory', '512 MB', 'Up', '3 h 12 min']) {
+      expect(find.descendant(of: line, matching: find.text(t)), findsOneWidget, reason: t);
     }
     await tester.tap(find.byKey(const Key('simple-info')));
     await tester.pump();
-    expect(tester.getRect(find.byKey(const Key('simple-system-line'))).top, top + 40 + 8, reason: 'under Info');
+    final info = tester.getRect(find.byType(SimpleInfoPanel));
+    final system = tester.getRect(find.byKey(const Key('simple-system-line')));
+    expect(info.bottom, size.height - tileBottom, reason: 'Info keeps the corner');
+    expect(system.bottom, info.top - 8, reason: 'System on the row above');
     await tester.tap(find.byKey(const Key('simple-system')));
     await tester.pump();
     expect(find.byKey(const Key('simple-system-line')), findsNothing);

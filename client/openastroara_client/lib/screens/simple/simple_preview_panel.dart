@@ -17,7 +17,12 @@ import '../../widgets/imaging/exposure_controls_panel.dart' show FilterDropdown;
 import '../../widgets/imaging/histogram_strip.dart' show frameHistogramProvider;
 import '../imaging_actions.dart';
 import 'simple_shell.dart'
-    show SimplePanel, SimpleSegment, kSimpleStatusMaxWidth, kSimpleTileFill;
+    show
+        SimplePanel,
+        SimpleSegment,
+        kSimpleRailWidth,
+        kSimpleStatusMaxWidth,
+        kSimpleTileFill;
 
 /// Simple Mode body text: 14 px minimum (brief), tabular for live numbers.
 const kSimpleText = TextStyle(
@@ -73,8 +78,8 @@ String simpleMemory(int bytes) {
       : '${(bytes / (1024 * mb)).toStringAsFixed(1)} GB';
 }
 
-/// The server's figures as one line under Info's slot, turned on from the
-/// left rail's System: storage free, CPU, memory and uptime. CPU and memory
+/// The server's figures as tiles above Info's, turned on from the left
+/// rail's System: storage free, CPU, memory and uptime. CPU and memory
 /// are Ara's own process until the server reports the whole Pi. Re-read
 /// every 5 s while it shows.
 class SimpleSystemPanel extends ConsumerStatefulWidget {
@@ -113,35 +118,12 @@ class _SimpleSystemPanelState extends ConsumerState<SimpleSystemPanel> {
       ('Memory', state == null ? '—' : simpleMemory(state.workingSetBytes)),
       ('Up', state == null ? '—' : simpleUptime(state.uptimeSeconds)),
     ];
-    return SimplePanel(
-      key: const Key('simple-system-line'),
-      padding: const EdgeInsets.symmetric(horizontal: AraSpace.s16),
-      child: SizedBox(
-        height: 40,
-        child: SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            spacing: AraSpace.s16,
-            children: [
-              for (final (label, value) in facts)
-                Text.rich(
-                  TextSpan(
-                    children: [
-                      TextSpan(text: '$label ', style: AraText.caption),
-                      TextSpan(text: value, style: kSimpleText),
-                    ],
-                  ),
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
+    return SimpleFactTiles(key: const Key('simple-system-line'), facts: facts);
   }
 }
 
-/// The last frame's facts as one line under the strip, turned on from the
-/// left rail's Info:
+/// The last frame's facts as tiles in the bottom-right corner, turned on
+/// from the left rail's Info:
 /// HFR, stars, exposure · filter, gain · offset and clipped highlights.
 class SimpleInfoPanel extends ConsumerWidget {
   const SimpleInfoPanel({super.key});
@@ -170,30 +152,56 @@ class SimpleInfoPanel extends ConsumerWidget {
       ('Gain · offset', gainOffset),
       ('Clipped', clipped),
     ];
-    return SimplePanel(
-      padding: const EdgeInsets.symmetric(horizontal: AraSpace.s16),
-      child: SizedBox(
-        height: 40,
-        child: SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            spacing: AraSpace.s16,
+    return SimpleFactTiles(facts: facts);
+  }
+}
+
+/// A row of fact tiles (label over value, 72 × 56), the first fact at the
+/// right end, nearest the corner: how Info and System read.
+class SimpleFactTiles extends StatelessWidget {
+  const SimpleFactTiles({super.key, required this.facts});
+
+  final List<(String, String)> facts;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    mainAxisSize: MainAxisSize.min,
+    spacing: AraSpace.s8,
+    children: [
+      for (final (label, value) in facts.reversed)
+        Container(
+          width: kSimpleRailWidth,
+          height: 56,
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          decoration: BoxDecoration(
+            color: AraColors.overlayScrim,
+            border: Border.all(color: AraColors.border),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            spacing: 1,
             children: [
-              for (final (label, value) in facts)
-                Text.rich(
-                  TextSpan(
-                    children: [
-                      TextSpan(text: '$label ', style: AraText.caption),
-                      TextSpan(text: value, style: kSimpleText),
-                    ],
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(label, style: AraText.caption, maxLines: 1),
+              ),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  value,
+                  style: kSimpleText.copyWith(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
                   ),
+                  maxLines: 1,
                 ),
+              ),
             ],
           ),
         ),
-      ),
-    );
-  }
+    ],
+  );
 }
 
 /// True from the tap on the square until the daemon has answered the abort:

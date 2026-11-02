@@ -5,7 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/sequence/imaging_run_body.dart';
 import 'package:openastroara/models/sequence/sequence_summary.dart';
 import 'package:openastroara/models/sky_model_calibration.dart';
-import 'package:openastroara/screens/simple/simple_run_panel.dart';
+import 'package:openastroara/screens/simple/simple_plan_panel.dart';
 import 'package:openastroara/services/sequence_api.dart';
 import 'package:openastroara/state/sequencer/sequence_list_state.dart';
 import 'package:openastroara/state/planning/sky_model_calibration_state.dart';
