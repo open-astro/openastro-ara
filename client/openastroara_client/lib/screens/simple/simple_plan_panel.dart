@@ -19,6 +19,7 @@ import '../../state/sequencer/sequence_list_state.dart';
 import '../../state/settings/filter_set_state.dart';
 import '../../state/setup/setup_readiness.dart';
 import '../../state/simple_mode_state.dart';
+import '../../state/time_sync_state.dart';
 import '../../state/settings/imaging_defaults_state.dart';
 import '../../state/settings/settings_nav.dart';
 import '../../state/settings/site_settings_state.dart';
@@ -657,7 +658,15 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
     if (startAt != null && api != null && id != null && !active) {
       try {
         final body = (await api.getSequenceDetail(id)).body;
-        await api.updateSequence(id, body: scheduleRunBody(body, startAt));
+        final clock = await this.ref.read(timeSyncApiProvider)?.getState();
+        await api.updateSequence(
+          id,
+          body: scheduleRunBody(
+            body,
+            startAt,
+            daemonUtcOffsetMinutes: clock?.utcOffsetMinutes,
+          ),
+        );
       } catch (e) {
         state = state.copyWith(error: _why(e, 'schedule the start'));
         return false;

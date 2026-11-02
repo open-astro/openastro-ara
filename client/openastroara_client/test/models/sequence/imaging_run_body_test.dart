@@ -359,6 +359,15 @@ void main() {
       expect(clock(childrenOf(again)[2]), (23, 0, 0));
       expect(types(scheduleRunBody(again, null)), types(body(cool: -10)));
     });
+
+    test("the waits are in the daemon's wall clock, not the client's", () {
+      // Dark at 23:45 UTC; the daemon runs at UTC-4, so it waits for 19:45 on its own clock.
+      final b = scheduleRunBody(body(cool: -10), DateTime.utc(2026, 11, 2, 23, 45), daemonUtcOffsetMinutes: -240);
+      expect(clock(childrenOf(b)[0]), (19, 30, 0));
+      expect(clock(childrenOf(b)[2]), (19, 45, 0));
+      final utc = scheduleRunBody(body(), DateTime.utc(2026, 11, 2, 23, 45).toLocal(), daemonUtcOffsetMinutes: 0);
+      expect(clock(childrenOf(utc)[0]), (23, 45, 0));
+    });
   });
 
   group('defaultFrameCount', () {

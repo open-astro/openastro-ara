@@ -38,6 +38,9 @@ class TimeSyncState {
   final bool internetAvailableOnPi;
   final DateTime? syncedAtUtc;
 
+  /// The daemon host's local UTC offset; null from a daemon too old to say.
+  final int? utcOffsetMinutes;
+
   const TimeSyncState({
     required this.synced,
     this.source = 'none',
@@ -46,6 +49,7 @@ class TimeSyncState {
     this.location,
     this.internetAvailableOnPi = false,
     this.syncedAtUtc,
+    this.utcOffsetMinutes,
   });
 
   factory TimeSyncState.fromJson(Map<String, dynamic> json) => TimeSyncState(
@@ -61,6 +65,9 @@ class TimeSyncState {
         : false,
     syncedAtUtc: json['synced_at_utc'] is String
         ? DateTime.tryParse(json['synced_at_utc'] as String)
+        : null,
+    utcOffsetMinutes: json['utc_offset_minutes'] is int
+        ? json['utc_offset_minutes'] as int
         : null,
   );
 }

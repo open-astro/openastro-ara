@@ -15412,6 +15412,7 @@ components:
         - location
         - internet_available_on_pi
         - synced_at_utc
+        - utc_offset_minutes
       type: object
       properties:
         synced:
@@ -15440,6 +15441,12 @@ components:
             - 'null'
             - string
           format: date-time
+        utc_offset_minutes:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
     TrackingCalibrationDto:
       required:
         - ceiling_seconds

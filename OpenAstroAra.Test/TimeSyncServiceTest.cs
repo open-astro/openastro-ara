@@ -62,6 +62,14 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task The_state_carries_the_daemons_utc_offset() {
+            // Simple Mode writes a scheduled start in the daemon's wall clock (WaitForTime compares with
+            // DateTime.Now), so the client needs the daemon's offset, not its own.
+            var state = await NewService().GetStateAsync(CancellationToken.None);
+            Assert.That(state.UtcOffsetMinutes, Is.EqualTo((int)TimeZoneInfo.Local.GetUtcOffset(T0).TotalMinutes));
+        }
+
+        [Test]
         public async Task A_client_push_sets_the_clock_and_flips_synced() {
             var setter = new FakeClockSetter();
             var svc = NewService(setter);
