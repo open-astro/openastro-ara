@@ -1499,6 +1499,8 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
                     // estimate is stale whatever its age.
                     Interlocked.Increment(ref _treeVersion);
                 }
+                // A new running leaf starts without a fraction, even when it reads like the last.
+                if (runningIndex != CurrentInstructionIndex) CurrentInstructionProgress = null;
                 InstructionCount = total;
                 InstructionsCompleted = clamped;
                 CurrentInstructionIndex = runningIndex;
