@@ -667,6 +667,10 @@ class InertTreesTest(unittest.TestCase):
         self.assertNotIn(".yml", self.allowed("design/something.yml"))
         self.assertNotIn(".yml", self.allowed("docs/something.yml"))
         self.assertNotIn(".yml", self.allowed(".claude/settings.yml"))
+        # `.html` is the design preview's, under design/preview/ only.
+        self.assertIn(".html", self.allowed("design/preview/x.html"))
+        self.assertNotIn(".html", self.allowed("design/x.html"))
+        self.assertNotIn(".html", self.allowed("docs/x.html"))
 
     def test_codeql_paths_ignore_mirrors_inert_dirs(self):
         # #1022: codeql.yml skips prose-only PRs with a workflow-level
