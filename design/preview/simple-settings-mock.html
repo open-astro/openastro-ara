@@ -86,6 +86,9 @@
   .tiles div { background: var(--scrim); border-radius: 8px; padding: 5px 7px; font-size: 10px; color: var(--text2); }
   .tiles b { display: block; color: var(--text); font-size: 12.5px; }
   .warn { color: var(--busy); font-size: 11.5px; }
+  .auto { border-left: 3px solid var(--ok); background: rgba(76,175,80,.08); border-radius: 6px; padding: 8px 10px; font-size: 12.5px; display: flex; flex-direction: column; gap: 2px; }
+  .auto b { font-size: 11px; color: var(--ok); font-weight: 600; letter-spacing: .3px; }
+  .big { font-size: 20px; font-weight: 600; } .big .dim { font-size: 12.5px; font-weight: 400; }
   .hide { display: none !important; }
   table.inv { border-collapse: collapse; width: 100%; font-size: 13px; }
   table.inv th, table.inv td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
@@ -94,8 +97,8 @@
 </head>
 <body>
 <div class="page">
-  <h1>Simple Mode's own Settings: sheet B, one window per device, bare minimum <span class="tag">proposed</span></h1>
-  <p class="note">The gear opens Simple Mode's Settings: only what the top 90 % of nights touch, never the full UI's form. Your pick B: a sheet over the image, sections on the left. Each device has its own window, and the same window opens from its dot in the top bar (toggle "From the device dot"): one piece of code, two places. iPad 6 at 1024×768, drawn at 75 %. Trimmed to the bare minimum for a successful night (KISS). Everything here is a mock; the values are examples.</p>
+  <h1>Simple Mode's own Settings: Ara decides (KISS) <span class="tag">proposed</span></h1>
+  <p class="note">The gear opens Simple Mode's Settings: only what the top 90 % of nights touch, never the full UI's form. Your pick B: a sheet over the image, sections on the left. Each device has its own window, and the same window opens from its dot in the top bar (toggle "From the device dot"): one piece of code, two places. iPad 6 at 1024×768, drawn at 75 %. KISS: no knobs; automation and self-recovery do the work. Each place says what it is doing now and what Ara does for you; the only buttons are Connect, Park now and changing rig or profile. Everything here is a mock; the values are examples.</p>
 
   <div class="controls">
     <div class="seg" role="group" aria-label="Where it opens">
@@ -154,71 +157,35 @@
   <section>
     <h2>What's in it, and where it comes from</h2>
     <table class="inv">
-      <tr><th>Place</th><th>Holds (bare minimum)</th><th>Cut, stays in the Advanced UI</th></tr>
-      <tr><td>Camera</td><td>Connect, cooler on/off, target, current temperature.</td><td>Gain (Preview's chip has it), warm-up (End of night has it), electronics.</td></tr>
-      <tr><td>Mount</td><td>Connect, tracking, park, meridian flip on/off.</td><td>Flip timing, refocus after flip, pointing readout, limits.</td></tr>
-      <tr><td>Focuser</td><td>Connect, position, four move buttons, refocus when it cools by N °C.</td><td>Frame-count and filter-change triggers, backlash.</td></tr>
-      <tr><td>Filter wheel</td><td>Connect, filter in place, tap a filter to move.</td><td>Renaming filters, offsets.</td></tr>
-      <tr><td>Guider</td><td>Connect, RMS, dither every N frames.</td><td>Graph (the bottom row has it), settle, tuning, calibration.</td></tr>
-      <tr><td>Site</td><td>Location (GPS or typed), time zone.</td><td>Clock check, horizon, Bortle/SQM.</td></tr>
-      <tr><td>Storage</td><td>Which drive, free space.</td><td>Copy to another disk, file names.</td></tr>
-      <tr><td>End of night</td><td>Stop at dawn / at a time / never, park, warm the camera.</td><td>Flats, safety policies.</td></tr>
-      <tr><td>Alerts</td><td>Safety alarm sound, silent delay.</td><td>Where alerts go (they're in-app only today).</td></tr>
-      <tr><td>This rig</td><td>System figures, Change profile / Change rig, permanent pier, Simple Mode switch, version, logs &amp; bug report.</td><td>Profile editing, wizard, sky data.</td></tr>
+      <tr><th>Place</th><th>Shows</th><th>Ara decides (no knob)</th><th>Buttons</th></tr>
+      <tr><td>Camera</td><td>Temperature, target</td><td>Cool when a plan starts, wait for the target, warm at the end; retry a failed frame, reconnect a dropped camera</td><td>Connect</td></tr>
+      <tr><td>Mount</td><td>Tracking, side of the meridian</td><td>Track after Go to, flip and re-centre at the meridian, park at the end</td><td>Connect, Park now</td></tr>
+      <tr><td>Focuser</td><td>Position, temperature</td><td>Focus before the first frame, again on a 2 °C drop or a filter change</td><td>Connect</td></tr>
+      <tr><td>Filter wheel</td><td>Filter in place</td><td>Follow the plan</td><td>Connect</td></tr>
+      <tr><td>Guider</td><td>State, last RMS</td><td>Guide after centring, dither; lost star: pause, find a star, resume</td><td>Connect</td></tr>
+      <tr><td>Site</td><td>Place, coordinates, time zone</td><td>Take it from this device's GPS on connect</td><td>Type it, only without GPS</td></tr>
+      <tr><td>Storage</td><td>Free space, drive</td><td>Save to the rig's drive, warn before it fills, refuse to start with none</td><td>none</td></tr>
+      <tr><td>End of night</td><td>Tonight's dawn</td><td>Stop at dawn, park, warm the camera</td><td>none</td></tr>
+      <tr><td>Alerts</td><td>none</td><td>Park when unsafe; alarm after 5 s unless silenced; resume when safe</td><td>none</td></tr>
+      <tr><td>This rig</td><td>System figures, rig, profile, version</td><td>none</td><td>Change profile / rig, Permanent pier, Simple Mode switch, Logs</td></tr>
     </table>
+    <p class="note" style="margin-top:12px">The values Ara uses (−10 °C, 2 °C, dither, dawn) are the profile's, set once in the setup wizard or the Advanced UI; Simple Mode reads them and never asks. Each "Ara decides" line is a claim to check against the daemon before it ships: a line Ara doesn't do yet becomes daemon work, not a knob.</p>
     <p class="note" style="margin-top:12px">ASIAir's settings were the reference for the Gear details (its main camera, mount with meridian flip, EAF autofocus triggers, guiding dither, storage and Wi-Fi pages). Wi-Fi and power outputs aren't here: the rig's network is the Pi's, and Ara has no power-port control yet.</p>
   </section>
 </div>
 <script>
   const sections = {
-    gear: `<div class="h">Gear</div><div class="card">
-      <div class="kv"><span class="l"><i class="d" style="background:var(--ok)"></i>Camera · ASI2600MM</span><span class="btn">Disconnect</span></div>
-      <div class="kv"><span class="l"><i class="d" style="background:var(--ok)"></i>Mount · AM5</span><span class="btn">Disconnect</span></div>
-      <div class="kv"><span class="l"><i class="d" style="background:var(--ok)"></i>Focuser · EAF</span><span class="btn">Disconnect</span></div>
-      <div class="kv"><span class="l"><i class="d" style="background:var(--ok)"></i>Filter wheel · EFW 7</span><span class="btn">Disconnect</span></div>
-      <div class="kv"><span class="l"><i class="d" style="background:var(--busy)"></i>Guider · connecting…</span><span class="btn">Cancel</span></div>
-      <div class="kv"><span class="l"><i class="d" style="background:#666"></i>Flat panel</span><span class="btn">Connect</span></div></div>
-      <div class="dim" style="font-size:11.5px">Tap a device for its window (the same one its dot in the top bar opens). Changing which device is which stays in the Advanced UI.</div>`,
-    camera: `<div class="winhead"><i class="d" style="width:9px;height:9px;border-radius:50%;background:var(--ok)"></i><span class="h">Camera · ASI2600MM</span><span class="btn" style="margin-left:auto">Disconnect</span></div><div class="card">
-      <div class="kv"><span>Cooler</span><span class="seg2"><span class="on">On</span><span>Off</span></span></div>
-      <div class="kv"><span>Target</span><span class="val">−10 °C</span></div>
-      <div class="kv"><span class="dim">Now</span><span>−9.8 °C · 34 % power</span></div></div>`,
-    mount: `<div class="winhead"><i class="d" style="width:9px;height:9px;border-radius:50%;background:var(--ok)"></i><span class="h">Mount · AM5</span><span class="btn" style="margin-left:auto">Disconnect</span></div><div class="card">
-      <div class="kv"><span>Tracking</span><span class="seg2"><span class="on">On</span><span>Off</span></span></div>
-      <div class="kv"><span>Park</span><span class="btn">Park now</span></div></div>
-      <div class="card"><div class="kv"><span>Meridian flip</span><span class="seg2"><span class="on">Auto</span><span>Off</span></span></div></div>`,
-    focuser: `<div class="winhead"><i class="d" style="width:9px;height:9px;border-radius:50%;background:var(--ok)"></i><span class="h">Focuser · EAF</span><span class="btn" style="margin-left:auto">Disconnect</span></div>
-      <div class="card"><div class="kv"><span class="dim">Position</span><span>12 480 · 8.4 °C</span></div>
-      <div class="kv"><span>Move</span><span style="display:flex;gap:6px"><span class="btn">«</span><span class="btn">‹</span><span class="btn">›</span><span class="btn">»</span></span></div></div>
-      <div class="card"><div class="kv"><span>Refocus when it cools by</span><span class="val">2 °C</span></div></div>`,
-    wheel: `<div class="winhead"><i class="d" style="width:9px;height:9px;border-radius:50%;background:var(--ok)"></i><span class="h">Filter wheel · EFW 7</span><span class="btn" style="margin-left:auto">Disconnect</span></div>
-      <div class="card"><div class="kv"><span class="dim">In place</span><span>L</span></div>
-      <div class="kv"><span>Filters</span><span style="display:flex;gap:4px"><span class="val">L</span><span class="val">R</span><span class="val">G</span><span class="val">B</span><span class="val">Ha</span><span class="val">OIII</span><span class="val">SII</span></span></div></div>
-      <div class="dim" style="font-size:11.5px">Tap a filter to move to it. Renaming filters stays in the Advanced UI.</div>`,
-    guider: `<div class="winhead"><i class="d" style="width:9px;height:9px;border-radius:50%;background:var(--busy)"></i><span class="h">Guider · connecting…</span><span class="btn" style="margin-left:auto">Cancel</span></div>
-      <div class="card"><div class="kv"><span class="dim">RMS</span><span>0.62″</span></div></div>
-      <div class="card"><div class="kv"><span>Dither every</span><span class="val">3 frames</span></div></div>`,
-    site: `<div class="h">Site</div><div class="card">
-      <div class="kv"><span>Location</span><span>−36.85°, 174.76°</span></div>
-      <div class="kv"><span class="dim">From</span><span class="seg2"><span class="on">This iPad's GPS</span><span>Typed</span></span></div>
-      <div class="kv"><span>Time zone</span><span>Pacific/Auckland</span></div></div>`,
-    storage: `<div class="h">Storage</div><div class="card">
-      <div class="kv"><span>Frames go to</span><span class="val">USB · Samsung T7 ▾</span></div>
-      <div class="kv"><span class="dim">Free</span><span>212 GB of 466 GB</span></div></div>`,
-    night: `<div class="h">End of night</div><div class="card">
-      <div class="kv"><span>Stop</span><span class="seg2"><span class="on">At dawn</span><span>At a time</span><span>Never</span></span></div>
-      <div class="kv"><span class="dim">Tonight</span><span>05:12 (astronomical dawn)</span></div>
-      <div class="kv"><span>Then park</span><span class="seg2"><span class="on">On</span><span>Off</span></span></div>
-      <div class="kv"><span>Warm the camera</span><span class="seg2"><span class="on">On</span><span>Off</span></span></div></div>`,
-    alerts: `<div class="h">Alerts</div><div class="card">
-      <div class="kv"><span>Safety alarm sound</span><span class="seg2"><span class="on">On</span><span>Off</span></span></div>
-      <div class="kv"><span>Silent delay</span><span class="val">5 s</span></div></div>`,
-    rig: `<div class="h">This rig</div><div class="tiles"><div>Storage<b>212 GB</b></div><div>CPU<b>14 %</b></div><div>Memory<b>410 MB</b></div><div>Up<b>2 h 10</b></div></div>
-      <div class="card"><div class="kv"><span class="dim">Rig</span><span>astro</span></div><div class="kv"><span class="dim">Profile</span><span>Backyard Rig</span></div>
-      <div class="kv"><span class="btn">Change profile</span><span class="btn">Change rig</span></div></div>
-      <div class="card"><div class="kv"><span>Permanent pier</span><span class="seg2"><span>On</span><span class="on">Off</span></span></div>
-      <div class="kv"><span>Simple Mode</span><span class="seg2"><span class="on">On</span><span>Off</span></span></div></div>
-      <div class="kv dim" style="font-size:11.5px"><span>Version 0.0.1</span><span class="back">Logs &amp; bug report ›</span></div>`,
+    gear: `<div class="h">Gear</div><div class="card"><div class="kv"><span class="l"><i class="d" style="background:var(--ok)"></i>Camera · ASI2600MM</span><span class="dim">−9.8 °C</span></div><div class="kv"><span class="l"><i class="d" style="background:var(--ok)"></i>Mount · AM5</span><span class="dim">Tracking</span></div><div class="kv"><span class="l"><i class="d" style="background:var(--ok)"></i>Focuser · EAF</span><span class="dim">12 480</span></div><div class="kv"><span class="l"><i class="d" style="background:var(--ok)"></i>Filter wheel · EFW 7</span><span class="dim">L</span></div><div class="kv"><span class="l"><i class="d" style="background:var(--busy)"></i>Guider</span><span class="dim">Connecting…</span></div></div><div class="auto"><b>Ara does this for you</b>Connects every device of the profile when the app connects, and reconnects on its own if one drops.</div>`,
+    camera: `<div class="winhead"><i class="d" style="width:9px;height:9px;border-radius:50%;background:var(--ok)"></i><span class="h">Camera · ASI2600MM</span><span class="btn" style="margin-left:auto">Disconnect</span></div><div class="big">−9.8 °C <span class="dim">cooling to −10 °C</span></div><div class="auto"><b>Ara does this for you</b>Cools the camera when a plan starts, waits for −10 °C before the first frame, and warms it up when the night ends. A failed frame is taken again; a camera that drops is reconnected and the plan carries on.</div>`,
+    mount: `<div class="winhead"><i class="d" style="width:9px;height:9px;border-radius:50%;background:var(--ok)"></i><span class="h">Mount · AM5</span><span class="btn" style="margin-left:auto">Disconnect</span></div><div class="big">Tracking <span class="dim">east of the meridian</span></div><div class="auto"><b>Ara does this for you</b>Tracks after every Go to, flips at the meridian and centres again after the flip, and parks when the night ends.</div><div class="kv"><span class="dim">Packing up early?</span><span class="btn">Park now</span></div>`,
+    focuser: `<div class="winhead"><i class="d" style="width:9px;height:9px;border-radius:50%;background:var(--ok)"></i><span class="h">Focuser · EAF</span><span class="btn" style="margin-left:auto">Disconnect</span></div><div class="big">12 480 <span class="dim">8.4 °C</span></div><div class="auto"><b>Ara does this for you</b>Focuses before the first frame, and again when it cools by 2 °C or the filter changes. To focus by hand, use Focus mode.</div>`,
+    wheel: `<div class="winhead"><i class="d" style="width:9px;height:9px;border-radius:50%;background:var(--ok)"></i><span class="h">Filter wheel · EFW 7</span><span class="btn" style="margin-left:auto">Disconnect</span></div><div class="big">L <span class="dim">in place</span></div><div class="auto"><b>Ara does this for you</b>Moves to each filter of the plan in turn. Preview's chip picks one by hand.</div>`,
+    guider: `<div class="winhead"><i class="d" style="width:9px;height:9px;border-radius:50%;background:var(--busy)"></i><span class="h">Guider · OpenAstro Guider</span><span class="btn" style="margin-left:auto">Cancel</span></div><div class="big">Connecting… <span class="dim">last RMS 0.62″</span></div><div class="auto"><b>Ara does this for you</b>Starts guiding after the mount centres and dithers between frames. If it loses the star it pauses the plan, finds a star again (plate solving if it must) and resumes on its own.</div>`,
+    site: `<div class="h">Site</div><div class="big">Auckland <span class="dim">−36.85°, 174.76° · Pacific/Auckland</span></div><div class="auto"><b>Ara does this for you</b>Takes the location from this iPad's GPS each time you connect, so dark times and altitudes are right.</div><div class="dim" style="font-size:11.5px">No GPS on this device? You type it once, here.</div>`,
+    storage: `<div class="h">Storage</div><div class="big">212 GB free <span class="dim">USB · Samsung T7</span></div><div class="auto"><b>Ara does this for you</b>Saves to the drive plugged into the rig and warns you before it fills; with no drive it stops before the first frame and says so.</div>`,
+    night: `<div class="h">End of night</div><div class="big">05:12 <span class="dim">astronomical dawn</span></div><div class="auto"><b>Ara does this for you</b>Stops at dawn, parks the mount and warms the camera. You can sleep.</div>`,
+    alerts: `<div class="h">Alerts</div><div class="auto"><b>Ara does this for you</b>If the sky turns unsafe it parks, and the alarm sounds after 5 s unless someone silences it on screen. When the sky is safe again it unparks and picks the plan up where it stopped.</div>`,
+    rig: `<div class="h">This rig</div><div class="tiles"><div>Storage<b>212 GB</b></div><div>CPU<b>14 %</b></div><div>Memory<b>410 MB</b></div><div>Up<b>2 h 10</b></div></div><div class="card"><div class="kv"><span class="dim">Rig</span><span>astro</span></div><div class="kv"><span class="dim">Profile</span><span>Backyard Rig</span></div><div class="kv"><span class="btn">Change profile</span><span class="btn">Change rig</span></div></div><div class="card"><div class="kv"><span>Permanent pier <span class="dim">(skips polar alignment)</span></span><span class="seg2"><span>On</span><span class="on">Off</span></span></div><div class="kv"><span>Simple Mode</span><span class="seg2"><span class="on">On</span><span>Off</span></span></div></div><div class="kv dim" style="font-size:11.5px"><span>Version 0.0.1</span><span class="back">Logs &amp; bug report ›</span></div>`,
   };
   const devices = ['camera','mount','focuser','wheel','guider'];
   const captions = {
