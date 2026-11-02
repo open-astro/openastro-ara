@@ -360,7 +360,7 @@ class _EmergencyStopButtonState extends ConsumerState<EmergencyStopButton>
                         alignment: Alignment.centerLeft,
                         widthFactor: _hold.value,
                         // Simple Mode's sweep darkens, keeping HOLD at 7.7:1;
-                        // the full UI's lightens, as on master.
+                        // the full UI's lightens.
                         child: ColoredBox(
                           color: simple
                               ? const Color(0x40000000)
