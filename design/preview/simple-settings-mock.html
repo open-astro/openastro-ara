@@ -48,8 +48,12 @@
   .estop { position: absolute; right: 12px; bottom: 12px; width: 44px; height: 44px; border-radius: 8px; background: #D32F2F; display: grid; place-items: center; font-size: 11px; font-weight: 700; color: #fff; }
 
   /* the settings surface */
-  .veil { position: absolute; inset: 0; background: rgba(0,0,0,.35); }
-  .surface { position: absolute; background: var(--scrim); border-radius: 12px; display: flex; overflow: hidden; font-size: 12.5px; }
+  .veil { position: absolute; inset: 0; background: rgba(0,0,0,var(--veilA,.35)); }
+  .ipad.flat { background: #d8d8d8; } .ipad.flat .stars { display: none; }
+  .ctl { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text2); }
+  .ctl output { color: var(--text); font-variant-numeric: tabular-nums; min-width: 4ch; }
+  .contrast { font-size: 13px; }
+  .surface { position: absolute; background: rgba(26,26,26,var(--sheetA,.75)); backdrop-filter: blur(var(--blur,0px)); -webkit-backdrop-filter: blur(var(--blur,0px)); border-radius: 12px; display: flex; overflow: hidden; font-size: 12.5px; }
   .surface.a { right: 12px; top: 62px; bottom: 66px; width: 300px; flex-direction: column; }
   .surface.b { left: 12px; right: 12px; top: 62px; bottom: 66px; }
   .surface.dot { left: 60px; top: 62px; width: 330px; max-height: 440px; flex-direction: column; }
@@ -115,6 +119,13 @@
       <button data-s="alerts">Alerts</button>
       <button data-s="rig">This rig</button>
     </div>
+    <label class="ctl">Sheet opacity <input type="range" id="sheetA" min="40" max="95" value="75"><output id="sheetAo">75 %</output></label>
+    <label class="ctl">Blur behind <input type="range" id="blur" min="0" max="20" value="8"><output id="bluro">8 px</output></label>
+    <div class="seg" role="group" aria-label="Behind">
+      <button data-bg="sky" aria-pressed="true">Dark sky</button>
+      <button data-bg="flat">Bright flat (worst case)</button>
+    </div>
+    <span class="contrast" id="contrast"></span>
     <div class="seg" role="group" aria-label="Look">
       <button data-n="day" aria-pressed="true">Normal</button>
       <button data-n="night">Night mode</button>
@@ -247,6 +258,30 @@
   document.querySelectorAll('[data-n]').forEach(b => b.onclick = () => { document.body.classList.toggle('night', b.dataset.n === 'night'); document.querySelectorAll('[data-n]').forEach(x => x.setAttribute('aria-pressed', x === b)); });
   document.getElementById('nav').querySelectorAll('[data-go]').forEach(e => e.onclick = () => { s = e.dataset.go; render(); });
   render();
+  // Contrast of the dimmest text (#A0A0A0) on the sheet over the worst background.
+  const lum = v => { v /= 255; return v <= .03928 ? v / 12.92 : Math.pow((v + .055) / 1.055, 2.4); };
+  function looks() {
+    const a = document.getElementById('sheetA').value / 100, blur = document.getElementById('blur').value;
+    const ipad = document.querySelector('.ipad');
+    ipad.style.setProperty('--sheetA', a);
+    ipad.style.setProperty('--blur', blur + 'px');
+    document.getElementById('sheetAo').textContent = Math.round(a * 100) + ' %';
+    document.getElementById('bluro').textContent = blur + ' px';
+    const flat = ipad.classList.contains('flat');
+    const under = (flat ? 216 : 18) * (1 - .35);              // the image under the veil
+    const bg = 26 * a + under * (1 - a);                       // the sheet over it
+    const c = (lum(160) + .05) / (lum(bg) + .05);
+    const ok = c >= 4.5;
+    document.getElementById('contrast').innerHTML = `Dimmest text: <b style="color:${ok ? 'var(--ok)' : 'var(--errText)'}">${c.toFixed(1)}:1</b> ${ok ? '(AA ✓)' : '(below AA 4.5:1)'} on ${flat ? 'a white flat' : 'the sky'}`;
+  }
+  document.getElementById('sheetA').oninput = looks;
+  document.getElementById('blur').oninput = looks;
+  document.querySelectorAll('[data-bg]').forEach(b => b.onclick = () => {
+    document.querySelector('.ipad').classList.toggle('flat', b.dataset.bg === 'flat');
+    document.querySelectorAll('[data-bg]').forEach(x => x.setAttribute('aria-pressed', x === b));
+    looks();
+  });
+  looks();
 </script>
 </body>
 </html>
