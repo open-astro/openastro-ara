@@ -261,5 +261,28 @@ namespace OpenAstroAra.Test {
             Assert.That(roundTripped.Conditions, Has.Count.EqualTo(1));
             Assert.That(((LoopCondition)roundTripped.Conditions[0]).Iterations, Is.EqualTo(3));
         }
+
+        [Test]
+        public void A_wait_until_time_step_as_the_client_writes_it_deserializes_and_keeps_its_clock_time() {
+            // Simple Mode's scheduled start: the client writes only the four ints (no
+            // SelectedProvider), so the daemon's prototype must bring the clock-time source.
+            var factory = HeadlessSequencerFactory.WithDefaults();
+            var converter = new SequenceJsonConverter(factory);
+            var root = Newtonsoft.Json.Linq.JObject.Parse(converter.Serialize(new SequentialContainer { Name = "scheduled" }));
+            root["Items"]!["$values"] = new Newtonsoft.Json.Linq.JArray(new Newtonsoft.Json.Linq.JObject {
+                ["$type"] = "OpenAstroAra.Sequencer.SequenceItem.Utility.WaitForTime, OpenAstroAra.Sequencer",
+                ["Hours"] = 21, ["Minutes"] = 47, ["Seconds"] = 0, ["MinutesOffset"] = 0,
+            });
+
+            var ok = new SequenceBodyDeserializer(factory, logger: null)
+                .TryDeserialize(JsonDocument.Parse(root.ToString()).RootElement.Clone(), out var container, out var error);
+
+            Assert.That(ok, Is.True, $"unexpected error: {error}");
+            var wait = container!.Items.Single() as WaitForTime;
+            Assert.That(wait, Is.Not.Null, "a WaitForTime, not a placeholder");
+            Assert.That(wait!.SelectedProvider, Is.InstanceOf<OpenAstroAra.Sequencer.Utility.DateTimeProvider.TimeProvider>());
+            Assert.That((wait.Hours, wait.Minutes, wait.Seconds), Is.EqualTo((21, 47, 0)), "the clock time is kept");
+            Assert.That(wait.Validate(), Is.True, string.Join("; ", wait.Issues));
+        }
     }
 }
