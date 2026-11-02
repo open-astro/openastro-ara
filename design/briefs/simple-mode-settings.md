@@ -18,22 +18,25 @@ Simple Mode covers the top 90 % most used features, 90 % of the time, 90 % faste
 - **One window per device, one piece of code:** each device has its own window (Camera, Mount, Focuser, Filter wheel, Guider). The same widget is the right pane of Settings and opens on its own, under its dot, when the device's dot in the top bar is tapped (the image stays visible). Each window's header holds the device's status dot, name and Connect / Disconnect.
 - **Values are shared** with the Advanced UI: Simple Mode only hides settings, so switching modes resets nothing.
 
-## Content (bare minimum)
+## Content (no knobs)
 
-| Place | Holds | Stays in the Advanced UI |
-|---|---|---|
-| Camera | Connect, cooler on/off, target, current temperature | Gain (Preview's chip), warm-up (End of night), electronics |
-| Mount | Connect, tracking, park, meridian flip on/off | Flip timing, refocus after a flip, pointing readout, limits |
-| Focuser | Connect, position, four move buttons, refocus when it cools by N °C | Frame-count and filter-change triggers, backlash |
-| Filter wheel | Connect, filter in place, tap a filter to move | Renaming filters, offsets |
-| Guider | Connect, RMS, dither every N frames | Graph (bottom row), settle, tuning, calibration |
-| Site | Location (this device's GPS or typed), time zone | Clock check, horizon, Bortle/SQM |
-| Storage | Which drive, free space | Copy to another disk, file names |
-| End of night | Stop at dawn / at a time / never, park, warm the camera | Flats, safety policies |
-| Alerts | Safety alarm sound, silent delay | Where alerts go (in-app only today, §46) |
-| This rig | System figures, Change profile / Change rig, permanent pier, Simple Mode switch, version, logs & bug report | Profile editing, wizard, sky data |
+Each place shows what is happening now and what Ara does for you. The values Ara uses are the profile's (set once in the setup wizard or the Advanced UI); Simple Mode reads them and never asks.
 
-Gear lists only the devices the profile has; flat panel, dome, weather and safety monitor show Connect only.
+| Place | Shows | Ara decides and recovers | Buttons |
+|---|---|---|---|
+| Gear | Each device's dot and one live value | Connects the profile's devices on connect, reconnects one that drops | none |
+| Camera | Temperature, target | Cools when a plan starts, waits for the target, warms at the end; retries a failed frame, reconnects a dropped camera | Connect |
+| Mount | Tracking, side of the meridian | Tracks after Go to, flips and re-centres at the meridian, parks at the end | Connect, Park now |
+| Focuser | Position, temperature | Focuses before the first frame, again on a 2 °C drop or a filter change (by hand: Focus mode) | Connect |
+| Filter wheel | Filter in place | Follows the plan (by hand: Preview's chip) | Connect |
+| Guider | State, last RMS | Guides after centring, dithers; on a lost star pauses, finds a star (plate solving if it must) and resumes | Connect |
+| Site | Place, coordinates, time zone | Takes it from this device's GPS on connect | Type it, only without GPS |
+| Storage | Free space, drive | Saves to the rig's drive, warns before it fills, refuses to start with none | none |
+| End of night | Tonight's dawn | Stops at dawn, parks, warms the camera | none |
+| Alerts | none | Parks when unsafe, alarm after 5 s unless silenced, resumes when safe | none |
+| This rig | System figures, rig, profile, version | none | Change profile / rig, Permanent pier, Simple Mode switch, Logs |
+
+Each "Ara decides" line is a claim to check against the daemon before it ships; one Ara doesn't do yet becomes daemon work, never a knob.
 
 ## States
 
