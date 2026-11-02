@@ -416,6 +416,34 @@ void main() {
     expect(find.descendant(of: find.byKey(const Key('simple-run-tracker')), matching: find.text('0 / 30')), findsOneWidget);
   });
 
+  for (final size in const [Size(1024, 768), Size(768, 1024)]) {
+    testWidgets('at $size: Plan\'s sheet clears the status pill and the bottom row; the lists sit beside the plan '
+        'on a wide window, on top on a narrow one', (tester) async {
+      // A long queue: taller than the room, so the sheet must scroll inside its slot.
+      await _pump(tester, size,
+          plan: SimpleRun(sequenceId: 'seq-1', targets: [
+            for (var i = 1; i <= 10; i++)
+              SimpleTarget(name: 'M$i', steps: const [FilterPlanStep(filterName: 'L', exposureSeconds: 120, frameCount: 30)]),
+          ]));
+      await tester.tap(find.byKey(const Key('simple-mode')));
+      await tester.pump();
+      await tester.tap(find.text('Plan').first);
+      await tester.pump();
+      final sheet = tester.getRect(find.byType(SimpleRunSheet));
+      expect(sheet.top, greaterThanOrEqualTo(kSimpleInset * 3 + kSimpleBarHeight + kSimpleStatusHeight),
+          reason: 'under the status pill');
+      expect(sheet.bottom, lessThanOrEqualTo(size.height - kSimpleInset * 2 - kSimpleBarHeight),
+          reason: 'above the bottom row');
+      final queue = tester.getRect(find.text('QUEUE'));
+      final search = tester.getRect(find.byKey(const Key('simple-run-search')));
+      if (size.width > size.height) {
+        expect(queue.right, lessThan(search.left), reason: 'a column beside the plan');
+      } else {
+        expect(queue.bottom, lessThan(search.top), reason: 'on top');
+      }
+    });
+  }
+
   // Info and System: a tile per fact in the bottom-left corner, above the guiding and histogram row, growing
   // right; System's row sits above Info's.
   const tileLeft = kSimpleInset;

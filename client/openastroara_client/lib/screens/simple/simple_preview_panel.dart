@@ -526,6 +526,9 @@ class SimpleShutterButton extends StatelessWidget {
 /// camera's REC light): looping, taking a frame with its countdown and bar,
 /// stopping, frame ready, or why it failed. Nothing while idle. It sits
 /// outside the panels, so it stays in the immersive view.
+/// The status pill's height (Plan's sheet starts below it).
+const double kSimpleStatusHeight = 48;
+
 class SimpleStatusPill extends ConsumerStatefulWidget {
   const SimpleStatusPill({super.key});
 
@@ -598,7 +601,7 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
       child: SimplePanel(
         padding: const EdgeInsets.symmetric(horizontal: AraSpace.s16),
         child: SizedBox(
-          height: 48,
+          height: kSimpleStatusHeight,
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [

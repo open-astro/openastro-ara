@@ -416,8 +416,14 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                           // Plan's sheet and Night done: a sheet centred over
                           // the image; while imaging, its panel sits beside
                           // the rail like any mode's.
+                          // Between the status pill and the bottom row; a
+                          // tall sheet scrolls inside.
                           if (runSheet)
-                            Positioned.fill(
+                            Positioned(
+                              left: 0,
+                              right: 0,
+                              top: railTop + kSimpleStatusHeight + kSimpleInset,
+                              bottom: kSimpleInset * 2 + kSimpleBarHeight,
                               child: Center(
                                 child: SimpleRunSheet(
                                   onShowSky: () => setState(() => _sky = true),

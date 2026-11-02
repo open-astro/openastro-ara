@@ -1061,6 +1061,12 @@ const _kFramePresets = [5, 10, 12, 15, 20, 30, 40, 60, 90, 120, 180, 240, 300];
 /// Sky), a row per filter (sub length and frames), then Create plan (Save
 /// plan once one exists); once the run ends, Night done. The shutter starts
 /// the plan.
+/// The sheet's list column (QUEUE, tonight's best) on a wide window.
+const double _kListsWidth = 240;
+
+/// The window width from which the lists sit beside the plan.
+const double _kTwoColumnWidth = 960;
+
 class SimpleRunSheet extends ConsumerStatefulWidget {
   const SimpleRunSheet({
     super.key,
@@ -1114,14 +1120,18 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
     final info = ref.watch(sequenceRunStateProvider).value;
     return SimplePanel(
       padding: const EdgeInsets.all(18),
-      child: SizedBox(
-        width: 400,
-        // A short window scrolls the sheet rather than cutting it.
-        child: SingleChildScrollView(
-          child: simpleRunPhase(run, info) == SimpleRunPhase.done
-              ? _NightDone(run: run, info: info!, onLibrary: widget.onLibrary)
-              : _plan(run),
-        ),
+      // A short window scrolls the sheet rather than cutting it.
+      child: SingleChildScrollView(
+        child: simpleRunPhase(run, info) == SimpleRunPhase.done
+            ? SizedBox(
+                width: 400,
+                child: _NightDone(
+                  run: run,
+                  info: info!,
+                  onLibrary: widget.onLibrary,
+                ),
+              )
+            : _plan(run),
       ),
     );
   }
@@ -1195,12 +1205,12 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
         .where((o) => o.maxAltitudeDeg > 0)
         .take(4)
         .toList();
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      spacing: AraSpace.s8,
-      children: [
-        Text("Tonight's plan", style: _head),
+    // A wide window puts the lists in a column beside the plan, so the sheet
+    // stays short enough to clear the status pill.
+    final wide =
+        (run.targets.isNotEmpty || best.isNotEmpty) &&
+        MediaQuery.sizeOf(context).width >= _kTwoColumnWidth;
+    final lists = <Widget>[
         if (run.targets.isNotEmpty) _QueueList(run: run),
         // Tonight's best, from the full UI's ranking: one tap picks a target.
         if (best.isNotEmpty) ...[
@@ -1211,7 +1221,7 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
             children: [
               for (final o in best)
                 SizedBox(
-                  width: (400 - AraSpace.s8) / 2,
+                  width: wide ? _kListsWidth : (400 - AraSpace.s8) / 2,
                   height: 52,
                   child: Material(
                     color: sel?.name == o.name
@@ -1253,6 +1263,14 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
             ],
           ),
         ],
+    ];
+    final main = Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      spacing: AraSpace.s8,
+      children: [
+        Text("Tonight's plan", style: _head),
+        if (!wide) ...lists,
         TextField(
           key: const Key('simple-run-search'),
           controller: _query,
@@ -1464,6 +1482,24 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
         ),
       ],
     );
+    if (!wide) return SizedBox(width: 400, child: main);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      spacing: AraSpace.s16,
+      children: [
+        SizedBox(
+          width: _kListsWidth,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            spacing: AraSpace.s8,
+            children: lists,
+          ),
+        ),
+        SizedBox(width: 400, child: main),
+      ],
+    );
   }
 }
 
@@ -1496,16 +1532,28 @@ class _QueueList extends ConsumerWidget {
             return Row(
               spacing: AraSpace.s8,
               children: [
+                // Two lines, to fit the narrow list column.
                 Expanded(
-                  child: Text(
-                    t.tag ?? t.name,
-                    style: kSimpleText.copyWith(fontWeight: FontWeight.w600),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        t.tag ?? t.name,
+                        style: kSimpleText.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      Text(
+                        '$got / ${_total(t.steps)} · ${simpleRunDuration(left)}',
+                        style: _dim.copyWith(fontSize: 12),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
                   ),
                 ),
-                Text('$got / ${_total(t.steps)}', style: _dim),
-                Text(simpleRunDuration(left), style: _dim),
                 SizedBox(
                   width: 44,
                   height: 44,
