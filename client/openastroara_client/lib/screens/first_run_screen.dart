@@ -29,6 +29,10 @@ class _FirstRunScreenState extends ConsumerState<FirstRunScreen> {
   final _manualPortCtrl = TextEditingController(text: '5555');
   Timer? _rescanTimer;
 
+  /// The last rig, picked without a tap this visit (ALP-4890); its handshake
+  /// confirms it the same way.
+  AraServer? _autoPicked;
+
   @override
   void initState() {
     super.initState();
@@ -64,10 +68,22 @@ class _FirstRunScreenState extends ConsumerState<FirstRunScreen> {
   @override
   Widget build(BuildContext context) {
     ref.listen(discoveredServersProvider, (prev, next) {
-      // Every rig found is listed and the user taps the one they want —
-      // never picked automatically, even when only one answered: a site can
-      // have several rigs, some not yet up (#1129).
-      next.whenData((server) => setState(() => _discovered.add(server)));
+      // Every rig found is listed and the user taps the one they want (a site
+      // can have several rigs, some not yet up, #1129) — except the last rig
+      // this client used, which connects on its own (ALP-4890).
+      next.whenData((server) {
+        setState(() => _discovered.add(server));
+        _maybeAutoPick();
+      });
+    });
+    ref.listen(lastRigNameProvider, (_, _) => _maybeAutoPick());
+    ref.listen(serverHandshakeProvider, (_, next) {
+      final picked = _autoPicked;
+      if (picked != null &&
+          next.value != null &&
+          ref.read(selectedServerProvider) == picked) {
+        unawaited(_confirm(picked));
+      }
     });
     final selected = ref.watch(selectedServerProvider);
     final handshake = ref.watch(serverHandshakeProvider);
@@ -219,7 +235,24 @@ class _FirstRunScreenState extends ConsumerState<FirstRunScreen> {
         .select(AraServer(hostname: host, port: port));
   }
 
+  /// Select the last rig once it shows up, unless the user came here to
+  /// choose (Launchpad, "Choose a different rig") or already picked one.
+  void _maybeAutoPick() {
+    if (_autoPicked != null ||
+        ref.read(serverChooserRequestedProvider) ||
+        ref.read(selectedServerProvider) != null) {
+      return;
+    }
+    final pick =
+        autoPickRig(_discovered, ref.read(lastRigNameProvider).value);
+    if (pick == null) return;
+    _autoPicked = pick;
+    ref.read(selectedServerProvider.notifier).select(pick);
+  }
+
   Future<void> _confirm(AraServer server) async {
+    final name = ref.read(serverHandshakeProvider).value?.name;
+    if (name != null) unawaited(ref.read(lastRigServiceProvider).save(name));
     await ref.read(savedServersProvider.notifier).add(server);
     // A Launchpad-forced visit ends here: the server is chosen, so the router
     // may resume the normal flow (profile box). The _RootRouter watching

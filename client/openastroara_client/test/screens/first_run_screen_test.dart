@@ -6,7 +6,10 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/server.dart';
 import 'package:openastroara/screens/first_run_screen.dart';
+import 'package:openastroara/services/last_rig_service.dart';
+import 'package:openastroara/services/server_api.dart';
 import 'package:openastroara/services/server_discovery_service.dart';
+import 'package:openastroara/state/launch_gate_state.dart';
 import 'package:openastroara/services/multicast_lock.dart';
 import 'package:openastroara/state/saved_server_state.dart';
 import 'package:openastroara/state/server_state.dart';
@@ -28,7 +31,86 @@ class _FakeDiscovery extends ServerDiscoveryService {
   ValueListenable<bool> get localNetworkBlocked => blocked;
 }
 
+/// In-memory last rig.
+class _MemLastRig extends LastRigService {
+  _MemLastRig([this.name]);
+  String? name;
+  @override
+  Future<String?> load() async => name;
+  @override
+  Future<void> save(String name) async => this.name = name;
+}
+
+/// ALP-4890: the scan screen with a remembered rig and a handshake that
+/// answers with the rig's nickname, without a network.
+Future<ProviderContainer> _scan(WidgetTester tester, List<AraServer> rigs, _MemLastRig last,
+    {bool chooser = false}) async {
+  FlutterSecureStorage.setMockInitialValues({});
+  final container = ProviderContainer(overrides: [
+    discoveryServiceProvider.overrideWithValue(_FakeDiscovery(rigs)),
+    lastRigServiceProvider.overrideWithValue(last),
+    serverHandshakeProvider.overrideWith((ref) async {
+      final s = ref.watch(selectedServerProvider);
+      return s == null ? null : ServerInfo(name: s.mdnsName ?? s.hostname, version: '1', apiVersion: '1');
+    }),
+  ]);
+  addTearDown(container.dispose);
+  if (chooser) container.read(serverChooserRequestedProvider.notifier).request();
+  await tester.pumpWidget(UncontrolledProviderScope(
+    container: container,
+    child: const MaterialApp(home: FirstRunScreen()),
+  ));
+  await tester.pump();
+  await tester.pump(const Duration(seconds: 1));
+  await tester.pump();
+  return container;
+}
+
 void main() {
+  test('autoPickRig: the last rig by name, in either spelling, first found wins', () {
+    const sweep = AraServer(hostname: '10.0.0.5', port: 5555, mdnsName: 'astro.lan');
+    const mdns = AraServer(hostname: '10.0.0.6', port: 5555, mdnsName: 'astro-lan');
+    const other = AraServer(hostname: '10.0.0.7', port: 5555, mdnsName: 'garage');
+    expect(autoPickRig([other, sweep], 'astro.lan'), sweep);
+    expect(autoPickRig([mdns], 'Astro.lan'), mdns);
+    expect(autoPickRig([mdns, sweep], 'astro.lan'), mdns);
+    expect(autoPickRig([other], 'astro.lan'), isNull);
+    expect(autoPickRig([sweep], null), isNull);
+    expect(autoPickRig([const AraServer(hostname: '10.0.0.8', port: 5555)], 'astro.lan'), isNull);
+  });
+
+  testWidgets('ALP-4890: the last rig connects on its own when the scan finds it', (tester) async {
+    const rig = AraServer(hostname: '10.0.0.5', port: 5555, mdnsName: 'astro');
+    const other = AraServer(hostname: '10.0.0.7', port: 5555, mdnsName: 'garage');
+    final c = await _scan(tester, const [other, rig], _MemLastRig('astro'));
+    expect(c.read(selectedServerProvider), rig);
+    expect(await c.read(savedServersProvider.future), [rig]);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('ALP-4890: no remembered rig, or another rig, waits for a tap; a tap remembers it', (tester) async {
+    const rig = AraServer(hostname: '10.0.0.5', port: 5555, mdnsName: 'astro');
+    final last = _MemLastRig('garage');
+    final c = await _scan(tester, const [rig], last);
+    expect(c.read(selectedServerProvider), isNull);
+    expect(await c.read(savedServersProvider.future), isEmpty);
+    await tester.tap(find.text('astro'));
+    await tester.pump();
+    await tester.pump();
+    await tester.tap(find.text('Continue'));
+    await tester.pump();
+    expect(last.name, 'astro');
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('ALP-4890: Launchpad\'s chooser never connects on its own', (tester) async {
+    const rig = AraServer(hostname: '10.0.0.5', port: 5555, mdnsName: 'astro');
+    final c = await _scan(tester, const [rig], _MemLastRig('astro'), chooser: true);
+    expect(c.read(selectedServerProvider), isNull);
+    expect(await c.read(savedServersProvider.future), isEmpty);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
   testWidgets('⟳ Rescan forgets the shared sweep before re-running discovery', (
     tester,
   ) async {
