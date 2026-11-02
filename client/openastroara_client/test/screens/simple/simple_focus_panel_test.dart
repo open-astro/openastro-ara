@@ -9,6 +9,9 @@ import 'package:openastroara/screens/simple/simple_preview_panel.dart' show Simp
 import 'package:openastroara/state/equipment/focuser_state.dart';
 import 'package:openastroara/state/focus/autofocus_live_state.dart';
 import 'package:openastroara/state/focus/bahtinov_focus_state.dart';
+import 'package:openastroara/services/simple_mode_prefs_service.dart';
+import 'package:openastroara/state/simple_messages_state.dart';
+import 'package:openastroara/state/simple_mode_state.dart';
 
 FocuserStatus _focuser({int? position = 1000, bool absolute = true, int max = 1100, String runtime = 'idle'}) =>
     FocuserStatus(
@@ -78,7 +81,41 @@ Future<(_Focuser, _Live)> _pump(WidgetTester tester, {FocuserStatus? focuser, Au
   return (f, l);
 }
 
+class _StuckFocuser extends _Focuser {
+  _StuckFocuser(super.status);
+  @override
+  Future<bool> move(int targetPosition, {bool useTempComp = false}) async => throw StateError('Focuser is busy');
+}
+
+class _SimplePrefs extends SimpleModePrefsService {
+  @override
+  Future<bool> load() async => true;
+  @override
+  Future<void> save(bool enabled) async {}
+}
+
 void main() {
+  testWidgets('a nudge that fails says so in a pill, not a snackbar', (tester) async {
+    final c = ProviderContainer(overrides: [
+      focuserProvider.overrideWith(() => _StuckFocuser(_focuser())),
+      autofocusLiveProvider.overrideWith(() => _Live(const AutofocusLive(run: AutofocusRun.idle))),
+      simpleModePrefsProvider.overrideWithValue(_SimplePrefs()),
+    ]);
+    addTearDown(c.dispose);
+    await c.read(simpleModeProvider.future);
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: c,
+      child: const MaterialApp(home: Scaffold(body: Center(child: SimpleFocusPanel()))),
+    ));
+    await tester.pump();
+    await tester.tap(find.byIcon(Icons.chevron_left));
+    await tester.pump();
+    final m = c.read(simpleMessagesProvider).single;
+    expect(m.kind, SimpleMessageKind.error);
+    expect(m.title, "Couldn't move");
+    expect(find.byType(SnackBar), findsNothing);
+  });
+
   group('simpleFocusHfr', () {
     test('nothing before a run', () => expect(simpleFocusHfr(AutofocusRun.idle), isNull));
     test('the latest kept probe while running', () {

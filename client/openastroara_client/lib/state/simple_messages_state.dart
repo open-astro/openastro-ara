@@ -99,11 +99,13 @@ final simpleMessagesProvider =
     );
 
 /// Tells the user what happened: a pill in Simple Mode, the full UI's
-/// snackbar otherwise ("[title]: [detail]", red when [error]).
+/// snackbar otherwise ("[title]: [detail]", red when [error] unless
+/// [snackBarRed] says otherwise, so the full UI keeps its look).
 typedef UserNotify = void Function(
   String title, {
   String? detail,
   bool error,
+  bool? snackBarRed,
   Duration? snackBarDuration,
 });
 
@@ -116,6 +118,7 @@ UserNotify userNotifier(BuildContext context) {
     String title, {
     String? detail,
     bool error = false,
+    bool? snackBarRed,
     Duration? snackBarDuration,
   }) {
     if (container.read(simpleModeProvider).value ?? false) {
@@ -131,7 +134,7 @@ UserNotify userNotifier(BuildContext context) {
     messenger?.showSnackBar(
       SnackBar(
         content: Text(detail == null ? title : '$title: $detail'),
-        backgroundColor: error ? AraColors.accentError : null,
+        backgroundColor: (snackBarRed ?? error) ? AraColors.accentError : null,
         duration: snackBarDuration ?? const Duration(milliseconds: 4000),
       ),
     );

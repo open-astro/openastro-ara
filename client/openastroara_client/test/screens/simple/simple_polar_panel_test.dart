@@ -9,6 +9,9 @@ import 'package:openastroara/screens/simple/simple_polar_panel.dart';
 import 'package:openastroara/services/polar_align_api.dart';
 import 'package:openastroara/state/polar_align/polar_align_state.dart';
 import 'package:openastroara/theme/ara_colors.dart';
+import 'package:openastroara/services/simple_mode_prefs_service.dart';
+import 'package:openastroara/state/simple_messages_state.dart';
+import 'package:openastroara/state/simple_mode_state.dart';
 
 class _Api implements PolarAlignClient {
   final calls = <String>[];
@@ -34,6 +37,18 @@ class _Api implements PolarAlignClient {
   }
   @override
   void close() {}
+}
+
+class _FailingApi extends _Api {
+  @override
+  Future<void> start() async => throw StateError('no camera');
+}
+
+class _SimplePrefs extends SimpleModePrefsService {
+  @override
+  Future<bool> load() async => true;
+  @override
+  Future<void> save(bool enabled) async {}
 }
 
 class _Live extends PolarAlignLiveNotifier {
@@ -176,6 +191,25 @@ void main() {
   group('the shutter runs the routine', () {
     Future<_Api?> shutter(WidgetTester tester, PolarAlignLive live, {String loopMode = PolarAlignLoopModes.loop, bool server = true}) =>
         _pump(tester, live, loopMode: loopMode, server: server, child: const SimplePolarShutter());
+
+    testWidgets('a start that fails says so in a pill', (tester) async {
+      final api = _FailingApi();
+      final c = ProviderContainer(overrides: [
+        polarAlignApiProvider.overrideWithValue(api),
+        polarAlignLiveProvider.overrideWith(() => _Live(const PolarAlignLive())),
+        simpleModePrefsProvider.overrideWithValue(_SimplePrefs()),
+      ]);
+      addTearDown(c.dispose);
+      await c.read(simpleModeProvider.future);
+      await tester.pumpWidget(UncontrolledProviderScope(
+        container: c,
+        child: const MaterialApp(home: Scaffold(body: Center(child: SimplePolarShutter()))),
+      ));
+      await tester.tap(find.byKey(const Key('simple-shutter')));
+      await tester.pump();
+      expect(c.read(simpleMessagesProvider).single.kind, SimpleMessageKind.error);
+      expect(find.byType(SnackBar), findsNothing);
+    });
 
     testWidgets('idle: starts it', (tester) async {
       final api = await shutter(tester, const PolarAlignLive());

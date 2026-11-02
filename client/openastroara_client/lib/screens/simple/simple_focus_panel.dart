@@ -16,6 +16,7 @@ import '../../widgets/focus/v_curve_chart.dart';
 import 'simple_preview_panel.dart'
     show SimpleShutter, SimpleShutterButton, kSimpleText;
 import 'simple_shell.dart' show SimplePanel, kSimpleTileFill;
+import '../../state/simple_messages_state.dart';
 
 /// The HFR to show big: the confirmed one after a run, the latest kept probe
 /// while one runs, else nothing. Pure — unit-tested.
@@ -172,16 +173,11 @@ class SimpleFocusPanel extends ConsumerWidget {
   ) async {
     final target = simpleNudgeTarget(focuser, delta);
     if (target == null) return;
-    final messenger = ScaffoldMessenger.of(context);
+    final notify = userNotifier(context);
     try {
       await ref.read(focuserProvider.notifier).move(target);
     } catch (e) {
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text("Couldn't move: ${describeEquipmentError(e)}"),
-          backgroundColor: AraColors.accentError,
-        ),
-      );
+      notify("Couldn't move", detail: describeEquipmentError(e), error: true);
     }
   }
 }
@@ -207,7 +203,9 @@ class _Nudge extends StatelessWidget {
           child: Icon(
             icon,
             size: 20,
-            color: onTap == null ? AraColors.textDisabled : AraColors.textPrimary,
+            color: onTap == null
+                ? AraColors.textDisabled
+                : AraColors.textPrimary,
           ),
         ),
       ),

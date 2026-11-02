@@ -13,8 +13,14 @@ import '../../util/friendly_error.dart';
 import '../../widgets/imaging/polar_align_panel.dart';
 import 'simple_autopilot.dart' show AutopilotStep, autopilotProvider;
 import 'simple_preview_panel.dart'
-    show SimplePresetTile, SimpleShutterButton, exposurePresets, formatExposure, kSimpleText;
+    show
+        SimplePresetTile,
+        SimpleShutterButton,
+        exposurePresets,
+        formatExposure,
+        kSimpleText;
 import 'simple_shell.dart' show SimplePanel, SimpleSegment, kSimpleTileFill;
+import '../../state/simple_messages_state.dart';
 
 /// True while the server runs any phase of the routine.
 bool simplePolarActive(PolarAlignLive live) =>
@@ -75,13 +81,15 @@ class SimplePolarShutter extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final api = ref.watch(polarAlignApiProvider);
     final active = simplePolarActive(ref.watch(polarAlignLiveProvider));
-    final messenger = ScaffoldMessenger.maybeOf(context);
+    final notify = userNotifier(context);
     Future<void> run(String action, Future<void> Function() op) async {
       try {
         await op();
       } catch (e) {
-        messenger?.showSnackBar(
-          SnackBar(content: Text(friendlyError(e, action: action))),
+        notify(
+          friendlyError(e, action: action),
+          error: true,
+          snackBarRed: false,
         );
       }
     }
@@ -138,7 +146,9 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
   @override
   void initState() {
     super.initState();
-    _bolt.track(ref.read(polarAlignLiveProvider)); // the first frame is the baseline
+    _bolt.track(
+      ref.read(polarAlignLiveProvider),
+    ); // the first frame is the baseline
     WidgetsBinding.instance.addPostFrameCallback((_) => _hydrate());
   }
 
@@ -184,10 +194,12 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
 
   @override
   Widget build(BuildContext context) {
-    final autopilot =
-        ref.watch(autopilotProvider) == AutopilotStep.polarAlign;
+    final autopilot = ref.watch(autopilotProvider) == AutopilotStep.polarAlign;
     final live = ref.watch(polarAlignLiveProvider);
-    ref.listen(polarAlignLiveProvider, (_, next) => setState(() => _bolt.track(next)));
+    ref.listen(
+      polarAlignLiveProvider,
+      (_, next) => setState(() => _bolt.track(next)),
+    );
     final settings =
         ref.watch(simplePolarSettingsProvider).value ??
         const PolarAlignSettings();

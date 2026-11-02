@@ -11,8 +11,8 @@ import '../state/imaging/live_view_frame_state.dart';
 import '../state/imaging/live_view_state.dart';
 import '../state/imaging/solve_state.dart';
 import '../state/saved_server_state.dart';
-import '../theme/ara_colors.dart';
 import '../util/friendly_error.dart';
+import '../state/simple_messages_state.dart';
 
 // Capture actions shared by the Live tab and Simple Mode's Preview, moved out
 // of ImagingTab unchanged so both shells drive the daemon the same way.
@@ -26,7 +26,7 @@ Future<void> toggleLiveView(
   WidgetRef ref,
   bool on,
 ) async {
-  final messenger = ScaffoldMessenger.of(context);
+  final notify = userNotifier(context);
   final controller = ref.read(liveViewControllerProvider.notifier);
   controller.set(on); // optimistic — reflect the tap immediately
   final lv = ref.read(liveViewFrameProvider.notifier);
@@ -49,8 +49,11 @@ Future<void> toggleLiveView(
     // idle), which must not raise a spurious "couldn't start" snackbar.
     if (!lvState.active && lvState.error != null) {
       controller.set(false);
-      messenger.showSnackBar(
-        SnackBar(content: Text("Couldn't start Live View: ${lvState.error}")),
+      notify(
+        "Couldn't start Live View",
+        detail: '${lvState.error}',
+        error: true,
+        snackBarRed: false,
       );
     }
   } else {
@@ -62,7 +65,7 @@ Future<void> toggleLiveView(
 /// daemon runs the capture in the background and registers the frame; we
 /// just surface accepted/failed to the user.
 Future<void> takeOne(BuildContext context, WidgetRef ref) async {
-  final messenger = ScaffoldMessenger.of(context);
+  final notify = userNotifier(context);
   // Commit any half-typed control edit (the fields commit on focus loss)
   // before reading the exposure params this shot will use. The zero delay
   // lets the focus system deliver the change listeners.
@@ -70,9 +73,7 @@ Future<void> takeOne(BuildContext context, WidgetRef ref) async {
   await Future<void>.delayed(Duration.zero);
   final server = ref.read(activeServerProvider);
   if (server == null) {
-    messenger.showSnackBar(
-      const SnackBar(content: Text('Not connected to a server.')),
-    );
+    notify('Not connected to a server.', error: true, snackBarRed: false);
     return;
   }
   final params = ref.read(exposureControllerProvider);
@@ -92,8 +93,9 @@ Future<void> takeOne(BuildContext context, WidgetRef ref) async {
     frameId = await CameraExposureApi(server).takeOne(params);
   } catch (e) {
     progress.fail(
-        friendlyError(e, action: 'take that exposure'),
-        generation: generation);
+      friendlyError(e, action: 'take that exposure'),
+      generation: generation,
+    );
     return;
   }
   // Phase 2 — the POST returned 202; the capture (expose → download → FITS)
@@ -130,8 +132,10 @@ Future<void> takeOne(BuildContext context, WidgetRef ref) async {
       await Future<void>.delayed(const Duration(milliseconds: 500));
     }
   } catch (e) {
-    progress.fail(friendlyError(e, action: 'confirm the frame arrived'),
-        generation: generation);
+    progress.fail(
+      friendlyError(e, action: 'confirm the frame arrived'),
+      generation: generation,
+    );
     return;
   }
   if (landed) {
@@ -154,7 +158,7 @@ Future<void> takeOne(BuildContext context, WidgetRef ref) async {
 /// Cancel the in-flight capture — abort the exposure on the daemon, then
 /// drop the capture state back to idle.
 Future<void> cancelCapture(BuildContext context, WidgetRef ref) async {
-  final messenger = ScaffoldMessenger.of(context);
+  final notify = userNotifier(context);
   final progress = ref.read(captureProgressProvider.notifier);
   final server = ref.read(activeServerProvider);
   if (server == null) {
@@ -180,9 +184,6 @@ Future<void> cancelCapture(BuildContext context, WidgetRef ref) async {
     // double-tap race where the first abort won, or the capture finished
     // while the abort was in flight) — nothing to warn about.
     if (!context.mounted) return;
-    messenger.showSnackBar(SnackBar(
-      content: Text(friendlyError(e, action: 'abort the capture')),
-      backgroundColor: AraColors.accentError,
-    ));
+    notify(friendlyError(e, action: 'abort the capture'), error: true);
   }
 }
