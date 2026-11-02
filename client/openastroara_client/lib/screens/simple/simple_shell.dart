@@ -291,8 +291,18 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     });
   }
 
-  void _toggle(_Popover p) =>
-      setState(() => _popover = _popover == p ? _Popover.none : p);
+  void _toggle(_Popover p) => setState(() {
+    // The sheet opened from the queue's Add target / edit outranks every
+    // popover, so a rail tap closes it first (it used to stay up for good on
+    // a touchscreen, user 2026-11-03); the chip, which opens that sheet, just
+    // closes it.
+    if (_adding) {
+      _closeSheet();
+      _popover = p == _Popover.settings ? _Popover.none : p;
+      return;
+    }
+    _popover = _popover == p ? _Popover.none : p;
+  });
 
   /// A tap on the image closes what's open, or else toggles the immersive
   /// view (only once there is a frame to look at).
