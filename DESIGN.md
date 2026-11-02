@@ -18,7 +18,9 @@ colors:
   accent-disconnected: "#606060"
   selection-bg: "#1976D2"
   selection-fg: "#FFFFFF"
-  overlay-scrim: "rgba(26, 26, 26, 0.72)"
+  overlay-scrim: "rgba(26, 26, 26, 0.90)"
+  error-text: "#FF8A80"
+  selection-tint: "rgba(25, 118, 210, 0.25)"
   button-primary: "#1565C0"
   button-secondary: "#424242"
 typography:
@@ -259,7 +261,7 @@ Material segmented buttons and choice chips. Selected segments use Selection Blu
 
 ### Simple Mode: Image First (two rails)
 Simple Mode (see PRODUCT.md) puts the latest frame first. It is simpler than ASIAir, not a copy of it. The image fills the window edge to edge, and the controls float over it on translucent panels. The layout below is the prototype on `feat/simple-mode`, approved on 2026-11-01; it sits behind Settings → System → Experimental → Simple Mode (off by default, per client), and the system status bar is hidden while it shows.
-- **Panels:** every panel uses `overlay-scrim` (Night Floor at 72 %), 10 px corners and no border, and sits 16 px from the frame edge and from its neighbours.
+- **Panels:** every panel uses `overlay-scrim` (Night Floor at 90 %, so panel text reads at 4.5:1 or better over a dark sky, a grey frame or a white flat; raised from 72 % on 2026-11-02), 10 px corners and no border, and sits 16 px from the frame edge and from its neighbours. Error words on a panel use `error-text` (#FF8A80), Fault Red lightened for the scrim; Fault Red itself stays for fills and the E-stop. A selected or current item on a panel uses `selection-tint`.
 - **Fixed slots:** nothing moves when state changes. A panel with nothing to show is not drawn, and the panels around it keep their places.
 - **Top:** a full-width status strip, 56 px tall: the device dots (connected gear only; a fault still shows), then Search settings, Night mode, Show all options and Settings, in the full UI's top-bar order. Nothing hides under a ⋯ menu.
 - **Camera status:** a pill at the top-left, 16 px under the strip and at most 300 px wide, like a camera's REC light: "Taking a frame · 3 s left" with a thin bar, Looping, Stopping…, Frame ready, or why it failed; nothing while idle. It stays in the immersive view and moves up into the corner.
@@ -295,7 +297,7 @@ The shutter starts the plan; while imaging it shows pause bars with a blue ring 
 
 **Always on, in both modes:** Emergency Stop (except in the immersive view), the attention banner, the device status dots, Night mode and the Simple ↔ full UI switch.
 
-Targets are at least 44 px tall, with 14 px body text. Colours and status dots behave exactly as in the full UI. Phone Companion Mode uses the same image-first idea in a portrait arrangement. The rendered reference is `design/preview/ara-design-preview.html`.
+Targets are at least 44 px tall (the settings segments too), with 14 px body text. The rails follow the user's text size up to 1.3x, since they are a fixed-width cluster; panels, the sheet and messages follow it all the way, and the Autopilot offer's words wrap on a narrow window. Colours and status dots behave exactly as in the full UI. Phone Companion Mode uses the same image-first idea in a portrait arrangement. The rendered reference is `design/preview/ara-design-preview.html`.
 ### Cards / Containers
 - **Corner Style:** 6 px.
 - **Background:** Panel Grey.
