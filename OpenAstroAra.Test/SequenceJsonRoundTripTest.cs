@@ -284,5 +284,32 @@ namespace OpenAstroAra.Test {
             Assert.That((wait.Hours, wait.Minutes, wait.Seconds), Is.EqualTo((21, 47, 0)), "the clock time is kept");
             Assert.That(wait.Validate(), Is.True, string.Join("; ", wait.Issues));
         }
+
+        [TestCase(null, typeof(OpenAstroAra.Sequencer.Utility.DateTimeProvider.TimeProvider))]
+        [TestCase("OpenAstroAra.Sequencer.Utility.DateTimeProvider.DuskProvider, OpenAstroAra.Sequencer",
+            typeof(OpenAstroAra.Sequencer.Utility.DateTimeProvider.DuskProvider))]
+        public void An_until_a_time_condition_as_the_client_writes_it_deserializes_with_its_time_source(
+                string? providerType, System.Type expected) {
+            // The full UI's "Until a time": Custom time omits SelectedProvider; a sky event names it.
+            var factory = HeadlessSequencerFactory.WithDefaults();
+            var converter = new SequenceJsonConverter(factory);
+            var root = Newtonsoft.Json.Linq.JObject.Parse(converter.Serialize(new SequentialContainer { Name = "until" }));
+            var condition = new Newtonsoft.Json.Linq.JObject {
+                ["$type"] = "OpenAstroAra.Sequencer.Conditions.TimeCondition, OpenAstroAra.Sequencer",
+                ["Hours"] = 4, ["Minutes"] = 30, ["Seconds"] = 0, ["MinutesOffset"] = 0,
+            };
+            if (providerType != null) {
+                condition["SelectedProvider"] = new Newtonsoft.Json.Linq.JObject { ["$type"] = providerType };
+            }
+            root["Conditions"]!["$values"] = new Newtonsoft.Json.Linq.JArray(condition);
+
+            var ok = new SequenceBodyDeserializer(factory, logger: null)
+                .TryDeserialize(JsonDocument.Parse(root.ToString()).RootElement.Clone(), out var container, out var error);
+
+            Assert.That(ok, Is.True, $"unexpected error: {error}");
+            var until = ((SequentialContainer)container!).Conditions.Single() as TimeCondition;
+            Assert.That(until, Is.Not.Null, "a TimeCondition, not a placeholder");
+            Assert.That(until!.SelectedProvider, Is.InstanceOf(expected));
+        }
     }
 }
