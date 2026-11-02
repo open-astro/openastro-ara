@@ -629,78 +629,86 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
             (run?.state?.isActive ?? false)
         ? run?.currentInstructionProgress
         : null;
-    return ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: kSimpleStatusMaxWidth),
-      child: SimplePanel(
-        padding: const EdgeInsets.symmetric(horizontal: AraSpace.s16),
-        child: Stack(
-          children: [
-            Container(
-              height: kSimpleStatusHeight,
-              // With the bar, the words move up so the two sit together.
-              padding: EdgeInsets.only(bottom: stepProgress == null ? 0 : 9),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.circle, size: 10, color: dot),
-                  const SizedBox(width: AraSpace.s8),
-                  // One text, so the label keeps its room and only the detail's
-                  // tail is cut (two Flexibles halved the space: "Taking a fr…").
-                  Flexible(
-                    child: Text.rich(
-                      TextSpan(
-                        text: label,
-                        children: [
-                          if (detail != null) ...[
-                            const WidgetSpan(
-                              child: SizedBox(width: AraSpace.s8),
-                            ),
-                            TextSpan(
-                              text: detail,
-                              style: const TextStyle(
-                                color: AraColors.textSecondary,
+    // Announced when it changes: the label and the plan's step, not each
+    // second of an exposure's countdown.
+    return Semantics(
+      container: true,
+      liveRegion: true,
+      label: exposing || detail == null ? label : '$label, $detail',
+      excludeSemantics: true,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: kSimpleStatusMaxWidth),
+        child: SimplePanel(
+          padding: const EdgeInsets.symmetric(horizontal: AraSpace.s16),
+          child: Stack(
+            children: [
+              Container(
+                height: kSimpleStatusHeight,
+                // With the bar, the words move up so the two sit together.
+                padding: EdgeInsets.only(bottom: stepProgress == null ? 0 : 9),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.circle, size: 10, color: dot),
+                    const SizedBox(width: AraSpace.s8),
+                    // One text, so the label keeps its room and only the detail's
+                    // tail is cut (two Flexibles halved the space: "Taking a fr…").
+                    Flexible(
+                      child: Text.rich(
+                        TextSpan(
+                          text: label,
+                          children: [
+                            if (detail != null) ...[
+                              const WidgetSpan(
+                                child: SizedBox(width: AraSpace.s8),
                               ),
-                            ),
+                              TextSpan(
+                                text: detail,
+                                style: const TextStyle(
+                                  color: AraColors.textSecondary,
+                                ),
+                              ),
+                            ],
                           ],
-                        ],
+                        ),
+                        style: kSimpleText,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                      style: kSimpleText,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
                     ),
-                  ),
-                  if (exposing) ...[
-                    const SizedBox(width: AraSpace.s12),
-                    SizedBox(
-                      width: 60,
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(2),
-                        child: LinearProgressIndicator(
-                          value: (p.displayProgressPct ?? 0) / 100,
-                          minHeight: 4,
-                          backgroundColor: kSimpleTileFill,
+                    if (exposing) ...[
+                      const SizedBox(width: AraSpace.s12),
+                      SizedBox(
+                        width: 60,
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(2),
+                          child: LinearProgressIndicator(
+                            value: (p.displayProgressPct ?? 0) / 100,
+                            minHeight: 4,
+                            backgroundColor: kSimpleTileFill,
+                          ),
                         ),
                       ),
-                    ),
+                    ],
                   ],
-                ],
-              ),
-            ),
-            if (stepProgress != null)
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: 10,
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(2),
-                  child: LinearProgressIndicator(
-                    value: stepProgress,
-                    minHeight: 3,
-                    backgroundColor: kSimpleTileFill,
-                  ),
                 ),
               ),
-          ],
+              if (stepProgress != null)
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 10,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(2),
+                    child: LinearProgressIndicator(
+                      value: stepProgress,
+                      minHeight: 3,
+                      backgroundColor: kSimpleTileFill,
+                    ),
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );

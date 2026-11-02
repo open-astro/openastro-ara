@@ -861,6 +861,9 @@ void main() {
         .join();
     expect(pill(), contains('Plan'));
     expect(pill(), contains('Cooling camera to -10 °C'));
+    // Screen readers hear the step when it changes.
+    expect(tester.getSemantics(find.byType(SimpleStatusPill)), matchesSemantics(
+        label: 'Plan, Cooling camera to -10 °C', isLiveRegion: true));
     // A frame in hand: the camera's own countdown wins.
     container.read(captureProgressProvider.notifier).beginExposing(const Duration(seconds: 5));
     await tester.pump();
@@ -927,6 +930,12 @@ void main() {
       expect(find.descendant(of: alarm, matching: find.byIcon(Icons.error)), findsOneWidget);
       expect(find.descendant(of: alarm, matching: find.byIcon(Icons.notifications_active)), findsNothing,
           reason: 'not the bell');
+      // The keyboard lands on Silence; screen readers read only the alarm.
+      final focused = FocusManager.instance.primaryFocus?.context;
+      expect(focused, isNotNull);
+      expect(find.descendant(of: find.byKey(const Key('simple-safety-silence')), matching: find.byElementPredicate((e) => e == focused)),
+          findsOneWidget, reason: 'Silence has the focus');
+      expect(find.byType(BlockSemantics), findsWidgets);
       await tester.tap(find.byKey(const Key('simple-safety-silence')));
       await tester.pump();
       expect(alarm, findsNothing);

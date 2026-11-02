@@ -149,6 +149,17 @@ DateTime _nextAt(DateTime t, DateTime now) {
   return at.isAfter(now) ? at : at.add(const Duration(days: 1));
 }
 
+/// When it gets dark tonight (local), or null once dark: worked out once per
+/// site and 5-minute tick, not on every rebuild of the sheet (a minute-by-
+/// minute sun scan).
+final simpleDarkStartProvider = Provider<DateTime?>((ref) {
+  ref.watch(skyClockProvider);
+  return darkStart(
+    ref.watch(siteSettingsProvider),
+    ref.watch(clockProvider)().toUtc(),
+  )?.toLocal();
+});
+
 /// Tonight's dark hours left for the picked target, from the ranking; null
 /// when the ranking doesn't have it.
 // shortcut: matched by name, so a search pick named unlike the ranking ("M 31")
@@ -1398,10 +1409,7 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
         ref.watch(sequenceRunStateProvider).value?.state?.isActive ?? false;
     final off = sel == null || sel.belowHorizon || run.busy || imaging;
     final now = ref.watch(clockProvider)();
-    final dark = darkStart(
-      ref.watch(siteSettingsProvider),
-      now.toUtc(),
-    )?.toLocal();
+    final dark = ref.watch(simpleDarkStartProvider);
     final startAt = _startNow ? null : _pickedStart ?? dark;
     final queueOff = sel == null || sel.neverRises || run.busy;
     final best = (ref.watch(tonightSkyProvider).value ?? const [])
