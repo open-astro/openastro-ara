@@ -37,6 +37,10 @@ class AraColors {
   /// reads as an alarm from across the room ([textPrimary] on it passes 7:1).
   static const alarmScrim = Color(0xE03C0808);
 
+  /// Simple Mode's Emergency Stop fill: Fault Red darkened so its white
+  /// label reads at 5:1 (Fault Red gives 4.2:1). The full UI keeps Fault Red.
+  static const emergencyStop = Color(0xFFD32F2F);
+
   // Text
   static const textPrimary = Color(0xFFE0E0E0);
   static const textSecondary = Color(0xFFA0A0A0);

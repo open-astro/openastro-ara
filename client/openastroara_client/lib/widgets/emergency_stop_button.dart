@@ -89,7 +89,9 @@ class _EmergencyStopButtonState extends ConsumerState<EmergencyStopButton>
 
   void _pressDown(PointerDownEvent e) {
     // Only the primary button (a finger, a left click) arms the hold.
-    if (e.kind == PointerDeviceKind.mouse && e.buttons != kPrimaryButton) return;
+    if (e.kind == PointerDeviceKind.mouse && e.buttons != kPrimaryButton) {
+      return;
+    }
     _viaPointer = true;
     if (_inFlight) return;
     setState(() => _holding = true);
@@ -248,9 +250,11 @@ class _EmergencyStopButtonState extends ConsumerState<EmergencyStopButton>
 
   @override
   Widget build(BuildContext context) {
-    final red = Theme.of(context).colorScheme.error;
     final compact = widget.compact;
     final simple = widget.simple || compact;
+    final red = simple
+        ? AraColors.emergencyStop
+        : Theme.of(context).colorScheme.error;
     final radius = simple ? 10.0 : 16.0;
     final icon = _inFlight
         ? SizedBox(
@@ -344,7 +348,13 @@ class _EmergencyStopButtonState extends ConsumerState<EmergencyStopButton>
                       builder: (context, _) => FractionallySizedBox(
                         alignment: Alignment.centerLeft,
                         widthFactor: _hold.value,
-                        child: const ColoredBox(color: Color(0x40FFFFFF)),
+                        // Simple Mode's sweep darkens, keeping HOLD at 7.7:1;
+                        // the full UI's lightens, as on master.
+                        child: ColoredBox(
+                          color: simple
+                              ? const Color(0x40000000)
+                              : const Color(0x40FFFFFF),
+                        ),
                       ),
                     ),
                   ),
