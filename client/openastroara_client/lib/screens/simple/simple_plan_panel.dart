@@ -26,6 +26,8 @@ import '../../util/friendly_error.dart';
 import '../../widgets/sequencer/target_plan_dialog.dart'
     show planFrameCount, planOptionsAvailable, suggestedSubSeconds;
 import '../../widgets/emergency_stop_button.dart' show kEmergencyStopHold;
+import '../../widgets/sequencer/run_completion_sheet.dart'
+    show runFramesPerFilter;
 import 'simple_preview_panel.dart'
     show SimplePresetTile, exposurePresets, formatExposure, kSimpleText;
 import 'simple_shell.dart'
@@ -1201,8 +1203,20 @@ class _NightDone extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final done = simpleRunProgress(run.steps, info.framesCaptured);
+    // The library's count when it answers, else the plan-order estimate.
+    final filed = runFramesPerFilter(ref, info);
+    final done = filed == null
+        ? simpleRunProgress(run.steps, info.framesCaptured)
+        : [
+            for (final s in run.steps)
+              s.filterName.isEmpty
+                  ? filed.values.fold(0, (a, b) => a + b)
+                  : filed[s.filterName] ?? 0,
+          ];
     final start = info.startedUtc?.toLocal(), end = info.completedUtc?.toLocal();
+    final stoppedAt = info.state == SequenceRunState.completed
+        ? null
+        : info.currentInstructionDescription;
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1212,12 +1226,20 @@ class _NightDone extends ConsumerWidget {
         Text(
           [
             run.targetName ?? info.currentTargetName ?? '',
-            if (start != null && end != null) '${_hhmm(start)} – ${_hhmm(end)}',
+            if (start != null && end != null) ...[
+              '${_hhmm(start)} – ${_hhmm(end)}',
+              simpleRunDuration(end.difference(start).inSeconds.toDouble()),
+            ],
             if (info.state == SequenceRunState.stopped) 'stopped',
             if (info.state == SequenceRunState.failed) 'failed',
           ].where((s) => s.isNotEmpty).join(' · '),
           style: _dim,
         ),
+        if (stoppedAt != null && stoppedAt.isNotEmpty)
+          Text(
+            'Stopped at: $stoppedAt',
+            style: kSimpleText.copyWith(color: AraColors.accentError),
+          ),
         for (var i = 0; i < run.steps.length; i++)
           Row(
             children: [

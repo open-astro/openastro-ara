@@ -22,6 +22,8 @@ import 'package:openastroara/services/simple_mode_prefs_service.dart';
 import 'package:openastroara/state/simple_mode_state.dart';
 import 'package:openastroara/state/settings/settings_nav.dart';
 import 'package:openastroara/state/app_shell_state.dart';
+import 'package:openastroara/models/library/live_library.dart';
+import 'package:openastroara/state/library/live_library_state.dart';
 
 const _m31 = PlanetariumSelection(
     name: 'M31', kind: 'Galaxy', raHours: 0.73, decDeg: 41.4, raJ2000Hours: 0.71, decJ2000Deg: 41.27, altDeg: 62.4, maxAltDeg: 74.2);
@@ -143,6 +145,15 @@ class _Prefs extends SimpleModePrefsService {
   Future<bool> load() async => value;
   @override
   Future<void> save(bool enabled) async => value = enabled;
+}
+
+class _Sessions extends LiveLibrarySessionsNotifier {
+  @override
+  Future<List<LibrarySession>?> build() async => [
+        LibrarySession(
+            id: 's1', targetName: 'M31', sessionStartUtc: DateTime.utc(2026, 11, 2, 20), sessionEndUtc: null,
+            totalFrames: 21, lightFrames: 21, calibrationFrames: 0, filtersUsed: const ['L', 'R', 'G']),
+      ];
 }
 
 final _rig = <Object>[
@@ -328,7 +339,8 @@ void main() {
   });
 
   // The sheet, the tracker and the shutter together, as on the rail.
-  Future<(ProviderContainer, _Seq)> run(WidgetTester tester, {PlanetariumSelection? sel = _m31}) async {
+  Future<(ProviderContainer, _Seq)> run(WidgetTester tester,
+      {PlanetariumSelection? sel = _m31, List<Object> overrides = const []}) async {
     final seq = _Seq();
     final c = await _pump(
         tester,
@@ -340,7 +352,8 @@ void main() {
             const SimpleRunShutter(),
           ]),
         ),
-        sel: sel);
+        sel: sel,
+        overrides: overrides);
     return (c, seq);
   }
 
@@ -523,6 +536,46 @@ void main() {
     expect(c.read(selectedSettingsPanelProvider), 'session.storage');
     expect(c.read(selectedTabIndexProvider), kOptionsTabIndex);
     expect(prefs.value, isFalse, reason: 'Simple Mode left');
+  });
+
+  testWidgets('Night done: how long, how it ended, where it stopped, and the frames the library filed per filter',
+      (tester) async {
+    final start = DateTime.utc(2026, 11, 2, 21);
+    LibraryFrameItem frame(String filter, DateTime at) => LibraryFrameItem(
+        id: '$filter$at', frameType: 'light', filterName: filter, exposureSeconds: 5, capturedUtc: at,
+        hfr: null, starCount: null, rating: 0);
+    final frames = [
+      frame('L', start.subtract(const Duration(hours: 1))), // an earlier run's
+      for (var i = 0; i < 12; i++) frame('L', start.add(Duration(minutes: i))),
+      for (var i = 0; i < 6; i++) frame('R', start.add(Duration(minutes: 20 + i))),
+      for (var i = 0; i < 2; i++) frame('G', start.add(Duration(minutes: 30 + i))),
+    ];
+    final (c, seq) = await run(tester, overrides: [
+      liveLibrarySessionsProvider.overrideWith(_Sessions.new),
+      sessionFramesProvider.overrideWith((ref, id) async => frames),
+    ]);
+    await create(tester);
+    await c.read(simpleRunProvider.notifier).start();
+    // The plan-order estimate would read L 15, R 5.
+    await imaging(
+        tester,
+        c,
+        seq,
+        SequenceRunStateInfo(
+          sequenceId: 'seq-1',
+          state: SequenceRunState.stopped,
+          framesCaptured: 20,
+          startedUtc: start,
+          completedUtc: start.add(const Duration(hours: 2, minutes: 30)),
+          currentInstructionDescription: 'Take exposure (G)',
+        ));
+    expect(find.text('Night done'), findsOneWidget);
+    expect(find.textContaining('2 h 30 min · stopped'), findsOneWidget);
+    expect(find.text('Stopped at: Take exposure (G)'), findsOneWidget);
+    expect(find.text('12 × 5 s'), findsOneWidget);
+    expect(find.text('6 × 5 s'), findsOneWidget);
+    expect(find.text('2 × 5 s'), findsOneWidget);
+    expect(find.text('0 × 5 s'), findsOneWidget);
   });
 
   group('the progress panel', () {

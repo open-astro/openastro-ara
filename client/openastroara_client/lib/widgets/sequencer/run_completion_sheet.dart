@@ -1,13 +1,35 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../models/library/live_library.dart';
 import '../../models/sequence/sequence_summary.dart';
 import '../../state/app_shell_state.dart';
 import '../../state/library/live_library_state.dart';
 import '../../state/settings/settings_nav.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
+
+/// Frames per filter ('No filter' for none) for the library session
+/// overlapping [run] (best-effort: the newest session, frames from the run's
+/// start); null until the library answers. Shared with Simple Mode's Night
+/// done.
+Map<String, int>? runFramesPerFilter(WidgetRef ref, SequenceRunStateInfo run) {
+  final sessions = ref.watch(liveLibrarySessionsProvider).value;
+  final session = sessions?.isNotEmpty == true ? sessions!.first : null;
+  final frames = session == null
+      ? null
+      : ref.watch(sessionFramesProvider(session.id)).value;
+  if (frames == null) return null;
+  final perFilter = <String, int>{};
+  for (final f in frames) {
+    if (run.startedUtc != null && f.capturedUtc.isBefore(run.startedUtc!)) {
+      continue;
+    }
+    final filter = f.filterName;
+    final name = filter != null && filter.isNotEmpty ? filter : 'No filter';
+    perFilter[name] = (perFilter[name] ?? 0) + 1;
+  }
+  return perFilter;
+}
 
 /// §Run-redesign S6 — a finished run is an event, not a log line. Shown once
 /// on the running→terminal transition: duration, how the night ended, frames
@@ -48,25 +70,7 @@ class RunCompletionSheet extends ConsumerWidget {
         ? run.completedUtc!.difference(run.startedUtc!)
         : null;
 
-    // Frames per filter for the session overlapping this run (best-effort:
-    // the newest session whose start is before the run's end).
-    final sessions = ref.watch(liveLibrarySessionsProvider).value;
-    final session = sessions?.isNotEmpty == true ? sessions!.first : null;
-    final frames = session == null
-        ? null
-        : ref.watch(sessionFramesProvider(session.id)).value;
-    final inRun = frames == null || run.startedUtc == null
-        ? frames
-        : [
-            for (final f in frames)
-              if (!f.capturedUtc.isBefore(run.startedUtc!)) f,
-          ];
-    final perFilter = <String, int>{};
-    for (final f in inRun ?? const <LibraryFrameItem>[]) {
-      final filter = f.filterName;
-      final name = filter != null && filter.isNotEmpty ? filter : 'No filter';
-      perFilter[name] = (perFilter[name] ?? 0) + 1;
-    }
+    final perFilter = runFramesPerFilter(ref, run) ?? const {};
 
     return SafeArea(
       child: Padding(
