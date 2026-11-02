@@ -390,7 +390,10 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
         : height -
               kSimpleInset * 3 -
               kSimpleBarHeight -
-              (planSquares ? kSimplePlanSquareHeight + kSimpleInset : 0) -
+              (planSquares
+                  ? kSimplePlanSquareHeight * simpleRailScale(context) +
+                        kSimpleInset
+                  : 0) -
               rightRailTop;
     final queuePanel = SimpleRunPanel(
       onAdd: () => _openSheet(),
@@ -1191,32 +1194,46 @@ class _ModeGrid extends ConsumerWidget {
         runSpacing: AraSpace.s8,
         children: [
           for (final m in SimpleModeScreen.values)
-            SizedBox(
-              width: 138,
-              height: 52,
-              child: Material(
-                color: m == current
-                    ? AraColors.selectionBg
-                    : AraColors.tileFill,
-                borderRadius: BorderRadius.circular(8),
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(8),
-                  onTap: () => onPicked(m),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    child: Row(
-                      spacing: AraSpace.s8,
-                      children: [
-                        Icon(m.icon, size: 20, color: AraColors.textPrimary),
-                        Flexible(
-                          child: Text(
-                            m.label,
-                            style: kSimpleText,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+            Semantics(
+              selected: m == current,
+              child: SizedBox(
+                width: 138,
+                height: 52,
+                child: Material(
+                  color: m == current
+                      ? AraColors.selectionBg
+                      : AraColors.tileFill,
+                  borderRadius: BorderRadius.circular(10),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(10),
+                    onTap: () => onPicked(m),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      child: Row(
+                        spacing: AraSpace.s8,
+                        children: [
+                          Icon(
+                            m.icon,
+                            size: 20,
+                            color: m == current
+                                ? AraColors.selectionFg
+                                : AraColors.textPrimary,
                           ),
-                        ),
-                      ],
+                          Flexible(
+                            child: Text(
+                              m.label,
+                              // White on the blue reads at 4.6:1.
+                              style: kSimpleText.copyWith(
+                                color: m == current
+                                    ? AraColors.selectionFg
+                                    : null,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),

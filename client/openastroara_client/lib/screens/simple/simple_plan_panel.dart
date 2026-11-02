@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:dio/dio.dart';
 import 'package:flutter/cupertino.dart'
     show CupertinoDatePicker, CupertinoDatePickerMode;
+import 'package:flutter/gestures.dart' show PointerDeviceKind, kPrimaryButton;
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart' show CustomSemanticsAction;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -46,6 +47,7 @@ import 'simple_shell.dart'
         kSimpleGoStyle,
         kSimpleInset,
         kSimpleRailWidth,
+        simpleRailScale,
         leaveSimpleMode;
 
 /// The first plan for a filter set: LRGB when the set has any of it, else the
@@ -908,7 +910,8 @@ class _SimpleRunTrackerState extends ConsumerState<SimpleRunTracker> {
       builder: (context, box) {
         final fit = math.max(
           1,
-          ((box.maxWidth + _kSquareGap) / (kSimpleRailWidth + _kSquareGap))
+          ((box.maxWidth + _kSquareGap) /
+                  (kSimpleRailWidth * simpleRailScale(context) + _kSquareGap))
               .floor(),
         );
         final all = run.targets.length;
@@ -1003,9 +1006,10 @@ class _PlanSquare extends StatelessWidget {
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: onTap,
+          // Grows with the text past 1.3x, as the rails do.
           child: SizedBox(
-            width: kSimpleRailWidth,
-            height: kSimplePlanSquareHeight,
+            width: kSimpleRailWidth * simpleRailScale(context),
+            height: kSimplePlanSquareHeight * simpleRailScale(context),
             child: Stack(
               children: [
                 // A long name or time shrinks to fit, clear of the border.
@@ -1178,8 +1182,13 @@ class _SimpleRunShutterState extends ConsumerState<SimpleRunShutter>
             }
           : null,
       child: Listener(
-        onPointerDown: (_) {
+        onPointerDown: (e) {
           _viaPointer = true;
+          // Only a finger or the main mouse button, as the Emergency Stop.
+          if (e.kind == PointerDeviceKind.mouse &&
+              e.buttons != kPrimaryButton) {
+            return;
+          }
           _down = true;
           _held = false;
           if (holdable) _hold.forward(from: 0);
@@ -1461,41 +1470,59 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
           runSpacing: AraSpace.s8,
           children: [
             for (final o in best)
-              SizedBox(
-                width: wide ? _kListsWidth : (400 - AraSpace.s8) / 2,
-                height: 52,
-                child: Material(
-                  color: sel?.name == o.name
-                      ? AraColors.selectionBg
-                      : AraColors.tileFill,
-                  borderRadius: BorderRadius.circular(8),
-                  child: InkWell(
-                    key: Key('simple-run-suggestion-${o.name}'),
-                    borderRadius: BorderRadius.circular(8),
-                    onTap: () => ref
-                        .read(planetariumSelectionProvider.notifier)
-                        .set(simpleSelectionOf(o)),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            o.name,
-                            style: kSimpleText.copyWith(
-                              fontWeight: FontWeight.w600,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+              // 52 px at 1x, growing with the user's text size.
+              Semantics(
+                selected: sel?.name == o.name,
+                child: SizedBox(
+                  width: wide ? _kListsWidth : (400 - AraSpace.s8) / 2,
+                  child: Material(
+                    color: sel?.name == o.name
+                        ? AraColors.selectionBg
+                        : AraColors.tileFill,
+                    borderRadius: BorderRadius.circular(10),
+                    child: InkWell(
+                      key: Key('simple-run-suggestion-${o.name}'),
+                      borderRadius: BorderRadius.circular(10),
+                      onTap: () => ref
+                          .read(planetariumSelectionProvider.notifier)
+                          .set(simpleSelectionOf(o)),
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(minHeight: 52),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 6,
                           ),
-                          Text(
-                            simpleSuggestionLine(o),
-                            style: _dim.copyWith(fontSize: 12),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                o.name,
+                                style: kSimpleText.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                  // White on the blue reads at 4.6:1.
+                                  color: sel?.name == o.name
+                                      ? AraColors.selectionFg
+                                      : null,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              Text(
+                                simpleSuggestionLine(o),
+                                style: _dim.copyWith(
+                                  fontSize: 12,
+                                  color: sel?.name == o.name
+                                      ? AraColors.selectionFg
+                                      : null,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
                           ),
-                        ],
+                        ),
                       ),
                     ),
                   ),

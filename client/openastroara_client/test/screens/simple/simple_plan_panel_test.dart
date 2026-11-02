@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/gestures.dart' show PointerDeviceKind, kSecondaryMouseButton;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/rendering.dart' show RenderParagraph;
@@ -15,6 +16,7 @@ import 'package:openastroara/models/sky_model_calibration.dart';
 import 'package:openastroara/screens/simple/simple_plan_panel.dart';
 import 'package:openastroara/services/sequence_api.dart';
 import 'package:openastroara/services/tonight_sky_api.dart';
+import 'package:openastroara/theme/ara_colors.dart';
 import 'package:openastroara/state/sky_atlas/tonight_sky_state.dart';
 import 'package:openastroara/state/sequencer/sequence_list_state.dart';
 import 'package:openastroara/state/planning/sky_model_calibration_state.dart';
@@ -596,6 +598,13 @@ void main() {
       await tester.tap(find.byKey(const Key('simple-run-suggestion-NGC 7000')));
       await tester.pump();
       expect(c.read(planetariumSelectionProvider)?.name, 'NGC 7000');
+      // The picked tile is blue: its words are white (4.6:1), and screen readers hear it's selected.
+      final picked = find.byKey(const Key('simple-run-suggestion-NGC 7000'));
+      for (final t in tester.widgetList<Text>(find.descendant(of: picked, matching: find.byType(Text)))) {
+        expect(t.style?.color, AraColors.selectionFg, reason: t.data);
+      }
+      expect(tester.getSemantics(picked), isSemantics(isSelected: true));
+      expect(tester.getSemantics(find.byKey(const Key('simple-run-suggestion-M31'))), isSemantics(isSelected: false));
       await tester.tap(find.byKey(const Key('simple-run-start')));
       await tester.pumpAndSettle();
       expect(seq.calls, ['create NGC 7000', 'start seq-1']);
@@ -1018,6 +1027,16 @@ void main() {
       await tester.sendKeyEvent(LogicalKeyboardKey.enter);
       await tester.pumpAndSettle();
       expect(opened, 1);
+    });
+
+    testWidgets('a right-click does nothing; only a finger or the main button works the shutter', (tester) async {
+      final (_, seq) = await run(tester);
+      await create(tester);
+      final g = await tester.startGesture(tester.getCenter(find.byKey(const Key('simple-shutter'))),
+          kind: PointerDeviceKind.mouse, buttons: kSecondaryMouseButton);
+      await g.up();
+      await tester.pumpAndSettle();
+      expect(seq.calls, ['create M31'], reason: 'not started');
     });
 
     testWidgets('holding 2 s stops the run; letting go early does nothing', (tester) async {

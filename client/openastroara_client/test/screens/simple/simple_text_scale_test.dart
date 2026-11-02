@@ -4,7 +4,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/models/sequence/imaging_run_body.dart';
+import 'package:openastroara/screens/simple/simple_plan_panel.dart';
 import 'package:openastroara/screens/simple/simple_shell.dart';
+import 'package:openastroara/services/tonight_sky_api.dart';
+import 'package:openastroara/state/sky_atlas/planetarium_selection_state.dart';
+import 'package:openastroara/state/sky_atlas/tonight_sky_state.dart';
 import 'package:openastroara/services/simple_mode_prefs_service.dart';
 import 'package:openastroara/state/app_shell_state.dart';
 import 'package:openastroara/state/settings/settings_nav.dart';
@@ -37,6 +42,18 @@ Future<void> _loadFonts() async {
   await (FontLoader('MaterialIcons')..addFont(Future.value(bytes('MaterialIcons-Regular.otf')))).load();
 }
 
+/// A queue of two, so the plan squares draw.
+class _Queue extends SimpleRunNotifier {
+  @override
+  SimpleRun build() => const SimpleRun(sequenceId: 'seq-1', targets: [
+        SimpleTarget(name: 'M 31', steps: [FilterPlanStep(filterName: 'L', exposureSeconds: 120, frameCount: 30)]),
+        SimpleTarget(name: 'NGC 7000', steps: [FilterPlanStep(filterName: 'Ha', exposureSeconds: 300, frameCount: 12)]),
+      ]);
+}
+
+TonightSkyObject _o(String name, double alt) => TonightSkyObject(
+    id: name, name: name, type: 'Galaxy', magnitude: 5, raDeg: 10, decDeg: 40, altitudeDeg: alt, maxAltitudeDeg: 70);
+
 void main() {
   final hasFonts = File('$_fonts/Roboto-Regular.ttf').existsSync();
   setUpAll(() async {
@@ -59,6 +76,12 @@ void main() {
         final c = ProviderContainer(overrides: [
           simpleModePrefsProvider.overrideWithValue(_MemPrefs()),
           selectedTabIndexProvider.overrideWith(_StartOnLive.new),
+          // Plan with real content: Tonight's best (one picked) and a queue.
+          if (open == 'Plan') ...[
+            tonightSkyProvider.overrideWith(
+                (ref) async => [_o('M31', 62), _o('North America Nebula', 71), _o('M33', 48), _o('M45', 30)]),
+            simpleRunProvider.overrideWith(_Queue.new),
+          ],
         ]);
         addTearDown(c.dispose);
         await c.read(simpleModeProvider.future);
@@ -78,6 +101,18 @@ void main() {
           await tester.tap(find.byKey(const Key('simple-mode')), warnIfMissed: false);
           await tester.pump();
           await tester.tap(find.text('Plan').first, warnIfMissed: false);
+          await tester.pump();
+          c.read(planetariumSelectionProvider.notifier).set(const PlanetariumSelection(
+              name: 'M31', kind: 'Galaxy', raHours: 0.73, decDeg: 41.4, raJ2000Hours: 0.71, decJ2000Deg: 41.27,
+              altDeg: 62, maxAltDeg: 74));
+          await tester.pump();
+          // Picking Plan opens nothing; the chip opens the sheet.
+          await tester.tap(find.byKey(const Key('simple-settings')), warnIfMissed: false);
+          await tester.pump();
+          // (The one-third width has no sheet layout yet: phone layout, ALP-4865.)
+          if (size.width >= 768) {
+            expect(find.textContaining("TONIGHT'S BEST"), findsOneWidget, reason: 'the sheet with its suggestions');
+          }
         } else {
           await tester.tap(find.byKey(const Key('simple-settings')), warnIfMissed: false);
         }

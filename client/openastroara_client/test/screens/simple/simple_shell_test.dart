@@ -35,6 +35,7 @@ import 'package:openastroara/screens/simple/simple_message_pills.dart';
 import 'package:openastroara/widgets/emergency_stop_button.dart';
 import 'package:openastroara/widgets/imaging/histogram_strip.dart' show frameHistogramProvider;
 import 'package:openastroara/widgets/night_hotkey.dart';
+import 'package:openastroara/theme/ara_colors.dart';
 
 class _MemPrefs extends SimpleModePrefsService {
   bool value = true;
@@ -213,6 +214,14 @@ void main() {
       expect(now.dy > before.dy || (now.dy == before.dy && now.dx > before.dx), isTrue,
           reason: '${modes[i]} after ${modes[i - 1]}');
     }
+    // The current mode's tile is blue: white words (4.6:1), and announced as selected.
+    final current = tester.widget<Text>(find.text('Preview').evaluate()
+        .map((e) => e.widget as Text)
+        .map((t) => find.byWidget(t))
+        .reduce((a, b) => tester.getTopLeft(a).dx < tester.getTopLeft(b).dx ? a : b));
+    expect(current.style?.color, AraColors.selectionFg);
+    expect(find.bySemanticsLabel(RegExp('^Preview\$')).evaluate().isNotEmpty, isTrue);
+    expect(tester.getSemantics(find.bySemanticsLabel(RegExp('^Preview\$')).first), isSemantics(isSelected: true));
     await tester.tap(find.text('Preview').first);
     await tester.pump();
     expect(find.text('Focus'), findsNothing, reason: 'closed');

@@ -31,6 +31,10 @@ void main() {
     });
   }
 
+  test('selected tiles (the mode grid, Tonight\'s best) read at 4.5:1: white on the blue', () {
+    expect(_contrast(AraColors.selectionFg, AraColors.selectionBg), greaterThanOrEqualTo(4.5));
+  });
+
   test('the green go buttons (Start Autopilot, Done, Create and start) read at 4.5:1', () {
     final fg = kSimpleGoStyle.foregroundColor!.resolve({})!;
     final bg = kSimpleGoStyle.backgroundColor!.resolve({})!;
