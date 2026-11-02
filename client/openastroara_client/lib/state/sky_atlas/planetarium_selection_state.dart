@@ -72,7 +72,7 @@ final planetariumSelectionProvider =
       PlanetariumSelectionNotifier.new,
     );
 
-/// A search typed outside the planetarium (Simple Mode's Target panel), run
+/// A search typed outside the planetarium (Simple Mode Run's sheet), run
 /// by the planetarium with its own search (catalogs, the daemon's resolver,
 /// the engine). A bus like `planetariumCommandProvider`: every request
 /// notifies, even the same text twice; consume it with `ref.listen`.

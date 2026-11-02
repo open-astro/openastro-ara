@@ -2,11 +2,13 @@ import 'dart:math' as math;
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart' show CustomSemanticsAction;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/sequence/imaging_run_body.dart';
 import '../../models/sequence/sequence_summary.dart';
 import '../../services/sequence_api.dart' show SequenceClient;
+import '../../state/equipment/camera_state.dart';
 import '../../state/planning/sky_model_calibration_state.dart';
 import '../../state/sequencer/create_imaging_run.dart';
 import '../../state/sequencer/sequence_list_state.dart';
@@ -18,15 +20,10 @@ import '../../theme/ara_metrics.dart';
 import '../../util/friendly_error.dart';
 import '../../widgets/sequencer/target_plan_dialog.dart'
     show planOptionsAvailable, suggestedSubSeconds;
+import '../../widgets/emergency_stop_button.dart' show kEmergencyStopHold;
 import 'simple_preview_panel.dart'
-    show
-        SimplePresetTile,
-        SimpleShutterButton,
-        exposurePresets,
-        formatExposure,
-        kSimpleText;
-import 'simple_shell.dart' show SimplePanel;
-import 'simple_target_panel.dart' show simpleTargetStatus;
+    show SimplePresetTile, exposurePresets, formatExposure, kSimpleText;
+import 'simple_shell.dart' show SimplePanel, kSimpleInset, kSimpleRailWidth;
 
 /// The first plan for a filter set: LRGB when the set has any of it, else the
 /// narrowband filters, else every filter; one row with no filter name when
@@ -157,68 +154,103 @@ final simpleRunPlanProvider =
       SimpleRunPlanNotifier.new,
     );
 
-/// The run Simple Mode started (its plan, to split the progress per filter),
-/// whether the shutter is still creating it, why it failed, and the red
-/// square's question.
+/// Where the selection stands, in words: "62° up · max 74°", "Below your
+/// horizon · rises 22:40", "Never rises here". Pure — unit-tested.
+String simpleTargetStatus(PlanetariumSelection s) {
+  if (s.neverRises) return 'Never rises here';
+  if (s.belowHorizon) {
+    final rise = s.rise;
+    return rise == null
+        ? 'Below your horizon'
+        : 'Below your horizon · rises ${_hhmm(rise)}';
+  }
+  return '${(s.altDeg ?? 0).round()}° up · max ${s.maxAltDeg.round()}°';
+}
+
+/// The plan Simple Mode created on the rig (its rows, to split the progress
+/// per filter), whether it has started, a call in flight, a pause asked for
+/// but not reached yet, and why the last call failed.
 class SimpleRun {
   const SimpleRun({
     this.sequenceId,
     this.targetName,
     this.steps = const [],
-    this.starting = false,
+    this.started = false,
+    this.busy = false,
+    this.pausing = false,
     this.error,
-    this.asking = false,
-    this.stopAfter,
   });
 
   final String? sequenceId;
   final String? targetName;
   final List<FilterPlanStep> steps;
-  final bool starting;
+  final bool started;
+  final bool busy;
+
+  /// Pause asked for: the daemon finishes the frame in hand first.
+  final bool pausing;
   final String? error;
 
-  /// The red square was tapped: the progress panel asks before stopping.
-  final bool asking;
-
-  /// "Stop after this frame": the frame count to stop past.
-  final int? stopAfter;
-
-  SimpleRun copyWith({bool? asking, int? stopAfter, String? error}) =>
+  SimpleRun copyWith({bool? started, bool? busy, bool? pausing, String? error}) =>
       SimpleRun(
         sequenceId: sequenceId,
         targetName: targetName,
         steps: steps,
-        asking: asking ?? this.asking,
-        stopAfter: stopAfter ?? this.stopAfter,
+        started: started ?? this.started,
+        busy: busy ?? this.busy,
+        pausing: pausing ?? this.pausing,
         error: error,
       );
+}
+
+/// What Run's shutter, tracker and sheet show.
+enum SimpleRunPhase { none, ready, imaging, pausing, paused, done }
+
+bool _paused(SequenceRunState? s) =>
+    s == SequenceRunState.paused || s == SequenceRunState.pausedAwaitingUser;
+
+/// Pure — unit-tested. A run in progress wins (Simple Mode's or one adopted
+/// from the daemon); a plan this app started ends once the daemon reports it
+/// finished, stopped or failed (not merely idle, which a just-started run
+/// still reads).
+SimpleRunPhase simpleRunPhase(SimpleRun run, SequenceRunStateInfo? info) {
+  if (info?.state?.isActive ?? false) {
+    if (_paused(info!.state)) return SimpleRunPhase.paused;
+    return run.pausing ? SimpleRunPhase.pausing : SimpleRunPhase.imaging;
+  }
+  if (run.sequenceId == null) return SimpleRunPhase.none;
+  if (!run.started) return SimpleRunPhase.ready;
+  final ended =
+      info?.sequenceId == run.sequenceId &&
+      const {
+        SequenceRunState.completed,
+        SequenceRunState.stopped,
+        SequenceRunState.failed,
+      }.contains(info?.state);
+  return ended ? SimpleRunPhase.done : SimpleRunPhase.ready;
 }
 
 class SimpleRunNotifier extends Notifier<SimpleRun> {
   @override
   SimpleRun build() {
-    // The daemon's stop cancels the frame in hand, so "after this frame"
-    // waits here for the next filed frame and stops then.
-    // shortcut: only while this app runs; a daemon-side stop-after-frame
-    // would survive the iPad sleeping.
+    // The pause lands once the frame in hand is filed.
     ref.listen(sequenceRunStateProvider, (_, next) {
-      final after = state.stopAfter, info = next.value;
-      if (after != null && info != null && info.framesCaptured > after) {
-        stopNow();
+      if (state.pausing && _paused(next.value?.state)) {
+        state = state.copyWith(pausing: false);
       }
     });
     return const SimpleRun();
   }
 
-  /// The shutter: create the run from the plan on the target picked in
-  /// Target, then start it. [ref] is the shutter's (the create reads the
-  /// widget tree).
-  Future<void> start(WidgetRef ref) async {
+  /// Create plan: the run for the picked target, on the rig but not started.
+  /// Saving again replaces the plan (the old one is deleted). [ref] is the
+  /// sheet's (the create reads the widget tree). True once created.
+  Future<bool> create(WidgetRef ref) async {
     final sel = ref.read(planetariumSelectionProvider);
     final steps = ref.read(simpleRunPlanProvider);
-    if (sel == null || state.starting) return;
-    state = const SimpleRun(starting: true);
-    final plan = steps.first.filterName.isEmpty ? null : steps;
+    if (sel == null || state.busy) return false;
+    final old = state.started ? null : state.sequenceId;
+    state = state.copyWith(busy: true);
     try {
       final r = await createImagingRun(
         ref,
@@ -227,61 +259,68 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
         targetName: sel.name,
         jumpToRun: false,
         appendToOpen: false,
-        filterPlan: plan,
+        filterPlan: steps.first.filterName.isEmpty ? null : steps,
         exposureSeconds: steps.first.exposureSeconds,
         frameCount: steps.first.frameCount,
       );
       if (r == null || r.draft) {
-        state = const SimpleRun(
+        state = state.copyWith(
+          busy: false,
           error: "Couldn't reach the rig. Check the connection and try again.",
         );
-        return;
+        return false;
       }
-      final api = this.ref.read(sequenceApiProvider);
-      if (api == null) return;
-      await api.start(r.sequenceId);
       state = SimpleRun(
         sequenceId: r.sequenceId,
         targetName: sel.name,
         steps: steps,
       );
-      await this.ref.read(sequenceRunStateProvider.notifier).refresh();
+      if (old != null) {
+        // shortcut: a failed delete leaves the old plan in the Sequence list;
+        // update the plan in place if that clutters.
+        try {
+          await this.ref.read(sequenceApiProvider)?.deleteSequence(old);
+        } catch (_) {}
+      }
+      return true;
     } catch (e) {
-      state = SimpleRun(error: _why(e, 'start imaging'));
+      state = state.copyWith(busy: false, error: _why(e, 'create the plan'));
+      return false;
     }
   }
 
-  void ask() => state = state.copyWith(asking: true);
-  void keepGoing() => state = state.copyWith(asking: false);
-
-  void stopAfterThisFrame() {
-    final info = ref.read(sequenceRunStateProvider).value;
-    state = state.copyWith(asking: false, stopAfter: info?.framesCaptured ?? 0);
-  }
-
-  Future<void> stopNow() => _op((api, id) => api.stop(id), 'stop the run');
-  Future<void> pause() => _op((api, id) => api.pause(id), 'pause');
+  /// The shutter's actions.
+  Future<void> start() => _op(
+    (api, id) => api.start(id),
+    'start imaging',
+    before: state.copyWith(started: true),
+  );
+  Future<void> pause() =>
+      _op((api, id) => api.pause(id), 'pause', before: state.copyWith(pausing: true));
   Future<void> resume() => _op((api, id) => api.resume(id), 'resume');
+  Future<void> stop() => _op((api, id) => api.stop(id), 'stop the run');
 
   /// Night done's New plan: back to the sheet.
   void newPlan() => state = const SimpleRun();
 
   Future<void> _op(
     Future<String> Function(SequenceClient api, String id) op,
-    String action,
-  ) async {
+    String action, {
+    SimpleRun? before,
+  }) async {
     final api = ref.read(sequenceApiProvider);
-    final id = ref.read(selectedSequenceIdProvider);
-    if (api == null || id == null) return;
-    state = SimpleRun(
-      sequenceId: state.sequenceId,
-      targetName: state.targetName,
-      steps: state.steps,
-    );
+    final info = ref.read(sequenceRunStateProvider).value;
+    // A run in progress (perhaps adopted from the daemon), else our plan.
+    final id = (info?.state?.isActive ?? false)
+        ? info!.sequenceId
+        : state.sequenceId;
+    if (api == null || id == null || id.isEmpty) return;
+    final undo = state;
+    state = (before ?? state).copyWith();
     try {
       await op(api, id);
     } catch (e) {
-      state = state.copyWith(error: _why(e, action));
+      state = undo.copyWith(error: _why(e, action));
     }
     await ref.read(sequenceRunStateProvider.notifier).refresh();
   }
@@ -301,56 +340,298 @@ final simpleRunProvider = NotifierProvider<SimpleRunNotifier, SimpleRun>(
   SimpleRunNotifier.new,
 );
 
-bool _paused(SequenceRunState? s) =>
-    s == SequenceRunState.paused || s == SequenceRunState.pausedAwaitingUser;
-
-/// Whether the run Simple Mode started has ended (Night done shows).
-bool simpleRunDone(SimpleRun run, SequenceRunStateInfo? info) =>
-    run.sequenceId != null &&
-    info?.sequenceId == run.sequenceId &&
-    !(info?.state?.isActive ?? true);
-
-/// The rail chip in Run: "Plan", "23 / 100" while imaging, "Paused",
-/// "Done". Pure — unit-tested.
-String simpleRunSummary(SimpleRun run, SequenceRunStateInfo? info) {
-  if (simpleRunDone(run, info)) return 'Done';
-  if (info?.state?.isActive != true) return 'Plan';
-  if (_paused(info!.state)) return 'Paused';
-  final total = info.sequenceId == run.sequenceId ? _total(run.steps) : 0;
-  return total > 0
-      ? '${info.framesCaptured} / $total'
-      : '${info.framesCaptured} frames';
+/// The row the run is on (the first not yet full), by the plan order.
+int _current(List<FilterPlanStep> steps, List<int> done) {
+  for (var i = 0; i < steps.length; i++) {
+    if (done[i] < steps[i].frameCount) return i;
+  }
+  return steps.length - 1;
 }
 
-/// The rail's shutter in Run: starts imaging the plan; while a run images,
-/// its red square asks first (in the progress panel) whether to stop.
-class SimpleRunShutter extends ConsumerWidget {
-  const SimpleRunShutter({super.key, required this.onPanel});
+String _sub(FilterPlanStep s) {
+  final len = formatExposure(
+    Duration(milliseconds: (s.exposureSeconds * 1000).round()),
+  );
+  return s.filterName.isEmpty ? len : '${s.filterName} · $len';
+}
 
-  /// Opens (true) or closes the mode's panel: the sheet closes once the run
-  /// starts and the progress panel opens to ask.
-  final ValueChanged<bool> onPanel;
+/// The tracker above the rail, for the plan's whole life: the target, frames
+/// done of the plan, the filter and sub length in hand, and the time (total
+/// before the start, left while imaging). Green ready, blue imaging, amber
+/// paused, green done. Nothing without a plan. Tap: the sheet or the
+/// progress panel.
+class SimpleRunTracker extends ConsumerWidget {
+  const SimpleRunTracker({super.key, required this.onTap});
+
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final info = ref.watch(sequenceRunStateProvider).value;
     final run = ref.watch(simpleRunProvider);
-    final sel = ref.watch(planetariumSelectionProvider);
-    final active = info?.state?.isActive ?? false;
-    return SimpleShutterButton(
-      running: active || run.starting,
-      label: active ? 'Stop the run' : 'Start imaging',
-      onPressed: active
-          ? () {
-              ref.read(simpleRunProvider.notifier).ask();
-              onPanel(true);
+    final info = ref.watch(sequenceRunStateProvider).value;
+    final phase = simpleRunPhase(run, info);
+    if (phase == SimpleRunPhase.none) return const SizedBox.shrink();
+    final ours = run.sequenceId != null && info?.sequenceId == run.sequenceId;
+    final steps = run.steps;
+    final captured = ours || !run.started ? (info?.framesCaptured ?? 0) : 0;
+    final frames = phase == SimpleRunPhase.ready ? 0 : captured;
+    final done = simpleRunProgress(steps, frames);
+    final total = _total(steps);
+    final known = steps.isNotEmpty && (ours || phase == SimpleRunPhase.ready);
+    final left = known
+        ? [
+            for (var i = 0; i < steps.length; i++)
+              (steps[i].frameCount - done[i]) * steps[i].exposureSeconds,
+          ].fold(0.0, (a, b) => a + b)
+        : null;
+    final color = switch (phase) {
+      SimpleRunPhase.ready || SimpleRunPhase.done => AraColors.accentConnected,
+      SimpleRunPhase.paused => AraColors.accentBusy,
+      _ => AraColors.selectionBg,
+    };
+    final last = switch (phase) {
+      SimpleRunPhase.pausing => 'Pausing…',
+      SimpleRunPhase.paused => 'Paused',
+      SimpleRunPhase.done => 'Done',
+      _ => (info?.estimatedRemainingSeconds ?? left) == null
+          ? ''
+          : simpleRunDuration(info?.estimatedRemainingSeconds ?? left!),
+    };
+    final small = kSimpleText.copyWith(
+      fontSize: 11.5,
+      color: AraColors.textSecondary,
+    );
+    return Semantics(
+      button: true,
+      label: 'Plan: ${run.targetName ?? info?.currentTargetName ?? ''}',
+      child: GestureDetector(
+        key: const Key('simple-run-tracker'),
+        onTap: onTap,
+        child: Container(
+          width: kSimpleRailWidth,
+          height: 100,
+          clipBehavior: Clip.antiAlias,
+          decoration: BoxDecoration(
+            color: AraColors.overlayScrim,
+            border: Border.all(color: color),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Stack(
+            children: [
+              Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  spacing: 2,
+                  children: [
+                    Text(
+                      run.targetName ?? info?.currentTargetName ?? '',
+                      style: kSimpleText.copyWith(fontWeight: FontWeight.w600),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    Text(
+                      known ? '$frames / $total' : '$captured',
+                      style: kSimpleText,
+                    ),
+                    if (known)
+                      Text(
+                        _sub(steps[_current(steps, done)]),
+                        style: small,
+                        maxLines: 1,
+                      ),
+                    Text(
+                      last,
+                      style: phase == SimpleRunPhase.paused
+                          ? small.copyWith(color: AraColors.accentBusy)
+                          : small,
+                      maxLines: 1,
+                    ),
+                  ],
+                ),
+              ),
+              if (known && total > 0 && phase != SimpleRunPhase.ready)
+                Align(
+                  alignment: Alignment.bottomLeft,
+                  child: FractionallySizedBox(
+                    widthFactor: frames / total,
+                    child: Container(height: 3, color: color),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// How long the shutter is held to stop a run (the Emergency Stop's hold).
+const kSimpleRunStopHold = kEmergencyStopHold;
+
+/// The rail's shutter in Run. Plan ready: a play triangle in a green ring;
+/// a tap starts it. Imaging: pause bars, with a blue ring filling as the
+/// frame exposes; a tap pauses (after the frame in hand). Paused: a play
+/// triangle in an amber ring; a tap resumes. While imaging or paused, a
+/// 2 s hold stops the run (a red ring fills; letting go early cancels).
+/// Screen readers get "Stop the run" as an action; keyboards ⌘. / Ctrl+.
+class SimpleRunShutter extends ConsumerStatefulWidget {
+  const SimpleRunShutter({super.key});
+
+  @override
+  ConsumerState<SimpleRunShutter> createState() => _SimpleRunShutterState();
+}
+
+class _SimpleRunShutterState extends ConsumerState<SimpleRunShutter>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _hold =
+      AnimationController(vsync: this, duration: kSimpleRunStopHold)
+        ..addListener(() => setState(() {}))
+        ..addStatusListener((s) {
+          if (s == AnimationStatus.completed) {
+            _held = true;
+            _hold.value = 0;
+            ref.read(simpleRunProvider.notifier).stop();
+          }
+        });
+
+  /// The hold reached the end: the release is not a tap.
+  bool _held = false;
+  bool _down = false;
+
+  @override
+  void dispose() {
+    _hold.dispose();
+    super.dispose();
+  }
+
+  bool _holdable(SimpleRunPhase p) =>
+      p == SimpleRunPhase.imaging ||
+      p == SimpleRunPhase.pausing ||
+      p == SimpleRunPhase.paused;
+
+  VoidCallback? _tap(SimpleRunPhase p) {
+    final run = ref.read(simpleRunProvider.notifier);
+    return switch (p) {
+      SimpleRunPhase.ready => run.start,
+      SimpleRunPhase.imaging => run.pause,
+      SimpleRunPhase.paused => run.resume,
+      _ => null,
+    };
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final run = ref.watch(simpleRunProvider);
+    final phase = simpleRunPhase(run, ref.watch(sequenceRunStateProvider).value);
+    final camera = ref.watch(cameraStatusProvider).value;
+    final exposing = camera?.runtimeState == 'exposing';
+    final holdable = _holdable(phase);
+    final tap = run.busy ? null : _tap(phase);
+    final ring = switch (phase) {
+      SimpleRunPhase.ready => AraColors.accentConnected,
+      SimpleRunPhase.paused => AraColors.accentBusy,
+      SimpleRunPhase.none => AraColors.textDisabled,
+      _ => AraColors.textPrimary.withValues(alpha: 0.25),
+    };
+    final pauseBars =
+        phase == SimpleRunPhase.imaging || phase == SimpleRunPhase.pausing;
+    return Semantics(
+      button: true,
+      label: switch (phase) {
+        SimpleRunPhase.ready => 'Start imaging',
+        SimpleRunPhase.imaging => 'Pause after this frame',
+        SimpleRunPhase.pausing => 'Pausing',
+        SimpleRunPhase.paused => 'Resume',
+        _ => 'Create a plan first',
+      },
+      onTap: tap,
+      customSemanticsActions: holdable
+          ? {
+              const CustomSemanticsAction(label: 'Stop the run'): () =>
+                  ref.read(simpleRunProvider.notifier).stop(),
             }
-          : sel == null || run.starting
-          ? null
-          : () async {
-              await ref.read(simpleRunProvider.notifier).start(ref);
-              if (ref.read(simpleRunProvider).error == null) onPanel(false);
-            },
+          : null,
+      child: Listener(
+        onPointerDown: (_) {
+          _down = true;
+          _held = false;
+          if (holdable) _hold.forward(from: 0);
+        },
+        onPointerUp: (_) {
+          if (!_down) return;
+          _down = false;
+          final quick = _hold.value < 0.15;
+          _hold.value = 0;
+          // A quick release is a tap; a longer one short of 2 s cancels.
+          if (!_held && (quick || !holdable)) tap?.call();
+        },
+        onPointerCancel: (_) {
+          _down = false;
+          _hold.value = 0;
+        },
+        child: Stack(
+          clipBehavior: Clip.none,
+          alignment: Alignment.center,
+          children: [
+            Container(
+              key: const Key('simple-shutter'),
+              width: 60,
+              height: 60,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: ring, width: 3),
+              ),
+              alignment: Alignment.center,
+              child: Icon(
+                pauseBars ? Icons.pause : Icons.play_arrow,
+                size: 40,
+                color: phase == SimpleRunPhase.none
+                    ? AraColors.textDisabled
+                    : AraColors.textPrimary,
+              ),
+            ),
+            // The frame exposing, or the hold to stop over it.
+            if (_hold.value > 0 || (pauseBars && exposing))
+              SizedBox(
+                width: 60,
+                height: 60,
+                child: TweenAnimationBuilder<double>(
+                  tween: Tween(
+                    end: _hold.value > 0
+                        ? _hold.value
+                        : (camera?.exposureProgressPct ?? 0) / 100,
+                  ),
+                  duration: _hold.value > 0
+                      ? Duration.zero
+                      : const Duration(milliseconds: 900),
+                  builder: (_, v, _) => CircularProgressIndicator(
+                    value: v,
+                    strokeWidth: 3,
+                    color: _hold.value > 0
+                        ? AraColors.accentError
+                        : AraColors.selectionBg,
+                  ),
+                ),
+              ),
+            if (_hold.value > 0)
+              Positioned(
+                right: 60 + kSimpleInset + 6,
+                child: SimplePanel(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                  child: Text(
+                    'Hold to stop',
+                    style: kSimpleText,
+                    maxLines: 1,
+                    softWrap: false,
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -361,17 +642,25 @@ TextStyle get _head =>
 
 const _kFramePresets = [5, 10, 12, 15, 20, 30, 40, 60, 90, 120, 180, 240, 300];
 
-/// Run's sheet, centred over the image: the plan for the target picked in
-/// Target (a row per filter: sub length and frames), or why there's none;
-/// once the run ends, Night done. The shutter starts imaging.
+/// Run's sheet, centred over the image: the target (a search, or Pick in
+/// Sky), a row per filter (sub length and frames), then Create plan (Save
+/// plan once one exists); once the run ends, Night done. The shutter starts
+/// the plan.
 class SimpleRunSheet extends ConsumerStatefulWidget {
   const SimpleRunSheet({
     super.key,
-    required this.onOpenTarget,
+    required this.onShowSky,
+    required this.onPickInSky,
+    required this.onCreated,
     required this.onLibrary,
   });
 
-  final VoidCallback onOpenTarget;
+  /// A search runs in the planetarium, so it shows behind the sheet.
+  final VoidCallback onShowSky;
+
+  /// Closes the sheet for the sky; Sky's card brings it back.
+  final VoidCallback onPickInSky;
+  final VoidCallback onCreated;
   final VoidCallback onLibrary;
 
   @override
@@ -379,11 +668,26 @@ class SimpleRunSheet extends ConsumerStatefulWidget {
 }
 
 class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
+  final _query = TextEditingController();
+
   @override
   void initState() {
     super.initState();
     // The rows start from the profile's filters and default exposure.
     hydratePlanningSettings(ProviderScope.containerOf(context, listen: false));
+  }
+
+  @override
+  void dispose() {
+    _query.dispose();
+    super.dispose();
+  }
+
+  void _search() {
+    final q = _query.text.trim();
+    if (q.isEmpty) return;
+    widget.onShowSky();
+    ref.read(planetariumSearchProvider.notifier).search(q);
   }
 
   @override
@@ -394,35 +698,18 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
       padding: const EdgeInsets.all(18),
       child: SizedBox(
         width: 400,
-        child: simpleRunDone(run, info)
-            ? _NightDone(run: run, info: info!, onLibrary: widget.onLibrary)
-            : _plan(run),
+        // A short window scrolls the sheet rather than cutting it.
+        child: SingleChildScrollView(
+          child: simpleRunPhase(run, info) == SimpleRunPhase.done
+              ? _NightDone(run: run, info: info!, onLibrary: widget.onLibrary)
+              : _plan(run),
+        ),
       ),
     );
   }
 
   Widget _plan(SimpleRun run) {
     final sel = ref.watch(planetariumSelectionProvider);
-    if (sel == null) {
-      return Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        spacing: AraSpace.s8,
-        children: [
-          Text('No target yet', style: _head),
-          Text(
-            'Run images the target you pick in Target. Pick one there, go '
-            'to it, then come back.',
-            style: _dim,
-          ),
-          FilledButton(
-            key: const Key('simple-run-open-target'),
-            onPressed: widget.onOpenTarget,
-            child: const Text('Open Target'),
-          ),
-        ],
-      );
-    }
     final steps = ref.watch(simpleRunPlanProvider);
     final plan = ref.read(simpleRunPlanProvider.notifier);
     final filters = ref.watch(filterSetProvider).filters;
@@ -438,33 +725,85 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
         ref.watch(skyModelCalibrationProvider).value?.appliedK ?? const {};
     final suggested = [
       for (final s in steps)
-        suggestedSubSeconds(
-          ref,
-          // The unnamed row (no filter choice) is the set's one filter.
-          filterName: s.filterName.isEmpty
-              ? filters.firstOrNull?.name ?? ''
-              : s.filterName,
-          raDeg: sel.raJ2000Hours * 15,
-          decDeg: sel.decJ2000Deg,
-          defaultExposure:
-              ref.watch(imagingDefaultsProvider).defaultExposure.inMilliseconds /
-              1000,
-          skyCalibrationK: k,
-        ),
+        sel == null
+            ? s.exposureSeconds
+            : suggestedSubSeconds(
+                ref,
+                // The unnamed row (no filter choice) is the set's one filter.
+                filterName: s.filterName.isEmpty
+                    ? filters.firstOrNull?.name ?? ''
+                    : s.filterName,
+                raDeg: sel.raJ2000Hours * 15,
+                decDeg: sel.decJ2000Deg,
+                defaultExposure:
+                    ref
+                        .watch(imagingDefaultsProvider)
+                        .defaultExposure
+                        .inMilliseconds /
+                    1000,
+                skyCalibrationK: k,
+              ),
     ];
     final hint = simpleRunSuggestion(steps, suggested);
     Duration dur(double s) => Duration(milliseconds: (s * 1000).round());
+    final saved = run.sequenceId != null && !run.started;
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       spacing: AraSpace.s8,
       children: [
-        Text("Tonight's plan · ${sel.name}", style: _head),
-        Text(
-          '${simpleTargetStatus(sel)}. Autofocus, dither and flats follow '
-          'your profile.',
-          style: _dim,
+        Text("Tonight's plan", style: _head),
+        TextField(
+          key: const Key('simple-run-search'),
+          controller: _query,
+          style: kSimpleText,
+          textInputAction: TextInputAction.search,
+          onSubmitted: (_) => _search(),
+          decoration: InputDecoration(
+            hintText: 'Search objects',
+            prefixIcon: const Icon(Icons.search, size: 20),
+            suffixIcon: IconButton(
+              tooltip: 'Search',
+              icon: const Icon(Icons.arrow_forward, size: 20),
+              onPressed: _search,
+            ),
+          ),
         ),
+        Row(
+          children: [
+            Expanded(
+              child: sel == null
+                  ? Text('Search, or pick in the sky.', style: _dim)
+                  : Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          sel.name,
+                          style: kSimpleText.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        Text(
+                          simpleTargetStatus(sel),
+                          style: sel.belowHorizon
+                              ? kSimpleText.copyWith(
+                                  color: AraColors.accentBusy,
+                                )
+                              : _dim,
+                        ),
+                      ],
+                    ),
+            ),
+            TextButton(
+              key: const Key('simple-run-pick-in-sky'),
+              onPressed: widget.onPickInSky,
+              child: const Text('Pick in Sky'),
+            ),
+          ],
+        ),
+        const Divider(height: 1),
         for (var i = 0; i < steps.length; i++)
           Row(
             spacing: AraSpace.s8,
@@ -481,9 +820,7 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
                 child: SimplePresetTile<Duration>(
                   key: Key('simple-run-exposure-$i'),
                   label: 'Exposure',
-                  value: Duration(
-                    milliseconds: (steps[i].exposureSeconds * 1000).round(),
-                  ),
+                  value: dur(steps[i].exposureSeconds),
                   // The suggestion is listed, and marked, even off the presets.
                   options: {
                     ...exposurePresets(minSec: 1, maxSec: 0),
@@ -571,16 +908,22 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
             maxLines: 4,
             overflow: TextOverflow.ellipsis,
           ),
-        Container(
-          height: 48,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: const Color(0x59404040),
-            borderRadius: BorderRadius.circular(10),
-          ),
+        FilledButton(
+          key: const Key('simple-run-create'),
+          onPressed: sel == null || sel.belowHorizon || run.busy
+              ? null
+              : () async {
+                  final ok = await ref
+                      .read(simpleRunProvider.notifier)
+                      .create(ref);
+                  if (ok) widget.onCreated();
+                },
           child: Text(
-            run.starting ? 'Creating the run…' : 'Tap the shutter to start imaging',
-            style: _dim,
+            run.busy
+                ? 'Creating…'
+                : saved
+                ? 'Save plan'
+                : 'Create plan',
           ),
         ),
       ],
@@ -659,8 +1002,7 @@ class _NightDone extends ConsumerWidget {
 }
 
 /// Run's panel beside the rail while imaging: frames done of the plan, when
-/// it ends, a bar per filter, Pause or Resume; after the red square, the
-/// question whether to stop.
+/// it ends, and a bar per filter. The shutter pauses and, held, stops.
 class SimpleRunPanel extends ConsumerWidget {
   const SimpleRunPanel({super.key});
 
@@ -668,12 +1010,11 @@ class SimpleRunPanel extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final run = ref.watch(simpleRunProvider);
     final info = ref.watch(sequenceRunStateProvider).value;
-    final runner = ref.read(simpleRunProvider.notifier);
     final ours = info?.sequenceId == run.sequenceId;
     final steps = ours ? run.steps : const <FilterPlanStep>[];
-    final done = simpleRunProgress(steps, info?.framesCaptured ?? 0);
+    final captured = info?.framesCaptured ?? 0;
+    final done = simpleRunProgress(steps, captured);
     final remaining = info?.estimatedRemainingSeconds;
-    final paused = _paused(info?.state);
     return SimplePanel(
       padding: const EdgeInsets.all(AraSpace.s16),
       child: SizedBox(
@@ -688,7 +1029,7 @@ class SimpleRunPanel extends ConsumerWidget {
               style: AraText.caption,
             ),
             Text(
-              simpleRunSummary(run, info),
+              steps.isEmpty ? '$captured frames' : '$captured / ${_total(steps)}',
               style: const TextStyle(
                 fontSize: 30,
                 fontWeight: FontWeight.w300,
@@ -742,72 +1083,10 @@ class SimpleRunPanel extends ConsumerWidget {
                 maxLines: 4,
                 overflow: TextOverflow.ellipsis,
               ),
-            if (run.stopAfter != null)
-              Text('Stopping after this frame…', style: _dim)
-            else if (run.asking)
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: const Color(0x993A2C0A),
-                  border: Border.all(color: AraColors.accentBusy),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  spacing: AraSpace.s8,
-                  children: [
-                    Text(
-                      'Stop the run?',
-                      style: kSimpleText.copyWith(fontWeight: FontWeight.w600),
-                    ),
-                    Text(
-                      '${info?.framesCaptured ?? 0} frames are saved. The mount '
-                      'keeps tracking.',
-                      style: _dim.copyWith(fontSize: 12),
-                    ),
-                    FilledButton(
-                      key: const Key('simple-run-stop-after'),
-                      onPressed: runner.stopAfterThisFrame,
-                      child: const Text('Stop after this frame'),
-                    ),
-                    Row(
-                      spacing: AraSpace.s8,
-                      children: [
-                        Expanded(
-                          child: OutlinedButton(
-                            key: const Key('simple-run-stop-now'),
-                            style: OutlinedButton.styleFrom(
-                              side: const BorderSide(
-                                color: AraColors.accentError,
-                              ),
-                            ),
-                            onPressed: runner.stopNow,
-                            child: const Text('Stop now'),
-                          ),
-                        ),
-                        Expanded(
-                          child: OutlinedButton(
-                            key: const Key('simple-run-keep-going'),
-                            onPressed: runner.keepGoing,
-                            child: const Text('Keep going'),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              )
-            else ...[
-              FilledButton.tonal(
-                key: const Key('simple-run-pause'),
-                onPressed: paused ? runner.resume : runner.pause,
-                child: Text(paused ? 'Resume' : 'Pause'),
-              ),
-              Text(
-                'The red square stops the run.',
-                style: _dim.copyWith(fontSize: 12),
-              ),
-            ],
+            Text(
+              'Tap the shutter to pause after this frame; hold it to stop.',
+              style: _dim.copyWith(fontSize: 12),
+            ),
           ],
         ),
       ),

@@ -30,11 +30,18 @@ const _lrgb = [
 class _Seq implements SequenceClient {
   final calls = <String>[];
   SequenceRunStateInfo? runState;
+  var _n = 0;
   @override
   Future<String> create(String name, Map<String, dynamic> body,
       {String? description, String? idempotencyKey}) async {
     calls.add('create $name');
-    return 'seq-1';
+    return 'seq-${++_n}';
+  }
+
+  @override
+  Future<bool> deleteSequence(String id) async {
+    calls.add('delete $id');
+    return true;
   }
 
   @override
@@ -115,6 +122,10 @@ Future<ProviderContainer> _pump(WidgetTester tester, _Seq seq, Widget child,
     filterSetProvider.overrideWith(_Filters.new),
   ]);
   addTearDown(container.dispose);
+  // Tall enough for the sheet, tracker and shutter stacked in one column.
+  tester.view.physicalSize = const Size(1024, 1100);
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.reset);
   await tester.pumpWidget(UncontrolledProviderScope(
     container: container,
     child: MaterialApp(home: Scaffold(body: Center(child: child))),
@@ -122,8 +133,6 @@ Future<ProviderContainer> _pump(WidgetTester tester, _Seq seq, Widget child,
   await tester.pumpAndSettle();
   return container;
 }
-
-InkResponse _shutter(WidgetTester t) => t.widget<InkResponse>(find.byKey(const Key('simple-shutter')));
 
 void main() {
   test('the first plan: LRGB from the set, one unnamed row without a choice', () {
@@ -156,17 +165,35 @@ void main() {
     expect(simpleRunProgress(steps, 99), [40, 20]);
   });
 
-  test('the chip: Plan, frames of the total, Paused, Done', () {
-    const run = SimpleRun(sequenceId: 'seq-1', steps: [
-      FilterPlanStep(filterName: 'L', exposureSeconds: 300, frameCount: 40),
-      FilterPlanStep(filterName: 'R', exposureSeconds: 180, frameCount: 60),
-    ]);
-    expect(simpleRunSummary(const SimpleRun(), null), 'Plan');
-    expect(simpleRunSummary(run, _imaging(23)), '23 / 100');
-    expect(simpleRunSummary(run, _imaging(23, state: SequenceRunState.paused)), 'Paused');
-    expect(simpleRunSummary(run, _imaging(100, state: SequenceRunState.completed)), 'Done');
-    // A run started elsewhere: just its frames.
-    expect(simpleRunSummary(const SimpleRun(), _imaging(7)), '7 frames');
+  test('the phase: a run in progress wins; a started plan ends only on a terminal state', () {
+    const none = SimpleRun();
+    const ready = SimpleRun(sequenceId: 'seq-1');
+    const started = SimpleRun(sequenceId: 'seq-1', started: true);
+    expect(simpleRunPhase(none, null), SimpleRunPhase.none);
+    expect(simpleRunPhase(ready, null), SimpleRunPhase.ready);
+    expect(simpleRunPhase(started, _imaging(3)), SimpleRunPhase.imaging);
+    expect(simpleRunPhase(started.copyWith(pausing: true), _imaging(3)), SimpleRunPhase.pausing);
+    expect(simpleRunPhase(started, _imaging(3, state: SequenceRunState.paused)), SimpleRunPhase.paused);
+    expect(simpleRunPhase(started, _imaging(3, state: SequenceRunState.idle)), SimpleRunPhase.ready,
+        reason: 'a just-started run still reads idle');
+    expect(simpleRunPhase(started, _imaging(60, state: SequenceRunState.completed)), SimpleRunPhase.done);
+    expect(simpleRunPhase(started, _imaging(9, state: SequenceRunState.stopped)), SimpleRunPhase.done);
+    // A run adopted from the daemon, with no plan here.
+    expect(simpleRunPhase(none, _imaging(7)), SimpleRunPhase.imaging);
+  });
+
+  test('simpleTargetStatus: up, below with its rise, never rises', () {
+    expect(simpleTargetStatus(_m31), '62° up · max 74°');
+    expect(
+        simpleTargetStatus(PlanetariumSelection(
+            name: 'M33', kind: 'Galaxy', raHours: 1.6, decDeg: 30.8, raJ2000Hours: 1.56, decJ2000Deg: 30.66,
+            altDeg: -12, maxAltDeg: 60, rise: DateTime(2026, 11, 2, 22, 40))),
+        'Below your horizon · rises 22:40');
+    expect(
+        simpleTargetStatus(const PlanetariumSelection(
+            name: 'NGC 104', kind: 'Cluster', raHours: 0.4, decDeg: -72, raJ2000Hours: 0.4, decJ2000Deg: -72,
+            altDeg: -40, maxAltDeg: -20)),
+        'Never rises here');
   });
 
   test('the hint: rows that differ, grouped by length; null when all match', () {
@@ -192,100 +219,74 @@ void main() {
     expect(simpleRunDuration(6 * 3600 + 20 * 60), '6 h 20 min');
   });
 
-  group('the shutter starts imaging', () {
-    testWidgets('off with no target picked', (tester) async {
-      await _pump(tester, _Seq(), SimpleRunShutter(onPanel: (_) {}), sel: null);
-      expect(_shutter(tester).onTap, isNull);
-    });
+  // The sheet, the tracker and the shutter together, as on the rail.
+  Future<(ProviderContainer, _Seq)> run(WidgetTester tester, {PlanetariumSelection? sel = _m31}) async {
+    final seq = _Seq();
+    final c = await _pump(
+        tester,
+        seq,
+        SingleChildScrollView(
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}, onLibrary: () {}),
+            SimpleRunTracker(onTap: () {}),
+            const SimpleRunShutter(),
+          ]),
+        ),
+        sel: sel);
+    return (c, seq);
+  }
 
-    testWidgets('creates the run from the plan, starts it and closes the sheet', (tester) async {
-      final seq = _Seq();
-      bool? panel;
-      final c = await _pump(tester, seq, SimpleRunShutter(onPanel: (open) => panel = open));
-      await tester.tap(find.byKey(const Key('simple-shutter')));
-      await tester.pumpAndSettle();
-      expect(seq.calls, ['create M31', 'start seq-1']);
-      expect(panel, isFalse);
-      expect(c.read(simpleRunProvider).sequenceId, 'seq-1');
-      expect(c.read(simpleRunProvider).steps.map((s) => s.filterName), ['L', 'R', 'G', 'B']);
-    });
-  });
+  Future<void> create(WidgetTester tester) async {
+    await tester.tap(find.byKey(const Key('simple-run-create')));
+    await tester.pumpAndSettle();
+  }
 
-  group('the red square asks before stopping', () {
-    Future<(ProviderContainer, List<bool>)> imaging(WidgetTester tester, _Seq seq) async {
-      final panels = <bool>[];
-      seq.runState = _imaging(23);
-      final c = await _pump(
-          tester,
-          seq,
-          Row(mainAxisSize: MainAxisSize.min, children: [
-            const SimpleRunPanel(),
-            SimpleRunShutter(onPanel: panels.add),
-          ]));
-      c.read(selectedSequenceIdProvider.notifier).select('seq-1');
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const Key('simple-shutter')));
-      await tester.pumpAndSettle();
-      return (c, panels);
-    }
-
-    testWidgets('the tap opens the question; Keep going closes it', (tester) async {
-      final seq = _Seq();
-      final (_, panels) = await imaging(tester, seq);
-      expect(panels, [true]);
-      expect(find.text('Stop the run?'), findsOneWidget);
-      await tester.tap(find.byKey(const Key('simple-run-keep-going')));
-      await tester.pumpAndSettle();
-      expect(find.text('Stop the run?'), findsNothing);
-      expect(seq.calls, isEmpty);
-    });
-
-    testWidgets('Stop now stops the run', (tester) async {
-      final seq = _Seq();
-      await imaging(tester, seq);
-      await tester.tap(find.byKey(const Key('simple-run-stop-now')));
-      await tester.pumpAndSettle();
-      expect(seq.calls, ['stop seq-1']);
-    });
-
-    testWidgets('Stop after this frame stops once the next frame is filed', (tester) async {
-      final seq = _Seq();
-      final (c, _) = await imaging(tester, seq);
-      await tester.tap(find.byKey(const Key('simple-run-stop-after')));
-      await tester.pumpAndSettle();
-      expect(find.text('Stopping after this frame…'), findsOneWidget);
-      await c.read(sequenceRunStateProvider.notifier).refresh();
-      await tester.pumpAndSettle();
-      expect(seq.calls, isEmpty, reason: 'frame 23 is still the last one');
-      seq.runState = _imaging(24);
-      await c.read(sequenceRunStateProvider.notifier).refresh();
-      await tester.pumpAndSettle();
-      expect(seq.calls, ['stop seq-1']);
-    });
-  });
+  Future<void> imaging(WidgetTester tester, ProviderContainer c, _Seq seq, SequenceRunStateInfo state) async {
+    seq.runState = state;
+    await c.read(sequenceRunStateProvider.notifier).refresh();
+    await tester.pumpAndSettle();
+  }
 
   group('the sheet', () {
-    testWidgets('with no target it sends you to Target', (tester) async {
-      var opened = false;
-      await _pump(tester, _Seq(), SimpleRunSheet(onOpenTarget: () => opened = true, onLibrary: () {}), sel: null);
-      expect(find.text('No target yet'), findsOneWidget);
-      await tester.tap(find.byKey(const Key('simple-run-open-target')));
-      expect(opened, isTrue);
+    testWidgets('with nothing picked: search or Pick in Sky; Create plan is off', (tester) async {
+      var showSky = 0, pick = 0;
+      final c = await _pump(
+          tester,
+          _Seq(),
+          SimpleRunSheet(onShowSky: () => showSky++, onPickInSky: () => pick++, onCreated: () {}, onLibrary: () {}),
+          sel: null);
+      expect(find.text('Search, or pick in the sky.'), findsOneWidget);
+      expect(tester.widget<FilledButton>(find.byKey(const Key('simple-run-create'))).onPressed, isNull);
+      await tester.tap(find.byKey(const Key('simple-run-pick-in-sky')));
+      expect(pick, 1);
+      await tester.enterText(find.byKey(const Key('simple-run-search')), 'M42');
+      await tester.testTextInput.receiveAction(TextInputAction.search);
+      await tester.pump();
+      expect(showSky, 1, reason: 'the search runs in the planetarium');
+      expect(c.read(planetariumSearchProvider), 'M42');
     });
 
-    testWidgets('lists the plan for the target and says the shutter starts it', (tester) async {
-      await _pump(tester, _Seq(), SimpleRunSheet(onOpenTarget: () {}, onLibrary: () {}));
-      expect(find.text("Tonight's plan · M31"), findsOneWidget);
-      expect(find.byKey(const Key('simple-run-exposure-3')), findsOneWidget);
-      expect(find.text('60 frames'), findsOneWidget);
-      expect(find.text('Tap the shutter to start imaging'), findsOneWidget);
-      expect(find.text('Start imaging'), findsNothing);
-      // An unconfigured rig has no suggestion beyond the default: no hint.
-      expect(find.byKey(const Key('simple-run-use-suggested')), findsNothing);
+    testWidgets('Create plan creates the run without starting it; again it saves and replaces', (tester) async {
+      var created = 0;
+      final seq = _Seq();
+      await _pump(
+          tester,
+          seq,
+          SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () => created++, onLibrary: () {}));
+      expect(find.text('M31'), findsOneWidget);
+      expect(find.text('Create plan'), findsOneWidget);
+      await create(tester);
+      expect(seq.calls, ['create M31']);
+      expect(created, 1);
+      expect(find.text('Save plan'), findsOneWidget);
+      await create(tester);
+      expect(seq.calls, ['create M31', 'create M31', 'delete seq-1']);
     });
 
     testWidgets('a configured rig gets the suggested subs in one line; Use all takes them', (tester) async {
-      final c = await _pump(tester, _Seq(), SimpleRunSheet(onOpenTarget: () {}, onLibrary: () {}), overrides: _rig);
+      final c = await _pump(tester, _Seq(),
+          SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}, onLibrary: () {}),
+          overrides: _rig);
       expect(find.textContaining('Suggested: '), findsOneWidget);
       final before = c.read(simpleRunPlanProvider).map((s) => s.exposureSeconds).toList();
       expect(before.toSet(), {5.0}, reason: 'rows start at the profile default');
@@ -296,13 +297,80 @@ void main() {
       expect(find.textContaining('Suggested: '), findsNothing, reason: 'every row matches now');
     });
 
-    testWidgets('a removed row leaves the plan; the last row stays', (tester) async {
-      final c = await _pump(tester, _Seq(), SimpleRunSheet(onOpenTarget: () {}, onLibrary: () {}));
+    testWidgets('an unconfigured rig has no hint; the last row stays', (tester) async {
+      final c = await _pump(tester, _Seq(),
+          SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}, onLibrary: () {}));
+      expect(find.byKey(const Key('simple-run-use-suggested')), findsNothing);
+      expect(find.text('60 frames'), findsOneWidget);
       final plan = c.read(simpleRunPlanProvider.notifier);
       for (var i = 0; i < 5; i++) {
         plan.remove(0);
       }
       expect(c.read(simpleRunPlanProvider).map((s) => s.filterName), ['B']);
+    });
+  });
+
+  group('the tracker and the shutter', () {
+    testWidgets('no plan: no tracker, and the shutter does nothing', (tester) async {
+      final (_, seq) = await run(tester);
+      expect(find.byKey(const Key('simple-run-tracker')), findsNothing);
+      await tester.tap(find.byKey(const Key('simple-shutter')));
+      await tester.pump();
+      expect(seq.calls, isEmpty);
+    });
+
+    testWidgets('plan ready: 0 of the total, the first filter; the shutter starts it', (tester) async {
+      final (_, seq) = await run(tester);
+      await create(tester);
+      expect(find.byKey(const Key('simple-run-tracker')), findsOneWidget);
+      expect(find.text('0 / 60'), findsOneWidget);
+      expect(find.text('L · 5 s'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('simple-shutter')));
+      await tester.pumpAndSettle();
+      expect(seq.calls.last, 'start seq-1');
+    });
+
+    testWidgets('imaging: a tap pauses (Pausing… until it lands), paused a tap resumes', (tester) async {
+      final (c, seq) = await run(tester);
+      await create(tester);
+      await tester.tap(find.byKey(const Key('simple-shutter')));
+      await tester.pumpAndSettle();
+      await imaging(tester, c, seq, _imaging(23));
+      expect(find.text('23 / 60'), findsOneWidget);
+      expect(find.text('R · 5 s'), findsOneWidget, reason: '15 per filter: frame 23 is on R');
+      await tester.tap(find.byKey(const Key('simple-shutter')));
+      await tester.pumpAndSettle();
+      expect(seq.calls.last, 'pause seq-1');
+      expect(find.text('Pausing…'), findsOneWidget);
+      await imaging(tester, c, seq, _imaging(24, state: SequenceRunState.paused));
+      expect(find.text('Paused'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('simple-shutter')));
+      await tester.pumpAndSettle();
+      expect(seq.calls.last, 'resume seq-1');
+    });
+
+    testWidgets('holding 2 s stops the run; letting go early does nothing', (tester) async {
+      final (c, seq) = await run(tester);
+      await create(tester);
+      await tester.tap(find.byKey(const Key('simple-shutter')));
+      await tester.pumpAndSettle();
+      await imaging(tester, c, seq, _imaging(23));
+      final before = seq.calls.length;
+
+      var g = await tester.startGesture(tester.getCenter(find.byKey(const Key('simple-shutter'))));
+      await tester.pump(); // the hold's first frame
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.text('Hold to stop'), findsOneWidget);
+      await g.up();
+      await tester.pumpAndSettle();
+      expect(seq.calls.length, before, reason: 'released at 1 s: neither a pause nor a stop');
+
+      g = await tester.startGesture(tester.getCenter(find.byKey(const Key('simple-shutter'))));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 2100));
+      await g.up();
+      await tester.pumpAndSettle();
+      expect(seq.calls.sublist(before), ['stop seq-1']);
     });
   });
 }

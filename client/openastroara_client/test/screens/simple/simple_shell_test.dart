@@ -3,6 +3,7 @@ import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/state/sky_atlas/planetarium_selection_state.dart';
 import 'package:openastroara/main.dart' show isShell, shellFor;
 import 'package:openastroara/models/frame_histogram.dart';
 import 'package:openastroara/models/server.dart';
@@ -135,18 +136,18 @@ void main() {
 
   testWidgets('at rest only the essentials show: no mode list, no settings, no info', (tester) async {
     await _pump(tester, const Size(1024, 768));
-    for (final hidden in ['Focus', 'Polar align', 'Target', 'Run', 'Exposure', 'Gain', 'Loop', 'HFR', 'Guiding']) {
+    for (final hidden in ['Focus', 'Polar align', 'Run', 'Exposure', 'Gain', 'Loop', 'HFR', 'Guiding']) {
       expect(find.text(hidden), findsNothing, reason: '$hidden is one tap away, not out');
     }
     expect(find.text('Tap the shutter to take a frame'), findsOneWidget);
     expect(find.byKey(const Key('sky')), findsOneWidget, reason: 'the sky until there is a frame');
   });
 
-  testWidgets('the mode name opens the five modes in order; picking one closes them', (tester) async {
+  testWidgets('the mode name opens the four modes in order; picking one closes them', (tester) async {
     final container = await _pump(tester, const Size(1024, 768));
     await tester.tap(find.byKey(const Key('simple-mode')));
     await tester.pump();
-    final modes = ['Preview', 'Focus', 'Polar align', 'Target', 'Run'];
+    final modes = ['Preview', 'Focus', 'Polar align', 'Run'];
     // .first: the grid sits before the rail (whose label also reads Preview).
     final order = [for (final m in modes) tester.getTopLeft(find.text(m).first)];
     for (var i = 1; i < order.length; i++) {
@@ -164,11 +165,8 @@ void main() {
     await tester.pump();
     expect(container.read(simpleModeProvider).value, isTrue, reason: 'Run stays in Simple Mode');
     expect(find.descendant(of: find.byKey(const Key('simple-mode')), matching: find.text('Run')), findsOneWidget);
-    // Run opens on its sheet, centred; with nothing picked it points to Target.
-    expect(find.text('No target yet'), findsOneWidget);
-    await tester.tap(find.byKey(const Key('simple-run-open-target')));
-    await tester.pump();
-    expect(find.descendant(of: find.byKey(const Key('simple-mode')), matching: find.text('Target')), findsOneWidget);
+    // Run opens on its sheet, centred; with nothing picked it asks for a target.
+    expect(find.text('Search, or pick in the sky.'), findsOneWidget);
   });
 
   testWidgets('Focus stays in Simple Mode: the rail reads Focus, its panel opens left of the rail; the chip is the Focus chip',
@@ -247,22 +245,30 @@ void main() {
     expect(p.didExceedMaxLines, isFalse, reason: 'cut');
   });
 
-  testWidgets('Target stays in Simple Mode on the sky; a tap on the sky keeps its panel', (tester) async {
+  testWidgets('an object picked in the sky offers Image this, which opens Run on it; Pick in Sky goes back',
+      (tester) async {
     final container = await _pump(tester, const Size(1024, 768));
     await _frame(tester, container);
-    await tester.tap(find.byKey(const Key('simple-mode')));
+    expect(find.byKey(const Key('simple-sky-image-this')), findsNothing);
+    await tester.tap(find.text('Sky'));
     await tester.pump();
-    await tester.tap(find.text('Target'));
+    container.read(planetariumSelectionProvider.notifier).set(const PlanetariumSelection(
+        name: 'M31', kind: 'Galaxy', raHours: 0.73, decDeg: 41.4, raJ2000Hours: 0.71, decJ2000Deg: 41.27,
+        altDeg: 62.4, maxAltDeg: 74.2));
     await tester.pump();
-    expect(container.read(simpleModeProvider).value, isTrue, reason: 'no jump to the full UI');
-    expect(find.byKey(const Key('sky')), findsOneWidget, reason: 'the planetarium, even over a frame');
-    final chip = find.byKey(const Key('simple-settings'));
-    expect(find.descendant(of: chip, matching: find.text('None')), findsOneWidget);
-    final rail = _panelOf(tester, find.byKey(const Key('simple-shutter')));
-    expect(_panelOf(tester, find.byKey(const Key('simple-target-search'))).right, rail.left - kSimpleInset);
-    await tester.tap(find.byKey(const Key('simple-frame')), warnIfMissed: false);
+    expect(find.text('Galaxy · 62° up · max 74°'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('simple-sky-image-this')));
     await tester.pump();
-    expect(find.byKey(const Key('simple-target-search')), findsOneWidget, reason: 'picking in the sky keeps the panel');
+    expect(find.descendant(of: find.byKey(const Key('simple-mode')), matching: find.text('Run')), findsOneWidget);
+    expect(find.byKey(const Key('sky')), findsNothing, reason: 'back on the frame');
+    expect(find.text("Tonight's plan"), findsOneWidget);
+    expect(find.byKey(const Key('simple-sky-image-this')), findsNothing, reason: 'the sheet, not the card');
+
+    await tester.tap(find.byKey(const Key('simple-run-pick-in-sky')));
+    await tester.pump();
+    expect(find.text("Tonight's plan"), findsNothing);
+    expect(find.byKey(const Key('sky')), findsOneWidget);
+    expect(find.byKey(const Key('simple-sky-image-this')), findsOneWidget);
   });
 
   testWidgets('the settings chip opens Exposure and Gain side by side from lists, Filter and Loop/Single',

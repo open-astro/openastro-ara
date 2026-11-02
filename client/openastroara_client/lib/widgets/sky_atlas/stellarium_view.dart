@@ -274,7 +274,7 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
       _lastDebugLine = line;
       return;
     }
-    // Simple Mode (bare): the page's selection, for the app's Target panel.
+    // Simple Mode (bare): the page's selection, for Sky's card and Run's sheet.
     if (event['type'] == 'selection') {
       ref
           .read(planetariumSelectionProvider.notifier)
@@ -521,7 +521,7 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
       // so clear() doesn't re-wake this listener.)
       ref.read(planetariumCommandProvider.notifier).clear();
     });
-    // A search typed in Simple Mode's Target panel runs through this view's
+    // A search typed in Simple Mode Run's sheet runs through this view's
     // own search, as if typed in its search bar.
     ref.listen<String?>(planetariumSearchProvider, (_, q) {
       if (q == null) return;

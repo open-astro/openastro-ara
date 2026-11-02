@@ -35,7 +35,6 @@ import '../shell_listeners.dart';
 import 'simple_focus_panel.dart';
 import 'simple_polar_panel.dart';
 import 'simple_run_panel.dart';
-import 'simple_target_panel.dart';
 import 'simple_preview_panel.dart';
 
 /// Inset from the frame edge and between panels.
@@ -55,14 +54,13 @@ const double kSimpleStatusMaxWidth = 300;
 const double kSimpleStopSize = 60;
 
 /// The modes, in the decided order.
-enum SimpleModeScreen { preview, focus, polarAlign, target, run }
+enum SimpleModeScreen { preview, focus, polarAlign, run }
 
 extension on SimpleModeScreen {
   String get label => switch (this) {
     SimpleModeScreen.preview => 'Preview',
     SimpleModeScreen.polarAlign => 'Polar align',
     SimpleModeScreen.focus => 'Focus',
-    SimpleModeScreen.target => 'Target',
     SimpleModeScreen.run => 'Run',
   };
 
@@ -73,19 +71,17 @@ extension on SimpleModeScreen {
     SimpleModeScreen.preview => Icons.visibility_outlined,
     SimpleModeScreen.focus => Icons.center_focus_strong,
     SimpleModeScreen.polarAlign => Icons.explore_outlined,
-    SimpleModeScreen.target => Icons.travel_explore,
     SimpleModeScreen.run => Icons.playlist_play,
   };
 
   /// The full-UI tab a mode opens until its Simple Mode screen exists
-  /// (brief: Preview, Polar align and Focus open Live; Target opens Planning).
+  /// (brief: Preview, Polar align and Focus open Live).
   // shortcut: Run always opens Sequence; the brief wants Live while a run is
   // imaging — switch on the sequence state when the Run screen is built.
   int get fullUiTab => switch (this) {
     SimpleModeScreen.preview ||
     SimpleModeScreen.polarAlign ||
     SimpleModeScreen.focus => kLiveTabIndex,
-    SimpleModeScreen.target => kPlanningTabIndex,
     SimpleModeScreen.run => kRunTabIndex,
   };
 }
@@ -165,14 +161,25 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
   void _openSettings() =>
       ref.read(selectedTabIndexProvider.notifier).select(kOptionsTabIndex);
 
+  void _stopRun() {
+    if (_mode != SimpleModeScreen.run) return;
+    final phase = simpleRunPhase(
+      ref.read(simpleRunProvider),
+      ref.read(sequenceRunStateProvider).value,
+    );
+    if (phase == SimpleRunPhase.imaging ||
+        phase == SimpleRunPhase.pausing ||
+        phase == SimpleRunPhase.paused) {
+      ref.read(simpleRunProvider.notifier).stop();
+    }
+  }
+
   void _toggle(_Popover p) =>
       setState(() => _popover = _popover == p ? _Popover.none : p);
 
   /// A tap on the image closes what's open, or else toggles the immersive
   /// view (only once there is a frame to look at).
   void _tapImage(bool hasFrame) => setState(() {
-    // In Target a tap picks an object in the sky; the panel stays.
-    if (_mode == SimpleModeScreen.target) return;
     if (_popover != _Popover.none) {
       _popover = _Popover.none;
     } else if (hasFrame) {
@@ -193,9 +200,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
         polarFrame ||
         ref.watch(lastCapturedFrameIdProvider) != null ||
         ref.watch(liveViewControllerProvider);
-    // Target works on the sky.
-    final showSky =
-        _sky || !hasFrame || _mode == SimpleModeScreen.target;
+    final showSky = _sky || !hasFrame;
     final panels = !_clean || showSky;
     // Only Run reads the sequencer (reading it adopts a run in progress).
     final runActive =
@@ -205,6 +210,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
         _mode == SimpleModeScreen.run &&
         _popover == _Popover.settings &&
         !runActive;
+    final sel = ref.watch(planetariumSelectionProvider);
     final motion = MediaQuery.disableAnimationsOf(context)
         ? Duration.zero
         : const Duration(milliseconds: 220);
@@ -228,6 +234,11 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                   _openSettings,
               const SingleActivator(LogicalKeyboardKey.comma, control: true):
                   _openSettings,
+              // Hold-to-stop for keyboards: ⌘. / Ctrl+. stops a run.
+              const SingleActivator(LogicalKeyboardKey.period, meta: true):
+                  _stopRun,
+              const SingleActivator(LogicalKeyboardKey.period, control: true):
+                  _stopRun,
             },
             child: Focus(
               focusNode: _focus,
@@ -360,11 +371,6 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                   popover: _popover,
                                   onModes: () => _toggle(_Popover.modes),
                                   onSettings: () => _toggle(_Popover.settings),
-                                  onPanel: (open) => setState(
-                                    () => _popover = open
-                                        ? _Popover.settings
-                                        : _Popover.none,
-                                  ),
                                 ),
                               ),
                             ),
@@ -376,10 +382,14 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                             Positioned.fill(
                               child: Center(
                                 child: SimpleRunSheet(
-                                  onOpenTarget: () => setState(() {
-                                    _mode = SimpleModeScreen.target;
-                                    _popover = _Popover.settings;
+                                  onShowSky: () => setState(() => _sky = true),
+                                  onPickInSky: () => setState(() {
+                                    _sky = true;
+                                    _popover = _Popover.none;
                                   }),
+                                  onCreated: () => setState(
+                                    () => _popover = _Popover.none,
+                                  ),
                                   onLibrary: () => Navigator.of(context).push(
                                     MaterialPageRoute<void>(
                                       builder: (_) =>
@@ -416,8 +426,6 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                           const SimpleFocusPanel(),
                                         SimpleModeScreen.polarAlign =>
                                           const SimplePolarPanel(),
-                                        SimpleModeScreen.target =>
-                                          const SimpleTargetPanel(),
                                         SimpleModeScreen.run =>
                                           const SimpleRunPanel(),
                                         _ => const SizedBox(
@@ -425,6 +433,39 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                           child: SimpleSettingsPopover(),
                                         ),
                                       },
+                              ),
+                            ),
+                          // Run's plan tracker sits above the rail, so the
+                          // rail never moves for it.
+                          if (_mode == SimpleModeScreen.run)
+                            Positioned(
+                              left: 0,
+                              top: 0,
+                              child: CompositedTransformFollower(
+                                link: _railLink,
+                                targetAnchor: Alignment.topLeft,
+                                followerAnchor: Alignment.bottomLeft,
+                                offset: const Offset(0, -AraSpace.s8),
+                                child: SimpleRunTracker(
+                                  onTap: () => _toggle(_Popover.settings),
+                                ),
+                              ),
+                            ),
+                          // The sky's pick, offered to Run.
+                          if (showSky && sel != null && !runSheet)
+                            Positioned(
+                              left: 0,
+                              right: 0,
+                              bottom: kSimpleInset * 2 + 40,
+                              child: Center(
+                                child: _SkyPick(
+                                  selection: sel,
+                                  onImage: () => setState(() {
+                                    _mode = SimpleModeScreen.run;
+                                    _popover = _Popover.settings;
+                                    _sky = false;
+                                  }),
+                                ),
                               ),
                             ),
                           // Stop on its own at the bottom, under the rail.
@@ -449,6 +490,53 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
       ),
     );
   }
+}
+
+/// The object picked in the sky, over it: its name, type and altitude, and
+/// Image this, which opens Run's sheet with it.
+class _SkyPick extends StatelessWidget {
+  const _SkyPick({required this.selection, required this.onImage});
+
+  final PlanetariumSelection selection;
+  final VoidCallback onImage;
+
+  @override
+  Widget build(BuildContext context) => SimplePanel(
+    padding: const EdgeInsets.fromLTRB(16, 10, 10, 10),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      spacing: AraSpace.s16,
+      children: [
+        Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              selection.name,
+              style: kSimpleText.copyWith(fontWeight: FontWeight.w600),
+            ),
+            Text(
+              [
+                if (selection.kind.isNotEmpty) selection.kind,
+                simpleTargetStatus(selection),
+              ].join(' · '),
+              style: kSimpleText.copyWith(
+                fontSize: 12,
+                color: selection.belowHorizon
+                    ? AraColors.accentBusy
+                    : AraColors.textSecondary,
+              ),
+            ),
+          ],
+        ),
+        FilledButton(
+          key: const Key('simple-sky-image-this'),
+          onPressed: onImage,
+          child: const Text('Image this'),
+        ),
+      ],
+    ),
+  );
 }
 
 /// Fades the panels out for the immersive view (220 ms, instant with reduced
@@ -686,16 +774,12 @@ class _RightRail extends ConsumerWidget {
     required this.popover,
     required this.onModes,
     required this.onSettings,
-    required this.onPanel,
   });
 
   final SimpleModeScreen mode;
   final _Popover popover;
   final VoidCallback onModes;
   final VoidCallback onSettings;
-
-  /// Opens (true) or closes the mode's panel, for Run's shutter.
-  final ValueChanged<bool> onPanel;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -743,8 +827,7 @@ class _RightRail extends ConsumerWidget {
           ),
           switch (mode) {
             SimpleModeScreen.polarAlign => const SimplePolarShutter(),
-            SimpleModeScreen.target => const SimpleTargetShutter(),
-            SimpleModeScreen.run => SimpleRunShutter(onPanel: onPanel),
+            SimpleModeScreen.run => const SimpleRunShutter(),
             _ => const SimpleShutter(),
           },
           _RailButton(
@@ -753,13 +836,10 @@ class _RightRail extends ConsumerWidget {
             icon: mode == SimpleModeScreen.polarAlign ? null : Icons.tune,
             label: switch (mode) {
               SimpleModeScreen.focus => simpleFocusSummary(ref),
-              SimpleModeScreen.target => simpleTargetSummary(
-                ref.watch(planetariumSelectionProvider),
-              ),
-              SimpleModeScreen.run => simpleRunSummary(
-                ref.watch(simpleRunProvider),
-                ref.watch(sequenceRunStateProvider).value,
-              ),
+              SimpleModeScreen.run =>
+                ref.watch(simpleRunProvider).targetName ??
+                    ref.watch(planetariumSelectionProvider)?.name ??
+                    'Plan',
               SimpleModeScreen.polarAlign => simplePolarSummary(
                 ref.watch(simplePolarSettingsProvider).value ??
                     const PolarAlignSettings(),
@@ -786,7 +866,6 @@ class _ModeGrid extends ConsumerWidget {
     SimpleModeScreen.preview,
     SimpleModeScreen.focus,
     SimpleModeScreen.polarAlign,
-    SimpleModeScreen.target,
     SimpleModeScreen.run,
   };
 
