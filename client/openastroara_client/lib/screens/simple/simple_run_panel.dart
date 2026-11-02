@@ -110,13 +110,14 @@ String simpleRunDuration(double seconds) {
 }
 
 /// The rail chip in Run: the plan's total imaging time, the created plan's
-/// once there is one, else the sheet's rows. Pure — unit-tested.
+/// once there is one, else the sheet's rows; hours over minutes, as P.A.'s
+/// chip takes two lines in 60 px. Pure — unit-tested.
 String simpleRunChip(SimpleRun run, List<FilterPlanStep> rows) => simpleRunDuration(
   (run.steps.isEmpty ? rows : run.steps).fold(
     0.0,
     (t, s) => t + s.exposureSeconds * s.frameCount,
   ),
-);
+).replaceFirst(' h ', ' h\n');
 
 String _hhmm(DateTime t) =>
     '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';

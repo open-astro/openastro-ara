@@ -832,8 +832,12 @@ class _RightRail extends ConsumerWidget {
           },
           _RailButton(
             key: const Key('simple-settings'),
-            // P.A.'s setup takes two lines, so it has no icon.
-            icon: mode == SimpleModeScreen.polarAlign ? null : Icons.tune,
+            // P.A.'s setup and Run's time take two lines, so they have no icon.
+            icon:
+                mode == SimpleModeScreen.polarAlign ||
+                    mode == SimpleModeScreen.run
+                ? null
+                : Icons.tune,
             label: switch (mode) {
               SimpleModeScreen.focus => simpleFocusSummary(ref),
               SimpleModeScreen.run => simpleRunChip(

@@ -235,11 +235,12 @@ void main() {
       FilterPlanStep(filterName: 'L', exposureSeconds: 120, frameCount: 15),
       FilterPlanStep(filterName: 'R', exposureSeconds: 180, frameCount: 15),
     ];
-    expect(simpleRunChip(const SimpleRun(), rows), '1 h 15 min');
+    expect(simpleRunChip(const SimpleRun(), rows), '1 h\n15 min');
     const created = SimpleRun(sequenceId: 'seq-1', steps: [
       FilterPlanStep(filterName: 'L', exposureSeconds: 300, frameCount: 12),
     ]);
-    expect(simpleRunChip(created, rows), '1 h 0 min');
+    expect(simpleRunChip(created, rows), '1 h\n0 min');
+    expect(simpleRunChip(const SimpleRun(), const [FilterPlanStep(filterName: 'L', exposureSeconds: 60, frameCount: 45)]), '45 min');
   });
 
   test('durations read in hours and minutes', () {

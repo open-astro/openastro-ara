@@ -3,6 +3,7 @@ import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/screens/simple/simple_run_panel.dart';
 import 'package:openastroara/state/sky_atlas/planetarium_selection_state.dart';
 import 'package:openastroara/main.dart' show isShell, shellFor;
 import 'package:openastroara/models/frame_histogram.dart';
@@ -169,6 +170,15 @@ void main() {
     expect(find.text('Search, or pick in the sky.'), findsOneWidget);
     // The chip reads the plan's total imaging time: 60 frames at the 5 s default.
     expect(find.descendant(of: find.byKey(const Key('simple-settings')), matching: find.text('5 min')), findsOneWidget);
+    // A long night takes two lines in the 60 px chip, hours over minutes, with no icon (as P.A.'s).
+    // (The test font's square glyphs are too wide to measure the real fit.)
+    container.read(simpleRunPlanProvider.notifier)
+      ..setExposure(0, 150)
+      ..setFrames(0, 300);
+    await tester.pump();
+    final long = find.descendant(of: find.byKey(const Key('simple-settings')), matching: find.text('12 h\n30 min'));
+    expect(tester.widget<Text>(long).maxLines, 2);
+    expect(find.descendant(of: find.byKey(const Key('simple-settings')), matching: find.byType(Icon)), findsNothing);
   });
 
   testWidgets('Focus stays in Simple Mode: the rail reads Focus, its panel opens left of the rail; the chip is the Focus chip',
