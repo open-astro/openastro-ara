@@ -149,6 +149,8 @@ Future<ImagingRunResult?> createImagingRun(
   double? exposureSeconds,
   int? frameCount,
   bool appendToOpen = true,
+  // Simple Mode: every target centres, whatever Settings → Plate Solving says.
+  bool alwaysCenter = false,
 }) async {
   // Pin the autoDispose API for the whole create. With no widget watching
   // it (the coordinate-entry dialog, a Tonight's Sky row whose panel just
@@ -174,6 +176,7 @@ Future<ImagingRunResult?> createImagingRun(
       exposureOverride: exposureSeconds,
       frameCountOverride: frameCount,
       appendToOpen: appendToOpen,
+      alwaysCenter: alwaysCenter,
     );
   } finally {
     keepApi.close();
@@ -194,6 +197,8 @@ Future<ImagingRunResult?> _createImagingRunPinned(
   double? exposureOverride,
   int? frameCountOverride,
   bool appendToOpen = true,
+  // Simple Mode: every target centres, whatever Settings → Plate Solving says.
+  bool alwaysCenter = false,
 }) async {
   final api = ref.read(sequenceApiProvider);
   final container = ProviderScope.containerOf(ref.context, listen: false);
@@ -252,6 +257,7 @@ Future<ImagingRunResult?> _createImagingRunPinned(
       binning: defaults.defaultBin,
       frameCount: frameCount,
       coolToC: defaults.coolerTargetC,
+      alwaysCenter: alwaysCenter,
       warmAtEnd: defaults.warmupAtSessionEnd,
       autofocusEveryNExposures: afEvery,
       positionAngleDeg: positionAngleDeg,
@@ -270,6 +276,7 @@ Future<ImagingRunResult?> _createImagingRunPinned(
         buildTargetBlock(
           raDeg: p.raDeg,
           coolToC: defaults.coolerTargetC,
+          alwaysCenter: alwaysCenter,
           decDeg: p.decDeg,
           targetName: p.name,
           exposureSeconds: exposureSeconds,
@@ -300,6 +307,7 @@ Future<ImagingRunResult?> _createImagingRunPinned(
           buildTargetBlock(
             raDeg: p.raDeg,
             coolToC: defaults.coolerTargetC,
+            alwaysCenter: alwaysCenter,
             decDeg: p.decDeg,
             targetName: p.name,
             exposureSeconds: exposureSeconds,
@@ -386,6 +394,7 @@ Future<ImagingRunResult?> _createImagingRunPinned(
         buildTargetBlock(
           raDeg: p.raDeg,
           coolToC: defaults.coolerTargetC,
+          alwaysCenter: alwaysCenter,
           decDeg: p.decDeg,
           targetName: p.name,
           exposureSeconds: exposureSeconds,
@@ -445,6 +454,7 @@ Future<ImagingRunResult?> _createImagingRunPinned(
     binning: defaults.defaultBin,
     frameCount: frameCount,
     coolToC: defaults.coolerTargetC,
+    alwaysCenter: alwaysCenter,
     warmAtEnd: defaults.warmupAtSessionEnd,
     autofocusEveryNExposures: afEveryExposures,
     positionAngleDeg: positionAngleDeg,
@@ -462,6 +472,7 @@ Future<ImagingRunResult?> _createImagingRunPinned(
       buildTargetBlock(
         raDeg: p.raDeg,
         coolToC: defaults.coolerTargetC,
+        alwaysCenter: alwaysCenter,
         decDeg: p.decDeg,
         targetName: p.name,
         exposureSeconds: exposureSeconds,

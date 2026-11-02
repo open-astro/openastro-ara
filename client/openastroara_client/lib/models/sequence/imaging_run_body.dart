@@ -109,6 +109,7 @@ Map<String, dynamic> buildImagingRunBody({
   // measurement on its own, and a body prior would override a Recalibrate.
   // Null = no sheet. Ignored on a guided rig.
   double? trackingPriorSeconds,
+  bool alwaysCenter = false,
 }) {
   final target = buildTargetBlock(
     raDeg: raDeg,
@@ -131,6 +132,7 @@ Map<String, dynamic> buildImagingRunBody({
     unguidedOptions: unguidedOptions,
     trackingPriorSeconds: trackingPriorSeconds,
     coolToC: coolToC,
+    alwaysCenter: alwaysCenter,
   );
 
   // ── The session around it, in run order ──────────────────────────────────
@@ -205,6 +207,8 @@ Map<String, dynamic> buildTargetBlock({
   // The session's cooler target: the block waits for it just before its first
   // light (the session started the cool without waiting).
   double? coolToC,
+  // Simple Mode: centre on the target whatever Settings → Plate Solving says.
+  bool alwaysCenter = false,
 }) {
   // Cook the block from the rig: a device the rig lacks gets no step and no
   // trigger, whatever the caller asked for. Without a focuser there is
@@ -384,12 +388,22 @@ Map<String, dynamic> buildTargetBlock({
   // A failed go-to skips the rest of this target (SkipInstructionSetOnError)
   // instead of the default ContinueOnError: filter, focus, guiding and every
   // frame after it would run on the wrong patch of sky.
+  //
+  // With autofocus, the block slews blind, focuses near the target, and only
+  // then centres: a solve on an out-of-focus field fails (user, 2026-11-02).
+  final focusFirst = afAtStart;
   final goToTarget = (positionAngleDeg != null
       ? (_item(centerAndRotateType)
           ..['Coordinates'] = inputCoordinatesFromDeg(raDeg, decDeg)
           ..['PositionAngle'] = ((positionAngleDeg % 360) + 360) % 360)
       : (_item(slewScopeToRaDecType)
-          ..['Coordinates'] = inputCoordinatesFromDeg(raDeg, decDeg)))
+          ..['Coordinates'] = inputCoordinatesFromDeg(raDeg, decDeg)
+          // Absent follows Settings → Plate Solving; Simple Mode always centres.
+          ..addAll({if (alwaysCenter) 'Center': true})))
+    ..['ErrorBehavior'] = skipInstructionSetOnError;
+  final blindSlew = _item(slewScopeToRaDecType)
+    ..['Coordinates'] = inputCoordinatesFromDeg(raDeg, decDeg)
+    ..['Center'] = false
     ..['ErrorBehavior'] = skipInstructionSetOnError;
 
   final children = <Map<String, dynamic>>[
@@ -397,7 +411,7 @@ Map<String, dynamic> buildTargetBlock({
     // run: the Plan screen's "Rotate camera" panel plate-solves the camera
     // against the framing so it can be turned by hand. Center and Rotate then
     // centres (and, without a rotator, leaves the angle as the user set it).
-    goToTarget,
+    focusFirst ? blindSlew : goToTarget,
     // Autofocus runs through the plan's FIRST filter (or the single chosen
     // one) — focusing through a random previously-loaded filter would hand
     // the whole session a soft start.
@@ -408,6 +422,7 @@ Map<String, dynamic> buildTargetBlock({
         rig.filterWheel)
       switchTo(filterName),
     if (afAtStart) _item(runAutofocusType),
+    if (focusFirst) goToTarget,
     if (guide) _item(startGuidingType),
     // After focus (the probe judges FWHM growth against its first rung, so it
     // must see focused stars) and before the first imaging loop.

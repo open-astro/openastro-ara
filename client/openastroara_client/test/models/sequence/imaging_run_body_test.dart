@@ -62,12 +62,13 @@ void main() {
       // targets can be appended as siblings.
       final target = targetBlockOf(root);
       final targetTypes = childrenOf(target).map(type).toList();
-      expect(targetTypes, hasLength(4));
-      expect(targetTypes[0], contains('.Telescope.SlewScopeToRaDec'));
+      expect(targetTypes, hasLength(5));
+      expect(targetTypes[0], contains('.Telescope.SlewScopeToRaDec')); // blind
       expect(targetTypes[1], contains('.Autofocus.RunAutofocus'));
+      expect(targetTypes[2], contains('.Telescope.SlewScopeToRaDec')); // centres on focused stars
       // Waits for the session's cool, which ran during the slew and focus.
-      expect(targetTypes[2], contains('.Camera.CoolCamera'));
-      expect(targetTypes[3], contains('.Container.SequentialContainer'));
+      expect(targetTypes[3], contains('.Camera.CoolCamera'));
+      expect(targetTypes[4], contains('.Container.SequentialContainer'));
     });
 
     test('the imaging loop carries the exposure, loop count and AF trigger',
@@ -98,7 +99,7 @@ void main() {
         () {
       final root = build();
       final slew = childrenOf(targetBlockOf(root))
-          .singleWhere((c) => type(c).contains('SlewScopeToRaDec'));
+          .firstWhere((c) => type(c).contains('SlewScopeToRaDec'));
       final coords = slew['Coordinates'] as Map<String, dynamic>;
       // 83.8° = 5h 35m 12s; -5.4° = -5° 24' 0"
       expect(coords['RAHours'], 5);
@@ -116,8 +117,8 @@ void main() {
       final types = childrenOf(target).map(type).toList();
       expect(
         types.where((t) => t.contains('SlewScopeToRaDec')),
-        isEmpty,
-        reason: 'Center and Rotate owns the slew — a second slew would race it',
+        hasLength(1),
+        reason: 'one blind slew to focus near the target; Center and Rotate then owns the centring',
       );
       final car = childrenOf(target)
           .singleWhere((c) => type(c).contains('CenterAndRotate'));
@@ -150,7 +151,7 @@ void main() {
       expect(types.where((t) => t.contains('CenterAndRotate')), isEmpty);
       expect(
         types.where((t) => t.contains('SlewScopeToRaDec')),
-        hasLength(1),
+        hasLength(2), // blind, then the centring one after autofocus
       );
     });
 
@@ -333,30 +334,41 @@ void main() {
     });
   });
 
-  group('cooling while the plan gets ready', () {
-    test('the session starts the cool without waiting; the target waits for it just before the first light', () {
-      final b = buildImagingRunBody(
-          raDeg: 10, decDeg: 41, targetName: 'M31', exposureSeconds: 120, frameCount: 10, coolToC: -10);
-      final cool = childrenOf(b).first;
-      expect(cool[r'$type'], coolCameraType);
-      expect(cool['WaitForTemperature'], false, reason: 'unpark, slew, centre, focus go on meanwhile');
-      final target = childrenOf(b).firstWhere((c) => c['Name'] == 'M31');
-      final steps = childrenOf(target);
-      final wait = steps.indexWhere((c) => c[r'$type'] == coolCameraType);
-      final firstLight = steps.indexWhere((c) => childrenOf(c).any((x) => x[r'$type'] == takeExposureType));
-      expect(wait, greaterThan(0), reason: 'after the go-to');
-      expect(wait, lessThan(firstLight), reason: 'before the first light frame');
-      expect(steps[wait]['Temperature'], -10);
-      expect(steps[wait]['WaitForTemperature'] ?? true, true);
-      final focus = steps.indexWhere((c) => c[r'$type'] == runAutofocusType);
-      expect(focus, lessThan(wait), reason: 'focus runs while it cools');
+  group('focus before centring', () {
+    List<Map<String, dynamic>> steps(Map<String, dynamic> b) => childrenOf(childrenOf(b).firstWhere((c) => c['Name'] == 'M31'));
+    Map<String, dynamic> body({bool alwaysCenter = false, double? pa, bool af = true}) => buildImagingRunBody(
+        raDeg: 10, decDeg: 41, targetName: 'M31', exposureSeconds: 120, frameCount: 10,
+        autofocusAtStart: af, positionAngleDeg: pa, alwaysCenter: alwaysCenter);
+
+    test('the target slews blind, focuses, then centres on sharp stars', () {
+      final t = steps(body());
+      final types = [for (final c in t) c[r'$type']];
+      final slew = types.indexOf(slewScopeToRaDecType);
+      final focus = types.indexOf(runAutofocusType);
+      final centre = types.lastIndexOf(slewScopeToRaDecType);
+      expect(slew, 0);
+      expect(t[slew]['Center'], false, reason: 'no solve on an out-of-focus field');
+      expect(focus, greaterThan(slew));
+      expect(centre, greaterThan(focus));
+      expect(t[centre]['Center'], isNull, reason: 'the full UI follows Settings → Plate Solving');
+      expect(t[slew]['ErrorBehavior'], skipInstructionSetOnError);
+      expect(t[centre]['ErrorBehavior'], skipInstructionSetOnError);
     });
 
-    test('no cooler target: no cooling steps anywhere', () {
-      final b = buildImagingRunBody(raDeg: 10, decDeg: 41, targetName: 'M31', exposureSeconds: 120, frameCount: 10);
-      final target = childrenOf(b).firstWhere((c) => c['Name'] == 'M31');
-      expect(childrenOf(b).where((c) => c[r'$type'] == coolCameraType), isEmpty);
-      expect(childrenOf(target).where((c) => c[r'$type'] == coolCameraType), isEmpty);
+    test('Simple Mode always centres', () {
+      final t = steps(body(alwaysCenter: true));
+      expect(t.lastWhere((c) => c[r'$type'] == slewScopeToRaDecType)['Center'], true);
+    });
+
+    test('a framing angle centres and rotates after the focus', () {
+      final types = [for (final c in steps(body(pa: 30))) c[r'$type']];
+      expect(types.first, slewScopeToRaDecType);
+      expect(types.indexOf(centerAndRotateType), greaterThan(types.indexOf(runAutofocusType)));
+    });
+
+    test('no autofocus: one go-to, as before', () {
+      final t = steps(body(af: false));
+      expect(t.where((c) => c[r'$type'] == slewScopeToRaDecType), hasLength(1));
     });
   });
 
@@ -571,9 +583,11 @@ void main() {
       // No by-hand step inside the run: the Plan screen's Rotate camera panel
       // is where the camera gets turned, before the run starts.
       expect(t.where((x) => (x ?? '').contains('RotateCameraByHand')), isEmpty);
-      expect(t.indexOf(centerAndRotateType), 0);
-      expect(childrenOf(b)[0]['PositionAngle'], 299.0);
-      expect(types(b), isNot(contains(slewScopeToRaDecType)));
+      // Blind slew, autofocus, then Center and Rotate on focused stars.
+      expect(t.indexOf(slewScopeToRaDecType), 0);
+      final car = t.indexOf(centerAndRotateType);
+      expect(car, greaterThan(t.indexOf(runAutofocusType)));
+      expect(childrenOf(b)[car]['PositionAngle'], 299.0);
     });
 
     // #1264 — no guider → the mount's tracking is the exposure ceiling: a
@@ -666,9 +680,10 @@ void main() {
       final b = block();
       final t = types(b);
       expect(t, [
-        slewScopeToRaDecType,
+        slewScopeToRaDecType, // blind
         switchFilterType, // Ha, so autofocus runs through it
         runAutofocusType,
+        slewScopeToRaDecType, // centres on focused stars
         startGuidingType,
         sequentialContainerType, // Ha Imaging
         switchFilterType, // OIII
@@ -676,14 +691,14 @@ void main() {
       ]);
       final kids = childrenOf(b);
       expect((kids[1]['Filter'] as Map)['_name'], 'Ha');
-      expect(kids[4]['Name'], 'Ha Imaging');
-      expect((kids[5]['Filter'] as Map)['_name'], 'OIII');
-      expect(kids[6]['Name'], 'OIII Imaging');
+      expect(kids[5]['Name'], 'Ha Imaging');
+      expect((kids[6]['Filter'] as Map)['_name'], 'OIII');
+      expect(kids[7]['Name'], 'OIII Imaging');
     });
 
     test('each loop carries its own exposure, count, dither + scaled AF', () {
       final kids = childrenOf(block());
-      final ha = kids[4];
+      final ha = kids[5];
       final exposure = childrenOf(ha).single;
       expect(exposure['ExposureTime'], 300.0);
       expect(conditionsOf(ha).single['Iterations'], 20);

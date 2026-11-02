@@ -117,6 +117,36 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Center_off_slews_blind_whatever_the_profile_says() {
+            // A plan slews blind, focuses, then centres on sharp stars: the first slew must not
+            // try to solve an out-of-focus field (user, 2026-11-02).
+            var mount = Mount();
+            var centering = Centering(converges: true);
+            var item = new SlewScopeToRaDec(mount.Object, Guider(wasGuiding: false).Object, Profile(centerAfterSlew: true), centering.Object) {
+                Coordinates = Helix(), Center = false,
+            };
+
+            await item.Execute(NoProgress, CancellationToken.None);
+
+            mount.Verify(m => m.SlewToCoordinatesAsync(It.IsAny<Coordinates>(), It.IsAny<CancellationToken>()), Times.Once);
+            centering.VerifyNoOtherCalls();
+        }
+
+        [Test]
+        public async Task Center_on_centres_whatever_the_profile_says() {
+            // Simple Mode always centres its targets.
+            var centering = Centering(converges: true);
+            var item = new SlewScopeToRaDec(Mount().Object, Guider(wasGuiding: false).Object, Profile(centerAfterSlew: false), centering.Object) {
+                Coordinates = Helix(), Center = true,
+            };
+
+            await item.Execute(NoProgress, CancellationToken.None);
+
+            centering.Verify(e => e.CenterAsync(It.IsAny<Coordinates>(), It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()), Times.Once);
+            Assert.That(((SlewScopeToRaDec)item.Clone()).Center, Is.True, "a clone keeps it");
+        }
+
+        [Test]
         public async Task With_center_after_slew_off_the_step_keeps_the_blind_slew() {
             var mount = Mount();
             var centering = Centering(converges: true);

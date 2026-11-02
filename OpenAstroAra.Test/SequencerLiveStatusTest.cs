@@ -129,6 +129,9 @@ namespace OpenAstroAra.Test {
 
             Assert.Multiple(() => {
                 Assert.That(SequencerService.DescribeLeaf(slew), Is.EqualTo("Slewing to NGC 7000"));
+                slew.Center = true;
+                Assert.That(SequencerService.DescribeLeaf(slew), Is.EqualTo("Centring on NGC 7000"), "a plan's centring slew");
+                slew.Center = null;
                 Assert.That(SequencerService.DescribeLeaf(focus), Is.EqualTo("Focusing"));
                 Assert.That(SequencerService.DescribeLeaf(cool), Is.EqualTo("Waiting for the camera to cool to -10 °C"));
                 Assert.That(SequencerService.DescribeLeaf(Step<OpenAstroAra.Sequencer.SequenceItem.Telescope.UnparkScope>()), Is.EqualTo("Unparking the mount"));
