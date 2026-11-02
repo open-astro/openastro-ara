@@ -1,9 +1,11 @@
 import 'dart:math' as math;
+import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/sequence/imaging_run_body.dart';
 import 'package:openastroara/models/sequence/sequence_summary.dart';
@@ -36,6 +38,14 @@ import 'package:openastroara/screens/settings/settings_shell.dart';
 import 'package:openastroara/state/launch_gate_state.dart';
 import 'package:openastroara/state/profile_management_state.dart';
 import 'package:openastroara/state/ws/ws_providers.dart';
+import 'package:openastroara/models/camera_status.dart';
+import 'package:openastroara/models/equipment_device_status.dart';
+import 'package:openastroara/models/focuser_status.dart';
+import 'package:openastroara/models/mount_status.dart';
+import 'package:openastroara/state/equipment/camera_state.dart';
+import 'package:openastroara/state/equipment/equipment_device_state.dart';
+import 'package:openastroara/state/equipment/focuser_state.dart';
+import 'package:openastroara/state/equipment/mount_state.dart';
 import 'package:openastroara/state/settings/settings_nav.dart';
 import 'package:openastroara/state/simple_mode_state.dart';
 import 'package:openastroara/state/simple_messages_state.dart';
@@ -83,13 +93,16 @@ final _someSteps = [
 
 Future<ProviderContainer> _pump(WidgetTester tester, Size size,
     {List<GuideStep> steps = const [], AraServer? server, FrameHistogram? histogram,
-    ServerInternalState? internal, StorageSpace? storage, ProfileList? profiles, SimpleRun? plan, SequenceRunStateInfo? runState, bool queueing = false, bool manualAlarm = false, bool feature = false}) async {
+    ServerInternalState? internal, StorageSpace? storage, ProfileList? profiles, SimpleRun? plan, SequenceRunStateInfo? runState, bool queueing = false, bool manualAlarm = false, bool feature = false, bool pier = false, bool linkUp = false, List<Override> gear = const []}) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
   final container = ProviderContainer(overrides: [
     simpleModePrefsProvider.overrideWithValue(_MemPrefs()),
     if (feature) simpleModeFeaturePrefsProvider.overrideWithValue(_MemPrefs()),
+    if (pier) simplePermanentPierPrefsProvider.overrideWithValue(_MemPrefs()..value = false),
+    if (linkUp) serverLinkUpProvider.overrideWithValue(true),
+    ...gear,
     selectedTabIndexProvider.overrideWith(_StartOnLive.new),
     guideStepsProvider.overrideWith(() => _Steps(steps)),
     if (server != null) activeServerProvider.overrideWithValue(server),
@@ -112,6 +125,54 @@ Future<ProviderContainer> _pump(WidgetTester tester, Size size,
   ));
   await tester.pump();
   return container;
+}
+
+Future<void> _openSection(WidgetTester tester, String section) async {
+  if (find.byKey(const Key('simple-menu')).evaluate().isEmpty) {
+    await tester.tap(find.byTooltip('Settings'));
+    await tester.pump();
+  }
+  await tester.tap(find.byKey(Key('simple-menu-nav-$section')));
+  await tester.pump();
+  await tester.pump(); // the storage read resolves
+}
+
+mixin _Calls<T extends EquipmentDeviceStatus> on EquipmentDeviceNotifier<T> {
+  final calls = <String>[];
+  @override
+  Future<bool> disconnect() async {
+    calls.add('disconnect');
+    return true;
+  }
+
+  @override
+  Future<bool> reconnect() async {
+    calls.add('reconnect');
+    return true;
+  }
+}
+
+Map<String, dynamic> _wire(String name, EquipmentConnectionState s) => {'device_id': 'd', 'name': name, 'state': s.name};
+
+class _Camera extends CameraStatusNotifier with _Calls<CameraStatus> {
+  _Camera(this.state0);
+  final EquipmentConnectionState state0;
+  @override
+  Future<CameraStatus?> build() async => CameraStatus.fromJson(_wire('ASI2600MM', state0));
+}
+
+class _Focuser extends FocuserNotifier with _Calls<FocuserStatus> {
+  _Focuser(this.state0);
+  final EquipmentConnectionState state0;
+  @override
+  Future<FocuserStatus?> build() async => FocuserStatus.fromJson(_wire('EAF', state0));
+}
+
+class _Mount extends MountNotifier with _Calls<MountStatus> {
+  _Mount(this.state0);
+  final EquipmentConnectionState state0;
+  @override
+  Future<MountStatus?> build() async => MountStatus.fromJson(_wire('AM5', state0));
 }
 
 class _Profiles extends ProfileManagementNotifier {
@@ -664,23 +725,6 @@ void main() {
     });
   }
 
-  for (final size in const [Size(1024, 768), Size(1470, 854)]) {
-    testWidgets('at $size: the Settings menu pushes the Autopilot offer aside, and it comes back', (tester) async {
-      await _pump(tester, size);
-      final offer = find.byKey(const Key('autopilot-offer'));
-      final centred = tester.getRect(offer).center.dx;
-      await tester.tap(find.byTooltip('Settings'));
-      await tester.pumpAndSettle();
-      final menu = tester.getRect(find.byKey(const Key('simple-menu')));
-      final moved = tester.getRect(offer);
-      expect(moved.right, lessThanOrEqualTo(menu.left - kSimpleInset), reason: 'beside the menu, not under it');
-      expect(moved.left, greaterThanOrEqualTo(0));
-      await tester.tap(find.byTooltip('Settings'));
-      await tester.pumpAndSettle();
-      expect(tester.getRect(offer).center.dx, closeTo(centred, 0.5), reason: 'centred again');
-    });
-  }
-
   testWidgets('the Autopilot offer can be dismissed', (tester) async {
     await _pump(tester, const Size(1024, 768));
     await tester.tap(find.byTooltip('Not now'));
@@ -882,35 +926,48 @@ void main() {
     expect(find.byType(SimpleInfoPanel), findsNothing);
   });
 
-  testWidgets('the gear opens the Settings menu: System figures, rig and profile, the way to change them, '
-      'and Settings; the left rail has no System', (tester) async {
-    const size = Size(1470, 854);
-    final c = await _pump(tester, size,
+  testWidgets('the gear opens Settings over the image: dimmed, blurred 5 px, 90 % panel, sections on the left; '
+      'a tap outside closes it; the left rail has no System', (tester) async {
+    const size = Size(1024, 768);
+    await _pump(tester, size);
+    expect(find.byKey(const Key('simple-system')), findsNothing, reason: 'System lives in Settings › This rig');
+    await tester.tap(find.byTooltip('Settings'));
+    await tester.pump();
+    final sheet = find.byKey(const Key('simple-menu'));
+    expect(sheet, findsOneWidget);
+    final rect = tester.getRect(sheet);
+    expect(rect.left, kSimpleInset);
+    expect(rect.right, size.width - kSimpleInset, reason: 'the width of the window');
+    final blur = tester.widget<BackdropFilter>(find.descendant(of: sheet, matching: find.byType(BackdropFilter)));
+    expect(blur.filter, ImageFilter.blur(sigmaX: 5, sigmaY: 5));
+    final box = tester.widget<Container>(find.byKey(const Key('simple-menu-surface')));
+    expect((box.decoration! as BoxDecoration).color, AraColors.overlayScrim);
+    for (final t in ['Gear', 'This rig']) {
+      expect(find.descendant(of: sheet, matching: find.text(t)), findsWidgets, reason: t);
+    }
+    expect(find.text('All settings'), findsNothing, reason: 'no full settings form in Simple Mode');
+    await tester.tapAt(Offset(size.width / 2, size.height - 4)); // the veil, below the sheet
+    await tester.pump();
+    expect(sheet, findsNothing);
+  });
+
+  testWidgets('This rig: the rig\'s figures, rig and profile and how to change them, Permanent pier, the Simple Mode '
+      'switch, version and logs', (tester) async {
+    final c = await _pump(tester, const Size(1470, 854),
         server: const AraServer(hostname: '10.0.0.5', port: 5555, mdnsName: 'astro'),
         internal: const ServerInternalState(uptimeSeconds: 11520, cpuPercent: 23.4, workingSetBytes: 512 * 1048576),
         storage: const StorageSpace(saveDirectory: '/data', isFallback: false, freeBytes: 412 * 1073741824, totalBytes: 900 * 1073741824),
         profiles: const ProfileList(activeId: 'p1', profiles: [ProfileMeta(id: 'p1', name: 'Backyard Rig')]));
-    expect(find.byKey(const Key('simple-system')), findsNothing, reason: 'System moved into the Settings menu');
-    expect(find.byKey(const Key('simple-menu')), findsNothing);
-    await tester.tap(find.byTooltip('Settings'));
-    await tester.pump();
-    await tester.pump(); // the storage read resolves
-    final menu = find.byKey(const Key('simple-menu'));
-    expect(menu, findsOneWidget);
-    expect(c.read(simpleModeProvider).value, isTrue, reason: 'Settings never leaves Simple Mode');
-    final line = find.descendant(of: menu, matching: find.byKey(const Key('simple-system-line')));
-    for (final t in ['Storage', '412 GB free', 'CPU', '23 %', 'Memory', '512 MB', 'Up', '3 h 12 min']) {
+    await _openSection(tester, 'This rig');
+    final sheet = find.byKey(const Key('simple-menu'));
+    final line = find.descendant(of: sheet, matching: find.byKey(const Key('simple-system-line')));
+    for (final t in ['412 GB free', '23 %', '512 MB', '3 h 12 min']) {
       expect(find.descendant(of: line, matching: find.text(t)), findsOneWidget, reason: t);
     }
-    for (final t in ['astro', 'Backyard Rig', 'Change profile', 'Change rig', 'All settings']) {
-      expect(find.descendant(of: menu, matching: find.text(t)), findsOneWidget, reason: t);
+    for (final t in ['astro', 'Backyard Rig', 'Change profile', 'Change rig', 'Permanent pier', 'Simple Mode', 'Logs & bug report']) {
+      expect(find.descendant(of: sheet, matching: find.text(t)), findsWidgets, reason: t);
     }
-    expect(tester.getRect(menu).right, size.width - kSimpleInset, reason: 'under the gear, top right');
-    // A tap on the image closes it.
-    await tester.tap(find.byKey(const Key('simple-frame')));
-    await tester.pump();
-    expect(menu, findsNothing);
-    // The server makes the gear's providers ask it for status: let them settle.
+    expect(c.read(simpleModeProvider).value, isTrue);
     await tester.pumpWidget(const SizedBox());
     c.dispose();
     await tester.pump(const Duration(seconds: 5));
@@ -919,45 +976,84 @@ void main() {
   testWidgets('Change profile goes to the profile box; Change rig to the rig list', (tester) async {
     final c = await _pump(tester, const Size(1024, 768));
     c.read(profileGatePassedProvider.notifier).pass();
-    await tester.tap(find.byTooltip('Settings'));
-    await tester.pump();
+    await _openSection(tester, 'This rig');
     await tester.tap(find.text('Change profile'));
     await tester.pump();
     expect(c.read(profileGatePassedProvider), isFalse);
     expect(c.read(serverChooserRequestedProvider), isFalse, reason: 'the same rig: straight to its profiles');
 
     c.read(profileGatePassedProvider.notifier).pass();
-    await tester.tap(find.byTooltip('Settings'));
-    await tester.pump();
+    await _openSection(tester, 'This rig');
     await tester.tap(find.text('Change rig'));
     await tester.pump();
     expect(c.read(profileGatePassedProvider), isFalse);
     expect(c.read(serverChooserRequestedProvider), isTrue, reason: 'the rig list, which never connects on its own');
   });
 
-  testWidgets('while a plan runs, the menu says it keeps running', (tester) async {
+  testWidgets('while a plan runs, This rig says it keeps running', (tester) async {
     await _pump(tester, const Size(1024, 768),
         plan: const SimpleRun(sequenceId: 'seq-1', started: true, targets: [
           SimpleTarget(name: 'M 31', steps: [FilterPlanStep(filterName: 'L', exposureSeconds: 120, frameCount: 30)]),
         ]),
         runState: const SequenceRunStateInfo(sequenceId: 'seq-1', state: SequenceRunState.running));
-    await tester.tap(find.byTooltip('Settings'));
-    await tester.pump();
+    await _openSection(tester, 'This rig');
     expect(find.textContaining('keeps running on the rig'), findsOneWidget);
   });
 
-  testWidgets('All settings opens Settings over Simple Mode; closing it comes back', (tester) async {
-    final c = await _pump(tester, const Size(1024, 768));
-    await tester.tap(find.byTooltip('Settings'));
+  testWidgets('Permanent pier (the one thing Ara can\'t know) and the Simple Mode switch (the way out)', (tester) async {
+    final c = await _pump(tester, const Size(1024, 768), pier: true);
+    await _openSection(tester, 'This rig');
+    await tester.tap(find.byKey(const Key('simple-menu-pier-on')));
     await tester.pump();
-    await tester.tap(find.text('All settings'));
+    expect(c.read(simplePermanentPierProvider).value, isTrue);
+    await tester.tap(find.byKey(const Key('simple-menu-simple-mode-off')));
+    await tester.pump();
+    expect(c.read(simpleModeProvider).value, isFalse, reason: 'off: the full UI');
+  });
+
+  testWidgets('Logs & bug report opens over Simple Mode; Back comes back', (tester) async {
+    final c = await _pump(tester, const Size(1024, 768));
+    await _openSection(tester, 'This rig');
+    await tester.tap(find.text('Logs & bug report'));
     await tester.pumpAndSettle();
     expect(find.byType(SettingsShell), findsOneWidget);
+    expect(c.read(selectedSettingsPanelProvider), 'support.logs');
     expect(c.read(simpleModeProvider).value, isTrue);
     await tester.tap(find.byTooltip('Back'));
     await tester.pumpAndSettle();
     expect(find.byType(SettingsShell), findsNothing);
-    expect(find.byType(SimpleShell), findsOneWidget);
+  });
+
+  testWidgets('Gear lists the profile\'s devices with their state: Disconnect, Connect, Reconnect after a failure; '
+      'devices never set up are not listed', (tester) async {
+    final camera = _Camera(EquipmentConnectionState.connected);
+    final focuser = _Focuser(EquipmentConnectionState.error);
+    final mount = _Mount(EquipmentConnectionState.disconnected);
+    await _pump(tester, const Size(1024, 768), linkUp: true, gear: [
+      cameraStatusProvider.overrideWith(() => camera),
+      focuserProvider.overrideWith(() => focuser),
+      mountProvider.overrideWith(() => mount),
+    ]);
+    await _openSection(tester, 'Gear');
+    final page = find.byKey(const Key('simple-gear'));
+    expect(find.descendant(of: page, matching: find.textContaining('ASI2600MM')), findsOneWidget);
+    expect(find.descendant(of: page, matching: find.textContaining('Filter wheel')), findsNothing, reason: 'never set up');
+    await tester.tap(find.byKey(const Key('simple-gear-camera-disconnect')));
+    await tester.tap(find.byKey(const Key('simple-gear-focuser-reconnect')));
+    await tester.tap(find.byKey(const Key('simple-gear-mount-connect')));
+    await tester.pump();
+    expect(camera.calls, ['disconnect']);
+    expect(focuser.calls, ['reconnect']);
+    expect(mount.calls, ['reconnect'], reason: 'Connect: the device the rig remembers, no chooser');
+  });
+
+  testWidgets('Gear with no rig link says so instead of showing stale states', (tester) async {
+    await _pump(tester, const Size(1024, 768), gear: [
+      cameraStatusProvider.overrideWith(() => _Camera(EquipmentConnectionState.connected)),
+    ]);
+    await _openSection(tester, 'Gear');
+    expect(find.text('Rig not connected'), findsOneWidget);
+    expect(find.byKey(const Key('simple-gear-camera-disconnect')), findsNothing);
   });
 
   testWidgets('a jump to a settings panel (gear chips, Open Storage) opens it over Simple Mode', (tester) async {
@@ -981,10 +1077,9 @@ void main() {
 
   testWidgets('turning Simple Mode off in Settings closes Settings onto the full UI', (tester) async {
     final c = await _pump(tester, const Size(1024, 768), feature: true);
-    await tester.tap(find.byTooltip('Settings'));
-    await tester.pump();
-    await tester.tap(find.text('All settings'));
+    c.read(selectedTabIndexProvider.notifier).select(kOptionsTabIndex);
     await tester.pumpAndSettle();
+    expect(find.byType(SettingsShell), findsOneWidget);
     await c.read(simpleModeProvider.notifier).set(false);
     await tester.pumpAndSettle();
     expect(find.byType(SettingsShell), findsNothing);
@@ -1322,7 +1417,7 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.comma);
     await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
     await tester.pumpAndSettle();
-    expect(find.byType(SettingsShell), findsOneWidget, reason: 'Settings over Simple Mode');
+    expect(find.byKey(const Key('simple-menu')), findsOneWidget, reason: 'Simple Mode\'s Settings');
     expect(container.read(simpleModeProvider).value, isTrue);
   });
 

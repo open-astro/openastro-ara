@@ -24,6 +24,21 @@ import '../../state/sky_atlas/planetarium_selection_state.dart';
 import '../../state/settings/settings_nav.dart';
 import '../../state/simple_messages_state.dart';
 import '../../state/simple_mode_state.dart';
+
+import 'dart:ui' show ImageFilter;
+
+import '../../app_version.dart';
+import '../../models/equipment_device_status.dart';
+import '../../state/equipment/camera_state.dart';
+import '../../state/equipment/dome_state.dart';
+import '../../state/equipment/equipment_device_state.dart';
+import '../../state/equipment/filter_wheel_state.dart';
+import '../../state/equipment/flat_panel_state.dart';
+import '../../state/equipment/focuser_state.dart';
+import '../../state/equipment/mount_state.dart';
+import '../../state/equipment/rotator_state.dart';
+import '../../state/equipment/weather_state.dart';
+import '../../state/ws/ws_providers.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
 import '../../widgets/emergency_stop_button.dart';
@@ -169,26 +184,18 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
   final _rightRailKey = GlobalKey();
   final _autopilotRowKey = GlobalKey();
 
-  /// The Settings menu's width, measured the same way: the Autopilot row
-  /// moves left of it while it shows.
-  double _menuWidth = 0;
-  final _menuKey = GlobalKey();
-
   void _measure() => WidgetsBinding.instance.addPostFrameCallback((_) {
     final rail = _leftRailKey.currentContext?.size?.height;
     final right = _rightRailKey.currentContext?.size?.height;
     final row = _autopilotRowKey.currentContext?.size?.height;
-    final menu = _menuKey.currentContext?.size?.width ?? 0;
     if (!mounted) return;
     if ((rail != null && rail != _leftRailHeight) ||
         (right != null && right != _rightRailHeight) ||
-        (row != null && row != _autopilotRowHeight) ||
-        menu != _menuWidth) {
+        (row != null && row != _autopilotRowHeight)) {
       setState(() {
         _leftRailHeight = rail ?? _leftRailHeight;
         _rightRailHeight = right ?? _rightRailHeight;
         _autopilotRowHeight = row ?? _autopilotRowHeight;
-        _menuWidth = menu;
       });
     }
   });
@@ -243,7 +250,11 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     super.dispose();
   }
 
-  /// Settings over Simple Mode, on whatever panel was picked last.
+  /// The full Settings page over Simple Mode, on whatever panel was picked
+  /// last (Logs, a device dot).
+  // shortcut: a device dot still opens the full Settings page; each device
+  // gets its own window from its dot as it is built
+  // (design/briefs/simple-mode-settings.md).
   void _openSettings() {
     setState(() => _popover = _Popover.none);
     unawaited(
@@ -438,12 +449,16 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
               quiet: true,
               child: CallbackShortcuts(
                 bindings: <ShortcutActivator, VoidCallback>{
-                  const SingleActivator(LogicalKeyboardKey.comma, meta: true):
-                      _openSettings,
+                  const SingleActivator(
+                    LogicalKeyboardKey.comma,
+                    meta: true,
+                  ): () =>
+                      _toggle(_Popover.menu),
                   const SingleActivator(
                     LogicalKeyboardKey.comma,
                     control: true,
-                  ): _openSettings,
+                  ): () =>
+                      _toggle(_Popover.menu),
                   // Hold-to-stop for keyboards: ⌘. / Ctrl+. twice stops a run.
                   const SingleActivator(LogicalKeyboardKey.period, meta: true):
                       _stopRun,
@@ -648,19 +663,8 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                     ),
                                   ),
                                 )
-                              else if (_popover == _Popover.menu)
-                                Positioned(
-                                  right: kSimpleInset,
-                                  top: railTop,
-                                  child: _SettingsMenu(
-                                    key: _menuKey,
-                                    onClose: () => setState(
-                                      () => _popover = _Popover.none,
-                                    ),
-                                    onSettings: _openSettings,
-                                  ),
-                                )
-                              else if (_popover != _Popover.none)
+                              else if (_popover != _Popover.none &&
+                                  _popover != _Popover.menu)
                                 Positioned(
                                   left: 0,
                                   top: 0,
@@ -718,17 +722,11 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                   ),
                                 ),
                               // Autopilot's steps, or the offer to start it, centred
-                              // under the strip; the Settings menu pushes it left.
+                              // under the strip.
                               if (autopilotRow)
-                                AnimatedPositioned(
-                                  duration: motion,
-                                  curve: Curves.easeOut,
+                                Positioned(
                                   left: 0,
-                                  right:
-                                      _popover == _Popover.menu &&
-                                          _menuWidth > 0
-                                      ? kSimpleInset * 2 + _menuWidth
-                                      : 0,
+                                  right: 0,
                                   top: railTop,
                                   child: Center(
                                     child: KeyedSubtree(
@@ -780,6 +778,43 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                     ),
                                   ),
                                 ),
+                              // Settings: a sheet over the dimmed image, from the
+                              // strip down to the bottom row; Stop stays above
+                              // the veil, within reach.
+                              if (_popover == _Popover.menu) ...[
+                                Positioned.fill(
+                                  child: GestureDetector(
+                                    key: const Key('simple-menu-veil'),
+                                    behavior: HitTestBehavior.opaque,
+                                    onTap: () => setState(
+                                      () => _popover = _Popover.none,
+                                    ),
+                                    child: const ColoredBox(
+                                      color: Color(0x59000000), // 35 %
+                                    ),
+                                  ),
+                                ),
+                                Positioned(
+                                  left: kSimpleInset,
+                                  right: kSimpleInset,
+                                  top: railTop,
+                                  bottom: kSimpleInset * 2 + kSimpleBarHeight,
+                                  child: _SettingsSheet(
+                                    onClose: () => setState(
+                                      () => _popover = _Popover.none,
+                                    ),
+                                    onLogs: () {
+                                      ref
+                                          .read(
+                                            selectedSettingsPanelProvider
+                                                .notifier,
+                                          )
+                                          .select('support.logs');
+                                      _openSettings();
+                                    },
+                                  ),
+                                ),
+                              ],
                               // Stop on its own at the bottom, under the rail.
                               Positioned(
                                 right:
@@ -1590,17 +1625,254 @@ ThemeData simpleTheme(ThemeData base) {
   );
 }
 
-/// The top bar's Settings menu: the rig's figures (System), the rig and
-/// profile with the way to change them, and the rest of Settings.
-class _SettingsMenu extends ConsumerWidget {
-  const _SettingsMenu({
-    super.key,
-    required this.onClose,
-    required this.onSettings,
-  });
+/// Simple Mode's Settings (design/briefs/simple-mode-settings.md): a sheet
+/// with its sections on the left and the picked one on the right, on the
+/// 90 % panel scrim over a 5 px blur of the image.
+class _SettingsSheet extends StatefulWidget {
+  const _SettingsSheet({required this.onClose, required this.onLogs});
 
   final VoidCallback onClose;
-  final VoidCallback onSettings;
+  final VoidCallback onLogs;
+
+  @override
+  State<_SettingsSheet> createState() => _SettingsSheetState();
+}
+
+class _SettingsSheetState extends State<_SettingsSheet> {
+  static const _sections = [
+    ('Gear', Icons.settings_input_component_outlined),
+    ('This rig', Icons.memory),
+  ];
+  String _section = 'Gear';
+
+  @override
+  Widget build(BuildContext context) {
+    // A narrow window (Split View, a phone) keeps only the sections' icons.
+    final narrow = MediaQuery.sizeOf(context).width < 600;
+    return ClipRRect(
+      key: const Key('simple-menu'),
+      borderRadius: BorderRadius.circular(10),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+        child: Container(
+          key: const Key('simple-menu-surface'),
+          decoration: const BoxDecoration(color: AraColors.overlayScrim),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SizedBox(
+                width: narrow ? 60 : 200 * simpleRailScale(context),
+                child: ListView(
+                  padding: const EdgeInsets.all(AraSpace.s8),
+                  children: [
+                    for (final (name, icon) in _sections)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 4),
+                        child: Material(
+                          color: _section == name
+                              ? AraColors.selectionTint
+                              : Colors.transparent,
+                          borderRadius: BorderRadius.circular(8),
+                          child: InkWell(
+                            key: Key('simple-menu-nav-$name'),
+                            borderRadius: BorderRadius.circular(8),
+                            onTap: () => setState(() => _section = name),
+                            child: Semantics(
+                              selected: _section == name,
+                              label: narrow ? name : null,
+                              child: ConstrainedBox(
+                                constraints: const BoxConstraints(
+                                  minHeight: 44,
+                                ),
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: AraSpace.s12,
+                                    vertical: AraSpace.s8,
+                                  ),
+                                  child: Row(
+                                    spacing: AraSpace.s12,
+                                    children: [
+                                      Icon(
+                                        icon,
+                                        size: 20,
+                                        color: _section == name
+                                            ? AraColors.accentInfo
+                                            : AraColors.textPrimary,
+                                      ),
+                                      if (!narrow)
+                                        Expanded(
+                                          child: Text(
+                                            name,
+                                            style: kSimpleText.copyWith(
+                                              color: _section == name
+                                                  ? AraColors.accentInfo
+                                                  : null,
+                                            ),
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              const VerticalDivider(width: 1, color: AraColors.border),
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(AraSpace.s16),
+                  child: switch (_section) {
+                    'This rig' => _ThisRig(
+                      onClose: widget.onClose,
+                      onLogs: widget.onLogs,
+                    ),
+                    _ => const _Gear(),
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Settings › Gear: the profile's devices with their state, and the only
+/// place Simple Mode connects or disconnects one (a device's own window has
+/// neither). Ara connects the profile's gear on its own; Connect asks the rig
+/// for the device it remembers, never a chooser.
+// shortcut: the guider and the switches have their own state types; they
+// join this list with their windows.
+class _Gear extends ConsumerWidget {
+  const _Gear();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (!ref.watch(serverLinkUpProvider)) {
+      return Column(
+        key: const Key('simple-gear'),
+        crossAxisAlignment: CrossAxisAlignment.start,
+        spacing: AraSpace.s8,
+        children: [
+          const Text('Gear', style: kSimpleText),
+          Text('Rig not connected', style: AraText.caption),
+        ],
+      );
+    }
+    return Column(
+      key: const Key('simple-gear'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      spacing: AraSpace.s8,
+      children: [
+        const Text('Gear', style: kSimpleText),
+        _GearRow(id: 'camera', type: 'Camera', provider: cameraStatusProvider),
+        _GearRow(id: 'mount', type: 'Mount', provider: mountProvider),
+        _GearRow(id: 'focuser', type: 'Focuser', provider: focuserProvider),
+        _GearRow(
+          id: 'filterwheel',
+          type: 'Filter wheel',
+          provider: filterWheelProvider,
+        ),
+        _GearRow(id: 'rotator', type: 'Rotator', provider: rotatorProvider),
+        _GearRow(id: 'flat', type: 'Flat panel', provider: flatPanelProvider),
+        _GearRow(id: 'dome', type: 'Dome', provider: domeProvider),
+        _GearRow(id: 'weather', type: 'Weather', provider: weatherProvider),
+      ],
+    );
+  }
+}
+
+class _GearRow<T extends EquipmentDeviceStatus> extends ConsumerWidget {
+  const _GearRow({
+    required this.id,
+    required this.type,
+    required this.provider,
+  });
+
+  final String id;
+  final String type;
+  final AsyncNotifierProvider<EquipmentDeviceNotifier<T>, T?> provider;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final status = ref.watch(provider).value;
+    // Never set up on this rig: nothing to show (the Advanced UI picks gear).
+    if (status == null) return const SizedBox.shrink();
+    final notifier = ref.read(provider.notifier);
+    final (dot, word) = switch (status.connectionState) {
+      EquipmentConnectionState.connected => (
+        AraColors.accentConnected,
+        'Connected',
+      ),
+      EquipmentConnectionState.connecting => (
+        AraColors.accentBusy,
+        'Connecting…',
+      ),
+      EquipmentConnectionState.error => (AraColors.accentError, 'Failed'),
+      _ => (AraColors.textDisabled, 'Not connected'),
+    };
+    final (label, action) = switch (status.connectionState) {
+      EquipmentConnectionState.connected => ('Disconnect', notifier.disconnect),
+      EquipmentConnectionState.connecting => (null, null),
+      EquipmentConnectionState.error => ('Reconnect', notifier.reconnect),
+      _ => ('Connect', notifier.reconnect),
+    };
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AraSpace.s12,
+        vertical: AraSpace.s8,
+      ),
+      decoration: BoxDecoration(
+        color: AraColors.tileFill,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        spacing: AraSpace.s12,
+        children: [
+          Container(
+            width: 10,
+            height: 10,
+            decoration: BoxDecoration(color: dot, shape: BoxShape.circle),
+          ),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  status.name.isEmpty ? type : '$type · ${status.name}',
+                  style: kSimpleText,
+                ),
+                Text(word, style: AraText.caption),
+              ],
+            ),
+          ),
+          if (label != null)
+            TextButton(
+              key: Key('simple-gear-$id-${label.toLowerCase()}'),
+              style: TextButton.styleFrom(minimumSize: const Size(0, 44)),
+              onPressed: () => action!(),
+              child: Text(label),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Settings › This rig: what belongs to no device. The rig's figures, the rig
+/// and profile with the way to change them, the one setting Ara can't find out
+/// (a permanent pier, asked once), the way out of Simple Mode, the version
+/// and the logs.
+class _ThisRig extends ConsumerWidget {
+  const _ThisRig({required this.onClose, required this.onLogs});
+
+  final VoidCallback onClose;
+  final VoidCallback onLogs;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -1613,6 +1885,7 @@ class _SettingsMenu extends ConsumerWidget {
     final running = ref.watch(
       sequenceRunStateProvider.select((s) => s.value?.state?.isActive ?? false),
     );
+    final version = ref.watch(appDisplayVersionProvider).value;
     Widget fact(String label, String value) => Row(
       children: [
         Text(label, style: AraText.caption),
@@ -1627,17 +1900,55 @@ class _SettingsMenu extends ConsumerWidget {
         ),
       ],
     );
-    Widget item(String label, VoidCallback onTap) => SizedBox(
-      width: double.infinity,
+    Widget action(String label, VoidCallback onTap) => Expanded(
       child: TextButton(
         style: TextButton.styleFrom(
           backgroundColor: AraColors.tileFill,
-          alignment: Alignment.centerLeft,
           minimumSize: const Size(0, 44),
         ),
         onPressed: onTap,
-        child: Text(label, style: kSimpleText),
+        child: Text(label, style: kSimpleText, textAlign: TextAlign.center),
       ),
+    );
+    // Segments name their states, never a bare toggle (DESIGN.md).
+    Widget toggle(
+      String id,
+      String label,
+      String? hint,
+      bool on,
+      ValueChanged<bool> set,
+    ) => Row(
+      spacing: AraSpace.s12,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label, style: kSimpleText),
+              if (hint != null) Text(hint, style: AraText.caption),
+            ],
+          ),
+        ),
+        DecoratedBox(
+          decoration: BoxDecoration(
+            color: AraColors.tileFill,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (final (v, word) in const [(true, 'On'), (false, 'Off')])
+                SimpleSegment(
+                  key: Key('simple-menu-$id-${word.toLowerCase()}'),
+                  label: word,
+                  selected: on == v,
+                  radius: 8,
+                  onTap: on == v ? null : () => set(v),
+                ),
+            ],
+          ),
+        ),
+      ],
     );
     void relaunch({required bool rig}) {
       onClose();
@@ -1648,35 +1959,55 @@ class _SettingsMenu extends ConsumerWidget {
       if (rig) ref.read(serverChooserRequestedProvider.notifier).request();
     }
 
-    return SimplePanel(
-      key: const Key('simple-menu'),
-      padding: const EdgeInsets.all(AraSpace.s12),
-      child: IntrinsicWidth(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      spacing: AraSpace.s8,
+      children: [
+        const Text('This rig', style: kSimpleText),
+        const SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: SimpleSystemPanel(),
+        ),
+        fact('Rig', server == null ? '—' : server.mdnsName ?? server.hostname),
+        fact('Profile', profile ?? '—'),
+        if (running)
+          Text(
+            'A plan is running. It keeps running on the rig; pick this '
+            'profile again to come back to it.',
+            style: AraText.caption.copyWith(color: AraColors.accentBusy),
+          ),
+        Row(
           spacing: AraSpace.s8,
           children: [
-            const Text('System', style: kSimpleText),
-            const SimpleSystemPanel(),
-            const Divider(height: AraSpace.s8),
-            fact(
-              'Rig',
-              server == null ? '—' : server.mdnsName ?? server.hostname,
-            ),
-            fact('Profile', profile ?? '—'),
-            if (running)
-              Text(
-                'A plan is running. It keeps running on the rig; pick this '
-                'profile again to come back to it.',
-                style: AraText.caption.copyWith(color: AraColors.accentBusy),
-              ),
-            item('Change profile', () => relaunch(rig: false)),
-            item('Change rig', () => relaunch(rig: true)),
-            const Divider(height: AraSpace.s8),
-            item('All settings', onSettings),
+            action('Change profile', () => relaunch(rig: false)),
+            action('Change rig', () => relaunch(rig: true)),
           ],
         ),
-      ),
+        const Divider(height: AraSpace.s16),
+        toggle(
+          'pier',
+          'Permanent pier',
+          'Skips polar alignment',
+          ref.watch(simplePermanentPierProvider).value ?? false,
+          (v) => ref.read(simplePermanentPierProvider.notifier).set(v),
+        ),
+        toggle('simple-mode', 'Simple Mode', null, true, (v) {
+          if (!v) ref.read(simpleModeProvider.notifier).set(false);
+        }),
+        Row(
+          children: [
+            Text(
+              version == null ? '' : 'Version $version',
+              style: AraText.caption,
+            ),
+            const Spacer(),
+            TextButton(
+              onPressed: onLogs,
+              child: const Text('Logs & bug report'),
+            ),
+          ],
+        ),
+      ],
     );
   }
 }
