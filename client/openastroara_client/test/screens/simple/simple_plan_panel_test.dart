@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/gestures.dart' show PointerDeviceKind, kSecondaryMouseButton;
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/rendering.dart' show RenderParagraph;
@@ -474,6 +475,41 @@ void main() {
       expect(c.read(planetariumSearchProvider), 'M42');
     });
 
+    testWidgets('the filters are chips: a tap adds a row, another tap takes it out; the last one stays',
+        (tester) async {
+      final c = await _pump(tester, _Seq(),
+          SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}, onLibrary: () {}));
+      List<String> rows() => [for (final s in c.read(simpleRunPlanProvider)) s.filterName];
+      final before = rows();
+      final f = before.last;
+      await tester.tap(find.byKey(Key('simple-run-filter-$f')));
+      await tester.pump();
+      expect(rows(), [...before]..remove(f));
+      await tester.tap(find.byKey(Key('simple-run-filter-$f')));
+      await tester.pump();
+      expect(rows(), before);
+      expect(find.text('Add filter'), findsNothing, reason: 'the chips replace the menu');
+      for (final f in [...before]) {
+        await tester.tap(find.byKey(Key('simple-run-filter-$f')));
+        await tester.pump();
+      }
+      expect(rows(), hasLength(1), reason: 'a run needs something to take');
+    });
+
+    testWidgets('Frames opens a wheel; spinning it and Done sets the count', (tester) async {
+      final c = await _pump(tester, _Seq(),
+          SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}, onLibrary: () {}));
+      await tester.tap(find.byKey(const Key('simple-run-frames-0')));
+      await tester.pumpAndSettle();
+      final wheel = find.byType(CupertinoPicker);
+      expect(wheel, findsOneWidget);
+      tester.widget<CupertinoPicker>(wheel).onSelectedItemChanged!(0); // 5 frames
+      await tester.tap(find.text('Done'));
+      await tester.pumpAndSettle();
+      expect(c.read(simpleRunPlanProvider).first.frameCount, 5);
+      expect(wheel, findsNothing);
+    });
+
     testWidgets('typing offers matching objects as you go; tapping one searches it', (tester) async {
       var showSky = 0;
       final c = await _pump(
@@ -699,8 +735,9 @@ void main() {
     await _pump(tester, _Seq(),
         SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}, onLibrary: () {}),
         filters: _duo);
-    _whole(tester, find.text('L-enhance'));
-    _whole(tester, find.text('L-eXtreme'));
+    // .last: the row (the chips above name the filters too).
+    _whole(tester, find.text('L-enhance').last);
+    _whole(tester, find.text('L-eXtreme').last);
   });
 
   testWidgets('the plan square shows the catalog tag; the sheet keeps the whole name', (tester) async {

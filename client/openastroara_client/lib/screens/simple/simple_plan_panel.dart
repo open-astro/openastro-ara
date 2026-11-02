@@ -1466,10 +1466,6 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
     final steps = ref.watch(simpleRunPlanProvider);
     final plan = ref.read(simpleRunPlanProvider.notifier);
     final filters = ref.watch(filterSetProvider).filters;
-    final unused = [
-      for (final f in filters)
-        if (steps.every((s) => s.filterName != f.name)) f.name,
-    ];
     final seconds = steps.fold(
       0.0,
       (t, s) => t + s.exposureSeconds * s.frameCount,
@@ -1692,6 +1688,28 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
           ),
         ],
         const Divider(height: 1),
+        // The filters as chips: a tap adds a row, another takes it out (the
+        // last one stays: a run needs something to take).
+        if (steps.first.filterName.isNotEmpty)
+          Wrap(
+            spacing: AraSpace.s8,
+            runSpacing: AraSpace.s8,
+            children: [
+              for (final f in filters)
+                FilterChip(
+                  key: Key('simple-run-filter-${f.name}'),
+                  label: Text(f.name),
+                  selected: steps.any((s) => s.filterName == f.name),
+                  showCheckmark: false,
+                  selectedColor: AraColors.selectionTint,
+                  onSelected: (on) => on
+                      ? plan.add(f.name)
+                      : plan.remove(
+                          steps.indexWhere((s) => s.filterName == f.name),
+                        ),
+                ),
+            ],
+          ),
         for (var i = 0; i < steps.length; i++)
           Row(
             spacing: AraSpace.s8,
@@ -1729,44 +1747,10 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
                   options: _kFramePresets,
                   format: (n) => '× $n',
                   onSelected: (n) => plan.setFrames(i, n),
+                  wheel: true,
                 ),
-              ),
-              SizedBox(
-                width: 44,
-                child: steps.length > 1
-                    ? IconButton(
-                        tooltip: 'Remove ${steps[i].filterName}',
-                        icon: const Icon(Icons.close, size: 18),
-                        onPressed: () => plan.remove(i),
-                      )
-                    : null,
               ),
             ],
-          ),
-        if (steps.first.filterName.isNotEmpty && unused.isNotEmpty)
-          Align(
-            alignment: Alignment.centerLeft,
-            child: PopupMenuButton<String>(
-              tooltip: 'Add filter',
-              onSelected: plan.add,
-              itemBuilder: (_) => [
-                for (final f in unused)
-                  PopupMenuItem(
-                    value: f,
-                    height: 44,
-                    child: Text(f, style: kSimpleText),
-                  ),
-              ],
-              child: SizedBox(
-                height: 44,
-                child: Center(
-                  child: Text(
-                    'Add filter',
-                    style: kSimpleText.copyWith(color: AraColors.accentInfo),
-                  ),
-                ),
-              ),
-            ),
           ),
         if (hint != null)
           Row(

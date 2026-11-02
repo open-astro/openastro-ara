@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart' show Ticker;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -459,6 +460,7 @@ class SimplePresetTile<T> extends StatelessWidget {
     required this.options,
     required this.format,
     required this.onSelected,
+    this.wheel = false,
   });
 
   final String label;
@@ -467,9 +469,51 @@ class SimplePresetTile<T> extends StatelessWidget {
   final String Function(T) format;
   final ValueChanged<T> onSelected;
 
+  /// Pick on an iOS-style wheel (spun with a thumb, the neighbours in view)
+  /// instead of a list: for a long ordered set like a frame count.
+  final bool wheel;
+
   @override
   Widget build(BuildContext context) {
     final items = options.contains(value) ? options : [value, ...options];
+    final tile = Container(
+      // At least 48 px; taller when the user's text is larger.
+      constraints: const BoxConstraints(minHeight: 48),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: AraColors.tileFill,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: AraText.caption,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          Text(
+            format(value),
+            style: kSimpleText,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
+    );
+    if (wheel) {
+      return Semantics(
+        button: true,
+        label: label,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => _showWheel(context, items),
+          child: tile,
+        ),
+      );
+    }
     return PopupMenuButton<T>(
       tooltip: label,
       initialValue: value,
@@ -487,34 +531,53 @@ class SimplePresetTile<T> extends StatelessWidget {
             child: Text(format(o), style: kSimpleText),
           ),
       ],
-      child: Container(
-        // At least 48 px; taller when the user's text is larger.
-        constraints: const BoxConstraints(minHeight: 48),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-        decoration: BoxDecoration(
-          color: AraColors.tileFill,
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              label,
-              style: AraText.caption,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-            Text(
-              format(value),
-              style: kSimpleText,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ],
+      child: tile,
+    );
+  }
+
+  Future<void> _showWheel(BuildContext context, List<T> items) async {
+    var picked = value;
+    final done = await showCupertinoModalPopup<bool>(
+      context: context,
+      builder: (popup) => Container(
+        height: 280,
+        color: AraColors.bgPanel,
+        child: SafeArea(
+          top: false,
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(left: 16),
+                    child: Text(label, style: kSimpleText),
+                  ),
+                  const Spacer(),
+                  TextButton(
+                    onPressed: () => Navigator.of(popup).pop(true),
+                    child: const Text('Done'),
+                  ),
+                ],
+              ),
+              Expanded(
+                child: CupertinoPicker(
+                  itemExtent: 44,
+                  scrollController: FixedExtentScrollController(
+                    initialItem: items.indexOf(value),
+                  ),
+                  onSelectedItemChanged: (i) => picked = items[i],
+                  children: [
+                    for (final o in items)
+                      Center(child: Text(format(o), style: kSimpleText)),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
+    if (done ?? false) onSelected(picked);
   }
 }
 
