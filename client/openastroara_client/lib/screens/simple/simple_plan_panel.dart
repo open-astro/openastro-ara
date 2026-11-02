@@ -1590,7 +1590,7 @@ class _RunError extends ConsumerWidget {
     children: [
       Text(
         run.error!,
-        style: kSimpleText.copyWith(color: AraColors.accentError),
+        style: kSimpleText.copyWith(color: AraColors.errorText),
         maxLines: 4,
         overflow: TextOverflow.ellipsis,
       ),
@@ -1659,7 +1659,7 @@ class _NightDone extends ConsumerWidget {
         if (stoppedAt != null && stoppedAt.isNotEmpty)
           Text(
             'Stopped at: $stoppedAt',
-            style: kSimpleText.copyWith(color: AraColors.accentError),
+            style: kSimpleText.copyWith(color: AraColors.errorText),
           ),
         for (var t = 0; t < run.targets.length; t++) ...[
           if (multi)

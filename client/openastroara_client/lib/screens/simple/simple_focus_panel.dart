@@ -128,7 +128,7 @@ class SimpleFocusPanel extends ConsumerWidget {
             if (error != null)
               Text(
                 error,
-                style: kSimpleText.copyWith(color: AraColors.accentError),
+                style: kSimpleText.copyWith(color: AraColors.errorText),
                 maxLines: 4,
                 overflow: TextOverflow.ellipsis,
               ),

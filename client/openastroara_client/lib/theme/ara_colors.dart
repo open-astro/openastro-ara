@@ -24,9 +24,14 @@ class AraColors {
   static const bgInput = Color(0xFF333333);
   static const border = Color(0xFF404040);
 
-  /// Simple Mode's floating panels: [bgPrimary] at 72 % over the frame
-  /// (DESIGN.md `overlay-scrim`).
-  static const overlayScrim = Color(0xB81A1A1A);
+  /// Simple Mode's floating panels: [bgPrimary] at 90 % over the frame
+  /// (DESIGN.md `overlay-scrim`), so their text reads over a bright frame too.
+  static const overlayScrim = Color(0xE61A1A1A);
+
+  /// Error words on Simple Mode's panels: [accentError] lightened so it reads
+  /// at 4.5:1 over the scrim on any frame (Fault Red itself falls to 1.6:1
+  /// over a bright one).
+  static const errorText = Color(0xFFFF8A80);
 
   // Text
   static const textPrimary = Color(0xFFE0E0E0);
