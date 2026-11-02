@@ -547,6 +547,24 @@ void main() {
       });
     });
 
+    testWidgets('from the night\'s end until sunrise: Start now only, no start time to pick', (tester) async {
+      // 11:30 UTC Jan 15: 06:30 local, morning twilight at the Atlanta-ish site.
+      final morning = DateTime.utc(2026, 1, 15, 11, 30);
+      final seq = _Seq();
+      await _pump(tester, seq,
+          SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}, onLibrary: () {}),
+          overrides: [
+            siteSettingsProvider.overrideWith(() => _SiteAt(
+                const SiteSettings(latitudeDeg: 34, longitudeDeg: -84, twilightDefinition: TwilightDefinition.astronomical))),
+            clockProvider.overrideWithValue(() => morning.toLocal()),
+          ]);
+      expect((tester.widget<FilledButton>(find.byKey(const Key('simple-run-start'))).child! as Text).data, 'Create and start');
+      expect(find.byKey(const Key('simple-run-pick-time')), findsNothing);
+      await tester.tap(find.byKey(const Key('simple-run-start')));
+      await tester.pumpAndSettle();
+      expect(seq.calls, ['create M31', 'start seq-1'], reason: 'no waits the daemon would read as yesterday');
+    });
+
     testWidgets('tonight\'s best: up to four suggestions, one tap picks the target', (tester) async {
       TonightSkyObject o(String name, double alt) => TonightSkyObject(
           id: name, name: name, type: 'Galaxy', magnitude: 5, raDeg: 10, decDeg: 40, altitudeDeg: alt, maxAltitudeDeg: 70);

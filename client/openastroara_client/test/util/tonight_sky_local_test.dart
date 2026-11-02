@@ -35,6 +35,13 @@ void main() {
     expect(darkStart(site, DateTime.utc(2026, 1, 15, 3)), isNull, reason: 'already dark');
   });
 
+  test('darkStart: none from the end of the night until sunrise (the daemon reads evening times then as yesterday)', () {
+    // 11:30 UTC Jan 15 is 06:30 local, morning twilight at the Atlanta-ish site (sunrise ~07:40).
+    expect(darkStart(site, DateTime.utc(2026, 1, 15, 11, 30)), isNull);
+    expect(scheduleAllowed(site, DateTime.utc(2026, 1, 15, 11, 30)), isFalse);
+    expect(scheduleAllowed(site, DateTime.utc(2026, 1, 14, 20)), isTrue, reason: 'afternoon');
+  });
+
   // RedCat-51-ish train on an APS-C-ish sensor.
   const optics = OpticsSettings(
     focalLengthMm: 250,

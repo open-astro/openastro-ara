@@ -30,7 +30,7 @@ import '../../state/sky_atlas/tonight_sky_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
 import '../../util/friendly_error.dart';
-import '../../util/tonight_sky_local.dart' show darkStart;
+import '../../util/tonight_sky_local.dart' show darkStart, scheduleAllowed;
 import '../../widgets/sequencer/target_plan_dialog.dart'
     show planFrameCount, planOptionsAvailable, suggestedSubSeconds;
 import '../../state/ws/ws_providers.dart';
@@ -158,6 +158,16 @@ final simpleDarkStartProvider = Provider<DateTime?>((ref) {
     ref.watch(siteSettingsProvider),
     ref.watch(clockProvider)().toUtc(),
   )?.toLocal();
+});
+
+/// Whether a start time can be picked now: not from the night's end until
+/// sunrise (the daemon would read it as yesterday's and start at once).
+final simpleScheduleAllowedProvider = Provider<bool>((ref) {
+  ref.watch(skyClockProvider);
+  return scheduleAllowed(
+    ref.watch(siteSettingsProvider),
+    ref.watch(clockProvider)().toUtc(),
+  );
 });
 
 /// Tonight's dark hours left for the picked target, from the ranking; null
@@ -1412,7 +1422,8 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
     final off = sel == null || sel.belowHorizon || run.busy || imaging;
     final now = ref.watch(clockProvider)();
     final dark = ref.watch(simpleDarkStartProvider);
-    final startAt = _startNow ? null : _pickedStart ?? dark;
+    final canSchedule = ref.watch(simpleScheduleAllowedProvider);
+    final startAt = _startNow || !canSchedule ? null : _pickedStart ?? dark;
     final queueOff = sel == null || sel.neverRises || run.busy;
     final best = (ref.watch(tonightSkyProvider).value ?? const [])
         .where((o) => o.maxAltitudeDeg > 0)
@@ -1685,7 +1696,7 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
                   onPressed: () => setState(() => _startNow = false),
                   child: Text('Wait for dark (${_hhmm(dark)})'),
                 ),
-              if (startAt == null || startAt == dark)
+              if (canSchedule && (startAt == null || startAt == dark))
                 TextButton(
                   key: const Key('simple-run-pick-time'),
                   onPressed: () => setState(() {
@@ -1697,7 +1708,7 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
                 ),
             ],
           ),
-          if (_picking)
+          if (_picking && canSchedule)
             SizedBox(
               key: const Key('simple-run-time-picker'),
               height: 132,
