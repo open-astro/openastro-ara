@@ -926,6 +926,7 @@ class _ModeGrid extends ConsumerWidget {
   final ValueChanged<SimpleModeScreen> onPicked;
 
   static const _built = {
+    SimpleModeScreen.autopilot,
     SimpleModeScreen.preview,
     SimpleModeScreen.focus,
     SimpleModeScreen.polarAlign,

@@ -364,6 +364,17 @@ void main() {
     expect(find.byKey(const Key('autopilot-strip')), findsNothing);
   });
 
+  testWidgets('Autopilot picked from the modes stays in Simple Mode and starts, as the offer does', (tester) async {
+    final container = await _pump(tester, const Size(1024, 768));
+    await tester.tap(find.byKey(const Key('simple-mode')));
+    await tester.pump();
+    await tester.tap(find.text('Autopilot'));
+    await tester.pump();
+    expect(container.read(simpleModeProvider).value, isTrue, reason: 'no jump to the full UI');
+    expect(find.byKey(const Key('autopilot-strip')), findsOneWidget);
+    expect(find.byKey(const Key('simple-autofocus')), findsOneWidget, reason: "Focus's panel, open");
+  });
+
   testWidgets('the Autopilot offer can be dismissed', (tester) async {
     await _pump(tester, const Size(1024, 768));
     await tester.tap(find.byTooltip('Not now'));
