@@ -332,13 +332,19 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     final panels = !_clean || showSky;
     // Every mode reads the sequencer (the plan squares, the status pill), so
     // opening Simple Mode adopts a run in progress; only Plan acts on it.
+    // Selects, not the whole run state: progress frames arrive every few
+    // seconds and would rebuild the whole screen.
     final runActive =
         shown == SimpleModeScreen.plan &&
-        (ref.watch(sequenceRunStateProvider).value?.state?.isActive ?? false);
+        ref.watch(
+          sequenceRunStateProvider.select(
+            (s) => s.value?.state?.isActive ?? false,
+          ),
+        );
+    final run = ref.watch(simpleRunProvider);
     final planSquares =
-        simpleRunPhase(
-          ref.watch(simpleRunProvider),
-          ref.watch(sequenceRunStateProvider).value,
+        ref.watch(
+          sequenceRunStateProvider.select((s) => simpleRunPhase(run, s.value)),
         ) !=
         SimpleRunPhase.none;
     const railTop = kSimpleInset * 2 + kSimpleBarHeight;
@@ -1497,6 +1503,13 @@ class SimpleSegment extends StatelessWidget {
 /// Simple Mode's density (DESIGN.md "Two Densities"): 10 px corners on
 /// buttons and fields instead of Material's pills, 44 px minimum targets,
 /// fields as borderless tiles.
+/// Simple Mode's green go buttons (Start Autopilot, Done, Create and start):
+/// dark text on the green, 6.3:1 (white is 2.8:1).
+final kSimpleGoStyle = FilledButton.styleFrom(
+  backgroundColor: AraColors.accentConnected,
+  foregroundColor: AraColors.bgPrimary,
+);
+
 ThemeData simpleTheme(ThemeData base) {
   const shape = RoundedRectangleBorder(
     borderRadius: BorderRadius.all(Radius.circular(10)),
@@ -1512,6 +1525,8 @@ ThemeData simpleTheme(ThemeData base) {
     borderSide: BorderSide.none,
   );
   return base.copyWith(
+    // Desktop defaults to compact density, which takes buttons under 44 px.
+    visualDensity: VisualDensity.standard,
     filledButtonTheme: FilledButtonThemeData(
       style: buttons.merge(base.filledButtonTheme.style),
     ),

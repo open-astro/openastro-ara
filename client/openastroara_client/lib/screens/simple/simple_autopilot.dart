@@ -11,7 +11,7 @@ import '../../theme/ara_metrics.dart';
 import 'simple_plan_panel.dart' show simpleRunProvider;
 import 'simple_polar_panel.dart' show simplePolarActive;
 import 'simple_preview_panel.dart' show kSimpleText;
-import 'simple_shell.dart' show SimplePanel;
+import 'simple_shell.dart' show SimplePanel, kSimpleGoStyle;
 
 /// Autopilot's steps, in the night's order: focus first (polar alignment
 /// plate-solves and fails on a soft focus), then polar align, then the plan.
@@ -213,7 +213,9 @@ class _Step extends StatelessWidget {
                     '${step.index + 1}',
                     style: kSimpleText.copyWith(
                       fontSize: 11,
-                      color: on ? AraColors.accentInfo : AraColors.textSecondary,
+                      color: on
+                          ? AraColors.accentInfo
+                          : AraColors.textSecondary,
                     ),
                   ),
                 ),
@@ -265,14 +267,10 @@ class AutopilotOffer extends StatelessWidget {
       spacing: AraSpace.s12,
       children: [
         // Wraps on a narrow window rather than pushing the buttons off.
-        Flexible(
-          child: Text('Nothing done yet tonight', style: kSimpleText),
-        ),
+        Flexible(child: Text('Nothing done yet tonight', style: kSimpleText)),
         FilledButton(
           key: const Key('autopilot-start'),
-          style: FilledButton.styleFrom(
-            backgroundColor: AraColors.accentConnected,
-          ),
+          style: kSimpleGoStyle,
           onPressed: onStart,
           child: const Text('Start Autopilot'),
         ),

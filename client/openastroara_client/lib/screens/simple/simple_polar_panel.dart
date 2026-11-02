@@ -19,7 +19,7 @@ import 'simple_preview_panel.dart'
         exposurePresets,
         formatExposure,
         kSimpleText;
-import 'simple_shell.dart' show SimplePanel, SimpleSegment;
+import 'simple_shell.dart' show SimplePanel, SimpleSegment, kSimpleGoStyle;
 import '../../state/simple_messages_state.dart';
 
 /// True while the server runs any phase of the routine.
@@ -364,9 +364,7 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
                   Expanded(
                     child: FilledButton(
                       key: const Key('simple-polar-done'),
-                      style: FilledButton.styleFrom(
-                        backgroundColor: AraColors.accentConnected,
-                      ),
+                      style: kSimpleGoStyle,
                       onPressed:
                           !_busy &&
                               total != null &&

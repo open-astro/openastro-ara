@@ -140,6 +140,26 @@ void main() {
     );
   }
 
+  testWidgets('Simple Mode: a failed rung leads the message, so its two lines show what failed', (tester) async {
+    await pumpButton(tester, button: const EmergencyStopButton(compact: true), simpleMode: true);
+    fake.result = const EmergencyStopResult(
+      alreadyInProgress: false,
+      runsAborted: 1,
+      exposureAborted: true,
+      guidingStopped: true,
+      parkRequested: false,
+      flatPanelLightOff: true,
+      failedRungs: ['park'],
+    );
+    await activateWithoutPointer(tester);
+    await activateWithoutPointer(tester);
+    await tester.pumpAndSettle();
+    final container = ProviderScope.containerOf(tester.element(find.byType(EmergencyStopButton)));
+    final title = container.read(simpleMessagesProvider).first.title;
+    expect(title, startsWith('CHECK THE RIG: MOUNT PARK FAILED'));
+    expect(title, contains('1 sequence run(s) aborted'), reason: 'what worked still follows');
+  });
+
   group('Simple Mode: keyboard and screen readers press again, no dialog', () {
     testWidgets(
       'the first press arms it (PRESS AGAIN, announced), the second within 3 s stops',

@@ -1,7 +1,9 @@
 import 'dart:math' as math;
 import 'dart:ui';
 
+import 'package:flutter/material.dart' show ThemeData, VisualDensity, TargetPlatform;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/screens/simple/simple_shell.dart' show kSimpleGoStyle, simpleTheme;
 import 'package:openastroara/theme/ara_colors.dart';
 
 /// [fg] over [bg], WCAG ratio.
@@ -23,6 +25,22 @@ void main() {
       expect(_contrast(AraColors.textPrimary, panel), greaterThanOrEqualTo(4.5));
       expect(_contrast(AraColors.textSecondary, panel), greaterThanOrEqualTo(4.5));
       expect(_contrast(AraColors.errorText, panel), greaterThanOrEqualTo(4.5));
+      // Fields, presets and the mode grid's tiles sit on tile-fill on a panel.
+      final tile = Color.alphaBlend(AraColors.tileFill, panel);
+      expect(_contrast(AraColors.textSecondary, tile), greaterThanOrEqualTo(4.5));
     });
   }
+
+  test('the green go buttons (Start Autopilot, Done, Create and start) read at 4.5:1', () {
+    final fg = kSimpleGoStyle.foregroundColor!.resolve({})!;
+    final bg = kSimpleGoStyle.backgroundColor!.resolve({})!;
+    expect(bg, AraColors.accentConnected);
+    expect(_contrast(fg, bg), greaterThanOrEqualTo(4.5));
+  });
+
+  test('on desktop Simple Mode keeps standard density, so buttons stay 44 px', () {
+    for (final p in [TargetPlatform.macOS, TargetPlatform.windows, TargetPlatform.linux]) {
+      expect(simpleTheme(ThemeData(platform: p)).visualDensity, VisualDensity.standard, reason: '$p');
+    }
+  });
 }

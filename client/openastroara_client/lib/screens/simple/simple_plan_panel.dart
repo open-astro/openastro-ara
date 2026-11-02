@@ -41,7 +41,12 @@ import '../../widgets/sequencer/run_completion_sheet.dart'
 import 'simple_preview_panel.dart'
     show SimplePresetTile, exposurePresets, formatExposure, kSimpleText;
 import 'simple_shell.dart'
-    show SimplePanel, kSimpleInset, kSimpleRailWidth, leaveSimpleMode;
+    show
+        SimplePanel,
+        kSimpleGoStyle,
+        kSimpleInset,
+        kSimpleRailWidth,
+        leaveSimpleMode;
 
 /// The first plan for a filter set: LRGB when the set has any of it, else the
 /// narrowband filters, else every filter; one row with no filter name when
@@ -1790,9 +1795,7 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
               Expanded(
                 child: FilledButton(
                   key: const Key('simple-run-start'),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: AraColors.accentConnected,
-                  ),
+                  style: kSimpleGoStyle,
                   onPressed: off
                       ? null
                       : () async {

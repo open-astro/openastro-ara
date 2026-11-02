@@ -194,7 +194,7 @@ class _EmergencyStopButtonState extends ConsumerState<EmergencyStopButton>
       }
       // A rung that failed keeps its pill up until it is read.
       notify(
-        _summarize(result),
+        _summarize(result, failuresFirst: widget.simple || widget.compact),
         error: result.failedRungs.isNotEmpty,
         snackBarRed: false,
         snackBarDuration: const Duration(seconds: 10),
@@ -225,7 +225,12 @@ class _EmergencyStopButtonState extends ConsumerState<EmergencyStopButton>
     'cooler_off': 'CAMERA COOLER STILL ON (switching it off failed)',
   };
 
-  static String _summarize(EmergencyStopResult r) {
+  /// [failuresFirst]: Simple Mode's message pill shows two lines, so a
+  /// failed rung leads instead of trailing off past them.
+  static String _summarize(
+    EmergencyStopResult r, {
+    bool failuresFirst = false,
+  }) {
     if (r.alreadyInProgress) {
       return 'An emergency stop is already running — no second volley sent.';
     }
@@ -243,9 +248,9 @@ class _EmergencyStopButtonState extends ConsumerState<EmergencyStopButton>
         .map((rung) => _failurePhrases[rung] ?? '$rung FAILED')
         .toList(growable: false);
     final summary = 'Emergency stop executed: ${parts.join(', ')}.';
-    return failures.isEmpty
-        ? summary
-        : '$summary CHECK THE RIG: ${failures.join('; ')}.';
+    if (failures.isEmpty) return summary;
+    final check = 'CHECK THE RIG: ${failures.join('; ')}.';
+    return failuresFirst ? '$check $summary' : '$summary $check';
   }
 
   @override
