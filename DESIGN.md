@@ -326,6 +326,7 @@ An inline warning built from three parts: an amber or red icon, a coloured outli
 - **Do** use `AraColors`, `AraSpace` and `AraText` tokens. Accents come only through semantic roles.
 - **Do** use tabular figures for any live number.
 - **Do** check every new state in Night mode: it must still be distinguishable by brightness.
+- **Do** meet WCAG 2.2 AA on every new or changed control (playbook §53): 4.5:1 text, keyboard reach with visible focus, a pointer-free path for every hold or drag. Night mode is exempt from contrast; the default theme isn't.
 - **Do** write labels in product voice: verbs, sentence case, no NINA or daemon enum names.
 
 ### Don't:

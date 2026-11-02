@@ -123,7 +123,7 @@ This split is why **WILMA is not a thin client** — it's a planning workstation
 
 **Hardware philosophy + a11y + privacy (§52–54)**
 - [§52 Mount handling — Alpaca-only commitment](#52-mount-handling--alpaca-only-commitment--feature-detection)
-- [§53 Accessibility (WCAG AA-leaning)](#53-accessibility-wcag-21-aa-leaning-baseline)
+- [§53 Accessibility (WCAG 2.2 AA)](#53-accessibility-wcag-22-aa-self-checked)
 - [§54 Bug report submission + PII handling](#54-bug-report-submission--pii-handling)
 
 **Forward-looking (§55–56)**
@@ -7911,11 +7911,15 @@ None of these change the core: **ARA stays Alpaca-only, trusts the standard, and
 
 ---
 
-## 53. Accessibility (WCAG 2.1 AA-leaning baseline)
+## 53. Accessibility (WCAG 2.2 AA, self-checked)
 
 ARA commits to a **targeted accessibility baseline** that benefits many user groups beyond formally-impaired users — color-blind users (~8% of males), aging astrophotographers (median demographic is 50+), low-vision users, anyone using the app in bright dawn glare, anyone preserving night vision with a red headlamp, anyone keyboard-navigating on desktop, and observatories/outreach orgs that need to comply with ADA / Section 508 / EU EAA.
 
-**Scope: WCAG 2.1 AA-leaning, not formally certified.** We follow the standard where it's cheap and broadly beneficial; we don't pursue paid audits or marketing the compliance.
+**Scope: WCAG 2.2 Level AA is the bar, self-checked, not formally certified** (decided 2026-11-03; it was "2.1 AA-leaning"). Every new or changed control meets AA: text contrast 4.5:1 (3:1 for large text and for non-text UI), keyboard reach with a visible focus that overlays don't hide, a non-drag alternative for any drag, a pointer-free alternative for any hold (a second press, a screen-reader action), and targets of at least 24 px (we keep 44). An AA failure is a bug, not a judgement call. We still don't pursue paid audits or market the compliance (§53.5).
+
+**Night mode is exempt from contrast.** Its red-only palette can't reach 4.5:1 and isn't meant to; the user turns it on, and the default theme is what has to pass.
+
+**Known gap:** white on Fault Red (`#E53935`) is 4.2:1. Simple Mode's Emergency Stop already uses `#D32F2F` (5.0:1); the full UI's Stop and red fills change in their own PR after Simple Mode merges (ALP-4895).
 
 ### 53.1 What's in scope
 
@@ -7989,7 +7993,7 @@ No light-theme variant in the initial release — observatory astrophotography i
 
 ### 53.5 What's explicitly out of initial scope
 
-- Formal WCAG 2.1 AA certification or compliance audit
+- Formal WCAG 2.2 AA certification or compliance audit
 - Paid third-party accessibility testing
 - Compliance attestation documentation
 - AAA-level requirements (e.g., 7:1 contrast, sign-language alternatives, etc.)
