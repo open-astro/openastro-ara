@@ -23,6 +23,7 @@ colors:
   selection-tint: "rgba(25, 118, 210, 0.25)"
   tile-fill: "rgba(64, 64, 64, 0.55)"
   alarm-scrim: "rgba(60, 8, 8, 0.88)"
+  emergency-stop: "#D32F2F"
   button-primary: "#1565C0"
   button-secondary: "#424242"
 typography:
@@ -250,7 +251,7 @@ Controls behave like labelled hardware: each one names its state and shows it wi
 - **Destructive:** Fault Red fill (the theme's `error`), with the action named in the label.
 
 ### Emergency Stop (signature)
-A filled Fault Red button with a report icon and the label "Emergency Stop", in the bottom status bar on every tab, right after the connection indicator. While a stop is in flight it shows a spinner and "Stopping…". It confirms by holding: pressing reads "Hold to confirm" while a lighter fill sweeps across, and 2 s of holding sends the stop; letting go early sends nothing. Keyboard and screen-reader activation, which can't hold, get a dialog ("Stop everything now?") whose confirm button is filled red and labelled EMERGENCY STOP (decided 2026-11-01). In Simple Mode it also carries a ring: a 2 px dark gap, then 1 px of Fault Red (ALP-4812); the full UI keeps its plain button with the hold (decided 2026-11-02). It is the heaviest control on any screen: no other control at rest is filled red.
+A filled Fault Red button with a report icon and the label "Emergency Stop", in the bottom status bar on every tab, right after the connection indicator. While a stop is in flight it shows a spinner and "Stopping…". It confirms by holding: pressing reads "Hold to confirm" while a lighter fill sweeps across, and 2 s of holding sends the stop; letting go early sends nothing. Keyboard and screen-reader activation, which can't hold, get a dialog ("Stop everything now?") whose confirm button is filled red and labelled EMERGENCY STOP (decided 2026-11-01). In Simple Mode it also carries a ring: a 2 px dark gap, then 1 px of the same red (ALP-4812), and it fills with `emergency-stop` (#D32F2F, Fault Red darkened so the white label reads at 5:1; Fault Red gives 4.2:1) under a sweep that darkens instead (HOLD at 7.7:1); the full UI keeps its plain Fault Red button and lighter sweep (decided 2026-11-02). It is the heaviest control on any screen: no other control at rest is filled red.
 
 ### Equipment Chip (signature)
 A fixed 76 px-wide tile in the top bar (48 px when compact), so the icons sit evenly spaced. It has a 28 px device icon in Starlight Text, a 10 px status dot at its top-right corner (2 px Panel Grey ring), and the device name underneath in label-small Dim Text. Mount and Filter Wheel use hand-drawn glyphs (a telescope on a tripod, a five-slot filter wheel) because Material Icons has neither. The dot blinks green (700 ms) while the device is connected and working; amber stays for states that need a look. Tapping opens the device's Settings page, and long-press is supported. When compact the name is dropped and lives on as the tooltip.
