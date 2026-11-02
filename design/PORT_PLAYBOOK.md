@@ -2470,11 +2470,11 @@ Future: UPS GPIO signal pin can trigger a proactive checkpoint + park sequence a
 **Pause vs Abort vs Stop:**
 - **Pause** — described above; everything stays connected and ready; resume restores the running state
 - **Abort** — sequence ends; mount stays where it is; cooler stays on; user controls what happens next
-- **Emergency Stop** (§35.3) — sequence ends; mount parks per §35 safety policy; cooler may warm or stay depending on `cooler_warmup_on_session_end` (§28.13); equipment disconnects per safety policy
+- **Emergency Stop** (§35.3) — sequence ends; mount parks per §35 safety policy; the cooler is switched straight off as the stop's last rung, whatever `cooler_warmup_on_session_end` says (§28.13 does not apply to it); equipment disconnects per safety policy
 
 ### 28.13 Cooler warmup at session end
 
-When a sequence ends (graceful completion, user abort, emergency stop) or the user explicitly disconnects the camera, ARA's behavior depends on the per-profile `cooler_warmup_on_session_end` setting:
+When a sequence ends (graceful completion or user abort) or the user explicitly disconnects the camera, ARA's behavior depends on the per-profile `cooler_warmup_on_session_end` setting. Emergency Stop is the exception: it switches the cooler straight off with no ramp (§35.3 step 6):
 
 | Value | Behavior |
 |---|---|
