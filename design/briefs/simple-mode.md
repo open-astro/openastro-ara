@@ -18,12 +18,12 @@ Shaped 2026-11-01 (`/impeccable shape simple-mode`). Paperclip: ALP-4810. Render
 - **Image first:** the latest frame fills the screen.
 - **Simpler than ASIAir, not a copy of it.**
 - **Controls:** they float on translucent panels (the two-rail layout in `DESIGN.md`):
-  - **top:** a status strip (device dots, Search, Night mode, Show all options, Settings), with the attention banner centred under it when needed;
+  - **top:** a status strip (device dots, Night mode, Settings), with the attention banner centred under it when needed;
   - **top-left:** the message pills (results, errors, questions), up to 420 px; see `simple-mode-pills.md`;
   - **top-right:** the camera status pill, at most 300 px wide (half the row on a narrow window), sharing the row with the message pills;
   - **right rail, 72 px wide and only as tall as its controls:** the mode name (tap for the five modes as a grid), the shutter, the settings chip (the current mode's options under the settings icon: "5 s · 100" in Preview, "Auto" or "Manual" in Focus);
   - **bottom right:** the compact Emergency Stop on its own, a 60 px STOP with a 2 s hold;
-  - **left rail:** Sky, Info, System and Library; Info shows the last frame's facts and System the server's figures (storage free, CPU, memory, uptime) as fact tiles in the bottom-left corner;
+  - **left rail:** Sky, Info and Library; Info shows the last frame's facts as fact tiles in the bottom-left corner;
   - **bottom row, 56 px tall, 16 px from the left edge and from Stop:** the guiding graph and the histogram, each once it has data; a lone one fills the row, both split it equally with guiding on the left;
   - **popovers** (the mode grid, settings, a mode's panel) open left of the right rail and never move it.
 - **Fixed slots:** nothing shifts when state changes; a panel with no data is not drawn.
@@ -34,7 +34,7 @@ Shaped 2026-11-01 (`/impeccable shape simple-mode`). Paperclip: ALP-4810. Render
 ## Scope
 
 - **One screen:** a mode grid with Autopilot · Preview · Focus · Polar align · Plan.
-- **Settings:** open from the strip's gear. "Show all options" switches to the full UI. In slice 1 Settings, the device dots and ⌘K also switch to the full UI on the matching Settings page; a settings sheet over Simple Mode comes later.
+- **Settings:** the strip's gear opens a menu: System (the server's figures: storage free, CPU, memory, uptime), the rig and profile with Change profile and Change rig, and All settings, which opens Settings over Simple Mode. Device dots and ⌘, open Settings over Simple Mode too. Nothing leads to the full UI (user, 2026-11-03); Settings' Simple Mode switch is the way out.
 - **Getting in:** turn on Settings → System → Experimental → Simple Mode (off by default, per client), then use the frame icon in the full UI's top-right cluster, between Night mode and the gear.
 - **Plan** (named Run until 2026-11-02): a quick plan builder only. It sets exposure and frame count per filter for the current target, and autofocus, dither and flats follow the profile's defaults. The sequence editor stays in the full UI only.
 - **Phones:** they run Simple Mode only, with no Sequence tab, once Simple Mode exists. Until then, PR #1474's phone layout stands.
@@ -45,13 +45,13 @@ Shaped 2026-11-01 (`/impeccable shape simple-mode`). Paperclip: ALP-4810. Render
 
 | Where | What |
 |---|---|
-| Top | Status strip: device dots, Search, Night mode, Show all options, Settings |
+| Top | Status strip: device dots, Night mode, Settings (menu: System, rig and profile, All settings) |
 | Top-left, under the strip | Message pills (results, errors, questions) |
 | Top-right, under the strip | Camera status pill |
 | Bottom-right, above the bottom row | Plan squares (the running plan in the corner, queued plans to its left) |
 | Bottom-left, above the bottom row | Info and System fact tiles (when on) |
 | Centre, under the strip | Attention banner, when something needs the person |
-| Left rail | Sky, Info, System, Library |
+| Left rail | Sky, Info, Library |
 | Right rail | Mode name, shutter, settings chip |
 | Bottom right | Emergency Stop |
 | Bottom row | Guiding graph (RMS, RA/Dec trace) and histogram |
@@ -80,7 +80,6 @@ Shaped 2026-11-01 (`/impeccable shape simple-mode`). Paperclip: ALP-4810. Render
 
 - **Errors inside a mode** (plate solve failed, autofocus failed, slew failed): while the person works a mode, the error shows inside that mode's panel, naming the cause and the fix, with a Retry (for example "Too few stars in a 2 s frame", then "Retry with 10 s"). During an unattended run the same errors use the centred attention banner.
 - **Below the horizon (including the custom horizon):** Go to is disabled with the reason ("Below your horizon until 22:40"), and "Go to at 22:40" waits, then slews and centres on its own. In Plan such a target can be queued but not started: its square reads "rises 22:40" and the shutter waits for it (the app holds the start; the daemon waiting itself is ALP-4857).
-- **Show all options** opens the matching full-UI tab: Preview, Polar align and Focus open Live; Plan opens Live while imaging and Sequence when idle.
 
 ## Still open
 

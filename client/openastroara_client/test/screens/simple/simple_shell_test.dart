@@ -30,6 +30,12 @@ import 'package:openastroara/state/imaging/capture_progress_state.dart';
 import 'package:openastroara/state/imaging/exposure_state.dart';
 import 'package:openastroara/state/imaging/last_frame_state.dart';
 import 'package:openastroara/state/saved_server_state.dart';
+import 'package:openastroara/models/profile_list.dart';
+import 'package:openastroara/models/profile_meta.dart';
+import 'package:openastroara/screens/settings/settings_shell.dart';
+import 'package:openastroara/state/launch_gate_state.dart';
+import 'package:openastroara/state/profile_management_state.dart';
+import 'package:openastroara/state/ws/ws_providers.dart';
 import 'package:openastroara/state/settings/settings_nav.dart';
 import 'package:openastroara/state/simple_mode_state.dart';
 import 'package:openastroara/state/simple_messages_state.dart';
@@ -77,30 +83,42 @@ final _someSteps = [
 
 Future<ProviderContainer> _pump(WidgetTester tester, Size size,
     {List<GuideStep> steps = const [], AraServer? server, FrameHistogram? histogram,
-    ServerInternalState? internal, StorageSpace? storage, SimpleRun? plan, SequenceRunStateInfo? runState, bool queueing = false, bool manualAlarm = false}) async {
+    ServerInternalState? internal, StorageSpace? storage, ProfileList? profiles, SimpleRun? plan, SequenceRunStateInfo? runState, bool queueing = false, bool manualAlarm = false, bool feature = false}) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
   final container = ProviderContainer(overrides: [
     simpleModePrefsProvider.overrideWithValue(_MemPrefs()),
+    if (feature) simpleModeFeaturePrefsProvider.overrideWithValue(_MemPrefs()),
     selectedTabIndexProvider.overrideWith(_StartOnLive.new),
     guideStepsProvider.overrideWith(() => _Steps(steps)),
     if (server != null) activeServerProvider.overrideWithValue(server),
+    // A server would otherwise dial a real event stream.
+    if (server != null) wsEventStreamProvider.overrideWith((ref) => null),
     if (histogram != null) frameHistogramProvider.overrideWith((ref, id) async => histogram),
     if (internal != null) serverInternalStateProvider.overrideWith(() => _Internal(internal)),
     if (storage != null) storageSpaceProvider.overrideWith((ref) async => storage),
+    if (profiles != null) profileManagementProvider.overrideWith(() => _Profiles(profiles)),
     if (plan != null) simpleRunProvider.overrideWith(() => queueing ? _Queueing(plan) : _Plan(plan)),
     if (runState != null) sequenceRunStateProvider.overrideWith(() => _RunState(runState)),
     if (manualAlarm) safetyAlarmProvider.overrideWith(_ManualAlarm.new),
   ]);
   addTearDown(container.dispose);
   await container.read(simpleModeProvider.future);
+  if (feature) await container.read(simpleModeFeatureProvider.future);
   await tester.pumpWidget(UncontrolledProviderScope(
     container: container,
     child: const MaterialApp(home: SimpleShell(planetarium: SizedBox(key: Key('sky')))),
   ));
   await tester.pump();
   return container;
+}
+
+class _Profiles extends ProfileManagementNotifier {
+  _Profiles(this.value);
+  final ProfileList value;
+  @override
+  Future<ProfileList> build() async => value;
 }
 
 class _Plan extends SimpleRunNotifier {
@@ -847,33 +865,112 @@ void main() {
     expect(find.byType(SimpleInfoPanel), findsNothing);
   });
 
-  testWidgets('System shows the server\'s figures as tiles in the bottom-left corner (above Info when it shows)', (tester) async {
+  testWidgets('the gear opens the Settings menu: System figures, rig and profile, the way to change them, '
+      'and Settings; the left rail has no System', (tester) async {
     const size = Size(1470, 854);
-    await _pump(tester, size,
+    final c = await _pump(tester, size,
+        server: const AraServer(hostname: '10.0.0.5', port: 5555, mdnsName: 'astro'),
         internal: const ServerInternalState(uptimeSeconds: 11520, cpuPercent: 23.4, workingSetBytes: 512 * 1048576),
-        storage: const StorageSpace(saveDirectory: '/data', isFallback: false, freeBytes: 412 * 1073741824, totalBytes: 900 * 1073741824));
-    expect(find.byKey(const Key('simple-system-line')), findsNothing);
-    expect(_panelOf(tester, find.byKey(const Key('simple-system'))), _panelOf(tester, find.byKey(const Key('simple-sky'))),
-        reason: 'on the left rail');
-    await tester.tap(find.byKey(const Key('simple-system')));
+        storage: const StorageSpace(saveDirectory: '/data', isFallback: false, freeBytes: 412 * 1073741824, totalBytes: 900 * 1073741824),
+        profiles: const ProfileList(activeId: 'p1', profiles: [ProfileMeta(id: 'p1', name: 'Backyard Rig')]));
+    expect(find.byKey(const Key('simple-system')), findsNothing, reason: 'System moved into the Settings menu');
+    expect(find.byKey(const Key('simple-menu')), findsNothing);
+    await tester.tap(find.byTooltip('Settings'));
     await tester.pump();
     await tester.pump(); // the storage read resolves
-    final rect = tester.getRect(find.byKey(const Key('simple-system-line')));
-    expect(rect.left, tileLeft);
-    expect(rect.bottom, size.height - tileBottom, reason: 'alone, in the corner');
-    final line = find.byKey(const Key('simple-system-line'));
+    final menu = find.byKey(const Key('simple-menu'));
+    expect(menu, findsOneWidget);
+    expect(c.read(simpleModeProvider).value, isTrue, reason: 'Settings never leaves Simple Mode');
+    final line = find.descendant(of: menu, matching: find.byKey(const Key('simple-system-line')));
     for (final t in ['Storage', '412 GB free', 'CPU', '23 %', 'Memory', '512 MB', 'Up', '3 h 12 min']) {
       expect(find.descendant(of: line, matching: find.text(t)), findsOneWidget, reason: t);
     }
-    await tester.tap(find.byKey(const Key('simple-info')));
+    for (final t in ['astro', 'Backyard Rig', 'Change profile', 'Change rig', 'All settings']) {
+      expect(find.descendant(of: menu, matching: find.text(t)), findsOneWidget, reason: t);
+    }
+    expect(tester.getRect(menu).right, size.width - kSimpleInset, reason: 'under the gear, top right');
+    // A tap on the image closes it.
+    await tester.tap(find.byKey(const Key('simple-frame')));
     await tester.pump();
-    final info = tester.getRect(find.byType(SimpleInfoPanel));
-    final system = tester.getRect(find.byKey(const Key('simple-system-line')));
-    expect(info.bottom, size.height - tileBottom, reason: 'Info keeps the corner');
-    expect(system.bottom, info.top - 8, reason: 'System on the row above');
-    await tester.tap(find.byKey(const Key('simple-system')));
+    expect(menu, findsNothing);
+    // The server makes the gear's providers ask it for status: let them settle.
+    await tester.pumpWidget(const SizedBox());
+    c.dispose();
+    await tester.pump(const Duration(seconds: 5));
+  });
+
+  testWidgets('Change profile goes to the profile box; Change rig to the rig list', (tester) async {
+    final c = await _pump(tester, const Size(1024, 768));
+    c.read(profileGatePassedProvider.notifier).pass();
+    await tester.tap(find.byTooltip('Settings'));
     await tester.pump();
-    expect(find.byKey(const Key('simple-system-line')), findsNothing);
+    await tester.tap(find.text('Change profile'));
+    await tester.pump();
+    expect(c.read(profileGatePassedProvider), isFalse);
+    expect(c.read(serverChooserRequestedProvider), isFalse, reason: 'the same rig: straight to its profiles');
+
+    c.read(profileGatePassedProvider.notifier).pass();
+    await tester.tap(find.byTooltip('Settings'));
+    await tester.pump();
+    await tester.tap(find.text('Change rig'));
+    await tester.pump();
+    expect(c.read(profileGatePassedProvider), isFalse);
+    expect(c.read(serverChooserRequestedProvider), isTrue, reason: 'the rig list, which never connects on its own');
+  });
+
+  testWidgets('while a plan runs, the menu says it keeps running', (tester) async {
+    await _pump(tester, const Size(1024, 768),
+        plan: const SimpleRun(sequenceId: 'seq-1', started: true, targets: [
+          SimpleTarget(name: 'M 31', steps: [FilterPlanStep(filterName: 'L', exposureSeconds: 120, frameCount: 30)]),
+        ]),
+        runState: const SequenceRunStateInfo(sequenceId: 'seq-1', state: SequenceRunState.running));
+    await tester.tap(find.byTooltip('Settings'));
+    await tester.pump();
+    expect(find.textContaining('keeps running on the rig'), findsOneWidget);
+  });
+
+  testWidgets('All settings opens Settings over Simple Mode; closing it comes back', (tester) async {
+    final c = await _pump(tester, const Size(1024, 768));
+    await tester.tap(find.byTooltip('Settings'));
+    await tester.pump();
+    await tester.tap(find.text('All settings'));
+    await tester.pumpAndSettle();
+    expect(find.byType(SettingsShell), findsOneWidget);
+    expect(c.read(simpleModeProvider).value, isTrue);
+    await tester.tap(find.byTooltip('Back'));
+    await tester.pumpAndSettle();
+    expect(find.byType(SettingsShell), findsNothing);
+    expect(find.byType(SimpleShell), findsOneWidget);
+  });
+
+  testWidgets('a jump to a settings panel (gear chips, Open Storage) opens it over Simple Mode', (tester) async {
+    // The test font is wider than the real one and overflows the Storage panel.
+    tester.platformDispatcher.textScaleFactorTestValue = 0.5;
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    final c = await _pump(tester, const Size(1024, 768));
+    c.read(selectedSettingsPanelProvider.notifier).select('session.storage');
+    c.read(selectedTabIndexProvider.notifier).select(kOptionsTabIndex);
+    await tester.pumpAndSettle();
+    expect(find.byType(SettingsShell), findsOneWidget);
+    expect(c.read(selectedSettingsPanelProvider), 'session.storage');
+    expect(c.read(simpleModeProvider).value, isTrue);
+    await tester.tap(find.byTooltip('Back'));
+    await tester.pumpAndSettle();
+    // A second jump opens it again.
+    c.read(selectedTabIndexProvider.notifier).select(kOptionsTabIndex);
+    await tester.pumpAndSettle();
+    expect(find.byType(SettingsShell), findsOneWidget);
+  });
+
+  testWidgets('turning Simple Mode off in Settings closes Settings onto the full UI', (tester) async {
+    final c = await _pump(tester, const Size(1024, 768), feature: true);
+    await tester.tap(find.byTooltip('Settings'));
+    await tester.pump();
+    await tester.tap(find.text('All settings'));
+    await tester.pumpAndSettle();
+    await c.read(simpleModeProvider.notifier).set(false);
+    await tester.pumpAndSettle();
+    expect(find.byType(SettingsShell), findsNothing);
   });
 
   testWidgets('Sky shows the planetarium over a frame, and back', (tester) async {
@@ -1152,26 +1249,19 @@ void main() {
     expect(find.text('STOP'), findsOneWidget);
   });
 
-  testWidgets('the strip has Search, Night mode, the full UI and Settings out, in the full UI\'s order', (tester) async {
-    final container = await _pump(tester, const Size(1024, 768));
+  testWidgets('the strip has Night mode and Settings, and nothing that leads to the full UI', (tester) async {
+    final c = await _pump(tester, const Size(1024, 768));
     expect(find.byKey(const Key('simple-more')), findsNothing, reason: 'nothing hides under ⋯');
-    final order = ['Search settings', 'Night mode', 'Show all options', 'Settings'];
-    final xs = [for (final t in order) tester.getCenter(find.byTooltip(t)).dx];
-    for (var i = 1; i < xs.length; i++) {
-      expect(xs[i], greaterThan(xs[i - 1]), reason: '${order[i]} after ${order[i - 1]}');
-    }
-
-    await tester.tap(find.byTooltip('Settings'));
+    expect(find.byTooltip('Search settings'), findsNothing);
+    expect(find.byTooltip('Show all options'), findsNothing);
+    expect(tester.getCenter(find.byTooltip('Settings')).dx, greaterThan(tester.getCenter(find.byTooltip('Night mode')).dx));
+    // ⌘K (the full UI's search) does nothing here.
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyK);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
     await tester.pumpAndSettle();
-    expect(container.read(simpleModeProvider).value, isFalse);
-    expect(container.read(selectedTabIndexProvider), kOptionsTabIndex);
-
-    await container.read(simpleModeProvider.notifier).set(true);
-    await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('Show all options'));
-    await tester.pumpAndSettle();
-    expect(container.read(simpleModeProvider).value, isFalse);
-    expect(container.read(selectedTabIndexProvider), kLiveTabIndex);
+    expect(find.byType(Dialog), findsNothing);
+    expect(c.read(simpleModeProvider).value, isTrue);
   });
 
   testWidgets('only connected gear shows in the strip', (tester) async {
@@ -1214,8 +1304,9 @@ void main() {
     await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
     await tester.sendKeyEvent(LogicalKeyboardKey.comma);
     await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
-    await tester.pump();
-    expect(container.read(selectedTabIndexProvider), kOptionsTabIndex);
+    await tester.pumpAndSettle();
+    expect(find.byType(SettingsShell), findsOneWidget, reason: 'Settings over Simple Mode');
+    expect(container.read(simpleModeProvider).value, isTrue);
   });
 
   testWidgets('buttons use 10 px corners, not Material pills', (tester) async {

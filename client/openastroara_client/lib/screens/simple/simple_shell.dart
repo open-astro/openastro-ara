@@ -10,6 +10,9 @@ import '../../models/frame_histogram.dart';
 import '../../models/guider_status.dart';
 import '../../models/polar_align.dart';
 import '../../state/app_shell_state.dart';
+import '../../state/launch_gate_state.dart';
+import '../../state/profile_management_state.dart';
+import '../../state/saved_server_state.dart';
 import '../../state/guider/guide_step_state.dart';
 import '../../state/guider/guider_state.dart';
 import '../../state/imaging/last_frame_state.dart';
@@ -23,7 +26,6 @@ import '../../state/simple_messages_state.dart';
 import '../../state/simple_mode_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
-import '../../widgets/command_palette.dart';
 import '../../widgets/emergency_stop_button.dart';
 import '../../widgets/equipment/equipment_status_chip.dart';
 import '../../widgets/equipment_chip.dart'
@@ -33,6 +35,7 @@ import '../../widgets/imaging/guiding_strip.dart';
 import '../../widgets/imaging/histogram_strip.dart' show frameHistogramProvider;
 import '../../widgets/sky_atlas/stellarium_view.dart';
 import '../library/image_library_screen.dart';
+import '../settings/settings_shell.dart';
 import '../shell_listeners.dart';
 import 'simple_autopilot.dart';
 import 'simple_focus_panel.dart';
@@ -90,29 +93,12 @@ extension on SimpleModeScreen {
     SimpleModeScreen.polarAlign => Icons.explore_outlined,
     SimpleModeScreen.plan => Icons.playlist_play,
   };
-
-  /// The full-UI tab a mode opens until its Simple Mode screen exists
-  /// (brief: Preview, Polar align and Focus open Live).
-  // shortcut: Run always opens Sequence; the brief wants Live while a run is
-  // imaging — switch on the sequence state when the Run screen is built.
-  int get fullUiTab => switch (this) {
-    SimpleModeScreen.autopilot ||
-    SimpleModeScreen.preview ||
-    SimpleModeScreen.polarAlign ||
-    SimpleModeScreen.focus => kLiveTabIndex,
-    SimpleModeScreen.plan => kRunTabIndex,
-  };
-}
-
-/// Leave Simple Mode for the full UI, showing [tab].
-void leaveSimpleMode(WidgetRef ref, int tab) {
-  ref.read(selectedTabIndexProvider.notifier).select(tab);
-  ref.read(simpleModeProvider.notifier).set(false);
 }
 
 /// The one popover open beside a rail, if any. [settings] is the chip's: the
 /// current mode's options (Preview's exposure, Focus's panel).
-enum _Popover { none, modes, settings, queue }
+/// [menu] is the top bar's Settings menu.
+enum _Popover { none, modes, settings, queue, menu }
 
 /// Simple Mode (ALP-4810): the latest frame fills the window and only the
 /// shutter is always out. A right rail holds the mode (tap for the five
@@ -122,8 +108,9 @@ enum _Popover { none, modes, settings, queue }
 /// beside the rail and close with a tap on the image. Tapping the image with
 /// nothing open hides everything (the immersive view).
 ///
-/// All five modes stay here; any tab jump made from here (Settings, a
-/// device dot, ⌘K) opens the full UI.
+/// All five modes stay here, and nothing here leads to the full UI: Settings
+/// (the gear's menu, ⌘, a device dot, Open Storage) opens over Simple Mode.
+/// The way out is Settings' own Simple Mode switch.
 class SimpleShell extends ConsumerStatefulWidget {
   const SimpleShell({
     super.key,
@@ -141,7 +128,6 @@ class SimpleShell extends ConsumerStatefulWidget {
 class _SimpleShellState extends ConsumerState<SimpleShell> {
   bool _clean = false;
   bool _info = false;
-  bool _system = false;
 
   /// The planetarium on demand (the left rail's Sky), over any frame.
   bool _sky = false;
@@ -249,9 +235,17 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     super.dispose();
   }
 
-  // ⌘, / Ctrl+, opens Settings, which (for now) returns to the full UI.
-  void _openSettings() =>
-      ref.read(selectedTabIndexProvider.notifier).select(kOptionsTabIndex);
+  /// Settings over Simple Mode, on whatever panel was picked last.
+  void _openSettings() {
+    setState(() => _popover = _Popover.none);
+    unawaited(
+      Navigator.of(context)
+          .push(MaterialPageRoute<void>(builder: (_) => const _SettingsPage())),
+    );
+  }
+
+  /// Set while a jump to the Settings tab is turned back (see build).
+  bool _restoringTab = false;
 
   /// The first ⌘. / Ctrl+. asks; a second within 3 s stops (the keyboard's
   /// stand-in for the shutter's 2 s hold, as the Emergency Stop does).
@@ -317,7 +311,20 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
 
   @override
   Widget build(BuildContext context) {
+    // A jump to Settings (a device dot, Open Storage) opens it over Simple
+    // Mode and puts the tab back, so the next jump is a change again; any
+    // other tab jump still leaves for the full UI.
     ref.listen(selectedTabIndexProvider, (previous, next) {
+      if (_restoringTab) return;
+      if (next == kOptionsTabIndex) {
+        _restoringTab = true;
+        ref
+            .read(selectedTabIndexProvider.notifier)
+            .select(previous ?? kLiveTabIndex);
+        _restoringTab = false;
+        _openSettings();
+        return;
+      }
       ref.read(simpleModeProvider.notifier).set(false);
     });
     // Autopilot opens each step on its panel, and ends on the plan.
@@ -423,16 +430,6 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
               quiet: true,
               child: CallbackShortcuts(
                 bindings: <ShortcutActivator, VoidCallback>{
-                  const SingleActivator(
-                    LogicalKeyboardKey.keyK,
-                    meta: true,
-                  ): () =>
-                      showCommandPalette(context),
-                  const SingleActivator(
-                    LogicalKeyboardKey.keyK,
-                    control: true,
-                  ): () =>
-                      showCommandPalette(context),
                   const SingleActivator(LogicalKeyboardKey.comma, meta: true):
                       _openSettings,
                   const SingleActivator(
@@ -528,29 +525,22 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                           visible: panels,
                           child: Stack(
                             children: [
-                              const Positioned(
+                              Positioned(
                                 left: kSimpleInset,
                                 right: kSimpleInset,
                                 top: kSimpleInset,
                                 height: kSimpleBarHeight,
-                                child: _StatusStrip(),
+                                child: _StatusStrip(
+                                  onSettings: () => _toggle(_Popover.menu),
+                                ),
                               ),
-                              // Info and System: fact tiles hugging the bottom-left
-                              // corner, above the bottom row; System's row sits
-                              // above Info's.
-                              if (_info || _system)
-                                Positioned(
+                              // Info: fact tiles hugging the bottom-left corner,
+                              // above the bottom row.
+                              if (_info)
+                                const Positioned(
                                   left: kSimpleInset,
                                   bottom: kSimpleInset * 2 + kSimpleBarHeight,
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    spacing: AraSpace.s8,
-                                    children: [
-                                      if (_system) const SimpleSystemPanel(),
-                                      if (_info) const SimpleInfoPanel(),
-                                    ],
-                                  ),
+                                  child: SimpleInfoPanel(),
                                 ),
                               // Guiding and the histogram along the bottom, each
                               // once it has data: 16 px from the edge and from Stop.
@@ -574,12 +564,9 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                     key: _leftRailKey,
                                     child: _LeftRail(
                                       info: _info,
-                                      system: _system,
                                       sky: showSky,
                                       onInfo: () =>
                                           setState(() => _info = !_info),
-                                      onSystem: () =>
-                                          setState(() => _system = !_system),
                                       // With no frame there is only the sky.
                                       onSky: hasFrame
                                           ? () => setState(() => _sky = !_sky)
@@ -651,6 +638,17 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                             ),
                                           ),
                                     ),
+                                  ),
+                                )
+                              else if (_popover == _Popover.menu)
+                                Positioned(
+                                  right: kSimpleInset,
+                                  top: railTop,
+                                  child: _SettingsMenu(
+                                    onClose: () => setState(
+                                      () => _popover = _Popover.none,
+                                    ),
+                                    onSettings: _openSettings,
                                   ),
                                 )
                               else if (_popover != _Popover.none)
@@ -884,10 +882,11 @@ class SimplePanel extends StatelessWidget {
   );
 }
 
-/// Device dots (connected gear only), then Search, Night mode, Show all
-/// options and Settings, in the full UI's top-bar order.
+/// Device dots (connected gear only), then Night mode and the Settings menu.
 class _StatusStrip extends ConsumerWidget {
-  const _StatusStrip();
+  const _StatusStrip({required this.onSettings});
+
+  final VoidCallback onSettings;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -915,11 +914,6 @@ class _StatusStrip extends ConsumerWidget {
             ),
           ),
           IconButton(
-            icon: const Icon(Icons.search, size: 22),
-            tooltip: 'Search settings',
-            onPressed: () => showCommandPalette(context),
-          ),
-          IconButton(
             icon: Icon(
               night ? Icons.nights_stay : Icons.nights_stay_outlined,
               size: 22,
@@ -928,19 +922,10 @@ class _StatusStrip extends ConsumerWidget {
             tooltip: night ? 'Night mode on' : 'Night mode',
             onPressed: () => ref.read(nightModeProvider.notifier).set(!night),
           ),
-          // The full UI's Simple Mode button, mirrored: the way back.
-          IconButton(
-            icon: const Icon(Icons.fit_screen, size: 22),
-            tooltip: 'Show all options',
-            onPressed: () =>
-                leaveSimpleMode(ref, SimpleModeScreen.preview.fullUiTab),
-          ),
           IconButton(
             icon: const Icon(Icons.settings_outlined, size: 22),
             tooltip: 'Settings',
-            onPressed: () => ref
-                .read(selectedTabIndexProvider.notifier)
-                .select(kOptionsTabIndex),
+            onPressed: onSettings,
           ),
         ],
       ),
@@ -1032,18 +1017,14 @@ double simpleRailScale(BuildContext context) =>
 class _LeftRail extends StatelessWidget {
   const _LeftRail({
     required this.info,
-    required this.system,
     required this.sky,
     required this.onInfo,
-    required this.onSystem,
     required this.onSky,
   });
 
   final bool info;
-  final bool system;
   final bool sky;
   final VoidCallback onInfo;
-  final VoidCallback onSystem;
   final VoidCallback? onSky;
 
   @override
@@ -1066,13 +1047,6 @@ class _LeftRail extends StatelessWidget {
           label: 'Info',
           selected: info,
           onTap: onInfo,
-        ),
-        _RailButton(
-          key: const Key('simple-system'),
-          icon: Icons.memory,
-          label: 'System',
-          selected: system,
-          onTap: onSystem,
         ),
         _RailButton(
           key: const Key('simple-library'),
@@ -1599,4 +1573,108 @@ ThemeData simpleTheme(ThemeData base) {
       ),
     ),
   );
+}
+
+/// The top bar's Settings menu: the rig's figures (System), the rig and
+/// profile with the way to change them, and the rest of Settings.
+class _SettingsMenu extends ConsumerWidget {
+  const _SettingsMenu({required this.onClose, required this.onSettings});
+
+  final VoidCallback onClose;
+  final VoidCallback onSettings;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final server = ref.watch(activeServerProvider);
+    final profiles = ref.watch(profileManagementProvider).value;
+    final profile = profiles?.profiles
+        .where((p) => p.id == profiles.activeId)
+        .firstOrNull
+        ?.name;
+    final running = ref.watch(
+      sequenceRunStateProvider.select((s) => s.value?.state?.isActive ?? false),
+    );
+    Widget fact(String label, String value) => Row(
+      children: [
+        Text(label, style: AraText.caption),
+        const SizedBox(width: AraSpace.s12),
+        Expanded(
+          child: Text(
+            value,
+            style: kSimpleText,
+            textAlign: TextAlign.right,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
+    );
+    Widget item(String label, VoidCallback onTap) => SizedBox(
+      width: double.infinity,
+      child: TextButton(
+        style: TextButton.styleFrom(
+          backgroundColor: AraColors.tileFill,
+          alignment: Alignment.centerLeft,
+          minimumSize: const Size(0, 44),
+        ),
+        onPressed: onTap,
+        child: Text(label, style: kSimpleText),
+      ),
+    );
+    void relaunch({required bool rig}) {
+      onClose();
+      ref.read(offlineModeProvider.notifier).exit();
+      ref.read(profileGatePassedProvider.notifier).reset();
+      // Changing rig starts at the rig list; changing profile stays on this
+      // rig and opens its profile box.
+      if (rig) ref.read(serverChooserRequestedProvider.notifier).request();
+    }
+
+    return SimplePanel(
+      key: const Key('simple-menu'),
+      padding: const EdgeInsets.all(AraSpace.s12),
+      child: IntrinsicWidth(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          spacing: AraSpace.s8,
+          children: [
+            const Text('System', style: kSimpleText),
+            const SimpleSystemPanel(),
+            const Divider(height: AraSpace.s8),
+            fact(
+              'Rig',
+              server == null ? '—' : server.mdnsName ?? server.hostname,
+            ),
+            fact('Profile', profile ?? '—'),
+            if (running)
+              Text(
+                'A plan is running. It keeps running on the rig; pick this '
+                'profile again to come back to it.',
+                style: AraText.caption.copyWith(color: AraColors.accentBusy),
+              ),
+            item('Change profile', () => relaunch(rig: false)),
+            item('Change rig', () => relaunch(rig: true)),
+            const Divider(height: AraSpace.s8),
+            item('All settings', onSettings),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Settings over Simple Mode, closed with Back. Turning Simple Mode off in
+/// it closes it onto the full UI.
+class _SettingsPage extends ConsumerWidget {
+  const _SettingsPage();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    ref.listen(simpleModeActiveProvider, (_, on) {
+      if (!on) Navigator.of(context).maybePop();
+    });
+    return Scaffold(
+      appBar: AppBar(title: const Text('Settings')),
+      body: const SettingsShell(),
+    );
+  }
 }

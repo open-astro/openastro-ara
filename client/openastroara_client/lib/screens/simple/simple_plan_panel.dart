@@ -47,8 +47,7 @@ import 'simple_shell.dart'
         kSimpleGoStyle,
         kSimpleInset,
         kSimpleRailWidth,
-        simpleRailScale,
-        leaveSimpleMode;
+        simpleRailScale;
 
 /// The first plan for a filter set: LRGB when the set has any of it, else the
 /// narrowband filters, else every filter; one row with no filter name when
@@ -1980,10 +1979,8 @@ class _RunError extends ConsumerWidget {
       if (run.noStorage)
         TextButton(
           onPressed: () {
-            ref
-                .read(selectedSettingsPanelProvider.notifier)
-                .select('session.storage');
-            leaveSimpleMode(ref, kOptionsTabIndex);
+            // The shell opens Settings over Simple Mode.
+            openSettingsPanel(ref, 'session.storage');
           },
           child: const Text('Open Storage'),
         ),

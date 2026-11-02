@@ -715,7 +715,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(c.read(selectedSettingsPanelProvider), 'session.storage');
     expect(c.read(selectedTabIndexProvider), kOptionsTabIndex);
-    expect(prefs.value, isFalse, reason: 'Simple Mode left');
+    expect(prefs.value, isTrue, reason: 'Settings opens over Simple Mode (the shell shows it)');
   });
 
   testWidgets('Night done: how long, how it ended, where it stopped, and the frames the library filed per filter',
