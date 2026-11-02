@@ -825,6 +825,26 @@ void main() {
     await tester.pump(const Duration(seconds: 1));
   });
 
+  testWidgets('a running step that reports how far it has got shows a bar along the pill\'s foot', (tester) async {
+    await _pump(tester, const Size(1024, 768),
+        plan: const SimpleRun(sequenceId: 'seq-1', started: true, targets: [
+          SimpleTarget(name: 'M31', steps: [FilterPlanStep(filterName: 'L', exposureSeconds: 120, frameCount: 30)]),
+        ]),
+        runState: const SequenceRunStateInfo(
+            sequenceId: 'seq-1',
+            state: SequenceRunState.running,
+            currentInstructionDescription: 'Cooling camera to -10 °C',
+            currentInstructionProgress: 0.4));
+    await tester.pump();
+    final bar = find.descendant(of: find.byType(SimpleStatusPill), matching: find.byType(LinearProgressIndicator));
+    expect(bar, findsOneWidget);
+    expect(tester.widget<LinearProgressIndicator>(bar).value, 0.4);
+    final pill = tester.getRect(find.descendant(of: find.byType(SimpleStatusPill), matching: find.byType(SimplePanel)));
+    expect(pill.height, kSimpleStatusHeight, reason: 'the bar sits inside the pill, which keeps its height');
+    expect(tester.getRect(bar).bottom, lessThanOrEqualTo(pill.bottom));
+    expect(tester.getRect(bar).top, greaterThan(pill.center.dy), reason: 'along its foot');
+  });
+
   testWidgets('a scheduled plan waiting on the rig: the pill says when it starts', (tester) async {
     final at = DateTime.now().add(const Duration(hours: 2));
     await _pump(tester, const Size(1024, 768),

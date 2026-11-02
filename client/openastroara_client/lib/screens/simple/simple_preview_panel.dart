@@ -620,54 +620,85 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
                   : (null, null, AraColors.textSecondary),
           };
     if (label == null) return const SizedBox.shrink();
+    // The plan's step shows how far it has got (cooling, a wait, autofocus)
+    // as a line along the pill's foot.
+    final stepProgress =
+        !stopping &&
+            !looping &&
+            p.phase == CapturePhase.idle &&
+            (run?.state?.isActive ?? false)
+        ? run?.currentInstructionProgress
+        : null;
     return ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: kSimpleStatusMaxWidth),
       child: SimplePanel(
         padding: const EdgeInsets.symmetric(horizontal: AraSpace.s16),
-        child: SizedBox(
-          height: kSimpleStatusHeight,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.circle, size: 10, color: dot),
-              const SizedBox(width: AraSpace.s8),
-              // One text, so the label keeps its room and only the detail's
-              // tail is cut (two Flexibles halved the space: "Taking a fr…").
-              Flexible(
-                child: Text.rich(
-                  TextSpan(
-                    text: label,
-                    children: [
-                      if (detail != null) ...[
-                        const WidgetSpan(child: SizedBox(width: AraSpace.s8)),
-                        TextSpan(
-                          text: detail,
-                          style: const TextStyle(color: AraColors.textSecondary),
-                        ),
-                      ],
-                    ],
-                  ),
-                  style: kSimpleText,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              if (exposing) ...[
-                const SizedBox(width: AraSpace.s12),
-                SizedBox(
-                  width: 60,
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(2),
-                    child: LinearProgressIndicator(
-                      value: (p.displayProgressPct ?? 0) / 100,
-                      minHeight: 4,
-                      backgroundColor: kSimpleTileFill,
+        child: Stack(
+          children: [
+            SizedBox(
+              height: kSimpleStatusHeight,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.circle, size: 10, color: dot),
+                  const SizedBox(width: AraSpace.s8),
+                  // One text, so the label keeps its room and only the detail's
+                  // tail is cut (two Flexibles halved the space: "Taking a fr…").
+                  Flexible(
+                    child: Text.rich(
+                      TextSpan(
+                        text: label,
+                        children: [
+                          if (detail != null) ...[
+                            const WidgetSpan(
+                              child: SizedBox(width: AraSpace.s8),
+                            ),
+                            TextSpan(
+                              text: detail,
+                              style: const TextStyle(
+                                color: AraColors.textSecondary,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                      style: kSimpleText,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
+                  if (exposing) ...[
+                    const SizedBox(width: AraSpace.s12),
+                    SizedBox(
+                      width: 60,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(2),
+                        child: LinearProgressIndicator(
+                          value: (p.displayProgressPct ?? 0) / 100,
+                          minHeight: 4,
+                          backgroundColor: kSimpleTileFill,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            if (stepProgress != null)
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 6,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(2),
+                  child: LinearProgressIndicator(
+                    value: stepProgress,
+                    minHeight: 3,
+                    backgroundColor: kSimpleTileFill,
+                  ),
                 ),
-              ],
-            ],
-          ),
+              ),
+          ],
         ),
       ),
     );

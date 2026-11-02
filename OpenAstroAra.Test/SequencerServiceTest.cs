@@ -16,6 +16,7 @@ using Microsoft.Extensions.Hosting;
 using Moq;
 using NUnit.Framework;
 using OpenAstroAra.Core.Enums;
+using OpenAstroAra.Core.Model;
 using OpenAstroAra.Sequencer.Container;
 using OpenAstroAra.Sequencer.SequenceItem;
 using OpenAstroAra.Sequencer.SequenceItem.Utility;
@@ -257,6 +258,35 @@ namespace OpenAstroAra.Test {
                                                 && d.ValueKind == JsonValueKind.String && d.GetString()!.Length > 0).ToList();
             Assert.That(described, Is.Not.Empty, "the running wait is described on the wire, not only on GET /state");
             Assert.That(progress.All(e => e.Payload.TryGetProperty("current_target_name", out _)), Is.True, "the target rides every frame (null before a target)");
+        }
+
+        [Test]
+        public async Task Progress_frames_carry_how_far_the_current_instruction_has_got() {
+            // A step that reports a fraction (cooling, a wait, autofocus) shows a bar in Simple Mode's
+            // status pill; the wait reports elapsed / total through CoreUtil.Wait.
+            var id = Guid.NewGuid();
+            var ws = new RecordingWsBroadcaster();
+            var svc = BuildService(id, BuildBody(c => {
+                c.Items.Add(new WaitForTimeSpan { Time = 2 });
+            }), ws: ws);
+
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            await WaitForTerminalAsync(svc, id);
+
+            var fractions = ws.Records.Where(e => e.Type == "sequence.progress")
+                .Select(e => e.Payload.TryGetProperty("current_instruction_progress", out var p) && p.ValueKind == JsonValueKind.Number
+                    ? p.GetDouble() : (double?)null)
+                .Where(f => f is not null).Select(f => f!.Value).ToList();
+            Assert.That(fractions, Is.Not.Empty, "the wait's fraction rides the progress frames");
+            Assert.That(fractions, Has.All.InRange(0.0, 1.0));
+        }
+
+        [Test]
+        public void A_progress_report_gives_a_fraction_only_when_the_instruction_reports_one() {
+            Assert.That(SequencerService.ProgressOf(new ApplicationStatus { Progress = 0.4 }), Is.EqualTo(0.4).Within(1e-9));
+            Assert.That(SequencerService.ProgressOf(new ApplicationStatus { Progress = 30, MaxProgress = 60 }), Is.EqualTo(0.5).Within(1e-9));
+            Assert.That(SequencerService.ProgressOf(new ApplicationStatus { Progress = 1.7 }), Is.EqualTo(1.0), "clamped");
+            Assert.That(SequencerService.ProgressOf(new ApplicationStatus { Status = "Slewing" }), Is.Null, "no fraction reported");
         }
 
         [Test]

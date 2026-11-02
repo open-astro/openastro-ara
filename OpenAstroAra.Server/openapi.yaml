@@ -13728,6 +13728,13 @@ components:
             - string
           format: int32
           default: 0
+        current_instruction_progress:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
     SequenceShareDto:
       required:
         - sequence_id

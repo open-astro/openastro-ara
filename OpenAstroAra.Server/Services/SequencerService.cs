@@ -297,6 +297,13 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         return string.IsNullOrWhiteSpace(detail) ? main : $"{main} · {detail}";
     }
 
+    /// <summary>How far the reporting instruction has got, 0–1, when it reports a fraction (cooling, a
+    /// wait, autofocus); null when it reports none. Pure.</summary>
+    internal static double? ProgressOf(ApplicationStatus status) =>
+        status.Progress < 0 || status.MaxProgress <= 0
+            ? null
+            : Math.Clamp(status.Progress / status.MaxProgress, 0, 1);
+
     /// <summary>What the Run tab shows from Resume until the retried instruction reports again. The pause
     /// text ("Guiding did not start … press Resume") otherwise stood for minutes over a run that was
     /// already calibrating (2026-10-16).</summary>
@@ -909,6 +916,7 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
                     // Tree-derived status first, so the instruction's own report wins.
                     RefreshLiveStatus(run);
                     run.SetDescription(DescribeStatus(status));
+                    run.SetProgress(ProgressOf(status));
                     progressPublisher.Poke();
                     checkpoints.Poke();
                 });
@@ -1202,6 +1210,7 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
                 // left the Run tab on "Run started" until the first exposure.
                 ["current_instruction_description"] = run.CurrentInstructionDescription,
                 ["current_target_name"] = run.CurrentTargetName,
+                ["current_instruction_progress"] = run.CurrentInstructionProgress,
             };
             var (estimatedTotal, estimatedRemaining) = run.EstimatedSeconds();
             payload["estimated_total_seconds"] = estimatedTotal;
@@ -1472,6 +1481,14 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
             lock (_gate) { CurrentInstructionDescription = description; }
         }
 
+        /// <summary>The running instruction's own fraction done; cleared when the next leaf starts.</summary>
+        public double? CurrentInstructionProgress { get; private set; }
+
+        public void SetProgress(double? fraction) {
+            if (fraction is null) return;
+            lock (_gate) { CurrentInstructionProgress = fraction; }
+        }
+
         /// <summary>Set the instruction total + completed count + current index as one consistent snapshot.</summary>
         public bool UpdateProgress(int total, int completed, int? runningIndex) {
             lock (_gate) {
@@ -1518,6 +1535,7 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
                 if (description != _lastLeafDescription) {
                     _lastLeafDescription = description;
                     CurrentInstructionDescription = description;
+                    CurrentInstructionProgress = null;
                     changed = true;
                 }
                 if (targetName is not null && targetName != CurrentTargetName) {
@@ -1618,7 +1636,8 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
                     InstructionsTotal: InstructionCount,
                     CurrentInstructionDescription: CurrentInstructionDescription,
                     EstimatedTotalSeconds: total,
-                    EstimatedRemainingSeconds: remaining);
+                    EstimatedRemainingSeconds: remaining,
+                    CurrentInstructionProgress: CurrentInstructionProgress);
             }
         }
     }
