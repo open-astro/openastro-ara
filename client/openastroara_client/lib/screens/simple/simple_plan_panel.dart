@@ -7,6 +7,7 @@ import 'package:flutter/semantics.dart' show CustomSemanticsAction;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/sequence/imaging_run_body.dart';
+import '../../models/sequence/nina_dom.dart' show childrenOf, withChildren;
 import '../../models/sequence/sequence_summary.dart';
 import '../../services/sequence_api.dart' show SequenceClient;
 import '../../state/equipment/camera_state.dart';
@@ -85,23 +86,6 @@ List<FilterPlanStep> simpleRunDefaultPlan(
           filterCount: picked.length,
         ),
       ),
-  ];
-}
-
-/// Frames done per plan row, the loops running in plan order. Pure —
-/// unit-tested.
-// shortcut: counts the run's filed frames against the plan in order, so a
-// skipped or failed frame shifts the split; read per-loop counts from the
-// run tree if that matters.
-List<int> simpleRunProgress(List<FilterPlanStep> steps, int captured) {
-  var left = captured;
-  return [
-    for (final s in steps)
-      () {
-        final done = math.min(left, s.frameCount);
-        left -= done;
-        return done;
-      }(),
   ];
 }
 
@@ -297,26 +281,84 @@ String? simpleTargetTag(String name, List<String> designations) {
   return tags.firstOrNull?.$2;
 }
 
-/// The plan Simple Mode created on the rig (its rows, to split the progress
-/// per filter), whether it has started, a call in flight, a pause asked for
-/// but not reached yet, and why the last call failed.
+/// One target in Simple Mode's queue: its name, the plan square's tag, its
+/// rows (to split the progress per filter), its position (to queue it again)
+/// and, queued below the horizon, when it rises.
+class SimpleTarget {
+  const SimpleTarget({
+    required this.name,
+    this.tag,
+    this.steps = const [],
+    this.raDeg = 0,
+    this.decDeg = 0,
+    this.rise,
+  });
+
+  final String name;
+
+  /// The catalog tag for the plan square (null: its name).
+  final String? tag;
+  final List<FilterPlanStep> steps;
+
+  /// J2000.
+  final double raDeg;
+  final double decDeg;
+
+  /// When it rises, if it was below the horizon when queued.
+  // shortcut: the client holds the start; the daemon waiting for the rise
+  // itself needs ALP-4857.
+  final DateTime? rise;
+
+  /// Still below the horizon at [now].
+  bool waiting(DateTime now) => rise != null && now.isBefore(rise!);
+}
+
+/// Frames done per row of each target, the targets and their rows running in
+/// order. Pure — unit-tested.
+// shortcut: counts the run's filed frames against the plan in order, so a
+// skipped or failed frame shifts the split; read per-loop counts from the
+// run tree if that matters.
+List<List<int>> simpleTargetProgress(List<SimpleTarget> targets, int captured) {
+  var left = captured;
+  return [
+    for (final t in targets)
+      [
+        for (final s in t.steps)
+          () {
+            final done = math.min(left, s.frameCount);
+            left -= done;
+            return done;
+          }(),
+      ],
+  ];
+}
+
+/// The target the run is on: the first not yet full, else the last. Pure —
+/// unit-tested.
+int simpleCurrentTarget(List<SimpleTarget> targets, int captured) {
+  final done = simpleTargetProgress(targets, captured);
+  for (var i = 0; i < targets.length; i++) {
+    if (_total(targets[i].steps) > done[i].fold(0, (a, b) => a + b)) return i;
+  }
+  return math.max(0, targets.length - 1);
+}
+
+/// Simple Mode's queue on the rig: one sequence holding its targets in order,
+/// whether it has started, a call in flight, a pause asked for but not
+/// reached yet, and why the last call failed.
 class SimpleRun {
   const SimpleRun({
     this.sequenceId,
-    this.targetName,
-    this.steps = const [],
+    this.targets = const [],
     this.started = false,
     this.busy = false,
     this.pausing = false,
     this.error,
     this.noStorage = false,
-    this.rise,
-    this.tag,
   });
 
   final String? sequenceId;
-  final String? targetName;
-  final List<FilterPlanStep> steps;
+  final List<SimpleTarget> targets;
   final bool started;
   final bool busy;
 
@@ -327,19 +369,17 @@ class SimpleRun {
   /// The daemon refused for want of a storage disk: [error] offers Storage.
   final bool noStorage;
 
-  /// When the target rises, if it was below the horizon when queued: the
-  /// plan can't start before then.
-  // shortcut: the client holds the start; the daemon waiting for the rise
-  // itself needs ALP-4857.
-  final DateTime? rise;
+  /// Every target's rows, in order.
+  List<FilterPlanStep> get steps => [for (final t in targets) ...t.steps];
 
-  /// The target's catalog tag, for the plan square (null: its name).
-  final String? tag;
+  /// The first target, which the run starts on.
+  String? get targetName => targets.firstOrNull?.name;
 
-  /// Still below the horizon at [now].
-  bool waiting(DateTime now) => rise != null && now.isBefore(rise!);
+  /// The first target is still below the horizon at [now]: no start yet.
+  bool waiting(DateTime now) => targets.firstOrNull?.waiting(now) ?? false;
 
   SimpleRun copyWith({
+    List<SimpleTarget>? targets,
     bool? started,
     bool? busy,
     bool? pausing,
@@ -347,15 +387,12 @@ class SimpleRun {
     bool noStorage = false,
   }) => SimpleRun(
         sequenceId: sequenceId,
-        targetName: targetName,
-        steps: steps,
+        targets: targets ?? this.targets,
         started: started ?? this.started,
         busy: busy ?? this.busy,
         pausing: pausing ?? this.pausing,
         error: error,
         noStorage: noStorage,
-        rise: rise,
-        tag: tag,
       );
 }
 
@@ -398,25 +435,28 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
     return const SimpleRun();
   }
 
-  /// Add to queue: the run for the picked target, on the rig but not started.
-  /// [ref] is the caller's widget's (the create reads the widget tree). True
-  /// once created.
-  // shortcut: one queued plan for now, so adding again replaces it (the old
-  // one is deleted); keep a list once the corner shows several squares.
-  Future<bool> create(WidgetRef ref) async {
+  /// Add to queue: the picked target joins the end of the queue (the one
+  /// sequence; live when it is imaging), or makes it. [first] puts it at the
+  /// front instead (Start now). [ref] is the caller's widget's (the create
+  /// reads the widget tree). True once on the rig.
+  Future<bool> create(WidgetRef ref, {bool first = false}) async {
     final sel = ref.read(planetariumSelectionProvider);
     final steps = ref.read(simpleRunPlanProvider);
     if (sel == null || state.busy) return false;
-    final old = state.started ? null : state.sequenceId;
+    final queue = state.sequenceId;
     state = state.copyWith(busy: true);
     try {
+      // The append goes to the selected sequence.
+      if (queue != null) {
+        this.ref.read(selectedSequenceIdProvider.notifier).select(queue);
+      }
       final r = await createImagingRun(
         ref,
         raDeg: sel.raJ2000Hours * 15,
         decDeg: sel.decJ2000Deg,
         targetName: sel.name,
         jumpToRun: false,
-        appendToOpen: false,
+        appendToOpen: queue != null,
         filterPlan: steps.first.filterName.isEmpty ? null : steps,
         exposureSeconds: steps.first.exposureSeconds,
         frameCount: steps.first.frameCount,
@@ -428,19 +468,33 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
         );
         return false;
       }
-      state = SimpleRun(
-        sequenceId: r.sequenceId,
-        targetName: sel.name,
-        steps: steps,
-        rise: sel.belowHorizon ? sel.rise : null,
-        tag: simpleTargetTag(sel.name, sel.designations),
-      );
-      if (old != null) {
-        // shortcut: a failed delete leaves the old plan in the Sequence list;
-        // update the plan in place if that clutters.
+      if (queue != null && r.sequenceId != queue) {
+        // The daemon refused the append (the run is winding down) and a
+        // second sequence was made: don't leave it behind.
         try {
-          await this.ref.read(sequenceApiProvider)?.deleteSequence(old);
+          await this.ref.read(sequenceApiProvider)?.deleteSequence(r.sequenceId);
         } catch (_) {}
+        state = state.copyWith(
+          busy: false,
+          error: "The run is ending; this target can't join it.",
+        );
+        return false;
+      }
+      final target = SimpleTarget(
+        name: sel.name,
+        tag: simpleTargetTag(sel.name, sel.designations),
+        steps: steps,
+        raDeg: sel.raJ2000Hours * 15,
+        decDeg: sel.decJ2000Deg,
+        rise: sel.belowHorizon ? sel.rise : null,
+      );
+      if (queue == null) {
+        state = SimpleRun(sequenceId: r.sequenceId, targets: [target]);
+      } else if (first && state.targets.isNotEmpty) {
+        await _moveFirst(queue, target.name, state.targets.first.name);
+        state = state.copyWith(targets: [target, ...state.targets]);
+      } else {
+        state = state.copyWith(targets: [...state.targets, target]);
       }
       return true;
     } catch (e) {
@@ -449,9 +503,47 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
     }
   }
 
-  /// Create and start (or ▶ with a target picked and no plan yet).
+  // Start now on a queue that hasn't started: the new block goes before the
+  // first target's.
+  Future<void> _moveFirst(String id, String name, String before) async {
+    final api = ref.read(sequenceApiProvider);
+    if (api == null) return;
+    final body = (await api.getSequenceDetail(id)).body;
+    final from = indexOfTargetBlock(body, name);
+    final to = indexOfTargetBlock(body, before);
+    if (from < 0 || to < 0 || from < to) return;
+    final children = childrenOf(body);
+    children.insert(to, children.removeAt(from));
+    await api.updateSequence(id, body: withChildren(body, children));
+  }
+
+  /// Remove target [i] from the queue (one not started yet): live from a
+  /// running sequence, else from the stored body.
+  Future<void> remove(int i) async {
+    final api = ref.read(sequenceApiProvider);
+    final id = state.sequenceId;
+    if (api == null || id == null || i >= state.targets.length) return;
+    final name = state.targets[i].name;
+    try {
+      final body = (await api.getSequenceDetail(id)).body;
+      final active =
+          ref.read(sequenceRunStateProvider).value?.state?.isActive ?? false;
+      if (active) {
+        final at = indexOfTargetBlock(body, name);
+        if (at >= 0) await api.removeRunItem(id, [at]);
+      } else if (removeTargetFromRunBody(body, name) case final next?) {
+        await api.updateSequence(id, body: next);
+      }
+      state = state.copyWith(targets: [...state.targets]..removeAt(i));
+    } catch (e) {
+      state = state.copyWith(error: _why(e, 'remove it from the queue'));
+    }
+  }
+
+  /// Create and start (or ▶ with a target picked and no plan yet); with a
+  /// queue, Start now: the target goes first.
   Future<bool> createAndStart(WidgetRef ref) async {
-    if (!await create(ref)) return false;
+    if (!await create(ref, first: state.sequenceId != null)) return false;
     await start();
     return state.error == null;
   }
@@ -560,59 +652,169 @@ String _sub(FilterPlanStep s) {
   return s.filterName.isEmpty ? len : '${s.filterName} · $len';
 }
 
-/// The tracker above the rail, for the plan's whole life: the target, frames
-/// done of the plan, the filter and sub length in hand, and the time (total
-/// before the start, left while imaging). Green ready, blue imaging, amber
-/// paused, green done. Nothing without a plan. Tap: the sheet or the
-/// progress panel.
-class SimpleRunTracker extends ConsumerWidget {
+/// The plan squares under the strip, for the queue's whole life, right to
+/// left in queue order: each target's tag, frames done of its total, the
+/// filter and sub length in hand, and the time (total before it starts, left
+/// while imaging). The target in hand is green ready, blue imaging, amber
+/// paused; the others green. Nothing without a plan. A tap on the one in
+/// hand: the sheet or the progress panel; on a queued one: Remove under it.
+class SimpleRunTracker extends ConsumerStatefulWidget {
   const SimpleRunTracker({super.key, required this.onTap});
 
   final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<SimpleRunTracker> createState() => _SimpleRunTrackerState();
+}
+
+class _SimpleRunTrackerState extends ConsumerState<SimpleRunTracker> {
+  /// The queued square showing Remove, if any.
+  int? _picked;
+
+  @override
+  Widget build(BuildContext context) {
     final run = ref.watch(simpleRunProvider);
     final info = ref.watch(sequenceRunStateProvider).value;
     final phase = simpleRunPhase(run, info);
     if (phase == SimpleRunPhase.none) return const SizedBox.shrink();
     final ours = run.sequenceId != null && info?.sequenceId == run.sequenceId;
-    final steps = run.steps;
     final captured = ours || !run.started ? (info?.framesCaptured ?? 0) : 0;
-    final frames = phase == SimpleRunPhase.ready ? 0 : captured;
-    final done = simpleRunProgress(steps, frames);
-    final total = _total(steps);
-    final known = steps.isNotEmpty && (ours || phase == SimpleRunPhase.ready);
-    final left = known
-        ? [
-            for (var i = 0; i < steps.length; i++)
-              (steps[i].frameCount - done[i]) * steps[i].exposureSeconds,
-          ].fold(0.0, (a, b) => a + b)
-        : null;
-    final color = switch (phase) {
+    final known = run.targets.isNotEmpty && (ours || phase == SimpleRunPhase.ready);
+    final active = switch (phase) {
       SimpleRunPhase.ready || SimpleRunPhase.done => AraColors.accentConnected,
       SimpleRunPhase.paused => AraColors.accentBusy,
       _ => AraColors.selectionBg,
     };
-    final last = switch (phase) {
-      SimpleRunPhase.ready when run.waiting(DateTime.now()) =>
-        'rises ${_hhmm(run.rise!.toLocal())}',
+    String? stateWord() => switch (phase) {
       SimpleRunPhase.pausing => 'Pausing…',
       SimpleRunPhase.paused => 'Paused',
       SimpleRunPhase.done => 'Done',
-      _ => (info?.estimatedRemainingSeconds ?? left) == null
-          ? ''
-          : simpleRunDuration(info?.estimatedRemainingSeconds ?? left!),
+      _ => null,
     };
+    if (!known) {
+      // A run picked up from the daemon: what it reports.
+      return _PlanSquare(
+        key: const Key('simple-run-tracker'),
+        name: info?.currentTargetName ?? '',
+        frames: '$captured',
+        last: stateWord() ??
+            (info?.estimatedRemainingSeconds == null
+                ? ''
+                : simpleRunDuration(info!.estimatedRemainingSeconds!)),
+        color: active,
+        onTap: widget.onTap,
+      );
+    }
+    final frames = phase == SimpleRunPhase.ready ? 0 : captured;
+    final progress = simpleTargetProgress(run.targets, frames);
+    final cur = simpleCurrentTarget(run.targets, frames);
+    final now = DateTime.now();
+    Widget square(int i) {
+      final t = run.targets[i];
+      final done = progress[i];
+      final got = done.fold(0, (a, b) => a + b);
+      final total = _total(t.steps);
+      final finished = phase == SimpleRunPhase.done || i < cur;
+      final inHand = i == cur && !finished;
+      final left = [
+        for (var r = 0; r < t.steps.length; r++)
+          (t.steps[r].frameCount - done[r]) * t.steps[r].exposureSeconds,
+      ].fold(0.0, (a, b) => a + b);
+      final last = finished
+          ? 'Done'
+          : t.waiting(now) && (!inHand || phase == SimpleRunPhase.ready)
+          ? 'rises ${_hhmm(t.rise!.toLocal())}'
+          : inHand
+          ? stateWord() ??
+                simpleRunDuration(
+                  run.targets.length == 1
+                      ? info?.estimatedRemainingSeconds ?? left
+                      : left,
+                )
+          : simpleRunDuration(left);
+      return _PlanSquare(
+        name: t.tag ?? t.name,
+        label: t.name,
+        frames: '$got / $total',
+        sub: t.steps.isEmpty ? null : _sub(t.steps[_current(t.steps, done)]),
+        last: last,
+        paused: inHand && phase == SimpleRunPhase.paused,
+        color: inHand ? active : AraColors.accentConnected,
+        fraction: inHand && phase != SimpleRunPhase.ready && total > 0
+            ? got / total
+            : null,
+        onTap: inHand || finished
+            ? widget.onTap
+            : () => setState(() => _picked = _picked == i ? null : i),
+      );
+    }
+
+    return Row(
+      key: const Key('simple-run-tracker'),
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      spacing: 6,
+      children: [
+        // The queue runs right to left: the first target sits in the corner.
+        for (var i = run.targets.length - 1; i >= 0; i--)
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              square(i),
+              if (_picked == i && i > cur && phase != SimpleRunPhase.done)
+                TextButton(
+                  key: const Key('simple-run-remove'),
+                  onPressed: () {
+                    setState(() => _picked = null);
+                    ref.read(simpleRunProvider.notifier).remove(i);
+                  },
+                  child: const Text('Remove'),
+                ),
+            ],
+          ),
+      ],
+    );
+  }
+}
+
+/// One plan square: the target's tag, frames, filter · sub and time, a bar
+/// filling while it images.
+class _PlanSquare extends StatelessWidget {
+  const _PlanSquare({
+    super.key,
+    required this.name,
+    this.label,
+    required this.frames,
+    this.sub,
+    required this.last,
+    required this.color,
+    this.paused = false,
+    this.fraction,
+    required this.onTap,
+  });
+
+  final String name;
+
+  /// The whole name, for screen readers ([name] may be the tag).
+  final String? label;
+  final String frames;
+  final String? sub;
+  final String last;
+  final Color color;
+  final bool paused;
+  final double? fraction;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
     final small = kSimpleText.copyWith(
       fontSize: 11.5,
       color: AraColors.textSecondary,
     );
     return Semantics(
       button: true,
-      label: 'Plan: ${run.targetName ?? info?.currentTargetName ?? ''}',
+      label: 'Plan: ${label ?? name}',
       child: GestureDetector(
-        key: const Key('simple-run-tracker'),
         onTap: onTap,
         child: Container(
           width: kSimpleRailWidth,
@@ -634,18 +836,12 @@ class SimpleRunTracker extends ConsumerWidget {
                     spacing: 2,
                     children: [
                       for (final (text, style) in [
-                        (
-                          run.tag ??
-                              run.targetName ??
-                              info?.currentTargetName ??
-                              '',
-                          kSimpleText.copyWith(fontWeight: FontWeight.w600),
-                        ),
-                        (known ? '$frames / $total' : '$captured', kSimpleText),
-                        if (known) (_sub(steps[_current(steps, done)]), small),
+                        (name, kSimpleText.copyWith(fontWeight: FontWeight.w600)),
+                        (frames, kSimpleText),
+                        if (sub != null) (sub!, small),
                         (
                           last,
-                          phase == SimpleRunPhase.paused
+                          paused
                               ? small.copyWith(color: AraColors.accentBusy)
                               : small,
                         ),
@@ -658,11 +854,11 @@ class SimpleRunTracker extends ConsumerWidget {
                   ),
                 ),
               ),
-              if (known && total > 0 && phase != SimpleRunPhase.ready)
+              if (fraction != null)
                 Align(
                   alignment: Alignment.bottomLeft,
                   child: FractionallySizedBox(
-                    widthFactor: frames / total,
+                    widthFactor: fraction,
                     child: Container(height: 3, color: color),
                   ),
                 ),
@@ -751,7 +947,7 @@ class _SimpleRunShutterState extends ConsumerState<SimpleRunShutter>
     // queued below the horizon waits for the rise.
     final waiting = phase == SimpleRunPhase.ready && run.waiting(DateTime.now());
     if (waiting) {
-      _riseTimer ??= Timer(run.rise!.difference(DateTime.now()), () {
+      _riseTimer ??= Timer(run.targets.first.rise!.difference(DateTime.now()), () {
         _riseTimer = null;
         if (mounted) setState(() {});
       });
@@ -770,7 +966,7 @@ class _SimpleRunShutterState extends ConsumerState<SimpleRunShutter>
     return Semantics(
       button: true,
       label: switch (phase) {
-        _ when waiting => 'Rises ${_hhmm(run.rise!.toLocal())}',
+        _ when waiting => 'Rises ${_hhmm(run.targets.first.rise!.toLocal())}',
         _ when idle => 'Pick a target first',
         SimpleRunPhase.ready || SimpleRunPhase.none => 'Start imaging',
         SimpleRunPhase.imaging => 'Pause after this frame',
@@ -996,8 +1192,11 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
     }
 
     final nameWidth = steps.map((s) => widthOf(s.filterName)).fold(32.0, math.max);
-    // Below the horizon it can be queued, not started.
-    final off = sel == null || sel.belowHorizon || run.busy;
+    // Below the horizon it can be queued, not started; while imaging the
+    // sheet only adds (the shutter has the run).
+    final imaging =
+        ref.watch(sequenceRunStateProvider).value?.state?.isActive ?? false;
+    final off = sel == null || sel.belowHorizon || run.busy || imaging;
     final queueOff = sel == null || sel.neverRises || run.busy;
     final best = (ref.watch(tonightSkyProvider).value ?? const [])
         .where((o) => o.maxAltitudeDeg > 0)
@@ -1248,7 +1447,13 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
                             .createAndStart(ref);
                         if (ok) widget.onCreated();
                       },
-                child: Text(run.busy ? 'Starting…' : 'Create and start'),
+                child: Text(
+                  run.busy
+                      ? 'Starting…'
+                      : run.sequenceId != null
+                      ? 'Start now'
+                      : 'Create and start',
+                ),
               ),
             ),
           ],
@@ -1301,16 +1506,19 @@ class _NightDone extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // The library's count when it answers, else the plan-order estimate.
-    final filed = runFramesPerFilter(ref, info);
-    final done = filed == null
-        ? simpleRunProgress(run.steps, info.framesCaptured)
-        : [
-            for (final s in run.steps)
-              s.filterName.isEmpty
-                  ? filed.values.fold(0, (a, b) => a + b)
-                  : filed[s.filterName] ?? 0,
-          ];
+    // One target: the library's count when it answers (its newest session),
+    // else the plan-order estimate, which a queue always uses.
+    final multi = run.targets.length > 1;
+    final filed = multi ? null : runFramesPerFilter(ref, info);
+    final est = simpleTargetProgress(run.targets, info.framesCaptured);
+    int done(int t, int r) {
+      final s = run.targets[t].steps[r];
+      if (filed == null) return est[t][r];
+      return s.filterName.isEmpty
+          ? filed.values.fold(0, (a, b) => a + b)
+          : filed[s.filterName] ?? 0;
+    }
+
     final start = info.startedUtc?.toLocal(), end = info.completedUtc?.toLocal();
     final stoppedAt = info.state == SequenceRunState.completed
         ? null
@@ -1323,7 +1531,7 @@ class _NightDone extends ConsumerWidget {
         Text('Night done', style: _head),
         Text(
           [
-            run.targetName ?? info.currentTargetName ?? '',
+            if (!multi) run.targetName ?? info.currentTargetName ?? '',
             if (start != null && end != null) ...[
               '${_hhmm(start)} – ${_hhmm(end)}',
               simpleRunDuration(end.difference(start).inSeconds.toDouble()),
@@ -1338,23 +1546,30 @@ class _NightDone extends ConsumerWidget {
             'Stopped at: $stoppedAt',
             style: kSimpleText.copyWith(color: AraColors.accentError),
           ),
-        for (var i = 0; i < run.steps.length; i++)
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  run.steps[i].filterName.isEmpty
-                      ? 'Frames'
-                      : run.steps[i].filterName,
-                  style: _dim,
+        for (var t = 0; t < run.targets.length; t++) ...[
+          if (multi)
+            Text(
+              run.targets[t].name,
+              style: kSimpleText.copyWith(fontWeight: FontWeight.w600),
+            ),
+          for (var r = 0; r < run.targets[t].steps.length; r++)
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    run.targets[t].steps[r].filterName.isEmpty
+                        ? 'Frames'
+                        : run.targets[t].steps[r].filterName,
+                    style: _dim,
+                  ),
                 ),
-              ),
-              Text(
-                '${done[i]} × ${formatExposure(Duration(milliseconds: (run.steps[i].exposureSeconds * 1000).round()))}',
-                style: kSimpleText,
-              ),
-            ],
-          ),
+                Text(
+                  '${done(t, r)} × ${formatExposure(Duration(milliseconds: (run.targets[t].steps[r].exposureSeconds * 1000).round()))}',
+                  style: kSimpleText,
+                ),
+              ],
+            ),
+        ],
         Row(
           spacing: AraSpace.s8,
           children: [
@@ -1378,19 +1593,28 @@ class _NightDone extends ConsumerWidget {
   }
 }
 
-/// Plan's panel beside the rail while imaging: frames done of the plan, when
-/// it ends, and a bar per filter. The shutter pauses and, held, stops.
+/// Plan's panel beside the rail while imaging: the target in hand, its
+/// frames done, when the queue ends, a bar per filter, and Add to queue. The
+/// shutter pauses and, held, stops.
 class SimpleRunPanel extends ConsumerWidget {
-  const SimpleRunPanel({super.key});
+  const SimpleRunPanel({super.key, required this.onAdd});
+
+  /// Add to queue: the sheet, to add a target while imaging.
+  final VoidCallback onAdd;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final run = ref.watch(simpleRunProvider);
     final info = ref.watch(sequenceRunStateProvider).value;
-    final ours = info?.sequenceId == run.sequenceId;
-    final steps = ours ? run.steps : const <FilterPlanStep>[];
-    final captured = info?.framesCaptured ?? 0;
-    final done = simpleRunProgress(steps, captured);
+    final ours = info?.sequenceId == run.sequenceId && run.targets.isNotEmpty;
+    final allCaptured = info?.framesCaptured ?? 0;
+    final cur = ours ? simpleCurrentTarget(run.targets, allCaptured) : 0;
+    final target = ours ? run.targets[cur] : null;
+    final steps = target?.steps ?? const <FilterPlanStep>[];
+    final done = ours
+        ? simpleTargetProgress(run.targets, allCaptured)[cur]
+        : const <int>[];
+    final captured = ours ? done.fold(0, (a, b) => a + b) : allCaptured;
     final remaining = info?.estimatedRemainingSeconds;
     final paused = _paused(info?.state);
     final mountStopped = ref.watch(simpleMountStoppedProvider);
@@ -1404,7 +1628,7 @@ class SimpleRunPanel extends ConsumerWidget {
           spacing: AraSpace.s8,
           children: [
             Text(
-              'IMAGING ${(run.targetName ?? info?.currentTargetName ?? '').toUpperCase()}',
+              'IMAGING ${(target?.name ?? info?.currentTargetName ?? '').toUpperCase()}',
               style: AraText.caption,
             ),
             Text(
@@ -1483,6 +1707,11 @@ class SimpleRunPanel extends ConsumerWidget {
                 'Tap the shutter to pause after this frame; hold it to stop.',
                 style: _dim.copyWith(fontSize: 12),
               ),
+            TextButton(
+              key: const Key('simple-run-add'),
+              onPressed: onAdd,
+              child: const Text('Add to queue'),
+            ),
           ],
         ),
       ),

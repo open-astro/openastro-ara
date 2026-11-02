@@ -138,6 +138,9 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
   _Popover _popover = _Popover.none;
   SimpleModeScreen _mode = SimpleModeScreen.preview;
 
+  /// Plan's sheet open over a run in progress, to add to the queue.
+  bool _adding = false;
+
   /// The Autopilot offer was dismissed (until Simple Mode opens again).
   bool _offerDismissed = false;
 
@@ -210,8 +213,9 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
   /// A tap on the image closes what's open, or else toggles the immersive
   /// view (only once there is a frame to look at).
   void _tapImage(bool hasFrame) => setState(() {
-    if (_popover != _Popover.none) {
+    if (_popover != _Popover.none || _adding) {
       _popover = _Popover.none;
+      _adding = false;
     } else if (hasFrame) {
       _clean = !_clean;
     }
@@ -248,8 +252,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
         (ref.watch(sequenceRunStateProvider).value?.state?.isActive ?? false);
     final runSheet =
         shown == SimpleModeScreen.plan &&
-        _popover == _Popover.settings &&
-        !runActive;
+        ((_popover == _Popover.settings && !runActive) || _adding);
     final sel = ref.watch(planetariumSelectionProvider);
     final motion = MediaQuery.disableAnimationsOf(context)
         ? Duration.zero
@@ -421,10 +424,12 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                   onPickInSky: () => setState(() {
                                     _sky = true;
                                     _popover = _Popover.none;
+                                    _adding = false;
                                   }),
-                                  onCreated: () => setState(
-                                    () => _popover = _Popover.none,
-                                  ),
+                                  onCreated: () => setState(() {
+                                    _popover = _Popover.none;
+                                    _adding = false;
+                                  }),
                                   onLibrary: () => Navigator.of(context).push(
                                     MaterialPageRoute<void>(
                                       builder: (_) =>
@@ -471,7 +476,12 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                         SimpleModeScreen.polarAlign =>
                                           const SimplePolarPanel(),
                                         SimpleModeScreen.plan =>
-                                          const SimpleRunPanel(),
+                                          SimpleRunPanel(
+                                            onAdd: () => setState(() {
+                                              _popover = _Popover.none;
+                                              _adding = true;
+                                            }),
+                                          ),
                                         _ => const SizedBox(
                                           width: 280,
                                           child: SimpleSettingsPopover(),
@@ -521,7 +531,11 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                   selection: sel,
                                   onImage: () => setState(() {
                                     _mode = SimpleModeScreen.plan;
-                                    _popover = _Popover.settings;
+                                    // Over a run, the sheet adds to its queue.
+                                    _popover = runActive
+                                        ? _Popover.none
+                                        : _Popover.settings;
+                                    _adding = runActive;
                                     _sky = false;
                                   }),
                                 ),

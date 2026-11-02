@@ -403,8 +403,8 @@ void main() {
 
   testWidgets('the plan square hugs the top-right corner, under the strip', (tester) async {
     await _pump(tester, const Size(1024, 768),
-        plan: const SimpleRun(sequenceId: 'seq-1', targetName: 'M31', steps: [
-          FilterPlanStep(filterName: 'L', exposureSeconds: 120, frameCount: 30),
+        plan: const SimpleRun(sequenceId: 'seq-1', targets: [
+          SimpleTarget(name: 'M31', steps: [FilterPlanStep(filterName: 'L', exposureSeconds: 120, frameCount: 30)]),
         ]));
     await tester.tap(find.byKey(const Key('simple-mode')));
     await tester.pump();

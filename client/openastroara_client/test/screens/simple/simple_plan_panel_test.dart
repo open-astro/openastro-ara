@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:dio/dio.dart';
 import 'package:openastroara/models/sequence/imaging_run_body.dart';
 import 'package:openastroara/models/sequence/sequence_summary.dart';
+import 'package:openastroara/models/sequence/nina_dom.dart' show childrenOf;
 import 'package:openastroara/models/sky_model_calibration.dart';
 import 'package:openastroara/screens/simple/simple_plan_panel.dart';
 import 'package:openastroara/services/sequence_api.dart';
@@ -30,6 +31,9 @@ import 'package:openastroara/widgets/stop_mount_overlay.dart' show SlewWsEvents;
 import 'package:openastroara/models/library/live_library.dart';
 import 'package:openastroara/state/library/live_library_state.dart';
 
+const _m42 = PlanetariumSelection(
+    name: 'M42', kind: 'Nebula', raHours: 5.59, decDeg: -5.39, raJ2000Hours: 5.59, decJ2000Deg: -5.39, altDeg: 30, maxAltDeg: 45);
+
 const _m31 = PlanetariumSelection(
     name: 'M31', kind: 'Galaxy', raHours: 0.73, decDeg: 41.4, raJ2000Hours: 0.71, decJ2000Deg: 41.27, altDeg: 62.4, maxAltDeg: 74.2);
 
@@ -47,12 +51,40 @@ class _Seq implements SequenceClient {
   final calls = <String>[];
   SequenceRunStateInfo? runState;
   var _n = 0;
+  /// The bodies the daemon keeps, by id.
+  final bodies = <String, Map<String, dynamic>>{};
   @override
   Future<String> create(String name, Map<String, dynamic> body,
       {String? description, String? idempotencyKey}) async {
     calls.add('create $name');
-    return 'seq-${++_n}';
+    final id = 'seq-${++_n}';
+    bodies[id] = body;
+    return id;
   }
+
+  @override
+  Future<SequenceDetail> getSequenceDetail(String id) async => SequenceDetail(id: id, body: bodies[id] ?? const {});
+
+  @override
+  Future<SequenceDetail> updateSequence(String id, {String? name, String? description, Map<String, dynamic>? body}) async {
+    calls.add('update $id');
+    if (body != null) bodies[id] = body;
+    return SequenceDetail(id: id, body: bodies[id] ?? const {});
+  }
+
+  @override
+  Future<SequenceDetail> removeRunItem(String id, List<int> path) async {
+    calls.add('remove-live $id $path');
+    return SequenceDetail(id: id, body: bodies[id] ?? const {});
+  }
+
+  /// The target blocks' names in the stored body, in order.
+  List<String> targets(String id) => [
+        for (final c in childrenOf(bodies[id]!))
+          if (indexOfTargetBlock(bodies[id]!, c['Name'] as String? ?? '') >= 0 &&
+              childrenOf(c).isNotEmpty)
+            c['Name'] as String,
+      ];
 
   @override
   Future<bool> deleteSequence(String id) async {
@@ -274,17 +306,6 @@ void main() {
     expect(page!.designations, ['NAME Horsehead Nebula', 'B 33']);
   });
 
-  test('progress fills the plan rows in order', () {
-    const steps = [
-      FilterPlanStep(filterName: 'L', exposureSeconds: 300, frameCount: 40),
-      FilterPlanStep(filterName: 'R', exposureSeconds: 180, frameCount: 20),
-    ];
-    expect(simpleRunProgress(steps, 0), [0, 0]);
-    expect(simpleRunProgress(steps, 23), [23, 0]);
-    expect(simpleRunProgress(steps, 45), [40, 5]);
-    expect(simpleRunProgress(steps, 99), [40, 20]);
-  });
-
   test('the phase: a run in progress wins; a started plan ends only on a terminal state', () {
     const none = SimpleRun();
     const ready = SimpleRun(sequenceId: 'seq-1');
@@ -340,8 +361,8 @@ void main() {
       FilterPlanStep(filterName: 'R', exposureSeconds: 180, frameCount: 15),
     ];
     expect(simpleRunChip(const SimpleRun(), rows), '1 h\n15 min');
-    const created = SimpleRun(sequenceId: 'seq-1', steps: [
-      FilterPlanStep(filterName: 'L', exposureSeconds: 300, frameCount: 12),
+    const created = SimpleRun(sequenceId: 'seq-1', targets: [
+      SimpleTarget(name: 'M31', steps: [FilterPlanStep(filterName: 'L', exposureSeconds: 300, frameCount: 12)]),
     ]);
     expect(simpleRunChip(created, rows), '1 h\n0 min');
     expect(simpleRunChip(const SimpleRun(), const [FilterPlanStep(filterName: 'L', exposureSeconds: 60, frameCount: 45)]), '45 min');
@@ -421,7 +442,7 @@ void main() {
       expect(c.read(planetariumSearchProvider), 'M42');
     });
 
-    testWidgets('Add to queue creates the run without starting it; again it replaces it', (tester) async {
+    testWidgets('Add to queue creates the run without starting it; again it appends', (tester) async {
       var created = 0;
       final seq = _Seq();
       await _pump(
@@ -434,9 +455,8 @@ void main() {
       await create(tester);
       expect(seq.calls, ['create M31']);
       expect(created, 1);
-      // shortcut in the app: one queued plan for now, so a new one replaces it.
       await create(tester);
-      expect(seq.calls, ['create M31', 'create M31', 'delete seq-1']);
+      expect(seq.calls, ['create M31', 'update seq-1'], reason: 'the queue grows; nothing is replaced');
     });
 
     testWidgets('Create and start creates the run and starts it, then closes the sheet', (tester) async {
@@ -621,12 +641,84 @@ void main() {
     expect(find.text('0 × 5 s'), findsOneWidget);
   });
 
+  test('progress fills the queue in order, target by target', () {
+    const a = SimpleTarget(name: 'M31', steps: [FilterPlanStep(filterName: 'L', exposureSeconds: 60, frameCount: 10)]);
+    const b = SimpleTarget(name: 'M42', steps: [
+      FilterPlanStep(filterName: 'Ha', exposureSeconds: 180, frameCount: 4),
+      FilterPlanStep(filterName: 'OIII', exposureSeconds: 180, frameCount: 4),
+    ]);
+    expect(simpleTargetProgress([a, b], 12), [
+      [10],
+      [2, 0],
+    ]);
+    expect(simpleCurrentTarget([a, b], 9), 0);
+    expect(simpleCurrentTarget([a, b], 10), 1);
+    expect(simpleCurrentTarget([a, b], 99), 1, reason: 'the last once all are full');
+  });
+
+  group('the queue', () {
+    Future<void> pick(WidgetTester tester, ProviderContainer c, PlanetariumSelection s) async {
+      c.read(planetariumSelectionProvider.notifier).set(s);
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('Add to queue appends to the one sequence; the squares line up right to left', (tester) async {
+      final (c, seq) = await run(tester);
+      await create(tester);
+      await pick(tester, c, _m42);
+      await create(tester);
+      expect(seq.calls, ['create M31', 'update seq-1'], reason: 'appended, nothing deleted');
+      expect(seq.targets('seq-1'), ['M31', 'M42']);
+      expect(c.read(simpleRunProvider).targets.map((t) => t.name), ['M31', 'M42']);
+      final tracker = find.byKey(const Key('simple-run-tracker'));
+      final m31 = tester.getRect(find.descendant(of: tracker, matching: find.text('M31')));
+      final m42 = tester.getRect(find.descendant(of: tracker, matching: find.text('M42')));
+      expect(m42.right, lessThan(m31.left), reason: 'the next one to the left');
+    });
+
+    testWidgets('with a queue, Start now puts the target first and starts', (tester) async {
+      final (c, seq) = await run(tester);
+      await create(tester);
+      await pick(tester, c, _m42);
+      expect(find.text('Start now'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('simple-run-start')));
+      await tester.pumpAndSettle();
+      expect(seq.targets('seq-1'), ['M42', 'M31']);
+      expect(c.read(simpleRunProvider).targets.map((t) => t.name), ['M42', 'M31']);
+      expect(seq.calls.last, 'start seq-1');
+    });
+
+    testWidgets('a queued square offers Remove, which takes it out of the sequence', (tester) async {
+      final (c, seq) = await run(tester);
+      await create(tester);
+      await pick(tester, c, _m42);
+      await create(tester);
+      final tracker = find.byKey(const Key('simple-run-tracker'));
+      await tester.tap(find.descendant(of: tracker, matching: find.text('M42')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('simple-run-remove')));
+      await tester.pumpAndSettle();
+      expect(seq.targets('seq-1'), ['M31']);
+      expect(c.read(simpleRunProvider).targets.map((t) => t.name), ['M31']);
+    });
+
+    testWidgets('while imaging: the panel offers Add to queue; the sheet only adds', (tester) async {
+      var adds = 0;
+      final seq = _Seq();
+      final c = await _pump(tester, seq, SimpleRunPanel(onAdd: () => adds++));
+      c.read(selectedSequenceIdProvider.notifier).select('seq-1');
+      await imaging(tester, c, seq, _imaging(3));
+      await tester.tap(find.byKey(const Key('simple-run-add')));
+      expect(adds, 1);
+    });
+  });
+
   group('the progress panel', () {
     testWidgets('a panic stop reads Mount stopped while paused; resuming clears it', (tester) async {
       final ws = StreamController<WsEvent>.broadcast();
       addTearDown(ws.close);
       final seq = _Seq();
-      final c = await _pump(tester, seq, const SimpleRunPanel(),
+      final c = await _pump(tester, seq, SimpleRunPanel(onAdd: () {}),
           overrides: [wsEventsProvider.overrideWith((ref) => ws.stream)]);
       c.read(selectedSequenceIdProvider.notifier).select('seq-1');
       await imaging(tester, c, seq, _imaging(24));
@@ -644,7 +736,7 @@ void main() {
 
     testWidgets('paused: resume without re-centering, or re-center and refocus; imaging: neither', (tester) async {
       final seq = _Seq();
-      final c = await _pump(tester, seq, const SimpleRunPanel());
+      final c = await _pump(tester, seq, SimpleRunPanel(onAdd: () {}));
       c.read(selectedSequenceIdProvider.notifier).select('seq-1');
       await imaging(tester, c, seq, _imaging(24));
       expect(find.textContaining('pause after this frame'), findsOneWidget);
