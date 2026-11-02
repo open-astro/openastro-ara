@@ -20,12 +20,7 @@ import '../../widgets/imaging/histogram_strip.dart' show frameHistogramProvider;
 import '../imaging_actions.dart';
 import 'simple_plan_panel.dart' show simpleRunProvider;
 import 'simple_shell.dart'
-    show
-        SimplePanel,
-        SimpleSegment,
-        kSimpleRailWidth,
-        kSimpleStatusMaxWidth,
-        kSimpleTileFill;
+    show SimplePanel, SimpleSegment, kSimpleRailWidth, kSimpleStatusMaxWidth;
 
 /// Simple Mode body text: 14 px minimum (brief), tabular for live numbers.
 const kSimpleText = TextStyle(
@@ -116,7 +111,10 @@ class _SimpleSystemPanelState extends ConsumerState<SimpleSystemPanel> {
     final storage = ref.watch(storageSpaceProvider);
     final cpu = state?.cpuPercent;
     final facts = [
-      ('Storage', storage.hasValue ? simpleFree(storage.value?.freeBytes) : '—'),
+      (
+        'Storage',
+        storage.hasValue ? simpleFree(storage.value?.freeBytes) : '—',
+      ),
       ('CPU', cpu == null ? '—' : '${cpu.round()} %'),
       ('Memory', state == null ? '—' : simpleMemory(state.workingSetBytes)),
       ('Up', state == null ? '—' : simpleUptime(state.uptimeSeconds)),
@@ -302,7 +300,7 @@ class SimpleSettingsPopover extends ConsumerWidget {
           // Switching while a loop runs would strand it with no stop.
           Container(
             decoration: BoxDecoration(
-              color: kSimpleTileFill,
+              color: AraColors.tileFill,
               borderRadius: BorderRadius.circular(8),
             ),
             child: Row(
@@ -449,7 +447,7 @@ class SimplePresetTile<T> extends StatelessWidget {
         constraints: const BoxConstraints(minHeight: 48),
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
         decoration: BoxDecoration(
-          color: kSimpleTileFill,
+          color: AraColors.tileFill,
           borderRadius: BorderRadius.circular(10),
         ),
         child: Column(
@@ -685,7 +683,7 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
                           child: LinearProgressIndicator(
                             value: (p.displayProgressPct ?? 0) / 100,
                             minHeight: 4,
-                            backgroundColor: kSimpleTileFill,
+                            backgroundColor: AraColors.tileFill,
                           ),
                         ),
                       ),
@@ -703,7 +701,7 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
                     child: LinearProgressIndicator(
                       value: stepProgress,
                       minHeight: 3,
-                      backgroundColor: kSimpleTileFill,
+                      backgroundColor: AraColors.tileFill,
                     ),
                   ),
                 ),

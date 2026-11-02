@@ -33,6 +33,10 @@ class AraColors {
   /// over a bright one).
   static const errorText = Color(0xFFFF8A80);
 
+  /// The tile fill behind Simple Mode's fields, switches and fact tiles
+  /// ([border] at 55 %, DESIGN.md `tile-fill`).
+  static const tileFill = Color(0x8C404040);
+
   /// Simple Mode's full-screen safety alarm: a deep red over everything, so it
   /// reads as an alarm from across the room ([textPrimary] on it passes 7:1).
   static const alarmScrim = Color(0xE03C0808);

@@ -19,7 +19,7 @@ import 'simple_preview_panel.dart'
         exposurePresets,
         formatExposure,
         kSimpleText;
-import 'simple_shell.dart' show SimplePanel, SimpleSegment, kSimpleTileFill;
+import 'simple_shell.dart' show SimplePanel, SimpleSegment;
 import '../../state/simple_messages_state.dart';
 
 /// True while the server runs any phase of the routine.
@@ -322,7 +322,7 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
             ),
             Container(
               decoration: BoxDecoration(
-                color: kSimpleTileFill,
+                color: AraColors.tileFill,
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Row(

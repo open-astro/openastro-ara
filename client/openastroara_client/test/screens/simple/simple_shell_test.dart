@@ -644,6 +644,8 @@ void main() {
     await chord();
     expect(plan.stops, 0, reason: 'the first press only asks');
     expect(find.textContaining('again to stop the run'), findsOneWidget);
+    expect(container.read(simpleMessagesProvider).single.kind, SimpleMessageKind.question,
+        reason: 'it asks for something: amber, not a green result');
     await tester.pump(const Duration(seconds: 4));
     await chord();
     expect(plan.stops, 0, reason: 'the window ran out: this press asks again');

@@ -41,12 +41,7 @@ import '../../widgets/sequencer/run_completion_sheet.dart'
 import 'simple_preview_panel.dart'
     show SimplePresetTile, exposurePresets, formatExposure, kSimpleText;
 import 'simple_shell.dart'
-    show
-        SimplePanel,
-        kSimpleInset,
-        kSimpleRailWidth,
-        kSimpleTileFill,
-        leaveSimpleMode;
+    show SimplePanel, kSimpleInset, kSimpleRailWidth, leaveSimpleMode;
 
 /// The first plan for a filter set: LRGB when the set has any of it, else the
 /// narrowband filters, else every filter; one row with no filter name when
@@ -1467,7 +1462,7 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
                 child: Material(
                   color: sel?.name == o.name
                       ? AraColors.selectionBg
-                      : kSimpleTileFill,
+                      : AraColors.tileFill,
                   borderRadius: BorderRadius.circular(8),
                   child: InkWell(
                     key: Key('simple-run-suggestion-${o.name}'),

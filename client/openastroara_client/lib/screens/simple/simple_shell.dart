@@ -282,7 +282,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
       TargetPlatform.iOS,
     }.contains(Theme.of(context).platform);
     _stopAsk = messages.show(
-      SimpleMessageKind.result,
+      SimpleMessageKind.question,
       'Press ${mac ? '⌘.' : 'Ctrl+.'} again to stop the run',
     );
     _stopDisarm = Timer(const Duration(seconds: 3), () {
@@ -1197,7 +1197,9 @@ class _ModeGrid extends ConsumerWidget {
               width: 138,
               height: 52,
               child: Material(
-                color: m == current ? AraColors.selectionBg : kSimpleTileFill,
+                color: m == current
+                    ? AraColors.selectionBg
+                    : AraColors.tileFill,
                 borderRadius: BorderRadius.circular(8),
                 child: InkWell(
                   borderRadius: BorderRadius.circular(8),
@@ -1524,7 +1526,7 @@ ThemeData simpleTheme(ThemeData base) {
       isDense: true,
       contentPadding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
       filled: true,
-      fillColor: kSimpleTileFill,
+      fillColor: AraColors.tileFill,
       border: tile,
       enabledBorder: tile,
       focusedBorder: tile.copyWith(
@@ -1533,6 +1535,3 @@ ThemeData simpleTheme(ThemeData base) {
     ),
   );
 }
-
-/// The tile fill behind Simple Mode's fields and switches (Hairline at 55 %).
-const kSimpleTileFill = Color(0x8C404040);

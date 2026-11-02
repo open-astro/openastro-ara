@@ -15,7 +15,7 @@ import '../../widgets/focus/focusing_pane.dart' show MainFocusCard;
 import '../../widgets/focus/v_curve_chart.dart';
 import 'simple_preview_panel.dart'
     show SimpleShutter, SimpleShutterButton, kSimpleText;
-import 'simple_shell.dart' show SimplePanel, kSimpleTileFill;
+import 'simple_shell.dart' show SimplePanel;
 import '../../state/simple_messages_state.dart';
 
 /// The HFR to show big: the confirmed one after a run, the latest kept probe
@@ -193,7 +193,7 @@ class _Nudge extends StatelessWidget {
   Widget build(BuildContext context) => Tooltip(
     message: label,
     child: Material(
-      color: kSimpleTileFill,
+      color: AraColors.tileFill,
       borderRadius: BorderRadius.circular(8),
       child: InkWell(
         onTap: onTap,
