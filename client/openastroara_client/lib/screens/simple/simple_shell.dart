@@ -301,7 +301,8 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
         ref.watch(liveViewControllerProvider);
     final showSky = _sky || !hasFrame;
     final panels = !_clean || showSky;
-    // Only Plan reads the sequencer (reading it adopts a run in progress).
+    // Every mode reads the sequencer (the plan squares, the status pill), so
+    // opening Simple Mode adopts a run in progress; only Plan acts on it.
     final runActive =
         shown == SimpleModeScreen.plan &&
         (ref.watch(sequenceRunStateProvider).value?.state?.isActive ?? false);
