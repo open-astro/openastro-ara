@@ -29,7 +29,7 @@ Shaped 2026-11-01 (`/impeccable shape simple-mode`). Paperclip: ALP-4810. Render
 - **Fixed slots:** nothing shifts when state changes; a panel with no data is not drawn.
 - **Immersive view:** clicking the image hides every panel, Emergency Stop included; the status pill and any alert stay. Clicking again brings them back.
 - **Status strip:** only connected devices show.
-- **Unchanged:** colours, status dots, Night-mode behaviour and Emergency Stop are as in the full UI.
+- **Unchanged:** colours, status dots and Night-mode behaviour are as in the full UI. Emergency Stop does the same thing with the same 2 s hold, but Simple Mode's copy is its own: a compact STOP square with a ring, filled #D32F2F so its label reads at 4.5:1 (WCAG 2.2 AA), and keyboards press it twice instead of getting the confirm dialog.
 
 ## Scope
 
@@ -39,7 +39,7 @@ Shaped 2026-11-01 (`/impeccable shape simple-mode`). Paperclip: ALP-4810. Render
 - **Plan** (named Run until 2026-11-02): a quick plan builder only. It sets exposure and frame count per filter for the current target, and autofocus, dither and flats follow the profile's defaults. The sequence editor stays in the full UI only.
 - **Phones:** they run Simple Mode only, with no Sequence tab, once Simple Mode exists. Until then, PR #1474's phone layout stands.
 - **Desktop default:** the full UI stays the default on desktop.
-- **Full UI untouched:** the full UI keeps its current layout (PR #1474's shell). Every change this brief leads to lands in Simple Mode only.
+- **Full UI layout untouched:** the full UI keeps its current layout (PR #1474's shell), and its look stays as on master. Approved exceptions that reach it: the Emergency Stop's 2 s hold and its cooler-off rung (ALP-4812), the Simple Mode icon in the top-right cluster, and the daemon-side plan changes both shells share (cooling while slewing, focus before centring, plain step names). Everything else lands in Simple Mode only.
 
 ## On the image during a run
 
@@ -62,7 +62,7 @@ Shaped 2026-11-01 (`/impeccable shape simple-mode`). Paperclip: ALP-4810. Render
 - **Size:** targets are at least 44 px, with 14 px text.
 - **⌘K search:** finds every setting, including ones Simple Mode hides, and opens them in a sheet over Simple Mode without leaving it.
 - **Night mode:** every panel must still read through the red filter.
-- **Shortcuts:** none for now; the immersive view toggles only by clicking the image.
+- **Shortcuts:** ⌘, / Ctrl+, opens Settings; ⌘. / Ctrl+. asks, then stops a running plan on a second press within 3 s; Tab reaches the rail, the shutter and the plan squares, and Enter or Space presses them. The immersive view toggles only by clicking the image.
 
 ## Mode screens (decided 2026-11-01)
 

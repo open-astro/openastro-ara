@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-11-01T04:39:28+00:00",
+  "generatedAt": "2026-11-03T00:00:00+13:00",
   "title": "Design System: OpenAstro Ara",
   "extensions": {
     "colorMeta": {
@@ -277,7 +277,31 @@
       "overlay-scrim": {
         "role": "neutral",
         "displayName": "Overlay Scrim",
-        "canonical": "rgba(26, 26, 26, 0.72)",
+        "canonical": "rgba(26, 26, 26, 0.90)",
+        "tonalRamp": []
+      },
+      "error-text": {
+        "role": "error",
+        "displayName": "Error Text",
+        "canonical": "#FF8A80",
+        "tonalRamp": []
+      },
+      "tile-fill": {
+        "role": "neutral",
+        "displayName": "Tile Fill",
+        "canonical": "rgba(56, 56, 56, 0.55)",
+        "tonalRamp": []
+      },
+      "alarm-scrim": {
+        "role": "error",
+        "displayName": "Alarm Scrim",
+        "canonical": "rgba(60, 8, 8, 0.88)",
+        "tonalRamp": []
+      },
+      "emergency-stop": {
+        "role": "error",
+        "displayName": "Simple Stop Red",
+        "canonical": "#D32F2F",
         "tonalRamp": []
       }
     },
@@ -458,7 +482,7 @@
       },
       {
         "name": "The Two Densities Rule",
-        "body": "The full UI is dense: 11–15 px type and 4–8 px corners. Simple Mode is roomy and image-first: the frame fills the window, controls float on translucent overlays, every interactive target is at least 44 px tall, corners are 10 px, and body text is 14 px. Both densities share the same colours, the same named rules and the same Emergency Stop. Phones run Companion Mode, which builds on Simple Mode, so phones always get the roomy density. Simple Mode is not built yet; this is its target, and it moves away from the current code on purpose.",
+        "body": "The full UI is dense: 11–15 px type and 4–8 px corners. Simple Mode is roomy and image-first: the frame fills the window, controls float on translucent overlays, every interactive target is at least 44 px tall, corners are 10 px, and body text is 14 px. Both densities share the same colours, the same named rules and the same Emergency Stop hold; Simple Mode's Stop fills with #D32F2F for 4.5:1 text. Phones run Companion Mode, which builds on Simple Mode, so phones always get the roomy density. Simple Mode is built behind Settings → System → Experimental (PR #1480).",
         "section": "layout"
       }
     ],

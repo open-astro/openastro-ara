@@ -21,7 +21,7 @@ colors:
   overlay-scrim: "rgba(26, 26, 26, 0.90)"
   error-text: "#FF8A80"
   selection-tint: "rgba(25, 118, 210, 0.25)"
-  tile-fill: "rgba(64, 64, 64, 0.55)"
+  tile-fill: "rgba(56, 56, 56, 0.55)"
   alarm-scrim: "rgba(60, 8, 8, 0.88)"
   emergency-stop: "#D32F2F"
   button-primary: "#1565C0"
@@ -219,7 +219,7 @@ Responsive behaviour is keyed to the window, not the device:
 Phones run Companion Mode (see PRODUCT.md). PR #1474's narrow layout is the shell phones get today.
 
 ### Named Rules
-**The Two Densities Rule.** The full UI is dense: 11–15 px type and 4–8 px corners. Simple Mode is roomy and image-first: the frame fills the window, controls float on translucent overlays, every interactive target is at least 44 px tall, corners are 10 px, and body text is 14 px. Both densities share the same colours, the same named rules and the same Emergency Stop. Phones run Companion Mode, which builds on Simple Mode, so phones always get the roomy density. Simple Mode exists only as a prototype behind an experimental toggle (`feat/simple-mode`); this is its target.
+**The Two Densities Rule.** The full UI is dense: 11–15 px type and 4–8 px corners. Simple Mode is roomy and image-first: the frame fills the window, controls float on translucent overlays, every interactive target is at least 44 px tall, corners are 10 px, and body text is 14 px. Both densities share the same colours, the same named rules and the same Emergency Stop hold; Simple Mode's Stop fills with `emergency-stop` (#D32F2F) so its label reads at 4.5:1. Phones run Companion Mode, which builds on Simple Mode, so phones always get the roomy density. Simple Mode exists only as a prototype behind an experimental toggle (`feat/simple-mode`); this is its target.
 
 ## Elevation & Depth
 
@@ -276,7 +276,7 @@ Simple Mode (see PRODUCT.md) puts the latest frame first. It is simpler than ASI
 - **Popovers** (the mode grid, settings, and a mode's panel) open to the left of the right rail, level with its top, 16 px from it. Opening one never moves the rail. A tap on the image closes an open popover.
 - **Stop:** the compact Emergency Stop, a 60 px square reading STOP, on its own at the bottom right under the rail. It fires after a 2 s hold and reads HOLD while held; keyboard and screen reader users press it, then press again within 3 s (it reads PRESS AGAIN, no dialog).
 - **Left rail (72 px wide, centred between the strip and the bottom):** Sky (the planetarium at any time, over a frame; an object tapped there shows a card under it with its name, type and altitude and Image this, which opens Plan's sheet with it), Info (toggles the last frame's facts), System (toggles the server's figures) and Library (the Image Library screen). Each is an icon over a caption.
-- **Info:** a row of fact tiles (72 × 56, label over value, on `tile-fill`, which the mode grid's unselected tiles share) hugging the bottom-left corner, just above the bottom row, HFR nearest the corner, then Stars, Exposure · filter, Gain · offset, Clipped. The bottom-right corner belongs to the plan squares, the top-left to the message pills.
+- **Info:** a row of fact tiles (72 × 56, label over value, on `overlay-scrim` with a 1 px Hairline border) hugging the bottom-left corner, just above the bottom row, HFR nearest the corner, then Stars, Exposure · filter, Gain · offset, Clipped. The bottom-right corner belongs to the plan squares, the top-left to the message pills.
 - **System:** a row of the same tiles, in the bottom-left corner alone or 8 px above Info's row while Info shows: Storage (free on the save drive, or Unplugged), CPU, Memory and Up, re-read every 5 s while it shows. CPU and Memory are Ara's own process until the server reports the whole Pi. CPU temperature, under-voltage or throttling and disk I/O are next; they need the server to report them.
 - **Bottom row (56 px tall, 16 px from the left edge and 16 px from Stop):** the guiding graph ("Guiding", the RMS, the RA/Dec trace) and the frame's histogram (plotted over the range the frame uses), each only once it has data. A lone one fills the row; both split it equally, guiding on the left.
 - **Centre:** the attention banner, centred 16 px under the status strip, only when something needs the person (the daemon's prompts become question pills in phase B).
