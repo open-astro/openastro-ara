@@ -570,6 +570,17 @@ void main() {
     });
   });
 
+  testWidgets('screen readers can hide and show the controls over a frame', (tester) async {
+    final container = await _pump(tester, const Size(1024, 768));
+    // The label leads; the frame's own words may follow it.
+    expect(find.bySemanticsLabel(RegExp('^Hide controls')), findsNothing, reason: 'no frame yet: nothing to clear');
+    await _frame(tester, container);
+    expect(find.bySemanticsLabel(RegExp('^Hide controls')), findsOneWidget);
+    await tester.tapAt(const Offset(400, 400));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.bySemanticsLabel(RegExp('^Show controls')), findsOneWidget);
+  });
+
   testWidgets('a tap on the image hides everything (Stop too); the status stays and drops into the corner',
       (tester) async {
     final container = await _pump(tester, const Size(1024, 768));

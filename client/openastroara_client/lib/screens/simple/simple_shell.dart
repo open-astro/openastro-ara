@@ -289,20 +289,29 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                 child: Stack(
                   children: [
                     Positioned.fill(
-                      child: GestureDetector(
-                        key: const Key('simple-frame'),
-                        behavior: HitTestBehavior.opaque,
-                        onTap: () => _tapImage(!showSky),
-                        child: !showSky
-                            ? (polarFrame
-                                  ? const SimplePolarFrame()
-                                  : const FrameViewer())
-                            // The sky: asked for, or standing in until there
-                            // is a frame.
-                            : KeyedSubtree(
-                                key: const Key('simple-planetarium'),
-                                child: widget.planetarium,
-                              ),
+                      // Screen readers get the immersive toggle by name.
+                      child: Semantics(
+                        button: !showSky,
+                        label: showSky
+                            ? null
+                            : _clean
+                            ? 'Show controls'
+                            : 'Hide controls',
+                        child: GestureDetector(
+                          key: const Key('simple-frame'),
+                          behavior: HitTestBehavior.opaque,
+                          onTap: () => _tapImage(!showSky),
+                          child: !showSky
+                              ? (polarFrame
+                                    ? const SimplePolarFrame()
+                                    : const FrameViewer())
+                              // The sky: asked for, or standing in until there
+                              // is a frame.
+                              : KeyedSubtree(
+                                  key: const Key('simple-planetarium'),
+                                  child: widget.planetarium,
+                                ),
+                        ),
                       ),
                     ),
                     if (!hasFrame)
