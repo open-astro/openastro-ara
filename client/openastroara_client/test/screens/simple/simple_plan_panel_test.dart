@@ -57,7 +57,8 @@ class _Seq implements SequenceClient {
   @override
   Future<String> pause(String id) async => _op('pause $id');
   @override
-  Future<String> resume(String id, {bool recenter = true, bool refocus = false}) async => _op('resume $id');
+  Future<String> resume(String id, {bool recenter = true, bool refocus = false}) async =>
+      _op('resume $id${recenter ? '' : ' no-recenter'}${refocus ? ' refocus' : ''}');
   String _op(String c) {
     calls.add(c);
     return 'op';
@@ -489,6 +490,27 @@ void main() {
     final text = tester.getRect(name);
     expect(text.left, greaterThanOrEqualTo(box.left + 4), reason: 'clear of the left border');
     expect(text.right, lessThanOrEqualTo(box.right - 4), reason: 'clear of the right border');
+  });
+
+  group('the progress panel', () {
+    testWidgets('paused: resume without re-centering, or re-center and refocus; imaging: neither', (tester) async {
+      final seq = _Seq();
+      final c = await _pump(tester, seq, const SimpleRunPanel());
+      c.read(selectedSequenceIdProvider.notifier).select('seq-1');
+      await imaging(tester, c, seq, _imaging(24));
+      expect(find.textContaining('pause after this frame'), findsOneWidget);
+      expect(find.text('Resume without re-centering'), findsNothing);
+      expect(find.text('Re-center and refocus'), findsNothing);
+
+      await imaging(tester, c, seq, _imaging(24, state: SequenceRunState.paused));
+      expect(find.textContaining('Tap the shutter to resume'), findsOneWidget);
+      await tester.tap(find.text('Resume without re-centering'));
+      await tester.pumpAndSettle();
+      expect(seq.calls.last, 'resume seq-1 no-recenter');
+      await tester.tap(find.text('Re-center and refocus'));
+      await tester.pumpAndSettle();
+      expect(seq.calls.last, 'resume seq-1 refocus');
+    });
   });
 
   group('the tracker and the shutter', () {

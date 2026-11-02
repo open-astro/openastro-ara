@@ -397,7 +397,12 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
   );
   Future<void> pause() =>
       _op((api, id) => api.pause(id), 'pause', before: state.copyWith(pausing: true));
-  Future<void> resume() => _op((api, id) => api.resume(id), 'resume');
+  // The shutter's resume re-centers (pointing may have drifted while
+  // paused); the progress panel offers the other two.
+  Future<void> resume({bool recenter = true, bool refocus = false}) => _op(
+    (api, id) => api.resume(id, recenter: recenter, refocus: refocus),
+    'resume',
+  );
   Future<void> stop() => _op((api, id) => api.stop(id), 'stop the run');
 
   /// Night done's New plan: back to the sheet.
@@ -1221,6 +1226,7 @@ class SimpleRunPanel extends ConsumerWidget {
     final captured = info?.framesCaptured ?? 0;
     final done = simpleRunProgress(steps, captured);
     final remaining = info?.estimatedRemainingSeconds;
+    final paused = _paused(info?.state);
     return SimplePanel(
       padding: const EdgeInsets.all(AraSpace.s16),
       child: SizedBox(
@@ -1289,10 +1295,28 @@ class SimpleRunPanel extends ConsumerWidget {
                 maxLines: 4,
                 overflow: TextOverflow.ellipsis,
               ),
-            Text(
-              'Tap the shutter to pause after this frame; hold it to stop.',
-              style: _dim.copyWith(fontSize: 12),
-            ),
+            if (paused) ...[
+              Text(
+                'Tap the shutter to resume and re-center; hold it to stop.',
+                style: _dim.copyWith(fontSize: 12),
+              ),
+              TextButton(
+                onPressed: () => ref
+                    .read(simpleRunProvider.notifier)
+                    .resume(recenter: false),
+                child: const Text('Resume without re-centering'),
+              ),
+              TextButton(
+                onPressed: () => ref
+                    .read(simpleRunProvider.notifier)
+                    .resume(refocus: true),
+                child: const Text('Re-center and refocus'),
+              ),
+            ] else
+              Text(
+                'Tap the shutter to pause after this frame; hold it to stop.',
+                style: _dim.copyWith(fontSize: 12),
+              ),
           ],
         ),
       ),
