@@ -35,6 +35,7 @@ import 'custom_target_dialog.dart';
 import 'linux_planetarium_overlay.dart';
 import 'rotation_assist_panel.dart';
 import 'tonight_sky_panel.dart';
+import '../../state/simple_messages_state.dart';
 
 /// §36 Planetarium — the embedded Stellarium Web Engine (AGPL; see
 /// `assets/stellarium/LICENSE-AGPL-3.0.txt`), rendered in the platform's **native
@@ -418,6 +419,15 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
     final route = routeSearch(applyImagingRegions(catalog), q);
     switch (route.kind) {
       case SearchRouteKind.coordinates:
+        // Simple Mode shows no popups: coordinate entry stays in the full UI.
+        if (widget.bare) {
+          userNotifier(context)(
+            "Coordinates can't be searched here",
+            detail: 'Search by name, or use the full UI\'s Sky Atlas',
+            error: true,
+          );
+          return;
+        }
         await showCustomTargetDialog(context, initialText: q);
       case SearchRouteKind.catalog:
       case SearchRouteKind.engine:
@@ -428,7 +438,7 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
           _pushCmd(route.command!);
           return;
         }
-        final messenger = ScaffoldMessenger.of(context);
+        final notify = userNotifier(context);
         final r = await api.resolve(q);
         if (!mounted) return;
         // A resolved object the bundle already lists is that row (#1267
@@ -438,14 +448,18 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
           return;
         }
         if (r.resolved) {
+          // Simple Mode: centre the sky on it, no dialog.
+          final goto = widget.bare ? resolvedGoto(r) : null;
+          if (goto != null) {
+            _pushCmd(goto);
+            return;
+          }
           await showCustomTargetDialog(context, resolved: r);
           return;
         }
         _pushCmd(route.command!);
         final m = searchFallbackMessage(r);
-        if (m != null) {
-          messenger.showSnackBar(SnackBar(content: Text(m)));
-        }
+        if (m != null) notify(m, error: true, snackBarRed: false);
     }
   }
 
