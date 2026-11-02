@@ -183,7 +183,7 @@ void main() {
     expect(find.text('Search, or pick in the sky.'), findsOneWidget);
     // The chip reads the plan's total imaging time: 60 frames at the 5 s default.
     expect(find.descendant(of: find.byKey(const Key('simple-settings')), matching: find.text('5 min')), findsOneWidget);
-    // A long night takes two lines in the 60 px chip, hours over minutes, with no icon (as P.A.'s).
+    // A long night takes two lines in the 60 px chip, hours over minutes, under the icon (as P.A.'s).
     // (The test font's square glyphs are too wide to measure the real fit.)
     container.read(simpleRunPlanProvider.notifier)
       ..setExposure(0, 150)
@@ -191,7 +191,7 @@ void main() {
     await tester.pump();
     final long = find.descendant(of: find.byKey(const Key('simple-settings')), matching: find.text('12 h\n30 min'));
     expect(tester.widget<Text>(long).maxLines, 2);
-    expect(find.descendant(of: find.byKey(const Key('simple-settings')), matching: find.byType(Icon)), findsNothing);
+    expect(find.descendant(of: find.byKey(const Key('simple-settings')), matching: find.byIcon(Icons.tune)), findsOneWidget);
   });
 
   testWidgets('Focus stays in Simple Mode: the rail reads Focus, its panel opens left of the rail; the chip is the Focus chip',
@@ -252,7 +252,7 @@ void main() {
     expect(find.byKey(const Key('simple-polar-exposure')), findsOneWidget);
   });
 
-  testWidgets('the P.A. chip stacks exposure over Loop/Single, no icon, never cut', (tester) async {
+  testWidgets('the P.A. chip stacks exposure over Loop/Single under the icon, never cut', (tester) async {
     tester.platformDispatcher.textScaleFactorTestValue = 0.5;
     addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
     final container = await _pump(tester, const Size(1024, 768));
@@ -264,9 +264,9 @@ void main() {
     await tester.tap(find.text('Polar align'));
     await tester.pump();
     final chip = find.byKey(const Key('simple-settings'));
-    expect(find.descendant(of: chip, matching: find.byIcon(Icons.tune)), findsNothing);
-    final p = tester.renderObject<RenderParagraph>(find.descendant(of: chip, matching: find.byType(RichText)));
-    expect(p.text.toPlainText(), '45 s\nSingle');
+    expect(find.descendant(of: chip, matching: find.byIcon(Icons.tune)), findsOneWidget);
+    final p = tester.renderObject<RenderParagraph>(
+        find.descendant(of: find.descendant(of: chip, matching: find.text('45 s\nSingle')), matching: find.byType(RichText)));
     expect(p.didExceedMaxLines, isFalse, reason: 'cut');
   });
 
@@ -324,6 +324,22 @@ void main() {
     await tester.tapAt(const Offset(400, 400));
     await tester.pump();
     expect(find.text('Loop'), findsNothing, reason: 'a tap on the image closes it');
+  });
+
+  testWidgets('the chip shows the settings icon in every mode, at one height, so the rail never changes size',
+      (tester) async {
+    await _pump(tester, const Size(1024, 768));
+    final chip = find.byKey(const Key('simple-settings'));
+    Size? size;
+    for (final m in ['Preview', 'Focus', 'Polar align', 'Plan']) {
+      await tester.tap(find.byKey(const Key('simple-mode')));
+      await tester.pump();
+      await tester.tap(find.text(m).first);
+      await tester.pump();
+      expect(find.descendant(of: chip, matching: find.byIcon(Icons.tune)), findsOneWidget, reason: m);
+      size ??= tester.getSize(chip);
+      expect(tester.getSize(chip), size, reason: '$m: same chip height');
+    }
   });
 
   testWidgets('opening the modes or the settings never moves the rail', (tester) async {

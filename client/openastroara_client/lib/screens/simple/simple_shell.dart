@@ -714,9 +714,14 @@ class _RailButton extends StatelessWidget {
     required this.label,
     required this.onTap,
     this.selected = false,
+    this.tall = false,
   });
 
   final IconData? icon;
+
+  /// The settings chip: tall enough for the icon over two lines (P.A.'s
+  /// setup, Plan's time), in every mode so the rail never changes size.
+  final bool tall;
   final String label;
   final VoidCallback onTap;
   final bool selected;
@@ -734,7 +739,7 @@ class _RailButton extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
         child: SizedBox(
           width: 60,
-          height: 56,
+          height: tall ? 72 : 56,
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
@@ -750,7 +755,7 @@ class _RailButton extends StatelessWidget {
               ],
               Text(
                 label,
-                maxLines: icon == null ? 2 : 1,
+                maxLines: icon == null || tall ? 2 : 1,
                 textAlign: TextAlign.center,
                 overflow: TextOverflow.ellipsis,
                 style: AraText.caption.copyWith(
@@ -896,12 +901,8 @@ class _RightRail extends ConsumerWidget {
           },
           _RailButton(
             key: const Key('simple-settings'),
-            // P.A.'s setup and Plan's time take two lines, so they have no icon.
-            icon:
-                mode == SimpleModeScreen.polarAlign ||
-                    mode == SimpleModeScreen.plan
-                ? null
-                : Icons.tune,
+            icon: Icons.tune,
+            tall: true,
             label: switch (mode) {
               SimpleModeScreen.focus => simpleFocusSummary(ref),
               SimpleModeScreen.plan => simpleRunChip(
