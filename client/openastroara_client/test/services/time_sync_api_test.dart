@@ -58,6 +58,7 @@ void main() {
     final state = await api.getState();
     expect(state.synced, isFalse, reason: 'wrong-typed synced reads as false → the client pushes');
     expect(state.source, 'none');
+    expect(state.utcOffsetMinutes, isNull, reason: 'an older daemon sends no offset');
   });
 
   test('getState parses the full status fields the settings section renders', () async {
@@ -69,6 +70,7 @@ void main() {
       'location': {'lat': 30.27, 'lng': -97.74, 'alt': 165.0},
       'internet_available_on_pi': false,
       'synced_at_utc': '2026-07-11T07:00:00Z',
+      'utc_offset_minutes': -300,
     });
     final api = TimeSyncApi(const AraServer(hostname: 'x', port: 80),
         dio: Dio()..httpClientAdapter = adapter);
@@ -79,6 +81,7 @@ void main() {
     expect(state.location!.alt, 165.0);
     expect(state.internetAvailableOnPi, isFalse);
     expect(state.syncedAtUtc, DateTime.utc(2026, 7, 11, 7));
+    expect(state.utcOffsetMinutes, -300);
   });
 
   test('getState tolerates a null-altitude location (RMC-only GPS fix)', () async {

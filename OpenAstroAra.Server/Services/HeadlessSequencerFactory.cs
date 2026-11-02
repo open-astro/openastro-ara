@@ -41,6 +41,7 @@ using OpenAstroAra.Sequencer.Trigger.Autofocus;
 using OpenAstroAra.Sequencer.Trigger.Connect;
 using OpenAstroAra.Sequencer.Trigger.Guider;
 using OpenAstroAra.Sequencer.Trigger.MeridianFlip;
+using OpenAstroAra.Astrometry;
 using OpenAstroAra.Sequencer.Utility.DateTimeProvider;
 using OpenAstroAra.Server.Services.Equipment;
 using System.Windows.Data;
@@ -170,6 +171,8 @@ public sealed class HeadlessSequencerFactory : ISequencerFactory {
     /// subsequent §38k sub-PRs as each instruction's equipment-service
     /// dependency tree gets DI-wired.
     /// </summary>
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope",
+        Justification = "The NighttimeCalculator behind the time sources lives as long as the factory, a daemon singleton; its only resource is a 10-minute reference-date timer.")]
     public static HeadlessSequencerFactory WithDefaults(
             ISafetyMonitorMediator? safetyMonitorMediator = null,
             ITelescopeMediator? telescopeMediator = null,
@@ -231,6 +234,19 @@ public sealed class HeadlessSequencerFactory : ISequencerFactory {
         // placeholder keeps the prototype JSON-resolvable for clone/validate; Program.cs hands in the real
         // §58.4 MeridianFlipExecutor so an executed flip actually runs the recovery sequence.
         meridianFlipExecutor ??= new PlaceholderMeridianFlipExecutor();
+        // Wait (until time) and Until a time need their time sources: the clock (the default, which
+        // rolls over at the site's dawn, so an evening plan's 01:30 means tonight's 01:30) and the
+        // sky events the full UI's editor offers.
+        var night = new NighttimeCalculator(profileService);
+        var clockTime = new OpenAstroAra.Sequencer.Utility.DateTimeProvider.TimeProvider(night);
+        var timeSources = new List<IDateTimeProvider> {
+            clockTime,
+            new SunsetProvider(night), new SunriseProvider(night),
+            new CivilDuskProvider(night), new CivilDawnProvider(night),
+            new NauticalDuskProvider(night), new NauticalDawnProvider(night),
+            new DuskProvider(night), new DawnProvider(night),
+            new MeridianProvider(profileService),
+        };
 
         return new HeadlessSequencerFactory(
             items: new List<ISequenceItem> {
@@ -240,6 +256,7 @@ public sealed class HeadlessSequencerFactory : ISequencerFactory {
                 // OSC rig, etc.); arms the root's pause gate as AwaitingUser.
                 new WaitForUser(),
                 new WaitForTimeSpan(),
+                new WaitForTime(timeSources, clockTime),
                 // §48.4 — WaitForSunAltitude gates the sky-flat generator's body (waits for the sun
                 // to drop through the twilight altitude); profile-only dep for the observer site.
                 new WaitForSunAltitude(profileService),
@@ -367,7 +384,7 @@ public sealed class HeadlessSequencerFactory : ISequencerFactory {
                     rotatorMediator, telescopeMediator, guiderMediator, switchMediator,
                     flatDeviceMediator, weatherDataMediator, domeMediator, safetyMonitorMediator),
             },
-            conditions: DefaultConditions(profileService),
+            conditions: [.. DefaultConditions(profileService), new TimeCondition(timeSources, clockTime)],
             container: new List<ISequenceContainer> {
                 new SequenceRootContainer(),
                 new SequentialContainer(),
@@ -417,6 +434,8 @@ public sealed class HeadlessSequencerFactory : ISequencerFactory {
                     profileService, cameraMediator, filterWheelMediator, focuserMediator,
                     rotatorMediator, telescopeMediator, guiderMediator, switchMediator,
                     flatDeviceMediator, weatherDataMediator, domeMediator, safetyMonitorMediator),
-            });
+            },
+            // A body naming a provider (the full UI's editor does) resolves through this list.
+            dateTimeProviders: timeSources);
     }
 }

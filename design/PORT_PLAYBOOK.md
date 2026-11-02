@@ -2470,11 +2470,11 @@ Future: UPS GPIO signal pin can trigger a proactive checkpoint + park sequence a
 **Pause vs Abort vs Stop:**
 - **Pause** — described above; everything stays connected and ready; resume restores the running state
 - **Abort** — sequence ends; mount stays where it is; cooler stays on; user controls what happens next
-- **Emergency Stop** (§35.3) — sequence ends; mount parks per §35 safety policy; cooler may warm or stay depending on `cooler_warmup_on_session_end` (§28.13); equipment disconnects per safety policy
+- **Emergency Stop** (§35.3) — sequence ends; mount parks per §35 safety policy; the cooler is switched straight off as the stop's last rung, whatever `cooler_warmup_on_session_end` says (§28.13 does not apply to it); equipment disconnects per safety policy
 
 ### 28.13 Cooler warmup at session end
 
-When a sequence ends (graceful completion, user abort, emergency stop) or the user explicitly disconnects the camera, ARA's behavior depends on the per-profile `cooler_warmup_on_session_end` setting:
+When a sequence ends (graceful completion or user abort) or the user explicitly disconnects the camera, ARA's behavior depends on the per-profile `cooler_warmup_on_session_end` setting. Emergency Stop is the exception: it switches the cooler straight off with no ramp (§35.3 step 6):
 
 | Value | Behavior |
 |---|---|
@@ -4458,7 +4458,7 @@ User can override every single default.
 
 ### 35.3 User-triggered emergency abort
 
-Persistent **[Emergency Stop]** button in WILMA's main app shell (top-right of status bar). Single tap = immediate abort, no confirmation (the button IS the confirmation). Fires `POST /api/v1/server/emergency-stop`:
+Persistent **[Emergency Stop]** button in WILMA's main app shell (top-right of status bar). Press and hold for 2 s to abort ("Hold to confirm", a fill sweeping across; letting go early sends nothing). Keyboard and screen-reader activation can't hold, so it opens a "Stop everything now?" confirmation instead; Simple Mode's versions, which show no popups, ask for a second press within 3 s. Fires `POST /api/v1/server/emergency-stop`:
 
 Server shutdown sequence:
 1. Camera: abort current exposure
@@ -4466,8 +4466,9 @@ Server shutdown sequence:
 3. Mount: park (or home if no park position configured)
 4. Filter wheel / focuser / rotator: leave in place (no auto-move; user can intervene)
 5. Flat panel: turn off (if connected, and configured to do so)
-6. Sequence state → `aborted`
-7. WebSocket event `sequence.aborted` to all connected clients
+6. Camera cooler: switch off (if the camera is connected and its cooler is on; reported as `cooler_off`, a refusal as the failed rung `cooler_off`)
+7. Sequence state → `aborted`
+8. WebSocket event `sequence.aborted` to all connected clients
 
 ### 35.4 SafetyMonitor poll loop (server-side)
 

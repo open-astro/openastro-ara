@@ -8916,6 +8916,9 @@ components:
           type: array
           items:
             type: string
+        cooler_off:
+          type: boolean
+          default: false
     EquipmentConnectionDto:
       required:
         - camera
@@ -13728,6 +13731,13 @@ components:
             - string
           format: int32
           default: 0
+        current_instruction_progress:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
     SequenceShareDto:
       required:
         - sequence_id
@@ -15412,6 +15422,7 @@ components:
         - location
         - internet_available_on_pi
         - synced_at_utc
+        - utc_offset_minutes
       type: object
       properties:
         synced:
@@ -15440,6 +15451,12 @@ components:
             - 'null'
             - string
           format: date-time
+        utc_offset_minutes:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
     TrackingCalibrationDto:
       required:
         - ceiling_seconds

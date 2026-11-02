@@ -119,7 +119,9 @@ public sealed partial class TimeSyncService : ITimeSyncService {
             SystemTimeOffsetSeconds: offset,
             Location: location,
             InternetAvailableOnPi: InternetProbe(),
-            SyncedAtUtc: syncedAt));
+            SyncedAtUtc: syncedAt,
+            // Today's offset: a start scheduled across a DST change lands an hour off (rare; accepted).
+            UtcOffsetMinutes: (int)TimeZoneInfo.Local.GetUtcOffset(now).TotalMinutes));
     }
 
     // A pushed time outside this window is a malformed request, not a plausible clock: a request

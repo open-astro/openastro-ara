@@ -24,6 +24,28 @@ class AraColors {
   static const bgInput = Color(0xFF333333);
   static const border = Color(0xFF404040);
 
+  /// Simple Mode's floating panels: [bgPrimary] at 90 % over the frame
+  /// (DESIGN.md `overlay-scrim`), so their text reads over a bright frame too.
+  static const overlayScrim = Color(0xE61A1A1A);
+
+  /// Error words on Simple Mode's panels: [accentError] lightened so it reads
+  /// at 4.5:1 over the scrim on any frame (Fault Red itself falls to 1.6:1
+  /// over a bright one).
+  static const errorText = Color(0xFFFF8A80);
+
+  /// The tile fill behind Simple Mode's fields, presets and mode tiles
+  /// (DESIGN.md `tile-fill`): dark enough that [textSecondary] on it reads
+  /// at 4.5:1 over a white frame.
+  static const tileFill = Color(0x8C383838);
+
+  /// Simple Mode's full-screen safety alarm: a deep red over everything, so it
+  /// reads as an alarm from across the room ([textPrimary] on it passes 7:1).
+  static const alarmScrim = Color(0xE03C0808);
+
+  /// Simple Mode's Emergency Stop fill: Fault Red darkened so its white
+  /// label reads at 5:1 (Fault Red gives 4.2:1). The full UI keeps Fault Red.
+  static const emergencyStop = Color(0xFFD32F2F);
+
   // Text
   static const textPrimary = Color(0xFFE0E0E0);
   static const textSecondary = Color(0xFFA0A0A0);
@@ -43,6 +65,10 @@ class AraColors {
 
   // Selection / buttons
   static const selectionBg = Color(0xFF1976D2);
+
+  /// [selectionBg] at 25 %: a selected or current item on a translucent
+  /// panel (Simple Mode's rail buttons, Autopilot's step in hand).
+  static const selectionTint = Color(0x401976D2);
   static const selectionFg = Color(0xFFFFFFFF);
   static const buttonPrimary = Color(0xFF1565C0);
   static const buttonSecondary = Color(0xFF424242);

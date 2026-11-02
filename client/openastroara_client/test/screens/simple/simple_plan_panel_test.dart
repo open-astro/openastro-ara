@@ -1,0 +1,1073 @@
+import 'dart:async';
+
+import 'package:flutter/gestures.dart' show PointerDeviceKind, kSecondaryMouseButton;
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter/rendering.dart' show RenderParagraph;
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:dio/dio.dart';
+import 'package:openastroara/models/sequence/imaging_run_body.dart';
+import 'package:openastroara/models/sequence/sequence_summary.dart';
+import 'package:openastroara/models/sequence/nina_dom.dart' show childrenOf;
+import 'package:openastroara/models/sequence/instruction_catalog.dart' show waitForTimeType;
+import 'package:openastroara/util/tonight_sky_local.dart' show darkStart;
+import 'package:openastroara/models/sky_model_calibration.dart';
+import 'package:openastroara/screens/simple/simple_plan_panel.dart';
+import 'package:openastroara/services/sequence_api.dart';
+import 'package:openastroara/services/tonight_sky_api.dart';
+import 'package:openastroara/theme/ara_colors.dart';
+import 'package:openastroara/state/sky_atlas/tonight_sky_state.dart';
+import 'package:openastroara/state/sequencer/sequence_list_state.dart';
+import 'package:openastroara/state/planning/sky_model_calibration_state.dart';
+import 'package:openastroara/state/settings/camera_electronics_state.dart';
+import 'package:openastroara/state/settings/filter_set_state.dart';
+import 'package:openastroara/state/settings/optics_settings_state.dart';
+import 'package:openastroara/state/settings/site_settings_state.dart';
+import 'package:openastroara/state/sky_atlas/planetarium_selection_state.dart';
+import 'package:openastroara/state/setup/setup_readiness.dart';
+import 'package:openastroara/services/simple_mode_prefs_service.dart';
+import 'package:openastroara/state/simple_mode_state.dart';
+import 'package:openastroara/state/settings/settings_nav.dart';
+import 'package:openastroara/state/app_shell_state.dart';
+import 'package:openastroara/models/ws_event.dart';
+import 'package:openastroara/state/ws/ws_providers.dart';
+import 'package:openastroara/widgets/stop_mount_overlay.dart' show SlewWsEvents;
+import 'package:openastroara/models/library/live_library.dart';
+import 'package:openastroara/state/library/live_library_state.dart';
+
+const _m42 = PlanetariumSelection(
+    name: 'M42', kind: 'Nebula', raHours: 5.59, decDeg: -5.39, raJ2000Hours: 5.59, decJ2000Deg: -5.39, altDeg: 30, maxAltDeg: 45);
+
+const _m31 = PlanetariumSelection(
+    name: 'M31', kind: 'Galaxy', raHours: 0.73, decDeg: 41.4, raJ2000Hours: 0.71, decJ2000Deg: 41.27, altDeg: 62.4, maxAltDeg: 74.2);
+
+const _lrgb = [
+  PlanningFilter(name: 'L', kind: FilterKind.l),
+  PlanningFilter(name: 'R', kind: FilterKind.r),
+  PlanningFilter(name: 'G', kind: FilterKind.g),
+  PlanningFilter(name: 'B', kind: FilterKind.b),
+  PlanningFilter(name: 'Ha', kind: FilterKind.ha),
+];
+
+/// The daemon as the Run mode sees it: create, start and the lifecycle calls
+/// are recorded; the run state is whatever the test sets.
+class _Seq implements SequenceClient {
+  final calls = <String>[];
+  SequenceRunStateInfo? runState;
+  var _n = 0;
+  /// The bodies the daemon keeps, by id.
+  final bodies = <String, Map<String, dynamic>>{};
+  @override
+  Future<String> create(String name, Map<String, dynamic> body,
+      {String? description, String? idempotencyKey}) async {
+    calls.add('create $name');
+    final id = 'seq-${++_n}';
+    bodies[id] = body;
+    return id;
+  }
+
+  @override
+  Future<SequenceDetail> getSequenceDetail(String id) async => SequenceDetail(id: id, body: bodies[id] ?? const {});
+
+  @override
+  Future<SequenceDetail> updateSequence(String id, {String? name, String? description, Map<String, dynamic>? body}) async {
+    calls.add('update $id');
+    if (body != null) bodies[id] = body;
+    return SequenceDetail(id: id, body: bodies[id] ?? const {});
+  }
+
+  @override
+  Future<SequenceDetail> removeRunItem(String id, List<int> path) async {
+    calls.add('remove-live $id $path');
+    return SequenceDetail(id: id, body: bodies[id] ?? const {});
+  }
+
+  /// The target blocks' names in the stored body, in order.
+  List<String> targets(String id) => [
+        for (final c in childrenOf(bodies[id]!))
+          if (indexOfTargetBlock(bodies[id]!, c['Name'] as String? ?? '') >= 0 &&
+              childrenOf(c).isNotEmpty)
+            c['Name'] as String,
+      ];
+
+  @override
+  Future<bool> deleteSequence(String id) async {
+    calls.add('delete $id');
+    return true;
+  }
+
+  /// What start throws instead, as the daemon refuses.
+  Object? startError;
+  @override
+  Future<String> start(String id) async {
+    if (startError case final e?) throw e;
+    return _op('start $id');
+  }
+  @override
+  Future<String> stop(String id) async => _op('stop $id');
+  @override
+  Future<String> pause(String id) async => _op('pause $id');
+  @override
+  Future<String> resume(String id, {bool recenter = true, bool refocus = false}) async =>
+      _op('resume $id${recenter ? '' : ' no-recenter'}${refocus ? ' refocus' : ''}');
+  String _op(String c) {
+    calls.add(c);
+    return 'op';
+  }
+
+  @override
+  Future<SequenceRunStateInfo?> getRunState(String id) async => runState;
+  @override
+  Future<SequencePage> list({int limit = 50, String? cursor}) async => const SequencePage(items: []);
+  @override
+  void close() {}
+  @override
+  void noSuchMethod(Invocation invocation) => throw UnimplementedError('${invocation.memberName}');
+}
+
+SequenceRunStateInfo _imaging(int frames, {SequenceRunState state = SequenceRunState.running}) =>
+    SequenceRunStateInfo(sequenceId: 'seq-1', state: state, framesCaptured: frames);
+
+class _Sel extends PlanetariumSelectionNotifier {
+  _Sel(this.value);
+  final PlanetariumSelection? value;
+  @override
+  PlanetariumSelection? build() => value;
+}
+
+class _Filters extends FilterSetNotifier {
+  _Filters([this.filters = _lrgb]);
+  final List<PlanningFilter> filters;
+  @override
+  FilterSetSettings build() => FilterSetSettings(filters: filters);
+}
+
+/// A colour camera's dual-band filters: long names.
+const _duo = [
+  PlanningFilter(name: 'L-enhance', kind: FilterKind.duo),
+  PlanningFilter(name: 'L-eXtreme', kind: FilterKind.duo),
+];
+
+/// The text is drawn whole on one line: none of it cut or wrapped.
+void _whole(WidgetTester tester, Finder text) {
+  final p = tester.renderObject<RenderParagraph>(text);
+  expect(p.didExceedMaxLines, isFalse, reason: '$text cut');
+  expect(p.size.width, greaterThanOrEqualTo(p.getMaxIntrinsicWidth(double.infinity) - 0.5), reason: '$text cut');
+}
+
+// A configured rig, so the suggested sub lengths compute (as in
+// target_plan_dialog_test).
+class _Optics extends OpticsSettingsNotifier {
+  @override
+  OpticsSettings build() => const OpticsSettings(
+      focalLengthMm: 447, reducerFactor: 1.0, sensorWidthPx: 6248, sensorHeightPx: 4176, pixelSizeUm: 3.76, apertureMm: 91);
+}
+
+class _Electronics extends CameraElectronicsNotifier {
+  @override
+  CameraElectronics build() =>
+      const CameraElectronics(readNoiseE: 0.7, fullWellE: 50000, electronsPerAdu: 0.8, quantumEfficiencyPeak: 0.8);
+}
+
+class _Site extends SiteSettingsNotifier {
+  @override
+  SiteSettings build() => SiteSettings(bortleClass: 6);
+}
+
+class _SiteAt extends SiteSettingsNotifier {
+  _SiteAt(this.site);
+  final SiteSettings site;
+  @override
+  SiteSettings build() => site;
+}
+
+class _NoSkyModel extends SkyModelCalibrationNotifier {
+  @override
+  Future<SkyModelCalibration?> build() async => null;
+}
+
+class _Prefs extends SimpleModePrefsService {
+  _Prefs(this.value);
+  bool value;
+  @override
+  Future<bool> load() async => value;
+  @override
+  Future<void> save(bool enabled) async => value = enabled;
+}
+
+class _Sessions extends LiveLibrarySessionsNotifier {
+  @override
+  Future<List<LibrarySession>?> build() async => [
+        LibrarySession(
+            id: 's1', targetName: 'M31', sessionStartUtc: DateTime.utc(2026, 11, 2, 20), sessionEndUtc: null,
+            totalFrames: 21, lightFrames: 21, calibrationFrames: 0, filtersUsed: const ['L', 'R', 'G']),
+      ];
+}
+
+final _rig = <Object>[
+  opticsSettingsProvider.overrideWith(_Optics.new),
+  cameraElectronicsProvider.overrideWith(_Electronics.new),
+  siteSettingsProvider.overrideWith(_Site.new),
+  skyModelCalibrationProvider.overrideWith(_NoSkyModel.new),
+];
+
+Future<ProviderContainer> _pump(WidgetTester tester, _Seq seq, Widget child,
+    {PlanetariumSelection? sel = _m31,
+    List<Object> overrides = const [],
+    List<PlanningFilter> filters = _lrgb,
+    List<TonightSkyObject> tonight = const []}) async {
+  final container = ProviderContainer(overrides: [
+    ...overrides.cast(),
+    tonightSkyProvider.overrideWith((ref) async => tonight),
+    sequenceApiProvider.overrideWith((ref) => seq),
+    planetariumSelectionProvider.overrideWith(() => _Sel(sel)),
+    filterSetProvider.overrideWith(() => _Filters(filters)),
+  ]);
+  addTearDown(container.dispose);
+  // Tall enough for the sheet, tracker and shutter stacked in one column.
+  tester.view.physicalSize = const Size(1024, 1100);
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.reset);
+  await tester.pumpWidget(UncontrolledProviderScope(
+    container: container,
+    child: MaterialApp(home: Scaffold(body: Center(child: child))),
+  ));
+  await tester.pumpAndSettle();
+  return container;
+}
+
+void main() {
+  test('the first plan: LRGB from the set, one unnamed row without a choice', () {
+    final lrgb = simpleRunDefaultPlan(_lrgb, 300);
+    expect(lrgb.map((s) => s.filterName), ['L', 'R', 'G', 'B']);
+    expect(lrgb.map((s) => s.frameCount), [15, 15, 15, 15]);
+    expect(lrgb.first.exposureSeconds, 300);
+
+    final narrow = simpleRunDefaultPlan(const [
+      PlanningFilter(name: 'Ha', kind: FilterKind.ha),
+      PlanningFilter(name: 'OIII', kind: FilterKind.oiii),
+    ], 180);
+    expect(narrow.map((s) => s.filterName), ['Ha', 'OIII']);
+    expect(narrow.first.frameCount, 30);
+
+    final osc = simpleRunDefaultPlan(const [PlanningFilter(name: 'OSC', kind: FilterKind.osc)], 60);
+    expect(osc, hasLength(1));
+    expect(osc.single.filterName, '');
+    expect(osc.single.frameCount, 60);
+  });
+
+  group('frames fill the dark window', () {
+    TonightSkyObject m31(double hours) => TonightSkyObject(
+        id: 'm31', name: 'M31', type: 'Galaxy', magnitude: 3.4, raDeg: 10.7, decDeg: 41.3,
+        altitudeDeg: 62, maxAltitudeDeg: 74, remainingHours: hours);
+
+    Future<ProviderContainer> plan(List<TonightSkyObject> tonight) async {
+      final c = ProviderContainer(overrides: [
+        tonightSkyProvider.overrideWith((ref) async => tonight),
+        planetariumSelectionProvider.overrideWith(() => _Sel(_m31)),
+        filterSetProvider.overrideWith(() => _Filters()),
+      ]);
+      addTearDown(c.dispose);
+      c.listen(simpleRunPlanProvider, (_, _) {});
+      await c.read(tonightSkyProvider.future);
+      await Future<void>.delayed(Duration.zero);
+      return c;
+    }
+
+    test('the picked target\'s window splits across the rows; a new sub refits its row', () async {
+      final c = await plan([m31(2)]);
+      // 2 h over four rows = 30 min each; 5 s subs fit 360, capped at 300.
+      expect(c.read(simpleRunPlanProvider).map((s) => s.frameCount), [300, 300, 300, 300]);
+      c.read(simpleRunPlanProvider.notifier).setExposure(0, 120);
+      expect(c.read(simpleRunPlanProvider).first.frameCount, 15);
+    });
+
+    test('no window for the target (not ranked tonight): 60 frames split, a new sub keeps the count', () async {
+      final c = await plan(const []);
+      expect(c.read(simpleRunPlanProvider).map((s) => s.frameCount), [15, 15, 15, 15]);
+      c.read(simpleRunPlanProvider.notifier).setExposure(0, 120);
+      expect(c.read(simpleRunPlanProvider).first.frameCount, 15);
+    });
+  });
+
+  test('the plan square\'s catalog tag: a region\'s own, else M > NGC > IC > Sh2 > B > LBN, else none', () {
+    expect(simpleTargetTag('Horsehead + Flame region (IC 434)', ['IC0434']), 'IC 434');
+    expect(simpleTargetTag('Question Mark region (NGC 7822 / Ced 214)', ['NGC7822']), 'NGC 7822');
+    expect(simpleTargetTag('Spaghetti Nebula (Simeis 147)', ['REGION-SIMEIS-147']), 'Simeis 147');
+    expect(simpleTargetTag('Orion Nebula + Running Man (M42)', ['NGC1976']), 'M 42');
+    expect(simpleTargetTag('Rho Ophiuchi cloud complex', ['REGION-RHO-OPH']), isNull);
+    // A sky pick: the page's designations.
+    expect(simpleTargetTag('Horsehead Nebula', ['NAME Horsehead Nebula', 'B 33', 'LDN 1630']), 'B 33');
+    expect(simpleTargetTag('Orion Nebula', ['NGC 1976', 'M 42']), 'M 42');
+    expect(simpleTargetTag('Andromeda Galaxy', ['NGC0224', 'M031']), 'M 31');
+    expect(simpleTargetTag('Flame Nebula', ['NGC 2024', 'Sh2-277']), 'NGC 2024');
+    expect(simpleTargetTag('Sh2-129', ['SH 2-129']), 'Sh2-129');
+    expect(simpleTargetTag('Twin Jet', ['M 2-9']), isNull, reason: 'Minkowski, not Messier');
+  });
+
+  test('a tonight\'s-best pick carries its id and aliases; the page\'s pick its designations', () {
+    final o = TonightSkyObject(
+        id: 'IC0434', name: 'Horsehead + Flame region (IC 434)', type: 'HII', magnitude: null, raDeg: 85.25,
+        decDeg: -2.45, altitudeDeg: 30, maxAltitudeDeg: 50, aliases: const ['LBN 953']);
+    expect(simpleSelectionOf(o).designations, ['IC0434', 'LBN 953']);
+    final page = PlanetariumSelection.tryFromJson(const {
+      'name': 'Horsehead Nebula', 'raHours': 5.68, 'decDeg': -2.46, 'maxAltDeg': 50,
+      'designations': ['NAME Horsehead Nebula', 'B 33'],
+    });
+    expect(page!.designations, ['NAME Horsehead Nebula', 'B 33']);
+  });
+
+  test('the phase: a run in progress wins; a started plan ends only on a terminal state', () {
+    const none = SimpleRun();
+    const ready = SimpleRun(sequenceId: 'seq-1');
+    const started = SimpleRun(sequenceId: 'seq-1', started: true);
+    expect(simpleRunPhase(none, null), SimpleRunPhase.none);
+    expect(simpleRunPhase(ready, null), SimpleRunPhase.ready);
+    expect(simpleRunPhase(started, _imaging(3)), SimpleRunPhase.imaging);
+    expect(simpleRunPhase(started.copyWith(pausing: true), _imaging(3)), SimpleRunPhase.pausing);
+    expect(simpleRunPhase(started, _imaging(3, state: SequenceRunState.paused)), SimpleRunPhase.paused);
+    expect(simpleRunPhase(started, _imaging(3, state: SequenceRunState.idle)), SimpleRunPhase.ready,
+        reason: 'a just-started run still reads idle');
+    expect(simpleRunPhase(started, _imaging(60, state: SequenceRunState.completed)), SimpleRunPhase.done);
+    expect(simpleRunPhase(started, _imaging(9, state: SequenceRunState.stopped)), SimpleRunPhase.done);
+    // A run adopted from the daemon, with no plan here.
+    expect(simpleRunPhase(none, _imaging(7)), SimpleRunPhase.imaging);
+  });
+
+  test('simpleTargetStatus: up, below with its rise, never rises', () {
+    expect(simpleTargetStatus(_m31), '62° up · max 74°');
+    expect(
+        simpleTargetStatus(PlanetariumSelection(
+            name: 'M33', kind: 'Galaxy', raHours: 1.6, decDeg: 30.8, raJ2000Hours: 1.56, decJ2000Deg: 30.66,
+            altDeg: -12, maxAltDeg: 60, rise: DateTime(2026, 11, 2, 22, 40))),
+        'Below your horizon · rises 22:40');
+    expect(
+        simpleTargetStatus(const PlanetariumSelection(
+            name: 'NGC 104', kind: 'Cluster', raHours: 0.4, decDeg: -72, raJ2000Hours: 0.4, decJ2000Deg: -72,
+            altDeg: -40, maxAltDeg: -20)),
+        'Never rises here');
+  });
+
+  test('the hint: rows that differ, grouped by length; null when all match', () {
+    const lrgb = [
+      FilterPlanStep(filterName: 'L', exposureSeconds: 5, frameCount: 15),
+      FilterPlanStep(filterName: 'R', exposureSeconds: 180, frameCount: 15),
+      FilterPlanStep(filterName: 'G', exposureSeconds: 5, frameCount: 15),
+      FilterPlanStep(filterName: 'B', exposureSeconds: 5, frameCount: 15),
+    ];
+    expect(simpleRunSuggestion(lrgb, [120, 180, 180, 180]), 'L 2 min · GB 3 min');
+    expect(simpleRunSuggestion(lrgb, [5, 180, 5, 5]), isNull);
+    const narrow = [
+      FilterPlanStep(filterName: 'Ha', exposureSeconds: 60, frameCount: 30),
+      FilterPlanStep(filterName: 'OIII', exposureSeconds: 60, frameCount: 30),
+    ];
+    expect(simpleRunSuggestion(narrow, [300, 300]), 'Ha/OIII 5 min');
+    const osc = [FilterPlanStep(filterName: '', exposureSeconds: 5, frameCount: 60)];
+    expect(simpleRunSuggestion(osc, [90]), '90 s');
+  });
+
+  test('the chip reads the plan\'s total imaging time: the created plan, else the sheet\'s rows', () {
+    const rows = [
+      FilterPlanStep(filterName: 'L', exposureSeconds: 120, frameCount: 15),
+      FilterPlanStep(filterName: 'R', exposureSeconds: 180, frameCount: 15),
+    ];
+    expect(simpleRunChip(const SimpleRun(), rows), '1 h\n15 min');
+    const created = SimpleRun(sequenceId: 'seq-1', targets: [
+      SimpleTarget(name: 'M31', steps: [FilterPlanStep(filterName: 'L', exposureSeconds: 300, frameCount: 12)]),
+    ]);
+    expect(simpleRunChip(created, rows), '1 h\n0 min');
+    expect(simpleRunChip(const SimpleRun(), const [FilterPlanStep(filterName: 'L', exposureSeconds: 60, frameCount: 45)]), '45 min');
+  });
+
+  test('a suggestion reads type and altitude, or when it rises; it becomes the selection', () {
+    final up = TonightSkyObject(
+        id: 'ngc7000', name: 'NGC 7000', type: 'Nebula', magnitude: 4, raDeg: 314.7, decDeg: 44.3,
+        altitudeDeg: 71.4, maxAltitudeDeg: 80, windowEndUtc: DateTime.utc(2026, 11, 3, 1, 40));
+    expect(simpleSuggestionLine(up), 'Nebula · 71° up');
+    final later = TonightSkyObject(
+        id: 'm45', name: 'M45', type: 'Cluster', magnitude: 1.6, raDeg: 56.9, decDeg: 24.1,
+        altitudeDeg: -5, maxAltitudeDeg: 70, windowStartUtc: DateTime(2026, 11, 2, 21, 50));
+    expect(simpleSuggestionLine(later), 'Cluster · rises 21:50');
+    final sel = simpleSelectionOf(up);
+    expect(sel.name, 'NGC 7000');
+    expect(sel.raJ2000Hours, closeTo(314.7 / 15, 1e-9));
+    expect(sel.decJ2000Deg, 44.3);
+    expect(sel.altDeg, 71.4);
+    expect(sel.belowHorizon, isFalse);
+    expect(simpleSelectionOf(later).belowHorizon, isTrue);
+  });
+
+  test('durations read in hours and minutes', () {
+    expect(simpleRunDuration(45 * 60), '45 min');
+    expect(simpleRunDuration(6 * 3600 + 20 * 60), '6 h 20 min');
+  });
+
+  // The sheet, the tracker and the shutter together, as on the rail.
+  Future<(ProviderContainer, _Seq)> run(WidgetTester tester,
+      {PlanetariumSelection? sel = _m31, List<Object> overrides = const [], VoidCallback? onTracker}) async {
+    final seq = _Seq();
+    final c = await _pump(
+        tester,
+        seq,
+        SingleChildScrollView(
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}, onLibrary: () {}),
+            SimpleRunTracker(onTap: onTracker ?? () {}),
+            const SimpleRunShutter(),
+          ]),
+        ),
+        sel: sel,
+        overrides: overrides);
+    return (c, seq);
+  }
+
+  // Add to queue: a plan on the rig, not started.
+  /// Tabs until the keyboard focus holds [target].
+  Future<void> tabTo(WidgetTester tester, Finder target) async {
+    for (var i = 0; i < 40; i++) {
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.pump();
+      final ctx = FocusManager.instance.primaryFocus?.context;
+      if (ctx != null &&
+          find.descendant(of: find.byElementPredicate((e) => e == ctx), matching: target).evaluate().isNotEmpty) {
+        return;
+      }
+    }
+    fail('Tab never reached $target');
+  }
+
+  Future<void> create(WidgetTester tester) async {
+    await tester.tap(find.byKey(const Key('simple-run-queue')));
+    await tester.pumpAndSettle();
+  }
+
+  Future<void> imaging(WidgetTester tester, ProviderContainer c, _Seq seq, SequenceRunStateInfo state) async {
+    seq.runState = state;
+    await c.read(sequenceRunStateProvider.notifier).refresh();
+    await tester.pumpAndSettle();
+  }
+
+  group('the sheet', () {
+    testWidgets('with nothing picked: search or Pick in Sky; both buttons are off', (tester) async {
+      var showSky = 0, pick = 0;
+      final c = await _pump(
+          tester,
+          _Seq(),
+          SimpleRunSheet(onShowSky: () => showSky++, onPickInSky: () => pick++, onCreated: () {}, onLibrary: () {}),
+          sel: null);
+      expect(find.text('Search, or pick in the sky.'), findsOneWidget);
+      expect(tester.widget<OutlinedButton>(find.byKey(const Key('simple-run-queue'))).onPressed, isNull);
+      expect(tester.widget<FilledButton>(find.byKey(const Key('simple-run-start'))).onPressed, isNull);
+      await tester.tap(find.byKey(const Key('simple-run-pick-in-sky')));
+      expect(pick, 1);
+      await tester.enterText(find.byKey(const Key('simple-run-search')), 'M42');
+      await tester.testTextInput.receiveAction(TextInputAction.search);
+      await tester.pump();
+      expect(showSky, 1, reason: 'the search runs in the planetarium');
+      expect(c.read(planetariumSearchProvider), 'M42');
+    });
+
+    testWidgets('Add to queue creates the run without starting it and keeps the sheet up for the next pick; again it appends',
+        (tester) async {
+      var created = 0;
+      final seq = _Seq();
+      final c = await _pump(
+          tester,
+          seq,
+          SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () => created++, onLibrary: () {}));
+      expect(find.text('M31'), findsOneWidget);
+      expect(find.text('Add to queue'), findsOneWidget);
+      expect(find.text('Create and start'), findsOneWidget);
+      await create(tester);
+      expect(seq.calls, ['create M31']);
+      expect(created, 0, reason: 'the sheet stays up while planning');
+      expect(find.text('M31 added · 1 in the queue'), findsOneWidget);
+      expect(c.read(planetariumSelectionProvider), isNull, reason: 'cleared for the next pick');
+      c.read(planetariumSelectionProvider.notifier).set(_m42);
+      await tester.pumpAndSettle();
+      expect(find.text('M31 added · 1 in the queue'), findsNothing, reason: 'a new pick clears the line');
+      await create(tester);
+      expect(seq.calls, ['create M31', 'update seq-1'], reason: 'the queue grows; nothing is replaced');
+      // Start now begins imaging: that closes it.
+      c.read(planetariumSelectionProvider.notifier).set(_m31);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('simple-run-start')));
+      await tester.pumpAndSettle();
+      expect(c.read(simpleRunProvider).busy, isFalse, reason: 'an append ends the busy state');
+      expect(created, 1);
+    });
+
+    testWidgets('Create and start creates the run and starts it, then closes the sheet', (tester) async {
+      var created = 0;
+      final seq = _Seq();
+      await _pump(
+          tester,
+          seq,
+          SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () => created++, onLibrary: () {}));
+      await tester.tap(find.byKey(const Key('simple-run-start')));
+      await tester.pumpAndSettle();
+      expect(seq.calls, ['create M31', 'start seq-1']);
+      expect(created, 1);
+    });
+
+    group('a scheduled start', () {
+      // 20:00 UTC on Jan 14 at an Atlanta-ish site: daylight, dark falls that evening.
+      final nowUtc = DateTime.utc(2026, 1, 14, 20);
+      const site = SiteSettings(latitudeDeg: 34, longitudeDeg: -84, twilightDefinition: TwilightDefinition.astronomical);
+      final dark = darkStart(site, nowUtc)!.toLocal();
+      String hhmm(DateTime t) => '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+      final overrides = <Object>[
+        siteSettingsProvider.overrideWith(() => _SiteAt(site)),
+        clockProvider.overrideWithValue(() => nowUtc.toLocal()),
+      ];
+      String go(WidgetTester tester) =>
+          (tester.widget<FilledButton>(find.byKey(const Key('simple-run-start'))).child! as Text).data!;
+
+      testWidgets('before dark the green button starts at dark; the plan waits on the rig, cooling 15 min early',
+          (tester) async {
+        final seq = _Seq();
+        await _pump(tester, seq,
+            SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}, onLibrary: () {}),
+            overrides: overrides);
+        expect(go(tester), 'Start at ${hhmm(dark)}');
+        expect(find.text('Starts at dark (${hhmm(dark)})'), findsOneWidget);
+        await tester.tap(find.byKey(const Key('simple-run-start')));
+        await tester.pumpAndSettle();
+        expect(seq.calls, ['create M31', 'update seq-1', 'start seq-1']);
+        final first = childrenOf(seq.bodies['seq-1']!).first;
+        expect(first[r'$type'], waitForTimeType);
+        final lead = dark.subtract(const Duration(minutes: 15));
+        expect((first['Hours'], first['Minutes']), (lead.hour, lead.minute), reason: 'cooling starts 15 min early');
+      });
+
+      testWidgets('Start now instead: today\'s Create and start; Wait for dark brings it back; Pick a time shows '
+          'the wheel', (tester) async {
+        final seq = _Seq();
+        await _pump(tester, seq,
+            SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}, onLibrary: () {}),
+            overrides: overrides);
+        await tester.tap(find.byKey(const Key('simple-run-start-now')));
+        await tester.pump();
+        expect(go(tester), 'Create and start');
+        await tester.tap(find.byKey(const Key('simple-run-wait-dark')));
+        await tester.pump();
+        expect(go(tester), 'Start at ${hhmm(dark)}');
+        await tester.tap(find.byKey(const Key('simple-run-pick-time')));
+        await tester.pump();
+        expect(find.byKey(const Key('simple-run-time-picker')), findsOneWidget);
+        await tester.tap(find.byKey(const Key('simple-run-start-now')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('simple-run-start')));
+        await tester.pumpAndSettle();
+        expect(seq.calls, ['create M31', 'start seq-1'], reason: 'starting now leaves the plan as it was');
+      });
+    });
+
+    testWidgets('from the night\'s end until sunrise: Start now only, no start time to pick', (tester) async {
+      // 11:30 UTC Jan 15: 06:30 local, morning twilight at the Atlanta-ish site.
+      final morning = DateTime.utc(2026, 1, 15, 11, 30);
+      final seq = _Seq();
+      await _pump(tester, seq,
+          SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}, onLibrary: () {}),
+          overrides: [
+            siteSettingsProvider.overrideWith(() => _SiteAt(
+                const SiteSettings(latitudeDeg: 34, longitudeDeg: -84, twilightDefinition: TwilightDefinition.astronomical))),
+            clockProvider.overrideWithValue(() => morning.toLocal()),
+          ]);
+      expect((tester.widget<FilledButton>(find.byKey(const Key('simple-run-start'))).child! as Text).data, 'Create and start');
+      expect(find.byKey(const Key('simple-run-pick-time')), findsNothing);
+      await tester.tap(find.byKey(const Key('simple-run-start')));
+      await tester.pumpAndSettle();
+      expect(seq.calls, ['create M31', 'start seq-1'], reason: 'no waits the daemon would read as yesterday');
+    });
+
+    testWidgets('tonight\'s best: up to four suggestions, one tap picks the target', (tester) async {
+      TonightSkyObject o(String name, double alt) => TonightSkyObject(
+          id: name, name: name, type: 'Galaxy', magnitude: 5, raDeg: 10, decDeg: 40, altitudeDeg: alt, maxAltitudeDeg: 70);
+      final seq = _Seq();
+      final c = await _pump(tester, seq,
+          SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}, onLibrary: () {}),
+          sel: null,
+          tonight: [o('M31', 62), o('NGC 7000', 71), o('M33', 48), o('M45', 30), o('M42', 10)]);
+      expect(find.text("TONIGHT'S BEST"), findsOneWidget);
+      for (final n in ['M31', 'NGC 7000', 'M33', 'M45']) {
+        expect(find.byKey(Key('simple-run-suggestion-$n')), findsOneWidget, reason: n);
+      }
+      expect(find.byKey(const Key('simple-run-suggestion-M42')), findsNothing, reason: 'four at most');
+      await tester.tap(find.byKey(const Key('simple-run-suggestion-NGC 7000')));
+      await tester.pump();
+      expect(c.read(planetariumSelectionProvider)?.name, 'NGC 7000');
+      // The picked tile is blue: its words are white (4.6:1), and screen readers hear it's selected.
+      final picked = find.byKey(const Key('simple-run-suggestion-NGC 7000'));
+      for (final t in tester.widgetList<Text>(find.descendant(of: picked, matching: find.byType(Text)))) {
+        expect(t.style?.color, AraColors.selectionFg, reason: t.data);
+      }
+      expect(tester.getSemantics(picked), isSemantics(isSelected: true));
+      expect(tester.getSemantics(find.byKey(const Key('simple-run-suggestion-M31'))), isSemantics(isSelected: false));
+      await tester.tap(find.byKey(const Key('simple-run-start')));
+      await tester.pumpAndSettle();
+      expect(seq.calls, ['create NGC 7000', 'start seq-1']);
+    });
+
+    testWidgets('no ranking (no site yet): no suggestions, search stays', (tester) async {
+      await _pump(tester, _Seq(), SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}, onLibrary: () {}));
+      expect(find.text("TONIGHT'S BEST"), findsNothing);
+      expect(find.byKey(const Key('simple-run-search')), findsOneWidget);
+    });
+
+    testWidgets('a configured rig gets the suggested subs in one line; Use all takes them', (tester) async {
+      final c = await _pump(tester, _Seq(),
+          SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}, onLibrary: () {}),
+          overrides: _rig);
+      expect(find.textContaining('Suggested: '), findsOneWidget);
+      final before = c.read(simpleRunPlanProvider).map((s) => s.exposureSeconds).toList();
+      expect(before.toSet(), {5.0}, reason: 'rows start at the profile default');
+      await tester.tap(find.byKey(const Key('simple-run-use-suggested')));
+      await tester.pumpAndSettle();
+      final after = c.read(simpleRunPlanProvider).map((s) => s.exposureSeconds).toList();
+      expect(after.every((s) => s >= 30 && s <= 600), isTrue, reason: 'the plan clamp: $after');
+      expect(find.textContaining('Suggested: '), findsNothing, reason: 'every row matches now');
+    });
+
+    for (final (aligned, permanent, shown) in [
+      (SetupStepState.pending, false, true),
+      (SetupStepState.done, false, false),
+      (SetupStepState.pending, true, false),
+    ]) {
+      testWidgets('polar align $aligned, permanent pier $permanent: amber line ${shown ? 'shows' : 'hidden'}',
+          (tester) async {
+        await _pump(tester, _Seq(),
+            SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}, onLibrary: () {}),
+            overrides: [
+              setupPolarAlignStateProvider.overrideWithValue(aligned),
+              simplePermanentPierPrefsProvider.overrideWithValue(_Prefs(permanent)),
+            ]);
+        expect(find.text('Not polar aligned tonight'), shown ? findsOneWidget : findsNothing);
+        // A warning, not a gate.
+        expect(tester.widget<FilledButton>(find.byKey(const Key('simple-run-start'))).onPressed, isNotNull);
+      });
+    }
+
+    testWidgets('an unconfigured rig has no hint; the last row stays', (tester) async {
+      final c = await _pump(tester, _Seq(),
+          SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}, onLibrary: () {}));
+      expect(find.byKey(const Key('simple-run-use-suggested')), findsNothing);
+      expect(find.text('60 frames'), findsOneWidget);
+      final plan = c.read(simpleRunPlanProvider.notifier);
+      for (var i = 0; i < 5; i++) {
+        plan.remove(0);
+      }
+      expect(c.read(simpleRunPlanProvider).map((s) => s.filterName), ['B']);
+    });
+  });
+
+  testWidgets('long filter names show whole in the sheet\'s rows', (tester) async {
+    await _pump(tester, _Seq(),
+        SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}, onLibrary: () {}),
+        filters: _duo);
+    _whole(tester, find.text('L-enhance'));
+    _whole(tester, find.text('L-eXtreme'));
+  });
+
+  testWidgets('the plan square shows the catalog tag; the sheet keeps the whole name', (tester) async {
+    const region = PlanetariumSelection(
+        name: 'Horsehead + Flame region (IC 434)', kind: 'HII', raHours: 5.68, decDeg: -2.45, raJ2000Hours: 5.68,
+        decJ2000Deg: -2.45, altDeg: 30, maxAltDeg: 50, designations: ['IC0434']);
+    final (_, _) = await run(tester, sel: region);
+    expect(find.text('Horsehead + Flame region (IC 434)'), findsWidgets, reason: 'the sheet');
+    await create(tester);
+    expect(find.descendant(of: find.byKey(const Key('simple-run-tracker')), matching: find.text('IC 434')),
+        findsOneWidget);
+  });
+
+  testWidgets('a long object name shows whole in the tracker, clear of its border', (tester) async {
+    const andromeda = PlanetariumSelection(
+        name: 'Andromeda Galaxy', kind: 'Galaxy', raHours: 0.73, decDeg: 41.4, raJ2000Hours: 0.71,
+        decJ2000Deg: 41.27, altDeg: 62.4, maxAltDeg: 74.2);
+    final (_, _) = await run(tester, sel: andromeda);
+    await create(tester);
+    final name = find.descendant(of: find.byKey(const Key('simple-run-tracker')), matching: find.text('Andromeda Galaxy'));
+    _whole(tester, name);
+    final box = tester.getRect(find.byKey(const Key('simple-run-tracker')));
+    final text = tester.getRect(name);
+    expect(text.left, greaterThanOrEqualTo(box.left + 4), reason: 'clear of the left border');
+    expect(text.right, lessThanOrEqualTo(box.right - 4), reason: 'clear of the right border');
+  });
+
+  testWidgets('no storage disk: the daemon\'s words and Open Storage, which leaves for the full UI\'s page', (tester) async {
+    final seq = _Seq()
+      ..startError = DioException(
+        requestOptions: RequestOptions(),
+        response: Response(requestOptions: RequestOptions(), statusCode: 409, data: {
+          'title': 'store_unavailable',
+          'detail': 'There is no disk to save frames to.',
+        }),
+      );
+    final prefs = _Prefs(true);
+    final c = await _pump(tester, seq,
+        SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}, onLibrary: () {}),
+        overrides: [simpleModePrefsProvider.overrideWithValue(prefs)]);
+    await tester.tap(find.byKey(const Key('simple-run-start')));
+    await tester.pumpAndSettle();
+    expect(find.text('There is no disk to save frames to.'), findsOneWidget);
+    await tester.tap(find.text('Open Storage'));
+    await tester.pumpAndSettle();
+    expect(c.read(selectedSettingsPanelProvider), 'session.storage');
+    expect(c.read(selectedTabIndexProvider), kOptionsTabIndex);
+    expect(prefs.value, isFalse, reason: 'Simple Mode left');
+  });
+
+  testWidgets('Night done: how long, how it ended, where it stopped, and the frames the library filed per filter',
+      (tester) async {
+    final start = DateTime.utc(2026, 11, 2, 21);
+    LibraryFrameItem frame(String filter, DateTime at) => LibraryFrameItem(
+        id: '$filter$at', frameType: 'light', filterName: filter, exposureSeconds: 5, capturedUtc: at,
+        hfr: null, starCount: null, rating: 0);
+    final frames = [
+      frame('L', start.subtract(const Duration(hours: 1))), // an earlier run's
+      for (var i = 0; i < 12; i++) frame('L', start.add(Duration(minutes: i))),
+      for (var i = 0; i < 6; i++) frame('R', start.add(Duration(minutes: 20 + i))),
+      for (var i = 0; i < 2; i++) frame('G', start.add(Duration(minutes: 30 + i))),
+    ];
+    final (c, seq) = await run(tester, overrides: [
+      liveLibrarySessionsProvider.overrideWith(_Sessions.new),
+      sessionFramesProvider.overrideWith((ref, id) async => frames),
+    ]);
+    await create(tester);
+    await c.read(simpleRunProvider.notifier).start();
+    // The plan-order estimate would read L 15, R 5.
+    await imaging(
+        tester,
+        c,
+        seq,
+        SequenceRunStateInfo(
+          sequenceId: 'seq-1',
+          state: SequenceRunState.stopped,
+          framesCaptured: 20,
+          startedUtc: start,
+          completedUtc: start.add(const Duration(hours: 2, minutes: 30)),
+          currentInstructionDescription: 'Take exposure (G)',
+        ));
+    expect(find.text('Night done'), findsOneWidget);
+    expect(find.textContaining('2 h 30 min · stopped'), findsOneWidget);
+    expect(find.text('Stopped at: Take exposure (G)'), findsOneWidget);
+    expect(find.text('12 × 5 s'), findsOneWidget);
+    expect(find.text('6 × 5 s'), findsOneWidget);
+    expect(find.text('2 × 5 s'), findsOneWidget);
+    expect(find.text('0 × 5 s'), findsOneWidget);
+  });
+
+  test('progress fills the queue in order, target by target', () {
+    const a = SimpleTarget(name: 'M31', steps: [FilterPlanStep(filterName: 'L', exposureSeconds: 60, frameCount: 10)]);
+    const b = SimpleTarget(name: 'M42', steps: [
+      FilterPlanStep(filterName: 'Ha', exposureSeconds: 180, frameCount: 4),
+      FilterPlanStep(filterName: 'OIII', exposureSeconds: 180, frameCount: 4),
+    ]);
+    expect(simpleTargetProgress([a, b], 12), [
+      [10],
+      [2, 0],
+    ]);
+    expect(simpleCurrentTarget([a, b], 9), 0);
+    expect(simpleCurrentTarget([a, b], 10), 1);
+    expect(simpleCurrentTarget([a, b], 99), 1, reason: 'the last once all are full');
+  });
+
+  group('the queue', () {
+    Future<void> pick(WidgetTester tester, ProviderContainer c, PlanetariumSelection s) async {
+      c.read(planetariumSelectionProvider.notifier).set(s);
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('Add to queue appends to the one sequence; the squares line up right to left', (tester) async {
+      final (c, seq) = await run(tester);
+      await create(tester);
+      await pick(tester, c, _m42);
+      await create(tester);
+      expect(seq.calls, ['create M31', 'update seq-1'], reason: 'appended, nothing deleted');
+      expect(seq.targets('seq-1'), ['M31', 'M42']);
+      expect(c.read(simpleRunProvider).targets.map((t) => t.name), ['M31', 'M42']);
+      final tracker = find.byKey(const Key('simple-run-tracker'));
+      final m31 = tester.getRect(find.descendant(of: tracker, matching: find.text('M31')));
+      final m42 = tester.getRect(find.descendant(of: tracker, matching: find.text('M42')));
+      expect(m42.right, lessThan(m31.left), reason: 'the next one to the left');
+    });
+
+    testWidgets('with a queue, Start now puts the target first and starts', (tester) async {
+      final (c, seq) = await run(tester);
+      await create(tester);
+      await pick(tester, c, _m42);
+      expect(find.text('Start now'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('simple-run-start')));
+      await tester.pumpAndSettle();
+      expect(seq.targets('seq-1'), ['M42', 'M31']);
+      expect(c.read(simpleRunProvider).targets.map((t) => t.name), ['M42', 'M31']);
+      expect(seq.calls.last, 'start seq-1');
+    });
+
+    testWidgets('the queue lives in its own panel, not the sheet: a tap edits a target, × deletes one', (tester) async {
+      int? edited;
+      final seq = _Seq();
+      final c = await _pump(
+          tester,
+          seq,
+          SingleChildScrollView(
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}, onLibrary: () {}),
+              SimpleRunPanel(onAdd: () {}, onEdit: (i) => edited = i),
+            ]),
+          ));
+      await create(tester);
+      await pick(tester, c, _m42);
+      await create(tester);
+      expect(find.descendant(of: find.byType(SimpleRunSheet), matching: find.text('QUEUE')), findsNothing,
+          reason: 'the sheet only plans the next target');
+      final panel = find.byType(SimpleRunPanel);
+      expect(find.descendant(of: panel, matching: find.textContaining('QUEUE')), findsOneWidget);
+      await tester.tap(find.byKey(const Key('simple-run-edit-1')));
+      expect(edited, 1);
+      await tester.tap(find.byKey(const Key('simple-run-remove-1')));
+      await tester.pumpAndSettle();
+      expect(seq.targets('seq-1'), ['M31']);
+      expect(c.read(simpleRunProvider).targets.map((t) => t.name), ['M31']);
+    });
+
+    testWidgets('editing a queued target: the sheet edits its rows only; Save updates it in place', (tester) async {
+      var closed = 0;
+      final seq = _Seq();
+      final c = await _pump(tester, seq,
+          SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}, onLibrary: () {}));
+      await create(tester);
+      await pick(tester, c, _m42);
+      await create(tester);
+      // The shell loads the target's rows, then opens the sheet on it.
+      c.read(simpleRunPlanProvider.notifier).load(c.read(simpleRunProvider).targets[1].steps);
+      await tester.pumpWidget(UncontrolledProviderScope(
+        container: c,
+        child: MaterialApp(
+            home: Scaffold(
+                body: Center(
+                    child: SimpleRunSheet(
+                        editing: 1, onShowSky: () {}, onPickInSky: () {}, onCreated: () => closed++, onLibrary: () {})))),
+      ));
+      await tester.pumpAndSettle();
+      expect(find.text('Edit M42'), findsOneWidget);
+      expect(find.byKey(const Key('simple-run-search')), findsNothing, reason: 'the target stays');
+      expect(find.text('Add to queue'), findsNothing);
+      c.read(simpleRunPlanProvider.notifier).setFrames(0, 7);
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('simple-run-save')));
+      await tester.pumpAndSettle();
+      expect(seq.targets('seq-1'), ['M31', 'M42'], reason: 'still second');
+      expect(c.read(simpleRunProvider).targets[1].steps.first.frameCount, 7);
+      expect(c.read(simpleRunProvider).targets.map((t) => t.name), ['M31', 'M42']);
+      expect(closed, 1);
+    });
+
+    testWidgets('while imaging: the panel offers Add to queue; the sheet only adds', (tester) async {
+      var adds = 0;
+      final seq = _Seq();
+      final c = await _pump(tester, seq, SimpleRunPanel(onAdd: () => adds++, onEdit: (_) {}));
+      c.read(selectedSequenceIdProvider.notifier).select('seq-1');
+      await imaging(tester, c, seq, _imaging(3));
+      await tester.tap(find.byKey(const Key('simple-run-add')));
+      expect(adds, 1);
+    });
+  });
+
+  group('the progress panel', () {
+    testWidgets('a panic stop reads Mount stopped while paused; resuming clears it', (tester) async {
+      final ws = StreamController<WsEvent>.broadcast();
+      addTearDown(ws.close);
+      final seq = _Seq();
+      final c = await _pump(tester, seq, SimpleRunPanel(onAdd: () {}, onEdit: (_) {}),
+          overrides: [wsEventsProvider.overrideWith((ref) => ws.stream)]);
+      c.read(selectedSequenceIdProvider.notifier).select('seq-1');
+      await imaging(tester, c, seq, _imaging(24));
+      ws.add(WsEvent(type: SlewWsEvents.aborted, ts: DateTime.utc(2026), seq: 1));
+      await tester.pumpAndSettle();
+      // The daemon's pause lands after the abort.
+      await imaging(tester, c, seq, _imaging(24, state: SequenceRunState.paused));
+      expect(find.text('Mount stopped'), findsOneWidget);
+      await imaging(tester, c, seq, _imaging(24));
+      expect(find.text('Mount stopped'), findsNothing);
+      // A plain pause says nothing.
+      await imaging(tester, c, seq, _imaging(25, state: SequenceRunState.paused));
+      expect(find.text('Mount stopped'), findsNothing);
+    });
+
+    testWidgets('paused: resume without re-centering, or re-center and refocus; imaging: neither', (tester) async {
+      final seq = _Seq();
+      final c = await _pump(tester, seq, SimpleRunPanel(onAdd: () {}, onEdit: (_) {}));
+      c.read(selectedSequenceIdProvider.notifier).select('seq-1');
+      await imaging(tester, c, seq, _imaging(24));
+      expect(find.textContaining('pause after this frame'), findsOneWidget);
+      expect(find.text('Resume without re-centering'), findsNothing);
+      expect(find.text('Re-center and refocus'), findsNothing);
+
+      await imaging(tester, c, seq, _imaging(24, state: SequenceRunState.paused));
+      expect(find.textContaining('Tap the shutter to resume'), findsOneWidget);
+      await tester.tap(find.text('Resume without re-centering'));
+      await tester.pumpAndSettle();
+      expect(seq.calls.last, 'resume seq-1 no-recenter');
+      await tester.tap(find.text('Re-center and refocus'));
+      await tester.pumpAndSettle();
+      expect(seq.calls.last, 'resume seq-1 refocus');
+    });
+  });
+
+  group('the tracker and the shutter', () {
+    testWidgets('nothing picked: no tracker, and the shutter does nothing', (tester) async {
+      final (_, seq) = await run(tester, sel: null);
+      expect(find.byKey(const Key('simple-run-tracker')), findsNothing);
+      expect(tester.getSemantics(find.byKey(const Key('simple-shutter'))), isSemantics(hasEnabledState: true, isEnabled: false),
+          reason: 'announced as unavailable, not as a live button');
+      await tester.tap(find.byKey(const Key('simple-shutter')));
+      await tester.pump();
+      expect(seq.calls, isEmpty);
+    });
+
+    testWidgets('a target picked, no plan yet: the shutter creates and starts it', (tester) async {
+      final (_, seq) = await run(tester);
+      await tester.tap(find.byKey(const Key('simple-shutter')));
+      await tester.pumpAndSettle();
+      expect(seq.calls, ['create M31', 'start seq-1']);
+    });
+
+    testWidgets('plan ready: 0 of the total, the first filter; the shutter starts it', (tester) async {
+      final (_, seq) = await run(tester);
+      await create(tester);
+      expect(find.byKey(const Key('simple-run-tracker')), findsOneWidget);
+      expect(find.descendant(of: find.byKey(const Key('simple-run-tracker')), matching: find.text('0 / 60')), findsOneWidget);
+      expect(find.text('L · 5 s'), findsOneWidget);
+      // A white ring, like every mode's; amber only while paused.
+      expect(((tester.widget<Container>(find.byKey(const Key('simple-shutter'))).decoration as BoxDecoration).border
+              as Border)
+          .top
+          .color, AraColors.textPrimary);
+      await tester.tap(find.byKey(const Key('simple-shutter')));
+      await tester.pumpAndSettle();
+      expect(seq.calls.last, 'start seq-1');
+    });
+
+    testWidgets('below the horizon: Add to queue only; the plan waits for the rise', (tester) async {
+      final rise = DateTime.now().add(const Duration(hours: 2));
+      final low = PlanetariumSelection(
+          name: 'M31', kind: 'Galaxy', raHours: 0.73, decDeg: 41.4, raJ2000Hours: 0.71, decJ2000Deg: 41.27,
+          altDeg: -8, maxAltDeg: 74.2, rise: rise);
+      final (_, seq) = await run(tester, sel: low);
+      expect(tester.widget<FilledButton>(find.byKey(const Key('simple-run-start'))).onPressed, isNull,
+          reason: 'no Create and start below the horizon');
+      await create(tester);
+      expect(seq.calls, ['create M31'], reason: 'queued');
+      final hhmm = '${rise.hour.toString().padLeft(2, '0')}:${rise.minute.toString().padLeft(2, '0')}';
+      expect(find.text('rises $hhmm'), findsOneWidget, reason: 'the plan square says when');
+      await tester.tap(find.byKey(const Key('simple-shutter')));
+      await tester.pumpAndSettle();
+      expect(seq.calls, ['create M31'], reason: 'the shutter waits for the rise');
+    });
+
+    testWidgets('a target that never rises here can\'t be queued', (tester) async {
+      const never = PlanetariumSelection(
+          name: 'Omega Cen', kind: 'Globular', raHours: 13.4, decDeg: -47.5, raJ2000Hours: 13.4,
+          decJ2000Deg: -47.5, altDeg: -30, maxAltDeg: -5);
+      await run(tester, sel: never);
+      expect(tester.widget<OutlinedButton>(find.byKey(const Key('simple-run-queue'))).onPressed, isNull);
+      expect(tester.widget<FilledButton>(find.byKey(const Key('simple-run-start'))).onPressed, isNull);
+    });
+
+    testWidgets('imaging: a tap pauses (Pausing… until it lands), paused a tap resumes', (tester) async {
+      final (c, seq) = await run(tester);
+      await create(tester);
+      await tester.tap(find.byKey(const Key('simple-shutter')));
+      await tester.pumpAndSettle();
+      await imaging(tester, c, seq, _imaging(23));
+      expect(find.descendant(of: find.byKey(const Key('simple-run-tracker')), matching: find.text('23 / 60')), findsOneWidget);
+      expect(find.text('R · 5 s'), findsOneWidget, reason: '15 per filter: frame 23 is on R');
+      await tester.tap(find.byKey(const Key('simple-shutter')));
+      await tester.pumpAndSettle();
+      expect(seq.calls.last, 'pause seq-1');
+      expect(find.text('Pausing…'), findsOneWidget);
+      await imaging(tester, c, seq, _imaging(24, state: SequenceRunState.paused));
+      expect(find.text('Paused'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('simple-shutter')));
+      await tester.pumpAndSettle();
+      expect(seq.calls.last, 'resume seq-1');
+    });
+
+    testWidgets('a slowish tap (0.6 s: gloves, cold hands) still pauses', (tester) async {
+      final (c, seq) = await run(tester);
+      await create(tester);
+      await tester.tap(find.byKey(const Key('simple-shutter')));
+      await tester.pumpAndSettle();
+      await imaging(tester, c, seq, _imaging(23));
+      final g = await tester.startGesture(tester.getCenter(find.byKey(const Key('simple-shutter'))));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 600));
+      await g.up();
+      await tester.pumpAndSettle();
+      expect(seq.calls.last, 'pause seq-1');
+    });
+
+    testWidgets('the keyboard reaches the shutter: Enter starts, pauses and resumes the plan', (tester) async {
+      final (c, seq) = await run(tester);
+      await create(tester);
+      await tabTo(tester, find.byKey(const Key('simple-shutter')));
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pumpAndSettle();
+      expect(seq.calls.last, 'start seq-1');
+      await imaging(tester, c, seq, _imaging(23));
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pumpAndSettle();
+      expect(seq.calls.last, 'pause seq-1');
+      await imaging(tester, c, seq, _imaging(24, state: SequenceRunState.paused));
+      await tester.sendKeyEvent(LogicalKeyboardKey.space);
+      await tester.pumpAndSettle();
+      expect(seq.calls.last, 'resume seq-1');
+    });
+
+    testWidgets('the keyboard reaches a plan square; Enter opens it', (tester) async {
+      var opened = 0;
+      final (_, _) = await run(tester, onTracker: () => opened++);
+      await create(tester);
+      await tabTo(tester, find.descendant(of: find.byKey(const Key('simple-run-tracker')), matching: find.text('M31')));
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pumpAndSettle();
+      expect(opened, 1);
+    });
+
+    testWidgets('a right-click does nothing; only a finger or the main button works the shutter', (tester) async {
+      final (_, seq) = await run(tester);
+      await create(tester);
+      final g = await tester.startGesture(tester.getCenter(find.byKey(const Key('simple-shutter'))),
+          kind: PointerDeviceKind.mouse, buttons: kSecondaryMouseButton);
+      await g.up();
+      await tester.pumpAndSettle();
+      expect(seq.calls, ['create M31'], reason: 'not started');
+    });
+
+    testWidgets('holding 2 s stops the run; letting go early does nothing', (tester) async {
+      final (c, seq) = await run(tester);
+      await create(tester);
+      await tester.tap(find.byKey(const Key('simple-shutter')));
+      await tester.pumpAndSettle();
+      await imaging(tester, c, seq, _imaging(23));
+      final before = seq.calls.length;
+
+      var g = await tester.startGesture(tester.getCenter(find.byKey(const Key('simple-shutter'))));
+      await tester.pump(); // the hold's first frame
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.text('Hold to stop'), findsOneWidget);
+      await g.up();
+      await tester.pumpAndSettle();
+      expect(seq.calls.length, before, reason: 'released at 1 s: neither a pause nor a stop');
+
+      g = await tester.startGesture(tester.getCenter(find.byKey(const Key('simple-shutter'))));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 2100));
+      await g.up();
+      await tester.pumpAndSettle();
+      expect(seq.calls.sublist(before), ['stop seq-1']);
+    });
+  });
+}

@@ -303,6 +303,24 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Starting_a_cool_writes_the_target_and_switches_the_cooler_on_without_waiting_or_holding_the_slot() {
+            // Simple Mode's plan starts the cool and slews meanwhile. Nothing may keep running
+            // after the step (#1480 review: a background cool outlived Stop and Emergency Stop).
+            await using var cam = new SimCamera { FixedTemperature = 20 };
+            var (svc, delays) = await ConnectedAsync(cam);
+            using var __ = svc;
+
+            Assert.That(await svc.StartCooling(-10, CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(5)), Is.True);
+            Assert.That(cam.Setpoints, Is.EqualTo(new[] { -10.0 }));
+            Assert.That(cam.CoolerWrites, Does.Contain(true));
+            Assert.That(delays, Is.Empty, "it does not wait for the sensor");
+            // The slot is free: a cool to another target is not refused as "still running".
+            var log = new StatusLog();
+            await svc.CoolCamera(-15, TimeSpan.Zero, log, CancellationToken.None);
+            Assert.That(log.Statuses, Has.None.Contains("still running"));
+        }
+
+        [Test]
         public async Task A_cool_whose_sensor_never_moves_with_unknown_cooler_power_still_gives_up() {
             // No readable CoolerPower (unparseable) — must not hang waiting for a power reading.
             await using var cam = new SimCamera { FixedTemperature = 5, CoolerPowerUnreadable = true };
@@ -325,6 +343,29 @@ namespace OpenAstroAra.Test {
             Assert.That(cam.Setpoints, Has.Count.EqualTo(3), "two ramp steps, then the hold");
             Assert.That(cam.Setpoints[^1], Is.EqualTo(18.0), "the TEC is left holding where the sensor is, like NINA");
             await WaitForAsync(() => Task.FromResult(svc.TargetTemp == 18.0), "a stale ramp target outlived the cancel");
+        }
+
+        [Test]
+        public async Task A_cooler_switched_off_during_the_ramp_is_not_switched_back_on_by_the_cancel_hold() {
+            // Emergency Stop cancels the run, then switches the cooler off; its write can land
+            // before the cancelled ramp's hold. The hold must not turn the cooler back on.
+            await using var cam = new SimCamera { FixedTemperature = 18 };
+            using var cts = new CancellationTokenSource();
+            CameraService? svcRef = null;
+            var (svc, _) = await ConnectedAsync(cam, onDelay: n => {
+                if (n == 2) {
+                    svcRef!.SetCoolerAsync(false, null, CancellationToken.None).GetAwaiter().GetResult();
+                    cts.Cancel();
+                }
+            });
+            svcRef = svc;
+            using var __ = svc;
+
+            await Assert.CatchAsync<OperationCanceledException>(
+                () => svc.CoolCamera(-10, TimeSpan.FromMinutes(1), new StatusLog(), cts.Token));
+
+            Assert.That(cam.CoolerWrites[^1], Is.False, "the cooler stays off");
+            Assert.That(cam.Setpoints, Has.Count.EqualTo(2), "two ramp steps, no hold after the cooler went off");
         }
 
         [Test]

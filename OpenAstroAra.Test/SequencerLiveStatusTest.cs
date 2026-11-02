@@ -111,8 +111,58 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void The_plans_steps_read_in_plain_words_naming_the_target() {
+            // User, 2026-11-02: "Slewing to target XXX", not "Slew scope to ra dec".
+            var factory = HeadlessSequencerFactory.WithDefaults();
+            T Step<T>() where T : class, ISequenceItem => (T)factory.Items.OfType<T>().First().Clone();
+            var slew = Step<OpenAstroAra.Sequencer.SequenceItem.Telescope.SlewScopeToRaDec>();
+            var focus = Step<OpenAstroAra.Sequencer.SequenceItem.Autofocus.RunAutofocus>();
+            var cool = Step<OpenAstroAra.Sequencer.SequenceItem.Camera.CoolCamera>();
+            cool.Temperature = -10;
+            // A client-built target block: its horizon condition marks it as the target.
+            var target = new SequentialContainer { Name = "NGC 7000" };
+            target.Add((AboveHorizonCondition)factory.GetCondition<AboveHorizonCondition>().Clone());
+            target.Add(slew);
+            target.Add(focus);
+            target.Add(cool);
+            new SequenceRootContainer().Add(target);
+
+            Assert.Multiple(() => {
+                Assert.That(SequencerService.DescribeLeaf(slew), Is.EqualTo("Slewing to NGC 7000"));
+                slew.Center = true;
+                Assert.That(SequencerService.DescribeLeaf(slew), Is.EqualTo("Centring on NGC 7000"), "a plan's centring slew");
+                slew.Center = null;
+                Assert.That(SequencerService.DescribeLeaf(focus), Is.EqualTo("Focusing"));
+                Assert.That(SequencerService.DescribeLeaf(cool), Is.EqualTo("Waiting for the camera to cool to -10 °C"));
+                Assert.That(SequencerService.DescribeLeaf(Step<OpenAstroAra.Sequencer.SequenceItem.Telescope.UnparkScope>()), Is.EqualTo("Unparking the mount"));
+                Assert.That(SequencerService.DescribeLeaf(Step<OpenAstroAra.Sequencer.SequenceItem.Guider.StartGuiding>()), Is.EqualTo("Starting guiding"));
+                Assert.That(SequencerService.DescribeLeaf(new CenterAndRotate(centeringExecutor: null)), Is.EqualTo("Centring"),
+                    "outside a target block there is no name to give");
+            });
+        }
+
+        [Test]
+        public void The_other_plan_steps_read_in_plain_words_too() {
+            var factory = HeadlessSequencerFactory.WithDefaults();
+            T Step<T>() where T : class, ISequenceItem => (T)factory.Items.OfType<T>().First().Clone();
+            var wait = Step<OpenAstroAra.Sequencer.SequenceItem.Utility.WaitForTime>();
+            wait.Hours = 9;
+            wait.Minutes = 5;
+            var filter = Step<OpenAstroAra.Sequencer.SequenceItem.FilterWheel.SwitchFilter>();
+            filter.Filter = new OpenAstroAra.Core.Model.Equipment.FilterInfo("Ha", 0, 0);
+
+            Assert.Multiple(() => {
+                Assert.That(SequencerService.DescribeLeaf(wait), Is.EqualTo("Waiting until 09:05"), "zero-padded clock time");
+                Assert.That(SequencerService.DescribeLeaf(filter), Is.EqualTo("Switching to the Ha filter"));
+                Assert.That(SequencerService.DescribeLeaf(Step<OpenAstroAra.Sequencer.SequenceItem.Telescope.ParkScope>()), Is.EqualTo("Parking the mount"));
+                Assert.That(SequencerService.DescribeLeaf(Step<OpenAstroAra.Sequencer.SequenceItem.Telescope.SetTracking>()), Is.EqualTo("Starting tracking"));
+                Assert.That(SequencerService.DescribeLeaf(Step<OpenAstroAra.Sequencer.SequenceItem.Camera.WarmCamera>()), Is.EqualTo("Warming the camera"));
+            });
+        }
+
+        [Test]
         public void Other_instructions_get_a_humanised_type_name() {
-            Assert.That(SequencerService.DescribeLeaf(new CenterAndRotate(centeringExecutor: null)), Is.EqualTo("Center and rotate"));
+            Assert.That(SequencerService.DescribeLeaf(new OpenAstroAra.Sequencer.SequenceItem.Utility.WaitForTimeSpan()), Is.EqualTo("Wait for time span"));
         }
     }
 }

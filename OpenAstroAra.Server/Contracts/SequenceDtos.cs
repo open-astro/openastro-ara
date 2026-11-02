@@ -115,7 +115,10 @@ public sealed record SequenceRunStateDto(
     double? EstimatedTotalSeconds = null,
     double? EstimatedRemainingSeconds = null,
     // Frames this run has filed so far (its §40 run session's count); 0 until the first lands.
-    int FramesCaptured = 0);
+    int FramesCaptured = 0,
+    // How far the running instruction has got, 0–1, when it reports a fraction (cooling, a wait,
+    // autofocus); null otherwise. Cleared when the next instruction starts.
+    double? CurrentInstructionProgress = null);
 
 /// <summary>Per-instruction progress payload (WS sequence.instruction_started / _complete / _failed).</summary>
 public sealed record InstructionProgressDto(

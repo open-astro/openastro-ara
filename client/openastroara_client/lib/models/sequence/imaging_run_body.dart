@@ -42,13 +42,15 @@ class UnguidedOptions {
 ///
 /// ```
 /// SequentialContainer  (named after the target)
-/// ├─ Cool Camera        (when a cooler target is configured)
+/// ├─ Cool Camera        (when a cooler target is configured; starts the cooler, doesn't wait)
 /// ├─ Unpark Scope
 /// ├─ Set Tracking       (sidereal)
 /// ├─ Target SequentialContainer  (named after the target — see [buildTargetBlock])
-/// │   ├─ Slew to RA/Dec     (the target's J2000 coordinates)
+/// │   ├─ Slew to RA/Dec     (the target's J2000 coordinates; blind when autofocus follows)
 /// │   ├─ Switch Filter      (when a filter is chosen — matched by name)
 /// │   ├─ Run Autofocus      (when enabled)
+/// │   ├─ Slew to RA/Dec     (after autofocus only: the centring go-to)
+/// │   ├─ Cool Camera        (when a cooler target is configured; waits for the sensor)
 /// │   └─ "Imaging" SequentialContainer
 /// │        Conditions: Loop (× frame count)
 /// │        Triggers:  Autofocus After Exposures (when a cadence is set)
@@ -64,7 +66,7 @@ class UnguidedOptions {
 ///
 /// With a [FilterPlanStep] plan (the §Run "smart target" flow), the target
 /// block becomes filter-aware: slew → switch to the FIRST plan filter →
-/// autofocus (through that filter) → optional Start Guiding → one
+/// autofocus (through that filter) → go-to → optional Start Guiding → one
 /// `<Filter> Imaging` loop per plan step (each preceded by its Switch
 /// Filter), every loop carrying the dither / autofocus triggers. §63 made
 /// the guider mediator real (GuiderService drives OpenAstro Guider), so guiding steps
@@ -109,6 +111,7 @@ Map<String, dynamic> buildImagingRunBody({
   // measurement on its own, and a body prior would override a Recalibrate.
   // Null = no sheet. Ignored on a guided rig.
   double? trackingPriorSeconds,
+  bool alwaysCenter = false,
 }) {
   final target = buildTargetBlock(
     raDeg: raDeg,
@@ -130,6 +133,8 @@ Map<String, dynamic> buildImagingRunBody({
     rig: rig,
     unguidedOptions: unguidedOptions,
     trackingPriorSeconds: trackingPriorSeconds,
+    coolToC: coolToC,
+    alwaysCenter: alwaysCenter,
   );
 
   // ── The session around it, in run order ──────────────────────────────────
@@ -139,7 +144,9 @@ Map<String, dynamic> buildImagingRunBody({
         ..['Temperature'] = coolToC
         // 0 = regulate as fast as the driver allows; a fixed multi-minute ramp
         // would stall a run against hardware that's already at temperature.
-        ..['Duration'] = 0.0,
+        ..['Duration'] = 0.0
+        // The plan moves on while it cools; each target waits for it.
+        ..['WaitForTemperature'] = false,
     _item(unparkScopeType),
     _item(setTrackingType), // catalog default: sidereal
     target,
@@ -173,7 +180,9 @@ class FilterPlanStep {
 
 /// One target's worth of session — a SequentialContainer named after the
 /// target holding slew → optional filter switch → optional autofocus →
-/// optional Start Guiding → the Take-Exposure loop(s). With a [filterPlan],
+/// go-to (with autofocus, the first slew is blind and this one centres) →
+/// optional Start Guiding → optional waiting Cool Camera → the Take-Exposure
+/// loop(s). With a [filterPlan],
 /// one `<Filter> Imaging` loop per step (each with its own Switch Filter,
 /// exposure and count); without one, the single default loop as before.
 /// This is the unit [buildImagingRunBody] wraps once and
@@ -199,6 +208,11 @@ Map<String, dynamic> buildTargetBlock({
   RigCapabilities rig = RigCapabilities.everything,
   UnguidedOptions unguidedOptions = const UnguidedOptions(),
   double? trackingPriorSeconds,
+  // The session's cooler target: the block waits for it just before its first
+  // light (the session started the cool without waiting).
+  double? coolToC,
+  // Simple Mode: centre on the target whatever Settings → Plate Solving says.
+  bool alwaysCenter = false,
 }) {
   // Cook the block from the rig: a device the rig lacks gets no step and no
   // trigger, whatever the caller asked for. Without a focuser there is
@@ -378,12 +392,22 @@ Map<String, dynamic> buildTargetBlock({
   // A failed go-to skips the rest of this target (SkipInstructionSetOnError)
   // instead of the default ContinueOnError: filter, focus, guiding and every
   // frame after it would run on the wrong patch of sky.
+  //
+  // With autofocus, the block slews blind, focuses near the target, and only
+  // then centres: a solve on an out-of-focus field fails (user, 2026-11-02).
+  final focusFirst = afAtStart;
   final goToTarget = (positionAngleDeg != null
       ? (_item(centerAndRotateType)
           ..['Coordinates'] = inputCoordinatesFromDeg(raDeg, decDeg)
           ..['PositionAngle'] = ((positionAngleDeg % 360) + 360) % 360)
       : (_item(slewScopeToRaDecType)
-          ..['Coordinates'] = inputCoordinatesFromDeg(raDeg, decDeg)))
+          ..['Coordinates'] = inputCoordinatesFromDeg(raDeg, decDeg)
+          // Absent follows Settings → Plate Solving; Simple Mode always centres.
+          ..addAll({if (alwaysCenter) 'Center': true})))
+    ..['ErrorBehavior'] = skipInstructionSetOnError;
+  final blindSlew = _item(slewScopeToRaDecType)
+    ..['Coordinates'] = inputCoordinatesFromDeg(raDeg, decDeg)
+    ..['Center'] = false
     ..['ErrorBehavior'] = skipInstructionSetOnError;
 
   final children = <Map<String, dynamic>>[
@@ -391,7 +415,7 @@ Map<String, dynamic> buildTargetBlock({
     // run: the Plan screen's "Rotate camera" panel plate-solves the camera
     // against the framing so it can be turned by hand. Center and Rotate then
     // centres (and, without a rotator, leaves the angle as the user set it).
-    goToTarget,
+    focusFirst ? blindSlew : goToTarget,
     // Autofocus runs through the plan's FIRST filter (or the single chosen
     // one) — focusing through a random previously-loaded filter would hand
     // the whole session a soft start.
@@ -402,10 +426,17 @@ Map<String, dynamic> buildTargetBlock({
         rig.filterWheel)
       switchTo(filterName),
     if (afAtStart) _item(runAutofocusType),
+    if (focusFirst) goToTarget,
     if (guide) _item(startGuidingType),
     // After focus (the probe judges FWHM growth against its first rung, so it
     // must see focused stars) and before the first imaging loop.
     if (unguided) trackingProbe(),
+    // Waits for the sensor: the session switched the cooler on without waiting,
+    // so the go-to, focus and guiding ran while it cooled.
+    if (coolToC != null)
+      _item(coolCameraType)
+        ..['Temperature'] = coolToC
+        ..['Duration'] = 0.0,
     if (plan != null)
       for (var i = 0; i < plan.length; i++) ...[
         if (i > 0) switchTo(plan[i].filterName),
@@ -524,6 +555,47 @@ Map<String, dynamic>? removeTargetFromRunBody(
   final index = indexOfTargetBlock(root, targetName);
   if (index < 0) return null;
   return withChildren(root, childrenOf(root)..removeAt(index));
+}
+
+/// A scheduled start: the run waits until [startAt], cooling 15 minutes
+/// before so the camera is cold on time. Replaces the waits of an earlier
+/// schedule; a null [startAt] just removes them. The daemon's Wait (until
+/// time) compares hours and minutes with its own local clock, so they are
+/// written at [daemonUtcOffsetMinutes] (from GET /server/time-sync).
+// shortcut: a daemon too old to report its offset (null) gets the client's
+// wall clock, right only when both share a time zone.
+Map<String, dynamic> scheduleRunBody(
+  Map<String, dynamic> root,
+  DateTime? startAt, {
+  int? daemonUtcOffsetMinutes,
+}) {
+  final children = childrenOf(root)
+      .where((c) => c[r'$type'] != waitForTimeType)
+      .toList();
+  if (startAt != null) {
+    Map<String, dynamic> waitUntil(DateTime instant) {
+      final t = daemonUtcOffsetMinutes == null
+          ? instant
+          : instant.toUtc().add(Duration(minutes: daemonUtcOffsetMinutes));
+      return _item(waitForTimeType)
+        ..['Hours'] = t.hour
+        ..['Minutes'] = t.minute
+        ..['Seconds'] = 0;
+    }
+
+    final cool = children.indexWhere((c) => c[r'$type'] == coolCameraType);
+    if (cool < 0) {
+      children.insert(0, waitUntil(startAt));
+    } else {
+      children
+        ..insert(cool + 1, waitUntil(startAt))
+        ..insert(
+          cool,
+          waitUntil(startAt.subtract(const Duration(minutes: 15))),
+        );
+    }
+  }
+  return withChildren(root, children);
 }
 
 Map<String, dynamic> _item(String type) {

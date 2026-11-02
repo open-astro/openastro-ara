@@ -55,14 +55,14 @@ class ExposureControlsPanel extends ConsumerWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           pair(
-            _DurationSecondsField(
+            DurationSecondsField(
               label: 'Exposure (s)',
               value: params.exposure,
               minSeconds: exposureCaps?.minExposureSec ?? 0,
               maxSeconds: exposureCaps?.maxExposureSec ?? 0,
               onChanged: ctrl.setExposure,
             ),
-            _IntField(
+            IntField(
               label: 'Gain',
               value: params.gain,
               min: 0,
@@ -72,7 +72,7 @@ class ExposureControlsPanel extends ConsumerWidget {
           ),
           const SizedBox(height: 6),
           pair(
-            _IntField(
+            IntField(
               label: 'Offset',
               value: params.offset,
               min: 0,
@@ -91,7 +91,7 @@ class ExposureControlsPanel extends ConsumerWidget {
           // profile's wheel slot labels (daemon-authoritative via the 12h.2b
           // round-trip), same source as the sequence editor's picker.
           pair(
-            _FilterDropdown(
+            FilterDropdown(
               value: params.filterSlot,
               onChanged: ctrl.setFilterSlot,
             ),
@@ -135,13 +135,14 @@ class ExposureControlsPanel extends ConsumerWidget {
 /// flats). Millisecond resolution — what the daemon request carries — with a
 /// floor at the camera's ExposureMin and a ceiling at its ExposureMax when it
 /// reports them (0 = not reported).
-class _DurationSecondsField extends StatefulWidget {
+class DurationSecondsField extends StatefulWidget {
   final String label;
   final Duration value;
   final double minSeconds;
   final double maxSeconds;
   final ValueChanged<Duration> onChanged;
-  const _DurationSecondsField({
+  const DurationSecondsField({
+    super.key,
     required this.label,
     required this.value,
     required this.onChanged,
@@ -150,7 +151,7 @@ class _DurationSecondsField extends StatefulWidget {
   });
 
   @override
-  State<_DurationSecondsField> createState() => _DurationSecondsFieldState();
+  State<DurationSecondsField> createState() => _DurationSecondsFieldState();
 }
 
 /// Upper sanity bound when the camera reports no ExposureMax, so an input like
@@ -166,7 +167,7 @@ String _formatSeconds(Duration d) {
       .replaceFirst(RegExp(r'0+$'), '');
 }
 
-class _DurationSecondsFieldState extends State<_DurationSecondsField> {
+class _DurationSecondsFieldState extends State<DurationSecondsField> {
   late final TextEditingController _ctrl;
   final FocusNode _focus = FocusNode();
 
@@ -208,7 +209,7 @@ class _DurationSecondsFieldState extends State<_DurationSecondsField> {
   }
 
   @override
-  void didUpdateWidget(covariant _DurationSecondsField old) {
+  void didUpdateWidget(covariant DurationSecondsField old) {
     super.didUpdateWidget(old);
     // Never fight the user's in-progress edit.
     if (_focus.hasFocus) return;
@@ -235,13 +236,14 @@ class _DurationSecondsFieldState extends State<_DurationSecondsField> {
   }
 }
 
-class _IntField extends StatefulWidget {
+class IntField extends StatefulWidget {
   final String label;
   final int value;
   final int min;
   final int max;
   final ValueChanged<int> onChanged;
-  const _IntField({
+  const IntField({
+    super.key,
     required this.label,
     required this.value,
     required this.min,
@@ -250,10 +252,10 @@ class _IntField extends StatefulWidget {
   });
 
   @override
-  State<_IntField> createState() => _IntFieldState();
+  State<IntField> createState() => _IntFieldState();
 }
 
-class _IntFieldState extends State<_IntField> {
+class _IntFieldState extends State<IntField> {
   late final TextEditingController _ctrl;
   final FocusNode _focus = FocusNode();
 
@@ -278,7 +280,7 @@ class _IntFieldState extends State<_IntField> {
   }
 
   @override
-  void didUpdateWidget(covariant _IntField old) {
+  void didUpdateWidget(covariant IntField old) {
     super.didUpdateWidget(old);
     if (_focus.hasFocus) return;
     final expected = widget.value.toString();
@@ -385,19 +387,20 @@ class _BinDropdown extends ConsumerWidget {
 /// the field back to the truthful value (via a keyed rebuild).
 enum _FilterPhase { idle, changing, updated }
 
-class _FilterDropdown extends ConsumerStatefulWidget {
+class FilterDropdown extends ConsumerStatefulWidget {
   final String value;
   final ValueChanged<String> onChanged;
-  const _FilterDropdown({
+  const FilterDropdown({
+    super.key,
     required this.value,
     required this.onChanged,
   });
 
   @override
-  ConsumerState<_FilterDropdown> createState() => _FilterDropdownState();
+  ConsumerState<FilterDropdown> createState() => _FilterDropdownState();
 }
 
-class _FilterDropdownState extends ConsumerState<_FilterDropdown>
+class _FilterDropdownState extends ConsumerState<FilterDropdown>
     with SingleTickerProviderStateMixin {
   /// Bumped whenever a commanded wheel move is rejected/failed, forcing the
   /// FormField to rebuild from the authoritative [value].

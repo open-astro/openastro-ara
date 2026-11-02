@@ -6,6 +6,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'app_version.dart';
 import 'screens/app_shell.dart';
+import 'screens/simple/simple_shell.dart';
+import 'state/simple_mode_state.dart';
 import 'screens/first_run_screen.dart';
 import 'screens/launch_profile_screen.dart';
 import 'screens/offline_launch_screen.dart';
@@ -137,15 +139,17 @@ class _RootRouter extends ConsumerWidget {
     // the profile box: with servers saved the flow would otherwise resume one
     // step in, and "back to the launchpad" should mean screen one.
     final serverChooserRequested = ref.watch(serverChooserRequestedProvider);
+    // ALP-4810 — Simple Mode (behind its experimental toggle) picks the shell.
+    final shell = shellFor(simple: ref.watch(simpleModeActiveProvider));
     final Widget routed = saved.when(
       data: (servers) => offline
           // Offline still gets a profile step: pick which CACHED profile to
           // plan with (seeding the settings notifiers) before the shell.
-          ? (gatePassed ? const AppShell() : const OfflineLaunchScreen())
+          ? (gatePassed ? shell : const OfflineLaunchScreen())
           : servers.isEmpty || serverChooserRequested
           ? const FirstRunScreen()
           : gatePassed
-          ? const AppShell()
+          ? shell
           : const LaunchProfileScreen(),
       loading: () =>
           const Scaffold(body: Center(child: CircularProgressIndicator())),
@@ -183,7 +187,7 @@ class _RootRouter extends ConsumerWidget {
     // chose — not a hand-copied predicate that could drift from the branches
     // above (review #846). Post-frame + idempotent, so it's a no-op until the
     // routed-to surface really changes.
-    final inShell = routed is AppShell;
+    final inShell = isShell(routed);
     final windowMode = ref.read(windowModeProvider);
     WidgetsBinding.instance.addPostFrameCallback(
       (_) => windowMode.set(
@@ -193,3 +197,13 @@ class _RootRouter extends ConsumerWidget {
     return routed;
   }
 }
+
+/// The shell the router shows once the launch gate passes: Simple Mode's
+/// image-first shell or the full UI.
+@visibleForTesting
+Widget shellFor({required bool simple}) =>
+    simple ? const SimpleShell() : const AppShell();
+
+/// Whether [routed] is a shell (either one), which maximizes the window.
+@visibleForTesting
+bool isShell(Widget routed) => routed is AppShell || routed is SimpleShell;

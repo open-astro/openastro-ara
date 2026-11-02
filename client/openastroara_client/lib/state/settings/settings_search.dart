@@ -259,6 +259,14 @@ const Map<String, List<String>> _panelKeywords = {
     'nina profile',
   ],
   'profile.wizard': ['wizard', 'rerun', 'setup', 'walkthrough'],
+  'app.experimental': [
+    'experimental',
+    'simple mode',
+    'feature',
+    'preview features',
+    'labs',
+    'beta',
+  ],
   'app.changelog': [
     'changelog',
     'release notes',

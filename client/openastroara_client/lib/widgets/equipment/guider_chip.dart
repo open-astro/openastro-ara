@@ -69,7 +69,7 @@ class GuiderChip extends ConsumerWidget {
         ? guiderChipLevel(ref.watch(guiderStatusProvider))
         : StatusLevel.disconnected;
     return EquipmentChip(
-      icon: Icons.gps_fixed,
+      icon: EquipmentChipHideDisconnected.of(context) ? Icons.track_changes : Icons.gps_fixed,
       label: 'Guider',
       status: level,
       onTap: () => openSettingsPanel(ref, 'eq.guider'),

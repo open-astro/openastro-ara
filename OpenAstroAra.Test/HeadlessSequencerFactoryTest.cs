@@ -174,12 +174,13 @@ namespace OpenAstroAra.Test {
         [Test]
         public void WithDefaults_registers_condition_prototypes() {
             var factory = HeadlessSequencerFactory.WithDefaults();
-            Assert.That(factory.Conditions, Has.Count.EqualTo(4));
+            Assert.That(factory.Conditions, Has.Count.EqualTo(5));
             var typeNames = factory.Conditions.Select(c => c.GetType().Name).ToList();
             Assert.That(typeNames, Does.Contain("LoopCondition"));
             Assert.That(typeNames, Does.Contain("TimeSpanCondition"));
             Assert.That(typeNames, Does.Contain("AboveHorizonCondition"));
             Assert.That(typeNames, Does.Contain("AltitudeCondition"));
+            Assert.That(typeNames, Does.Contain("TimeCondition"));
         }
 
         // Every client-generated target block carries an AboveHorizonCondition; unregistered it

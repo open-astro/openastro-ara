@@ -61,17 +61,30 @@ class MountNotifier extends EquipmentDeviceNotifier<MountStatus> {
   /// sequence run is in progress the daemon refuses a slew (409
   /// `run_in_progress`, see [isRunInProgressRefusal]) until the caller has asked
   /// the user and repeats with [force].
-  Future<bool> slewTo(double raHours, double decDegrees,
-          {bool sync = false, bool force = false}) =>
-      performAction(
-        (api) => api.command('slew', {
-          'right_ascension_hours': raHours,
-          'declination_degrees': decDegrees,
-          'sync': sync,
-          if (force) 'force': true,
-        }),
-        pollAfter: true,
-      );
+  ///
+  /// A GoTo turns tracking on first when it is off: ASCOM mounts refuse
+  /// SlewToCoordinates without it ("requires Tracking to be true", an EQMOD
+  /// mount at home on the rig, 2026-11-02), and the daemon's 202 hides that.
+  Future<bool> slewTo(
+    double raHours,
+    double decDegrees, {
+    bool sync = false,
+    bool force = false,
+  }) => performAction((api) async {
+    final m = state.value;
+    if (!sync &&
+        m != null &&
+        !m.tracking &&
+        (m.capabilities?.canSetTracking ?? false)) {
+      await api.command('tracking', {'enabled': true});
+    }
+    await api.command('slew', {
+      'right_ascension_hours': raHours,
+      'declination_degrees': decDegrees,
+      'sync': sync,
+      if (force) 'force': true,
+    });
+  }, pollAfter: true);
 
   /// Manual nudge on one axis (0 = primary/RA-Az, 1 = secondary/Dec-Alt) at [rate]
   /// deg/sec; rate 0 stops that axis. The direction pad calls this on press (rate)

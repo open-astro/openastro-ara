@@ -353,6 +353,10 @@ class SequenceRunStateInfo {
   /// Frames this run has filed so far (the daemon's run-session count).
   final int framesCaptured;
 
+  /// How far the running instruction has got, 0–1, when it reports a fraction
+  /// (cooling, a wait, autofocus); null otherwise or from an older daemon.
+  final double? currentInstructionProgress;
+
   const SequenceRunStateInfo({
     this.sequenceId = '',
     this.runId = '',
@@ -367,6 +371,7 @@ class SequenceRunStateInfo {
     this.estimatedTotalSeconds,
     this.estimatedRemainingSeconds,
     this.framesCaptured = 0,
+    this.currentInstructionProgress,
   });
 
   factory SequenceRunStateInfo.fromJson(Map<String, dynamic> json) {
@@ -385,6 +390,8 @@ class SequenceRunStateInfo {
       estimatedRemainingSeconds:
           _doubleOrNull(json['estimated_remaining_seconds']),
       framesCaptured: _int(json['frames_captured']),
+      currentInstructionProgress:
+          _doubleOrNull(json['current_instruction_progress']),
     );
   }
 
@@ -423,6 +430,12 @@ class SequenceRunStateInfo {
       estimatedRemainingSeconds:
           _doubleOrNull(payload['estimated_remaining_seconds']) ??
               estimatedRemainingSeconds,
+      // A null clears it (the next step reports none yet); an older daemon
+      // omits the key, which keeps the last known.
+      currentInstructionProgress:
+          payload.containsKey('current_instruction_progress')
+              ? _doubleOrNull(payload['current_instruction_progress'])
+              : currentInstructionProgress,
     );
   }
 
@@ -442,7 +455,9 @@ class SequenceRunStateInfo {
       other.instructionsTotal == instructionsTotal &&
       other.currentInstructionDescription == currentInstructionDescription &&
       other.estimatedTotalSeconds == estimatedTotalSeconds &&
-      other.estimatedRemainingSeconds == estimatedRemainingSeconds;
+      other.estimatedRemainingSeconds == estimatedRemainingSeconds &&
+      other.framesCaptured == framesCaptured &&
+      other.currentInstructionProgress == currentInstructionProgress;
 
   @override
   int get hashCode => Object.hash(
@@ -457,7 +472,9 @@ class SequenceRunStateInfo {
       instructionsTotal,
       currentInstructionDescription,
       estimatedTotalSeconds,
-      estimatedRemainingSeconds);
+      estimatedRemainingSeconds,
+      framesCaptured,
+      currentInstructionProgress);
 }
 
 /// One row in the sequence list — daemon's `SequenceListItemDto`.

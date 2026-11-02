@@ -1,0 +1,257 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/models/autofocus_run.dart';
+import 'package:openastroara/models/equipment_device_status.dart';
+import 'package:openastroara/models/focuser_status.dart';
+import 'package:openastroara/screens/simple/simple_focus_panel.dart';
+import 'package:openastroara/screens/simple/simple_preview_panel.dart' show SimpleShutter;
+import 'package:openastroara/state/equipment/focuser_state.dart';
+import 'package:openastroara/state/focus/autofocus_live_state.dart';
+import 'package:openastroara/state/focus/bahtinov_focus_state.dart';
+import 'package:openastroara/services/simple_mode_prefs_service.dart';
+import 'package:openastroara/state/simple_messages_state.dart';
+import 'package:openastroara/state/simple_mode_state.dart';
+
+FocuserStatus _focuser({int? position = 1000, bool absolute = true, int max = 1100, String runtime = 'idle'}) =>
+    FocuserStatus(
+      deviceId: 'f',
+      name: 'Focuser',
+      connectionState: EquipmentConnectionState.connected,
+      capabilities: FocuserCapabilities(
+        minPosition: 0,
+        maxPosition: max,
+        stepSizeUm: 1,
+        canTempComp: false,
+        absoluteFocuser: absolute,
+      ),
+      runtimeState: runtime,
+      position: position,
+      temperature: null,
+      tempCompEnabled: false,
+    );
+
+AutofocusProbe _probe(int i, double hfr, {bool kept = true}) =>
+    AutofocusProbe(index: i, phase: AutofocusProbePhases.fine, position: 900 + i * 50, hfr: hfr, stars: 40, kept: kept);
+
+class _Focuser extends FocuserNotifier {
+  _Focuser(this.status);
+  final FocuserStatus? status;
+  final moves = <int>[];
+  @override
+  Future<FocuserStatus?> build() async => status;
+  @override
+  Future<bool> move(int targetPosition, {bool useTempComp = false}) async {
+    moves.add(targetPosition);
+    return true;
+  }
+}
+
+class _Pick extends MainFocusMethodNotifier {
+  _Pick(this.method);
+  final MainFocusMethod method;
+  @override
+  MainFocusMethod? build() => method;
+}
+
+class _Live extends AutofocusLiveNotifier {
+  _Live(this.live);
+  final AutofocusLive live;
+  int starts = 0;
+  int cancels = 0;
+  @override
+  AutofocusLive build() => live;
+  @override
+  Future<void> start() async => starts++;
+  @override
+  Future<void> cancel() async => cancels++;
+}
+
+Future<(_Focuser, _Live)> _pump(WidgetTester tester, {FocuserStatus? focuser, AutofocusRun run = AutofocusRun.idle}) async {
+  final f = _Focuser(focuser);
+  final l = _Live(AutofocusLive(run: run));
+  await tester.pumpWidget(ProviderScope(
+    overrides: [
+      focuserProvider.overrideWith(() => f),
+      autofocusLiveProvider.overrideWith(() => l),
+    ],
+    child: const MaterialApp(home: Scaffold(body: Center(child: SimpleFocusPanel()))),
+  ));
+  await tester.pump();
+  return (f, l);
+}
+
+class _StuckFocuser extends _Focuser {
+  _StuckFocuser(super.status);
+  @override
+  Future<bool> move(int targetPosition, {bool useTempComp = false}) async => throw StateError('Focuser is busy');
+}
+
+class _SimplePrefs extends SimpleModePrefsService {
+  @override
+  Future<bool> load() async => true;
+  @override
+  Future<void> save(bool enabled) async {}
+}
+
+void main() {
+  testWidgets('a nudge that fails says so in a pill, not a snackbar', (tester) async {
+    final c = ProviderContainer(overrides: [
+      focuserProvider.overrideWith(() => _StuckFocuser(_focuser())),
+      autofocusLiveProvider.overrideWith(() => _Live(const AutofocusLive(run: AutofocusRun.idle))),
+      simpleModePrefsProvider.overrideWithValue(_SimplePrefs()),
+    ]);
+    addTearDown(c.dispose);
+    await c.read(simpleModeProvider.future);
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: c,
+      child: const MaterialApp(home: Scaffold(body: Center(child: SimpleFocusPanel()))),
+    ));
+    await tester.pump();
+    await tester.tap(find.byIcon(Icons.chevron_left));
+    await tester.pump();
+    final m = c.read(simpleMessagesProvider).single;
+    expect(m.kind, SimpleMessageKind.error);
+    expect(m.title, "Couldn't move");
+    expect(find.byType(SnackBar), findsNothing);
+  });
+
+  group('simpleFocusHfr', () {
+    test('nothing before a run', () => expect(simpleFocusHfr(AutofocusRun.idle), isNull));
+    test('the latest kept probe while running', () {
+      final run = AutofocusRun(state: AutofocusRunStates.running, probes: [_probe(0, 3.1), _probe(1, 2.4), _probe(2, 9, kept: false)]);
+      expect(simpleFocusHfr(run), 2.4);
+    });
+    test('the confirmed HFR once complete', () {
+      final run = AutofocusRun(state: AutofocusRunStates.complete, finalHfr: 1.98, probes: [_probe(0, 2.4)]);
+      expect(simpleFocusHfr(run), 1.98);
+    });
+  });
+
+  group('simpleNudgeTarget', () {
+    test('absolute: position + delta, clamped to the range', () {
+      expect(simpleNudgeTarget(_focuser(), -50), 950);
+      expect(simpleNudgeTarget(_focuser(), 250), 1100);
+    });
+    test('absolute with no range known: not clamped', () {
+      expect(simpleNudgeTarget(_focuser(max: 0), 250), 1250);
+    });
+    test('absolute with no position yet: nothing to send', () {
+      expect(simpleNudgeTarget(_focuser(position: null), 50), isNull);
+    });
+    test('relative: the delta itself', () {
+      expect(simpleNudgeTarget(_focuser(absolute: false), -250), -250);
+    });
+  });
+
+  testWidgets('no focuser: says so, the nudges are off; no Autofocus button (the shutter starts it)', (tester) async {
+    await _pump(tester);
+    expect(find.text('No focuser connected'), findsOneWidget);
+    expect(find.text('Autofocus'), findsNothing);
+    for (final icon in [Icons.chevron_left, Icons.chevron_right]) {
+      final ink = find.ancestor(of: find.byIcon(icon), matching: find.byType(InkWell));
+      expect(tester.widget<InkWell>(ink).onTap, isNull);
+    }
+  });
+
+  testWidgets('a connected focuser: position, nudges move by the step size', (tester) async {
+    final (f, _) = await _pump(tester, focuser: _focuser());
+    expect(find.text('Position 1000'), findsOneWidget);
+    expect(find.text('HFR —'), findsOneWidget);
+    // The profile's default step is 50; large is five steps.
+    await tester.tap(find.byIcon(Icons.chevron_left));
+    await tester.tap(find.byIcon(Icons.keyboard_double_arrow_right));
+    expect(f.moves, [950, 1100]);
+  });
+
+  testWidgets('while a run goes: the curve, no Cancel (the shutter\'s square), no nudges', (tester) async {
+    final run = AutofocusRun(
+      state: AutofocusRunStates.running,
+      phase: 'sweep',
+      totalSteps: 7,
+      completedSteps: 2,
+      stepSize: 80,
+      probes: [_probe(0, 3.1), _probe(1, 2.4)],
+    );
+    final (f, _) = await _pump(tester, focuser: _focuser(), run: run);
+    expect(find.text('HFR 2.40'), findsOneWidget);
+    expect(find.textContaining('Sweeping'), findsOneWidget);
+    expect(find.text('Cancel'), findsNothing);
+    await tester.tap(find.byIcon(Icons.chevron_left));
+    expect(f.moves, isEmpty);
+  });
+
+  group('the shutter follows the chip', () {
+    Future<_Live> shutter(WidgetTester tester, MainFocusMethod pick,
+        {FocuserStatus? focuser, AutofocusRun run = AutofocusRun.idle}) async {
+      final l = _Live(AutofocusLive(run: run));
+      await tester.pumpWidget(ProviderScope(
+        overrides: [
+          focuserProvider.overrideWith(() => _Focuser(focuser)),
+          autofocusLiveProvider.overrideWith(() => l),
+          mainFocusMethodProvider.overrideWith(() => _Pick(pick)),
+        ],
+        child: const MaterialApp(home: Scaffold(body: Center(child: SimpleFocusShutter()))),
+      ));
+      await tester.pump();
+      return l;
+    }
+
+    testWidgets('Auto: the shutter starts autofocus', (tester) async {
+      final l = await shutter(tester, MainFocusMethod.autofocus, focuser: _focuser());
+      expect(find.bySemanticsLabel('Autofocus'), findsOneWidget);
+      // Only Preview's shutter is a camera button; a routine starts with play.
+      expect(find.descendant(of: find.byKey(const Key('simple-shutter')), matching: find.byIcon(Icons.play_arrow)),
+          findsOneWidget);
+      await tester.tap(find.byKey(const Key('simple-shutter')));
+      expect(l.starts, 1);
+    });
+
+    testWidgets('Auto while it runs: the red square cancels it', (tester) async {
+      final l = await shutter(tester, MainFocusMethod.autofocus,
+          focuser: _focuser(), run: const AutofocusRun(state: AutofocusRunStates.running));
+      expect(find.bySemanticsLabel('Cancel autofocus'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('simple-shutter')));
+      expect(l.cancels, 1);
+    });
+
+    testWidgets('Auto with no focuser: the shutter is off', (tester) async {
+      final l = await shutter(tester, MainFocusMethod.autofocus);
+      await tester.tap(find.byKey(const Key('simple-shutter')));
+      expect(l.starts, 0);
+    });
+
+    testWidgets('Manual: Preview\'s shutter, frames to focus by', (tester) async {
+      await shutter(tester, MainFocusMethod.bahtinov, focuser: _focuser());
+      expect(find.byType(SimpleShutter), findsOneWidget);
+      expect(find.descendant(of: find.byKey(const Key('simple-shutter')), matching: find.byIcon(Icons.play_arrow)),
+          findsOneWidget, reason: 'Focus starts with play in Manual too');
+    });
+  });
+
+  group('the rail chip reads the focus method', () {
+    Future<void> chip(WidgetTester tester, FocuserStatus? focuser, {MainFocusMethod? pick}) async {
+      await tester.pumpWidget(ProviderScope(
+        overrides: [
+          focuserProvider.overrideWith(() => _Focuser(focuser)),
+          if (pick != null) mainFocusMethodProvider.overrideWith(() => _Pick(pick)),
+        ],
+        child: MaterialApp(home: Consumer(builder: (context, ref, _) => Text(simpleFocusSummary(ref)))),
+      ));
+      await tester.pump();
+    }
+
+    testWidgets('Auto with a focuser to drive', (tester) async {
+      await chip(tester, _focuser());
+      expect(find.text('Auto'), findsOneWidget);
+    });
+    testWidgets('Manual without one', (tester) async {
+      await chip(tester, null);
+      expect(find.text('Manual'), findsOneWidget);
+    });
+    testWidgets('Manual when the Bahtinov mask was picked', (tester) async {
+      await chip(tester, _focuser(), pick: MainFocusMethod.bahtinov);
+      expect(find.text('Manual'), findsOneWidget);
+    });
+  });
+}

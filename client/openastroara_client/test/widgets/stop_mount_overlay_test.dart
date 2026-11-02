@@ -161,7 +161,7 @@ void main() {
   late _FakeSolveApi solveApi;
   late ProviderContainer container;
 
-  Future<void> pump(WidgetTester tester, {Widget child = const Text('tab content')}) async {
+  Future<void> pump(WidgetTester tester, {Widget child = const Text('tab content'), bool quiet = false}) async {
     ws = StreamController<WsEvent>.broadcast();
     addTearDown(ws.close);
     mountApi = _FakeMountApi();
@@ -180,7 +180,7 @@ void main() {
         ],
         child: MaterialApp(
           home: Scaffold(
-            body: StopMountListener(child: child),
+            body: StopMountListener(quiet: quiet, child: child),
           ),
         ),
       ),
@@ -257,6 +257,15 @@ void main() {
     expect(find.byKey(const ValueKey('stop_mount_button')), findsNothing);
     expect(find.text('Mount stopped at user request'), findsOneWidget);
     expect(find.textContaining('RA 9.57h'), findsOneWidget);
+  });
+
+  testWidgets('quiet (Simple Mode, no popups): no slewing banner and no stopped dialog', (tester) async {
+    await pump(tester, quiet: true);
+    await fire(tester, _event(SlewWsEvents.started, {'target_ra_hours': 9.92, 'target_dec_degrees': 69.1}));
+    expect(find.byKey(const ValueKey('stop_mount_button')), findsNothing);
+    await fire(tester, _event(SlewWsEvents.aborted, {'reason': 'user_request'}));
+    expect(find.text('Mount stopped at user request'), findsNothing);
+    expect(find.byType(AlertDialog), findsNothing);
   });
 
   testWidgets('resume acts on the run the daemon paused for this stop', (
