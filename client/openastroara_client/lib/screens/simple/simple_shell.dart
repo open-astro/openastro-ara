@@ -315,7 +315,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                       ),
                     ),
                     if (!hasFrame)
-                      const Positioned.fill(
+                      Positioned.fill(
                         child: IgnorePointer(
                           child: Center(
                             child: Text(
@@ -323,7 +323,9 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                               style: TextStyle(
                                 fontSize: 20,
                                 letterSpacing: 2,
-                                color: Color(0x80E0E0E0),
+                                color: AraColors.textPrimary.withValues(
+                                  alpha: 0.5,
+                                ),
                               ),
                             ),
                           ),
@@ -759,7 +761,7 @@ class _RailButton extends StatelessWidget {
     selected: selected,
     label: label,
     child: Material(
-      color: selected ? const Color(0x401976D2) : Colors.transparent,
+      color: selected ? AraColors.selectionTint : Colors.transparent,
       borderRadius: BorderRadius.circular(8),
       child: InkWell(
         onTap: onTap,

@@ -1786,7 +1786,7 @@ class SimpleRunPanel extends ConsumerWidget {
                       color: done[i] == steps[i].frameCount
                           ? AraColors.accentConnected
                           : AraColors.selectionBg,
-                      backgroundColor: const Color(0xCC404040),
+                      backgroundColor: AraColors.border.withValues(alpha: 0.8),
                     ),
                   ),
                   SizedBox(

@@ -179,7 +179,7 @@ class _Step extends StatelessWidget {
       height: 36,
       padding: const EdgeInsets.symmetric(horizontal: 10),
       decoration: BoxDecoration(
-        color: on ? const Color(0x401976D2) : null,
+        color: on ? AraColors.selectionTint : null,
         borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
