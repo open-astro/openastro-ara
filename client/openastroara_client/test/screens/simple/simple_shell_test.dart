@@ -219,7 +219,11 @@ void main() {
     await tester.pump();
     expect(container.read(simpleModeProvider).value, isTrue, reason: 'Plan stays in Simple Mode');
     expect(find.descendant(of: find.byKey(const Key('simple-mode')), matching: find.text('Plan')), findsOneWidget);
-    // Plan opens on its sheet, centred; with nothing picked it asks for a target.
+    // Picking Plan opens nothing; the chip opens its sheet, which with nothing
+    // picked asks for a target.
+    expect(find.text('Search, or pick in the sky.'), findsNothing);
+    await tester.tap(find.byKey(const Key('simple-settings')));
+    await tester.pump();
     expect(find.text('Search, or pick in the sky.'), findsOneWidget);
     // The chip reads the plan's total imaging time: 60 frames at the 5 s default.
     expect(find.descendant(of: find.byKey(const Key('simple-settings')), matching: find.text('5 min')), findsOneWidget);
@@ -243,6 +247,10 @@ void main() {
     await tester.pump();
     expect(container.read(simpleModeProvider).value, isTrue, reason: 'no jump to the full UI');
     expect(find.descendant(of: find.byKey(const Key('simple-mode')), matching: find.text('Focus')), findsOneWidget);
+    expect(find.text('No focuser connected'), findsNothing, reason: 'picking a mode opens nothing');
+    // Picking a mode only switches it; the chip opens its panel.
+    await tester.tap(find.byKey(const Key('simple-settings')));
+    await tester.pump();
     final rail = _panelOf(tester, find.byKey(const Key('simple-shutter')));
     final panel = _panelOf(tester, find.text('No focuser connected'));
     expect(panel.right, rail.left - kSimpleInset, reason: 'left of the rail');
@@ -279,6 +287,9 @@ void main() {
     expect(container.read(simpleModeProvider).value, isTrue, reason: 'no jump to the full UI');
     expect(find.descendant(of: find.byKey(const Key('simple-mode')), matching: find.text('P.A.')), findsOneWidget);
     final chip = find.byKey(const Key('simple-settings'));
+    expect(find.byKey(const Key('simple-polar-exposure')), findsNothing, reason: 'picking a mode opens nothing');
+    await tester.tap(chip);
+    await tester.pump();
     expect(find.descendant(of: chip, matching: find.text('1 s\nLoop')), findsOneWidget);
     final rail = _panelOf(tester, find.byKey(const Key('simple-shutter')));
     final panel = _panelOf(tester, find.byKey(const Key('simple-polar-exposure')));
@@ -486,7 +497,7 @@ void main() {
       expect(find.text('Autopilot'), findsOneWidget, reason: 'the modes are open');
       await tap(find.ancestor(of: find.text('Focus'), matching: find.byType(InkWell)).first);
       expect(find.byKey(const Key('autopilot-strip')), findsNothing, reason: 'Focus picked: Autopilot left');
-      expect(find.byType(SimpleFocusPanel), findsOneWidget);
+      expect(find.byType(SimpleFocusPanel), findsNothing, reason: 'picking a mode opens nothing');
     });
   }
 
@@ -542,6 +553,8 @@ void main() {
       await tester.tap(find.byKey(const Key('simple-mode')));
       await tester.pump();
       await tester.tap(find.text('Plan').first);
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('simple-settings')));
       await tester.pump();
       final scroll = find.descendant(of: find.byType(SimpleRunSheet), matching: find.byType(Scrollable)).first;
       expect(tester.state<ScrollableState>(scroll).position.maxScrollExtent, 0, reason: 'everything shows');
@@ -615,9 +628,6 @@ void main() {
     await tester.pump();
     await tester.tap(find.text('Plan').first);
     await tester.pump();
-    // The sheet opens with Plan; the squares show once it's put away.
-    await tester.tap(find.byKey(const Key('simple-settings')));
-    await tester.pump();
     final square = tester.getRect(find.byKey(const Key('simple-run-tracker')));
     expect(square.right, 1024 - kSimpleInset, reason: 'in the corner');
     expect(square.bottom, 768 - (kSimpleInset * 2 + kSimpleBarHeight), reason: 'just above the bottom row');
@@ -638,6 +648,8 @@ void main() {
       await tester.tap(find.byKey(const Key('simple-mode')));
       await tester.pump();
       await tester.tap(find.text('Plan').first);
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('simple-settings')));
       await tester.pump();
       final sheet = tester.getRect(find.byType(SimpleRunSheet));
       expect(sheet.top, greaterThanOrEqualTo(kSimpleInset * 3 + kSimpleBarHeight + kSimpleStatusHeight),

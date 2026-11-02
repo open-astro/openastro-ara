@@ -628,8 +628,8 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                             : _popover == _Popover.modes
                                             ? _ModeGrid(
                                                 current: _mode,
-                                                // A mode opens on its panel; Preview's
-                                                // controls are already on the rail.
+                                                // Picking a mode only switches it; the
+                                                // chip opens its panel (user, 2026-11-02).
                                                 onPicked: (m) {
                                                   if (m ==
                                                       SimpleModeScreen
@@ -638,12 +638,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                                   }
                                                   setState(() {
                                                     _mode = m;
-                                                    _popover =
-                                                        m ==
-                                                            SimpleModeScreen
-                                                                .preview
-                                                        ? _Popover.none
-                                                        : _Popover.settings;
+                                                    _popover = _Popover.none;
                                                   });
                                                   // Picking a mode leaves Autopilot.
                                                   ref
