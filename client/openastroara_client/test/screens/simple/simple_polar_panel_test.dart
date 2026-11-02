@@ -41,6 +41,7 @@ class _Live extends PolarAlignLiveNotifier {
   final PolarAlignLive live;
   @override
   PolarAlignLive build() => live;
+  void frame(PolarAlignLive next) => state = next;
 }
 
 const _adjusting = PolarAlignLive(
@@ -144,6 +145,22 @@ void main() {
     await tester.pumpAndSettle();
     expect(api.calls.last, 'complete');
     expect(c.read(autopilotProvider), AutopilotStep.plan);
+  });
+
+  testWidgets('a bolt turned the wrong way gets the full UI\'s nudge', (tester) async {
+    PolarAlignLive at(int i, double alt, double az) => PolarAlignLive(
+        phase: PolarAlignStates.adjusting, iteration: i, altErrorArcmin: alt, azErrorArcmin: az, totalErrorArcmin: 10);
+    // The iPad, as the shell tests.
+    tester.view.physicalSize = const Size(1024, 768);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await _pump(tester, at(1, 10, -4));
+    final live = ProviderScope.containerOf(tester.element(find.byType(SimplePolarPanel)))
+        .read(polarAlignLiveProvider.notifier) as _Live;
+    expect(find.textContaining('got worse'), findsNothing);
+    live.frame(at(2, 13, -4.2));
+    await tester.pumpAndSettle();
+    expect(find.text('Altitude got worse. Turn that bolt back past where you started.'), findsOneWidget);
   });
 
   testWidgets('failed solves say so', (tester) async {

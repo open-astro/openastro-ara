@@ -81,6 +81,57 @@ String? boltDirectionNudge({
   return null;
 }
 
+/// §45.16 the bolt-direction nudge across frames (the full panel's and Simple
+/// Mode's): kept for a few frames, cleared as soon as the named axis
+/// improves.
+class BoltNudgeTracker {
+  double? _prevAlt;
+  double? _prevAz;
+  int _iteration = 0;
+  bool _axisAlt = true;
+  int _untilIteration = 0;
+  static const _frames = 3;
+
+  /// The amber line to show, or null.
+  String? nudge;
+
+  /// Compare this frame's errors with the previous frame's. Call on every
+  /// live-state change; a seed or a new run resets the baseline.
+  void track(PolarAlignLive live) {
+    if (live.phase == PolarAlignStates.paused) return; // no solve: hold the baseline
+    if (live.phase != PolarAlignStates.adjusting) {
+      // Leaving adjust (stopped, failed, a new run's seed): the next adjust
+      // frame starts a new baseline, so a new run whose first iteration
+      // number matches the old run's is never compared across runs.
+      _iteration = 0;
+      _prevAlt = null;
+      _prevAz = null;
+      nudge = null;
+      return;
+    }
+    if (live.iteration == _iteration) return;
+    _iteration = live.iteration;
+    final found = boltDirectionNudge(
+        prevAlt: _prevAlt, prevAz: _prevAz, alt: live.altErrorArcmin, az: live.azErrorArcmin);
+    if (found != null) {
+      nudge = found;
+      _axisAlt = found.startsWith('Altitude');
+      _untilIteration = live.iteration + _frames;
+    } else if (nudge != null) {
+      // Cleared as soon as the named axis actually improves by more than the
+      // noise (the user turned the bolt back), else after a few frames.
+      final before = _axisAlt ? _prevAlt : _prevAz;
+      final after = _axisAlt ? live.altErrorArcmin : live.azErrorArcmin;
+      final improved = before != null &&
+          after != null &&
+          before.abs() - after.abs() > polarSolveNoiseArcmin;
+      if (improved || live.iteration > _untilIteration) nudge = null;
+    }
+    _prevAlt = live.altErrorArcmin;
+    _prevAz = live.azErrorArcmin;
+  }
+}
+
 /// Fractional dot offset inside the bullseye for the current error, drawn as
 /// seen by someone facing the pole: x = azimuth, east of the pole to the right
 /// facing the NCP and to the LEFT facing the SCP ([southern]); y = altitude
@@ -207,13 +258,7 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
 
   // §45.16 bolt-direction nudge: the previous frame's errors, the iteration
   // they came from, the nudge in force and the iteration it expires after.
-  double? _prevAlt;
-  double? _prevAz;
-  int _nudgeIteration = 0;
-  String? _nudge;
-  bool _nudgeAxisAlt = true;
-  int _nudgeUntilIteration = 0;
-  static const _nudgeFrames = 3;
+  final _bolt = BoltNudgeTracker();
   PolarAlignSettings _settings = const PolarAlignSettings();
   final _exposureCtrl = TextEditingController(text: _exposureText(1.0));
 
@@ -240,7 +285,7 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
   @override
   void initState() {
     super.initState();
-    _trackNudge(ref.read(polarAlignLiveProvider)); // the first frame is the nudge baseline
+    _bolt.track(ref.read(polarAlignLiveProvider)); // the first frame is the nudge baseline
     WidgetsBinding.instance.addPostFrameCallback((_) => _hydrate());
   }
 
@@ -387,7 +432,7 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
     _syncTicker(live.frameInProgress);
     // §45.16 the bolt-direction nudge is tracked on each state change, not
     // in build: it mutates the baseline fields.
-    ref.listen(polarAlignLiveProvider, (prev, next) => setState(() => _trackNudge(next)));
+    ref.listen(polarAlignLiveProvider, (prev, next) => setState(() => _bolt.track(next)));
     // Each finished frame (solved or not) replaces lastFrame — fetch its image.
     ref.listen(polarAlignLiveProvider, (prev, next) {
       if (next.lastFrame != null && !identical(prev?.lastFrame, next.lastFrame)) {
@@ -825,7 +870,7 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
                   ],
                 ),
               ),
-              if (_nudge case final nudge?) ...[
+              if (_bolt.nudge case final nudge?) ...[
                 const SizedBox(height: 12),
                 _nudgeLine(nudge),
               ],
@@ -889,7 +934,7 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
       child: Column(
         children: [
           row,
-          if (_nudge case final nudge?) ...[
+          if (_bolt.nudge case final nudge?) ...[
             const SizedBox(height: 8),
             _nudgeLine(nudge),
           ],
@@ -911,43 +956,6 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
           ),
         ],
       );
-
-  /// §45.16 — compare this frame's errors with the previous frame's and keep
-  /// a bolt-direction nudge for a few frames. Called from build on every
-  /// new adjust-loop iteration; a seed or a new run resets the baseline.
-  void _trackNudge(PolarAlignLive live) {
-    if (live.phase == PolarAlignStates.paused) return; // no solve: hold the baseline
-    if (live.phase != PolarAlignStates.adjusting) {
-      // Leaving adjust (stopped, failed, a new run's seed): the next adjust
-      // frame starts a new baseline, so a new run whose first iteration
-      // number matches the old run's is never compared across runs.
-      _nudgeIteration = 0;
-      _prevAlt = null;
-      _prevAz = null;
-      _nudge = null;
-      return;
-    }
-    if (live.iteration == _nudgeIteration) return;
-    _nudgeIteration = live.iteration;
-    final nudge = boltDirectionNudge(
-        prevAlt: _prevAlt, prevAz: _prevAz, alt: live.altErrorArcmin, az: live.azErrorArcmin);
-    if (nudge != null) {
-      _nudge = nudge;
-      _nudgeAxisAlt = nudge.startsWith('Altitude');
-      _nudgeUntilIteration = live.iteration + _nudgeFrames;
-    } else if (_nudge != null) {
-      // Cleared as soon as the named axis actually improves by more than the
-      // noise (the user turned the bolt back), else after a few frames.
-      final before = _nudgeAxisAlt ? _prevAlt : _prevAz;
-      final after = _nudgeAxisAlt ? live.altErrorArcmin : live.azErrorArcmin;
-      final improved = before != null &&
-          after != null &&
-          before.abs() - after.abs() > polarSolveNoiseArcmin;
-      if (improved || live.iteration > _nudgeUntilIteration) _nudge = null;
-    }
-    _prevAlt = live.altErrorArcmin;
-    _prevAz = live.azErrorArcmin;
-  }
 
   /// The total error translated for people who don't think in arcminutes:
   /// arcseconds, a plain-English verdict, worst-case star drift over a

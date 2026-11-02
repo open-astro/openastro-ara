@@ -133,10 +133,12 @@ class SimplePolarPanel extends ConsumerStatefulWidget {
 class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
   bool _busy = false;
   String? _error;
+  final _bolt = BoltNudgeTracker();
 
   @override
   void initState() {
     super.initState();
+    _bolt.track(ref.read(polarAlignLiveProvider)); // the first frame is the baseline
     WidgetsBinding.instance.addPostFrameCallback((_) => _hydrate());
   }
 
@@ -185,6 +187,7 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
     final autopilot =
         ref.watch(autopilotProvider) == AutopilotStep.polarAlign;
     final live = ref.watch(polarAlignLiveProvider);
+    ref.listen(polarAlignLiveProvider, (_, next) => setState(() => _bolt.track(next)));
     final settings =
         ref.watch(simplePolarSettingsProvider).value ??
         const PolarAlignSettings();
@@ -276,6 +279,13 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
                 polarAzHint(live.azErrorArcmin, southern: southern),
               ),
             ],
+            // The full panel's nudge, cut to two lines for the 248 px panel.
+            if (active && _bolt.nudge != null)
+              Text(
+                '${_bolt.nudge!.startsWith('Altitude') ? 'Altitude' : 'Azimuth'} got '
+                'worse. Turn that bolt back past where you started.',
+                style: kSimpleText.copyWith(color: AraColors.accentBusy),
+              ),
             if (active && live.consecutiveSolveFailures > 0)
               Text(
                 'No solve (${live.consecutiveSolveFailures} in a row). Check the sky.',
