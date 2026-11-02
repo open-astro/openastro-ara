@@ -7,6 +7,8 @@ import 'package:openastroara/models/sequence/sequence_summary.dart';
 import 'package:openastroara/models/sky_model_calibration.dart';
 import 'package:openastroara/screens/simple/simple_plan_panel.dart';
 import 'package:openastroara/services/sequence_api.dart';
+import 'package:openastroara/services/tonight_sky_api.dart';
+import 'package:openastroara/state/sky_atlas/tonight_sky_state.dart';
 import 'package:openastroara/state/sequencer/sequence_list_state.dart';
 import 'package:openastroara/state/planning/sky_model_calibration_state.dart';
 import 'package:openastroara/state/settings/camera_electronics_state.dart';
@@ -130,9 +132,13 @@ final _rig = <Object>[
 ];
 
 Future<ProviderContainer> _pump(WidgetTester tester, _Seq seq, Widget child,
-    {PlanetariumSelection? sel = _m31, List<Object> overrides = const [], List<PlanningFilter> filters = _lrgb}) async {
+    {PlanetariumSelection? sel = _m31,
+    List<Object> overrides = const [],
+    List<PlanningFilter> filters = _lrgb,
+    List<TonightSkyObject> tonight = const []}) async {
   final container = ProviderContainer(overrides: [
     ...overrides.cast(),
+    tonightSkyProvider.overrideWith((ref) async => tonight),
     sequenceApiProvider.overrideWith((ref) => seq),
     planetariumSelectionProvider.overrideWith(() => _Sel(sel)),
     filterSetProvider.overrideWith(() => _Filters(filters)),
@@ -243,6 +249,24 @@ void main() {
     expect(simpleRunChip(const SimpleRun(), const [FilterPlanStep(filterName: 'L', exposureSeconds: 60, frameCount: 45)]), '45 min');
   });
 
+  test('a suggestion reads type and altitude, or when it rises; it becomes the selection', () {
+    final up = TonightSkyObject(
+        id: 'ngc7000', name: 'NGC 7000', type: 'Nebula', magnitude: 4, raDeg: 314.7, decDeg: 44.3,
+        altitudeDeg: 71.4, maxAltitudeDeg: 80, windowEndUtc: DateTime.utc(2026, 11, 3, 1, 40));
+    expect(simpleSuggestionLine(up), 'Nebula · 71° up');
+    final later = TonightSkyObject(
+        id: 'm45', name: 'M45', type: 'Cluster', magnitude: 1.6, raDeg: 56.9, decDeg: 24.1,
+        altitudeDeg: -5, maxAltitudeDeg: 70, windowStartUtc: DateTime(2026, 11, 2, 21, 50));
+    expect(simpleSuggestionLine(later), 'Cluster · rises 21:50');
+    final sel = simpleSelectionOf(up);
+    expect(sel.name, 'NGC 7000');
+    expect(sel.raJ2000Hours, closeTo(314.7 / 15, 1e-9));
+    expect(sel.decJ2000Deg, 44.3);
+    expect(sel.altDeg, 71.4);
+    expect(sel.belowHorizon, isFalse);
+    expect(simpleSelectionOf(later).belowHorizon, isTrue);
+  });
+
   test('durations read in hours and minutes', () {
     expect(simpleRunDuration(45 * 60), '45 min');
     expect(simpleRunDuration(6 * 3600 + 20 * 60), '6 h 20 min');
@@ -326,6 +350,33 @@ void main() {
       await tester.pumpAndSettle();
       expect(seq.calls, ['create M31', 'start seq-1']);
       expect(created, 1);
+    });
+
+    testWidgets('tonight\'s best: up to four suggestions, one tap picks the target', (tester) async {
+      TonightSkyObject o(String name, double alt) => TonightSkyObject(
+          id: name, name: name, type: 'Galaxy', magnitude: 5, raDeg: 10, decDeg: 40, altitudeDeg: alt, maxAltitudeDeg: 70);
+      final seq = _Seq();
+      final c = await _pump(tester, seq,
+          SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}, onLibrary: () {}),
+          sel: null,
+          tonight: [o('M31', 62), o('NGC 7000', 71), o('M33', 48), o('M45', 30), o('M42', 10)]);
+      expect(find.text("TONIGHT'S BEST"), findsOneWidget);
+      for (final n in ['M31', 'NGC 7000', 'M33', 'M45']) {
+        expect(find.byKey(Key('simple-run-suggestion-$n')), findsOneWidget, reason: n);
+      }
+      expect(find.byKey(const Key('simple-run-suggestion-M42')), findsNothing, reason: 'four at most');
+      await tester.tap(find.byKey(const Key('simple-run-suggestion-NGC 7000')));
+      await tester.pump();
+      expect(c.read(planetariumSelectionProvider)?.name, 'NGC 7000');
+      await tester.tap(find.byKey(const Key('simple-run-start')));
+      await tester.pumpAndSettle();
+      expect(seq.calls, ['create NGC 7000', 'start seq-1']);
+    });
+
+    testWidgets('no ranking (no site yet): no suggestions, search stays', (tester) async {
+      await _pump(tester, _Seq(), SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}, onLibrary: () {}));
+      expect(find.text("TONIGHT'S BEST"), findsNothing);
+      expect(find.byKey(const Key('simple-run-search')), findsOneWidget);
     });
 
     testWidgets('a configured rig gets the suggested subs in one line; Use all takes them', (tester) async {

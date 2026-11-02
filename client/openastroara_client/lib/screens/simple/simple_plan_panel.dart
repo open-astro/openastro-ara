@@ -14,7 +14,9 @@ import '../../state/sequencer/create_imaging_run.dart';
 import '../../state/sequencer/sequence_list_state.dart';
 import '../../state/settings/filter_set_state.dart';
 import '../../state/settings/imaging_defaults_state.dart';
+import '../../services/tonight_sky_api.dart';
 import '../../state/sky_atlas/planetarium_selection_state.dart';
+import '../../state/sky_atlas/tonight_sky_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
 import '../../util/friendly_error.dart';
@@ -23,7 +25,8 @@ import '../../widgets/sequencer/target_plan_dialog.dart'
 import '../../widgets/emergency_stop_button.dart' show kEmergencyStopHold;
 import 'simple_preview_panel.dart'
     show SimplePresetTile, exposurePresets, formatExposure, kSimpleText;
-import 'simple_shell.dart' show SimplePanel, kSimpleInset, kSimpleRailWidth;
+import 'simple_shell.dart'
+    show SimplePanel, kSimpleInset, kSimpleRailWidth, kSimpleTileFill;
 
 /// The first plan for a filter set: LRGB when the set has any of it, else the
 /// narrowband filters, else every filter; one row with no filter name when
@@ -176,6 +179,34 @@ String simpleTargetStatus(PlanetariumSelection s) {
   }
   return '${(s.altDeg ?? 0).round()}° up · max ${s.maxAltDeg.round()}°';
 }
+
+/// A suggestion's second line: its type, then its altitude now or when it
+/// rises. Pure — unit-tested.
+String simpleSuggestionLine(TonightSkyObject o) {
+  final rise = o.windowStartUtc?.toLocal();
+  final where = o.altitudeDeg > 0
+      ? '${o.altitudeDeg.round()}° up'
+      : rise == null
+      ? 'below the horizon'
+      : 'rises ${_hhmm(rise)}';
+  return [if (o.type.isNotEmpty) o.type, where].join(' · ');
+}
+
+/// A suggestion as the planetarium's selection, so the plan takes it as if
+/// tapped in the sky. Pure — unit-tested.
+// shortcut: the ranker's position is J2000 and stands in for JNOW too; only
+// the plan (J2000) reads it, the planetarium isn't pointed at it.
+PlanetariumSelection simpleSelectionOf(TonightSkyObject o) => PlanetariumSelection(
+  name: o.name,
+  kind: o.type,
+  raHours: o.raDeg / 15,
+  decDeg: o.decDeg,
+  raJ2000Hours: o.raDeg / 15,
+  decJ2000Deg: o.decDeg,
+  altDeg: o.altitudeDeg,
+  maxAltDeg: o.maxAltitudeDeg,
+  rise: o.windowStartUtc?.toLocal(),
+);
 
 /// The plan Simple Mode created on the rig (its rows, to split the progress
 /// per filter), whether it has started, a call in flight, a pause asked for
@@ -791,12 +822,67 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
 
     final nameWidth = steps.map((s) => widthOf(s.filterName)).fold(32.0, math.max);
     final off = sel == null || sel.belowHorizon || run.busy;
+    final best = (ref.watch(tonightSkyProvider).value ?? const [])
+        .where((o) => o.maxAltitudeDeg > 0)
+        .take(4)
+        .toList();
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       spacing: AraSpace.s8,
       children: [
         Text("Tonight's plan", style: _head),
+        // Tonight's best, from the full UI's ranking: one tap picks a target.
+        if (best.isNotEmpty) ...[
+          Text("TONIGHT'S BEST", style: AraText.caption),
+          Wrap(
+            spacing: AraSpace.s8,
+            runSpacing: AraSpace.s8,
+            children: [
+              for (final o in best)
+                SizedBox(
+                  width: (400 - AraSpace.s8) / 2,
+                  height: 52,
+                  child: Material(
+                    color: sel?.name == o.name
+                        ? AraColors.selectionBg
+                        : kSimpleTileFill,
+                    borderRadius: BorderRadius.circular(8),
+                    child: InkWell(
+                      key: Key('simple-run-suggestion-${o.name}'),
+                      borderRadius: BorderRadius.circular(8),
+                      onTap: () => ref
+                          .read(planetariumSelectionProvider.notifier)
+                          .set(simpleSelectionOf(o)),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              o.name,
+                              style: kSimpleText.copyWith(
+                                fontWeight: FontWeight.w600,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            Text(
+                              simpleSuggestionLine(o),
+                              style: _dim.copyWith(fontSize: 12),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ],
         TextField(
           key: const Key('simple-run-search'),
           controller: _query,
