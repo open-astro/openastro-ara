@@ -957,7 +957,8 @@ class _RailButton extends StatelessWidget {
   final bool tall;
   final String label;
 
-  /// Null: nothing to do (Sky with no frame yet); dim, and announced so.
+  /// Null: nothing to do, announced so; dim unless [selected] (Sky with no
+  /// frame yet: the planetarium it opens is already open, so it shows lit).
   final VoidCallback? onTap;
   final bool selected;
 
@@ -983,7 +984,7 @@ class _RailButton extends StatelessWidget {
                 Icon(
                   icon,
                   size: 24,
-                  color: onTap == null
+                  color: onTap == null && !selected
                       ? AraColors.textDisabled
                       : selected
                       ? AraColors.textPrimary
@@ -997,7 +998,7 @@ class _RailButton extends StatelessWidget {
                 textAlign: TextAlign.center,
                 overflow: TextOverflow.ellipsis,
                 style: AraText.caption.copyWith(
-                  color: onTap == null
+                  color: onTap == null && !selected
                       ? AraColors.textDisabled
                       : selected
                       ? AraColors.textPrimary

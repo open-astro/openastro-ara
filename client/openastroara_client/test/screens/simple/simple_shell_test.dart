@@ -205,7 +205,10 @@ void main() {
     expect((math.max(lum(sky), lum(const Color(0xFF0A0A0A))) + 0.05) / (math.min(lum(sky), lum(const Color(0xFF0A0A0A))) + 0.05),
         greaterThanOrEqualTo(4.5));
     expect(find.byKey(const Key('sky')), findsOneWidget, reason: 'the sky until there is a frame');
-    // With nothing but the sky, Sky can't switch anything: it says so.
+    // Sky opens the planetarium, which is already open: Sky shows lit (not dimmed), and
+    // screen readers hear there's nothing to switch.
+    expect(tester.widget<Icon>(find.descendant(of: find.byKey(const Key('simple-sky')), matching: find.byType(Icon))).color,
+        AraColors.textPrimary);
     expect(tester.getSemantics(find.byKey(const Key('simple-sky'))), isSemantics(hasEnabledState: true, isEnabled: false));
   });
 
