@@ -13,6 +13,8 @@ import '../../state/planning/sky_model_calibration_state.dart';
 import '../../state/sequencer/create_imaging_run.dart';
 import '../../state/sequencer/sequence_list_state.dart';
 import '../../state/settings/filter_set_state.dart';
+import '../../state/setup/setup_readiness.dart';
+import '../../state/simple_mode_state.dart';
 import '../../state/settings/imaging_defaults_state.dart';
 import '../../services/tonight_sky_api.dart';
 import '../../state/sky_atlas/planetarium_selection_state.dart';
@@ -1079,6 +1081,14 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
             Text(simpleRunDuration(seconds), style: _dim),
           ],
         ),
+        // The full UI asks before Run; here it only warns (a permanent pier
+        // or a daytime test runs fine unaligned).
+        if (ref.watch(setupPolarAlignStateProvider) != SetupStepState.done &&
+            !(ref.watch(simplePermanentPierProvider).value ?? false))
+          Text(
+            'Not polar aligned tonight',
+            style: kSimpleText.copyWith(color: AraColors.accentBusy),
+          ),
         if (run.error != null)
           Text(
             run.error!,

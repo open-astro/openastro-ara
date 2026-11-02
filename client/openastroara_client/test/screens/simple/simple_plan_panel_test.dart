@@ -16,6 +16,9 @@ import 'package:openastroara/state/settings/filter_set_state.dart';
 import 'package:openastroara/state/settings/optics_settings_state.dart';
 import 'package:openastroara/state/settings/site_settings_state.dart';
 import 'package:openastroara/state/sky_atlas/planetarium_selection_state.dart';
+import 'package:openastroara/state/setup/setup_readiness.dart';
+import 'package:openastroara/services/simple_mode_prefs_service.dart';
+import 'package:openastroara/state/simple_mode_state.dart';
 
 const _m31 = PlanetariumSelection(
     name: 'M31', kind: 'Galaxy', raHours: 0.73, decDeg: 41.4, raJ2000Hours: 0.71, decJ2000Deg: 41.27, altDeg: 62.4, maxAltDeg: 74.2);
@@ -122,6 +125,13 @@ class _Site extends SiteSettingsNotifier {
 class _NoSkyModel extends SkyModelCalibrationNotifier {
   @override
   Future<SkyModelCalibration?> build() async => null;
+}
+
+class _Prefs extends SimpleModePrefsService {
+  _Prefs(this.value);
+  final bool value;
+  @override
+  Future<bool> load() async => value;
 }
 
 final _rig = <Object>[
@@ -426,6 +436,25 @@ void main() {
       expect(after.every((s) => s >= 30 && s <= 600), isTrue, reason: 'the plan clamp: $after');
       expect(find.textContaining('Suggested: '), findsNothing, reason: 'every row matches now');
     });
+
+    for (final (aligned, permanent, shown) in [
+      (SetupStepState.pending, false, true),
+      (SetupStepState.done, false, false),
+      (SetupStepState.pending, true, false),
+    ]) {
+      testWidgets('polar align $aligned, permanent pier $permanent: amber line ${shown ? 'shows' : 'hidden'}',
+          (tester) async {
+        await _pump(tester, _Seq(),
+            SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}, onLibrary: () {}),
+            overrides: [
+              setupPolarAlignStateProvider.overrideWithValue(aligned),
+              simplePermanentPierPrefsProvider.overrideWithValue(_Prefs(permanent)),
+            ]);
+        expect(find.text('Not polar aligned tonight'), shown ? findsOneWidget : findsNothing);
+        // A warning, not a gate.
+        expect(tester.widget<FilledButton>(find.byKey(const Key('simple-run-start'))).onPressed, isNotNull);
+      });
+    }
 
     testWidgets('an unconfigured rig has no hint; the last row stays', (tester) async {
       final c = await _pump(tester, _Seq(),
