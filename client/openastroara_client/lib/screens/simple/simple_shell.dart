@@ -13,7 +13,6 @@ import '../../state/app_shell_state.dart';
 import '../../state/launch_gate_state.dart';
 import '../../state/profile_management_state.dart';
 import '../../state/saved_server_state.dart';
-import '../../state/server_state.dart';
 import '../../state/guider/guide_step_state.dart';
 import '../../state/guider/guider_state.dart';
 import '../../state/imaging/last_frame_state.dart';
@@ -29,6 +28,8 @@ import '../../state/simple_mode_state.dart';
 import 'dart:ui' show ImageFilter;
 
 import '../../app_version.dart';
+import '../../services/plate_solve_database_api.dart';
+import '../../services/server_maintenance_api.dart';
 import '../../models/equipment_device_status.dart';
 import '../../state/equipment/camera_state.dart';
 import '../../state/equipment/dome_state.dart';
@@ -1641,10 +1642,10 @@ class _SettingsSheet extends StatefulWidget {
 
 class _SettingsSheetState extends State<_SettingsSheet> {
   static const _sections = [
-    ('Devices', Icons.settings_input_component_outlined),
     ('Rig', Icons.memory),
+    ('Devices', Icons.settings_input_component_outlined),
   ];
-  String _section = 'Devices';
+  String _section = 'Rig';
 
   @override
   Widget build(BuildContext context) {
@@ -1883,7 +1884,9 @@ class _ThisRig extends ConsumerWidget {
       sequenceRunStateProvider.select((s) => s.value?.state?.isActive ?? false),
     );
     final version = ref.watch(appDisplayVersionProvider).value;
-    final serverVersion = ref.watch(activeServerInfoProvider).value?.version;
+    final rig = ref.watch(daemonVersionsProvider).value;
+    final stars = ref.watch(plateSolveDatabaseStatusProvider).value?.databases;
+    final servers = rig?.alpacaServers ?? const <AlpacaServerVersion>[];
     Widget fact(String label, String value) => Row(
       children: [
         Text(label, style: AraText.caption),
@@ -1989,9 +1992,8 @@ class _ThisRig extends ConsumerWidget {
           if (!v) ref.read(simpleModeProvider.notifier).set(false);
         }),
         const Divider(height: AraSpace.s16),
-        // Every version on the rig, for a bug report or a support question.
-        // shortcut: OpenAstro Guider's and AlpacaBridge's versions need the
-        // daemon to report them; they join this list when it does.
+        // Every version on the rig, for a bug report or a support question;
+        // a part the rig can't read is left out.
         Column(
           key: const Key('simple-versions'),
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -2009,7 +2011,30 @@ class _ThisRig extends ConsumerWidget {
               children: [
                 for (final (name, v) in [
                   ('This app', version),
-                  ('OpenAstro Ara server', serverVersion),
+                  ('OpenAstro Ara server', rig?.daemonVersion),
+                  if (rig?.guiderVersion != null)
+                    ('OpenAstro Guider', rig!.guiderVersion),
+                  for (final a in servers)
+                    (
+                      servers.length > 1
+                          ? '${a.label} (${a.host}:${a.port})'
+                          : a.label,
+                      a.version,
+                    ),
+                  if (rig?.astapVersion != null) ('ASTAP', rig!.astapVersion),
+                  if (stars != null && stars.isNotEmpty)
+                    (
+                      'Star database',
+                      stars.map((d) => d.toUpperCase()).join(', '),
+                    ),
+                  if (rig != null && rig.osRelease.isNotEmpty)
+                    (
+                      'System',
+                      [
+                        rig.osRelease,
+                        if (rig.boardModel != null) rig.boardModel!,
+                      ].join(' · '),
+                    ),
                 ])
                   TableRow(
                     children: [

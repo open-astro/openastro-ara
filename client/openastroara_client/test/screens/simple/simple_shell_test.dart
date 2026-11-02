@@ -38,8 +38,8 @@ import 'package:openastroara/screens/settings/settings_shell.dart';
 import 'package:openastroara/state/launch_gate_state.dart';
 import 'package:openastroara/state/profile_management_state.dart';
 import 'package:openastroara/state/ws/ws_providers.dart';
-import 'package:openastroara/services/server_api.dart';
-import 'package:openastroara/state/server_state.dart';
+import 'package:openastroara/services/server_maintenance_api.dart';
+import 'package:openastroara/services/plate_solve_database_api.dart';
 import 'package:openastroara/models/camera_status.dart';
 import 'package:openastroara/models/equipment_device_status.dart';
 import 'package:openastroara/models/focuser_status.dart';
@@ -95,7 +95,7 @@ final _someSteps = [
 
 Future<ProviderContainer> _pump(WidgetTester tester, Size size,
     {List<GuideStep> steps = const [], AraServer? server, FrameHistogram? histogram,
-    ServerInternalState? internal, StorageSpace? storage, ProfileList? profiles, SimpleRun? plan, SequenceRunStateInfo? runState, bool queueing = false, bool manualAlarm = false, bool feature = false, bool pier = false, bool linkUp = false, List<Override> gear = const [], ServerInfo? serverInfo}) async {
+    ServerInternalState? internal, StorageSpace? storage, ProfileList? profiles, SimpleRun? plan, SequenceRunStateInfo? runState, bool queueing = false, bool manualAlarm = false, bool feature = false, bool pier = false, bool linkUp = false, List<Override> gear = const [], DaemonVersions? versions, List<String>? starDatabases}) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
@@ -105,7 +105,11 @@ Future<ProviderContainer> _pump(WidgetTester tester, Size size,
     if (pier) simplePermanentPierPrefsProvider.overrideWithValue(_MemPrefs()..value = false),
     if (linkUp) serverLinkUpProvider.overrideWithValue(true),
     ...gear,
-    if (serverInfo != null) activeServerInfoProvider.overrideWith((ref) async => serverInfo),
+    if (versions != null) daemonVersionsProvider.overrideWith((ref) async => versions),
+    if (starDatabases != null)
+      plateSolveDatabaseStatusProvider.overrideWith((ref) async => PlateSolveDatabaseStatus(
+          configuredPath: '/var/lib/astap', effectivePath: '/var/lib/astap', fileCount: 9,
+          databases: starDatabases, solverPath: '/opt/openastroara/astap_cli', solverFound: true)),
     selectedTabIndexProvider.overrideWith(_StartOnLive.new),
     guideStepsProvider.overrideWith(() => _Steps(steps)),
     if (server != null) activeServerProvider.overrideWithValue(server),
@@ -948,6 +952,7 @@ void main() {
     for (final t in ['Devices', 'Rig']) {
       expect(find.descendant(of: sheet, matching: find.text(t)), findsWidgets, reason: t);
     }
+    expect(find.byKey(const Key('simple-versions')), findsOneWidget, reason: 'Settings opens on Rig');
     expect(find.text('All settings'), findsNothing, reason: 'no full settings form in Simple Mode');
     await tester.tapAt(Offset(size.width / 2, size.height - 4)); // the veil, below the sheet
     await tester.pump();
@@ -961,10 +966,31 @@ void main() {
         internal: const ServerInternalState(uptimeSeconds: 11520, cpuPercent: 23.4, workingSetBytes: 512 * 1048576),
         storage: const StorageSpace(saveDirectory: '/data', isFallback: false, freeBytes: 412 * 1073741824, totalBytes: 900 * 1073741824),
         profiles: const ProfileList(activeId: 'p1', profiles: [ProfileMeta(id: 'p1', name: 'Backyard Rig')]),
-        serverInfo: const ServerInfo(name: 'astro', version: '0.0.1-ara.7', apiVersion: '1'));
+        versions: DaemonVersions.fromJson({
+          'daemon_version': '0.0.1-ara.7',
+          'os_release': 'Debian GNU/Linux 13 (trixie)',
+          'board_model': 'Raspberry Pi 5 Model B Rev 1.1',
+          'guider_version': '2.6.13dev7',
+          'alpaca_servers': [
+            {'host': '10.0.30.223', 'port': 6800, 'server_name': 'AlpacaHTTP', 'manufacturer': 'OpenAstro.net', 'version': '6.0.0~nightly'},
+          ],
+          'astap_version': 'CLI-2026.09.01',
+        }),
+        starDatabases: const ['d05', 'd80']);
     await _openSection(tester, 'Rig');
     // Every version on the rig, for a bug report or a support question.
-    expect(find.descendant(of: find.byKey(const Key('simple-versions')), matching: find.text('OpenAstro Ara server')), findsOneWidget);
+    final versions = find.byKey(const Key('simple-versions'));
+    for (final (name, value) in const [
+      ('OpenAstro Ara server', '0.0.1-ara.7'),
+      ('OpenAstro Guider', '2.6.13dev7'),
+      ('AlpacaBridge', '6.0.0~nightly'),
+      ('ASTAP', 'CLI-2026.09.01'),
+      ('Star database', 'D05, D80'),
+      ('System', 'Debian GNU/Linux 13 (trixie) · Raspberry Pi 5 Model B Rev 1.1'),
+    ]) {
+      expect(find.descendant(of: versions, matching: find.text(name)), findsOneWidget, reason: name);
+      expect(find.descendant(of: versions, matching: find.text(value)), findsOneWidget, reason: value);
+    }
     expect(find.descendant(of: find.byKey(const Key('simple-versions')), matching: find.text('This app')), findsOneWidget);
     expect(find.text('0.0.1-ara.7'), findsOneWidget);
     // Beside its name and in readable type, not at the far edge in a caption.

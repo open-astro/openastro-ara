@@ -4,7 +4,6 @@ import '../models/server.dart';
 import '../services/last_rig_service.dart';
 import '../services/server_api.dart';
 import '../services/server_discovery_service.dart';
-import 'saved_server_state.dart';
 
 /// Single-source Riverpod providers for the first-run flow.
 /// State persistence to flutter_secure_storage lands in the Phase 11 follow-up
@@ -44,13 +43,6 @@ final serverHandshakeProvider = FutureProvider.autoDispose<ServerInfo?>((
   final server = ref.watch(selectedServerProvider);
   if (server == null) return null;
   return ServerApi(server).getInfo();
-});
-
-/// The active rig's /server/info (name and server version), for Simple Mode's
-/// Settings › Rig; null with no rig.
-final activeServerInfoProvider = FutureProvider.autoDispose<ServerInfo?>((ref) {
-  final server = ref.watch(activeServerProvider);
-  return server == null ? null : ServerApi(server).getInfo();
 });
 
 /// ALP-4890 — where the last rig's name is kept; overridden in tests.

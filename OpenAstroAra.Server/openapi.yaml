@@ -6667,6 +6667,35 @@ paths:
                 $ref: '#/components/schemas/ProblemDetails'
 components:
   schemas:
+    AlpacaServerVersionDto:
+      required:
+        - host
+        - port
+        - server_name
+        - manufacturer
+        - version
+      type: object
+      properties:
+        host:
+          type: string
+        port:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+        server_name:
+          type:
+            - 'null'
+            - string
+        manufacturer:
+          type:
+            - 'null'
+            - string
+        version:
+          type:
+            - 'null'
+            - string
     ApiSurfaceVersionDto:
       required:
         - name
@@ -6716,6 +6745,24 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ApiSurfaceVersionDto'
+        board_model:
+          type:
+            - 'null'
+            - string
+        guider_version:
+          type:
+            - 'null'
+            - string
+        alpaca_servers:
+          type:
+            - 'null'
+            - array
+          items:
+            $ref: '#/components/schemas/AlpacaServerVersionDto'
+        astap_version:
+          type:
+            - 'null'
+            - string
     AutoFlatsDecisionRequestDto:
       required:
         - choice

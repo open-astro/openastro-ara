@@ -249,6 +249,9 @@ public interface IFlatDeviceService {
 
 public interface IGuiderService {
     Task<GuiderDto?> GetAsync(CancellationToken ct);
+    /// <summary>The connected guider's version from its handshake (OpenAstro Guider or PHD2), or null when
+    /// it isn't connected or didn't say.</summary>
+    string? GuiderVersion => null;
     /// <summary>§36.10 — the guide camera's frame size from the connected guider, or null when the guider or
     /// its camera is not connected (the profile never holds it; polar alignment reads the same RPC).</summary>
     Task<(int Width, int Height)?> TryGetGuideFrameSizeAsync(CancellationToken ct);

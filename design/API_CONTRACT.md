@@ -42,6 +42,20 @@ This file captures the *reasoning* behind each contract decision — DTO shapes,
 **Related:** §X.Y of PORT_PLAYBOOK.md, PR #N
 ```
 
+### 2026-11-03 — Every version on the rig: `/server/versions` gains the board, the guider, the Alpaca servers and ASTAP
+
+**Endpoint(s) or area:** `GET /api/v1/server/versions` (`ApiVersionsDto`): new optional `board_model`, `guider_version`, `alpaca_servers`, `astap_version`.
+
+**Decision:** `board_model` is the device tree's model string ("Raspberry Pi 5 Model B Rev 1.1"), null without one. `guider_version` is the connected guider's version from its handshake (`get_version`, else the `Version` event), null while disconnected. `alpaca_servers` is `[{ "host", "port", "server_name"?, "manufacturer"?, "version"? }]`, one entry per distinct host:port among the remembered devices (IP when known, else host name), each asked `GET /management/v1/description` in parallel with the existing 3 s management-client timeout; a server that doesn't answer is listed with nulls. `astap_version` is parsed from the configured solver's `-h` banner ("CLI-2026.09.01"), cached per path, null when the binary is missing or silent. The star database already has its own route (`GET /api/v1/platesolve/database`). All four are optional and additive (v1 protocol-minor rule); older daemons omit them.
+
+**Reasoning:** support asks for every version first; Simple Mode's Settings › Rig and the About panel show them. Alpaca does have a version call for the server itself (`ManufacturerVersion` in the management description), unlike for devices; that is what AlpacaBridge reports.
+
+**Spec ref:** `Services/RigVersions.cs`, `Services/PlaceholderServerStateService.cs`, `Services/AlpacaManagementClient.cs` (`GetDescriptionAsync`), `PHD2Guider.GuiderVersion`.
+
+**Related:** design/briefs/simple-mode-settings.md; tests `RigVersionsTest`.
+
+---
+
 ### 2026-11-01 — The guider profile picker: `runtime.profiles` and `phd2_profile_id`
 
 **Endpoint(s) or area:** `GET /api/v1/equipment/guider` — `runtime.profiles` (`GuiderStateDto.Profiles`); `GET/PUT /api/v1/profile/phd2` — `phd2_profile_id` (`Phd2SettingsDto.Phd2ProfileId`).

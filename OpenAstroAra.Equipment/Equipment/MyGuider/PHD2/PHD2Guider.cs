@@ -364,7 +364,8 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                     GuiderFork = forkIdentity.ForkName;
                     OverlapSupport = forkIdentity.OverlapSupport;
 
-                    var reportedVersion = versionRpc?.Version ?? Version?.PHDVersion ?? "(unknown)";
+                    GuiderVersion = versionRpc?.Version ?? Version?.PHDVersion;
+                    var reportedVersion = GuiderVersion ?? "(unknown)";
                     if (Version == null && versionRpc == null) {
                         Logger.Warning("PHD2 version handshake produced neither a get_version result nor a Version event within 2s; cannot identify openastro-guider vs upstream. Some §63 features may behave unexpectedly.");
                     } else if (forkIdentity.IsOpenAstroGuider) {

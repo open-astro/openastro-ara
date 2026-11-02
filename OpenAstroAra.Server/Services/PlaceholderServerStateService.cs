@@ -41,14 +41,21 @@ public sealed class PlaceholderServerStateService : IServerStateService {
     private readonly IWsBroadcaster? _broadcaster;
     private readonly IDiagnosticsService? _diagnostics;
     private readonly INotificationService? _notifications;
+    private readonly RigVersions _rig;
 
     public PlaceholderServerStateService(
             IWsBroadcaster? broadcaster = null,
             IDiagnosticsService? diagnostics = null,
-            INotificationService? notifications = null) {
+            INotificationService? notifications = null,
+            IGuiderService? guider = null,
+            IEquipmentSelectionStore? selections = null,
+            IAlpacaManagementClient? alpaca = null,
+            IProfileStore? profiles = null) {
         _broadcaster = broadcaster;
         _diagnostics = diagnostics;
         _notifications = notifications;
+        _rig = new RigVersions(guider, selections, alpaca,
+            astapPath: profiles is null ? null : () => profiles.GetPlateSolveSettings().PathOrEndpoint?.Trim());
     }
 
     public async Task<ServerStateDto> GetSnapshotAsync(CancellationToken ct) {
@@ -117,7 +124,8 @@ public sealed class PlaceholderServerStateService : IServerStateService {
         }
     }
 
-    public Task<ApiVersionsDto> GetVersionsAsync(CancellationToken ct) =>
+    public async Task<ApiVersionsDto> GetVersionsAsync(CancellationToken ct) {
+        var rig = await _rig.CollectAsync(ct).ConfigureAwait(false);
         // Version data answers WILMA's §54 "About" screen + the §63.1
         // compatibility check. Daemon git sha pulled from
         // AssemblyInformationalVersionAttribute which .NET auto-populates
@@ -125,7 +133,7 @@ public sealed class PlaceholderServerStateService : IServerStateService {
         // (controlled by the IncludeSourceRevisionInInformationalVersion
         // MSBuild flag, default true). Falls back to "unknown" if absent
         // (running from a non-git checkout, e.g., the chiseled .deb).
-        Task.FromResult(new ApiVersionsDto(
+        return new ApiVersionsDto(
             DaemonVersion: ServerIdentity.Version,
             DaemonGitSha: ExtractGitSha(),
             DotnetVersion: System.Environment.Version.ToString(),
@@ -136,7 +144,12 @@ public sealed class PlaceholderServerStateService : IServerStateService {
             ApiSurfaces: new[] {
                 new ApiSurfaceVersionDto("rest",      "1.0.0", IsDeprecated: false, SunsetUtc: null),
                 new ApiSurfaceVersionDto("websocket", "1.0.0", IsDeprecated: false, SunsetUtc: null),
-            }));
+            },
+            BoardModel: rig.BoardModel,
+            GuiderVersion: rig.GuiderVersion,
+            AlpacaServers: rig.AlpacaServers,
+            AstapVersion: rig.AstapVersion);
+    }
 
     public Task<ReleaseNotesDto?> GetReleaseNotesAsync(string? version, CancellationToken ct) =>
         // Single placeholder release-notes record for v0.0.1-ara.1 — the

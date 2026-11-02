@@ -166,6 +166,14 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
     // without touching the guider). Null in benches/tests without a repository → stamp unconditionally.
     private readonly Func<Guid?>? _activeProfileIdResolver;
 
+    public string? GuiderVersion {
+        get {
+            lock (_gate) {
+                return _state == EquipmentConnectionState.Connected ? _guider?.GuiderVersion : null;
+            }
+        }
+    }
+
     public Task<GuiderDto?> GetAsync(CancellationToken ct) {
         lock (_gate) {
             ObjectDisposedException.ThrowIf(_disposed, this);

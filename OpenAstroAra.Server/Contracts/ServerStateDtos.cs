@@ -89,7 +89,23 @@ public sealed record ApiVersionsDto(
     string OsArch,
     string AlpacaSdkVersion,
     string Phd2ProtocolVersion,
-    IReadOnlyList<ApiSurfaceVersionDto> ApiSurfaces);
+    IReadOnlyList<ApiSurfaceVersionDto> ApiSurfaces,
+    // Every other version on the rig (Simple Mode's Settings › Rig, the About panel); each null or empty
+    // when it can't be read: the board from the device tree, OpenAstro Guider from its version handshake,
+    // each Alpaca server in use (AlpacaBridge) from its management description, ASTAP from its banner.
+    string? BoardModel = null,
+    string? GuiderVersion = null,
+    IReadOnlyList<AlpacaServerVersionDto>? AlpacaServers = null,
+    string? AstapVersion = null);
+
+/// <summary>One Alpaca server the rig's devices are on, from <c>GET /management/v1/description</c>;
+/// name, maker and version are null when it didn't answer.</summary>
+public sealed record AlpacaServerVersionDto(
+    string Host,
+    int Port,
+    string? ServerName,
+    string? Manufacturer,
+    string? Version);
 
 public sealed record ApiSurfaceVersionDto(
     string Name,

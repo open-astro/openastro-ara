@@ -41,7 +41,15 @@ public interface IAlpacaManagementClient {
     /// The UniqueID is what survives an AlpacaBridge renumber (ZWO cameras are numbered in SDK
     /// enumeration order); it is empty when the server reports none. Best-effort like the names.</summary>
     Task<IReadOnlyDictionary<string, AlpacaConfiguredDevice>> GetConfiguredDevicesAsync(string host, int port, CancellationToken ct);
+
+    /// <summary>The server's own name, maker and version (<c>/management/v1/description</c>), or null when
+    /// it doesn't answer. Best-effort like the names.</summary>
+    Task<AlpacaServerDescription?> GetDescriptionAsync(string host, int port, CancellationToken ct) =>
+        Task.FromResult<AlpacaServerDescription?>(null);
 }
+
+/// <summary>An Alpaca server's <c>description</c>: <c>ServerName</c>, <c>Manufacturer</c>, <c>ManufacturerVersion</c>.</summary>
+public sealed record AlpacaServerDescription(string? ServerName, string? Manufacturer, string? Version);
 
 /// <summary>One <c>configureddevices</c> entry: the name and the server's <c>UniqueID</c> ("" when absent).</summary>
 public sealed record AlpacaConfiguredDevice(string Name, string UniqueId);
@@ -98,6 +106,38 @@ public sealed partial class AlpacaManagementClient : IAlpacaManagementClient, ID
         }
     }
 
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Best-effort lookup boundary: an unreachable/slow/malformed Alpaca host just has no version to show.")]
+    public async Task<AlpacaServerDescription?> GetDescriptionAsync(string host, int port, CancellationToken ct) {
+        var uri = ManagementUri(host, port, "description");
+        try {
+            using var response = await _http.GetAsync(uri, HttpCompletionOption.ResponseContentRead, ct).ConfigureAwait(false);
+            if (!response.IsSuccessStatusCode) {
+                LogLookupFailed(_logger, host, port, (int)response.StatusCode);
+                return null;
+            }
+            return ParseDescription(await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false));
+        } catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested) {
+            LogLookupThrew(_logger, host, port, ex);
+            return null;
+        }
+    }
+
+    /// <summary>Parse the <c>description</c> envelope; null when it carries no object. Internal for testing.</summary>
+    internal static AlpacaServerDescription? ParseDescription(string json) {
+        try {
+            using var doc = JsonDocument.Parse(json);
+            if (!doc.RootElement.TryGetProperty("Value", out var v) || v.ValueKind != JsonValueKind.Object) {
+                return null;
+            }
+            static string? Str(JsonElement o, string name) =>
+                o.TryGetProperty(name, out var p) && p.ValueKind == JsonValueKind.String ? p.GetString() : null;
+            return new AlpacaServerDescription(Str(v, "ServerName"), Str(v, "Manufacturer"), Str(v, "ManufacturerVersion"));
+        } catch (JsonException) {
+            return null;
+        }
+    }
+
     private static readonly IReadOnlyDictionary<string, AlpacaConfiguredDevice> EmptyDevices = new Dictionary<string, AlpacaConfiguredDevice>();
 
     /// <summary>The <c>"type/number" → name</c> view of a devices map.</summary>
@@ -123,7 +163,7 @@ public sealed partial class AlpacaManagementClient : IAlpacaManagementClient, ID
     /// <summary>The management URL for one Alpaca server. Throws <see cref="ArgumentException"/> (→ 400)
     /// for an empty host or a port outside 1..65535 — validated at the edge so a bad request never
     /// dials. Internal for direct unit testing.</summary>
-    internal static Uri ManagementUri(string host, int port) {
+    internal static Uri ManagementUri(string host, int port, string endpoint = "configureddevices") {
         if (string.IsNullOrWhiteSpace(host)) {
             throw new ArgumentException("host is required", nameof(host));
         }
@@ -137,7 +177,7 @@ public sealed partial class AlpacaManagementClient : IAlpacaManagementClient, ID
         }
         // Bracket a bare IPv6 literal; hostnames/IPv4 pass through.
         var authority = host.Contains(':', StringComparison.Ordinal) && !host.StartsWith('[') ? $"[{host}]" : host;
-        if (!Uri.TryCreate($"http://{authority}:{port.ToString(CultureInfo.InvariantCulture)}/management/v1/configureddevices",
+        if (!Uri.TryCreate($"http://{authority}:{port.ToString(CultureInfo.InvariantCulture)}/management/v1/{endpoint}",
                 UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttp) {
             throw new ArgumentException($"'{host}' is not a valid host", nameof(host));
         }

@@ -39,6 +39,10 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             }
         }
 
+        /// <summary>The connected guider's version from its handshake (get_version, else the Version
+        /// event), or null when it didn't say. Shown in Simple Mode's Settings › Rig.</summary>
+        public string? GuiderVersion { get; private set; }
+
         private bool _overlapSupport;
 
         /// <summary>Whether the connected daemon advertised overlapped/pipelined-RPC support — a fork-only
