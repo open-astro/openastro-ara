@@ -82,5 +82,19 @@ Shaped 2026-11-01 (`/impeccable shape simple-mode`). Paperclip: ALP-4810. Render
 
 ## Still open
 
+### Missing for a full night (2026-11-02, Paperclip)
+
+What still keeps a whole night out of Simple Mode once the parity gaps and pills (ALP-4825) are done. 1, 2, 9 and 4 make a first full night possible; the rest make nights better.
+
+1. **Connect to the rig** without the full UI: the Connect to your rig card, auto-connect from the profile, profile pick (ALP-4858).
+2. **Wait for dark, stop at dawn, park:** the daemon first (ALP-4857), then Plan (ALP-4859).
+3. **A real queue:** several plan squares, live append to the running plan, dawn ends the queue (ALP-4860).
+4. **First-time rig setup:** site, camera details, guider pick and calibration, once per rig (ALP-4861).
+5. **Calibration frames:** darks and bias beyond the auto-flats prompt (ALP-4862).
+6. **Camera cooling and dew:** a camera tile and a dew pill (ALP-4863).
+7. **Remember tonight's progress** across a relaunch, and a permanent pier in the rig's profile (ALP-4864).
+8. **Phone layout** (ALP-4865).
+9. **A night on the rig** to verify everything built so far (ALP-4866).
+
 - Exact copy for every state and error, written against the daemon's real failure reasons.
 - Where the attention banner goes while the Info line is showing (both sit under the strip).
