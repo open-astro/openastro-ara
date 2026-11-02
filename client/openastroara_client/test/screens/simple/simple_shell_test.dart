@@ -340,7 +340,7 @@ void main() {
     expect(rail(), before, reason: 'modes open');
   });
 
-  testWidgets('with nothing done tonight Preview offers Autopilot; it walks Focus first, the rail reads Autopilot',
+  testWidgets('with nothing done tonight Preview offers Autopilot; it walks Focus first, the rail reads Auto',
       (tester) async {
     await _pump(tester, const Size(1024, 768));
     expect(find.byKey(const Key('autopilot-offer')), findsOneWidget);
@@ -348,7 +348,9 @@ void main() {
     await tester.pump();
     expect(find.byKey(const Key('autopilot-offer')), findsNothing);
     expect(find.byKey(const Key('autopilot-strip')), findsOneWidget);
-    expect(find.descendant(of: find.byKey(const Key('simple-mode')), matching: find.text('Autopilot')), findsOneWidget);
+    // "Autopilot" doesn't fit the 60 px rail: it reads Auto, as Polar align reads P.A.
+    expect(find.descendant(of: find.byKey(const Key('simple-mode')), matching: find.text('Auto')), findsOneWidget);
+    expect(find.bySemanticsLabel(RegExp(r'^Mode: Autopilot')), findsOneWidget, reason: 'the screen reader says it whole');
     expect(find.byKey(const Key('simple-autofocus')), findsOneWidget, reason: "Focus's panel, open");
     await tester.tap(find.byKey(const Key('autopilot-skip')));
     await tester.pump();

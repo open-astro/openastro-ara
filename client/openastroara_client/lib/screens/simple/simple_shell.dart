@@ -67,7 +67,11 @@ extension on SimpleModeScreen {
   };
 
   /// The name on the 60 px rail, where "Polar align" doesn't fit.
-  String get railLabel => this == SimpleModeScreen.polarAlign ? 'P.A.' : label;
+  String get railLabel => switch (this) {
+    SimpleModeScreen.polarAlign => 'P.A.',
+    SimpleModeScreen.autopilot => 'Auto',
+    _ => label,
+  };
 
   IconData get icon => switch (this) {
     SimpleModeScreen.autopilot => Icons.rocket_launch_outlined,
@@ -395,9 +399,9 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                 link: _railLink,
                                 child: _RightRail(
                                   mode: shown,
-                                  railLabel:
+                                  named:
                                       _mode == SimpleModeScreen.autopilot
-                                      ? SimpleModeScreen.autopilot.label
+                                      ? SimpleModeScreen.autopilot
                                       : null,
                                   popover: _popover,
                                   onModes: () => _toggle(_Popover.modes),
@@ -826,7 +830,7 @@ class _LeftRail extends StatelessWidget {
 class _RightRail extends ConsumerWidget {
   const _RightRail({
     required this.mode,
-    this.railLabel,
+    this.named,
     required this.popover,
     required this.onModes,
     required this.onSettings,
@@ -834,8 +838,8 @@ class _RightRail extends ConsumerWidget {
 
   final SimpleModeScreen mode;
 
-  /// Overrides the mode's name on the rail (Autopilot shows its own).
-  final String? railLabel;
+  /// Overrides the mode named on the rail (Autopilot shows its own).
+  final SimpleModeScreen? named;
   final _Popover popover;
   final VoidCallback onModes;
   final VoidCallback onSettings;
@@ -852,7 +856,7 @@ class _RightRail extends ConsumerWidget {
           // The mode on top of the shutter; the settings chip under it.
           Semantics(
             button: true,
-            label: 'Mode: ${railLabel ?? mode.label}',
+            label: 'Mode: ${(named ?? mode).label}',
             child: InkWell(
               key: const Key('simple-mode'),
               onTap: onModes,
@@ -864,7 +868,7 @@ class _RightRail extends ConsumerWidget {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Text(
-                      railLabel ?? mode.railLabel,
+                      (named ?? mode).railLabel,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: kSimpleText.copyWith(
