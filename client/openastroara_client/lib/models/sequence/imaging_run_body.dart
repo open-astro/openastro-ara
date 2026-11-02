@@ -42,13 +42,15 @@ class UnguidedOptions {
 ///
 /// ```
 /// SequentialContainer  (named after the target)
-/// ├─ Cool Camera        (when a cooler target is configured)
+/// ├─ Cool Camera        (when a cooler target is configured; starts the cooler, doesn't wait)
 /// ├─ Unpark Scope
 /// ├─ Set Tracking       (sidereal)
 /// ├─ Target SequentialContainer  (named after the target — see [buildTargetBlock])
-/// │   ├─ Slew to RA/Dec     (the target's J2000 coordinates)
+/// │   ├─ Slew to RA/Dec     (the target's J2000 coordinates; blind when autofocus follows)
 /// │   ├─ Switch Filter      (when a filter is chosen — matched by name)
 /// │   ├─ Run Autofocus      (when enabled)
+/// │   ├─ Slew to RA/Dec     (after autofocus only: the centring go-to)
+/// │   ├─ Cool Camera        (when a cooler target is configured; waits for the sensor)
 /// │   └─ "Imaging" SequentialContainer
 /// │        Conditions: Loop (× frame count)
 /// │        Triggers:  Autofocus After Exposures (when a cadence is set)
@@ -64,7 +66,7 @@ class UnguidedOptions {
 ///
 /// With a [FilterPlanStep] plan (the §Run "smart target" flow), the target
 /// block becomes filter-aware: slew → switch to the FIRST plan filter →
-/// autofocus (through that filter) → optional Start Guiding → one
+/// autofocus (through that filter) → go-to → optional Start Guiding → one
 /// `<Filter> Imaging` loop per plan step (each preceded by its Switch
 /// Filter), every loop carrying the dither / autofocus triggers. §63 made
 /// the guider mediator real (GuiderService drives OpenAstro Guider), so guiding steps
@@ -178,7 +180,9 @@ class FilterPlanStep {
 
 /// One target's worth of session — a SequentialContainer named after the
 /// target holding slew → optional filter switch → optional autofocus →
-/// optional Start Guiding → the Take-Exposure loop(s). With a [filterPlan],
+/// go-to (with autofocus, the first slew is blind and this one centres) →
+/// optional Start Guiding → optional waiting Cool Camera → the Take-Exposure
+/// loop(s). With a [filterPlan],
 /// one `<Filter> Imaging` loop per step (each with its own Switch Filter,
 /// exposure and count); without one, the single default loop as before.
 /// This is the unit [buildImagingRunBody] wraps once and
