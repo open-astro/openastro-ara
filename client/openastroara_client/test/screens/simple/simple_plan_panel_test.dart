@@ -920,6 +920,8 @@ void main() {
     testWidgets('nothing picked: no tracker, and the shutter does nothing', (tester) async {
       final (_, seq) = await run(tester, sel: null);
       expect(find.byKey(const Key('simple-run-tracker')), findsNothing);
+      expect(tester.getSemantics(find.byKey(const Key('simple-shutter'))), isSemantics(hasEnabledState: true, isEnabled: false),
+          reason: 'announced as unavailable, not as a live button');
       await tester.tap(find.byKey(const Key('simple-shutter')));
       await tester.pump();
       expect(seq.calls, isEmpty);

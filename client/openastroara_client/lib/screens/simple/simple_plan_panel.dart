@@ -1165,6 +1165,7 @@ class _SimpleRunShutterState extends ConsumerState<SimpleRunShutter>
         phase == SimpleRunPhase.imaging || phase == SimpleRunPhase.pausing;
     return Semantics(
       button: true,
+      enabled: tap != null || holdable,
       label: switch (phase) {
         _ when waiting => 'Rises ${_hhmm(run.targets.first.rise!.toLocal())}',
         _ when idle => 'Pick a target first',

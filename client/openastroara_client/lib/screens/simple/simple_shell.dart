@@ -956,12 +956,15 @@ class _RailButton extends StatelessWidget {
   /// setup, Plan's time), in every mode so the rail never changes size.
   final bool tall;
   final String label;
-  final VoidCallback onTap;
+
+  /// Null: nothing to do (Sky with no frame yet); dim, and announced so.
+  final VoidCallback? onTap;
   final bool selected;
 
   @override
   Widget build(BuildContext context) => Semantics(
     button: true,
+    enabled: onTap != null,
     selected: selected,
     label: label,
     child: Material(
@@ -980,7 +983,9 @@ class _RailButton extends StatelessWidget {
                 Icon(
                   icon,
                   size: 24,
-                  color: selected
+                  color: onTap == null
+                      ? AraColors.textDisabled
+                      : selected
                       ? AraColors.textPrimary
                       : AraColors.textSecondary,
                 ),
@@ -992,7 +997,9 @@ class _RailButton extends StatelessWidget {
                 textAlign: TextAlign.center,
                 overflow: TextOverflow.ellipsis,
                 style: AraText.caption.copyWith(
-                  color: selected
+                  color: onTap == null
+                      ? AraColors.textDisabled
+                      : selected
                       ? AraColors.textPrimary
                       : AraColors.textSecondary,
                 ),
@@ -1040,7 +1047,7 @@ class _LeftRail extends StatelessWidget {
           icon: Icons.public,
           label: 'Sky',
           selected: sky,
-          onTap: onSky ?? () {},
+          onTap: onSky,
         ),
         _RailButton(
           key: const Key('simple-info'),

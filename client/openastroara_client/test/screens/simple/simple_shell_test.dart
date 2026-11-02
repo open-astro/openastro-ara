@@ -205,6 +205,8 @@ void main() {
     expect((math.max(lum(sky), lum(const Color(0xFF0A0A0A))) + 0.05) / (math.min(lum(sky), lum(const Color(0xFF0A0A0A))) + 0.05),
         greaterThanOrEqualTo(4.5));
     expect(find.byKey(const Key('sky')), findsOneWidget, reason: 'the sky until there is a frame');
+    // With nothing but the sky, Sky can't switch anything: it says so.
+    expect(tester.getSemantics(find.byKey(const Key('simple-sky'))), isSemantics(hasEnabledState: true, isEnabled: false));
   });
 
   testWidgets('the mode name opens the modes in order, Autopilot first; picking one closes them', (tester) async {
