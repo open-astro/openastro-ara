@@ -194,5 +194,22 @@ void main() {
           reason: 'a hung guider is as dangerous as an unparked mount — '
               'no rung fails silently');
     });
+
+    testWidgets('the summary says the camera is warming up', (tester) async {
+      await pumpButton(tester);
+      fake.result = EmergencyStopResult.fromJson(const {
+        'runs_aborted': 1,
+        'park_requested': true,
+        'camera_warming': true,
+        'failed_rungs': <String>[],
+      });
+
+      await activateWithoutPointer(tester);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('EMERGENCY STOP'));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('camera warming up'), findsOneWidget);
+    });
   });
 }

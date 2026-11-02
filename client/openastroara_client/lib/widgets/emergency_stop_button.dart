@@ -210,6 +210,7 @@ class _EmergencyStopButtonState extends ConsumerState<EmergencyStopButton>
     'stop_guiding': 'GUIDING MAY STILL BE ACTIVE (stop failed)',
     'park': 'MOUNT PARK FAILED — verify it manually',
     'flat_panel_light_off': 'FLAT PANEL LIGHT-OFF FAILED',
+    'warm_camera': 'CAMERA WARM-UP DID NOT START (the cooler is still on)',
   };
 
   static String _summarize(EmergencyStopResult r) {
@@ -224,6 +225,7 @@ class _EmergencyStopButtonState extends ConsumerState<EmergencyStopButton>
       if (r.guidingStopped) 'guiding stopped',
       if (r.parkRequested) 'mount told to park',
       if (r.flatPanelLightOff) 'flat panel light off',
+      if (r.cameraWarming) 'camera warming up',
     ];
     final failures = r.failedRungs
         .map((rung) => _failurePhrases[rung] ?? '$rung FAILED')

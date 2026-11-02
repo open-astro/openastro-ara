@@ -147,7 +147,9 @@ public sealed record EmergencyStopResultDto(
     bool ParkRequested,
     bool FlatPanelLightOff,
     // Rungs that were ATTEMPTED and faulted (tokens: abort_runs,
-    // abort_exposure, stop_guiding, park, flat_panel_light_off). A device
+    // abort_exposure, stop_guiding, park, flat_panel_light_off, warm_camera). A device
     // that isn't connected at all reads false above but is NOT listed here —
     // a rig without a flat panel is not a failure.
-    System.Collections.Generic.IReadOnlyList<string> FailedRungs);
+    System.Collections.Generic.IReadOnlyList<string> FailedRungs,
+    // A cooled camera's gradual warm-up was started (it runs on after the response).
+    bool CameraWarming = false);
