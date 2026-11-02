@@ -442,8 +442,9 @@ class SimplePresetTile<T> extends StatelessWidget {
           ),
       ],
       child: Container(
-        height: 48,
-        padding: const EdgeInsets.symmetric(horizontal: 10),
+        // At least 48 px; taller when the user's text is larger.
+        constraints: const BoxConstraints(minHeight: 48),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
         decoration: BoxDecoration(
           color: kSimpleTileFill,
           borderRadius: BorderRadius.circular(10),

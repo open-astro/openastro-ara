@@ -264,7 +264,10 @@ class AutopilotOffer extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       spacing: AraSpace.s12,
       children: [
-        Text('Nothing done yet tonight', style: kSimpleText),
+        // Wraps on a narrow window rather than pushing the buttons off.
+        Flexible(
+          child: Text('Nothing done yet tonight', style: kSimpleText),
+        ),
         FilledButton(
           key: const Key('autopilot-start'),
           style: FilledButton.styleFrom(
