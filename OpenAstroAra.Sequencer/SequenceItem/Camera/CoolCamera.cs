@@ -15,6 +15,7 @@
 using Newtonsoft.Json;
 using OpenAstroAra.Core.Locale;
 using OpenAstroAra.Core.Model;
+using OpenAstroAra.Core.Utility;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Sequencer.Validations;
 using System;
@@ -41,7 +42,8 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Camera {
         public override object Clone() {
             return new CoolCamera(this) {
                 Temperature = Temperature,
-                Duration = Duration
+                Duration = Duration,
+                WaitForTemperature = WaitForTemperature
             };
         }
 
@@ -61,6 +63,11 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Camera {
         [JsonProperty]
         public double Duration { get; set; } = 0;
 
+        /// <summary>Off: write the target, switch the cooler on and let the plan move on (it slews
+        /// and focuses meanwhile); a later Cool Camera waits for the sensor before the first light.</summary>
+        [JsonProperty]
+        public bool WaitForTemperature { get; set; } = true;
+
         private IList<string> issues = new List<string>();
 
         public IList<string> Issues {
@@ -72,6 +79,14 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Camera {
         }
 
         public override async Task Execute(IProgress<ApplicationStatus> progress, CancellationToken token) {
+            if (!WaitForTemperature) {
+                // Start it and move on; nothing runs past this step (Stop has nothing to cancel).
+                // A later Cool Camera waits for the sensor.
+                if (!await cameraMediator.StartCooling(Temperature, token)) {
+                    Logger.Warning($"Cool Camera: the cooler could not be started at {Temperature} °C; the plan goes on");
+                }
+                return;
+            }
             var success = await cameraMediator.CoolCamera(Temperature, TimeSpan.FromMinutes(Duration), progress, token);
 
             if (!success) {
@@ -97,6 +112,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Camera {
         }
 
         public override TimeSpan GetEstimatedDuration() {
+            if (!WaitForTemperature) return TimeSpan.Zero;
             return Duration > 0 ? TimeSpan.FromMinutes(Duration) : TimeSpan.FromMinutes(1);
         }
 

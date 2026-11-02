@@ -67,6 +67,8 @@ class TopEquipmentChips extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Simple Mode's strip has its own icons and names; the full UI keeps its own.
+    final simple = EquipmentChipHideDisconnected.of(context);
     return Flex(
       direction: direction,
       mainAxisSize: MainAxisSize.min,
@@ -86,7 +88,7 @@ class TopEquipmentChips extends StatelessWidget {
             watchLevel: (ref) => equipmentChipLevel(ref.watch(mountProvider))),
         const GuiderChip(),
         EquipmentStatusChip(
-            icon: Icons.adjust,
+            icon: simple ? Icons.center_focus_strong : Icons.adjust,
             label: 'Focuser',
             panelId: 'eq.focuser',
             faultTypes: const {'focuser'},
@@ -106,6 +108,7 @@ class TopEquipmentChips extends StatelessWidget {
             watchLevel: (ref) => equipmentChipLevel(ref.watch(rotatorProvider))),
         EquipmentStatusChip(
             icon: Icons.wb_sunny,
+            glyph: simple ? const EquipmentGlyph.flatPanel(color: AraColors.textPrimary) : null,
             label: 'Flat Panel',
             panelId: 'eq.flat',
             // One physical device under two wire tokens (the reconnector
@@ -113,7 +116,9 @@ class TopEquipmentChips extends StatelessWidget {
             faultTypes: const {'covercalibrator', 'flatdevice'},
             watchLevel: (ref) =>
                 equipmentChipLevel(ref.watch(flatPanelProvider))),
-        const SwitchStatusChip(icon: Icons.power, label: 'Switch'),
+        simple
+            ? const SwitchStatusChip(icon: Icons.toggle_on, label: 'Switches')
+            : const SwitchStatusChip(icon: Icons.power, label: 'Switch'),
         EquipmentStatusChip(
             icon: Icons.cloud_outlined,
             label: 'Weather',
@@ -121,13 +126,14 @@ class TopEquipmentChips extends StatelessWidget {
             faultTypes: const {'observingconditions'},
             watchLevel: (ref) => equipmentChipLevel(ref.watch(weatherProvider))),
         EquipmentStatusChip(
-            icon: Icons.shield_outlined,
+            icon: simple ? Icons.verified_user : Icons.shield_outlined,
             label: 'Safety',
             panelId: 'eq.safety',
             faultTypes: const {'safetymonitor'},
             watchLevel: (ref) => equipmentChipLevel(ref.watch(safetyMonitorProvider))),
         EquipmentStatusChip(
             icon: Icons.home_outlined,
+            glyph: simple ? const EquipmentGlyph.dome(color: AraColors.textPrimary) : null,
             label: 'Dome',
             panelId: 'eq.dome',
             faultTypes: const {'dome'},

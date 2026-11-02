@@ -82,7 +82,7 @@ Future<void> captureProfileCache(
     final activeId = list.activeId;
     if (activeId == null) return;
     // The section GETs read the ACTIVE profile — that's the one we snapshot.
-    // Parallel (like _hydratePlanningSettings): this fires on every list load
+    // Parallel (like hydratePlanningSettings): this fires on every list load
     // AND after every mutation, so serializing 6 round-trips adds up.
     final (optics, imaging, autofocus, site, filters, electronics, horizon, unguided) = await (
       api.getOptics(),

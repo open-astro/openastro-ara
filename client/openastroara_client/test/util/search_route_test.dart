@@ -235,4 +235,17 @@ void main() {
       reason: 'two rows share the dashless key',
     );
   });
+
+  test('Simple Mode: a resolved name the bundle lacks becomes a goto at its position, Simbad prefix dropped', () {
+    final goto = resolvedGoto(const TargetResolution(
+      status: 'resolved',
+      source: 'simbad',
+      mainId: 'V* AB Cas',
+      raDeg: 3.5,
+      decDeg: 71.3,
+    ));
+    expect(goto, {'type': 'goto', 'ra': 3.5, 'dec': 71.3, 'name': 'AB Cas'});
+    expect(resolvedGoto(const TargetResolution(status: 'offline')), isNull);
+    expect(resolvedGoto(const TargetResolution(status: 'resolved', mainId: 'X')), isNull, reason: 'no position');
+  });
 }

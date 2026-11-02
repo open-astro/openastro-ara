@@ -87,7 +87,27 @@ public sealed partial class SequencerService {
             }
             return label;
         }
-        return Humanize(leaf.GetType().Name);
+        // The plan's own steps in plain words, naming the target where there is one.
+        var target = TargetNameOf(leaf);
+        string To(string verb) => target is null ? verb : $"{verb} {target}";
+        return leaf switch {
+            OpenAstroAra.Sequencer.SequenceItem.Telescope.SlewScopeToRaDec { Center: true } => target is null ? "Centring" : $"Centring on {target}",
+            OpenAstroAra.Sequencer.SequenceItem.Telescope.SlewScopeToRaDec => To("Slewing to"),
+            OpenAstroAra.Sequencer.SequenceItem.Platesolving.CenterAndRotate => target is null ? "Centring" : $"Centring on {target}",
+            OpenAstroAra.Sequencer.SequenceItem.Autofocus.RunAutofocus => "Focusing",
+            OpenAstroAra.Sequencer.SequenceItem.Guider.StartGuiding => "Starting guiding",
+            OpenAstroAra.Sequencer.SequenceItem.Telescope.UnparkScope => "Unparking the mount",
+            OpenAstroAra.Sequencer.SequenceItem.Telescope.ParkScope => "Parking the mount",
+            OpenAstroAra.Sequencer.SequenceItem.Telescope.SetTracking => "Starting tracking",
+            OpenAstroAra.Sequencer.SequenceItem.Telescope.TrackingProbe => "Checking the tracking",
+            OpenAstroAra.Sequencer.SequenceItem.FilterWheel.SwitchFilter f when f.Filter?.Name is { Length: > 0 } n => $"Switching to the {n} filter",
+            OpenAstroAra.Sequencer.SequenceItem.Camera.CoolCamera cc => string.Create(CultureInfo.InvariantCulture,
+                $"Waiting for the camera to cool to {cc.Temperature:0.#} °C"),
+            OpenAstroAra.Sequencer.SequenceItem.Camera.WarmCamera => "Warming the camera",
+            WaitForTime wt => string.Create(CultureInfo.InvariantCulture, $"Waiting until {wt.Hours:00}:{wt.Minutes:00}"),
+            WaitForUser => "Waiting for you",
+            _ => Humanize(leaf.GetType().Name),
+        };
     }
 
     /// <summary>

@@ -108,6 +108,66 @@ bool planOptionsAvailable(List<PlanningFilter> filters) {
   return hasMono || swappable >= 2;
 }
 
+/// A practical per-filter sub length (the plan chooser's, and Simple Mode
+/// Run's hint): the local Glover recommendation, never below the user's
+/// default exposure (Glover's floor is a MINIMUM — "8 s works" is true but
+/// nobody wants 3,000 files), never above the
+/// saturation ceiling, capped at 10 min so a narrowband floor can't demand
+/// unguidable subs. Falls back to the default exposure when the setup
+/// can't compute.
+double suggestedSubSeconds(
+  WidgetRef ref, {
+  required String filterName,
+  required double raDeg,
+  required double decDeg,
+  required double defaultExposure,
+  Map<String, double> skyCalibrationK = const {},
+}) {
+  final outcome = resolveOptimalSubLocal(
+    optics: ref.read(opticsSettingsProvider),
+    electronics: ref.read(cameraElectronicsProvider),
+    site: ref.read(siteSettingsProvider),
+    filterSet: ref.read(filterSetProvider),
+    filterName: filterName,
+    raDeg: raDeg,
+    decDeg: decDeg,
+    noiseTolerancePct: ref.read(planningPrefsProvider).noiseTolerancePct,
+    skyCalibrationK: skyCalibrationK,
+  );
+  if (outcome is! LocalOptimalSubSuccess) {
+    return defaultExposure > 0 ? defaultExposure : 60;
+  }
+  final r = outcome.result;
+  var sec = math.max(r.recommendedSec, defaultExposure);
+  if (r.viable) sec = math.min(sec, r.ceilingSec);
+  // Floor at 30 s: past the Glover floor the quality penalty is essentially
+  // flat, but a 10 s luminance plan means ~350 files/hour — hours of extra
+  // stacking for no measurable gain. (The per-node advisor still shows the
+  // pure floor; this floor is a PLAN practicality, not physics.) The
+  // saturation ceiling still wins when the sky is truly that bright.
+  sec = sec.clamp(30.0, 600.0);
+  if (r.viable && r.ceilingSec < sec) sec = math.max(1.0, r.ceilingSec);
+  // Round to something a human would type: nearest 10 s above a minute,
+  // nearest 5 s below.
+  final step = sec >= 60 ? 10 : 5;
+  return math.max(step, (sec / step).round() * step).toDouble();
+}
+
+/// A plan row's frames (the plan chooser's, and Simple Mode Plan's): tonight's
+/// remaining window split evenly across [filterCount] filters at
+/// [exposureSeconds] a sub; with no window, 60 frames split the same way.
+int planFrameCount(
+  double exposureSeconds, {
+  required double? remainingDarkHours,
+  required int filterCount,
+}) =>
+    defaultFrameCount(
+      exposureSeconds,
+      remainingDarkHours:
+          remainingDarkHours == null ? null : remainingDarkHours / filterCount,
+      fallbackFrames: math.max(12, 60 ~/ filterCount),
+    );
+
 class _TargetPlanDialog extends ConsumerStatefulWidget {
   const _TargetPlanDialog({
     required this.targetName,
@@ -152,62 +212,28 @@ class _TargetPlanDialogState extends ConsumerState<_TargetPlanDialog> {
     _options = _buildOptions();
   }
 
-  /// A practical per-filter sub length: the local Glover recommendation,
-  /// never below the user's default exposure (Glover's floor is a MINIMUM —
-  /// "8 s works" is true but nobody wants 3,000 files), never above the
-  /// saturation ceiling, capped at 10 min so a narrowband floor can't demand
-  /// unguidable subs. Falls back to the default exposure when the setup
-  /// can't compute.
-  double _suggestedExposure(String filterName, double defaultExposure) {
-    final outcome = resolveOptimalSubLocal(
-      optics: ref.read(opticsSettingsProvider),
-      electronics: ref.read(cameraElectronicsProvider),
-      site: ref.read(siteSettingsProvider),
-      filterSet: ref.read(filterSetProvider),
-      filterName: filterName,
-      raDeg: widget.raDeg,
-      decDeg: widget.decDeg,
-      noiseTolerancePct: ref.read(planningPrefsProvider).noiseTolerancePct,
-      skyCalibrationK: widget.skyCalibrationK,
-    );
-    if (outcome is! LocalOptimalSubSuccess) {
-      return defaultExposure > 0 ? defaultExposure : 60;
-    }
-    final r = outcome.result;
-    var sec = math.max(r.recommendedSec, defaultExposure);
-    if (r.viable) sec = math.min(sec, r.ceilingSec);
-    // Floor at 30 s: past the Glover floor the quality penalty is essentially
-    // flat, but a 10 s luminance plan means ~350 files/hour — hours of extra
-    // stacking for no measurable gain. (The per-node advisor still shows the
-    // pure floor; this floor is a PLAN practicality, not physics.) The
-    // saturation ceiling still wins when the sky is truly that bright.
-    sec = sec.clamp(30.0, 600.0);
-    if (r.viable && r.ceilingSec < sec) sec = math.max(1.0, r.ceilingSec);
-    // Round to something a human would type: nearest 10 s above a minute,
-    // nearest 5 s below.
-    final step = sec >= 60 ? 10 : 5;
-    return math.max(step, (sec / step).round() * step).toDouble();
-  }
-
   List<FilterPlanStep> _steps(List<PlanningFilter> picked) {
     final defaults = ref.read(imagingDefaultsProvider);
     final defaultExposure = defaults.defaultExposure.inMilliseconds /
         Duration.millisecondsPerSecond;
-    // Split tonight's remaining window evenly across the chosen filters.
-    final hoursEach = widget.remainingDarkHours != null
-        ? widget.remainingDarkHours! / picked.length
-        : null;
     return [
       for (final f in picked)
         () {
-          final exp = _suggestedExposure(f.name, defaultExposure);
+          final exp = suggestedSubSeconds(
+            ref,
+            filterName: f.name,
+            raDeg: widget.raDeg,
+            decDeg: widget.decDeg,
+            defaultExposure: defaultExposure,
+            skyCalibrationK: widget.skyCalibrationK,
+          );
           return FilterPlanStep(
             filterName: f.name,
             exposureSeconds: exp,
-            frameCount: defaultFrameCount(
+            frameCount: planFrameCount(
               exp,
-              remainingDarkHours: hoursEach,
-              fallbackFrames: math.max(12, 60 ~/ picked.length),
+              remainingDarkHours: widget.remainingDarkHours,
+              filterCount: picked.length,
             ),
           );
         }(),

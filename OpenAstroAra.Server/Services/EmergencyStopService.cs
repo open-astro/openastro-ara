@@ -21,9 +21,9 @@ namespace OpenAstroAra.Server.Services;
 /// path behind <c>POST /api/v1/server/emergency-stop</c>. Rungs, in order:
 /// abort active sequence runs FIRST (so a still-running instruction can't
 /// start a fresh exposure or slew behind the stop), then abort the in-flight
-/// exposure, stop guiding, park the mount, and switch the flat panel's light
-/// off. Every rung is best-effort — a dead device must never block the
-/// remaining rungs — and the result reports honestly what each rung did.
+/// exposure, stop guiding, park the mount, switch the flat panel's light
+/// off, and switch the camera's cooler off. Every rung is best-effort — a
+/// dead device must never block the remaining rungs — and the result reports honestly what each rung did.
 /// The <c>safety.emergency_stop</c> WS event fires up-front so WILMA can
 /// show the stop banner while the daemon works.
 /// </summary>
@@ -122,6 +122,12 @@ public sealed partial class EmergencyStopService {
             _flatDevice is null ? null : async () => (await _flatDevice.GetAsync(CancellationToken.None).ConfigureAwait(false))?.State == EquipmentConnectionState.Connected,
             _flatDevice is null ? null : async ct => await _flatDevice.ApplyFlatPanelAsync(new FlatPanelRequestDto(LightOn: false), null, ct).ConfigureAwait(false)).ConfigureAwait(false);
         if (flatOutcome is RungOutcome.Failed) { failedRungs.Add("flat_panel_light_off"); }
+        // A camera whose cooler is already off has nothing to switch off (not a failure).
+        var coolerOutcome = await RungAsync("cooler off",
+            _camera is null ? null : async () => (await _camera.GetAsync(CancellationToken.None).ConfigureAwait(false)) is { State: EquipmentConnectionState.Connected, Runtime.CoolerOn: true },
+            _camera is null ? null : ct => _camera.SetCoolerAsync(false, null, ct)).ConfigureAwait(false);
+        if (coolerOutcome is RungOutcome.Failed) { failedRungs.Add("cooler_off"); }
+        var coolerOff = coolerOutcome is RungOutcome.Done;
 
         var exposureAborted = exposureOutcome is RungOutcome.Done;
         var guidingStopped = guidingOutcome is RungOutcome.Done;
@@ -139,6 +145,7 @@ public sealed partial class EmergencyStopService {
             ["guiding_stopped"] = guidingStopped,
             ["park_requested"] = parkRequested,
             ["flat_panel_light_off"] = flatLightOff,
+            ["cooler_off"] = coolerOff,
             ["failed_rungs"] = failedRungsJson,
         }).ConfigureAwait(false);
 
@@ -148,7 +155,8 @@ public sealed partial class EmergencyStopService {
             + (exposureAborted ? "the in-flight exposure was aborted, " : string.Empty)
             + (guidingStopped ? "guiding was stopped, " : string.Empty)
             + (parkRequested ? "the mount was told to park" : "no connected mount was parked")
-            + (flatLightOff ? ", and the flat panel light was switched off" : string.Empty) + "."
+            + (flatLightOff ? ", and the flat panel light was switched off" : string.Empty)
+            + (coolerOff ? "; the camera's cooler was switched off" : string.Empty) + "."
             + (failedRungs.Count > 0
                 ? $" ATTENTION: {failedRungs.Count} step(s) FAILED ({string.Join(", ", failedRungs)}) — check the rig manually."
                 : string.Empty)).ConfigureAwait(false);
@@ -160,7 +168,8 @@ public sealed partial class EmergencyStopService {
             GuidingStopped: guidingStopped,
             ParkRequested: parkRequested,
             FlatPanelLightOff: flatLightOff,
-            FailedRungs: failedRungs);
+            FailedRungs: failedRungs,
+            CoolerOff: coolerOff);
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",

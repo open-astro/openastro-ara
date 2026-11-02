@@ -19,19 +19,42 @@ const double kEquipmentChipCompactChipWidth = 48;
 /// the phone rule: the top bar sets it from the room it actually has, so an
 /// iPad in portrait drops the names instead of pushing chips off screen.
 class EquipmentChipCompact extends InheritedWidget {
-  const EquipmentChipCompact({super.key, required this.compact, required super.child});
+  const EquipmentChipCompact({
+    super.key,
+    required this.compact,
+    required super.child,
+  });
 
   final bool compact;
 
-  static bool? maybeOf(BuildContext context) =>
-      context.dependOnInheritedWidgetOfExactType<EquipmentChipCompact>()?.compact;
+  static bool? maybeOf(BuildContext context) => context
+      .dependOnInheritedWidgetOfExactType<EquipmentChipCompact>()
+      ?.compact;
 
   @override
-  bool updateShouldNotify(EquipmentChipCompact oldWidget) => compact != oldWidget.compact;
+  bool updateShouldNotify(EquipmentChipCompact oldWidget) =>
+      compact != oldWidget.compact;
+}
+
+/// Under it, chips for devices that aren't connected draw nothing: Simple
+/// Mode's strip shows only the gear that's actually there.
+class EquipmentChipHideDisconnected extends InheritedWidget {
+  const EquipmentChipHideDisconnected({super.key, required super.child});
+
+  static bool of(BuildContext context) =>
+      context
+          .dependOnInheritedWidgetOfExactType<
+            EquipmentChipHideDisconnected
+          >() !=
+      null;
+
+  @override
+  bool updateShouldNotify(EquipmentChipHideDisconnected oldWidget) => false;
 }
 
 class EquipmentChip extends StatelessWidget {
   final IconData icon;
+
   /// Drawn instead of [icon] for a device Material Icons has no glyph for.
   final Widget? glyph;
   final String label;
@@ -51,55 +74,62 @@ class EquipmentChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (status == StatusLevel.disconnected &&
+        EquipmentChipHideDisconnected.of(context)) {
+      return const SizedBox.shrink();
+    }
     // shortestSide, not width: a phone in landscape is wide enough for the
     // desktop layout but not for eleven named chips plus the top-bar icons.
-    final compact = EquipmentChipCompact.maybeOf(context) ??
+    final compact =
+        EquipmentChipCompact.maybeOf(context) ??
         MediaQuery.sizeOf(context).shortestSide < kEquipmentChipCompactWidth;
     return Semantics(
       label: '$label (${status.name})',
       // Either tap or long-press makes this chip interactive.
       button: onTap != null || onLongPress != null,
       child: Tooltip(
-       message: label,
-       child: InkWell(
-        onTap: onTap,
-        onLongPress: onLongPress,
-        borderRadius: BorderRadius.circular(6),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-          width: compact ? kEquipmentChipCompactChipWidth : kEquipmentChipWidth,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  glyph ?? Icon(icon, size: 28, color: AraColors.textPrimary),
-                  Positioned(
-                    top: -2,
-                    right: -2,
-                    child: _StatusDot(status: status),
+        message: label,
+        child: InkWell(
+          onTap: onTap,
+          onLongPress: onLongPress,
+          borderRadius: BorderRadius.circular(6),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            width: compact
+                ? kEquipmentChipCompactChipWidth
+                : kEquipmentChipWidth,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    glyph ?? Icon(icon, size: 28, color: AraColors.textPrimary),
+                    Positioned(
+                      top: -2,
+                      right: -2,
+                      child: _StatusDot(status: status),
+                    ),
+                  ],
+                ),
+                if (!compact) ...[
+                  const SizedBox(height: 2),
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      label,
+                      maxLines: 1,
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: AraColors.textSecondary,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
                   ),
                 ],
-              ),
-              if (!compact) ...[
-                const SizedBox(height: 2),
-                FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Text(
-                    label,
-                    maxLines: 1,
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: AraColors.textSecondary,
-                          letterSpacing: 0.5,
-                        ),
-                  ),
-                ),
               ],
-            ],
+            ),
           ),
         ),
-       ),
       ),
     );
   }
@@ -115,9 +145,13 @@ class _StatusDot extends StatefulWidget {
   State<_StatusDot> createState() => _StatusDotState();
 }
 
-class _StatusDotState extends State<_StatusDot> with SingleTickerProviderStateMixin {
-  late final AnimationController _blink =
-      AnimationController(vsync: this, duration: const Duration(milliseconds: 700), lowerBound: 0.25);
+class _StatusDotState extends State<_StatusDot>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _blink = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 700),
+    lowerBound: 0.25,
+  );
 
   @override
   void initState() {
@@ -149,16 +183,16 @@ class _StatusDotState extends State<_StatusDot> with SingleTickerProviderStateMi
 
   @override
   Widget build(BuildContext context) => FadeTransition(
-        key: const ValueKey('equipment-chip-dot'),
-        opacity: _blink,
-        child: Container(
-          width: 10,
-          height: 10,
-          decoration: BoxDecoration(
-            color: widget.status.color,
-            shape: BoxShape.circle,
-            border: Border.all(color: AraColors.bgPanel, width: 2),
-          ),
-        ),
-      );
+    key: const ValueKey('equipment-chip-dot'),
+    opacity: _blink,
+    child: Container(
+      width: 10,
+      height: 10,
+      decoration: BoxDecoration(
+        color: widget.status.color,
+        shape: BoxShape.circle,
+        border: Border.all(color: AraColors.bgPanel, width: 2),
+      ),
+    ),
+  );
 }

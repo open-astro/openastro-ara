@@ -22,6 +22,7 @@ import '../../state/saved_server_state.dart';
 import '../../state/sequencer/create_imaging_run.dart';
 import '../../state/settings/optics_settings_state.dart';
 import '../../state/settings/site_settings_state.dart';
+import '../../state/sky_atlas/planetarium_selection_state.dart';
 import '../../state/sky_atlas/site_location_state.dart';
 import '../../state/sky_atlas/sky_atlas_state.dart';
 import '../../state/sky_atlas/target_resolve_state.dart';
@@ -34,6 +35,7 @@ import 'custom_target_dialog.dart';
 import 'linux_planetarium_overlay.dart';
 import 'rotation_assist_panel.dart';
 import 'tonight_sky_panel.dart';
+import '../../state/simple_messages_state.dart';
 
 /// §36 Planetarium — the embedded Stellarium Web Engine (AGPL; see
 /// `assets/stellarium/LICENSE-AGPL-3.0.txt`), rendered in the platform's **native
@@ -59,7 +61,11 @@ import 'tonight_sky_panel.dart';
 /// recentre button) ride [planetariumCommandProvider] over the loopback server,
 /// since there is no Dart→page JS bridge.
 class StellariumView extends ConsumerStatefulWidget {
-  const StellariumView({super.key});
+  const StellariumView({super.key, this.bare = false});
+
+  /// Sky only: no search bar, docked panels or in-page controls. Simple Mode
+  /// shows it behind its own panels, which would otherwise collide with them.
+  final bool bare;
 
   @override
   ConsumerState<StellariumView> createState() => _StellariumViewState();
@@ -159,6 +165,7 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
                   // Debug builds only: the page posts renderer telemetry back
                   // (FOV, canvas, errors) which _onPageEvent prints.
                   if (kDebugMode) 'debug': '1',
+                  if (widget.bare) 'bare': '1',
                 }.entries
                 .map((e) => '${e.key}=${Uri.encodeQueryComponent(e.value)}')
                 .join('&');
@@ -266,6 +273,13 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
       final line = '$event';
       if (kDebugMode && line != _lastDebugLine) debugPrint('StellariumView debug: $line');
       _lastDebugLine = line;
+      return;
+    }
+    // Simple Mode (bare): the page's selection, for Sky's card and Plan's sheet.
+    if (event['type'] == 'selection') {
+      ref
+          .read(planetariumSelectionProvider.notifier)
+          .set(PlanetariumSelection.tryFromJson(event['object']));
       return;
     }
     if (event['type'] == 'displayPref') {
@@ -405,6 +419,15 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
     final route = routeSearch(applyImagingRegions(catalog), q);
     switch (route.kind) {
       case SearchRouteKind.coordinates:
+        // Simple Mode shows no popups: coordinate entry stays in the full UI.
+        if (widget.bare) {
+          userNotifier(context)(
+            "Coordinates can't be searched here",
+            detail: 'Search by name, or use the full UI\'s Sky Atlas',
+            error: true,
+          );
+          return;
+        }
         await showCustomTargetDialog(context, initialText: q);
       case SearchRouteKind.catalog:
       case SearchRouteKind.engine:
@@ -415,7 +438,7 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
           _pushCmd(route.command!);
           return;
         }
-        final messenger = ScaffoldMessenger.of(context);
+        final notify = userNotifier(context);
         final r = await api.resolve(q);
         if (!mounted) return;
         // A resolved object the bundle already lists is that row (#1267
@@ -425,14 +448,18 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
           return;
         }
         if (r.resolved) {
+          // Simple Mode: centre the sky on it, no dialog.
+          final goto = widget.bare ? resolvedGoto(r) : null;
+          if (goto != null) {
+            _pushCmd(goto);
+            return;
+          }
           await showCustomTargetDialog(context, resolved: r);
           return;
         }
         _pushCmd(route.command!);
         final m = searchFallbackMessage(r);
-        if (m != null) {
-          messenger.showSnackBar(SnackBar(content: Text(m)));
-        }
+        if (m != null) notify(m, error: true, snackBarRed: false);
     }
   }
 
@@ -508,6 +535,14 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
       // so clear() doesn't re-wake this listener.)
       ref.read(planetariumCommandProvider.notifier).clear();
     });
+    // A search typed in Simple Mode Plan's sheet runs through this view's
+    // own search, as if typed in its search bar.
+    ref.listen<String?>(planetariumSearchProvider, (_, q) {
+      if (q == null) return;
+      ref.read(planetariumSearchProvider.notifier).clear();
+      _searchCtrl.text = q;
+      unawaited(_submitSearch());
+    });
 
     // Site / optics edits made in Options reach the page even with no daemon
     // to poll (online, the page's own polling of the profile endpoints does
@@ -572,6 +607,12 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
             ),
     );
 
+    if (widget.bare) {
+      return ColoredBox(
+        color: AraColors.bgPrimary,
+        child: Column(children: [planetarium]),
+      );
+    }
     return ColoredBox(
       color: AraColors.bgPrimary,
       child: Column(

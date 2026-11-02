@@ -543,6 +543,25 @@ public sealed partial class CameraService : ICameraMediator, IImagingMediator {
         }
     }
 
+    /// <summary>Simple Mode's plan starts the cool and slews meanwhile: write the target and switch
+    /// the cooler on, then return. Nothing keeps running, so Stop and Emergency Stop have nothing
+    /// to cancel; the target's own Cool Camera waits for the sensor before the first light.</summary>
+    // It leaves _coolingTargetC alone: the waiting Cool Camera after it sets that when it regulates.
+    public async Task<bool> StartCooling(double temperature, CancellationToken ct) {
+        lock (_gate) {
+            if (_sequencerCoolingActive) {
+                return false; // a cooling step is regulating: leave it be
+            }
+        }
+        try {
+            await SetCoolerAsync(enabled: true, temperature, ct).ConfigureAwait(false);
+            return true;
+        } catch (InvalidOperationException ex) {
+            LogStartCoolingFailed(ex.Message);
+            return false;
+        }
+    }
+
     /// <summary>
     /// #1187 — the sequencer's WarmCamera: with the cooler on, ramp the set-point toward
     /// <see cref="WarmCameraTargetC"/> over <paramref name="duration"/> (a stall short of it — a cold
@@ -611,6 +630,8 @@ public sealed partial class CameraService : ICameraMediator, IImagingMediator {
             ? (await ReadCoolingTelemetryAsync().ConfigureAwait(false))?.Temperature ?? double.NaN
             : startTemperature;
         var wrote = false;
+        // A cooler-off after this point (Emergency Stop, the REST control) wins over the hold below.
+        var offsAtStart = Interlocked.Read(ref _coolerOffs);
         // #1210 — the fan interlock runs on the first write and then once per
         // CoolingFanSyncInterval of ramp time, not on every 15 s set-point step — but ONLY while
         // the cache knows the cooler is still on. A cooler switched off mid-ramp (the REST control,
@@ -685,7 +706,7 @@ public sealed partial class CameraService : ICameraMediator, IImagingMediator {
         } catch (OperationCanceledException) when (ct.IsCancellationRequested && wrote) {
             // NINA: a cancelled ramp leaves the TEC holding where the sensor is, not still driving
             // toward a target nobody is waiting for.
-            await HoldSetpointAtSensorAsync().ConfigureAwait(false);
+            await HoldSetpointAtSensorAsync(offsAtStart).ConfigureAwait(false);
             throw;
         }
     }
@@ -704,13 +725,13 @@ public sealed partial class CameraService : ICameraMediator, IImagingMediator {
         !double.IsNaN(temperature)
         && (cooling ? temperature <= target + CoolingReachedToleranceC : temperature >= target - CoolingReachedToleranceC);
 
-    private async Task HoldSetpointAtSensorAsync() {
+    private async Task HoldSetpointAtSensorAsync(long offsAtStart) {
         var temperature = (await ReadCoolingTelemetryAsync().ConfigureAwait(false))?.Temperature ?? double.NaN;
         if (double.IsNaN(temperature)) {
             return;
         }
         try {
-            await SetCoolerAsync(enabled: true, temperature, CancellationToken.None).ConfigureAwait(false);
+            await SetCoolerAsync(enabled: true, temperature, syncFan: true, CancellationToken.None, skipIfOffSince: offsAtStart).ConfigureAwait(false);
         } catch (InvalidOperationException ex) {
             LogSequencerCoolingHoldFailed(ex);
         }
@@ -834,6 +855,9 @@ public sealed partial class CameraService : ICameraMediator, IImagingMediator {
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Sequencer CoolCamera: target {TargetC} °C over {Duration}")]
     private partial void LogSequencerCoolStart(double targetC, TimeSpan duration);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Starting the cool failed: {Reason}")]
+    private partial void LogStartCoolingFailed(string reason);
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Sequencer WarmCamera over {Duration}")]
     private partial void LogSequencerWarmStart(TimeSpan duration);

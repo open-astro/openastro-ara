@@ -15,6 +15,12 @@ class EquipmentGlyph extends StatelessWidget {
   /// A filter wheel: round housing with the motor box below, five filter holes.
   const EquipmentGlyph.filterWheel({super.key, this.size = 28, required this.color}) : _paint = _filterWheel;
 
+  /// A flat panel seen face on: a frame round a lit panel.
+  const EquipmentGlyph.flatPanel({super.key, this.size = 28, required this.color}) : _paint = _flatPanel;
+
+  /// An observatory dome on its wall, with the shutter slit open.
+  const EquipmentGlyph.dome({super.key, this.size = 28, required this.color}) : _paint = _dome;
+
   @override
   Widget build(BuildContext context) => SizedBox.square(
         dimension: size,
@@ -60,6 +66,34 @@ class EquipmentGlyph extends StatelessWidget {
     }
     holes.addOval(Rect.fromCircle(center: centre, radius: 0.9 * u));
     c.drawPath(Path.combine(PathOperation.difference, body, holes), fill);
+  }
+
+  static void _flatPanel(Canvas c, Size s, Paint stroke, Paint fill) {
+    final u = s.width / 24;
+    final frame = Path()
+      ..fillType = PathFillType.evenOdd
+      ..addRect(Rect.fromLTRB(3 * u, 5 * u, 21 * u, 19 * u))
+      ..addRect(Rect.fromLTRB(5 * u, 7 * u, 19 * u, 17 * u));
+    c.drawPath(frame, fill);
+    c.drawRect(Rect.fromLTRB(7 * u, 9 * u, 17 * u, 15 * u), fill);
+  }
+
+  static void _dome(Canvas c, Size s, Paint stroke, Paint fill) {
+    final u = s.width / 24;
+    final dome = Path()
+      ..moveTo(3 * u, 12 * u)
+      ..arcToPoint(Offset(21 * u, 12 * u), radius: Radius.circular(9 * u))
+      ..lineTo(21 * u, 14 * u)
+      ..lineTo(3 * u, 14 * u)
+      ..close();
+    final slit = Path()
+      ..moveTo(11 * u, 5.1 * u)
+      ..lineTo(11 * u, 12 * u)
+      ..lineTo(8.2 * u, 12 * u)
+      ..arcToPoint(Offset(11 * u, 5.1 * u), radius: Radius.circular(7 * u))
+      ..close();
+    c.drawPath(Path.combine(PathOperation.difference, dome, slit), fill);
+    c.drawRect(Rect.fromLTRB(2 * u, 16 * u, 22 * u, 20 * u), fill);
   }
 }
 

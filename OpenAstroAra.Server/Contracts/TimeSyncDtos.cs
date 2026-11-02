@@ -35,7 +35,8 @@ public sealed record TimeSyncStateDto(
     double SystemTimeOffsetSeconds,
     TimeSyncLocationDto? Location,
     bool InternetAvailableOnPi,
-    DateTimeOffset? SyncedAtUtc);
+    DateTimeOffset? SyncedAtUtc,
+    int UtcOffsetMinutes);   // the host's local offset now: WaitForTime compares wall-clock times with it
 
 /// <summary>§31.3 — <c>POST /api/v1/server/time-sync</c>: a client-pushed time (+ optional
 /// location). <c>Source</c> is one of <c>client|gps-client|gps-mobile|manual</c> (<c>gps-client</c>

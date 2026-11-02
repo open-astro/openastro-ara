@@ -841,6 +841,42 @@ TonightFraming _classifyFraming(
 
 // ── Astronomy (ports of the Meeus helpers in TonightSkyService.cs) ─────────
 
+/// When it gets dark tonight at [site] (the sun below its twilight line), to
+/// the minute; null when it is dark already, the site is unset, or it doesn't
+/// get dark in the next day (a polar summer).
+DateTime? darkStart(SiteSettings site, DateTime nowUtc) {
+  if (site.latitudeDeg == 0 && site.longitudeDeg == 0) return null;
+  final line = _twilightSunAltitudeDeg(site.twilightDefinition);
+  bool dark(DateTime t) =>
+      sunMoonAltitudeDeg(t, site.latitudeDeg, site.longitudeDeg).sunAltDeg <
+      line;
+  final now = DateTime.utc(
+    nowUtc.year,
+    nowUtc.month,
+    nowUtc.day,
+    nowUtc.hour,
+    nowUtc.minute,
+  );
+  if (dark(now) || !scheduleAllowed(site, now)) return null;
+  for (var m = 1; m <= 24 * 60; m++) {
+    final t = now.add(Duration(minutes: m));
+    if (dark(t)) return t;
+  }
+  return null;
+}
+
+/// Whether a start later today can be scheduled: not while the sun is below
+/// the horizon and rising (the night's end, until sunrise), when the daemon's
+/// clock rolls over at sunrise and reads an evening time as yesterday's.
+bool scheduleAllowed(SiteSettings site, DateTime nowUtc) {
+  if (site.latitudeDeg == 0 && site.longitudeDeg == 0) return true;
+  double sun(DateTime t) =>
+      sunMoonAltitudeDeg(t.toUtc(), site.latitudeDeg, site.longitudeDeg)
+          .sunAltDeg;
+  final now = sun(nowUtc);
+  return !(now < 0 && sun(nowUtc.add(const Duration(minutes: 10))) > now);
+}
+
 double _twilightSunAltitudeDeg(TwilightDefinition twilight) =>
     switch (twilight) {
       TwilightDefinition.civil => -6.0,

@@ -82,5 +82,26 @@ void main() {
           reason: 'an older daemon omits it: keep the last known');
       expect(older.currentTargetName, 'Helix Nebula');
     });
+
+    test('the running instruction\'s fraction: read, updated, cleared by the next step, kept when omitted', () {
+      final info = SequenceRunStateInfo.fromJson({'state': 'running', 'current_instruction_progress': 0.25});
+      expect(info.currentInstructionProgress, 0.25);
+      final later = info.applyWsProgress({'current_instruction_progress': 0.6});
+      expect(later.currentInstructionProgress, 0.6);
+      expect(later.applyWsProgress({'instructions_completed': 3}).currentInstructionProgress, 0.6,
+          reason: 'an older daemon omits it: keep the last known');
+      expect(later.applyWsProgress({'current_instruction_progress': null}).currentInstructionProgress, isNull,
+          reason: 'the next step reports none yet: the bar goes');
+      expect(info == later, isFalse, reason: 'a new fraction notifies watchers');
+    });
+  });
+
+  test('run states differing only in frames captured are not equal', () {
+    // A poll that only files another frame must still notify its watchers
+    // (Simple Mode's "Stop after this frame" waits on exactly that).
+    const a = SequenceRunStateInfo(sequenceId: 's', framesCaptured: 23);
+    const b = SequenceRunStateInfo(sequenceId: 's', framesCaptured: 24);
+    expect(a == b, isFalse);
+    expect(a.hashCode == b.hashCode, isFalse);
   });
 }

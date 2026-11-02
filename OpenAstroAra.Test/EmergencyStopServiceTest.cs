@@ -109,6 +109,48 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Execute_SwitchesACooledCamerasCoolerOff() {
+            // User, 2026-11-02: the stop left the cooler on.
+            camera.Setup(c => c.GetAsync(It.IsAny<CancellationToken>())).ReturnsAsync(new CameraDto(
+                "c1", "Cam", EquipmentConnectionState.Connected, null,
+                new CameraStateDto("idle", CcdTemperature: -10, CoolerPowerPct: 60, CoolerOn: true, ExposureProgressPct: null)));
+            camera.Setup(c => c.SetCoolerAsync(false, null, It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+
+            var result = await Build().ExecuteAsync();
+
+            Assert.That(result.CoolerOff, Is.True);
+            Assert.That(result.FailedRungs, Is.Empty);
+            camera.Verify(c => c.SetCoolerAsync(false, null, It.IsAny<CancellationToken>()), Times.Once);
+        }
+
+        [Test]
+        public async Task Execute_LeavesACameraWithItsCoolerOff_Alone() {
+            camera.Setup(c => c.GetAsync(It.IsAny<CancellationToken>())).ReturnsAsync(new CameraDto(
+                "c1", "Cam", EquipmentConnectionState.Connected, null,
+                new CameraStateDto("idle", CcdTemperature: 18, CoolerPowerPct: 0, CoolerOn: false, ExposureProgressPct: null)));
+
+            var result = await Build().ExecuteAsync();
+
+            Assert.That(result.CoolerOff, Is.False);
+            Assert.That(result.FailedRungs, Is.Empty, "nothing to switch off is not a failure");
+            camera.Verify(c => c.SetCoolerAsync(It.IsAny<bool>(), It.IsAny<double?>(), It.IsAny<CancellationToken>()), Times.Never);
+        }
+
+        [Test]
+        public async Task Execute_ACoolerThatRefuses_IsCalledOut() {
+            camera.Setup(c => c.GetAsync(It.IsAny<CancellationToken>())).ReturnsAsync(new CameraDto(
+                "c1", "Cam", EquipmentConnectionState.Connected, null,
+                new CameraStateDto("idle", CcdTemperature: -10, CoolerPowerPct: 60, CoolerOn: true, ExposureProgressPct: null)));
+            camera.Setup(c => c.SetCoolerAsync(false, null, It.IsAny<CancellationToken>()))
+                .ThrowsAsync(new InvalidOperationException("driver rejected"));
+
+            var result = await Build().ExecuteAsync();
+
+            Assert.That(result.CoolerOff, Is.False);
+            Assert.That(result.FailedRungs, Does.Contain("cooler_off"));
+        }
+
+        [Test]
         public async Task Execute_EmitsStopEventBeforeActionTaken_AndPostsCriticalNotification() {
             await Build().ExecuteAsync();
 

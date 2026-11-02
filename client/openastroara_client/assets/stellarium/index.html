@@ -34,6 +34,8 @@
     color: var(--txt); -webkit-font-smoothing: antialiased; font-size: 13px; }
   #stel-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
   .ui { position: absolute; z-index: 10; }
+  /* ?bare=1 (Simple Mode): sky only, the app's own panels float over it. */
+  .bare .ui { display: none !important; }
   button { font: inherit; font-size: 13px; font-weight: 500; color: var(--txt); background: transparent;
     border: none; border-radius: 8px; padding: 6px 11px; cursor: pointer;
     transition: background .15s ease, color .15s ease; }
@@ -290,6 +292,7 @@ var D2R = Math.PI / 180.0;
 
 function mjdFromUnixMs(ms) { return ms / 86400000.0 + 40587.0; }
 function qp(name, dflt) { var v = new URLSearchParams(location.search).get(name); return v === null ? dflt : v; }
+if (qp('bare', '0') === '1') document.documentElement.classList.add('bare');
 
 // Config from the URL (the Flutter app injects these when it loads the page).
 var LAT = parseFloat(qp('lat', '0'));
@@ -387,6 +390,7 @@ function setLayer(name, on) {
 // into a small info panel and offer Center (lock the view on it) + GoTo (slew
 // the connected mount to it via the daemon REST API).
 var selRaHours = null, selDecDeg = null;   // last selection's JNOW coords, for GoTo
+var selRaJ2000Hours = null, selDecJ2000Deg = null;   // and J2000, for plate-solve centring
 var selVisible = false;                     // does it ever rise above the site horizon?
 var selAltDeg = null;                       // current altitude (deg); ≤0 = below horizon now
 var selRiseStr = null;                      // tonight's rise time, formatted, or null
@@ -415,9 +419,17 @@ function bestName(names) {
   return '';
 }
 
+// Simple Mode (?bare=1) hides this page's own panel and shows the selection in
+// the app's: post it to Flutter instead (null when nothing is selected).
+function postSelection(obj) {
+  if (!document.documentElement.classList.contains('bare')) return;
+  fetch('/araevent', { method: 'POST', headers: araHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({ type: 'selection', object: obj }) }).catch(function () {});
+}
+
 function renderInfo(sel) {
   var el = document.getElementById('info');
-  if (!sel) { el.style.display = 'none'; selRaHours = selDecDeg = selAltDeg = null; selRiseStr = null; return; }
+  if (!sel) { el.style.display = 'none'; selRaHours = selDecDeg = selAltDeg = null; selRiseStr = null; postSelection(null); return; }
   selAltDeg = null; selRiseStr = null;
 
   var names = [];
@@ -439,6 +451,8 @@ function renderInfo(sel) {
     var radec = sel.getInfo('radec');
     // Frame this object too (J2000), so the framing box follows the selection.
     var icrf = stel.c2s(radec);
+    selRaJ2000Hours = stel.anp(icrf[0]) * 12 / Math.PI;
+    selDecJ2000Deg = stel.anpm(icrf[1]) * 180 / Math.PI;
     setFrameTarget(stel.anp(icrf[0]) / D2R, stel.anpm(icrf[1]) / D2R, names.length ? names[0] : 'Target');
     var jnow = stel.c2s(stel.convertFrame(stel.core.observer, 'ICRF', 'JNOW', radec));
     var ra = stel.anp(jnow[0]), dec = stel.anpm(jnow[1]);
@@ -466,14 +480,24 @@ function renderInfo(sel) {
   } catch (e) { selRaHours = selDecDeg = selAltDeg = null; selVisible = false; }
 
   // Rise/set tonight.
+  var riseMs = null;
   try {
     var vis = sel.computeVisibility();
     if (vis && vis.length && vis[0].rise != null) {
+      riseMs = unixMsFromMjd(vis[0].rise);
       selRiseStr = new Date(unixMsFromMjd(vis[0].rise)).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
       rows.push(['Rise', selRiseStr]);
       rows.push(['Set', new Date(unixMsFromMjd(vis[0].set)).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })]);
     }
   } catch (e) {}
+
+  postSelection(selRaHours == null ? null : {
+    name: document.getElementById('i-name').textContent, kind: typeStr,
+    raHours: selRaHours, decDeg: selDecDeg, altDeg: selAltDeg,
+    raJ2000Hours: selRaJ2000Hours, decJ2000Deg: selDecJ2000Deg,
+    maxAltDeg: 90 - Math.abs(LAT - selDecDeg), riseMs: riseMs,
+    designations: names,
+  });
 
   // Build the rows as DOM nodes with textContent — every value is escaped by
   // construction, so a future row carrying a server-supplied string (object name,

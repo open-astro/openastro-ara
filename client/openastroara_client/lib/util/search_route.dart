@@ -136,6 +136,19 @@ Map<String, Object?>? routeResolved(
   return null;
 }
 
+/// A resolved name the bundle doesn't list, as a goto to its position:
+/// Simple Mode centres the sky on it instead of opening the target dialog.
+/// Null without a position.
+Map<String, Object?>? resolvedGoto(TargetResolution r) =>
+    r.resolved && r.raDeg != null && r.decDeg != null
+    ? {
+        'type': 'goto',
+        'ra': r.raDeg,
+        'dec': r.decDeg,
+        'name': _stripSimbadPrefix(r.mainId ?? ''),
+      }
+    : null;
+
 /// How many of a Simbad answer's aliases are tried against the bundle.
 const int maxResolvedAliasesTried = 64;
 

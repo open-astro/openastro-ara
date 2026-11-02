@@ -1,39 +1,155 @@
+import 'dart:async';
+
+import 'package:flutter/gestures.dart' show PointerDeviceKind, kPrimaryButton;
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../services/server_api.dart';
+import '../state/equipment/camera_state.dart';
+import '../theme/ara_colors.dart';
 import '../state/saved_server_state.dart';
 import '../util/friendly_error.dart';
+import '../state/simple_messages_state.dart';
 import '../state/ws/client_session_state.dart';
 
 /// §35.3 — the persistent big red button, always visible in the bottom
-/// status bar. Tap → confirm ("Stop everything now?") → the daemon aborts
+/// status bar. Press and hold for 2 s ("Hold to confirm", a fill sweeping
+/// across) → the daemon aborts
 /// the running sequence, aborts the in-flight exposure, stops guiding,
-/// parks the mount, and switches the flat panel light off. The snackbar
+/// parks the mount, switches the flat panel light off and the camera's
+/// cooler off. The snackbar
 /// reports honestly what each rung did (a dead mount says so instead of
-/// pretending it parked).
+/// pretending it parked). Letting go early sends nothing. Keyboard and
+/// screen-reader activation can't hold, so they get the confirm dialog
+/// ("Stop everything now?") instead; Simple Mode's versions, which show no
+/// popups, ask them to press again within 3 s (PRESS AGAIN).
+///
+/// Heavier than any other control (ALP-4812): a ring of Fault Red set off by
+/// a dark gap. [simple] is Simple Mode's version — 56 px tall, 10 px corners,
+/// 14 px text — matching the design preview.
 class EmergencyStopButton extends ConsumerStatefulWidget {
-  const EmergencyStopButton({super.key});
+  const EmergencyStopButton({
+    super.key,
+    this.simple = false,
+    this.compact = false,
+  });
+
+  final bool simple;
+
+  /// Simple Mode's rail version: a 60 px square reading STOP (HOLD while
+  /// held), same hold-to-confirm.
+  final bool compact;
 
   @override
   ConsumerState<EmergencyStopButton> createState() =>
       _EmergencyStopButtonState();
 }
 
-class _EmergencyStopButtonState extends ConsumerState<EmergencyStopButton> {
+/// How long the press has to be held.
+const kEmergencyStopHold = Duration(seconds: 2);
+
+class _EmergencyStopButtonState extends ConsumerState<EmergencyStopButton>
+    with SingleTickerProviderStateMixin {
   bool _inFlight = false;
+
+  /// Runs while the button is held; reaching the end is the confirmation.
+  late final AnimationController _hold =
+      AnimationController(vsync: this, duration: kEmergencyStopHold)
+        ..addStatusListener((status) {
+          if (status == AnimationStatus.completed) {
+            _hold.value = 0;
+            setState(() => _holding = false);
+            _stop();
+          }
+        });
+
+  /// Set by a pointer press so the button's own onPressed (which fires on
+  /// release) doesn't also open the dialog meant for keyboard and screen
+  /// readers.
+  bool _viaPointer = false;
+
+  /// The press is down and counting: the label reads "Hold to confirm".
+  bool _holding = false;
+
+  /// Simple Mode, keyboard or screen reader: pressed once, waiting for the
+  /// second press.
+  bool _armed = false;
+  Timer? _disarm;
+
+  /// How long the first press stays armed.
+  static const _pressAgainWindow = Duration(seconds: 3);
+
+  @override
+  void dispose() {
+    _hold.dispose();
+    _disarm?.cancel();
+    super.dispose();
+  }
+
+  void _pressDown(PointerDownEvent e) {
+    // Only the primary button (a finger, a left click) arms the hold.
+    if (e.kind == PointerDeviceKind.mouse && e.buttons != kPrimaryButton) {
+      return;
+    }
+    _viaPointer = true;
+    if (_inFlight) return;
+    setState(() => _holding = true);
+    _hold.forward(from: 0);
+  }
+
+  void _pressEnd(PointerEvent _) {
+    // A release short of 2 s sends nothing.
+    if (_holding) {
+      setState(() => _holding = false);
+      _hold.reverse();
+    }
+    // onPressed (if the release counts as a tap) runs in this same dispatch.
+    scheduleMicrotask(() => _viaPointer = false);
+  }
+
+  void _onPressed() {
+    if (_viaPointer) return;
+    if (widget.simple || widget.compact) {
+      _pressAgain();
+    } else {
+      _confirmAndStop();
+    }
+  }
+
+  void _pressAgain() {
+    if (_armed) {
+      _disarm?.cancel();
+      setState(() => _armed = false);
+      _stop();
+      return;
+    }
+    setState(() => _armed = true);
+    SemanticsService.sendAnnouncement(
+      View.of(context),
+      'Press again within 3 seconds to stop everything',
+      Directionality.of(context),
+    );
+    _disarm = Timer(_pressAgainWindow, () {
+      if (mounted) setState(() => _armed = false);
+    });
+  }
 
   Future<void> _confirmAndStop() async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        icon: Icon(Icons.warning_amber_rounded,
-            color: Theme.of(dialogContext).colorScheme.error, size: 32),
+        icon: Icon(
+          Icons.warning_amber_rounded,
+          color: Theme.of(dialogContext).colorScheme.error,
+          size: 32,
+        ),
         title: const Text('Stop everything now?'),
         content: const Text(
           'This aborts the running sequence and the in-flight exposure, '
           'stops guiding, parks the mount, and switches the flat panel '
-          'light off. It cannot be undone — the sequence does not resume.',
+          'light and the camera cooler off. It cannot be undone — the '
+          'sequence does not resume.',
         ),
         actions: [
           TextButton(
@@ -51,30 +167,47 @@ class _EmergencyStopButtonState extends ConsumerState<EmergencyStopButton> {
       ),
     );
     if (confirmed != true || !mounted) return;
+    await _stop();
+  }
 
+  Future<void> _stop() async {
+    if (_inFlight) return;
     final server = ref.read(activeServerProvider);
-    final messenger = ScaffoldMessenger.of(context);
+    final notify = userNotifier(context);
     if (server == null) {
-      messenger.showSnackBar(
-          const SnackBar(content: Text('No server connected — nothing to stop.')));
+      notify(
+        'No server connected — nothing to stop.',
+        error: true,
+        snackBarRed: false,
+      );
       return;
     }
     setState(() => _inFlight = true);
+    ref.read(localEmergencyStopProvider.notifier).pressed();
     try {
-      final result =
-          await ref.read(serverApiFactoryProvider)(server).emergencyStop();
-      messenger.showSnackBar(SnackBar(
-        duration: const Duration(seconds: 10),
-        content: Text(_summarize(result)),
-      ));
+      final result = await ref
+          .read(serverApiFactoryProvider)(server)
+          .emergencyStop();
+      // The cooler toggle polls every 15 s; show the stop's cooler-off now.
+      if (ref.exists(cameraStatusProvider)) {
+        unawaited(ref.read(cameraStatusProvider.notifier).refresh());
+      }
+      // A rung that failed keeps its pill up until it is read.
+      notify(
+        _summarize(result, failuresFirst: widget.simple || widget.compact),
+        error: result.failedRungs.isNotEmpty,
+        snackBarRed: false,
+        snackBarDuration: const Duration(seconds: 10),
+      );
     } catch (e) {
-      messenger.showSnackBar(SnackBar(
-        duration: const Duration(seconds: 10),
-        content: Text(
-            'EMERGENCY STOP FAILED — '
-            '${friendlyError(e, action: 'reach the rig')} '
-            'Check your rig manually.'),
-      ));
+      notify(
+        'EMERGENCY STOP FAILED — '
+        '${friendlyError(e, action: 'reach the rig')} '
+        'Check your rig manually.',
+        error: true,
+        snackBarRed: false,
+        snackBarDuration: const Duration(seconds: 10),
+      );
     } finally {
       if (mounted) setState(() => _inFlight = false);
     }
@@ -89,9 +222,15 @@ class _EmergencyStopButtonState extends ConsumerState<EmergencyStopButton> {
     'stop_guiding': 'GUIDING MAY STILL BE ACTIVE (stop failed)',
     'park': 'MOUNT PARK FAILED — verify it manually',
     'flat_panel_light_off': 'FLAT PANEL LIGHT-OFF FAILED',
+    'cooler_off': 'CAMERA COOLER STILL ON (switching it off failed)',
   };
 
-  static String _summarize(EmergencyStopResult r) {
+  /// [failuresFirst]: Simple Mode's message pill shows two lines, so a
+  /// failed rung leads instead of trailing off past them.
+  static String _summarize(
+    EmergencyStopResult r, {
+    bool failuresFirst = false,
+  }) {
     if (r.alreadyInProgress) {
       return 'An emergency stop is already running — no second volley sent.';
     }
@@ -103,37 +242,159 @@ class _EmergencyStopButtonState extends ConsumerState<EmergencyStopButton> {
       if (r.guidingStopped) 'guiding stopped',
       if (r.parkRequested) 'mount told to park',
       if (r.flatPanelLightOff) 'flat panel light off',
+      if (r.coolerOff) 'camera cooler off',
     ];
     final failures = r.failedRungs
         .map((rung) => _failurePhrases[rung] ?? '$rung FAILED')
         .toList(growable: false);
     final summary = 'Emergency stop executed: ${parts.join(', ')}.';
-    return failures.isEmpty
-        ? summary
-        : '$summary CHECK THE RIG: ${failures.join('; ')}.';
+    if (failures.isEmpty) return summary;
+    final check = 'CHECK THE RIG: ${failures.join('; ')}.';
+    return failuresFirst ? '$check $summary' : '$summary $check';
   }
 
   @override
   Widget build(BuildContext context) {
+    final compact = widget.compact;
+    final simple = widget.simple || compact;
+    final red = simple
+        ? AraColors.emergencyStop
+        : Theme.of(context).colorScheme.error;
+    final radius = simple ? 10.0 : 16.0;
+    final icon = _inFlight
+        ? SizedBox(
+            width: simple ? 18 : 14,
+            height: simple ? 18 : 14,
+            child: const CircularProgressIndicator(strokeWidth: 2),
+          )
+        : Icon(Icons.report, size: simple ? 20 : 16);
+    final label = Text(
+      compact
+          ? (_inFlight
+                ? '…'
+                : _holding
+                ? 'HOLD'
+                : _armed
+                ? 'PRESS\nAGAIN'
+                : 'STOP')
+          : _inFlight
+          ? 'Stopping…'
+          : _holding
+          ? 'Hold to confirm'
+          : _armed
+          ? 'Press again'
+          : 'Emergency Stop',
+      maxLines: _armed && compact ? 2 : 1,
+      textAlign: TextAlign.center,
+    );
+    final style = FilledButton.styleFrom(
+      backgroundColor: red,
+      foregroundColor: Theme.of(context).colorScheme.onError,
+      padding: EdgeInsets.symmetric(
+        horizontal: compact ? 0 : (simple ? 8 : 18),
+        vertical: simple ? 0 : 7,
+      ),
+      minimumSize: Size(0, compact ? 54 : (simple ? 50 : 0)),
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      visualDensity: simple ? VisualDensity.standard : VisualDensity.compact,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(radius),
+      ),
+      // From the theme's label style, so it carries the app's font family.
+      textStyle: Theme.of(context).textTheme.labelLarge?.copyWith(
+        fontSize: compact ? 12 : (simple ? 14 : 13),
+        fontWeight: compact ? FontWeight.w700 : FontWeight.w600,
+      ),
+    );
+    // Simple Mode stacks the icon over the label: the 60 px compact square
+    // has no room for both on one line.
+    final button = simple
+        ? FilledButton(
+            onPressed: _inFlight ? null : _onPressed,
+            style: style,
+            // Armed, the compact square drops the icon: PRESS AGAIN needs
+            // both lines' room at larger text.
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (!(_armed && compact)) ...[icon, const SizedBox(height: 2)],
+                label,
+              ],
+            ),
+          )
+        : FilledButton.icon(
+            onPressed: _inFlight ? null : _onPressed,
+            style: style,
+            icon: icon,
+            label: label,
+          );
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8),
-      child: FilledButton.icon(
-        onPressed: _inFlight ? null : _confirmAndStop,
-        icon: _inFlight
-            ? const SizedBox(
-                width: 14,
-                height: 14,
-                child: CircularProgressIndicator(strokeWidth: 2),
+      padding: EdgeInsets.symmetric(horizontal: simple ? 0 : 8),
+      // Simple Mode's ring: a 2 px dark gap, then 1 px of Fault Red around it
+      // (the full UI keeps its plain button; the hold and its sweep are both).
+      child: Container(
+        padding: EdgeInsets.all(simple ? 2 : 0),
+        decoration: simple
+            ? BoxDecoration(
+                color: AraColors.bgPrimary,
+                borderRadius: BorderRadius.circular(radius + 3),
+                border: Border.all(color: red),
               )
-            : const Icon(Icons.report, size: 16),
-        label: Text(_inFlight ? 'Stopping…' : 'Emergency Stop'),
-        style: FilledButton.styleFrom(
-          backgroundColor: Theme.of(context).colorScheme.error,
-          foregroundColor: Theme.of(context).colorScheme.onError,
-          visualDensity: VisualDensity.compact,
-          textStyle: Theme.of(context).textTheme.bodySmall,
+            : null,
+        child: Listener(
+          onPointerDown: _pressDown,
+          onPointerUp: _pressEnd,
+          onPointerCancel: _pressEnd,
+          child: Stack(
+            fit: StackFit.passthrough,
+            children: [
+              button,
+              // The hold's progress, sweeping left to right over the red.
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(radius),
+                    child: AnimatedBuilder(
+                      animation: _hold,
+                      builder: (context, _) => FractionallySizedBox(
+                        alignment: Alignment.centerLeft,
+                        widthFactor: _hold.value,
+                        // Simple Mode's sweep darkens, keeping HOLD at 7.7:1;
+                        // the full UI's lightens.
+                        child: ColoredBox(
+                          color: simple
+                              ? const Color(0x40000000)
+                              : const Color(0x40FFFFFF),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 }
+
+/// When Emergency Stop was last pressed on this device: Simple Mode doesn't
+/// sound the safety alarm for a stop its user just pressed (the stop's own
+/// summary pill says what happened).
+class LocalEmergencyStopNotifier extends Notifier<DateTime?> {
+  @override
+  DateTime? build() => null;
+
+  void pressed() => state = DateTime.now();
+
+  /// Pressed here within the last minute.
+  bool get recent =>
+      state != null &&
+      DateTime.now().difference(state!) < const Duration(minutes: 1);
+}
+
+final localEmergencyStopProvider =
+    NotifierProvider<LocalEmergencyStopNotifier, DateTime?>(
+      LocalEmergencyStopNotifier.new,
+    );

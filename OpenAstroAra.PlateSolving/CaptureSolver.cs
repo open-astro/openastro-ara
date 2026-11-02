@@ -88,7 +88,8 @@ namespace OpenAstroAra.PlateSolving {
                     }
 
                     if (!plateSolveResult.Success && remainingAttempts > 0) {
-                        await CoreUtil.Wait(parameter.ReattemptDelay, true, progress, "", ct);
+                        // Say why it waits: a bare "Waiting 01:15" read like the plan had stalled.
+                        await CoreUtil.Wait(parameter.ReattemptDelay, true, progress, "No plate solve, trying again in", ct);
                     }
                 }
             } while (!plateSolveResult.Success && remainingAttempts > 0);
