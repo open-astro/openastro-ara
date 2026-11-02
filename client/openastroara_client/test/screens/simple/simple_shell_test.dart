@@ -930,7 +930,7 @@ void main() {
       'a tap outside closes it; the left rail has no System', (tester) async {
     const size = Size(1024, 768);
     await _pump(tester, size);
-    expect(find.byKey(const Key('simple-system')), findsNothing, reason: 'System lives in Settings › This rig');
+    expect(find.byKey(const Key('simple-system')), findsNothing, reason: 'System lives in Settings › Rig');
     await tester.tap(find.byTooltip('Settings'));
     await tester.pump();
     final sheet = find.byKey(const Key('simple-menu'));
@@ -942,7 +942,7 @@ void main() {
     expect(blur.filter, ImageFilter.blur(sigmaX: 5, sigmaY: 5));
     final box = tester.widget<Container>(find.byKey(const Key('simple-menu-surface')));
     expect((box.decoration! as BoxDecoration).color, AraColors.overlayScrim);
-    for (final t in ['Gear', 'This rig']) {
+    for (final t in ['Gear', 'Rig']) {
       expect(find.descendant(of: sheet, matching: find.text(t)), findsWidgets, reason: t);
     }
     expect(find.text('All settings'), findsNothing, reason: 'no full settings form in Simple Mode');
@@ -951,14 +951,14 @@ void main() {
     expect(sheet, findsNothing);
   });
 
-  testWidgets('This rig: the rig\'s figures, rig and profile and how to change them, Permanent pier, the Simple Mode '
+  testWidgets('Rig: the rig\'s figures, rig and profile and how to change them, Permanent pier, the Simple Mode '
       'switch, version and logs', (tester) async {
     final c = await _pump(tester, const Size(1470, 854),
         server: const AraServer(hostname: '10.0.0.5', port: 5555, mdnsName: 'astro'),
         internal: const ServerInternalState(uptimeSeconds: 11520, cpuPercent: 23.4, workingSetBytes: 512 * 1048576),
         storage: const StorageSpace(saveDirectory: '/data', isFallback: false, freeBytes: 412 * 1073741824, totalBytes: 900 * 1073741824),
         profiles: const ProfileList(activeId: 'p1', profiles: [ProfileMeta(id: 'p1', name: 'Backyard Rig')]));
-    await _openSection(tester, 'This rig');
+    await _openSection(tester, 'Rig');
     final sheet = find.byKey(const Key('simple-menu'));
     final line = find.descendant(of: sheet, matching: find.byKey(const Key('simple-system-line')));
     for (final t in ['412 GB free', '23 %', '512 MB', '3 h 12 min']) {
@@ -970,6 +970,7 @@ void main() {
     final page = tester.getRect(find.ancestor(of: line, matching: find.byType(Column)).first);
     expect(row.width, closeTo(page.width, 1), reason: 'the tiles fill the page width');
     expect(tiles.last.center.dx - tiles.first.center.dx, greaterThan(page.width * 0.6));
+    expect(find.descendant(of: sheet, matching: find.text('Name')), findsOneWidget, reason: 'not "Rig" twice');
     for (final t in ['astro', 'Backyard Rig', 'Change profile', 'Change rig', 'Permanent pier', 'Simple Mode', 'Logs & bug report']) {
       expect(find.descendant(of: sheet, matching: find.text(t)), findsWidgets, reason: t);
     }
@@ -982,33 +983,33 @@ void main() {
   testWidgets('Change profile goes to the profile box; Change rig to the rig list', (tester) async {
     final c = await _pump(tester, const Size(1024, 768));
     c.read(profileGatePassedProvider.notifier).pass();
-    await _openSection(tester, 'This rig');
+    await _openSection(tester, 'Rig');
     await tester.tap(find.text('Change profile'));
     await tester.pump();
     expect(c.read(profileGatePassedProvider), isFalse);
     expect(c.read(serverChooserRequestedProvider), isFalse, reason: 'the same rig: straight to its profiles');
 
     c.read(profileGatePassedProvider.notifier).pass();
-    await _openSection(tester, 'This rig');
+    await _openSection(tester, 'Rig');
     await tester.tap(find.text('Change rig'));
     await tester.pump();
     expect(c.read(profileGatePassedProvider), isFalse);
     expect(c.read(serverChooserRequestedProvider), isTrue, reason: 'the rig list, which never connects on its own');
   });
 
-  testWidgets('while a plan runs, This rig says it keeps running', (tester) async {
+  testWidgets('while a plan runs, Rig says it keeps running', (tester) async {
     await _pump(tester, const Size(1024, 768),
         plan: const SimpleRun(sequenceId: 'seq-1', started: true, targets: [
           SimpleTarget(name: 'M 31', steps: [FilterPlanStep(filterName: 'L', exposureSeconds: 120, frameCount: 30)]),
         ]),
         runState: const SequenceRunStateInfo(sequenceId: 'seq-1', state: SequenceRunState.running));
-    await _openSection(tester, 'This rig');
+    await _openSection(tester, 'Rig');
     expect(find.textContaining('keeps running on the rig'), findsOneWidget);
   });
 
   testWidgets('Permanent pier (the one thing Ara can\'t know) and the Simple Mode switch (the way out)', (tester) async {
     final c = await _pump(tester, const Size(1024, 768), pier: true);
-    await _openSection(tester, 'This rig');
+    await _openSection(tester, 'Rig');
     await tester.tap(find.byKey(const Key('simple-menu-pier-on')));
     await tester.pump();
     expect(c.read(simplePermanentPierProvider).value, isTrue);
@@ -1019,7 +1020,7 @@ void main() {
 
   testWidgets('Logs & bug report opens over Simple Mode; Back comes back', (tester) async {
     final c = await _pump(tester, const Size(1024, 768));
-    await _openSection(tester, 'This rig');
+    await _openSection(tester, 'Rig');
     await tester.tap(find.text('Logs & bug report'));
     await tester.pumpAndSettle();
     expect(find.byType(SettingsShell), findsOneWidget);

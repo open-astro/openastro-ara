@@ -117,7 +117,7 @@
       <button data-s="storage">Storage</button>
       <button data-s="night">End of night</button>
       <button data-s="alerts">Alerts</button>
-      <button data-s="rig">This rig</button>
+      <button data-s="rig">Rig</button>
     </div>
     <label class="ctl">Sheet opacity <input type="range" id="sheetA" min="40" max="95" value="90"><output id="sheetAo">90 %</output></label>
     <label class="ctl">Blur behind <input type="range" id="blur" min="0" max="20" value="5"><output id="bluro">5 px</output></label>
@@ -155,7 +155,7 @@
         <div class="row" data-go="night"><span class="ic">◐</span>End of night<span class="sub">Dawn · park</span></div>
         <div class="row" data-go="alerts"><span class="ic">♪</span>Alerts<span class="sub">Sound on</span></div>
         <div class="grp">App</div>
-        <div class="row" data-go="rig"><span class="ic">⌂</span>This rig<span class="sub">astro · Backyard</span></div>
+        <div class="row" data-go="rig"><span class="ic">⌂</span>Rig<span class="sub">astro · Backyard</span></div>
       </div>
       <div class="body" id="body"></div>
     </div>
@@ -175,7 +175,7 @@
       <tr><td>Storage</td><td>Which drive, free space.</td><td>Copy to another disk, file names.</td></tr>
       <tr><td>End of night</td><td>Stop at dawn / at a time / never, park, warm the camera.</td><td>Flats, safety policies.</td></tr>
       <tr><td>Alerts</td><td>Safety alarm sound, silent delay.</td><td>Where alerts go (they're in-app only today).</td></tr>
-      <tr><td>This rig</td><td>System figures, Change profile / Change rig, permanent pier, Simple Mode switch, version, logs &amp; bug report.</td><td>Profile editing, wizard, sky data.</td></tr>
+      <tr><td>Rig</td><td>System figures, Change profile / Change rig, permanent pier, Simple Mode switch, version, logs &amp; bug report.</td><td>Profile editing, wizard, sky data.</td></tr>
     </table>
     <p class="note" style="margin-top:12px">ASIAir's settings were the reference for the Gear details (its main camera, mount with meridian flip, EAF autofocus triggers, guiding dither, storage and Wi-Fi pages). Wi-Fi and power outputs aren't here: the rig's network is the Pi's, and Ara has no power-port control yet.</p>
   </section>
@@ -224,7 +224,7 @@
     alerts: `<div class="h">Alerts</div><div class="card">
       <div class="kv"><span>Safety alarm sound</span><span class="seg2"><span class="on">On</span><span>Off</span></span></div>
       <div class="kv"><span>Silent delay</span><span class="val">5 s</span></div></div>`,
-    rig: `<div class="h">This rig</div><div class="tiles"><div>Storage<b>212 GB</b></div><div>CPU<b>14 %</b></div><div>Memory<b>410 MB</b></div><div>Up<b>2 h 10</b></div></div>
+    rig: `<div class="h">Rig</div><div class="tiles"><div>Storage<b>212 GB</b></div><div>CPU<b>14 %</b></div><div>Memory<b>410 MB</b></div><div>Up<b>2 h 10</b></div></div>
       <div class="card"><div class="kv"><span class="dim">Rig</span><span>astro</span></div><div class="kv"><span class="dim">Profile</span><span>Backyard Rig</span></div>
       <div class="kv"><span class="btn">Change profile</span><span class="btn">Change rig</span></div></div>
       <div class="card"><div class="kv"><span>Permanent pier</span><span class="seg2"><span>On</span><span class="on">Off</span></span></div>

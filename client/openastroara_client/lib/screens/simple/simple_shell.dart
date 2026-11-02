@@ -1641,7 +1641,7 @@ class _SettingsSheet extends StatefulWidget {
 class _SettingsSheetState extends State<_SettingsSheet> {
   static const _sections = [
     ('Gear', Icons.settings_input_component_outlined),
-    ('This rig', Icons.memory),
+    ('Rig', Icons.memory),
   ];
   String _section = 'Gear';
 
@@ -1726,7 +1726,7 @@ class _SettingsSheetState extends State<_SettingsSheet> {
                 child: SingleChildScrollView(
                   padding: const EdgeInsets.all(AraSpace.s16),
                   child: switch (_section) {
-                    'This rig' => _ThisRig(
+                    'Rig' => _ThisRig(
                       onClose: widget.onClose,
                       onLogs: widget.onLogs,
                     ),
@@ -1864,7 +1864,7 @@ class _GearRow<T extends EquipmentDeviceStatus> extends ConsumerWidget {
   }
 }
 
-/// Settings › This rig: what belongs to no device. The rig's figures, the rig
+/// Settings › Rig: what belongs to no device. The rig's figures, the rig
 /// and profile with the way to change them, the one setting Ara can't find out
 /// (a permanent pier, asked once), the way out of Simple Mode, the version
 /// and the logs.
@@ -1963,9 +1963,9 @@ class _ThisRig extends ConsumerWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       spacing: AraSpace.s8,
       children: [
-        const Text('This rig', style: kSimpleText),
+        const Text('Rig', style: kSimpleText),
         const SimpleSystemPanel(expand: true),
-        fact('Rig', server == null ? '—' : server.mdnsName ?? server.hostname),
+        fact('Name', server == null ? '—' : server.mdnsName ?? server.hostname),
         fact('Profile', profile ?? '—'),
         if (running)
           Text(

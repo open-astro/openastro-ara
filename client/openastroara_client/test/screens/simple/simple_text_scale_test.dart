@@ -69,7 +69,7 @@ void main() {
     (1.0, const Size(320, 768)),
   ];
   for (final (scale, size) in cases) {
-    for (final open in ['Preview settings', 'Plan', 'Stop armed', 'Modes', 'Settings', 'This rig']) {
+    for (final open in ['Preview settings', 'Plan', 'Stop armed', 'Modes', 'Settings', 'Rig']) {
       testWidgets('text ${scale}x at ${size.width.toInt()}x${size.height.toInt()}, $open: nothing overflows',
           skip: !hasFonts, (tester) async {
         tester.view.physicalSize = size;
@@ -137,11 +137,11 @@ void main() {
             expect(p.didExceedMaxLines, isFalse, reason: '"${p.text.toPlainText()}" is cut off');
           }
           await tester.pump(const Duration(seconds: 4)); // the press-again window lapses
-        } else if (open == 'Settings' || open == 'This rig') {
+        } else if (open == 'Settings' || open == 'Rig') {
           await tester.tap(find.byTooltip('Settings'));
           await tester.pump();
-          if (open == 'This rig') {
-            await tester.tap(find.byKey(const Key('simple-menu-nav-This rig')));
+          if (open == 'Rig') {
+            await tester.tap(find.byKey(const Key('simple-menu-nav-Rig')));
             await tester.pump();
           }
         } else {
