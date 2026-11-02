@@ -122,7 +122,7 @@ class _SimpleSystemPanelState extends ConsumerState<SimpleSystemPanel> {
   }
 }
 
-/// The last frame's facts as tiles in the bottom-right corner, turned on
+/// The last frame's facts as tiles in the bottom-left corner, turned on
 /// from the left rail's Info:
 /// HFR, stars, exposure · filter, gain · offset and clipped highlights.
 class SimpleInfoPanel extends ConsumerWidget {
@@ -157,7 +157,7 @@ class SimpleInfoPanel extends ConsumerWidget {
 }
 
 /// A row of fact tiles (label over value, 72 × 56), the first fact at the
-/// right end, nearest the corner: how Info and System read.
+/// left end, nearest the corner: how Info and System read.
 class SimpleFactTiles extends StatelessWidget {
   const SimpleFactTiles({super.key, required this.facts});
 
@@ -168,7 +168,7 @@ class SimpleFactTiles extends StatelessWidget {
     mainAxisSize: MainAxisSize.min,
     spacing: AraSpace.s8,
     children: [
-      for (final (label, value) in facts.reversed)
+      for (final (label, value) in facts)
         Container(
           width: kSimpleRailWidth,
           height: 56,

@@ -297,15 +297,15 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                             height: kSimpleBarHeight,
                             child: _StatusStrip(),
                           ),
-                          // Info and System: fact tiles hugging the bottom-right
-                          // corner, above the bottom row and left of the rail;
-                          // System's row sits above Info's.
+                          // Info and System: fact tiles hugging the bottom-left
+                          // corner, above the bottom row; System's row sits
+                          // above Info's.
                           if (_info || _system)
                             Positioned(
-                              right: kSimpleInset * 2 + kSimpleRailWidth,
+                              left: kSimpleInset,
                               bottom: kSimpleInset * 2 + kSimpleBarHeight,
                               child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.end,
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 spacing: AraSpace.s8,
                                 children: [
                                   if (_system) const SimpleSystemPanel(),

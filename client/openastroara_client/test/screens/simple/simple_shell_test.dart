@@ -352,31 +352,31 @@ void main() {
     expect(find.text('0 / 30'), findsOneWidget);
   });
 
-  // Info and System: a tile per fact in the bottom-right corner, above the guiding and histogram row and left
-  // of the rail, growing left; System's row sits above Info's.
-  const tileRight = kSimpleInset * 2 + kSimpleRailWidth;
+  // Info and System: a tile per fact in the bottom-left corner, above the guiding and histogram row, growing
+  // right; System's row sits above Info's.
+  const tileLeft = kSimpleInset;
   const tileBottom = kSimpleInset * 2 + kSimpleBarHeight;
 
-  testWidgets('Info shows the last frame facts as tiles in the bottom-right corner', (tester) async {
+  testWidgets('Info shows the last frame facts as tiles in the bottom-left corner', (tester) async {
     final container = await _pump(tester, const Size(1024, 768));
     await _frame(tester, container);
     await tester.tap(find.byKey(const Key('simple-info')));
     await tester.pump();
     final row = tester.getRect(find.byType(SimpleInfoPanel));
-    expect(row.right, 1024 - tileRight, reason: 'hugs the corner, left of the rail');
+    expect(row.left, tileLeft, reason: 'hugs the corner');
     expect(row.bottom, 768 - tileBottom, reason: 'just above the bottom row');
     expect(row.height, 56, reason: 'one row of tiles');
     for (final fact in ['HFR', 'Stars', 'Exposure', 'Gain · offset', 'Clipped']) {
       expect(find.descendant(of: find.byType(SimpleInfoPanel), matching: find.text(fact)), findsOneWidget, reason: fact);
     }
     // HFR nearest the corner.
-    expect(tester.getRect(find.text('HFR')).center.dx, greaterThan(tester.getRect(find.text('Clipped')).center.dx));
+    expect(tester.getRect(find.text('HFR')).center.dx, lessThan(tester.getRect(find.text('Clipped')).center.dx));
     await tester.tap(find.byKey(const Key('simple-info')));
     await tester.pump();
     expect(find.byType(SimpleInfoPanel), findsNothing);
   });
 
-  testWidgets('System shows the server\'s figures as tiles in the bottom-right corner (above Info when it shows)', (tester) async {
+  testWidgets('System shows the server\'s figures as tiles in the bottom-left corner (above Info when it shows)', (tester) async {
     const size = Size(1470, 854);
     await _pump(tester, size,
         internal: const ServerInternalState(uptimeSeconds: 11520, cpuPercent: 23.4, workingSetBytes: 512 * 1048576),
@@ -388,7 +388,7 @@ void main() {
     await tester.pump();
     await tester.pump(); // the storage read resolves
     final rect = tester.getRect(find.byKey(const Key('simple-system-line')));
-    expect(rect.right, size.width - tileRight);
+    expect(rect.left, tileLeft);
     expect(rect.bottom, size.height - tileBottom, reason: 'alone, in the corner');
     final line = find.byKey(const Key('simple-system-line'));
     for (final t in ['Storage', '412 GB free', 'CPU', '23 %', 'Memory', '512 MB', 'Up', '3 h 12 min']) {
