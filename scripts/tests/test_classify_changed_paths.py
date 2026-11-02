@@ -596,8 +596,11 @@ class InertTreesTest(unittest.TestCase):
     # a script there cannot be a build input any more than the SKILL.md next
     # to it. Keyed on the sub-prefix so `.claude/commands/` and the rest of
     # `.claude/` stay prose-only.
+    # `design/preview/` may hold `.html`: static design mocks opened by hand
+    # in a browser; no workflow, build or test step references that path.
     EXTRA_BY_PREFIX = {
         ".github/ISSUE_TEMPLATE/": {".yml", ".yaml"},
+        "design/preview/": {".html"},
         ".claude/skills/": {".sh", ".swift", ".expect", ".json"},
     }
 
