@@ -334,7 +334,11 @@
   .s-prog .bar i.now { background: var(--sel); }
   .s-prog .frow span:last-child { text-align: right; color: var(--text2); }
   .sm .stopb { height: 48px; border-radius: 10px; border: 1px solid var(--err); background: transparent; color: var(--text); font: 500 14px var(--sys); cursor: pointer; }
-  .s-trk { position: absolute; left: 0; right: 0; bottom: calc(100% + 8px); height: 100px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; white-space: nowrap; overflow: hidden; cursor: pointer; }
+  .s-trk { position: absolute; right: var(--in); top: var(--top); width: var(--rail); height: 100px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; white-space: nowrap; overflow: hidden; cursor: pointer; }
+  .s-tiles { position: absolute; right: calc(2 * var(--in) + var(--rail)); bottom: calc(2 * var(--in) + var(--bar)); display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+  .s-tiles .r { display: flex; gap: 8px; flex-direction: row-reverse; }
+  .s-tiles .f { width: 72px; height: 56px; padding: 0 4px; border-radius: 10px; background: var(--scrim); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; border: 1px solid var(--border); white-space: nowrap; overflow: hidden; }
+  .s-tiles .f small { font-size: 10.5px; color: var(--text2); } .s-tiles .f b { font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
   .s-trk b { font-size: 14px; } .s-trk small { font-size: 11.5px; color: var(--text2); }
   .s-trk i { position: absolute; left: 0; bottom: 0; height: 3px; }
   .s-shut { position: relative; }
@@ -549,10 +553,14 @@
           <div class="ib" title="Settings"><svg><use href="#i-gear"/></svg></div>
         </div>
         <div class="p s-pill" id="s-pill" aria-live="polite"></div>
-        <div class="p s-info fade" data-v="frame grid settings clean">
-          <span><small>HFR</small>2.31</span><span><small>Stars</small>1,842</span><span><small>Exposure</small>5 s · L</span><span><small>Gain · offset</small>100 · 10</span><span><small>Clipped</small>0.02 %</span>
+        <div class="p s-trk" data-v="ready" style="border:1px solid var(--ok)"><b>M31</b><span>0 / 60</span><small>L · 2 min</small><small>2 h 45 min</small></div>
+        <div class="p s-trk" data-v="run hold prog" style="border:1px solid var(--sel)"><b>M31</b><span>23 / 60</span><small>R · 3 min</small><small>1 h 40 min</small><i style="width:38%;background:var(--sel)"></i></div>
+        <div class="p s-trk" data-v="paused" style="border:1px solid var(--busy)"><b>M31</b><span>24 / 60</span><small>R · 3 min</small><small style="color:var(--busy)">Paused</small><i style="width:40%;background:var(--busy)"></i></div>
+        <div class="p s-trk" data-v="done" style="border:1px solid var(--ok)"><b>M31</b><span>60 / 60</span><small>B · 3 min</small><small>Done</small><i style="width:100%;background:var(--ok)"></i></div>
+        <div class="s-tiles fade" data-v="frame grid settings clean">
+          <div class="r" data-v="frame"><div class="f"><small>Storage</small><b>412 GB free</b></div><div class="f"><small>CPU</small><b>23 %</b></div><div class="f"><small>Memory</small><b>512 MB</b></div><div class="f"><small>Up</small><b>3 h 12 min</b></div></div>
+          <div class="r"><div class="f"><small>HFR</small><b>2.31</b></div><div class="f"><small>Stars</small><b>1,842</b></div><div class="f"><small>Exposure</small><b>5 s · L</b></div><div class="f"><small>Gain · offset</small><b>100 · 10</b></div><div class="f"><small>Clipped</small><b>0.02 %</b></div></div>
         </div>
-        <div class="p s-info s-sys fade" data-v="frame"><span><small>Storage</small>412 GB free</span><span><small>CPU</small>23 %</span><span><small>Memory</small>512 MB</span><span><small>Up</small>3 h 12 min</span></div>
         <div class="p s-attn" data-v="run-attn"><svg><use href="#i-warn"/></svg><b>Guiding lost. Retrying (2 of 5).</b><span>Exposures paused.</span></div>
 
         <div class="s-col l fade">
@@ -572,16 +580,12 @@
               <div class="s-rb" id="s-chip"><svg><use href="#i-tune"/></svg>5 s · 100</div>
             </div>
 
-            <div class="p s-trk" data-v="ready" style="border:1px solid var(--ok)"><b>M31</b><span>0 / 60</span><small>L · 2 min</small><small>2 h 45 min</small></div>
-            <div class="p s-trk" data-v="run hold prog" style="border:1px solid var(--sel)"><b>M31</b><span>23 / 60</span><small>R · 3 min</small><small>1 h 40 min</small><i style="width:38%;background:var(--sel)"></i></div>
-            <div class="p s-trk" data-v="paused" style="border:1px solid var(--busy)"><b>M31</b><span>24 / 60</span><small>R · 3 min</small><small style="color:var(--busy)">Paused</small><i style="width:40%;background:var(--busy)"></i></div>
-            <div class="p s-trk" data-v="done" style="border:1px solid var(--ok)"><b>M31</b><span>60 / 60</span><small>B · 3 min</small><small>Done</small><i style="width:100%;background:var(--ok)"></i></div>
             <div class="p s-holdlbl" data-v="hold">Hold to stop</div>
             <div class="p s-pop s-grid" data-v="grid" id="s-grid">
               <span data-go="frame" class="on"><svg><use href="#i-eye"/></svg>Preview</span>
               <span data-go="focus"><svg><use href="#i-focus"/></svg>Focus</span>
               <span data-go="pa"><svg><use href="#i-explore"/></svg>Polar align</span>
-              <span data-go="plan"><svg><use href="#i-playlist"/></svg>Run</span>
+              <span data-go="plan"><svg><use href="#i-playlist"/></svg>Plan</span>
             </div>
             <div class="p s-pop s-set" data-v="settings">
               <span style="font-weight:600">Preview settings</span>
@@ -898,10 +902,10 @@
     settings: { mode: 'Preview', pill: P.ready, info: true }, clean: { mode: 'Preview', pill: P.loop, info: true, shut: true },
     focus: { mode: 'Focus', chip: 'Auto', pill: P.loop, shut: true }, pa: { mode: 'Polar align', rail: 'P.A.', chip: '1 s\nLoop', chipIcon: false, pill: P.loop, shut: true },
     pick: { mode: 'Preview', sky: true },
-    plan: { mode: 'Run', chip: '2 h\n45 min', chipIcon: false, sh: 'off' }, ready: { mode: 'Run', chip: '2 h\n45 min', chipIcon: false, sh: 'go2' },
-    run: { mode: 'Run', pill: P.img, chip: '2 h\n45 min', chipIcon: false, sh: 'pz' }, hold: { mode: 'Run', pill: P.img, chip: '2 h\n45 min', chipIcon: false, sh: 'hd' },
-    paused: { mode: 'Run', pill: ['g-busy', 'Paused'], chip: '2 h\n45 min', chipIcon: false, sh: 'play' }, prog: { mode: 'Run', pill: P.img, chip: '2 h\n45 min', chipIcon: false, sh: 'pz' },
-    'run-attn': { mode: 'Run', pill: ['g-busy', 'Waiting for guiding'], chip: '2 h\n45 min', chipIcon: false, sh: 'pz' }, done: { mode: 'Run', chip: '2 h\n45 min', chipIcon: false },
+    plan: { mode: 'Plan', chip: '2 h\n45 min', chipIcon: false, sh: 'off' }, ready: { mode: 'Plan', chip: '2 h\n45 min', chipIcon: false, sh: 'go2' },
+    run: { mode: 'Plan', pill: P.img, chip: '2 h\n45 min', chipIcon: false, sh: 'pz' }, hold: { mode: 'Plan', pill: P.img, chip: '2 h\n45 min', chipIcon: false, sh: 'hd' },
+    paused: { mode: 'Plan', pill: ['g-busy', 'Paused'], chip: '2 h\n45 min', chipIcon: false, sh: 'play' }, prog: { mode: 'Plan', pill: P.img, chip: '2 h\n45 min', chipIcon: false, sh: 'pz' },
+    'run-attn': { mode: 'Plan', pill: ['g-busy', 'Waiting for guiding'], chip: '2 h\n45 min', chipIcon: false, sh: 'pz' }, done: { mode: 'Plan', chip: '2 h\n45 min', chipIcon: false },
     empty: { mode: 'Preview', sky: true } };
   let VIEW;
   const setView = v => {

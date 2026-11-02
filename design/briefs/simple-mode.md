@@ -32,10 +32,10 @@ Shaped 2026-11-01 (`/impeccable shape simple-mode`). Paperclip: ALP-4810. Render
 
 ## Scope
 
-- **One screen:** a mode grid with Preview · Focus · Polar align · Run.
+- **One screen:** a mode grid with Preview · Focus · Polar align · Plan.
 - **Settings:** open from the strip's gear. "Show all options" switches to the full UI. In slice 1 Settings, the device dots and ⌘K also switch to the full UI on the matching Settings page; a settings sheet over Simple Mode comes later.
 - **Getting in:** turn on Settings → System → Experimental → Simple Mode (off by default, per client), then use the frame icon in the full UI's top-right cluster, between Night mode and the gear.
-- **Run:** a quick plan builder only. It sets exposure and frame count per filter for the current target, and autofocus, dither and flats follow the profile's defaults. The sequence editor stays in the full UI only.
+- **Plan** (named Run until 2026-11-02): a quick plan builder only. It sets exposure and frame count per filter for the current target, and autofocus, dither and flats follow the profile's defaults. The sequence editor stays in the full UI only.
 - **Phones:** they run Simple Mode only, with no Sequence tab, once Simple Mode exists. Until then, PR #1474's phone layout stands.
 - **Desktop default:** the full UI stays the default on desktop.
 - **Full UI untouched:** the full UI keeps its current layout (PR #1474's shell). Every change this brief leads to lands in Simple Mode only.
@@ -46,13 +46,14 @@ Shaped 2026-11-01 (`/impeccable shape simple-mode`). Paperclip: ALP-4810. Render
 |---|---|
 | Top | Status strip: device dots, Search, Night mode, Show all options, Settings |
 | Top-left, under the strip | Camera status pill |
-| Top-right, under the strip | Info line (when on) |
+| Top-right, under the strip | Plan squares (the running plan in the corner, queued plans to its left) |
+| Bottom-right, above the bottom row | Info and System fact tiles (when on) |
 | Centre, under the strip | Attention banner, when something needs the person |
-| Left rail | Sky, Info, Library |
+| Left rail | Sky, Info, System, Library |
 | Right rail | Mode name, shutter, settings chip |
 | Bottom right | Emergency Stop |
 | Bottom row | Guiding graph (RMS, RA/Dec trace) and histogram |
-| Centre, over the image | Run's plan sheet; Night done when the plan finishes |
+| Centre, over the image | Plan's sheet; Night done when the plan finishes |
 
 ## Interaction
 
@@ -63,13 +64,13 @@ Shaped 2026-11-01 (`/impeccable shape simple-mode`). Paperclip: ALP-4810. Render
 
 ## Mode screens (decided 2026-11-01)
 
-- **Mode order:** Preview · Focus · Polar align · Run (Target folded into Run, 2026-11-02). On the right rail Polar align reads "P.A." (the full name doesn't fit 60 px); the mode grid spells it out.
-- **Mode panels:** every mode except Preview opens its panel to the left of the right rail, a floating card like the settings popover, level with the rail's top. Run uses a centred sheet instead (decided 2026-11-01).
+- **Mode order:** Preview · Focus · Polar align · Plan (Target folded in and Run renamed Plan, 2026-11-02). On the right rail Polar align reads "P.A." (the full name doesn't fit 60 px); the mode grid spells it out.
+- **Mode panels:** every mode except Preview opens its panel to the left of the right rail, a floating card like the settings popover, level with the rail's top. Plan uses a centred sheet instead (decided 2026-11-01).
 - **Preview:** shoot and loop, from the right rail: the shutter and the settings chip (Exposure, Gain, Filter, Loop/Single). The last frame's facts (HFR, stars, exposure · filter, gain · offset, clipped) come from Info. Single saves the frame (the daemon registers every Take One); Loop is live view and saves nothing. No Save frame button.
 - **Polar align:** the polar-align camera's frames fill the image while it runs (nothing drawn on them). The shutter starts the routine and its red square stops it (Loop or Single). The mode panel holds Exposure and Loop/Single, and while it runs the error, the zone (under 10′ green, under 60′ amber, otherwise red), the bullseye, the altitude and azimuth turns, Take frame (Single) and a green Done. The rail reads "P.A."; the chip reads "45 s" over "Single" (two lines, no icon).
 - **Focus:** a zoomed star with its HFR ring top-left; the mode panel shows the HFR, the focus curve, the position, Autofocus, and four nudge steps.
-- **Run:** the quick plan builder as a sheet centred over the image, the rails still visible: the target on top (a search, or Pick in Sky; Sky's card offers Image this), a row per filter, then Create plan, which makes the run on the rig without starting it (Save plan once made). A tracker square above the rail follows the plan (target, frames of the total, filter and sub, time). The shutter starts the plan (play, green ring), pauses it after the frame in hand (pause bars, a ring filling with the exposure), resumes it (play, amber ring); a 2 s hold stops it (decided 2026-11-02: the shutter always starts).
-- **Run finished:** a Night done summary, in the same centred sheet (frames per filter, integration, best HFR, issues, flats, mount parked, then Image Library and New plan).
+- **Plan:** the quick plan builder as a sheet centred over the image, the rails still visible: the target on top (a search, or Pick in Sky; Sky's card offers Image this), a row per filter, then Create plan, which makes the run on the rig without starting it (Save plan once made). A plan square in the top-right corner follows the plan (queued plans join to its left); Info and System are fact tiles in the bottom-right corner (target, frames of the total, filter and sub, time). The shutter starts the plan (play, green ring), pauses it after the frame in hand (pause bars, a ring filling with the exposure), resumes it (play, amber ring); a 2 s hold stops it (decided 2026-11-02: the shutter always starts).
+- **Plan finished:** a Night done summary, in the same centred sheet (frames per filter, integration, best HFR, issues, flats, mount parked, then Image Library and New plan).
 - **No rig / no frame:** tonight's planetarium behind a Connect to your rig card (discovered rigs, Add by address). Device dots go grey, the mode name dims, and Emergency Stop shows disabled.
 - **Always visible in both modes:** Emergency Stop (except in the immersive view), the attention banner, device status dots, Night mode and the Simple ↔ full UI switch.
 
@@ -77,7 +78,7 @@ Shaped 2026-11-01 (`/impeccable shape simple-mode`). Paperclip: ALP-4810. Render
 
 - **Errors inside a mode** (plate solve failed, autofocus failed, slew failed): while the person works a mode, the error shows inside that mode's panel, naming the cause and the fix, with a Retry (for example "Too few stars in a 2 s frame", then "Retry with 10 s"). During an unattended run the same errors use the centred attention banner.
 - **Below the horizon (including the custom horizon):** Go to is disabled with the reason ("Below your horizon until 22:40"), and "Go to at 22:40" waits, then slews and centres on its own.
-- **Show all options** opens the matching full-UI tab: Preview, Polar align and Focus open Live; Run opens Live while imaging and Sequence when idle.
+- **Show all options** opens the matching full-UI tab: Preview, Polar align and Focus open Live; Plan opens Live while imaging and Sequence when idle.
 
 ## Still open
 
