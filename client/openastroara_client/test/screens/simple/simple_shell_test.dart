@@ -684,6 +684,42 @@ void main() {
     await tester.pump(const Duration(seconds: 10));
   });
 
+  testWidgets('Add target from the queue panel never traps the sheet: the modes and the chip still work', (tester) async {
+    // User, 2026-11-03: plan square -> queue panel -> Add target, and the sheet could no
+    // longer be hidden or the mode changed.
+    final queue = SimpleRun(sequenceId: 'seq-1', targets: const [
+      SimpleTarget(name: 'M31', steps: [FilterPlanStep(filterName: 'L', exposureSeconds: 120, frameCount: 30)]),
+    ]);
+    await _pump(tester, const Size(1024, 768), plan: queue);
+    await tester.tap(find.byKey(const Key('simple-mode')));
+    await tester.pump();
+    await tester.tap(find.text('Plan').first);
+    await tester.pump();
+    await tester.tap(find.descendant(of: find.byKey(const Key('simple-run-tracker')), matching: find.text('M31')));
+    await tester.pump();
+    await tester.tap(find.text('Add target'));
+    await tester.pump();
+    expect(find.byType(SimpleRunSheet), findsOneWidget, reason: 'the sheet opens to add a target');
+
+    // The mode name opens the modes over it.
+    await tester.tap(find.byKey(const Key('simple-mode')));
+    await tester.pump();
+    expect(find.byType(SimpleRunSheet), findsNothing, reason: 'the modes replace the sheet');
+    expect(find.text('Polar align'), findsOneWidget, reason: 'the mode grid shows');
+    await tester.tap(find.byKey(const Key('simple-mode')));
+    await tester.pump();
+
+    // And from Add target again, the chip hides the sheet.
+    await tester.tap(find.descendant(of: find.byKey(const Key('simple-run-tracker')), matching: find.text('M31')));
+    await tester.pump();
+    await tester.tap(find.text('Add target'));
+    await tester.pump();
+    expect(find.byType(SimpleRunSheet), findsOneWidget);
+    await tester.tap(find.byKey(const Key('simple-settings')));
+    await tester.pump();
+    expect(find.byType(SimpleRunSheet), findsNothing, reason: 'the chip closes the sheet it would open');
+  });
+
   testWidgets('the plan square hugs the bottom-right corner, above the bottom row', (tester) async {
     await _pump(tester, const Size(1024, 768),
         plan: const SimpleRun(sequenceId: 'seq-1', targets: [
