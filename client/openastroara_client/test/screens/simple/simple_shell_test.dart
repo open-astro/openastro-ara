@@ -853,6 +853,10 @@ void main() {
 
     testWidgets('guiding alone fills the row', (tester) async {
       await _pump(tester, size, steps: _someSteps);
+      // RA and Dec are named, not told apart by colour alone (WCAG 1.4.1).
+      final trace = find.ancestor(of: find.byKey(const Key('simple-guide-trace')), matching: find.byType(Row)).first;
+      expect(find.descendant(of: trace, matching: find.text('RA')), findsOneWidget);
+      expect(find.descendant(of: trace, matching: find.text('Dec')), findsOneWidget);
       expect(guiding(tester), Rect.fromLTRB(kSimpleInset, size.height - kSimpleInset - kSimpleBarHeight,
           end(tester), size.height - kSimpleInset));
     });

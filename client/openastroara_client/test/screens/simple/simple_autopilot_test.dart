@@ -125,10 +125,15 @@ void main() {
     // Skipped, not done: amber, never the green tick.
     expect(find.byIcon(Icons.check_circle), findsNothing);
     expect(tester.widget<Icon>(find.byIcon(Icons.skip_next)).color, AraColors.accentBusy);
+    // Screen readers hear each step's state, not only its name.
+    expect(find.bySemanticsLabel('Focus, skipped'), findsOneWidget);
+    expect(find.bySemanticsLabel('Polar align, current step'), findsOneWidget);
+    expect(find.bySemanticsLabel('Plan, next'), findsOneWidget);
     c.read(_focus.notifier).set(SetupStepState.done);
     await tester.pump();
     expect(tester.widget<Icon>(find.byIcon(Icons.check_circle)).color, AraColors.accentConnected,
         reason: 'focused after all: green');
+    expect(find.bySemanticsLabel('Focus, done'), findsOneWidget);
     expect(find.byIcon(Icons.skip_next), findsNothing);
     await tester.tap(find.byKey(const Key('autopilot-back')));
     await tester.pump();

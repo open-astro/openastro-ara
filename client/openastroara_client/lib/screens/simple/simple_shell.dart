@@ -1285,14 +1285,31 @@ class _GuidingBar extends ConsumerWidget {
               ),
             ),
           ),
+          const SizedBox(width: 10),
+          // Named, and Dec dashed: the two lines aren't told apart by colour
+          // alone (WCAG 1.4.1, the Brightness-First Rule).
+          Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'RA',
+                style: AraText.caption.copyWith(color: AraColors.accentInfo),
+              ),
+              Text(
+                'Dec',
+                style: AraText.caption.copyWith(color: AraColors.errorText),
+              ),
+            ],
+          ),
         ],
       ),
     );
   }
 }
 
-/// The last minute or so of RA (blue) and Dec (red) guide error, centred on
-/// zero and scaled to the largest excursion shown.
+/// The last minute or so of RA (blue, solid) and Dec (light red, dashed)
+/// guide error, centred on zero and scaled to the largest excursion shown.
 class _TracePainter extends CustomPainter {
   _TracePainter(List<GuideStep> steps)
     : _steps = steps.length > _kShown
@@ -1317,7 +1334,11 @@ class _TracePainter extends CustomPainter {
         if (v != null && v.abs() > peak) peak = v.abs();
       }
     }
-    void line(double? Function(GuideStep) value, Color color) {
+    void line(
+      double? Function(GuideStep) value,
+      Color color, {
+      bool dashed = false,
+    }) {
       final path = Path();
       var started = false;
       for (var i = 0; i < _steps.length; i++) {
@@ -1327,17 +1348,20 @@ class _TracePainter extends CustomPainter {
         started ? path.lineTo(p.dx, p.dy) : path.moveTo(p.dx, p.dy);
         started = true;
       }
-      canvas.drawPath(
-        path,
-        Paint()
-          ..color = color
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 1.5,
-      );
+      final paint = Paint()
+        ..color = color
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.5;
+      if (!dashed) return canvas.drawPath(path, paint);
+      for (final m in path.computeMetrics()) {
+        for (var d = 0.0; d < m.length; d += 7) {
+          canvas.drawPath(m.extractPath(d, math.min(d + 4, m.length)), paint);
+        }
+      }
     }
 
     line((s) => s.raPx, AraColors.accentInfo);
-    line((s) => s.decPx, AraColors.accentError);
+    line((s) => s.decPx, AraColors.errorText, dashed: true);
   }
 
   @override

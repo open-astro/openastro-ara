@@ -175,57 +175,71 @@ class _Step extends StatelessWidget {
   Widget build(BuildContext context) {
     final behind = step.index < current.index;
     final on = step == current;
-    return Container(
-      height: 36,
-      padding: const EdgeInsets.symmetric(horizontal: 10),
-      decoration: BoxDecoration(
-        color: on ? AraColors.selectionTint : null,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        spacing: 6,
-        children: [
-          behind && done
-              ? const Icon(
-                  Icons.check_circle,
-                  size: 20,
-                  color: AraColors.accentConnected,
-                )
+    // The tick and skip mark are icons: screen readers get the state in words.
+    return Semantics(
+      label:
+          '${step.label}, ${behind && done
+              ? 'done'
               : behind
-              ? const Icon(
-                  Icons.skip_next,
-                  size: 20,
-                  color: AraColors.accentBusy,
-                )
-              : Container(
-                  width: 20,
-                  height: 20,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: on ? AraColors.accentInfo : AraColors.textDisabled,
-                      width: 1.5,
+              ? 'skipped'
+              : on
+              ? 'current step'
+              : 'next'}',
+      excludeSemantics: true,
+      child: Container(
+        height: 36,
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        decoration: BoxDecoration(
+          color: on ? AraColors.selectionTint : null,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          spacing: 6,
+          children: [
+            behind && done
+                ? const Icon(
+                    Icons.check_circle,
+                    size: 20,
+                    color: AraColors.accentConnected,
+                  )
+                : behind
+                ? const Icon(
+                    Icons.skip_next,
+                    size: 20,
+                    color: AraColors.accentBusy,
+                  )
+                : Container(
+                    width: 20,
+                    height: 20,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: on
+                            ? AraColors.accentInfo
+                            : AraColors.textDisabled,
+                        width: 1.5,
+                      ),
+                    ),
+                    child: Text(
+                      '${step.index + 1}',
+                      style: kSimpleText.copyWith(
+                        fontSize: 11,
+                        color: on
+                            ? AraColors.accentInfo
+                            : AraColors.textSecondary,
+                      ),
                     ),
                   ),
-                  child: Text(
-                    '${step.index + 1}',
-                    style: kSimpleText.copyWith(
-                      fontSize: 11,
-                      color: on
-                          ? AraColors.accentInfo
-                          : AraColors.textSecondary,
-                    ),
-                  ),
-                ),
-          Text(
-            step.label,
-            style: kSimpleText.copyWith(
-              color: on ? AraColors.textPrimary : AraColors.textSecondary,
+            Text(
+              step.label,
+              style: kSimpleText.copyWith(
+                color: on ? AraColors.textPrimary : AraColors.textSecondary,
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
