@@ -93,19 +93,25 @@ List<FilterPlanStep> simpleRunDefaultPlan(
 /// differs from it, rows sharing a length together ("L 120 s · GB 180 s",
 /// "Ha/OIII 300 s"); null when every row already matches. Pure —
 /// unit-tested.
-String? simpleRunSuggestion(List<FilterPlanStep> steps, List<double> suggested) {
+String? simpleRunSuggestion(
+  List<FilterPlanStep> steps,
+  List<double> suggested,
+) {
   final byLength = <double, List<String>>{};
   for (var i = 0; i < steps.length; i++) {
     if (suggested[i] == steps[i].exposureSeconds) continue;
     (byLength[suggested[i]] ??= []).add(steps[i].filterName);
   }
   if (byLength.isEmpty) return null;
-  String len(double s) => formatExposure(Duration(milliseconds: (s * 1000).round()));
-  return byLength.entries.map((e) {
-    final names = e.value.where((n) => n.isNotEmpty).toList();
-    final joined = names.join(names.every((n) => n.length == 1) ? '' : '/');
-    return joined.isEmpty ? len(e.key) : '$joined ${len(e.key)}';
-  }).join(' · ');
+  String len(double s) =>
+      formatExposure(Duration(milliseconds: (s * 1000).round()));
+  return byLength.entries
+      .map((e) {
+        final names = e.value.where((n) => n.isNotEmpty).toList();
+        final joined = names.join(names.every((n) => n.length == 1) ? '' : '/');
+        return joined.isEmpty ? len(e.key) : '$joined ${len(e.key)}';
+      })
+      .join(' · ');
 }
 
 int _total(List<FilterPlanStep> steps) =>
@@ -120,12 +126,13 @@ String simpleRunDuration(double seconds) {
 /// The rail chip in Plan: the plan's total imaging time, the created plan's
 /// once there is one, else the sheet's rows; hours over minutes, as P.A.'s
 /// chip takes two lines in 60 px. Pure — unit-tested.
-String simpleRunChip(SimpleRun run, List<FilterPlanStep> rows) => simpleRunDuration(
-  (run.steps.isEmpty ? rows : run.steps).fold(
-    0.0,
-    (t, s) => t + s.exposureSeconds * s.frameCount,
-  ),
-).replaceFirst(' h ', ' h\n');
+String simpleRunChip(SimpleRun run, List<FilterPlanStep> rows) =>
+    simpleRunDuration(
+      (run.steps.isEmpty ? rows : run.steps).fold(
+        0.0,
+        (t, s) => t + s.exposureSeconds * s.frameCount,
+      ),
+    ).replaceFirst(' h ', ' h\n');
 
 String _hhmm(DateTime t) =>
     '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
@@ -163,15 +170,16 @@ class SimpleRunPlanNotifier extends Notifier<List<FilterPlanStep>> {
     );
   }
 
-  FilterPlanStep _fit(FilterPlanStep s, double exposureSeconds) => FilterPlanStep(
-    filterName: s.filterName,
-    exposureSeconds: exposureSeconds,
-    frameCount: planFrameCount(
-      exposureSeconds,
-      remainingDarkHours: _darkHours,
-      filterCount: state.length,
-    ),
-  );
+  FilterPlanStep _fit(FilterPlanStep s, double exposureSeconds) =>
+      FilterPlanStep(
+        filterName: s.filterName,
+        exposureSeconds: exposureSeconds,
+        frameCount: planFrameCount(
+          exposureSeconds,
+          remainingDarkHours: _darkHours,
+          filterCount: state.length,
+        ),
+      );
 
   void _set(int i, {double? exposureSeconds, int? frameCount}) => state = [
     for (var j = 0; j < state.length; j++)
@@ -185,6 +193,9 @@ class SimpleRunPlanNotifier extends Notifier<List<FilterPlanStep>> {
   ];
 
   // Without a window the count the user set stays.
+  /// Editing a queued target: its rows, to change and save back.
+  void load(List<FilterPlanStep> steps) => state = [...steps];
+
   void setExposure(int i, double seconds) => _darkHours == null
       ? _set(i, exposureSeconds: seconds)
       : state = [
@@ -242,18 +253,19 @@ String simpleSuggestionLine(TonightSkyObject o) {
 /// tapped in the sky. Pure — unit-tested.
 // shortcut: the ranker's position is J2000 and stands in for JNOW too; only
 // the plan (J2000) reads it, the planetarium isn't pointed at it.
-PlanetariumSelection simpleSelectionOf(TonightSkyObject o) => PlanetariumSelection(
-  name: o.name,
-  kind: o.type,
-  raHours: o.raDeg / 15,
-  decDeg: o.decDeg,
-  raJ2000Hours: o.raDeg / 15,
-  decJ2000Deg: o.decDeg,
-  altDeg: o.altitudeDeg,
-  maxAltDeg: o.maxAltitudeDeg,
-  rise: o.windowStartUtc?.toLocal(),
-  designations: [o.id, ...o.aliases],
-);
+PlanetariumSelection simpleSelectionOf(TonightSkyObject o) =>
+    PlanetariumSelection(
+      name: o.name,
+      kind: o.type,
+      raHours: o.raDeg / 15,
+      decDeg: o.decDeg,
+      raJ2000Hours: o.raDeg / 15,
+      decJ2000Deg: o.decDeg,
+      altDeg: o.altitudeDeg,
+      maxAltDeg: o.maxAltitudeDeg,
+      rise: o.windowStartUtc?.toLocal(),
+      designations: [o.id, ...o.aliases],
+    );
 
 const _tagOrder = ['M', 'NGC', 'IC', 'SH2', 'B', 'LBN'];
 final _tagKey = RegExp(r'^(M|NGC|IC|SH2|B|LBN)-?(\d+[A-Z]?)$');
@@ -386,14 +398,14 @@ class SimpleRun {
     String? error,
     bool noStorage = false,
   }) => SimpleRun(
-        sequenceId: sequenceId,
-        targets: targets ?? this.targets,
-        started: started ?? this.started,
-        busy: busy ?? this.busy,
-        pausing: pausing ?? this.pausing,
-        error: error,
-        noStorage: noStorage,
-      );
+    sequenceId: sequenceId,
+    targets: targets ?? this.targets,
+    started: started ?? this.started,
+    busy: busy ?? this.busy,
+    pausing: pausing ?? this.pausing,
+    error: error,
+    noStorage: noStorage,
+  );
 }
 
 /// What Plan's shutter, tracker and sheet show.
@@ -472,7 +484,9 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
         // The daemon refused the append (the run is winding down) and a
         // second sequence was made: don't leave it behind.
         try {
-          await this.ref.read(sequenceApiProvider)?.deleteSequence(r.sequenceId);
+          await this.ref
+              .read(sequenceApiProvider)
+              ?.deleteSequence(r.sequenceId);
         } catch (_) {}
         state = state.copyWith(
           busy: false,
@@ -491,10 +505,16 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
       if (queue == null) {
         state = SimpleRun(sequenceId: r.sequenceId, targets: [target]);
       } else if (first && state.targets.isNotEmpty) {
-        await _moveFirst(queue, target.name, state.targets.first.name);
-        state = state.copyWith(targets: [target, ...state.targets], busy: false);
+        await _moveBefore(queue, target.name, state.targets.first.name);
+        state = state.copyWith(
+          targets: [target, ...state.targets],
+          busy: false,
+        );
       } else {
-        state = state.copyWith(targets: [...state.targets, target], busy: false);
+        state = state.copyWith(
+          targets: [...state.targets, target],
+          busy: false,
+        );
       }
       return true;
     } catch (e) {
@@ -503,18 +523,86 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
     }
   }
 
-  // Start now on a queue that hasn't started: the new block goes before the
-  // first target's.
-  Future<void> _moveFirst(String id, String name, String before) async {
+  // The named block (just appended, so last) goes before [before]'s: Start
+  // now puts a target first, an edit puts it back. Live while it runs.
+  Future<void> _moveBefore(String id, String name, String before) async {
     final api = ref.read(sequenceApiProvider);
     if (api == null) return;
     final body = (await api.getSequenceDetail(id)).body;
     final from = indexOfTargetBlock(body, name);
     final to = indexOfTargetBlock(body, before);
     if (from < 0 || to < 0 || from < to) return;
+    if (ref.read(sequenceRunStateProvider).value?.state?.isActive ?? false) {
+      await api.moveRunItem(id, [from], to);
+      return;
+    }
     final children = childrenOf(body);
     children.insert(to, children.removeAt(from));
     await api.updateSequence(id, body: withChildren(body, children));
+  }
+
+  /// Edit target [i]'s rows (one not started yet): its block is replaced on
+  /// the rig (removed, added again with [steps], moved back into place), live
+  /// while imaging. True once saved.
+  Future<bool> edit(WidgetRef ref, int i, List<FilterPlanStep> steps) async {
+    final api = this.ref.read(sequenceApiProvider);
+    final id = state.sequenceId;
+    if (api == null || id == null || i >= state.targets.length || state.busy) {
+      return false;
+    }
+    final t = state.targets[i];
+    final next = i + 1 < state.targets.length
+        ? state.targets[i + 1].name
+        : null;
+    state = state.copyWith(busy: true);
+    try {
+      await _removeBlock(api, id, t.name);
+      this.ref.read(selectedSequenceIdProvider.notifier).select(id);
+      final r = await createImagingRun(
+        ref,
+        raDeg: t.raDeg,
+        decDeg: t.decDeg,
+        targetName: t.name,
+        jumpToRun: false,
+        appendToOpen: true,
+        filterPlan: steps.first.filterName.isEmpty ? null : steps,
+        exposureSeconds: steps.first.exposureSeconds,
+        frameCount: steps.first.frameCount,
+      );
+      if (r == null || r.draft || r.sequenceId != id) {
+        throw StateError("the rig didn't take the edited plan");
+      }
+      if (next != null) await _moveBefore(id, t.name, next);
+      final edited = SimpleTarget(
+        name: t.name,
+        tag: t.tag,
+        steps: steps,
+        raDeg: t.raDeg,
+        decDeg: t.decDeg,
+        rise: t.rise,
+      );
+      state = state.copyWith(
+        targets: [...state.targets]..[i] = edited,
+        busy: false,
+      );
+      return true;
+    } catch (e) {
+      state = state.copyWith(busy: false, error: _why(e, 'save the edit'));
+      return false;
+    }
+  }
+
+  // The named target block out of the sequence: live while it runs.
+  Future<void> _removeBlock(SequenceClient api, String id, String name) async {
+    final body = (await api.getSequenceDetail(id)).body;
+    final active =
+        ref.read(sequenceRunStateProvider).value?.state?.isActive ?? false;
+    if (active) {
+      final at = indexOfTargetBlock(body, name);
+      if (at >= 0) await api.removeRunItem(id, [at]);
+    } else if (removeTargetFromRunBody(body, name) case final next?) {
+      await api.updateSequence(id, body: next);
+    }
   }
 
   /// Remove target [i] from the queue (one not started yet): live from a
@@ -525,15 +613,7 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
     if (api == null || id == null || i >= state.targets.length) return;
     final name = state.targets[i].name;
     try {
-      final body = (await api.getSequenceDetail(id)).body;
-      final active =
-          ref.read(sequenceRunStateProvider).value?.state?.isActive ?? false;
-      if (active) {
-        final at = indexOfTargetBlock(body, name);
-        if (at >= 0) await api.removeRunItem(id, [at]);
-      } else if (removeTargetFromRunBody(body, name) case final next?) {
-        await api.updateSequence(id, body: next);
-      }
+      await _removeBlock(api, id, name);
       final left = [...state.targets]..removeAt(i);
       if (left.isEmpty && !state.started) {
         // Nothing left to run: the empty sequence goes too.
@@ -561,8 +641,11 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
     'start imaging',
     before: state.copyWith(started: true),
   );
-  Future<void> pause() =>
-      _op((api, id) => api.pause(id), 'pause', before: state.copyWith(pausing: true));
+  Future<void> pause() => _op(
+    (api, id) => api.pause(id),
+    'pause',
+    before: state.copyWith(pausing: true),
+  );
   // The shutter's resume re-centers (pointing may have drifted while
   // paused); the progress panel offers the other two.
   Future<void> resume({bool recenter = true, bool refocus = false}) => _op(
@@ -683,7 +766,8 @@ class _SimpleRunTrackerState extends ConsumerState<SimpleRunTracker> {
     if (phase == SimpleRunPhase.none) return const SizedBox.shrink();
     final ours = run.sequenceId != null && info?.sequenceId == run.sequenceId;
     final captured = ours || !run.started ? (info?.framesCaptured ?? 0) : 0;
-    final known = run.targets.isNotEmpty && (ours || phase == SimpleRunPhase.ready);
+    final known =
+        run.targets.isNotEmpty && (ours || phase == SimpleRunPhase.ready);
     final active = switch (phase) {
       SimpleRunPhase.ready || SimpleRunPhase.done => AraColors.accentConnected,
       SimpleRunPhase.paused => AraColors.accentBusy,
@@ -701,7 +785,8 @@ class _SimpleRunTrackerState extends ConsumerState<SimpleRunTracker> {
         key: const Key('simple-run-tracker'),
         name: info?.currentTargetName ?? '',
         frames: '$captured',
-        last: stateWord() ??
+        last:
+            stateWord() ??
             (info?.estimatedRemainingSeconds == null
                 ? ''
                 : simpleRunDuration(info!.estimatedRemainingSeconds!)),
@@ -764,9 +849,7 @@ class _SimpleRunTrackerState extends ConsumerState<SimpleRunTracker> {
         final all = run.targets.length;
         final shown = all <= fit
             ? [for (var i = 0; i < all; i++) i]
-            : [
-                for (var i = cur; i < math.min(all, cur + fit - 1); i++) i,
-              ];
+            : [for (var i = cur; i < math.min(all, cur + fit - 1); i++) i];
         final rest = [
           for (var i = shown.isEmpty ? 0 : shown.last + 1; i < all; i++) i,
         ];
@@ -868,7 +951,10 @@ class _PlanSquare extends StatelessWidget {
                     spacing: 2,
                     children: [
                       for (final (text, style) in [
-                        (name, kSimpleText.copyWith(fontWeight: FontWeight.w600)),
+                        (
+                          name,
+                          kSimpleText.copyWith(fontWeight: FontWeight.w600),
+                        ),
                         (frames, kSimpleText),
                         if (sub != null) (sub!, small),
                         (
@@ -970,22 +1056,28 @@ class _SimpleRunShutterState extends ConsumerState<SimpleRunShutter>
   @override
   Widget build(BuildContext context) {
     final run = ref.watch(simpleRunProvider);
-    final phase = simpleRunPhase(run, ref.watch(sequenceRunStateProvider).value);
+    final phase = simpleRunPhase(
+      run,
+      ref.watch(sequenceRunStateProvider).value,
+    );
     final camera = ref.watch(cameraStatusProvider).value;
     final exposing = camera?.runtimeState == 'exposing';
     final holdable = _holdable(phase);
     ref.watch(planetariumSelectionProvider);
     // A picked target with no plan yet starts like a ready plan; a plan
     // queued below the horizon waits for the rise.
-    final waiting = phase == SimpleRunPhase.ready && run.waiting(DateTime.now());
+    final waiting =
+        phase == SimpleRunPhase.ready && run.waiting(DateTime.now());
     if (waiting) {
-      _riseTimer ??= Timer(run.targets.first.rise!.difference(DateTime.now()), () {
-        _riseTimer = null;
-        if (mounted) setState(() {});
-      });
+      _riseTimer ??= Timer(
+        run.targets.first.rise!.difference(DateTime.now()),
+        () {
+          _riseTimer = null;
+          if (mounted) setState(() {});
+        },
+      );
     }
-    final idle =
-        (phase == SimpleRunPhase.none && !_pickable()) || waiting;
+    final idle = (phase == SimpleRunPhase.none && !_pickable()) || waiting;
     final tap = run.busy ? null : _tap(phase);
     final ring = switch (phase) {
       _ when idle => AraColors.textDisabled,
@@ -1119,7 +1211,12 @@ class SimpleRunSheet extends ConsumerStatefulWidget {
     required this.onPickInSky,
     required this.onCreated,
     required this.onLibrary,
+    this.editing,
   });
+
+  /// The queued target being edited (its rows are in the plan rows); null
+  /// when planning the next target.
+  final int? editing;
 
   /// A search runs in the planetarium, so it shows behind the sheet.
   final VoidCallback onShowSky;
@@ -1182,6 +1279,11 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
   }
 
   Widget _plan(SimpleRun run) {
+    // An edit whose target went (deleted, or the queue ended) plans anew.
+    final editing =
+        widget.editing != null && widget.editing! < run.targets.length
+        ? widget.editing
+        : null;
     ref.listen(planetariumSelectionProvider, (_, next) {
       if (next != null && _added != null) setState(() => _added = null);
     });
@@ -1239,7 +1341,9 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
       return w;
     }
 
-    final nameWidth = steps.map((s) => widthOf(s.filterName)).fold(32.0, math.max);
+    final nameWidth = steps
+        .map((s) => widthOf(s.filterName))
+        .fold(32.0, math.max);
     // Below the horizon it can be queued, not started; while imaging the
     // sheet only adds (the shutter has the run).
     final imaging =
@@ -1253,119 +1357,127 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
     // A wide window puts the lists in a column beside the plan, so the sheet
     // stays short enough to clear the status pill.
     final wide =
-        (run.targets.isNotEmpty || best.isNotEmpty) &&
+        best.isNotEmpty &&
+        editing == null &&
         MediaQuery.sizeOf(context).width >= _kTwoColumnWidth;
     final lists = <Widget>[
-        if (run.targets.isNotEmpty) _QueueList(run: run),
-        // Tonight's best, from the full UI's ranking: one tap picks a target.
-        if (best.isNotEmpty) ...[
-          Text("TONIGHT'S BEST", style: AraText.caption),
-          Wrap(
-            spacing: AraSpace.s8,
-            runSpacing: AraSpace.s8,
-            children: [
-              for (final o in best)
-                SizedBox(
-                  width: wide ? _kListsWidth : (400 - AraSpace.s8) / 2,
-                  height: 52,
-                  child: Material(
-                    color: sel?.name == o.name
-                        ? AraColors.selectionBg
-                        : kSimpleTileFill,
+      // Tonight's best, from the full UI's ranking: one tap picks a target.
+      if (best.isNotEmpty) ...[
+        Text("TONIGHT'S BEST", style: AraText.caption),
+        Wrap(
+          spacing: AraSpace.s8,
+          runSpacing: AraSpace.s8,
+          children: [
+            for (final o in best)
+              SizedBox(
+                width: wide ? _kListsWidth : (400 - AraSpace.s8) / 2,
+                height: 52,
+                child: Material(
+                  color: sel?.name == o.name
+                      ? AraColors.selectionBg
+                      : kSimpleTileFill,
+                  borderRadius: BorderRadius.circular(8),
+                  child: InkWell(
+                    key: Key('simple-run-suggestion-${o.name}'),
                     borderRadius: BorderRadius.circular(8),
-                    child: InkWell(
-                      key: Key('simple-run-suggestion-${o.name}'),
-                      borderRadius: BorderRadius.circular(8),
-                      onTap: () => ref
-                          .read(planetariumSelectionProvider.notifier)
-                          .set(simpleSelectionOf(o)),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              o.name,
-                              style: kSimpleText.copyWith(
-                                fontWeight: FontWeight.w600,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
+                    onTap: () => ref
+                        .read(planetariumSelectionProvider.notifier)
+                        .set(simpleSelectionOf(o)),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            o.name,
+                            style: kSimpleText.copyWith(
+                              fontWeight: FontWeight.w600,
                             ),
-                            Text(
-                              simpleSuggestionLine(o),
-                              style: _dim.copyWith(fontSize: 12),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ],
-                        ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          Text(
+                            simpleSuggestionLine(o),
+                            style: _dim.copyWith(fontSize: 12),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
                       ),
                     ),
                   ),
                 ),
-            ],
-          ),
-        ],
+              ),
+          ],
+        ),
+      ],
     ];
     final main = Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       spacing: AraSpace.s8,
       children: [
-        Text("Tonight's plan", style: _head),
-        if (!wide) ...lists,
-        TextField(
-          key: const Key('simple-run-search'),
-          controller: _query,
-          style: kSimpleText,
-          textInputAction: TextInputAction.search,
-          onSubmitted: (_) => _search(),
-          decoration: InputDecoration(
-            hintText: 'Search objects',
-            prefixIcon: const Icon(Icons.search, size: 20),
-            suffixIcon: IconButton(
-              tooltip: 'Search',
-              icon: const Icon(Icons.arrow_forward, size: 20),
-              onPressed: _search,
+        Text(
+          editing == null
+              ? "Tonight's plan"
+              : 'Edit ${run.targets[editing].name}',
+          style: _head,
+        ),
+        if (!wide && editing == null) ...lists,
+        // Editing keeps the target: to change it, delete it and add another.
+        if (editing == null) ...[
+          TextField(
+            key: const Key('simple-run-search'),
+            controller: _query,
+            style: kSimpleText,
+            textInputAction: TextInputAction.search,
+            onSubmitted: (_) => _search(),
+            decoration: InputDecoration(
+              hintText: 'Search objects',
+              prefixIcon: const Icon(Icons.search, size: 20),
+              suffixIcon: IconButton(
+                tooltip: 'Search',
+                icon: const Icon(Icons.arrow_forward, size: 20),
+                onPressed: _search,
+              ),
             ),
           ),
-        ),
-        Row(
-          children: [
-            Expanded(
-              child: sel == null
-                  ? Text('Search, or pick in the sky.', style: _dim)
-                  : Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          sel.name,
-                          style: kSimpleText.copyWith(
-                            fontWeight: FontWeight.w600,
+          Row(
+            children: [
+              Expanded(
+                child: sel == null
+                    ? Text('Search, or pick in the sky.', style: _dim)
+                    : Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            sel.name,
+                            style: kSimpleText.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        Text(
-                          simpleTargetStatus(sel),
-                          style: sel.belowHorizon
-                              ? kSimpleText.copyWith(
-                                  color: AraColors.accentBusy,
-                                )
-                              : _dim,
-                        ),
-                      ],
-                    ),
-            ),
-            TextButton(
-              key: const Key('simple-run-pick-in-sky'),
-              onPressed: widget.onPickInSky,
-              child: const Text('Pick in Sky'),
-            ),
-          ],
-        ),
+                          Text(
+                            simpleTargetStatus(sel),
+                            style: sel.belowHorizon
+                                ? kSimpleText.copyWith(
+                                    color: AraColors.accentBusy,
+                                  )
+                                : _dim,
+                          ),
+                        ],
+                      ),
+              ),
+              TextButton(
+                key: const Key('simple-run-pick-in-sky'),
+                onPressed: widget.onPickInSky,
+                child: const Text('Pick in Sky'),
+              ),
+            ],
+          ),
+        ],
         const Divider(height: 1),
         for (var i = 0; i < steps.length; i++)
           Row(
@@ -1460,13 +1572,16 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
           ),
         Row(
           children: [
-            Expanded(child: Text('${_total(steps)} frames', style: kSimpleText)),
+            Expanded(
+              child: Text('${_total(steps)} frames', style: kSimpleText),
+            ),
             Text(simpleRunDuration(seconds), style: _dim),
           ],
         ),
         // The full UI asks before Run; here it only warns (a permanent pier
         // or a daytime test runs fine unaligned).
-        if (ref.watch(setupPolarAlignStateProvider) != SetupStepState.done &&
+        if (editing == null &&
+            ref.watch(setupPolarAlignStateProvider) != SetupStepState.done &&
             !(ref.watch(simplePermanentPierProvider).value ?? false))
           Text(
             'Not polar aligned tonight',
@@ -1478,53 +1593,84 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
             style: kSimpleText.copyWith(color: AraColors.accentConnected),
           ),
         if (run.error != null) _RunError(run),
-        Row(
-          spacing: AraSpace.s8,
-          children: [
-            Expanded(
-              child: OutlinedButton(
-                key: const Key('simple-run-queue'),
-                onPressed: queueOff
-                    ? null
-                    : () async {
-                        final name = sel.name;
-                        final ok = await ref
-                            .read(simpleRunProvider.notifier)
-                            .create(ref);
-                        if (!ok || !mounted) return;
-                        // The sheet stays up for the next pick.
-                        final n = ref.read(simpleRunProvider).targets.length;
-                        ref.read(planetariumSelectionProvider.notifier).set(null);
-                        setState(() => _added = '$name added · $n in the queue');
-                      },
-                child: const Text('Add to queue'),
-              ),
-            ),
-            Expanded(
-              child: FilledButton(
-                key: const Key('simple-run-start'),
-                style: FilledButton.styleFrom(
-                  backgroundColor: AraColors.accentConnected,
-                ),
-                onPressed: off
-                    ? null
-                    : () async {
-                        final ok = await ref
-                            .read(simpleRunProvider.notifier)
-                            .createAndStart(ref);
-                        if (ok) widget.onCreated();
-                      },
-                child: Text(
-                  run.busy
-                      ? 'Starting…'
-                      : run.sequenceId != null
-                      ? 'Start now'
-                      : 'Create and start',
+        if (editing != null)
+          Row(
+            spacing: AraSpace.s8,
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: widget.onCreated,
+                  child: const Text('Cancel'),
                 ),
               ),
-            ),
-          ],
-        ),
+              Expanded(
+                child: FilledButton(
+                  key: const Key('simple-run-save'),
+                  onPressed: run.busy
+                      ? null
+                      : () async {
+                          final ok = await ref
+                              .read(simpleRunProvider.notifier)
+                              .edit(ref, editing, steps);
+                          if (ok) widget.onCreated();
+                        },
+                  child: Text(run.busy ? 'Saving…' : 'Save'),
+                ),
+              ),
+            ],
+          )
+        else
+          Row(
+            spacing: AraSpace.s8,
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  key: const Key('simple-run-queue'),
+                  onPressed: queueOff
+                      ? null
+                      : () async {
+                          final name = sel.name;
+                          final ok = await ref
+                              .read(simpleRunProvider.notifier)
+                              .create(ref);
+                          if (!ok || !mounted) return;
+                          // The sheet stays up for the next pick.
+                          final n = ref.read(simpleRunProvider).targets.length;
+                          ref
+                              .read(planetariumSelectionProvider.notifier)
+                              .set(null);
+                          setState(
+                            () => _added = '$name added · $n in the queue',
+                          );
+                        },
+                  child: const Text('Add to queue'),
+                ),
+              ),
+              Expanded(
+                child: FilledButton(
+                  key: const Key('simple-run-start'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AraColors.accentConnected,
+                  ),
+                  onPressed: off
+                      ? null
+                      : () async {
+                          final ok = await ref
+                              .read(simpleRunProvider.notifier)
+                              .createAndStart(ref);
+                          if (ok) widget.onCreated();
+                        },
+                  child: Text(
+                    run.busy
+                        ? 'Starting…'
+                        : run.sequenceId != null
+                        ? 'Start now'
+                        : 'Create and start',
+                  ),
+                ),
+              ),
+            ],
+          ),
       ],
     );
     if (!wide) return SizedBox(width: 400, child: main);
@@ -1551,8 +1697,11 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
 /// The sheet's QUEUE: each target with its tag, frames done of its total and
 /// time left, and × for one that hasn't started.
 class _QueueList extends ConsumerWidget {
-  const _QueueList({required this.run});
+  const _QueueList({required this.run, required this.onEdit});
   final SimpleRun run;
+
+  /// A target that hasn't started, tapped: edit its rows.
+  final ValueChanged<int> onEdit;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -1564,7 +1713,12 @@ class _QueueList extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text('QUEUE', style: AraText.caption),
+        Text(
+          'QUEUE · ${run.targets.length} '
+          '${run.targets.length == 1 ? 'target' : 'targets'} · '
+          '${simpleRunDuration(run.steps.fold(0.0, (t, s) => t + s.exposureSeconds * s.frameCount))}',
+          style: AraText.caption,
+        ),
         for (var i = 0; i < run.targets.length; i++)
           () {
             final t = run.targets[i];
@@ -1577,26 +1731,32 @@ class _QueueList extends ConsumerWidget {
             return Row(
               spacing: AraSpace.s8,
               children: [
-                // Two lines, to fit the narrow list column.
+                // Two lines, to fit the narrow list column; a target that
+                // hasn't started opens its rows for editing.
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        t.tag ?? t.name,
-                        style: kSimpleText.copyWith(
-                          fontWeight: FontWeight.w600,
+                  child: InkWell(
+                    key: Key('simple-run-edit-$i'),
+                    borderRadius: BorderRadius.circular(8),
+                    onTap: !run.started || i > cur ? () => onEdit(i) : null,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          t.tag ?? t.name,
+                          style: kSimpleText.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      Text(
-                        '$got / ${_total(t.steps)} · ${simpleRunDuration(left)}',
-                        style: _dim.copyWith(fontSize: 12),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
+                        Text(
+                          '$got / ${_total(t.steps)} · ${simpleRunDuration(left)}',
+                          style: _dim.copyWith(fontSize: 12),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
                   ),
                 ),
                 SizedBox(
@@ -1679,7 +1839,8 @@ class _NightDone extends ConsumerWidget {
           : filed[s.filterName] ?? 0;
     }
 
-    final start = info.startedUtc?.toLocal(), end = info.completedUtc?.toLocal();
+    final start = info.startedUtc?.toLocal(),
+        end = info.completedUtc?.toLocal();
     final stoppedAt = info.state == SequenceRunState.completed
         ? null
         : info.currentInstructionDescription;
@@ -1753,14 +1914,19 @@ class _NightDone extends ConsumerWidget {
   }
 }
 
-/// Plan's panel beside the rail while imaging: the target in hand, its
-/// frames done, when the queue ends, a bar per filter, and Add to queue. The
-/// shutter pauses and, held, stops.
+/// Plan's queue panel beside the rail (a plan square tapped, or the chip
+/// while imaging): while imaging the target in hand, its frames, when the
+/// queue ends and a bar per filter; then the queue, where a tap edits a target
+/// that hasn't started and × deletes it; then Add target. The shutter pauses
+/// and, held, stops.
 class SimpleRunPanel extends ConsumerWidget {
-  const SimpleRunPanel({super.key, required this.onAdd});
+  const SimpleRunPanel({super.key, required this.onAdd, required this.onEdit});
 
-  /// Add to queue: the sheet, to add a target while imaging.
+  /// Add target: the plan sheet, to queue another.
   final VoidCallback onAdd;
+
+  /// A queued target tapped: the plan sheet on its rows.
+  final ValueChanged<int> onEdit;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -1778,6 +1944,7 @@ class SimpleRunPanel extends ConsumerWidget {
     final remaining = info?.estimatedRemainingSeconds;
     final paused = _paused(info?.state);
     final mountStopped = ref.watch(simpleMountStoppedProvider);
+    final imaging = info?.state?.isActive ?? false;
     return SimplePanel(
       padding: const EdgeInsets.all(AraSpace.s16),
       child: SizedBox(
@@ -1787,65 +1954,74 @@ class SimpleRunPanel extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           spacing: AraSpace.s8,
           children: [
-            Text(
-              'IMAGING ${(target?.name ?? info?.currentTargetName ?? '').toUpperCase()}',
-              style: AraText.caption,
-            ),
-            Text(
-              steps.isEmpty ? '$captured frames' : '$captured / ${_total(steps)}',
-              style: const TextStyle(
-                fontSize: 30,
-                fontWeight: FontWeight.w300,
-                color: AraColors.textPrimary,
-                fontFeatures: [FontFeature.tabularFigures()],
-              ),
-            ),
-            if (paused && mountStopped)
+            if (imaging) ...[
               Text(
-                'Mount stopped',
-                style: kSimpleText.copyWith(color: AraColors.accentBusy),
+                'IMAGING ${(target?.name ?? info?.currentTargetName ?? '').toUpperCase()}',
+                style: AraText.caption,
               ),
-            if (remaining != null)
               Text(
-                'Ends ${_hhmm(DateTime.now().add(Duration(seconds: remaining.round())))}'
-                ' · ${simpleRunDuration(remaining)} left',
-                style: _dim,
+                steps.isEmpty
+                    ? '$captured frames'
+                    : '$captured / ${_total(steps)}',
+                style: const TextStyle(
+                  fontSize: 30,
+                  fontWeight: FontWeight.w300,
+                  color: AraColors.textPrimary,
+                  fontFeatures: [FontFeature.tabularFigures()],
+                ),
               ),
-            for (var i = 0; i < steps.length; i++)
-              Row(
-                spacing: AraSpace.s8,
-                children: [
-                  SizedBox(
-                    width: 24,
-                    child: Text(
-                      steps[i].filterName.isEmpty ? '—' : steps[i].filterName,
-                      style: kSimpleText.copyWith(fontWeight: FontWeight.w600),
-                      overflow: TextOverflow.clip,
+              if (paused && mountStopped)
+                Text(
+                  'Mount stopped',
+                  style: kSimpleText.copyWith(color: AraColors.accentBusy),
+                ),
+              if (remaining != null)
+                Text(
+                  'Ends ${_hhmm(DateTime.now().add(Duration(seconds: remaining.round())))}'
+                  ' · ${simpleRunDuration(remaining)} left',
+                  style: _dim,
+                ),
+              for (var i = 0; i < steps.length; i++)
+                Row(
+                  spacing: AraSpace.s8,
+                  children: [
+                    SizedBox(
+                      width: 24,
+                      child: Text(
+                        steps[i].filterName.isEmpty ? '—' : steps[i].filterName,
+                        style: kSimpleText.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                        overflow: TextOverflow.clip,
+                      ),
                     ),
-                  ),
-                  Expanded(
-                    child: LinearProgressIndicator(
-                      value: done[i] / steps[i].frameCount,
-                      minHeight: 6,
-                      borderRadius: BorderRadius.circular(3),
-                      color: done[i] == steps[i].frameCount
-                          ? AraColors.accentConnected
-                          : AraColors.selectionBg,
-                      backgroundColor: AraColors.border.withValues(alpha: 0.8),
+                    Expanded(
+                      child: LinearProgressIndicator(
+                        value: done[i] / steps[i].frameCount,
+                        minHeight: 6,
+                        borderRadius: BorderRadius.circular(3),
+                        color: done[i] == steps[i].frameCount
+                            ? AraColors.accentConnected
+                            : AraColors.selectionBg,
+                        backgroundColor: AraColors.border.withValues(
+                          alpha: 0.8,
+                        ),
+                      ),
                     ),
-                  ),
-                  SizedBox(
-                    width: 64,
-                    child: Text(
-                      '${done[i]} / ${steps[i].frameCount}',
-                      style: _dim,
-                      textAlign: TextAlign.right,
+                    SizedBox(
+                      width: 64,
+                      child: Text(
+                        '${done[i]} / ${steps[i].frameCount}',
+                        style: _dim,
+                        textAlign: TextAlign.right,
+                      ),
                     ),
-                  ),
-                ],
-              ),
+                  ],
+                ),
+            ],
+            if (run.targets.isNotEmpty) _QueueList(run: run, onEdit: onEdit),
             if (run.error != null) _RunError(run),
-            if (paused) ...[
+            if (imaging && paused) ...[
               Text(
                 'Tap the shutter to resume and re-center; hold it to stop.',
                 style: _dim.copyWith(fontSize: 12),
@@ -1857,12 +2033,11 @@ class SimpleRunPanel extends ConsumerWidget {
                 child: const Text('Resume without re-centering'),
               ),
               TextButton(
-                onPressed: () => ref
-                    .read(simpleRunProvider.notifier)
-                    .resume(refocus: true),
+                onPressed: () =>
+                    ref.read(simpleRunProvider.notifier).resume(refocus: true),
                 child: const Text('Re-center and refocus'),
               ),
-            ] else
+            ] else if (imaging)
               Text(
                 'Tap the shutter to pause after this frame; hold it to stop.',
                 style: _dim.copyWith(fontSize: 12),
@@ -1870,7 +2045,7 @@ class SimpleRunPanel extends ConsumerWidget {
             TextButton(
               key: const Key('simple-run-add'),
               onPressed: onAdd,
-              child: const Text('Add to queue'),
+              child: const Text('Add target'),
             ),
           ],
         ),

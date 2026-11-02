@@ -102,7 +102,7 @@ void leaveSimpleMode(WidgetRef ref, int tab) {
 
 /// The one popover open beside a rail, if any. [settings] is the chip's: the
 /// current mode's options (Preview's exposure, Focus's panel).
-enum _Popover { none, modes, settings }
+enum _Popover { none, modes, settings, queue }
 
 /// Simple Mode (ALP-4810): the latest frame fills the window and only the
 /// shutter is always out. A right rail holds the mode (tap for the five
@@ -138,8 +138,29 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
   _Popover _popover = _Popover.none;
   SimpleModeScreen _mode = SimpleModeScreen.preview;
 
-  /// Plan's sheet open over a run in progress, to add to the queue.
+  /// Plan's sheet open from the queue panel: to add a target (also over a
+  /// run in progress), or on queued target [_editing]'s rows.
   bool _adding = false;
+  int? _editing;
+
+  /// The queue panel's Add target and edit: the sheet over everything.
+  void _openSheet({int? edit}) => setState(() {
+    if (edit != null) {
+      ref
+          .read(simpleRunPlanProvider.notifier)
+          .load(ref.read(simpleRunProvider).targets[edit].steps);
+    }
+    _editing = edit;
+    _popover = _Popover.none;
+    _adding = true;
+  });
+
+  // Leaving an edit drops its rows: the sheet plans the next target afresh.
+  void _closeSheet() {
+    if (_editing != null) ref.invalidate(simpleRunPlanProvider);
+    _editing = null;
+    _adding = false;
+  }
 
   /// The Autopilot strip's laid-out width, so the plan squares stop short of
   /// it; measured after each frame it shows.
@@ -230,7 +251,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
   void _tapImage(bool hasFrame) => setState(() {
     if (_popover != _Popover.none || _adding) {
       _popover = _Popover.none;
-      _adding = false;
+      _closeSheet();
     } else if (hasFrame) {
       _clean = !_clean;
     }
@@ -273,6 +294,10 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
         SimpleRunPhase.none;
     const railTop = kSimpleInset * 2 + kSimpleBarHeight;
     final width = MediaQuery.sizeOf(context).width;
+    final queuePanel = SimpleRunPanel(
+      onAdd: () => _openSheet(),
+      onEdit: (i) => _openSheet(edit: i),
+    );
     // The plan squares sit right of Autopilot's strip, or under it when the
     // window leaves no room beside it (portrait).
     const pillEnd = kSimpleInset * 2 + kSimpleStatusMaxWidth;
@@ -470,19 +495,22 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                   ? squaresTop +
                                         kSimplePlanSquareHeight +
                                         kSimpleInset
-                                  : railTop + kSimpleStatusHeight + kSimpleInset,
+                                  : railTop +
+                                        kSimpleStatusHeight +
+                                        kSimpleInset,
                               bottom: kSimpleInset * 2 + kSimpleBarHeight,
                               child: Center(
                                 child: SimpleRunSheet(
+                                  editing: _editing,
                                   onShowSky: () => setState(() => _sky = true),
                                   onPickInSky: () => setState(() {
                                     _sky = true;
                                     _popover = _Popover.none;
-                                    _adding = false;
+                                    _closeSheet();
                                   }),
                                   onCreated: () => setState(() {
                                     _popover = _Popover.none;
-                                    _adding = false;
+                                    _closeSheet();
                                   }),
                                   onLibrary: () => Navigator.of(context).push(
                                     MaterialPageRoute<void>(
@@ -502,7 +530,9 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                 targetAnchor: Alignment.topLeft,
                                 followerAnchor: Alignment.topRight,
                                 offset: const Offset(-kSimpleInset, 0),
-                                child: _popover == _Popover.modes
+                                child: _popover == _Popover.queue
+                                    ? queuePanel
+                                    : _popover == _Popover.modes
                                     ? _ModeGrid(
                                         current: _mode,
                                         // A mode opens on its panel; Preview's
@@ -529,12 +559,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                           const SimpleFocusPanel(),
                                         SimpleModeScreen.polarAlign =>
                                           const SimplePolarPanel(),
-                                        SimpleModeScreen.plan => SimpleRunPanel(
-                                          onAdd: () => setState(() {
-                                            _popover = _Popover.none;
-                                            _adding = true;
-                                          }),
-                                        ),
+                                        SimpleModeScreen.plan => queuePanel,
                                         _ => const SizedBox(
                                           width: 280,
                                           child: SimpleSettingsPopover(),
@@ -575,7 +600,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                               child: Align(
                                 alignment: Alignment.topRight,
                                 child: SimpleRunTracker(
-                                  onTap: () => _toggle(_Popover.settings),
+                                  onTap: () => _toggle(_Popover.queue),
                                 ),
                               ),
                             ),

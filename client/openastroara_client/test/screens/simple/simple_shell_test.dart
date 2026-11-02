@@ -442,8 +442,8 @@ void main() {
   });
 
   for (final size in const [Size(1024, 768), Size(768, 1024)]) {
-    testWidgets('at $size: Plan\'s sheet clears the status pill and the bottom row; the lists sit beside the plan '
-        'on a wide window, on top on a narrow one', (tester) async {
+    testWidgets('at $size: Plan\'s sheet clears the status pill, the plan squares and the bottom row; a plan '
+        'square opens the queue panel', (tester) async {
       // A long queue: taller than the room, so the sheet must scroll inside its slot.
       await _pump(tester, size,
           plan: SimpleRun(sequenceId: 'seq-1', targets: [
@@ -467,13 +467,13 @@ void main() {
           findsOneWidget);
       expect(sheet.bottom, lessThanOrEqualTo(size.height - kSimpleInset * 2 - kSimpleBarHeight),
           reason: 'above the bottom row');
-      final queue = tester.getRect(find.text('QUEUE'));
-      final search = tester.getRect(find.byKey(const Key('simple-run-search')));
-      if (size.width > size.height) {
-        expect(queue.right, lessThan(search.left), reason: 'a column beside the plan');
-      } else {
-        expect(queue.bottom, lessThan(search.top), reason: 'on top');
-      }
+      // The queue isn't in the sheet: a plan square opens it in its own panel.
+      expect(find.descendant(of: find.byType(SimpleRunSheet), matching: find.textContaining('QUEUE')),
+          findsNothing);
+      await tester.tap(find.descendant(of: find.byKey(const Key('simple-run-tracker')), matching: find.text('M1')));
+      await tester.pump();
+      expect(find.descendant(of: find.byType(SimpleRunPanel), matching: find.textContaining('QUEUE · 10 targets')),
+          findsOneWidget);
     });
   }
 

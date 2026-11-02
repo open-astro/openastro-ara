@@ -701,8 +701,8 @@ void main() {
       expect(seq.calls.last, 'start seq-1');
     });
 
-    testWidgets('every square opens the sheet; its queue list removes a target', (tester) async {
-      var taps = 0;
+    testWidgets('the queue lives in its own panel, not the sheet: a tap edits a target, × deletes one', (tester) async {
+      int? edited;
       final seq = _Seq();
       final c = await _pump(
           tester,
@@ -710,29 +710,60 @@ void main() {
           SingleChildScrollView(
             child: Column(mainAxisSize: MainAxisSize.min, children: [
               SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}, onLibrary: () {}),
-              SimpleRunTracker(onTap: () => taps++),
+              SimpleRunPanel(onAdd: () {}, onEdit: (i) => edited = i),
             ]),
           ));
       await create(tester);
       await pick(tester, c, _m42);
       await create(tester);
-      final tracker = find.byKey(const Key('simple-run-tracker'));
-      for (final name in ['M31', 'M42']) {
-        await tester.tap(find.descendant(of: tracker, matching: find.text(name)));
-        await tester.pumpAndSettle();
-      }
-      expect(taps, 2, reason: 'the same for every square');
-      expect(find.text('QUEUE'), findsOneWidget);
+      expect(find.descendant(of: find.byType(SimpleRunSheet), matching: find.text('QUEUE')), findsNothing,
+          reason: 'the sheet only plans the next target');
+      final panel = find.byType(SimpleRunPanel);
+      expect(find.descendant(of: panel, matching: find.textContaining('QUEUE')), findsOneWidget);
+      await tester.tap(find.byKey(const Key('simple-run-edit-1')));
+      expect(edited, 1);
       await tester.tap(find.byKey(const Key('simple-run-remove-1')));
       await tester.pumpAndSettle();
       expect(seq.targets('seq-1'), ['M31']);
       expect(c.read(simpleRunProvider).targets.map((t) => t.name), ['M31']);
     });
 
+    testWidgets('editing a queued target: the sheet edits its rows only; Save updates it in place', (tester) async {
+      var closed = 0;
+      final seq = _Seq();
+      final c = await _pump(tester, seq,
+          SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}, onLibrary: () {}));
+      await create(tester);
+      await pick(tester, c, _m42);
+      await create(tester);
+      // The shell loads the target's rows, then opens the sheet on it.
+      c.read(simpleRunPlanProvider.notifier).load(c.read(simpleRunProvider).targets[1].steps);
+      await tester.pumpWidget(UncontrolledProviderScope(
+        container: c,
+        child: MaterialApp(
+            home: Scaffold(
+                body: Center(
+                    child: SimpleRunSheet(
+                        editing: 1, onShowSky: () {}, onPickInSky: () {}, onCreated: () => closed++, onLibrary: () {})))),
+      ));
+      await tester.pumpAndSettle();
+      expect(find.text('Edit M42'), findsOneWidget);
+      expect(find.byKey(const Key('simple-run-search')), findsNothing, reason: 'the target stays');
+      expect(find.text('Add to queue'), findsNothing);
+      c.read(simpleRunPlanProvider.notifier).setFrames(0, 7);
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('simple-run-save')));
+      await tester.pumpAndSettle();
+      expect(seq.targets('seq-1'), ['M31', 'M42'], reason: 'still second');
+      expect(c.read(simpleRunProvider).targets[1].steps.first.frameCount, 7);
+      expect(c.read(simpleRunProvider).targets.map((t) => t.name), ['M31', 'M42']);
+      expect(closed, 1);
+    });
+
     testWidgets('while imaging: the panel offers Add to queue; the sheet only adds', (tester) async {
       var adds = 0;
       final seq = _Seq();
-      final c = await _pump(tester, seq, SimpleRunPanel(onAdd: () => adds++));
+      final c = await _pump(tester, seq, SimpleRunPanel(onAdd: () => adds++, onEdit: (_) {}));
       c.read(selectedSequenceIdProvider.notifier).select('seq-1');
       await imaging(tester, c, seq, _imaging(3));
       await tester.tap(find.byKey(const Key('simple-run-add')));
@@ -745,7 +776,7 @@ void main() {
       final ws = StreamController<WsEvent>.broadcast();
       addTearDown(ws.close);
       final seq = _Seq();
-      final c = await _pump(tester, seq, SimpleRunPanel(onAdd: () {}),
+      final c = await _pump(tester, seq, SimpleRunPanel(onAdd: () {}, onEdit: (_) {}),
           overrides: [wsEventsProvider.overrideWith((ref) => ws.stream)]);
       c.read(selectedSequenceIdProvider.notifier).select('seq-1');
       await imaging(tester, c, seq, _imaging(24));
@@ -763,7 +794,7 @@ void main() {
 
     testWidgets('paused: resume without re-centering, or re-center and refocus; imaging: neither', (tester) async {
       final seq = _Seq();
-      final c = await _pump(tester, seq, SimpleRunPanel(onAdd: () {}));
+      final c = await _pump(tester, seq, SimpleRunPanel(onAdd: () {}, onEdit: (_) {}));
       c.read(selectedSequenceIdProvider.notifier).select('seq-1');
       await imaging(tester, c, seq, _imaging(24));
       expect(find.textContaining('pause after this frame'), findsOneWidget);
