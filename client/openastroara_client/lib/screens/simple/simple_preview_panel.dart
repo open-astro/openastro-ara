@@ -564,8 +564,8 @@ class SimpleShutterButton extends StatelessWidget {
   }
 }
 
-/// What the camera is doing, as a small pill top-left on the image (like a
-/// camera's REC light): looping, taking a frame with its countdown and bar,
+/// What the camera is doing, as a small pill on the image (like a camera's
+/// REC light): looping, taking a frame with its countdown and bar,
 /// stopping, frame ready, or why it failed. Nothing while idle. It sits
 /// outside the panels, so it stays in the immersive view.
 /// The status pill's height (Plan's sheet starts below it).
