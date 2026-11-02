@@ -13,6 +13,7 @@ import '../../state/app_shell_state.dart';
 import '../../state/launch_gate_state.dart';
 import '../../state/profile_management_state.dart';
 import '../../state/saved_server_state.dart';
+import '../../state/server_state.dart';
 import '../../state/guider/guide_step_state.dart';
 import '../../state/guider/guider_state.dart';
 import '../../state/imaging/last_frame_state.dart';
@@ -1882,6 +1883,7 @@ class _ThisRig extends ConsumerWidget {
       sequenceRunStateProvider.select((s) => s.value?.state?.isActive ?? false),
     );
     final version = ref.watch(appDisplayVersionProvider).value;
+    final serverVersion = ref.watch(activeServerInfoProvider).value?.version;
     Widget fact(String label, String value) => Row(
       children: [
         Text(label, style: AraText.caption),
@@ -1986,18 +1988,26 @@ class _ThisRig extends ConsumerWidget {
         toggle('simple-mode', 'Simple Mode', null, true, (v) {
           if (!v) ref.read(simpleModeProvider.notifier).set(false);
         }),
-        Row(
+        const Divider(height: AraSpace.s16),
+        // Every version on the rig, for a bug report or a support question.
+        // shortcut: OpenAstro Guider's and AlpacaBridge's versions need the
+        // daemon to report them; they join this list when it does.
+        Column(
+          key: const Key('simple-versions'),
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          spacing: AraSpace.s4,
           children: [
-            Text(
-              version == null ? '' : 'Version $version',
-              style: AraText.caption,
-            ),
-            const Spacer(),
-            TextButton(
-              onPressed: onLogs,
-              child: const Text('Logs & bug report'),
-            ),
+            Text('Versions', style: AraText.caption),
+            fact('This app', version ?? '—'),
+            fact('Server', serverVersion ?? '—'),
           ],
+        ),
+        Align(
+          alignment: Alignment.centerRight,
+          child: TextButton(
+            onPressed: onLogs,
+            child: const Text('Logs & bug report'),
+          ),
         ),
       ],
     );

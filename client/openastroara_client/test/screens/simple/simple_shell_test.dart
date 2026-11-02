@@ -38,6 +38,8 @@ import 'package:openastroara/screens/settings/settings_shell.dart';
 import 'package:openastroara/state/launch_gate_state.dart';
 import 'package:openastroara/state/profile_management_state.dart';
 import 'package:openastroara/state/ws/ws_providers.dart';
+import 'package:openastroara/services/server_api.dart';
+import 'package:openastroara/state/server_state.dart';
 import 'package:openastroara/models/camera_status.dart';
 import 'package:openastroara/models/equipment_device_status.dart';
 import 'package:openastroara/models/focuser_status.dart';
@@ -93,7 +95,7 @@ final _someSteps = [
 
 Future<ProviderContainer> _pump(WidgetTester tester, Size size,
     {List<GuideStep> steps = const [], AraServer? server, FrameHistogram? histogram,
-    ServerInternalState? internal, StorageSpace? storage, ProfileList? profiles, SimpleRun? plan, SequenceRunStateInfo? runState, bool queueing = false, bool manualAlarm = false, bool feature = false, bool pier = false, bool linkUp = false, List<Override> gear = const []}) async {
+    ServerInternalState? internal, StorageSpace? storage, ProfileList? profiles, SimpleRun? plan, SequenceRunStateInfo? runState, bool queueing = false, bool manualAlarm = false, bool feature = false, bool pier = false, bool linkUp = false, List<Override> gear = const [], ServerInfo? serverInfo}) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
@@ -103,6 +105,7 @@ Future<ProviderContainer> _pump(WidgetTester tester, Size size,
     if (pier) simplePermanentPierPrefsProvider.overrideWithValue(_MemPrefs()..value = false),
     if (linkUp) serverLinkUpProvider.overrideWithValue(true),
     ...gear,
+    if (serverInfo != null) activeServerInfoProvider.overrideWith((ref) async => serverInfo),
     selectedTabIndexProvider.overrideWith(_StartOnLive.new),
     guideStepsProvider.overrideWith(() => _Steps(steps)),
     if (server != null) activeServerProvider.overrideWithValue(server),
@@ -957,8 +960,12 @@ void main() {
         server: const AraServer(hostname: '10.0.0.5', port: 5555, mdnsName: 'astro'),
         internal: const ServerInternalState(uptimeSeconds: 11520, cpuPercent: 23.4, workingSetBytes: 512 * 1048576),
         storage: const StorageSpace(saveDirectory: '/data', isFallback: false, freeBytes: 412 * 1073741824, totalBytes: 900 * 1073741824),
-        profiles: const ProfileList(activeId: 'p1', profiles: [ProfileMeta(id: 'p1', name: 'Backyard Rig')]));
+        profiles: const ProfileList(activeId: 'p1', profiles: [ProfileMeta(id: 'p1', name: 'Backyard Rig')]),
+        serverInfo: const ServerInfo(name: 'astro', version: '0.0.1-ara.7', apiVersion: '1'));
     await _openSection(tester, 'Rig');
+    // Every version on the rig, for a bug report or a support question.
+    expect(find.descendant(of: find.byKey(const Key('simple-versions')), matching: find.text('Server')), findsOneWidget);
+    expect(find.text('0.0.1-ara.7'), findsOneWidget);
     final sheet = find.byKey(const Key('simple-menu'));
     final line = find.descendant(of: sheet, matching: find.byKey(const Key('simple-system-line')));
     for (final t in ['412 GB free', '23 %', '512 MB', '3 h 12 min']) {
