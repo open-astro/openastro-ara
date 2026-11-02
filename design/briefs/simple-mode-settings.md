@@ -14,8 +14,8 @@ Simple Mode covers the top 90 % most used features, 90 % of the time, 90 % faste
 
 ## Direction (chosen: B)
 
-- **Shape:** the gear opens a sheet over the dimmed image. Sections on the left (Gear with its devices listed under it, Site, Storage, End of night, Alerts, Rig), the section or device window on the right. A tap outside or Close returns to the image.
-- **One window per device, one piece of code:** each device has its own window (Camera, Mount, Focuser, Filter wheel, Guider). The same widget is the right pane of Settings and opens on its own, under its dot, when the device's dot in the top bar is tapped (the image stays visible). Each window's header holds the device's status dot and name. A device's window has no Connect / Disconnect (user, 2026-11-03): Ara connects the profile's gear and reconnects what drops. Settings › Gear keeps Connect / Disconnect per device (user: "leave it in the Settings"), and a device that failed or is stuck shows red there with the reason and **Reconnect** (disconnect plus connect).
+- **Shape:** the gear opens a sheet over the dimmed image. Sections on the left (Devices, with each device listed under it, Site, Storage, End of night, Alerts, Rig), the section or device window on the right. A tap outside or Close returns to the image.
+- **One window per device, one piece of code:** each device has its own window (Camera, Mount, Focuser, Filter wheel, Guider). The same widget is the right pane of Settings and opens on its own, under its dot, when the device's dot in the top bar is tapped (the image stays visible). Each window's header holds the device's status dot and name. A device's window has no Connect / Disconnect (user, 2026-11-03): Ara connects the profile's gear and reconnects what drops. Settings › Devices keeps Connect / Disconnect per device (user: "leave it in the Settings"), and a device that failed or is stuck shows red there with the reason and **Reconnect** (disconnect plus connect).
 - **Look:** the sheet uses the 90 % `overlay-scrim` every Simple Mode panel uses, plus a 5 px blur of the image behind (user, 2026-11-03). Its dimmest text (#A0A0A0) is 5.8:1 over a white flat under the veil, AA.
 - **Values are shared** with the Advanced UI: Simple Mode only hides settings, so switching modes resets nothing.
 
@@ -34,11 +34,11 @@ Simple Mode covers the top 90 % most used features, 90 % of the time, 90 % faste
 | Alerts | Safety alarm sound, silent delay | Where alerts go (in-app only today, §46) |
 | Rig | System figures, Change profile / Change rig, permanent pier, Simple Mode switch, version, logs & bug report | Profile editing, wizard, sky data |
 
-Gear lists only the devices the profile has, each with its state; flat panel, dome, weather and safety monitor have no window of their own. ASIAir's settings stay the reference for how much control to give (user, 2026-11-03: "we need to give SOME control to the user").
+Devices lists only the devices the profile has, each with its state; flat panel, dome, weather and safety monitor have no window of their own. ASIAir's settings stay the reference for how much control to give (user, 2026-11-03: "we need to give SOME control to the user").
 
 ## States
 
-- A device not in the profile: not listed. Connecting: amber dot (Gear: Cancel). Failed or stuck: red dot and the reason (Gear: Reconnect). Disconnected: grey dot (Gear: Connect).
+- A device not in the profile: not listed. Connecting: amber dot (Devices: Cancel). Failed or stuck: red dot and the reason (Devices: Reconnect). Disconnected: grey dot (Devices: Connect).
 - No rig link: every window reads its last values greyed with "Rig not connected", controls disabled.
 - A running plan: changes apply to the next frame or step; the Rig section keeps the "plan keeps running" line by Change profile / Change rig.
 - Text up to 3.1x and Night mode (WCAG 2.2 AA bar; night mode exempt from contrast).

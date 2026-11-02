@@ -942,7 +942,7 @@ void main() {
     expect(blur.filter, ImageFilter.blur(sigmaX: 5, sigmaY: 5));
     final box = tester.widget<Container>(find.byKey(const Key('simple-menu-surface')));
     expect((box.decoration! as BoxDecoration).color, AraColors.overlayScrim);
-    for (final t in ['Gear', 'Rig']) {
+    for (final t in ['Devices', 'Rig']) {
       expect(find.descendant(of: sheet, matching: find.text(t)), findsWidgets, reason: t);
     }
     expect(find.text('All settings'), findsNothing, reason: 'no full settings form in Simple Mode');
@@ -1031,7 +1031,7 @@ void main() {
     expect(find.byType(SettingsShell), findsNothing);
   });
 
-  testWidgets('Gear lists the profile\'s devices with their state: Disconnect, Connect, Reconnect after a failure; '
+  testWidgets('Devices lists the profile\'s devices with their state: Disconnect, Connect, Reconnect after a failure; '
       'devices never set up are not listed', (tester) async {
     final camera = _Camera(EquipmentConnectionState.connected);
     final focuser = _Focuser(EquipmentConnectionState.error);
@@ -1041,7 +1041,7 @@ void main() {
       focuserProvider.overrideWith(() => focuser),
       mountProvider.overrideWith(() => mount),
     ]);
-    await _openSection(tester, 'Gear');
+    await _openSection(tester, 'Devices');
     final page = find.byKey(const Key('simple-gear'));
     expect(find.descendant(of: page, matching: find.textContaining('ASI2600MM')), findsOneWidget);
     expect(find.descendant(of: page, matching: find.textContaining('Filter wheel')), findsNothing, reason: 'never set up');
@@ -1054,11 +1054,11 @@ void main() {
     expect(mount.calls, ['reconnect'], reason: 'Connect: the device the rig remembers, no chooser');
   });
 
-  testWidgets('Gear with no rig link says so instead of showing stale states', (tester) async {
+  testWidgets('Devices with no rig link says so instead of showing stale states', (tester) async {
     await _pump(tester, const Size(1024, 768), gear: [
       cameraStatusProvider.overrideWith(() => _Camera(EquipmentConnectionState.connected)),
     ]);
-    await _openSection(tester, 'Gear');
+    await _openSection(tester, 'Devices');
     expect(find.text('Rig not connected'), findsOneWidget);
     expect(find.byKey(const Key('simple-gear-camera-disconnect')), findsNothing);
   });

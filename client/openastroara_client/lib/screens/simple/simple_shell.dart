@@ -1640,10 +1640,10 @@ class _SettingsSheet extends StatefulWidget {
 
 class _SettingsSheetState extends State<_SettingsSheet> {
   static const _sections = [
-    ('Gear', Icons.settings_input_component_outlined),
+    ('Devices', Icons.settings_input_component_outlined),
     ('Rig', Icons.memory),
   ];
-  String _section = 'Gear';
+  String _section = 'Devices';
 
   @override
   Widget build(BuildContext context) {
@@ -1742,7 +1742,7 @@ class _SettingsSheetState extends State<_SettingsSheet> {
   }
 }
 
-/// Settings › Gear: the profile's devices with their state, and the only
+/// Settings › Devices: the profile's devices with their state, and the only
 /// place Simple Mode connects or disconnects one (a device's own window has
 /// neither). Ara connects the profile's gear on its own; Connect asks the rig
 /// for the device it remembers, never a chooser.
@@ -1759,7 +1759,7 @@ class _Gear extends ConsumerWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         spacing: AraSpace.s8,
         children: [
-          const Text('Gear', style: kSimpleText),
+          const Text('Devices', style: kSimpleText),
           Text('Rig not connected', style: AraText.caption),
         ],
       );
@@ -1769,7 +1769,7 @@ class _Gear extends ConsumerWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       spacing: AraSpace.s8,
       children: [
-        const Text('Gear', style: kSimpleText),
+        const Text('Devices', style: kSimpleText),
         _GearRow(id: 'camera', type: 'Camera', provider: cameraStatusProvider),
         _GearRow(id: 'mount', type: 'Mount', provider: mountProvider),
         _GearRow(id: 'focuser', type: 'Focuser', provider: focuserProvider),
