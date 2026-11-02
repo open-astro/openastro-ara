@@ -120,6 +120,7 @@ public sealed partial class TimeSyncService : ITimeSyncService {
             Location: location,
             InternetAvailableOnPi: InternetProbe(),
             SyncedAtUtc: syncedAt,
+            // Today's offset: a start scheduled across a DST change lands an hour off (rare; accepted).
             UtcOffsetMinutes: (int)TimeZoneInfo.Local.GetUtcOffset(now).TotalMinutes));
     }
 

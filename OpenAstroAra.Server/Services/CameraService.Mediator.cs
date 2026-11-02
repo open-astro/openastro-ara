@@ -546,6 +546,7 @@ public sealed partial class CameraService : ICameraMediator, IImagingMediator {
     /// <summary>Simple Mode's plan starts the cool and slews meanwhile: write the target and switch
     /// the cooler on, then return. Nothing keeps running, so Stop and Emergency Stop have nothing
     /// to cancel; the target's own Cool Camera waits for the sensor before the first light.</summary>
+    // It leaves _coolingTargetC alone: the waiting Cool Camera after it sets that when it regulates.
     public async Task<bool> StartCooling(double temperature, CancellationToken ct) {
         lock (_gate) {
             if (_sequencerCoolingActive) {
