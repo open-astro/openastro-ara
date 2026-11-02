@@ -1758,10 +1758,7 @@ class _Gear extends ConsumerWidget {
         key: const Key('simple-gear'),
         crossAxisAlignment: CrossAxisAlignment.start,
         spacing: AraSpace.s8,
-        children: [
-          const Text('Devices', style: kSimpleText),
-          Text('Rig not connected', style: AraText.caption),
-        ],
+        children: [Text('Rig not connected', style: AraText.caption)],
       );
     }
     return Column(
@@ -1769,7 +1766,6 @@ class _Gear extends ConsumerWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       spacing: AraSpace.s8,
       children: [
-        const Text('Devices', style: kSimpleText),
         _GearRow(id: 'camera', type: 'Camera', provider: cameraStatusProvider),
         _GearRow(id: 'mount', type: 'Mount', provider: mountProvider),
         _GearRow(id: 'focuser', type: 'Focuser', provider: focuserProvider),
@@ -1963,7 +1959,6 @@ class _ThisRig extends ConsumerWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       spacing: AraSpace.s8,
       children: [
-        const Text('Rig', style: kSimpleText),
         const SimpleSystemPanel(expand: true),
         fact('Name', server == null ? '—' : server.mdnsName ?? server.hostname),
         fact('Profile', profile ?? '—'),

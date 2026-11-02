@@ -971,6 +971,7 @@ void main() {
     expect(row.width, closeTo(page.width, 1), reason: 'the tiles fill the page width');
     expect(tiles.last.center.dx - tiles.first.center.dx, greaterThan(page.width * 0.6));
     expect(find.descendant(of: sheet, matching: find.text('Name')), findsOneWidget, reason: 'not "Rig" twice');
+    expect(find.descendant(of: sheet, matching: find.text('Rig')), findsOneWidget, reason: 'the section list names the page; no title repeats it');
     for (final t in ['astro', 'Backyard Rig', 'Change profile', 'Change rig', 'Permanent pier', 'Simple Mode', 'Logs & bug report']) {
       expect(find.descendant(of: sheet, matching: find.text(t)), findsWidgets, reason: t);
     }
@@ -1043,6 +1044,7 @@ void main() {
     ]);
     await _openSection(tester, 'Devices');
     final page = find.byKey(const Key('simple-gear'));
+    expect(find.text('Devices'), findsOneWidget, reason: 'only in the section list, no page title');
     expect(find.descendant(of: page, matching: find.textContaining('ASI2600MM')), findsOneWidget);
     expect(find.descendant(of: page, matching: find.textContaining('Filter wheel')), findsNothing, reason: 'never set up');
     await tester.tap(find.byKey(const Key('simple-gear-camera-disconnect')));

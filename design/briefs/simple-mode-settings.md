@@ -16,6 +16,7 @@ Simple Mode covers the top 90 % most used features, 90 % of the time, 90 % faste
 
 - **Shape:** the gear opens a sheet over the dimmed image. Sections on the left (Devices, with each device listed under it, Site, Storage, End of night, Alerts, Rig), the section or device window on the right. A tap outside or Close returns to the image.
 - **One window per device, one piece of code:** each device has its own window (Camera, Mount, Focuser, Filter wheel, Guider). The same widget is the right pane of Settings and opens on its own, under its dot, when the device's dot in the top bar is tapped (the image stays visible). Each window's header holds the device's status dot and name. A device's window has no Connect / Disconnect (user, 2026-11-03): Ara connects the profile's gear and reconnects what drops. Settings › Devices keeps Connect / Disconnect per device (user: "leave it in the Settings"), and a device that failed or is stuck shows red there with the reason and **Reconnect** (disconnect plus connect).
+- **No page titles:** the selected section in the list names the page; the page doesn't repeat it (user, 2026-11-03).
 - **Look:** the sheet uses the 90 % `overlay-scrim` every Simple Mode panel uses, plus a 5 px blur of the image behind (user, 2026-11-03). Its dimmest text (#A0A0A0) is 5.8:1 over a white flat under the veil, AA.
 - **Values are shared** with the Advanced UI: Simple Mode only hides settings, so switching modes resets nothing.
 
