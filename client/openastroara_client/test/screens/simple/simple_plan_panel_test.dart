@@ -265,8 +265,9 @@ void main() {
     return (c, seq);
   }
 
+  // Add to queue: a plan on the rig, not started.
   Future<void> create(WidgetTester tester) async {
-    await tester.tap(find.byKey(const Key('simple-run-create')));
+    await tester.tap(find.byKey(const Key('simple-run-queue')));
     await tester.pumpAndSettle();
   }
 
@@ -277,7 +278,7 @@ void main() {
   }
 
   group('the sheet', () {
-    testWidgets('with nothing picked: search or Pick in Sky; Create plan is off', (tester) async {
+    testWidgets('with nothing picked: search or Pick in Sky; both buttons are off', (tester) async {
       var showSky = 0, pick = 0;
       final c = await _pump(
           tester,
@@ -285,7 +286,8 @@ void main() {
           SimpleRunSheet(onShowSky: () => showSky++, onPickInSky: () => pick++, onCreated: () {}, onLibrary: () {}),
           sel: null);
       expect(find.text('Search, or pick in the sky.'), findsOneWidget);
-      expect(tester.widget<FilledButton>(find.byKey(const Key('simple-run-create'))).onPressed, isNull);
+      expect(tester.widget<OutlinedButton>(find.byKey(const Key('simple-run-queue'))).onPressed, isNull);
+      expect(tester.widget<FilledButton>(find.byKey(const Key('simple-run-start'))).onPressed, isNull);
       await tester.tap(find.byKey(const Key('simple-run-pick-in-sky')));
       expect(pick, 1);
       await tester.enterText(find.byKey(const Key('simple-run-search')), 'M42');
@@ -295,7 +297,7 @@ void main() {
       expect(c.read(planetariumSearchProvider), 'M42');
     });
 
-    testWidgets('Create plan creates the run without starting it; again it saves and replaces', (tester) async {
+    testWidgets('Add to queue creates the run without starting it; again it replaces it', (tester) async {
       var created = 0;
       final seq = _Seq();
       await _pump(
@@ -303,13 +305,27 @@ void main() {
           seq,
           SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () => created++, onLibrary: () {}));
       expect(find.text('M31'), findsOneWidget);
-      expect(find.text('Create plan'), findsOneWidget);
+      expect(find.text('Add to queue'), findsOneWidget);
+      expect(find.text('Create and start'), findsOneWidget);
       await create(tester);
       expect(seq.calls, ['create M31']);
       expect(created, 1);
-      expect(find.text('Save plan'), findsOneWidget);
+      // shortcut in the app: one queued plan for now, so a new one replaces it.
       await create(tester);
       expect(seq.calls, ['create M31', 'create M31', 'delete seq-1']);
+    });
+
+    testWidgets('Create and start creates the run and starts it, then closes the sheet', (tester) async {
+      var created = 0;
+      final seq = _Seq();
+      await _pump(
+          tester,
+          seq,
+          SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () => created++, onLibrary: () {}));
+      await tester.tap(find.byKey(const Key('simple-run-start')));
+      await tester.pumpAndSettle();
+      expect(seq.calls, ['create M31', 'start seq-1']);
+      expect(created, 1);
     });
 
     testWidgets('a configured rig gets the suggested subs in one line; Use all takes them', (tester) async {
@@ -362,12 +378,19 @@ void main() {
   });
 
   group('the tracker and the shutter', () {
-    testWidgets('no plan: no tracker, and the shutter does nothing', (tester) async {
-      final (_, seq) = await run(tester);
+    testWidgets('nothing picked: no tracker, and the shutter does nothing', (tester) async {
+      final (_, seq) = await run(tester, sel: null);
       expect(find.byKey(const Key('simple-run-tracker')), findsNothing);
       await tester.tap(find.byKey(const Key('simple-shutter')));
       await tester.pump();
       expect(seq.calls, isEmpty);
+    });
+
+    testWidgets('a target picked, no plan yet: the shutter creates and starts it', (tester) async {
+      final (_, seq) = await run(tester);
+      await tester.tap(find.byKey(const Key('simple-shutter')));
+      await tester.pumpAndSettle();
+      expect(seq.calls, ['create M31', 'start seq-1']);
     });
 
     testWidgets('plan ready: 0 of the total, the first filter; the shutter starts it', (tester) async {

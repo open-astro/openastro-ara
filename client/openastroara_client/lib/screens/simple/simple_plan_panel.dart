@@ -252,9 +252,11 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
     return const SimpleRun();
   }
 
-  /// Create plan: the run for the picked target, on the rig but not started.
-  /// Saving again replaces the plan (the old one is deleted). [ref] is the
-  /// sheet's (the create reads the widget tree). True once created.
+  /// Add to queue: the run for the picked target, on the rig but not started.
+  /// [ref] is the caller's widget's (the create reads the widget tree). True
+  /// once created.
+  // shortcut: one queued plan for now, so adding again replaces it (the old
+  // one is deleted); keep a list once the corner shows several squares.
   Future<bool> create(WidgetRef ref) async {
     final sel = ref.read(planetariumSelectionProvider);
     final steps = ref.read(simpleRunPlanProvider);
@@ -297,6 +299,13 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
       state = state.copyWith(busy: false, error: _why(e, 'create the plan'));
       return false;
     }
+  }
+
+  /// Create and start (or ▶ with a target picked and no plan yet).
+  Future<bool> createAndStart(WidgetRef ref) async {
+    if (!await create(ref)) return false;
+    await start();
+    return state.error == null;
   }
 
   /// The shutter's actions.
@@ -513,6 +522,11 @@ class _SimpleRunShutterState extends ConsumerState<SimpleRunShutter>
     super.dispose();
   }
 
+  bool _pickable() {
+    final sel = ref.read(planetariumSelectionProvider);
+    return sel != null && !sel.belowHorizon;
+  }
+
   bool _holdable(SimpleRunPhase p) =>
       p == SimpleRunPhase.imaging ||
       p == SimpleRunPhase.pausing ||
@@ -521,6 +535,7 @@ class _SimpleRunShutterState extends ConsumerState<SimpleRunShutter>
   VoidCallback? _tap(SimpleRunPhase p) {
     final run = ref.read(simpleRunProvider.notifier);
     return switch (p) {
+      SimpleRunPhase.none when _pickable() => () => run.createAndStart(ref),
       SimpleRunPhase.ready => run.start,
       SimpleRunPhase.imaging => run.pause,
       SimpleRunPhase.paused => run.resume,
@@ -535,11 +550,14 @@ class _SimpleRunShutterState extends ConsumerState<SimpleRunShutter>
     final camera = ref.watch(cameraStatusProvider).value;
     final exposing = camera?.runtimeState == 'exposing';
     final holdable = _holdable(phase);
+    ref.watch(planetariumSelectionProvider);
+    // A picked target with no plan yet starts like a ready plan.
+    final idle = phase == SimpleRunPhase.none && !_pickable();
     final tap = run.busy ? null : _tap(phase);
     final ring = switch (phase) {
-      SimpleRunPhase.ready => AraColors.accentConnected,
+      _ when idle => AraColors.textDisabled,
+      SimpleRunPhase.ready || SimpleRunPhase.none => AraColors.accentConnected,
       SimpleRunPhase.paused => AraColors.accentBusy,
-      SimpleRunPhase.none => AraColors.textDisabled,
       _ => AraColors.textPrimary.withValues(alpha: 0.25),
     };
     final pauseBars =
@@ -547,11 +565,12 @@ class _SimpleRunShutterState extends ConsumerState<SimpleRunShutter>
     return Semantics(
       button: true,
       label: switch (phase) {
-        SimpleRunPhase.ready => 'Start imaging',
+        _ when idle => 'Pick a target first',
+        SimpleRunPhase.ready || SimpleRunPhase.none => 'Start imaging',
         SimpleRunPhase.imaging => 'Pause after this frame',
         SimpleRunPhase.pausing => 'Pausing',
         SimpleRunPhase.paused => 'Resume',
-        _ => 'Create a plan first',
+        _ => 'Start imaging',
       },
       onTap: tap,
       customSemanticsActions: holdable
@@ -594,9 +613,7 @@ class _SimpleRunShutterState extends ConsumerState<SimpleRunShutter>
               child: Icon(
                 pauseBars ? Icons.pause : Icons.play_arrow,
                 size: 40,
-                color: phase == SimpleRunPhase.none
-                    ? AraColors.textDisabled
-                    : AraColors.textPrimary,
+                color: idle ? AraColors.textDisabled : AraColors.textPrimary,
               ),
             ),
             // The frame exposing, or the hold to stop over it.
@@ -773,7 +790,7 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
     }
 
     final nameWidth = steps.map((s) => widthOf(s.filterName)).fold(32.0, math.max);
-    final saved = run.sequenceId != null && !run.started;
+    final off = sel == null || sel.belowHorizon || run.busy;
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -935,23 +952,41 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
             maxLines: 4,
             overflow: TextOverflow.ellipsis,
           ),
-        FilledButton(
-          key: const Key('simple-run-create'),
-          onPressed: sel == null || sel.belowHorizon || run.busy
-              ? null
-              : () async {
-                  final ok = await ref
-                      .read(simpleRunProvider.notifier)
-                      .create(ref);
-                  if (ok) widget.onCreated();
-                },
-          child: Text(
-            run.busy
-                ? 'Creating…'
-                : saved
-                ? 'Save plan'
-                : 'Create plan',
-          ),
+        Row(
+          spacing: AraSpace.s8,
+          children: [
+            Expanded(
+              child: OutlinedButton(
+                key: const Key('simple-run-queue'),
+                onPressed: off
+                    ? null
+                    : () async {
+                        final ok = await ref
+                            .read(simpleRunProvider.notifier)
+                            .create(ref);
+                        if (ok) widget.onCreated();
+                      },
+                child: const Text('Add to queue'),
+              ),
+            ),
+            Expanded(
+              child: FilledButton(
+                key: const Key('simple-run-start'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: AraColors.accentConnected,
+                ),
+                onPressed: off
+                    ? null
+                    : () async {
+                        final ok = await ref
+                            .read(simpleRunProvider.notifier)
+                            .createAndStart(ref);
+                        if (ok) widget.onCreated();
+                      },
+                child: Text(run.busy ? 'Starting…' : 'Create and start'),
+              ),
+            ),
+          ],
         ),
       ],
     );
