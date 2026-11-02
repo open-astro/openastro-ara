@@ -62,10 +62,12 @@ void main() {
       // targets can be appended as siblings.
       final target = targetBlockOf(root);
       final targetTypes = childrenOf(target).map(type).toList();
-      expect(targetTypes, hasLength(3));
+      expect(targetTypes, hasLength(4));
       expect(targetTypes[0], contains('.Telescope.SlewScopeToRaDec'));
       expect(targetTypes[1], contains('.Autofocus.RunAutofocus'));
-      expect(targetTypes[2], contains('.Container.SequentialContainer'));
+      // Waits for the session's cool, which ran during the slew and focus.
+      expect(targetTypes[2], contains('.Camera.CoolCamera'));
+      expect(targetTypes[3], contains('.Container.SequentialContainer'));
     });
 
     test('the imaging loop carries the exposure, loop count and AF trigger',
@@ -328,6 +330,60 @@ void main() {
       final before = childrenOf(root).length;
       removeTargetFromRunBody(root, 'M 31');
       expect(childrenOf(root), hasLength(before));
+    });
+  });
+
+  group('cooling while the plan gets ready', () {
+    test('the session starts the cool without waiting; the target waits for it just before the first light', () {
+      final b = buildImagingRunBody(
+          raDeg: 10, decDeg: 41, targetName: 'M31', exposureSeconds: 120, frameCount: 10, coolToC: -10);
+      final cool = childrenOf(b).first;
+      expect(cool[r'$type'], coolCameraType);
+      expect(cool['WaitForTemperature'], false, reason: 'unpark, slew, centre, focus go on meanwhile');
+      final target = childrenOf(b).firstWhere((c) => c['Name'] == 'M31');
+      final steps = childrenOf(target);
+      final wait = steps.indexWhere((c) => c[r'$type'] == coolCameraType);
+      final firstLight = steps.indexWhere((c) => childrenOf(c).any((x) => x[r'$type'] == takeExposureType));
+      expect(wait, greaterThan(0), reason: 'after the go-to');
+      expect(wait, lessThan(firstLight), reason: 'before the first light frame');
+      expect(steps[wait]['Temperature'], -10);
+      expect(steps[wait]['WaitForTemperature'] ?? true, true);
+      final focus = steps.indexWhere((c) => c[r'$type'] == runAutofocusType);
+      expect(focus, lessThan(wait), reason: 'focus runs while it cools');
+    });
+
+    test('no cooler target: no cooling steps anywhere', () {
+      final b = buildImagingRunBody(raDeg: 10, decDeg: 41, targetName: 'M31', exposureSeconds: 120, frameCount: 10);
+      final target = childrenOf(b).firstWhere((c) => c['Name'] == 'M31');
+      expect(childrenOf(b).where((c) => c[r'$type'] == coolCameraType), isEmpty);
+      expect(childrenOf(target).where((c) => c[r'$type'] == coolCameraType), isEmpty);
+    });
+  });
+
+  group('cooling while the plan gets ready', () {
+    test('the session starts the cool without waiting; the target waits for it just before the first light', () {
+      final b = buildImagingRunBody(
+          raDeg: 10, decDeg: 41, targetName: 'M31', exposureSeconds: 120, frameCount: 10, coolToC: -10);
+      final cool = childrenOf(b).first;
+      expect(cool[r'$type'], coolCameraType);
+      expect(cool['WaitForTemperature'], false, reason: 'unpark, slew, centre, focus go on meanwhile');
+      final target = childrenOf(b).firstWhere((c) => c['Name'] == 'M31');
+      final steps = childrenOf(target);
+      final wait = steps.indexWhere((c) => c[r'$type'] == coolCameraType);
+      final firstLight = steps.indexWhere((c) => childrenOf(c).any((x) => x[r'$type'] == takeExposureType));
+      expect(wait, greaterThan(0), reason: 'after the go-to');
+      expect(wait, lessThan(firstLight), reason: 'before the first light frame');
+      expect(steps[wait]['Temperature'], -10);
+      expect(steps[wait]['WaitForTemperature'] ?? true, true);
+      final focus = steps.indexWhere((c) => c[r'$type'] == runAutofocusType);
+      expect(focus, lessThan(wait), reason: 'focus runs while it cools');
+    });
+
+    test('no cooler target: no cooling steps anywhere', () {
+      final b = buildImagingRunBody(raDeg: 10, decDeg: 41, targetName: 'M31', exposureSeconds: 120, frameCount: 10);
+      final target = childrenOf(b).firstWhere((c) => c['Name'] == 'M31');
+      expect(childrenOf(b).where((c) => c[r'$type'] == coolCameraType), isEmpty);
+      expect(childrenOf(target).where((c) => c[r'$type'] == coolCameraType), isEmpty);
     });
   });
 

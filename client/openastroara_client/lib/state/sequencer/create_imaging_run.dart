@@ -269,6 +269,7 @@ Future<ImagingRunResult?> _createImagingRunPinned(
         body,
         buildTargetBlock(
           raDeg: p.raDeg,
+          coolToC: defaults.coolerTargetC,
           decDeg: p.decDeg,
           targetName: p.name,
           exposureSeconds: exposureSeconds,
@@ -298,6 +299,7 @@ Future<ImagingRunResult?> _createImagingRunPinned(
         for (final p in panels)
           buildTargetBlock(
             raDeg: p.raDeg,
+            coolToC: defaults.coolerTargetC,
             decDeg: p.decDeg,
             targetName: p.name,
             exposureSeconds: exposureSeconds,
@@ -383,6 +385,7 @@ Future<ImagingRunResult?> _createImagingRunPinned(
       for (final p in panels)
         buildTargetBlock(
           raDeg: p.raDeg,
+          coolToC: defaults.coolerTargetC,
           decDeg: p.decDeg,
           targetName: p.name,
           exposureSeconds: exposureSeconds,
@@ -458,6 +461,7 @@ Future<ImagingRunResult?> _createImagingRunPinned(
       body,
       buildTargetBlock(
         raDeg: p.raDeg,
+        coolToC: defaults.coolerTargetC,
         decDeg: p.decDeg,
         targetName: p.name,
         exposureSeconds: exposureSeconds,

@@ -130,6 +130,7 @@ Map<String, dynamic> buildImagingRunBody({
     rig: rig,
     unguidedOptions: unguidedOptions,
     trackingPriorSeconds: trackingPriorSeconds,
+    coolToC: coolToC,
   );
 
   // ── The session around it, in run order ──────────────────────────────────
@@ -139,7 +140,9 @@ Map<String, dynamic> buildImagingRunBody({
         ..['Temperature'] = coolToC
         // 0 = regulate as fast as the driver allows; a fixed multi-minute ramp
         // would stall a run against hardware that's already at temperature.
-        ..['Duration'] = 0.0,
+        ..['Duration'] = 0.0
+        // The plan moves on while it cools; each target waits for it.
+        ..['WaitForTemperature'] = false,
     _item(unparkScopeType),
     _item(setTrackingType), // catalog default: sidereal
     target,
@@ -199,6 +202,9 @@ Map<String, dynamic> buildTargetBlock({
   RigCapabilities rig = RigCapabilities.everything,
   UnguidedOptions unguidedOptions = const UnguidedOptions(),
   double? trackingPriorSeconds,
+  // The session's cooler target: the block waits for it just before its first
+  // light (the session started the cool without waiting).
+  double? coolToC,
 }) {
   // Cook the block from the rig: a device the rig lacks gets no step and no
   // trigger, whatever the caller asked for. Without a focuser there is
@@ -406,6 +412,12 @@ Map<String, dynamic> buildTargetBlock({
     // After focus (the probe judges FWHM growth against its first rung, so it
     // must see focused stars) and before the first imaging loop.
     if (unguided) trackingProbe(),
+    // Joins the session's cool to the same target (the daemon waits on it), so
+    // the go-to, focus and guiding ran while the sensor cooled.
+    if (coolToC != null)
+      _item(coolCameraType)
+        ..['Temperature'] = coolToC
+        ..['Duration'] = 0.0,
     if (plan != null)
       for (var i = 0; i < plan.length; i++) ...[
         if (i > 0) switchTo(plan[i].filterName),

@@ -521,6 +521,11 @@ public sealed partial class CameraService : ICameraMediator, IImagingMediator {
     /// </summary>
     public async Task<bool> CoolCamera(double temperature, TimeSpan duration, IProgress<ApplicationStatus> progress, CancellationToken ct) {
         const string operation = "Cooling";
+        // A cool to the same target already running (Simple Mode starts one, slews, then waits on
+        // it before the first light) is joined, not refused: nothing races, nothing is written.
+        while (SequencerCoolingTo(temperature)) {
+            await Task.Delay(SameTargetPoll, ct).ConfigureAwait(false);
+        }
         var refusal = BeginSequencerCooling(needsSetpoint: true);
         if (refusal is not null) {
             return CoolingFailed(operation, refusal, progress);
@@ -749,6 +754,14 @@ public sealed partial class CameraService : ICameraMediator, IImagingMediator {
             _sequencerCoolingActive = true;
         }
         return null;
+    }
+
+    internal TimeSpan SameTargetPoll { get; set; } = TimeSpan.FromMilliseconds(500);
+
+    private bool SequencerCoolingTo(double temperature) {
+        lock (_gate) {
+            return _sequencerCoolingActive && Math.Abs(_coolingTargetC - temperature) < 0.05;
+        }
     }
 
     private void EndSequencerCooling() {

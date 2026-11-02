@@ -303,6 +303,36 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_second_cool_to_the_same_target_waits_for_the_running_one_instead_of_failing() {
+            // Simple Mode cools while the plan slews, then waits for that cool before the first
+            // light: the second step names the same target, so it joins rather than races (#1210
+            // still refuses a different target, above).
+            await using var cam = new SimCamera();
+            var firstWaiting = new TaskCompletionSource();
+            var release = new TaskCompletionSource();
+            var (svc, _) = await ConnectedAsync(cam, delayGate: n => {
+                if (n == 1) {
+                    firstWaiting.TrySetResult();
+                    return release.Task;
+                }
+                return Task.CompletedTask;
+            });
+            using var __ = svc;
+
+            var first = svc.CoolCamera(-10, TimeSpan.FromMinutes(1), new StatusLog(), CancellationToken.None);
+            await firstWaiting.Task.WaitAsync(TimeSpan.FromSeconds(15));
+            var log = new StatusLog();
+            var second = svc.CoolCamera(-10, TimeSpan.Zero, log, CancellationToken.None);
+            await Task.Delay(200);
+            Assert.That(second.IsCompleted, Is.False, "it waits for the running cool");
+
+            release.SetResult();
+            Assert.That(await first, Is.True);
+            Assert.That(await second.WaitAsync(TimeSpan.FromSeconds(15)), Is.True);
+            Assert.That(log.Statuses, Has.None.Contains("still running"));
+        }
+
+        [Test]
         public async Task A_cool_whose_sensor_never_moves_with_unknown_cooler_power_still_gives_up() {
             // No readable CoolerPower (unparseable) — must not hang waiting for a power reading.
             await using var cam = new SimCamera { FixedTemperature = 5, CoolerPowerUnreadable = true };
