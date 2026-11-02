@@ -561,19 +561,14 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                           // the image; while imaging, its panel sits beside
                           // the rail like any mode's.
                           // Between the status pill and the bottom row (the
-                          // plan squares once there is a queue); a tall sheet
-                          // scrolls inside.
+                          // plan squares step aside while it shows); a tall
+                          // sheet scrolls inside.
                           if (runSheet)
                             Positioned(
                               left: 0,
                               right: 0,
                               top: railTop + kSimpleStatusHeight + kSimpleInset,
-                              bottom:
-                                  kSimpleInset * 2 +
-                                  kSimpleBarHeight +
-                                  (planSquares
-                                      ? kSimplePlanSquareHeight + kSimpleInset
-                                      : 0),
+                              bottom: kSimpleInset * 2 + kSimpleBarHeight,
                               child: Center(
                                 child: SimpleRunSheet(
                                   editing: _editing,
@@ -677,7 +672,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                           // The plan squares hug the bottom-right corner, just
                           // above the bottom row, growing left over the right
                           // half (the Info tiles have the left).
-                          if (shown == SimpleModeScreen.plan)
+                          if (shown == SimpleModeScreen.plan && !runSheet)
                             Positioned(
                               left: width / 2,
                               right: kSimpleInset,

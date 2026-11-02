@@ -514,6 +514,26 @@ void main() {
     expect(find.byKey(const Key('autopilot-strip')), findsNothing, reason: 'Focus picked: Autopilot left');
   });
 
+  for (final size in const [Size(1024, 768), Size(768, 1024)]) {
+    testWidgets('at $size: with two queued, Plan\'s sheet for the next pick fits without scrolling', (tester) async {
+      await _pump(tester, size,
+          plan: SimpleRun(sequenceId: 'seq-1', targets: [
+            for (var i = 1; i <= 2; i++)
+              SimpleTarget(name: 'M$i', steps: const [FilterPlanStep(filterName: 'L', exposureSeconds: 120, frameCount: 30)]),
+          ]));
+      final c = ProviderScope.containerOf(tester.element(find.byType(SimpleShell)));
+      c.read(planetariumSelectionProvider.notifier).set(const PlanetariumSelection(
+          name: 'M42', kind: 'Nebula', raHours: 5.6, decDeg: -5.4, raJ2000Hours: 5.6, decJ2000Deg: -5.4, altDeg: 40,
+          maxAltDeg: 60));
+      await tester.tap(find.byKey(const Key('simple-mode')));
+      await tester.pump();
+      await tester.tap(find.text('Plan').first);
+      await tester.pump();
+      final scroll = find.descendant(of: find.byType(SimpleRunSheet), matching: find.byType(Scrollable)).first;
+      expect(tester.state<ScrollableState>(scroll).position.maxScrollExtent, 0, reason: 'everything shows');
+    });
+  }
+
   testWidgets('Autopilot picked from the modes stays in Simple Mode and starts, as the offer does', (tester) async {
     final container = await _pump(tester, const Size(1024, 768));
     await tester.tap(find.byKey(const Key('simple-mode')));
@@ -581,6 +601,9 @@ void main() {
     await tester.pump();
     await tester.tap(find.text('Plan').first);
     await tester.pump();
+    // The sheet opens with Plan; the squares show once it's put away.
+    await tester.tap(find.byKey(const Key('simple-settings')));
+    await tester.pump();
     final square = tester.getRect(find.byKey(const Key('simple-run-tracker')));
     expect(square.right, 1024 - kSimpleInset, reason: 'in the corner');
     expect(square.bottom, 768 - (kSimpleInset * 2 + kSimpleBarHeight), reason: 'just above the bottom row');
@@ -590,8 +613,8 @@ void main() {
   });
 
   for (final size in const [Size(1024, 768), Size(768, 1024)]) {
-    testWidgets('at $size: Plan\'s sheet clears the status pill and the plan squares; a plan '
-        'square opens the queue panel', (tester) async {
+    testWidgets('at $size: Plan\'s sheet runs from the status pill to the bottom row while the plan squares '
+        'step aside; a plan square opens the queue panel', (tester) async {
       // A long queue: taller than the room, so the sheet must scroll inside its slot.
       await _pump(tester, size,
           plan: SimpleRun(sequenceId: 'seq-1', targets: [
@@ -603,10 +626,15 @@ void main() {
       await tester.tap(find.text('Plan').first);
       await tester.pump();
       final sheet = tester.getRect(find.byType(SimpleRunSheet));
-      final squares = tester.getRect(find.byKey(const Key('simple-run-tracker')));
       expect(sheet.top, greaterThanOrEqualTo(kSimpleInset * 3 + kSimpleBarHeight + kSimpleStatusHeight),
           reason: 'under the status pill');
-      expect(sheet.bottom, lessThanOrEqualTo(squares.top), reason: 'above the plan squares');
+      expect(sheet.bottom, lessThanOrEqualTo(size.height - kSimpleInset * 2 - kSimpleBarHeight),
+          reason: 'above the bottom row');
+      expect(find.byKey(const Key('simple-run-tracker')), findsNothing, reason: 'the squares step aside');
+      // The chip puts the sheet away: the squares come back.
+      await tester.tap(find.byKey(const Key('simple-settings')));
+      await tester.pump();
+      final squares = tester.getRect(find.byKey(const Key('simple-run-tracker')));
       // Ten queued: the squares keep to the right half (the Info tiles have
       // the left) and the rest fold into one "+N" square.
       expect(squares.left, greaterThanOrEqualTo(size.width / 2), reason: 'the right half');
@@ -638,6 +666,8 @@ void main() {
       await tester.tap(find.byKey(const Key('autopilot-skip')));
       await tester.pump();
       await tester.tap(find.byKey(const Key('autopilot-skip')));
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('simple-settings')));
       await tester.pump();
       final strip = tester.getRect(find.byKey(const Key('autopilot-strip')));
       final squares = tester.getRect(find.byKey(const Key('simple-run-tracker')));
