@@ -34,6 +34,7 @@ import '../library/image_library_screen.dart';
 import '../shell_listeners.dart';
 import 'simple_autopilot.dart';
 import 'simple_focus_panel.dart';
+import 'simple_message_pills.dart';
 import 'simple_polar_panel.dart';
 import 'simple_plan_panel.dart';
 import 'simple_preview_panel.dart';
@@ -50,6 +51,12 @@ const double kSimpleRailWidth = 72;
 /// The status pill's widest (top-left under the strip); Info starts right of
 /// it.
 const double kSimpleStatusMaxWidth = 300;
+
+/// The message pills' widest (they share the top row with the status pill).
+const double kSimpleMessagesMaxWidth = 420;
+
+/// The Autopilot strip's or offer's row before it is measured.
+const double kSimpleAutopilotRowHeight = 56;
 
 /// Side of the compact Stop at the bottom right.
 const double kSimpleStopSize = 60;
@@ -161,6 +168,27 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     _editing = null;
     _adding = false;
   }
+
+  /// The left rail's and the Autopilot row's heights, measured after each
+  /// frame: the message pills start under the Autopilot row (its words wrap
+  /// on a narrow window) and stop above the left rail.
+  double _leftRailHeight = 0;
+  double _autopilotRowHeight = kSimpleAutopilotRowHeight;
+  final _leftRailKey = GlobalKey();
+  final _autopilotRowKey = GlobalKey();
+
+  void _measure() => WidgetsBinding.instance.addPostFrameCallback((_) {
+    final rail = _leftRailKey.currentContext?.size?.height;
+    final row = _autopilotRowKey.currentContext?.size?.height;
+    if (!mounted) return;
+    if ((rail != null && rail != _leftRailHeight) ||
+        (row != null && row != _autopilotRowHeight)) {
+      setState(() {
+        _leftRailHeight = rail ?? _leftRailHeight;
+        _autopilotRowHeight = row ?? _autopilotRowHeight;
+      });
+    }
+  });
 
   /// The Autopilot offer was dismissed (until Simple Mode opens again).
   bool _offerDismissed = false;
@@ -279,6 +307,31 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
         SimpleRunPhase.none;
     const railTop = kSimpleInset * 2 + kSimpleBarHeight;
     final width = MediaQuery.sizeOf(context).width;
+    final autopilotRow =
+        _mode == SimpleModeScreen.autopilot ||
+        (!_offerDismissed &&
+            _mode == SimpleModeScreen.preview &&
+            autopilotOffered(ref));
+    // Messages share the top row with the status pill, which keeps at most
+    // half of it; they start under the Autopilot strip when it shows.
+    final statusRoom = math.min(
+      kSimpleStatusMaxWidth,
+      (width - kSimpleInset * 3) / 2,
+    );
+    final messagesWidth = math.min(
+      kSimpleMessagesMaxWidth,
+      width - kSimpleInset * 3 - statusRoom,
+    );
+    final messagesTop = autopilotRow
+        ? railTop + _autopilotRowHeight + AraSpace.s12
+        : railTop;
+    _measure();
+    final height =
+        MediaQuery.sizeOf(context).height -
+        MediaQuery.paddingOf(context).vertical;
+    final leftRailTop = _leftRailHeight == 0
+        ? height
+        : railTop + (height - railTop * 2 - _leftRailHeight) / 2;
     final queuePanel = SimpleRunPanel(
       onAdd: () => _openSheet(),
       onEdit: (i) => _openSheet(edit: i),
@@ -363,6 +416,21 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                           ),
                         ),
                       ),
+                    // The message pills, top-left under the strip (under the
+                    // Autopilot strip when it shows), down to the left rail;
+                    // they stay in the immersive view.
+                    AnimatedPositioned(
+                      left: kSimpleInset,
+                      top: panels ? messagesTop : kSimpleInset,
+                      width: messagesWidth,
+                      duration: motion,
+                      curve: Curves.easeOut,
+                      child: SimpleMessagePills(
+                        maxHeight: panels
+                            ? leftRailTop - messagesTop - kSimpleInset
+                            : double.infinity,
+                      ),
+                    ),
                     // The camera's status, top-right under the strip (messages
                     // have the top-left), at most half the row; it stays in
                     // the immersive view and moves up into the corner.
@@ -423,17 +491,20 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                             width: kSimpleRailWidth,
                             child: Align(
                               alignment: Alignment.centerLeft,
-                              child: _LeftRail(
-                                info: _info,
-                                system: _system,
-                                sky: showSky,
-                                onInfo: () => setState(() => _info = !_info),
-                                onSystem: () =>
-                                    setState(() => _system = !_system),
-                                // With no frame there is only the sky.
-                                onSky: hasFrame
-                                    ? () => setState(() => _sky = !_sky)
-                                    : null,
+                              child: KeyedSubtree(
+                                key: _leftRailKey,
+                                child: _LeftRail(
+                                  info: _info,
+                                  system: _system,
+                                  sky: showSky,
+                                  onInfo: () => setState(() => _info = !_info),
+                                  onSystem: () =>
+                                      setState(() => _system = !_system),
+                                  // With no frame there is only the sky.
+                                  onSky: hasFrame
+                                      ? () => setState(() => _sky = !_sky)
+                                      : null,
+                                ),
                               ),
                             ),
                           ),
@@ -548,23 +619,23 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                             ),
                           // Autopilot's steps, or the offer to start it, centred
                           // under the strip.
-                          if (_mode == SimpleModeScreen.autopilot ||
-                              (!_offerDismissed &&
-                                  _mode == SimpleModeScreen.preview &&
-                                  autopilotOffered(ref)))
+                          if (autopilotRow)
                             Positioned(
                               left: 0,
                               right: 0,
                               top: railTop,
                               child: Center(
-                                child: _mode == SimpleModeScreen.autopilot
-                                    ? const AutopilotStrip()
-                                    : AutopilotOffer(
-                                        onStart: _startAutopilot,
-                                        onDismiss: () => setState(
-                                          () => _offerDismissed = true,
+                                child: KeyedSubtree(
+                                  key: _autopilotRowKey,
+                                  child: _mode == SimpleModeScreen.autopilot
+                                      ? const AutopilotStrip()
+                                      : AutopilotOffer(
+                                          onStart: _startAutopilot,
+                                          onDismiss: () => setState(
+                                            () => _offerDismissed = true,
+                                          ),
                                         ),
-                                      ),
+                                ),
                               ),
                             ),
                           // The plan squares hug the bottom-right corner, just

@@ -27,6 +27,8 @@ import 'package:openastroara/state/imaging/last_frame_state.dart';
 import 'package:openastroara/state/saved_server_state.dart';
 import 'package:openastroara/state/settings/settings_nav.dart';
 import 'package:openastroara/state/simple_mode_state.dart';
+import 'package:openastroara/state/simple_messages_state.dart';
+import 'package:openastroara/screens/simple/simple_message_pills.dart';
 import 'package:openastroara/widgets/emergency_stop_button.dart';
 import 'package:openastroara/widgets/imaging/histogram_strip.dart' show frameHistogramProvider;
 import 'package:openastroara/widgets/night_hotkey.dart';
@@ -418,6 +420,32 @@ void main() {
     await tester.pump();
     expect(find.descendant(of: chip, matching: find.text('Plan\n5 min')), findsOneWidget);
   });
+
+  for (final size in const [Size(1024, 768), Size(768, 1024), Size(507, 768)]) {
+    testWidgets('at $size: message pills sit top-left, beside the status pill, above the left rail, '
+        'under the Autopilot offer', (tester) async {
+      final container = await _pump(tester, size);
+      await _frame(tester, container);
+      container.read(captureProgressProvider.notifier).beginExposing(const Duration(seconds: 5));
+      for (var i = 0; i < 6; i++) {
+        container.read(simpleMessagesProvider.notifier).show(SimpleMessageKind.error, 'Message $i');
+      }
+      await tester.pump();
+      // The rail and the offer are measured after the first frame.
+      await tester.pump(const Duration(milliseconds: 300));
+      final pills = tester.getRect(find.byType(SimpleMessagePills));
+      final status = _panelOf(tester, find.textContaining('Taking a frame'));
+      final rail = _panelOf(tester, find.text('Library'));
+      final offer = tester.getRect(find.byKey(const Key('autopilot-offer')));
+      expect(pills.left, kSimpleInset, reason: 'the top-left corner');
+      expect(pills.top, greaterThanOrEqualTo(offer.bottom), reason: 'under the Autopilot offer');
+      expect(pills.right, lessThanOrEqualTo(status.left), reason: 'beside the status pill, never under it');
+      expect(pills.bottom, lessThanOrEqualTo(rail.top), reason: 'above the left rail');
+      expect(find.byKey(const Key('simple-messages-more')), findsOneWidget, reason: 'six don\'t fit: the rest fold');
+      container.read(captureProgressProvider.notifier).reset();
+      await tester.pump(const Duration(seconds: 1));
+    });
+  }
 
   testWidgets('the Autopilot offer can be dismissed', (tester) async {
     await _pump(tester, const Size(1024, 768));
