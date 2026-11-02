@@ -254,6 +254,7 @@ class DiagnosticsAccumulator {
         // a11y text isn't blank for exactly the malformed-payload case.
         return 'Diagnostics: $n issue$plural — info';
       case StatusLevel.connected:
+      case StatusLevel.active:
         // All open issues are green-severity — not warnings, so no suffix.
         return 'Diagnostics: $n open issue$plural';
       case StatusLevel.disconnected:
@@ -275,6 +276,7 @@ class DiagnosticsAccumulator {
       case StatusLevel.info:
         return 2;
       case StatusLevel.connected:
+      case StatusLevel.active:
         return 1;
       case StatusLevel.disconnected:
         return 0;

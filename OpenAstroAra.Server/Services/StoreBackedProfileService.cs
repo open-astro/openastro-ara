@@ -191,6 +191,8 @@ internal static class ProfileStoreMapper {
         guider.DecGuideMode = NormalizeDecGuideMode(phd2.DecGuideMode);
         guider.GuideExposureMs = Math.Max(0, phd2.GuideExposureMs);
         guider.GuideCameraGain = Math.Clamp(phd2.GuideCameraGain, 0, 100);
+        // The picked guider profile pins it on connect; null (or a non-id 0) = Automatic, the §63.4 guider profile named after the Ara profile.
+        guider.PHD2ProfileId = phd2.Phd2ProfileId is > 0 ? phd2.Phd2ProfileId : null;
         // §63.17 equipment selections — trimmed (choice strings are matched verbatim by the daemon; stray
         // whitespace from a hand-edited profile.json would silently select nothing) and the port clamped to
         // the valid range with 0 = unset.

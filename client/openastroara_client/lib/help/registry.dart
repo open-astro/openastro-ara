@@ -534,7 +534,7 @@ const Map<String, Help> helpRegistry = {
     body:
         'What the disk-space monitor does when free space on your image save volume **drops to** the **critical** threshold (set under Settings → Session → Storage).\n\n'
         '* **Warn only** (default): raise a red diagnostic and, if enabled, a *Low disk space* notification — but keep capturing. You decide what to do.\n'
-        '* **Pause the running sequence**: suspend any in-progress sequence at its next step and refuse new frames; free some space, then resume the run from the Run tab. A critical notification records that it paused the run.\n'
+        '* **Pause the running sequence**: suspend any in-progress sequence at its next step and refuse new frames; free some space, then resume the run from the Sequence tab. A critical notification records that it paused the run.\n'
         '* **Abort the running sequence**: also halt any in-progress sequence, so you don\'t keep filling the disk with frames that may not even save. A critical notification records that it stopped the run.\n\n'
         'This fires on the *transition* into critical (when free space crosses the threshold going down), so it halts a sequence that\'s already running. With Pause or Abort set, a brand-new sequence on an already-critical disk is refused frame by frame: the pre-capture check stops each exposure before the shutter opens until space is freed. Either way the monitor never deletes anything.',
     relatedSettings: [
@@ -1101,7 +1101,7 @@ const Map<String, Help> helpRegistry = {
         '* **Pick a star and zoom.** Tap a star on the picture to measure that one instead of the brightest, and Ara stays on it. **1× / 2× / 4×** enlarges the star; **Whole frame** goes back to the brightest star.\n'
         '* **The big number** is how far the middle spike sits from the centre of the X, in pixels — the median of the last five measured frames of that star, so seeing does not make it jump. Each frame\'s own value is on the picture and in the trend. It is zero at focus and changes sign as you pass through, so you can see which side you are on. With the optics set, it also shows roughly how many micrometres of focuser travel that is.\n'
         '* **The advice follows your last move.** Ara cannot know which way your knob turns the focuser, so it says *Keep going*, *Go back*, or *You passed focus*. The number changes in step with the focuser, so the advice also says how big the next move should be compared with the last one.\n'
-        '* **In focus** means the offset sits inside the critical focus zone. The zone comes from your focal ratio and pixel size (Options → Imaging → Optics). Without them, in focus means within half a pixel.\n'
+        '* **In focus** means the offset sits inside the critical focus zone. The zone comes from your focal ratio and pixel size (Settings → Imaging → Optics). Without them, in focus means within half a pixel.\n'
         '* **Finish** asks you to take the mask off, and marks the telescope focused when the big number (the median of the last measured frames) was in the zone — one lucky or seeing-blown frame does not decide it. Autofocus and sequences will not start while the readout runs, so the mask can never end up on your images.\n'
         '* **Exposure**: well under a second for a bright star; lengthen it if the spikes are faint.',
     relatedSettings: [],
@@ -1553,9 +1553,10 @@ const Map<String, Help> helpRegistry = {
     key: 'eq.guider.profile',
     title: 'Guider profile',
     body:
-        'Which equipment profile the guider should load when Ara connects it. Leave empty to use the guider\'s '
-        'current/default profile. Profiles in the guider hold its camera + mount selection and calibration data, '
-        'so pointing at the wrong one connects the wrong hardware.',
+        'Which equipment profile the guider should load when Ara connects it. Automatic uses the guider profile '
+        'Ara names after the active Ara profile; pick one of the guider\'s own profiles (listed while the guider '
+        'is connected) to pin it instead. Profiles in the guider hold its camera + mount selection and calibration '
+        'data, so pointing at the wrong one connects the wrong hardware.',
   ),
   'eq.guider.dither_every_n': Help(
     key: 'eq.guider.dither_every_n',

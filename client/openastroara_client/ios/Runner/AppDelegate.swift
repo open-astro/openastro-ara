@@ -4,6 +4,7 @@ import UIKit
 
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
+  private var displayChannel: FlutterMethodChannel?
   private let bonjour = BonjourBrowser()
 
   override func application(
@@ -15,6 +16,32 @@ import UIKit
 
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
+    if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "OpenAstroAraDisplay") {
+      // NotchSideProbe: which way the window is turned, so a landscape iPhone
+      // keeps its margin only on the Dynamic Island side.
+      let channel = FlutterMethodChannel(name: "openastroara/display", binaryMessenger: registrar.messenger())
+      channel.setMethodCallHandler { call, result in
+        guard call.method == "interfaceOrientation" else {
+          result(FlutterMethodNotImplemented)
+          return
+        }
+        let scene = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first
+        // effectiveGeometry is iOS 16+; the deployment target is 15.
+        let orientation: UIInterfaceOrientation?
+        if #available(iOS 16.0, *) {
+          orientation = scene?.effectiveGeometry.interfaceOrientation
+        } else {
+          orientation = scene?.interfaceOrientation
+        }
+        switch orientation {
+        case .landscapeLeft: result("landscapeLeft")
+        case .landscapeRight: result("landscapeRight")
+        case .portrait, .portraitUpsideDown: result("portrait")
+        default: result(nil)
+        }
+      }
+      displayChannel = channel
+    }
     guard let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "OpenAstroAraBonjour") else { return }
     let channel = FlutterMethodChannel(name: "openastroara/bonjour", binaryMessenger: registrar.messenger())
     channel.setMethodCallHandler { [bonjour] call, result in

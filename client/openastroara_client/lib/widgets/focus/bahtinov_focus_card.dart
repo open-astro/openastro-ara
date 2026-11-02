@@ -167,7 +167,7 @@ class _BahtinovFocusCardState extends ConsumerState<BahtinovFocusCard> {
           ] else if (measured && !status.zoneFromOptics) ...[
             InlineNotice.info(
                 // One line on a laptop screen, so the readout keeps its height.
-                'Until the optics are set (Options → Imaging → Optics), in focus means within ${formatOffset(status.zonePx)} px.'),
+                'Until the optics are set (Settings → Imaging → Optics), in focus means within ${formatOffset(status.zonePx)} px.'),
             const SizedBox(height: 16),
           ],
           if (!hasData)

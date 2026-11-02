@@ -198,7 +198,7 @@ class PolarAlignLiveNotifier extends Notifier<PolarAlignLive> {
 
 /// Rebuild the live view from a REST snapshot — a full replacement, NOT a
 /// copyWith: the resync exists precisely because the WS stream missed events,
-/// so every field the snapshot doesn't carry (zone, error reason, retry
+/// so every field the snapshot doesn't carry (error reason, retry
 /// streak, iteration) must reset rather than survive from a previous run.
 /// Pure — unit-tested.
 PolarAlignLive liveFromStatus(PolarAlignStatus status) => PolarAlignLive(
@@ -206,8 +206,19 @@ PolarAlignLive liveFromStatus(PolarAlignStatus status) => PolarAlignLive(
       altErrorArcmin: status.altitudeAdjustmentArcmin,
       azErrorArcmin: status.azimuthAdjustmentArcmin,
       totalErrorArcmin: status.currentErrorArcmin,
+      zone: polarAlignZone(status.currentErrorArcmin),
       lastFrame: status.lastFrame,
     );
+
+/// The zone for a total error, by the daemon's own rule (PolarAlignService
+/// PublishProgressAsync) — the REST snapshot carries the error but not the zone.
+String? polarAlignZone(double? totalArcmin) => totalArcmin == null
+    ? null
+    : totalArcmin < 10.0
+        ? 'green'
+        : totalArcmin < 60.0
+            ? 'yellow'
+            : 'red';
 
 final polarAlignLiveProvider =
     NotifierProvider<PolarAlignLiveNotifier, PolarAlignLive>(

@@ -6,8 +6,11 @@ import 'package:openastroara/models/server.dart';
 import 'package:openastroara/services/guider_api.dart';
 import 'package:openastroara/services/saved_server_service.dart';
 import 'package:openastroara/state/guider/guider_state.dart';
+import 'package:openastroara/state/app_shell_state.dart';
 import 'package:openastroara/state/saved_server_state.dart';
+import 'package:openastroara/state/settings/settings_nav.dart';
 import 'package:openastroara/widgets/equipment/guider_chip.dart';
+import 'package:openastroara/widgets/equipment/equipment_state_chip.dart';
 import 'package:openastroara/widgets/equipment/guider_dialog.dart';
 import 'package:openastroara/widgets/status_indicator.dart';
 
@@ -56,7 +59,7 @@ Widget _app(GuiderClient fake) => ProviderScope(
         savedServerServiceProvider.overrideWithValue(_FakeSavedServerService()),
         guiderApiFactoryProvider.overrideWithValue((_) => fake),
       ],
-      child: const MaterialApp(home: Scaffold(body: GuiderChip())),
+      child: const MaterialApp(home: Scaffold(body: GuiderConnectionSection())),
     );
 
 void main() {
@@ -151,36 +154,45 @@ void main() {
   });
 
   group('labels', () {
-    test('connection labels', () {
-      expect(guiderConnectionLabel(GuiderConnectionState.connected), 'Connected');
-      expect(guiderConnectionLabel(GuiderConnectionState.connecting), 'Connecting…');
-      expect(guiderConnectionLabel(GuiderConnectionState.disconnected), 'Disconnected');
-    });
-
     test('runtime labels', () {
       expect(guiderRuntimeLabel(GuiderRuntimeState.guiding), 'Guiding');
       expect(guiderRuntimeLabel(GuiderRuntimeState.starLost), 'Star lost');
     });
   });
 
-  testWidgets('GuiderChip renders the GUIDE label (disconnected by default)', (tester) async {
+  testWidgets('GuiderChip renders the Guider label (disconnected by default)', (tester) async {
     await tester.pumpWidget(const ProviderScope(
       child: MaterialApp(home: Scaffold(body: GuiderChip())),
     ));
     await tester.pump();
-    expect(find.text('GUIDE'), findsOneWidget);
+    expect(find.text('Guider'), findsOneWidget);
   });
 
-  testWidgets('tapping the chip opens the guider dialog (no server → not configured)', (tester) async {
-    await tester.pumpWidget(const ProviderScope(
-      child: MaterialApp(home: Scaffold(body: GuiderChip())),
+  testWidgets('tapping the chip routes to the guider Settings panel (Options tab), like the other devices',
+      (tester) async {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: const MaterialApp(home: Scaffold(body: GuiderChip())),
     ));
     await tester.pump();
     await tester.tap(find.byType(GuiderChip));
+    await tester.pump();
+    expect(container.read(selectedSettingsPanelProvider), 'eq.guider');
+    expect(container.read(selectedTabIndexProvider), kOptionsTabIndex);
+    expect(find.byType(Dialog), findsNothing, reason: 'no popup any more');
+  });
+
+  testWidgets('the connection section shows "not configured" with no server', (tester) async {
+    await tester.pumpWidget(const ProviderScope(
+      child: MaterialApp(home: Scaffold(body: GuiderConnectionSection())),
+    ));
     await tester.pumpAndSettle();
-    expect(find.text('Guider'), findsOneWidget); // dialog title
     expect(find.text('No guider configured on this server.'), findsOneWidget);
-    expect(find.text('Connect'), findsOneWidget);
+    expect(find.byTooltip('Connect'), findsOneWidget);
+    // Same card language as the mount/camera/focuser: the link-state chip.
+    expect(find.byType(EquipmentStateChip), findsOneWidget);
   });
 
   testWidgets('tapping Connect on a disconnected guider calls the notifier', (tester) async {
@@ -188,22 +200,18 @@ void main() {
         _status(GuiderConnectionState.disconnected, GuiderRuntimeState.stopped));
     await tester.pumpWidget(_app(fake));
     await tester.pumpAndSettle();
-    await tester.tap(find.byType(GuiderChip));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Connect'));
+    await tester.tap(find.byTooltip('Connect'));
     await tester.pumpAndSettle();
     expect(fake.connectCalls, 1);
   });
 
-  testWidgets('a failed connect shows the error message in the dialog', (tester) async {
+  testWidgets('a failed connect shows the error message in the section', (tester) async {
     final fake = _FakeGuiderClient(
         _status(GuiderConnectionState.disconnected, GuiderRuntimeState.stopped),
         throwOnConnect: true);
     await tester.pumpWidget(_app(fake));
     await tester.pumpAndSettle();
-    await tester.tap(find.byType(GuiderChip));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Connect'));
+    await tester.tap(find.byTooltip('Connect'));
     await tester.pumpAndSettle();
     expect(find.textContaining('Could not reach the guider'), findsOneWidget);
   });
@@ -213,10 +221,9 @@ void main() {
         _status(GuiderConnectionState.connected, GuiderRuntimeState.guiding));
     await tester.pumpWidget(_app(fake));
     await tester.pumpAndSettle();
-    await tester.tap(find.byType(GuiderChip));
-    await tester.pumpAndSettle();
-    expect(find.text('Disconnect'), findsOneWidget);
-    await tester.tap(find.text('Disconnect'));
+    expect(find.byTooltip('Disconnect'), findsOneWidget);
+    expect(find.text('Guiding'), findsOneWidget, reason: 'the runtime state is in the card body');
+    await tester.tap(find.byTooltip('Disconnect'));
     await tester.pumpAndSettle();
     expect(fake.disconnectCalls, 1);
   });

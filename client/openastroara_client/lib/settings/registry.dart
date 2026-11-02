@@ -1686,12 +1686,12 @@ const List<Setting> settingsRegistry = [
   Setting(
     id: 'eq.guider.profile',
     label: 'OpenAstro Guider profile',
-    description: 'Which OpenAstro Guider equipment profile to use. OpenAstro Guider stores per-mount/camera profiles separate from ARA\'s profiles.',
+    description: 'Which OpenAstro Guider equipment profile to select on connect: Automatic (the one Ara names after the active Ara profile) or one of the guider\'s own profiles.',
     keywords: ['phd2', 'profile', 'equipment', 'guider'],
     path: ['Settings', 'Equipment', 'Guider'],
-    type: SettingType.string(),
-    defaultValue: 'Default',
-    profilePath: 'phd2.profile',
+    type: SettingType.complex(),
+    defaultValue: 0,
+    profilePath: 'phd2.phd2_profile_id',
   ),
   Setting(
     id: 'eq.guider.dither_enabled',

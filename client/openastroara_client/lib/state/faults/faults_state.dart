@@ -117,7 +117,7 @@ int statusLevelRank(StatusLevel level) => switch (level) {
       StatusLevel.error => 4,
       StatusLevel.busy => 3,
       StatusLevel.info => 2,
-      StatusLevel.connected => 1,
+      StatusLevel.connected || StatusLevel.active => 1,
       StatusLevel.disconnected => 0,
     };
 

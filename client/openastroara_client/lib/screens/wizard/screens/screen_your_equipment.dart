@@ -758,7 +758,7 @@ class _DetailsDisclosure extends StatelessWidget {
         label: 'Read noise (e⁻)',
         initialValue: c.readNoiseE?.toString(),
         helperText: 'Spec-sheet value — Alpaca doesn\'t report it. Feeds '
-            'exposure planning; leave blank to set later in Options.',
+            'exposure planning; leave blank to set later in Settings.',
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
         inputFormatters: WizardInput.unsignedDecimal,
         onChanged: (v) => _assignDouble(v, (d) => c.readNoiseE = d),

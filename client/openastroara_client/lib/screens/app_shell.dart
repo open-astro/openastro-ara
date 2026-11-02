@@ -22,7 +22,12 @@ import '../widgets/emergency_stop_button.dart';
 import '../widgets/safety_alarm_listener.dart';
 import '../widgets/stop_mount_overlay.dart';
 import '../widgets/equipment/equipment_status_chip.dart';
+import 'package:flutter/foundation.dart' show defaultTargetPlatform;
+import '../services/notch_side.dart';
+import '../widgets/equipment_chip.dart'
+    show EquipmentChipCompact, kEquipmentChipCompactWidth, kEquipmentChipWidth;
 import '../widgets/help_dialog.dart';
+import '../widgets/settings_gear_button.dart';
 import '../widgets/launchpad_button.dart';
 import '../widgets/ws_connection_indicator.dart';
 import 'calibration/calibration_screen.dart';
@@ -56,14 +61,14 @@ class AppShell extends ConsumerStatefulWidget {
 class _AppShellState extends ConsumerState<AppShell> {
   static const _tabs = <_TabSpec>[
     _TabSpec(icon: Icons.public, label: 'Planning', body: PlanningTab()),
-    _TabSpec(icon: Icons.checklist, label: 'Setup', body: SetupTab()),
+    _TabSpec(icon: Icons.checklist, label: 'Checklist', body: SetupTab()),
     _TabSpec(
       icon: Icons.play_circle_outline,
-      label: 'Run',
+      label: 'Sequence',
       body: SequencerTab(),
     ),
     _TabSpec(icon: Icons.camera_alt, label: 'Live', body: ImagingTab()),
-    _TabSpec(icon: Icons.settings, label: 'Options', body: OptionsTab()),
+    _TabSpec(icon: Icons.settings, label: 'Settings', body: OptionsTab()),
   ];
 
   // §61 — the shell's shortcuts only see keys when focus is inside it. The
@@ -91,6 +96,8 @@ class _AppShellState extends ConsumerState<AppShell> {
   @override
   Widget build(BuildContext context) {
     final selectedTab = ref.watch(selectedTabIndexProvider);
+    final narrow =
+        MediaQuery.sizeOf(context).width < kEquipmentChipCompactWidth;
     // Visited tabs are provider state marked from select() (#1111 PR C), so
     // this build has no side effects and no post-frame setState. The union
     // with selectedTab keeps the invariant even if the two providers ever
@@ -102,20 +109,20 @@ class _AppShellState extends ConsumerState<AppShell> {
     // to update the constant trips this in debug instead of silently navigating
     // to the wrong tab.
     assert(
-      _tabs[kOptionsTabIndex].label == 'Options',
-      'kOptionsTabIndex must point at the Options tab — update it if _tabs is reordered.',
+      _tabs[kOptionsTabIndex].label == 'Settings' && kOptionsTabIndex == _tabs.length - 1,
+      'kOptionsTabIndex must point at the Settings tab, the last one (the rail lists the tabs before it).',
     );
     assert(
-      _tabs[kRunTabIndex].label == 'Run',
-      'kRunTabIndex must point at the Run tab — update it if _tabs is reordered.',
+      _tabs[kRunTabIndex].label == 'Sequence',
+      'kRunTabIndex must point at the Sequence tab — update it if _tabs is reordered.',
     );
     assert(
       _tabs[kPlanningTabIndex].label == 'Planning',
       'kPlanningTabIndex must point at the Planning tab — update it if _tabs is reordered.',
     );
     assert(
-      _tabs[kSetupTabIndex].label == 'Setup',
-      'kSetupTabIndex must point at the Setup tab — update it if _tabs is reordered.',
+      _tabs[kSetupTabIndex].label == 'Checklist',
+      'kSetupTabIndex must point at the Checklist tab — update it if _tabs is reordered.',
     );
     assert(
       _tabs[kLiveTabIndex].label == 'Live',
@@ -147,7 +154,7 @@ class _AppShellState extends ConsumerState<AppShell> {
               // §57 — the Stop Mount panic overlay surfaces over every tab
               // while the daemon reports an autonomous slew in progress.
               child: StopMountListener(
-                child: SafeArea(
+                child: _EdgeToEdge(
                 child: CallbackShortcuts(
                   // §61 ⌘K on macOS, Ctrl+K elsewhere — both bound so the palette
                   // is reachable regardless of host platform.
@@ -176,18 +183,29 @@ class _AppShellState extends ConsumerState<AppShell> {
                     focusNode: _focus,
                     child: Column(
                       children: [
-                        const _TopEquipmentBar(),
+                        _TopEquipmentBar(showChips: !narrow),
                         Expanded(
                           child: Row(
+                            // Stretch so the device column fills the height
+                            // and starts at the top, like the rail.
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
+                              // A phone-width window swaps the bars: the
+                              // devices stand in a column here and the tabs
+                              // move to a bottom bar (below).
+                              if (narrow)
+                                const _DeviceColumn()
+                              else
                               NavigationRail(
-                                selectedIndex: selectedTab,
+                                // Settings opens from the top-bar gear, so the
+                                // rail lists the workflow tabs only.
+                                selectedIndex: railIndexFor(selectedTab),
                                 onDestinationSelected: (i) => ref
                                     .read(selectedTabIndexProvider.notifier)
                                     .select(i),
                                 labelType: NavigationRailLabelType.all,
                                 destinations: [
-                                  for (final t in _tabs)
+                                  for (final t in _tabs.take(kOptionsTabIndex))
                                     NavigationRailDestination(
                                       icon: Icon(t.icon),
                                       label: Text(t.label),
@@ -224,6 +242,25 @@ class _AppShellState extends ConsumerState<AppShell> {
                           ),
                         ),
                         const _BottomStatusBar(),
+                        if (narrow)
+                          NavigationBar(
+                            // Settings (from the gear) has no tab here:
+                            // nothing is highlighted while it shows.
+                            selectedIndex: railIndexFor(selectedTab) ?? 0,
+                            indicatorColor: railIndexFor(selectedTab) == null
+                                ? Colors.transparent
+                                : null,
+                            onDestinationSelected: (i) => ref
+                                .read(selectedTabIndexProvider.notifier)
+                                .select(i),
+                            destinations: [
+                              for (final t in _tabs.take(kOptionsTabIndex))
+                                NavigationDestination(
+                                  icon: Icon(t.icon),
+                                  label: t.label,
+                                ),
+                            ],
+                          ),
                       ],
                     ),
                   ),
@@ -268,7 +305,10 @@ class _TabSpec {
 }
 
 class _TopEquipmentBar extends StatelessWidget {
-  const _TopEquipmentBar();
+  const _TopEquipmentBar({required this.showChips});
+
+  /// False on a phone-width window, where the devices sit in [_DeviceColumn].
+  final bool showChips;
 
   @override
   Widget build(BuildContext context) {
@@ -276,25 +316,46 @@ class _TopEquipmentBar extends StatelessWidget {
         ? '⌘K'
         : 'Ctrl+K';
     return Container(
-      height: 64,
+      height: showChips ? 64 : 48,
       decoration: const BoxDecoration(
         color: AraColors.bgPanel,
         border: Border(bottom: BorderSide(color: AraColors.border)),
       ),
       child: Row(
         children: [
-          const Expanded(
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              padding: EdgeInsets.symmetric(horizontal: 8),
-              // Per §25.3 device-type order; each chip is live (status dot) +
-              // clickable (routes to its Settings panel). See TopEquipmentChips.
-              child: TopEquipmentChips(),
+          if (!showChips) const Spacer() else
+          Expanded(
+            // Names only when every named chip fits; otherwise icons only, so
+            // no device is pushed off screen (an iPad in portrait, a phone in
+            // landscape, a narrowed desktop window).
+            child: LayoutBuilder(
+              builder: (context, constraints) => EquipmentChipCompact(
+                compact: constraints.maxWidth <
+                    TopEquipmentChips.count * kEquipmentChipWidth + 16,
+                child: const SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  padding: EdgeInsets.symmetric(horizontal: 8),
+                  // Per §25.3 order (most used first); each chip is live (status dot) +
+                  // clickable (routes to its Settings panel). See TopEquipmentChips.
+                  child: TopEquipmentChips(),
+                ),
+              ),
             ),
           ),
-          // Night mode toggle — sits right beside the equipment chips (the
-          // DOME chip is the last one) so it's reachable in one tap from any
-          // tab; the same as the Ctrl+N / Cmd+N hotkey.
+          // §61.1 — visible magnifying-glass icon on the right side of the
+          // top bar. Opens the same `showCommandPalette` dialog that ⌘K
+          // launches; tooltip surfaces the platform-correct shortcut so
+          // keyboard-first users learn it.
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 2),
+            child: IconButton(
+              icon: const Icon(Icons.search, size: 22),
+              tooltip: 'Search settings ($shortcutLabel)',
+              onPressed: () => showCommandPalette(context),
+            ),
+          ),
+          // Night mode toggle — one tap from any tab; the same as the
+          // Ctrl+N / Cmd+N hotkey.
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 2),
             child: Consumer(
@@ -318,22 +379,89 @@ class _TopEquipmentBar extends StatelessWidget {
               },
             ),
           ),
-          // §61.1 — visible magnifying-glass icon on the right side of the
-          // top bar. Opens the same `showCommandPalette` dialog that ⌘K
-          // launches; tooltip surfaces the platform-correct shortcut so
-          // keyboard-first users learn it.
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            child: IconButton(
-              icon: const Icon(Icons.search, size: 22),
-              tooltip: 'Search settings ($shortcutLabel)',
-              onPressed: () => showCommandPalette(context),
-            ),
+          // Settings last, at the right edge.
+          const Padding(
+            padding: EdgeInsets.only(right: 6),
+            child: SettingsGearButton(),
           ),
         ],
       ),
     );
   }
+}
+
+/// [SafeArea] whose margins (a phone's notch on both sides in landscape, the
+/// status bar, the home indicator) are painted in the bars' colour instead of
+/// left black, so the shell reads as full screen while its content stays clear
+/// of them.
+class _EdgeToEdge extends StatefulWidget {
+  const _EdgeToEdge({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_EdgeToEdge> createState() => _EdgeToEdgeState();
+}
+
+class _EdgeToEdgeState extends State<_EdgeToEdge> with WidgetsBindingObserver {
+  NotchSide _notch = NotchSide.unknown;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _probe();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  // A rotation changes the window's metrics: ask again which side the island is on.
+  @override
+  void didChangeMetrics() => _probe();
+
+  Future<void> _probe() async {
+    if (defaultTargetPlatform != TargetPlatform.iOS) return;
+    final side = await NotchSideProbe.side();
+    if (mounted && side != _notch) setState(() => _notch = side);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final pad = MediaQuery.paddingOf(context);
+    // Equal side margins = iOS's symmetric landscape reservation; only then is
+    // the side without the island free to use.
+    final symmetric = pad.left > 0 && pad.left == pad.right;
+    return ColoredBox(
+      color: AraColors.bgPanel,
+      child: SafeArea(
+        left: !(symmetric && _notch == NotchSide.right),
+        right: !(symmetric && _notch == NotchSide.left),
+        child: ColoredBox(
+          color: Theme.of(context).scaffoldBackgroundColor,
+          child: widget.child,
+        ),
+      ),
+    );
+  }
+}
+
+/// The device chips standing in a column down the left edge, for a
+/// phone-width window (the tabs take the bottom bar there).
+class _DeviceColumn extends StatelessWidget {
+  const _DeviceColumn();
+
+  @override
+  Widget build(BuildContext context) => const ColoredBox(
+        color: AraColors.bgPanel,
+        child: SingleChildScrollView(
+          padding: EdgeInsets.symmetric(vertical: 4),
+          child: TopEquipmentChips(direction: Axis.vertical),
+        ),
+      );
 }
 
 class _BottomStatusBar extends StatelessWidget {

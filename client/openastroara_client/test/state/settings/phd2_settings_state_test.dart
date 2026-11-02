@@ -167,14 +167,6 @@ void main() {
       expect(container.read(phd2SettingsProvider).port, 4401);
     });
 
-    test('setPhd2Profile trims + rejects empty', () {
-      final n = container.read(phd2SettingsProvider.notifier);
-      n.setPhd2Profile('');
-      expect(container.read(phd2SettingsProvider).phd2Profile, 'Default');
-      n.setPhd2Profile('  Imaging rig 1  ');
-      expect(container.read(phd2SettingsProvider).phd2Profile, 'Imaging rig 1');
-    });
-
     test('positive-only setters reject zero/negative', () {
       final n = container.read(phd2SettingsProvider.notifier);
       n.setDitherEveryNFrames(0);

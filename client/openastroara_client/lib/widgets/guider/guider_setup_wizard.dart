@@ -772,7 +772,7 @@ class _GuiderSetupWizardState extends ConsumerState<GuiderSetupWizard> {
               padding: const EdgeInsets.only(top: 4),
               child: Text(
                 'Guide focal length: ${draft.guideFocalLength} mm — derived '
-                'from the main optics (Options → Imaging → Optics).',
+                'from the main optics (Settings → Imaging → Optics).',
                 style: Theme.of(context)
                     .textTheme
                     .bodySmall

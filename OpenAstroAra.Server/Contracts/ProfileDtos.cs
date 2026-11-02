@@ -494,7 +494,10 @@ public sealed record Phd2SettingsDto(
     double? DecMinimumMove = null,
     // Guide camera gain, percent of the camera's range (0..100), pushed with the guider's set_camera_gain.
     // Defaults to 50: the guider's own 95% buries stars in read noise on a fresh install.
-    int GuideCameraGain = 50);
+    int GuideCameraGain = 50,
+    // The guider profile to select on connect, by the daemon's profile id (from the guider state's
+    // Profiles list). Null = Automatic: the guider profile named after the Ara profile (§63.4).
+    int? Phd2ProfileId = null);
 
 /// <summary>
 /// §45.12 polar-alignment settings — the routine's knobs. Every field carries its playbook default

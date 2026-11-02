@@ -588,7 +588,7 @@ class ProfileApi {
   Future<Phd2Settings> putPhd2Settings(Phd2Settings value) async {
     final res = await _dio.put<Map<String, dynamic>>(
       '/api/v1/profile/phd2',
-      data: _phd2SettingsToJson(value),
+      data: phd2SettingsToJson(value),
     );
     return _phd2SettingsFromJson(res.data ?? const {});
   }
@@ -863,9 +863,12 @@ class ProfileApi {
     guideExposureMaxMs: (j['guide_exposure_max_ms'] as num?)?.toInt() ?? 6000,
     guideExposureMs: (j['guide_exposure_ms'] as num?)?.toInt() ?? 0,
     guideCameraGain: (j['guide_camera_gain'] as num?)?.toInt() ?? 50,
+    guiderProfileId: (j['phd2_profile_id'] as num?)?.toInt() ?? 0,
   );
 
-  static Map<String, dynamic> _phd2SettingsToJson(Phd2Settings v) => {
+  /// The guider settings as sent on PUT (also how the guider panel tells a
+  /// real edit from a write that changes nothing).
+  static Map<String, dynamic> phd2SettingsToJson(Phd2Settings v) => {
     'host': v.host,
     'port': v.port,
     'phd2_profile': v.phd2Profile,
@@ -896,6 +899,7 @@ class ProfileApi {
     'guide_exposure_max_ms': v.guideExposureMaxMs,
     'guide_exposure_ms': v.guideExposureMs,
     'guide_camera_gain': v.guideCameraGain,
+    'phd2_profile_id': v.guiderProfileId > 0 ? v.guiderProfileId : null,
   };
 
   // ── Diagnostics mode JSON mapping ──────────────────────────────────────

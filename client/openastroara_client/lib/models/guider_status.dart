@@ -4,6 +4,8 @@
 /// via `LowerCaseNamingPolicy`).
 library;
 
+import 'package:flutter/foundation.dart' show mapEquals;
+
 import 'pa_residual.dart';
 
 /// Link state of the guider device itself (mirrors the server
@@ -131,6 +133,9 @@ class GuiderStatus {
   final String? calibrationDirection;
   final int? calibrationStep;
   final double? calibrationDistancePx;
+  /// The guider's profiles, id → name (`runtime.profiles`), for the Settings
+  /// profile picker. Empty until a guider has connected.
+  final Map<int, String> profiles;
 
   const GuiderStatus({
     this.deviceId,
@@ -148,6 +153,7 @@ class GuiderStatus {
     this.calibrationDirection,
     this.calibrationStep,
     this.calibrationDistancePx,
+    this.profiles = const {},
   });
 
   /// "North step 7 · 11.9 px" while a calibration leg is reported; null otherwise.
@@ -197,6 +203,7 @@ class GuiderStatus {
       calibrationDirection: _str(runtimeMap['calibration_direction']),
       calibrationStep: (runtimeMap['calibration_step'] as num?)?.toInt(),
       calibrationDistancePx: _asDouble(runtimeMap['calibration_distance_px']),
+      profiles: _profiles(runtimeMap['profiles']),
     );
   }
 
@@ -204,6 +211,13 @@ class GuiderStatus {
   // is expected) degrades to null rather than throwing — the factory tolerates
   // any malformed value, not only nulls.
   static String? _str(dynamic v) => v is String ? v : null;
+
+  static Map<int, String> _profiles(dynamic v) => {
+        if (v is List)
+          for (final p in v)
+            if (p is Map && p['id'] is num && p['name'] is String)
+              (p['id'] as num).toInt(): p['name'] as String,
+      };
 
   static String _brandName(String? raw) {
     if (raw == null || raw.isEmpty) return 'Guider';
@@ -240,10 +254,11 @@ class GuiderStatus {
       other.rmsRaArcsec == rmsRaArcsec &&
       other.rmsDecArcsec == rmsDecArcsec &&
       other.currentProfile == currentProfile &&
-      other.paResidual == paResidual;
+      other.paResidual == paResidual &&
+      mapEquals(other.profiles, profiles);
 
   @override
   int get hashCode => Object.hash(deviceId, name, connectionState, runtimeState,
       rmsTotal, rmsRa, rmsDec, rmsTotalArcsec, rmsRaArcsec, rmsDecArcsec,
-      currentProfile, paResidual);
+      currentProfile, paResidual, Object.hashAll(profiles.entries.map((e) => Object.hash(e.key, e.value))));
 }

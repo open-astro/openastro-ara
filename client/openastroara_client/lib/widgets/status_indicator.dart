@@ -57,6 +57,9 @@ class StatusIndicator extends StatelessWidget {
 
 enum StatusLevel {
   connected(AraColors.accentConnected),
+  /// Connected and working (exposing, slewing, moving): green, shown blinking
+  /// on the top-bar chips. Amber ([busy]) is kept for states that need a look.
+  active(AraColors.accentConnected),
   busy(AraColors.accentBusy),
   error(AraColors.accentError),
   info(AraColors.accentInfo),

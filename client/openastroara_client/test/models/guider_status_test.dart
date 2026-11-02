@@ -28,6 +28,22 @@ void main() {
       expect(s.rmsTotalArcsec, isNull);
     });
 
+    test('parses the guider profile list for the Settings picker', () {
+      final s = GuiderStatus.fromJson({
+        'device_id': 'PHD2_Single', 'name': 'PHD2', 'state': 'connected',
+        'runtime': {
+          'state': 'stopped',
+          'profiles': [
+            {'id': 1, 'name': 'Default'},
+            {'id': 4, 'name': 'ara-main'},
+            {'name': 'no id is dropped'},
+          ],
+        },
+      });
+      expect(s.profiles, {1: 'Default', 4: 'ara-main'});
+      expect(GuiderStatus.fromJson(const {'name': 'PHD2', 'state': 'disconnected'}).profiles, isEmpty);
+    });
+
     test('parses the daemon arcsec RMS alongside the pixel figures', () {
       final s = GuiderStatus.fromJson(<String, dynamic>{
         'name': 'PHD2',

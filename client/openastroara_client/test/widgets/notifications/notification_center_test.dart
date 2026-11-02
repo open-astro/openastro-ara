@@ -142,7 +142,9 @@ void main() {
     await _pump(
         tester,
         _FakeClient([
-          _n('a', title: 'Guider gave up'),
+          // Zero age: the default 4 minutes lands on yesterday in the first
+          // minutes after midnight, and the TODAY header goes missing.
+          _n('a', title: 'Guider gave up', age: Duration.zero),
           _n('b', title: 'Disk nearly full', age: const Duration(days: 1)),
         ]));
     await tester.tap(find.byType(IconButton).first);
