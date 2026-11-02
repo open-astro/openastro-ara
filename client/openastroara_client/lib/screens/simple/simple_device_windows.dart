@@ -9,7 +9,8 @@ import '../../state/settings/imaging_defaults_state.dart';
 import '../../state/simple_messages_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
-import 'simple_preview_panel.dart' show kSimpleText;
+import 'simple_preview_panel.dart'
+    show SimplePresetTile, gainPresets, kSimpleText;
 import 'simple_shell.dart' show SimpleSegment;
 
 /// One window per device in Simple Mode (design/briefs/simple-mode-settings.md):
@@ -69,6 +70,7 @@ class SimpleCameraWindow extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final s = ref.watch(cameraStatusProvider).value;
     final target = ref.watch(imagingDefaultsProvider).coolerTargetC;
+    final gain = ref.watch(imagingDefaultsProvider).defaultGain;
     final children = <Widget>[SimpleDeviceHeader(type: 'Camera', status: s)];
     if (s == null || !s.isConnected) {
       children.add(
@@ -143,6 +145,20 @@ class SimpleCameraWindow extends ConsumerWidget {
       if (now.isNotEmpty) {
         children.add(_row('Now', Text(now, style: kSimpleText)));
       }
+      // The profile's gain: what plans shoot at (Preview's chip sets its own).
+      final named = caps?.gains ?? const <String>[];
+      children.add(
+        SimplePresetTile<int>(
+          key: const Key('simple-camera-gain'),
+          label: 'Gain',
+          value: gain,
+          options: named.isNotEmpty
+              ? [for (var i = 0; i < named.length; i++) i]
+              : gainPresets(min: caps?.minGain ?? 0, max: caps?.maxGain ?? 0),
+          format: (g) => named.isNotEmpty && g < named.length ? named[g] : '$g',
+          onSelected: (g) => _setGain(context, ref, g),
+        ),
+      );
     }
     return Column(
       key: const Key('simple-device-camera'),
@@ -184,6 +200,24 @@ class SimpleCameraWindow extends ConsumerWidget {
         () => ref
             .read(cameraStatusProvider.notifier)
             .setCooler(true, targetTemperatureC: celsius),
+      );
+    }
+  }
+
+  /// Set once, like the target: the profile keeps it.
+  Future<void> _setGain(BuildContext context, WidgetRef ref, int gain) async {
+    final defaults = ref.read(imagingDefaultsProvider.notifier);
+    defaults.setGain(gain);
+    final notify = userNotifier(context);
+    final api = ref.read(profileApiProvider);
+    if (api == null) return;
+    try {
+      await defaults.persistToServer(api);
+    } catch (e) {
+      notify(
+        "Couldn't save the gain",
+        detail: describeEquipmentError(e),
+        error: true,
       );
     }
   }

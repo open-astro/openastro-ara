@@ -115,6 +115,34 @@ void main() {
   );
 
   testWidgets(
+    'Gain: picked from the camera\'s range and kept in the profile, so plans use it',
+    (tester) async {
+      final (c, _) = await _pump(tester, {
+        ..._wire(),
+        'capabilities': {
+          'has_cooler': true,
+          'can_set_temperature': true,
+          'min_gain': 0,
+          'max_gain': 300,
+        },
+      });
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('simple-camera-gain')),
+          matching: find.text('100'),
+        ),
+        findsOneWidget,
+      );
+      await tester.tap(find.byKey(const Key('simple-camera-gain')));
+      await tester.pumpAndSettle();
+      expect(find.text('450'), findsNothing, reason: 'past the camera\'s 300');
+      await tester.tap(find.text('120').last);
+      await tester.pumpAndSettle();
+      expect(c.read(imagingDefaultsProvider).defaultGain, 120);
+    },
+  );
+
+  testWidgets(
     'a camera without a cooler says so and still reads its temperature',
     (tester) async {
       await _pump(tester, _wire(cooler: false, on: false, setpoint: null));
