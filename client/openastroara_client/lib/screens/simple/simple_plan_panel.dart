@@ -24,7 +24,10 @@ import '../../state/time_sync_state.dart';
 import '../../state/settings/imaging_defaults_state.dart';
 import '../../state/settings/settings_nav.dart';
 import '../../state/settings/site_settings_state.dart';
-import '../../services/dso_catalog_service.dart' show designationKey;
+import '../../services/dso_catalog_service.dart'
+    show DsoSuggestion, designationKey, searchSuggestions;
+import '../../state/sky_atlas/dso_catalog_state.dart'
+    show bundledCatalogProvider;
 import '../../services/tonight_sky_api.dart';
 import '../../state/sky_atlas/planetarium_selection_state.dart';
 import '../../state/sky_atlas/tonight_sky_state.dart';
@@ -1352,7 +1355,12 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
     if (q.isEmpty) return;
     widget.onShowSky();
     ref.read(planetariumSearchProvider.notifier).search(q);
+    setState(() => _suggesting = false);
   }
+
+  /// Whether the typed text shows its suggestions (closed by a pick or a
+  /// search, opened again by typing).
+  bool _suggesting = false;
 
   @override
   Widget build(BuildContext context) {
@@ -1552,6 +1560,7 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
             controller: _query,
             style: kSimpleText,
             textInputAction: TextInputAction.search,
+            onChanged: (_) => setState(() => _suggesting = true),
             onSubmitted: (_) => _search(),
             decoration: InputDecoration(
               hintText: 'Search objects',
@@ -1563,6 +1572,21 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
               ),
             ),
           ),
+          // Matching objects as you type; a tap searches the one picked.
+          if (_suggesting)
+            for (final (i, hit) in searchSuggestions(
+              ref.watch(bundledCatalogProvider).value ?? const [],
+              _query.text,
+              limit: 5,
+            ).indexed)
+              _Suggestion(
+                key: Key('simple-run-suggestion-$i'),
+                hit: hit,
+                onTap: () {
+                  _query.text = hit.label;
+                  _search();
+                },
+              ),
           Row(
             children: [
               Expanded(
@@ -2223,6 +2247,57 @@ class SimpleRunPanel extends ConsumerWidget {
               child: const Text('Add target'),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// One search suggestion: the designation that matched, the common name and
+/// what it is, 44 pt tall.
+class _Suggestion extends StatelessWidget {
+  const _Suggestion({super.key, required this.hit, required this.onTap});
+
+  final DsoSuggestion hit;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final o = hit.dso;
+    final detail = [
+      if (o.name.isNotEmpty && o.name != hit.label) o.name,
+      if (o.magnitude != null) 'mag ${o.magnitude!.toStringAsFixed(1)}',
+    ].join(' · ');
+    return InkWell(
+      borderRadius: BorderRadius.circular(8),
+      onTap: onTap,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 44),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: AraSpace.s12),
+          child: Row(
+            spacing: AraSpace.s12,
+            children: [
+              const Icon(
+                Icons.search,
+                size: 18,
+                color: AraColors.textSecondary,
+              ),
+              Text(
+                hit.label,
+                style: kSimpleText.copyWith(fontWeight: FontWeight.w600),
+              ),
+              if (detail.isNotEmpty)
+                Expanded(
+                  child: Text(
+                    detail,
+                    style: kSimpleText.copyWith(color: AraColors.textSecondary),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );

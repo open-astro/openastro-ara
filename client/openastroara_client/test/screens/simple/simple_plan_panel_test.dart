@@ -6,6 +6,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/services/dso_catalog_service.dart';
+import 'package:openastroara/state/sky_atlas/dso_catalog_state.dart';
 import 'package:dio/dio.dart';
 import 'package:openastroara/models/sequence/imaging_run_body.dart';
 import 'package:openastroara/models/sequence/sequence_summary.dart';
@@ -466,6 +468,33 @@ void main() {
       await tester.pump();
       expect(showSky, 1, reason: 'the search runs in the planetarium');
       expect(c.read(planetariumSearchProvider), 'M42');
+    });
+
+    testWidgets('typing offers matching objects as you go; tapping one searches it', (tester) async {
+      var showSky = 0;
+      final c = await _pump(
+          tester,
+          _Seq(),
+          SimpleRunSheet(onShowSky: () => showSky++, onPickInSky: () {}, onCreated: () {}, onLibrary: () {}),
+          sel: null,
+          overrides: [
+            bundledCatalogProvider.overrideWith((ref) async => const [
+                  PlanningDso(id: 'NGC0224', name: 'Andromeda Galaxy', type: 'G', magnitude: 3.4, raDeg: 10.7, decDeg: 41.3, aliases: ['M 31']),
+                  PlanningDso(id: 'NGC0598', name: 'Triangulum Galaxy', type: 'G', magnitude: 5.7, raDeg: 23.5, decDeg: 30.7, aliases: ['M 33']),
+                ]),
+          ]);
+      await tester.enterText(find.byKey(const Key('simple-run-search')), 'm3');
+      await tester.pump();
+      await tester.pump();
+      expect(find.byKey(const Key('simple-run-suggestion-0')), findsOneWidget);
+      expect(find.textContaining('M 31'), findsOneWidget);
+      expect(find.textContaining('Andromeda Galaxy'), findsOneWidget, reason: 'the common name beside the designation');
+      expect(tester.getSize(find.byKey(const Key('simple-run-suggestion-0'))).height, greaterThanOrEqualTo(44));
+      await tester.tap(find.textContaining('M 31'));
+      await tester.pump();
+      expect(c.read(planetariumSearchProvider), 'M 31');
+      expect(showSky, 1);
+      expect(find.byKey(const Key('simple-run-suggestion-0')), findsNothing, reason: 'the list closes on a pick');
     });
 
     testWidgets('Add to queue creates the run without starting it and keeps the sheet up for the next pick; again it appends',

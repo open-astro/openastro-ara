@@ -423,7 +423,7 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
         if (widget.bare) {
           userNotifier(context)(
             "Coordinates can't be searched here",
-            detail: 'Search by name, or use the full UI\'s Sky Atlas',
+            detail: 'Search by name',
             error: true,
           );
           return;
