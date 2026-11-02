@@ -116,10 +116,7 @@ class _SimpleSystemPanelState extends ConsumerState<SimpleSystemPanel> {
     final storage = ref.watch(storageSpaceProvider);
     final cpu = state?.cpuPercent;
     final facts = [
-      (
-        'Storage',
-        storage.hasValue ? simpleFree(storage.value?.freeBytes) : '—',
-      ),
+      ('Storage', storage.hasValue ? simpleFree(storage.value?.freeBytes) : '—'),
       ('CPU', cpu == null ? '—' : '${cpu.round()} %'),
       ('Memory', state == null ? '—' : simpleMemory(state.workingSetBytes)),
       ('Up', state == null ? '—' : simpleUptime(state.uptimeSeconds)),

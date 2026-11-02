@@ -933,6 +933,20 @@ void main() {
     });
   }
 
+  testWidgets('an emergency stop pressed on this device: no full screen and no tone; other alarms still show',
+      (tester) async {
+    final container = await _pump(tester, const Size(1024, 768), manualAlarm: true);
+    container.read(localEmergencyStopProvider.notifier).pressed();
+    final alarm = container.read(safetyAlarmProvider.notifier) as _ManualAlarm;
+    alarm.raise('EMERGENCY STOP triggered');
+    await tester.pump();
+    expect(find.byKey(const Key('simple-safety-alarm')), findsNothing, reason: 'you pressed it here');
+    expect(container.read(safetyAlarmProvider).pending, isFalse, reason: 'silenced before the tone');
+    alarm.raise('Safety monitor: unsafe (rain)');
+    await tester.pump();
+    expect(find.byKey(const Key('simple-safety-alarm')), findsOneWidget, reason: 'weather still alarms');
+  });
+
   testWidgets('the status pill never cuts its label short while the whole line fits', (tester) async {
     // Half-size test glyphs: "Taking a frame  3 s left" fits the 300 px pill.
     tester.platformDispatcher.textScaleFactorTestValue = 0.5;

@@ -175,6 +175,7 @@ class _EmergencyStopButtonState extends ConsumerState<EmergencyStopButton>
       return;
     }
     setState(() => _inFlight = true);
+    ref.read(localEmergencyStopProvider.notifier).pressed();
     try {
       final result = await ref
           .read(serverApiFactoryProvider)(server)
@@ -341,3 +342,23 @@ class _EmergencyStopButtonState extends ConsumerState<EmergencyStopButton>
     );
   }
 }
+
+/// When Emergency Stop was last pressed on this device: Simple Mode doesn't
+/// sound the safety alarm for a stop its user just pressed (the stop's own
+/// summary pill says what happened).
+class LocalEmergencyStopNotifier extends Notifier<DateTime?> {
+  @override
+  DateTime? build() => null;
+
+  void pressed() => state = DateTime.now();
+
+  /// Pressed here within the last minute.
+  bool get recent =>
+      state != null &&
+      DateTime.now().difference(state!) < const Duration(minutes: 1);
+}
+
+final localEmergencyStopProvider =
+    NotifierProvider<LocalEmergencyStopNotifier, DateTime?>(
+      LocalEmergencyStopNotifier.new,
+    );

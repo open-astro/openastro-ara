@@ -160,7 +160,7 @@ class SafetyAlarmController extends Notifier<SafetyAlarmState> {
               ? reasons.whereType<String>().join('; ')
               : 'Conditions are UNSAFE');
         case 'safety.emergency_stop':
-          trigger('EMERGENCY STOP triggered', urgent: true);
+          trigger(kEmergencyStopReason, urgent: true);
         case 'safety.safe':
           silence();
       }
@@ -268,6 +268,9 @@ class SafetyAlarmController extends Notifier<SafetyAlarmState> {
     _player = null;
   }
 }
+
+/// The alarm's reason for a `safety.emergency_stop` on its own.
+const kEmergencyStopReason = 'EMERGENCY STOP triggered';
 
 final safetyAlarmProvider =
     NotifierProvider<SafetyAlarmController, SafetyAlarmState>(

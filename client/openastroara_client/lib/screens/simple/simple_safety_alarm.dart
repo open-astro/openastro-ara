@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../state/alarm/safety_alarm_state.dart';
 import '../../theme/ara_colors.dart';
+import '../../widgets/emergency_stop_button.dart'
+    show localEmergencyStopProvider;
 import '../../theme/ara_metrics.dart';
 import 'simple_preview_panel.dart' show kSimpleText;
 
@@ -16,8 +18,19 @@ class SimpleSafetyAlarm extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // An emergency stop pressed on this device: no screen and no tone.
+    bool own(SafetyAlarmState a) =>
+        a.reason == kEmergencyStopReason &&
+        ref.read(localEmergencyStopProvider.notifier).recent;
+    ref.listen(safetyAlarmProvider, (_, next) {
+      if ((next.pending || next.ringing) && own(next)) {
+        ref.read(safetyAlarmProvider.notifier).silence();
+      }
+    });
     final alarm = ref.watch(safetyAlarmProvider);
-    if (!alarm.pending && !alarm.ringing) return const SizedBox.shrink();
+    if (!alarm.pending && !alarm.ringing || own(alarm)) {
+      return const SizedBox.shrink();
+    }
     return Positioned.fill(
       key: const Key('simple-safety-alarm'),
       child: Semantics(
