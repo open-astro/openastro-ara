@@ -257,8 +257,10 @@ Ara assumes you're asleep while it works:
   Set the target ADU, frames per filter, the sky patch (azimuth/altitude), the stop-above/below
   bounds, and the wait-for sun altitude under **Settings → Session → Calibration**; the step is
   also in the sequence editor's Calibration category for hand-built plans.
-- **Emergency stop**: the red **Emergency Stop** button on the app's bottom status bar is always one
-  tap away, on every tab. After a confirmation it makes the daemon abort the running sequence and
+- **Emergency stop**: the red **Emergency Stop** button on the app's bottom status bar is always
+  there, on every tab. Press and hold it for 2 s ("Hold to confirm"; letting go early sends nothing).
+  With a keyboard or screen reader, activating it opens a "Stop everything now?" confirmation
+  instead (in Simple Mode, press it again within 3 s). It then makes the daemon abort the running sequence and
   the in-flight exposure, stop guiding, park the mount, and switch the flat panel light off — then
   reports honestly what each step did (an unreachable mount is called out loudly so you go check,
   never papered over). A panicked double-press is ignored while the first stop is running.

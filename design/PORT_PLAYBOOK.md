@@ -4458,7 +4458,7 @@ User can override every single default.
 
 ### 35.3 User-triggered emergency abort
 
-Persistent **[Emergency Stop]** button in WILMA's main app shell (top-right of status bar). Single tap = immediate abort, no confirmation (the button IS the confirmation). Fires `POST /api/v1/server/emergency-stop`:
+Persistent **[Emergency Stop]** button in WILMA's main app shell (top-right of status bar). Press and hold for 2 s to abort ("Hold to confirm", a fill sweeping across; letting go early sends nothing). Keyboard and screen-reader activation can't hold, so it opens a "Stop everything now?" confirmation instead; Simple Mode's versions, which show no popups, ask for a second press within 3 s. Fires `POST /api/v1/server/emergency-stop`:
 
 Server shutdown sequence:
 1. Camera: abort current exposure
