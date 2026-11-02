@@ -153,6 +153,21 @@ double suggestedSubSeconds(
   return math.max(step, (sec / step).round() * step).toDouble();
 }
 
+/// A plan row's frames (the plan chooser's, and Simple Mode Plan's): tonight's
+/// remaining window split evenly across [filterCount] filters at
+/// [exposureSeconds] a sub; with no window, 60 frames split the same way.
+int planFrameCount(
+  double exposureSeconds, {
+  required double? remainingDarkHours,
+  required int filterCount,
+}) =>
+    defaultFrameCount(
+      exposureSeconds,
+      remainingDarkHours:
+          remainingDarkHours == null ? null : remainingDarkHours / filterCount,
+      fallbackFrames: math.max(12, 60 ~/ filterCount),
+    );
+
 class _TargetPlanDialog extends ConsumerStatefulWidget {
   const _TargetPlanDialog({
     required this.targetName,
@@ -201,10 +216,6 @@ class _TargetPlanDialogState extends ConsumerState<_TargetPlanDialog> {
     final defaults = ref.read(imagingDefaultsProvider);
     final defaultExposure = defaults.defaultExposure.inMilliseconds /
         Duration.millisecondsPerSecond;
-    // Split tonight's remaining window evenly across the chosen filters.
-    final hoursEach = widget.remainingDarkHours != null
-        ? widget.remainingDarkHours! / picked.length
-        : null;
     return [
       for (final f in picked)
         () {
@@ -219,10 +230,10 @@ class _TargetPlanDialogState extends ConsumerState<_TargetPlanDialog> {
           return FilterPlanStep(
             filterName: f.name,
             exposureSeconds: exp,
-            frameCount: defaultFrameCount(
+            frameCount: planFrameCount(
               exp,
-              remainingDarkHours: hoursEach,
-              fallbackFrames: math.max(12, 60 ~/ picked.length),
+              remainingDarkHours: widget.remainingDarkHours,
+              filterCount: picked.length,
             ),
           );
         }(),

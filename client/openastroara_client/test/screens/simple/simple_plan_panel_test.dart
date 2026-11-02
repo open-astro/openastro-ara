@@ -176,6 +176,40 @@ void main() {
     expect(osc.single.frameCount, 60);
   });
 
+  group('frames fill the dark window', () {
+    TonightSkyObject m31(double hours) => TonightSkyObject(
+        id: 'm31', name: 'M31', type: 'Galaxy', magnitude: 3.4, raDeg: 10.7, decDeg: 41.3,
+        altitudeDeg: 62, maxAltitudeDeg: 74, remainingHours: hours);
+
+    Future<ProviderContainer> plan(List<TonightSkyObject> tonight) async {
+      final c = ProviderContainer(overrides: [
+        tonightSkyProvider.overrideWith((ref) async => tonight),
+        planetariumSelectionProvider.overrideWith(() => _Sel(_m31)),
+        filterSetProvider.overrideWith(() => _Filters()),
+      ]);
+      addTearDown(c.dispose);
+      c.listen(simpleRunPlanProvider, (_, _) {});
+      await c.read(tonightSkyProvider.future);
+      await Future<void>.delayed(Duration.zero);
+      return c;
+    }
+
+    test('the picked target\'s window splits across the rows; a new sub refits its row', () async {
+      final c = await plan([m31(2)]);
+      // 2 h over four rows = 30 min each; 5 s subs fit 360, capped at 300.
+      expect(c.read(simpleRunPlanProvider).map((s) => s.frameCount), [300, 300, 300, 300]);
+      c.read(simpleRunPlanProvider.notifier).setExposure(0, 120);
+      expect(c.read(simpleRunPlanProvider).first.frameCount, 15);
+    });
+
+    test('no window for the target (not ranked tonight): 60 frames split, a new sub keeps the count', () async {
+      final c = await plan(const []);
+      expect(c.read(simpleRunPlanProvider).map((s) => s.frameCount), [15, 15, 15, 15]);
+      c.read(simpleRunPlanProvider.notifier).setExposure(0, 120);
+      expect(c.read(simpleRunPlanProvider).first.frameCount, 15);
+    });
+  });
+
   test('progress fills the plan rows in order', () {
     const steps = [
       FilterPlanStep(filterName: 'L', exposureSeconds: 300, frameCount: 40),

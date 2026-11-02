@@ -21,7 +21,7 @@ import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
 import '../../util/friendly_error.dart';
 import '../../widgets/sequencer/target_plan_dialog.dart'
-    show planOptionsAvailable, suggestedSubSeconds;
+    show planFrameCount, planOptionsAvailable, suggestedSubSeconds;
 import '../../widgets/emergency_stop_button.dart' show kEmergencyStopHold;
 import 'simple_preview_panel.dart'
     show SimplePresetTile, exposurePresets, formatExposure, kSimpleText;
@@ -30,22 +30,25 @@ import 'simple_shell.dart'
 
 /// The first plan for a filter set: LRGB when the set has any of it, else the
 /// narrowband filters, else every filter; one row with no filter name when
-/// there is no choice to make (OSC). Tonight's frames split evenly. Pure —
-/// unit-tested.
+/// there is no choice to make (OSC). The rows split [remainingDarkHours]
+/// (60 frames without a window) evenly. Pure — unit-tested.
 // Subs start at the profile's default exposure; the sheet offers the
 // suggested ones (simpleRunSuggestion).
-// shortcut: frames don't fit the dark window; reuse target_plan_dialog's
-// _steps split when the sheet should be smarter.
 List<FilterPlanStep> simpleRunDefaultPlan(
   List<PlanningFilter> filters,
-  double exposureSeconds,
-) {
+  double exposureSeconds, {
+  double? remainingDarkHours,
+}) {
   if (!planOptionsAvailable(filters)) {
     return [
       FilterPlanStep(
         filterName: '',
         exposureSeconds: exposureSeconds,
-        frameCount: 60,
+        frameCount: planFrameCount(
+          exposureSeconds,
+          remainingDarkHours: remainingDarkHours,
+          filterCount: 1,
+        ),
       ),
     ];
   }
@@ -62,7 +65,11 @@ List<FilterPlanStep> simpleRunDefaultPlan(
       FilterPlanStep(
         filterName: f.name,
         exposureSeconds: exposureSeconds,
-        frameCount: math.max(12, 60 ~/ picked.length),
+        frameCount: planFrameCount(
+          exposureSeconds,
+          remainingDarkHours: remainingDarkHours,
+          filterCount: picked.length,
+        ),
       ),
   ];
 }
@@ -125,12 +132,47 @@ String simpleRunChip(SimpleRun run, List<FilterPlanStep> rows) => simpleRunDurat
 String _hhmm(DateTime t) =>
     '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
 
-/// The plan the sheet edits: one row per filter.
+/// Tonight's dark hours left for the picked target, from the ranking; null
+/// when the ranking doesn't have it.
+// shortcut: matched by name, so a search pick named unlike the ranking ("M 31")
+// gets the 60-frame fallback; match by position if that bites.
+final simpleDarkHoursProvider = Provider<double?>((ref) {
+  final name = ref.watch(planetariumSelectionProvider.select((s) => s?.name));
+  final hours = (ref.watch(tonightSkyProvider).value ?? const [])
+      .where((o) => o.name == name)
+      .firstOrNull
+      ?.remainingHours;
+  return hours != null && hours > 0 ? hours : null;
+});
+
+/// The plan the sheet edits: one row per filter. A new target's window refits
+/// every row's frames; a new sub length refits its row's.
 class SimpleRunPlanNotifier extends Notifier<List<FilterPlanStep>> {
+  double? _darkHours;
+
   @override
-  List<FilterPlanStep> build() => simpleRunDefaultPlan(
-    ref.watch(filterSetProvider).filters,
-    ref.watch(imagingDefaultsProvider).defaultExposure.inMilliseconds / 1000,
+  List<FilterPlanStep> build() {
+    ref.listen(simpleDarkHoursProvider, (prev, next) {
+      if (prev == next) return;
+      _darkHours = next;
+      state = [for (final s in state) _fit(s, s.exposureSeconds)];
+    });
+    _darkHours = ref.read(simpleDarkHoursProvider);
+    return simpleRunDefaultPlan(
+      ref.watch(filterSetProvider).filters,
+      ref.watch(imagingDefaultsProvider).defaultExposure.inMilliseconds / 1000,
+      remainingDarkHours: _darkHours,
+    );
+  }
+
+  FilterPlanStep _fit(FilterPlanStep s, double exposureSeconds) => FilterPlanStep(
+    filterName: s.filterName,
+    exposureSeconds: exposureSeconds,
+    frameCount: planFrameCount(
+      exposureSeconds,
+      remainingDarkHours: _darkHours,
+      filterCount: state.length,
+    ),
   );
 
   void _set(int i, {double? exposureSeconds, int? frameCount}) => state = [
@@ -144,7 +186,13 @@ class SimpleRunPlanNotifier extends Notifier<List<FilterPlanStep>> {
           : state[j],
   ];
 
-  void setExposure(int i, double seconds) => _set(i, exposureSeconds: seconds);
+  // Without a window the count the user set stays.
+  void setExposure(int i, double seconds) => _darkHours == null
+      ? _set(i, exposureSeconds: seconds)
+      : state = [
+          for (var j = 0; j < state.length; j++)
+            j == i ? _fit(state[j], seconds) : state[j],
+        ];
   void setFrames(int i, int count) => _set(i, frameCount: count);
 
   // The last row stays: a run needs something to take.
