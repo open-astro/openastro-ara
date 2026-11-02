@@ -394,6 +394,20 @@ void main() {
     expect(find.byType(SimpleFocusPanel), findsOneWidget, reason: "Focus's panel, open");
   });
 
+  testWidgets('in Autopilot the chip names the step whose settings it shows', (tester) async {
+    await _pump(tester, const Size(1024, 768));
+    await tester.tap(find.byKey(const Key('autopilot-start')));
+    await tester.pump();
+    final chip = find.byKey(const Key('simple-settings'));
+    expect(find.descendant(of: chip, matching: find.text('Focus\nManual')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('autopilot-skip')));
+    await tester.pump();
+    expect(find.descendant(of: chip, matching: find.text('P.A.\n1 s')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('autopilot-skip')));
+    await tester.pump();
+    expect(find.descendant(of: chip, matching: find.text('Plan\n5 min')), findsOneWidget);
+  });
+
   testWidgets('the Autopilot offer can be dismissed', (tester) async {
     await _pump(tester, const Size(1024, 768));
     await tester.tap(find.byTooltip('Not now'));

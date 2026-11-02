@@ -402,8 +402,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                 link: _railLink,
                                 child: _RightRail(
                                   mode: shown,
-                                  named:
-                                      _mode == SimpleModeScreen.autopilot
+                                  named: _mode == SimpleModeScreen.autopilot
                                       ? SimpleModeScreen.autopilot
                                       : null,
                                   popover: _popover,
@@ -481,13 +480,12 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                           const SimpleFocusPanel(),
                                         SimpleModeScreen.polarAlign =>
                                           const SimplePolarPanel(),
-                                        SimpleModeScreen.plan =>
-                                          SimpleRunPanel(
-                                            onAdd: () => setState(() {
-                                              _popover = _Popover.none;
-                                              _adding = true;
-                                            }),
-                                          ),
+                                        SimpleModeScreen.plan => SimpleRunPanel(
+                                          onAdd: () => setState(() {
+                                            _popover = _Popover.none;
+                                            _adding = true;
+                                          }),
+                                        ),
                                         _ => const SizedBox(
                                           width: 280,
                                           child: SimpleSettingsPopover(),
@@ -923,24 +921,33 @@ class _RightRail extends ConsumerWidget {
             key: const Key('simple-settings'),
             icon: Icons.tune,
             tall: true,
-            label: switch (mode) {
-              SimpleModeScreen.focus => simpleFocusSummary(ref),
-              SimpleModeScreen.plan => simpleRunChip(
-                ref.watch(simpleRunProvider),
-                ref.watch(simpleRunPlanProvider),
-              ),
-              SimpleModeScreen.polarAlign => simplePolarSummary(
-                ref.watch(simplePolarSettingsProvider).value ??
-                    const PolarAlignSettings(),
-              ),
-              _ => simpleSettingsSummary(ref),
-            },
+            label: _chipLabel(ref),
             selected: popover == _Popover.settings,
             onTap: onSettings,
           ),
         ],
       ),
     );
+  }
+
+  // In Autopilot the chip names the step whose settings it shows ("Focus"
+  // over "Auto"), so they don't read as random.
+  String _chipLabel(WidgetRef ref) {
+    final label = switch (mode) {
+      SimpleModeScreen.focus => simpleFocusSummary(ref),
+      SimpleModeScreen.plan => simpleRunChip(
+        ref.watch(simpleRunProvider),
+        ref.watch(simpleRunPlanProvider),
+      ),
+      SimpleModeScreen.polarAlign => simplePolarSummary(
+        ref.watch(simplePolarSettingsProvider).value ??
+            const PolarAlignSettings(),
+      ),
+      _ => simpleSettingsSummary(ref),
+    };
+    return named == null
+        ? label
+        : '${mode.railLabel}\n${label.split('\n').first}';
   }
 }
 
@@ -973,9 +980,7 @@ class _ModeGrid extends ConsumerWidget {
               width: 138,
               height: 52,
               child: Material(
-                color: m == current
-                    ? AraColors.selectionBg
-                    : kSimpleTileFill,
+                color: m == current ? AraColors.selectionBg : kSimpleTileFill,
                 borderRadius: BorderRadius.circular(8),
                 child: InkWell(
                   borderRadius: BorderRadius.circular(8),
