@@ -346,6 +346,29 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_cooler_switched_off_during_the_ramp_is_not_switched_back_on_by_the_cancel_hold() {
+            // Emergency Stop cancels the run, then switches the cooler off; its write can land
+            // before the cancelled ramp's hold. The hold must not turn the cooler back on.
+            await using var cam = new SimCamera { FixedTemperature = 18 };
+            using var cts = new CancellationTokenSource();
+            CameraService? svcRef = null;
+            var (svc, _) = await ConnectedAsync(cam, onDelay: n => {
+                if (n == 2) {
+                    svcRef!.SetCoolerAsync(false, null, CancellationToken.None).GetAwaiter().GetResult();
+                    cts.Cancel();
+                }
+            });
+            svcRef = svc;
+            using var __ = svc;
+
+            await Assert.CatchAsync<OperationCanceledException>(
+                () => svc.CoolCamera(-10, TimeSpan.FromMinutes(1), new StatusLog(), cts.Token));
+
+            Assert.That(cam.CoolerWrites[^1], Is.False, "the cooler stays off");
+            Assert.That(cam.Setpoints, Has.Count.EqualTo(2), "two ramp steps, no hold after the cooler went off");
+        }
+
+        [Test]
         public async Task A_camera_without_a_settable_cooler_fails_at_once_with_a_clear_status() {
             await using var cam = new SimCamera { CanSetTemperature = false };
             var (svc, delays) = await ConnectedAsync(cam);

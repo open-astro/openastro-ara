@@ -82,6 +82,12 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
 
     private readonly CoolingDriftMonitor _coolingDrift = new();
     private readonly object _gate = new();
+
+    // Cooler writes run one at a time under this lock, and every cooler-off bumps _coolerOffs,
+    // so a cancelled ramp's hold can tell an off (Emergency Stop, the REST control) landed
+    // after its ramp began and must not switch the cooler back on.
+    private readonly object _coolerWriteGate = new();
+    private long _coolerOffs;
     private readonly Timer _refreshTimer;
     // #1265 — bench-test knob: re-arms the refresh timer at a shorter cadence so a fixture that
     // needs "several ticks" waits milliseconds, not multiples of the 2 s production interval.
@@ -504,7 +510,12 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
     /// sequencer ramp writes every 15 s; a full switch-list read plus a fan write each time is
     /// 4×/min for an hour-long imported cool). The first write of any ramp, any step whose cooler
     /// is not known to be on, and every cooler-off always sync.</summary>
-    internal async Task SetCoolerAsync(bool enabled, double? targetTemperatureC, bool syncFan, CancellationToken ct) {
+    internal async Task SetCoolerAsync(bool enabled, double? targetTemperatureC, bool syncFan, CancellationToken ct,
+            long? skipIfOffSince = null) {
+        // skipIfOffSince: the write is dropped when a cooler-off has landed since that count.
+        if (skipIfOffSince is long since && Interlocked.Read(ref _coolerOffs) != since) {
+            return;
+        }
         var client = RequireConnectedClient();
         // §25.5.5 — capability gates BEFORE any device write: a camera without a
         // cooler (CoolerOn not implemented) or without TEC set-point regulation
@@ -547,12 +558,22 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
         lock (_gate) {
             _coolingDrift.Reset();
         }
+        var skipped = false;
         try {
             await Task.Run(() => {
-                if (targetTemperatureC is double target) {
-                    client.SetCCDTemperature = target;
+                lock (_coolerWriteGate) {
+                    if (skipIfOffSince is long n && Interlocked.Read(ref _coolerOffs) != n) {
+                        skipped = true;
+                        return;
+                    }
+                    if (!enabled) {
+                        Interlocked.Increment(ref _coolerOffs);
+                    }
+                    if (targetTemperatureC is double target) {
+                        client.SetCCDTemperature = target;
+                    }
+                    client.CoolerOn = enabled;
                 }
-                client.CoolerOn = enabled;
             }, CancellationToken.None).ConfigureAwait(false);
         } catch (Exception ex) {
             // The caps probe can read CoolerOn successfully while the SETTER still
@@ -560,6 +581,9 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
             // refuses the write). Surface a clean message instead of a 500.
             throw new InvalidOperationException(
                 $"the camera rejected the cooler write ({ex.GetType().Name}) — it may not support cooling", ex);
+        }
+        if (skipped) {
+            return;
         }
         RefreshCacheOnce();
         // §25.5.6 / #1065 — on DISABLE the fan is stopped AFTER the cooler write is committed and

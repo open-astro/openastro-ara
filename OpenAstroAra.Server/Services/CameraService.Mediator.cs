@@ -630,6 +630,8 @@ public sealed partial class CameraService : ICameraMediator, IImagingMediator {
             ? (await ReadCoolingTelemetryAsync().ConfigureAwait(false))?.Temperature ?? double.NaN
             : startTemperature;
         var wrote = false;
+        // A cooler-off after this point (Emergency Stop, the REST control) wins over the hold below.
+        var offsAtStart = Interlocked.Read(ref _coolerOffs);
         // #1210 — the fan interlock runs on the first write and then once per
         // CoolingFanSyncInterval of ramp time, not on every 15 s set-point step — but ONLY while
         // the cache knows the cooler is still on. A cooler switched off mid-ramp (the REST control,
@@ -704,7 +706,7 @@ public sealed partial class CameraService : ICameraMediator, IImagingMediator {
         } catch (OperationCanceledException) when (ct.IsCancellationRequested && wrote) {
             // NINA: a cancelled ramp leaves the TEC holding where the sensor is, not still driving
             // toward a target nobody is waiting for.
-            await HoldSetpointAtSensorAsync().ConfigureAwait(false);
+            await HoldSetpointAtSensorAsync(offsAtStart).ConfigureAwait(false);
             throw;
         }
     }
@@ -723,13 +725,13 @@ public sealed partial class CameraService : ICameraMediator, IImagingMediator {
         !double.IsNaN(temperature)
         && (cooling ? temperature <= target + CoolingReachedToleranceC : temperature >= target - CoolingReachedToleranceC);
 
-    private async Task HoldSetpointAtSensorAsync() {
+    private async Task HoldSetpointAtSensorAsync(long offsAtStart) {
         var temperature = (await ReadCoolingTelemetryAsync().ConfigureAwait(false))?.Temperature ?? double.NaN;
         if (double.IsNaN(temperature)) {
             return;
         }
         try {
-            await SetCoolerAsync(enabled: true, temperature, CancellationToken.None).ConfigureAwait(false);
+            await SetCoolerAsync(enabled: true, temperature, syncFan: true, CancellationToken.None, skipIfOffSince: offsAtStart).ConfigureAwait(false);
         } catch (InvalidOperationException ex) {
             LogSequencerCoolingHoldFailed(ex);
         }
