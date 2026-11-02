@@ -596,8 +596,11 @@ class InertTreesTest(unittest.TestCase):
     # a script there cannot be a build input any more than the SKILL.md next
     # to it. Keyed on the sub-prefix so `.claude/commands/` and the rest of
     # `.claude/` stay prose-only.
+    # `design/preview/` may hold `.html`: static design mocks opened by hand
+    # in a browser; no workflow, build or test step references that path.
     EXTRA_BY_PREFIX = {
         ".github/ISSUE_TEMPLATE/": {".yml", ".yaml"},
+        "design/preview/": {".html"},
         ".claude/skills/": {".sh", ".swift", ".expect", ".json"},
     }
 
@@ -664,6 +667,10 @@ class InertTreesTest(unittest.TestCase):
         self.assertNotIn(".yml", self.allowed("design/something.yml"))
         self.assertNotIn(".yml", self.allowed("docs/something.yml"))
         self.assertNotIn(".yml", self.allowed(".claude/settings.yml"))
+        # `.html` is the design preview's, under design/preview/ only.
+        self.assertIn(".html", self.allowed("design/preview/x.html"))
+        self.assertNotIn(".html", self.allowed("design/x.html"))
+        self.assertNotIn(".html", self.allowed("docs/x.html"))
 
     def test_codeql_paths_ignore_mirrors_inert_dirs(self):
         # #1022: codeql.yml skips prose-only PRs with a workflow-level
