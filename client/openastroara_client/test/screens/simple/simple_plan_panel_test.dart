@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -402,7 +403,7 @@ void main() {
 
   // The sheet, the tracker and the shutter together, as on the rail.
   Future<(ProviderContainer, _Seq)> run(WidgetTester tester,
-      {PlanetariumSelection? sel = _m31, List<Object> overrides = const []}) async {
+      {PlanetariumSelection? sel = _m31, List<Object> overrides = const [], VoidCallback? onTracker}) async {
     final seq = _Seq();
     final c = await _pump(
         tester,
@@ -410,7 +411,7 @@ void main() {
         SingleChildScrollView(
           child: Column(mainAxisSize: MainAxisSize.min, children: [
             SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}, onLibrary: () {}),
-            SimpleRunTracker(onTap: () {}),
+            SimpleRunTracker(onTap: onTracker ?? () {}),
             const SimpleRunShutter(),
           ]),
         ),
@@ -420,6 +421,20 @@ void main() {
   }
 
   // Add to queue: a plan on the rig, not started.
+  /// Tabs until the keyboard focus holds [target].
+  Future<void> tabTo(WidgetTester tester, Finder target) async {
+    for (var i = 0; i < 40; i++) {
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.pump();
+      final ctx = FocusManager.instance.primaryFocus?.context;
+      if (ctx != null &&
+          find.descendant(of: find.byElementPredicate((e) => e == ctx), matching: target).evaluate().isNotEmpty) {
+        return;
+      }
+    }
+    fail('Tab never reached $target');
+  }
+
   Future<void> create(WidgetTester tester) async {
     await tester.tap(find.byKey(const Key('simple-run-queue')));
     await tester.pumpAndSettle();
@@ -962,6 +977,47 @@ void main() {
       await tester.tap(find.byKey(const Key('simple-shutter')));
       await tester.pumpAndSettle();
       expect(seq.calls.last, 'resume seq-1');
+    });
+
+    testWidgets('a slowish tap (0.6 s: gloves, cold hands) still pauses', (tester) async {
+      final (c, seq) = await run(tester);
+      await create(tester);
+      await tester.tap(find.byKey(const Key('simple-shutter')));
+      await tester.pumpAndSettle();
+      await imaging(tester, c, seq, _imaging(23));
+      final g = await tester.startGesture(tester.getCenter(find.byKey(const Key('simple-shutter'))));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 600));
+      await g.up();
+      await tester.pumpAndSettle();
+      expect(seq.calls.last, 'pause seq-1');
+    });
+
+    testWidgets('the keyboard reaches the shutter: Enter starts, pauses and resumes the plan', (tester) async {
+      final (c, seq) = await run(tester);
+      await create(tester);
+      await tabTo(tester, find.byKey(const Key('simple-shutter')));
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pumpAndSettle();
+      expect(seq.calls.last, 'start seq-1');
+      await imaging(tester, c, seq, _imaging(23));
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pumpAndSettle();
+      expect(seq.calls.last, 'pause seq-1');
+      await imaging(tester, c, seq, _imaging(24, state: SequenceRunState.paused));
+      await tester.sendKeyEvent(LogicalKeyboardKey.space);
+      await tester.pumpAndSettle();
+      expect(seq.calls.last, 'resume seq-1');
+    });
+
+    testWidgets('the keyboard reaches a plan square; Enter opens it', (tester) async {
+      var opened = 0;
+      final (_, _) = await run(tester, onTracker: () => opened++);
+      await create(tester);
+      await tabTo(tester, find.descendant(of: find.byKey(const Key('simple-run-tracker')), matching: find.text('M31')));
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pumpAndSettle();
+      expect(opened, 1);
     });
 
     testWidgets('holding 2 s stops the run; letting go early does nothing', (tester) async {

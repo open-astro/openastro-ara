@@ -105,6 +105,10 @@ class _Plan extends SimpleRunNotifier {
   final SimpleRun value;
   @override
   SimpleRun build() => value;
+
+  var stops = 0;
+  @override
+  Future<void> stop() async => stops++;
 }
 
 /// Add to queue without a daemon: the picked target joins the queue.
@@ -617,6 +621,35 @@ void main() {
     await tester.tap(find.byTooltip('Not now'));
     await tester.pump();
     expect(find.byKey(const Key('autopilot-offer')), findsNothing);
+  });
+
+  testWidgets('⌘. stops a running plan only when pressed twice within 3 s, like the keyboard\'s Stop', (tester) async {
+    final container = await _pump(tester, const Size(1024, 768),
+        plan: const SimpleRun(sequenceId: 'seq-1', started: true, targets: [
+          SimpleTarget(name: 'M31', steps: [FilterPlanStep(filterName: 'L', exposureSeconds: 120, frameCount: 30)]),
+        ]),
+        runState: const SequenceRunStateInfo(sequenceId: 'seq-1', state: SequenceRunState.running));
+    await tester.tap(find.byKey(const Key('simple-mode')));
+    await tester.pump();
+    await tester.tap(find.text('Plan'));
+    await tester.pump();
+    final plan = container.read(simpleRunProvider.notifier) as _Plan;
+    Future<void> chord() async {
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.period);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
+      await tester.pump();
+    }
+
+    await chord();
+    expect(plan.stops, 0, reason: 'the first press only asks');
+    expect(find.textContaining('again to stop the run'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 4));
+    await chord();
+    expect(plan.stops, 0, reason: 'the window ran out: this press asks again');
+    await chord();
+    expect(plan.stops, 1);
+    await tester.pump(const Duration(seconds: 10));
   });
 
   testWidgets('the plan square hugs the bottom-right corner, above the bottom row', (tester) async {

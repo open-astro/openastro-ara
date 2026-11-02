@@ -994,58 +994,60 @@ class _PlanSquare extends StatelessWidget {
     return Semantics(
       button: true,
       label: 'Plan: ${label ?? name}',
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          width: kSimpleRailWidth,
-          height: kSimplePlanSquareHeight,
-          clipBehavior: Clip.antiAlias,
-          decoration: BoxDecoration(
-            color: AraColors.overlayScrim,
-            border: Border.all(color: color),
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Stack(
-            children: [
-              // A long name or time shrinks to fit, clear of the border.
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 6),
-                child: Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    spacing: 2,
-                    children: [
-                      for (final (text, style) in [
-                        (
-                          name,
-                          kSimpleText.copyWith(fontWeight: FontWeight.w600),
-                        ),
-                        (frames, kSimpleText),
-                        if (sub != null) (sub!, small),
-                        (
-                          last,
-                          paused
-                              ? small.copyWith(color: AraColors.accentBusy)
-                              : small,
-                        ),
-                      ])
-                        FittedBox(
-                          fit: BoxFit.scaleDown,
-                          child: Text(text, style: style, maxLines: 1),
-                        ),
-                    ],
+      child: Material(
+        color: AraColors.overlayScrim,
+        shape: RoundedRectangleBorder(
+          side: BorderSide(color: color),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: SizedBox(
+            width: kSimpleRailWidth,
+            height: kSimplePlanSquareHeight,
+            child: Stack(
+              children: [
+                // A long name or time shrinks to fit, clear of the border.
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                  child: Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      spacing: 2,
+                      children: [
+                        for (final (text, style) in [
+                          (
+                            name,
+                            kSimpleText.copyWith(fontWeight: FontWeight.w600),
+                          ),
+                          (frames, kSimpleText),
+                          if (sub != null) (sub!, small),
+                          (
+                            last,
+                            paused
+                                ? small.copyWith(color: AraColors.accentBusy)
+                                : small,
+                          ),
+                        ])
+                          FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text(text, style: style, maxLines: 1),
+                          ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-              if (fraction != null)
-                Align(
-                  alignment: Alignment.bottomLeft,
-                  child: FractionallySizedBox(
-                    widthFactor: fraction,
-                    child: Container(height: 3, color: color),
+                if (fraction != null)
+                  Align(
+                    alignment: Alignment.bottomLeft,
+                    child: FractionallySizedBox(
+                      widthFactor: fraction,
+                      child: Container(height: 3, color: color),
+                    ),
                   ),
-                ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -1061,7 +1063,8 @@ const kSimpleRunStopHold = kEmergencyStopHold;
 /// frame exposes; a tap pauses (after the frame in hand). Paused: a play
 /// triangle in an amber ring; a tap resumes. While imaging or paused, a
 /// 2 s hold stops the run (a red ring fills; letting go early cancels).
-/// Screen readers get "Stop the run" as an action; keyboards ⌘. / Ctrl+.
+/// Screen readers get "Stop the run" as an action. Keyboards: Tab reaches
+/// it, Enter / Space taps it, ⌘. / Ctrl+. pressed twice stops the run.
 class SimpleRunShutter extends ConsumerStatefulWidget {
   const SimpleRunShutter({super.key});
 
@@ -1085,6 +1088,10 @@ class _SimpleRunShutterState extends ConsumerState<SimpleRunShutter>
   /// The hold reached the end: the release is not a tap.
   bool _held = false;
   bool _down = false;
+
+  /// The press came from a pointer, which [Listener] already handled; the
+  /// [InkResponse] tap is for the keyboard (Enter / Space) only.
+  bool _viaPointer = false;
 
   Timer? _riseTimer;
 
@@ -1172,81 +1179,91 @@ class _SimpleRunShutterState extends ConsumerState<SimpleRunShutter>
           : null,
       child: Listener(
         onPointerDown: (_) {
+          _viaPointer = true;
           _down = true;
           _held = false;
           if (holdable) _hold.forward(from: 0);
         },
         onPointerUp: (_) {
+          scheduleMicrotask(() => _viaPointer = false);
           if (!_down) return;
           _down = false;
-          final quick = _hold.value < 0.15;
+          // Up to 0.8 s is a tap (gloves, cold hands); longer, short of 2 s,
+          // cancels the hold.
+          final quick = _hold.value < 0.4;
           _hold.value = 0;
-          // A quick release is a tap; a longer one short of 2 s cancels.
           if (!_held && (quick || !holdable)) tap?.call();
         },
         onPointerCancel: (_) {
+          scheduleMicrotask(() => _viaPointer = false);
           _down = false;
           _hold.value = 0;
         },
-        child: Stack(
-          clipBehavior: Clip.none,
-          alignment: Alignment.center,
-          children: [
-            Container(
-              key: const Key('simple-shutter'),
-              width: 60,
-              height: 60,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(color: ring, width: 3),
-              ),
-              alignment: Alignment.center,
-              child: Icon(
-                pauseBars ? Icons.pause : Icons.play_arrow,
-                size: 40,
-                color: idle ? AraColors.textDisabled : AraColors.textPrimary,
-              ),
-            ),
-            // The frame exposing, or the hold to stop over it.
-            if (_hold.value > 0 || (pauseBars && exposing))
-              SizedBox(
+        child: InkResponse(
+          radius: 36,
+          onTap: () {
+            if (!_viaPointer) tap?.call();
+          },
+          child: Stack(
+            clipBehavior: Clip.none,
+            alignment: Alignment.center,
+            children: [
+              Container(
+                key: const Key('simple-shutter'),
                 width: 60,
                 height: 60,
-                child: TweenAnimationBuilder<double>(
-                  tween: Tween(
-                    end: _hold.value > 0
-                        ? _hold.value
-                        : (camera?.exposureProgressPct ?? 0) / 100,
-                  ),
-                  duration: _hold.value > 0
-                      ? Duration.zero
-                      : const Duration(milliseconds: 900),
-                  builder: (_, v, _) => CircularProgressIndicator(
-                    value: v,
-                    strokeWidth: 3,
-                    color: _hold.value > 0
-                        ? AraColors.accentError
-                        : AraColors.selectionBg,
-                  ),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: ring, width: 3),
+                ),
+                alignment: Alignment.center,
+                child: Icon(
+                  pauseBars ? Icons.pause : Icons.play_arrow,
+                  size: 40,
+                  color: idle ? AraColors.textDisabled : AraColors.textPrimary,
                 ),
               ),
-            if (_hold.value > 0)
-              Positioned(
-                right: 60 + kSimpleInset + 6,
-                child: SimplePanel(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 8,
-                  ),
-                  child: Text(
-                    'Hold to stop',
-                    style: kSimpleText,
-                    maxLines: 1,
-                    softWrap: false,
+              // The frame exposing, or the hold to stop over it.
+              if (_hold.value > 0 || (pauseBars && exposing))
+                SizedBox(
+                  width: 60,
+                  height: 60,
+                  child: TweenAnimationBuilder<double>(
+                    tween: Tween(
+                      end: _hold.value > 0
+                          ? _hold.value
+                          : (camera?.exposureProgressPct ?? 0) / 100,
+                    ),
+                    duration: _hold.value > 0
+                        ? Duration.zero
+                        : const Duration(milliseconds: 900),
+                    builder: (_, v, _) => CircularProgressIndicator(
+                      value: v,
+                      strokeWidth: 3,
+                      color: _hold.value > 0
+                          ? AraColors.accentError
+                          : AraColors.selectionBg,
+                    ),
                   ),
                 ),
-              ),
-          ],
+              if (_hold.value > 0)
+                Positioned(
+                  right: 60 + kSimpleInset + 6,
+                  child: SimplePanel(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    child: Text(
+                      'Hold to stop',
+                      style: kSimpleText,
+                      maxLines: 1,
+                      softWrap: false,
+                    ),
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );

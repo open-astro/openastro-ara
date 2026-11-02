@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/services.dart';
@@ -18,6 +19,7 @@ import '../../state/polar_align/polar_align_state.dart';
 import '../../state/sequencer/sequence_list_state.dart';
 import '../../state/sky_atlas/planetarium_selection_state.dart';
 import '../../state/settings/settings_nav.dart';
+import '../../state/simple_messages_state.dart';
 import '../../state/simple_mode_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
@@ -241,6 +243,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
 
   @override
   void dispose() {
+    _stopDisarm?.cancel();
     _focus.dispose();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     super.dispose();
@@ -250,17 +253,42 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
   void _openSettings() =>
       ref.read(selectedTabIndexProvider.notifier).select(kOptionsTabIndex);
 
+  /// The first ⌘. / Ctrl+. asks; a second within 3 s stops (the keyboard's
+  /// stand-in for the shutter's 2 s hold, as the Emergency Stop does).
+  int? _stopAsk;
+  Timer? _stopDisarm;
+
   void _stopRun() {
     if (_shown(ref.read(autopilotProvider)) != SimpleModeScreen.plan) return;
     final phase = simpleRunPhase(
       ref.read(simpleRunProvider),
       ref.read(sequenceRunStateProvider).value,
     );
-    if (phase == SimpleRunPhase.imaging ||
-        phase == SimpleRunPhase.pausing ||
-        phase == SimpleRunPhase.paused) {
-      ref.read(simpleRunProvider.notifier).stop();
+    if (phase != SimpleRunPhase.imaging &&
+        phase != SimpleRunPhase.pausing &&
+        phase != SimpleRunPhase.paused) {
+      return;
     }
+    final messages = ref.read(simpleMessagesProvider.notifier);
+    _stopDisarm?.cancel();
+    if (_stopAsk != null) {
+      messages.dismiss(_stopAsk!);
+      _stopAsk = null;
+      ref.read(simpleRunProvider.notifier).stop();
+      return;
+    }
+    final mac = const {
+      TargetPlatform.macOS,
+      TargetPlatform.iOS,
+    }.contains(Theme.of(context).platform);
+    _stopAsk = messages.show(
+      SimpleMessageKind.result,
+      'Press ${mac ? '⌘.' : 'Ctrl+.'} again to stop the run',
+    );
+    _stopDisarm = Timer(const Duration(seconds: 3), () {
+      if (_stopAsk != null) messages.dismiss(_stopAsk!);
+      _stopAsk = null;
+    });
   }
 
   void _toggle(_Popover p) =>
@@ -394,7 +422,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                     LogicalKeyboardKey.comma,
                     control: true,
                   ): _openSettings,
-                  // Hold-to-stop for keyboards: ⌘. / Ctrl+. stops a run.
+                  // Hold-to-stop for keyboards: ⌘. / Ctrl+. twice stops a run.
                   const SingleActivator(LogicalKeyboardKey.period, meta: true):
                       _stopRun,
                   const SingleActivator(
@@ -1155,14 +1183,6 @@ class _ModeGrid extends ConsumerWidget {
   final SimpleModeScreen current;
   final ValueChanged<SimpleModeScreen> onPicked;
 
-  static const _built = {
-    SimpleModeScreen.autopilot,
-    SimpleModeScreen.preview,
-    SimpleModeScreen.focus,
-    SimpleModeScreen.polarAlign,
-    SimpleModeScreen.plan,
-  };
-
   @override
   Widget build(BuildContext context, WidgetRef ref) => SimplePanel(
     padding: const EdgeInsets.all(AraSpace.s8),
@@ -1181,14 +1201,7 @@ class _ModeGrid extends ConsumerWidget {
                 borderRadius: BorderRadius.circular(8),
                 child: InkWell(
                   borderRadius: BorderRadius.circular(8),
-                  onTap: () {
-                    if (_built.contains(m)) {
-                      onPicked(m);
-                    } else {
-                      onPicked(current);
-                      leaveSimpleMode(ref, m.fullUiTab);
-                    }
-                  },
+                  onTap: () => onPicked(m),
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 12),
                     child: Row(
