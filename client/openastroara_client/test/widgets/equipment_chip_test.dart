@@ -35,7 +35,7 @@ void main() {
     await _pumpAt(tester, 1600, const TopEquipmentChips());
     const order = [
       'Camera', 'Mount', 'Guider', 'Focuser', 'Filter Wheel', 'Rotator',
-      'Flat Panel', 'Switches', 'Weather', 'Safety', 'Dome',
+      'Flat Panel', 'Switch', 'Weather', 'Safety', 'Dome',
     ];
     for (final name in order) {
       expect(find.text(name), findsOneWidget, reason: name);

@@ -310,14 +310,17 @@ class _EmergencyStopButtonState extends ConsumerState<EmergencyStopButton>
           );
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: simple ? 0 : 8),
-      // The ring: a 2 px dark gap, then 1 px of Fault Red around it.
+      // Simple Mode's ring: a 2 px dark gap, then 1 px of Fault Red around it
+      // (the full UI keeps its plain button; the hold and its sweep are both).
       child: Container(
-        padding: const EdgeInsets.all(2),
-        decoration: BoxDecoration(
-          color: simple ? AraColors.bgPrimary : AraColors.bgPanel,
-          borderRadius: BorderRadius.circular(radius + 3),
-          border: Border.all(color: red),
-        ),
+        padding: EdgeInsets.all(simple ? 2 : 0),
+        decoration: simple
+            ? BoxDecoration(
+                color: AraColors.bgPrimary,
+                borderRadius: BorderRadius.circular(radius + 3),
+                border: Border.all(color: red),
+              )
+            : null,
         child: Listener(
           onPointerDown: _pressDown,
           onPointerUp: _pressEnd,

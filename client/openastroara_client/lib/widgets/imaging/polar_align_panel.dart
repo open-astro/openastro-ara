@@ -763,8 +763,6 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
                       : 'Available once the total error is under ${_toleranceArcmin.toStringAsFixed(1)}′',
                   child: FilledButton.icon(
                     key: const Key('polar-align-done'),
-                    // Done is green wherever it shows (rotation assist too).
-                    style: FilledButton.styleFrom(backgroundColor: AraColors.accentConnected),
                     onPressed: _busy || !inTolerance
                         ? null
                         : () => _run('complete polar alignment', () async {

@@ -209,7 +209,7 @@ class WizardEquipmentReadiness
       case EquipmentDeviceType.safetyMonitor:
         return 'Safety monitor';
       case EquipmentDeviceType.switchDevice:
-        return 'Switches';
+        return 'Switch';
     }
   }
 }

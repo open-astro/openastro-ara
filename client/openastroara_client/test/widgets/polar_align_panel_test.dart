@@ -337,7 +337,6 @@ void main() {
       expect(find.descendant(of: readout, matching: find.text('Move east')), findsOneWidget);
       final done = tester.widget<FilledButton>(find.byKey(const Key('polar-align-done')));
       expect(done.onPressed, isNull, reason: '27.3′ is outside the 1′ tolerance — Done disabled');
-      expect(done.style?.backgroundColor?.resolve({}), AraColors.accentConnected, reason: 'Done is green');
 
       await tester.ensureVisible(find.byKey(const Key('polar-align-abort')));
       await tester.pumpAndSettle();

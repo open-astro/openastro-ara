@@ -118,7 +118,7 @@ const List<SettingsGroup> settingsTree = <SettingsGroup>[
         label: 'Safety Monitor',
         groupId: 'equipment',
       ),
-      SettingsPanelInfo(id: 'eq.switch', label: 'Switches', groupId: 'equipment'),
+      SettingsPanelInfo(id: 'eq.switch', label: 'Switch', groupId: 'equipment'),
     ],
   ),
   SettingsGroup(

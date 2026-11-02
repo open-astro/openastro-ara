@@ -387,7 +387,6 @@ class _GuidingTuneDialogState extends ConsumerState<GuidingTuneDialog> {
                     ),
                   ),
                   TextButton(
-                    style: TextButton.styleFrom(foregroundColor: AraColors.accentConnected),
                     onPressed: () => Navigator.of(context).pop(),
                     child: const Text('Done'),
                   ),

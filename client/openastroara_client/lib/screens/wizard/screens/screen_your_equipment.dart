@@ -63,7 +63,7 @@ String _typeLabel(EquipmentDeviceType t) => switch (t) {
       EquipmentDeviceType.weather => 'Observing conditions',
       EquipmentDeviceType.safetyMonitor => 'Safety monitor',
       EquipmentDeviceType.flatPanel => 'Flat panel',
-      EquipmentDeviceType.switchDevice => 'Switches',
+      EquipmentDeviceType.switchDevice => 'Switch',
       EquipmentDeviceType.guider => 'Guider',
     };
 
@@ -279,7 +279,7 @@ class _ScreenYourEquipmentState extends ConsumerState<ScreenYourEquipment> {
       backgroundColor: AraColors.bgPanel,
       isScrollControlled: true,
       builder: (_) => DiscoverySheet(
-        slotLabel: 'Switches',
+        slotLabel: 'Switch',
         type: EquipmentDeviceType.switchDevice,
         api: api,
       ),
