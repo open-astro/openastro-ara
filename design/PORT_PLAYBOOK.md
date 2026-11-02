@@ -4466,8 +4466,9 @@ Server shutdown sequence:
 3. Mount: park (or home if no park position configured)
 4. Filter wheel / focuser / rotator: leave in place (no auto-move; user can intervene)
 5. Flat panel: turn off (if connected, and configured to do so)
-6. Sequence state → `aborted`
-7. WebSocket event `sequence.aborted` to all connected clients
+6. Camera cooler: switch off (if the camera is connected and its cooler is on; reported as `cooler_off`, a refusal as the failed rung `cooler_off`)
+7. Sequence state → `aborted`
+8. WebSocket event `sequence.aborted` to all connected clients
 
 ### 35.4 SafetyMonitor poll loop (server-side)
 
