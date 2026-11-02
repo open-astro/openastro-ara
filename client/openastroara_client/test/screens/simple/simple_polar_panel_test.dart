@@ -213,6 +213,8 @@ void main() {
 
     testWidgets('idle: starts it', (tester) async {
       final api = await shutter(tester, const PolarAlignLive());
+      expect(find.descendant(of: find.byKey(const Key('simple-shutter')), matching: find.byIcon(Icons.play_arrow)),
+          findsOneWidget, reason: 'a routine starts with play');
       await tester.tap(find.byKey(const Key('simple-shutter')));
       await tester.pump();
       expect(api!.calls, ['start']);
@@ -240,14 +242,13 @@ void main() {
       await shutter(tester, _adjusting);
       expect(fill(), AraColors.accentError);
     });
-    testWidgets('idle: the start disc is white', (tester) async {
-      Color fill() => tester
-          .widgetList<Container>(find.descendant(of: find.byKey(const Key('simple-shutter')), matching: find.byType(Container)))
-          .map((c) => (c.decoration as BoxDecoration?)?.color)
-          .whereType<Color>()
-          .single;
+    testWidgets('idle: the start triangle is white', (tester) async {
       await shutter(tester, const PolarAlignLive());
-      expect(fill(), AraColors.textPrimary);
+      expect(
+          tester
+              .widget<Icon>(find.descendant(of: find.byKey(const Key('simple-shutter')), matching: find.byType(Icon)))
+              .color,
+          AraColors.textPrimary);
     });
     testWidgets('no server: off', (tester) async {
       await shutter(tester, const PolarAlignLive(), server: false);

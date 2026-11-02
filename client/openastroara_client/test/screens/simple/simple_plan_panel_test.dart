@@ -940,6 +940,11 @@ void main() {
       expect(find.byKey(const Key('simple-run-tracker')), findsOneWidget);
       expect(find.descendant(of: find.byKey(const Key('simple-run-tracker')), matching: find.text('0 / 60')), findsOneWidget);
       expect(find.text('L · 5 s'), findsOneWidget);
+      // A white ring, like every mode's; amber only while paused.
+      expect(((tester.widget<Container>(find.byKey(const Key('simple-shutter'))).decoration as BoxDecoration).border
+              as Border)
+          .top
+          .color, AraColors.textPrimary);
       await tester.tap(find.byKey(const Key('simple-shutter')));
       await tester.pumpAndSettle();
       expect(seq.calls.last, 'start seq-1');

@@ -200,6 +200,9 @@ void main() {
     testWidgets('Auto: the shutter starts autofocus', (tester) async {
       final l = await shutter(tester, MainFocusMethod.autofocus, focuser: _focuser());
       expect(find.bySemanticsLabel('Autofocus'), findsOneWidget);
+      // Only Preview's shutter is a camera button; a routine starts with play.
+      expect(find.descendant(of: find.byKey(const Key('simple-shutter')), matching: find.byIcon(Icons.play_arrow)),
+          findsOneWidget);
       await tester.tap(find.byKey(const Key('simple-shutter')));
       expect(l.starts, 1);
     });
@@ -221,6 +224,8 @@ void main() {
     testWidgets('Manual: Preview\'s shutter, frames to focus by', (tester) async {
       await shutter(tester, MainFocusMethod.bahtinov, focuser: _focuser());
       expect(find.byType(SimpleShutter), findsOneWidget);
+      expect(find.descendant(of: find.byKey(const Key('simple-shutter')), matching: find.byIcon(Icons.play_arrow)),
+          findsOneWidget, reason: 'Focus starts with play in Manual too');
     });
   });
 

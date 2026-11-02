@@ -95,6 +95,7 @@ class SimplePolarShutter extends ConsumerWidget {
     }
 
     return SimpleShutterButton(
+      start: true,
       running: active,
       label: active ? 'Stop' : 'Start polar alignment',
       onPressed: api == null

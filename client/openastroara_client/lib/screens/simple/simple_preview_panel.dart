@@ -359,7 +359,11 @@ class SimpleSettingsPopover extends ConsumerWidget {
 /// The shutter on the rail: takes a frame (Single) or starts and stops the
 /// loop (Loop); while a shot runs its square stops it.
 class SimpleShutter extends ConsumerWidget {
-  const SimpleShutter({super.key});
+  const SimpleShutter({super.key, this.start = false});
+
+  /// Play instead of the camera's filled circle (Focus on Manual: the frames
+  /// are for focusing, not the picture).
+  final bool start;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -368,6 +372,7 @@ class SimpleShutter extends ConsumerWidget {
     final capturing = ref.watch(captureProgressProvider).isCapturing;
     final stopping = ref.watch(_stoppingProvider);
     return SimpleShutterButton(
+      start: start,
       running: (looping || capturing) && !stopping,
       onPressed: stopping
           ? null
@@ -509,9 +514,14 @@ class SimpleShutterButton extends StatelessWidget {
     required this.running,
     required this.onPressed,
     this.label,
+    this.start = false,
   });
 
   final bool running;
+
+  /// A play triangle at rest instead of the filled circle: only Preview's
+  /// shutter takes a picture; every other mode's starts its routine.
+  final bool start;
   final VoidCallback? onPressed;
 
   /// What a tap does, for screen readers; defaults to Stop / Take a frame.
@@ -536,16 +546,18 @@ class SimpleShutterButton extends StatelessWidget {
             border: Border.all(color: fg, width: 3),
           ),
           alignment: Alignment.center,
-          child: Container(
-            width: running ? 22 : 40,
-            height: running ? 22 : 40,
-            decoration: BoxDecoration(
-              // The stop square is red: stop reads as stop.
-              color: running && enabled ? AraColors.accentError : fg,
-              shape: running ? BoxShape.rectangle : BoxShape.circle,
-              borderRadius: running ? BorderRadius.circular(4) : null,
-            ),
-          ),
+          child: start && !running
+              ? Icon(Icons.play_arrow, size: 40, color: fg)
+              : Container(
+                  width: running ? 22 : 40,
+                  height: running ? 22 : 40,
+                  decoration: BoxDecoration(
+                    // The stop square is red: stop reads as stop.
+                    color: running && enabled ? AraColors.accentError : fg,
+                    shape: running ? BoxShape.rectangle : BoxShape.circle,
+                    borderRadius: running ? BorderRadius.circular(4) : null,
+                  ),
+                ),
         ),
       ),
     );

@@ -192,6 +192,12 @@ void main() {
     });
   }
 
+  testWidgets('Preview\'s shutter is the camera button: a filled circle, not play', (tester) async {
+    await _pump(tester, const Size(1024, 768));
+    expect(find.descendant(of: find.byKey(const Key('simple-shutter')), matching: find.byIcon(Icons.play_arrow)),
+        findsNothing);
+  });
+
   testWidgets('at rest only the essentials show: no mode list, no settings, no info', (tester) async {
     await _pump(tester, const Size(1024, 768));
     for (final hidden in ['Focus', 'Polar align', 'Plan', 'Exposure', 'Gain', 'Loop', 'HFR', 'Guiding']) {

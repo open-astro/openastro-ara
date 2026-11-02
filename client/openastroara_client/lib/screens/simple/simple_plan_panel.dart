@@ -1157,7 +1157,8 @@ class _SimpleRunShutterState extends ConsumerState<SimpleRunShutter>
     final tap = run.busy ? null : _tap(phase);
     final ring = switch (phase) {
       _ when idle => AraColors.textDisabled,
-      SimpleRunPhase.ready || SimpleRunPhase.none => AraColors.accentConnected,
+      // White like every mode's ring; amber only while paused.
+      SimpleRunPhase.ready || SimpleRunPhase.none => AraColors.textPrimary,
       SimpleRunPhase.paused => AraColors.accentBusy,
       _ => AraColors.textPrimary.withValues(alpha: 0.25),
     };

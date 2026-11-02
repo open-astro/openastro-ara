@@ -62,7 +62,9 @@ class SimpleFocusShutter extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    if (simpleFocusSummary(ref) != 'Auto') return const SimpleShutter();
+    if (simpleFocusSummary(ref) != 'Auto') {
+      return const SimpleShutter(start: true);
+    }
     final live = ref.watch(autofocusLiveProvider);
     final connected =
         ref.watch(focuserProvider).asData?.value?.connectionState ==
@@ -70,6 +72,7 @@ class SimpleFocusShutter extends ConsumerWidget {
     final running = live.run.isRunning;
     final notifier = ref.read(autofocusLiveProvider.notifier);
     return SimpleShutterButton(
+      start: true,
       running: running,
       label: running ? 'Cancel autofocus' : 'Autofocus',
       onPressed: live.busy || !(running || connected)
