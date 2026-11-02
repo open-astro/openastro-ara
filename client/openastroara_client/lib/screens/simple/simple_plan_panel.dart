@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:dio/dio.dart';
@@ -281,6 +282,7 @@ class SimpleRun {
     this.pausing = false,
     this.error,
     this.noStorage = false,
+    this.rise,
   });
 
   final String? sequenceId;
@@ -295,6 +297,15 @@ class SimpleRun {
 
   /// The daemon refused for want of a storage disk: [error] offers Storage.
   final bool noStorage;
+
+  /// When the target rises, if it was below the horizon when queued: the
+  /// plan can't start before then.
+  // shortcut: the client holds the start; the daemon waiting for the rise
+  // itself needs ALP-4857.
+  final DateTime? rise;
+
+  /// Still below the horizon at [now].
+  bool waiting(DateTime now) => rise != null && now.isBefore(rise!);
 
   SimpleRun copyWith({
     bool? started,
@@ -311,6 +322,7 @@ class SimpleRun {
         pausing: pausing ?? this.pausing,
         error: error,
         noStorage: noStorage,
+        rise: rise,
       );
 }
 
@@ -387,6 +399,7 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
         sequenceId: r.sequenceId,
         targetName: sel.name,
         steps: steps,
+        rise: sel.belowHorizon ? sel.rise : null,
       );
       if (old != null) {
         // shortcut: a failed delete leaves the old plan in the Sequence list;
@@ -548,6 +561,8 @@ class SimpleRunTracker extends ConsumerWidget {
       _ => AraColors.selectionBg,
     };
     final last = switch (phase) {
+      SimpleRunPhase.ready when run.waiting(DateTime.now()) =>
+        'rises ${_hhmm(run.rise!.toLocal())}',
       SimpleRunPhase.pausing => 'Pausing…',
       SimpleRunPhase.paused => 'Paused',
       SimpleRunPhase.done => 'Done',
@@ -655,9 +670,12 @@ class _SimpleRunShutterState extends ConsumerState<SimpleRunShutter>
   bool _held = false;
   bool _down = false;
 
+  Timer? _riseTimer;
+
   @override
   void dispose() {
     _hold.dispose();
+    _riseTimer?.cancel();
     super.dispose();
   }
 
@@ -675,7 +693,9 @@ class _SimpleRunShutterState extends ConsumerState<SimpleRunShutter>
     final run = ref.read(simpleRunProvider.notifier);
     return switch (p) {
       SimpleRunPhase.none when _pickable() => () => run.createAndStart(ref),
-      SimpleRunPhase.ready => run.start,
+      SimpleRunPhase.ready
+          when !ref.read(simpleRunProvider).waiting(DateTime.now()) =>
+        run.start,
       SimpleRunPhase.imaging => run.pause,
       SimpleRunPhase.paused => run.resume,
       _ => null,
@@ -690,8 +710,17 @@ class _SimpleRunShutterState extends ConsumerState<SimpleRunShutter>
     final exposing = camera?.runtimeState == 'exposing';
     final holdable = _holdable(phase);
     ref.watch(planetariumSelectionProvider);
-    // A picked target with no plan yet starts like a ready plan.
-    final idle = phase == SimpleRunPhase.none && !_pickable();
+    // A picked target with no plan yet starts like a ready plan; a plan
+    // queued below the horizon waits for the rise.
+    final waiting = phase == SimpleRunPhase.ready && run.waiting(DateTime.now());
+    if (waiting) {
+      _riseTimer ??= Timer(run.rise!.difference(DateTime.now()), () {
+        _riseTimer = null;
+        if (mounted) setState(() {});
+      });
+    }
+    final idle =
+        (phase == SimpleRunPhase.none && !_pickable()) || waiting;
     final tap = run.busy ? null : _tap(phase);
     final ring = switch (phase) {
       _ when idle => AraColors.textDisabled,
@@ -704,6 +733,7 @@ class _SimpleRunShutterState extends ConsumerState<SimpleRunShutter>
     return Semantics(
       button: true,
       label: switch (phase) {
+        _ when waiting => 'Rises ${_hhmm(run.rise!.toLocal())}',
         _ when idle => 'Pick a target first',
         SimpleRunPhase.ready || SimpleRunPhase.none => 'Start imaging',
         SimpleRunPhase.imaging => 'Pause after this frame',
@@ -929,7 +959,9 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
     }
 
     final nameWidth = steps.map((s) => widthOf(s.filterName)).fold(32.0, math.max);
+    // Below the horizon it can be queued, not started.
     final off = sel == null || sel.belowHorizon || run.busy;
+    final queueOff = sel == null || sel.neverRises || run.busy;
     final best = (ref.watch(tonightSkyProvider).value ?? const [])
         .where((o) => o.maxAltitudeDeg > 0)
         .take(4)
@@ -1154,7 +1186,7 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
             Expanded(
               child: OutlinedButton(
                 key: const Key('simple-run-queue'),
-                onPressed: off
+                onPressed: queueOff
                     ? null
                     : () async {
                         final ok = await ref

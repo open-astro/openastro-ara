@@ -651,6 +651,32 @@ void main() {
       expect(seq.calls.last, 'start seq-1');
     });
 
+    testWidgets('below the horizon: Add to queue only; the plan waits for the rise', (tester) async {
+      final rise = DateTime.now().add(const Duration(hours: 2));
+      final low = PlanetariumSelection(
+          name: 'M31', kind: 'Galaxy', raHours: 0.73, decDeg: 41.4, raJ2000Hours: 0.71, decJ2000Deg: 41.27,
+          altDeg: -8, maxAltDeg: 74.2, rise: rise);
+      final (_, seq) = await run(tester, sel: low);
+      expect(tester.widget<FilledButton>(find.byKey(const Key('simple-run-start'))).onPressed, isNull,
+          reason: 'no Create and start below the horizon');
+      await create(tester);
+      expect(seq.calls, ['create M31'], reason: 'queued');
+      final hhmm = '${rise.hour.toString().padLeft(2, '0')}:${rise.minute.toString().padLeft(2, '0')}';
+      expect(find.text('rises $hhmm'), findsOneWidget, reason: 'the plan square says when');
+      await tester.tap(find.byKey(const Key('simple-shutter')));
+      await tester.pumpAndSettle();
+      expect(seq.calls, ['create M31'], reason: 'the shutter waits for the rise');
+    });
+
+    testWidgets('a target that never rises here can\'t be queued', (tester) async {
+      const never = PlanetariumSelection(
+          name: 'Omega Cen', kind: 'Globular', raHours: 13.4, decDeg: -47.5, raJ2000Hours: 13.4,
+          decJ2000Deg: -47.5, altDeg: -30, maxAltDeg: -5);
+      await run(tester, sel: never);
+      expect(tester.widget<OutlinedButton>(find.byKey(const Key('simple-run-queue'))).onPressed, isNull);
+      expect(tester.widget<FilledButton>(find.byKey(const Key('simple-run-start'))).onPressed, isNull);
+    });
+
     testWidgets('imaging: a tap pauses (Pausing… until it lands), paused a tap resumes', (tester) async {
       final (c, seq) = await run(tester);
       await create(tester);
