@@ -496,6 +496,7 @@ function renderInfo(sel) {
     raHours: selRaHours, decDeg: selDecDeg, altDeg: selAltDeg,
     raJ2000Hours: selRaJ2000Hours, decJ2000Deg: selDecJ2000Deg,
     maxAltDeg: 90 - Math.abs(LAT - selDecDeg), riseMs: riseMs,
+    designations: names,
   });
 
   // Build the rows as DOM nodes with textContent — every value is escaped by

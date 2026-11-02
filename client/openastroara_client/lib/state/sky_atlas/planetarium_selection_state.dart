@@ -21,6 +21,10 @@ class PlanetariumSelection {
   /// Tonight's rise, when the page could work it out.
   final DateTime? rise;
 
+  /// Its catalog designations ("M 42", "NGC 1976", "NAME Orion Nebula"), for
+  /// the plan square's tag.
+  final List<String> designations;
+
   const PlanetariumSelection({
     required this.name,
     required this.kind,
@@ -31,6 +35,7 @@ class PlanetariumSelection {
     required this.maxAltDeg,
     this.altDeg,
     this.rise,
+    this.designations = const [],
   });
 
   bool get neverRises => maxAltDeg <= 0;
@@ -57,6 +62,9 @@ class PlanetariumSelection {
       rise: riseMs == null
           ? null
           : DateTime.fromMillisecondsSinceEpoch(riseMs.round()),
+      designations: [
+        if (json['designations'] case final List list) ...list.whereType<String>(),
+      ],
     );
   }
 }

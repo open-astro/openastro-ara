@@ -18,6 +18,7 @@ import '../../state/setup/setup_readiness.dart';
 import '../../state/simple_mode_state.dart';
 import '../../state/settings/imaging_defaults_state.dart';
 import '../../state/settings/settings_nav.dart';
+import '../../services/dso_catalog_service.dart' show designationKey;
 import '../../services/tonight_sky_api.dart';
 import '../../state/sky_atlas/planetarium_selection_state.dart';
 import '../../state/sky_atlas/tonight_sky_state.dart';
@@ -267,7 +268,34 @@ PlanetariumSelection simpleSelectionOf(TonightSkyObject o) => PlanetariumSelecti
   altDeg: o.altitudeDeg,
   maxAltDeg: o.maxAltitudeDeg,
   rise: o.windowStartUtc?.toLocal(),
+  designations: [o.id, ...o.aliases],
 );
+
+const _tagOrder = ['M', 'NGC', 'IC', 'SH2', 'B', 'LBN'];
+final _tagKey = RegExp(r'^(M|NGC|IC|SH2|B|LBN)-?(\d+[A-Z]?)$');
+
+/// A designation as the plan square writes it ("M 42", "Sh2-129") and its
+/// rank in [_tagOrder]; null for any other catalog.
+(int, String)? _catalogTag(String designation) {
+  final m = _tagKey.firstMatch(designationKey(designation));
+  if (m == null) return null;
+  final p = m[1]!;
+  return (_tagOrder.indexOf(p), p == 'SH2' ? 'Sh2-${m[2]}' : '$p ${m[2]}');
+}
+
+/// The plan square's name for a target: a curated region's own tag (its name
+/// ends "(IC 434)"), else its best designation, M > NGC > IC > Sh2 > B > LBN;
+/// null when it has none (the square shows the name). Pure — unit-tested.
+String? simpleTargetTag(String name, List<String> designations) {
+  final own = RegExp(r'\(([^()]+)\)\s*$').firstMatch(name)?[1];
+  if (own != null) {
+    final first = own.split(' / ').first.trim();
+    return _catalogTag(first)?.$2 ?? first;
+  }
+  final tags = [for (final d in designations) ?_catalogTag(d)]
+    ..sort((a, b) => a.$1.compareTo(b.$1));
+  return tags.firstOrNull?.$2;
+}
 
 /// The plan Simple Mode created on the rig (its rows, to split the progress
 /// per filter), whether it has started, a call in flight, a pause asked for
@@ -283,6 +311,7 @@ class SimpleRun {
     this.error,
     this.noStorage = false,
     this.rise,
+    this.tag,
   });
 
   final String? sequenceId;
@@ -304,6 +333,9 @@ class SimpleRun {
   // itself needs ALP-4857.
   final DateTime? rise;
 
+  /// The target's catalog tag, for the plan square (null: its name).
+  final String? tag;
+
   /// Still below the horizon at [now].
   bool waiting(DateTime now) => rise != null && now.isBefore(rise!);
 
@@ -323,6 +355,7 @@ class SimpleRun {
         error: error,
         noStorage: noStorage,
         rise: rise,
+        tag: tag,
       );
 }
 
@@ -400,6 +433,7 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
         targetName: sel.name,
         steps: steps,
         rise: sel.belowHorizon ? sel.rise : null,
+        tag: simpleTargetTag(sel.name, sel.designations),
       );
       if (old != null) {
         // shortcut: a failed delete leaves the old plan in the Sequence list;
@@ -601,7 +635,10 @@ class SimpleRunTracker extends ConsumerWidget {
                     children: [
                       for (final (text, style) in [
                         (
-                          run.targetName ?? info?.currentTargetName ?? '',
+                          run.tag ??
+                              run.targetName ??
+                              info?.currentTargetName ??
+                              '',
                           kSimpleText.copyWith(fontWeight: FontWeight.w600),
                         ),
                         (known ? '$frames / $total' : '$captured', kSimpleText),

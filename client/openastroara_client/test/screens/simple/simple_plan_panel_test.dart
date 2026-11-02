@@ -247,6 +247,33 @@ void main() {
     });
   });
 
+  test('the plan square\'s catalog tag: a region\'s own, else M > NGC > IC > Sh2 > B > LBN, else none', () {
+    expect(simpleTargetTag('Horsehead + Flame region (IC 434)', ['IC0434']), 'IC 434');
+    expect(simpleTargetTag('Question Mark region (NGC 7822 / Ced 214)', ['NGC7822']), 'NGC 7822');
+    expect(simpleTargetTag('Spaghetti Nebula (Simeis 147)', ['REGION-SIMEIS-147']), 'Simeis 147');
+    expect(simpleTargetTag('Orion Nebula + Running Man (M42)', ['NGC1976']), 'M 42');
+    expect(simpleTargetTag('Rho Ophiuchi cloud complex', ['REGION-RHO-OPH']), isNull);
+    // A sky pick: the page's designations.
+    expect(simpleTargetTag('Horsehead Nebula', ['NAME Horsehead Nebula', 'B 33', 'LDN 1630']), 'B 33');
+    expect(simpleTargetTag('Orion Nebula', ['NGC 1976', 'M 42']), 'M 42');
+    expect(simpleTargetTag('Andromeda Galaxy', ['NGC0224', 'M031']), 'M 31');
+    expect(simpleTargetTag('Flame Nebula', ['NGC 2024', 'Sh2-277']), 'NGC 2024');
+    expect(simpleTargetTag('Sh2-129', ['SH 2-129']), 'Sh2-129');
+    expect(simpleTargetTag('Twin Jet', ['M 2-9']), isNull, reason: 'Minkowski, not Messier');
+  });
+
+  test('a tonight\'s-best pick carries its id and aliases; the page\'s pick its designations', () {
+    final o = TonightSkyObject(
+        id: 'IC0434', name: 'Horsehead + Flame region (IC 434)', type: 'HII', magnitude: null, raDeg: 85.25,
+        decDeg: -2.45, altitudeDeg: 30, maxAltitudeDeg: 50, aliases: const ['LBN 953']);
+    expect(simpleSelectionOf(o).designations, ['IC0434', 'LBN 953']);
+    final page = PlanetariumSelection.tryFromJson(const {
+      'name': 'Horsehead Nebula', 'raHours': 5.68, 'decDeg': -2.46, 'maxAltDeg': 50,
+      'designations': ['NAME Horsehead Nebula', 'B 33'],
+    });
+    expect(page!.designations, ['NAME Horsehead Nebula', 'B 33']);
+  });
+
   test('progress fills the plan rows in order', () {
     const steps = [
       FilterPlanStep(filterName: 'L', exposureSeconds: 300, frameCount: 40),
@@ -504,6 +531,17 @@ void main() {
         filters: _duo);
     _whole(tester, find.text('L-enhance'));
     _whole(tester, find.text('L-eXtreme'));
+  });
+
+  testWidgets('the plan square shows the catalog tag; the sheet keeps the whole name', (tester) async {
+    const region = PlanetariumSelection(
+        name: 'Horsehead + Flame region (IC 434)', kind: 'HII', raHours: 5.68, decDeg: -2.45, raJ2000Hours: 5.68,
+        decJ2000Deg: -2.45, altDeg: 30, maxAltDeg: 50, designations: ['IC0434']);
+    final (_, _) = await run(tester, sel: region);
+    await create(tester);
+    expect(find.descendant(of: find.byKey(const Key('simple-run-tracker')), matching: find.text('IC 434')),
+        findsOneWidget);
+    expect(find.text('Horsehead + Flame region (IC 434)'), findsWidgets, reason: 'the sheet');
   });
 
   testWidgets('a long object name shows whole in the tracker, clear of its border', (tester) async {
