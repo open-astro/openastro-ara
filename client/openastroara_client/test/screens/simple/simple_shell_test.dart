@@ -1503,6 +1503,26 @@ void main() {
     expect(container.read(simpleModeProvider).value, isTrue);
   });
 
+  testWidgets('text and outlined button labels read at 4.5:1 or better on a panel and on a tile (WCAG 2.2 AA)',
+      (tester) async {
+    await _pump(tester, const Size(1024, 768));
+    final context = tester.element(find.byKey(const Key('simple-mode')));
+    double contrast(Color a, Color b) {
+      final (l1, l2) = (a.computeLuminance(), b.computeLuminance());
+      return (math.max(l1, l2) + .05) / (math.min(l1, l2) + .05);
+    }
+    // The panel scrim over a black sky, and a tile on it.
+    final panel = Color.alphaBlend(AraColors.overlayScrim, Colors.black);
+    for (final (name, style) in [
+      ('TextButton', TextButtonTheme.of(context).style!),
+      ('OutlinedButton', OutlinedButtonTheme.of(context).style!),
+    ]) {
+      final fg = style.foregroundColor!.resolve({})!;
+      expect(contrast(fg, panel), greaterThanOrEqualTo(4.5), reason: '$name on a panel');
+      expect(contrast(fg, AraColors.tileFill), greaterThanOrEqualTo(4.5), reason: '$name on a tile');
+    }
+  });
+
   testWidgets('buttons use 10 px corners, not Material pills', (tester) async {
     await _pump(tester, const Size(1024, 768));
     final context = tester.element(find.byKey(const Key('simple-mode')));

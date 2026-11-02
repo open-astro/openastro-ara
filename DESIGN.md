@@ -20,6 +20,7 @@ colors:
   selection-fg: "#FFFFFF"
   overlay-scrim: "rgba(26, 26, 26, 0.90)"
   error-text: "#FF8A80"
+  link-text: "#64B5F6"
   selection-tint: "rgba(25, 118, 210, 0.25)"
   tile-fill: "rgba(56, 56, 56, 0.55)"
   alarm-scrim: "rgba(60, 8, 8, 0.88)"
@@ -273,7 +274,7 @@ Material segmented buttons and choice chips. Selected segments use Selection Blu
 
 ### Simple Mode: Image First (two rails)
 Simple Mode (see PRODUCT.md) puts the latest frame first. It is simpler than ASIAir, not a copy of it. The image fills the window edge to edge, and the controls float over it on translucent panels. The layout below is the prototype on `feat/simple-mode`, approved on 2026-11-01; it sits behind Settings → System → Experimental → Simple Mode (off by default, per client), and the system status bar is hidden while it shows.
-- **Panels:** every panel uses `overlay-scrim` (Night Floor at 90 %, so panel text reads at 4.5:1 or better over a dark sky, a grey frame or a white flat; raised from 72 % on 2026-11-02), 10 px corners and no border, and sits 16 px from the frame edge and from its neighbours. Error words on a panel use `error-text` (#FF8A80), Fault Red lightened for the scrim; Fault Red itself stays for fills and the E-stop. A selected or current item on a panel uses `selection-tint`.
+- **Panels:** every panel uses `overlay-scrim` (Night Floor at 90 %, so panel text reads at 4.5:1 or better over a dark sky, a grey frame or a white flat; raised from 72 % on 2026-11-02), 10 px corners and no border, and sits 16 px from the frame edge and from its neighbours. Error words on a panel use `error-text` (#FF8A80), Fault Red lightened for the scrim; Fault Red itself stays for fills and the E-stop. Text-button labels on a panel use `link-text` (#64B5F6, Info Blue lightened: 4.5:1 on a tile too) and outlined-button labels white; the button primary (#1565C0) is for fills only, since as text it reads at 3:1 on a panel and 2:1 on a tile. A selected or current item on a panel uses `selection-tint`.
 - **Fixed slots:** nothing moves when state changes. A panel with nothing to show is not drawn, and the panels around it keep their places.
 - **Top:** a full-width status strip, 56 px tall: the device dots (connected gear only; a fault still shows), then Night mode and Settings. Nothing hides under a ⋯ menu, and nothing on it leads to the full UI. Settings opens a menu under the gear: System (the server's figures as tiles: storage free, CPU, memory, uptime), the rig and profile with **Change profile** (this rig's profile box) and **Change rig** (the rig list), a line saying a running plan keeps running, and **All settings** (Settings over Simple Mode, closed with Back).
 - **Camera status:** a pill at the top-right, 16 px under the strip and at most 300 px wide (half the row on a narrow window), like a camera's REC light: "Taking a frame · 3 s left" with a thin bar, Looping, Stopping…, Frame ready, or why it failed. Between frames a running plan shows its step there ("Plan · Cooling camera to -10 °C", amber "Plan paused" when paused), with a thin line along the pill's foot showing how far the step has got when it reports that (cooling, a wait, autofocus), and a scheduled plan says when it starts ("Plan · Starts at 21:47") (decided 2026-11-02). Nothing while idle. It stays in the immersive view and moves up into the corner.

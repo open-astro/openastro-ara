@@ -1649,11 +1649,20 @@ ThemeData simpleTheme(ThemeData base) {
     filledButtonTheme: FilledButtonThemeData(
       style: buttons.merge(base.filledButtonTheme.style),
     ),
+    // The theme's primary (#1565C0) reads at 3:1 on a panel and 2:1 on a
+    // tile; labels need 4.5:1 (WCAG 2.2 AA): text buttons in linkText,
+    // outlined ones in white.
     textButtonTheme: TextButtonThemeData(
-      style: buttons.merge(base.textButtonTheme.style),
+      style: buttons
+          .merge(TextButton.styleFrom(foregroundColor: AraColors.linkText))
+          .merge(base.textButtonTheme.style),
     ),
     outlinedButtonTheme: OutlinedButtonThemeData(
-      style: buttons.merge(base.outlinedButtonTheme.style),
+      style: buttons
+          .merge(
+            OutlinedButton.styleFrom(foregroundColor: AraColors.textPrimary),
+          )
+          .merge(base.outlinedButtonTheme.style),
     ),
     inputDecorationTheme: base.inputDecorationTheme.copyWith(
       // 48 px tiles (DESIGN.md layout C), label inside.

@@ -173,7 +173,8 @@ class _SimpleCameraWindowState extends ConsumerState<SimpleCameraWindow> {
     return Column(
       key: const Key('simple-device-camera'),
       crossAxisAlignment: CrossAxisAlignment.stretch,
-      spacing: AraSpace.s12,
+      // Tight: each row is already 44 pt, and a slider sits under its row.
+      spacing: AraSpace.s4,
       children: children,
     );
   }

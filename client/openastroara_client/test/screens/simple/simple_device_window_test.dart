@@ -73,6 +73,10 @@ void main() {
           tester.getSize(find.byKey(Key('simple-window-row-$label'))).height;
       expect(row('Now'), row('Cooler'));
       expect(row('Target'), row('Cooler'));
+      // Compact: rows and their sliders sit close, not 12 pt apart.
+      final cooler = tester.getRect(find.byKey(const Key('simple-window-row-Cooler')));
+      final target = tester.getRect(find.byKey(const Key('simple-window-row-Target')));
+      expect(target.top - cooler.bottom, lessThanOrEqualTo(4));
       expect(
         find.text('Disconnect'),
         findsNothing,
