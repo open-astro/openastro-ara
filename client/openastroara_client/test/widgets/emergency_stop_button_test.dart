@@ -195,12 +195,12 @@ void main() {
               'no rung fails silently');
     });
 
-    testWidgets('the summary says the camera is warming up', (tester) async {
+    testWidgets('the summary says the camera cooler was switched off', (tester) async {
       await pumpButton(tester);
       fake.result = EmergencyStopResult.fromJson(const {
         'runs_aborted': 1,
         'park_requested': true,
-        'camera_warming': true,
+        'cooler_off': true,
         'failed_rungs': <String>[],
       });
 
@@ -209,7 +209,7 @@ void main() {
       await tester.tap(find.text('EMERGENCY STOP'));
       await tester.pumpAndSettle();
 
-      expect(find.textContaining('camera warming up'), findsOneWidget);
+      expect(find.textContaining('camera cooler off'), findsOneWidget);
     });
   });
 }

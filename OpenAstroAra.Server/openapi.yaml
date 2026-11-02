@@ -8916,7 +8916,7 @@ components:
           type: array
           items:
             type: string
-        camera_warming:
+        cooler_off:
           type: boolean
           default: false
     EquipmentConnectionDto:

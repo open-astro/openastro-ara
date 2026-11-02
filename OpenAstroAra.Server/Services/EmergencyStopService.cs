@@ -22,10 +22,8 @@ namespace OpenAstroAra.Server.Services;
 /// abort active sequence runs FIRST (so a still-running instruction can't
 /// start a fresh exposure or slew behind the stop), then abort the in-flight
 /// exposure, stop guiding, park the mount, switch the flat panel's light
-/// off, and start a gradual warm-up of a cooled camera (in the background:
-/// the ramp takes minutes, and cutting a cold TEC at once is the thermal
-/// shock the ramp exists to avoid). Every rung is best-effort — a dead device must never block the
-/// remaining rungs — and the result reports honestly what each rung did.
+/// off, and switch the camera's cooler off. Every rung is best-effort — a
+/// dead device must never block the remaining rungs — and the result reports honestly what each rung did.
 /// The <c>safety.emergency_stop</c> WS event fires up-front so WILMA can
 /// show the stop banner while the daemon works.
 /// </summary>
@@ -39,8 +37,6 @@ public sealed partial class EmergencyStopService {
     private readonly IFlatDeviceService? _flatDevice;
     private readonly INotificationService? _notifications;
     private readonly IWsBroadcaster? _ws;
-    private readonly OpenAstroAra.Equipment.Interfaces.Mediator.ICameraMediator? _cameraMediator;
-    private readonly IProfileStore? _profiles;
     private readonly ILogger<EmergencyStopService> _logger;
 
     // Single-flight: a panicked double-press must not queue a second full
@@ -64,9 +60,7 @@ public sealed partial class EmergencyStopService {
             IFlatDeviceService? flatDevice = null,
             INotificationService? notifications = null,
             IWsBroadcaster? ws = null,
-            ILogger<EmergencyStopService>? logger = null,
-            OpenAstroAra.Equipment.Interfaces.Mediator.ICameraMediator? cameraMediator = null,
-            IProfileStore? profiles = null) {
+            ILogger<EmergencyStopService>? logger = null) {
         _camera = camera;
         _sequencerResolver = sequencerResolver;
         _guider = guider;
@@ -74,8 +68,6 @@ public sealed partial class EmergencyStopService {
         _flatDevice = flatDevice;
         _notifications = notifications;
         _ws = ws;
-        _cameraMediator = cameraMediator;
-        _profiles = profiles;
         _logger = logger ?? NullLogger<EmergencyStopService>.Instance;
     }
 
@@ -130,9 +122,12 @@ public sealed partial class EmergencyStopService {
             _flatDevice is null ? null : async () => (await _flatDevice.GetAsync(CancellationToken.None).ConfigureAwait(false))?.State == EquipmentConnectionState.Connected,
             _flatDevice is null ? null : async ct => await _flatDevice.ApplyFlatPanelAsync(new FlatPanelRequestDto(LightOn: false), null, ct).ConfigureAwait(false)).ConfigureAwait(false);
         if (flatOutcome is RungOutcome.Failed) { failedRungs.Add("flat_panel_light_off"); }
-        var warmOutcome = await StartCameraWarmUpAsync().ConfigureAwait(false);
-        if (warmOutcome is RungOutcome.Failed) { failedRungs.Add("warm_camera"); }
-        var cameraWarming = warmOutcome is RungOutcome.Done;
+        // A camera whose cooler is already off has nothing to switch off (not a failure).
+        var coolerOutcome = await RungAsync("cooler off",
+            _camera is null ? null : async () => (await _camera.GetAsync(CancellationToken.None).ConfigureAwait(false)) is { State: EquipmentConnectionState.Connected, Runtime.CoolerOn: true },
+            _camera is null ? null : ct => _camera.SetCoolerAsync(false, null, ct)).ConfigureAwait(false);
+        if (coolerOutcome is RungOutcome.Failed) { failedRungs.Add("cooler_off"); }
+        var coolerOff = coolerOutcome is RungOutcome.Done;
 
         var exposureAborted = exposureOutcome is RungOutcome.Done;
         var guidingStopped = guidingOutcome is RungOutcome.Done;
@@ -150,7 +145,7 @@ public sealed partial class EmergencyStopService {
             ["guiding_stopped"] = guidingStopped,
             ["park_requested"] = parkRequested,
             ["flat_panel_light_off"] = flatLightOff,
-            ["camera_warming"] = cameraWarming,
+            ["cooler_off"] = coolerOff,
             ["failed_rungs"] = failedRungsJson,
         }).ConfigureAwait(false);
 
@@ -161,7 +156,7 @@ public sealed partial class EmergencyStopService {
             + (guidingStopped ? "guiding was stopped, " : string.Empty)
             + (parkRequested ? "the mount was told to park" : "no connected mount was parked")
             + (flatLightOff ? ", and the flat panel light was switched off" : string.Empty)
-            + (cameraWarming ? "; the camera is warming up" : string.Empty) + "."
+            + (coolerOff ? "; the camera's cooler was switched off" : string.Empty) + "."
             + (failedRungs.Count > 0
                 ? $" ATTENTION: {failedRungs.Count} step(s) FAILED ({string.Join(", ", failedRungs)}) — check the rig manually."
                 : string.Empty)).ConfigureAwait(false);
@@ -174,40 +169,7 @@ public sealed partial class EmergencyStopService {
             ParkRequested: parkRequested,
             FlatPanelLightOff: flatLightOff,
             FailedRungs: failedRungs,
-            CameraWarming: cameraWarming);
-    }
-
-    /// <summary>Starts the camera's gradual warm-up (the WarmCamera ramp, at the profile's
-    /// cooler ramp rate) and returns without waiting for it. A camera that isn't connected or
-    /// whose cooler is off has nothing to warm.</summary>
-    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "Best-effort rung: a camera fault must not fail the stop; logged, reported as a failed rung, never rethrown.")]
-    private async Task<RungOutcome> StartCameraWarmUpAsync() {
-        if (_camera is null || _cameraMediator is null) return RungOutcome.NotAvailable;
-        try {
-            var probe = _camera.GetAsync(CancellationToken.None);
-            if (await Task.WhenAny(probe, Task.Delay(RungTimeout)).ConfigureAwait(false) != probe) {
-                LogRungTimedOut("warm camera", RungTimeout.TotalSeconds);
-                return RungOutcome.Failed;
-            }
-            var dto = await probe.ConfigureAwait(false);
-            if (dto?.State != EquipmentConnectionState.Connected || dto.Runtime is not { CoolerOn: true } runtime) {
-                return RungOutcome.NotAvailable;
-            }
-            var rampPerMin = 1.0;
-            try {
-                if (_profiles?.GetImagingDefaults().CoolerRampCPerMin is > 0 and var r) rampPerMin = r;
-            } catch (Exception ex) {
-                LogRungFailed("read the cooler ramp rate", ex);
-            }
-            var from = runtime.CcdTemperature ?? CameraService.WarmCameraTargetC;
-            var duration = TimeSpan.FromMinutes(Math.Max(0, CameraService.WarmCameraTargetC - from) / rampPerMin);
-            ObserveQuietly("warm camera", _cameraMediator.WarmCamera(duration, new Progress<OpenAstroAra.Core.Model.ApplicationStatus>(), CancellationToken.None));
-            return RungOutcome.Done;
-        } catch (Exception ex) {
-            LogRungFailed("warm camera", ex);
-            return RungOutcome.Failed;
-        }
+            CoolerOff: coolerOff);
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",

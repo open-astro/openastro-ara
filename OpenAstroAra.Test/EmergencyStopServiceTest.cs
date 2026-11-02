@@ -14,8 +14,6 @@
 
 using Moq;
 using NUnit.Framework;
-using OpenAstroAra.Core.Model;
-using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Contracts.WsEvents;
 using OpenAstroAra.Server.Services;
@@ -111,27 +109,18 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public async Task Execute_StartsAGradualWarmUp_OfACooledCamera_WithoutWaitingForIt() {
-            // A cold TEC left on after the stop (user, 2026-11-02); cut it gradually, never at once.
+        public async Task Execute_SwitchesACooledCamerasCoolerOff() {
+            // User, 2026-11-02: the stop left the cooler on.
             camera.Setup(c => c.GetAsync(It.IsAny<CancellationToken>())).ReturnsAsync(new CameraDto(
                 "c1", "Cam", EquipmentConnectionState.Connected, null,
                 new CameraStateDto("idle", CcdTemperature: -10, CoolerPowerPct: 60, CoolerOn: true, ExposureProgressPct: null)));
-            var mediator = new Mock<ICameraMediator>();
-            var warming = new TaskCompletionSource<bool>(); // a ramp that takes its time
-            mediator.Setup(m => m.WarmCamera(It.IsAny<TimeSpan>(), It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()))
-                .Returns(warming.Task);
+            camera.Setup(c => c.SetCoolerAsync(false, null, It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
 
-            var result = await new EmergencyStopService(camera.Object, () => sequencer.Object, guider.Object,
-                telescope.Object, flat.Object, notifications.Object, ws.Object, cameraMediator: mediator.Object).ExecuteAsync();
+            var result = await Build().ExecuteAsync();
 
-            Assert.That(result.CameraWarming, Is.True);
+            Assert.That(result.CoolerOff, Is.True);
             Assert.That(result.FailedRungs, Is.Empty);
-            // From −10 °C to the warm target at the default 1 °C/min.
-            mediator.Verify(m => m.WarmCamera(TimeSpan.FromMinutes(CameraService.WarmCameraTargetC + 10),
-                It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()), Times.Once);
-            camera.Verify(c => c.SetCoolerAsync(It.IsAny<bool>(), It.IsAny<double?>(), It.IsAny<CancellationToken>()), Times.Never,
-                "never an abrupt cooler-off");
-            warming.SetResult(true);
+            camera.Verify(c => c.SetCoolerAsync(false, null, It.IsAny<CancellationToken>()), Times.Once);
         }
 
         [Test]
@@ -139,14 +128,26 @@ namespace OpenAstroAra.Test {
             camera.Setup(c => c.GetAsync(It.IsAny<CancellationToken>())).ReturnsAsync(new CameraDto(
                 "c1", "Cam", EquipmentConnectionState.Connected, null,
                 new CameraStateDto("idle", CcdTemperature: 18, CoolerPowerPct: 0, CoolerOn: false, ExposureProgressPct: null)));
-            var mediator = new Mock<ICameraMediator>();
 
-            var result = await new EmergencyStopService(camera.Object, () => sequencer.Object, guider.Object,
-                telescope.Object, flat.Object, notifications.Object, ws.Object, cameraMediator: mediator.Object).ExecuteAsync();
+            var result = await Build().ExecuteAsync();
 
-            Assert.That(result.CameraWarming, Is.False);
-            Assert.That(result.FailedRungs, Is.Empty, "nothing to warm is not a failure");
-            mediator.Verify(m => m.WarmCamera(It.IsAny<TimeSpan>(), It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()), Times.Never);
+            Assert.That(result.CoolerOff, Is.False);
+            Assert.That(result.FailedRungs, Is.Empty, "nothing to switch off is not a failure");
+            camera.Verify(c => c.SetCoolerAsync(It.IsAny<bool>(), It.IsAny<double?>(), It.IsAny<CancellationToken>()), Times.Never);
+        }
+
+        [Test]
+        public async Task Execute_ACoolerThatRefuses_IsCalledOut() {
+            camera.Setup(c => c.GetAsync(It.IsAny<CancellationToken>())).ReturnsAsync(new CameraDto(
+                "c1", "Cam", EquipmentConnectionState.Connected, null,
+                new CameraStateDto("idle", CcdTemperature: -10, CoolerPowerPct: 60, CoolerOn: true, ExposureProgressPct: null)));
+            camera.Setup(c => c.SetCoolerAsync(false, null, It.IsAny<CancellationToken>()))
+                .ThrowsAsync(new InvalidOperationException("driver rejected"));
+
+            var result = await Build().ExecuteAsync();
+
+            Assert.That(result.CoolerOff, Is.False);
+            Assert.That(result.FailedRungs, Does.Contain("cooler_off"));
         }
 
         [Test]
