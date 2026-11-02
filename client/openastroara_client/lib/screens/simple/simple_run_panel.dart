@@ -109,6 +109,15 @@ String simpleRunDuration(double seconds) {
   return min >= 60 ? '${min ~/ 60} h ${min % 60} min' : '$min min';
 }
 
+/// The rail chip in Run: the plan's total imaging time, the created plan's
+/// once there is one, else the sheet's rows. Pure — unit-tested.
+String simpleRunChip(SimpleRun run, List<FilterPlanStep> rows) => simpleRunDuration(
+  (run.steps.isEmpty ? rows : run.steps).fold(
+    0.0,
+    (t, s) => t + s.exposureSeconds * s.frameCount,
+  ),
+);
+
 String _hhmm(DateTime t) =>
     '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
 
@@ -418,35 +427,34 @@ class SimpleRunTracker extends ConsumerWidget {
           ),
           child: Stack(
             children: [
-              Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  spacing: 2,
-                  children: [
-                    Text(
-                      run.targetName ?? info?.currentTargetName ?? '',
-                      style: kSimpleText.copyWith(fontWeight: FontWeight.w600),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    Text(
-                      known ? '$frames / $total' : '$captured',
-                      style: kSimpleText,
-                    ),
-                    if (known)
-                      Text(
-                        _sub(steps[_current(steps, done)]),
-                        style: small,
-                        maxLines: 1,
-                      ),
-                    Text(
-                      last,
-                      style: phase == SimpleRunPhase.paused
-                          ? small.copyWith(color: AraColors.accentBusy)
-                          : small,
-                      maxLines: 1,
-                    ),
-                  ],
+              // A long name or time shrinks to fit, clear of the border.
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 6),
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    spacing: 2,
+                    children: [
+                      for (final (text, style) in [
+                        (
+                          run.targetName ?? info?.currentTargetName ?? '',
+                          kSimpleText.copyWith(fontWeight: FontWeight.w600),
+                        ),
+                        (known ? '$frames / $total' : '$captured', kSimpleText),
+                        if (known) (_sub(steps[_current(steps, done)]), small),
+                        (
+                          last,
+                          phase == SimpleRunPhase.paused
+                              ? small.copyWith(color: AraColors.accentBusy)
+                              : small,
+                        ),
+                      ])
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(text, style: style, maxLines: 1),
+                        ),
+                    ],
+                  ),
                 ),
               ),
               if (known && total > 0 && phase != SimpleRunPhase.ready)
@@ -746,6 +754,24 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
     ];
     final hint = simpleRunSuggestion(steps, suggested);
     Duration dur(double s) => Duration(milliseconds: (s * 1000).round());
+    // The filter column fits the longest name ("L-eXtreme"); the tiles share
+    // what's left.
+    final nameStyle = kSimpleText.copyWith(fontWeight: FontWeight.w600);
+    double widthOf(String name) {
+      final painter = TextPainter(
+        text: TextSpan(
+          text: name,
+          style: DefaultTextStyle.of(context).style.merge(nameStyle),
+        ),
+        textDirection: TextDirection.ltr,
+        textScaler: MediaQuery.textScalerOf(context),
+      )..layout();
+      final w = painter.width.ceilToDouble();
+      painter.dispose();
+      return w;
+    }
+
+    final nameWidth = steps.map((s) => widthOf(s.filterName)).fold(32.0, math.max);
     final saved = run.sequenceId != null && !run.started;
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -809,11 +835,11 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
             spacing: AraSpace.s8,
             children: [
               SizedBox(
-                width: 40,
+                width: nameWidth,
                 child: Text(
                   steps[i].filterName.isEmpty ? '—' : steps[i].filterName,
-                  style: kSimpleText.copyWith(fontWeight: FontWeight.w600),
-                  overflow: TextOverflow.ellipsis,
+                  style: nameStyle,
+                  maxLines: 1,
                 ),
               ),
               Expanded(

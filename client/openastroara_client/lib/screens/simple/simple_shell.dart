@@ -836,10 +836,10 @@ class _RightRail extends ConsumerWidget {
             icon: mode == SimpleModeScreen.polarAlign ? null : Icons.tune,
             label: switch (mode) {
               SimpleModeScreen.focus => simpleFocusSummary(ref),
-              SimpleModeScreen.run =>
-                ref.watch(simpleRunProvider).targetName ??
-                    ref.watch(planetariumSelectionProvider)?.name ??
-                    'Plan',
+              SimpleModeScreen.run => simpleRunChip(
+                ref.watch(simpleRunProvider),
+                ref.watch(simpleRunPlanProvider),
+              ),
               SimpleModeScreen.polarAlign => simplePolarSummary(
                 ref.watch(simplePolarSettingsProvider).value ??
                     const PolarAlignSettings(),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/sequence/imaging_run_body.dart';
@@ -78,8 +79,23 @@ class _Sel extends PlanetariumSelectionNotifier {
 }
 
 class _Filters extends FilterSetNotifier {
+  _Filters([this.filters = _lrgb]);
+  final List<PlanningFilter> filters;
   @override
-  FilterSetSettings build() => const FilterSetSettings(filters: _lrgb);
+  FilterSetSettings build() => FilterSetSettings(filters: filters);
+}
+
+/// A colour camera's dual-band filters: long names.
+const _duo = [
+  PlanningFilter(name: 'L-enhance', kind: FilterKind.duo),
+  PlanningFilter(name: 'L-eXtreme', kind: FilterKind.duo),
+];
+
+/// The text is drawn whole on one line: none of it cut or wrapped.
+void _whole(WidgetTester tester, Finder text) {
+  final p = tester.renderObject<RenderParagraph>(text);
+  expect(p.didExceedMaxLines, isFalse, reason: '$text cut');
+  expect(p.size.width, greaterThanOrEqualTo(p.getMaxIntrinsicWidth(double.infinity) - 0.5), reason: '$text cut');
 }
 
 // A configured rig, so the suggested sub lengths compute (as in
@@ -114,12 +130,12 @@ final _rig = <Object>[
 ];
 
 Future<ProviderContainer> _pump(WidgetTester tester, _Seq seq, Widget child,
-    {PlanetariumSelection? sel = _m31, List<Object> overrides = const []}) async {
+    {PlanetariumSelection? sel = _m31, List<Object> overrides = const [], List<PlanningFilter> filters = _lrgb}) async {
   final container = ProviderContainer(overrides: [
     ...overrides.cast(),
     sequenceApiProvider.overrideWith((ref) => seq),
     planetariumSelectionProvider.overrideWith(() => _Sel(sel)),
-    filterSetProvider.overrideWith(_Filters.new),
+    filterSetProvider.overrideWith(() => _Filters(filters)),
   ]);
   addTearDown(container.dispose);
   // Tall enough for the sheet, tracker and shutter stacked in one column.
@@ -212,6 +228,18 @@ void main() {
     expect(simpleRunSuggestion(narrow, [300, 300]), 'Ha/OIII 5 min');
     const osc = [FilterPlanStep(filterName: '', exposureSeconds: 5, frameCount: 60)];
     expect(simpleRunSuggestion(osc, [90]), '90 s');
+  });
+
+  test('the chip reads the plan\'s total imaging time: the created plan, else the sheet\'s rows', () {
+    const rows = [
+      FilterPlanStep(filterName: 'L', exposureSeconds: 120, frameCount: 15),
+      FilterPlanStep(filterName: 'R', exposureSeconds: 180, frameCount: 15),
+    ];
+    expect(simpleRunChip(const SimpleRun(), rows), '1 h 15 min');
+    const created = SimpleRun(sequenceId: 'seq-1', steps: [
+      FilterPlanStep(filterName: 'L', exposureSeconds: 300, frameCount: 12),
+    ]);
+    expect(simpleRunChip(created, rows), '1 h 0 min');
   });
 
   test('durations read in hours and minutes', () {
@@ -308,6 +336,28 @@ void main() {
       }
       expect(c.read(simpleRunPlanProvider).map((s) => s.filterName), ['B']);
     });
+  });
+
+  testWidgets('long filter names show whole in the sheet\'s rows', (tester) async {
+    await _pump(tester, _Seq(),
+        SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}, onLibrary: () {}),
+        filters: _duo);
+    _whole(tester, find.text('L-enhance'));
+    _whole(tester, find.text('L-eXtreme'));
+  });
+
+  testWidgets('a long object name shows whole in the tracker, clear of its border', (tester) async {
+    const andromeda = PlanetariumSelection(
+        name: 'Andromeda Galaxy', kind: 'Galaxy', raHours: 0.73, decDeg: 41.4, raJ2000Hours: 0.71,
+        decJ2000Deg: 41.27, altDeg: 62.4, maxAltDeg: 74.2);
+    final (_, _) = await run(tester, sel: andromeda);
+    await create(tester);
+    final name = find.descendant(of: find.byKey(const Key('simple-run-tracker')), matching: find.text('Andromeda Galaxy'));
+    _whole(tester, name);
+    final box = tester.getRect(find.byKey(const Key('simple-run-tracker')));
+    final text = tester.getRect(name);
+    expect(text.left, greaterThanOrEqualTo(box.left + 4), reason: 'clear of the left border');
+    expect(text.right, lessThanOrEqualTo(box.right - 4), reason: 'clear of the right border');
   });
 
   group('the tracker and the shutter', () {

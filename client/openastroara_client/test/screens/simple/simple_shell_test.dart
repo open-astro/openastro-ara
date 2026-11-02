@@ -167,6 +167,8 @@ void main() {
     expect(find.descendant(of: find.byKey(const Key('simple-mode')), matching: find.text('Run')), findsOneWidget);
     // Run opens on its sheet, centred; with nothing picked it asks for a target.
     expect(find.text('Search, or pick in the sky.'), findsOneWidget);
+    // The chip reads the plan's total imaging time: 60 frames at the 5 s default.
+    expect(find.descendant(of: find.byKey(const Key('simple-settings')), matching: find.text('5 min')), findsOneWidget);
   });
 
   testWidgets('Focus stays in Simple Mode: the rail reads Focus, its panel opens left of the rail; the chip is the Focus chip',
