@@ -412,8 +412,8 @@ Map<String, dynamic> buildTargetBlock({
     // After focus (the probe judges FWHM growth against its first rung, so it
     // must see focused stars) and before the first imaging loop.
     if (unguided) trackingProbe(),
-    // Joins the session's cool to the same target (the daemon waits on it), so
-    // the go-to, focus and guiding ran while the sensor cooled.
+    // Waits for the sensor: the session switched the cooler on without waiting,
+    // so the go-to, focus and guiding ran while it cooled.
     if (coolToC != null)
       _item(coolCameraType)
         ..['Temperature'] = coolToC

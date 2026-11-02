@@ -63,8 +63,8 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Camera {
         [JsonProperty]
         public double Duration { get; set; } = 0;
 
-        /// <summary>Off: start the cool and let the plan move on (it slews and focuses meanwhile);
-        /// a later Cool Camera to the same target waits on it before the first light.</summary>
+        /// <summary>Off: write the target, switch the cooler on and let the plan move on (it slews
+        /// and focuses meanwhile); a later Cool Camera waits for the sensor before the first light.</summary>
         [JsonProperty]
         public bool WaitForTemperature { get; set; } = true;
 
@@ -80,10 +80,11 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Camera {
 
         public override async Task Execute(IProgress<ApplicationStatus> progress, CancellationToken token) {
             if (!WaitForTemperature) {
-                // Its own progress sink: the plan's description follows the steps that run meanwhile.
-                var cooling = cameraMediator.CoolCamera(Temperature, TimeSpan.FromMinutes(Duration), new Progress<ApplicationStatus>(), token);
-                _ = cooling.ContinueWith(t => Logger.Warning($"Cooling in the background did not finish: {t.Exception?.GetBaseException().Message}"),
-                    CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
+                // Start it and move on; nothing runs past this step (Stop has nothing to cancel).
+                // A later Cool Camera waits for the sensor.
+                if (!await cameraMediator.StartCooling(Temperature, token)) {
+                    Logger.Warning($"Cool Camera: the cooler could not be started at {Temperature} °C; the plan goes on");
+                }
                 return;
             }
             var success = await cameraMediator.CoolCamera(Temperature, TimeSpan.FromMinutes(Duration), progress, token);

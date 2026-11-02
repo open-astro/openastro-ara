@@ -51,6 +51,10 @@ namespace OpenAstroAra.Equipment.Interfaces.Mediator {
 
         Task<bool> CoolCamera(double temperature, TimeSpan duration, IProgress<ApplicationStatus> progress, CancellationToken ct);
 
+        /// <summary>Writes the cooler target and switches the cooler on, without waiting for the
+        /// sensor. False when the camera can't take it.</summary>
+        Task<bool> StartCooling(double temperature, CancellationToken ct);
+
         Task<bool> WarmCamera(TimeSpan duration, IProgress<ApplicationStatus> progress, CancellationToken ct);
 
         void RegisterCaptureBlock(ICameraConsumer cameraConsumer);

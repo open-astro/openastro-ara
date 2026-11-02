@@ -117,6 +117,8 @@ public sealed class HeadlessCameraMediator : ICameraMediator {
     public Task<bool> CoolCamera(double temperature, TimeSpan duration, IProgress<ApplicationStatus> progress, CancellationToken ct) =>
         Task.FromResult(false);
 
+    public Task<bool> StartCooling(double temperature, CancellationToken ct) => Task.FromResult(false);
+
     public Task<bool> WarmCamera(TimeSpan duration, IProgress<ApplicationStatus> progress, CancellationToken ct) =>
         Task.FromResult(false);
 

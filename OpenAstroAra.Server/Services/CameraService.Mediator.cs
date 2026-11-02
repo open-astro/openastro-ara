@@ -521,11 +521,6 @@ public sealed partial class CameraService : ICameraMediator, IImagingMediator {
     /// </summary>
     public async Task<bool> CoolCamera(double temperature, TimeSpan duration, IProgress<ApplicationStatus> progress, CancellationToken ct) {
         const string operation = "Cooling";
-        // A cool to the same target already running (Simple Mode starts one, slews, then waits on
-        // it before the first light) is joined, not refused: nothing races, nothing is written.
-        while (SequencerCoolingTo(temperature)) {
-            await Task.Delay(SameTargetPoll, ct).ConfigureAwait(false);
-        }
         var refusal = BeginSequencerCooling(needsSetpoint: true);
         if (refusal is not null) {
             return CoolingFailed(operation, refusal, progress);
@@ -545,6 +540,24 @@ public sealed partial class CameraService : ICameraMediator, IImagingMediator {
             return CoolingFailed(operation, ex.Message, progress);
         } finally {
             EndSequencerCooling();
+        }
+    }
+
+    /// <summary>Simple Mode's plan starts the cool and slews meanwhile: write the target and switch
+    /// the cooler on, then return. Nothing keeps running, so Stop and Emergency Stop have nothing
+    /// to cancel; the target's own Cool Camera waits for the sensor before the first light.</summary>
+    public async Task<bool> StartCooling(double temperature, CancellationToken ct) {
+        lock (_gate) {
+            if (_sequencerCoolingActive) {
+                return false; // a cooling step is regulating: leave it be
+            }
+        }
+        try {
+            await SetCoolerAsync(enabled: true, temperature, ct).ConfigureAwait(false);
+            return true;
+        } catch (InvalidOperationException ex) {
+            LogStartCoolingFailed(ex.Message);
+            return false;
         }
     }
 
@@ -756,14 +769,6 @@ public sealed partial class CameraService : ICameraMediator, IImagingMediator {
         return null;
     }
 
-    internal TimeSpan SameTargetPoll { get; set; } = TimeSpan.FromMilliseconds(500);
-
-    private bool SequencerCoolingTo(double temperature) {
-        lock (_gate) {
-            return _sequencerCoolingActive && Math.Abs(_coolingTargetC - temperature) < 0.05;
-        }
-    }
-
     private void EndSequencerCooling() {
         lock (_gate) {
             _coolingTargetC = double.NaN;
@@ -847,6 +852,9 @@ public sealed partial class CameraService : ICameraMediator, IImagingMediator {
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Sequencer CoolCamera: target {TargetC} °C over {Duration}")]
     private partial void LogSequencerCoolStart(double targetC, TimeSpan duration);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Starting the cool failed: {Reason}")]
+    private partial void LogStartCoolingFailed(string reason);
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Sequencer WarmCamera over {Duration}")]
     private partial void LogSequencerWarmStart(TimeSpan duration);

@@ -25,18 +25,17 @@ namespace OpenAstroAra.Test {
     public class CoolCameraStepTest {
 
         [Test]
-        public async Task Without_waiting_the_step_starts_the_cool_and_returns_at_once() {
+        public async Task Without_waiting_the_step_starts_the_cool_and_leaves_nothing_running() {
             var camera = new Mock<ICameraMediator>();
-            var cooling = new TaskCompletionSource<bool>();
-            camera.Setup(c => c.CoolCamera(-10, It.IsAny<TimeSpan>(), It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()))
-                .Returns(cooling.Task);
+            camera.Setup(c => c.StartCooling(-10, It.IsAny<CancellationToken>())).ReturnsAsync(true);
             var step = new CoolCamera(camera.Object) { Temperature = -10, WaitForTemperature = false };
 
             await step.Execute(new Progress<ApplicationStatus>(), CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(5));
 
-            camera.Verify(c => c.CoolCamera(-10, It.IsAny<TimeSpan>(), It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()), Times.Once);
+            camera.Verify(c => c.StartCooling(-10, It.IsAny<CancellationToken>()), Times.Once);
+            camera.Verify(c => c.CoolCamera(It.IsAny<double>(), It.IsAny<TimeSpan>(), It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()),
+                Times.Never, "no cool runs on after the step");
             Assert.That(step.GetEstimatedDuration(), Is.EqualTo(TimeSpan.Zero), "it takes no time in the plan");
-            cooling.SetResult(true);
         }
 
         [Test]

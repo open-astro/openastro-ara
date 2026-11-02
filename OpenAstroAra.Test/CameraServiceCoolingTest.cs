@@ -303,32 +303,20 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public async Task A_second_cool_to_the_same_target_waits_for_the_running_one_instead_of_failing() {
-            // Simple Mode cools while the plan slews, then waits for that cool before the first
-            // light: the second step names the same target, so it joins rather than races (#1210
-            // still refuses a different target, above).
-            await using var cam = new SimCamera();
-            var firstWaiting = new TaskCompletionSource();
-            var release = new TaskCompletionSource();
-            var (svc, _) = await ConnectedAsync(cam, delayGate: n => {
-                if (n == 1) {
-                    firstWaiting.TrySetResult();
-                    return release.Task;
-                }
-                return Task.CompletedTask;
-            });
+        public async Task Starting_a_cool_writes_the_target_and_switches_the_cooler_on_without_waiting_or_holding_the_slot() {
+            // Simple Mode's plan starts the cool and slews meanwhile. Nothing may keep running
+            // after the step (#1480 review: a background cool outlived Stop and Emergency Stop).
+            await using var cam = new SimCamera { FixedTemperature = 20 };
+            var (svc, delays) = await ConnectedAsync(cam);
             using var __ = svc;
 
-            var first = svc.CoolCamera(-10, TimeSpan.FromMinutes(1), new StatusLog(), CancellationToken.None);
-            await firstWaiting.Task.WaitAsync(TimeSpan.FromSeconds(15));
+            Assert.That(await svc.StartCooling(-10, CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(5)), Is.True);
+            Assert.That(cam.Setpoints, Is.EqualTo(new[] { -10.0 }));
+            Assert.That(cam.CoolerWrites, Does.Contain(true));
+            Assert.That(delays, Is.Empty, "it does not wait for the sensor");
+            // The slot is free: a cool to another target is not refused as "still running".
             var log = new StatusLog();
-            var second = svc.CoolCamera(-10, TimeSpan.Zero, log, CancellationToken.None);
-            await Task.Delay(200);
-            Assert.That(second.IsCompleted, Is.False, "it waits for the running cool");
-
-            release.SetResult();
-            Assert.That(await first, Is.True);
-            Assert.That(await second.WaitAsync(TimeSpan.FromSeconds(15)), Is.True);
+            await svc.CoolCamera(-15, TimeSpan.Zero, log, CancellationToken.None);
             Assert.That(log.Statuses, Has.None.Contains("still running"));
         }
 
