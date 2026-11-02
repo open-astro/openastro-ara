@@ -741,6 +741,27 @@ void main() {
   const tileLeft = kSimpleInset;
   const tileBottom = kSimpleInset * 2 + kSimpleBarHeight;
 
+  testWidgets('at 2x text the rails widen with their labels and the facts turn into a list (WCAG 1.4.4)',
+      (tester) async {
+    tester.platformDispatcher.textScaleFactorTestValue = 2;
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    final container = await _pump(tester, const Size(1024, 768));
+    await _frame(tester, container);
+    await tester.tap(find.byKey(const Key('simple-info')));
+    await tester.pump();
+    // Labels follow the user's size all the way; nothing caps them at 1.3x.
+    final library = tester.element(find.text('Library'));
+    expect(MediaQuery.textScalerOf(library).scale(1), 2);
+    expect(tester.getSize(find.byKey(const Key('simple-info'))).width, greaterThan(60),
+        reason: 'the rail button grows past its 1x width');
+    // The facts read as one list, label and value per line, not 72 px tiles.
+    expect(find.byKey(const Key('simple-facts-list')), findsOneWidget);
+    final hfr = tester.getRect(find.text('HFR'));
+    final clipped = tester.getRect(find.text('Clipped'));
+    expect(clipped.top, greaterThan(hfr.top), reason: 'one fact per line');
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('Info shows the last frame facts as tiles in the bottom-left corner', (tester) async {
     final container = await _pump(tester, const Size(1024, 768));
     await _frame(tester, container);

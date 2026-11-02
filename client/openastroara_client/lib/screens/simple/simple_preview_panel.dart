@@ -158,14 +158,53 @@ class SimpleInfoPanel extends ConsumerWidget {
 }
 
 /// A row of fact tiles (label over value, 72 × 56), the first fact at the
-/// left end, nearest the corner: how Info and System read.
+/// left end, nearest the corner: how Info and System read. Above 1.3x text
+/// the tiles would squeeze it back down, so the facts read as one list
+/// instead, a label and value per line (WCAG 1.4.4).
 class SimpleFactTiles extends StatelessWidget {
   const SimpleFactTiles({super.key, required this.facts});
 
   final List<(String, String)> facts;
 
+  static final _value = kSimpleText.copyWith(
+    fontSize: 13,
+    fontWeight: FontWeight.w600,
+  );
+
+  static final _box = BoxDecoration(
+    color: AraColors.overlayScrim,
+    border: Border.all(color: AraColors.border),
+    borderRadius: BorderRadius.circular(10),
+  );
+
   @override
-  Widget build(BuildContext context) => Row(
+  Widget build(BuildContext context) {
+    if (MediaQuery.textScalerOf(context).scale(1) > 1.3) {
+      return Container(
+        key: const Key('simple-facts-list'),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: _box,
+        child: Table(
+          defaultColumnWidth: const IntrinsicColumnWidth(),
+          children: [
+            for (final (label, value) in facts)
+              TableRow(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(right: 18),
+                    child: Text(label, style: AraText.caption),
+                  ),
+                  Text(value, style: _value, textAlign: TextAlign.right),
+                ],
+              ),
+          ],
+        ),
+      );
+    }
+    return _tiles();
+  }
+
+  Widget _tiles() => Row(
     mainAxisSize: MainAxisSize.min,
     spacing: AraSpace.s8,
     children: [
@@ -174,11 +213,7 @@ class SimpleFactTiles extends StatelessWidget {
           width: kSimpleRailWidth,
           height: 56,
           padding: const EdgeInsets.symmetric(horizontal: 4),
-          decoration: BoxDecoration(
-            color: AraColors.overlayScrim,
-            border: Border.all(color: AraColors.border),
-            borderRadius: BorderRadius.circular(10),
-          ),
+          decoration: _box,
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             spacing: 1,
@@ -189,14 +224,7 @@ class SimpleFactTiles extends StatelessWidget {
               ),
               FittedBox(
                 fit: BoxFit.scaleDown,
-                child: Text(
-                  value,
-                  style: kSimpleText.copyWith(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                  ),
-                  maxLines: 1,
-                ),
+                child: Text(value, style: _value, maxLines: 1),
               ),
             ],
           ),

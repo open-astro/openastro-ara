@@ -348,6 +348,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
         ) !=
         SimpleRunPhase.none;
     const railTop = kSimpleInset * 2 + kSimpleBarHeight;
+    final railWidth = kSimpleRailWidth * simpleRailScale(context);
     final width = MediaQuery.sizeOf(context).width;
     final autopilotRow =
         _mode == SimpleModeScreen.autopilot ||
@@ -544,20 +545,20 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                 ),
                               // Guiding and the histogram along the bottom, each
                               // once it has data: 16 px from the edge and from Stop.
-                              const Positioned(
+                              Positioned(
                                 left: kSimpleInset,
                                 right:
                                     kSimpleInset * 2 +
-                                    (kSimpleRailWidth + kSimpleStopSize) / 2,
+                                    (railWidth + kSimpleStopSize) / 2,
                                 bottom: kSimpleInset,
                                 height: kSimpleBarHeight,
-                                child: _StatsRow(),
+                                child: const _StatsRow(),
                               ),
                               Positioned(
                                 left: kSimpleInset,
                                 top: railTop,
                                 bottom: railTop,
-                                width: kSimpleRailWidth,
+                                width: railWidth,
                                 child: Align(
                                   alignment: Alignment.centerLeft,
                                   child: KeyedSubtree(
@@ -586,7 +587,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                 right: kSimpleInset,
                                 top: railTop,
                                 bottom: kSimpleInset * 2 + kSimpleStopSize,
-                                width: kSimpleRailWidth,
+                                width: railWidth,
                                 child: Center(
                                   child: CompositedTransformTarget(
                                     link: _railLink,
@@ -758,14 +759,14 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                   ),
                                 ),
                               // Stop on its own at the bottom, under the rail.
-                              const Positioned(
+                              Positioned(
                                 right:
                                     kSimpleInset +
-                                    (kSimpleRailWidth - kSimpleStopSize) / 2,
+                                    (railWidth - kSimpleStopSize) / 2,
                                 bottom: kSimpleInset,
                                 width: kSimpleStopSize,
                                 height: kSimpleStopSize,
-                                child: EmergencyStopButton(compact: true),
+                                child: const EmergencyStopButton(compact: true),
                               ),
                             ],
                           ),
@@ -972,8 +973,8 @@ class _RailButton extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(8),
         child: SizedBox(
-          width: 60,
-          height: tall ? 72 : 56,
+          width: 60 * simpleRailScale(context),
+          height: (tall ? 72 : 56) * simpleRailScale(context),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
@@ -1006,10 +1007,10 @@ class _RailButton extends StatelessWidget {
   );
 }
 
-/// The rails are a fixed-width instrument cluster: their labels follow the
-/// user's text size up to 1.3x (the panels follow it all the way).
-Widget _railText(Widget rail) =>
-    MediaQuery.withClampedTextScaling(maxScaleFactor: 1.3, child: rail);
+/// How much the rails grow: none up to 1.3x text, then with the text, so
+/// their labels follow the user's size all the way (WCAG 1.4.4).
+double simpleRailScale(BuildContext context) =>
+    math.max(1, MediaQuery.textScalerOf(context).scale(1) / 1.3);
 
 class _LeftRail extends StatelessWidget {
   const _LeftRail({
@@ -1029,46 +1030,42 @@ class _LeftRail extends StatelessWidget {
   final VoidCallback? onSky;
 
   @override
-  Widget build(BuildContext context) => _railText(
-    SimplePanel(
-      padding: const EdgeInsets.symmetric(vertical: AraSpace.s8, horizontal: 6),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        spacing: 4,
-        children: [
-          _RailButton(
-            key: const Key('simple-sky'),
-            icon: Icons.public,
-            label: 'Sky',
-            selected: sky,
-            onTap: onSky ?? () {},
+  Widget build(BuildContext context) => SimplePanel(
+    padding: const EdgeInsets.symmetric(vertical: AraSpace.s8, horizontal: 6),
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      spacing: 4,
+      children: [
+        _RailButton(
+          key: const Key('simple-sky'),
+          icon: Icons.public,
+          label: 'Sky',
+          selected: sky,
+          onTap: onSky ?? () {},
+        ),
+        _RailButton(
+          key: const Key('simple-info'),
+          icon: Icons.info_outline,
+          label: 'Info',
+          selected: info,
+          onTap: onInfo,
+        ),
+        _RailButton(
+          key: const Key('simple-system'),
+          icon: Icons.memory,
+          label: 'System',
+          selected: system,
+          onTap: onSystem,
+        ),
+        _RailButton(
+          key: const Key('simple-library'),
+          icon: Icons.photo_library_outlined,
+          label: 'Library',
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(builder: (_) => const ImageLibraryScreen()),
           ),
-          _RailButton(
-            key: const Key('simple-info'),
-            icon: Icons.info_outline,
-            label: 'Info',
-            selected: info,
-            onTap: onInfo,
-          ),
-          _RailButton(
-            key: const Key('simple-system'),
-            icon: Icons.memory,
-            label: 'System',
-            selected: system,
-            onTap: onSystem,
-          ),
-          _RailButton(
-            key: const Key('simple-library'),
-            icon: Icons.photo_library_outlined,
-            label: 'Library',
-            onTap: () => Navigator.of(context).push(
-              MaterialPageRoute<void>(
-                builder: (_) => const ImageLibraryScreen(),
-              ),
-            ),
-          ),
-        ],
-      ),
+        ),
+      ],
     ),
   );
 }
@@ -1096,67 +1093,62 @@ class _RightRail extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final modesOpen = popover == _Popover.modes;
-    return _railText(
-      SimplePanel(
-        padding: const EdgeInsets.symmetric(
-          vertical: AraSpace.s8,
-          horizontal: 6,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          spacing: AraSpace.s8,
-          children: [
-            // The mode on top of the shutter; the settings chip under it.
-            Semantics(
-              button: true,
-              label: 'Mode: ${(named ?? mode).label}',
-              child: InkWell(
-                key: const Key('simple-mode'),
-                onTap: onModes,
-                borderRadius: BorderRadius.circular(8),
-                child: SizedBox(
-                  width: 60,
-                  height: 48,
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        (named ?? mode).railLabel,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: kSimpleText.copyWith(
-                          fontWeight: FontWeight.w600,
-                          color: modesOpen ? AraColors.accentInfo : null,
-                        ),
+    return SimplePanel(
+      padding: const EdgeInsets.symmetric(vertical: AraSpace.s8, horizontal: 6),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        spacing: AraSpace.s8,
+        children: [
+          // The mode on top of the shutter; the settings chip under it.
+          Semantics(
+            button: true,
+            label: 'Mode: ${(named ?? mode).label}',
+            child: InkWell(
+              key: const Key('simple-mode'),
+              onTap: onModes,
+              borderRadius: BorderRadius.circular(8),
+              child: SizedBox(
+                width: 60 * simpleRailScale(context),
+                height: 48 * simpleRailScale(context),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      (named ?? mode).railLabel,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: kSimpleText.copyWith(
+                        fontWeight: FontWeight.w600,
+                        color: modesOpen ? AraColors.accentInfo : null,
                       ),
-                      Icon(
-                        modesOpen ? Icons.expand_less : Icons.expand_more,
-                        size: 18,
-                        color: modesOpen
-                            ? AraColors.accentInfo
-                            : AraColors.textSecondary,
-                      ),
-                    ],
-                  ),
+                    ),
+                    Icon(
+                      modesOpen ? Icons.expand_less : Icons.expand_more,
+                      size: 18,
+                      color: modesOpen
+                          ? AraColors.accentInfo
+                          : AraColors.textSecondary,
+                    ),
+                  ],
                 ),
               ),
             ),
-            switch (mode) {
-              SimpleModeScreen.focus => const SimpleFocusShutter(),
-              SimpleModeScreen.polarAlign => const SimplePolarShutter(),
-              SimpleModeScreen.plan => const SimpleRunShutter(),
-              _ => const SimpleShutter(),
-            },
-            _RailButton(
-              key: const Key('simple-settings'),
-              icon: Icons.tune,
-              tall: true,
-              label: _chipLabel(ref),
-              selected: popover == _Popover.settings,
-              onTap: onSettings,
-            ),
-          ],
-        ),
+          ),
+          switch (mode) {
+            SimpleModeScreen.focus => const SimpleFocusShutter(),
+            SimpleModeScreen.polarAlign => const SimplePolarShutter(),
+            SimpleModeScreen.plan => const SimpleRunShutter(),
+            _ => const SimpleShutter(),
+          },
+          _RailButton(
+            key: const Key('simple-settings'),
+            icon: Icons.tune,
+            tall: true,
+            label: _chipLabel(ref),
+            selected: popover == _Popover.settings,
+            onTap: onSettings,
+          ),
+        ],
       ),
     );
   }
