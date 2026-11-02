@@ -14,6 +14,7 @@ import 'package:openastroara/services/storage_space_api.dart';
 import 'package:openastroara/state/stats/server_internal_state_state.dart';
 import 'package:openastroara/screens/app_shell.dart';
 import 'package:openastroara/models/polar_align.dart';
+import 'package:openastroara/screens/simple/simple_focus_panel.dart';
 import 'package:openastroara/screens/simple/simple_polar_panel.dart';
 import 'package:openastroara/screens/simple/simple_preview_panel.dart';
 import 'package:openastroara/screens/simple/simple_shell.dart';
@@ -203,7 +204,7 @@ void main() {
     expect(container.read(simpleModeProvider).value, isTrue, reason: 'no jump to the full UI');
     expect(find.descendant(of: find.byKey(const Key('simple-mode')), matching: find.text('Focus')), findsOneWidget);
     final rail = _panelOf(tester, find.byKey(const Key('simple-shutter')));
-    final panel = _panelOf(tester, find.byKey(const Key('simple-autofocus')));
+    final panel = _panelOf(tester, find.text('No focuser connected'));
     expect(panel.right, rail.left - kSimpleInset, reason: 'left of the rail');
     expect(panel.top, rail.top, reason: 'level with its top');
 
@@ -214,18 +215,18 @@ void main() {
         reason: 'no focuser connected, so focus is by hand');
     await tester.tap(chip);
     await tester.pump();
-    expect(find.byKey(const Key('simple-autofocus')), findsNothing, reason: 'the chip hides the Focus panel');
+    expect(find.byType(SimpleFocusPanel), findsNothing, reason: 'the chip hides the Focus panel');
     expect(find.text('Exposure'), findsNothing, reason: "never Preview's settings in Focus");
     expect(_panelOf(tester, find.byKey(const Key('simple-shutter'))), rail, reason: 'the rail never moves');
     await tester.tap(chip);
     await tester.pump();
-    expect(find.byKey(const Key('simple-autofocus')), findsOneWidget, reason: 'and shows it again');
+    expect(find.byType(SimpleFocusPanel), findsOneWidget, reason: 'and shows it again');
 
     await tester.tap(find.byKey(const Key('simple-mode')));
     await tester.pump();
     await tester.tap(find.text('Preview').first);
     await tester.pump();
-    expect(find.byKey(const Key('simple-autofocus')), findsNothing, reason: 'Preview has no panel');
+    expect(find.byType(SimpleFocusPanel), findsNothing, reason: 'Preview has no panel');
     expect(find.descendant(of: chip, matching: find.text(_summary(container))), findsOneWidget);
   });
 
@@ -351,7 +352,7 @@ void main() {
     // "Autopilot" doesn't fit the 60 px rail: it reads Auto, as Polar align reads P.A.
     expect(find.descendant(of: find.byKey(const Key('simple-mode')), matching: find.text('Auto')), findsOneWidget);
     expect(find.bySemanticsLabel(RegExp(r'^Mode: Autopilot')), findsOneWidget, reason: 'the screen reader says it whole');
-    expect(find.byKey(const Key('simple-autofocus')), findsOneWidget, reason: "Focus's panel, open");
+    expect(find.byType(SimpleFocusPanel), findsOneWidget, reason: "Focus's panel, open");
     await tester.tap(find.byKey(const Key('autopilot-skip')));
     await tester.pump();
     expect(find.byType(SimplePolarPanel), findsOneWidget, reason: "on to polar align's panel");
@@ -374,7 +375,7 @@ void main() {
     await tester.pump();
     expect(container.read(simpleModeProvider).value, isTrue, reason: 'no jump to the full UI');
     expect(find.byKey(const Key('autopilot-strip')), findsOneWidget);
-    expect(find.byKey(const Key('simple-autofocus')), findsOneWidget, reason: "Focus's panel, open");
+    expect(find.byType(SimpleFocusPanel), findsOneWidget, reason: "Focus's panel, open");
   });
 
   testWidgets('the Autopilot offer can be dismissed', (tester) async {

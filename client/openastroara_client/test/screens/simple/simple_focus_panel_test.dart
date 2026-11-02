@@ -5,6 +5,7 @@ import 'package:openastroara/models/autofocus_run.dart';
 import 'package:openastroara/models/equipment_device_status.dart';
 import 'package:openastroara/models/focuser_status.dart';
 import 'package:openastroara/screens/simple/simple_focus_panel.dart';
+import 'package:openastroara/screens/simple/simple_preview_panel.dart' show SimpleShutter;
 import 'package:openastroara/state/equipment/focuser_state.dart';
 import 'package:openastroara/state/focus/autofocus_live_state.dart';
 import 'package:openastroara/state/focus/bahtinov_focus_state.dart';
@@ -106,29 +107,27 @@ void main() {
     });
   });
 
-  testWidgets('no focuser: says so, Autofocus and the nudges are off', (tester) async {
+  testWidgets('no focuser: says so, the nudges are off; no Autofocus button (the shutter starts it)', (tester) async {
     await _pump(tester);
     expect(find.text('No focuser connected'), findsOneWidget);
-    expect(tester.widget<FilledButton>(find.byKey(const Key('simple-autofocus'))).onPressed, isNull);
+    expect(find.text('Autofocus'), findsNothing);
     for (final icon in [Icons.chevron_left, Icons.chevron_right]) {
       final ink = find.ancestor(of: find.byIcon(icon), matching: find.byType(InkWell));
       expect(tester.widget<InkWell>(ink).onTap, isNull);
     }
   });
 
-  testWidgets('a connected focuser: position, Autofocus starts a run, nudges move by the step size', (tester) async {
-    final (f, l) = await _pump(tester, focuser: _focuser());
+  testWidgets('a connected focuser: position, nudges move by the step size', (tester) async {
+    final (f, _) = await _pump(tester, focuser: _focuser());
     expect(find.text('Position 1000'), findsOneWidget);
     expect(find.text('HFR —'), findsOneWidget);
-    await tester.tap(find.byKey(const Key('simple-autofocus')));
-    expect(l.starts, 1);
     // The profile's default step is 50; large is five steps.
     await tester.tap(find.byIcon(Icons.chevron_left));
     await tester.tap(find.byIcon(Icons.keyboard_double_arrow_right));
     expect(f.moves, [950, 1100]);
   });
 
-  testWidgets('while a run goes: the curve, Cancel, and no nudges', (tester) async {
+  testWidgets('while a run goes: the curve, no Cancel (the shutter\'s square), no nudges', (tester) async {
     final run = AutofocusRun(
       state: AutofocusRunStates.running,
       phase: 'sweep',
@@ -137,14 +136,55 @@ void main() {
       stepSize: 80,
       probes: [_probe(0, 3.1), _probe(1, 2.4)],
     );
-    final (f, l) = await _pump(tester, focuser: _focuser(), run: run);
+    final (f, _) = await _pump(tester, focuser: _focuser(), run: run);
     expect(find.text('HFR 2.40'), findsOneWidget);
     expect(find.textContaining('Sweeping'), findsOneWidget);
-    expect(find.byKey(const Key('simple-autofocus')), findsNothing);
-    await tester.tap(find.byKey(const Key('simple-focus-cancel')));
-    expect(l.cancels, 1);
+    expect(find.text('Cancel'), findsNothing);
     await tester.tap(find.byIcon(Icons.chevron_left));
     expect(f.moves, isEmpty);
+  });
+
+  group('the shutter follows the chip', () {
+    Future<_Live> shutter(WidgetTester tester, MainFocusMethod pick,
+        {FocuserStatus? focuser, AutofocusRun run = AutofocusRun.idle}) async {
+      final l = _Live(AutofocusLive(run: run));
+      await tester.pumpWidget(ProviderScope(
+        overrides: [
+          focuserProvider.overrideWith(() => _Focuser(focuser)),
+          autofocusLiveProvider.overrideWith(() => l),
+          mainFocusMethodProvider.overrideWith(() => _Pick(pick)),
+        ],
+        child: const MaterialApp(home: Scaffold(body: Center(child: SimpleFocusShutter()))),
+      ));
+      await tester.pump();
+      return l;
+    }
+
+    testWidgets('Auto: the shutter starts autofocus', (tester) async {
+      final l = await shutter(tester, MainFocusMethod.autofocus, focuser: _focuser());
+      expect(find.bySemanticsLabel('Autofocus'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('simple-shutter')));
+      expect(l.starts, 1);
+    });
+
+    testWidgets('Auto while it runs: the red square cancels it', (tester) async {
+      final l = await shutter(tester, MainFocusMethod.autofocus,
+          focuser: _focuser(), run: const AutofocusRun(state: AutofocusRunStates.running));
+      expect(find.bySemanticsLabel('Cancel autofocus'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('simple-shutter')));
+      expect(l.cancels, 1);
+    });
+
+    testWidgets('Auto with no focuser: the shutter is off', (tester) async {
+      final l = await shutter(tester, MainFocusMethod.autofocus);
+      await tester.tap(find.byKey(const Key('simple-shutter')));
+      expect(l.starts, 0);
+    });
+
+    testWidgets('Manual: Preview\'s shutter, frames to focus by', (tester) async {
+      await shutter(tester, MainFocusMethod.bahtinov, focuser: _focuser());
+      expect(find.byType(SimpleShutter), findsOneWidget);
+    });
   });
 
   group('the rail chip reads the focus method', () {

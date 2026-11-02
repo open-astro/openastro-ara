@@ -889,6 +889,7 @@ class _RightRail extends ConsumerWidget {
             ),
           ),
           switch (mode) {
+            SimpleModeScreen.focus => const SimpleFocusShutter(),
             SimpleModeScreen.polarAlign => const SimplePolarShutter(),
             SimpleModeScreen.plan => const SimpleRunShutter(),
             _ => const SimpleShutter(),

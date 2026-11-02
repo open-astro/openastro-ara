@@ -13,7 +13,8 @@ import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
 import '../../widgets/focus/focusing_pane.dart' show MainFocusCard;
 import '../../widgets/focus/v_curve_chart.dart';
-import 'simple_preview_panel.dart' show kSimpleText;
+import 'simple_preview_panel.dart'
+    show SimpleShutter, SimpleShutterButton, kSimpleText;
 import 'simple_shell.dart' show SimplePanel, kSimpleTileFill;
 
 /// The HFR to show big: the confirmed one after a run, the latest kept probe
@@ -52,9 +53,36 @@ int? simpleNudgeTarget(FocuserStatus focuser, int delta) {
       : to;
 }
 
+/// The rail's shutter in Focus follows the chip: on Auto it starts autofocus
+/// and its red square cancels it; on Manual it is Preview's, frames to focus
+/// by.
+class SimpleFocusShutter extends ConsumerWidget {
+  const SimpleFocusShutter({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (simpleFocusSummary(ref) != 'Auto') return const SimpleShutter();
+    final live = ref.watch(autofocusLiveProvider);
+    final connected =
+        ref.watch(focuserProvider).asData?.value?.connectionState ==
+        EquipmentConnectionState.connected;
+    final running = live.run.isRunning;
+    final notifier = ref.read(autofocusLiveProvider.notifier);
+    return SimpleShutterButton(
+      running: running,
+      label: running ? 'Cancel autofocus' : 'Autofocus',
+      onPressed: live.busy || !(running || connected)
+          ? null
+          : running
+          ? notifier.cancel
+          : notifier.start,
+    );
+  }
+}
+
 /// Focus mode's panel beside the right rail: where the run stands, the HFR,
-/// the V-curve once there are probes, the focuser position, Autofocus (or
-/// Cancel) and four nudges.
+/// the V-curve once there are probes, the focuser position and four nudges.
+/// The shutter starts autofocus.
 class SimpleFocusPanel extends ConsumerWidget {
   const SimpleFocusPanel({super.key});
 
@@ -110,23 +138,6 @@ class SimpleFocusPanel extends ConsumerWidget {
                   : 'No focuser connected',
               style: kSimpleText.copyWith(color: AraColors.textSecondary),
             ),
-            run.isRunning
-                ? FilledButton.tonal(
-                    key: const Key('simple-focus-cancel'),
-                    onPressed: live.busy
-                        ? null
-                        : () =>
-                              ref.read(autofocusLiveProvider.notifier).cancel(),
-                    child: const Text('Cancel', style: kSimpleText),
-                  )
-                : FilledButton(
-                    key: const Key('simple-autofocus'),
-                    onPressed: connected && !live.busy
-                        ? () =>
-                              ref.read(autofocusLiveProvider.notifier).start()
-                        : null,
-                    child: const Text('Autofocus'),
-                  ),
             Row(
               spacing: 4,
               children: [
