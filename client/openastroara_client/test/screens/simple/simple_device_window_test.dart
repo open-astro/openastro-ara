@@ -68,6 +68,11 @@ void main() {
       expect(find.text('Cooler'), findsOneWidget);
       expect(find.text('−10 °C'), findsOneWidget, reason: 'the target');
       expect(find.text('−9.8 °C · 34 % power'), findsOneWidget, reason: 'now');
+      // Cooler, Target and Now sit on an even rhythm: the rows are one height.
+      double row(String label) =>
+          tester.getSize(find.byKey(Key('simple-window-row-$label'))).height;
+      expect(row('Now'), row('Cooler'));
+      expect(row('Target'), row('Cooler'));
       expect(
         find.text('Disconnect'),
         findsNothing,

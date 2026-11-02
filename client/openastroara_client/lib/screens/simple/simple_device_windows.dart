@@ -239,11 +239,17 @@ class SimpleCameraWindow extends ConsumerWidget {
     }
   }
 
-  static Widget _row(String label, Widget value) => Row(
-    children: [
-      Expanded(child: Text(label, style: kSimpleText)),
-      value,
-    ],
+  // One height for every row (the 44 pt of the On / Off and − / + controls),
+  // so a text-only row like Now keeps the rhythm.
+  static Widget _row(String label, Widget value) => ConstrainedBox(
+    key: Key('simple-window-row-$label'),
+    constraints: const BoxConstraints(minHeight: 44),
+    child: Row(
+      children: [
+        Expanded(child: Text(label, style: kSimpleText)),
+        value,
+      ],
+    ),
   );
 }
 
