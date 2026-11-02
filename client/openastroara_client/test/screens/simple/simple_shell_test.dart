@@ -964,7 +964,8 @@ void main() {
         serverInfo: const ServerInfo(name: 'astro', version: '0.0.1-ara.7', apiVersion: '1'));
     await _openSection(tester, 'Rig');
     // Every version on the rig, for a bug report or a support question.
-    expect(find.descendant(of: find.byKey(const Key('simple-versions')), matching: find.text('Server')), findsOneWidget);
+    expect(find.descendant(of: find.byKey(const Key('simple-versions')), matching: find.text('OpenAstro Ara server')), findsOneWidget);
+    expect(find.descendant(of: find.byKey(const Key('simple-versions')), matching: find.text('OpenAstro Ara client')), findsOneWidget);
     expect(find.text('0.0.1-ara.7'), findsOneWidget);
     final sheet = find.byKey(const Key('simple-menu'));
     final line = find.descendant(of: sheet, matching: find.byKey(const Key('simple-system-line')));

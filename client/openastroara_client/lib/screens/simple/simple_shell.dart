@@ -1998,8 +1998,8 @@ class _ThisRig extends ConsumerWidget {
           spacing: AraSpace.s4,
           children: [
             Text('Versions', style: AraText.caption),
-            fact('This app', version ?? '—'),
-            fact('Server', serverVersion ?? '—'),
+            fact('OpenAstro Ara client', version ?? '—'),
+            fact('OpenAstro Ara server', serverVersion ?? '—'),
           ],
         ),
         Align(
