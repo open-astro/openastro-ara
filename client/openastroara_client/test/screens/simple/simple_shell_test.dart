@@ -1095,6 +1095,35 @@ void main() {
     expect(mount.calls, ['reconnect'], reason: 'Connect: the device the rig remembers, no chooser');
   });
 
+  testWidgets('the camera\'s dot opens its window over Simple Mode, not the full Settings page', (tester) async {
+    final c = await _pump(tester, const Size(1024, 768), linkUp: true, gear: [
+      cameraStatusProvider.overrideWith(() => _Camera(EquipmentConnectionState.connected)),
+    ]);
+    // What the top bar's camera chip does (openSettingsPanel).
+    c.read(selectedSettingsPanelProvider.notifier).select('eq.camera');
+    c.read(selectedTabIndexProvider.notifier).select(kOptionsTabIndex);
+    await tester.pumpAndSettle();
+    expect(find.byType(SettingsShell), findsNothing);
+    expect(find.byKey(const Key('simple-device-camera')), findsOneWidget);
+    expect(c.read(simpleModeProvider).value, isTrue);
+    await tester.tapAt(const Offset(512, 700)); // the image closes it
+    await tester.pump();
+    expect(find.byKey(const Key('simple-device-camera')), findsNothing);
+  });
+
+  testWidgets('Settings lists the camera under Devices; it and its Devices row open the same window', (tester) async {
+    await _pump(tester, const Size(1024, 768), linkUp: true, gear: [
+      cameraStatusProvider.overrideWith(() => _Camera(EquipmentConnectionState.connected)),
+    ]);
+    await _openSection(tester, 'Camera');
+    final sheet = find.byKey(const Key('simple-menu'));
+    expect(find.descendant(of: sheet, matching: find.byKey(const Key('simple-device-camera'))), findsOneWidget);
+    await _openSection(tester, 'Devices');
+    await tester.tap(find.textContaining('ASI2600MM'));
+    await tester.pump();
+    expect(find.descendant(of: sheet, matching: find.byKey(const Key('simple-device-camera'))), findsOneWidget);
+  });
+
   testWidgets('Devices with no rig link says so instead of showing stale states', (tester) async {
     await _pump(tester, const Size(1024, 768), gear: [
       cameraStatusProvider.overrideWith(() => _Camera(EquipmentConnectionState.connected)),

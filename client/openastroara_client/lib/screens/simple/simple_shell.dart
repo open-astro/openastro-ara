@@ -55,6 +55,7 @@ import '../library/image_library_screen.dart';
 import '../settings/settings_shell.dart';
 import '../shell_listeners.dart';
 import 'simple_autopilot.dart';
+import 'simple_device_windows.dart';
 import 'simple_focus_panel.dart';
 import 'simple_message_pills.dart';
 import 'simple_polar_panel.dart';
@@ -115,7 +116,8 @@ extension on SimpleModeScreen {
 /// The one popover open beside a rail, if any. [settings] is the chip's: the
 /// current mode's options (Preview's exposure, Focus's panel).
 /// [menu] is the top bar's Settings menu.
-enum _Popover { none, modes, settings, queue, menu }
+/// [device] is a device's window, opened from its dot in the top bar.
+enum _Popover { none, modes, settings, queue, menu, device }
 
 /// Simple Mode (ALP-4810): the latest frame fills the window and only the
 /// shutter is always out. A right rail holds the mode (tap for the five
@@ -343,7 +345,13 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
             .read(selectedTabIndexProvider.notifier)
             .select(previous ?? kLiveTabIndex);
         _restoringTab = false;
-        _openSettings();
+        // A device with its own window opens it; the rest still get the full
+        // Settings page over Simple Mode.
+        if (ref.read(selectedSettingsPanelProvider) == 'eq.camera') {
+          setState(() => _popover = _Popover.device);
+        } else {
+          _openSettings();
+        }
         return;
       }
       ref.read(simpleModeProvider.notifier).set(false);
@@ -666,7 +674,8 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                   ),
                                 )
                               else if (_popover != _Popover.none &&
-                                  _popover != _Popover.menu)
+                                  _popover != _Popover.menu &&
+                                  _popover != _Popover.device)
                                 Positioned(
                                   left: 0,
                                   top: 0,
@@ -783,6 +792,17 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                               // Settings: a sheet over the dimmed image, from the
                               // strip down to the bottom row; Stop stays above
                               // the veil, within reach.
+                              // A device's window, under the strip's dots.
+                              if (_popover == _Popover.device)
+                                Positioned(
+                                  left: kSimpleInset,
+                                  top: railTop,
+                                  width: 360 * simpleRailScale(context),
+                                  child: const SimplePanel(
+                                    padding: EdgeInsets.all(AraSpace.s16),
+                                    child: SimpleCameraWindow(),
+                                  ),
+                                ),
                               if (_popover == _Popover.menu) ...[
                                 Positioned.fill(
                                   child: GestureDetector(
@@ -1630,25 +1650,29 @@ ThemeData simpleTheme(ThemeData base) {
 /// Simple Mode's Settings (design/briefs/simple-mode-settings.md): a sheet
 /// with its sections on the left and the picked one on the right, on the
 /// 90 % panel scrim over a 5 px blur of the image.
-class _SettingsSheet extends StatefulWidget {
+class _SettingsSheet extends ConsumerStatefulWidget {
   const _SettingsSheet({required this.onClose, required this.onLogs});
 
   final VoidCallback onClose;
   final VoidCallback onLogs;
 
   @override
-  State<_SettingsSheet> createState() => _SettingsSheetState();
+  ConsumerState<_SettingsSheet> createState() => _SettingsSheetState();
 }
 
-class _SettingsSheetState extends State<_SettingsSheet> {
-  static const _sections = [
-    ('Rig', Icons.memory),
-    ('Devices', Icons.settings_input_component_outlined),
-  ];
+class _SettingsSheetState extends ConsumerState<_SettingsSheet> {
   String _section = 'Rig';
 
   @override
   Widget build(BuildContext context) {
+    // The devices with a window of their own, listed under Devices once the
+    // rig knows them.
+    final sections = [
+      ('Rig', Icons.memory, false),
+      ('Devices', Icons.settings_input_component_outlined, false),
+      if (ref.watch(cameraStatusProvider).value != null)
+        ('Camera', Icons.photo_camera_outlined, true),
+    ];
     // A narrow window (Split View, a phone) keeps only the sections' icons.
     final narrow = MediaQuery.sizeOf(context).width < 600;
     return ClipRRect(
@@ -1667,9 +1691,12 @@ class _SettingsSheetState extends State<_SettingsSheet> {
                 child: ListView(
                   padding: const EdgeInsets.all(AraSpace.s8),
                   children: [
-                    for (final (name, icon) in _sections)
+                    for (final (name, icon, device) in sections)
                       Padding(
-                        padding: const EdgeInsets.only(bottom: 4),
+                        padding: EdgeInsets.only(
+                          bottom: 4,
+                          left: device && !narrow ? AraSpace.s16 : 0,
+                        ),
                         child: Material(
                           color: _section == name
                               ? AraColors.selectionTint
@@ -1732,7 +1759,8 @@ class _SettingsSheetState extends State<_SettingsSheet> {
                       onClose: widget.onClose,
                       onLogs: widget.onLogs,
                     ),
-                    _ => const _Gear(),
+                    'Camera' => const SimpleCameraWindow(),
+                    _ => _Gear(onOpen: (id) => setState(() => _section = id)),
                   },
                 ),
               ),
@@ -1751,7 +1779,10 @@ class _SettingsSheetState extends State<_SettingsSheet> {
 // shortcut: the guider and the switches have their own state types; they
 // join this list with their windows.
 class _Gear extends ConsumerWidget {
-  const _Gear();
+  const _Gear({required this.onOpen});
+
+  /// Opens a device's window (the ones that have one) in Settings.
+  final ValueChanged<String> onOpen;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -1768,7 +1799,12 @@ class _Gear extends ConsumerWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       spacing: AraSpace.s8,
       children: [
-        _GearRow(id: 'camera', type: 'Camera', provider: cameraStatusProvider),
+        _GearRow(
+          id: 'camera',
+          type: 'Camera',
+          provider: cameraStatusProvider,
+          onOpen: () => onOpen('Camera'),
+        ),
         _GearRow(id: 'mount', type: 'Mount', provider: mountProvider),
         _GearRow(id: 'focuser', type: 'Focuser', provider: focuserProvider),
         _GearRow(
@@ -1790,7 +1826,11 @@ class _GearRow<T extends EquipmentDeviceStatus> extends ConsumerWidget {
     required this.id,
     required this.type,
     required this.provider,
+    this.onOpen,
   });
+
+  /// The device's window, for the ones that have one.
+  final VoidCallback? onOpen;
 
   final String id;
   final String type;
@@ -1820,7 +1860,7 @@ class _GearRow<T extends EquipmentDeviceStatus> extends ConsumerWidget {
       EquipmentConnectionState.error => ('Reconnect', notifier.reconnect),
       _ => ('Connect', notifier.reconnect),
     };
-    return Container(
+    final row = Container(
       padding: const EdgeInsets.symmetric(
         horizontal: AraSpace.s12,
         vertical: AraSpace.s8,
@@ -1856,9 +1896,22 @@ class _GearRow<T extends EquipmentDeviceStatus> extends ConsumerWidget {
               onPressed: () => action!(),
               child: Text(label),
             ),
+          if (onOpen != null)
+            const Icon(Icons.chevron_right, color: AraColors.textSecondary),
         ],
       ),
     );
+    // A device with a window opens it from its row.
+    return onOpen == null
+        ? row
+        : Semantics(
+            button: true,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: onOpen,
+              child: row,
+            ),
+          );
   }
 }
 

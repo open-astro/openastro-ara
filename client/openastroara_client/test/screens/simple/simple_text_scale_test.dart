@@ -16,6 +16,8 @@ import 'package:openastroara/state/app_shell_state.dart';
 import 'package:openastroara/state/settings/settings_nav.dart';
 import 'package:openastroara/state/simple_mode_state.dart';
 import 'package:openastroara/widgets/emergency_stop_button.dart';
+import 'package:openastroara/models/camera_status.dart';
+import 'package:openastroara/state/equipment/camera_state.dart';
 
 class _MemPrefs extends SimpleModePrefsService {
   bool value = true;
@@ -44,6 +46,17 @@ Future<void> _loadFonts() async {
   await (FontLoader('MaterialIcons')..addFont(Future.value(bytes('MaterialIcons-Regular.otf')))).load();
 }
 
+/// A connected, cooled camera, for its window.
+class _Camera extends CameraStatusNotifier {
+  @override
+  Future<CameraStatus?> build() async => CameraStatus.fromJson({
+        'name': 'ZWO ASI2600MM Pro',
+        'state': 'connected',
+        'capabilities': {'has_cooler': true, 'can_set_temperature': true},
+        'runtime': {'ccd_temperature': -9.8, 'cooler_power_pct': 34, 'cooler_on': true, 'cooler_setpoint_c': -10},
+      });
+}
+
 /// A queue of two, so the plan squares draw.
 class _Queue extends SimpleRunNotifier {
   @override
@@ -69,7 +82,7 @@ void main() {
     (1.0, const Size(320, 768)),
   ];
   for (final (scale, size) in cases) {
-    for (final open in ['Preview settings', 'Plan', 'Stop armed', 'Modes', 'Settings', 'Rig']) {
+    for (final open in ['Preview settings', 'Plan', 'Stop armed', 'Modes', 'Settings', 'Rig', 'Camera']) {
       testWidgets('text ${scale}x at ${size.width.toInt()}x${size.height.toInt()}, $open: nothing overflows',
           skip: !hasFonts, (tester) async {
         tester.view.physicalSize = size;
@@ -79,6 +92,7 @@ void main() {
           simpleModePrefsProvider.overrideWithValue(_MemPrefs()),
           selectedTabIndexProvider.overrideWith(_StartOnLive.new),
           // Plan with real content: Tonight's best (one picked) and a queue.
+          if (open == 'Camera') cameraStatusProvider.overrideWith(_Camera.new),
           if (open == 'Plan') ...[
             tonightSkyProvider.overrideWith(
                 (ref) async => [_o('M31', 62), _o('North America Nebula', 71), _o('M33', 48), _o('M45', 30)]),
@@ -137,6 +151,12 @@ void main() {
             expect(p.didExceedMaxLines, isFalse, reason: '"${p.text.toPlainText()}" is cut off');
           }
           await tester.pump(const Duration(seconds: 4)); // the press-again window lapses
+        } else if (open == 'Camera') {
+          // What the top bar's camera dot does.
+          c.read(selectedSettingsPanelProvider.notifier).select('eq.camera');
+          c.read(selectedTabIndexProvider.notifier).select(kOptionsTabIndex);
+          await tester.pump();
+          expect(find.byKey(const Key('simple-device-camera')), findsOneWidget);
         } else if (open == 'Settings' || open == 'Rig') {
           await tester.tap(find.byTooltip('Settings'));
           await tester.pump();
