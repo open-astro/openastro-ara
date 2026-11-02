@@ -18,14 +18,17 @@ Shaped 2026-11-02 (`/impeccable shape`). Paperclip: ALP-4825 (part of ALP-4810).
 
 ## Placement and stacking
 
-- Centred under the status strip, below the Autopilot strip or offer when one shows.
-- Never over the plan squares (top right) or the status pill (top left); on a narrow window the stack drops below both.
-- Newest on top. After three, the rest fold into one "+N more" pill.
+Decided on the mock (2026-11-02, option A, one line): the corners are re-dealt.
+
+- Message pills stack in the **top-left** corner, under the strip and under the Autopilot strip or offer when one shows.
+- The camera status pill moves to the **top-right** corner; the two share the row (status at most 300 px or half the row, messages the rest up to 420 px), so neither is ever under the other.
+- The plan squares move to the **bottom-right**, above the bottom row.
+- Newest on top; as many as fit above the left rail (two on a landscape iPad), the rest fold into "+N more", at the end of the newest pill when there is no room below.
 - In the immersive view errors and questions stay; results fade as usual.
 
 ## What switches in phase A
 
-Simple Mode only. One call (`notifyUser`) shows a pill in Simple Mode and today's snackbar in the full UI, so the full UI is unchanged.
+Simple Mode only. One call (`userNotifier(context)`) shows a pill in Simple Mode and today's snackbar in the full UI, so the full UI is unchanged.
 
 - Focus: nudge errors.
 - Polar align: start, stop and take-frame errors.
@@ -46,6 +49,6 @@ Simple Mode only. One call (`notifyUser`) shows a pill in Simple Mode and today'
 
 The daemon's prompts: takeover request and session transferred, safety alarm (must stay unmissable, with its audible escalation), bedtime checklist, morning summary, manual filter swap, auto flats and calibration, profile replay. Phase B, next slice, each keeping its automation.
 
-## Next
+## Status
 
-A rendered mock of the pills over the Simple Mode shell for a pick, then the build, test first.
+Phase A built on `feat/simple-mode` (2026-11-02). Phase B (the daemon's prompts) is next.
