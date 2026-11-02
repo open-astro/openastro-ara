@@ -301,7 +301,7 @@ The shutter starts the plan; while imaging it shows pause bars with a blue ring 
 
 **Always on, in both modes:** Emergency Stop (except in the immersive view), the attention banner, the device status dots, Night mode and the Simple ↔ full UI switch.
 
-Targets are at least 44 px tall (the settings segments too), with 14 px body text. The rails follow the user's text size up to 1.3x, since they are a fixed-width cluster; panels, the sheet and messages follow it all the way, and the Autopilot offer's words wrap on a narrow window. Colours and status dots behave exactly as in the full UI. Phone Companion Mode uses the same image-first idea in a portrait arrangement. The rendered reference is `design/preview/ara-design-preview.html`.
+Targets are at least 44 px tall (the settings segments too), with 14 px body text. Everything follows the user's text size all the way (WCAG 1.4.4): the rails keep 72 px up to 1.3x and then widen with the text (111 px at 2x), their buttons growing with them; above 1.3x Info's and System's tiles become one panel, a label and value per line, since 72 px tiles would squeeze the text back down (decided 2026-11-03); panels, the sheet and messages follow it too, and the Autopilot offer's words wrap on a narrow window. Colours and status dots behave exactly as in the full UI. Phone Companion Mode uses the same image-first idea in a portrait arrangement. The rendered reference is `design/preview/ara-design-preview.html`.
 ### Cards / Containers
 - **Corner Style:** 6 px.
 - **Background:** Panel Grey.
