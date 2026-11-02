@@ -965,8 +965,13 @@ void main() {
     await _openSection(tester, 'Rig');
     // Every version on the rig, for a bug report or a support question.
     expect(find.descendant(of: find.byKey(const Key('simple-versions')), matching: find.text('OpenAstro Ara server')), findsOneWidget);
-    expect(find.descendant(of: find.byKey(const Key('simple-versions')), matching: find.text('OpenAstro Ara client')), findsOneWidget);
+    expect(find.descendant(of: find.byKey(const Key('simple-versions')), matching: find.text('This app')), findsOneWidget);
     expect(find.text('0.0.1-ara.7'), findsOneWidget);
+    // Beside its name and in readable type, not at the far edge in a caption.
+    final name = tester.getRect(find.text('OpenAstro Ara server'));
+    final value = tester.getRect(find.text('0.0.1-ara.7'));
+    expect(value.left - name.right, lessThan(48), reason: 'the version sits next to its name');
+    expect(tester.widget<Text>(find.text('Versions')).style!.fontSize, greaterThanOrEqualTo(14));
     final sheet = find.byKey(const Key('simple-menu'));
     final line = find.descendant(of: sheet, matching: find.byKey(const Key('simple-system-line')));
     for (final t in ['412 GB free', '23 %', '512 MB', '3 h 12 min']) {

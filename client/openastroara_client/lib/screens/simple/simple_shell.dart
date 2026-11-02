@@ -1994,12 +1994,42 @@ class _ThisRig extends ConsumerWidget {
         // daemon to report them; they join this list when it does.
         Column(
           key: const Key('simple-versions'),
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          spacing: AraSpace.s4,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          spacing: AraSpace.s8,
           children: [
-            Text('Versions', style: AraText.caption),
-            fact('OpenAstro Ara client', version ?? '—'),
-            fact('OpenAstro Ara server', serverVersion ?? '—'),
+            Text(
+              'Versions',
+              style: kSimpleText.copyWith(fontWeight: FontWeight.w600),
+            ),
+            // Each version beside its name, not across the page from it.
+            Table(
+              defaultColumnWidth: const IntrinsicColumnWidth(),
+              defaultVerticalAlignment: TableCellVerticalAlignment.baseline,
+              textBaseline: TextBaseline.alphabetic,
+              children: [
+                for (final (name, v) in [
+                  ('This app', version),
+                  ('OpenAstro Ara server', serverVersion),
+                ])
+                  TableRow(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.only(
+                          right: AraSpace.s24,
+                          bottom: AraSpace.s4,
+                        ),
+                        child: Text(
+                          name,
+                          style: kSimpleText.copyWith(
+                            color: AraColors.textSecondary,
+                          ),
+                        ),
+                      ),
+                      Text(v ?? '—', style: kSimpleText),
+                    ],
+                  ),
+              ],
+            ),
           ],
         ),
         Align(
