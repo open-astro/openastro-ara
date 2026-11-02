@@ -300,7 +300,8 @@ class _EmergencyStopButtonState extends ConsumerState<EmergencyStopButton>
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(radius),
       ),
-      textStyle: TextStyle(
+      // From the theme's label style, so it carries the app's font family.
+      textStyle: Theme.of(context).textTheme.labelLarge?.copyWith(
         fontSize: compact ? 12 : (simple ? 14 : 13),
         fontWeight: compact ? FontWeight.w700 : FontWeight.w600,
       ),
@@ -311,9 +312,14 @@ class _EmergencyStopButtonState extends ConsumerState<EmergencyStopButton>
         ? FilledButton(
             onPressed: _inFlight ? null : _onPressed,
             style: style,
+            // Armed, the compact square drops the icon: PRESS AGAIN needs
+            // both lines' room at larger text.
             child: Column(
               mainAxisSize: MainAxisSize.min,
-              children: [icon, const SizedBox(height: 2), label],
+              children: [
+                if (!(_armed && compact)) ...[icon, const SizedBox(height: 2)],
+                label,
+              ],
             ),
           )
         : FilledButton.icon(

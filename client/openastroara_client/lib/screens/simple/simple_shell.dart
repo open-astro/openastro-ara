@@ -349,6 +349,8 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
         SimpleRunPhase.none;
     const railTop = kSimpleInset * 2 + kSimpleBarHeight;
     final railWidth = kSimpleRailWidth * simpleRailScale(context);
+    // Stop grows with the rails, so its label fits at the user's text size.
+    final stopSize = kSimpleStopSize * simpleRailScale(context);
     final width = MediaQuery.sizeOf(context).width;
     final autopilotRow =
         _mode == SimpleModeScreen.autopilot ||
@@ -379,12 +381,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     // the bottom row), scrolling inside when taller.
     final rightRailTop =
         railTop +
-        (height -
-                railTop -
-                kSimpleInset * 2 -
-                kSimpleStopSize -
-                _rightRailHeight) /
-            2;
+        (height - railTop - kSimpleInset * 2 - stopSize - _rightRailHeight) / 2;
     final popoverMaxHeight = _rightRailHeight == 0
         ? double.infinity
         : height -
@@ -480,9 +477,8 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                   style: TextStyle(
                                     fontSize: 20,
                                     letterSpacing: 2,
-                                    color: AraColors.textPrimary.withValues(
-                                      alpha: 0.5,
-                                    ),
+                                    // Dim but solid: 8:1 on a dark sky.
+                                    color: AraColors.textSecondary,
                                   ),
                                 ),
                               ),
@@ -552,7 +548,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                 left: kSimpleInset,
                                 right:
                                     kSimpleInset * 2 +
-                                    (railWidth + kSimpleStopSize) / 2,
+                                    (railWidth + stopSize) / 2,
                                 bottom: kSimpleInset,
                                 height: kSimpleBarHeight,
                                 child: const _StatsRow(),
@@ -589,7 +585,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                               Positioned(
                                 right: kSimpleInset,
                                 top: railTop,
-                                bottom: kSimpleInset * 2 + kSimpleStopSize,
+                                bottom: kSimpleInset * 2 + stopSize,
                                 width: railWidth,
                                 child: Center(
                                   child: CompositedTransformTarget(
@@ -764,11 +760,10 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                               // Stop on its own at the bottom, under the rail.
                               Positioned(
                                 right:
-                                    kSimpleInset +
-                                    (railWidth - kSimpleStopSize) / 2,
+                                    kSimpleInset + (railWidth - stopSize) / 2,
                                 bottom: kSimpleInset,
-                                width: kSimpleStopSize,
-                                height: kSimpleStopSize,
+                                width: stopSize,
+                                height: stopSize,
                                 child: const EmergencyStopButton(compact: true),
                               ),
                             ],

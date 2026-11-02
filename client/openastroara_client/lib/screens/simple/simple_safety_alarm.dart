@@ -57,72 +57,76 @@ class _SimpleSafetyAlarmState extends ConsumerState<SimpleSafetyAlarm> {
       key: const Key('simple-safety-alarm'),
       // Screen readers and the keyboard stay on the alarm: nothing behind it
       // is read or reachable until it's silenced.
-      child: BlockSemantics(
-        child: Semantics(
-          liveRegion: true,
-          label: 'Safety alert',
-          child: Material(
-            color: AraColors.alarmScrim,
-            child: SafeArea(
-              child: Center(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(AraSpace.s24),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    spacing: AraSpace.s12,
-                    children: [
-                      const Icon(
-                        Icons.error,
-                        size: 72,
-                        color: AraColors.accentError,
-                      ),
-                      Text(
-                        'SAFETY ALERT',
-                        style: kSimpleText.copyWith(
-                          fontSize: 26,
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: 1,
-                          color: AraColors.textPrimary,
+      // Its own focus scope: Tab cycles within the alarm instead of reaching
+      // the controls under the veil.
+      child: FocusScope(
+        child: BlockSemantics(
+          child: Semantics(
+            liveRegion: true,
+            label: 'Safety alert',
+            child: Material(
+              color: AraColors.alarmScrim,
+              child: SafeArea(
+                child: Center(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(AraSpace.s24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      spacing: AraSpace.s12,
+                      children: [
+                        const Icon(
+                          Icons.error,
+                          size: 72,
+                          color: AraColors.accentError,
                         ),
-                      ),
-                      Text(
-                        alarm.reason.isEmpty
-                            ? 'Conditions are UNSAFE.'
-                            : alarm.reason,
-                        textAlign: TextAlign.center,
-                        style: kSimpleText.copyWith(
-                          fontSize: 16,
-                          color: AraColors.errorText,
-                        ),
-                      ),
-                      Text(
-                        // Pending: the silent delay (or the tone is muted).
-                        alarm.ringing
-                            ? 'Alarm ringing'
-                            : 'Silence it before it sounds',
-                        style: kSimpleText.copyWith(
-                          color: AraColors.textSecondary,
-                        ),
-                      ),
-                      const SizedBox(height: AraSpace.s8),
-                      FilledButton(
-                        key: const Key('simple-safety-silence'),
-                        focusNode: _silence,
-                        style: FilledButton.styleFrom(
-                          backgroundColor: AraColors.accentError,
-                          foregroundColor: AraColors.textPrimary,
-                          minimumSize: const Size(220, 56),
-                          textStyle: const TextStyle(
-                            // Large text (20 px bold): passes 3:1 on Fault Red, where 16 px didn't pass 4.5:1.
-                            fontSize: 20,
-                            fontWeight: FontWeight.w700,
+                        Text(
+                          'SAFETY ALERT',
+                          style: kSimpleText.copyWith(
+                            fontSize: 26,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 1,
+                            color: AraColors.textPrimary,
                           ),
                         ),
-                        onPressed: () =>
-                            ref.read(safetyAlarmProvider.notifier).silence(),
-                        child: const Text('Silence alarm'),
-                      ),
-                    ],
+                        Text(
+                          alarm.reason.isEmpty
+                              ? 'Conditions are UNSAFE.'
+                              : alarm.reason,
+                          textAlign: TextAlign.center,
+                          style: kSimpleText.copyWith(
+                            fontSize: 16,
+                            color: AraColors.errorText,
+                          ),
+                        ),
+                        Text(
+                          // Pending: the silent delay (or the tone is muted).
+                          alarm.ringing
+                              ? 'Alarm ringing'
+                              : 'Silence it before it sounds',
+                          style: kSimpleText.copyWith(
+                            color: AraColors.textSecondary,
+                          ),
+                        ),
+                        const SizedBox(height: AraSpace.s8),
+                        FilledButton(
+                          key: const Key('simple-safety-silence'),
+                          focusNode: _silence,
+                          style: FilledButton.styleFrom(
+                            backgroundColor: AraColors.accentError,
+                            foregroundColor: AraColors.textPrimary,
+                            minimumSize: const Size(220, 56),
+                            textStyle: const TextStyle(
+                              // Large text (20 px bold): passes 3:1 on Fault Red, where 16 px didn't pass 4.5:1.
+                              fontSize: 20,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          onPressed: () =>
+                              ref.read(safetyAlarmProvider.notifier).silence(),
+                          child: const Text('Silence alarm'),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),

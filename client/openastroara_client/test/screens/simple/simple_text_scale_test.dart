@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -14,6 +15,7 @@ import 'package:openastroara/services/simple_mode_prefs_service.dart';
 import 'package:openastroara/state/app_shell_state.dart';
 import 'package:openastroara/state/settings/settings_nav.dart';
 import 'package:openastroara/state/simple_mode_state.dart';
+import 'package:openastroara/widgets/emergency_stop_button.dart';
 
 class _MemPrefs extends SimpleModePrefsService {
   bool value = true;
@@ -67,7 +69,7 @@ void main() {
     (1.0, const Size(320, 768)),
   ];
   for (final (scale, size) in cases) {
-    for (final open in ['Preview settings', 'Plan']) {
+    for (final open in ['Preview settings', 'Plan', 'Stop armed']) {
       testWidgets('text ${scale}x at ${size.width.toInt()}x${size.height.toInt()}, $open: nothing overflows',
           skip: !hasFonts, (tester) async {
         tester.view.physicalSize = size;
@@ -113,6 +115,19 @@ void main() {
           if (size.width >= 768) {
             expect(find.textContaining("TONIGHT'S BEST"), findsOneWidget, reason: 'the sheet with its suggestions');
           }
+        } else if (open == 'Stop armed') {
+          // A keyboard press arms it: PRESS AGAIN, the longest label it shows.
+          tester.widget<FilledButton>(find.descendant(
+                  of: find.byType(EmergencyStopButton), matching: find.byType(FilledButton)))
+              .onPressed!();
+          await tester.pump();
+          expect(find.textContaining('AGAIN'), findsOneWidget);
+          // A clipped or mid-word-broken label throws nothing, so check the lines.
+          for (final p in tester.renderObjectList<RenderParagraph>(
+              find.descendant(of: find.byType(EmergencyStopButton), matching: find.byType(RichText)))) {
+            expect(p.didExceedMaxLines, isFalse, reason: '"${p.text.toPlainText()}" is cut off');
+          }
+          await tester.pump(const Duration(seconds: 4)); // the press-again window lapses
         } else {
           await tester.tap(find.byKey(const Key('simple-settings')), warnIfMissed: false);
         }

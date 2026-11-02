@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter/services.dart';
@@ -196,6 +198,12 @@ void main() {
       expect(find.text(hidden), findsNothing, reason: '$hidden is one tap away, not out');
     }
     expect(find.text('Tap the shutter to take a frame'), findsOneWidget);
+    // No scrim behind it: it has to read at 4.5:1 on a dark sky by itself.
+    final hint = tester.widget<Text>(find.text('Tap the shutter to take a frame')).style!.color!;
+    double lum(Color c) => c.computeLuminance();
+    final sky = Color.alphaBlend(hint, const Color(0xFF0A0A0A));
+    expect((math.max(lum(sky), lum(const Color(0xFF0A0A0A))) + 0.05) / (math.min(lum(sky), lum(const Color(0xFF0A0A0A))) + 0.05),
+        greaterThanOrEqualTo(4.5));
     expect(find.byKey(const Key('sky')), findsOneWidget, reason: 'the sky until there is a frame');
   });
 
@@ -1013,6 +1021,17 @@ void main() {
       expect(find.descendant(of: find.byKey(const Key('simple-safety-silence')), matching: find.byElementPredicate((e) => e == focused)),
           findsOneWidget, reason: 'Silence has the focus');
       expect(find.byType(BlockSemantics), findsWidgets);
+      // Tab and Shift+Tab stay on the alarm; nothing behind the veil takes the focus.
+      for (final back in [false, false, false, true, true]) {
+        if (back) await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+        await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+        if (back) await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+        await tester.pump();
+        final now = FocusManager.instance.primaryFocus?.context;
+        expect(now, isNotNull);
+        expect(find.descendant(of: alarm, matching: find.byElementPredicate((e) => e == now)), findsOneWidget,
+            reason: 'focus left the alarm for ${now?.widget}');
+      }
       await tester.tap(find.byKey(const Key('simple-safety-silence')));
       await tester.pump();
       expect(alarm, findsNothing);
