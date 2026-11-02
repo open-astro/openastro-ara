@@ -142,6 +142,25 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void The_other_plan_steps_read_in_plain_words_too() {
+            var factory = HeadlessSequencerFactory.WithDefaults();
+            T Step<T>() where T : class, ISequenceItem => (T)factory.Items.OfType<T>().First().Clone();
+            var wait = Step<OpenAstroAra.Sequencer.SequenceItem.Utility.WaitForTime>();
+            wait.Hours = 9;
+            wait.Minutes = 5;
+            var filter = Step<OpenAstroAra.Sequencer.SequenceItem.FilterWheel.SwitchFilter>();
+            filter.Filter = new OpenAstroAra.Core.Model.Equipment.FilterInfo("Ha", 0, 0);
+
+            Assert.Multiple(() => {
+                Assert.That(SequencerService.DescribeLeaf(wait), Is.EqualTo("Waiting until 09:05"), "zero-padded clock time");
+                Assert.That(SequencerService.DescribeLeaf(filter), Is.EqualTo("Switching to the Ha filter"));
+                Assert.That(SequencerService.DescribeLeaf(Step<OpenAstroAra.Sequencer.SequenceItem.Telescope.ParkScope>()), Is.EqualTo("Parking the mount"));
+                Assert.That(SequencerService.DescribeLeaf(Step<OpenAstroAra.Sequencer.SequenceItem.Telescope.SetTracking>()), Is.EqualTo("Starting tracking"));
+                Assert.That(SequencerService.DescribeLeaf(Step<OpenAstroAra.Sequencer.SequenceItem.Camera.WarmCamera>()), Is.EqualTo("Warming the camera"));
+            });
+        }
+
+        [Test]
         public void Other_instructions_get_a_humanised_type_name() {
             Assert.That(SequencerService.DescribeLeaf(new OpenAstroAra.Sequencer.SequenceItem.Utility.WaitForTimeSpan()), Is.EqualTo("Wait for time span"));
         }
