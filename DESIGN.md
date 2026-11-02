@@ -306,11 +306,11 @@ The shutter starts the plan; while imaging it shows pause bars with a blue ring 
 
 **Errors.** While the person works a mode, errors (solve, autofocus, slew) show inside that mode's panel with the cause, the fix and Retry. During an unattended run they use the centred attention banner.
 
-**No rig connected.** The planetarium of tonight's sky fills the image area with a centred card: rigs found on the network with Connect, and Add a rig by address. Device dots go grey, the mode name dims, and Emergency Stop shows disabled.
+**No rig connected (not built yet; ALP-4858).** Planned: the planetarium of tonight's sky fills the image area with a centred card: rigs found on the network with Connect, and Add a rig by address; device dots go grey and the mode name dims. Today Simple Mode shows the planetarium with no card, and Emergency Stop stays enabled and answers a press with "No server connected — nothing to stop."
 
 **Always on, in both modes:** Emergency Stop (except in the immersive view), the attention banner, the device status dots, Night mode and the Simple ↔ full UI switch.
 
-Targets are at least 44 px tall (the settings segments too), with 14 px body text. Everything follows the user's text size all the way (WCAG 1.4.4): the rails keep 72 px up to 1.3x and then widen with the text (111 px at 2x), their buttons growing with them; above 1.3x Info's and System's tiles become one panel, a label and value per line, since 72 px tiles would squeeze the text back down (decided 2026-11-03); panels, the sheet and messages follow it too, and the Autopilot offer's words wrap on a narrow window. Colours and status dots behave exactly as in the full UI. Phone Companion Mode uses the same image-first idea in a portrait arrangement. The rendered reference is `design/preview/ara-design-preview.html`.
+Targets are at least 44 px tall (the settings segments too), with 14 px body text. Text follows the user's size (WCAG 1.4.4), checked from 1x to 2x on iPad by the text-size test, which also fails on a label cut short: the rails keep 72 px up to 1.1x and then widen with the text (131 px at 2x), their buttons, the mode tiles, Stop and the plan squares growing with them; above 1.3x Info's and System's tiles become one panel, a label and value per line, since 72 px tiles would squeeze the text back down (decided 2026-11-03); panels, the sheet and messages follow it too, and the Autopilot offer's words wrap on a narrow window. Colours and status dots behave exactly as in the full UI. Phone Companion Mode uses the same image-first idea in a portrait arrangement. The rendered reference is `design/preview/ara-design-preview.html`.
 ### Cards / Containers
 - **Corner Style:** 6 px.
 - **Background:** Panel Grey.

@@ -11,7 +11,7 @@
     --text: #E0E0E0; --text2: #A0A0A0; --text3: #606060;
     --ok: #4CAF50; --busy: #FFB300; --err: #E53935; --stop-red: #D32F2F; --info: #42A5F5; --off: #606060;
     --sel: #1976D2; --btn: #1565C0;
-    --scrim: rgba(26, 26, 26, 0.72);
+    --scrim: rgba(26, 26, 26, 0.90);
     --sys: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
     --mono: ui-monospace, "SF Mono", Menlo, monospace;
   }
@@ -101,7 +101,7 @@
   .pulse i { width: 8px; height: 8px; border-radius: 50%; background: var(--info); }
 
   /* ---------- Overlay pieces (phone Companion Mode and the component samples) ---------- */
-  .ov { position: absolute; background: var(--scrim); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); border-radius: 10px; font-size: 14px; }
+  .ov { position: absolute; background: var(--scrim); border-radius: 10px; font-size: 14px; }
   .ov-top { left: 12px; right: 12px; top: 12px; min-height: 56px; display: flex; align-items: center; gap: 16px; padding: 6px 8px 6px 14px; }
   .ov-top .devs { display: flex; gap: 14px; }
   .ov-top .devs .ic { width: 24px; height: 24px; }
@@ -121,7 +121,7 @@
   .sm { --in: 16px; --bar: 56px; --rail: 72px; --stop: 60px; --top: calc(2 * var(--in) + var(--bar)); position: relative; height: 680px; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; font-size: 14px; }
   .sm [hidden] { display: none !important; }
   .sm > .sky, .sm > .atlas { position: absolute; inset: 0; cursor: pointer; }
-  .sm .p { position: absolute; background: var(--scrim); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); border-radius: 10px; }
+  .sm .p { position: absolute; background: var(--scrim); border-radius: 10px; }
   .sm .lbl { font-size: 11px; font-weight: 600; letter-spacing: .6px; text-transform: uppercase; color: var(--text2); }
   .sm .sub { color: var(--text2); font-variant-numeric: tabular-nums; }
   .sm .tgt { font-size: 15px; font-weight: 600; white-space: nowrap; }
@@ -145,7 +145,7 @@
   /* the strip, the camera status pill, Info */
   .s-strip { left: var(--in); right: var(--in); top: var(--in); height: var(--bar); display: flex; align-items: center; gap: 4px; padding: 0 4px 0 16px; }
   .s-strip .grow { flex: 1; }
-  .s-pill { left: var(--in); top: var(--top); max-width: 300px; height: 48px; display: flex; align-items: center; gap: 8px; padding: 0 16px; white-space: nowrap; transition: top .22s ease-out; }
+  .s-pill { right: var(--in); top: var(--top); max-width: 300px; height: 48px; display: flex; align-items: center; gap: 8px; padding: 0 16px; white-space: nowrap; transition: top .22s ease-out; }
   .s-pill > i { width: 10px; height: 10px; border-radius: 50%; flex: none; }
   .s-pill .pb { width: 60px; height: 4px; border-radius: 2px; background: rgba(64,64,64,.8); margin-left: 4px; flex: none; }
   .s-pill .pb i { display: block; height: 100%; width: 40%; border-radius: 2px; background: var(--sel); }
@@ -211,7 +211,7 @@
   .s-attn { left: 50%; transform: translateX(-50%); top: var(--top); height: 48px; display: flex; gap: 10px; align-items: center; padding: 0 16px; background: rgba(58,44,10,.9) !important; border: 1px solid var(--busy); white-space: nowrap; }
   .s-attn svg { width: 20px; height: 20px; fill: var(--busy); flex: none; }
   .s-attn span { color: var(--text2); }
-  .sm .s-hint { left: 50%; top: 50%; transform: translate(-50%, -50%); background: none; -webkit-backdrop-filter: none; backdrop-filter: none; font-size: 20px; letter-spacing: 2px; color: rgba(224,224,224,.5); pointer-events: none; white-space: nowrap; }
+  .sm .s-hint { left: 50%; top: 50%; transform: translate(-50%, -50%); background: none; -webkit-backdrop-filter: none; backdrop-filter: none; font-size: 20px; letter-spacing: 2px; color: var(--text2); pointer-events: none; white-space: nowrap; }
   .s-sheet { left: 50%; top: 50%; transform: translate(-50%, -50%); width: 400px; padding: 18px; display: flex; flex-direction: column; gap: 10px; }
   .s-sheet .hd { font-size: 16px; font-weight: 600; }
   .sm .prow { display: grid; grid-template-columns: 48px 1fr 1fr 32px; gap: 8px; align-items: center; }
@@ -337,7 +337,7 @@
   .s-trk { position: absolute; right: var(--in); top: var(--top); width: var(--rail); height: 100px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; white-space: nowrap; overflow: hidden; cursor: pointer; }
   .s-tiles { position: absolute; left: var(--in); bottom: calc(2 * var(--in) + var(--bar)); display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
   .s-tiles .r { display: flex; gap: 8px; }
-  .s-tiles .f { width: 72px; height: 56px; padding: 0 4px; border-radius: 10px; background: var(--scrim); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; border: 1px solid var(--border); white-space: nowrap; overflow: hidden; }
+  .s-tiles .f { width: 72px; height: 56px; padding: 0 4px; border-radius: 10px; background: var(--scrim); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; border: 1px solid var(--border); white-space: nowrap; overflow: hidden; }
   .s-tiles .f small { font-size: 11px; color: var(--text2); } .s-tiles .f b { font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
   .s-trk b { font-size: 14px; } .s-trk small { font-size: 11.5px; color: var(--text2); }
   .s-trk i { position: absolute; left: 0; bottom: 0; height: 3px; }
@@ -444,12 +444,12 @@
         <button data-smode="focus" aria-pressed="false">Focus</button>
         <button data-smode="pa" aria-pressed="false">Polar align</button>
         <button data-smode="pick" aria-pressed="false">Sky: object picked</button>
-        <button data-smode="plan" aria-pressed="false">Run plan</button>
+        <button data-smode="plan" aria-pressed="false">Plan</button>
         <button data-smode="ready" aria-pressed="false">Plan ready</button>
         <button data-smode="run" aria-pressed="false">Imaging</button>
         <button data-smode="hold" aria-pressed="false">Holding to stop</button>
         <button data-smode="paused" aria-pressed="false">Paused</button>
-        <button data-smode="prog" aria-pressed="false">Run progress</button>
+        <button data-smode="prog" aria-pressed="false">Plan running</button>
         <button data-smode="run-attn" aria-pressed="false">Guiding lost</button>
         <button data-smode="done" aria-pressed="false">Night done</button>
         <button data-smode="empty" aria-pressed="false">No rig</button>
@@ -687,7 +687,7 @@
       </div>
 
     </div>
-    <p class="note" style="margin-top:10px">Simple Mode, two rails (ALP-4810, the prototype on <code>feat/simple-mode</code>): the frame fills the screen; the strip on top shows connected gear, then Search, Night mode, Show all options and Settings; the camera status pill sits top-left (at most 300 px) and Info is one line top-right. The right rail holds the mode, the shutter and the settings chip, only as tall as its controls; Stop sits alone at the bottom right (2 s hold). The left rail holds Sky, Info and Library. Guiding and the histogram share the bottom row, each once it has data. Popovers and mode panels open left of the right rail and never move it; Run's plan and Night done are a sheet centred over the image. Click the mode name, the settings chip or a mode in the grid; click the image to close a popover, or with none open to switch the immersive view.</p>
+    <p class="note" style="margin-top:10px">Simple Mode, two rails (ALP-4810, the prototype on <code>feat/simple-mode</code>): the frame fills the screen; the strip on top shows connected gear, then Search, Night mode, Show all options and Settings; the camera status pill sits top-right (at most 300 px). The right rail holds the mode, the shutter and the settings chip, only as tall as its controls; Stop sits alone at the bottom right (2 s hold). The left rail holds Sky, Info and Library. Guiding and the histogram share the bottom row, each once it has data. Popovers and mode panels open left of the right rail and never move it; Plan's sheet and Night done are a sheet centred over the image. Click the mode name, the settings chip or a mode in the grid; click the image to close a popover, or with none open to switch the immersive view.</p>
   </section>
 
   <section id="phone">
@@ -938,10 +938,10 @@
   groups('smode', setView);
   const live = () => VIEW !== 'empty';
   document.getElementById('s-mode').addEventListener('click', () => live() && setView(VIEW === 'grid' ? 'frame' : 'grid'));
-  // In Run the chip (and the tracker) opens the plan sheet before a run and the progress panel during one
+  // In Plan the chip (and the tracker) opens the plan sheet before a run and the progress panel during one
   const RUN_CHIP = { plan: 'ready', ready: 'plan', run: 'prog', prog: 'run', paused: 'prog', 'run-attn': 'prog', done: 'done' };
   document.getElementById('s-chip').addEventListener('click', () => live() && setView(RUN_CHIP[VIEW] || (VIEW === 'settings' ? 'frame' : 'settings')));
-  // The shutter always starts; in Run it then pauses and resumes (a 2 s hold stops: see Holding to stop)
+  // The shutter always starts; in Plan it then pauses and resumes (a 2 s hold stops: see Holding to stop)
   const RUN_SHUT = { ready: 'run', run: 'paused', prog: 'paused', 'run-attn': 'paused', paused: 'run' };
   document.getElementById('s-shut').addEventListener('click', () => live() && setView(RUN_SHUT[VIEW] || (VIEWS[VIEW].shut ? 'frame' : 'taking')));
   S.querySelectorAll('#s-grid span').forEach(x => x.addEventListener('click', () => setView(x.dataset.go)));
