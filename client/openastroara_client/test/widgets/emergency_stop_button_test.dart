@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart' show PointerDeviceKind, kSecondaryMouseButton;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -137,6 +138,16 @@ void main() {
       expect(fake.calls, 0);
       expect(find.text('Stop everything now?'), findsNothing);
       expect(find.text('Emergency Stop'), findsOneWidget, reason: 'back to its label');
+    });
+
+    testWidgets('a right-click held 2 s does not stop', (tester) async {
+      await pumpButton(tester);
+      final gesture = await tester.startGesture(tester.getCenter(find.byType(EmergencyStopButton)),
+          kind: PointerDeviceKind.mouse, buttons: kSecondaryMouseButton);
+      await tester.pump(const Duration(milliseconds: 2500));
+      expect(fake.calls, 0);
+      await gesture.up();
+      await tester.pump();
     });
   });
 

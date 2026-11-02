@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/gestures.dart' show PointerDeviceKind, kPrimaryButton;
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -16,7 +17,8 @@ import '../state/ws/client_session_state.dart';
 /// status bar. Press and hold for 2 s ("Hold to confirm", a fill sweeping
 /// across) → the daemon aborts
 /// the running sequence, aborts the in-flight exposure, stops guiding,
-/// parks the mount, and switches the flat panel light off. The snackbar
+/// parks the mount, switches the flat panel light off and the camera's
+/// cooler off. The snackbar
 /// reports honestly what each rung did (a dead mount says so instead of
 /// pretending it parked). Letting go early sends nothing. Keyboard and
 /// screen-reader activation can't hold, so they get the confirm dialog
@@ -85,7 +87,9 @@ class _EmergencyStopButtonState extends ConsumerState<EmergencyStopButton>
     super.dispose();
   }
 
-  void _pressDown(PointerDownEvent _) {
+  void _pressDown(PointerDownEvent e) {
+    // Only the primary button (a finger, a left click) arms the hold.
+    if (e.kind == PointerDeviceKind.mouse && e.buttons != kPrimaryButton) return;
     _viaPointer = true;
     if (_inFlight) return;
     setState(() => _holding = true);
@@ -142,7 +146,8 @@ class _EmergencyStopButtonState extends ConsumerState<EmergencyStopButton>
         content: const Text(
           'This aborts the running sequence and the in-flight exposure, '
           'stops guiding, parks the mount, and switches the flat panel '
-          'light off. It cannot be undone — the sequence does not resume.',
+          'light and the camera cooler off. It cannot be undone — the '
+          'sequence does not resume.',
         ),
         actions: [
           TextButton(
