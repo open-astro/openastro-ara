@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/state/simple_messages_state.dart';
 import 'package:openastroara/services/dso_catalog_service.dart';
 import 'package:openastroara/state/sky_atlas/dso_catalog_state.dart';
 import 'package:dio/dio.dart';
@@ -40,6 +41,9 @@ import 'package:openastroara/state/library/live_library_state.dart';
 
 const _m42 = PlanetariumSelection(
     name: 'M42', kind: 'Nebula', raHours: 5.59, decDeg: -5.39, raJ2000Hours: 5.59, decJ2000Deg: -5.39, altDeg: 30, maxAltDeg: 45);
+
+const _m45 = PlanetariumSelection(
+    name: 'M45', kind: 'Cluster', raHours: 3.79, decDeg: 24.1, raJ2000Hours: 3.79, decJ2000Deg: 24.1, altDeg: 40, maxAltDeg: 60);
 
 const _m31 = PlanetariumSelection(
     name: 'M31', kind: 'Galaxy', raHours: 0.73, decDeg: 41.4, raJ2000Hours: 0.71, decJ2000Deg: 41.27, altDeg: 62.4, maxAltDeg: 74.2);
@@ -859,6 +863,55 @@ void main() {
       await tester.pumpAndSettle();
       expect(seq.targets('seq-1'), ['M31']);
       expect(c.read(simpleRunProvider).targets.map((t) => t.name), ['M31']);
+      await tester.pump(const Duration(seconds: 7)); // the Undo pill fades
+    });
+
+    Future<(ProviderContainer, _Seq)> queueOfThree(WidgetTester tester) async {
+      final seq = _Seq();
+      final c = await _pump(
+          tester,
+          seq,
+          SingleChildScrollView(
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}, onLibrary: () {}),
+              SimpleRunPanel(onAdd: () {}, onEdit: (_) {}),
+            ]),
+          ));
+      await create(tester);
+      await pick(tester, c, _m42);
+      await create(tester);
+      await pick(tester, c, _m45);
+      await create(tester);
+      expect(seq.targets('seq-1'), ['M31', 'M42', 'M45']);
+      return (c, seq);
+    }
+
+    testWidgets('a swipe left removes a queued target; Undo puts it back where it was', (tester) async {
+      final (c, seq) = await queueOfThree(tester);
+      await tester.drag(find.byKey(const Key('simple-run-edit-0')), const Offset(-400, 0));
+      await tester.pumpAndSettle();
+      expect(seq.targets('seq-1'), ['M42', 'M45']);
+      expect(c.read(simpleRunProvider).targets.map((t) => t.name), ['M42', 'M45']);
+      final pill = c.read(simpleMessagesProvider).single;
+      expect(pill.title, 'M31 removed');
+      expect(pill.actions.single.label, 'Undo');
+      c.read(simpleMessagesProvider.notifier).dismiss(pill.id); // what the pill's Undo does first
+      pill.actions.single.onPressed();
+      await tester.pumpAndSettle();
+      expect(seq.targets('seq-1'), ['M31', 'M42', 'M45']);
+      expect(c.read(simpleRunProvider).targets.map((t) => t.name), ['M31', 'M42', 'M45']);
+    });
+
+    testWidgets('queued targets reorder by dragging their handle; the rig follows', (tester) async {
+      final (c, seq) = await queueOfThree(tester);
+      expect(find.byKey(const Key('simple-run-drag-0')), findsOneWidget, reason: 'a visible handle');
+      await c.read(simpleRunProvider.notifier).reorder(0, 2);
+      await tester.pumpAndSettle();
+      expect(seq.targets('seq-1'), ['M42', 'M45', 'M31']);
+      expect(c.read(simpleRunProvider).targets.map((t) => t.name), ['M42', 'M45', 'M31']);
+      await c.read(simpleRunProvider.notifier).reorder(2, 0);
+      await tester.pumpAndSettle();
+      expect(seq.targets('seq-1'), ['M31', 'M42', 'M45']);
     });
 
     testWidgets('editing a queued target: the sheet edits its rows only; Save updates it in place', (tester) async {

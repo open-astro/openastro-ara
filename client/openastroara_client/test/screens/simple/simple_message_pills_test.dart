@@ -69,6 +69,18 @@ void main() {
     expect(c.read(simpleMessagesProvider), isEmpty);
   });
 
+  testWidgets('a result can carry one action (Undo), shown on the pill while it lasts', (tester) async {
+    final c = await _pump(tester);
+    var undone = false;
+    c.read(simpleMessagesProvider.notifier).show(SimpleMessageKind.result, 'M31 removed',
+        actions: [SimpleMessageAction('Undo', () => undone = true)]);
+    await tester.pump();
+    await tester.tap(find.widgetWithText(TextButton, 'Undo'));
+    await tester.pump();
+    expect(undone, isTrue);
+    expect(c.read(simpleMessagesProvider), isEmpty, reason: 'the action answers it');
+  });
+
   testWidgets('newest on top; past the room the rest fold into "+N more", which shows them all', (tester) async {
     // Room for two pills and the fold.
     final c = await _pump(tester, maxHeight: 2 * kSimpleMessageHeight + 8 + 8 + 44);

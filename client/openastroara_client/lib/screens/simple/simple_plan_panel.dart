@@ -19,6 +19,7 @@ import '../../state/sequencer/create_imaging_run.dart';
 import '../../state/sequencer/sequence_list_state.dart';
 import '../../state/settings/filter_set_state.dart';
 import '../../state/setup/setup_readiness.dart';
+import '../../state/simple_messages_state.dart';
 import '../../state/simple_mode_state.dart';
 import '../../state/time_sync_state.dart';
 import '../../state/settings/imaging_defaults_state.dart';
@@ -648,6 +649,74 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
       if (at >= 0) await api.removeRunItem(id, [at]);
     } else if (removeTargetFromRunBody(body, name) case final next?) {
       await api.updateSequence(id, body: next);
+    }
+  }
+
+  /// Put a removed target back at [at] (Undo after a swipe): added to the
+  /// rig again and moved into place. True once back.
+  Future<bool> restore(WidgetRef ref, SimpleTarget t, int at) async {
+    final id = state.sequenceId;
+    if (id == null || state.busy || t.steps.isEmpty) return false;
+    state = state.copyWith(busy: true);
+    try {
+      this.ref.read(selectedSequenceIdProvider.notifier).select(id);
+      final r = await createImagingRun(
+        ref,
+        raDeg: t.raDeg,
+        decDeg: t.decDeg,
+        targetName: t.name,
+        jumpToRun: false,
+        alwaysCenter: true,
+        appendToOpen: true,
+        filterPlan: t.steps.first.filterName.isEmpty ? null : t.steps,
+        exposureSeconds: t.steps.first.exposureSeconds,
+        frameCount: t.steps.first.frameCount,
+      );
+      if (r == null || r.draft || r.sequenceId != id) {
+        throw StateError("the rig didn't take it back");
+      }
+      final at2 = at.clamp(0, state.targets.length);
+      if (at2 < state.targets.length) {
+        await _moveBefore(id, t.name, state.targets[at2].name);
+      }
+      state = state.copyWith(
+        targets: [...state.targets]..insert(at2, t),
+        busy: false,
+      );
+      return true;
+    } catch (e) {
+      state = state.copyWith(busy: false, error: _why(e, 'put it back'));
+      return false;
+    }
+  }
+
+  /// Move queued target [from] to position [to] (drag to reorder), on the
+  /// rig too. Only moves earlier exist there, so the new order is built
+  /// front to back, each target moved before the one in its place.
+  Future<void> reorder(int from, int to) async {
+    final id = state.sequenceId;
+    final n = state.targets.length;
+    if (id == null ||
+        from == to ||
+        from < 0 ||
+        to < 0 ||
+        from >= n ||
+        to >= n) {
+      return;
+    }
+    final wanted = [...state.targets];
+    wanted.insert(to, wanted.removeAt(from));
+    state = state.copyWith(busy: true);
+    try {
+      final now = [for (final t in state.targets) t.name];
+      for (var k = 0; k < wanted.length; k++) {
+        if (now[k] == wanted[k].name) continue;
+        await _moveBefore(id, wanted[k].name, now[k]);
+        now.insert(k, now.removeAt(now.indexOf(wanted[k].name)));
+      }
+      state = state.copyWith(targets: wanted, busy: false);
+    } catch (e) {
+      state = state.copyWith(busy: false, error: _why(e, 'reorder the queue'));
     }
   }
 
@@ -1911,6 +1980,127 @@ class _QueueList extends ConsumerWidget {
     final captured = ours ? info?.framesCaptured ?? 0 : 0;
     final progress = simpleTargetProgress(run.targets, captured);
     final cur = simpleCurrentTarget(run.targets, captured);
+    final notifier = ref.read(simpleRunProvider.notifier);
+    // A target that hasn't started can be edited, removed and moved.
+    bool open(int i) => !run.started || i > cur;
+
+    Future<void> remove(int i) async {
+      final t = run.targets[i];
+      await notifier.remove(i);
+      if (ref.read(simpleRunProvider).sequenceId == null) return;
+      final messages = ref.read(simpleMessagesProvider.notifier);
+      messages.show(
+        SimpleMessageKind.result,
+        '${t.name} removed',
+        actions: [
+          SimpleMessageAction('Undo', () => notifier.restore(ref, t, i)),
+        ],
+      );
+    }
+
+    Widget row(int i) {
+      final t = run.targets[i];
+      final got = progress[i].fold(0, (a, b) => a + b);
+      final left = [
+        for (var r = 0; r < t.steps.length; r++)
+          (t.steps[r].frameCount - progress[i][r]) * t.steps[r].exposureSeconds,
+      ].fold(0.0, (a, b) => a + b);
+      final content = Row(
+        spacing: AraSpace.s8,
+        children: [
+          // A visible handle: dragging it moves the target in the queue.
+          SizedBox(
+            width: 28,
+            height: 44,
+            child: open(i)
+                ? ReorderableDragStartListener(
+                    index: i,
+                    child: Semantics(
+                      label: 'Move ${t.name}',
+                      child: const Icon(
+                        Icons.drag_indicator,
+                        key: null,
+                        size: 20,
+                        color: AraColors.textSecondary,
+                      ),
+                    ),
+                  )
+                : null,
+          ),
+          // Two lines, to fit the narrow list column; a target that hasn't
+          // started opens its rows for editing.
+          Expanded(
+            child: InkWell(
+              key: Key('simple-run-edit-$i'),
+              borderRadius: BorderRadius.circular(8),
+              onTap: open(i) ? () => onEdit(i) : null,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    t.tag ?? t.name,
+                    style: kSimpleText.copyWith(fontWeight: FontWeight.w600),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  Text(
+                    '$got / ${_total(t.steps)} · ${simpleRunDuration(left)}',
+                    style: _dim.copyWith(fontSize: 12),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          SizedBox(
+            width: 44,
+            height: 44,
+            child: open(i)
+                ? IconButton(
+                    key: Key('simple-run-remove-$i'),
+                    tooltip: 'Remove ${t.name} from the queue',
+                    icon: const Icon(Icons.close, size: 18),
+                    onPressed: run.busy ? null : () => remove(i),
+                  )
+                : null,
+          ),
+        ],
+      );
+      // A swipe left removes it too (the × stays for those who don't swipe).
+      return Material(
+        key: ValueKey('simple-run-row-${t.name}'),
+        type: MaterialType.transparency,
+        child: !open(i) || run.busy
+            ? content
+            : Dismissible(
+                key: ValueKey('simple-run-swipe-${t.name}'),
+                direction: DismissDirection.endToStart,
+                background: Container(
+                  alignment: Alignment.centerRight,
+                  padding: const EdgeInsets.only(right: AraSpace.s16),
+                  decoration: BoxDecoration(
+                    color: AraColors.emergencyStop,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Text(
+                    'Remove',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                // The row goes when the rig confirms, not before.
+                confirmDismiss: (_) async {
+                  await remove(i);
+                  return false;
+                },
+                child: content,
+              ),
+      );
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -1920,65 +2110,25 @@ class _QueueList extends ConsumerWidget {
           '${simpleRunDuration(run.steps.fold(0.0, (t, s) => t + s.exposureSeconds * s.frameCount))}',
           style: AraText.caption,
         ),
-        for (var i = 0; i < run.targets.length; i++)
-          () {
-            final t = run.targets[i];
-            final got = progress[i].fold(0, (a, b) => a + b);
-            final left = [
-              for (var r = 0; r < t.steps.length; r++)
-                (t.steps[r].frameCount - progress[i][r]) *
-                    t.steps[r].exposureSeconds,
-            ].fold(0.0, (a, b) => a + b);
-            return Row(
-              spacing: AraSpace.s8,
-              children: [
-                // Two lines, to fit the narrow list column; a target that
-                // hasn't started opens its rows for editing.
-                Expanded(
-                  child: InkWell(
-                    key: Key('simple-run-edit-$i'),
-                    borderRadius: BorderRadius.circular(8),
-                    onTap: !run.started || i > cur ? () => onEdit(i) : null,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          t.tag ?? t.name,
-                          style: kSimpleText.copyWith(
-                            fontWeight: FontWeight.w600,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        Text(
-                          '$got / ${_total(t.steps)} · ${simpleRunDuration(left)}',
-                          style: _dim.copyWith(fontSize: 12),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-                    ),
-                  ),
+        ReorderableListView(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          buildDefaultDragHandles: false,
+          onReorderItem: (from, to) {
+            if (!open(from) || !open(to)) return; // started ones stay put
+            notifier.reorder(from, to);
+          },
+          children: [
+            for (var i = 0; i < run.targets.length; i++)
+              KeyedSubtree(
+                key: ValueKey('simple-run-item-${run.targets[i].name}'),
+                child: KeyedSubtree(
+                  key: Key('simple-run-drag-$i'),
+                  child: row(i),
                 ),
-                SizedBox(
-                  width: 44,
-                  height: 44,
-                  child: !run.started || i > cur
-                      ? IconButton(
-                          key: Key('simple-run-remove-$i'),
-                          tooltip: 'Remove ${t.name} from the queue',
-                          icon: const Icon(Icons.close, size: 18),
-                          onPressed: run.busy
-                              ? null
-                              : () => ref
-                                    .read(simpleRunProvider.notifier)
-                                    .remove(i),
-                        )
-                      : null,
-                ),
-              ],
-            );
-          }(),
+              ),
+          ],
+        ),
       ],
     );
   }

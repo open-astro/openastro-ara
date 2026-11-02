@@ -196,6 +196,13 @@ class _Pill extends ConsumerWidget {
                       ],
                     ),
                   )
+                else if (m.kind == SimpleMessageKind.result &&
+                    m.actions.isNotEmpty)
+                  // A result's one action (Undo), there while the pill lasts.
+                  TextButton(
+                    onPressed: () => _answer(notifier, 0),
+                    child: Text(m.actions.first.label),
+                  )
                 else if (m.kind == SimpleMessageKind.result)
                   const SizedBox(width: kSimpleInset - 4),
               ],
