@@ -32,7 +32,7 @@ Shaped 2026-11-01 (`/impeccable shape simple-mode`). Paperclip: ALP-4810. Render
 
 ## Scope
 
-- **One screen:** a mode grid with Preview · Focus · Polar align · Plan.
+- **One screen:** a mode grid with Autopilot · Preview · Focus · Polar align · Plan.
 - **Settings:** open from the strip's gear. "Show all options" switches to the full UI. In slice 1 Settings, the device dots and ⌘K also switch to the full UI on the matching Settings page; a settings sheet over Simple Mode comes later.
 - **Getting in:** turn on Settings → System → Experimental → Simple Mode (off by default, per client), then use the frame icon in the full UI's top-right cluster, between Night mode and the gear.
 - **Plan** (named Run until 2026-11-02): a quick plan builder only. It sets exposure and frame count per filter for the current target, and autofocus, dither and flats follow the profile's defaults. The sequence editor stays in the full UI only.
@@ -64,7 +64,7 @@ Shaped 2026-11-01 (`/impeccable shape simple-mode`). Paperclip: ALP-4810. Render
 
 ## Mode screens (decided 2026-11-01)
 
-- **Mode order:** Preview · Focus · Polar align · Plan (Target folded in and Run renamed Plan, 2026-11-02). On the right rail Polar align reads "P.A." (the full name doesn't fit 60 px); the mode grid spells it out.
+- **Mode order:** Autopilot · Preview · Focus · Polar align · Plan (Target folded in, Run renamed Plan, Autopilot added, 2026-11-02). Autopilot walks Focus → Polar align → Plan with a step strip, each step handing over to the next; Preview offers it while nothing is done tonight. On the right rail Polar align reads "P.A." (the full name doesn't fit 60 px); the mode grid spells it out.
 - **Mode panels:** every mode except Preview opens its panel to the left of the right rail, a floating card like the settings popover, level with the rail's top. Plan uses a centred sheet instead (decided 2026-11-01).
 - **Preview:** shoot and loop, from the right rail: the shutter and the settings chip (Exposure, Gain, Filter, Loop/Single). The last frame's facts (HFR, stars, exposure · filter, gain · offset, clipped) come from Info. Single saves the frame (the daemon registers every Take One); Loop is live view and saves nothing. No Save frame button.
 - **Polar align:** the polar-align camera's frames fill the image while it runs (nothing drawn on them). The shutter starts the routine and its red square stops it (Loop or Single). The mode panel holds Exposure and Loop/Single, and while it runs the error, the zone (under 10′ green, under 60′ amber, otherwise red), the bullseye, the altitude and azimuth turns, Take frame (Single) and a green Done. The rail reads "P.A."; the chip reads "45 s" over "Single" (two lines, no icon).
