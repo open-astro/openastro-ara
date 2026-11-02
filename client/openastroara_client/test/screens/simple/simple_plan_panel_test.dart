@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:dio/dio.dart';
 import 'package:openastroara/models/sequence/imaging_run_body.dart';
 import 'package:openastroara/models/sequence/sequence_summary.dart';
 import 'package:openastroara/models/sky_model_calibration.dart';
@@ -19,6 +20,8 @@ import 'package:openastroara/state/sky_atlas/planetarium_selection_state.dart';
 import 'package:openastroara/state/setup/setup_readiness.dart';
 import 'package:openastroara/services/simple_mode_prefs_service.dart';
 import 'package:openastroara/state/simple_mode_state.dart';
+import 'package:openastroara/state/settings/settings_nav.dart';
+import 'package:openastroara/state/app_shell_state.dart';
 
 const _m31 = PlanetariumSelection(
     name: 'M31', kind: 'Galaxy', raHours: 0.73, decDeg: 41.4, raJ2000Hours: 0.71, decJ2000Deg: 41.27, altDeg: 62.4, maxAltDeg: 74.2);
@@ -50,8 +53,13 @@ class _Seq implements SequenceClient {
     return true;
   }
 
+  /// What start throws instead, as the daemon refuses.
+  Object? startError;
   @override
-  Future<String> start(String id) async => _op('start $id');
+  Future<String> start(String id) async {
+    if (startError case final e?) throw e;
+    return _op('start $id');
+  }
   @override
   Future<String> stop(String id) async => _op('stop $id');
   @override
@@ -130,9 +138,11 @@ class _NoSkyModel extends SkyModelCalibrationNotifier {
 
 class _Prefs extends SimpleModePrefsService {
   _Prefs(this.value);
-  final bool value;
+  bool value;
   @override
   Future<bool> load() async => value;
+  @override
+  Future<void> save(bool enabled) async => value = enabled;
 }
 
 final _rig = <Object>[
@@ -490,6 +500,29 @@ void main() {
     final text = tester.getRect(name);
     expect(text.left, greaterThanOrEqualTo(box.left + 4), reason: 'clear of the left border');
     expect(text.right, lessThanOrEqualTo(box.right - 4), reason: 'clear of the right border');
+  });
+
+  testWidgets('no storage disk: the daemon\'s words and Open Storage, which leaves for the full UI\'s page', (tester) async {
+    final seq = _Seq()
+      ..startError = DioException(
+        requestOptions: RequestOptions(),
+        response: Response(requestOptions: RequestOptions(), statusCode: 409, data: {
+          'title': 'store_unavailable',
+          'detail': 'There is no disk to save frames to.',
+        }),
+      );
+    final prefs = _Prefs(true);
+    final c = await _pump(tester, seq,
+        SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}, onLibrary: () {}),
+        overrides: [simpleModePrefsProvider.overrideWithValue(prefs)]);
+    await tester.tap(find.byKey(const Key('simple-run-start')));
+    await tester.pumpAndSettle();
+    expect(find.text('There is no disk to save frames to.'), findsOneWidget);
+    await tester.tap(find.text('Open Storage'));
+    await tester.pumpAndSettle();
+    expect(c.read(selectedSettingsPanelProvider), 'session.storage');
+    expect(c.read(selectedTabIndexProvider), kOptionsTabIndex);
+    expect(prefs.value, isFalse, reason: 'Simple Mode left');
   });
 
   group('the progress panel', () {

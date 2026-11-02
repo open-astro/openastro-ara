@@ -16,6 +16,7 @@ import '../../state/settings/filter_set_state.dart';
 import '../../state/setup/setup_readiness.dart';
 import '../../state/simple_mode_state.dart';
 import '../../state/settings/imaging_defaults_state.dart';
+import '../../state/settings/settings_nav.dart';
 import '../../services/tonight_sky_api.dart';
 import '../../state/sky_atlas/planetarium_selection_state.dart';
 import '../../state/sky_atlas/tonight_sky_state.dart';
@@ -28,7 +29,12 @@ import '../../widgets/emergency_stop_button.dart' show kEmergencyStopHold;
 import 'simple_preview_panel.dart'
     show SimplePresetTile, exposurePresets, formatExposure, kSimpleText;
 import 'simple_shell.dart'
-    show SimplePanel, kSimpleInset, kSimpleRailWidth, kSimpleTileFill;
+    show
+        SimplePanel,
+        kSimpleInset,
+        kSimpleRailWidth,
+        kSimpleTileFill,
+        leaveSimpleMode;
 
 /// The first plan for a filter set: LRGB when the set has any of it, else the
 /// narrowband filters, else every filter; one row with no filter name when
@@ -270,6 +276,7 @@ class SimpleRun {
     this.busy = false,
     this.pausing = false,
     this.error,
+    this.noStorage = false,
   });
 
   final String? sequenceId;
@@ -282,8 +289,16 @@ class SimpleRun {
   final bool pausing;
   final String? error;
 
-  SimpleRun copyWith({bool? started, bool? busy, bool? pausing, String? error}) =>
-      SimpleRun(
+  /// The daemon refused for want of a storage disk: [error] offers Storage.
+  final bool noStorage;
+
+  SimpleRun copyWith({
+    bool? started,
+    bool? busy,
+    bool? pausing,
+    String? error,
+    bool noStorage = false,
+  }) => SimpleRun(
         sequenceId: sequenceId,
         targetName: targetName,
         steps: steps,
@@ -291,6 +306,7 @@ class SimpleRun {
         busy: busy ?? this.busy,
         pausing: pausing ?? this.pausing,
         error: error,
+        noStorage: noStorage,
       );
 }
 
@@ -425,7 +441,13 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
     try {
       await op(api, id);
     } catch (e) {
-      state = undo.copyWith(error: _why(e, action));
+      state = undo.copyWith(
+        error: _why(e, action),
+        noStorage:
+            e is DioException &&
+            e.response?.data is Map &&
+            e.response!.data['title'] == 'store_unavailable',
+      );
     }
     await ref.read(sequenceRunStateProvider.notifier).refresh();
   }
@@ -1094,13 +1116,7 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
             'Not polar aligned tonight',
             style: kSimpleText.copyWith(color: AraColors.accentBusy),
           ),
-        if (run.error != null)
-          Text(
-            run.error!,
-            style: kSimpleText.copyWith(color: AraColors.accentError),
-            maxLines: 4,
-            overflow: TextOverflow.ellipsis,
-          ),
+        if (run.error != null) _RunError(run),
         Row(
           spacing: AraSpace.s8,
           children: [
@@ -1140,6 +1156,36 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
       ],
     );
   }
+}
+
+/// Why the last call failed; a missing storage disk offers the full UI's
+/// Storage page, where the drive is set up.
+class _RunError extends ConsumerWidget {
+  const _RunError(this.run);
+  final SimpleRun run;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(
+        run.error!,
+        style: kSimpleText.copyWith(color: AraColors.accentError),
+        maxLines: 4,
+        overflow: TextOverflow.ellipsis,
+      ),
+      if (run.noStorage)
+        TextButton(
+          onPressed: () {
+            ref
+                .read(selectedSettingsPanelProvider.notifier)
+                .select('session.storage');
+            leaveSimpleMode(ref, kOptionsTabIndex);
+          },
+          child: const Text('Open Storage'),
+        ),
+    ],
+  );
 }
 
 class _NightDone extends ConsumerWidget {
@@ -1288,13 +1334,7 @@ class SimpleRunPanel extends ConsumerWidget {
                   ),
                 ],
               ),
-            if (run.error != null)
-              Text(
-                run.error!,
-                style: kSimpleText.copyWith(color: AraColors.accentError),
-                maxLines: 4,
-                overflow: TextOverflow.ellipsis,
-              ),
+            if (run.error != null) _RunError(run),
             if (paused) ...[
               Text(
                 'Tap the shutter to resume and re-center; hold it to stop.',
