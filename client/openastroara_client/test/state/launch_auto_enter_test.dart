@@ -6,6 +6,7 @@ import 'package:openastroara/models/server.dart';
 import 'package:openastroara/services/profile_api.dart';
 import 'package:openastroara/state/launch_gate_state.dart';
 import 'package:openastroara/state/profile_management_state.dart';
+import 'package:openastroara/state/saved_server_state.dart';
 
 class _FakeApi extends ProfileApi {
   _FakeApi({this.activeId = 'id-1', this.profiles = const [ProfileMeta(id: 'id-1', name: 'Backyard')]})
@@ -82,6 +83,21 @@ void main() {
     expect(c.read(profileGatePassedProvider), isFalse);
     api.error = null;
     c.invalidate(profileManagementProvider); // the box's Retry
+    await settle();
+    expect(c.read(profileGatePassedProvider), isTrue);
+  });
+
+  test('a cold start with no rig goes straight in once the rig is picked', () async {
+    final api = _FakeApi();
+    final c = ProviderContainer(overrides: [
+      profileApiProvider.overrideWith((ref) => ref.watch(activeServerProvider) == null ? null : api),
+    ]);
+    addTearDown(c.dispose);
+    c.listen(launchAutoEnterProvider, (_, _) {});
+    await settle();
+    expect(c.read(profileGatePassedProvider), isFalse, reason: 'no rig yet');
+    await c.read(savedServersProvider.future);
+    await c.read(savedServersProvider.notifier).add(const AraServer(hostname: 'rig', port: 5555));
     await settle();
     expect(c.read(profileGatePassedProvider), isTrue);
   });
