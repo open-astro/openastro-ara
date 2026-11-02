@@ -213,7 +213,9 @@ void main() {
     await tester.pump();
     final modes = ['Autopilot', 'Preview', 'Focus', 'Polar align', 'Plan'];
     // The grid's tile, not the rail's label (which also reads Preview): the leftmost match.
-    Offset tile(String m) => (find.text(m).evaluate().map((e) => tester.getTopLeft(find.byWidget(e.widget))).toList()
+    // The tile's corner, not the text's: a name on two lines sits higher in its tile.
+    Offset tile(String m) => (find.text(m).evaluate().map((e) => tester.getTopLeft(
+                find.ancestor(of: find.byWidget(e.widget), matching: find.byType(InkWell)).first)).toList()
           ..sort((a, b) => a.dx.compareTo(b.dx)))
         .first;
     final order = [for (final m in modes) tile(m)];

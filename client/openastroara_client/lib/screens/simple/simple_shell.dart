@@ -1005,10 +1005,11 @@ class _RailButton extends StatelessWidget {
   );
 }
 
-/// How much the rails grow: none up to 1.3x text, then with the text, so
-/// their labels follow the user's size all the way (WCAG 1.4.4).
+/// How much the rails grow: none up to 1.1x text, then with the text, so
+/// their labels follow the user's size all the way (WCAG 1.4.4). The 60 px
+/// mode label ("Preview", 14 px semibold) is full from 1.1x.
 double simpleRailScale(BuildContext context) =>
-    math.max(1, MediaQuery.textScalerOf(context).scale(1) / 1.3);
+    math.max(1, MediaQuery.textScalerOf(context).scale(1) / 1.1);
 
 class _LeftRail extends StatelessWidget {
   const _LeftRail({
@@ -1183,7 +1184,7 @@ class _ModeGrid extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) => SimplePanel(
     padding: const EdgeInsets.all(AraSpace.s8),
     child: SizedBox(
-      width: 300,
+      width: 300 * simpleRailScale(context),
       child: Wrap(
         spacing: AraSpace.s8,
         runSpacing: AraSpace.s8,
@@ -1191,9 +1192,12 @@ class _ModeGrid extends ConsumerWidget {
           for (final m in SimpleModeScreen.values)
             Semantics(
               selected: m == current,
-              child: SizedBox(
-                width: 138,
-                height: 52,
+              // 138 x 52 at 1x; wider with the text, and two lines for a
+              // name that still needs them.
+              child: ConstrainedBox(
+                constraints: BoxConstraints.tightFor(
+                  width: 138 * simpleRailScale(context),
+                ).copyWith(minHeight: 52),
                 child: Material(
                   color: m == current
                       ? AraColors.selectionBg
@@ -1223,7 +1227,7 @@ class _ModeGrid extends ConsumerWidget {
                                     ? AraColors.selectionFg
                                     : null,
                               ),
-                              maxLines: 1,
+                              maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),

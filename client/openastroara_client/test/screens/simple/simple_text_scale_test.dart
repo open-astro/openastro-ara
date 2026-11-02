@@ -69,7 +69,7 @@ void main() {
     (1.0, const Size(320, 768)),
   ];
   for (final (scale, size) in cases) {
-    for (final open in ['Preview settings', 'Plan', 'Stop armed']) {
+    for (final open in ['Preview settings', 'Plan', 'Stop armed', 'Modes']) {
       testWidgets('text ${scale}x at ${size.width.toInt()}x${size.height.toInt()}, $open: nothing overflows',
           skip: !hasFonts, (tester) async {
         tester.view.physicalSize = size;
@@ -114,6 +114,15 @@ void main() {
           // (The one-third width has no sheet layout yet: phone layout, ALP-4865.)
           if (size.width >= 768) {
             expect(find.textContaining("TONIGHT'S BEST"), findsOneWidget, reason: 'the sheet with its suggestions');
+          }
+        } else if (open == 'Modes') {
+          await tester.tap(find.byKey(const Key('simple-mode')), warnIfMissed: false);
+          await tester.pump();
+          // Every mode name whole, on the rail and in the grid: no "Previ…".
+          for (final name in ['Autopilot', 'Preview', 'Focus', 'Polar align', 'Plan']) {
+            for (final p in tester.renderObjectList<RenderParagraph>(find.text(name))) {
+              expect(p.didExceedMaxLines, isFalse, reason: '"$name" is cut off');
+            }
           }
         } else if (open == 'Stop armed') {
           // A keyboard press arms it: PRESS AGAIN, the longest label it shows.
