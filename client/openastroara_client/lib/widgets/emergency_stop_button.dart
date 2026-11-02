@@ -1,12 +1,14 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../services/server_api.dart';
 import '../theme/ara_colors.dart';
 import '../state/saved_server_state.dart';
 import '../util/friendly_error.dart';
+import '../state/simple_messages_state.dart';
 import '../state/ws/client_session_state.dart';
 
 /// §35.3 — the persistent big red button, always visible in the bottom
@@ -17,7 +19,8 @@ import '../state/ws/client_session_state.dart';
 /// reports honestly what each rung did (a dead mount says so instead of
 /// pretending it parked). Letting go early sends nothing. Keyboard and
 /// screen-reader activation can't hold, so they get the confirm dialog
-/// ("Stop everything now?") instead.
+/// ("Stop everything now?") instead; Simple Mode's versions, which show no
+/// popups, ask them to press again within 3 s (PRESS AGAIN).
 ///
 /// Heavier than any other control (ALP-4812): a ring of Fault Red set off by
 /// a dark gap. [simple] is Simple Mode's version — 56 px tall, 10 px corners,
@@ -66,9 +69,18 @@ class _EmergencyStopButtonState extends ConsumerState<EmergencyStopButton>
   /// The press is down and counting: the label reads "Hold to confirm".
   bool _holding = false;
 
+  /// Simple Mode, keyboard or screen reader: pressed once, waiting for the
+  /// second press.
+  bool _armed = false;
+  Timer? _disarm;
+
+  /// How long the first press stays armed.
+  static const _pressAgainWindow = Duration(seconds: 3);
+
   @override
   void dispose() {
     _hold.dispose();
+    _disarm?.cancel();
     super.dispose();
   }
 
@@ -91,7 +103,29 @@ class _EmergencyStopButtonState extends ConsumerState<EmergencyStopButton>
 
   void _onPressed() {
     if (_viaPointer) return;
-    _confirmAndStop();
+    if (widget.simple || widget.compact) {
+      _pressAgain();
+    } else {
+      _confirmAndStop();
+    }
+  }
+
+  void _pressAgain() {
+    if (_armed) {
+      _disarm?.cancel();
+      setState(() => _armed = false);
+      _stop();
+      return;
+    }
+    setState(() => _armed = true);
+    SemanticsService.sendAnnouncement(
+      View.of(context),
+      'Press again within 3 seconds to stop everything',
+      Directionality.of(context),
+    );
+    _disarm = Timer(_pressAgainWindow, () {
+      if (mounted) setState(() => _armed = false);
+    });
   }
 
   Future<void> _confirmAndStop() async {
@@ -131,10 +165,12 @@ class _EmergencyStopButtonState extends ConsumerState<EmergencyStopButton>
   Future<void> _stop() async {
     if (_inFlight) return;
     final server = ref.read(activeServerProvider);
-    final messenger = ScaffoldMessenger.of(context);
+    final notify = userNotifier(context);
     if (server == null) {
-      messenger.showSnackBar(
-        const SnackBar(content: Text('No server connected — nothing to stop.')),
+      notify(
+        'No server connected — nothing to stop.',
+        error: true,
+        snackBarRed: false,
       );
       return;
     }
@@ -143,22 +179,21 @@ class _EmergencyStopButtonState extends ConsumerState<EmergencyStopButton>
       final result = await ref
           .read(serverApiFactoryProvider)(server)
           .emergencyStop();
-      messenger.showSnackBar(
-        SnackBar(
-          duration: const Duration(seconds: 10),
-          content: Text(_summarize(result)),
-        ),
+      // A rung that failed keeps its pill up until it is read.
+      notify(
+        _summarize(result),
+        error: result.failedRungs.isNotEmpty,
+        snackBarRed: false,
+        snackBarDuration: const Duration(seconds: 10),
       );
     } catch (e) {
-      messenger.showSnackBar(
-        SnackBar(
-          duration: const Duration(seconds: 10),
-          content: Text(
-            'EMERGENCY STOP FAILED — '
-            '${friendlyError(e, action: 'reach the rig')} '
-            'Check your rig manually.',
-          ),
-        ),
+      notify(
+        'EMERGENCY STOP FAILED — '
+        '${friendlyError(e, action: 'reach the rig')} '
+        'Check your rig manually.',
+        error: true,
+        snackBarRed: false,
+        snackBarDuration: const Duration(seconds: 10),
       );
     } finally {
       if (mounted) setState(() => _inFlight = false);
@@ -213,13 +248,22 @@ class _EmergencyStopButtonState extends ConsumerState<EmergencyStopButton>
         : Icon(Icons.report, size: simple ? 20 : 16);
     final label = Text(
       compact
-          ? (_inFlight ? '…' : (_holding ? 'HOLD' : 'STOP'))
+          ? (_inFlight
+                ? '…'
+                : _holding
+                ? 'HOLD'
+                : _armed
+                ? 'PRESS\nAGAIN'
+                : 'STOP')
           : _inFlight
           ? 'Stopping…'
           : _holding
           ? 'Hold to confirm'
+          : _armed
+          ? 'Press again'
           : 'Emergency Stop',
-      maxLines: 1,
+      maxLines: _armed && compact ? 2 : 1,
+      textAlign: TextAlign.center,
     );
     final style = FilledButton.styleFrom(
       backgroundColor: red,

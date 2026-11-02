@@ -6,6 +6,9 @@ import 'package:openastroara/services/server_api.dart';
 import 'package:openastroara/state/saved_server_state.dart';
 import 'package:openastroara/state/ws/client_session_state.dart';
 import 'package:openastroara/widgets/emergency_stop_button.dart';
+import 'package:openastroara/services/simple_mode_prefs_service.dart';
+import 'package:openastroara/state/simple_messages_state.dart';
+import 'package:openastroara/state/simple_mode_state.dart';
 
 /// Records §35.3 emergency-stop calls; the handshake/§27 members are unused
 /// by the button.
@@ -37,19 +40,30 @@ class _FixedServers extends SavedServersNotifier {
       const [AraServer(hostname: 'pi-test', port: 5555)];
 }
 
+class _Prefs extends SimpleModePrefsService {
+  _Prefs(this.value);
+  final bool value;
+  @override
+  Future<bool> load() async => value;
+  @override
+  Future<void> save(bool enabled) async {}
+}
+
 void main() {
   late _FakeServerApi fake;
 
-  Future<void> pumpButton(WidgetTester tester) async {
+  Future<void> pumpButton(WidgetTester tester, {EmergencyStopButton button = const EmergencyStopButton(),
+      bool simpleMode = false}) async {
     fake = _FakeServerApi();
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
           savedServersProvider.overrideWith(_FixedServers.new),
           serverApiFactoryProvider.overrideWithValue((server) => fake),
+          simpleModePrefsProvider.overrideWithValue(_Prefs(simpleMode)),
         ],
-        child: const MaterialApp(
-          home: Scaffold(body: EmergencyStopButton()),
+        child: MaterialApp(
+          home: Scaffold(body: button),
         ),
       ),
     );
@@ -58,6 +72,7 @@ void main() {
     final container = ProviderScope.containerOf(
         tester.element(find.byType(EmergencyStopButton)));
     await container.read(savedServersProvider.future);
+    await container.read(simpleModeProvider.future);
     await tester.pumpAndSettle();
   }
 
@@ -68,6 +83,33 @@ void main() {
             of: find.byType(EmergencyStopButton), matching: find.byType(FilledButton)))
         .onPressed!();
   }
+
+  group('Simple Mode: keyboard and screen readers press again, no dialog', () {
+    testWidgets('the first press arms it (PRESS AGAIN, announced), the second within 3 s stops', (tester) async {
+      await pumpButton(tester, button: const EmergencyStopButton(compact: true), simpleMode: true);
+      await activateWithoutPointer(tester);
+      await tester.pump();
+      expect(find.text('Stop everything now?'), findsNothing, reason: 'no popup in Simple Mode');
+      expect(find.text('PRESS\nAGAIN'), findsOneWidget);
+      expect(fake.calls, 0);
+      await activateWithoutPointer(tester);
+      await tester.pump();
+      expect(fake.calls, 1);
+      final container = ProviderScope.containerOf(tester.element(find.byType(EmergencyStopButton)));
+      expect(container.read(simpleMessagesProvider).single.title, startsWith('Emergency stop executed'),
+          reason: 'the result is a pill');
+    });
+
+    testWidgets('left alone for 3 s it disarms and sends nothing', (tester) async {
+      await pumpButton(tester, button: const EmergencyStopButton(compact: true), simpleMode: true);
+      await activateWithoutPointer(tester);
+      await tester.pump(const Duration(seconds: 3, milliseconds: 100));
+      expect(find.text('STOP'), findsOneWidget);
+      await activateWithoutPointer(tester);
+      await tester.pump();
+      expect(fake.calls, 0, reason: 'that press only armed it again');
+    });
+  });
 
   group('EmergencyStopButton hold to confirm', () {
     testWidgets('pressing shows Hold to confirm; holding 2 s stops with no dialog', (tester) async {
