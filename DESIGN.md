@@ -189,6 +189,15 @@ A near-black neutral ramp carries everything; saturated status accents carry mea
 - **Numeric** (400, 13px, tabular figures): timers, counts, temperatures, HFR, RMS. Anything that updates live.
 - **Label** (500, 11px, 0.5px tracking, Material label-small): device names under the equipment-button icons, in plain case ("Filter Wheel"), scaled down to fit rather than widening the button.
 
+**Simple Mode's ramp** (all of it follows the user's text size, WCAG 1.4.4):
+- **Readout** (300, 30px, tabular figures): the one number a mode is about: HFR in Focus, the polar error, Night done's frame count.
+- **Alarm** (26px title, 20px button, 16px reason): the full-screen safety alarm only.
+- **Hint** (400, 20px, 2px tracking): the "Tap the shutter to take a frame" line over the empty sky.
+- **Heading** (600, 16px): the sheet's and panels' titles ("Edit M42", "Night done").
+- **Body** (`body-simple`, 400, 14px): everything a user reads or taps; the minimum for running text.
+- **Fact value** (600, 13px, tabular): the value in an Info or System tile.
+- **Secondary line** (400, 11.5–12px, Dim Text): the line under a name in a tile, a plan square or the picked target ("Galaxy · up 62°", "L · 5 s"), and the rail captions (11px).
+
 ### Named Rules
 **The Steady Digits Rule.** Every number that updates live uses tabular figures. A countdown never shifts its neighbours.
 
