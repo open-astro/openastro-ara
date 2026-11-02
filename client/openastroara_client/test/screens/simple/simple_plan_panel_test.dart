@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -22,6 +24,9 @@ import 'package:openastroara/services/simple_mode_prefs_service.dart';
 import 'package:openastroara/state/simple_mode_state.dart';
 import 'package:openastroara/state/settings/settings_nav.dart';
 import 'package:openastroara/state/app_shell_state.dart';
+import 'package:openastroara/models/ws_event.dart';
+import 'package:openastroara/state/ws/ws_providers.dart';
+import 'package:openastroara/widgets/stop_mount_overlay.dart' show SlewWsEvents;
 import 'package:openastroara/models/library/live_library.dart';
 import 'package:openastroara/state/library/live_library_state.dart';
 
@@ -579,6 +584,26 @@ void main() {
   });
 
   group('the progress panel', () {
+    testWidgets('a panic stop reads Mount stopped while paused; resuming clears it', (tester) async {
+      final ws = StreamController<WsEvent>.broadcast();
+      addTearDown(ws.close);
+      final seq = _Seq();
+      final c = await _pump(tester, seq, const SimpleRunPanel(),
+          overrides: [wsEventsProvider.overrideWith((ref) => ws.stream)]);
+      c.read(selectedSequenceIdProvider.notifier).select('seq-1');
+      await imaging(tester, c, seq, _imaging(24));
+      ws.add(WsEvent(type: SlewWsEvents.aborted, ts: DateTime.utc(2026), seq: 1));
+      await tester.pumpAndSettle();
+      // The daemon's pause lands after the abort.
+      await imaging(tester, c, seq, _imaging(24, state: SequenceRunState.paused));
+      expect(find.text('Mount stopped'), findsOneWidget);
+      await imaging(tester, c, seq, _imaging(24));
+      expect(find.text('Mount stopped'), findsNothing);
+      // A plain pause says nothing.
+      await imaging(tester, c, seq, _imaging(25, state: SequenceRunState.paused));
+      expect(find.text('Mount stopped'), findsNothing);
+    });
+
     testWidgets('paused: resume without re-centering, or re-center and refocus; imaging: neither', (tester) async {
       final seq = _Seq();
       final c = await _pump(tester, seq, const SimpleRunPanel());

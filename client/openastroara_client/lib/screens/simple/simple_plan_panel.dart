@@ -25,7 +25,9 @@ import '../../theme/ara_metrics.dart';
 import '../../util/friendly_error.dart';
 import '../../widgets/sequencer/target_plan_dialog.dart'
     show planFrameCount, planOptionsAvailable, suggestedSubSeconds;
+import '../../state/ws/ws_providers.dart';
 import '../../widgets/emergency_stop_button.dart' show kEmergencyStopHold;
+import '../../widgets/stop_mount_overlay.dart' show SlewWsEvents;
 import '../../widgets/sequencer/run_completion_sheet.dart'
     show runFramesPerFilter;
 import 'simple_preview_panel.dart'
@@ -468,6 +470,33 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
 final simpleRunProvider = NotifierProvider<SimpleRunNotifier, SimpleRun>(
   SimpleRunNotifier.new,
 );
+
+/// A panic stop (this client's, another's, or the daemon's) paused the run:
+/// true from the slew's abort until the run leaves the pause. Run state has
+/// no pause reason, so the abort event is the only tell.
+class SimpleMountStoppedNotifier extends Notifier<bool> {
+  @override
+  bool build() {
+    ref.listen(wsEventsProvider, (_, next) {
+      if (next.value?.type == SlewWsEvents.aborted &&
+          (ref.read(sequenceRunStateProvider).value?.state?.isActive ??
+              false)) {
+        state = true;
+      }
+    });
+    ref.listen(sequenceRunStateProvider, (prev, next) {
+      if (_paused(prev?.value?.state) && !_paused(next.value?.state)) {
+        state = false;
+      }
+    });
+    return false;
+  }
+}
+
+final simpleMountStoppedProvider =
+    NotifierProvider<SimpleMountStoppedNotifier, bool>(
+      SimpleMountStoppedNotifier.new,
+    );
 
 /// The row the run is on (the first not yet full), by the plan order.
 int _current(List<FilterPlanStep> steps, List<int> done) {
@@ -1295,6 +1324,7 @@ class SimpleRunPanel extends ConsumerWidget {
     final done = simpleRunProgress(steps, captured);
     final remaining = info?.estimatedRemainingSeconds;
     final paused = _paused(info?.state);
+    final mountStopped = ref.watch(simpleMountStoppedProvider);
     return SimplePanel(
       padding: const EdgeInsets.all(AraSpace.s16),
       child: SizedBox(
@@ -1317,6 +1347,11 @@ class SimpleRunPanel extends ConsumerWidget {
                 fontFeatures: [FontFeature.tabularFigures()],
               ),
             ),
+            if (paused && mountStopped)
+              Text(
+                'Mount stopped',
+                style: kSimpleText.copyWith(color: AraColors.accentBusy),
+              ),
             if (remaining != null)
               Text(
                 'Ends ${_hhmm(DateTime.now().add(Duration(seconds: remaining.round())))}'
