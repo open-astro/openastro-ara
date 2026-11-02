@@ -97,55 +97,55 @@ void main() {
     expect(off.calls, [(true, -15.0)], reason: 'the profile\'s target');
   });
 
-  testWidgets(
-    'the target steps by a degree; a running cooler follows it, and plans use it too',
-    (tester) async {
-      final (c, camera) = await _pump(tester, _wire());
-      c.read(imagingDefaultsProvider.notifier).setCoolerTargetC(-10);
-      await tester.pump();
-      await tester.tap(find.byKey(const Key('simple-camera-target-warmer')));
-      await tester.pump();
-      expect(c.read(imagingDefaultsProvider).coolerTargetC, -9);
-      expect(camera.calls, [(true, -9.0)]);
-      expect(find.text('−9 °C'), findsOneWidget);
+  testWidgets('the target is a stepped slider (5 °C steps, −30 to +10); letting go sets it, a running cooler '
+      'follows and plans use it too', (tester) async {
+    final (c, camera) = await _pump(tester, _wire());
+    c.read(imagingDefaultsProvider.notifier).setCoolerTargetC(-10);
+    await tester.pump();
+    final slider = tester.widget<Slider>(find.byKey(const Key('simple-camera-target')));
+    expect((slider.min, slider.max, slider.divisions, slider.value), (-30.0, 10.0, 8, -10.0));
+    slider.onChanged!(-15);
+    await tester.pump();
+    expect(find.text('−15 °C'), findsOneWidget, reason: 'the value follows the thumb');
+    expect(camera.calls, isEmpty, reason: 'nothing is sent while dragging');
+    tester.widget<Slider>(find.byKey(const Key('simple-camera-target'))).onChangeEnd!(-15);
+    await tester.pump();
+    expect(c.read(imagingDefaultsProvider).coolerTargetC, -15);
+    expect(camera.calls, [(true, -15.0)]);
 
-      final (c2, off) = await _pump(tester, _wire(on: false, setpoint: null));
-      c2.read(imagingDefaultsProvider.notifier).setCoolerTargetC(-10);
-      await tester.pump();
-      await tester.tap(find.byKey(const Key('simple-camera-target-colder')));
-      await tester.pump();
-      expect(c2.read(imagingDefaultsProvider).coolerTargetC, -11);
-      expect(off.calls, isEmpty, reason: 'a cooler that is off stays off');
-    },
-  );
+    final (c2, off) = await _pump(tester, _wire(on: false, setpoint: null));
+    tester.widget<Slider>(find.byKey(const Key('simple-camera-target'))).onChangeEnd!(-20);
+    await tester.pump();
+    expect(c2.read(imagingDefaultsProvider).coolerTargetC, -20);
+    expect(off.calls, isEmpty, reason: 'a cooler that is off stays off');
+  });
 
-  testWidgets(
-    'Gain: picked from the camera\'s range and kept in the profile, so plans use it',
-    (tester) async {
-      final (c, _) = await _pump(tester, {
-        ..._wire(),
-        'capabilities': {
-          'has_cooler': true,
-          'can_set_temperature': true,
-          'min_gain': 0,
-          'max_gain': 300,
-        },
-      });
-      expect(
-        find.descendant(
-          of: find.byKey(const Key('simple-camera-gain')),
-          matching: find.text('100'),
-        ),
-        findsOneWidget,
-      );
-      await tester.tap(find.byKey(const Key('simple-camera-gain')));
-      await tester.pumpAndSettle();
-      expect(find.text('450'), findsNothing, reason: 'past the camera\'s 300');
-      await tester.tap(find.text('120').last);
-      await tester.pumpAndSettle();
-      expect(c.read(imagingDefaultsProvider).defaultGain, 120);
-    },
-  );
+  testWidgets('Gain is a slider over the camera\'s range; letting go keeps it in the profile', (tester) async {
+    final (c, _) = await _pump(tester, {
+      ..._wire(),
+      'capabilities': {'has_cooler': true, 'can_set_temperature': true, 'min_gain': 0, 'max_gain': 300},
+    });
+    final slider = tester.widget<Slider>(find.byKey(const Key('simple-camera-gain')));
+    expect((slider.min, slider.max, slider.value), (0.0, 300.0, 100.0));
+    slider.onChanged!(120);
+    await tester.pump();
+    expect(find.text('120'), findsOneWidget);
+    tester.widget<Slider>(find.byKey(const Key('simple-camera-gain'))).onChangeEnd!(120);
+    await tester.pump();
+    expect(c.read(imagingDefaultsProvider).defaultGain, 120);
+  });
+
+  testWidgets('a camera with named gain modes slides through the names', (tester) async {
+    final (c, _) = await _pump(tester, {
+      ..._wire(),
+      'capabilities': {'has_cooler': true, 'can_set_temperature': true, 'gains': ['Low', 'Medium', 'High']},
+    });
+    c.read(imagingDefaultsProvider.notifier).setGain(1);
+    await tester.pump();
+    final slider = tester.widget<Slider>(find.byKey(const Key('simple-camera-gain')));
+    expect((slider.min, slider.max, slider.divisions), (0.0, 2.0, 2));
+    expect(find.text('Medium'), findsOneWidget);
+  });
 
   testWidgets(
     'a camera without a cooler says so and still reads its temperature',

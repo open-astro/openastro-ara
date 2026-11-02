@@ -442,8 +442,8 @@ const _kGainPresets = [
 ];
 
 /// The gain list, trimmed to the camera's reported range (max 0 = not
-/// reported: the usual presets up to 300). Preview's chip and the Camera
-/// window share it.
+/// reported: the usual presets up to 300).
+@visibleForTesting
 List<int> gainPresets({required int min, required int max}) => [
   for (final g in _kGainPresets)
     if (max <= 0 ? g <= 300 : g >= min && g <= max) g,

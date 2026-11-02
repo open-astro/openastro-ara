@@ -9,8 +9,7 @@ import '../../state/settings/imaging_defaults_state.dart';
 import '../../state/simple_messages_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
-import 'simple_preview_panel.dart'
-    show SimplePresetTile, gainPresets, kSimpleText;
+import 'simple_preview_panel.dart' show kSimpleText;
 import 'simple_shell.dart' show SimpleSegment;
 
 /// One window per device in Simple Mode (design/briefs/simple-mode-settings.md):
@@ -63,14 +62,28 @@ String simpleCelsius(double c) {
 
 /// The camera's window: the cooler (On / Off), its target and what the
 /// sensor reads now. The target is the profile's, so plans cool to it too.
-class SimpleCameraWindow extends ConsumerWidget {
+class SimpleCameraWindow extends ConsumerStatefulWidget {
   const SimpleCameraWindow({super.key});
 
+  /// The target slider's range and step (user, 2026-11-03: a stepped slider).
+  static const double targetMin = -30, targetMax = 10, targetStep = 5;
+
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<SimpleCameraWindow> createState() => _SimpleCameraWindowState();
+}
+
+class _SimpleCameraWindowState extends ConsumerState<SimpleCameraWindow> {
+  // While a thumb is held: the value it shows, sent only on letting go.
+  double? _dragTarget;
+  double? _dragGain;
+
+  @override
+  Widget build(BuildContext context) {
     final s = ref.watch(cameraStatusProvider).value;
-    final target = ref.watch(imagingDefaultsProvider).coolerTargetC;
-    final gain = ref.watch(imagingDefaultsProvider).defaultGain;
+    final target =
+        _dragTarget ?? ref.watch(imagingDefaultsProvider).coolerTargetC;
+    final gain =
+        _dragGain?.round() ?? ref.watch(imagingDefaultsProvider).defaultGain;
     final children = <Widget>[SimpleDeviceHeader(type: 'Camera', status: s)];
     if (s == null || !s.isConnected) {
       children.add(
@@ -97,8 +110,6 @@ class SimpleCameraWindow extends ConsumerWidget {
               id: 'simple-camera-cooler',
               on: s.coolerOn,
               onChanged: (on) => _run(
-                context,
-                ref,
                 () => ref
                     .read(cameraStatusProvider.notifier)
                     .setCooler(on, targetTemperatureC: on ? target : null),
@@ -107,37 +118,24 @@ class SimpleCameraWindow extends ConsumerWidget {
           ),
         );
         if (caps.canSetTemperature) {
+          const lo = SimpleCameraWindow.targetMin,
+              hi = SimpleCameraWindow.targetMax;
           children.add(
-            _row(
-              'Target',
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                spacing: AraSpace.s8,
-                children: [
-                  _Step(
-                    key: const Key('simple-camera-target-colder'),
-                    icon: Icons.remove,
-                    label: 'Colder',
-                    onTap: () =>
-                        _setTarget(context, ref, target - 1, s.coolerOn),
-                  ),
-                  SizedBox(
-                    width: 64,
-                    child: Text(
-                      simpleCelsius(target),
-                      style: kSimpleText,
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-                  _Step(
-                    key: const Key('simple-camera-target-warmer'),
-                    icon: Icons.add,
-                    label: 'Warmer',
-                    onTap: () =>
-                        _setTarget(context, ref, target + 1, s.coolerOn),
-                  ),
-                ],
-              ),
+            _row('Target', Text(simpleCelsius(target), style: kSimpleText)),
+          );
+          children.add(
+            Slider(
+              key: const Key('simple-camera-target'),
+              min: lo,
+              max: hi,
+              divisions: ((hi - lo) / SimpleCameraWindow.targetStep).round(),
+              value: target.clamp(lo, hi),
+              label: simpleCelsius(target),
+              onChanged: (v) => setState(() => _dragTarget = v),
+              onChangeEnd: (v) {
+                setState(() => _dragTarget = null);
+                _setTarget(v, s.coolerOn);
+              },
             ),
           );
         }
@@ -146,17 +144,29 @@ class SimpleCameraWindow extends ConsumerWidget {
         children.add(_row('Now', Text(now, style: kSimpleText)));
       }
       // The profile's gain: what plans shoot at (Preview's chip sets its own).
+      // Named gain modes slide through their names.
       final named = caps?.gains ?? const <String>[];
+      final gMin = named.isNotEmpty ? 0 : caps?.minGain ?? 0;
+      final reported = caps?.maxGain ?? 0;
+      final gMax = named.isNotEmpty
+          ? named.length - 1
+          : (reported > 0 ? reported : 300);
+      String gainText(int g) =>
+          named.isNotEmpty && g >= 0 && g < named.length ? named[g] : '$g';
+      children.add(_row('Gain', Text(gainText(gain), style: kSimpleText)));
       children.add(
-        SimplePresetTile<int>(
+        Slider(
           key: const Key('simple-camera-gain'),
-          label: 'Gain',
-          value: gain,
-          options: named.isNotEmpty
-              ? [for (var i = 0; i < named.length; i++) i]
-              : gainPresets(min: caps?.minGain ?? 0, max: caps?.maxGain ?? 0),
-          format: (g) => named.isNotEmpty && g < named.length ? named[g] : '$g',
-          onSelected: (g) => _setGain(context, ref, g),
+          min: gMin.toDouble(),
+          max: gMax.toDouble(),
+          divisions: gMax > gMin ? gMax - gMin : null,
+          value: gain.clamp(gMin, gMax).toDouble(),
+          label: gainText(gain),
+          onChanged: (v) => setState(() => _dragGain = v),
+          onChangeEnd: (v) {
+            setState(() => _dragGain = null);
+            _setGain(v.round());
+          },
         ),
       );
     }
@@ -170,12 +180,7 @@ class SimpleCameraWindow extends ConsumerWidget {
 
   /// Set once: the profile keeps it (plans cool to it), and a running cooler
   /// follows it at once.
-  Future<void> _setTarget(
-    BuildContext context,
-    WidgetRef ref,
-    double celsius,
-    bool coolerOn,
-  ) async {
+  Future<void> _setTarget(double celsius, bool coolerOn) async {
     final defaults = ref.read(imagingDefaultsProvider.notifier);
     final before = ref.read(imagingDefaultsProvider).coolerTargetC;
     defaults.setCoolerTargetC(celsius);
@@ -193,10 +198,8 @@ class SimpleCameraWindow extends ConsumerWidget {
         );
       }
     }
-    if (coolerOn && context.mounted) {
+    if (coolerOn && mounted) {
       await _run(
-        context,
-        ref,
         () => ref
             .read(cameraStatusProvider.notifier)
             .setCooler(true, targetTemperatureC: celsius),
@@ -205,7 +208,7 @@ class SimpleCameraWindow extends ConsumerWidget {
   }
 
   /// Set once, like the target: the profile keeps it.
-  Future<void> _setGain(BuildContext context, WidgetRef ref, int gain) async {
+  Future<void> _setGain(int gain) async {
     final defaults = ref.read(imagingDefaultsProvider.notifier);
     defaults.setGain(gain);
     final notify = userNotifier(context);
@@ -222,11 +225,7 @@ class SimpleCameraWindow extends ConsumerWidget {
     }
   }
 
-  Future<void> _run(
-    BuildContext context,
-    WidgetRef ref,
-    Future<bool> Function() action,
-  ) async {
+  Future<void> _run(Future<bool> Function() action) async {
     final notify = userNotifier(context);
     try {
       await action();
@@ -279,34 +278,6 @@ class _OnOff extends StatelessWidget {
             onTap: on == v ? null : () => onChanged(v),
           ),
       ],
-    ),
-  );
-}
-
-class _Step extends StatelessWidget {
-  const _Step({
-    super.key,
-    required this.icon,
-    required this.label,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) => Material(
-    color: AraColors.tileFill,
-    borderRadius: BorderRadius.circular(8),
-    child: InkWell(
-      borderRadius: BorderRadius.circular(8),
-      onTap: onTap,
-      child: Semantics(
-        button: true,
-        label: label,
-        child: SizedBox(width: 44, height: 44, child: Icon(icon, size: 20)),
-      ),
     ),
   );
 }
