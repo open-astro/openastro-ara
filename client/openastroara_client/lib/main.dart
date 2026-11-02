@@ -132,6 +132,8 @@ class _RootRouter extends ConsumerWidget {
     // #1137 — a different server mid-session re-arms the launch gate: the
     // profile box, the cache seed and the gear hydration belong to the old rig.
     ref.listen(launchGateRearmProvider, (previous, next) {});
+    // ALP-4890 — a relaunch enters on the rig's active profile.
+    ref.listen(launchAutoEnterProvider, (previous, next) {});
     final saved = ref.watch(savedServersProvider);
     final gatePassed = ref.watch(profileGatePassedProvider);
     final offline = ref.watch(offlineModeProvider);

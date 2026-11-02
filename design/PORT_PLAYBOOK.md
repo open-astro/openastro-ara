@@ -3189,7 +3189,7 @@ No user-facing knobs for rotation cadence / size cap in the initial release — 
 
 ### 30.3 Subsequent launches
 
-Splash → network scan → user picks the rig (no auth per §67) → Profile box pre-selects last-used profile → click [Image] → main app. **Three taps from cold-launch to imaging.**
+Splash → network scan → user picks the rig (no auth per §67) → main app on the rig's active profile (the last one loaded). **One tap from cold-launch to imaging** (ALP-4890). The profile box still shows when the rig has no profile, or the active one is missing, or the profile list can't load (Retry / Plan offline); a Retry that succeeds goes straight in too. Only a session's first entry is automatic: the shell's Launchpad action shows the box, so switching profile stays one action away.
 
 Nothing about the rig is stored on the client (#1129): its address and even its name can change between nights (backyard, remote site, a new DHCP lease), so every launch scans (mDNS plus the subnet sweep; on iOS the system's Bonjour browse via NWBrowser, then the subnet sweep if it finds nothing, since iOS refuses raw multicast without Apple's multicast entitlement). A typed address is used for that session only. Versions before #1129 saved the list with addresses; the first launch of a newer client deletes it. The scan never picks a rig on its own, even when only one answers: a site can have four or five rigs, some not up yet, so the user always taps the one they mean. Once connected, a dropped link (Wi-Fi blip, Pi reboot) reconnects to that same rig automatically, with backoff.
 

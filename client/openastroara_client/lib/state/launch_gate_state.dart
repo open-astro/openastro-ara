@@ -1,15 +1,17 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../models/profile_list.dart';
 import '../models/server.dart';
+import 'profile_management_state.dart';
 import 'saved_server_state.dart';
 
 /// §30.1 launch-sequence gate — false until the user clicks [Image] on the
 /// launch profile box, at which point the root router swaps in the main shell.
 ///
-/// Deliberately session-scoped (not persisted): §30.3 wants the profile box on
-/// EVERY launch (pre-selecting the last-used profile), so the gate must reset
-/// each cold start. In-session it only re-arms through the shell's explicit
-/// "Launchpad" action ([ProfileGateNotifier.reset]).
+/// Deliberately session-scoped (not persisted): the gate resets each cold
+/// start, and the first entry of a session can pass it on its own
+/// ([launchAutoEnterProvider], ALP-4890). In-session it only re-arms through
+/// the shell's explicit "Launchpad" action ([ProfileGateNotifier.reset]).
 final profileGatePassedProvider =
     NotifierProvider<ProfileGateNotifier, bool>(ProfileGateNotifier.new);
 
@@ -18,7 +20,15 @@ class ProfileGateNotifier extends Notifier<bool> {
   @override
   bool build() => false;
 
-  void pass() => state = true;
+  /// Whether the gate has opened this session; only the first entry is
+  /// automatic ([launchAutoEnterProvider]).
+  bool get passedOnce => _passedOnce;
+  bool _passedOnce = false;
+
+  void pass() {
+    _passedOnce = true;
+    state = true;
+  }
 
   /// Re-arm the gate — the shell's "Launchpad" button sends the user back
   /// through the §30 launch flow (e.g. to switch server or profile).
@@ -95,4 +105,40 @@ final launchGateRearmProvider = Provider<void>((ref) {
       ref.read(profileGatePassedProvider.notifier).reset();
     }
   });
+});
+
+/// ALP-4890 — should the launch profile box enter on its own? Once per
+/// session, on the rig's active profile (the last one loaded), when the router
+/// would show the box: not offline, not on the server chooser.
+bool shouldAutoEnter({
+  required ProfileList? list,
+  required bool gatePassed,
+  required bool passedOnce,
+  required bool offline,
+  required bool chooserRequested,
+}) =>
+    list != null &&
+    !gatePassed &&
+    !passedOnce &&
+    !offline &&
+    !chooserRequested &&
+    list.profiles.any((p) => p.id == list.activeId);
+
+/// ALP-4890 — root-mounted (`main.dart` keeps it alive with a listen): the
+/// first time a session's profile list loads with an active profile, pass the
+/// gate, so a relaunch goes from the rig pick straight to the shell. Launchpad
+/// still shows the box, since the gate has passed once by then.
+final launchAutoEnterProvider = Provider<void>((ref) {
+  ref.listen<AsyncValue<ProfileList>>(profileManagementProvider, (_, next) {
+    final gate = ref.read(profileGatePassedProvider.notifier);
+    if (shouldAutoEnter(
+      list: next is AsyncData<ProfileList> ? next.value : null,
+      gatePassed: ref.read(profileGatePassedProvider),
+      passedOnce: gate.passedOnce,
+      offline: ref.read(offlineModeProvider),
+      chooserRequested: ref.read(serverChooserRequestedProvider),
+    )) {
+      gate.pass();
+    }
+  }, fireImmediately: true);
 });
