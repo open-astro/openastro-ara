@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/server.dart';
+import '../services/last_rig_service.dart';
 import '../services/multicast_lock.dart';
 import '../services/server_api.dart';
 import '../state/launch_gate_state.dart';
@@ -33,6 +34,7 @@ class _FirstRunScreenState extends ConsumerState<FirstRunScreen> {
   /// The last rig, picked without a tap this visit (ALP-4890); its handshake
   /// confirms it the same way.
   AraServer? _autoPicked;
+  bool _autoConfirmed = false;
 
   @override
   void initState() {
@@ -77,12 +79,15 @@ class _FirstRunScreenState extends ConsumerState<FirstRunScreen> {
         _maybeAutoPick();
       });
     });
-    ref.listen(lastRigNameProvider, (_, _) => _maybeAutoPick());
+    ref.listen(lastRigProvider, (_, _) => _maybeAutoPick());
     ref.listen(serverHandshakeProvider, (_, next) {
       final picked = _autoPicked;
       if (picked != null &&
+          !_autoConfirmed &&
           next.value != null &&
           ref.read(selectedServerProvider) == picked) {
+        // Once: a later handshake answer (a refresh) is the same rig (#1485).
+        _autoConfirmed = true;
         unawaited(_confirm(picked));
       }
     });
@@ -244,16 +249,19 @@ class _FirstRunScreenState extends ConsumerState<FirstRunScreen> {
         ref.read(selectedServerProvider) != null) {
       return;
     }
-    final pick =
-        autoPickRig(_discovered, ref.read(lastRigNameProvider).value);
+    final pick = autoPickRig(_discovered, ref.read(lastRigProvider).value);
     if (pick == null) return;
     _autoPicked = pick;
     ref.read(selectedServerProvider.notifier).select(pick);
   }
 
   Future<void> _confirm(AraServer server) async {
-    final name = ref.read(serverHandshakeProvider).value?.name;
-    if (name != null) unawaited(ref.read(lastRigServiceProvider).save(name));
+    final info = ref.read(serverHandshakeProvider).value;
+    if (info != null) {
+      unawaited(ref
+          .read(lastRigServiceProvider)
+          .save(LastRig(info.name, uuid: info.uuid)));
+    }
     await ref.read(savedServersProvider.notifier).add(server);
     // A Launchpad-forced visit ends here: the server is chosen, so the router
     // may resume the normal flow (profile box). The _RootRouter watching

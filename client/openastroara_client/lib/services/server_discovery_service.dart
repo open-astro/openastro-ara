@@ -105,9 +105,14 @@ class ServerDiscoveryService {
   Stream<AraServer> _bonjourDiscover() async* {
     for (final r in await (nativeBrowse ?? _channelBrowse)()) {
       if (r is! Map) continue;
-      final host = r['host'], port = r['port'], name = r['name'];
+      final host = r['host'], port = r['port'], name = r['name'], uuid = r['uuid'];
       if (host is String && port is int) {
-        yield AraServer(hostname: host, port: port, mdnsName: name is String ? name : null);
+        yield AraServer(
+          hostname: host,
+          port: port,
+          mdnsName: name is String ? name : null,
+          uuid: uuid is String ? uuid : null,
+        );
       }
     }
   }
@@ -813,6 +818,7 @@ class ServerDiscoveryService {
           hostname: host,
           port: port,
           mdnsName: nickname is String && nickname.isNotEmpty ? nickname : null,
+          uuid: json['server_uuid'] as String,
         ),
       );
       // ignore: avoid_catches_without_on_clauses

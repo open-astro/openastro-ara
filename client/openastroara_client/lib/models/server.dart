@@ -10,11 +10,16 @@ class AraServer {
   final String? mdnsName;
   final String? serverVersion;
 
+  /// The daemon's server_uuid, when the path that found it can say (the
+  /// subnet sweep, iOS Bonjour's TXT record); the auto-connect matches on it.
+  final String? uuid;
+
   const AraServer({
     required this.hostname,
     required this.port,
     this.mdnsName,
     this.serverVersion,
+    this.uuid,
   });
 
   String get baseUrl => 'http://$hostname:$port';
@@ -24,6 +29,7 @@ class AraServer {
         port: port,
         mdnsName: mdnsName,
         serverVersion: serverVersion ?? this.serverVersion,
+        uuid: uuid,
       );
 
   @override
@@ -34,5 +40,5 @@ class AraServer {
   int get hashCode => Object.hash(hostname, port);
 
   @override
-  String toString() => 'AraServer($hostname:$port, mdns=$mdnsName, ver=$serverVersion)';
+  String toString() => 'AraServer($hostname:$port, mdns=$mdnsName, ver=$serverVersion, uuid=$uuid)';
 }

@@ -33,6 +33,7 @@ class ServerApi {
       name: (nickname != null && nickname.isNotEmpty ? nickname : data['name'] as String?) ?? 'OpenAstro Ara',
       version: data['version'] as String? ?? 'unknown',
       apiVersion: data['api'] as String? ?? data['api_version'] as String? ?? 'unknown',
+      uuid: data['server_uuid'] as String?,
     );
   }
 
@@ -176,9 +177,13 @@ class ServerInfo {
   final String version;
   final String apiVersion;
 
+  /// The daemon's server_uuid; null from a daemon that doesn't send one.
+  final String? uuid;
+
   const ServerInfo({
     required this.name,
     required this.version,
     required this.apiVersion,
+    this.uuid,
   });
 }
