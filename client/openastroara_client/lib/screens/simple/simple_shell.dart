@@ -2127,8 +2127,9 @@ class _ThisRig extends ConsumerWidget {
     final rig = ref.watch(daemonVersionsProvider).value;
     final stars = ref.watch(plateSolveDatabaseStatusProvider).value?.databases;
     final servers = rig?.alpacaServers ?? const <AlpacaServerVersion>[];
-    // Name and Profile, each with its change button on the same line; set
-    // close together (two facts, not two settings).
+    // Name and Profile: the value is the button, shaded like Aperture's, with
+    // › because it leaves for the rig list or the profile box; 36 pt keeps
+    // the two lines close.
     Widget fact(
       String label,
       String value,
@@ -2137,30 +2138,28 @@ class _ThisRig extends ConsumerWidget {
     ) => Row(
       spacing: AraSpace.s12,
       children: [
-        Text(label, style: kSimpleText),
-        Expanded(
-          child: Text(
-            value,
-            style: kSimpleText,
-            textAlign: TextAlign.right,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ),
-        // A plain blue "Change"; a screen reader hears what it changes.
-        Semantics(
-          label: change,
-          button: true,
-          excludeSemantics: true,
-          child: TextButton(
-            key: Key('simple-rig-${change.toLowerCase().replaceAll(' ', '-')}'),
-            style: TextButton.styleFrom(
-              // 28 pt keeps the two lines close; still over WCAG 2.2's 24.
-              minimumSize: const Size(0, 28),
-              padding: const EdgeInsets.symmetric(horizontal: AraSpace.s8),
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        Expanded(child: Text(label, style: kSimpleText)),
+        Flexible(
+          child: Semantics(
+            label: '$label $value, $change',
+            button: true,
+            excludeSemantics: true,
+            child: TextButton(
+              key: Key(
+                'simple-rig-${change.toLowerCase().replaceAll(' ', '-')}',
+              ),
+              style: TextButton.styleFrom(
+                backgroundColor: AraColors.tileFill,
+                minimumSize: const Size(120, 36),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              onPressed: onTap,
+              child: Text(
+                '$value ›',
+                style: kSimpleText,
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
-            onPressed: onTap,
-            child: const Text('Change', style: TextStyle(fontSize: 14)),
           ),
         ),
       ],
