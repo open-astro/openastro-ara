@@ -30,6 +30,7 @@ public sealed partial class TelescopeService {
         double Latitude { get; }
         double Longitude { get; }
         double Elevation { get; }
+        bool Slewing { get; }
         void SetLatitude(double v);
         void SetLongitude(double v);
         void SetElevation(double v);
@@ -39,12 +40,21 @@ public sealed partial class TelescopeService {
         public double Latitude => mount.SiteLatitude;
         public double Longitude => mount.SiteLongitude;
         public double Elevation => mount.SiteElevation;
+        public bool Slewing => mount.Slewing;
         public void SetLatitude(double v) => mount.SiteLatitude = v;
         public void SetLongitude(double v) => mount.SiteLongitude = v;
         public void SetElevation(double v) => mount.SiteElevation = v;
     }
 
     private OpenAstroAra.Server.Services.IProfileStore? _siteStore;
+    // One push at a time, and the site last written in full, so a profile save that isn't the site
+    // (autofocus, storage, a saved target…) makes no Alpaca round trip.
+    private readonly object _sitePushGate = new();
+    private (double Lat, double Lng, double Elev)? _sitePushed;
+
+    // Some drivers refuse a site write mid-slew: wait for the slew to end, up to about three minutes.
+    private const int SitePushSlewPolls = 180;
+    private static readonly TimeSpan SitePushSlewPoll = TimeSpan.FromSeconds(1);
 
     /// <summary>The connected mount's site, null when none is connected; tests swap in a fake.</summary>
     internal Func<IMountSite?>? MountSiteSource { get; set; }
@@ -52,8 +62,12 @@ public sealed partial class TelescopeService {
     /// <summary>Runs a site push off the caller's thread; tests run it inline.</summary>
     internal Func<Action, Task> RunSitePush { get; set; } = Task.Run;
 
-    /// <summary>Write [lat, lng, elev] into the mount, skipping values it already holds; each value
-    /// is tried on its own, so one the driver refuses doesn't stop the rest. False when any failed.</summary>
+    /// <summary>The wait between slew checks; tests make it instant.</summary>
+    internal Action<TimeSpan> SitePushWait { get; set; } = System.Threading.Thread.Sleep;
+
+    /// <summary>Write [lat, lng, elev] into the mount, skipping values it already holds and an elevation
+    /// of 0 (unset: the default nobody changed, user 2026-11-03); each value is tried on its own, so one
+    /// the driver refuses doesn't stop the rest. False when any failed.</summary>
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Best-effort write boundary: a driver that refuses or can't report a site value (any ASCOM/transport exception) leaves that value to the mount and is reported by the false return.")]
     internal static bool PushSite(IMountSite mount, double lat, double lng, double elev) {
@@ -72,7 +86,9 @@ public sealed partial class TelescopeService {
         }
         One(() => mount.Latitude, mount.SetLatitude, lat);
         One(() => mount.Longitude, mount.SetLongitude, lng);
-        One(() => mount.Elevation, mount.SetElevation, elev);
+        if (elev != 0) {
+            One(() => mount.Elevation, mount.SetElevation, elev);
+        }
         return ok;
     }
 
@@ -87,8 +103,9 @@ public sealed partial class TelescopeService {
     }
 
     /// <summary>Push the profile's site to the connected mount, off the caller's thread (each write
-    /// is an HTTP round trip to the mount).</summary>
-    private void PushProfileSite() {
+    /// is an HTTP round trip to the mount). A site already written in full is skipped unless
+    /// <paramref name="force"/> (a fresh connect: the mount may hold anything).</summary>
+    internal void PushProfileSite(bool force = false) {
         var store = _siteStore;
         if (store is null) {
             return;
@@ -97,15 +114,40 @@ public sealed partial class TelescopeService {
         if (mount is null) {
             return;
         }
-        var site = store.GetSiteSettings();
-        if (!HasSite(site.LatitudeDeg, site.LongitudeDeg)) {
-            return; // a profile with no site yet must not overwrite the mount's real one
-        }
         _ = RunSitePush(() => {
-            if (!PushSite(mount, site.LatitudeDeg, site.LongitudeDeg, site.ElevationM)) {
-                LogSitePushIncomplete(site.LatitudeDeg, site.LongitudeDeg, site.ElevationM);
+            lock (_sitePushGate) {
+                // Read under the gate, so of two close saves the later push writes the newer site.
+                var site = store.GetSiteSettings();
+                var wanted = (site.LatitudeDeg, site.LongitudeDeg, site.ElevationM);
+                if (!HasSite(wanted.LatitudeDeg, wanted.LongitudeDeg) || (!force && _sitePushed == wanted)) {
+                    return; // no site yet must not overwrite the mount's real one; an unchanged one is there
+                }
+                if (!WaitOutSlew(mount)) {
+                    return; // still slewing: the next save or connect tries again
+                }
+                if (PushSite(mount, wanted.LatitudeDeg, wanted.LongitudeDeg, wanted.ElevationM)) {
+                    _sitePushed = wanted;
+                } else {
+                    _sitePushed = null;
+                    LogSitePushIncomplete(wanted.LatitudeDeg, wanted.LongitudeDeg, wanted.ElevationM);
+                }
             }
         });
+    }
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "A mount that can't report Slewing is treated as not slewing: the push's own per-value error handling covers a refused write.")]
+    private bool WaitOutSlew(IMountSite mount) {
+        for (var i = 0; i < SitePushSlewPolls; i++) {
+            bool slewing;
+            try { slewing = mount.Slewing; } catch (Exception) { slewing = false; }
+            if (!slewing) {
+                return true;
+            }
+            SitePushWait(SitePushSlewPoll);
+        }
+        LogSitePushSlewing();
+        return false;
     }
 
     private AlpacaMountSite? ConnectedAlpacaSite() {
@@ -119,4 +161,8 @@ public sealed partial class TelescopeService {
     [LoggerMessage(Level = LogLevel.Warning,
         Message = "The mount did not take all of the profile's site ({Lat}, {Lng}, {Elev} m); it keeps its own for those")]
     private partial void LogSitePushIncomplete(double lat, double lng, double elev);
+
+    [LoggerMessage(Level = LogLevel.Information,
+        Message = "The mount was still slewing; the profile's site goes in on the next save or connect")]
+    private partial void LogSitePushSlewing();
 }
