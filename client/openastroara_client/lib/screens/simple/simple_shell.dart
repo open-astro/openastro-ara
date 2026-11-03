@@ -64,6 +64,7 @@ import '../../theme/ara_metrics.dart';
 import '../../widgets/emergency_stop_button.dart';
 import '../../widgets/equipment/equipment_glyphs.dart';
 import '../../widgets/equipment/equipment_status_chip.dart';
+import '../../widgets/equipment/guider_chip.dart' show guiderStatusLevel;
 import '../../widgets/equipment_chip.dart'
     show EquipmentChipCompact, EquipmentChipHideDisconnected;
 import '../../widgets/imaging/frame_viewer.dart';
@@ -2127,20 +2128,13 @@ class _GearRow<T extends EquipmentDeviceStatus> extends ConsumerWidget {
     if (status == null) return const SizedBox.shrink();
     final notifier = ref.read(provider.notifier);
     final l10n = context.l10n;
-    final (dot, word) = switch (status.connectionState) {
-      EquipmentConnectionState.connected => (
-        AraColors.accentConnected,
-        l10n.shellConnected,
-      ),
-      EquipmentConnectionState.connecting => (
-        AraColors.accentBusy,
-        l10n.shellConnecting,
-      ),
-      EquipmentConnectionState.error => (
-        AraColors.accentError,
-        l10n.shellFailed,
-      ),
-      _ => (AraColors.textDisabled, l10n.shellNotConnected),
+    // The dot is the top bar chip's, so the two always agree.
+    final dot = equipmentStatusLevel(status).color;
+    final word = switch (status.connectionState) {
+      EquipmentConnectionState.connected => l10n.shellConnected,
+      EquipmentConnectionState.connecting => l10n.shellConnecting,
+      EquipmentConnectionState.error => l10n.shellFailed,
+      _ => l10n.shellNotConnected,
     };
     final (verb, label, action) = switch (status.connectionState) {
       EquipmentConnectionState.connected => (
@@ -2188,30 +2182,28 @@ class _GuiderGearRow extends ConsumerWidget {
     final notifier = ref.read(guiderStatusProvider.notifier);
     final camera = ref.watch(deviceDriverProvider('guidecamera')).value?.name;
     final l10n = context.l10n;
-    final (dot, word, verb, label, action) = switch (status?.connectionState) {
+    // The dot is the top bar chip's, so the two always agree.
+    final dot = guiderStatusLevel(status).color;
+    final (word, verb, label, action) = switch (status?.connectionState) {
       GuiderConnectionState.connected => (
-        AraColors.accentConnected,
         l10n.shellConnected,
         'disconnect',
         l10n.shellDisconnect,
         notifier.disconnect,
       ),
       GuiderConnectionState.connecting => (
-        AraColors.accentBusy,
         l10n.shellConnecting,
         null,
         null,
         null,
       ),
       GuiderConnectionState.error => (
-        AraColors.accentError,
         l10n.shellFailed,
         'reconnect',
         l10n.shellReconnect,
         notifier.connect,
       ),
       _ => (
-        AraColors.textDisabled,
         l10n.shellNotConnected,
         'connect',
         l10n.shellConnect,

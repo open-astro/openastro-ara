@@ -22,6 +22,8 @@ import 'package:openastroara/services/profile_api.dart';
 import 'package:openastroara/screens/simple/simple_search.dart';
 import 'package:openastroara/screens/simple/simple_device_windows.dart' show simpleMountMotionProvider;
 import 'package:openastroara/models/guider_status.dart';
+import 'package:openastroara/widgets/status_indicator.dart' show StatusLevel;
+import 'package:openastroara/widgets/equipment/guider_chip.dart' show guiderStatusLevel;
 import 'package:openastroara/state/app_locale_state.dart';
 import 'package:openastroara/services/equipment_driver_api.dart';
 import 'package:openastroara/state/guider/guider_state.dart';
@@ -234,6 +236,13 @@ class _GuiderCalls extends _GuiderUp {
   Future<void> disconnect() async => calls.add('disconnect');
   @override
   Future<void> connect({String? host, int? port}) async => calls.add('connect');
+}
+
+/// A guider mid-connect.
+class _GuiderConnecting extends _GuiderCalls {
+  @override
+  Future<GuiderStatus?> build() async =>
+      GuiderStatus.fromJson(const {'device_id': 'g', 'name': 'PHD2', 'state': 'connecting'});
 }
 
 /// The rig's answer once the guider is disconnected: no guider (404).
@@ -1471,6 +1480,28 @@ void main() {
     await tester.tap(find.descendant(of: page, matching: find.text('Guider · ZWO ASI120MM Mini')));
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('simple-gear')), findsNothing, reason: 'the Guider section is open');
+  });
+
+  testWidgets("a Devices row's dot is the top bar chip's: one status, one colour", (tester) async {
+    final guider = _GuiderConnecting();
+    await _pump(tester, const Size(1024, 768), linkUp: true, gear: [
+      guiderStatusProvider.overrideWith(() => guider),
+      cameraStatusProvider.overrideWith(() => _Camera(EquipmentConnectionState.connecting)),
+    ]);
+    await _openSection(tester, 'Devices');
+    Color dot(String type) => ((tester
+                .widget<Container>(find.descendant(
+                    of: find.ancestor(
+                            of: find.descendant(of: find.byKey(const Key('simple-gear')), matching: find.textContaining(type)),
+                            matching: find.byType(Row))
+                        .first,
+                    matching: find.byWidgetPredicate((w) =>
+                        w is Container && w.decoration is BoxDecoration &&
+                        (w.decoration as BoxDecoration).shape == BoxShape.circle)))
+                .decoration) as BoxDecoration)
+            .color!;
+    expect(dot('Guider'), guiderStatusLevel(await guider.future).color);
+    expect(dot('Camera'), StatusLevel.info.color, reason: 'connecting is info on the chips');
   });
 
   testWidgets('a disconnected guider stays in Devices with Connect (the rig forgets it until it connects)',
