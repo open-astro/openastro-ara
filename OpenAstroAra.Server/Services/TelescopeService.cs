@@ -1315,6 +1315,7 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
             }
             if (stillConnected) {
                 LogConnected(device.Name, host, device.IpPort, device.AlpacaDeviceNumber);
+                PushProfileSite(); // the profile's site into the mount (one source of truth)
             }
         } catch (Exception ex) {
             if (!adopted) {

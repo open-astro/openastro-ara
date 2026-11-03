@@ -72,6 +72,15 @@ public partial class Program {
     /// Kestrel binds only in <c>Run</c>, so building is side-effect-free on the network; the profile
     /// directory (<c>OPENASTROARA_PROFILE_DIR</c>) is created and the catalog opened, as at boot.
     /// </summary>
+    // The profile's site follows into the mount, on connect and on every profile change (the
+    // profile is its one source of truth).
+    private static TelescopeService FollowSite(IServiceProvider sp, TelescopeService mount) {
+        if (sp.GetService<IProfileStore>() is { } store) {
+            mount.FollowProfileSite(store);
+        }
+        return mount;
+    }
+
     internal static WebApplication BuildApp(string[] args) {
         var builder = WebApplication.CreateSlimBuilder(new WebApplicationOptions {
             Args = args,
@@ -311,7 +320,7 @@ public partial class Program {
         // park/unpark, set-tracking, abort-slew. One singleton backs BOTH the REST ITelescopeService
         // and the Sequencer's ITelescopeMediator (§8.1), so the telescope instructions drive the live
         // device (mediator wiring is below; this replaces the HeadlessTelescopeMediator stub).
-        builder.Services.AddSingleton<TelescopeService>(sp => new TelescopeService(
+        builder.Services.AddSingleton<TelescopeService>(sp => FollowSite(sp, new TelescopeService(
             sp.GetService<ILogger<TelescopeService>>(),
             sp.GetService<EquipmentEventPublisher>(),
             sp.GetService<IEquipmentFaultSink>(),
@@ -320,7 +329,7 @@ public partial class Program {
             // A REST park / home stops guiding first; the guider is registered after the mount, so it is
             // resolved lazily (and the factory lambda bypasses constructor activation: every optional
             // parameter is passed by hand, #711).
-            () => sp.GetService<OpenAstroAra.Equipment.Interfaces.Mediator.IGuiderMediator>()));
+            () => sp.GetService<OpenAstroAra.Equipment.Interfaces.Mediator.IGuiderMediator>())));
         builder.Services.AddSingleton<ITelescopeService>(sp => sp.GetRequiredService<TelescopeService>());
         builder.Services.AddSingleton<IMountSpecSheetSource>(sp => sp.GetRequiredService<TelescopeService>());
         // §14e — fourth real device service: live focuser (position/temp) + Move. One singleton
