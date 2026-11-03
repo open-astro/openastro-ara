@@ -1677,6 +1677,25 @@ void main() {
     expect(find.text('3.75 µm'), findsOneWidget);
   });
 
+  testWidgets("every Rig adjustment is one width: the wheels, the elevation stepper and the read-only tile",
+      (tester) async {
+    // User, 2026-11-04: the elevation stepper was wider than the rows above it.
+    await _pump(tester, const Size(1024, 768));
+    await _openSection(tester, 'Rig');
+    final elevation = find.byKey(const Key('simple-rig-elevation'));
+    await tester.ensureVisible(elevation);
+    await tester.pumpAndSettle();
+    final widths = {
+      for (final id in ['aperture', 'focal', 'guidefocal', 'guidepixel', 'lat', 'lng', 'elevation'])
+        id: tester.getSize(find.byKey(Key('simple-rig-$id'))).width,
+    };
+    expect(widths.values.toSet(), hasLength(1), reason: '$widths');
+    final right = {
+      for (final id in ['focal', 'elevation']) id: tester.getRect(find.byKey(Key('simple-rig-$id'))).right,
+    };
+    expect(right.values.toSet(), hasLength(1), reason: 'one right edge: $right');
+  });
+
   testWidgets("Rig's two guide rows show Not set in the same tile, the same size and edge", (tester) async {
     await _pump(tester, const Size(1024, 768));
     await _openSection(tester, 'Rig');

@@ -1333,6 +1333,10 @@ class _RailButton extends StatelessWidget {
 /// How much the rails grow: none up to 1.1x text, then with the text, so
 /// their labels follow the user's size all the way (WCAG 1.4.4). The 60 px
 /// mode label ("Preview", 14 px semibold) is full from 1.1x.
+/// Every Settings › Rig value (a wheel's, the elevation stepper's, the read-only
+/// pixel size) is this wide, so they line up.
+const double kSimpleRigControlWidth = 160;
+
 double simpleRailScale(BuildContext context) =>
     math.max(1, MediaQuery.textScalerOf(context).scale(1) / 1.1);
 
@@ -2724,7 +2728,7 @@ class _ThisRig extends ConsumerWidget {
                       style: TextButton.styleFrom(
                         backgroundColor: AraColors.tileFill,
                         disabledBackgroundColor: AraColors.tileFill,
-                        minimumSize: const Size(120, 44),
+                        minimumSize: const Size(kSimpleRigControlWidth, 44),
                       ),
                       onPressed: null,
                       child: Text(pixel, style: kSimpleText),
@@ -3144,7 +3148,7 @@ class _RigWheelRowState extends State<_RigWheelRow> {
                 key: Key('simple-rig-${widget.id}'),
                 style: TextButton.styleFrom(
                   backgroundColor: AraColors.tileFill,
-                  minimumSize: const Size(120, 44),
+                  minimumSize: const Size(kSimpleRigControlWidth, 44),
                   side: _open
                       ? const BorderSide(color: AraColors.selectionBg, width: 2)
                       : null,
@@ -3272,21 +3276,25 @@ class _RigStepperState extends State<_RigStepper> {
       spacing: AraSpace.s12,
       children: [
         Expanded(child: Text(widget.label, style: kSimpleText)),
-        DecoratedBox(
+        // The wheels' width, so every Rig value lines up (user, 2026-11-04).
+        Container(
+          key: Key('simple-rig-${widget.id}'),
+          width: kSimpleRigControlWidth,
           decoration: BoxDecoration(
             color: AraColors.tileFill,
             borderRadius: BorderRadius.circular(8),
           ),
           child: Row(
-            mainAxisSize: MainAxisSize.min,
             children: [
               _button(-1),
-              SizedBox(
-                width: 72,
+              Expanded(
                 child: Text(
                   '${(_held ?? widget.value).round()} ${widget.unit}',
                   style: kSimpleText,
                   textAlign: TextAlign.center,
+                  maxLines: 1,
+                  softWrap: false,
+                  overflow: TextOverflow.visible,
                 ),
               ),
               _button(1),
