@@ -308,9 +308,12 @@ Widget simpleWindowStepper({
       mainAxisSize: MainAxisSize.min,
       children: [
         button('down', Icons.remove, (l) => l.deviceLess, onLess),
-        SizedBox(
-          width: kSimpleWindowControlWidth - 96, // less the two 48 pt buttons
-          child: Text(text, textAlign: TextAlign.center, style: kSimpleText),
+        // Gives way in a narrow window, keeping the buttons whole.
+        Flexible(
+          child: SizedBox(
+            width: kSimpleWindowControlWidth - 96, // less the two 48 pt buttons
+            child: Text(text, textAlign: TextAlign.center, style: kSimpleText),
+          ),
         ),
         button('up', Icons.add, (l) => l.deviceMore, onMore),
       ],
@@ -319,17 +322,30 @@ Widget simpleWindowStepper({
 }
 
 /// One height for every row of a device window (the 44 pt of its controls),
-/// so a text-only row keeps the rhythm. [id] (English) names its Key.
+/// so a text-only row keeps the rhythm. [id] (English) names its Key. Too
+/// narrow for label and control side by side (a one-third Split View), the
+/// label goes over the control.
 Widget simpleWindowRow(String label, Widget value, {required String id}) =>
-    ConstrainedBox(
+    LayoutBuilder(
       key: Key('simple-window-row-$id'),
-      constraints: const BoxConstraints(minHeight: 44),
-      child: Row(
-        children: [
-          Expanded(child: Text(label, style: kSimpleText)),
-          value,
-        ],
-      ),
+      builder: (context, box) => box.maxWidth < kSimpleWindowControlWidth + 96
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              spacing: AraSpace.s4,
+              children: [
+                Text(label, style: kSimpleText),
+                value,
+              ],
+            )
+          : ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: 44),
+              child: Row(
+                children: [
+                  Expanded(child: Text(label, style: kSimpleText)),
+                  value,
+                ],
+              ),
+            ),
     );
 
 /// On / Off as named segments, never a bare toggle (DESIGN.md); [labels]
@@ -953,45 +969,31 @@ class _SimpleFocuserWindowState extends ConsumerState<SimpleFocuserWindow> {
         ),
         const SizedBox(height: AraSpace.s16),
         // Rows like the Guider window's: label left, control right.
-        LayoutBuilder(
-          builder: (context, box) {
-            // Too narrow for label and segments side by side (one-third
-            // Split View): the label goes over them, full width.
-            final narrow = box.maxWidth < kSimpleWindowControlWidth + 96;
-            final steps = Container(
-              key: const Key('simple-focuser-steps'),
-              width: narrow ? double.infinity : kSimpleWindowControlWidth,
-              decoration: BoxDecoration(
-                color: AraColors.tileFill,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                children: [
-                  for (final n in const [10, 100, 1000])
-                    Expanded(
-                      child: SimpleSegment(
-                        key: Key('simple-focuser-step-$n'),
-                        label: '$n',
-                        selected: _step == n,
-                        radius: 8,
-                        onTap: () => setState(() => _step = n),
-                      ),
+        simpleWindowRow(
+          context.l10n.deviceStep,
+          id: 'Step',
+          Container(
+            key: const Key('simple-focuser-steps'),
+            width: kSimpleWindowControlWidth,
+            decoration: BoxDecoration(
+              color: AraColors.tileFill,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              children: [
+                for (final n in const [10, 100, 1000])
+                  Expanded(
+                    child: SimpleSegment(
+                      key: Key('simple-focuser-step-$n'),
+                      label: '$n',
+                      selected: _step == n,
+                      radius: 8,
+                      onTap: () => setState(() => _step = n),
                     ),
-                ],
-              ),
-            );
-            return narrow
-                ? Column(
-                    key: const Key('simple-window-row-Step'),
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    spacing: AraSpace.s4,
-                    children: [
-                      Text(context.l10n.deviceStep, style: kSimpleText),
-                      steps,
-                    ],
-                  )
-                : simpleWindowRow(context.l10n.deviceStep, id: 'Step', steps);
-          },
+                  ),
+              ],
+            ),
+          ),
         ),
         ..._refocus(),
       ]);

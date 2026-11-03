@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart' show Ticker;
+import 'package:flutter/services.dart' show LogicalKeyboardKey;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../l10n/l10n.dart';
@@ -419,6 +420,76 @@ List<Duration> exposurePresets({
 
 /// A labelled 48 px tile that opens a list to pick from. The current value
 /// stays listed even when it isn't a preset (set in the full UI, say).
+/// Arrow keys for a wheel, which Flutter's pickers lack (WCAG 2.1.1): Tab
+/// reaches it, Down moves to the next item and Up to the one before, and a
+/// ring shows it has focus. [debugLabel] names its focus node.
+class SimpleWheelKeys extends StatefulWidget {
+  const SimpleWheelKeys({
+    super.key,
+    required this.debugLabel,
+    required this.onStep,
+    required this.child,
+    this.autofocus = false,
+  });
+
+  final String debugLabel;
+  final ValueChanged<int> onStep;
+  final Widget child;
+  final bool autofocus;
+
+  /// [onStep] for a picker on [c] with [count] items: one item, kept in range.
+  static ValueChanged<int> stepper(FixedExtentScrollController c, int count) =>
+      (d) {
+        final to = (c.selectedItem + d).clamp(0, count - 1);
+        if (to != c.selectedItem) c.jumpToItem(to);
+      };
+
+  @override
+  State<SimpleWheelKeys> createState() => _SimpleWheelKeysState();
+}
+
+class _SimpleWheelKeysState extends State<SimpleWheelKeys> {
+  late final _focus = FocusNode(debugLabel: widget.debugLabel);
+  bool _ring = false;
+
+  @override
+  void dispose() {
+    _focus.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => FocusableActionDetector(
+    focusNode: _focus,
+    autofocus: widget.autofocus,
+    onShowFocusHighlight: (v) => setState(() => _ring = v),
+    shortcuts: const {
+      SingleActivator(LogicalKeyboardKey.arrowDown): _WheelStep(1),
+      SingleActivator(LogicalKeyboardKey.arrowUp): _WheelStep(-1),
+    },
+    actions: {
+      _WheelStep: CallbackAction<_WheelStep>(
+        onInvoke: (i) => widget.onStep(i.dir),
+      ),
+    },
+    child: DecoratedBox(
+      position: DecorationPosition.foreground,
+      decoration: BoxDecoration(
+        border: _ring
+            ? Border.all(color: AraColors.accentInfo, width: 2)
+            : null,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: widget.child,
+    ),
+  );
+}
+
+class _WheelStep extends Intent {
+  const _WheelStep(this.dir);
+  final int dir;
+}
+
 class SimplePresetTile<T> extends StatelessWidget {
   const SimplePresetTile({
     super.key,
@@ -516,6 +587,9 @@ class SimplePresetTile<T> extends StatelessWidget {
 
   Future<void> _showWheel(BuildContext context, List<T> items) async {
     var picked = value;
+    final wheel = FixedExtentScrollController(
+      initialItem: items.indexOf(value),
+    );
     final done = await showCupertinoModalPopup<bool>(
       context: context,
       builder: (popup) => Container(
@@ -539,16 +613,20 @@ class SimplePresetTile<T> extends StatelessWidget {
                 ],
               ),
               Expanded(
-                child: CupertinoPicker(
-                  itemExtent: 44,
-                  scrollController: FixedExtentScrollController(
-                    initialItem: items.indexOf(value),
+                // Focused on opening, so the arrows turn it at once.
+                child: SimpleWheelKeys(
+                  debugLabel: 'simple-wheel-$label',
+                  autofocus: true,
+                  onStep: SimpleWheelKeys.stepper(wheel, items.length),
+                  child: CupertinoPicker(
+                    itemExtent: 44,
+                    scrollController: wheel,
+                    onSelectedItemChanged: (i) => picked = items[i],
+                    children: [
+                      for (final o in items)
+                        Center(child: Text(format(o), style: kSimpleText)),
+                    ],
                   ),
-                  onSelectedItemChanged: (i) => picked = items[i],
-                  children: [
-                    for (final o in items)
-                      Center(child: Text(format(o), style: kSimpleText)),
-                  ],
                 ),
               ),
             ],
@@ -556,6 +634,7 @@ class SimplePresetTile<T> extends StatelessWidget {
         ),
       ),
     );
+    wheel.dispose();
     if (done ?? false) onSelected(picked);
   }
 }

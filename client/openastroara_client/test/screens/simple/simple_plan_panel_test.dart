@@ -275,6 +275,16 @@ Future<bool> _tabTo(WidgetTester tester, Key k, {int max = 40}) async {
   return inside();
 }
 
+
+/// Tabs (at most [max] times) until the focused node is the one labelled [label].
+Future<bool> _tabToLabel(WidgetTester tester, String label, {int max = 60}) async {
+  for (var i = 0; i < max && FocusManager.instance.primaryFocus?.debugLabel != label; i++) {
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pump();
+  }
+  return FocusManager.instance.primaryFocus?.debugLabel == label;
+}
+
 void main() {
   test('the first plan: LRGB from the set, one unnamed row without a choice', () {
     final lrgb = simpleRunDefaultPlan(_lrgb, 300);
@@ -550,6 +560,21 @@ void main() {
       expect(find.byType(CupertinoPicker), findsOneWidget);
     });
 
+    testWidgets('the Frames wheel turns with the arrow keys: Enter opens it focused, Down is the next count', (tester) async {
+      final c = await _pump(tester, _Seq(),
+          SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}, onLibrary: () {}));
+      final before = c.read(simpleRunPlanProvider).first.frameCount;
+      expect(await _tabTo(tester, const Key('simple-run-frames-0')), isTrue);
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pumpAndSettle();
+      expect(FocusManager.instance.primaryFocus?.debugLabel, 'simple-wheel-Frames', reason: 'focus lands on the wheel');
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Done'));
+      await tester.pumpAndSettle();
+      expect(c.read(simpleRunPlanProvider).first.frameCount, greaterThan(before));
+    });
+
     testWidgets('a plan starts from the camera\'s gain and keeps its own; the run shoots at the plan\'s', (tester) async {
       final seq = _Seq();
       final c = await _pump(tester, seq,
@@ -688,6 +713,24 @@ void main() {
         await tester.tap(find.byKey(const Key('simple-run-start')));
         await tester.pumpAndSettle();
         expect(seq.calls, ['create M31', 'start seq-1'], reason: 'starting now leaves the plan as it was');
+      });
+
+      testWidgets('the start-time wheel takes the arrow keys: Down is 5 minutes later', (tester) async {
+        await _pump(tester, _Seq(),
+            SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}, onLibrary: () {}),
+            overrides: overrides);
+        await tester.tap(find.byKey(const Key('simple-run-pick-time')));
+        await tester.pump();
+        expect(await _tabToLabel(tester, 'simple-run-time-wheel'), isTrue);
+        // The wheel starts at dark on its 5-minute grid.
+        final grid = dark.subtract(Duration(minutes: dark.minute % 5));
+        await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+        await tester.pumpAndSettle();
+        expect(go(tester), 'Start at ${hhmm(grid.add(const Duration(minutes: 5)))}');
+        await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+        await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+        await tester.pumpAndSettle();
+        expect(go(tester), 'Start at ${hhmm(grid.subtract(const Duration(minutes: 5)))}');
       });
     });
 

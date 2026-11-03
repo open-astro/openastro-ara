@@ -395,6 +395,16 @@ Future<bool> _tabTo(WidgetTester tester, Key k, {int max = 40}) async {
   return inside();
 }
 
+
+/// Tabs (at most [max] times) until the focused node is the one labelled [label].
+Future<bool> _tabToLabel(WidgetTester tester, String label, {int max = 60}) async {
+  for (var i = 0; i < max && FocusManager.instance.primaryFocus?.debugLabel != label; i++) {
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pump();
+  }
+  return FocusManager.instance.primaryFocus?.debugLabel == label;
+}
+
 void main() {
   for (final size in const [Size(1024, 768), Size(1024, 744), Size(1470, 854)]) {
     testWidgets('at $size: compact right rail (mode, settings, shutter), Stop below, left rail (Sky, Info, Library)',
@@ -2279,5 +2289,21 @@ void main() {
     for (final id in ['rig', 'profile']) {
       expect(tester.getSize(find.byKey(Key('simple-rig-change-$id'))).height, greaterThanOrEqualTo(44), reason: id);
     }
+  });
+
+  testWidgets('a Rig wheel turns with the arrow keys and sets the value', (tester) async {
+    final c = await _pump(tester, const Size(1024, 768));
+    await _openSection(tester, 'Rig');
+    final before = c.read(siteSettingsProvider).latitudeDeg;
+    final lat = find.byKey(const Key('simple-rig-lat'));
+    await tester.ensureVisible(lat);
+    await tester.pump();
+    await tester.tap(lat);
+    await tester.pump();
+    // Wheel 1 is the tens of degrees.
+    expect(await _tabToLabel(tester, 'simple-rig-lat-wheel-1'), isTrue, reason: 'Tab reaches each wheel');
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.pumpAndSettle();
+    expect(c.read(siteSettingsProvider).latitudeDeg, closeTo(before.abs() + 10, 0.001));
   });
 }

@@ -47,7 +47,12 @@ import '../../widgets/sequencer/run_completion_sheet.dart'
     show runFramesPerFilter;
 import 'simple_device_windows.dart' show SimpleGainSlider;
 import 'simple_preview_panel.dart'
-    show SimplePresetTile, exposurePresets, formatExposure, kSimpleText;
+    show
+        SimplePresetTile,
+        SimpleWheelKeys,
+        exposurePresets,
+        formatExposure,
+        kSimpleText;
 import 'simple_shell.dart'
     show
         SimplePanel,
@@ -1445,6 +1450,10 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
   /// [_startNow], or at the [_pickedStart] the wheel set.
   bool _startNow = false;
   DateTime? _pickedStart;
+
+  /// Bumped by an arrow key, so the time wheel re-reads [_pickedStart]
+  /// (it reads its initial time once); a finger's turn leaves it alone.
+  int _timeKeyed = 0;
   bool _picking = false;
 
   @override
@@ -1905,13 +1914,25 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
             SizedBox(
               key: const Key('simple-run-time-picker'),
               height: 132,
-              child: CupertinoDatePicker(
-                mode: CupertinoDatePickerMode.time,
-                use24hFormat: MediaQuery.alwaysUse24HourFormatOf(context),
-                minuteInterval: 5,
-                initialDateTime: _pickedStart,
-                onDateTimeChanged: (t) =>
-                    setState(() => _pickedStart = _nextAt(t, now)),
+              child: SimpleWheelKeys(
+                debugLabel: 'simple-run-time-wheel',
+                // Down is 5 minutes later, as the wheel's next row.
+                onStep: (int d) => setState(() {
+                  _pickedStart = _nextAt(
+                    (_pickedStart ?? now).add(Duration(minutes: 5 * d)),
+                    now,
+                  );
+                  _timeKeyed++;
+                }),
+                child: CupertinoDatePicker(
+                  key: ValueKey(_timeKeyed),
+                  mode: CupertinoDatePickerMode.time,
+                  use24hFormat: MediaQuery.alwaysUse24HourFormatOf(context),
+                  minuteInterval: 5,
+                  initialDateTime: _pickedStart,
+                  onDateTimeChanged: (t) =>
+                      setState(() => _pickedStart = _nextAt(t, now)),
+                ),
               ),
             ),
         ],

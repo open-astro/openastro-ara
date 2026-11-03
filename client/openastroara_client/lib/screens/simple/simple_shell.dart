@@ -542,6 +542,9 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     final railWidth = kSimpleRailWidth * simpleRailScale(context);
     // Stop grows with the rails, so its label fits at the user's text size.
     final stopSize = kSimpleStopSize * simpleRailScale(context);
+    // The bottom row (guiding, histogram) grows with the text like the
+    // rails, so its two lines of labels fit at the user's size.
+    final bottomRow = kSimpleBarHeight * simpleRailScale(context);
     final width = MediaQuery.sizeOf(context).width;
     final autopilotRow =
         _mode == SimpleModeScreen.autopilot ||
@@ -577,7 +580,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
         ? double.infinity
         : height -
               kSimpleInset * 3 -
-              kSimpleBarHeight -
+              bottomRow -
               (planSquares
                   ? kSimplePlanSquareHeight * simpleRailScale(context) +
                         kSimpleInset
@@ -733,10 +736,10 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                               // Info: fact tiles hugging the bottom-left corner,
                               // above the bottom row.
                               if (_info)
-                                const Positioned(
+                                Positioned(
                                   left: kSimpleInset,
-                                  bottom: kSimpleInset * 2 + kSimpleBarHeight,
-                                  child: SimpleInfoPanel(),
+                                  bottom: kSimpleInset * 2 + bottomRow,
+                                  child: const SimpleInfoPanel(),
                                 ),
                               // Guiding and the histogram along the bottom, each
                               // once it has data: 16 px from the edge and from Stop.
@@ -746,7 +749,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                     kSimpleInset * 2 +
                                     (railWidth + stopSize) / 2,
                                 bottom: kSimpleInset,
-                                height: kSimpleBarHeight,
+                                height: bottomRow,
                                 child: const _StatsRow(),
                               ),
                               Positioned(
@@ -811,7 +814,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                       railTop +
                                       kSimpleStatusHeight +
                                       kSimpleInset,
-                                  bottom: kSimpleInset * 2 + kSimpleBarHeight,
+                                  bottom: kSimpleInset * 2 + bottomRow,
                                   child: Center(
                                     child: SimpleRunSheet(
                                       editing: _editing,
@@ -910,7 +913,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                 Positioned(
                                   left: width / 2,
                                   right: kSimpleInset,
-                                  bottom: kSimpleInset * 2 + kSimpleBarHeight,
+                                  bottom: kSimpleInset * 2 + bottomRow,
                                   child: Align(
                                     alignment: Alignment.bottomRight,
                                     child: SimpleRunTracker(
@@ -961,7 +964,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                   top: railTop,
                                   left: 0,
                                   right: 0,
-                                  bottom: kSimpleInset * 2 + kSimpleBarHeight,
+                                  bottom: kSimpleInset * 2 + bottomRow,
                                   child: Align(
                                     alignment: Alignment.topCenter,
                                     child: SizedBox(
@@ -996,7 +999,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                   left: kSimpleInset,
                                   right: kSimpleInset,
                                   top: railTop,
-                                  bottom: kSimpleInset * 2 + kSimpleBarHeight,
+                                  bottom: kSimpleInset * 2 + bottomRow,
                                   child: _SettingsSheet(
                                     key: ValueKey(_menuSection),
                                     section: _menuSection,
@@ -2842,37 +2845,43 @@ class _RigWheelRowState extends State<_RigWheelRow> {
   // iOS's own picker: the value under the band magnified, the wheels of a
   // group sharing one band like the Clock app's timer. [k] is the user's
   // text size, so a digit keeps its slot (WCAG 1.4.4).
-  Widget _wheel(int i, double k, {required bool first, required bool last}) =>
-      SizedBox(
-        // A digit's wheel, or wide enough for "600".
-        width: (widget.columns[i].length > 10 ? 72 : 36) * k,
-        height: 160 * k,
-        child: Semantics(
-          label: context.l10n.shellWheelSemantics(
-            widget.label,
-            i + 1,
-            widget.columns.length,
+  Widget _wheel(
+    int i,
+    double k, {
+    required bool first,
+    required bool last,
+  }) => SizedBox(
+    // A digit's wheel, or wide enough for "600".
+    width: (widget.columns[i].length > 10 ? 72 : 36) * k,
+    height: 160 * k,
+    child: Semantics(
+      label: context.l10n.shellWheelSemantics(
+        widget.label,
+        i + 1,
+        widget.columns.length,
+      ),
+      child: SimpleWheelKeys(
+        debugLabel: 'simple-rig-${widget.id}-wheel-$i',
+        onStep: SimpleWheelKeys.stepper(_wheels[i], widget.columns[i].length),
+        child: CupertinoPicker(
+          key: Key('simple-rig-${widget.id}-wheel-$i'),
+          scrollController: _wheels[i],
+          itemExtent: 36 * k,
+          useMagnifier: true,
+          magnification: 1.2,
+          selectionOverlay: CupertinoPickerDefaultSelectionOverlay(
+            capStartEdge: first,
+            capEndEdge: last,
           ),
-          child: CupertinoPicker(
-            key: Key('simple-rig-${widget.id}-wheel-$i'),
-            scrollController: _wheels[i],
-            itemExtent: 36 * k,
-            useMagnifier: true,
-            magnification: 1.2,
-            selectionOverlay: CupertinoPickerDefaultSelectionOverlay(
-              capStartEdge: first,
-              capEndEdge: last,
-            ),
-            onSelectedItemChanged: (_) {},
-            children: [
-              for (final o in widget.columns[i])
-                Center(
-                  child: Text(o, style: kSimpleText.copyWith(fontSize: 20)),
-                ),
-            ],
-          ),
+          onSelectedItemChanged: (_) {},
+          children: [
+            for (final o in widget.columns[i])
+              Center(child: Text(o, style: kSimpleText.copyWith(fontSize: 20))),
+          ],
         ),
-      );
+      ),
+    ),
+  );
 
   /// Wheels [from] up to [to] on one band, then [tail].
   Widget _group(int from, int to, double k, List<Widget> tail) => Row(

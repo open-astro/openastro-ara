@@ -6,6 +6,8 @@ import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/models/guider_status.dart';
+import 'package:openastroara/state/guider/guider_state.dart';
 import 'package:openastroara/models/sequence/imaging_run_body.dart';
 import 'package:openastroara/screens/simple/simple_plan_panel.dart';
 import 'package:openastroara/screens/simple/simple_shell.dart';
@@ -71,6 +73,15 @@ class _Focuser extends FocuserNotifier {
       });
 }
 
+/// A guider guiding, so the bottom row's guiding bar shows.
+class _Guiding extends GuiderStatusNotifier {
+  @override
+  Future<GuiderStatus?> build() async => GuiderStatus.fromJson(const {
+        'device_id': 'g', 'name': 'PHD2', 'state': 'connected',
+        'runtime': {'state': 'guiding', 'rms_total_arcsec': 0.62},
+      });
+}
+
 /// An imaged target with a long name, for Search's result rows.
 class _Sessions extends LiveLibrarySessionsNotifier {
   @override
@@ -107,7 +118,7 @@ void main() {
     (1.0, const Size(320, 768)),
   ];
   for (final (scale, size) in cases) {
-    for (final open in ['Preview settings', 'Plan', 'Stop armed', 'Modes', 'Settings', 'Rig', 'Camera', 'Settings Focuser', 'Search', 'Wheels lat', 'Wheels lng', 'Wheels aperture', 'Wheels focal']) {
+    for (final open in ['Preview settings', 'Plan', 'Stop armed', 'Modes', 'Settings', 'Rig', 'Camera', 'Settings Focuser', 'Search', 'Wheels lat', 'Wheels lng', 'Wheels aperture', 'Wheels focal', 'Settings Guider', 'Guiding']) {
       testWidgets('text ${scale}x at ${size.width.toInt()}x${size.height.toInt()}, $open: nothing overflows',
           skip: !hasFonts, (tester) async {
         tester.view.physicalSize = size;
@@ -120,6 +131,7 @@ void main() {
           if (open == 'Camera') cameraStatusProvider.overrideWith(_Camera.new),
           if (open == 'Settings Focuser') focuserProvider.overrideWith(_Focuser.new),
           if (open == 'Search') liveLibrarySessionsProvider.overrideWith(_Sessions.new),
+          if (open == 'Settings Guider' || open == 'Guiding') guiderStatusProvider.overrideWith(_Guiding.new),
           if (open == 'Plan') ...[
             tonightSkyProvider.overrideWith(
                 (ref) async => [_o('M31', 62), _o('North America Nebula', 71), _o('M33', 48), _o('M45', 30)]),
@@ -129,6 +141,7 @@ void main() {
         addTearDown(c.dispose);
         await c.read(simpleModeProvider.future);
         if (open == 'Settings Focuser') await c.read(focuserProvider.future);
+        if (open == 'Settings Guider' || open == 'Guiding') await c.read(guiderStatusProvider.future);
         await tester.pumpWidget(UncontrolledProviderScope(
           container: c,
           child: MaterialApp(
@@ -216,6 +229,15 @@ void main() {
             expect(p.textSize.width, lessThanOrEqualTo(p.size.width + 0.5),
                 reason: '"${p.text.toPlainText()}" is squeezed in its wheel');
           }
+        } else if (open == 'Settings Guider') {
+          // Its page in Settings: state, RMS, gain and the dither steppers.
+          await tester.tap(find.byTooltip('Settings'));
+          await tester.pump();
+          await tester.tap(find.byKey(const Key('simple-menu-nav-Guider')));
+          await tester.pump();
+        } else if (open == 'Guiding') {
+          // The bottom row's guiding bar: "Guiding" over the RMS, RA over Dec.
+          expect(find.byKey(const Key('simple-guide-trace')), findsOneWidget);
         } else if (open == 'Search') {
           await tester.tap(find.byKey(const Key('simple-search-button')));
           await tester.pump();
