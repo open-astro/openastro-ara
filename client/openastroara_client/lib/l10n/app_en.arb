@@ -584,7 +584,7 @@
   },
   "polarDoneNextPlan": "Done · Next: Plan",
   "@polarDoneNextPlan": {
-    "description": "Simple Mode Polar align panel: finish button in Autopilot, which then moves on to the Plan step"
+    "description": "Simple Mode Polar align panel: finish button in Guided Run, which then moves on to the Plan step"
   },
   "searchHint": "Objects, settings, modes, images",
   "@searchHint": {
@@ -835,19 +835,19 @@
   },
   "autopilotStepFocus": "Focus",
   "@autopilotStepFocus": {
-    "description": "Simple Mode Autopilot strip: step name: autofocus"
+    "description": "Simple Mode Guided Run strip: step name: autofocus"
   },
   "autopilotStepPolarAlign": "Polar align",
   "@autopilotStepPolarAlign": {
-    "description": "Simple Mode Autopilot strip: step name: polar alignment"
+    "description": "Simple Mode Guided Run strip: step name: polar alignment"
   },
   "autopilotStepPlan": "Plan",
   "@autopilotStepPlan": {
-    "description": "Simple Mode Autopilot strip: step name: the imaging plan"
+    "description": "Simple Mode Guided Run strip: step name: the imaging plan"
   },
   "autopilotStepDone": "{step}, done",
   "@autopilotStepDone": {
-    "description": "Simple Mode Autopilot strip: screen-reader label of a step done tonight",
+    "description": "Simple Mode Guided Run strip: screen-reader label of a step done tonight",
     "placeholders": {
       "step": {
         "type": "String",
@@ -857,7 +857,7 @@
   },
   "autopilotStepSkipped": "{step}, skipped",
   "@autopilotStepSkipped": {
-    "description": "Simple Mode Autopilot strip: screen-reader label of a skipped step",
+    "description": "Simple Mode Guided Run strip: screen-reader label of a skipped step",
     "placeholders": {
       "step": {
         "type": "String",
@@ -867,7 +867,7 @@
   },
   "autopilotStepCurrent": "{step}, current step",
   "@autopilotStepCurrent": {
-    "description": "Simple Mode Autopilot strip: screen-reader label of the current step",
+    "description": "Simple Mode Guided Run strip: screen-reader label of the current step",
     "placeholders": {
       "step": {
         "type": "String",
@@ -877,7 +877,7 @@
   },
   "autopilotStepNext": "{step}, next",
   "@autopilotStepNext": {
-    "description": "Simple Mode Autopilot strip: screen-reader label of a step still ahead",
+    "description": "Simple Mode Guided Run strip: screen-reader label of a step still ahead",
     "placeholders": {
       "step": {
         "type": "String",
@@ -887,25 +887,25 @@
   },
   "autopilotBack": "Back",
   "@autopilotBack": {
-    "description": "Simple Mode Autopilot strip: button that goes back one step"
+    "description": "Simple Mode Guided Run strip: button that goes back one step"
   },
   "autopilotSkip": "Skip",
   "@autopilotSkip": {
-    "description": "Simple Mode Autopilot strip: button that skips the current step"
+    "description": "Simple Mode Guided Run strip: button that skips the current step"
   },
   "autopilotNothingDone": "Nothing done yet tonight",
   "@autopilotNothingDone": {
-    "description": "Simple Mode Autopilot offer under the status strip: why Autopilot is offered"
+    "description": "Simple Mode Guided Run offer under the status strip: why Guided Run is offered"
   },
-  "autopilotStart": "Start Autopilot",
+  "autopilotStart": "Start Guided Run",
   "@autopilotStart": {
-    "description": "Simple Mode Autopilot offer: button that starts Autopilot"
+    "description": "Simple Mode Guided Run offer: button that starts Guided Run"
   },
   "autopilotNotNow": "Not now",
   "@autopilotNotNow": {
-    "description": "Simple Mode Autopilot offer: tooltip of the × that dismisses it"
+    "description": "Simple Mode Guided Run offer: tooltip of the × that dismisses it"
   },
-  "shellModeAutopilot": "Autopilot",
+  "shellModeAutopilot": "Guided Run",
   "@shellModeAutopilot": {
     "description": "Simple Mode mode name (mode grid, Mode: label for screen readers)"
   },
@@ -929,9 +929,9 @@
   "@shellRailPolarAlign": {
     "description": "Simple Mode right rail: short name of Polar align (60 px wide rail, keep very short)"
   },
-  "shellRailAutopilot": "Auto",
+  "shellRailAutopilot": "Guided",
   "@shellRailAutopilot": {
-    "description": "Simple Mode right rail: short name of Autopilot (60 px wide rail, keep very short)"
+    "description": "Simple Mode right rail: short name of Guided Run (60 px wide rail, keep very short)"
   },
   "shellStopAgain": "Press {shortcut} again to stop the run",
   "@shellStopAgain": {

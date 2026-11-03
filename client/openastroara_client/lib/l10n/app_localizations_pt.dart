@@ -657,13 +657,13 @@ class AppLocalizationsPt extends AppLocalizations {
   String get autopilotNothingDone => 'Nothing done yet tonight';
 
   @override
-  String get autopilotStart => 'Start Autopilot';
+  String get autopilotStart => 'Start Guided Run';
 
   @override
   String get autopilotNotNow => 'Not now';
 
   @override
-  String get shellModeAutopilot => 'Autopilot';
+  String get shellModeAutopilot => 'Guided Run';
 
   @override
   String get shellModePreview => 'Preview';
@@ -681,7 +681,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get shellRailPolarAlign => 'P.A.';
 
   @override
-  String get shellRailAutopilot => 'Auto';
+  String get shellRailAutopilot => 'Guided';
 
   @override
   String shellStopAgain(String shortcut) {
@@ -2382,13 +2382,13 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get autopilotNothingDone => 'Nada feito ainda esta noite';
 
   @override
-  String get autopilotStart => 'Iniciar Piloto automático';
+  String get autopilotStart => 'Iniciar sessão guiada';
 
   @override
   String get autopilotNotNow => 'Agora não';
 
   @override
-  String get shellModeAutopilot => 'Piloto automático';
+  String get shellModeAutopilot => 'Sessão guiada';
 
   @override
   String get shellModePreview => 'Prévia';
@@ -2406,7 +2406,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get shellRailPolarAlign => 'A.P.';
 
   @override
-  String get shellRailAutopilot => 'Auto';
+  String get shellRailAutopilot => 'Guiada';
 
   @override
   String shellStopAgain(String shortcut) {

@@ -849,7 +849,7 @@ abstract class AppLocalizations {
   /// **'Done'**
   String get polarDone;
 
-  /// Simple Mode Polar align panel: finish button in Autopilot, which then moves on to the Plan step
+  /// Simple Mode Polar align panel: finish button in Guided Run, which then moves on to the Plan step
   ///
   /// In en, this message translates to:
   /// **'Done · Next: Plan'**
@@ -1209,73 +1209,73 @@ abstract class AppLocalizations {
   /// **'guiding dithering'**
   String get searchWordsDither;
 
-  /// Simple Mode Autopilot strip: step name: autofocus
+  /// Simple Mode Guided Run strip: step name: autofocus
   ///
   /// In en, this message translates to:
   /// **'Focus'**
   String get autopilotStepFocus;
 
-  /// Simple Mode Autopilot strip: step name: polar alignment
+  /// Simple Mode Guided Run strip: step name: polar alignment
   ///
   /// In en, this message translates to:
   /// **'Polar align'**
   String get autopilotStepPolarAlign;
 
-  /// Simple Mode Autopilot strip: step name: the imaging plan
+  /// Simple Mode Guided Run strip: step name: the imaging plan
   ///
   /// In en, this message translates to:
   /// **'Plan'**
   String get autopilotStepPlan;
 
-  /// Simple Mode Autopilot strip: screen-reader label of a step done tonight
+  /// Simple Mode Guided Run strip: screen-reader label of a step done tonight
   ///
   /// In en, this message translates to:
   /// **'{step}, done'**
   String autopilotStepDone(String step);
 
-  /// Simple Mode Autopilot strip: screen-reader label of a skipped step
+  /// Simple Mode Guided Run strip: screen-reader label of a skipped step
   ///
   /// In en, this message translates to:
   /// **'{step}, skipped'**
   String autopilotStepSkipped(String step);
 
-  /// Simple Mode Autopilot strip: screen-reader label of the current step
+  /// Simple Mode Guided Run strip: screen-reader label of the current step
   ///
   /// In en, this message translates to:
   /// **'{step}, current step'**
   String autopilotStepCurrent(String step);
 
-  /// Simple Mode Autopilot strip: screen-reader label of a step still ahead
+  /// Simple Mode Guided Run strip: screen-reader label of a step still ahead
   ///
   /// In en, this message translates to:
   /// **'{step}, next'**
   String autopilotStepNext(String step);
 
-  /// Simple Mode Autopilot strip: button that goes back one step
+  /// Simple Mode Guided Run strip: button that goes back one step
   ///
   /// In en, this message translates to:
   /// **'Back'**
   String get autopilotBack;
 
-  /// Simple Mode Autopilot strip: button that skips the current step
+  /// Simple Mode Guided Run strip: button that skips the current step
   ///
   /// In en, this message translates to:
   /// **'Skip'**
   String get autopilotSkip;
 
-  /// Simple Mode Autopilot offer under the status strip: why Autopilot is offered
+  /// Simple Mode Guided Run offer under the status strip: why Guided Run is offered
   ///
   /// In en, this message translates to:
   /// **'Nothing done yet tonight'**
   String get autopilotNothingDone;
 
-  /// Simple Mode Autopilot offer: button that starts Autopilot
+  /// Simple Mode Guided Run offer: button that starts Guided Run
   ///
   /// In en, this message translates to:
-  /// **'Start Autopilot'**
+  /// **'Start Guided Run'**
   String get autopilotStart;
 
-  /// Simple Mode Autopilot offer: tooltip of the × that dismisses it
+  /// Simple Mode Guided Run offer: tooltip of the × that dismisses it
   ///
   /// In en, this message translates to:
   /// **'Not now'**
@@ -1284,7 +1284,7 @@ abstract class AppLocalizations {
   /// Simple Mode mode name (mode grid, Mode: label for screen readers)
   ///
   /// In en, this message translates to:
-  /// **'Autopilot'**
+  /// **'Guided Run'**
   String get shellModeAutopilot;
 
   /// Simple Mode mode name
@@ -1317,10 +1317,10 @@ abstract class AppLocalizations {
   /// **'P.A.'**
   String get shellRailPolarAlign;
 
-  /// Simple Mode right rail: short name of Autopilot (60 px wide rail, keep very short)
+  /// Simple Mode right rail: short name of Guided Run (60 px wide rail, keep very short)
   ///
   /// In en, this message translates to:
-  /// **'Auto'**
+  /// **'Guided'**
   String get shellRailAutopilot;
 
   /// Simple Mode message after the stop keyboard shortcut once; shortcut is the key combo (⌘. or Ctrl+.)

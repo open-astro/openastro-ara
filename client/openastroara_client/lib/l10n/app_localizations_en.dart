@@ -657,13 +657,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get autopilotNothingDone => 'Nothing done yet tonight';
 
   @override
-  String get autopilotStart => 'Start Autopilot';
+  String get autopilotStart => 'Start Guided Run';
 
   @override
   String get autopilotNotNow => 'Not now';
 
   @override
-  String get shellModeAutopilot => 'Autopilot';
+  String get shellModeAutopilot => 'Guided Run';
 
   @override
   String get shellModePreview => 'Preview';
@@ -681,7 +681,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get shellRailPolarAlign => 'P.A.';
 
   @override
-  String get shellRailAutopilot => 'Auto';
+  String get shellRailAutopilot => 'Guided';
 
   @override
   String shellStopAgain(String shortcut) {

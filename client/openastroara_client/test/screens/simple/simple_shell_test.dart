@@ -529,7 +529,7 @@ void main() {
     final container = await _pump(tester, const Size(1024, 768));
     await tester.tap(find.byKey(const Key('simple-mode')));
     await tester.pump();
-    final modes = ['Autopilot', 'Preview', 'Focus', 'Polar align', 'Plan'];
+    final modes = ['Guided Run', 'Preview', 'Focus', 'Polar align', 'Plan'];
     // The grid's tile, not the rail's label (which also reads Preview): the leftmost match.
     // The tile's corner, not the text's: a name on two lines sits higher in its tile.
     Offset tile(String m) => (find.text(m).evaluate().map((e) => tester.getTopLeft(
@@ -805,9 +805,9 @@ void main() {
     await tester.pump();
     expect(find.byKey(const Key('autopilot-offer')), findsNothing);
     expect(find.byKey(const Key('autopilot-strip')), findsOneWidget);
-    // "Autopilot" doesn't fit the 60 px rail: it reads Auto, as Polar align reads P.A.
-    expect(find.descendant(of: find.byKey(const Key('simple-mode')), matching: find.text('Auto')), findsOneWidget);
-    expect(find.bySemanticsLabel(RegExp(r'^Mode: Autopilot')), findsOneWidget, reason: 'the screen reader says it whole');
+    // "Guided Run" doesn't fit the 60 px rail: it reads Guided, as Polar align reads P.A.
+    expect(find.descendant(of: find.byKey(const Key('simple-mode')), matching: find.text('Guided')), findsOneWidget);
+    expect(find.bySemanticsLabel(RegExp(r'^Mode: Guided Run')), findsOneWidget, reason: 'the screen reader says it whole');
     expect(find.byType(SimpleFocusPanel), findsOneWidget, reason: "Focus's panel, open");
     await tester.tap(find.byKey(const Key('autopilot-skip')));
     await tester.pump();
@@ -872,7 +872,7 @@ void main() {
       await tap(find.byKey(const Key('simple-settings')));
       await tap(find.byKey(const Key('simple-mode')));
       expect(sheet, findsNothing, reason: 'the modes replace it');
-      expect(find.text('Autopilot'), findsOneWidget, reason: 'the modes are open');
+      expect(find.text('Guided Run'), findsOneWidget, reason: 'the modes are open');
       await tap(find.ancestor(of: find.text('Focus'), matching: find.byType(InkWell)).first);
       expect(find.byKey(const Key('autopilot-strip')), findsNothing, reason: 'Focus picked: Autopilot left');
       expect(find.byType(SimpleFocusPanel), findsNothing, reason: 'picking a mode opens nothing');
@@ -943,7 +943,7 @@ void main() {
     final container = await _pump(tester, const Size(1024, 768));
     await tester.tap(find.byKey(const Key('simple-mode')));
     await tester.pump();
-    await tester.tap(find.text('Autopilot'));
+    await tester.tap(find.text('Guided Run'));
     await tester.pump();
     expect(container.read(simpleModeProvider).value, isTrue, reason: 'no jump to the full UI');
     expect(find.byKey(const Key('autopilot-strip')), findsOneWidget);
