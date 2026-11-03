@@ -1152,6 +1152,7 @@ class _AutofocusButton extends ConsumerWidget {
                       Text(
                         context.l10n.deviceAutofocus,
                         style: AraText.caption,
+                        textAlign: TextAlign.center,
                       ),
                     ],
                   ),

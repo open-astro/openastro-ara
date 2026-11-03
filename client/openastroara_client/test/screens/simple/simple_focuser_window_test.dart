@@ -157,6 +157,10 @@ void main() {
     await tester.pump();
     expect(_live.starts, 1);
     expect(f.moves, isEmpty, reason: 'a tap in the middle is not a turn');
+    expect(
+        tester.widget<Text>(find.descendant(of: find.byKey(const Key('simple-focuser-autofocus')), matching: find.byType(Text))).textAlign,
+        TextAlign.center,
+        reason: 'a longer word (pt-BR "Foco automático") wraps centred in the round button');
   });
 
   testWidgets('the whole dial turns, like a safe\'s', (tester) async {
