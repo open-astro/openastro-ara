@@ -1009,16 +1009,28 @@ class _AutofocusButton extends ConsumerWidget {
   }
 }
 
-/// The guider's window: what it is doing, the guiding RMS, and how often a
-/// plan dithers (the profile's, so every run Ara builds dithers by it).
-class SimpleGuiderWindow extends ConsumerWidget {
-  const SimpleGuiderWindow({super.key});
+/// The guider's window, titled with its camera like Camera's: what it is
+/// doing, the guiding RMS, the guide camera's gain, and how often and how far
+/// a plan dithers (the profile's, so every run Ara builds uses them).
+class SimpleGuiderWindow extends ConsumerStatefulWidget {
+  const SimpleGuiderWindow({super.key, this.inSettings = false});
+
+  /// In Settings the window ends with the guide camera's versions.
+  final bool inSettings;
+
+  @override
+  ConsumerState<SimpleGuiderWindow> createState() => _SimpleGuiderWindowState();
+}
+
+class _SimpleGuiderWindowState extends ConsumerState<SimpleGuiderWindow> {
+  double? _dragGain;
 
   static String _arcsec(double v) => '${v.toStringAsFixed(2)}″';
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final g = ref.watch(guiderStatusProvider).value;
+    final camera = ref.watch(deviceDriverProvider('guidecamera')).value;
     final colour = switch (g?.connectionState) {
       GuiderConnectionState.connected => AraColors.accentConnected,
       GuiderConnectionState.connecting => AraColors.accentBusy,
@@ -1036,7 +1048,7 @@ class SimpleGuiderWindow extends ConsumerWidget {
           ),
           Expanded(
             child: Text(
-              g == null ? 'Guider' : 'Guider · ${g.name}',
+              camera?.name == null ? 'Guider' : 'Guider · ${camera!.name}',
               style: kSimpleText.copyWith(fontWeight: FontWeight.w600),
             ),
           ),
@@ -1076,6 +1088,24 @@ class SimpleGuiderWindow extends ConsumerWidget {
       }
     }
     final phd2 = ref.watch(phd2SettingsProvider);
+    // The guider's own gain scale: percent of the camera's range.
+    final gain = _dragGain ?? phd2.guideCameraGain.toDouble();
+    children.addAll([
+      simpleWindowRow('Gain', Text('${gain.round()} %', style: kSimpleText)),
+      Slider(
+        key: const Key('simple-guider-gain'),
+        min: 0,
+        max: 100,
+        divisions: 20,
+        value: gain.clamp(0, 100),
+        label: '${gain.round()} %',
+        onChanged: (v) => setState(() => _dragGain = v),
+        onChangeEnd: (v) {
+          setState(() => _dragGain = null);
+          _save((p) => p.setGuideCameraGain(v.round()));
+        },
+      ),
+    ]);
     final every = phd2.ditherEnabled ? math.max(1, phd2.ditherEveryNFrames) : 0;
     children.add(
       simpleWindowRow(
@@ -1087,11 +1117,28 @@ class SimpleGuiderWindow extends ConsumerWidget {
             1 => 'Every frame',
             _ => '$every frames',
           },
-          onLess: () => _setDither(context, ref, every - 1),
-          onMore: () => _setDither(context, ref, every + 1),
+          onLess: () => _setDither(every - 1),
+          onMore: () => _setDither(every + 1),
         ),
       ),
     );
+    if (every > 0) {
+      final px = phd2.ditherPixels;
+      children.add(
+        simpleWindowRow(
+          'Dither by',
+          simpleWindowStepper(
+            id: 'simple-guider-dither-px',
+            text: '${px == px.roundToDouble() ? px.round() : px} px',
+            onLess: () =>
+                px > 1 ? _save((p) => p.setDitherPixels(px - 1)) : null,
+            onMore: () =>
+                px < 30 ? _save((p) => p.setDitherPixels(px + 1)) : null,
+          ),
+        ),
+      );
+    }
+    if (widget.inSettings) children.addAll(_versions(camera));
     return Column(
       key: const Key('simple-device-guider'),
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1101,11 +1148,18 @@ class SimpleGuiderWindow extends ConsumerWidget {
   }
 
   /// 0 turns dithering off; 1 and up dithers every that many frames.
-  Future<void> _setDither(BuildContext context, WidgetRef ref, int n) async {
+  void _setDither(int n) {
     if (n < 0 || n > 20) return;
+    _save((p) {
+      p.setDitherEnabled(n > 0);
+      if (n > 0) p.setDitherEveryNFrames(n);
+    });
+  }
+
+  /// Changes the guider settings and saves them to the profile.
+  Future<void> _save(void Function(Phd2SettingsNotifier) change) async {
     final p = ref.read(phd2SettingsProvider.notifier);
-    p.setDitherEnabled(n > 0);
-    if (n > 0) p.setDitherEveryNFrames(n);
+    change(p);
     final api = ref.read(profileApiProvider);
     if (api == null) return;
     final notify = userNotifier(context);

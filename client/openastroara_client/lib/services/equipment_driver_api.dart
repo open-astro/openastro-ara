@@ -11,6 +11,7 @@ class DeviceDriver {
     this.sdkVersion,
     this.firmware,
     this.serialNumber,
+    this.name,
   });
 
   final String? driverVersion;
@@ -18,11 +19,15 @@ class DeviceDriver {
   final String? firmware;
   final String? serialNumber;
 
+  /// The model, for the guide camera (the guider's pick names no model).
+  final String? name;
+
   factory DeviceDriver.fromJson(Map<String, dynamic> json) => DeviceDriver(
     driverVersion: json['driver_version'] as String?,
     sdkVersion: json['sdk_version'] as String?,
     firmware: json['firmware'] as String?,
     serialNumber: json['serial_number'] as String?,
+    name: json['name'] as String?,
   );
 }
 

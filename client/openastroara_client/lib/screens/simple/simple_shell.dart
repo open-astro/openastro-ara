@@ -1986,7 +1986,7 @@ class _SettingsSheetState extends ConsumerState<_SettingsSheet> {
                 'Camera' => const SimpleCameraWindow(inSettings: true),
                 'Mount' => const SimpleMountWindow(inSettings: true),
                 'Focuser' => const SimpleFocuserWindow(inSettings: true),
-                'Guider' => const SimpleGuiderWindow(),
+                'Guider' => const SimpleGuiderWindow(inSettings: true),
                 _ => _Gear(onOpen: (id) => setState(() => _section = id)),
               },
             ),
