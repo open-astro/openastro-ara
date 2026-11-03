@@ -979,6 +979,20 @@ the line (an OAG at 3000 mm would never hold ten clean frames in a row). A user 
 start now resets the frame counter (`seq`), the trend (`recent`), the picture and the stop reason, so a
 refocus run never carries frames from before it; the client clears its chart from the same payload.
 
+### 2026-11-03 — Live stacking (server side): `POST/GET /equipment/camera/liveview/stack…`
+
+**Endpoint(s) or area:** `POST /api/v1/equipment/camera/liveview/stack/start`, `POST …/stack/reset`, `POST …/stack/stop`, `GET …/stack`, `GET …/stack/frame`.
+
+**Decision:** stacking is opt-in per Live View session and rides the running loop. `stack/start` (202, no body) enables it for the session that runs now; 409 when Live View is not active, when the session is a one-shot-colour camera at 1×1 binning (a later slice stacks colour), or when the session's frame size is known and over 12 MP. `stack/reset` empties the stack and keeps it enabled, `stack/stop` disables and empties it; both are 204 and idempotent. The stack also clears and turns off when Live View stops, self-stops, disconnects or restarts, so a new session never stacks until `stack/start` is called again. `GET …/stack` returns `LiveStackStatusDto { enabled, session_id, stack_seq, frames_stacked, frames_unregistered, rejected_samples, reference_stars, width, height, last_offset_x, last_offset_y, last_rotation_deg, last_outcome: reference|stacked|unregistered|wrong_size|too_large|dropped, last_frame_at_utc }`; `enabled` is true only for the running session, and `stack_seq` counts frames added and never goes back. `GET …/stack/frame` is the stretched stack as `image/jpeg` (≤ 1024 px, `Cache-Control: no-store`, headers `X-Stack-Seq`, `X-Live-Session`, `X-Stack-Frames`), 204 until a frame is stacked. The existing `/liveview` and `/liveview/frame` are unchanged (the live JPEG stays the raw frame). A camera service without live stacking answers 501 `not-implemented`.
+
+Each frame is aligned to the first one with the stars the §59 detector finds (shift and rotation, no scale) and folded into a per-pixel running mean with 3-sigma clipping, so satellite trails and cosmic rays drop out. Frames that cannot be matched are counted in `frames_unregistered` and never stacked; after 10 in a row the stack restarts on the new field. The work runs on the Live View loop thread after the live JPEG is published and outside the capture gate: with stacking on, the live frame rate drops (detection, resample and a second JPEG per frame; annotated Live View runs the detector twice), and a manual capture is not delayed by it.
+
+**Reasoning:** an always-on stack would cost a 12 MP float pass per frame for users who only focus. Hanging the engine on the camera service through its own interface keeps the shared service interface and the DI wiring untouched. A client polls `stack` and `stack/frame` the way it polls Live View.
+
+**Spec ref:** `OpenAstroAra.Server/openapi.yaml#/paths/~1api~1v1~1equipment~1camera~1liveview~1stack`; `Endpoints/LiveStackEndpoints.cs`, `Services/LiveStack/LiveStackEngine.cs`, `Services/CameraService.LiveStack.cs`, `Contracts/LiveStackDtos.cs`.
+
+**Related:** §64 Live View, §64.17 live stacking; tests `LiveStackEngineTest`, `LiveStackEngineLimitsTest`, `LiveStackEndpointsTest`, `CameraServiceLiveStackLifecycleTest`.
+
 ### 2026-10-03 — Setup → Smart Focus: the autofocus run record and the guide-camera focus loop
 
 **Endpoint(s) or area:** `GET /api/v1/autofocus/state`, `GET /api/v1/autofocus/frame`, `POST /api/v1/autofocus/cancel`; `POST /api/v1/equipment/guider/focus/start`, `POST …/focus/stop`, `GET …/focus`, `GET …/focus/frame`; `POST /api/v1/equipment/camera/connect` gains a 409; WebSocket `autofocus.step_complete`, `autofocus.curve_fit`, `autofocus.completed`, `autofocus.failed`.
