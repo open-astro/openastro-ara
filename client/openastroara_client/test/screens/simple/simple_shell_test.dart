@@ -994,7 +994,7 @@ void main() {
 
   for (final size in const [Size(1024, 768), Size(768, 1024), Size(507, 768)]) {
     testWidgets('at $size: message pills sit top-left, beside the status pill, above the left rail, '
-        'under the Autopilot offer', (tester) async {
+        'the Guided Run offer at the bottom', (tester) async {
       final container = await _pump(tester, size);
       await _frame(tester, container);
       container.read(captureProgressProvider.notifier).beginExposing(const Duration(seconds: 5));
@@ -1009,7 +1009,9 @@ void main() {
       final rail = _panelOf(tester, find.text('Library'));
       final offer = tester.getRect(find.byKey(const Key('autopilot-offer')));
       expect(pills.left, kSimpleInset, reason: 'the top-left corner');
-      expect(pills.top, greaterThanOrEqualTo(offer.bottom), reason: 'under the Autopilot offer');
+      expect(pills.top, lessThan(offer.top), reason: 'the offer moved to the bottom (user, 2026-11-03)');
+      expect(offer.bottom, size.height - kSimpleInset * 2 - kSimpleBarHeight, reason: 'just above the bottom row');
+      expect(offer.center.dx, closeTo(size.width / 2, 1), reason: 'centred');
       expect(pills.right, lessThanOrEqualTo(status.left), reason: 'beside the status pill, never under it');
       expect(pills.bottom, lessThanOrEqualTo(rail.top), reason: 'above the left rail');
       expect(find.byKey(const Key('simple-messages-more')), findsOneWidget, reason: 'six don\'t fit: the rest fold');

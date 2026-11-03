@@ -564,13 +564,15 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     // rails, so its two lines of labels fit at the user's size.
     final bottomRow = kSimpleBarHeight * simpleRailScale(context);
     final width = MediaQuery.sizeOf(context).width;
-    final autopilotRow =
-        _mode == SimpleModeScreen.autopilot ||
-        (!_offerDismissed &&
-            _mode == SimpleModeScreen.preview &&
-            autopilotOffered(ref));
+    // Guided Run's step strip, under the status strip; its offer sits at the
+    // bottom (user, 2026-11-03).
+    final autopilotRow = _mode == SimpleModeScreen.autopilot;
+    final autopilotOffer =
+        !_offerDismissed &&
+        _mode == SimpleModeScreen.preview &&
+        autopilotOffered(ref);
     // Messages share the top row with the status pill, which keeps at most
-    // half of it; they start under the Autopilot strip when it shows.
+    // half of it; they start under the Guided Run strip when it shows.
     final statusRoom = math.min(
       kSimpleStatusMaxWidth,
       (width - kSimpleInset * 3) / 2,
@@ -922,14 +924,24 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                   child: Center(
                                     child: KeyedSubtree(
                                       key: _autopilotRowKey,
-                                      child: _mode == SimpleModeScreen.autopilot
-                                          ? const AutopilotStrip()
-                                          : AutopilotOffer(
-                                              onStart: _startAutopilot,
-                                              onDismiss: () => setState(
-                                                () => _offerDismissed = true,
-                                              ),
-                                            ),
+                                      child: const AutopilotStrip(),
+                                    ),
+                                  ),
+                                ),
+                              // The offer, centred just above the bottom row,
+                              // under the rails (centred higher up); it wraps on
+                              // a narrow window.
+                              if (autopilotOffer)
+                                Positioned(
+                                  left: kSimpleInset,
+                                  right: kSimpleInset,
+                                  bottom: kSimpleInset * 2 + kSimpleBarHeight,
+                                  child: Center(
+                                    child: AutopilotOffer(
+                                      onStart: _startAutopilot,
+                                      onDismiss: () => setState(
+                                        () => _offerDismissed = true,
+                                      ),
                                     ),
                                   ),
                                 ),
