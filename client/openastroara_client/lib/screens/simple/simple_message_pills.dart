@@ -6,7 +6,7 @@ import '../../state/simple_messages_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
 import 'simple_preview_panel.dart' show kSimpleText;
-import 'simple_shell.dart' show kSimpleInset;
+import 'simple_shell.dart' show kSimpleInset, simpleFrost;
 
 /// A pill's height when its words take one line (two lines grow it).
 const double kSimpleMessageHeight = 48;
@@ -61,7 +61,8 @@ class _SimpleMessagePillsState extends ConsumerState<SimpleMessagePills> {
         if ((folded && !inline) || (_all && messages.length > fit))
           Semantics(
             button: true,
-            child: Material(
+            child: simpleFrost(
+              Material(
               color: AraColors.overlayScrim,
               borderRadius: BorderRadius.circular(10),
               child: InkWell(
@@ -80,6 +81,7 @@ class _SimpleMessagePillsState extends ConsumerState<SimpleMessagePills> {
                   ),
                 ),
               ),
+            ),
             ),
           ),
       ],
@@ -119,7 +121,8 @@ class _Pill extends ConsumerWidget {
       // Read out as it appears.
       liveRegion: true,
       container: true,
-      child: Container(
+      child: simpleFrost(
+        Container(
         key: Key('simple-message-${m.id}'),
         constraints: const BoxConstraints(minHeight: kSimpleMessageHeight),
         padding: const EdgeInsets.only(left: 14, right: 4),
@@ -236,6 +239,7 @@ class _Pill extends ConsumerWidget {
               ),
           ],
         ),
+      ),
       ),
     );
   }

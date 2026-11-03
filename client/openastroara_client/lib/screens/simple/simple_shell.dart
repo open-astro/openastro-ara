@@ -992,7 +992,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                   width:
                                       kSimpleDeviceWindowWidth *
                                       simpleRailScale(context),
-                                  child: SimpleFrostedPanel(
+                                  child: SimplePanel(
                                     padding: const EdgeInsets.all(AraSpace.s16),
                                     child: _deviceWindows[_device]!,
                                   ),
@@ -1159,6 +1159,9 @@ class _Fade extends StatelessWidget {
 }
 
 /// One floating panel: overlay scrim, 10 px corners, no border.
+/// Every Simple Mode panel's look: the 90 % scrim over a blur of the image
+/// behind ([AraBlur.panel]), first the Settings sheet's and the device
+/// windows', now every panel's, for legibility (user, 2026-11-04).
 class SimplePanel extends StatelessWidget {
   const SimplePanel({super.key, required this.child, this.padding});
 
@@ -1166,38 +1169,25 @@ class SimplePanel extends StatelessWidget {
   final EdgeInsetsGeometry? padding;
 
   @override
-  Widget build(BuildContext context) => Container(
-    padding: padding,
-    decoration: BoxDecoration(
-      color: AraColors.overlayScrim,
-      borderRadius: BorderRadius.circular(10),
+  Widget build(BuildContext context) => simpleFrost(
+    Container(
+      key: const Key('simple-frosted-surface'),
+      padding: padding,
+      decoration: const BoxDecoration(color: AraColors.overlayScrim),
+      child: child,
     ),
+  );
+}
+
+/// The panel blur under [child], clipped to the panels' 10 px corners: for
+/// the surfaces that draw their own scrim (pills, tiles, plan squares).
+Widget simpleFrost(Widget child) => ClipRRect(
+  borderRadius: BorderRadius.circular(10),
+  child: BackdropFilter(
+    filter: ImageFilter.blur(sigmaX: AraBlur.panel, sigmaY: AraBlur.panel),
     child: child,
-  );
-}
-
-/// The Settings sheet's and the device windows' look: the 90 % panel scrim
-/// over a 5 px blur of the image behind (user, 2026-11-03).
-class SimpleFrostedPanel extends StatelessWidget {
-  const SimpleFrostedPanel({super.key, required this.child, this.padding});
-
-  final Widget child;
-  final EdgeInsetsGeometry? padding;
-
-  @override
-  Widget build(BuildContext context) => ClipRRect(
-    borderRadius: BorderRadius.circular(10),
-    child: BackdropFilter(
-      filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
-      child: Container(
-        key: const Key('simple-frosted-surface'),
-        padding: padding,
-        decoration: const BoxDecoration(color: AraColors.overlayScrim),
-        child: child,
-      ),
-    ),
-  );
-}
+  ),
+);
 
 /// Device dots (connected gear only), then Night mode and the Settings menu.
 class _StatusStrip extends ConsumerWidget {
@@ -1988,7 +1978,7 @@ class _SettingsSheetState extends ConsumerState<_SettingsSheet> {
     ];
     // A narrow window (Split View, a phone) keeps only the sections' icons.
     final narrow = MediaQuery.sizeOf(context).width < 600;
-    return SimpleFrostedPanel(
+    return SimplePanel(
       key: const Key('simple-menu'),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,

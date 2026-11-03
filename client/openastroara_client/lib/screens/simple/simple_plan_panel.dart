@@ -59,6 +59,7 @@ import 'simple_preview_panel.dart'
 import 'simple_shell.dart'
     show
         SimplePanel,
+        simpleFrost,
         kSimpleGoStyle,
         kSimpleInset,
         kSimpleRailWidth,
@@ -1199,7 +1200,8 @@ class _PlanSquare extends StatelessWidget {
     return Semantics(
       button: true,
       label: context.l10n.planSquareLabel(label ?? name),
-      child: Material(
+      child: simpleFrost(
+        Material(
         color: AraColors.overlayScrim,
         shape: RoundedRectangleBorder(
           side: BorderSide(color: color),
@@ -1256,6 +1258,7 @@ class _PlanSquare extends StatelessWidget {
             ),
           ),
         ),
+      ),
       ),
     );
   }

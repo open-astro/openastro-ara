@@ -25,7 +25,12 @@ import 'simple_plan_panel.dart' show simpleRunProvider;
 import 'simple_device_windows.dart'
     show SimpleGainSlider, simpleCelsius, simpleMountMotionProvider;
 import 'simple_shell.dart'
-    show SimplePanel, SimpleSegment, kSimpleRailWidth, kSimpleStatusMaxWidth;
+    show
+        SimplePanel,
+        SimpleSegment,
+        kSimpleRailWidth,
+        kSimpleStatusMaxWidth,
+        simpleFrost;
 
 /// Simple Mode body text: 14 px minimum (brief), tabular for live numbers.
 const kSimpleText = TextStyle(
@@ -200,10 +205,14 @@ class SimpleFactTiles extends StatelessWidget {
     borderRadius: BorderRadius.circular(10),
   );
 
+  // On the image, the panel blur; in Settings › Rig the sheet already has it.
+  Widget _frost(Widget child) => expand ? child : simpleFrost(child);
+
   @override
   Widget build(BuildContext context) {
     if (MediaQuery.textScalerOf(context).scale(1) > 1.3) {
-      return Container(
+      return _frost(
+        Container(
         key: const Key('simple-facts-list'),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: _box,
@@ -222,6 +231,7 @@ class SimpleFactTiles extends StatelessWidget {
               ),
           ],
         ),
+      ),
       );
     }
     return _tiles();
@@ -234,7 +244,8 @@ class SimpleFactTiles extends StatelessWidget {
   );
 
   Widget _tile(String label, String value) {
-    final tile = Container(
+    final tile = _frost(
+        Container(
       width: expand ? null : kSimpleRailWidth,
       height: 56,
       padding: const EdgeInsets.symmetric(horizontal: 4),
@@ -253,7 +264,8 @@ class SimpleFactTiles extends StatelessWidget {
           ),
         ],
       ),
-    );
+    ),
+      );
     return expand ? Expanded(child: tile) : tile;
   }
 }

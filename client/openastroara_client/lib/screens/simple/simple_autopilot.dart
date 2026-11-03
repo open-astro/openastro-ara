@@ -19,7 +19,7 @@ import 'simple_plan_panel.dart'
         simpleScheduleAllowedProvider;
 import 'simple_polar_panel.dart' show simplePolarActive;
 import 'simple_preview_panel.dart' show kSimpleText;
-import 'simple_shell.dart' show SimplePanel, kSimpleGoStyle;
+import 'simple_shell.dart' show SimplePanel, kSimpleGoStyle, simpleFrost;
 
 /// Guided Run's steps, in the night's order: tonight's targets first, then
 /// focus (polar alignment plate-solves and fails on a soft focus), then polar
@@ -345,7 +345,8 @@ class AutopilotOffer extends StatelessWidget {
   final VoidCallback onDismiss;
 
   @override
-  Widget build(BuildContext context) => Container(
+  Widget build(BuildContext context) => simpleFrost(
+    Container(
     key: const Key('autopilot-offer'),
     padding: const EdgeInsets.fromLTRB(16, 6, 4, 6),
     decoration: BoxDecoration(
@@ -373,5 +374,6 @@ class AutopilotOffer extends StatelessWidget {
         ),
       ],
     ),
+  ),
   );
 }

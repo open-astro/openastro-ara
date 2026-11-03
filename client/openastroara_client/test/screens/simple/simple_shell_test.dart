@@ -74,6 +74,7 @@ import 'package:openastroara/state/equipment/mount_state.dart';
 import 'package:openastroara/widgets/equipment/equipment_glyphs.dart';
 import 'package:openastroara/state/settings/settings_nav.dart';
 import 'package:openastroara/state/simple_mode_state.dart';
+import 'package:openastroara/theme/ara_metrics.dart' show AraBlur;
 import 'package:openastroara/screens/simple/simple_safety_alarm.dart';
 import 'package:openastroara/state/night_mode_state.dart';
 import 'package:openastroara/state/settings/optics_settings_state.dart';
@@ -1686,6 +1687,45 @@ void main() {
     expect(find.descendant(of: find.byKey(const Key('simple-rig-guidefocal')), matching: find.text('Not set')), findsOneWidget);
     expect(find.descendant(of: find.byKey(const Key('simple-rig-guidepixel')), matching: find.text('Not set')), findsOneWidget);
     expect((pixel.width, pixel.height, pixel.right), (focal.width, focal.height, focal.right));
+  });
+
+  testWidgets('every panel on the image blurs what is behind it, as the Settings sheet does (AraBlur.panel)',
+      (tester) async {
+    // User, 2026-11-04: the Settings sheet's 90 % scrim + blur on every Simple Mode panel, for legibility.
+    final c = await _pump(tester, const Size(1024, 768),
+        plan: SimpleRun(sequenceId: 'seq-1', targets: [
+          SimpleTarget(name: 'M31', tag: 'M31', steps: const [FilterPlanStep(filterName: 'L', exposureSeconds: 60, frameCount: 10)],
+              raDeg: 10.7, decDeg: 41.3),
+        ]));
+    await _frame(tester, c);
+    await tester.tap(find.byKey(const Key('simple-info'))); // the Info tiles
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('simple-mode')));
+    await tester.pump();
+    await tester.tap(find.text('Plan').first); // the plan squares
+    await tester.pump();
+    c.read(simpleMessagesProvider.notifier)
+      ..show(SimpleMessageKind.error, "Couldn't start imaging")
+      ..show(SimpleMessageKind.result, 'Frame saved');
+    await tester.pump();
+    expect(find.byKey(const Key('simple-run-tracker')), findsOneWidget, reason: 'precondition: a plan square');
+    bool scrim(Widget w) =>
+        (w is Container && w.decoration is BoxDecoration && (w.decoration! as BoxDecoration).color == AraColors.overlayScrim) ||
+        (w is Material && w.color == AraColors.overlayScrim);
+    // Each scrim's own blur sits right above it (inside its clip), not some outer panel's.
+    final surfaces = find.byWidgetPredicate(scrim).evaluate().toList();
+    expect(surfaces.length, greaterThanOrEqualTo(8), reason: 'strip, rails, status, Info tiles, pills, plan square');
+    for (final e in surfaces) {
+      BackdropFilter? blur;
+      var up = 0;
+      e.visitAncestorElements((a) {
+        if (a.widget is BackdropFilter) blur = a.widget as BackdropFilter;
+        return blur == null && ++up < 4; // its own, a few elements up
+      });
+      expect(blur?.filter, ImageFilter.blur(sigmaX: AraBlur.panel, sigmaY: AraBlur.panel),
+          reason: '${e.widget.key ?? e.widget.runtimeType} has no blur of its own');
+    }
+    await tester.pump(const Duration(seconds: 7)); // the result fades
   });
 
   testWidgets("a Rig edit with no rig link says it wasn't saved instead of nothing", (tester) async {
