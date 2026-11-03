@@ -24,14 +24,6 @@ class DeviceDriver {
     firmware: json['firmware'] as String?,
     serialNumber: json['serial_number'] as String?,
   );
-
-  /// "SDK 1.41.0.0 · Driver 6.0.0 · Firmware 3.47 · S/N 0c19…", what's known.
-  String get line => [
-    if (sdkVersion != null) 'SDK $sdkVersion',
-    if (driverVersion != null) 'Driver $driverVersion',
-    if (firmware != null) 'Firmware $firmware',
-    if (serialNumber != null) 'S/N $serialNumber',
-  ].join(' · ');
 }
 
 /// The versions of the selected device of [type] ("camera", "telescope",

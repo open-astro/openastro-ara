@@ -1803,7 +1803,7 @@ class _SettingsSheetState extends ConsumerState<_SettingsSheet> {
                   onClose: widget.onClose,
                   onLogs: widget.onLogs,
                 ),
-                'Camera' => const SimpleCameraWindow(),
+                'Camera' => const SimpleCameraWindow(inSettings: true),
                 _ => _Gear(onOpen: (id) => setState(() => _section = id)),
               },
             ),
@@ -2089,67 +2089,34 @@ class _ThisRig extends ConsumerWidget {
         const Divider(height: AraSpace.s16),
         // Every version on the rig, for a bug report or a support question;
         // a part the rig can't read is left out.
-        Column(
+        SimpleVersions(
           key: const Key('simple-versions'),
-          crossAxisAlignment: CrossAxisAlignment.start,
-          spacing: AraSpace.s8,
-          children: [
-            Text(
-              'Versions',
-              style: kSimpleText.copyWith(fontWeight: FontWeight.w600),
-            ),
-            // Each version beside its name, not across the page from it.
-            Table(
-              defaultColumnWidth: const IntrinsicColumnWidth(),
-              defaultVerticalAlignment: TableCellVerticalAlignment.baseline,
-              textBaseline: TextBaseline.alphabetic,
-              children: [
-                for (final (name, v) in [
-                  ('This app', version),
-                  ('OpenAstro Ara server', rig?.daemonVersion),
-                  if (rig?.guiderVersion != null)
-                    ('OpenAstro Guider', rig!.guiderVersion),
-                  for (final a in servers)
-                    (
-                      servers.length > 1
-                          ? '${a.label} (${a.host}:${a.port})'
-                          : a.label,
-                      a.version,
-                    ),
-                  if (rig?.astapVersion != null) ('ASTAP', rig!.astapVersion),
-                  if (stars != null && stars.isNotEmpty)
-                    (
-                      'Star database',
-                      stars.map((d) => d.toUpperCase()).join(', '),
-                    ),
-                  if (rig != null && rig.osRelease.isNotEmpty)
-                    (
-                      'System',
-                      [
-                        rig.osRelease,
-                        if (rig.boardModel != null) rig.boardModel!,
-                      ].join(' · '),
-                    ),
-                ])
-                  TableRow(
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.only(
-                          right: AraSpace.s24,
-                          bottom: AraSpace.s4,
-                        ),
-                        child: Text(
-                          name,
-                          style: kSimpleText.copyWith(
-                            color: AraColors.textSecondary,
-                          ),
-                        ),
-                      ),
-                      Text(v ?? '—', style: kSimpleText),
-                    ],
-                  ),
-              ],
-            ),
+          rows: [
+            for (final (name, v) in <(String, String?)>[
+              ('This app', version),
+              ('OpenAstro Ara server', rig?.daemonVersion),
+              if (rig?.guiderVersion != null)
+                ('OpenAstro Guider', rig!.guiderVersion),
+              for (final a in servers)
+                (
+                  servers.length > 1
+                      ? '${a.label} (${a.host}:${a.port})'
+                      : a.label,
+                  a.version,
+                ),
+              if (rig?.astapVersion != null) ('ASTAP', rig!.astapVersion),
+              if (stars != null && stars.isNotEmpty)
+                ('Star database', stars.map((d) => d.toUpperCase()).join(', ')),
+              if (rig != null && rig.osRelease.isNotEmpty)
+                (
+                  'System',
+                  [
+                    rig.osRelease,
+                    if (rig.boardModel != null) rig.boardModel!,
+                  ].join(' · '),
+                ),
+            ])
+              (name, v ?? '—'),
           ],
         ),
         Align(

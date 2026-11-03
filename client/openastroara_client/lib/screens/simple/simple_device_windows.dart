@@ -64,7 +64,11 @@ String simpleCelsius(double c) {
 /// The camera's window: the cooler (On / Off), its target and what the
 /// sensor reads now. The target is the profile's, so plans cool to it too.
 class SimpleCameraWindow extends ConsumerStatefulWidget {
-  const SimpleCameraWindow({super.key});
+  const SimpleCameraWindow({super.key, this.inSettings = false});
+
+  /// In Settings the window ends with the camera's versions; the short one
+  /// from the dot leaves them out.
+  final bool inSettings;
 
   /// The target slider's range and step (user, 2026-11-03: a stepped slider).
   static const double targetMin = -30, targetMax = 10, targetStep = 5;
@@ -171,10 +175,20 @@ class _SimpleCameraWindowState extends ConsumerState<SimpleCameraWindow> {
         ),
       );
     }
-    // The versions the rig reports, small at the foot (support asks).
-    final driver = ref.watch(deviceDriverProvider('camera')).value?.line ?? '';
-    if (driver.isNotEmpty) {
-      children.add(Text(driver, style: AraText.caption));
+    // In Settings, the versions the rig reports (support asks), set out like
+    // Rig's.
+    if (widget.inSettings) {
+      final d = ref.watch(deviceDriverProvider('camera')).value;
+      final rows = [
+        if (d?.sdkVersion != null) ('SDK', d!.sdkVersion!),
+        if (d?.driverVersion != null) ('Driver', d!.driverVersion!),
+        if (d?.firmware != null) ('Firmware', d!.firmware!),
+        if (d?.serialNumber != null) ('Serial number', d!.serialNumber!),
+      ];
+      if (rows.isNotEmpty) {
+        children.add(const Divider(height: AraSpace.s16));
+        children.add(SimpleVersions(rows: rows));
+      }
     }
     return Column(
       key: const Key('simple-device-camera'),
@@ -286,5 +300,48 @@ class _OnOff extends StatelessWidget {
           ),
       ],
     ),
+  );
+}
+
+/// A titled two-column list of versions, each beside its name (Settings ›
+/// Rig, and a device's page in Settings).
+class SimpleVersions extends StatelessWidget {
+  const SimpleVersions({super.key, required this.rows});
+
+  final List<(String, String)> rows;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    spacing: AraSpace.s8,
+    children: [
+      Text(
+        'Versions',
+        style: kSimpleText.copyWith(fontWeight: FontWeight.w600),
+      ),
+      Table(
+        defaultColumnWidth: const IntrinsicColumnWidth(),
+        defaultVerticalAlignment: TableCellVerticalAlignment.baseline,
+        textBaseline: TextBaseline.alphabetic,
+        children: [
+          for (final (name, value) in rows)
+            TableRow(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(
+                    right: AraSpace.s24,
+                    bottom: AraSpace.s4,
+                  ),
+                  child: Text(
+                    name,
+                    style: kSimpleText.copyWith(color: AraColors.textSecondary),
+                  ),
+                ),
+                Text(value, style: kSimpleText),
+              ],
+            ),
+        ],
+      ),
+    ],
   );
 }

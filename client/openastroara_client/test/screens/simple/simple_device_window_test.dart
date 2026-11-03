@@ -45,6 +45,7 @@ Future<(ProviderContainer, _Camera)> _pump(
   WidgetTester tester,
   Map<String, dynamic> wire, {
   DeviceDriver? driver,
+  bool inSettings = false,
 }) async {
   // A test that pumps twice lets the first window's providers wind down.
   await tester.pumpWidget(const SizedBox());
@@ -62,7 +63,9 @@ Future<(ProviderContainer, _Camera)> _pump(
   await tester.pumpWidget(
     UncontrolledProviderScope(
       container: c,
-      child: const MaterialApp(home: Scaffold(body: SimpleCameraWindow())),
+      child: MaterialApp(
+        home: Scaffold(body: SimpleCameraWindow(inSettings: inSettings)),
+      ),
     ),
   );
   await tester.pump();
@@ -161,23 +164,27 @@ void main() {
     expect(find.text('Medium'), findsOneWidget);
   });
 
-  testWidgets('a footer names the SDK and driver versions the rig reports', (
-    tester,
-  ) async {
-    await _pump(
-      tester,
-      _wire(),
-      driver: const DeviceDriver(
-        driverVersion: '6.0.0~nightly',
-        sdkVersion: '1.41.0.0',
-        serialNumber: '0c190e111d020900',
-      ),
-    );
+  testWidgets('in Settings the window ends with a Versions table like Rig\'s; from the dot it shows none', (tester) async {
+    const driver = DeviceDriver(driverVersion: '6.0.0~nightly', sdkVersion: '1.41.0.0', serialNumber: '0c190e111d020900');
+    await _pump(tester, _wire(), driver: driver);
     await tester.pump();
-    expect(
-      find.text('SDK 1.41.0.0 · Driver 6.0.0~nightly · S/N 0c190e111d020900'),
-      findsOneWidget,
-    );
+    expect(find.text('Versions'), findsNothing, reason: 'the short window from the dot stays short');
+
+    await _pump(tester, _wire(), driver: driver, inSettings: true);
+    await tester.pump();
+    expect(tester.widget<Text>(find.text('Versions')).style!.fontWeight, FontWeight.w600);
+    for (final (name, value) in const [
+      ('SDK', '1.41.0.0'),
+      ('Driver', '6.0.0~nightly'),
+      ('Serial number', '0c190e111d020900'),
+    ]) {
+      final n = tester.getRect(find.text(name));
+      final v = tester.getRect(find.text(value));
+      expect(v.left - n.right, lessThan(80), reason: '$value beside its name');
+      expect((v.center.dy - n.center.dy).abs(), lessThan(2), reason: 'one row each');
+      expect(tester.widget<Text>(find.text(value)).style!.fontSize, greaterThanOrEqualTo(14), reason: 'readable');
+    }
+    expect(find.text('Firmware'), findsNothing, reason: 'only what the rig reports');
   });
 
   testWidgets(
