@@ -1660,6 +1660,34 @@ void main() {
     expect(api.reads, settled, reason: 'it stops reading once both are filled');
   });
 
+  testWidgets("Rig reads the guide optics from the rig when it opens, the guider already connected", (tester) async {
+    // On the iPad (2026-11-03): the rig held 128 mm / 3.75 µm but Rig showed Not set — nothing read the
+    // profile's guider section unless the guider connected while Rig was open.
+    final api = _GuideOpticsApi(0);
+    await _pump(tester, const Size(1024, 768), linkUp: true,
+        profiles: const ProfileList(activeId: 'p1', profiles: [ProfileMeta(id: 'p1', name: 'Backyard Rig')]), gear: [
+      guiderStatusProvider.overrideWith(_GuiderUp.new),
+      profileApiProvider.overrideWithValue(api),
+    ]);
+    await _openSection(tester, 'Rig');
+    await tester.pump();
+    await tester.ensureVisible(find.byKey(const Key('simple-rig-guidefocal')));
+    expect(find.descendant(of: find.byKey(const Key('simple-rig-guidefocal')), matching: find.text('128 mm')), findsOneWidget);
+    expect(find.text('3.75 µm'), findsOneWidget);
+  });
+
+  testWidgets("Rig's two guide rows show Not set in the same tile, the same size and edge", (tester) async {
+    await _pump(tester, const Size(1024, 768));
+    await _openSection(tester, 'Rig');
+    await tester.ensureVisible(find.byKey(const Key('simple-rig-guidepixel')));
+    await tester.pumpAndSettle();
+    final focal = tester.getRect(find.byKey(const Key('simple-rig-guidefocal')));
+    final pixel = tester.getRect(find.byKey(const Key('simple-rig-guidepixel')));
+    expect(find.descendant(of: find.byKey(const Key('simple-rig-guidefocal')), matching: find.text('Not set')), findsOneWidget);
+    expect(find.descendant(of: find.byKey(const Key('simple-rig-guidepixel')), matching: find.text('Not set')), findsOneWidget);
+    expect((pixel.width, pixel.height, pixel.right), (focal.width, focal.height, focal.right));
+  });
+
   testWidgets("a Rig edit with no rig link says it wasn't saved instead of nothing", (tester) async {
     // Review: _save returned silently when there was no ProfileApi, and the value reverted at the next read.
     final c = await _pump(tester, const Size(1024, 768), feature: true);

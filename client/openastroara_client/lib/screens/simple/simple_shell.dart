@@ -2378,7 +2378,11 @@ class _ThisRig extends ConsumerWidget {
     final api = ref.read(profileApiProvider);
     if (api == null) {
       // Shown, not kept: the next read from the rig puts the old value back.
-      notify(l10n.shellCouldntSave, detail: l10n.shellRigNotConnected, error: true);
+      notify(
+        l10n.shellCouldntSave,
+        detail: l10n.shellRigNotConnected,
+        error: true,
+      );
       return;
     }
     try {
@@ -2422,7 +2426,11 @@ class _ThisRig extends ConsumerWidget {
     site.setTimeZone(tz_map.latLngToTimezoneString(r.lat, r.lng));
     final api = ref.read(profileApiProvider);
     if (api == null) {
-      notify(l10n.shellCouldntSaveSite, detail: l10n.shellRigNotConnected, error: true);
+      notify(
+        l10n.shellCouldntSaveSite,
+        detail: l10n.shellRigNotConnected,
+        error: true,
+      );
       return;
     }
     try {
@@ -2438,11 +2446,16 @@ class _ThisRig extends ConsumerWidget {
     notify(l10n.shellSiteFrom(r.sourceLabel));
   }
 
-  /// The rig fills unset guide optics a few guider round trips after the
-  /// guider reports connected, so one read then usually beats it: read again
-  /// each second, up to ten times, until both are set.
-  static Future<void> _readGuideOptics(BuildContext context, WidgetRef ref) async {
-    for (var i = 0; i < 10; i++) {
+  /// The profile's guide optics. With [retry] (the guider connected): the
+  /// rig fills unset ones a few guider round trips later, so one read then
+  /// usually beats it: read again each second, up to ten times, until both
+  /// are set.
+  static Future<void> _readGuideOptics(
+    BuildContext context,
+    WidgetRef ref, {
+    bool retry = true,
+  }) async {
+    for (var i = 0; i < (retry ? 10 : 1); i++) {
       if (i > 0) await Future<void>.delayed(const Duration(seconds: 1));
       if (!context.mounted) return;
       final api = ref.read(profileApiProvider);
@@ -2460,14 +2473,6 @@ class _ThisRig extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // The rig fills the guide optics from the guider on connect: read them
-    // back then, so the rows below show what the profile now holds.
-    ref.listen(
-      guiderStatusProvider.select((s) => s.value?.isConnected ?? false),
-      (was, now) {
-        if (now && was != true) unawaited(_readGuideOptics(context, ref));
-      },
-    );
     final server = ref.watch(activeServerProvider);
     final profiles = ref.watch(profileManagementProvider).value;
     final profile = profiles?.profiles
@@ -2627,20 +2632,22 @@ class _ThisRig extends ConsumerWidget {
           ),
         // The guide scope: read from the guider when the profile left it
         // unset, kept in the profile (polar alignment solves with it).
-        _RigWheelRow.millimetres(
-          l10n,
-          id: 'guidefocal',
-          label: l10n.shellGuideFocalLength,
-          digits: 4,
-          value: ref.watch(phd2SettingsProvider).guideFocalLength.toDouble(),
-          onSet: (v) => _save(
-            context,
-            ref,
-            () => ref
-                .read(phd2SettingsProvider.notifier)
-                .setGuideFocalLength(v.round()),
-            (api) =>
-                ref.read(phd2SettingsProvider.notifier).persistToServer(api),
+        _GuideOpticsReader(
+          child: _RigWheelRow.millimetres(
+            l10n,
+            id: 'guidefocal',
+            label: l10n.shellGuideFocalLength,
+            digits: 4,
+            value: ref.watch(phd2SettingsProvider).guideFocalLength.toDouble(),
+            onSet: (v) => _save(
+              context,
+              ref,
+              () => ref
+                  .read(phd2SettingsProvider.notifier)
+                  .setGuideFocalLength(v.round()),
+              (api) =>
+                  ref.read(phd2SettingsProvider.notifier).persistToServer(api),
+            ),
           ),
         ),
         ConstrainedBox(
@@ -2650,10 +2657,32 @@ class _ThisRig extends ConsumerWidget {
               Expanded(
                 child: Text(l10n.shellGuidePixelSize, style: kSimpleText),
               ),
-              Text(switch (ref.watch(phd2SettingsProvider).guidePixelSize) {
-                final p when p > 0 => '${p.toStringAsFixed(2)} µm',
-                _ => l10n.shellNotSet,
-              }, style: kSimpleText),
+              // Read only (it comes from the guider), in the same tile as
+              // the value above it: its button, never enabled, read as text.
+              Builder(
+                builder: (context) {
+                  final pixel = switch (ref
+                      .watch(phd2SettingsProvider)
+                      .guidePixelSize) {
+                    final p when p > 0 => '${p.toStringAsFixed(2)} µm',
+                    _ => l10n.shellNotSet,
+                  };
+                  return Semantics(
+                    excludeSemantics: true,
+                    label: pixel,
+                    child: TextButton(
+                      key: const Key('simple-rig-guidepixel'),
+                      style: TextButton.styleFrom(
+                        backgroundColor: AraColors.tileFill,
+                        disabledBackgroundColor: AraColors.tileFill,
+                        minimumSize: const Size(120, 44),
+                      ),
+                      onPressed: null,
+                      child: Text(pixel, style: kSimpleText),
+                    ),
+                  );
+                },
+              ),
             ],
           ),
         ),
@@ -2817,6 +2846,37 @@ class _SettingsPage extends ConsumerWidget {
 /// A value the rig keeps, set by wheels: tap it and one wheel per digit
 /// (and a hemisphere for a coordinate) opens under it; a wheel at rest sets
 /// it. A second tap closes them.
+/// Reads the profile's guide optics when Rig opens, and again each time the
+/// guider connects (the rig fills unset ones then); draws [child].
+class _GuideOpticsReader extends ConsumerStatefulWidget {
+  const _GuideOpticsReader({required this.child});
+
+  final Widget child;
+
+  @override
+  ConsumerState<_GuideOpticsReader> createState() => _GuideOpticsReaderState();
+}
+
+class _GuideOpticsReaderState extends ConsumerState<_GuideOpticsReader> {
+  @override
+  void initState() {
+    super.initState();
+    ref.listenManual(
+      guiderStatusProvider.select((s) => s.value?.isConnected ?? false),
+      (was, now) {
+        // Open (was null), or the guider just connected.
+        if (was == null || (now && !was)) {
+          unawaited(_ThisRig._readGuideOptics(context, ref, retry: now));
+        }
+      },
+      fireImmediately: true,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
+}
+
 class _RigWheelRow extends StatefulWidget {
   const _RigWheelRow._({
     required this.id,
