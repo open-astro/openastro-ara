@@ -391,7 +391,7 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
                             }
                           : null,
                       child: Text(
-                        autopilot ? l10n.polarDoneNextPlan : l10n.polarDone,
+                        autopilot ? l10n.guidedDoneStartImaging : l10n.polarDone,
                       ),
                     ),
                   ),

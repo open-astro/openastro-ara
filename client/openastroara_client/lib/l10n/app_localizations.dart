@@ -849,12 +849,6 @@ abstract class AppLocalizations {
   /// **'Done'**
   String get polarDone;
 
-  /// Simple Mode Polar align panel: finish button in Guided Run, which then moves on to the Plan step
-  ///
-  /// In en, this message translates to:
-  /// **'Done · Next: Plan'**
-  String get polarDoneNextPlan;
-
   /// Simple Mode search panel: search field placeholder
   ///
   /// In en, this message translates to:
@@ -3308,6 +3302,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Guide'**
   String get focusScopeGuide;
+
+  /// Guided Run plan step: green button, on to focusing
+  ///
+  /// In en, this message translates to:
+  /// **'Next: Focus'**
+  String get guidedNextFocus;
+
+  /// Guided Run plan step: green button, on to polar alignment
+  ///
+  /// In en, this message translates to:
+  /// **'Next: Polar align'**
+  String get guidedNextPolarAlign;
+
+  /// Guided Run plan step: green button when focus and polar alignment are done already
+  ///
+  /// In en, this message translates to:
+  /// **'Start imaging'**
+  String get guidedStartImaging;
+
+  /// Guided Run plan step: line above the buttons
+  ///
+  /// In en, this message translates to:
+  /// **'Imaging starts after focus and polar alignment.'**
+  String get guidedImagingStartsAfter;
+
+  /// Guided Run: the last setup step's green Done, which starts imaging
+  ///
+  /// In en, this message translates to:
+  /// **'Done · Start imaging'**
+  String get guidedDoneStartImaging;
 }
 
 class _AppLocalizationsDelegate

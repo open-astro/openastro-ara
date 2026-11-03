@@ -44,9 +44,17 @@ class _Prefs extends SimpleModePrefsService {
 }
 
 class _Plan extends SimpleRunNotifier {
+  final starts = <DateTime?>[];
   @override
   SimpleRun build() => const SimpleRun();
+  void queued() => state = const SimpleRun(sequenceId: 'seq-1');
   void started() => state = const SimpleRun(sequenceId: 'seq-1', started: true);
+  @override
+  Future<bool> startQueue({DateTime? startAt}) async {
+    starts.add(startAt);
+    started();
+    return true;
+  }
 }
 
 Future<(ProviderContainer, _PolarApi)> _container({bool permanent = false}) async {
@@ -65,76 +73,86 @@ Future<(ProviderContainer, _PolarApi)> _container({bool permanent = false}) asyn
 }
 
 void main() {
-  test('the step to start on, or next: the first not done; P.A. skipped on a permanent pier', () {
-    expect(autopilotNext(focused: false, aligned: false, permanentPier: false), AutopilotStep.focus);
-    expect(autopilotNext(focused: true, aligned: false, permanentPier: false), AutopilotStep.polarAlign);
-    expect(autopilotNext(focused: true, aligned: false, permanentPier: true), AutopilotStep.plan);
-    expect(autopilotNext(focused: true, aligned: true, permanentPier: false), AutopilotStep.plan);
+  test('Plan first, then the first setup step not done; nothing left means start imaging', () {
+    expect(autopilotNext(focused: true, aligned: true, permanentPier: false), AutopilotStep.plan,
+        reason: 'the plan is never done beforehand: Guided Run starts on it');
+    expect(autopilotNext(after: AutopilotStep.plan, focused: false, aligned: false, permanentPier: false),
+        AutopilotStep.focus);
+    expect(autopilotNext(after: AutopilotStep.plan, focused: true, aligned: false, permanentPier: false),
+        AutopilotStep.polarAlign);
+    expect(autopilotNext(after: AutopilotStep.plan, focused: true, aligned: false, permanentPier: true), isNull);
     expect(autopilotNext(after: AutopilotStep.focus, focused: false, aligned: false, permanentPier: false),
         AutopilotStep.polarAlign, reason: 'Skip from Focus');
-    expect(autopilotNext(after: AutopilotStep.polarAlign, focused: false, aligned: false, permanentPier: false),
-        AutopilotStep.plan);
+    expect(autopilotNext(after: AutopilotStep.polarAlign, focused: false, aligned: false, permanentPier: false), isNull);
+  });
+
+  test('Guided Run opens on the plan; its Next goes to Focus', () async {
+    final (c, _) = await _container();
+    c.read(autopilotProvider.notifier).start();
+    expect(c.read(autopilotProvider), AutopilotStep.plan);
+    c.read(autopilotProvider.notifier).next();
+    expect(c.read(autopilotProvider), AutopilotStep.focus);
   });
 
   test('a finished autofocus moves on to polar align and starts its routine', () async {
     final (c, api) = await _container();
     c.read(autopilotProvider.notifier).start();
-    expect(c.read(autopilotProvider), AutopilotStep.focus);
+    c.read(autopilotProvider.notifier).next();
     expect(api.calls, isEmpty);
     c.read(_focus.notifier).set(SetupStepState.done);
     expect(c.read(autopilotProvider), AutopilotStep.polarAlign);
     expect(api.calls, ['start'], reason: 'entering polar align starts it');
   });
 
-  test('on a permanent pier a finished autofocus goes straight to the plan', () async {
+  test("on a permanent pier a finished autofocus waits for its Done: nothing starts on its own", () async {
     final (c, api) = await _container(permanent: true);
     c.read(autopilotProvider.notifier).start();
+    c.read(autopilotProvider.notifier).next();
     c.read(_focus.notifier).set(SetupStepState.done);
-    expect(c.read(autopilotProvider), AutopilotStep.plan);
+    expect(c.read(autopilotProvider), AutopilotStep.focus);
+    expect((c.read(simpleRunProvider.notifier) as _Plan).starts, isEmpty);
     expect(api.calls, isEmpty);
   });
 
-  test('Done (next) moves on to the plan; starting the plan ends Autopilot; Back goes back', () async {
+  test("the last setup step's Done starts imaging (the queue, at dark when it's before dark) and ends Guided Run",
+      () async {
     final (c, _) = await _container();
-    c.read(_focus.notifier).set(SetupStepState.done);
+    final plan = c.read(simpleRunProvider.notifier) as _Plan;
     c.read(autopilotProvider.notifier).start();
-    expect(c.read(autopilotProvider), AutopilotStep.polarAlign);
+    plan.queued();
     c.read(autopilotProvider.notifier).next();
-    expect(c.read(autopilotProvider), AutopilotStep.plan);
+    c.read(_focus.notifier).set(SetupStepState.done);
+    expect(c.read(autopilotProvider), AutopilotStep.polarAlign);
     c.read(autopilotProvider.notifier).back();
-    expect(c.read(autopilotProvider), AutopilotStep.polarAlign);
+    expect(c.read(autopilotProvider), AutopilotStep.focus);
     c.read(autopilotProvider.notifier).next();
-    (c.read(simpleRunProvider.notifier) as _Plan).started();
-    expect(c.read(autopilotProvider), isNull, reason: 'the plan runs: Autopilot is done');
+    c.read(autopilotProvider.notifier).next();
+    await Future<void>.value();
+    expect(plan.starts, hasLength(1));
+    expect(c.read(autopilotProvider), isNull, reason: 'imaging: Guided Run is done');
   });
 
-  testWidgets('the strip shows the steps, the current one lit; Skip and Back move', (tester) async {
+  testWidgets('the strip shows Plan, Focus, Polar align, the current one lit; Skip and Back move', (tester) async {
     final (c, _) = await _container();
     c.read(autopilotProvider.notifier).start();
     await tester.pumpWidget(UncontrolledProviderScope(
       container: c,
       child: const MaterialApp(home: Scaffold(body: Center(child: AutopilotStrip()))),
     ));
-    for (final s in ['Focus', 'Polar align', 'Plan']) {
-      expect(find.text(s), findsOneWidget);
-    }
+    final x = [for (final s in ['Plan', 'Focus', 'Polar align']) tester.getCenter(find.text(s)).dx];
+    expect(x, orderedEquals([...x]..sort()), reason: 'Plan first');
     expect(tester.widget<TextButton>(find.byKey(const Key('autopilot-back'))).onPressed, isNull);
+    (c.read(simpleRunProvider.notifier) as _Plan).queued();
     await tester.tap(find.byKey(const Key('autopilot-skip')));
     await tester.pump();
-    expect(c.read(autopilotProvider), AutopilotStep.polarAlign);
-    // Skipped, not done: amber, never the green tick.
-    expect(find.byIcon(Icons.check_circle), findsNothing);
-    expect(tester.widget<Icon>(find.byIcon(Icons.skip_next)).color, AraColors.accentBusy);
-    // Screen readers hear each step's state, not only its name.
-    expect(find.bySemanticsLabel('Focus, skipped'), findsOneWidget);
-    expect(find.bySemanticsLabel('Polar align, current step'), findsOneWidget);
-    expect(find.bySemanticsLabel('Plan, next'), findsOneWidget);
-    c.read(_focus.notifier).set(SetupStepState.done);
+    expect(c.read(autopilotProvider), AutopilotStep.focus);
+    expect(find.bySemanticsLabel('Plan, done'), findsOneWidget, reason: 'a queue is in');
+    expect(find.bySemanticsLabel('Focus, current step'), findsOneWidget);
+    expect(find.bySemanticsLabel('Polar align, next'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('autopilot-skip')));
     await tester.pump();
-    expect(tester.widget<Icon>(find.byIcon(Icons.check_circle)).color, AraColors.accentConnected,
-        reason: 'focused after all: green');
-    expect(find.bySemanticsLabel('Focus, done'), findsOneWidget);
-    expect(find.byIcon(Icons.skip_next), findsNothing);
+    expect(find.bySemanticsLabel('Focus, skipped'), findsOneWidget);
+    expect(tester.widget<Icon>(find.byIcon(Icons.skip_next)).color, AraColors.accentBusy);
     await tester.tap(find.byKey(const Key('autopilot-back')));
     await tester.pump();
     expect(c.read(autopilotProvider), AutopilotStep.focus);

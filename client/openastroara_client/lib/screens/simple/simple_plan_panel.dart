@@ -45,6 +45,8 @@ import '../../widgets/emergency_stop_button.dart' show kEmergencyStopHold;
 import '../../widgets/stop_mount_overlay.dart' show SlewWsEvents;
 import '../../widgets/sequencer/run_completion_sheet.dart'
     show runFramesPerFilter;
+import 'simple_autopilot.dart'
+    show AutopilotStep, autopilotNext, autopilotProvider;
 import 'simple_device_windows.dart' show SimpleGainSlider;
 import 'simple_preview_panel.dart'
     show
@@ -786,14 +788,20 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
   /// at once but waits on the rig until then (cooling 15 min before).
   Future<bool> createAndStart(WidgetRef ref, {DateTime? startAt}) async {
     if (!await create(ref, first: state.sequenceId != null)) return false;
-    final api = this.ref.read(sequenceApiProvider);
+    return startQueue(startAt: startAt);
+  }
+
+  /// Starts the queue as it stands (Guided Run's last Done). With [startAt]
+  /// the run starts at once but waits on the rig until then.
+  Future<bool> startQueue({DateTime? startAt}) async {
+    final api = ref.read(sequenceApiProvider);
     final id = state.sequenceId;
     final active =
-        this.ref.read(sequenceRunStateProvider).value?.state?.isActive ?? false;
+        ref.read(sequenceRunStateProvider).value?.state?.isActive ?? false;
     if (startAt != null && api != null && id != null && !active) {
       try {
         final body = (await api.getSequenceDetail(id)).body;
-        final clock = await this.ref.read(timeSyncApiProvider)?.getState();
+        final clock = await ref.read(timeSyncApiProvider)?.getState();
         await api.updateSequence(
           id,
           body: scheduleRunBody(
@@ -1585,6 +1593,19 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
     final imaging =
         ref.watch(sequenceRunStateProvider).value?.state?.isActive ?? false;
     final off = sel == null || sel.belowHorizon || run.busy || imaging;
+    // Guided Run's plan step only queues; its green button moves on (or, with
+    // focus and polar alignment done, starts imaging).
+    final guided = ref.watch(autopilotProvider) == AutopilotStep.plan;
+    final guidedNext = guided
+        ? autopilotNext(
+            after: AutopilotStep.plan,
+            focused: ref.watch(setupFocusStateProvider) == SetupStepState.done,
+            aligned:
+                ref.watch(setupPolarAlignStateProvider) == SetupStepState.done,
+            permanentPier:
+                ref.watch(simplePermanentPierProvider).value ?? false,
+          )
+        : null;
     final now = ref.watch(clockProvider)();
     final dark = ref.watch(simpleDarkStartProvider);
     final canSchedule = ref.watch(simpleScheduleAllowedProvider);
@@ -1870,7 +1891,9 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
             style: kSimpleText.copyWith(color: AraColors.accentConnected),
           ),
         if (run.error != null) _RunError(run),
-        if (editing == null && !imaging) ...[
+        if (guided && editing == null)
+          Text(context.l10n.guidedImagingStartsAfter, style: _dim)
+        else if (editing == null && !imaging) ...[
           Wrap(
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
@@ -2001,7 +2024,11 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
                 child: FilledButton(
                   key: const Key('simple-run-start'),
                   style: kSimpleGoStyle,
-                  onPressed: off
+                  onPressed: guided
+                      ? (run.sequenceId == null || run.busy
+                            ? null
+                            : ref.read(autopilotProvider.notifier).next)
+                      : off
                       ? null
                       : () async {
                           final ok = await ref
@@ -2013,7 +2040,14 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
                           if (ok) widget.onCreated();
                         },
                   child: Text(
-                    run.busy
+                    guided
+                        ? switch (guidedNext) {
+                            AutopilotStep.focus => context.l10n.guidedNextFocus,
+                            AutopilotStep.polarAlign =>
+                              context.l10n.guidedNextPolarAlign,
+                            _ => context.l10n.guidedStartImaging,
+                          }
+                        : run.busy
                         ? context.l10n.planStarting
                         : startAt != null && !imaging
                         ? context.l10n.planStartAt(_hhmm(startAt))

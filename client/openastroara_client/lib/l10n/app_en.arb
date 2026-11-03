@@ -582,10 +582,6 @@
   "@polarDone": {
     "description": "Simple Mode Polar align panel: button that finishes polar alignment"
   },
-  "polarDoneNextPlan": "Done · Next: Plan",
-  "@polarDoneNextPlan": {
-    "description": "Simple Mode Polar align panel: finish button in Guided Run, which then moves on to the Plan step"
-  },
   "searchHint": "Objects, settings, modes, images",
   "@searchHint": {
     "description": "Simple Mode search panel: search field placeholder"
@@ -2644,5 +2640,25 @@
   "focusScopeGuide": "Guide",
   "@focusScopeGuide": {
     "description": "Focus panel: focus the guide camera (short)"
+  },
+  "guidedNextFocus": "Next: Focus",
+  "@guidedNextFocus": {
+    "description": "Guided Run plan step: green button, on to focusing"
+  },
+  "guidedNextPolarAlign": "Next: Polar align",
+  "@guidedNextPolarAlign": {
+    "description": "Guided Run plan step: green button, on to polar alignment"
+  },
+  "guidedStartImaging": "Start imaging",
+  "@guidedStartImaging": {
+    "description": "Guided Run plan step: green button when focus and polar alignment are done already"
+  },
+  "guidedImagingStartsAfter": "Imaging starts after focus and polar alignment.",
+  "@guidedImagingStartsAfter": {
+    "description": "Guided Run plan step: line above the buttons"
+  },
+  "guidedDoneStartImaging": "Done · Start imaging",
+  "@guidedDoneStartImaging": {
+    "description": "Guided Run: the last setup step's green Done, which starts imaging"
   }
 }

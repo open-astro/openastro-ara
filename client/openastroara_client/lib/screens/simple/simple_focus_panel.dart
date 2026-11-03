@@ -19,6 +19,10 @@ import '../../state/settings/phd2_settings_state.dart';
 import '../../widgets/focus/guide_focus_card.dart'
     show GuideFocusCard, TurnAdvice, guideFocusBlocker, guideFocusHint;
 import '../../widgets/focus/v_curve_chart.dart';
+import '../../state/setup/setup_readiness.dart';
+import '../../state/simple_mode_state.dart';
+import 'simple_autopilot.dart'
+    show AutopilotStep, autopilotNext, autopilotProvider;
 import 'simple_preview_panel.dart' show SimpleShutterButton, kSimpleText;
 import 'simple_device_windows.dart' show simpleCelsius;
 import 'simple_shell.dart' show SimplePanel, SimpleSegment, kSimpleGoStyle;
@@ -383,6 +387,28 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
                     fontSize: 30,
                     fontWeight: FontWeight.w300,
                   ),
+                ),
+              // Guided Run with focus the last step (a permanent pier, or
+              // aligned already): its Done starts imaging, never the run's
+              // end on its own.
+              if (ref.watch(autopilotProvider) == AutopilotStep.focus &&
+                  ref.watch(setupFocusStateProvider) == SetupStepState.done &&
+                  autopilotNext(
+                        after: AutopilotStep.focus,
+                        focused: true,
+                        aligned:
+                            ref.watch(setupPolarAlignStateProvider) ==
+                            SetupStepState.done,
+                        permanentPier:
+                            ref.watch(simplePermanentPierProvider).value ??
+                            false,
+                      ) ==
+                      null)
+                FilledButton(
+                  key: const Key('simple-focus-guided-done'),
+                  style: kSimpleGoStyle,
+                  onPressed: ref.read(autopilotProvider.notifier).next,
+                  child: Text(l10n.guidedDoneStartImaging),
                 ),
               // A finished run's figures, all on view (Simple Mode folds
               // nothing away).

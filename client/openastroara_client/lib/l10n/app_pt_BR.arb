@@ -125,7 +125,6 @@
   "polarExposure": "Exposição",
   "polarTakeFrame": "Fazer quadro",
   "polarDone": "Concluir",
-  "polarDoneNextPlan": "Concluir · Próximo: Plano",
   "searchHint": "Objetos, ajustes, modos, imagens",
   "searchGroupSky": "Céu",
   "searchGroupSettings": "Ajustes",
@@ -534,5 +533,10 @@
   "focusStartGuide": "Iniciar o foco ao vivo da câmera de guia",
   "focusStopGuide": "Parar o foco ao vivo da câmera de guia",
   "focusScopeMain": "Principal",
-  "focusScopeGuide": "Guia"
+  "focusScopeGuide": "Guia",
+  "guidedNextFocus": "Próximo: Foco",
+  "guidedNextPolarAlign": "Próximo: Alinhamento polar",
+  "guidedStartImaging": "Iniciar a captura",
+  "guidedImagingStartsAfter": "A captura começa depois do foco e do alinhamento polar.",
+  "guidedDoneStartImaging": "Pronto · Iniciar a captura"
 }

@@ -9,14 +9,19 @@ import '../../state/setup/setup_readiness.dart';
 import '../../state/simple_mode_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
-import 'simple_plan_panel.dart' show simpleRunProvider;
+import 'simple_plan_panel.dart'
+    show
+        simpleDarkStartProvider,
+        simpleRunProvider,
+        simpleScheduleAllowedProvider;
 import 'simple_polar_panel.dart' show simplePolarActive;
 import 'simple_preview_panel.dart' show kSimpleText;
 import 'simple_shell.dart' show SimplePanel, kSimpleGoStyle;
 
-/// Autopilot's steps, in the night's order: focus first (polar alignment
-/// plate-solves and fails on a soft focus), then polar align, then the plan.
-enum AutopilotStep { focus, polarAlign, plan }
+/// Guided Run's steps, in the night's order: tonight's targets first, then
+/// focus (polar alignment plate-solves and fails on a soft focus), then polar
+/// align; the last one's Done starts imaging.
+enum AutopilotStep { plan, focus, polarAlign }
 
 extension AutopilotStepLabel on AutopilotStep {
   String label(AppLocalizations l10n) => switch (this) {
@@ -26,10 +31,10 @@ extension AutopilotStepLabel on AutopilotStep {
   };
 }
 
-/// The step to start on, or go to next from [after]: the first not done
-/// tonight, polar align skipped on a permanent pier; the plan is never done
-/// beforehand. Pure — unit-tested.
-AutopilotStep autopilotNext({
+/// The step to start on (always the plan), or go to next from [after]: the
+/// first setup step not done tonight, polar align skipped on a permanent
+/// pier; null when none is left, which starts imaging. Pure — unit-tested.
+AutopilotStep? autopilotNext({
   AutopilotStep? after,
   required bool focused,
   required bool aligned,
@@ -41,13 +46,13 @@ AutopilotStep autopilotNext({
     if (s == AutopilotStep.polarAlign && (aligned || permanentPier)) continue;
     return s;
   }
-  return AutopilotStep.plan;
+  return null;
 }
 
-/// Simple Mode's Autopilot: the night's steps in order, each handing over to
-/// the next. Null while Autopilot isn't running. A finished autofocus moves
-/// on to polar align, which starts its routine on entry; polar align's Done
-/// moves on to the plan; starting the plan ends Autopilot.
+/// Simple Mode's Guided Run: the night's steps in order, each handing over to
+/// the next. Null while it isn't running. The plan queues tonight's targets;
+/// a finished autofocus moves on to polar align, which starts its routine on
+/// entry; the last step's Done starts imaging, which ends Guided Run.
 class AutopilotNotifier extends Notifier<AutopilotStep?> {
   @override
   AutopilotStep? build() {
@@ -55,16 +60,18 @@ class AutopilotNotifier extends Notifier<AutopilotStep?> {
       if (state == AutopilotStep.focus &&
           prev != SetupStepState.done &&
           next == SetupStepState.done) {
-        _go(_next(AutopilotStep.focus));
+        // The last step waits for its Done: imaging never starts on its own.
+        if (_next(AutopilotStep.focus) case final n?) _go(n);
       }
     });
     ref.listen(simpleRunProvider, (prev, next) {
-      if (state == AutopilotStep.plan && next.started) state = null;
+      // Imaging started (the last Done, or by hand): Guided Run is done.
+      if (state != null && next.started) state = null;
     });
     return null;
   }
 
-  AutopilotStep _next(AutopilotStep? after) => autopilotNext(
+  AutopilotStep? _next(AutopilotStep? after) => autopilotNext(
     after: after,
     focused: ref.read(setupFocusStateProvider) == SetupStepState.done,
     aligned: ref.read(setupPolarAlignStateProvider) == SetupStepState.done,
@@ -82,12 +89,24 @@ class AutopilotNotifier extends Notifier<AutopilotStep?> {
     }
   }
 
-  void start() => _go(_next(null));
+  void start() => _go(_next(null)!);
 
-  /// Polar align's Done, or Skip: on to the next step.
+  /// The plan's Next, a Done, or Skip: on to the next step; from the last one,
+  /// imaging starts (at dark when it is before dark, as the plan sheet's
+  /// green button would).
   void next() {
     final s = state;
-    if (s != null) _go(_next(s));
+    if (s == null) return;
+    if (_next(s) case final n?) {
+      _go(n);
+      return;
+    }
+    final startAt = ref.read(simpleScheduleAllowedProvider)
+        ? ref.read(simpleDarkStartProvider)
+        : null;
+    unawaited(
+      ref.read(simpleRunProvider.notifier).startQueue(startAt: startAt),
+    );
   }
 
   void back() {
@@ -141,7 +160,8 @@ class AutopilotStrip extends ConsumerWidget {
                 done: switch (s) {
                   AutopilotStep.focus => focused,
                   AutopilotStep.polarAlign => aligned,
-                  AutopilotStep.plan => false,
+                  AutopilotStep.plan =>
+                    ref.watch(simpleRunProvider).sequenceId != null,
                 },
               ),
             ],
@@ -153,7 +173,7 @@ class AutopilotStrip extends ConsumerWidget {
             ),
             TextButton(
               key: const Key('autopilot-skip'),
-              onPressed: step == AutopilotStep.plan ? null : pilot.next,
+              onPressed: pilot.next,
               child: Text(context.l10n.autopilotSkip),
             ),
           ],

@@ -429,9 +429,6 @@ class AppLocalizationsPt extends AppLocalizations {
   String get polarDone => 'Done';
 
   @override
-  String get polarDoneNextPlan => 'Done · Next: Plan';
-
-  @override
   String get searchHint => 'Objects, settings, modes, images';
 
   @override
@@ -1871,6 +1868,22 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get focusScopeGuide => 'Guide';
+
+  @override
+  String get guidedNextFocus => 'Next: Focus';
+
+  @override
+  String get guidedNextPolarAlign => 'Next: Polar align';
+
+  @override
+  String get guidedStartImaging => 'Start imaging';
+
+  @override
+  String get guidedImagingStartsAfter =>
+      'Imaging starts after focus and polar alignment.';
+
+  @override
+  String get guidedDoneStartImaging => 'Done · Start imaging';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -2296,9 +2309,6 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get polarDone => 'Concluir';
-
-  @override
-  String get polarDoneNextPlan => 'Concluir · Próximo: Plano';
 
   @override
   String get searchHint => 'Objetos, ajustes, modos, imagens';
@@ -3748,4 +3758,20 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get focusScopeGuide => 'Guia';
+
+  @override
+  String get guidedNextFocus => 'Próximo: Foco';
+
+  @override
+  String get guidedNextPolarAlign => 'Próximo: Alinhamento polar';
+
+  @override
+  String get guidedStartImaging => 'Iniciar a captura';
+
+  @override
+  String get guidedImagingStartsAfter =>
+      'A captura começa depois do foco e do alinhamento polar.';
+
+  @override
+  String get guidedDoneStartImaging => 'Pronto · Iniciar a captura';
 }

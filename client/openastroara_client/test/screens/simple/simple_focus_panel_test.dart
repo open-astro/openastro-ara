@@ -6,6 +6,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/autofocus_run.dart';
 import 'package:openastroara/models/equipment_device_status.dart';
 import 'package:openastroara/models/focuser_status.dart';
+import 'package:openastroara/screens/simple/simple_autopilot.dart';
+import 'package:openastroara/state/setup/setup_readiness.dart';
+import 'package:openastroara/state/simple_mode_state.dart';
+import 'package:openastroara/services/simple_mode_prefs_service.dart';
 import 'package:openastroara/screens/simple/simple_focus_panel.dart';
 import 'package:openastroara/screens/simple/simple_shell.dart' show SimpleSegment;
 import 'package:openastroara/state/equipment/focuser_state.dart';
@@ -67,6 +71,21 @@ class _Live extends AutofocusLiveNotifier {
 }
 
 late ProviderContainer _c;
+
+class _Pilot extends AutopilotNotifier {
+  int nexts = 0;
+  @override
+  AutopilotStep? build() => AutopilotStep.focus;
+  @override
+  void next() => nexts++;
+}
+
+class _PierPrefs extends SimpleModePrefsService {
+  @override
+  Future<bool> load() async => true;
+  @override
+  Future<void> save(bool enabled) async {}
+}
 
 Future<(_Focuser, _Live)> _pump(WidgetTester tester,
     {FocuserStatus? focuser, AutofocusRun run = AutofocusRun.idle, Uint8List? frame}) async {
@@ -186,6 +205,28 @@ void main() {
     await _pump(tester,
         focuser: _focuser(), run: AutofocusRun(state: AutofocusRunStates.running, probes: [_probe(0, 3.1)]));
     expect(tester.widget<SimpleSegment>(find.byKey(const Key('simple-focus-method-manual'))).onTap, isNull);
+  });
+
+  testWidgets("Guided Run on a permanent pier: focus is the last step, so its Done starts imaging", (tester) async {
+    final f = _Focuser(_focuser());
+    final pilot = _Pilot();
+    _c = ProviderContainer(overrides: [
+      focuserProvider.overrideWith(() => f),
+      autofocusLiveProvider.overrideWith(() => _Live(AutofocusLive(run: weak))),
+      setupFocusStateProvider.overrideWithValue(SetupStepState.done),
+      setupPolarAlignStateProvider.overrideWithValue(SetupStepState.pending),
+      simplePermanentPierPrefsProvider.overrideWithValue(_PierPrefs()),
+      autopilotProvider.overrideWith(() => pilot),
+    ]);
+    addTearDown(_c.dispose);
+    await _c.read(simplePermanentPierProvider.future);
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: _c,
+      child: const MaterialApp(home: Scaffold(body: Center(child: SimpleFocusPanel()))),
+    ));
+    await tester.pump();
+    await tester.tap(find.text('Done · Start imaging'));
+    expect(pilot.nexts, 1);
   });
 
   group('the shutter follows the chip', () {

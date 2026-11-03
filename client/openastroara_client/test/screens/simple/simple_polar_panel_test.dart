@@ -139,7 +139,7 @@ void main() {
     expect(api!.calls, ['complete']);
   });
 
-  testWidgets('in Autopilot, Done reads Done · Next: Plan and moves on to the plan', (tester) async {
+  testWidgets('in Guided Run, polar align is the last step: Done reads Done · Start imaging', (tester) async {
     final api = _Api()..settings = PolarAlignSettings();
     final c = ProviderContainer(overrides: [
       polarAlignApiProvider.overrideWithValue(api),
@@ -155,14 +155,14 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Done'), findsOneWidget, reason: 'outside Autopilot');
     c.read(autopilotProvider.notifier).start();
+    c.read(autopilotProvider.notifier).next(); // past the plan, to Focus
     c.read(autopilotProvider.notifier).next(); // past Focus, to polar align
     await tester.pumpAndSettle();
     expect(c.read(autopilotProvider), AutopilotStep.polarAlign);
-    expect(find.text('Done · Next: Plan'), findsOneWidget);
+    expect(find.text('Done · Start imaging'), findsOneWidget);
     await tester.tap(find.byKey(const Key('simple-polar-done')));
     await tester.pumpAndSettle();
     expect(api.calls.last, 'complete');
-    expect(c.read(autopilotProvider), AutopilotStep.plan);
   });
 
   testWidgets('a bolt turned the wrong way gets the full UI\'s nudge', (tester) async {
