@@ -21,6 +21,7 @@ import 'package:openastroara/services/profile_api.dart';
 import 'package:openastroara/screens/simple/simple_search.dart';
 import 'package:openastroara/screens/simple/simple_device_windows.dart' show simpleMountMotionProvider;
 import 'package:openastroara/models/guider_status.dart';
+import 'package:openastroara/services/equipment_driver_api.dart';
 import 'package:openastroara/state/guider/guider_state.dart';
 import 'package:openastroara/services/dso_catalog_service.dart';
 import 'package:openastroara/state/sky_atlas/dso_catalog_state.dart';
@@ -223,6 +224,12 @@ class _GuiderUp extends GuiderStatusNotifier {
   @override
   Future<GuiderStatus?> build() async =>
       GuiderStatus.fromJson(const {'device_id': 'g', 'name': 'PHD2', 'state': 'connected', 'runtime': {'state': 'guiding'}});
+}
+
+class _GuiderCalls extends _GuiderUp {
+  final calls = <String>[];
+  @override
+  Future<void> disconnect() async => calls.add('disconnect');
 }
 
 class _ParkingMount extends MountNotifier {
@@ -1421,6 +1428,25 @@ void main() {
     expect(camera.calls, ['disconnect']);
     expect(focuser.calls, ['reconnect']);
     expect(mount.calls, ['reconnect'], reason: 'Connect: the device the rig remembers, no chooser');
+  });
+
+  testWidgets('Devices lists the guider, named by its camera like its window; Disconnect, and the row opens it',
+      (tester) async {
+    final guider = _GuiderCalls();
+    await _pump(tester, const Size(1024, 768), linkUp: true, gear: [
+      guiderStatusProvider.overrideWith(() => guider),
+      deviceDriverProvider.overrideWith((ref, type) async =>
+          type == 'guidecamera' ? const DeviceDriver(name: 'ZWO ASI120MM Mini') : null),
+    ]);
+    await _openSection(tester, 'Devices');
+    final page = find.byKey(const Key('simple-gear'));
+    expect(find.descendant(of: page, matching: find.text('Guider · ZWO ASI120MM Mini')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('simple-gear-guider-disconnect')));
+    await tester.pump();
+    expect(guider.calls, ['disconnect']);
+    await tester.tap(find.descendant(of: page, matching: find.text('Guider · ZWO ASI120MM Mini')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('simple-gear')), findsNothing, reason: 'the Guider section is open');
   });
 
   testWidgets('the camera\'s dot opens its window over Simple Mode, not the full Settings page', (tester) async {

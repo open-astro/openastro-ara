@@ -17,6 +17,7 @@ import '../../state/sky_atlas/tonight_sky_state.dart'
     show planningSettingsBootstrapProvider;
 import '../../models/frame_histogram.dart';
 import '../../models/guider_status.dart';
+import '../../services/equipment_driver_api.dart';
 import '../../models/polar_align.dart';
 import '../../state/app_shell_state.dart';
 import '../../state/launch_gate_state.dart';
@@ -2001,8 +2002,8 @@ class _SettingsSheetState extends ConsumerState<_SettingsSheet> {
 /// place Simple Mode connects or disconnects one (a device's own window has
 /// neither). Ara connects the profile's gear on its own; Connect asks the rig
 /// for the device it remembers, never a chooser.
-// shortcut: the guider and the switches have their own state types; they
-// join this list with their windows.
+// shortcut: the switches have their own state type; they join this list
+// with a window of their own.
 class _Gear extends ConsumerWidget {
   const _Gear({required this.onOpen});
 
@@ -2042,6 +2043,7 @@ class _Gear extends ConsumerWidget {
           provider: focuserProvider,
           onOpen: () => onOpen('Focuser'),
         ),
+        _GuiderGearRow(onOpen: () => onOpen('Guider')),
         _GearRow(
           id: 'filterwheel',
           type: 'Filter wheel',
@@ -2095,59 +2097,127 @@ class _GearRow<T extends EquipmentDeviceStatus> extends ConsumerWidget {
       EquipmentConnectionState.error => ('Reconnect', notifier.reconnect),
       _ => ('Connect', notifier.reconnect),
     };
-    final row = Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AraSpace.s12,
-        vertical: AraSpace.s8,
-      ),
-      decoration: BoxDecoration(
-        color: AraColors.tileFill,
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Row(
-        spacing: AraSpace.s12,
-        children: [
-          Container(
-            width: 10,
-            height: 10,
-            decoration: BoxDecoration(color: dot, shape: BoxShape.circle),
-          ),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  status.name.isEmpty ? type : '$type · ${status.name}',
-                  style: kSimpleText,
-                ),
-                Text(word, style: AraText.caption),
-              ],
-            ),
-          ),
-          if (label != null)
-            TextButton(
-              key: Key('simple-gear-$id-${label.toLowerCase()}'),
-              style: TextButton.styleFrom(minimumSize: const Size(0, 44)),
-              onPressed: () => action!(),
-              child: Text(label),
-            ),
-          if (onOpen != null)
-            const Icon(Icons.chevron_right, color: AraColors.textSecondary),
-        ],
-      ),
+    return _gearTile(
+      id: id,
+      title: status.name.isEmpty ? type : '$type · ${status.name}',
+      dot: dot,
+      word: word,
+      label: label,
+      action: action,
+      onOpen: onOpen,
     );
-    // A device with a window opens it from its row.
-    return onOpen == null
-        ? row
-        : Semantics(
-            button: true,
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: onOpen,
-              child: row,
-            ),
-          );
   }
+}
+
+/// The guider's row: its own state type, named by its camera as its window
+/// is.
+class _GuiderGearRow extends ConsumerWidget {
+  const _GuiderGearRow({required this.onOpen});
+
+  final VoidCallback onOpen;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final status = ref.watch(guiderStatusProvider).value;
+    if (status == null) return const SizedBox.shrink();
+    final notifier = ref.read(guiderStatusProvider.notifier);
+    final camera = ref.watch(deviceDriverProvider('guidecamera')).value?.name;
+    final (dot, word, label, action) = switch (status.connectionState) {
+      GuiderConnectionState.connected => (
+        AraColors.accentConnected,
+        'Connected',
+        'Disconnect',
+        notifier.disconnect,
+      ),
+      GuiderConnectionState.connecting => (
+        AraColors.accentBusy,
+        'Connecting…',
+        null,
+        null,
+      ),
+      GuiderConnectionState.error => (
+        AraColors.accentError,
+        'Failed',
+        'Reconnect',
+        notifier.connect,
+      ),
+      _ => (
+        AraColors.textDisabled,
+        'Not connected',
+        'Connect',
+        notifier.connect,
+      ),
+    };
+    return _gearTile(
+      id: 'guider',
+      title: camera == null ? 'Guider' : 'Guider · $camera',
+      dot: dot,
+      word: word,
+      label: label,
+      action: action,
+      onOpen: onOpen,
+    );
+  }
+}
+
+Widget _gearTile({
+  required String id,
+  required String title,
+  required Color dot,
+  required String word,
+  required String? label,
+  required Future<void> Function()? action,
+  required VoidCallback? onOpen,
+}) {
+  final row = Container(
+    padding: const EdgeInsets.symmetric(
+      horizontal: AraSpace.s12,
+      vertical: AraSpace.s8,
+    ),
+    decoration: BoxDecoration(
+      color: AraColors.tileFill,
+      borderRadius: BorderRadius.circular(10),
+    ),
+    child: Row(
+      spacing: AraSpace.s12,
+      children: [
+        Container(
+          width: 10,
+          height: 10,
+          decoration: BoxDecoration(color: dot, shape: BoxShape.circle),
+        ),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title, style: kSimpleText),
+              Text(word, style: AraText.caption),
+            ],
+          ),
+        ),
+        if (label != null)
+          TextButton(
+            key: Key('simple-gear-$id-${label.toLowerCase()}'),
+            style: TextButton.styleFrom(minimumSize: const Size(0, 44)),
+            onPressed: () => action!(),
+            child: Text(label),
+          ),
+        if (onOpen != null)
+          const Icon(Icons.chevron_right, color: AraColors.textSecondary),
+      ],
+    ),
+  );
+  // A device with a window opens it from its row.
+  return onOpen == null
+      ? row
+      : Semantics(
+          button: true,
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: onOpen,
+            child: row,
+          ),
+        );
 }
 
 /// Settings › Rig: what belongs to no device. The rig's figures, the rig
