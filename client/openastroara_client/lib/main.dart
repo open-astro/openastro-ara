@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'l10n/app_localizations.dart';
+import 'state/app_locale_state.dart';
 
 import 'app_version.dart';
 import 'screens/app_shell.dart';
@@ -93,8 +94,17 @@ class OpenAstroAraApp extends StatelessWidget {
       navigatorObservers: [planetariumRouteObserver],
       // Always the same widget type above the Navigator, on or off — see
       // NightFilter for why the Navigator's parent must never change.
-      builder: (context, child) =>
-          NightFilter(child: child ?? const SizedBox.shrink()),
+      // The language pick overrides below MaterialApp, so a change never
+      // rebuilds the root; with no pick the override keeps the device's.
+      builder: (context, child) => NightFilter(
+        child: Consumer(
+          builder: (context, ref, _) => Localizations.override(
+            context: context,
+            locale: ref.watch(appLocaleProvider),
+            child: child ?? const SizedBox.shrink(),
+          ),
+        ),
+      ),
       home: NightHotkey(child: home ?? const _RootRouter()),
     );
   }

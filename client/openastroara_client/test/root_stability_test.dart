@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/l10n/l10n.dart';
 import 'package:openastroara/main.dart';
 import 'package:openastroara/services/client_gps_prefs_service.dart';
 import 'package:openastroara/services/night_mode_prefs_service.dart';
+import 'package:openastroara/state/app_locale_state.dart';
 import 'package:openastroara/state/client_gps_state.dart';
 import 'package:openastroara/state/night_mode_state.dart';
 import 'package:openastroara/theme/ara_theme.dart';
@@ -46,7 +48,14 @@ void main() {
     addTearDown(container.dispose);
     await tester.pumpWidget(UncontrolledProviderScope(
       container: container,
-      child: const OpenAstroAraApp(home: Scaffold(body: Text('root'))),
+      child: OpenAstroAraApp(
+        home: Scaffold(
+          body: Column(children: [
+            const Text('root'),
+            Builder(builder: (c) => Text(c.l10n.shellSimpleMode, key: const Key('localized'))),
+          ]),
+        ),
+      ),
     ));
     await container.read(nightModeProvider.future);
     await container.read(clientGpsProvider.future);
@@ -93,6 +102,25 @@ void main() {
     expect(after.nav, same(before.nav), reason: 'Navigator state replaced');
     expect(after.theme, same(before.theme), reason: 'ThemeData replaced');
     expect(after.hotkeyFocus, same(before.hotkeyFocus));
+  });
+
+  testWidgets('a language pick translates the app without moving the Navigator', (tester) async {
+    await pump(tester);
+    final before = snapshot(tester);
+    String shown() => tester.widget<Text>(find.byKey(const Key('localized'))).data!;
+    expect(shown(), 'Simple Mode', reason: 'the system language (English in tests)');
+
+    container.read(appLocaleProvider.notifier).set(const Locale('pt'));
+    await tester.pump();
+    expect(shown(), lookupAppLocalizations(const Locale('pt')).shellSimpleMode);
+    final after = snapshot(tester);
+    expect(after.nav, same(before.nav), reason: 'Navigator state replaced');
+    expect(after.app, same(before.app), reason: 'MaterialApp widget rebuilt');
+
+    container.read(appLocaleProvider.notifier).set(null);
+    await tester.pump();
+    expect(shown(), 'Simple Mode', reason: 'System: back to the device language');
+    expect(snapshot(tester).nav, same(before.nav));
   });
 
   testWidgets('a night-mode toggle flips the filter without moving the Navigator',

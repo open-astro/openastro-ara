@@ -346,5 +346,7 @@
   "planRecenterAndRefocus": "Recentralizar e refocar",
   "planHintPause": "Toque no obturador para pausar após este quadro; segure para parar.",
   "planAddTarget": "Adicionar alvo",
-  "planMagnitude": "mag {value}"
+  "planMagnitude": "mag {value}",
+  "shellLanguage": "Idioma",
+  "shellLanguageSystem": "Sistema"
 }

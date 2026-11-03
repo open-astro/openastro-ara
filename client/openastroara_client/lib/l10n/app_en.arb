@@ -1680,5 +1680,13 @@
         "type": "String"
       }
     }
+  },
+  "shellLanguage": "Language",
+  "shellLanguageSystem": "System",
+  "@shellLanguage": {
+    "description": "Settings › Rig: the app language row (this device only)"
+  },
+  "@shellLanguageSystem": {
+    "description": "Settings › Rig language picker: follow the device's language"
   }
 }

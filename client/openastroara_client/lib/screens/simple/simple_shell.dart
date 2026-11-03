@@ -39,6 +39,7 @@ import 'dart:ui' show ImageFilter;
 
 import '../../app_version.dart';
 import '../../l10n/l10n.dart';
+import '../../state/app_locale_state.dart';
 import '../../services/plate_solve_database_api.dart';
 import '../../services/server_maintenance_api.dart';
 import '../../models/equipment_device_status.dart';
@@ -2583,6 +2584,40 @@ class _ThisRig extends ConsumerWidget {
         toggle('simple-mode', l10n.shellSimpleMode, null, true, (v) {
           if (!v) ref.read(simpleModeProvider.notifier).set(false);
         }),
+        // Each language in its own words; System follows the device.
+        Wrap(
+          spacing: AraSpace.s12,
+          runSpacing: AraSpace.s8,
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            Text(l10n.shellLanguage, style: kSimpleText),
+            DecoratedBox(
+              decoration: BoxDecoration(
+                color: AraColors.tileFill,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              // Wraps at large text sizes rather than overflow.
+              child: Wrap(
+                children: [
+                  for (final (id, locale, name) in [
+                    ('system', null, l10n.shellLanguageSystem),
+                    ('en', const Locale('en'), 'English'),
+                    ('pt', const Locale('pt'), 'Português'),
+                  ])
+                    SimpleSegment(
+                      key: Key('simple-menu-language-$id'),
+                      label: name,
+                      selected: ref.watch(appLocaleProvider) == locale,
+                      radius: 8,
+                      onTap: () =>
+                          ref.read(appLocaleProvider.notifier).set(locale),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
         const Divider(height: AraSpace.s16),
         // Every version on the rig, for a bug report or a support question;
         // a part the rig can't read is left out.

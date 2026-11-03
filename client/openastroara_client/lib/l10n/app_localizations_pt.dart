@@ -1191,4 +1191,10 @@ class AppLocalizationsPt extends AppLocalizations {
   String planMagnitude(String value) {
     return 'mag $value';
   }
+
+  @override
+  String get shellLanguage => 'Idioma';
+
+  @override
+  String get shellLanguageSystem => 'Sistema';
 }

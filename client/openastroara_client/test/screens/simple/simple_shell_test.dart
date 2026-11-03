@@ -22,6 +22,7 @@ import 'package:openastroara/services/profile_api.dart';
 import 'package:openastroara/screens/simple/simple_search.dart';
 import 'package:openastroara/screens/simple/simple_device_windows.dart' show simpleMountMotionProvider;
 import 'package:openastroara/models/guider_status.dart';
+import 'package:openastroara/state/app_locale_state.dart';
 import 'package:openastroara/services/equipment_driver_api.dart';
 import 'package:openastroara/state/guider/guider_state.dart';
 import 'package:openastroara/services/dso_catalog_service.dart';
@@ -1391,6 +1392,20 @@ void main() {
     await tester.tap(find.byKey(const Key('simple-menu-simple-mode')));
     await tester.pump();
     expect(c.read(simpleModeProvider).value, isFalse, reason: 'off: the full UI');
+  });
+
+  testWidgets('Rig: a language picker, System first, for this device only', (tester) async {
+    final c = await _pump(tester, const Size(1024, 768));
+    await _openSection(tester, 'Rig');
+    final pt = find.byKey(const Key('simple-menu-language-pt'));
+    await tester.ensureVisible(pt); // Rig scrolls
+    expect(tester.widget<SimpleSegment>(find.byKey(const Key('simple-menu-language-system'))).selected, isTrue);
+    await tester.tap(pt);
+    await tester.pump();
+    expect(c.read(appLocaleProvider), const Locale('pt'));
+    await tester.tap(find.byKey(const Key('simple-menu-language-system')));
+    await tester.pump();
+    expect(c.read(appLocaleProvider), isNull);
   });
 
   testWidgets('Logs & bug report opens over Simple Mode; Back comes back', (tester) async {

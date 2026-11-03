@@ -2179,6 +2179,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'mag {value}'**
   String planMagnitude(String value);
+
+  /// Settings › Rig: the app language row (this device only)
+  ///
+  /// In en, this message translates to:
+  /// **'Language'**
+  String get shellLanguage;
+
+  /// Settings › Rig language picker: follow the device's language
+  ///
+  /// In en, this message translates to:
+  /// **'System'**
+  String get shellLanguageSystem;
 }
 
 class _AppLocalizationsDelegate
