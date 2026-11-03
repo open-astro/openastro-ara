@@ -1903,6 +1903,7 @@ class _SettingsSheetState extends ConsumerState<_SettingsSheet> {
     // A device keeps the icon its dot has in the top bar.
     Widget glyph(IconData icon, Color c) => Icon(icon, size: 20, color: c);
     final l10n = context.l10n;
+    // Only a device appearing or going rebuilds this, not each 1 s reading.
     // The id picks the section (and a search hit names it); the label shows.
     final sections = <(String, String, Widget Function(Color), bool)>[
       ('Rig', l10n.shellSectionRig, (c) => glyph(Icons.memory, c), false),
@@ -1912,28 +1913,28 @@ class _SettingsSheetState extends ConsumerState<_SettingsSheet> {
         (c) => glyph(Icons.settings_input_component_outlined, c),
         false,
       ),
-      if (ref.watch(cameraStatusProvider).value != null)
+      if (ref.watch(cameraStatusProvider.select((v) => v.value != null)))
         (
           'Camera',
           l10n.shellSectionCamera,
           (c) => glyph(Icons.camera_alt, c),
           true,
         ),
-      if (ref.watch(mountProvider).value != null)
+      if (ref.watch(mountProvider.select((v) => v.value != null)))
         (
           'Mount',
           l10n.shellSectionMount,
           (c) => EquipmentGlyph.telescope(size: 20, color: c),
           true,
         ),
-      if (ref.watch(focuserProvider).value != null)
+      if (ref.watch(focuserProvider.select((v) => v.value != null)))
         (
           'Focuser',
           l10n.shellSectionFocuser,
           (c) => glyph(Icons.center_focus_strong, c),
           true,
         ),
-      if (ref.watch(guiderStatusProvider).value != null)
+      if (ref.watch(guiderStatusProvider.select((v) => v.value != null)))
         (
           'Guider',
           l10n.shellSectionGuider,
@@ -1983,7 +1984,7 @@ class _SettingsSheetState extends ConsumerState<_SettingsSheet> {
                                 children: [
                                   icon(
                                     _section == name
-                                        ? AraColors.accentInfo
+                                        ? AraColors.linkText
                                         : AraColors.textPrimary,
                                   ),
                                   if (!narrow)
@@ -1992,7 +1993,7 @@ class _SettingsSheetState extends ConsumerState<_SettingsSheet> {
                                         title,
                                         style: kSimpleText.copyWith(
                                           color: _section == name
-                                              ? AraColors.accentInfo
+                                              ? AraColors.linkText
                                               : null,
                                         ),
                                       ),
@@ -2946,6 +2947,7 @@ class _RigStepperState extends State<_RigStepper> {
   });
 
   void _start(int dir) {
+    _run?.cancel();
     _steps = 0;
     _bump(dir);
     _run = Timer.periodic(const Duration(milliseconds: 100), (_) => _bump(dir));
@@ -2958,6 +2960,13 @@ class _RigStepperState extends State<_RigStepper> {
     if (v != null) widget.onSet(v);
   }
 
+  /// The system took the finger mid-hold: stop and set nothing.
+  void _cancel() {
+    _run?.cancel();
+    _run = null;
+    if (_held != null) setState(() => _held = null);
+  }
+
   @override
   void dispose() {
     _run?.cancel();
@@ -2967,6 +2976,7 @@ class _RigStepperState extends State<_RigStepper> {
   Widget _button(int dir) => GestureDetector(
     onLongPressStart: (_) => _start(dir),
     onLongPressEnd: (_) => _end(),
+    onLongPressCancel: _cancel,
     // No tooltip: its own long press would take the hold.
     child: IconButton(
       key: Key('simple-rig-${widget.id}-${dir > 0 ? 'up' : 'down'}'),

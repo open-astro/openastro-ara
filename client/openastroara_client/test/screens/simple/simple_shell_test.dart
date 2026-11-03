@@ -2173,4 +2173,71 @@ void main() {
     expect(isShell(const AppShell()), isTrue);
     expect(isShell(const SizedBox()), isFalse);
   });
+
+  testWidgets('the selected Settings section reads at 4.5:1: link blue, not Info Blue on the tint', (tester) async {
+    await _pump(tester, const Size(1024, 768));
+    await _openSection(tester, 'Rig');
+    final nav = find.byKey(const Key('simple-menu-nav-Rig'));
+    // Info Blue on the selection tint is 4.3:1 over a white frame (WCAG 1.4.3).
+    final title = tester.widget<Text>(find.descendant(of: nav, matching: find.byType(Text)));
+    expect(title.style?.color, AraColors.linkText);
+    final icon = tester.widget<Icon>(find.descendant(of: nav, matching: find.byType(Icon)));
+    expect(icon.color, AraColors.linkText);
+  });
+
+  testWidgets('an interrupted hold on the elevation stepper stops, and sets nothing', (tester) async {
+    final c = await _pump(tester, const Size(1024, 768));
+    await _openSection(tester, 'Rig');
+    final before = c.read(siteSettingsProvider).elevationM;
+    final up = find.byKey(const Key('simple-rig-elevation-up'));
+    await tester.ensureVisible(up);
+    await tester.pump();
+    final g = await tester.startGesture(tester.getCenter(up));
+    await tester.pump(const Duration(milliseconds: 600)); // the hold starts
+    await tester.pump(const Duration(milliseconds: 300));
+    await g.cancel(); // iPadOS took the touch (Control Center, a call)
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 2));
+    expect(find.text('${before.round()} m'), findsOneWidget, reason: 'the run stopped and the held value was dropped');
+    expect(c.read(siteSettingsProvider).elevationM, before);
+  });
+
+  testWidgets('Search tells screen readers what it found', (tester) async {
+    await _pump(tester, const Size(1024, 768));
+    Future<void> search(String q) async {
+      if (find.byKey(const Key('simple-search')).evaluate().isEmpty) {
+        await tester.tap(find.byKey(const Key('simple-search-button')));
+        await tester.pump();
+      }
+      await tester.enterText(find.byKey(const Key('simple-search-field')), q);
+      await tester.pump();
+      await tester.pump();
+    }
+    final status = find.byKey(const Key('simple-search-status'));
+    await search('eleva');
+    expect(tester.getSemantics(status), isSemantics(label: '1 match', isLiveRegion: true));
+    await search('cool');
+    expect(tester.getSemantics(status),
+        isSemantics(label: 'Nothing in Simple Mode matches "cool".', isLiveRegion: true));
+  });
+
+  testWidgets('a new camera reading rebuilds neither Settings nor Search; only the camera coming or going does',
+      (tester) async {
+    final cam = _CoolingCamera(-5);
+    await _pump(tester, const Size(1024, 768), gear: [cameraStatusProvider.overrideWith(() => cam)]);
+    await tester.pump();
+    bool dirty(Finder f) => tester.element(f).dirty;
+    await tester.tap(find.byTooltip('Settings'));
+    await tester.pump();
+    final sheet = find.ancestor(
+        of: find.byKey(const Key('simple-menu')),
+        matching: find.byWidgetPredicate((w) => w.runtimeType.toString() == '_SettingsSheet'));
+    cam.set(-6); // the 1 s poll
+    expect(dirty(sheet), isFalse, reason: 'its sections only change when a device appears or goes');
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('simple-search-button')));
+    await tester.pump();
+    cam.set(-7);
+    expect(dirty(find.byType(SimpleSearchPanel)), isFalse, reason: 'no catalog scan per camera poll');
+  });
 }

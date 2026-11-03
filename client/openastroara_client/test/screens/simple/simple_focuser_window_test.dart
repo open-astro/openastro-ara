@@ -219,4 +219,39 @@ void main() {
     expect(steps.top - knob.bottom, greaterThanOrEqualTo(16), reason: 'room under the dial');
     expect(find.text('steps per click'), findsNothing);
   });
+
+  testWidgets('a keyboard turns the knob: Tab to it, the arrows move a step', (tester) async {
+    final f = await _pump(tester, _wire());
+    for (var i = 0; i < 10 && FocusManager.instance.primaryFocus?.debugLabel != 'simple-focuser-dial'; i++) {
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.pump();
+    }
+    expect(FocusManager.instance.primaryFocus?.debugLabel, 'simple-focuser-dial');
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+    await tester.pump();
+    expect(f.moves, [12100], reason: 'up or right: out a step');
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+    await tester.pump();
+    expect(f.moves.last, 11900, reason: 'down or left: in a step, from the reported position');
+  });
+
+  testWidgets('a turn cut off by the system moves nothing', (tester) async {
+    final f = await _pump(tester, _wire());
+    final knob = find.byKey(const Key('simple-focuser-knob'));
+    final centre = tester.getCenter(knob);
+    final r = tester.getSize(knob).width * 0.4;
+    Offset at(double deg) {
+      final a = (deg - 90) * math.pi / 180;
+      return centre + Offset(r * math.cos(a), r * math.sin(a));
+    }
+    final g = await tester.startGesture(at(0));
+    for (var d = 5.0; d <= 95; d += 5) {
+      await g.moveTo(at(d));
+      await tester.pump();
+    }
+    await g.cancel();
+    await tester.pump();
+    expect(f.moves, isEmpty);
+    expect(find.textContaining('Let go to move'), findsNothing);
+  });
 }

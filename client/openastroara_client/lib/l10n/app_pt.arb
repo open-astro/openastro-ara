@@ -133,6 +133,7 @@
   "searchGroupImages": "Imagens",
   "searchImageLibrary": "Biblioteca de imagens",
   "searchNoMatch": "Nada no Modo Simples corresponde a \"{query}\".",
+  "searchMatches": "{count, plural, =1{1 resultado} other{{count} resultados}}",
   "searchSectionRig": "Setup",
   "searchSectionDevices": "Dispositivos",
   "searchSectionCamera": "Câmera",

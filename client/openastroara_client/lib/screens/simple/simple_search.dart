@@ -173,12 +173,19 @@ class _SimpleSearchPanelState extends ConsumerState<SimpleSearchPanel> {
           spacing: AraSpace.s12,
           children: [
             Icon(icon, size: 18, color: AraColors.textSecondary),
-            Text(
-              title,
-              style: kSimpleText.copyWith(fontWeight: FontWeight.w600),
+            // A long target name wraps to two lines; the detail gives way.
+            Flexible(
+              flex: 3,
+              child: Text(
+                title,
+                style: kSimpleText.copyWith(fontWeight: FontWeight.w600),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
             if (detail != null)
-              Expanded(
+              Flexible(
+                flex: 2,
                 child: Text(
                   detail,
                   style: kSimpleText.copyWith(color: AraColors.textSecondary),
@@ -205,12 +212,16 @@ class _SimpleSearchPanelState extends ConsumerState<SimpleSearchPanel> {
       l10n,
       q,
       sections: {
+      // Only a device appearing or going rebuilds this, not each reading.
         'Rig',
         'Devices',
-        if (ref.watch(cameraStatusProvider).value != null) 'Camera',
-        if (ref.watch(mountProvider).value != null) 'Mount',
-        if (ref.watch(focuserProvider).value != null) 'Focuser',
-        if (ref.watch(guiderStatusProvider).value != null) 'Guider',
+        if (ref.watch(cameraStatusProvider.select((v) => v.value != null)))
+          'Camera',
+        if (ref.watch(mountProvider.select((v) => v.value != null))) 'Mount',
+        if (ref.watch(focuserProvider.select((v) => v.value != null)))
+          'Focuser',
+        if (ref.watch(guiderStatusProvider.select((v) => v.value != null)))
+          'Guider',
       },
       // The library is only asked once there is something to look for.
       targets: q.trim().length < 2
@@ -258,6 +269,22 @@ class _SimpleSearchPanelState extends ConsumerState<SimpleSearchPanel> {
               prefixIcon: const Icon(Icons.search, size: 20),
             ),
           ),
+          // What each keystroke found, for screen readers (WCAG 4.1.3).
+          if (q.trim().length >= 2)
+            Semantics(
+              key: const Key('simple-search-status'),
+              container: true,
+              liveRegion: true,
+              label: none
+                  ? l10n.searchNoMatch(q.trim())
+                  : l10n.searchMatches(
+                      sky.length +
+                          settings.length +
+                          modes.length +
+                          images.length,
+                    ),
+              child: const SizedBox(height: 1),
+            ),
           Flexible(
             child: ListView(
               shrinkWrap: true,
@@ -299,12 +326,15 @@ class _SimpleSearchPanelState extends ConsumerState<SimpleSearchPanel> {
                     t,
                   ),
                 if (none)
-                  Padding(
-                    padding: const EdgeInsets.all(AraSpace.s12),
-                    child: Text(
-                      l10n.searchNoMatch(q.trim()),
-                      style: kSimpleText.copyWith(
-                        color: AraColors.textSecondary,
+                  // The status above already says it.
+                  ExcludeSemantics(
+                    child: Padding(
+                      padding: const EdgeInsets.all(AraSpace.s12),
+                      child: Text(
+                        l10n.searchNoMatch(q.trim()),
+                        style: kSimpleText.copyWith(
+                          color: AraColors.textSecondary,
+                        ),
                       ),
                     ),
                   ),

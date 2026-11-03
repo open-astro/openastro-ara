@@ -2,7 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
-import 'package:flutter/services.dart' show HapticFeedback;
+import 'package:flutter/services.dart' show HapticFeedback, LogicalKeyboardKey;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../l10n/l10n.dart';
@@ -768,6 +768,16 @@ class _SimpleFocuserWindowState extends ConsumerState<SimpleFocuserWindow> {
   /// The last place sent, for "Moving to …".
   int? _sent;
 
+  /// The knob takes Tab like any control; the arrows move it a step.
+  final _dialFocus = FocusNode(debugLabel: 'simple-focuser-dial');
+  bool _dialFocused = false;
+
+  @override
+  void dispose() {
+    _dialFocus.dispose();
+    super.dispose();
+  }
+
   int _clamp(int v, FocuserStatus s) {
     final c = s.capabilities;
     return c == null || c.maxPosition <= c.minPosition
@@ -892,60 +902,96 @@ class _SimpleFocuserWindowState extends ConsumerState<SimpleFocuserWindow> {
             style: AraText.caption.copyWith(color: AraColors.accentBusy),
           ),
         ),
-        Center(
-          child: Semantics(
-            slider: true,
-            label: context.l10n.deviceFocusPosition,
-            value: simpleSteps(pos),
-            increasedValue: simpleSteps(_clamp(pos + _step, s)),
-            decreasedValue: simpleSteps(_clamp(pos - _step, s)),
-            onIncrease: () => _go(s, _clamp(pos + _step, s)),
-            onDecrease: () => _go(s, _clamp(pos - _step, s)),
-            child: _FocusKnob(
-              key: const Key('simple-focuser-knob'),
-              onDetent: (d) {
-                HapticFeedback.selectionClick();
-                setState(
-                  () => _target = _clamp((_target ?? pos) + d * _step, s),
-                );
+        LayoutBuilder(
+          builder: (context, box) => Center(
+            child: FocusableActionDetector(
+              focusNode: _dialFocus,
+              onShowFocusHighlight: (v) => setState(() => _dialFocused = v),
+              // Up or right turns it out, like the dial clockwise.
+              shortcuts: const {
+                SingleActivator(LogicalKeyboardKey.arrowUp): _DialStep(1),
+                SingleActivator(LogicalKeyboardKey.arrowRight): _DialStep(1),
+                SingleActivator(LogicalKeyboardKey.arrowDown): _DialStep(-1),
+                SingleActivator(LogicalKeyboardKey.arrowLeft): _DialStep(-1),
               },
-              onRelease: () {
-                final t = _target;
-                setState(() => _target = null);
-                if (t != null) _go(s, t);
+              actions: {
+                _DialStep: CallbackAction<_DialStep>(
+                  onInvoke: (i) => _go(s, _clamp(pos + i.dir * _step, s)),
+                ),
               },
-              // The middle runs autofocus (its square cancels it).
-              centre: const _AutofocusButton(),
+              child: Semantics(
+                slider: true,
+                label: context.l10n.deviceFocusPosition,
+                value: simpleSteps(pos),
+                increasedValue: simpleSteps(_clamp(pos + _step, s)),
+                decreasedValue: simpleSteps(_clamp(pos - _step, s)),
+                onIncrease: () => _go(s, _clamp(pos + _step, s)),
+                onDecrease: () => _go(s, _clamp(pos - _step, s)),
+                child: _FocusKnob(
+                  key: const Key('simple-focuser-knob'),
+                  focused: _dialFocused,
+                  size: math.min(220, box.maxWidth),
+                  onDetent: (d) {
+                    HapticFeedback.selectionClick();
+                    setState(
+                      () => _target = _clamp((_target ?? pos) + d * _step, s),
+                    );
+                  },
+                  onRelease: () {
+                    final t = _target;
+                    setState(() => _target = null);
+                    if (t != null) _go(s, t);
+                  },
+                  // The system took the finger: nothing moves.
+                  onCancel: () => setState(() => _target = null),
+                  // The middle runs autofocus (its square cancels it).
+                  centre: const _AutofocusButton(),
+                ),
+              ),
             ),
           ),
         ),
         const SizedBox(height: AraSpace.s16),
         // Rows like the Guider window's: label left, control right.
-        simpleWindowRow(
-          context.l10n.deviceStep,
-          id: 'Step',
-          Container(
-            key: const Key('simple-focuser-steps'),
-            width: kSimpleWindowControlWidth,
-            decoration: BoxDecoration(
-              color: AraColors.tileFill,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Row(
-              children: [
-                for (final n in const [10, 100, 1000])
-                  Expanded(
-                    child: SimpleSegment(
-                      key: Key('simple-focuser-step-$n'),
-                      label: '$n',
-                      selected: _step == n,
-                      radius: 8,
-                      onTap: () => setState(() => _step = n),
+        LayoutBuilder(
+          builder: (context, box) {
+            // Too narrow for label and segments side by side (one-third
+            // Split View): the label goes over them, full width.
+            final narrow = box.maxWidth < kSimpleWindowControlWidth + 96;
+            final steps = Container(
+              key: const Key('simple-focuser-steps'),
+              width: narrow ? double.infinity : kSimpleWindowControlWidth,
+              decoration: BoxDecoration(
+                color: AraColors.tileFill,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  for (final n in const [10, 100, 1000])
+                    Expanded(
+                      child: SimpleSegment(
+                        key: Key('simple-focuser-step-$n'),
+                        label: '$n',
+                        selected: _step == n,
+                        radius: 8,
+                        onTap: () => setState(() => _step = n),
+                      ),
                     ),
-                  ),
-              ],
-            ),
-          ),
+                ],
+              ),
+            );
+            return narrow
+                ? Column(
+                    key: const Key('simple-window-row-Step'),
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    spacing: AraSpace.s4,
+                    children: [
+                      Text(context.l10n.deviceStep, style: kSimpleText),
+                      steps,
+                    ],
+                  )
+                : simpleWindowRow(context.l10n.deviceStep, id: 'Step', steps);
+          },
         ),
         ..._refocus(),
       ]);
@@ -975,19 +1021,31 @@ class _FocusKnob extends StatefulWidget {
     super.key,
     required this.onDetent,
     required this.onRelease,
+    required this.onCancel,
     required this.centre,
+    this.focused = false,
+    this.size = 220,
   });
+
+  /// The dial's diameter: 220, less in a narrow window.
+  final double size;
 
   final ValueChanged<int> onDetent;
   final VoidCallback onRelease;
+
+  /// A turn the system cut off (a pointer cancel), instead of [onRelease].
+  final VoidCallback onCancel;
   final Widget centre;
+
+  /// Keyboard focus: a ring round the face.
+  final bool focused;
 
   @override
   State<_FocusKnob> createState() => _FocusKnobState();
 }
 
 class _FocusKnobState extends State<_FocusKnob> {
-  static const _size = 220.0;
+  double get _size => widget.size;
   static const _detent = math.pi / 6;
 
   /// The face's angle, and the turn not yet a whole detent.
@@ -1012,11 +1070,15 @@ class _FocusKnobState extends State<_FocusKnob> {
     }
   }
 
+  /// Set by a pointer cancel, which reaches the pan as an ordinary end.
+  bool _cancelled = false;
+
   void _end() {
     if (_last == null) return;
     _last = null;
     _pending = 0;
-    widget.onRelease();
+    _cancelled ? widget.onCancel() : widget.onRelease();
+    _cancelled = false;
   }
 
   @override
@@ -1025,32 +1087,49 @@ class _FocusKnobState extends State<_FocusKnob> {
     child: Stack(
       alignment: Alignment.center,
       children: [
-        RawGestureDetector(
-          gestures: {
-            _EagerPan: GestureRecognizerFactoryWithHandlers<_EagerPan>(
-              _EagerPan.new,
-              (r) {
-                r
-                  ..dragStartBehavior = DragStartBehavior.down
-                  ..onStart = (d) {
-                    _last = _at(d.localPosition);
-                  }
-                  ..onUpdate = (d) {
-                    _turn(d.localPosition);
-                  }
-                  ..onEnd = (_) {
-                    _end();
-                  }
-                  ..onCancel = _end;
-              },
+        if (widget.focused)
+          DecoratedBox(
+            decoration: const ShapeDecoration(
+              shape: CircleBorder(
+                side: BorderSide(color: AraColors.accentInfo, width: 2),
+              ),
             ),
-          },
-          child: Transform.rotate(
-            key: const Key('simple-focuser-dial-face'),
-            angle: _angle,
-            child: const CustomPaint(
-              size: Size.square(_size),
-              painter: _DialPainter(),
+            child: SizedBox.square(dimension: _size),
+          ),
+        // A listener sees the cancel before the pan turns it into an end.
+        Listener(
+          onPointerDown: (_) => _cancelled = false,
+          onPointerCancel: (_) => _cancelled = true,
+          child: RawGestureDetector(
+            gestures: {
+              _EagerPan: GestureRecognizerFactoryWithHandlers<_EagerPan>(
+                _EagerPan.new,
+                (r) {
+                  r
+                    ..dragStartBehavior = DragStartBehavior.down
+                    ..onStart = (d) {
+                      _last = _at(d.localPosition);
+                    }
+                    ..onUpdate = (d) {
+                      _turn(d.localPosition);
+                    }
+                    ..onEnd = (_) {
+                      _end();
+                    }
+                    ..onCancel = () {
+                      _cancelled = true;
+                      _end();
+                    };
+                },
+              ),
+            },
+            child: Transform.rotate(
+              key: const Key('simple-focuser-dial-face'),
+              angle: _angle,
+              child: CustomPaint(
+                size: Size.square(_size),
+                painter: const _DialPainter(),
+              ),
             ),
           ),
         ),
@@ -1069,6 +1148,12 @@ class _FocusKnobState extends State<_FocusKnob> {
       ],
     ),
   );
+}
+
+/// One keyboard step of the focuser knob: +1 out, −1 in.
+class _DialStep extends Intent {
+  const _DialStep(this.dir);
+  final int dir;
 }
 
 /// A pan that wins the finger on touch-down, ahead of the sheet's scroll and

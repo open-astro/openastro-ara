@@ -18,6 +18,10 @@ import 'package:openastroara/state/simple_mode_state.dart';
 import 'package:openastroara/widgets/emergency_stop_button.dart';
 import 'package:openastroara/models/camera_status.dart';
 import 'package:openastroara/state/equipment/camera_state.dart';
+import 'package:openastroara/models/focuser_status.dart';
+import 'package:openastroara/models/library/live_library.dart';
+import 'package:openastroara/state/equipment/focuser_state.dart';
+import 'package:openastroara/state/library/live_library_state.dart';
 
 class _MemPrefs extends SimpleModePrefsService {
   bool value = true;
@@ -57,6 +61,26 @@ class _Camera extends CameraStatusNotifier {
       });
 }
 
+class _Focuser extends FocuserNotifier {
+  @override
+  Future<FocuserStatus?> build() async => FocuserStatus.fromJson({
+        'device_id': 'f', 'name': 'ZWO EAF', 'state': 'connected',
+        'capabilities': {'min_position': 0, 'max_position': 60000, 'absolute_focuser': true},
+        'runtime': {'state': 'idle', 'position': 31250, 'temperature': 8.4},
+      });
+}
+
+/// An imaged target with a long name, for Search's result rows.
+class _Sessions extends LiveLibrarySessionsNotifier {
+  @override
+  Future<List<LibrarySession>?> build() async => [
+        LibrarySession(
+            id: 's1', targetName: 'Sh2-129 Flying Bat and Ou4 Giant Squid Nebula',
+            sessionStartUtc: DateTime.utc(2026, 11, 2, 20), sessionEndUtc: null,
+            totalFrames: 21, lightFrames: 21, calibrationFrames: 0, filtersUsed: const ['Ha']),
+      ];
+}
+
 /// A queue of two, so the plan squares draw.
 class _Queue extends SimpleRunNotifier {
   @override
@@ -82,7 +106,7 @@ void main() {
     (1.0, const Size(320, 768)),
   ];
   for (final (scale, size) in cases) {
-    for (final open in ['Preview settings', 'Plan', 'Stop armed', 'Modes', 'Settings', 'Rig', 'Camera']) {
+    for (final open in ['Preview settings', 'Plan', 'Stop armed', 'Modes', 'Settings', 'Rig', 'Camera', 'Settings Focuser', 'Search']) {
       testWidgets('text ${scale}x at ${size.width.toInt()}x${size.height.toInt()}, $open: nothing overflows',
           skip: !hasFonts, (tester) async {
         tester.view.physicalSize = size;
@@ -93,6 +117,8 @@ void main() {
           selectedTabIndexProvider.overrideWith(_StartOnLive.new),
           // Plan with real content: Tonight's best (one picked) and a queue.
           if (open == 'Camera') cameraStatusProvider.overrideWith(_Camera.new),
+          if (open == 'Settings Focuser') focuserProvider.overrideWith(_Focuser.new),
+          if (open == 'Search') liveLibrarySessionsProvider.overrideWith(_Sessions.new),
           if (open == 'Plan') ...[
             tonightSkyProvider.overrideWith(
                 (ref) async => [_o('M31', 62), _o('North America Nebula', 71), _o('M33', 48), _o('M45', 30)]),
@@ -101,6 +127,7 @@ void main() {
         ]);
         addTearDown(c.dispose);
         await c.read(simpleModeProvider.future);
+        if (open == 'Settings Focuser') await c.read(focuserProvider.future);
         await tester.pumpWidget(UncontrolledProviderScope(
           container: c,
           child: MaterialApp(
@@ -157,6 +184,20 @@ void main() {
           c.read(selectedTabIndexProvider.notifier).select(kOptionsTabIndex);
           await tester.pump();
           expect(find.byKey(const Key('simple-device-camera')), findsOneWidget);
+        } else if (open == 'Settings Focuser') {
+          // Its page in Settings: the dial and the step segments.
+          await tester.tap(find.byTooltip('Settings'));
+          await tester.pump();
+          await tester.tap(find.byKey(const Key('simple-menu-nav-Focuser')));
+          await tester.pump();
+          expect(find.byKey(const Key('simple-focuser-knob')), findsOneWidget);
+        } else if (open == 'Search') {
+          await tester.tap(find.byKey(const Key('simple-search-button')));
+          await tester.pump();
+          await tester.enterText(find.byKey(const Key('simple-search-field')), 'Flying');
+          await tester.pump();
+          await tester.pump();
+          expect(find.byKey(const Key('simple-search-image-0')), findsOneWidget);
         } else if (open == 'Settings' || open == 'Rig') {
           await tester.tap(find.byTooltip('Settings'));
           await tester.pump();

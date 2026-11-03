@@ -456,6 +456,17 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String searchMatches(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count resultados',
+      one: '1 resultado',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get searchSectionRig => 'Setup';
 
   @override

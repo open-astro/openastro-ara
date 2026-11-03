@@ -620,6 +620,15 @@
       }
     }
   },
+  "searchMatches": "{count, plural, =1{1 match} other{{count} matches}}",
+  "@searchMatches": {
+    "description": "Simple Mode search panel: what screen readers hear after each keystroke, the number of results shown",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "searchSectionRig": "Rig",
   "@searchSectionRig": {
     "description": "Simple Mode search panel: name of the Settings sheet's Rig section, shown beside a setting result (and the result for the section itself)"

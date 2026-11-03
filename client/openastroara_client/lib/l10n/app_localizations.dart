@@ -896,6 +896,12 @@ abstract class AppLocalizations {
   /// **'Nothing in Simple Mode matches \"{query}\".'**
   String searchNoMatch(String query);
 
+  /// Simple Mode search panel: what screen readers hear after each keystroke, the number of results shown
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 match} other{{count} matches}}'**
+  String searchMatches(int count);
+
   /// Simple Mode search panel: name of the Settings sheet's Rig section, shown beside a setting result (and the result for the section itself)
   ///
   /// In en, this message translates to:
