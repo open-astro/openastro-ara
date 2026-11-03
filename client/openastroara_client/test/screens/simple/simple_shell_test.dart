@@ -1329,15 +1329,15 @@ void main() {
     expect(value('aperture', '80 mm'), findsOneWidget);
   });
 
-  testWidgets('Rig\'s Name and Profile read like its other rows, set close together', (tester) async {
+  testWidgets('Rig\'s Name and Profile read like its other rows, a 44 pt row each', (tester) async {
     await _pump(tester, const Size(1024, 768));
     await _openSection(tester, 'Rig');
     TextStyle? style(String t) => tester.widget<Text>(find.text(t)).style;
     for (final t in ['Name', 'Profile']) {
       expect(style(t), style('Aperture'), reason: t);
     }
-    expect(tester.getCenter(find.text('Profile')).dy - tester.getCenter(find.text('Name')).dy, lessThanOrEqualTo(30),
-        reason: 'read-only facts sit close together, not 44 pt apart');
+    // Their Change buttons are 44 pt targets (user, 2026-11-03), so each row is 44 pt.
+    expect(tester.getCenter(find.text('Profile')).dy - tester.getCenter(find.text('Name')).dy, closeTo(44, 4));
   });
 
   testWidgets('a telescope the profile doesn\'t know comes from the mount, saved to the profile; a known one stays',
@@ -2239,5 +2239,13 @@ void main() {
     await tester.pump();
     cam.set(-7);
     expect(dirty(find.byType(SimpleSearchPanel)), isFalse, reason: 'no catalog scan per camera poll');
+  });
+
+  testWidgets('the Change buttons are 44 pt, like every Simple Mode target', (tester) async {
+    await _pump(tester, const Size(1024, 768));
+    await _openSection(tester, 'Rig');
+    for (final id in ['rig', 'profile']) {
+      expect(tester.getSize(find.byKey(Key('simple-rig-change-$id'))).height, greaterThanOrEqualTo(44), reason: id);
+    }
   });
 }

@@ -2409,8 +2409,9 @@ class _ThisRig extends ConsumerWidget {
           child: TextButton(
             key: Key('simple-rig-change-$id'),
             style: TextButton.styleFrom(
-              // 28 pt keeps the two lines close; still over WCAG 2.2's 24.
-              minimumSize: const Size(0, 28),
+              // Simple Mode's 44 pt target (user, 2026-11-03), over keeping
+              // the two lines close.
+              minimumSize: const Size(0, 44),
               padding: const EdgeInsets.symmetric(horizontal: AraSpace.s8),
               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
             ),
