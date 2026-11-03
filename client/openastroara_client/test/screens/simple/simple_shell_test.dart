@@ -25,6 +25,7 @@ import 'package:openastroara/models/autofocus_run.dart';
 import 'package:openastroara/state/focus/autofocus_live_state.dart';
 import 'package:openastroara/state/focus/bahtinov_focus_state.dart';
 import 'package:openastroara/models/bahtinov_focus.dart';
+import 'package:openastroara/state/focus/guide_focus_state.dart';
 import 'package:openastroara/models/guider_status.dart';
 import 'package:openastroara/widgets/status_indicator.dart' show StatusLevel;
 import 'package:openastroara/widgets/equipment/guider_chip.dart' show guiderStatusLevel;
@@ -299,6 +300,11 @@ class _BahtinovReading extends BahtinovFocusNotifier {
       frameSeq: 6,
     );
   }
+}
+
+class _GuideFrame extends GuideFocusNotifier {
+  @override
+  GuideFocusLive build() => GuideFocusLive(frame: Uint8List.fromList(_png), frameSeq: 1);
 }
 
 class _ManualPick extends MainFocusMethodNotifier {
@@ -616,6 +622,20 @@ void main() {
       expect(tester.state<ScrollableState>(scroll).position.maxScrollExtent, 0, reason: 'everything in view');
     });
   }
+
+  testWidgets("Focus on the guide camera fills the screen with the guide camera's frames", (tester) async {
+    final container = await _pump(tester, const Size(1024, 768), gear: [
+      guideFocusProvider.overrideWith(_GuideFrame.new),
+    ]);
+    await tester.tap(find.byKey(const Key('simple-mode')));
+    await tester.pump();
+    await tester.tap(find.text('Focus'));
+    await tester.pump();
+    expect(find.byKey(const Key('simple-focus-frame')), findsNothing, reason: 'the main telescope to start');
+    container.read(simpleFocusScopeProvider.notifier).set(SimpleFocusScope.guide);
+    await tester.pump();
+    expect(find.byKey(const Key('simple-focus-frame')), findsOneWidget);
+  });
 
   testWidgets('Focus stays in Simple Mode: the rail reads Focus, its panel opens left of the rail; the chip is the Focus chip',
       (tester) async {

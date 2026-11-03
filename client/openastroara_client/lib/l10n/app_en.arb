@@ -2438,5 +2438,211 @@
         "type": "String"
       }
     }
+  },
+  "guideFocusStarting": "Starting…",
+  "@guideFocusStarting": {
+    "description": "Guide camera live focus: starting"
+  },
+  "guideFocusNoStarsMeasured": "Live · no stars measured",
+  "@guideFocusNoStarsMeasured": {
+    "description": "Guide camera live focus headline: no stars"
+  },
+  "guideFocusLive": "Live · HFR {hfr}",
+  "@guideFocusLive": {
+    "description": "Guide camera live focus headline",
+    "placeholders": {
+      "hfr": {
+        "type": "String"
+      }
+    }
+  },
+  "guideFocusLiveInFocus": "Live · HFR {hfr} — in focus",
+  "@guideFocusLiveInFocus": {
+    "description": "Guide camera live focus headline, in focus",
+    "placeholders": {
+      "hfr": {
+        "type": "String"
+      }
+    }
+  },
+  "guideFocusLiveBest": "Live · HFR {hfr} — best so far",
+  "@guideFocusLiveBest": {
+    "description": "Guide camera live focus headline, the best so far",
+    "placeholders": {
+      "hfr": {
+        "type": "String"
+      }
+    }
+  },
+  "guideFocusStoppedError": "Stopped on an error",
+  "@guideFocusStoppedError": {
+    "description": "Guide camera live focus stopped on an error"
+  },
+  "guideFocusHeld": "In focus — held, stopped",
+  "@guideFocusHeld": {
+    "description": "Guide focus stopped on its own once held in focus"
+  },
+  "guideFocusHeldBest": "In focus — held, stopped · best HFR {hfr}",
+  "@guideFocusHeldBest": {
+    "description": "Same, with the best HFR",
+    "placeholders": {
+      "hfr": {
+        "type": "String"
+      }
+    }
+  },
+  "guideFocusInFocusBest": "In focus · best HFR {hfr}",
+  "@guideFocusInFocusBest": {
+    "description": "Guide focus stopped, in focus",
+    "placeholders": {
+      "hfr": {
+        "type": "String"
+      }
+    }
+  },
+  "guideFocusStopped": "Stopped",
+  "@guideFocusStopped": {
+    "description": "Guide focus stopped"
+  },
+  "guideFocusStoppedBest": "Stopped · best HFR {hfr}",
+  "@guideFocusStoppedBest": {
+    "description": "Guide focus stopped with the best HFR",
+    "placeholders": {
+      "hfr": {
+        "type": "String"
+      }
+    }
+  },
+  "guideFocusWaitingMain": "Waiting for the main telescope",
+  "@guideFocusWaitingMain": {
+    "description": "Off-axis guider: the main telescope must be focused first"
+  },
+  "guideFocusNotReady": "Not ready",
+  "@guideFocusNotReady": {
+    "description": "Guide focus can't start yet"
+  },
+  "guideFocusReady": "Ready to focus",
+  "@guideFocusReady": {
+    "description": "Guide focus can start"
+  },
+  "guideFocusConnectGuider": "Connect the guider first — the frames come through it.",
+  "@guideFocusConnectGuider": {
+    "description": "Guide focus blocker"
+  },
+  "guideFocusStopGuider": "Stop the guider first; it owns its camera while it is looping, guiding, calibrating or paused.",
+  "@guideFocusStopGuider": {
+    "description": "Guide focus blocker"
+  },
+  "guideFocusNoStars": "No stars",
+  "@guideFocusNoStars": {
+    "description": "Guide focus advice: no stars"
+  },
+  "guideFocusNoStarsDetail": "Point at a star field or lengthen the exposure. Far out of focus? Make big moves until stars appear.",
+  "@guideFocusNoStarsDetail": {
+    "description": "Guide focus advice detail: no stars"
+  },
+  "guideFocusBigMoves": "big moves",
+  "@guideFocusBigMoves": {
+    "description": "Move size inside the guide focus advice"
+  },
+  "guideFocusSmallMoves": "small moves",
+  "@guideFocusSmallMoves": {
+    "description": "Move size inside the guide focus advice"
+  },
+  "guideFocusInFocusDetail": "Stars are as tight as this camera resolves (in focus ≤ {target} px). Lock the focuser.",
+  "@guideFocusInFocusDetail": {
+    "description": "Guide focus in focus",
+    "placeholders": {
+      "target": {
+        "type": "String"
+      }
+    }
+  },
+  "guideFocusSharpest": "Sharpest so far",
+  "@guideFocusSharpest": {
+    "description": "Guide focus advice: at the best HFR seen"
+  },
+  "guideFocusSharpestDetail": "Hold here, or nudge a touch either way to confirm.",
+  "@guideFocusSharpestDetail": {
+    "description": "Guide focus advice detail"
+  },
+  "guideFocusMakeMoveDetail": "In or out, {size} — then watch which way the number goes.",
+  "@guideFocusMakeMoveDetail": {
+    "description": "Guide focus first move; size is 'small moves'/'big moves'",
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "guideFocusKeepGoingDetail": "Same way you just moved — {size}.",
+  "@guideFocusKeepGoingDetail": {
+    "description": "Guide focus keep going",
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "guideFocusGoBackDetail": "The other way from your last move — {size}.",
+  "@guideFocusGoBackDetail": {
+    "description": "Guide focus go back",
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "guideFocusHolding": "Holding",
+  "@guideFocusHolding": {
+    "description": "Guide focus advice: no change seen"
+  },
+  "guideFocusHoldingFar": "Still well off focus — make a bigger move and watch the number.",
+  "@guideFocusHoldingFar": {
+    "description": "Guide focus holding, far"
+  },
+  "guideFocusHoldingNear": "Try a small move either way.",
+  "@guideFocusHoldingNear": {
+    "description": "Guide focus holding, near"
+  },
+  "focusGuide": "Guide",
+  "@focusGuide": {
+    "description": "Focus mode rail chip: focusing the guide camera"
+  },
+  "focusGuideScope": "Guide scope: turn its focuser, or slide the camera in the draw tube, in small moves and watch the number fall.",
+  "@focusGuideScope": {
+    "description": "Focus panel, guide camera: what to turn (guide scope)"
+  },
+  "focusGuideOag": "Off-axis guider: it shares the main scope's focus. Turn the OAG's helical focuser in small moves and watch the number fall.",
+  "@focusGuideOag": {
+    "description": "Focus panel, guide camera: what to turn (off-axis guider)"
+  },
+  "focusGuideMainFirst": "Focus the main telescope first: an off-axis guider sees the same focal plane, so its HFR only means something once the main scope is in focus.",
+  "@focusGuideMainFirst": {
+    "description": "Focus panel, guide camera, off-axis guider gate"
+  },
+  "focusAlreadyInFocus": "Already in focus",
+  "@focusAlreadyInFocus": {
+    "description": "Focus panel: the main telescope was focused by hand"
+  },
+  "focusFrames": "Frames",
+  "@focusFrames": {
+    "description": "Focus panel, guide camera: frames taken"
+  },
+  "focusStartGuide": "Start the guide camera's live focus",
+  "@focusStartGuide": {
+    "description": "Screen reader label of Focus's shutter, guide camera"
+  },
+  "focusStopGuide": "Stop the guide camera's live focus",
+  "@focusStopGuide": {
+    "description": "Screen reader label of Focus's shutter, guide camera, while it reads"
+  },
+  "focusScopeMain": "Main",
+  "@focusScopeMain": {
+    "description": "Focus panel: focus the main telescope (short, shares a line with Auto / Manual)"
+  },
+  "focusScopeGuide": "Guide",
+  "@focusScopeGuide": {
+    "description": "Focus panel: focus the guide camera (short)"
   }
 }

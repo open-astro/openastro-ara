@@ -3074,6 +3074,240 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Weak curve fit (R² {r2}): the focus comes from the measured frame. Run again if the sky has settled.'**
   String focusWeakFitShort(String r2);
+
+  /// Guide camera live focus: starting
+  ///
+  /// In en, this message translates to:
+  /// **'Starting…'**
+  String get guideFocusStarting;
+
+  /// Guide camera live focus headline: no stars
+  ///
+  /// In en, this message translates to:
+  /// **'Live · no stars measured'**
+  String get guideFocusNoStarsMeasured;
+
+  /// Guide camera live focus headline
+  ///
+  /// In en, this message translates to:
+  /// **'Live · HFR {hfr}'**
+  String guideFocusLive(String hfr);
+
+  /// Guide camera live focus headline, in focus
+  ///
+  /// In en, this message translates to:
+  /// **'Live · HFR {hfr} — in focus'**
+  String guideFocusLiveInFocus(String hfr);
+
+  /// Guide camera live focus headline, the best so far
+  ///
+  /// In en, this message translates to:
+  /// **'Live · HFR {hfr} — best so far'**
+  String guideFocusLiveBest(String hfr);
+
+  /// Guide camera live focus stopped on an error
+  ///
+  /// In en, this message translates to:
+  /// **'Stopped on an error'**
+  String get guideFocusStoppedError;
+
+  /// Guide focus stopped on its own once held in focus
+  ///
+  /// In en, this message translates to:
+  /// **'In focus — held, stopped'**
+  String get guideFocusHeld;
+
+  /// Same, with the best HFR
+  ///
+  /// In en, this message translates to:
+  /// **'In focus — held, stopped · best HFR {hfr}'**
+  String guideFocusHeldBest(String hfr);
+
+  /// Guide focus stopped, in focus
+  ///
+  /// In en, this message translates to:
+  /// **'In focus · best HFR {hfr}'**
+  String guideFocusInFocusBest(String hfr);
+
+  /// Guide focus stopped
+  ///
+  /// In en, this message translates to:
+  /// **'Stopped'**
+  String get guideFocusStopped;
+
+  /// Guide focus stopped with the best HFR
+  ///
+  /// In en, this message translates to:
+  /// **'Stopped · best HFR {hfr}'**
+  String guideFocusStoppedBest(String hfr);
+
+  /// Off-axis guider: the main telescope must be focused first
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for the main telescope'**
+  String get guideFocusWaitingMain;
+
+  /// Guide focus can't start yet
+  ///
+  /// In en, this message translates to:
+  /// **'Not ready'**
+  String get guideFocusNotReady;
+
+  /// Guide focus can start
+  ///
+  /// In en, this message translates to:
+  /// **'Ready to focus'**
+  String get guideFocusReady;
+
+  /// Guide focus blocker
+  ///
+  /// In en, this message translates to:
+  /// **'Connect the guider first — the frames come through it.'**
+  String get guideFocusConnectGuider;
+
+  /// Guide focus blocker
+  ///
+  /// In en, this message translates to:
+  /// **'Stop the guider first; it owns its camera while it is looping, guiding, calibrating or paused.'**
+  String get guideFocusStopGuider;
+
+  /// Guide focus advice: no stars
+  ///
+  /// In en, this message translates to:
+  /// **'No stars'**
+  String get guideFocusNoStars;
+
+  /// Guide focus advice detail: no stars
+  ///
+  /// In en, this message translates to:
+  /// **'Point at a star field or lengthen the exposure. Far out of focus? Make big moves until stars appear.'**
+  String get guideFocusNoStarsDetail;
+
+  /// Move size inside the guide focus advice
+  ///
+  /// In en, this message translates to:
+  /// **'big moves'**
+  String get guideFocusBigMoves;
+
+  /// Move size inside the guide focus advice
+  ///
+  /// In en, this message translates to:
+  /// **'small moves'**
+  String get guideFocusSmallMoves;
+
+  /// Guide focus in focus
+  ///
+  /// In en, this message translates to:
+  /// **'Stars are as tight as this camera resolves (in focus ≤ {target} px). Lock the focuser.'**
+  String guideFocusInFocusDetail(String target);
+
+  /// Guide focus advice: at the best HFR seen
+  ///
+  /// In en, this message translates to:
+  /// **'Sharpest so far'**
+  String get guideFocusSharpest;
+
+  /// Guide focus advice detail
+  ///
+  /// In en, this message translates to:
+  /// **'Hold here, or nudge a touch either way to confirm.'**
+  String get guideFocusSharpestDetail;
+
+  /// Guide focus first move; size is 'small moves'/'big moves'
+  ///
+  /// In en, this message translates to:
+  /// **'In or out, {size} — then watch which way the number goes.'**
+  String guideFocusMakeMoveDetail(String size);
+
+  /// Guide focus keep going
+  ///
+  /// In en, this message translates to:
+  /// **'Same way you just moved — {size}.'**
+  String guideFocusKeepGoingDetail(String size);
+
+  /// Guide focus go back
+  ///
+  /// In en, this message translates to:
+  /// **'The other way from your last move — {size}.'**
+  String guideFocusGoBackDetail(String size);
+
+  /// Guide focus advice: no change seen
+  ///
+  /// In en, this message translates to:
+  /// **'Holding'**
+  String get guideFocusHolding;
+
+  /// Guide focus holding, far
+  ///
+  /// In en, this message translates to:
+  /// **'Still well off focus — make a bigger move and watch the number.'**
+  String get guideFocusHoldingFar;
+
+  /// Guide focus holding, near
+  ///
+  /// In en, this message translates to:
+  /// **'Try a small move either way.'**
+  String get guideFocusHoldingNear;
+
+  /// Focus mode rail chip: focusing the guide camera
+  ///
+  /// In en, this message translates to:
+  /// **'Guide'**
+  String get focusGuide;
+
+  /// Focus panel, guide camera: what to turn (guide scope)
+  ///
+  /// In en, this message translates to:
+  /// **'Guide scope: turn its focuser, or slide the camera in the draw tube, in small moves and watch the number fall.'**
+  String get focusGuideScope;
+
+  /// Focus panel, guide camera: what to turn (off-axis guider)
+  ///
+  /// In en, this message translates to:
+  /// **'Off-axis guider: it shares the main scope\'s focus. Turn the OAG\'s helical focuser in small moves and watch the number fall.'**
+  String get focusGuideOag;
+
+  /// Focus panel, guide camera, off-axis guider gate
+  ///
+  /// In en, this message translates to:
+  /// **'Focus the main telescope first: an off-axis guider sees the same focal plane, so its HFR only means something once the main scope is in focus.'**
+  String get focusGuideMainFirst;
+
+  /// Focus panel: the main telescope was focused by hand
+  ///
+  /// In en, this message translates to:
+  /// **'Already in focus'**
+  String get focusAlreadyInFocus;
+
+  /// Focus panel, guide camera: frames taken
+  ///
+  /// In en, this message translates to:
+  /// **'Frames'**
+  String get focusFrames;
+
+  /// Screen reader label of Focus's shutter, guide camera
+  ///
+  /// In en, this message translates to:
+  /// **'Start the guide camera\'s live focus'**
+  String get focusStartGuide;
+
+  /// Screen reader label of Focus's shutter, guide camera, while it reads
+  ///
+  /// In en, this message translates to:
+  /// **'Stop the guide camera\'s live focus'**
+  String get focusStopGuide;
+
+  /// Focus panel: focus the main telescope (short, shares a line with Auto / Manual)
+  ///
+  /// In en, this message translates to:
+  /// **'Main'**
+  String get focusScopeMain;
+
+  /// Focus panel: focus the guide camera (short)
+  ///
+  /// In en, this message translates to:
+  /// **'Guide'**
+  String get focusScopeGuide;
 }
 
 class _AppLocalizationsDelegate

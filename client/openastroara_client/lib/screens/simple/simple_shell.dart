@@ -78,6 +78,7 @@ import 'simple_autopilot.dart';
 import 'simple_device_windows.dart';
 import 'simple_focus_panel.dart';
 import '../../state/focus/autofocus_live_state.dart' show autofocusLiveProvider;
+import '../../state/focus/guide_focus_state.dart' show guideFocusProvider;
 import '../../state/focus/bahtinov_focus_state.dart'
     show MainFocusMethod, bahtinovFocusProvider;
 import 'simple_message_pills.dart';
@@ -522,6 +523,8 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     // Manual shows the Bahtinov readout's crop, spikes and all, there.
     final focusFrame = shown != SimpleModeScreen.focus
         ? null
+        : ref.watch(simpleFocusScopeProvider) == SimpleFocusScope.guide
+        ? ref.watch(guideFocusProvider.select((l) => l.frame))
         : simpleFocusMethod(ref) == MainFocusMethod.bahtinov
         ? ref.watch(bahtinovFocusProvider.select((l) => l.frame))
         : ref.watch(simpleFocusStarsShownProvider)

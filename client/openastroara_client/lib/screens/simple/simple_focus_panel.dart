@@ -13,7 +13,11 @@ import '../../models/focuser_status.dart';
 import '../../widgets/focus/bahtinov_focus_card.dart'
     show BahtinovFocusCard, bahtinovHint, formatOffset;
 import '../../widgets/focus/focusing_pane.dart' show MainFocusCard;
-import '../../widgets/focus/guide_focus_card.dart' show TurnAdvice;
+import '../../state/focus/guide_focus_state.dart';
+import '../../state/guider/guider_state.dart';
+import '../../state/settings/phd2_settings_state.dart';
+import '../../widgets/focus/guide_focus_card.dart'
+    show GuideFocusCard, TurnAdvice, guideFocusBlocker, guideFocusHint;
 import '../../widgets/focus/v_curve_chart.dart';
 import 'simple_preview_panel.dart' show SimpleShutterButton, kSimpleText;
 import 'simple_device_windows.dart' show simpleCelsius;
@@ -27,13 +31,46 @@ double? simpleFocusHfr(AutofocusRun run) {
   return kept.isEmpty ? null : kept.last.hfr;
 }
 
-/// "Auto" or "Manual": the rail chip's caption in Focus mode. The method is
-/// the one Smart Focus would use: the user's pick, else autofocus with a
-/// focuser connected, by hand without (as `MainFocusCard` decides).
+/// "Auto", "Manual" or "Guide": the rail chip's caption in Focus mode. For
+/// the main telescope the method is the one Smart Focus would use: the user's
+/// pick, else autofocus with a focuser connected, by hand without (as
+/// `MainFocusCard` decides).
 String simpleFocusSummary(WidgetRef ref) =>
-    simpleFocusMethod(ref) == MainFocusMethod.autofocus
+    ref.watch(simpleFocusScopeProvider) == SimpleFocusScope.guide
+    ? ref.context.l10n.focusGuide
+    : simpleFocusMethod(ref) == MainFocusMethod.autofocus
     ? ref.context.l10n.focusAuto
     : ref.context.l10n.focusManual;
+
+/// Which camera Focus focuses: the main telescope's, or the guide camera's
+/// (always by hand, watching its HFR). Session only; the main one to start.
+enum SimpleFocusScope { main, guide }
+
+class SimpleFocusScopeNotifier extends Notifier<SimpleFocusScope> {
+  @override
+  SimpleFocusScope build() => SimpleFocusScope.main;
+
+  void set(SimpleFocusScope scope) => state = scope;
+}
+
+final simpleFocusScopeProvider =
+    NotifierProvider<SimpleFocusScopeNotifier, SimpleFocusScope>(
+      SimpleFocusScopeNotifier.new,
+    );
+
+/// The guide camera's live-focus exposures, and the one picked (2 s to
+/// start), as the full UI's card offers them.
+const kSimpleGuideExposures = [1.0, 2.0, 3.0, 5.0];
+
+class SimpleGuideExposure extends Notifier<double> {
+  @override
+  double build() => 2;
+
+  void set(double seconds) => state = seconds;
+}
+
+final simpleGuideExposureProvider =
+    NotifierProvider<SimpleGuideExposure, double>(SimpleGuideExposure.new);
 
 /// Autofocus with the focuser connected, the Bahtinov mask without, unless
 /// one was picked.
@@ -81,6 +118,38 @@ class SimpleFocusShutter extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    if (ref.watch(simpleFocusScopeProvider) == SimpleFocusScope.guide) {
+      // The guide camera: starts and stops its live focus, once it can.
+      final guide = ref.watch(guideFocusProvider);
+      final active = guide.status.active;
+      final notifier = ref.read(guideFocusProvider.notifier);
+      final blocked =
+          guideFocusBlocker(
+            context.l10n,
+            ref.watch(guiderStatusProvider).asData?.value,
+            active: active,
+          ) !=
+          null;
+      final gated =
+          ref.watch(
+            phd2SettingsProvider.select((p) => p.guiderSetupType == 'oag'),
+          ) &&
+          !ref.watch(autofocusLiveProvider.select((s) => s.focusedThisSession));
+      return SimpleShutterButton(
+        start: true,
+        running: active,
+        label: active
+            ? context.l10n.focusStopGuide
+            : context.l10n.focusStartGuide,
+        onPressed: guide.busy || (!active && (blocked || gated))
+            ? null
+            : active
+            ? notifier.stop
+            : () => notifier.start(
+                exposureSec: ref.read(simpleGuideExposureProvider),
+              ),
+      );
+    }
     if (simpleFocusMethod(ref) != MainFocusMethod.autofocus) {
       // Manual: starts and stops the Bahtinov readout.
       final bahtinov = ref.watch(bahtinovFocusProvider);
@@ -143,8 +212,11 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
     final live = ref.watch(autofocusLiveProvider);
     final bahtinov = ref.watch(bahtinovFocusProvider);
     final method = simpleFocusMethod(ref);
+    final guide = ref.watch(guideFocusProvider);
+    final scope = ref.watch(simpleFocusScopeProvider);
     final locked =
         live.run.isRunning || bahtinov.status.active || bahtinov.busy;
+    final anyRunning = locked || guide.status.active || guide.busy;
     final run = live.run;
     final focuser = ref.watch(focuserProvider).asData?.value;
     final connected =
@@ -191,44 +263,97 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           spacing: 6,
           children: [
-            // The method: Smart Focus with the focuser, or by hand with a
-            // Bahtinov mask. Locked while a run goes.
-            DecoratedBox(
-              decoration: BoxDecoration(
-                color: AraColors.tileFill,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                children: [
-                  for (final (id, m, word) in [
-                    ('auto', MainFocusMethod.autofocus, l10n.focusAuto),
-                    ('manual', MainFocusMethod.bahtinov, l10n.focusManual),
-                  ])
-                    Expanded(
-                      child: SimpleSegment(
-                        key: Key('simple-focus-method-$id'),
-                        label: word,
-                        selected: method == m,
-                        radius: 8,
-                        onTap: locked || method == m
-                            ? null
-                            : () {
-                                if (m == MainFocusMethod.autofocus &&
-                                    bahtinov.status.hasMeasurement &&
-                                    !bahtinov.finished) {
-                                  setState(() => _askMask = _thenAuto = true);
-                                  return;
-                                }
-                                ref
-                                    .read(mainFocusMethodProvider.notifier)
-                                    .pick(m);
-                              },
+            // Which camera, then how to focus the main one, on one line
+            // (the panel has no room for two rows).
+            Row(
+              spacing: AraSpace.s8,
+              children: [
+                Expanded(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: AraColors.tileFill,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      children: [
+                        for (final (id, sc, word) in [
+                          ('main', SimpleFocusScope.main, l10n.focusScopeMain),
+                          (
+                            'guide',
+                            SimpleFocusScope.guide,
+                            l10n.focusScopeGuide,
+                          ),
+                        ])
+                          Expanded(
+                            child: SimpleSegment(
+                              key: Key('simple-focus-scope-$id'),
+                              label: word,
+                              selected: scope == sc,
+                              radius: 8,
+                              onTap: anyRunning || scope == sc
+                                  ? null
+                                  : () => ref
+                                        .read(simpleFocusScopeProvider.notifier)
+                                        .set(sc),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+                // The method: Smart Focus with the focuser, or by hand with a
+                // Bahtinov mask. Locked while a run goes.
+                if (scope == SimpleFocusScope.main)
+                  Expanded(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: AraColors.tileFill,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        children: [
+                          for (final (id, m, word) in [
+                            ('auto', MainFocusMethod.autofocus, l10n.focusAuto),
+                            (
+                              'manual',
+                              MainFocusMethod.bahtinov,
+                              l10n.focusManual,
+                            ),
+                          ])
+                            Expanded(
+                              child: SimpleSegment(
+                                key: Key('simple-focus-method-$id'),
+                                label: word,
+                                selected: method == m,
+                                radius: 8,
+                                onTap: locked || method == m
+                                    ? null
+                                    : () {
+                                        if (m == MainFocusMethod.autofocus &&
+                                            bahtinov.status.hasMeasurement &&
+                                            !bahtinov.finished) {
+                                          setState(
+                                            () => _askMask = _thenAuto = true,
+                                          );
+                                          return;
+                                        }
+                                        ref
+                                            .read(
+                                              mainFocusMethodProvider.notifier,
+                                            )
+                                            .pick(m);
+                                      },
+                              ),
+                            ),
+                        ],
                       ),
                     ),
-                ],
-              ),
+                  ),
+              ],
             ),
-            if (_askMask)
+            if (scope == SimpleFocusScope.guide)
+              ..._guide(l10n, guide)
+            else if (_askMask)
               ..._maskQuestion(l10n)
             else if (method == MainFocusMethod.bahtinov)
               ..._bahtinov(l10n, bahtinov, connected ? focuser : null)
@@ -480,6 +605,120 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
           onPressed: live.busy ? null : () => setState(() => _askMask = true),
           child: Text(l10n.bahtinovFinish),
         ),
+    ];
+  }
+
+  /// The guide camera, focused by hand: the full UI's guide-focus readout,
+  /// flat. The shutter starts and stops it; its frames fill the screen.
+  List<Widget> _guide(AppLocalizations l10n, GuideFocusLive live) {
+    final status = live.status;
+    final guider = ref.watch(guiderStatusProvider).asData?.value;
+    final oag = ref.watch(
+      phd2SettingsProvider.select((p) => p.guiderSetupType == 'oag'),
+    );
+    final gated =
+        oag &&
+        !ref.watch(autofocusLiveProvider.select((s) => s.focusedThisSession));
+    final blocker = guideFocusBlocker(l10n, guider, active: status.active);
+    final (headline, colour) = GuideFocusCard.headlineFor(
+      l10n,
+      status,
+      gated: gated,
+      blocked: blocker != null,
+    );
+    final latest = status.latest;
+    final hint = status.active ? guideFocusHint(l10n, status) : null;
+    final exposure = ref.watch(simpleGuideExposureProvider);
+    Widget fact(String label, String value) => Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        decoration: BoxDecoration(
+          color: AraColors.tileFill,
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(label, style: AraText.caption, maxLines: 1),
+            Text(value, style: kSimpleText),
+          ],
+        ),
+      ),
+    );
+    return [
+      Text(headline, style: kSimpleText.copyWith(color: colour), maxLines: 2),
+      Text(
+        oag ? l10n.focusGuideOag : l10n.focusGuideScope,
+        style: AraText.caption,
+      ),
+      if (gated && !status.active) ...[
+        Text(l10n.focusGuideMainFirst, style: AraText.caption),
+        OutlinedButton(
+          key: const Key('simple-guide-already-focused'),
+          onPressed: () =>
+              ref.read(autofocusLiveProvider.notifier).markFocusedManually(),
+          child: Text(l10n.focusAlreadyInFocus),
+        ),
+      ],
+      if (blocker != null) Text(blocker, style: AraText.caption),
+      if (latest != null)
+        Row(
+          spacing: AraSpace.s4,
+          children: [
+            fact(l10n.focusStars, '${latest.stars}'),
+            fact(l10n.focusFrames, '${status.seq}'),
+          ],
+        ),
+      if (hint != null) ...[
+        Text(
+          hint.title,
+          textAlign: TextAlign.center,
+          style: kSimpleText.copyWith(
+            fontWeight: FontWeight.w600,
+            color: switch (hint.advice) {
+              TurnAdvice.atBest => AraColors.accentConnected,
+              TurnAdvice.turnBack => AraColors.accentBusy,
+              _ => AraColors.textPrimary,
+            },
+          ),
+        ),
+        Text(hint.detail, textAlign: TextAlign.center, style: AraText.caption),
+      ],
+      if (live.error ?? status.error case final error?)
+        Text(
+          error,
+          style: kSimpleText.copyWith(color: AraColors.errorText),
+          maxLines: 3,
+        ),
+      Row(
+        spacing: AraSpace.s12,
+        children: [
+          Expanded(child: Text(l10n.bahtinovExposure, style: kSimpleText)),
+          DecoratedBox(
+            decoration: BoxDecoration(
+              color: AraColors.tileFill,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (final s in kSimpleGuideExposures)
+                  SimpleSegment(
+                    key: Key('simple-guide-exposure-${s.round()}'),
+                    label: '${s.round()} s',
+                    selected: exposure == s,
+                    radius: 8,
+                    onTap: status.active
+                        ? null
+                        : () => ref
+                              .read(simpleGuideExposureProvider.notifier)
+                              .set(s),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
     ];
   }
 }

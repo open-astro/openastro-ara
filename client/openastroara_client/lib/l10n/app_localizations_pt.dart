@@ -1726,6 +1726,151 @@ class AppLocalizationsPt extends AppLocalizations {
   String focusWeakFitShort(String r2) {
     return 'Weak curve fit (R² $r2): the focus comes from the measured frame. Run again if the sky has settled.';
   }
+
+  @override
+  String get guideFocusStarting => 'Starting…';
+
+  @override
+  String get guideFocusNoStarsMeasured => 'Live · no stars measured';
+
+  @override
+  String guideFocusLive(String hfr) {
+    return 'Live · HFR $hfr';
+  }
+
+  @override
+  String guideFocusLiveInFocus(String hfr) {
+    return 'Live · HFR $hfr — in focus';
+  }
+
+  @override
+  String guideFocusLiveBest(String hfr) {
+    return 'Live · HFR $hfr — best so far';
+  }
+
+  @override
+  String get guideFocusStoppedError => 'Stopped on an error';
+
+  @override
+  String get guideFocusHeld => 'In focus — held, stopped';
+
+  @override
+  String guideFocusHeldBest(String hfr) {
+    return 'In focus — held, stopped · best HFR $hfr';
+  }
+
+  @override
+  String guideFocusInFocusBest(String hfr) {
+    return 'In focus · best HFR $hfr';
+  }
+
+  @override
+  String get guideFocusStopped => 'Stopped';
+
+  @override
+  String guideFocusStoppedBest(String hfr) {
+    return 'Stopped · best HFR $hfr';
+  }
+
+  @override
+  String get guideFocusWaitingMain => 'Waiting for the main telescope';
+
+  @override
+  String get guideFocusNotReady => 'Not ready';
+
+  @override
+  String get guideFocusReady => 'Ready to focus';
+
+  @override
+  String get guideFocusConnectGuider =>
+      'Connect the guider first — the frames come through it.';
+
+  @override
+  String get guideFocusStopGuider =>
+      'Stop the guider first; it owns its camera while it is looping, guiding, calibrating or paused.';
+
+  @override
+  String get guideFocusNoStars => 'No stars';
+
+  @override
+  String get guideFocusNoStarsDetail =>
+      'Point at a star field or lengthen the exposure. Far out of focus? Make big moves until stars appear.';
+
+  @override
+  String get guideFocusBigMoves => 'big moves';
+
+  @override
+  String get guideFocusSmallMoves => 'small moves';
+
+  @override
+  String guideFocusInFocusDetail(String target) {
+    return 'Stars are as tight as this camera resolves (in focus ≤ $target px). Lock the focuser.';
+  }
+
+  @override
+  String get guideFocusSharpest => 'Sharpest so far';
+
+  @override
+  String get guideFocusSharpestDetail =>
+      'Hold here, or nudge a touch either way to confirm.';
+
+  @override
+  String guideFocusMakeMoveDetail(String size) {
+    return 'In or out, $size — then watch which way the number goes.';
+  }
+
+  @override
+  String guideFocusKeepGoingDetail(String size) {
+    return 'Same way you just moved — $size.';
+  }
+
+  @override
+  String guideFocusGoBackDetail(String size) {
+    return 'The other way from your last move — $size.';
+  }
+
+  @override
+  String get guideFocusHolding => 'Holding';
+
+  @override
+  String get guideFocusHoldingFar =>
+      'Still well off focus — make a bigger move and watch the number.';
+
+  @override
+  String get guideFocusHoldingNear => 'Try a small move either way.';
+
+  @override
+  String get focusGuide => 'Guide';
+
+  @override
+  String get focusGuideScope =>
+      'Guide scope: turn its focuser, or slide the camera in the draw tube, in small moves and watch the number fall.';
+
+  @override
+  String get focusGuideOag =>
+      'Off-axis guider: it shares the main scope\'s focus. Turn the OAG\'s helical focuser in small moves and watch the number fall.';
+
+  @override
+  String get focusGuideMainFirst =>
+      'Focus the main telescope first: an off-axis guider sees the same focal plane, so its HFR only means something once the main scope is in focus.';
+
+  @override
+  String get focusAlreadyInFocus => 'Already in focus';
+
+  @override
+  String get focusFrames => 'Frames';
+
+  @override
+  String get focusStartGuide => 'Start the guide camera\'s live focus';
+
+  @override
+  String get focusStopGuide => 'Stop the guide camera\'s live focus';
+
+  @override
+  String get focusScopeMain => 'Main';
+
+  @override
+  String get focusScopeGuide => 'Guide';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -3457,4 +3602,150 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String focusWeakFitShort(String r2) {
     return 'Ajuste da curva fraco (R² $r2): o foco vem do quadro medido. Rode de novo se o céu estabilizou.';
   }
+
+  @override
+  String get guideFocusStarting => 'Iniciando…';
+
+  @override
+  String get guideFocusNoStarsMeasured => 'Ao vivo · nenhuma estrela medida';
+
+  @override
+  String guideFocusLive(String hfr) {
+    return 'Ao vivo · HFR $hfr';
+  }
+
+  @override
+  String guideFocusLiveInFocus(String hfr) {
+    return 'Ao vivo · HFR $hfr — em foco';
+  }
+
+  @override
+  String guideFocusLiveBest(String hfr) {
+    return 'Ao vivo · HFR $hfr — o melhor até agora';
+  }
+
+  @override
+  String get guideFocusStoppedError => 'Parado por um erro';
+
+  @override
+  String get guideFocusHeld => 'Em foco — mantido, parado';
+
+  @override
+  String guideFocusHeldBest(String hfr) {
+    return 'Em foco — mantido, parado · melhor HFR $hfr';
+  }
+
+  @override
+  String guideFocusInFocusBest(String hfr) {
+    return 'Em foco · melhor HFR $hfr';
+  }
+
+  @override
+  String get guideFocusStopped => 'Parado';
+
+  @override
+  String guideFocusStoppedBest(String hfr) {
+    return 'Parado · melhor HFR $hfr';
+  }
+
+  @override
+  String get guideFocusWaitingMain => 'Aguardando o telescópio principal';
+
+  @override
+  String get guideFocusNotReady => 'Não está pronto';
+
+  @override
+  String get guideFocusReady => 'Pronto para focar';
+
+  @override
+  String get guideFocusConnectGuider =>
+      'Conecte a guiagem primeiro — os quadros vêm por ela.';
+
+  @override
+  String get guideFocusStopGuider =>
+      'Pare a guiagem primeiro; ela usa a câmera enquanto faz loop, guia, calibra ou está pausada.';
+
+  @override
+  String get guideFocusNoStars => 'Sem estrelas';
+
+  @override
+  String get guideFocusNoStarsDetail =>
+      'Aponte para um campo de estrelas ou aumente a exposição. Muito fora de foco? Faça movimentos grandes até as estrelas aparecerem.';
+
+  @override
+  String get guideFocusBigMoves => 'movimentos grandes';
+
+  @override
+  String get guideFocusSmallMoves => 'movimentos pequenos';
+
+  @override
+  String guideFocusInFocusDetail(String target) {
+    return 'As estrelas estão tão finas quanto esta câmera resolve (em foco ≤ $target px). Trave o focalizador.';
+  }
+
+  @override
+  String get guideFocusSharpest => 'O mais nítido até agora';
+
+  @override
+  String get guideFocusSharpestDetail =>
+      'Fique aqui, ou mexa um pouquinho para qualquer lado para confirmar.';
+
+  @override
+  String guideFocusMakeMoveDetail(String size) {
+    return 'Para dentro ou para fora, $size — e veja para onde o número vai.';
+  }
+
+  @override
+  String guideFocusKeepGoingDetail(String size) {
+    return 'Mesmo sentido do último movimento — $size.';
+  }
+
+  @override
+  String guideFocusGoBackDetail(String size) {
+    return 'O sentido contrário ao último movimento — $size.';
+  }
+
+  @override
+  String get guideFocusHolding => 'Parado no lugar';
+
+  @override
+  String get guideFocusHoldingFar =>
+      'Ainda bem fora de foco — faça um movimento maior e observe o número.';
+
+  @override
+  String get guideFocusHoldingNear =>
+      'Tente um movimento pequeno para qualquer lado.';
+
+  @override
+  String get focusGuide => 'Guia';
+
+  @override
+  String get focusGuideScope =>
+      'Luneta guia: gire o focalizador, ou deslize a câmera no tubo, em movimentos pequenos e veja o número cair.';
+
+  @override
+  String get focusGuideOag =>
+      'Guia fora do eixo: compartilha o foco do telescópio principal. Gire o focalizador helicoidal do OAG em movimentos pequenos e veja o número cair.';
+
+  @override
+  String get focusGuideMainFirst =>
+      'Foque o telescópio principal primeiro: um guia fora do eixo vê o mesmo plano focal, então o HFR dele só vale depois que o principal estiver em foco.';
+
+  @override
+  String get focusAlreadyInFocus => 'Já está em foco';
+
+  @override
+  String get focusFrames => 'Quadros';
+
+  @override
+  String get focusStartGuide => 'Iniciar o foco ao vivo da câmera de guia';
+
+  @override
+  String get focusStopGuide => 'Parar o foco ao vivo da câmera de guia';
+
+  @override
+  String get focusScopeMain => 'Principal';
+
+  @override
+  String get focusScopeGuide => 'Guia';
 }

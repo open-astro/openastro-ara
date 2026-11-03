@@ -3,6 +3,8 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../l10n/l10n.dart';
+
 import '../../models/guide_focus.dart';
 import '../../models/guider_status.dart';
 import '../../state/focus/autofocus_live_state.dart';
@@ -29,33 +31,37 @@ class GuideFocusCard extends ConsumerStatefulWidget {
   ConsumerState<GuideFocusCard> createState() => _GuideFocusCardState();
 
   /// The headline in words. Pure — unit-tested.
-  static (String, Color?) headlineFor(GuideFocusStatus status, {required bool gated, required bool blocked}) {
+  static (String, Color?) headlineFor(AppLocalizations l, GuideFocusStatus status, {required bool gated, required bool blocked}) {
     final latest = status.latest;
     if (status.active) {
-      if (latest == null) return ('Starting…', AraColors.accentBusy);
-      if (latest.stars == 0) return ('Live · no stars measured', AraColors.accentBusy);
+      if (latest == null) return (l.guideFocusStarting, AraColors.accentBusy);
+      if (latest.stars == 0) return (l.guideFocusNoStarsMeasured, AraColors.accentBusy);
       final best = status.bestHfr;
       final atBest = best != null && latest.hfr > 0 && latest.hfr <= best + 1e-9;
       final inFocus = status.hfrInFocus(latest.hfr);
       return (
-        'Live · HFR ${latest.hfr.toStringAsFixed(2)}${inFocus ? ' — in focus' : atBest ? ' — best so far' : ''}',
+        inFocus
+            ? l.guideFocusLiveInFocus(latest.hfr.toStringAsFixed(2))
+            : atBest
+            ? l.guideFocusLiveBest(latest.hfr.toStringAsFixed(2))
+            : l.guideFocusLive(latest.hfr.toStringAsFixed(2)),
         inFocus || atBest ? AraColors.accentConnected : AraColors.accentBusy,
       );
     }
-    if (status.state == GuideFocusStates.error) return ('Stopped on an error', AraColors.accentError);
+    if (status.state == GuideFocusStates.error) return (l.guideFocusStoppedError, AraColors.accentError);
     if (latest != null) {
       final best = status.bestHfr;
       if (status.stopReason == GuideFocusStates.stopReasonInFocus) {
-        return ('In focus — held, stopped${best != null ? ' · best HFR ${best.toStringAsFixed(2)}' : ''}', AraColors.accentConnected);
+        return (best != null ? l.guideFocusHeldBest(best.toStringAsFixed(2)) : l.guideFocusHeld, AraColors.accentConnected);
       }
       if (status.focusedThisSession) {
-        return ('In focus · best HFR ${best!.toStringAsFixed(2)}', AraColors.accentConnected);
+        return (l.guideFocusInFocusBest(best!.toStringAsFixed(2)), AraColors.accentConnected);
       }
-      return ('Stopped${best != null ? ' · best HFR ${best.toStringAsFixed(2)}' : ''}', null);
+      return (best != null ? l.guideFocusStoppedBest(best.toStringAsFixed(2)) : l.guideFocusStopped, null);
     }
-    if (gated) return ('Waiting for the main telescope', null);
-    if (blocked) return ('Not ready', null);
-    return ('Ready to focus', null);
+    if (gated) return (l.guideFocusWaitingMain, null);
+    if (blocked) return (l.guideFocusNotReady, null);
+    return (l.guideFocusReady, null);
   }
 }
 
@@ -75,36 +81,13 @@ class _GuideFocusCardState extends ConsumerState<GuideFocusCard> {
     final active = status.active;
     final guiderConnected =
         guider?.connectionState == GuiderConnectionState.connected;
-    final guiderBusy = guider != null &&
-        const {
-          GuiderRuntimeState.guiding,
-          GuiderRuntimeState.settling,
-          GuiderRuntimeState.calibrating,
-          GuiderRuntimeState.dithering,
-          // #1364 — a looping guider refuses the single frames this loop takes.
-          GuiderRuntimeState.looping,
-          GuiderRuntimeState.starSelected,
-          GuiderRuntimeState.starLost,
-          GuiderRuntimeState.paused,
-          // The Guiding Assistant owns the guide camera for its whole run.
-          GuiderRuntimeState.assistant,
-        }.contains(guider.runtimeState);
+    final blocker = guideFocusBlocker(context.l10n, guider, active: active);
     final gated = isOag && !mainFocused;
 
-    // The daemon is the authority on a running loop; the blockers only gate a
-    // Start from here.
-    String? blocker;
-    if (!active) {
-      if (!guiderConnected) {
-        blocker = 'Connect the guider first — the frames come through it.';
-      } else if (guiderBusy) {
-        blocker = 'Stop the guider first; it owns its camera while it is looping, guiding, calibrating or paused.';
-      }
-    }
 
     final latest = status.latest;
     final hasData = latest != null || live.frame != null;
-    final (headline, color) = GuideFocusCard.headlineFor(status, gated: gated, blocked: blocker != null);
+    final (headline, color) = GuideFocusCard.headlineFor(context.l10n, status, gated: gated, blocked: blocker != null);
 
     final action = active
         ? FilledButton.tonalIcon(
@@ -288,7 +271,7 @@ class _Hero extends StatelessWidget {
     final best = status.bestHfr;
     final hfr = latest?.hfr ?? 0.0;
     final atBest = best != null && hfr > 0 && hfr <= best + 1e-9;
-    final hint = guideFocusHint(status);
+    final hint = guideFocusHint(context.l10n, status);
     final color = atBest || status.hfrInFocus(hfr) ? AraColors.accentConnected : AraColors.textPrimary;
     String f(double v, [int d = 2]) => v > 0 ? v.toStringAsFixed(d) : '—';
     final target = status.expectedHfr;
@@ -397,47 +380,67 @@ class GuideFocusHint {
   const GuideFocusHint(this.advice, this.title, this.detail);
 }
 
+/// Why the guide camera's live focus can't start from here, or null when it
+/// can: the frames come through the guider, which owns its camera while it
+/// loops, guides, calibrates or pauses. The daemon is the authority on a
+/// running loop, so nothing blocks while [active]. Pure — unit-tested.
+String? guideFocusBlocker(AppLocalizations l, GuiderStatus? guider, {required bool active}) {
+  if (active) return null;
+  if (guider?.connectionState != GuiderConnectionState.connected) return l.guideFocusConnectGuider;
+  const busy = {
+    GuiderRuntimeState.guiding,
+    GuiderRuntimeState.settling,
+    GuiderRuntimeState.calibrating,
+    GuiderRuntimeState.dithering,
+    // #1364 — a looping guider refuses the single frames this loop takes.
+    GuiderRuntimeState.looping,
+    GuiderRuntimeState.starSelected,
+    GuiderRuntimeState.starLost,
+    GuiderRuntimeState.paused,
+    // The Guiding Assistant owns the guide camera for its whole run.
+    GuiderRuntimeState.assistant,
+  };
+  return busy.contains(guider!.runtimeState) ? l.guideFocusStopGuider : null;
+}
+
 /// Pure — unit-tested. First an absolute verdict: at or under the profile's
 /// expected in-focus HFR (× [kGuideFocusTargetTolerance]) is "In focus", whatever
 /// the trend says. Otherwise compares a 3-frame median with the median [lookback]
 /// frames earlier, so a static focuser is not told to turn by frame-to-frame noise.
-GuideFocusHint guideFocusHint(GuideFocusStatus status, {int lookback = 4}) {
+GuideFocusHint guideFocusHint(AppLocalizations l, GuideFocusStatus status, {int lookback = 4}) {
   final latest = status.latest;
   if (latest == null) {
-    return const GuideFocusHint(TurnAdvice.wait, 'Waiting', 'The first frame is on its way.');
+    return GuideFocusHint(TurnAdvice.wait, l.bahtinovWaiting, l.bahtinovWaitingDetail);
   }
   if (latest.stars == 0 || latest.hfr <= 0) {
-    return const GuideFocusHint(TurnAdvice.noStars, 'No stars',
-        'Point at a star field or lengthen the exposure. Far out of focus? Make big moves until stars appear.');
+    return GuideFocusHint(TurnAdvice.noStars, l.guideFocusNoStars, l.guideFocusNoStarsDetail);
   }
   final best = status.bestHfr;
   final hfr = latest.hfr;
   final measured = status.recent.where((s) => s.hfr > 0).toList(growable: false);
   final target = status.expectedHfr;
   final far = best != null && hfr > best * 1.5;
-  final size = far ? 'big moves' : 'small moves';
+  final size = far ? l.guideFocusBigMoves : l.guideFocusSmallMoves;
   if (target != null && status.hfrInFocus(hfr)) {
-    return GuideFocusHint(TurnAdvice.atBest, 'In focus',
-        'Stars are as tight as this camera resolves (in focus ≤ ${target.toStringAsFixed(2)} px). Lock the focuser.');
+    return GuideFocusHint(TurnAdvice.atBest, l.bahtinovInFocus, l.guideFocusInFocusDetail(target.toStringAsFixed(2)));
   }
   if (best != null && hfr <= best * 1.04) {
-    return const GuideFocusHint(TurnAdvice.atBest, 'Sharpest so far', 'Hold here, or nudge a touch either way to confirm.');
+    return GuideFocusHint(TurnAdvice.atBest, l.guideFocusSharpest, l.guideFocusSharpestDetail);
   }
   if (measured.length <= lookback) {
-    return GuideFocusHint(TurnAdvice.hold, 'Make a move', 'In or out, $size — then watch which way the number goes.');
+    return GuideFocusHint(TurnAdvice.hold, l.bahtinovMakeMove, l.guideFocusMakeMoveDetail(size));
   }
   final now = _medianEndingAt(measured, measured.length - 1);
   final earlier = _medianEndingAt(measured, measured.length - 1 - lookback);
   final delta = now - earlier;
   final tolerance = (earlier * 0.05).clamp(0.05, 0.3);
   if (delta < -tolerance) {
-    return GuideFocusHint(TurnAdvice.keepGoing, 'Keep going', 'Same way you just moved — $size.');
+    return GuideFocusHint(TurnAdvice.keepGoing, l.bahtinovKeepGoing, l.guideFocusKeepGoingDetail(size));
   }
   if (delta > tolerance) {
-    return GuideFocusHint(TurnAdvice.turnBack, 'Go back', 'The other way from your last move — $size.');
+    return GuideFocusHint(TurnAdvice.turnBack, l.bahtinovGoBack, l.guideFocusGoBackDetail(size));
   }
-  return GuideFocusHint(TurnAdvice.hold, 'Holding',
-      far ? 'Still well off focus — make a bigger move and watch the number.' : 'Try a small move either way.');
+  return GuideFocusHint(TurnAdvice.hold, l.guideFocusHolding, far ? l.guideFocusHoldingFar : l.guideFocusHoldingNear);
 }
 
 /// Median of the up-to-3 measurable HFRs ending at [end] (fewer at the start).
