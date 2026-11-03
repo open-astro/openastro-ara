@@ -494,5 +494,6 @@
   "bahtinovMaskRemoved": "Máscara retirada",
   "bahtinovExposure": "Exposição",
   "focusStartBahtinov": "Iniciar a leitura de Bahtinov",
-  "focusStopBahtinov": "Parar a leitura de Bahtinov"
+  "focusStopBahtinov": "Parar a leitura de Bahtinov",
+  "focusWeakFitShort": "Ajuste da curva fraco (R² {r2}): o foco vem do quadro medido. Rode de novo se o céu estabilizou."
 }

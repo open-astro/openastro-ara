@@ -23,6 +23,8 @@ import 'package:openastroara/screens/simple/simple_search.dart';
 import 'package:openastroara/screens/simple/simple_device_windows.dart' show simpleMountMotionProvider;
 import 'package:openastroara/models/autofocus_run.dart';
 import 'package:openastroara/state/focus/autofocus_live_state.dart';
+import 'package:openastroara/state/focus/bahtinov_focus_state.dart';
+import 'package:openastroara/models/bahtinov_focus.dart';
 import 'package:openastroara/models/guider_status.dart';
 import 'package:openastroara/widgets/status_indicator.dart' show StatusLevel;
 import 'package:openastroara/widgets/equipment/guider_chip.dart' show guiderStatusLevel;
@@ -257,6 +259,56 @@ class _LiveFrame extends AutofocusLiveNotifier {
   @override
   AutofocusLive build() => AutofocusLive(
       run: const AutofocusRun(state: AutofocusRunStates.complete, finalHfr: 1.01), frame: Uint8List.fromList(_png));
+}
+
+/// A finished Smart Focus with a weak fit and its frame: the tallest Auto panel.
+class _LiveWeak extends AutofocusLiveNotifier {
+  @override
+  AutofocusLive build() => AutofocusLive(
+      run: AutofocusRun(
+        state: AutofocusRunStates.complete,
+        finalHfr: 1.01,
+        finalPosition: 29463,
+        finalStars: 299,
+        probes: [
+          for (var i = 0; i < 7; i++)
+            AutofocusProbe(
+                index: i, phase: AutofocusProbePhases.fine, position: 29300 + i * 50,
+                hfr: [4.2, 3.4, 2.8, 1.4, 2.6, 3.3, 4.8][i], stars: 40, kept: true),
+        ],
+        fit: const AutofocusFit(
+            algorithm: 'hyperbolic', rSquared: 0.554, bestPosition: 29463, predictedHfr: 1.7,
+            withinSampledRange: true, curve: []),
+      ),
+      frame: Uint8List.fromList(_png));
+}
+
+/// A Bahtinov readout running with a frame: the tallest Manual panel.
+class _BahtinovReading extends BahtinovFocusNotifier {
+  @override
+  BahtinovFocusLive build() {
+    final recent = [
+      for (var i = 0; i < 6; i++)
+        BahtinovSample(seq: i + 1, detected: true, offsetPx: i < 3 ? 3.0 : 2.0, withinZone: false),
+    ];
+    return BahtinovFocusLive(
+      status: BahtinovFocusStatus(
+          active: true, state: BahtinovFocusStates.running, exposureSec: 2, seq: 6, latest: recent.last,
+          recent: recent, zonePx: 0.3, zoneFromOptics: false, hasFrame: true),
+      frame: Uint8List.fromList(_png),
+      frameSeq: 6,
+    );
+  }
+}
+
+class _ManualPick extends MainFocusMethodNotifier {
+  @override
+  MainFocusMethod? build() => MainFocusMethod.bahtinov;
+}
+
+class _AutoPick extends MainFocusMethodNotifier {
+  @override
+  MainFocusMethod? build() => MainFocusMethod.autofocus;
 }
 
 // A 1x1 PNG.
@@ -530,6 +582,7 @@ void main() {
   testWidgets("Focus: Measured stars On fills the screen with the run's frame, circles and all", (tester) async {
     final container = await _pump(tester, const Size(1024, 768), gear: [
       autofocusLiveProvider.overrideWith(() => _LiveFrame()),
+      mainFocusMethodProvider.overrideWith(_AutoPick.new),
     ]);
     await tester.tap(find.byKey(const Key('simple-mode')));
     await tester.pump();
@@ -540,6 +593,29 @@ void main() {
     await tester.pump();
     expect(find.byKey(const Key('simple-focus-frame')), findsOneWidget);
   });
+
+  for (final (name, gear) in [
+    ('Auto, a finished weak-fit run', <Override>[
+      autofocusLiveProvider.overrideWith(_LiveWeak.new),
+      focuserProvider.overrideWith(() => _Focuser(EquipmentConnectionState.connected)),
+    ]),
+    ('Manual, the Bahtinov readout with a frame', <Override>[
+      bahtinovFocusProvider.overrideWith(_BahtinovReading.new),
+      mainFocusMethodProvider.overrideWith(_ManualPick.new),
+    ]),
+  ]) {
+    testWidgets('the Focus panel fits on an iPad without scrolling: $name', (tester) async {
+      await _pump(tester, const Size(1024, 768), gear: gear);
+      await tester.tap(find.byKey(const Key('simple-mode')));
+      await tester.pump();
+      await tester.tap(find.text('Focus'));
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('simple-settings')));
+      await tester.pump();
+      final scroll = find.ancestor(of: find.byType(SimpleFocusPanel), matching: find.byType(Scrollable)).first;
+      expect(tester.state<ScrollableState>(scroll).position.maxScrollExtent, 0, reason: 'everything in view');
+    });
+  }
 
   testWidgets('Focus stays in Simple Mode: the rail reads Focus, its panel opens left of the rail; the chip is the Focus chip',
       (tester) async {

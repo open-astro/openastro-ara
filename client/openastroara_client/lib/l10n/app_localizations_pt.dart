@@ -1721,6 +1721,11 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get focusStopBahtinov => 'Stop the Bahtinov readout';
+
+  @override
+  String focusWeakFitShort(String r2) {
+    return 'Weak curve fit (R² $r2): the focus comes from the measured frame. Run again if the sky has settled.';
+  }
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -3447,4 +3452,9 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get focusStopBahtinov => 'Parar a leitura de Bahtinov';
+
+  @override
+  String focusWeakFitShort(String r2) {
+    return 'Ajuste da curva fraco (R² $r2): o foco vem do quadro medido. Rode de novo se o céu estabilizou.';
+  }
 }

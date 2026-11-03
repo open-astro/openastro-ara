@@ -1721,4 +1721,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get focusStopBahtinov => 'Stop the Bahtinov readout';
+
+  @override
+  String focusWeakFitShort(String r2) {
+    return 'Weak curve fit (R² $r2): the focus comes from the measured frame. Run again if the sky has settled.';
+  }
 }

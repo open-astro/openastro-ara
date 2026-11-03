@@ -78,6 +78,8 @@ import 'simple_autopilot.dart';
 import 'simple_device_windows.dart';
 import 'simple_focus_panel.dart';
 import '../../state/focus/autofocus_live_state.dart' show autofocusLiveProvider;
+import '../../state/focus/bahtinov_focus_state.dart'
+    show MainFocusMethod, bahtinovFocusProvider;
 import 'simple_message_pills.dart';
 import 'simple_polar_panel.dart';
 import 'simple_plan_panel.dart';
@@ -517,9 +519,12 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
         shown == SimpleModeScreen.polarAlign &&
         simplePolarActive(ref.watch(polarAlignLiveProvider));
     // Focus can show its run's frame, measured stars circled, when asked.
-    final focusFrame =
-        shown == SimpleModeScreen.focus &&
-            ref.watch(simpleFocusStarsShownProvider)
+    // Manual shows the Bahtinov readout's crop, spikes and all, there.
+    final focusFrame = shown != SimpleModeScreen.focus
+        ? null
+        : simpleFocusMethod(ref) == MainFocusMethod.bahtinov
+        ? ref.watch(bahtinovFocusProvider.select((l) => l.frame))
+        : ref.watch(simpleFocusStarsShownProvider)
         ? ref.watch(autofocusLiveProvider.select((l) => l.frame))
         : null;
     final hasFrame =

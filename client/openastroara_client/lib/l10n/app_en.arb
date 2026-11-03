@@ -2429,5 +2429,14 @@
   "focusStopBahtinov": "Stop the Bahtinov readout",
   "@focusStopBahtinov": {
     "description": "Screen reader label of Focus's shutter on Manual while it reads"
+  },
+  "focusWeakFitShort": "Weak curve fit (R² {r2}): the focus comes from the measured frame. Run again if the sky has settled.",
+  "@focusWeakFitShort": {
+    "description": "Simple Focus panel: a finished autofocus whose curve fit was weak, short form",
+    "placeholders": {
+      "r2": {
+        "type": "String"
+      }
+    }
   }
 }

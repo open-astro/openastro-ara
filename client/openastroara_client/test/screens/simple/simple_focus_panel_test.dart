@@ -150,11 +150,11 @@ void main() {
 
   testWidgets('a weak fit says so in the panel, in words', (tester) async {
     await _pump(tester, focuser: _focuser(), run: weak);
-    expect(find.textContaining('The curve fit was weak (R² 0.55)'), findsOneWidget);
+    expect(find.textContaining('Weak curve fit (R² 0.55)'), findsOneWidget);
   });
 
-  testWidgets('the focuser line: where it is and which', (tester) async {
-    await _pump(tester, focuser: _focuser(), run: weak);
+  testWidgets('the focuser line: where it is and which (before a result; then Best position says it)', (tester) async {
+    await _pump(tester, focuser: _focuser());
     expect(find.text('Focuser at 1000 · Focuser'), findsOneWidget);
   });
 

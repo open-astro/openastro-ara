@@ -3068,6 +3068,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Stop the Bahtinov readout'**
   String get focusStopBahtinov;
+
+  /// Simple Focus panel: a finished autofocus whose curve fit was weak, short form
+  ///
+  /// In en, this message translates to:
+  /// **'Weak curve fit (R² {r2}): the focus comes from the measured frame. Run again if the sky has settled.'**
+  String focusWeakFitShort(String r2);
 }
 
 class _AppLocalizationsDelegate

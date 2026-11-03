@@ -157,7 +157,11 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
     final l10n = context.l10n;
     final fit = run.fit;
     final best = run.finalPosition ?? fit?.bestPosition.round();
-    final weak = MainFocusCard.weakFitText(l10n, run);
+    // The full UI's verdict, cut to what to do (the panel has no room for
+    // the why).
+    final weak = MainFocusCard.weakFitText(l10n, run) == null
+        ? null
+        : l10n.focusWeakFitShort(fit!.rSquared.toStringAsFixed(2));
     final starsShown = ref.watch(simpleFocusStarsShownProvider);
     Widget stat(String label, String value) => Expanded(
       child: Container(
@@ -181,11 +185,11 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
     return SimplePanel(
       padding: const EdgeInsets.all(AraSpace.s16),
       child: SizedBox(
-        width: 360,
+        width: 400,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
-          spacing: AraSpace.s8,
+          spacing: 6,
           children: [
             // The method: Smart Focus with the focuser, or by hand with a
             // Bahtinov mask. Locked while a run goes.
@@ -234,7 +238,8 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
                 style: kSimpleText.copyWith(color: headlineColor),
                 maxLines: 2,
               ),
-              if (connected && focuser != null)
+              // A finished run's Best position tile says where it is.
+              if (connected && focuser != null && !run.isComplete)
                 Text(
                   [
                     if (focuser.position != null)
@@ -245,13 +250,15 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
                   ].join(' · '),
                   style: AraText.caption,
                 ),
-              Text(
-                context.l10n.focusHfr(hfr?.toStringAsFixed(2) ?? '—'),
-                style: kSimpleText.copyWith(
-                  fontSize: 30,
-                  fontWeight: FontWeight.w300,
+              // A finished run's headline already says its HFR.
+              if (!run.isComplete)
+                Text(
+                  context.l10n.focusHfr(hfr?.toStringAsFixed(2) ?? '—'),
+                  style: kSimpleText.copyWith(
+                    fontSize: 30,
+                    fontWeight: FontWeight.w300,
+                  ),
                 ),
-              ),
               // A finished run's figures, all on view (Simple Mode folds
               // nothing away).
               if (run.isComplete)
@@ -270,7 +277,7 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
                   ],
                 ),
               if (run.probes.isNotEmpty)
-                SizedBox(height: 140, child: VCurveChart(run: run)),
+                SizedBox(height: 90, child: VCurveChart(run: run)),
               if (weak != null)
                 Container(
                   padding: const EdgeInsets.all(AraSpace.s8),
@@ -394,16 +401,6 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
         ),
       if (!status.active && !status.hasMeasurement && !live.finished)
         Text(l10n.bahtinovFitMaskDetail, style: AraText.caption),
-      if (live.frame != null)
-        ClipRRect(
-          borderRadius: BorderRadius.circular(8),
-          child: Image.memory(
-            live.frame!,
-            height: 160,
-            fit: BoxFit.contain,
-            gaplessPlayback: true,
-          ),
-        ),
       if (reading) ...[
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
