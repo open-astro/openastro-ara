@@ -175,7 +175,7 @@ class _Pill extends ConsumerWidget {
                       semanticsLabel: context.l10n.pillsMoreSemantics(more!),
                     ),
                   ),
-                if (m.kind == SimpleMessageKind.error)
+                if (m.kind == SimpleMessageKind.error || m.stays)
                   IconButton(
                     tooltip: context.l10n.pillsDismiss,
                     icon: const Icon(Icons.close, size: 18),

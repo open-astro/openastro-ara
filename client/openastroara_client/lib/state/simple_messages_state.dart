@@ -9,7 +9,7 @@ import 'simple_mode_state.dart';
 /// Simple Mode's message pills (ALP-4825): no popups, so results, errors and
 /// questions show as pills in the top-left corner.
 enum SimpleMessageKind {
-  /// Green dot; fades after [kSimpleResultLife].
+  /// Green dot; fades after [kSimpleResultLife], unless it [SimpleMessage.stays].
   result,
 
   /// Red outline; stays until dismissed.
@@ -20,7 +20,7 @@ enum SimpleMessageKind {
 }
 
 /// How long a result pill stays.
-const kSimpleResultLife = Duration(seconds: 6);
+const kSimpleResultLife = Duration(seconds: 10); // 6 until 2026-11-04 (user: too fast)
 
 class SimpleMessageAction {
   const SimpleMessageAction(this.label, this.onPressed);
@@ -35,6 +35,7 @@ class SimpleMessage {
     required this.title,
     this.detail,
     this.actions = const [],
+    this.stays = false,
   });
 
   final int id;
@@ -44,6 +45,10 @@ class SimpleMessage {
 
   /// A question's buttons, the last one the main answer.
   final List<SimpleMessageAction> actions;
+
+  /// A result that waits to be read (closed with ×) instead of fading: an
+  /// Emergency Stop's summary.
+  final bool stays;
 }
 
 /// The pills showing, newest first.
@@ -66,6 +71,7 @@ class SimpleMessagesNotifier extends Notifier<List<SimpleMessage>> {
     String title, {
     String? detail,
     List<SimpleMessageAction> actions = const [],
+    bool stays = false,
   }) {
     final id = _next++;
     state = [
@@ -75,10 +81,11 @@ class SimpleMessagesNotifier extends Notifier<List<SimpleMessage>> {
         title: title,
         detail: detail,
         actions: actions,
+        stays: stays,
       ),
       ...state,
     ];
-    if (kind == SimpleMessageKind.result) {
+    if (kind == SimpleMessageKind.result && !stays) {
       _timers[id] = Timer(kSimpleResultLife, () => dismiss(id));
     }
     return id;
@@ -107,6 +114,7 @@ typedef UserNotify = void Function(
   bool error,
   bool? snackBarRed,
   Duration? snackBarDuration,
+  bool stays,
 });
 
 /// A [UserNotify] for [context], captured before any await (the context may
@@ -120,6 +128,7 @@ UserNotify userNotifier(BuildContext context) {
     bool error = false,
     bool? snackBarRed,
     Duration? snackBarDuration,
+    bool stays = false,
   }) {
     // Active, not just chosen: with the Experimental switch off the full UI
     // shows, and a pill there would reach nobody.
@@ -130,6 +139,7 @@ UserNotify userNotifier(BuildContext context) {
             error ? SimpleMessageKind.error : SimpleMessageKind.result,
             title,
             detail: detail,
+            stays: stays,
           );
       return;
     }

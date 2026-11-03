@@ -173,6 +173,29 @@ void main() {
     expect(title, contains('1 sequence run(s) aborted'), reason: 'what worked still follows');
   });
 
+  testWidgets('Simple Mode: a stop that went through stays in its pill until closed (user, 2026-11-04: 6 s was too fast)',
+      (tester) async {
+    await pumpButton(tester, button: const EmergencyStopButton(compact: true), simpleMode: true, pills: true);
+    fake.result = const EmergencyStopResult(
+      alreadyInProgress: false,
+      runsAborted: 1,
+      exposureAborted: true,
+      guidingStopped: true,
+      parkRequested: true,
+      flatPanelLightOff: true,
+      failedRungs: [],
+    );
+    await activateWithoutPointer(tester);
+    await activateWithoutPointer(tester);
+    await tester.pumpAndSettle();
+    await tester.pump(const Duration(minutes: 1));
+    final pill = find.byKey(const Key('simple-message-0'));
+    expect(pill, findsOneWidget, reason: 'a safety summary waits to be read');
+    await tester.tap(find.descendant(of: pill, matching: find.byTooltip('Dismiss')));
+    await tester.pump();
+    expect(pill, findsNothing);
+  });
+
   testWidgets('Simple Mode: the stop\'s message shows whole in its pill, every line (user, 2026-11-04: it was cut)',
       (tester) async {
     tester.view.physicalSize = const Size(1024, 768);

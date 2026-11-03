@@ -1108,7 +1108,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(seq.targets('seq-1'), ['M31']);
       expect(c.read(simpleRunProvider).targets.map((t) => t.name), ['M31']);
-      await tester.pump(const Duration(seconds: 7)); // the Undo pill fades
+      await tester.pump(kSimpleResultLife + const Duration(seconds: 1)); // the Undo pill fades
     });
 
     Future<(ProviderContainer, _Seq)> queueOfThree(WidgetTester tester) async {
@@ -1159,7 +1159,7 @@ void main() {
       expect(tester.takeException(), isNull);
       expect(seq.targets('seq-1'), ['M31', 'M42', 'M45']);
       expect(c.read(simpleRunProvider).targets.map((t) => t.name), ['M31', 'M42', 'M45']);
-      await tester.pump(const Duration(seconds: 7)); // the pills fade
+      await tester.pump(kSimpleResultLife + const Duration(seconds: 1)); // the pills fade
     });
 
     testWidgets('a second reorder while the first is on its way is not sent', (tester) async {

@@ -1746,7 +1746,7 @@ void main() {
       expect(blur?.filter, ImageFilter.blur(sigmaX: AraBlur.panel, sigmaY: AraBlur.panel),
           reason: '${e.widget.key ?? e.widget.runtimeType} has no blur of its own');
     }
-    await tester.pump(const Duration(seconds: 7)); // the result fades
+    await tester.pump(kSimpleResultLife + const Duration(seconds: 1)); // the result fades
   });
 
   testWidgets("Guided Run's plan step hugs the rail like every mode's panel, with no title (the strip names the step)",
