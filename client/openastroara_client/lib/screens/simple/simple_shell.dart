@@ -2,6 +2,7 @@ import 'package:lat_lng_to_timezone/lat_lng_to_timezone.dart' as tz_map;
 
 import 'simple_search.dart';
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 import 'dart:async';
@@ -829,8 +830,13 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                     ),
                                   ),
                                 )
-                              else if (_popover != _Popover.none &&
-                                  _popover != _Popover.menu)
+                              // The rail's own popovers; Settings and Search
+                              // have their places of their own.
+                              else if (const {
+                                _Popover.modes,
+                                _Popover.settings,
+                                _Popover.queue,
+                              }.contains(_popover))
                                 Positioned(
                                   left: 0,
                                   top: 0,
@@ -2321,11 +2327,12 @@ class _ThisRig extends ConsumerWidget {
         // solving, framing and the night's times use them).
         const Divider(height: AraSpace.s16),
         for (final (id, label, digits, value, set)
-            in <(String, String, int, double, void Function(double))>[
+            in <(String, String, int?, double, void Function(double))>[
+              // Aperture on one wheel of millimetres; focal length per digit.
               (
                 'aperture',
                 'Aperture',
-                3,
+                null,
                 ref.watch(opticsSettingsProvider).apertureMm,
                 ref.read(opticsSettingsProvider.notifier).setApertureMm,
               ),
@@ -2491,23 +2498,46 @@ class _RigWheelRow extends StatefulWidget {
     this.dotAfter,
   });
 
-  /// Whole millimetres, [digits] wheels.
+  /// Whole millimetres: [digits] wheels, or with none one wheel over
+  /// [_kApertureMm] (an unset value starts at 80).
   factory _RigWheelRow.millimetres({
     required String id,
     required String label,
-    required int digits,
+    required int? digits,
     required double value,
     required ValueChanged<double> onSet,
-  }) => _RigWheelRow._(
-    id: id,
-    label: label,
-    text: value > 0 ? '${value.round()} mm' : 'Not set',
-    columns: List.filled(digits, _kDigits),
-    initial: _digitsOf(value.round(), digits),
-    unit: 'mm',
-    read: (w) => int.parse(w.join()).toDouble(),
-    onSet: onSet,
-  );
+  }) {
+    final text = value > 0 ? '${value.round()} mm' : 'Not set';
+    if (digits == null) {
+      final (lo, hi) = _kApertureMm;
+      final v = value > 0 ? value.round().clamp(lo, hi) : 80;
+      return _RigWheelRow._(
+        id: id,
+        label: label,
+        text: text,
+        columns: [
+          [for (var mm = lo; mm <= hi; mm++) '$mm'],
+        ],
+        initial: [v - lo],
+        unit: 'mm',
+        read: (w) => (lo + w.single).toDouble(),
+        onSet: onSet,
+      );
+    }
+    return _RigWheelRow._(
+      id: id,
+      label: label,
+      text: text,
+      columns: List.filled(digits, _kDigits),
+      initial: _digitsOf(value.round(), digits),
+      unit: 'mm',
+      read: (w) => int.parse(w.join()).toDouble(),
+      onSet: onSet,
+    );
+  }
+
+  /// A small refractor to a big Dobsonian.
+  static const _kApertureMm = (10, 600);
 
   /// Latitude or longitude: hemisphere, degrees, four decimals (about 11 m).
   factory _RigWheelRow.coordinate({
@@ -2599,21 +2629,25 @@ class _RigWheelRowState extends State<_RigWheelRow> {
     super.dispose();
   }
 
-  Widget _wheel(int i) => Container(
-    width: 40,
-    height: 132,
-    decoration: BoxDecoration(
-      color: AraColors.tileFill,
-      borderRadius: BorderRadius.circular(8),
-    ),
+  // iOS's own picker: the value under the band magnified, the wheels
+  // sharing one band like the Clock app's timer.
+  Widget _wheel(int i) => SizedBox(
+    // A digit's wheel, or wide enough for "600".
+    width: widget.columns[i].length > 10 ? 72 : 36,
+    height: 160,
     child: Semantics(
       label: '${widget.label}, wheel ${i + 1} of ${widget.columns.length}',
-      child: ListWheelScrollView(
+      child: CupertinoPicker(
         key: Key('simple-rig-${widget.id}-wheel-$i'),
-        controller: _wheels[i],
-        itemExtent: 44,
-        diameterRatio: 3,
-        physics: const FixedExtentScrollPhysics(),
+        scrollController: _wheels[i],
+        itemExtent: 36,
+        useMagnifier: true,
+        magnification: 1.2,
+        selectionOverlay: CupertinoPickerDefaultSelectionOverlay(
+          capStartEdge: i == 0,
+          capEndEdge: i == widget.columns.length - 1,
+        ),
+        onSelectedItemChanged: (_) {},
         children: [
           for (final o in widget.columns[i])
             Center(child: Text(o, style: kSimpleText.copyWith(fontSize: 20))),
@@ -2659,7 +2693,6 @@ class _RigWheelRowState extends State<_RigWheelRow> {
             padding: const EdgeInsets.symmetric(vertical: AraSpace.s4),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.end,
-              spacing: AraSpace.s4,
               children: [
                 for (var i = 0; i < widget.columns.length; i++) ...[
                   _wheel(i),

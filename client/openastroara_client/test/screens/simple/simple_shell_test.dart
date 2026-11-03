@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'dart:ui' show ImageFilter;
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter/services.dart';
@@ -1124,8 +1125,11 @@ void main() {
     // One wheel per digit; a wheel at rest sets the value.
     await tester.tap(find.byKey(const Key('simple-rig-aperture')));
     await tester.pumpAndSettle();
-    expect(find.byKey(const Key('simple-rig-aperture-wheel-2')), findsOneWidget, reason: 'three digits');
-    await roll('simple-rig-aperture-wheel-2', 2);
+    expect(find.byKey(const Key('simple-rig-aperture-wheel-0')), findsOneWidget);
+    expect(find.byKey(const Key('simple-rig-aperture-wheel-1')), findsNothing, reason: 'one wheel of millimetres');
+    expect(tester.widget<CupertinoPicker>(find.byKey(const Key('simple-rig-aperture-wheel-0'))).useMagnifier, isTrue,
+        reason: "iOS's own picker, the value under the band magnified");
+    await roll('simple-rig-aperture-wheel-0', 2);
     expect(c.read(opticsSettingsProvider).apertureMm, 82);
     await tester.ensureVisible(find.byKey(const Key('simple-rig-aperture')));
     await tester.pumpAndSettle();
@@ -1235,6 +1239,14 @@ void main() {
     await tester.pump();
     expect(c.read(planetariumSearchProvider), 'M 31');
     expect(find.byKey(const Key('simple-planetarium')), findsOneWidget, reason: 'the sky, pointed at it');
+  });
+
+  testWidgets('Search opens on its own: no mode panel beside the rail', (tester) async {
+    await _pump(tester, const Size(1024, 768));
+    await tester.tap(find.byKey(const Key('simple-search-button')));
+    await tester.pump();
+    expect(find.byKey(const Key('simple-search')), findsOneWidget);
+    expect(find.text('Preview settings'), findsNothing);
   });
 
   testWidgets('⌘K opens Search too', (tester) async {
