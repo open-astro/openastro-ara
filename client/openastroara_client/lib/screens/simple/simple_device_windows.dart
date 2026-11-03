@@ -824,8 +824,14 @@ class _SimpleFocuserWindowState extends ConsumerState<SimpleFocuserWindow> {
         : v.clamp(c.minPosition, c.maxPosition);
   }
 
+  /// The dial moves nothing while autofocus runs (a touch would spoil its
+  /// curve) or while the position is unknown (a turn would jump from 0).
+  bool _locked(FocuserStatus s) =>
+      s.position == null || ref.read(autofocusLiveProvider).run.isRunning;
+
   Future<void> _go(FocuserStatus s, int target) async {
-    final from = s.position ?? 0;
+    if (_locked(s)) return;
+    final from = s.position!;
     if (target == from) return;
     setState(() => _sent = target);
     // A relative focuser takes the change, not a position.
@@ -969,6 +975,11 @@ class _SimpleFocuserWindowState extends ConsumerState<SimpleFocuserWindow> {
                 child: _FocusKnob(
                   key: const Key('simple-focuser-knob'),
                   focused: _dialFocused,
+                  enabled:
+                      s.position != null &&
+                      !ref.watch(
+                        autofocusLiveProvider.select((l) => l.run.isRunning),
+                      ),
                   // Grows with the text like the rails, so the label in its
                   // middle fits; never wider than the window.
                   size: math.min(220 * simpleRailScale(context), box.maxWidth),
@@ -1052,6 +1063,7 @@ class _FocusKnob extends StatefulWidget {
     required this.centre,
     this.focused = false,
     this.size = 220,
+    this.enabled = true,
   });
 
   /// The dial's diameter: 220, more with large text, less in a narrow
@@ -1064,6 +1076,9 @@ class _FocusKnob extends StatefulWidget {
   /// A turn the system cut off (a pointer cancel), instead of [onRelease].
   final VoidCallback onCancel;
   final Widget centre;
+
+  /// Off: the face is dimmed and turns nothing; the middle still works.
+  final bool enabled;
 
   /// Keyboard focus: a ring round the face.
   final bool focused;
@@ -1084,6 +1099,7 @@ class _FocusKnobState extends State<_FocusKnob> {
   double _at(Offset p) => math.atan2(p.dy - _size / 2, p.dx - _size / 2);
 
   void _turn(Offset p) {
+    if (!widget.enabled) return;
     final a = _at(p);
     var d = a - (_last ?? a);
     if (d > math.pi) d -= 2 * math.pi;
@@ -1151,12 +1167,15 @@ class _FocusKnobState extends State<_FocusKnob> {
                 },
               ),
             },
-            child: Transform.rotate(
-              key: const Key('simple-focuser-dial-face'),
-              angle: _angle,
-              child: CustomPaint(
-                size: Size.square(_size),
-                painter: const _DialPainter(),
+            child: Opacity(
+              opacity: widget.enabled ? 1 : 0.4,
+              child: Transform.rotate(
+                key: const Key('simple-focuser-dial-face'),
+                angle: _angle,
+                child: CustomPaint(
+                  size: Size.square(_size),
+                  painter: const _DialPainter(),
+                ),
               ),
             ),
           ),
