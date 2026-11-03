@@ -1194,6 +1194,27 @@ void main() {
     expect(find.byKey(const Key('simple-menu')), findsNothing, reason: 'the gear again closes it');
   });
 
+  testWidgets('a tap on the background closes every window, Info included, even over the sky', (tester) async {
+    final c = await _pump(tester, const Size(1024, 768), linkUp: true, gear: [
+      cameraStatusProvider.overrideWith(() => _Camera(EquipmentConnectionState.connected)),
+    ]);
+    // No frame yet: the planetarium is the background (it takes taps itself).
+    expect(find.byKey(const Key('sky')), findsOneWidget);
+    c.read(selectedSettingsPanelProvider.notifier).select('eq.camera');
+    c.read(selectedTabIndexProvider.notifier).select(kOptionsTabIndex);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('simple-info')));
+    await tester.tap(find.byKey(const Key('simple-mode')));
+    await tester.pump();
+    expect(find.byKey(const Key('simple-device-camera')), findsOneWidget);
+    expect(find.byType(SimpleInfoPanel), findsOneWidget);
+    await tester.tapAt(const Offset(512, 420)); // the middle of the sky
+    await tester.pump();
+    expect(find.byKey(const Key('simple-device-camera')), findsNothing);
+    expect(find.byType(SimpleInfoPanel), findsNothing);
+    expect(find.text('Polar align'), findsNothing);
+  });
+
   testWidgets('on a narrow window, opening a rail menu closes the camera window it would cover', (tester) async {
     final c = await _pump(tester, const Size(768, 1024), linkUp: true, gear: [
       cameraStatusProvider.overrideWith(() => _Camera(EquipmentConnectionState.connected)),

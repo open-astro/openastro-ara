@@ -352,9 +352,15 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
 
   /// A tap on the image closes what's open, or else toggles the immersive
   /// view (only once there is a frame to look at).
+  /// Whether any window is open (a device window, a rail menu, Plan's sheet
+  /// or the Info tiles): a tap on the background closes them all.
+  bool get _anyOpen =>
+      _device != null || _popover != _Popover.none || _adding || _info;
+
   void _tapImage(bool hasFrame) => setState(() {
-    if (_device != null || _popover != _Popover.none || _adding) {
+    if (_anyOpen) {
       _device = null;
+      _info = false;
       _popover = _Popover.none;
       _closeSheet();
     } else if (hasFrame) {
@@ -547,6 +553,17 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                             ),
                           ),
                         ),
+                        // The planetarium takes taps itself, so while a
+                        // window is open a layer over the background closes
+                        // them all instead.
+                        if (_anyOpen)
+                          Positioned.fill(
+                            child: GestureDetector(
+                              key: const Key('simple-background-close'),
+                              behavior: HitTestBehavior.opaque,
+                              onTap: () => _tapImage(!showSky),
+                            ),
+                          ),
                         if (!hasFrame)
                           Positioned.fill(
                             child: IgnorePointer(
