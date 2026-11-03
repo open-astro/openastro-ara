@@ -1,5 +1,7 @@
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart' show visibleForTesting;
+
 import '../services/bundled_catalogs.dart' show isStarType;
 import '../services/dso_catalog_service.dart';
 import '../services/tonight_sky_api.dart';
@@ -60,8 +62,12 @@ import 'star_model.dart' as stars;
 // * RemainingHours = max(0, windowEnd − max(now, windowStart)), always
 //   ≤ IntegrationHours.
 // * Enums go on the wire all-lowercase (§60.6: toosmall/good/toobig).
-// * Moon is display-only (separation/illumination chip, +0 tag); making it a
-//   score input needs the maintainer's call on weights.
+// * Moon (#1176): a post-sum multiplier like the filter factor, never a sixth
+//   weight. 1 − maxPenalty × illuminated × moonUpFraction × proximity, with
+//   maxPenalty 20% (10% when the filter set holds narrowband glass) and
+//   proximity falling linearly from 1 at 0° to 0 at 60° from the target.
+// * Optional magnitude floor (off by default): drops targets with a
+//   catalogued magnitude fainter than the floor; magnitude-less rows stay.
 
 // ── Score weights / thresholds (ported from the removed daemon
 //    TonightSkyService) ─────────────────────────────────────────────
@@ -73,13 +79,19 @@ const double _magnitudeWeight = 8.0;
 // §36.8 framing tiers (framing review, 2026-07-17): ratio = object major axis
 // ÷ short FOV side. "Fills frame" is reserved for targets that genuinely
 // dominate (≥40%); 15–40% is an honest "good fit" (full-ish points, ramping);
-// under 15% the rig is mismatched and the score should say so.
+// under 15% the rig is mismatched and the score should say so. 0.15 and 0.40
+// are the maintainer's settled values (#1176), not parked.
 const double _framingTooSmallRatio = 0.15;
 const double _framingFillsRatio = 0.40;
 const double _framingTooBigRatio = 0.80;
 // Q at the bottom of the good-fit ramp (ratio == tooSmall boundary).
 const double _framingGoodFitFloorQ = 0.70;
 const double _framingFloorQ = 0.15;
+// #1176 moon factor: max score cut, halved when the filter set has narrowband
+// glass (it cuts through moonlight); proximity reaches 0 at this separation.
+const double _moonMaxPenalty = 0.20;
+const double _moonMaxPenaltyNarrowband = 0.10;
+const double _moonFullSeparationDeg = 60.0;
 const double _hoursSaturationHours = 6.0;
 const double _sbContrastSpanMag = 4.0;
 const double _sbFloorQ = 0.15;
@@ -173,6 +185,10 @@ List<TonightSkyObject> computeTonightSkyLocal({
   /// (`SkyModelCalibration.appliedK`); a kind not in the map uses 1.0. Plain
   /// data so it crosses into the ranking isolate.
   Map<String, double> skyCalibrationK = const {},
+
+  /// #1176 — hide targets with a catalogued magnitude fainter than this;
+  /// null = off. Magnitude-less targets always stay.
+  double? magnitudeFloor,
 }) {
   // The curated imaging-regions layer (realistic extents + evocative names for
   // the famous complexes, plus region-scale fields with no catalog anchor)
@@ -254,8 +270,8 @@ List<TonightSkyObject> computeTonightSkyLocal({
   final cosLat = math.cos(_deg2rad(lat));
   final sinHorizon = math.sin(_deg2rad(horizon));
 
-  // Moon advisory grid (display-only, never a score input — same as the
-  // daemon). "Up" uses the TRUE horizon: moonlight washes the sky whenever
+  // Moon grid (feeds the post-sum moon factor, #1176, and the chip). "Up"
+  // uses the TRUE horizon: moonlight washes the sky whenever
   // the moon is up at all.
   final moonRaDeg = List<double>.filled(sampleCount, 0);
   final moonDecDeg = List<double>.filled(sampleCount, 0);
@@ -357,6 +373,11 @@ List<TonightSkyObject> computeTonightSkyLocal({
     // for that path. A star has no field to frame; "size unknown" would score
     // it neutral, ahead of honestly-small galaxies (review #1105).
     if (isStarType(o.type)) continue;
+    if (magnitudeFloor != null &&
+        o.magnitude != null &&
+        o.magnitude! > magnitudeFloor) {
+      continue;
+    }
     // Pre-filter: never clears the horizon at upper culmination → never up.
     final peakAltDeg = _maxAltitudeDeg(o.decDeg, lat);
     if (peakAltDeg < horizon) continue;
@@ -489,6 +510,14 @@ List<TonightSkyObject> computeTonightSkyLocal({
     //    says (light pollution / moon resilience); the same target with a
     //    broadband-only filter set is less so.
     var adjusted = score;
+    final hasNarrowband = filterSet.filters.any(
+      (f) =>
+          f.kind == FilterKind.ha ||
+          f.kind == FilterKind.oiii ||
+          f.kind == FilterKind.sii ||
+          f.kind == FilterKind.duo ||
+          f.kind == FilterKind.tri,
+    );
     final adjustReasons = <String>[];
     if (o.type == 'OCl') {
       adjusted *= 0.85;
@@ -542,14 +571,6 @@ List<TonightSkyObject> computeTonightSkyLocal({
       }
     }
     if (classifyEmission(o.type) == EmissionClass.emissionLine) {
-      final hasNarrowband = filterSet.filters.any(
-        (f) =>
-            f.kind == FilterKind.ha ||
-            f.kind == FilterKind.oiii ||
-            f.kind == FilterKind.sii ||
-            f.kind == FilterKind.duo ||
-            f.kind == FilterKind.tri,
-      );
       if (hasNarrowband) {
         adjusted *= 1.05;
         adjustReasons.add('emission target + narrowband in your wheel (+5%)');
@@ -563,12 +584,21 @@ List<TonightSkyObject> computeTonightSkyLocal({
         adjustReasons.add(
           filterSet.filters.isEmpty
               ? 'emission target with no narrowband filter (OSC/broadband'
-                  '${bright ? ', Bortle ${site.bortleClass} sky) (−25%)' : ') (−15%)'}'
+                    '${bright ? ', Bortle ${site.bortleClass} sky) (−25%)' : ') (−15%)'}'
               : 'emission target but no narrowband filter in your set'
-                  '${bright ? ' under a Bortle ${site.bortleClass} sky (−25%)' : ' (−15%)'}',
+                    '${bright ? ' under a Bortle ${site.bortleClass} sky (−25%)' : ' (−15%)'}',
         );
       }
     }
+    // #1176 moon factor, applied with the other post-sum multipliers.
+    final moonFactor = tonightMoonFactor(
+      illuminatedFraction: moonIlluminationPct / 100.0,
+      moonUpFraction: moonUpFraction,
+      separationDeg: moonSeparationDeg,
+      narrowband: hasNarrowband,
+    );
+    adjusted *= moonFactor;
+    final moonCutPct = ((1.0 - moonFactor) * 100.0).round();
     final finalScore = adjusted.clamp(0.0, 100.0);
 
     // §Integration Budget P3 - the tiered "how many hours from YOUR sky"
@@ -604,7 +634,8 @@ List<TonightSkyObject> computeTonightSkyLocal({
       ...adviceLines,
       if (moonUpFraction > 0)
         'moon ${moonSeparationDeg.toStringAsFixed(0)}° away, '
-            '${moonIlluminationPct.toStringAsFixed(0)}% lit (+0)'
+            '${moonIlluminationPct.toStringAsFixed(0)}% lit '
+            '(${moonCutPct > 0 ? '−$moonCutPct%' : '+0'})'
       else
         'moonless window (+0)',
       // §37.5 soft-warning altitude — advisory only, mirrors the daemon.
@@ -643,7 +674,7 @@ List<TonightSkyObject> computeTonightSkyLocal({
         // hours-free remainder scales by the same finalScore/score ratio.
         integrationBudget: integrationBudgetLine,
         budgetFullHours: budgetFullHours,
-      budget: budgetRecord,
+        budget: budgetRecord,
         hoursFreeScore: score > 0
             ? double.parse(
                 (finalScore * (score - hoursScore) / score).toStringAsFixed(1),
@@ -668,6 +699,27 @@ List<TonightSkyObject> computeTonightSkyLocal({
       ? scored.sublist(0, limit)
       : scored;
   return [for (final s in capped) s.$2];
+}
+
+/// #1176 moon multiplier: 1 − maxPenalty × lit × moonUpFraction × proximity;
+/// proximity = clamp((60 − separation) / 60, 0, 1).
+@visibleForTesting
+double tonightMoonFactor({
+  required double illuminatedFraction,
+  required double moonUpFraction,
+  required double separationDeg,
+  required bool narrowband,
+}) {
+  final proximity =
+      ((_moonFullSeparationDeg - separationDeg) / _moonFullSeparationDeg).clamp(
+        0.0,
+        1.0,
+      );
+  return 1.0 -
+      (narrowband ? _moonMaxPenaltyNarrowband : _moonMaxPenalty) *
+          illuminatedFraction *
+          moonUpFraction *
+          proximity;
 }
 
 // ── Scoring (port of ScoreObject) ──────────────────────────────────────────
@@ -870,9 +922,11 @@ DateTime? darkStart(SiteSettings site, DateTime nowUtc) {
 /// clock rolls over at sunrise and reads an evening time as yesterday's.
 bool scheduleAllowed(SiteSettings site, DateTime nowUtc) {
   if (site.latitudeDeg == 0 && site.longitudeDeg == 0) return true;
-  double sun(DateTime t) =>
-      sunMoonAltitudeDeg(t.toUtc(), site.latitudeDeg, site.longitudeDeg)
-          .sunAltDeg;
+  double sun(DateTime t) => sunMoonAltitudeDeg(
+    t.toUtc(),
+    site.latitudeDeg,
+    site.longitudeDeg,
+  ).sunAltDeg;
   final now = sun(nowUtc);
   return !(now < 0 && sun(nowUtc.add(const Duration(minutes: 10))) > now);
 }
@@ -1122,14 +1176,13 @@ String _shortNum(double v) =>
     v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toStringAsFixed(1);
 
 /// Nebula types whose photometry-less rows are tiered (see the adjust block).
-bool _isTieredNebulaType(String type) => const {
-      'HII', 'EmN', 'Neb', 'Cl+N', 'PN', 'RfN', 'SNR',
-    }.contains(type);
+bool _isTieredNebulaType(String type) =>
+    const {'HII', 'EmN', 'Neb', 'Cl+N', 'PN', 'RfN', 'SNR'}.contains(type);
 
 /// Tier for an unlisted photometry-less row of [type]: faint planetaries,
 /// reflection nebulae and remnants are specialist targets (tier 1); an
 /// unlisted emission region is "mostly stars" and keeps the hard discount.
 int? _typeFloorTier(String type) => switch (type) {
-      'PN' || 'RfN' || 'SNR' => 1,
-      _ => null,
-    };
+  'PN' || 'RfN' || 'SNR' => 1,
+  _ => null,
+};
