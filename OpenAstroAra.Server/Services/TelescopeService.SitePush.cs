@@ -136,6 +136,8 @@ public sealed partial class TelescopeService {
                 if (!await WaitOutSlewAsync(mount).ConfigureAwait(false)) {
                     return; // still slewing: the next save or connect tries again
                 }
+                // A push begun for a mount that has since disconnected can still set this after
+                // ForgetPushedSite(); harmless while every connect forces a push (keep that force).
                 if (PushSite(mount, wanted.Lat, wanted.Lng, wanted.Elev)) {
                     _sitePushed = wanted;
                 } else {

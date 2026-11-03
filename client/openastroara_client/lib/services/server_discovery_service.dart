@@ -808,7 +808,8 @@ class ServerDiscoveryService {
           })
           .timeout(const Duration(milliseconds: 1200));
       final json = jsonDecode(utf8.decode(bytes.takeBytes()));
-      if (json is! Map<String, dynamic> || json['server_uuid'] is! String) {
+      final uuid = json is Map<String, dynamic> ? json['server_uuid'] : null;
+      if (json is! Map<String, dynamic> || uuid is! String) {
         return const ProbeResult(answered: true);
       }
       final nickname = json['nickname'];
@@ -818,7 +819,7 @@ class ServerDiscoveryService {
           hostname: host,
           port: port,
           mdnsName: nickname is String && nickname.isNotEmpty ? nickname : null,
-          uuid: json['server_uuid'] as String,
+          uuid: uuid,
         ),
       );
       // ignore: avoid_catches_without_on_clauses
