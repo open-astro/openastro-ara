@@ -695,15 +695,12 @@ class SimpleShutterButton extends StatelessWidget {
           alignment: Alignment.center,
           child: start && !running
               ? Icon(Icons.play_arrow, size: 40, color: fg)
+              : running
+              ? SimpleStopSquare(color: enabled ? AraColors.accentError : fg)
               : Container(
-                  width: running ? 22 : 40,
-                  height: running ? 22 : 40,
-                  decoration: BoxDecoration(
-                    // The stop square is red: stop reads as stop.
-                    color: running && enabled ? AraColors.accentError : fg,
-                    shape: running ? BoxShape.rectangle : BoxShape.circle,
-                    borderRadius: running ? BorderRadius.circular(4) : null,
-                  ),
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(color: fg, shape: BoxShape.circle),
                 ),
         ),
       ),
@@ -715,6 +712,28 @@ class SimpleShutterButton extends StatelessWidget {
 /// REC light): looping, taking a frame with its countdown and bar,
 /// stopping, frame ready, or why it failed. Nothing while idle. It sits
 /// outside the panels, so it stays in the immersive view.
+/// The stop square's side: the shutter's while it works, and the Focuser
+/// dial's middle while autofocus runs.
+const double kSimpleStopSquare = 22;
+
+/// The square that stops what is running; red, so stop reads as stop.
+class SimpleStopSquare extends StatelessWidget {
+  const SimpleStopSquare({super.key, this.color = AraColors.accentError});
+
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    key: const Key('simple-stop-square'),
+    width: kSimpleStopSquare,
+    height: kSimpleStopSquare,
+    decoration: BoxDecoration(
+      color: color,
+      borderRadius: BorderRadius.circular(4),
+    ),
+  );
+}
+
 /// The status pill's height (Plan's sheet starts below it).
 const double kSimpleStatusHeight = 48;
 

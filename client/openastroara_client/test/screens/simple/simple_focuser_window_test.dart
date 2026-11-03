@@ -9,6 +9,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/focuser_status.dart';
 import 'package:openastroara/screens/simple/simple_device_windows.dart';
 import 'package:openastroara/models/autofocus_run.dart';
+import 'package:openastroara/screens/simple/simple_preview_panel.dart' show kSimpleStopSquare;
+import 'package:openastroara/theme/ara_colors.dart';
 import 'package:openastroara/services/equipment_driver_api.dart';
 import 'package:openastroara/state/equipment/focuser_state.dart';
 import 'package:openastroara/state/focus/autofocus_live_state.dart';
@@ -141,6 +143,18 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
     await tester.pump();
     expect(f.moves, isEmpty);
+  });
+
+  testWidgets("while autofocus runs, the dial's middle shows the shutter's stop square: same size, red, rounded",
+      (tester) async {
+    await _pump(tester, _wire());
+    _live.running();
+    await tester.pump();
+    final square = find.descendant(
+        of: find.byKey(const Key('simple-focuser-autofocus')), matching: find.byKey(const Key('simple-stop-square')));
+    expect(tester.getSize(square), const Size.square(kSimpleStopSquare));
+    final box = tester.widget<Container>(square).decoration! as BoxDecoration;
+    expect((box.color, box.borderRadius), (AraColors.accentError, BorderRadius.circular(4)));
   });
 
   testWidgets('with its position unknown the dial moves nothing: no blind jump from 0', (tester) async {

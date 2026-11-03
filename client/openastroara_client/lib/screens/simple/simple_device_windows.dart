@@ -27,7 +27,7 @@ import '../../state/app_locale_state.dart';
 import '../../state/simple_messages_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
-import 'simple_preview_panel.dart' show kSimpleText;
+import 'simple_preview_panel.dart' show SimpleStopSquare, kSimpleText;
 import 'simple_shell.dart' show SimpleSegment, simpleRailScale;
 
 /// One window per device in Simple Mode (design/briefs/simple-mode-settings.md):
@@ -1276,7 +1276,7 @@ class _AutofocusButton extends ConsumerWidget {
           excludeSemantics: true,
           child: Center(
             child: running
-                ? const Icon(Icons.stop, color: AraColors.accentError, size: 32)
+                ? const SimpleStopSquare()
                 : Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
