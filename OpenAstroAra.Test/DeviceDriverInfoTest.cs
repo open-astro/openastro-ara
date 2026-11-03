@@ -20,6 +20,7 @@ using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Endpoints;
 using OpenAstroAra.Server.Services;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -162,6 +163,51 @@ namespace OpenAstroAra.Test {
                 guider.Object, CancellationToken.None);
             Assert.That((result as Ok<DeviceDriverDto>)?.Value,
                 Is.EqualTo(new DeviceDriverDto(null, null, null, null, "ZWO ASI120MM Mini")));
+        }
+
+        [Test]
+        public async Task A_host_both_lookups_refuse_leaves_no_unobserved_task() {
+            // #1485: the driver lookup started beside the device list was never awaited when the list threw.
+            const string Marker = "not a host (#1485)";
+            var unobserved = 0;
+            void OnUnobserved(object? _, UnobservedTaskExceptionEventArgs e) {
+                if (e.Exception.InnerExceptions.Any(x => x.Message.Contains(Marker, System.StringComparison.Ordinal))) {
+                    Interlocked.Increment(ref unobserved);
+                }
+            }
+            TaskScheduler.UnobservedTaskException += OnUnobserved;
+            try {
+                await Lookups().ConfigureAwait(false);
+                System.GC.Collect();
+                System.GC.WaitForPendingFinalizers();
+                System.GC.Collect();
+                Assert.That(unobserved, Is.Zero);
+            } finally {
+                TaskScheduler.UnobservedTaskException -= OnUnobserved;
+            }
+
+            [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+            static async Task Lookups() {
+                var selections = new Mock<IEquipmentSelectionStore>();
+                selections.Setup(s => s.GetAllAsync(It.IsAny<CancellationToken>())).ReturnsAsync(new List<DiscoveredDeviceDto> {
+                    new("u1", "Cam", DeviceType.Camera, "bad host", "", 6800, 0, false),
+                });
+                var profiles = new Mock<IProfileStore>();
+                profiles.Setup(p => p.GetPhd2Settings()).Returns(new InMemoryProfileStore().GetPhd2Settings() with {
+                    GuiderCamera = "Alpaca Camera [bad host:6800/0]",
+                });
+                var alpaca = new Mock<IAlpacaManagementClient>();
+                alpaca.Setup(a => a.GetConfiguredDevicesAsync(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+                    .Returns(() => Task.FromException<IReadOnlyDictionary<string, AlpacaConfiguredDevice>>(new System.ArgumentException(Marker)));
+                alpaca.Setup(a => a.GetDriverVersionAsync(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+                    .Returns(() => Task.FromException<string?>(new System.ArgumentException(Marker)));
+                var device = await EquipmentEndpoints.GetDeviceDriverAsync("camera", selections.Object, alpaca.Object, CancellationToken.None)
+                    .ConfigureAwait(false);
+                Assert.That(device, Is.InstanceOf<Ok<DeviceDriverDto>>());
+                var guide = await EquipmentEndpoints.GetGuideCameraDriverAsync(profiles.Object, alpaca.Object, Mock.Of<IGuiderService>(),
+                    CancellationToken.None).ConfigureAwait(false);
+                Assert.That(guide, Is.InstanceOf<Ok<DeviceDriverDto>>());
+            }
         }
 
         [Test]
