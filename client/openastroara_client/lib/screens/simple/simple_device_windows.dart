@@ -771,8 +771,10 @@ class _SimpleFocuserWindowState extends ConsumerState<SimpleFocuserWindow> {
           ),
         ),
         const SizedBox(height: AraSpace.s16),
-        Center(
-          child: DecoratedBox(
+        // Rows like the Guider window's: label left, control right.
+        simpleWindowRow(
+          'Step',
+          DecoratedBox(
             key: const Key('simple-focuser-steps'),
             decoration: BoxDecoration(
               color: AraColors.tileFill,
@@ -793,12 +795,6 @@ class _SimpleFocuserWindowState extends ConsumerState<SimpleFocuserWindow> {
             ),
           ),
         ),
-        Text(
-          'steps per click',
-          textAlign: TextAlign.center,
-          style: AraText.caption,
-        ),
-        const SizedBox(height: AraSpace.s8),
         simpleWindowRow('Refocus after', _refocus()),
       ]);
     }

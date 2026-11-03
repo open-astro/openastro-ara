@@ -195,18 +195,22 @@ void main() {
       addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
       // The window's inner width: 360 pt grown with the text, less its padding.
       await _pump(tester, _wire(), width: 360 * (scale / 1.1).clamp(1, 2) - 32, font: 'Roboto');
-      for (final label in ['Position', 'Temperature', 'Refocus after']) {
+      for (final label in ['Position', 'Temperature', 'Step', 'Refocus after', 'Autofocus']) {
         final p = tester.renderObject<RenderParagraph>(find.text(label));
         expect(p.size.height, lessThan(14 * scale * 2), reason: '$label wraps');
       }
     });
   }
 
-  testWidgets('the step sits centred under the knob, with room', (tester) async {
+  testWidgets('under the dial, Step and Refocus after are rows like the Guider window\'s: label left, control right',
+      (tester) async {
     await _pump(tester, _wire());
     final knob = tester.getRect(find.byKey(const Key('simple-focuser-knob')));
     final steps = tester.getRect(find.byKey(const Key('simple-focuser-steps')));
-    expect(steps.center.dx, closeTo(knob.center.dx, 1));
-    expect(steps.top - knob.bottom, greaterThanOrEqualTo(16));
+    final refocus = tester.getRect(find.byKey(const Key('simple-focuser-refocus-up')));
+    expect(find.byKey(const Key('simple-window-row-Step')), findsOneWidget);
+    expect(steps.right, closeTo(refocus.right, 1), reason: 'the controls line up on the right');
+    expect(steps.top - knob.bottom, greaterThanOrEqualTo(16), reason: 'room under the dial');
+    expect(find.text('steps per click'), findsNothing);
   });
 }
