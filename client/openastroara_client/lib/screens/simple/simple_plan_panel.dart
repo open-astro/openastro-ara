@@ -2091,8 +2091,14 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
             spacing: AraSpace.s8,
             children: [
               Expanded(
-                child: OutlinedButton(
+                // Solid, so it reads beside the green Create and start (user,
+                // 2026-11-04): button-primary is the fill colour.
+                child: FilledButton(
                   key: const Key('simple-run-queue'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AraColors.buttonPrimary,
+                    foregroundColor: AraColors.selectionFg,
+                  ),
                   onPressed: queueOff
                       ? null
                       : () async {
@@ -2620,8 +2626,13 @@ class SimpleRunPanel extends ConsumerWidget {
                 context.l10n.planHintPause,
                 style: _dim.copyWith(fontSize: 12),
               ),
-            TextButton(
+            // Solid like the sheet's Add to queue (user, 2026-11-04).
+            FilledButton(
               key: const Key('simple-run-add'),
+              style: FilledButton.styleFrom(
+                backgroundColor: AraColors.buttonPrimary,
+                foregroundColor: AraColors.selectionFg,
+              ),
               onPressed: onAdd,
               child: Text(context.l10n.planAddTarget),
             ),

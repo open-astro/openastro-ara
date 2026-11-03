@@ -539,7 +539,7 @@ void main() {
           SimpleRunSheet(onShowSky: () => showSky++, onPickInSky: () => pick++, onCreated: () {}, onLibrary: () {}),
           sel: null);
       expect(find.text('Search, or pick in the sky.'), findsOneWidget);
-      expect(tester.widget<OutlinedButton>(find.byKey(const Key('simple-run-queue'))).onPressed, isNull);
+      expect(tester.widget<ButtonStyleButton>(find.byKey(const Key('simple-run-queue'))).onPressed, isNull);
       expect(tester.widget<FilledButton>(find.byKey(const Key('simple-run-start'))).onPressed, isNull);
       await tester.tap(find.byKey(const Key('simple-run-pick-in-sky')));
       expect(pick, 1);
@@ -548,6 +548,21 @@ void main() {
       await tester.pump();
       expect(showSky, 1, reason: 'the search runs in the planetarium');
       expect(c.read(planetariumSearchProvider), 'M42');
+    });
+
+    testWidgets('Add to queue is a solid button (button-primary, white words), not an outline', (tester) async {
+      // User, 2026-11-04: the outline read too faintly beside the green Create and start.
+      await _pump(tester, _Seq(), SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}, onLibrary: () {}));
+      final button = tester.widget<FilledButton>(find.byKey(const Key('simple-run-queue')));
+      expect(button.style?.backgroundColor?.resolve({}), AraColors.buttonPrimary);
+      expect(button.style?.foregroundColor?.resolve({}), AraColors.selectionFg);
+    });
+
+    testWidgets("the queue panel's Add target is solid too (button-primary, white words)", (tester) async {
+      await _pump(tester, _Seq(), SimpleRunPanel(onAdd: () {}, onEdit: (_) {}));
+      final button = tester.widget<FilledButton>(find.byKey(const Key('simple-run-add')));
+      expect(button.style?.backgroundColor?.resolve({}), AraColors.buttonPrimary);
+      expect(button.style?.foregroundColor?.resolve({}), AraColors.selectionFg);
     });
 
     testWidgets('a picked filter chip reads white on the solid selection blue, not dark on a dim tint', (tester) async {
@@ -1342,7 +1357,7 @@ void main() {
           name: 'Omega Cen', kind: 'Globular', raHours: 13.4, decDeg: -47.5, raJ2000Hours: 13.4,
           decJ2000Deg: -47.5, altDeg: -30, maxAltDeg: -5);
       await run(tester, sel: never);
-      expect(tester.widget<OutlinedButton>(find.byKey(const Key('simple-run-queue'))).onPressed, isNull);
+      expect(tester.widget<ButtonStyleButton>(find.byKey(const Key('simple-run-queue'))).onPressed, isNull);
       expect(tester.widget<FilledButton>(find.byKey(const Key('simple-run-start'))).onPressed, isNull);
     });
 
