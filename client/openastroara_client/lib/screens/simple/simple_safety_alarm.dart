@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../l10n/l10n.dart';
 import '../../state/alarm/safety_alarm_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../widgets/emergency_stop_button.dart'
@@ -63,7 +64,7 @@ class _SimpleSafetyAlarmState extends ConsumerState<SimpleSafetyAlarm> {
         child: BlockSemantics(
           child: Semantics(
             liveRegion: true,
-            label: 'Safety alert',
+            label: context.l10n.safetyAlertSemantics,
             child: Material(
               color: AraColors.alarmScrim,
               child: SafeArea(
@@ -80,7 +81,7 @@ class _SimpleSafetyAlarmState extends ConsumerState<SimpleSafetyAlarm> {
                           color: AraColors.accentError,
                         ),
                         Text(
-                          'SAFETY ALERT',
+                          context.l10n.safetyAlertTitle,
                           style: kSimpleText.copyWith(
                             fontSize: 26,
                             fontWeight: FontWeight.w600,
@@ -90,7 +91,7 @@ class _SimpleSafetyAlarmState extends ConsumerState<SimpleSafetyAlarm> {
                         ),
                         Text(
                           alarm.reason.isEmpty
-                              ? 'Conditions are UNSAFE.'
+                              ? context.l10n.safetyUnsafe
                               : alarm.reason,
                           textAlign: TextAlign.center,
                           style: kSimpleText.copyWith(
@@ -101,8 +102,8 @@ class _SimpleSafetyAlarmState extends ConsumerState<SimpleSafetyAlarm> {
                         Text(
                           // Pending: the silent delay (or the tone is muted).
                           alarm.ringing
-                              ? 'Alarm ringing'
-                              : 'Silence it before it sounds',
+                              ? context.l10n.safetyRinging
+                              : context.l10n.safetySilenceBefore,
                           style: kSimpleText.copyWith(
                             color: AraColors.textSecondary,
                           ),
@@ -123,7 +124,7 @@ class _SimpleSafetyAlarmState extends ConsumerState<SimpleSafetyAlarm> {
                           ),
                           onPressed: () =>
                               ref.read(safetyAlarmProvider.notifier).silence(),
-                          child: const Text('Silence alarm'),
+                          child: Text(context.l10n.safetySilence),
                         ),
                       ],
                     ),

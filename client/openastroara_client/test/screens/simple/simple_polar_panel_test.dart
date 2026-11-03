@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/screens/simple/simple_autopilot.dart';
+import 'package:openastroara/l10n/l10n.dart';
 import 'package:openastroara/models/polar_align.dart';
 import 'package:openastroara/screens/simple/simple_polar_panel.dart';
 import 'package:openastroara/services/polar_align_api.dart';
@@ -83,16 +84,18 @@ Future<_Api?> _pump(WidgetTester tester, PolarAlignLive live,
 
 void main() {
   test('simplePolarSummary: the settings, tight enough for the 60 px chip', () {
-    expect(simplePolarSummary(const PolarAlignSettings()), '1 s\nLoop');
-    expect(simplePolarSummary(const PolarAlignSettings(exposureSeconds: 45, loopMode: PolarAlignLoopModes.single)),
+    final en = lookupAppLocalizations(const Locale('en'));
+    expect(simplePolarSummary(const PolarAlignSettings(), en), '1 s\nLoop');
+    expect(simplePolarSummary(const PolarAlignSettings(exposureSeconds: 45, loopMode: PolarAlignLoopModes.single), en),
         '45 s\nSingle');
   });
 
   test('simplePolarPhase names each phase', () {
-    expect(simplePolarPhase(const PolarAlignLive()), 'Ready');
-    expect(simplePolarPhase(const PolarAlignLive(phase: PolarAlignStates.seeding)), 'Finding the pole…');
-    expect(simplePolarPhase(_adjusting), 'Adjusting');
-    expect(simplePolarPhase(const PolarAlignLive(phase: PolarAlignStates.failed)), 'Polar alignment failed');
+    final en = lookupAppLocalizations(const Locale('en'));
+    expect(simplePolarPhase(const PolarAlignLive(), en), 'Ready');
+    expect(simplePolarPhase(const PolarAlignLive(phase: PolarAlignStates.seeding), en), 'Finding the pole…');
+    expect(simplePolarPhase(_adjusting, en), 'Adjusting');
+    expect(simplePolarPhase(const PolarAlignLive(phase: PolarAlignStates.failed), en), 'Polar alignment failed');
   });
 
   testWidgets('idle: only the settings, no Ready and no Start (the shutter starts it)', (tester) async {

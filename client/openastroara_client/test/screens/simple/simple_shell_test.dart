@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/l10n/l10n.dart';
 import 'package:openastroara/models/sequence/imaging_run_body.dart';
 import 'package:openastroara/models/sequence/sequence_summary.dart';
 import 'package:openastroara/state/alarm/safety_alarm_state.dart';
@@ -2067,24 +2068,26 @@ void main() {
   });
 
   test('System figures read like the rest of Simple Mode', () {
+    final en = lookupAppLocalizations(const Locale('en'));
     expect(simpleUptime(11520), '3 h 12 min');
     expect(simpleUptime(300), '5 min');
     expect(simpleUptime(2 * 86400 + 4 * 3600), '2 d 4 h');
-    expect(simpleFree(412 * 1073741824), '412 GB free');
-    expect(simpleFree(1536 * 1048576), '1.5 GB free');
-    expect(simpleFree(null), 'Unplugged');
+    expect(simpleFree(en, 412 * 1073741824), '412 GB free');
+    expect(simpleFree(en, 1536 * 1048576), '1.5 GB free');
+    expect(simpleFree(en, null), 'Unplugged');
     expect(simpleMemory(512 * 1048576), '512 MB');
     expect(simpleMemory(1536 * 1048576), '1.5 GB');
   });
 
   test('Simple search: settings only for the devices there, modes by name, each imaged target once', () {
-    expect(simpleSearch('c'), isEmpty, reason: 'two characters at least');
-    final cool = simpleSearch('cool', sections: {'Rig', 'Devices', 'Camera'});
+    final en = lookupAppLocalizations(const Locale('en'));
+    expect(simpleSearch(en, 'c'), isEmpty, reason: 'two characters at least');
+    final cool = simpleSearch(en, 'cool', sections: {'Rig', 'Devices', 'Camera'});
     expect(cool.whereType<SimpleSettingHit>().map((h) => (h.title, h.section)),
         [('Cooler', 'Camera'), ('Cooler target', 'Camera')]);
-    expect(simpleSearch('cool'), isEmpty, reason: 'no camera');
-    expect(simpleSearch('polar').whereType<SimpleModeHit>().map((h) => h.mode), [SimpleModeScreen.polarAlign]);
-    expect(simpleSearch('m 31', targets: ['M 31', 'M 31', 'M 33']).whereType<SimpleImageHit>().map((h) => h.target),
+    expect(simpleSearch(en, 'cool'), isEmpty, reason: 'no camera');
+    expect(simpleSearch(en, 'polar').whereType<SimpleModeHit>().map((h) => h.mode), [SimpleModeScreen.polarAlign]);
+    expect(simpleSearch(en, 'm 31', targets: ['M 31', 'M 31', 'M 33']).whereType<SimpleImageHit>().map((h) => h.target),
         ['M 31']);
   });
 

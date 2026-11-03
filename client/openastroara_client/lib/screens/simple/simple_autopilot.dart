@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../l10n/l10n.dart';
 import '../../state/polar_align/polar_align_state.dart';
 import '../../state/setup/setup_readiness.dart';
 import '../../state/simple_mode_state.dart';
@@ -18,10 +19,10 @@ import 'simple_shell.dart' show SimplePanel, kSimpleGoStyle;
 enum AutopilotStep { focus, polarAlign, plan }
 
 extension AutopilotStepLabel on AutopilotStep {
-  String get label => switch (this) {
-    AutopilotStep.focus => 'Focus',
-    AutopilotStep.polarAlign => 'Polar align',
-    AutopilotStep.plan => 'Plan',
+  String label(AppLocalizations l10n) => switch (this) {
+    AutopilotStep.focus => l10n.autopilotStepFocus,
+    AutopilotStep.polarAlign => l10n.autopilotStepPolarAlign,
+    AutopilotStep.plan => l10n.autopilotStepPlan,
   };
 }
 
@@ -148,12 +149,12 @@ class AutopilotStrip extends ConsumerWidget {
             TextButton(
               key: const Key('autopilot-back'),
               onPressed: step.index > 0 ? pilot.back : null,
-              child: const Text('Back'),
+              child: Text(context.l10n.autopilotBack),
             ),
             TextButton(
               key: const Key('autopilot-skip'),
               onPressed: step == AutopilotStep.plan ? null : pilot.next,
-              child: const Text('Skip'),
+              child: Text(context.l10n.autopilotSkip),
             ),
           ],
         ),
@@ -175,16 +176,17 @@ class _Step extends StatelessWidget {
   Widget build(BuildContext context) {
     final behind = step.index < current.index;
     final on = step == current;
+    final l10n = context.l10n;
+    final label = step.label(l10n);
     // The tick and skip mark are icons: screen readers get the state in words.
     return Semantics(
-      label:
-          '${step.label}, ${behind && done
-              ? 'done'
-              : behind
-              ? 'skipped'
-              : on
-              ? 'current step'
-              : 'next'}',
+      label: behind && done
+          ? l10n.autopilotStepDone(label)
+          : behind
+          ? l10n.autopilotStepSkipped(label)
+          : on
+          ? l10n.autopilotStepCurrent(label)
+          : l10n.autopilotStepNext(label),
       excludeSemantics: true,
       child: Container(
         height: 36,
@@ -233,7 +235,7 @@ class _Step extends StatelessWidget {
                     ),
                   ),
             Text(
-              step.label,
+              label,
               style: kSimpleText.copyWith(
                 color: on ? AraColors.textPrimary : AraColors.textSecondary,
               ),
@@ -281,15 +283,17 @@ class AutopilotOffer extends StatelessWidget {
       spacing: AraSpace.s12,
       children: [
         // Wraps on a narrow window rather than pushing the buttons off.
-        Flexible(child: Text('Nothing done yet tonight', style: kSimpleText)),
+        Flexible(
+          child: Text(context.l10n.autopilotNothingDone, style: kSimpleText),
+        ),
         FilledButton(
           key: const Key('autopilot-start'),
           style: kSimpleGoStyle,
           onPressed: onStart,
-          child: const Text('Start Autopilot'),
+          child: Text(context.l10n.autopilotStart),
         ),
         IconButton(
-          tooltip: 'Not now',
+          tooltip: context.l10n.autopilotNotNow,
           icon: const Icon(Icons.close, size: 18),
           onPressed: onDismiss,
         ),

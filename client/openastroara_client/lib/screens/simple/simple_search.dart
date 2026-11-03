@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../l10n/l10n.dart';
 import '../../services/dso_catalog_service.dart';
 import '../../state/equipment/camera_state.dart';
 import '../../state/equipment/focuser_state.dart';
@@ -44,43 +45,55 @@ class SimpleImageHit extends SimpleSearchHit {
   final String target;
 }
 
-/// Simple Mode's settings by section: (title, section, other words for it).
-/// Camera, Mount, Focuser and Guider rows only count while that device is
+/// Simple Mode's settings by section: (title, section id, other words for
+/// it). Camera, Mount, Focuser and Guider rows only count while that device is
 /// there.
-const _kSettings = <(String, String, String)>[
-  ('Rig', 'Rig', 'system profile'),
-  ('Aperture', 'Rig', 'telescope diameter'),
-  ('Focal length', 'Rig', 'telescope'),
-  ('Latitude', 'Rig', 'site location coordinates'),
-  ('Longitude', 'Rig', 'site location coordinates'),
-  ('Elevation', 'Rig', 'site altitude height'),
-  ('Location and time', 'Rig', 'gps clock time zone site'),
-  ('Permanent pier', 'Rig', 'polar alignment observatory'),
-  ('Simple Mode', 'Rig', 'full ui advanced'),
-  ('Change profile', 'Rig', 'profile'),
-  ('Change rig', 'Rig', 'server'),
-  ('Versions', 'Rig', 'version about firmware driver'),
-  ('Logs & bug report', 'Rig', 'support logs'),
-  ('Devices', 'Devices', 'equipment gear'),
-  ('Connect', 'Devices', 'equipment gear'),
-  ('Disconnect', 'Devices', 'equipment gear'),
-  ('Reconnect', 'Devices', 'equipment gear'),
-  ('Cooler', 'Camera', 'camera temperature cooling'),
-  ('Cooler target', 'Camera', 'camera temperature cooling'),
-  ('Gain', 'Camera', 'camera iso hcg'),
-  ('Tracking', 'Mount', 'mount sidereal'),
-  ('Park', 'Mount', 'mount unpark'),
-  ('Meridian flip', 'Mount', 'mount pier side'),
-  ('Focuser', 'Focuser', 'focus position knob move'),
-  ('Focuser step', 'Focuser', 'focus move'),
-  ('Guider', 'Guider', 'guiding rms phd2'),
-  ('Dither', 'Guider', 'guiding dithering'),
+List<(String, String, String)> _settings(AppLocalizations l) => [
+  (l.searchSectionRig, 'Rig', l.searchWordsRig),
+  (l.searchSettingAperture, 'Rig', l.searchWordsAperture),
+  (l.searchSettingFocalLength, 'Rig', l.searchWordsFocalLength),
+  (l.searchSettingLatitude, 'Rig', l.searchWordsSite),
+  (l.searchSettingLongitude, 'Rig', l.searchWordsSite),
+  (l.searchSettingElevation, 'Rig', l.searchWordsElevation),
+  (l.searchSettingLocationTime, 'Rig', l.searchWordsLocationTime),
+  (l.searchSettingPermanentPier, 'Rig', l.searchWordsPermanentPier),
+  (l.searchSettingSimpleMode, 'Rig', l.searchWordsSimpleMode),
+  (l.searchSettingChangeProfile, 'Rig', l.searchWordsChangeProfile),
+  (l.searchSettingChangeRig, 'Rig', l.searchWordsChangeRig),
+  (l.searchSettingVersions, 'Rig', l.searchWordsVersions),
+  (l.searchSettingLogs, 'Rig', l.searchWordsLogs),
+  (l.searchSectionDevices, 'Devices', l.searchWordsDevices),
+  (l.searchSettingConnect, 'Devices', l.searchWordsDevices),
+  (l.searchSettingDisconnect, 'Devices', l.searchWordsDevices),
+  (l.searchSettingReconnect, 'Devices', l.searchWordsDevices),
+  (l.searchSettingCooler, 'Camera', l.searchWordsCooler),
+  (l.searchSettingCoolerTarget, 'Camera', l.searchWordsCooler),
+  (l.searchSettingGain, 'Camera', l.searchWordsGain),
+  (l.searchSettingTracking, 'Mount', l.searchWordsTracking),
+  (l.searchSettingPark, 'Mount', l.searchWordsPark),
+  (l.searchSettingMeridianFlip, 'Mount', l.searchWordsMeridianFlip),
+  (l.searchSectionFocuser, 'Focuser', l.searchWordsFocuser),
+  (l.searchSettingFocuserStep, 'Focuser', l.searchWordsFocuserStep),
+  (l.searchSectionGuider, 'Guider', l.searchWordsGuider),
+  (l.searchSettingDither, 'Guider', l.searchWordsDither),
 ];
+
+/// A Settings section id's name in [l]'s language.
+String _sectionName(AppLocalizations l, String section) => switch (section) {
+  'Devices' => l.searchSectionDevices,
+  'Camera' => l.searchSectionCamera,
+  'Mount' => l.searchSectionMount,
+  'Focuser' => l.searchSectionFocuser,
+  'Guider' => l.searchSectionGuider,
+  _ => l.searchSectionRig,
+};
 
 /// The hits for [query] among Simple Mode's settings, modes and imaged
 /// targets (the sky's come from the catalog search), at most [limit] of
-/// each; nothing under two characters. Pure — unit-tested.
+/// each; nothing under two characters. Settings and modes are matched in
+/// [l10n]'s language. Pure — unit-tested.
 List<SimpleSearchHit> simpleSearch(
+  AppLocalizations l10n,
   String query, {
   Set<String> sections = const {'Rig', 'Devices'},
   Iterable<String> targets = const [],
@@ -91,12 +104,12 @@ List<SimpleSearchHit> simpleSearch(
   bool hit(String s) => s.toLowerCase().contains(q);
   return [
     ...[
-      for (final (title, section, words) in _kSettings)
+      for (final (title, section, words) in _settings(l10n))
         if (sections.contains(section) && (hit(title) || hit(words)))
           SimpleSettingHit(title, section),
     ].take(limit),
     for (final m in SimpleModeScreen.values)
-      if (hit(m.label)) SimpleModeHit(m),
+      if (hit(m.labelOf(l10n))) SimpleModeHit(m),
     ...{
       for (final t in targets)
         if (hit(t)) t,
@@ -181,6 +194,7 @@ class _SimpleSearchPanelState extends ConsumerState<SimpleSearchPanel> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final q = _query.text;
     final sky = searchSuggestions(
       ref.watch(bundledCatalogProvider).value ?? const [],
@@ -188,6 +202,7 @@ class _SimpleSearchPanelState extends ConsumerState<SimpleSearchPanel> {
       limit: 5,
     );
     final hits = simpleSearch(
+      l10n,
       q,
       sections: {
         'Rig',
@@ -238,54 +253,56 @@ class _SimpleSearchPanelState extends ConsumerState<SimpleSearchPanel> {
               ].firstOrNull;
               if (first != null) widget.onHit(first);
             },
-            decoration: const InputDecoration(
-              hintText: 'Objects, settings, modes, images',
-              prefixIcon: Icon(Icons.search, size: 20),
+            decoration: InputDecoration(
+              hintText: l10n.searchHint,
+              prefixIcon: const Icon(Icons.search, size: 20),
             ),
           ),
           Flexible(
             child: ListView(
               shrinkWrap: true,
               children: [
-                if (sky.isNotEmpty) _group('Sky'),
+                if (sky.isNotEmpty) _group(l10n.searchGroupSky),
                 for (final (i, s) in sky.indexed)
                   SimpleSuggestion(
                     key: Key('simple-search-sky-$i'),
                     hit: s,
                     onTap: () => widget.onHit(SimpleSkyHit(s)),
                   ),
-                if (settings.isNotEmpty) _group('Settings'),
+                if (settings.isNotEmpty) _group(l10n.searchGroupSettings),
                 for (final (i, s) in settings.indexed)
                   _row(
                     'simple-search-setting-$i',
                     Icons.tune,
                     s.title,
-                    s.title == s.section ? null : s.section,
+                    s.title == _sectionName(l10n, s.section)
+                        ? null
+                        : _sectionName(l10n, s.section),
                     s,
                   ),
-                if (modes.isNotEmpty) _group('Modes'),
+                if (modes.isNotEmpty) _group(l10n.searchGroupModes),
                 for (final (i, m) in modes.indexed)
                   _row(
                     'simple-search-mode-$i',
                     m.mode.icon,
-                    m.mode.label,
+                    m.mode.labelOf(context.l10n),
                     null,
                     m,
                   ),
-                if (images.isNotEmpty) _group('Images'),
+                if (images.isNotEmpty) _group(l10n.searchGroupImages),
                 for (final (i, t) in images.indexed)
                   _row(
                     'simple-search-image-$i',
                     Icons.photo_library_outlined,
                     t.target,
-                    'Image Library',
+                    l10n.searchImageLibrary,
                     t,
                   ),
                 if (none)
                   Padding(
                     padding: const EdgeInsets.all(AraSpace.s12),
                     child: Text(
-                      'Nothing in Simple Mode matches "${q.trim()}".',
+                      l10n.searchNoMatch(q.trim()),
                       style: kSimpleText.copyWith(
                         color: AraColors.textSecondary,
                       ),

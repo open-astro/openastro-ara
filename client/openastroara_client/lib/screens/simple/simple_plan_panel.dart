@@ -35,6 +35,7 @@ import '../../state/sky_atlas/planetarium_selection_state.dart';
 import '../../state/sky_atlas/tonight_sky_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
+import '../../l10n/l10n.dart';
 import '../../util/friendly_error.dart';
 import '../../util/tonight_sky_local.dart' show darkStart, scheduleAllowed;
 import '../../widgets/sequencer/target_plan_dialog.dart'
@@ -280,26 +281,26 @@ final simpleRunGainProvider = NotifierProvider<SimpleRunGainNotifier, int?>(
 
 /// Where the selection stands, in words: "62° up · max 74°", "Below your
 /// horizon · rises 22:40", "Never rises here". Pure — unit-tested.
-String simpleTargetStatus(PlanetariumSelection s) {
-  if (s.neverRises) return 'Never rises here';
+String simpleTargetStatus(PlanetariumSelection s, AppLocalizations l) {
+  if (s.neverRises) return l.planNeverRises;
   if (s.belowHorizon) {
     final rise = s.rise;
     return rise == null
-        ? 'Below your horizon'
-        : 'Below your horizon · rises ${_hhmm(rise)}';
+        ? l.planBelowHorizon
+        : l.planBelowHorizonRises(_hhmm(rise));
   }
-  return '${(s.altDeg ?? 0).round()}° up · max ${s.maxAltDeg.round()}°';
+  return l.planAltitudeUpMax((s.altDeg ?? 0).round(), s.maxAltDeg.round());
 }
 
 /// A suggestion's second line: its type, then its altitude now or when it
 /// rises. Pure — unit-tested.
-String simpleSuggestionLine(TonightSkyObject o) {
+String simpleSuggestionLine(AppLocalizations l, TonightSkyObject o) {
   final rise = o.windowStartUtc?.toLocal();
   final where = o.altitudeDeg > 0
-      ? '${o.altitudeDeg.round()}° up'
+      ? l.planAltitudeUp(o.altitudeDeg.round())
       : rise == null
-      ? 'below the horizon'
-      : 'rises ${_hhmm(rise)}';
+      ? l.planBelowTheHorizon
+      : l.planRisesAt(_hhmm(rise));
   return [if (o.type.isNotEmpty) o.type, where].join(' · ');
 }
 
@@ -945,9 +946,9 @@ class _SimpleRunTrackerState extends ConsumerState<SimpleRunTracker> {
       _ => AraColors.selectionBg,
     };
     String? stateWord() => switch (phase) {
-      SimpleRunPhase.pausing => 'Pausing…',
-      SimpleRunPhase.paused => 'Paused',
-      SimpleRunPhase.done => 'Done',
+      SimpleRunPhase.pausing => context.l10n.planPausing,
+      SimpleRunPhase.paused => context.l10n.planPaused,
+      SimpleRunPhase.done => context.l10n.planDone,
       _ => null,
     };
     if (!known) {
@@ -981,9 +982,9 @@ class _SimpleRunTrackerState extends ConsumerState<SimpleRunTracker> {
           (t.steps[r].frameCount - done[r]) * t.steps[r].exposureSeconds,
       ].fold(0.0, (a, b) => a + b);
       final last = finished
-          ? 'Done'
+          ? context.l10n.planDone
           : t.waiting(now) && (!inHand || phase == SimpleRunPhase.ready)
-          ? 'rises ${_hhmm(t.rise!.toLocal())}'
+          ? context.l10n.planRisesAt(_hhmm(t.rise!.toLocal()))
           : inHand
           ? stateWord() ??
                 simpleRunDuration(
@@ -1034,8 +1035,8 @@ class _SimpleRunTrackerState extends ConsumerState<SimpleRunTracker> {
             if (all > fit && rest.isNotEmpty)
               _PlanSquare(
                 name: '+${rest.length}',
-                label: '${rest.length} more in the queue',
-                frames: 'queued',
+                label: context.l10n.planMoreInQueue(rest.length),
+                frames: context.l10n.planQueued,
                 last: simpleRunDuration(
                   rest.fold(
                     0.0,
@@ -1100,7 +1101,7 @@ class _PlanSquare extends StatelessWidget {
     );
     return Semantics(
       button: true,
-      label: 'Plan: ${label ?? name}',
+      label: context.l10n.planSquareLabel(label ?? name),
       child: Material(
         color: AraColors.overlayScrim,
         shape: RoundedRectangleBorder(
@@ -1272,18 +1273,21 @@ class _SimpleRunShutterState extends ConsumerState<SimpleRunShutter>
       button: true,
       enabled: tap != null || holdable,
       label: switch (phase) {
-        _ when waiting => 'Rises ${_hhmm(run.targets.first.rise!.toLocal())}',
-        _ when idle => 'Pick a target first',
-        SimpleRunPhase.ready || SimpleRunPhase.none => 'Start imaging',
-        SimpleRunPhase.imaging => 'Pause after this frame',
-        SimpleRunPhase.pausing => 'Pausing',
-        SimpleRunPhase.paused => 'Resume',
-        _ => 'Start imaging',
+        _ when waiting => context.l10n.planRisesAtCap(
+          _hhmm(run.targets.first.rise!.toLocal()),
+        ),
+        _ when idle => context.l10n.planPickTargetFirst,
+        SimpleRunPhase.ready ||
+        SimpleRunPhase.none => context.l10n.planStartImaging,
+        SimpleRunPhase.imaging => context.l10n.planPauseAfterFrame,
+        SimpleRunPhase.pausing => context.l10n.planPausingLabel,
+        SimpleRunPhase.paused => context.l10n.planResume,
+        _ => context.l10n.planStartImaging,
       },
       onTap: tap,
       customSemanticsActions: holdable
           ? {
-              const CustomSemanticsAction(label: 'Stop the run'): () =>
+              CustomSemanticsAction(label: context.l10n.planStopTheRun): () =>
                   ref.read(simpleRunProvider.notifier).stop(),
             }
           : null,
@@ -1370,7 +1374,7 @@ class _SimpleRunShutterState extends ConsumerState<SimpleRunShutter>
                       vertical: 8,
                     ),
                     child: Text(
-                      'Hold to stop',
+                      context.l10n.planHoldToStop,
                       style: kSimpleText,
                       maxLines: 1,
                       softWrap: false,
@@ -1586,7 +1590,7 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
     final lists = <Widget>[
       // Tonight's best, from the full UI's ranking: one tap picks a target.
       if (best.isNotEmpty) ...[
-        Text("TONIGHT'S BEST", style: AraText.caption),
+        Text(context.l10n.planTonightsBest, style: AraText.caption),
         Wrap(
           spacing: AraSpace.s8,
           runSpacing: AraSpace.s8,
@@ -1632,7 +1636,7 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
                                 overflow: TextOverflow.ellipsis,
                               ),
                               Text(
-                                simpleSuggestionLine(o),
+                                simpleSuggestionLine(context.l10n, o),
                                 style: _dim.copyWith(
                                   fontSize: 12,
                                   color: sel?.name == o.name
@@ -1661,8 +1665,8 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
       children: [
         Text(
           editing == null
-              ? "Tonight's plan"
-              : 'Edit ${run.targets[editing].name}',
+              ? context.l10n.planTonightsPlan
+              : context.l10n.planEditTarget(run.targets[editing].name),
           style: _head,
         ),
         if (!wide && editing == null) ...lists,
@@ -1676,10 +1680,10 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
             onChanged: (_) => setState(() => _suggesting = true),
             onSubmitted: (_) => _search(),
             decoration: InputDecoration(
-              hintText: 'Search objects',
+              hintText: context.l10n.planSearchObjects,
               prefixIcon: const Icon(Icons.search, size: 20),
               suffixIcon: IconButton(
-                tooltip: 'Search',
+                tooltip: context.l10n.planSearch,
                 icon: const Icon(Icons.arrow_forward, size: 20),
                 onPressed: _search,
               ),
@@ -1704,7 +1708,7 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
             children: [
               Expanded(
                 child: sel == null
-                    ? Text('Search, or pick in the sky.', style: _dim)
+                    ? Text(context.l10n.planSearchOrPick, style: _dim)
                     : Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -1717,7 +1721,7 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
                             overflow: TextOverflow.ellipsis,
                           ),
                           Text(
-                            simpleTargetStatus(sel),
+                            simpleTargetStatus(sel, context.l10n),
                             style: sel.belowHorizon
                                 ? kSimpleText.copyWith(
                                     color: AraColors.accentBusy,
@@ -1730,7 +1734,7 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
               TextButton(
                 key: const Key('simple-run-pick-in-sky'),
                 onPressed: widget.onPickInSky,
-                child: const Text('Pick in Sky'),
+                child: Text(context.l10n.planPickInSky),
               ),
             ],
           ),
@@ -1773,7 +1777,7 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
               Expanded(
                 child: SimplePresetTile<Duration>(
                   key: Key('simple-run-exposure-$i'),
-                  label: 'Exposure',
+                  label: context.l10n.planExposure,
                   value: dur(steps[i].exposureSeconds),
                   // The suggestion is listed, and marked, even off the presets.
                   options: {
@@ -1781,7 +1785,7 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
                     dur(suggested[i]),
                   }.toList()..sort(),
                   format: (d) => d == dur(suggested[i])
-                      ? '${formatExposure(d)} · suggested'
+                      ? context.l10n.planExposureSuggested(formatExposure(d))
                       : formatExposure(d),
                   onSelected: (d) =>
                       plan.setExposure(i, d.inMilliseconds / 1000),
@@ -1790,7 +1794,7 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
               Expanded(
                 child: SimplePresetTile<int>(
                   key: Key('simple-run-frames-$i'),
-                  label: 'Frames',
+                  label: context.l10n.planFrames,
                   value: steps[i].frameCount,
                   options: _kFramePresets,
                   format: (n) => '× $n',
@@ -1813,7 +1817,9 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
         if (hint != null)
           Row(
             children: [
-              Expanded(child: Text('Suggested: $hint', style: _dim)),
+              Expanded(
+                child: Text(context.l10n.planSuggested(hint), style: _dim),
+              ),
               TextButton(
                 key: const Key('simple-run-use-suggested'),
                 onPressed: () {
@@ -1821,14 +1827,17 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
                     plan.setExposure(i, suggested[i]);
                   }
                 },
-                child: const Text('Use all'),
+                child: Text(context.l10n.planUseAll),
               ),
             ],
           ),
         Row(
           children: [
             Expanded(
-              child: Text('${_total(steps)} frames', style: kSimpleText),
+              child: Text(
+                context.l10n.planFrameCount(_total(steps)),
+                style: kSimpleText,
+              ),
             ),
             Text(simpleRunDuration(seconds), style: _dim),
           ],
@@ -1839,7 +1848,7 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
             ref.watch(setupPolarAlignStateProvider) != SetupStepState.done &&
             !(ref.watch(simplePermanentPierProvider).value ?? false))
           Text(
-            'Not polar aligned tonight',
+            context.l10n.planNotPolarAligned,
             style: kSimpleText.copyWith(color: AraColors.accentBusy),
           ),
         if (_added != null)
@@ -1854,10 +1863,10 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
             children: [
               Text(
                 startAt == null
-                    ? 'Starts now'
+                    ? context.l10n.planStartsNow
                     : startAt == dark
-                    ? 'Starts at dark (${_hhmm(startAt)})'
-                    : 'Starts at ${_hhmm(startAt)}',
+                    ? context.l10n.planStartsAtDark(_hhmm(startAt))
+                    : context.l10n.planStartsAt(_hhmm(startAt)),
                 style: _dim,
               ),
               if (startAt != null)
@@ -1868,13 +1877,13 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
                     _pickedStart = null;
                     _picking = false;
                   }),
-                  child: const Text('Start now instead'),
+                  child: Text(context.l10n.planStartNowInstead),
                 )
               else if (dark != null)
                 TextButton(
                   key: const Key('simple-run-wait-dark'),
                   onPressed: () => setState(() => _startNow = false),
-                  child: Text('Wait for dark (${_hhmm(dark)})'),
+                  child: Text(context.l10n.planWaitForDark(_hhmm(dark))),
                 ),
               if (canSchedule && (startAt == null || startAt == dark))
                 TextButton(
@@ -1884,7 +1893,7 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
                     _startNow = false;
                     _pickedStart = _nextAt(startAt ?? dark ?? now, now);
                   }),
-                  child: const Text('Pick a time'),
+                  child: Text(context.l10n.planPickATime),
                 ),
             ],
           ),
@@ -1909,7 +1918,7 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
               Expanded(
                 child: OutlinedButton(
                   onPressed: widget.onCreated,
-                  child: const Text('Cancel'),
+                  child: Text(context.l10n.planCancel),
                 ),
               ),
               Expanded(
@@ -1928,7 +1937,9 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
                               );
                           if (ok) widget.onCreated();
                         },
-                  child: Text(run.busy ? 'Saving…' : 'Save'),
+                  child: Text(
+                    run.busy ? context.l10n.planSaving : context.l10n.planSave,
+                  ),
                 ),
               ),
             ],
@@ -1944,6 +1955,7 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
                       ? null
                       : () async {
                           final name = sel.name;
+                          final l10n = context.l10n;
                           final ok = await ref
                               .read(simpleRunProvider.notifier)
                               .create(ref);
@@ -1954,10 +1966,10 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
                               .read(planetariumSelectionProvider.notifier)
                               .set(null);
                           setState(
-                            () => _added = '$name added · $n in the queue',
+                            () => _added = l10n.planTargetAdded(name, n),
                           );
                         },
-                  child: const Text('Add to queue'),
+                  child: Text(context.l10n.planAddToQueue),
                 ),
               ),
               Expanded(
@@ -1977,12 +1989,12 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
                         },
                   child: Text(
                     run.busy
-                        ? 'Starting…'
+                        ? context.l10n.planStarting
                         : startAt != null && !imaging
-                        ? 'Start at ${_hhmm(startAt)}'
+                        ? context.l10n.planStartAt(_hhmm(startAt))
                         : run.sequenceId != null
-                        ? 'Start now'
-                        : 'Create and start',
+                        ? context.l10n.planStartNow
+                        : context.l10n.planCreateAndStart,
                   ),
                 ),
               ),
@@ -2033,14 +2045,15 @@ class _QueueList extends ConsumerWidget {
 
     Future<void> remove(int i) async {
       final t = run.targets[i];
+      final l10n = context.l10n;
       await notifier.remove(i);
       if (ref.read(simpleRunProvider).sequenceId == null) return;
       final messages = ref.read(simpleMessagesProvider.notifier);
       messages.show(
         SimpleMessageKind.result,
-        '${t.name} removed',
+        l10n.planTargetRemoved(t.name),
         actions: [
-          SimpleMessageAction('Undo', () => notifier.restore(ref, t, i)),
+          SimpleMessageAction(l10n.planUndo, () => notifier.restore(ref, t, i)),
         ],
       );
     }
@@ -2063,7 +2076,7 @@ class _QueueList extends ConsumerWidget {
                 ? ReorderableDragStartListener(
                     index: i,
                     child: Semantics(
-                      label: 'Move ${t.name}',
+                      label: context.l10n.planMoveTarget(t.name),
                       child: const Icon(
                         Icons.drag_indicator,
                         key: null,
@@ -2106,7 +2119,7 @@ class _QueueList extends ConsumerWidget {
             child: open(i)
                 ? IconButton(
                     key: Key('simple-run-remove-$i'),
-                    tooltip: 'Remove ${t.name} from the queue',
+                    tooltip: context.l10n.planRemoveFromQueue(t.name),
                     icon: const Icon(Icons.close, size: 18),
                     onPressed: run.busy ? null : () => remove(i),
                   )
@@ -2130,9 +2143,9 @@ class _QueueList extends ConsumerWidget {
                     color: AraColors.emergencyStop,
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: const Text(
-                    'Remove',
-                    style: TextStyle(
+                  child: Text(
+                    context.l10n.planRemove,
+                    style: const TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.w600,
                     ),
@@ -2152,9 +2165,15 @@ class _QueueList extends ConsumerWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text(
-          'QUEUE · ${run.targets.length} '
-          '${run.targets.length == 1 ? 'target' : 'targets'} · '
-          '${simpleRunDuration(run.steps.fold(0.0, (t, s) => t + s.exposureSeconds * s.frameCount))}',
+          context.l10n.planQueueHeader(
+            run.targets.length,
+            simpleRunDuration(
+              run.steps.fold(
+                0.0,
+                (t, s) => t + s.exposureSeconds * s.frameCount,
+              ),
+            ),
+          ),
           style: AraText.caption,
         ),
         ReorderableListView(
@@ -2203,7 +2222,7 @@ class _RunError extends ConsumerWidget {
             // The shell opens Settings over Simple Mode.
             openSettingsPanel(ref, 'session.storage');
           },
-          child: const Text('Open Storage'),
+          child: Text(context.l10n.planOpenStorage),
         ),
     ],
   );
@@ -2245,7 +2264,7 @@ class _NightDone extends ConsumerWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       spacing: AraSpace.s8,
       children: [
-        Text('Night done', style: _head),
+        Text(context.l10n.planNightDone, style: _head),
         Text(
           [
             if (!multi) run.targetName ?? info.currentTargetName ?? '',
@@ -2253,14 +2272,15 @@ class _NightDone extends ConsumerWidget {
               '${_hhmm(start)} – ${_hhmm(end)}',
               simpleRunDuration(end.difference(start).inSeconds.toDouble()),
             ],
-            if (info.state == SequenceRunState.stopped) 'stopped',
-            if (info.state == SequenceRunState.failed) 'failed',
+            if (info.state == SequenceRunState.stopped)
+              context.l10n.planStopped,
+            if (info.state == SequenceRunState.failed) context.l10n.planFailed,
           ].where((s) => s.isNotEmpty).join(' · '),
           style: _dim,
         ),
         if (stoppedAt != null && stoppedAt.isNotEmpty)
           Text(
-            'Stopped at: $stoppedAt',
+            context.l10n.planStoppedAt(stoppedAt),
             style: kSimpleText.copyWith(color: AraColors.errorText),
           ),
         for (var t = 0; t < run.targets.length; t++) ...[
@@ -2275,7 +2295,7 @@ class _NightDone extends ConsumerWidget {
                 Expanded(
                   child: Text(
                     run.targets[t].steps[r].filterName.isEmpty
-                        ? 'Frames'
+                        ? context.l10n.planFrames
                         : run.targets[t].steps[r].filterName,
                     style: _dim,
                   ),
@@ -2293,14 +2313,14 @@ class _NightDone extends ConsumerWidget {
             Expanded(
               child: OutlinedButton(
                 onPressed: onLibrary,
-                child: const Text('Image Library'),
+                child: Text(context.l10n.planImageLibrary),
               ),
             ),
             Expanded(
               child: FilledButton(
                 key: const Key('simple-run-new-plan'),
                 onPressed: ref.read(simpleRunProvider.notifier).newPlan,
-                child: const Text('New plan'),
+                child: Text(context.l10n.planNewPlan),
               ),
             ),
           ],
@@ -2352,12 +2372,14 @@ class SimpleRunPanel extends ConsumerWidget {
           children: [
             if (imaging) ...[
               Text(
-                'IMAGING ${(target?.name ?? info?.currentTargetName ?? '').toUpperCase()}',
+                context.l10n.planImagingTarget(
+                  (target?.name ?? info?.currentTargetName ?? '').toUpperCase(),
+                ),
                 style: AraText.caption,
               ),
               Text(
                 steps.isEmpty
-                    ? '$captured frames'
+                    ? context.l10n.planFrameCount(captured)
                     : '$captured / ${_total(steps)}',
                 style: const TextStyle(
                   fontSize: 30,
@@ -2368,13 +2390,17 @@ class SimpleRunPanel extends ConsumerWidget {
               ),
               if (paused && mountStopped)
                 Text(
-                  'Mount stopped',
+                  context.l10n.planMountStopped,
                   style: kSimpleText.copyWith(color: AraColors.accentBusy),
                 ),
               if (remaining != null)
                 Text(
-                  'Ends ${_hhmm(DateTime.now().add(Duration(seconds: remaining.round())))}'
-                  ' · ${simpleRunDuration(remaining)} left',
+                  context.l10n.planEndsLeft(
+                    _hhmm(
+                      DateTime.now().add(Duration(seconds: remaining.round())),
+                    ),
+                    simpleRunDuration(remaining),
+                  ),
                   style: _dim,
                 ),
               for (var i = 0; i < steps.length; i++)
@@ -2419,29 +2445,29 @@ class SimpleRunPanel extends ConsumerWidget {
             if (run.error != null) _RunError(run),
             if (imaging && paused) ...[
               Text(
-                'Tap the shutter to resume and re-center; hold it to stop.',
+                context.l10n.planHintResume,
                 style: _dim.copyWith(fontSize: 12),
               ),
               TextButton(
                 onPressed: () => ref
                     .read(simpleRunProvider.notifier)
                     .resume(recenter: false),
-                child: const Text('Resume without re-centering'),
+                child: Text(context.l10n.planResumeWithoutRecenter),
               ),
               TextButton(
                 onPressed: () =>
                     ref.read(simpleRunProvider.notifier).resume(refocus: true),
-                child: const Text('Re-center and refocus'),
+                child: Text(context.l10n.planRecenterAndRefocus),
               ),
             ] else if (imaging)
               Text(
-                'Tap the shutter to pause after this frame; hold it to stop.',
+                context.l10n.planHintPause,
                 style: _dim.copyWith(fontSize: 12),
               ),
             TextButton(
               key: const Key('simple-run-add'),
               onPressed: onAdd,
-              child: const Text('Add target'),
+              child: Text(context.l10n.planAddTarget),
             ),
           ],
         ),
@@ -2465,7 +2491,8 @@ class SimpleSuggestion extends StatelessWidget {
     final o = hit.dso;
     final detail = [
       if (o.name.isNotEmpty && o.name != hit.label) o.name,
-      if (o.magnitude != null) 'mag ${o.magnitude!.toStringAsFixed(1)}',
+      if (o.magnitude != null)
+        context.l10n.planMagnitude(o.magnitude!.toStringAsFixed(1)),
     ].join(' · ');
     return InkWell(
       borderRadius: BorderRadius.circular(8),

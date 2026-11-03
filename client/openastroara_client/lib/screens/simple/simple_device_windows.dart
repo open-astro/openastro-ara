@@ -5,6 +5,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../l10n/l10n.dart';
 import '../../models/equipment_device_status.dart';
 import '../../services/equipment_device_api.dart' show describeEquipmentError;
 import '../../services/equipment_driver_api.dart';
@@ -101,11 +102,15 @@ class _SimpleCameraWindowState extends ConsumerState<SimpleCameraWindow> {
     final s = ref.watch(cameraStatusProvider).value;
     final target =
         _dragTarget ?? ref.watch(imagingDefaultsProvider).coolerTargetC;
-    final children = <Widget>[SimpleDeviceHeader(type: 'Camera', status: s)];
+    final children = <Widget>[
+      SimpleDeviceHeader(type: context.l10n.deviceCamera, status: s),
+    ];
     if (s == null || !s.isConnected) {
       children.add(
         Text(
-          s?.isConnecting ?? false ? 'Connecting…' : 'Not connected',
+          s?.isConnecting ?? false
+              ? context.l10n.deviceConnecting
+              : context.l10n.deviceNotConnected,
           style: AraText.caption,
         ),
       );
@@ -113,22 +118,32 @@ class _SimpleCameraWindowState extends ConsumerState<SimpleCameraWindow> {
       final caps = s.capabilities;
       final now = [
         if (s.ccdTemperature != null) simpleCelsius(s.ccdTemperature!),
-        if (s.coolerPowerPct != null) '${s.coolerPowerPct!.round()} % power',
+        if (s.coolerPowerPct != null)
+          context.l10n.devicePowerPercent(s.coolerPowerPct!.round()),
       ].join(' · ');
       // What the sensor reads, first.
       if (now.isNotEmpty) {
         children.add(
-          _row('Current temperature', Text(now, style: kSimpleText)),
+          _row(
+            'Current temperature',
+            context.l10n.deviceCurrentTemperature,
+            Text(now, style: kSimpleText),
+          ),
         );
       }
       if (caps == null || !caps.hasCooler) {
         children.add(
-          _row('Cooler', const Text('No cooler', style: kSimpleText)),
+          _row(
+            'Cooler',
+            context.l10n.deviceCooler,
+            Text(context.l10n.deviceNoCooler, style: kSimpleText),
+          ),
         );
       } else {
         children.add(
           _row(
             'Cooler',
+            context.l10n.deviceCooler,
             _OnOff(
               id: 'simple-camera-cooler',
               on: s.coolerOn,
@@ -145,7 +160,11 @@ class _SimpleCameraWindowState extends ConsumerState<SimpleCameraWindow> {
           const lo = SimpleCameraWindow.targetMin,
               hi = SimpleCameraWindow.targetMax;
           children.add(
-            _row('Target', Text(simpleCelsius(target), style: kSimpleText)),
+            _row(
+              'Target',
+              context.l10n.deviceTarget,
+              Text(simpleCelsius(target), style: kSimpleText),
+            ),
           );
           children.add(
             Slider(
@@ -177,7 +196,7 @@ class _SimpleCameraWindowState extends ConsumerState<SimpleCameraWindow> {
     // Rig's.
     if (widget.inSettings) {
       children.addAll(
-        _versions(ref.watch(deviceDriverProvider('camera')).value),
+        _versions(context, ref.watch(deviceDriverProvider('camera')).value),
       );
     }
     return Column(
@@ -197,13 +216,14 @@ class _SimpleCameraWindowState extends ConsumerState<SimpleCameraWindow> {
     defaults.setCoolerTargetC(celsius);
     if (ref.read(imagingDefaultsProvider).coolerTargetC == before) return;
     final notify = userNotifier(context);
+    final l10n = context.l10n;
     final api = ref.read(profileApiProvider);
     if (api != null) {
       try {
         await defaults.persistToServer(api);
       } catch (e) {
         notify(
-          "Couldn't save the target",
+          l10n.deviceCouldntSaveTarget,
           detail: describeEquipmentError(e),
           error: true,
         );
@@ -225,29 +245,31 @@ class _SimpleCameraWindowState extends ConsumerState<SimpleCameraWindow> {
 
   Future<void> _run(Future<bool> Function() action) async {
     final notify = userNotifier(context);
+    final l10n = context.l10n;
     try {
       await action();
     } catch (e) {
       notify(
-        "Couldn't change the cooler",
+        l10n.deviceCouldntChangeCooler,
         detail: describeEquipmentError(e),
         error: true,
       );
     }
   }
 
-  static Widget _row(String label, Widget value) =>
-      simpleWindowRow(label, value);
+  static Widget _row(String id, String label, Widget value) =>
+      simpleWindowRow(label, value, id: id);
 }
 
 /// What the rig reports of a device's versions, set out like Rig's (only in
 /// Settings, under a divider); nothing when it reports none.
-List<Widget> _versions(DeviceDriver? d) {
+List<Widget> _versions(BuildContext context, DeviceDriver? d) {
+  final l10n = context.l10n;
   final rows = [
-    if (d?.sdkVersion != null) ('SDK', d!.sdkVersion!),
-    if (d?.driverVersion != null) ('Driver', d!.driverVersion!),
-    if (d?.firmware != null) ('Firmware', d!.firmware!),
-    if (d?.serialNumber != null) ('Serial number', d!.serialNumber!),
+    if (d?.sdkVersion != null) (l10n.deviceSdk, d!.sdkVersion!),
+    if (d?.driverVersion != null) (l10n.deviceDriver, d!.driverVersion!),
+    if (d?.firmware != null) (l10n.deviceFirmware, d!.firmware!),
+    if (d?.serialNumber != null) (l10n.deviceSerialNumber, d!.serialNumber!),
   ];
   return rows.isEmpty
       ? const []
@@ -265,12 +287,18 @@ Widget simpleWindowStepper({
   required VoidCallback onLess,
   required VoidCallback onMore,
 }) {
-  Widget button(String dir, IconData icon, String label, VoidCallback onTap) =>
-      IconButton(
-        key: Key('$id-$dir'),
-        onPressed: onTap,
-        icon: Icon(icon, semanticLabel: label),
-      );
+  Widget button(
+    String dir,
+    IconData icon,
+    String Function(AppLocalizations) label,
+    VoidCallback onTap,
+  ) => Builder(
+    builder: (context) => IconButton(
+      key: Key('$id-$dir'),
+      onPressed: onTap,
+      icon: Icon(icon, semanticLabel: label(context.l10n)),
+    ),
+  );
   return DecoratedBox(
     decoration: BoxDecoration(
       color: AraColors.tileFill,
@@ -279,45 +307,48 @@ Widget simpleWindowStepper({
     child: Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        button('down', Icons.remove, 'Less', onLess),
+        button('down', Icons.remove, (l) => l.deviceLess, onLess),
         SizedBox(
           width: kSimpleWindowControlWidth - 96, // less the two 48 pt buttons
           child: Text(text, textAlign: TextAlign.center, style: kSimpleText),
         ),
-        button('up', Icons.add, 'More', onMore),
+        button('up', Icons.add, (l) => l.deviceMore, onMore),
       ],
     ),
   );
 }
 
 /// One height for every row of a device window (the 44 pt of its controls),
-/// so a text-only row keeps the rhythm.
-Widget simpleWindowRow(String label, Widget value) => ConstrainedBox(
-  key: Key('simple-window-row-$label'),
-  constraints: const BoxConstraints(minHeight: 44),
-  child: Row(
-    children: [
-      Expanded(child: Text(label, style: kSimpleText)),
-      value,
-    ],
-  ),
-);
+/// so a text-only row keeps the rhythm. [id] (English) names its Key.
+Widget simpleWindowRow(String label, Widget value, {required String id}) =>
+    ConstrainedBox(
+      key: Key('simple-window-row-$id'),
+      constraints: const BoxConstraints(minHeight: 44),
+      child: Row(
+        children: [
+          Expanded(child: Text(label, style: kSimpleText)),
+          value,
+        ],
+      ),
+    );
 
 /// On / Off as named segments, never a bare toggle (DESIGN.md); [labels]
-/// names them otherwise ("Auto" / "Off").
+/// names them otherwise ("Auto" / "Off"), [ids] their Keys in English.
 class _OnOff extends StatelessWidget {
   const _OnOff({
     required this.id,
     required this.on,
     required this.onChanged,
-    this.labels = ('On', 'Off'),
+    this.labels,
+    this.ids = ('on', 'off'),
     this.enabled = true,
   });
 
   final String id;
   final bool on;
   final ValueChanged<bool> onChanged;
-  final (String, String) labels;
+  final (String, String)? labels;
+  final (String, String) ids;
 
   /// False: both segments show the state but take no tap.
   final bool enabled;
@@ -331,9 +362,12 @@ class _OnOff extends StatelessWidget {
     child: Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        for (final (v, word) in [(true, labels.$1), (false, labels.$2)])
+        for (final (v, key, word) in [
+          (true, ids.$1, labels?.$1 ?? context.l10n.deviceOn),
+          (false, ids.$2, labels?.$2 ?? context.l10n.deviceOff),
+        ])
           SimpleSegment(
-            key: Key('$id-${word.toLowerCase()}'),
+            key: Key('$id-$key'),
             label: word,
             selected: on == v,
             radius: 8,
@@ -357,7 +391,7 @@ class SimpleVersions extends StatelessWidget {
     spacing: AraSpace.s8,
     children: [
       Text(
-        'Versions',
+        context.l10n.deviceVersions,
         style: kSimpleText.copyWith(fontWeight: FontWeight.w600),
       ),
       Table(
@@ -466,11 +500,15 @@ class _SimpleMountWindowState extends ConsumerState<SimpleMountWindow> {
   @override
   Widget build(BuildContext context) {
     final m = ref.watch(mountProvider).value;
-    final children = <Widget>[SimpleDeviceHeader(type: 'Mount', status: m)];
+    final children = <Widget>[
+      SimpleDeviceHeader(type: context.l10n.deviceMount, status: m),
+    ];
     if (m == null || !m.isConnected) {
       children.add(
         Text(
-          m?.isConnecting ?? false ? 'Connecting…' : 'Not connected',
+          m?.isConnecting ?? false
+              ? context.l10n.deviceConnecting
+              : context.l10n.deviceNotConnected,
           style: AraText.caption,
         ),
       );
@@ -486,7 +524,8 @@ class _SimpleMountWindowState extends ConsumerState<SimpleMountWindow> {
       if (caps?.canSetTracking ?? false) {
         children.add(
           simpleWindowRow(
-            'Tracking',
+            context.l10n.deviceTracking,
+            id: 'Tracking',
             _OnOff(
               id: 'simple-mount-tracking',
               on: m.tracking && !m.parked,
@@ -501,20 +540,27 @@ class _SimpleMountWindowState extends ConsumerState<SimpleMountWindow> {
       }
       children.add(
         simpleWindowRow(
-          'Park',
+          context.l10n.devicePark,
+          id: 'Park',
           moving
               ? SizedBox(
                   height: 44,
                   child: Center(
                     child: Text(
-                      (parking ?? !m.parked) ? 'Parking…' : 'Unparking…',
+                      (parking ?? !m.parked)
+                          ? context.l10n.deviceParking
+                          : context.l10n.deviceUnparking,
                       style: kSimpleText.copyWith(color: AraColors.accentBusy),
                     ),
                   ),
                 )
               : _OnOff(
                   id: 'simple-mount-park',
-                  labels: const ('Parked', 'Unparked'),
+                  ids: const ('parked', 'unparked'),
+                  labels: (
+                    context.l10n.deviceParked,
+                    context.l10n.deviceUnparked,
+                  ),
                   on: m.parked,
                   enabled: m.parked
                       ? caps?.canUnpark ?? false
@@ -536,20 +582,20 @@ class _SimpleMountWindowState extends ConsumerState<SimpleMountWindow> {
             children: [
               Expanded(
                 child: Text(
-                  'A plan is running. Park the mount anyway?',
+                  context.l10n.devicePlanRunningParkAnyway,
                   style: kSimpleText.copyWith(color: AraColors.accentBusy),
                 ),
               ),
               TextButton(
                 onPressed: () => setState(() => _asking = false),
-                child: const Text('Cancel'),
+                child: Text(context.l10n.deviceCancel),
               ),
               TextButton(
                 onPressed: () {
                   setState(() => _asking = false);
                   _park(context, true);
                 },
-                child: const Text('Park anyway'),
+                child: Text(context.l10n.deviceParkAnyway),
               ),
             ],
           ),
@@ -557,10 +603,12 @@ class _SimpleMountWindowState extends ConsumerState<SimpleMountWindow> {
       }
       children.add(
         simpleWindowRow(
-          'Meridian flip',
+          context.l10n.deviceMeridianFlip,
+          id: 'Meridian flip',
           _OnOff(
             id: 'simple-mount-flip',
-            labels: const ('Auto', 'Off'),
+            ids: const ('auto', 'off'),
+            labels: (context.l10n.deviceAuto, context.l10n.deviceOff),
             on: ref.watch(safetyPoliciesProvider).meridianFlipAuto,
             onChanged: (on) => _setFlip(context, on),
           ),
@@ -569,7 +617,7 @@ class _SimpleMountWindowState extends ConsumerState<SimpleMountWindow> {
     }
     if (widget.inSettings) {
       children.addAll(
-        _versions(ref.watch(deviceDriverProvider('telescope')).value),
+        _versions(context, ref.watch(deviceDriverProvider('telescope')).value),
       );
     }
     return Column(
@@ -592,13 +640,14 @@ class _SimpleMountWindowState extends ConsumerState<SimpleMountWindow> {
     final policies = ref.read(safetyPoliciesProvider.notifier);
     policies.setMeridianFlipAuto(on);
     final notify = userNotifier(context);
+    final l10n = context.l10n;
     final api = ref.read(profileApiProvider);
     if (api == null) return;
     try {
       await policies.persistToServer(api);
     } catch (e) {
       notify(
-        "Couldn't save the meridian flip",
+        l10n.deviceCouldntSaveMeridianFlip,
         detail: describeEquipmentError(e),
         error: true,
       );
@@ -611,11 +660,12 @@ class _SimpleMountWindowState extends ConsumerState<SimpleMountWindow> {
     Future<bool> Function() action,
   ) async {
     final notify = userNotifier(context);
+    final l10n = context.l10n;
     try {
       return await action();
     } catch (e) {
       notify(
-        "Couldn't move the mount",
+        l10n.deviceCouldntMoveMount,
         detail: describeEquipmentError(e),
         error: true,
       );
@@ -665,7 +715,11 @@ class _SimpleGainSliderState extends ConsumerState<SimpleGainSlider> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        simpleWindowRow('Gain', Text(text(gain), style: kSimpleText)),
+        simpleWindowRow(
+          context.l10n.deviceGain,
+          id: 'Gain',
+          Text(text(gain), style: kSimpleText),
+        ),
         Slider(
           key: Key(widget.id),
           min: lo.toDouble(),
@@ -728,13 +782,14 @@ class _SimpleFocuserWindowState extends ConsumerState<SimpleFocuserWindow> {
     // A relative focuser takes the change, not a position.
     final absolute = s.capabilities?.absoluteFocuser ?? true;
     final notify = userNotifier(context);
+    final l10n = context.l10n;
     try {
       await ref
           .read(focuserProvider.notifier)
           .move(absolute ? target : target - from);
     } catch (e) {
       notify(
-        "Couldn't move the focuser",
+        l10n.deviceCouldntMoveFocuser,
         detail: describeEquipmentError(e),
         error: true,
       );
@@ -751,9 +806,14 @@ class _SimpleFocuserWindowState extends ConsumerState<SimpleFocuserWindow> {
   List<Widget> _refocus() {
     final saved = ref.watch(autofocusSettingsProvider).triggerTempDeltaC;
     final c = _dragRefocus ?? saved;
-    String text(double v) => v <= 0 ? 'Never' : simpleCelsius(v);
+    String text(double v) =>
+        v <= 0 ? context.l10n.deviceNever : simpleCelsius(v);
     return [
-      simpleWindowRow('Refocus temp', Text(text(c), style: kSimpleText)),
+      simpleWindowRow(
+        context.l10n.deviceRefocusTemp,
+        id: 'Refocus temp',
+        Text(text(c), style: kSimpleText),
+      ),
       Slider(
         key: const Key('simple-focuser-refocus'),
         min: 0,
@@ -776,11 +836,12 @@ class _SimpleFocuserWindowState extends ConsumerState<SimpleFocuserWindow> {
     final api = ref.read(profileApiProvider);
     if (api == null) return;
     final notify = userNotifier(context);
+    final l10n = context.l10n;
     try {
       await af.persistToServer(api);
     } catch (e) {
       notify(
-        "Couldn't save that",
+        l10n.deviceCouldntSaveThat,
         detail: describeEquipmentError(e),
         error: true,
       );
@@ -790,11 +851,15 @@ class _SimpleFocuserWindowState extends ConsumerState<SimpleFocuserWindow> {
   @override
   Widget build(BuildContext context) {
     final s = ref.watch(focuserProvider).value;
-    final children = <Widget>[SimpleDeviceHeader(type: 'Focuser', status: s)];
+    final children = <Widget>[
+      SimpleDeviceHeader(type: context.l10n.deviceFocuser, status: s),
+    ];
     if (s == null || !s.isConnected) {
       children.add(
         Text(
-          s?.isConnecting ?? false ? 'Connecting…' : 'Not connected',
+          s?.isConnecting ?? false
+              ? context.l10n.deviceConnecting
+              : context.l10n.deviceNotConnected,
           style: AraText.caption,
         ),
       );
@@ -802,21 +867,26 @@ class _SimpleFocuserWindowState extends ConsumerState<SimpleFocuserWindow> {
       final pos = s.position ?? 0;
       children.addAll([
         // Where the focuser is; where it will go shows above the dial.
-        simpleWindowRow('Position', Text(simpleSteps(pos), style: kSimpleText)),
+        simpleWindowRow(
+          context.l10n.devicePosition,
+          id: 'Position',
+          Text(simpleSteps(pos), style: kSimpleText),
+        ),
         if (s.temperature != null)
           simpleWindowRow(
-            'Temperature',
+            context.l10n.deviceTemperature,
+            id: 'Temperature',
             Text(simpleCelsius(s.temperature!), style: kSimpleText),
           ),
         SizedBox(
           height: 18,
           child: Text(
             _target != null
-                ? 'Let go to move to ${simpleSteps(_target!)}'
+                ? context.l10n.deviceLetGoToMoveTo(simpleSteps(_target!))
                 : s.isMoving
                 ? (_sent != null
-                      ? 'Moving to ${simpleSteps(_sent!)}…'
-                      : 'Moving…')
+                      ? context.l10n.deviceMovingTo(simpleSteps(_sent!))
+                      : context.l10n.deviceMoving)
                 : '',
             textAlign: TextAlign.center,
             style: AraText.caption.copyWith(color: AraColors.accentBusy),
@@ -825,7 +895,7 @@ class _SimpleFocuserWindowState extends ConsumerState<SimpleFocuserWindow> {
         Center(
           child: Semantics(
             slider: true,
-            label: 'Focus position',
+            label: context.l10n.deviceFocusPosition,
             value: simpleSteps(pos),
             increasedValue: simpleSteps(_clamp(pos + _step, s)),
             decreasedValue: simpleSteps(_clamp(pos - _step, s)),
@@ -852,7 +922,8 @@ class _SimpleFocuserWindowState extends ConsumerState<SimpleFocuserWindow> {
         const SizedBox(height: AraSpace.s16),
         // Rows like the Guider window's: label left, control right.
         simpleWindowRow(
-          'Step',
+          context.l10n.deviceStep,
+          id: 'Step',
           Container(
             key: const Key('simple-focuser-steps'),
             width: kSimpleWindowControlWidth,
@@ -881,7 +952,7 @@ class _SimpleFocuserWindowState extends ConsumerState<SimpleFocuserWindow> {
     }
     if (widget.inSettings) {
       children.addAll(
-        _versions(ref.watch(deviceDriverProvider('focuser')).value),
+        _versions(context, ref.watch(deviceDriverProvider('focuser')).value),
       );
     }
     return Column(
@@ -1067,7 +1138,9 @@ class _AutofocusButton extends ConsumerWidget {
         onTap: live.busy ? null : (running ? af.cancel : af.start),
         child: Semantics(
           button: true,
-          label: running ? 'Cancel autofocus' : 'Autofocus',
+          label: running
+              ? context.l10n.deviceCancelAutofocus
+              : context.l10n.deviceAutofocus,
           excludeSemantics: true,
           child: Center(
             child: running
@@ -1076,7 +1149,10 @@ class _AutofocusButton extends ConsumerWidget {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       const Icon(Icons.center_focus_strong, size: 26),
-                      Text('Autofocus', style: AraText.caption),
+                      Text(
+                        context.l10n.deviceAutofocus,
+                        style: AraText.caption,
+                      ),
                     ],
                   ),
           ),
@@ -1125,7 +1201,9 @@ class _SimpleGuiderWindowState extends ConsumerState<SimpleGuiderWindow> {
           ),
           Expanded(
             child: Text(
-              camera?.name == null ? 'Guider' : 'Guider · ${camera!.name}',
+              camera?.name == null
+                  ? context.l10n.deviceGuider
+                  : '${context.l10n.deviceGuider} · ${camera!.name}',
               style: kSimpleText.copyWith(fontWeight: FontWeight.w600),
             ),
           ),
@@ -1136,26 +1214,34 @@ class _SimpleGuiderWindowState extends ConsumerState<SimpleGuiderWindow> {
       children.add(
         Text(
           g?.connectionState == GuiderConnectionState.connecting
-              ? 'Connecting…'
-              : 'Not connected',
+              ? context.l10n.deviceConnecting
+              : context.l10n.deviceNotConnected,
           style: AraText.caption,
         ),
       );
     } else {
       children.add(
-        simpleWindowRow('State', Text(g.runtimeSummary, style: kSimpleText)),
+        simpleWindowRow(
+          context.l10n.deviceState,
+          id: 'State',
+          Text(g.runtimeSummary, style: kSimpleText),
+        ),
       );
       if (g.rmsTotalArcsec != null) {
         children.add(
           simpleWindowRow(
-            'RMS',
+            context.l10n.deviceRms,
+            id: 'RMS',
             Column(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Text(_arcsec(g.rmsTotalArcsec!), style: kSimpleText),
                 if (g.rmsRaArcsec != null && g.rmsDecArcsec != null)
                   Text(
-                    'RA ${_arcsec(g.rmsRaArcsec!)} · Dec ${_arcsec(g.rmsDecArcsec!)}',
+                    context.l10n.deviceRmsRaDec(
+                      _arcsec(g.rmsRaArcsec!),
+                      _arcsec(g.rmsDecArcsec!),
+                    ),
                     style: AraText.caption,
                   ),
               ],
@@ -1168,7 +1254,11 @@ class _SimpleGuiderWindowState extends ConsumerState<SimpleGuiderWindow> {
     // The guider's own gain scale: percent of the camera's range.
     final gain = _dragGain ?? phd2.guideCameraGain.toDouble();
     children.addAll([
-      simpleWindowRow('Gain', Text('${gain.round()} %', style: kSimpleText)),
+      simpleWindowRow(
+        context.l10n.deviceGain,
+        id: 'Gain',
+        Text('${gain.round()} %', style: kSimpleText),
+      ),
       Slider(
         key: const Key('simple-guider-gain'),
         min: 0,
@@ -1186,13 +1276,13 @@ class _SimpleGuiderWindowState extends ConsumerState<SimpleGuiderWindow> {
     final every = phd2.ditherEnabled ? math.max(1, phd2.ditherEveryNFrames) : 0;
     children.add(
       simpleWindowRow(
-        'Dither',
+        context.l10n.deviceDither,
+        id: 'Dither',
         simpleWindowStepper(
           id: 'simple-guider-dither',
           text: switch (every) {
-            0 => 'Off',
-            1 => 'Every frame',
-            _ => '$every frames',
+            0 => context.l10n.deviceOff,
+            _ => context.l10n.deviceDitherEveryFrames(every),
           },
           onLess: () => _setDither(every - 1),
           onMore: () => _setDither(every + 1),
@@ -1203,7 +1293,8 @@ class _SimpleGuiderWindowState extends ConsumerState<SimpleGuiderWindow> {
       final px = phd2.ditherPixels;
       children.add(
         simpleWindowRow(
-          'Dither by',
+          context.l10n.deviceDitherBy,
+          id: 'Dither by',
           simpleWindowStepper(
             id: 'simple-guider-dither-px',
             text: '${px == px.roundToDouble() ? px.round() : px} px',
@@ -1215,7 +1306,7 @@ class _SimpleGuiderWindowState extends ConsumerState<SimpleGuiderWindow> {
         ),
       );
     }
-    if (widget.inSettings) children.addAll(_versions(camera));
+    if (widget.inSettings) children.addAll(_versions(context, camera));
     return Column(
       key: const Key('simple-device-guider'),
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1240,11 +1331,12 @@ class _SimpleGuiderWindowState extends ConsumerState<SimpleGuiderWindow> {
     final api = ref.read(profileApiProvider);
     if (api == null) return;
     final notify = userNotifier(context);
+    final l10n = context.l10n;
     try {
       await p.persistToServer(api);
     } catch (e) {
       notify(
-        "Couldn't save that",
+        l10n.deviceCouldntSaveThat,
         detail: describeEquipmentError(e),
         error: true,
       );

@@ -1,3 +1,1684 @@
 {
-  "@@locale": "en"
+  "@@locale": "en",
+  "pillsMore": "+{count} more",
+  "@pillsMore": {
+    "description": "Simple Mode message pills: the pill under the visible messages that unfolds the hidden ones; count is how many are hidden",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "pillsShowFewer": "Show fewer",
+  "@pillsShowFewer": {
+    "description": "Simple Mode message pills: the pill that folds the extra messages away again"
+  },
+  "pillsMoreShort": "+{count}",
+  "@pillsMoreShort": {
+    "description": "Simple Mode message pills: short count of hidden messages at the end of the newest pill when there is no room below it",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "pillsMoreSemantics": "{count, plural, =1{1 more message} other{{count} more messages}}",
+  "@pillsMoreSemantics": {
+    "description": "Simple Mode message pills: screen reader label for the short +N count button",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "pillsDismiss": "Dismiss",
+  "@pillsDismiss": {
+    "description": "Simple Mode message pills: tooltip of the close button on an error message"
+  },
+  "safetyAlertSemantics": "Safety alert",
+  "@safetyAlertSemantics": {
+    "description": "Simple Mode safety alarm: screen reader label for the full-screen warning"
+  },
+  "safetyAlertTitle": "SAFETY ALERT",
+  "@safetyAlertTitle": {
+    "description": "Simple Mode safety alarm: big heading of the full-screen warning (all caps)"
+  },
+  "safetyUnsafe": "Conditions are UNSAFE.",
+  "@safetyUnsafe": {
+    "description": "Simple Mode safety alarm: shown when the alarm gives no reason of its own"
+  },
+  "safetyRinging": "Alarm ringing",
+  "@safetyRinging": {
+    "description": "Simple Mode safety alarm: status line while the alarm tone is sounding"
+  },
+  "safetySilenceBefore": "Silence it before it sounds",
+  "@safetySilenceBefore": {
+    "description": "Simple Mode safety alarm: status line during the silent delay before the tone starts"
+  },
+  "safetySilence": "Silence alarm",
+  "@safetySilence": {
+    "description": "Simple Mode safety alarm: the button that stops the sound and closes the warning"
+  },
+  "deviceCamera": "Camera",
+  "@deviceCamera": {
+    "description": "Camera window title, before the camera's name"
+  },
+  "deviceMount": "Mount",
+  "@deviceMount": {
+    "description": "Mount window title, before the mount's name"
+  },
+  "deviceFocuser": "Focuser",
+  "@deviceFocuser": {
+    "description": "Focuser window title, before the focuser's name"
+  },
+  "deviceGuider": "Guider",
+  "@deviceGuider": {
+    "description": "Guider window title, before the guide camera's name"
+  },
+  "deviceConnecting": "Connecting…",
+  "@deviceConnecting": {
+    "description": "Device window caption while the device connects"
+  },
+  "deviceNotConnected": "Not connected",
+  "@deviceNotConnected": {
+    "description": "Device window caption when the device is not connected"
+  },
+  "deviceCurrentTemperature": "Current temperature",
+  "@deviceCurrentTemperature": {
+    "description": "Camera window row: what the sensor reads now"
+  },
+  "deviceCooler": "Cooler",
+  "@deviceCooler": {
+    "description": "Camera window row: the cooler's On / Off"
+  },
+  "deviceNoCooler": "No cooler",
+  "@deviceNoCooler": {
+    "description": "Camera window: shown in the Cooler row when the camera has no cooler"
+  },
+  "deviceTarget": "Target",
+  "@deviceTarget": {
+    "description": "Camera window row: the cooler's target temperature"
+  },
+  "deviceCouldntSaveTarget": "Couldn't save the target",
+  "@deviceCouldntSaveTarget": {
+    "description": "Error message when the cooler target could not be saved to the profile"
+  },
+  "deviceCouldntChangeCooler": "Couldn't change the cooler",
+  "@deviceCouldntChangeCooler": {
+    "description": "Error message when the camera refused a cooler change"
+  },
+  "deviceSdk": "SDK",
+  "@deviceSdk": {
+    "description": "Versions table in a device's Settings page: the vendor SDK version"
+  },
+  "deviceDriver": "Driver",
+  "@deviceDriver": {
+    "description": "Versions table in a device's Settings page: the driver version"
+  },
+  "deviceFirmware": "Firmware",
+  "@deviceFirmware": {
+    "description": "Versions table in a device's Settings page: the firmware version"
+  },
+  "deviceSerialNumber": "Serial number",
+  "@deviceSerialNumber": {
+    "description": "Versions table in a device's Settings page: the device's serial number"
+  },
+  "deviceLess": "Less",
+  "@deviceLess": {
+    "description": "Screen-reader label of the minus button of a device window's stepper"
+  },
+  "deviceMore": "More",
+  "@deviceMore": {
+    "description": "Screen-reader label of the plus button of a device window's stepper"
+  },
+  "deviceOn": "On",
+  "@deviceOn": {
+    "description": "Device window segment: turns a feature on"
+  },
+  "deviceOff": "Off",
+  "@deviceOff": {
+    "description": "Device window segment or value: a feature is off"
+  },
+  "deviceVersions": "Versions",
+  "@deviceVersions": {
+    "description": "Title of the versions table in Settings (Rig, and a device's page)"
+  },
+  "deviceTracking": "Tracking",
+  "@deviceTracking": {
+    "description": "Mount window row: tracking On / Off"
+  },
+  "devicePark": "Park",
+  "@devicePark": {
+    "description": "Mount window row: Parked / Unparked"
+  },
+  "deviceParking": "Parking…",
+  "@deviceParking": {
+    "description": "Mount window: shown in the Park row while the mount parks"
+  },
+  "deviceUnparking": "Unparking…",
+  "@deviceUnparking": {
+    "description": "Mount window: shown in the Park row while the mount unparks"
+  },
+  "deviceParked": "Parked",
+  "@deviceParked": {
+    "description": "Mount window segment in the Park row: the mount is parked"
+  },
+  "deviceUnparked": "Unparked",
+  "@deviceUnparked": {
+    "description": "Mount window segment in the Park row: the mount is unparked"
+  },
+  "devicePlanRunningParkAnyway": "A plan is running. Park the mount anyway?",
+  "@devicePlanRunningParkAnyway": {
+    "description": "Mount window: asked when Parked is tapped while a plan runs"
+  },
+  "deviceCancel": "Cancel",
+  "@deviceCancel": {
+    "description": "Mount window button: don't park while a plan runs"
+  },
+  "deviceParkAnyway": "Park anyway",
+  "@deviceParkAnyway": {
+    "description": "Mount window button: park even though a plan runs"
+  },
+  "deviceMeridianFlip": "Meridian flip",
+  "@deviceMeridianFlip": {
+    "description": "Mount window row: the automatic meridian flip"
+  },
+  "deviceAuto": "Auto",
+  "@deviceAuto": {
+    "description": "Mount window segment in the Meridian flip row: flip automatically"
+  },
+  "deviceCouldntSaveMeridianFlip": "Couldn't save the meridian flip",
+  "@deviceCouldntSaveMeridianFlip": {
+    "description": "Error message when the meridian flip setting could not be saved"
+  },
+  "deviceCouldntMoveMount": "Couldn't move the mount",
+  "@deviceCouldntMoveMount": {
+    "description": "Error message when the mount refused to track, park or unpark"
+  },
+  "deviceGain": "Gain",
+  "@deviceGain": {
+    "description": "Camera and guider window row: the camera's gain"
+  },
+  "deviceCouldntMoveFocuser": "Couldn't move the focuser",
+  "@deviceCouldntMoveFocuser": {
+    "description": "Error message when the focuser refused a move"
+  },
+  "deviceCouldntSaveThat": "Couldn't save that",
+  "@deviceCouldntSaveThat": {
+    "description": "Error message when a focuser or guider setting could not be saved"
+  },
+  "deviceNever": "Never",
+  "@deviceNever": {
+    "description": "Focuser window, Refocus temp row: never refocus on temperature"
+  },
+  "deviceRefocusTemp": "Refocus temp",
+  "@deviceRefocusTemp": {
+    "description": "Focuser window row: refocus after the temperature drifts this much"
+  },
+  "devicePosition": "Position",
+  "@devicePosition": {
+    "description": "Focuser window row: the focuser's position in steps"
+  },
+  "deviceTemperature": "Temperature",
+  "@deviceTemperature": {
+    "description": "Focuser window row: the focuser's temperature"
+  },
+  "deviceMoving": "Moving…",
+  "@deviceMoving": {
+    "description": "Focuser window caption while the focuser moves"
+  },
+  "deviceFocusPosition": "Focus position",
+  "@deviceFocusPosition": {
+    "description": "Screen-reader label of the focuser's dial"
+  },
+  "deviceStep": "Step",
+  "@deviceStep": {
+    "description": "Focuser window row: how far one dial click moves"
+  },
+  "deviceAutofocus": "Autofocus",
+  "@deviceAutofocus": {
+    "description": "Button in the middle of the focuser dial: runs autofocus"
+  },
+  "deviceCancelAutofocus": "Cancel autofocus",
+  "@deviceCancelAutofocus": {
+    "description": "Screen-reader label of the focuser dial's middle button while autofocus runs"
+  },
+  "deviceState": "State",
+  "@deviceState": {
+    "description": "Guider window row: what the guider is doing"
+  },
+  "deviceRms": "RMS",
+  "@deviceRms": {
+    "description": "Guider window row: the guiding error (root mean square)"
+  },
+  "deviceDither": "Dither",
+  "@deviceDither": {
+    "description": "Guider window row: how often a plan dithers"
+  },
+  "deviceDitherBy": "Dither by",
+  "@deviceDitherBy": {
+    "description": "Guider window row: how far a dither moves, in pixels"
+  },
+  "devicePowerPercent": "{percent} % power",
+  "@devicePowerPercent": {
+    "description": "Camera window, Current temperature row: the cooler's power",
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "deviceLetGoToMoveTo": "Let go to move to {position}",
+  "@deviceLetGoToMoveTo": {
+    "description": "Focuser window caption while the dial turns; position is a step count like 12 000",
+    "placeholders": {
+      "position": {
+        "type": "String"
+      }
+    }
+  },
+  "deviceMovingTo": "Moving to {position}…",
+  "@deviceMovingTo": {
+    "description": "Focuser window caption while the focuser moves to a position (a step count like 12 000)",
+    "placeholders": {
+      "position": {
+        "type": "String"
+      }
+    }
+  },
+  "deviceRmsRaDec": "RA {ra} · Dec {dec}",
+  "@deviceRmsRaDec": {
+    "description": "Guider window, under the RMS value: the error per axis (values like 0.42″)",
+    "placeholders": {
+      "ra": {
+        "type": "String"
+      },
+      "dec": {
+        "type": "String"
+      }
+    }
+  },
+  "deviceDitherEveryFrames": "{count, plural, =1{Every frame} other{{count} frames}}",
+  "@deviceDitherEveryFrames": {
+    "description": "Guider window, Dither row: a plan dithers every this many frames",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "previewFree": "{size} GB free",
+  "@previewFree": {
+    "description": "Simple Mode System tile: free space on the save drive; size is a number in gigabytes",
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "previewUnplugged": "Unplugged",
+  "@previewUnplugged": {
+    "description": "Simple Mode System tile: the save drive can't be read"
+  },
+  "previewStorage": "Storage",
+  "@previewStorage": {
+    "description": "Simple Mode System tile label: storage free on the server"
+  },
+  "previewCpu": "CPU",
+  "@previewCpu": {
+    "description": "Simple Mode System tile label: server CPU use"
+  },
+  "previewMemory": "Memory",
+  "@previewMemory": {
+    "description": "Simple Mode System tile label: server memory in use"
+  },
+  "previewUp": "Up",
+  "@previewUp": {
+    "description": "Simple Mode System tile label: server uptime (short, tile is 72 px wide)"
+  },
+  "previewHfr": "HFR",
+  "@previewHfr": {
+    "description": "Simple Mode Info tile label: half-flux radius of the last frame's stars"
+  },
+  "previewStars": "Stars",
+  "@previewStars": {
+    "description": "Simple Mode Info tile label: number of stars detected in the last frame"
+  },
+  "previewExposure": "Exposure",
+  "@previewExposure": {
+    "description": "Simple Mode: exposure length, as an Info tile label and the Preview settings picker label"
+  },
+  "previewGainOffset": "Gain · offset",
+  "@previewGainOffset": {
+    "description": "Simple Mode Info tile label: the last frame's camera gain and offset"
+  },
+  "previewClipped": "Clipped",
+  "@previewClipped": {
+    "description": "Simple Mode Info tile label: share of saturated (clipped) highlight pixels"
+  },
+  "previewSettings": "Preview settings",
+  "@previewSettings": {
+    "description": "Simple Mode: title of the Preview settings popover"
+  },
+  "previewLoop": "Loop",
+  "@previewLoop": {
+    "description": "Simple Mode Preview settings: segment for continuous live view (frames not saved)"
+  },
+  "previewSingle": "Single",
+  "@previewSingle": {
+    "description": "Simple Mode Preview settings: segment for taking one saved frame"
+  },
+  "previewDone": "Done",
+  "@previewDone": {
+    "description": "Simple Mode: button closing a wheel picker and applying the pick"
+  },
+  "previewStop": "Stop",
+  "@previewStop": {
+    "description": "Simple Mode shutter button, screen-reader label while something runs"
+  },
+  "previewTakeFrame": "Take a frame",
+  "@previewTakeFrame": {
+    "description": "Simple Mode shutter button, screen-reader label at rest"
+  },
+  "previewStartsAt": "Starts at {time}",
+  "@previewStartsAt": {
+    "description": "Simple Mode status pill: a scheduled plan's start time (HH:MM)",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "previewStopping": "Stopping…",
+  "@previewStopping": {
+    "description": "Simple Mode status pill: the shot is being cancelled"
+  },
+  "previewTakingFrame": "Taking a frame",
+  "@previewTakingFrame": {
+    "description": "Simple Mode status pill: the camera is exposing"
+  },
+  "previewStarting": "Starting…",
+  "@previewStarting": {
+    "description": "Simple Mode status pill detail: the exposure is about to start"
+  },
+  "previewSecondsLeft": "{seconds} s left",
+  "@previewSecondsLeft": {
+    "description": "Simple Mode status pill detail: whole seconds left in the exposure (s = seconds)",
+    "placeholders": {
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "previewDownloading": "Downloading…",
+  "@previewDownloading": {
+    "description": "Simple Mode status pill: the frame is downloading from the camera"
+  },
+  "previewFrameReady": "Frame ready",
+  "@previewFrameReady": {
+    "description": "Simple Mode status pill: the frame has arrived"
+  },
+  "previewCaptureFailed": "Capture failed",
+  "@previewCaptureFailed": {
+    "description": "Simple Mode status pill: the capture failed (the reason follows)"
+  },
+  "previewLooping": "Looping",
+  "@previewLooping": {
+    "description": "Simple Mode status pill: live view is running"
+  },
+  "previewPlanPaused": "Plan paused",
+  "@previewPlanPaused": {
+    "description": "Simple Mode status pill: the imaging plan is paused (its step follows)"
+  },
+  "previewPlan": "Plan",
+  "@previewPlan": {
+    "description": "Simple Mode status pill: the imaging plan is running (its step follows)"
+  },
+  "previewParking": "Parking",
+  "@previewParking": {
+    "description": "Simple Mode status pill: the mount is parking"
+  },
+  "previewUnparking": "Unparking",
+  "@previewUnparking": {
+    "description": "Simple Mode status pill: the mount is unparking"
+  },
+  "previewCooling": "Cooling",
+  "@previewCooling": {
+    "description": "Simple Mode status pill: the camera sensor is cooling to its target (temperatures follow)"
+  },
+  "previewStatusSpoken": "{label}, {detail}",
+  "@previewStatusSpoken": {
+    "description": "Simple Mode status pill, screen-reader text: the status and its detail",
+    "placeholders": {
+      "label": {
+        "type": "String"
+      },
+      "detail": {
+        "type": "String"
+      }
+    }
+  },
+  "focusAuto": "Auto",
+  "@focusAuto": {
+    "description": "Simple Mode Focus: rail chip caption when focus runs by autofocus"
+  },
+  "focusManual": "Manual",
+  "@focusManual": {
+    "description": "Simple Mode Focus: rail chip caption when focusing by hand"
+  },
+  "focusAutofocus": "Autofocus",
+  "@focusAutofocus": {
+    "description": "Simple Mode Focus shutter, screen-reader label: start autofocus"
+  },
+  "focusCancelAutofocus": "Cancel autofocus",
+  "@focusCancelAutofocus": {
+    "description": "Simple Mode Focus shutter, screen-reader label while autofocus runs"
+  },
+  "focusHfr": "HFR {value}",
+  "@focusHfr": {
+    "description": "Simple Mode Focus panel: the big half-flux radius readout; value is a number or a dash",
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "focusNoFocuser": "No focuser connected",
+  "@focusNoFocuser": {
+    "description": "Simple Mode Focus panel: shown when no focuser is connected"
+  },
+  "polarLoop": "Loop",
+  "@polarLoop": {
+    "description": "Simple Mode Polar align panel: loop mode segment (shoots frames on its own); also the rail chip caption"
+  },
+  "polarSingle": "Single",
+  "@polarSingle": {
+    "description": "Simple Mode Polar align panel: single mode segment (waits for a tap before each frame); also the rail chip caption"
+  },
+  "polarStart": "Start polar alignment",
+  "@polarStart": {
+    "description": "Polar align shutter button's spoken label when idle"
+  },
+  "polarStop": "Stop",
+  "@polarStop": {
+    "description": "Polar align shutter button's spoken label while the routine runs"
+  },
+  "polarActionStart": "start polar alignment",
+  "@polarActionStart": {
+    "description": "Simple Mode Polar align panel: error message tail after \"Couldn't \" when starting the routine fails; lower-case, no period"
+  },
+  "polarActionStop": "stop polar alignment",
+  "@polarActionStop": {
+    "description": "Simple Mode Polar align panel: error message tail after \"Couldn't \" when stopping the routine fails; lower-case, no period"
+  },
+  "polarActionSave": "save the polar-align settings",
+  "@polarActionSave": {
+    "description": "Simple Mode Polar align panel: error message tail after \"Couldn't \" when saving its settings fails; lower-case, no period"
+  },
+  "polarActionCapture": "take a frame",
+  "@polarActionCapture": {
+    "description": "Simple Mode Polar align panel: error message tail after \"Couldn't \" when taking a frame fails; lower-case, no period"
+  },
+  "polarActionComplete": "complete polar alignment",
+  "@polarActionComplete": {
+    "description": "Simple Mode Polar align panel: error message tail after \"Couldn't \" when finishing the routine fails; lower-case, no period"
+  },
+  "polarPhaseSeeding": "Finding the pole…",
+  "@polarPhaseSeeding": {
+    "description": "Simple Mode Polar align panel: routine phase: first frames, locating the pole"
+  },
+  "polarPhaseAdjusting": "Adjusting",
+  "@polarPhaseAdjusting": {
+    "description": "Simple Mode Polar align panel: routine phase: the user turns the mount bolts"
+  },
+  "polarPhasePaused": "Paused",
+  "@polarPhasePaused": {
+    "description": "Simple Mode Polar align panel: routine phase: paused"
+  },
+  "polarPhaseFailed": "Polar alignment failed",
+  "@polarPhaseFailed": {
+    "description": "Simple Mode Polar align panel: routine phase: failed"
+  },
+  "polarPhaseReady": "Ready",
+  "@polarPhaseReady": {
+    "description": "Simple Mode Polar align panel: routine phase: idle"
+  },
+  "polarAltitude": "Altitude",
+  "@polarAltitude": {
+    "description": "Simple Mode Polar align panel: altitude axis row label (bolt to turn)"
+  },
+  "polarAzimuth": "Azimuth",
+  "@polarAzimuth": {
+    "description": "Simple Mode Polar align panel: azimuth axis row label (bolt to turn)"
+  },
+  "polarBoltWorse": "{axis} got worse. Turn that bolt back past where you started.",
+  "@polarBoltWorse": {
+    "description": "Simple Mode Polar align panel: warning after a bolt turn made the error worse",
+    "placeholders": {
+      "axis": {
+        "type": "String",
+        "example": "Altitude"
+      }
+    }
+  },
+  "polarNoSolve": "No solve ({count} in a row). Check the sky.",
+  "@polarNoSolve": {
+    "description": "Simple Mode Polar align panel: warning when frames fail to plate-solve",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "polarExposure": "Exposure",
+  "@polarExposure": {
+    "description": "Simple Mode Polar align panel: exposure picker tile label"
+  },
+  "polarTakeFrame": "Take frame",
+  "@polarTakeFrame": {
+    "description": "Simple Mode Polar align panel: button that shoots the next frame in Single mode"
+  },
+  "polarDone": "Done",
+  "@polarDone": {
+    "description": "Simple Mode Polar align panel: button that finishes polar alignment"
+  },
+  "polarDoneNextPlan": "Done · Next: Plan",
+  "@polarDoneNextPlan": {
+    "description": "Simple Mode Polar align panel: finish button in Autopilot, which then moves on to the Plan step"
+  },
+  "searchHint": "Objects, settings, modes, images",
+  "@searchHint": {
+    "description": "Simple Mode search panel: search field placeholder"
+  },
+  "searchGroupSky": "Sky",
+  "@searchGroupSky": {
+    "description": "Simple Mode search panel: heading over the results found in sky"
+  },
+  "searchGroupSettings": "Settings",
+  "@searchGroupSettings": {
+    "description": "Simple Mode search panel: heading over the results found in settings"
+  },
+  "searchGroupModes": "Modes",
+  "@searchGroupModes": {
+    "description": "Simple Mode search panel: heading over the results found in modes"
+  },
+  "searchGroupImages": "Images",
+  "@searchGroupImages": {
+    "description": "Simple Mode search panel: heading over the results found in images"
+  },
+  "searchImageLibrary": "Image Library",
+  "@searchImageLibrary": {
+    "description": "Simple Mode search panel: detail beside an imaged target result, where it opens"
+  },
+  "searchNoMatch": "Nothing in Simple Mode matches \"{query}\".",
+  "@searchNoMatch": {
+    "description": "Simple Mode search panel: shown when nothing matches what was typed",
+    "placeholders": {
+      "query": {
+        "type": "String",
+        "example": "M 31"
+      }
+    }
+  },
+  "searchSectionRig": "Rig",
+  "@searchSectionRig": {
+    "description": "Simple Mode search panel: name of the Settings sheet's Rig section, shown beside a setting result (and the result for the section itself)"
+  },
+  "searchSectionDevices": "Devices",
+  "@searchSectionDevices": {
+    "description": "Simple Mode search panel: name of the Settings sheet's Devices section, shown beside a setting result (and the result for the section itself)"
+  },
+  "searchSectionCamera": "Camera",
+  "@searchSectionCamera": {
+    "description": "Simple Mode search panel: name of the Settings sheet's Camera section, shown beside a setting result (and the result for the section itself)"
+  },
+  "searchSectionMount": "Mount",
+  "@searchSectionMount": {
+    "description": "Simple Mode search panel: name of the Settings sheet's Mount section, shown beside a setting result (and the result for the section itself)"
+  },
+  "searchSectionFocuser": "Focuser",
+  "@searchSectionFocuser": {
+    "description": "Simple Mode search panel: name of the Settings sheet's Focuser section, shown beside a setting result (and the result for the section itself)"
+  },
+  "searchSectionGuider": "Guider",
+  "@searchSectionGuider": {
+    "description": "Simple Mode search panel: name of the Settings sheet's Guider section, shown beside a setting result (and the result for the section itself)"
+  },
+  "searchSettingAperture": "Aperture",
+  "@searchSettingAperture": {
+    "description": "Simple Mode search panel: a setting's name as a result; should match its name in Settings"
+  },
+  "searchSettingFocalLength": "Focal length",
+  "@searchSettingFocalLength": {
+    "description": "Simple Mode search panel: a setting's name as a result; should match its name in Settings"
+  },
+  "searchSettingLatitude": "Latitude",
+  "@searchSettingLatitude": {
+    "description": "Simple Mode search panel: a setting's name as a result; should match its name in Settings"
+  },
+  "searchSettingLongitude": "Longitude",
+  "@searchSettingLongitude": {
+    "description": "Simple Mode search panel: a setting's name as a result; should match its name in Settings"
+  },
+  "searchSettingElevation": "Elevation",
+  "@searchSettingElevation": {
+    "description": "Simple Mode search panel: a setting's name as a result; should match its name in Settings"
+  },
+  "searchSettingLocationTime": "Location and time",
+  "@searchSettingLocationTime": {
+    "description": "Simple Mode search panel: a setting's name as a result; should match its name in Settings"
+  },
+  "searchSettingPermanentPier": "Permanent pier",
+  "@searchSettingPermanentPier": {
+    "description": "Simple Mode search panel: a setting's name as a result; should match its name in Settings"
+  },
+  "searchSettingSimpleMode": "Simple Mode",
+  "@searchSettingSimpleMode": {
+    "description": "Simple Mode search panel: a setting's name as a result; should match its name in Settings"
+  },
+  "searchSettingChangeProfile": "Change profile",
+  "@searchSettingChangeProfile": {
+    "description": "Simple Mode search panel: a setting's name as a result; should match its name in Settings"
+  },
+  "searchSettingChangeRig": "Change rig",
+  "@searchSettingChangeRig": {
+    "description": "Simple Mode search panel: a setting's name as a result; should match its name in Settings"
+  },
+  "searchSettingVersions": "Versions",
+  "@searchSettingVersions": {
+    "description": "Simple Mode search panel: a setting's name as a result; should match its name in Settings"
+  },
+  "searchSettingLogs": "Logs & bug report",
+  "@searchSettingLogs": {
+    "description": "Simple Mode search panel: a setting's name as a result; should match its name in Settings"
+  },
+  "searchSettingConnect": "Connect",
+  "@searchSettingConnect": {
+    "description": "Simple Mode search panel: a setting's name as a result; should match its name in Settings"
+  },
+  "searchSettingDisconnect": "Disconnect",
+  "@searchSettingDisconnect": {
+    "description": "Simple Mode search panel: a setting's name as a result; should match its name in Settings"
+  },
+  "searchSettingReconnect": "Reconnect",
+  "@searchSettingReconnect": {
+    "description": "Simple Mode search panel: a setting's name as a result; should match its name in Settings"
+  },
+  "searchSettingCooler": "Cooler",
+  "@searchSettingCooler": {
+    "description": "Simple Mode search panel: a setting's name as a result; should match its name in Settings"
+  },
+  "searchSettingCoolerTarget": "Cooler target",
+  "@searchSettingCoolerTarget": {
+    "description": "Simple Mode search panel: a setting's name as a result; should match its name in Settings"
+  },
+  "searchSettingGain": "Gain",
+  "@searchSettingGain": {
+    "description": "Simple Mode search panel: a setting's name as a result; should match its name in Settings"
+  },
+  "searchSettingTracking": "Tracking",
+  "@searchSettingTracking": {
+    "description": "Simple Mode search panel: a setting's name as a result; should match its name in Settings"
+  },
+  "searchSettingPark": "Park",
+  "@searchSettingPark": {
+    "description": "Simple Mode search panel: a setting's name as a result; should match its name in Settings"
+  },
+  "searchSettingMeridianFlip": "Meridian flip",
+  "@searchSettingMeridianFlip": {
+    "description": "Simple Mode search panel: a setting's name as a result; should match its name in Settings"
+  },
+  "searchSettingFocuserStep": "Focuser step",
+  "@searchSettingFocuserStep": {
+    "description": "Simple Mode search panel: a setting's name as a result; should match its name in Settings"
+  },
+  "searchSettingDither": "Dither",
+  "@searchSettingDither": {
+    "description": "Simple Mode search panel: a setting's name as a result; should match its name in Settings"
+  },
+  "searchWordsRig": "system profile",
+  "@searchWordsRig": {
+    "description": "Simple Mode search panel: never shown: space-separated lower-case words that also find this setting; translate as search words people might type"
+  },
+  "searchWordsAperture": "telescope diameter",
+  "@searchWordsAperture": {
+    "description": "Simple Mode search panel: never shown: space-separated lower-case words that also find this setting; translate as search words people might type"
+  },
+  "searchWordsFocalLength": "telescope",
+  "@searchWordsFocalLength": {
+    "description": "Simple Mode search panel: never shown: space-separated lower-case words that also find this setting; translate as search words people might type"
+  },
+  "searchWordsSite": "site location coordinates",
+  "@searchWordsSite": {
+    "description": "Simple Mode search panel: never shown: space-separated lower-case words that also find this setting; translate as search words people might type"
+  },
+  "searchWordsElevation": "site altitude height",
+  "@searchWordsElevation": {
+    "description": "Simple Mode search panel: never shown: space-separated lower-case words that also find this setting; translate as search words people might type"
+  },
+  "searchWordsLocationTime": "gps clock time zone site",
+  "@searchWordsLocationTime": {
+    "description": "Simple Mode search panel: never shown: space-separated lower-case words that also find this setting; translate as search words people might type"
+  },
+  "searchWordsPermanentPier": "polar alignment observatory",
+  "@searchWordsPermanentPier": {
+    "description": "Simple Mode search panel: never shown: space-separated lower-case words that also find this setting; translate as search words people might type"
+  },
+  "searchWordsSimpleMode": "full ui advanced",
+  "@searchWordsSimpleMode": {
+    "description": "Simple Mode search panel: never shown: space-separated lower-case words that also find this setting; translate as search words people might type"
+  },
+  "searchWordsChangeProfile": "profile",
+  "@searchWordsChangeProfile": {
+    "description": "Simple Mode search panel: never shown: space-separated lower-case words that also find this setting; translate as search words people might type"
+  },
+  "searchWordsChangeRig": "server",
+  "@searchWordsChangeRig": {
+    "description": "Simple Mode search panel: never shown: space-separated lower-case words that also find this setting; translate as search words people might type"
+  },
+  "searchWordsVersions": "version about firmware driver",
+  "@searchWordsVersions": {
+    "description": "Simple Mode search panel: never shown: space-separated lower-case words that also find this setting; translate as search words people might type"
+  },
+  "searchWordsLogs": "support logs",
+  "@searchWordsLogs": {
+    "description": "Simple Mode search panel: never shown: space-separated lower-case words that also find this setting; translate as search words people might type"
+  },
+  "searchWordsDevices": "equipment gear",
+  "@searchWordsDevices": {
+    "description": "Simple Mode search panel: never shown: space-separated lower-case words that also find this setting; translate as search words people might type"
+  },
+  "searchWordsCooler": "camera temperature cooling",
+  "@searchWordsCooler": {
+    "description": "Simple Mode search panel: never shown: space-separated lower-case words that also find this setting; translate as search words people might type"
+  },
+  "searchWordsGain": "camera iso hcg",
+  "@searchWordsGain": {
+    "description": "Simple Mode search panel: never shown: space-separated lower-case words that also find this setting; translate as search words people might type"
+  },
+  "searchWordsTracking": "mount sidereal",
+  "@searchWordsTracking": {
+    "description": "Simple Mode search panel: never shown: space-separated lower-case words that also find this setting; translate as search words people might type"
+  },
+  "searchWordsPark": "mount unpark",
+  "@searchWordsPark": {
+    "description": "Simple Mode search panel: never shown: space-separated lower-case words that also find this setting; translate as search words people might type"
+  },
+  "searchWordsMeridianFlip": "mount pier side",
+  "@searchWordsMeridianFlip": {
+    "description": "Simple Mode search panel: never shown: space-separated lower-case words that also find this setting; translate as search words people might type"
+  },
+  "searchWordsFocuser": "focus position knob move",
+  "@searchWordsFocuser": {
+    "description": "Simple Mode search panel: never shown: space-separated lower-case words that also find this setting; translate as search words people might type"
+  },
+  "searchWordsFocuserStep": "focus move",
+  "@searchWordsFocuserStep": {
+    "description": "Simple Mode search panel: never shown: space-separated lower-case words that also find this setting; translate as search words people might type"
+  },
+  "searchWordsGuider": "guiding rms phd2",
+  "@searchWordsGuider": {
+    "description": "Simple Mode search panel: never shown: space-separated lower-case words that also find this setting; translate as search words people might type"
+  },
+  "searchWordsDither": "guiding dithering",
+  "@searchWordsDither": {
+    "description": "Simple Mode search panel: never shown: space-separated lower-case words that also find this setting; translate as search words people might type"
+  },
+  "autopilotStepFocus": "Focus",
+  "@autopilotStepFocus": {
+    "description": "Simple Mode Autopilot strip: step name: autofocus"
+  },
+  "autopilotStepPolarAlign": "Polar align",
+  "@autopilotStepPolarAlign": {
+    "description": "Simple Mode Autopilot strip: step name: polar alignment"
+  },
+  "autopilotStepPlan": "Plan",
+  "@autopilotStepPlan": {
+    "description": "Simple Mode Autopilot strip: step name: the imaging plan"
+  },
+  "autopilotStepDone": "{step}, done",
+  "@autopilotStepDone": {
+    "description": "Simple Mode Autopilot strip: screen-reader label of a step done tonight",
+    "placeholders": {
+      "step": {
+        "type": "String",
+        "example": "Focus"
+      }
+    }
+  },
+  "autopilotStepSkipped": "{step}, skipped",
+  "@autopilotStepSkipped": {
+    "description": "Simple Mode Autopilot strip: screen-reader label of a skipped step",
+    "placeholders": {
+      "step": {
+        "type": "String",
+        "example": "Focus"
+      }
+    }
+  },
+  "autopilotStepCurrent": "{step}, current step",
+  "@autopilotStepCurrent": {
+    "description": "Simple Mode Autopilot strip: screen-reader label of the current step",
+    "placeholders": {
+      "step": {
+        "type": "String",
+        "example": "Focus"
+      }
+    }
+  },
+  "autopilotStepNext": "{step}, next",
+  "@autopilotStepNext": {
+    "description": "Simple Mode Autopilot strip: screen-reader label of a step still ahead",
+    "placeholders": {
+      "step": {
+        "type": "String",
+        "example": "Focus"
+      }
+    }
+  },
+  "autopilotBack": "Back",
+  "@autopilotBack": {
+    "description": "Simple Mode Autopilot strip: button that goes back one step"
+  },
+  "autopilotSkip": "Skip",
+  "@autopilotSkip": {
+    "description": "Simple Mode Autopilot strip: button that skips the current step"
+  },
+  "autopilotNothingDone": "Nothing done yet tonight",
+  "@autopilotNothingDone": {
+    "description": "Simple Mode Autopilot offer under the status strip: why Autopilot is offered"
+  },
+  "autopilotStart": "Start Autopilot",
+  "@autopilotStart": {
+    "description": "Simple Mode Autopilot offer: button that starts Autopilot"
+  },
+  "autopilotNotNow": "Not now",
+  "@autopilotNotNow": {
+    "description": "Simple Mode Autopilot offer: tooltip of the × that dismisses it"
+  },
+  "shellModeAutopilot": "Autopilot",
+  "@shellModeAutopilot": {
+    "description": "Simple Mode mode name (mode grid, Mode: label for screen readers)"
+  },
+  "shellModePreview": "Preview",
+  "@shellModePreview": {
+    "description": "Simple Mode mode name"
+  },
+  "shellModePolarAlign": "Polar align",
+  "@shellModePolarAlign": {
+    "description": "Simple Mode mode name"
+  },
+  "shellModeFocus": "Focus",
+  "@shellModeFocus": {
+    "description": "Simple Mode mode name"
+  },
+  "shellModePlan": "Plan",
+  "@shellModePlan": {
+    "description": "Simple Mode mode name"
+  },
+  "shellRailPolarAlign": "P.A.",
+  "@shellRailPolarAlign": {
+    "description": "Simple Mode right rail: short name of Polar align (60 px wide rail, keep very short)"
+  },
+  "shellRailAutopilot": "Auto",
+  "@shellRailAutopilot": {
+    "description": "Simple Mode right rail: short name of Autopilot (60 px wide rail, keep very short)"
+  },
+  "shellStopAgain": "Press {shortcut} again to stop the run",
+  "@shellStopAgain": {
+    "description": "Simple Mode message after the stop keyboard shortcut once; shortcut is the key combo (⌘. or Ctrl+.)",
+    "placeholders": {
+      "shortcut": {
+        "type": "String"
+      }
+    }
+  },
+  "shellShowControls": "Show controls",
+  "@shellShowControls": {
+    "description": "Simple Mode screen reader label of the image when the controls are hidden"
+  },
+  "shellHideControls": "Hide controls",
+  "@shellHideControls": {
+    "description": "Simple Mode screen reader label of the image when the controls are shown"
+  },
+  "shellTapShutter": "Tap the shutter to take a frame",
+  "@shellTapShutter": {
+    "description": "Simple Mode hint in the middle of the screen before the first frame"
+  },
+  "shellImageThis": "Image this",
+  "@shellImageThis": {
+    "description": "Simple Mode button on a picked sky object: start imaging it"
+  },
+  "shellSearch": "Search",
+  "@shellSearch": {
+    "description": "Simple Mode top bar: search button tooltip"
+  },
+  "shellNightModeOn": "Night mode on",
+  "@shellNightModeOn": {
+    "description": "Simple Mode top bar: night mode button tooltip while night mode is on"
+  },
+  "shellNightMode": "Night mode",
+  "@shellNightMode": {
+    "description": "Simple Mode top bar: night mode button tooltip while night mode is off"
+  },
+  "shellSettings": "Settings",
+  "@shellSettings": {
+    "description": "Simple Mode top bar: Settings button tooltip; title of the Settings page"
+  },
+  "shellSky": "Sky",
+  "@shellSky": {
+    "description": "Simple Mode left rail button: show the sky (planetarium)"
+  },
+  "shellInfo": "Info",
+  "@shellInfo": {
+    "description": "Simple Mode left rail button: show the info strips"
+  },
+  "shellLibrary": "Library",
+  "@shellLibrary": {
+    "description": "Simple Mode left rail button: open the image library"
+  },
+  "shellModeSemantics": "Mode: {mode}",
+  "@shellModeSemantics": {
+    "description": "Simple Mode screen reader label of the mode button on the right rail; mode is the mode name",
+    "placeholders": {
+      "mode": {
+        "type": "String"
+      }
+    }
+  },
+  "shellGuiding": "Guiding",
+  "@shellGuiding": {
+    "description": "Simple Mode info strip title: the guiding graph"
+  },
+  "shellGuidingRms": "RMS {rms}",
+  "@shellGuidingRms": {
+    "description": "Simple Mode guiding strip: total RMS guiding error; rms is the formatted value with its unit",
+    "placeholders": {
+      "rms": {
+        "type": "String"
+      }
+    }
+  },
+  "shellRa": "RA",
+  "@shellRa": {
+    "description": "Simple Mode guiding strip legend: right ascension line (abbreviation)"
+  },
+  "shellDec": "Dec",
+  "@shellDec": {
+    "description": "Simple Mode guiding strip legend: declination line (abbreviation)"
+  },
+  "shellHistogram": "Histogram",
+  "@shellHistogram": {
+    "description": "Simple Mode info strip title: the frame histogram"
+  },
+  "shellHistogramMedian": "Median {median}",
+  "@shellHistogramMedian": {
+    "description": "Simple Mode histogram strip: the frame's median pixel value",
+    "placeholders": {
+      "median": {
+        "type": "int"
+      }
+    }
+  },
+  "shellSectionRig": "Rig",
+  "@shellSectionRig": {
+    "description": "Simple Mode Settings section: the rig (site, telescope, versions)"
+  },
+  "shellSectionDevices": "Devices",
+  "@shellSectionDevices": {
+    "description": "Simple Mode Settings section: the list of devices"
+  },
+  "shellSectionCamera": "Camera",
+  "@shellSectionCamera": {
+    "description": "Simple Mode Settings section and device row: the camera"
+  },
+  "shellSectionMount": "Mount",
+  "@shellSectionMount": {
+    "description": "Simple Mode Settings section and device row: the mount"
+  },
+  "shellSectionFocuser": "Focuser",
+  "@shellSectionFocuser": {
+    "description": "Simple Mode Settings section and device row: the focuser"
+  },
+  "shellSectionGuider": "Guider",
+  "@shellSectionGuider": {
+    "description": "Simple Mode Settings section and device row: the guider"
+  },
+  "shellRigNotConnected": "Rig not connected",
+  "@shellRigNotConnected": {
+    "description": "Simple Mode Settings › Devices when the app has no link to the rig"
+  },
+  "shellFilterWheel": "Filter wheel",
+  "@shellFilterWheel": {
+    "description": "Simple Mode Settings › Devices row: the filter wheel"
+  },
+  "shellRotator": "Rotator",
+  "@shellRotator": {
+    "description": "Simple Mode Settings › Devices row: the rotator"
+  },
+  "shellFlatPanel": "Flat panel",
+  "@shellFlatPanel": {
+    "description": "Simple Mode Settings › Devices row: the flat panel"
+  },
+  "shellDome": "Dome",
+  "@shellDome": {
+    "description": "Simple Mode Settings › Devices row: the dome"
+  },
+  "shellWeather": "Weather",
+  "@shellWeather": {
+    "description": "Simple Mode Settings › Devices row: the weather station"
+  },
+  "shellGearTitle": "{type} · {name}",
+  "@shellGearTitle": {
+    "description": "Simple Mode Settings › Devices row title: device type and its name",
+    "placeholders": {
+      "type": {
+        "type": "String"
+      },
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "shellConnected": "Connected",
+  "@shellConnected": {
+    "description": "Simple Mode Settings › Devices row: device state"
+  },
+  "shellConnecting": "Connecting…",
+  "@shellConnecting": {
+    "description": "Simple Mode Settings › Devices row: device state"
+  },
+  "shellFailed": "Failed",
+  "@shellFailed": {
+    "description": "Simple Mode Settings › Devices row: device state after a failed connect"
+  },
+  "shellNotConnected": "Not connected",
+  "@shellNotConnected": {
+    "description": "Simple Mode Settings › Devices row: device state"
+  },
+  "shellDisconnect": "Disconnect",
+  "@shellDisconnect": {
+    "description": "Simple Mode Settings › Devices row button"
+  },
+  "shellReconnect": "Reconnect",
+  "@shellReconnect": {
+    "description": "Simple Mode Settings › Devices row button after a failure"
+  },
+  "shellConnect": "Connect",
+  "@shellConnect": {
+    "description": "Simple Mode Settings › Devices row button"
+  },
+  "shellCouldntSave": "Couldn't save that",
+  "@shellCouldntSave": {
+    "description": "Simple Mode Settings › Rig: message when a changed value failed to save"
+  },
+  "shellCouldntSetClock": "Couldn't set the rig's clock",
+  "@shellCouldntSetClock": {
+    "description": "Simple Mode Settings › Rig: message when sending this device's time to the rig failed"
+  },
+  "shellCouldntGetLocation": "Couldn't get a location",
+  "@shellCouldntGetLocation": {
+    "description": "Simple Mode Settings › Rig: message when no location could be found"
+  },
+  "shellCouldntSaveSite": "Couldn't save the site",
+  "@shellCouldntSaveSite": {
+    "description": "Simple Mode Settings › Rig: message when saving the location failed"
+  },
+  "shellSiteFrom": "Site from {source}",
+  "@shellSiteFrom": {
+    "description": "Simple Mode Settings › Rig: message after the location was set; source names where it came from (e.g. this iPad's GPS)",
+    "placeholders": {
+      "source": {
+        "type": "String"
+      }
+    }
+  },
+  "shellChange": "Change",
+  "@shellChange": {
+    "description": "Simple Mode Settings › Rig: button beside the rig name or the profile"
+  },
+  "shellName": "Name",
+  "@shellName": {
+    "description": "Simple Mode Settings › Rig: the rig's name"
+  },
+  "shellChangeRig": "Change rig",
+  "@shellChangeRig": {
+    "description": "Simple Mode Settings › Rig: screen reader label of the Change button beside the rig name"
+  },
+  "shellProfile": "Profile",
+  "@shellProfile": {
+    "description": "Simple Mode Settings › Rig: the active profile"
+  },
+  "shellChangeProfile": "Change profile",
+  "@shellChangeProfile": {
+    "description": "Simple Mode Settings › Rig: screen reader label of the Change button beside the profile"
+  },
+  "shellPlanRunning": "A plan is running. It keeps running on the rig; pick this profile again to come back to it.",
+  "@shellPlanRunning": {
+    "description": "Simple Mode Settings › Rig: note under the profile while a plan runs"
+  },
+  "shellAperture": "Aperture",
+  "@shellAperture": {
+    "description": "Simple Mode Settings › Rig: the telescope's aperture"
+  },
+  "shellFocalLength": "Focal length",
+  "@shellFocalLength": {
+    "description": "Simple Mode Settings › Rig: the telescope's focal length"
+  },
+  "shellLatitude": "Latitude",
+  "@shellLatitude": {
+    "description": "Simple Mode Settings › Rig: the site's latitude"
+  },
+  "shellLongitude": "Longitude",
+  "@shellLongitude": {
+    "description": "Simple Mode Settings › Rig: the site's longitude"
+  },
+  "shellElevation": "Elevation",
+  "@shellElevation": {
+    "description": "Simple Mode Settings › Rig: the site's elevation"
+  },
+  "shellUseLocation": "Use {device}'s location and time",
+  "@shellUseLocation": {
+    "description": "Simple Mode Settings › Rig button; device names this device (e.g. this iPad)",
+    "placeholders": {
+      "device": {
+        "type": "String"
+      }
+    }
+  },
+  "shellPermanentPier": "Permanent pier",
+  "@shellPermanentPier": {
+    "description": "Simple Mode Settings › Rig switch: the mount stays on a permanent pier"
+  },
+  "shellPermanentPierHint": "Skips polar alignment",
+  "@shellPermanentPierHint": {
+    "description": "Simple Mode Settings › Rig: hint under the Permanent pier switch"
+  },
+  "shellSimpleMode": "Simple Mode",
+  "@shellSimpleMode": {
+    "description": "Simple Mode Settings › Rig switch: turn Simple Mode off to go to the full app"
+  },
+  "shellThisApp": "This app",
+  "@shellThisApp": {
+    "description": "Simple Mode Settings › Rig versions list: this app's version"
+  },
+  "shellAraServer": "OpenAstro Ara server",
+  "@shellAraServer": {
+    "description": "Simple Mode Settings › Rig versions list: the rig's server (OpenAstro Ara is the product name)"
+  },
+  "shellStarDatabase": "Star database",
+  "@shellStarDatabase": {
+    "description": "Simple Mode Settings › Rig versions list: the plate solving star databases"
+  },
+  "shellSystem": "System",
+  "@shellSystem": {
+    "description": "Simple Mode Settings › Rig versions list: the rig's operating system and board"
+  },
+  "shellLogs": "Logs & bug report",
+  "@shellLogs": {
+    "description": "Simple Mode Settings › Rig button: open the logs and send a bug report"
+  },
+  "shellNotSet": "Not set",
+  "@shellNotSet": {
+    "description": "Simple Mode Settings › Rig: an aperture or focal length not set yet"
+  },
+  "shellHemiNorth": "N",
+  "@shellHemiNorth": {
+    "description": "Simple Mode Settings › Rig: latitude hemisphere, north (one letter)"
+  },
+  "shellHemiSouth": "S",
+  "@shellHemiSouth": {
+    "description": "Simple Mode Settings › Rig: latitude hemisphere, south (one letter)"
+  },
+  "shellHemiEast": "E",
+  "@shellHemiEast": {
+    "description": "Simple Mode Settings › Rig: longitude hemisphere, east (one letter)"
+  },
+  "shellHemiWest": "W",
+  "@shellHemiWest": {
+    "description": "Simple Mode Settings › Rig: longitude hemisphere, west (one letter)"
+  },
+  "shellWheelSemantics": "{label}, wheel {index} of {count}",
+  "@shellWheelSemantics": {
+    "description": "Simple Mode Settings › Rig: screen reader label of one digit wheel; label is the value's name",
+    "placeholders": {
+      "label": {
+        "type": "String"
+      },
+      "index": {
+        "type": "int"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "shellRaise": "Raise",
+  "@shellRaise": {
+    "description": "Simple Mode Settings › Rig: screen reader label of the + button (elevation)"
+  },
+  "shellLower": "Lower",
+  "@shellLower": {
+    "description": "Simple Mode Settings › Rig: screen reader label of the − button (elevation)"
+  },
+  "planNeverRises": "Never rises here",
+  "@planNeverRises": {
+    "description": "Plan sheet, under the picked target: it never rises at this site"
+  },
+  "planBelowHorizon": "Below your horizon",
+  "@planBelowHorizon": {
+    "description": "Plan sheet, under the picked target: it is below the horizon, no rise time known"
+  },
+  "planBelowHorizonRises": "Below your horizon · rises {time}",
+  "@planBelowHorizonRises": {
+    "description": "Plan sheet, under the picked target: below the horizon, with its rise time (HH:MM)",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "planAltitudeUpMax": "{alt}° up · max {max}°",
+  "@planAltitudeUpMax": {
+    "description": "Plan sheet, under the picked target: altitude now and highest tonight, in degrees",
+    "placeholders": {
+      "alt": {
+        "type": "int"
+      },
+      "max": {
+        "type": "int"
+      }
+    }
+  },
+  "planAltitudeUp": "{alt}° up",
+  "@planAltitudeUp": {
+    "description": "Tonight's best suggestion line: altitude now in degrees",
+    "placeholders": {
+      "alt": {
+        "type": "int"
+      }
+    }
+  },
+  "planBelowTheHorizon": "below the horizon",
+  "@planBelowTheHorizon": {
+    "description": "Tonight's best suggestion line, lowercase: below the horizon"
+  },
+  "planRisesAt": "rises {time}",
+  "@planRisesAt": {
+    "description": "Lowercase: when a target rises (HH:MM); suggestion line and plan square",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "planRisesAtCap": "Rises {time}",
+  "@planRisesAtCap": {
+    "description": "Shutter screen-reader label while the plan waits for the target to rise (HH:MM)",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "planPausing": "Pausing…",
+  "@planPausing": {
+    "description": "Plan square: the run is pausing after the current frame"
+  },
+  "planPaused": "Paused",
+  "@planPaused": {
+    "description": "Plan square: the run is paused"
+  },
+  "planDone": "Done",
+  "@planDone": {
+    "description": "Plan square: the target or run is finished"
+  },
+  "planMoreInQueue": "{count, plural, other{{count} more in the queue}}",
+  "@planMoreInQueue": {
+    "description": "Screen-reader label of the +N plan square: targets not shown",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "planQueued": "queued",
+  "@planQueued": {
+    "description": "Plan square for the hidden rest of the queue, lowercase"
+  },
+  "planSquareLabel": "Plan: {name}",
+  "@planSquareLabel": {
+    "description": "Screen-reader label of a plan square, with the target name",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "planPickTargetFirst": "Pick a target first",
+  "@planPickTargetFirst": {
+    "description": "Shutter screen-reader label: nothing to start yet"
+  },
+  "planStartImaging": "Start imaging",
+  "@planStartImaging": {
+    "description": "Shutter screen-reader label: start the run"
+  },
+  "planPauseAfterFrame": "Pause after this frame",
+  "@planPauseAfterFrame": {
+    "description": "Shutter screen-reader label while imaging"
+  },
+  "planPausingLabel": "Pausing",
+  "@planPausingLabel": {
+    "description": "Shutter screen-reader label while pausing"
+  },
+  "planResume": "Resume",
+  "@planResume": {
+    "description": "Shutter screen-reader label while paused"
+  },
+  "planStopTheRun": "Stop the run",
+  "@planStopTheRun": {
+    "description": "Shutter screen-reader custom action: stop the run"
+  },
+  "planHoldToStop": "Hold to stop",
+  "@planHoldToStop": {
+    "description": "Hint beside the shutter: hold it to stop the run"
+  },
+  "planTonightsBest": "TONIGHT'S BEST",
+  "@planTonightsBest": {
+    "description": "Plan sheet caption above tonight's suggested targets (uppercase)"
+  },
+  "planTonightsPlan": "Tonight's plan",
+  "@planTonightsPlan": {
+    "description": "Plan sheet heading"
+  },
+  "planEditTarget": "Edit {name}",
+  "@planEditTarget": {
+    "description": "Plan sheet heading when editing a queued target",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "planSearchObjects": "Search objects",
+  "@planSearchObjects": {
+    "description": "Plan sheet search field hint"
+  },
+  "planSearch": "Search",
+  "@planSearch": {
+    "description": "Tooltip of the plan sheet's search button"
+  },
+  "planSearchOrPick": "Search, or pick in the sky.",
+  "@planSearchOrPick": {
+    "description": "Plan sheet hint when no target is picked"
+  },
+  "planPickInSky": "Pick in Sky",
+  "@planPickInSky": {
+    "description": "Plan sheet button: pick the target in the planetarium"
+  },
+  "planExposure": "Exposure",
+  "@planExposure": {
+    "description": "Plan sheet row tile label: sub-exposure length"
+  },
+  "planExposureSuggested": "{exposure} · suggested",
+  "@planExposureSuggested": {
+    "description": "Exposure option marked as the suggested length; exposure is e.g. 2 min",
+    "placeholders": {
+      "exposure": {
+        "type": "String"
+      }
+    }
+  },
+  "planFrames": "Frames",
+  "@planFrames": {
+    "description": "Plan sheet row tile label: frame count; Night done row label for an unfiltered row"
+  },
+  "planSuggested": "Suggested: {hint}",
+  "@planSuggested": {
+    "description": "Plan sheet line with the suggested sub lengths, e.g. L 2 min · GB 3 min",
+    "placeholders": {
+      "hint": {
+        "type": "String"
+      }
+    }
+  },
+  "planUseAll": "Use all",
+  "@planUseAll": {
+    "description": "Plan sheet button: apply all suggested sub lengths"
+  },
+  "planFrameCount": "{count, plural, other{{count} frames}}",
+  "@planFrameCount": {
+    "description": "Plan sheet: total frames in the plan; progress panel frame count",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "planNotPolarAligned": "Not polar aligned tonight",
+  "@planNotPolarAligned": {
+    "description": "Plan sheet warning: polar alignment not done tonight"
+  },
+  "planStartsNow": "Starts now",
+  "@planStartsNow": {
+    "description": "Plan sheet: the run starts right away"
+  },
+  "planStartsAtDark": "Starts at dark ({time})",
+  "@planStartsAtDark": {
+    "description": "Plan sheet: the run waits for dark (HH:MM)",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "planStartsAt": "Starts at {time}",
+  "@planStartsAt": {
+    "description": "Plan sheet: the run starts at a picked time (HH:MM)",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "planStartNowInstead": "Start now instead",
+  "@planStartNowInstead": {
+    "description": "Plan sheet button: don't wait, start right away"
+  },
+  "planWaitForDark": "Wait for dark ({time})",
+  "@planWaitForDark": {
+    "description": "Plan sheet button: wait for dark to start (HH:MM)",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "planPickATime": "Pick a time",
+  "@planPickATime": {
+    "description": "Plan sheet button: choose a start time"
+  },
+  "planCancel": "Cancel",
+  "@planCancel": {
+    "description": "Plan sheet button: leave the edit without saving"
+  },
+  "planSaving": "Saving…",
+  "@planSaving": {
+    "description": "Plan sheet save button while saving"
+  },
+  "planSave": "Save",
+  "@planSave": {
+    "description": "Plan sheet button: save the edited target"
+  },
+  "planTargetAdded": "{name} added · {count} in the queue",
+  "@planTargetAdded": {
+    "description": "Plan sheet confirmation after adding a target to the queue",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "planAddToQueue": "Add to queue",
+  "@planAddToQueue": {
+    "description": "Plan sheet button: queue the picked target"
+  },
+  "planStarting": "Starting…",
+  "@planStarting": {
+    "description": "Plan sheet start button while starting"
+  },
+  "planStartAt": "Start at {time}",
+  "@planStartAt": {
+    "description": "Plan sheet start button with a scheduled start (HH:MM)",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "planStartNow": "Start now",
+  "@planStartNow": {
+    "description": "Plan sheet start button when a queue exists: start this target now"
+  },
+  "planCreateAndStart": "Create and start",
+  "@planCreateAndStart": {
+    "description": "Plan sheet start button: create the plan and start it"
+  },
+  "planTargetRemoved": "{name} removed",
+  "@planTargetRemoved": {
+    "description": "Message after a target is removed from the queue",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "planUndo": "Undo",
+  "@planUndo": {
+    "description": "Message action: put the removed target back"
+  },
+  "planMoveTarget": "Move {name}",
+  "@planMoveTarget": {
+    "description": "Screen-reader label of a queue row's drag handle",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "planRemoveFromQueue": "Remove {name} from the queue",
+  "@planRemoveFromQueue": {
+    "description": "Tooltip of a queue row's remove button",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "planRemove": "Remove",
+  "@planRemove": {
+    "description": "Shown behind a queue row swiped to remove it"
+  },
+  "planQueueHeader": "QUEUE · {count} {count, plural, =1{target} other{targets}} · {duration}",
+  "@planQueueHeader": {
+    "description": "Queue caption (uppercase): target count and total time, e.g. 6 h 20 min",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "duration": {
+        "type": "String"
+      }
+    }
+  },
+  "planOpenStorage": "Open Storage",
+  "@planOpenStorage": {
+    "description": "Button under a run error: open storage settings"
+  },
+  "planNightDone": "Night done",
+  "@planNightDone": {
+    "description": "Night done heading after the run ends"
+  },
+  "planStopped": "stopped",
+  "@planStopped": {
+    "description": "Night done summary, lowercase: the run was stopped"
+  },
+  "planFailed": "failed",
+  "@planFailed": {
+    "description": "Night done summary, lowercase: the run failed"
+  },
+  "planStoppedAt": "Stopped at: {step}",
+  "@planStoppedAt": {
+    "description": "Night done: the step where the run stopped",
+    "placeholders": {
+      "step": {
+        "type": "String"
+      }
+    }
+  },
+  "planImageLibrary": "Image Library",
+  "@planImageLibrary": {
+    "description": "Night done button: open the image library"
+  },
+  "planNewPlan": "New plan",
+  "@planNewPlan": {
+    "description": "Night done button: start a new plan"
+  },
+  "planImagingTarget": "IMAGING {name}",
+  "@planImagingTarget": {
+    "description": "Progress panel caption (uppercase) with the target name",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "planMountStopped": "Mount stopped",
+  "@planMountStopped": {
+    "description": "Progress panel: a panic stop paused the run"
+  },
+  "planEndsLeft": "Ends {time} · {duration} left",
+  "@planEndsLeft": {
+    "description": "Progress panel: when the queue ends (HH:MM) and the time left, e.g. 1 h 5 min",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      },
+      "duration": {
+        "type": "String"
+      }
+    }
+  },
+  "planHintResume": "Tap the shutter to resume and re-center; hold it to stop.",
+  "@planHintResume": {
+    "description": "Progress panel hint while paused"
+  },
+  "planResumeWithoutRecenter": "Resume without re-centering",
+  "@planResumeWithoutRecenter": {
+    "description": "Progress panel button while paused"
+  },
+  "planRecenterAndRefocus": "Re-center and refocus",
+  "@planRecenterAndRefocus": {
+    "description": "Progress panel button while paused: resume after re-centering and refocusing"
+  },
+  "planHintPause": "Tap the shutter to pause after this frame; hold it to stop.",
+  "@planHintPause": {
+    "description": "Progress panel hint while imaging"
+  },
+  "planAddTarget": "Add target",
+  "@planAddTarget": {
+    "description": "Progress panel button: queue another target"
+  },
+  "planMagnitude": "mag {value}",
+  "@planMagnitude": {
+    "description": "Search suggestion: the object's magnitude, e.g. mag 8.4",
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  }
 }

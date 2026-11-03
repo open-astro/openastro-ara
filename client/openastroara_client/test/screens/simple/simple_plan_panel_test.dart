@@ -20,6 +20,7 @@ import 'package:openastroara/models/sequence/instruction_catalog.dart' show wait
 import 'package:openastroara/util/tonight_sky_local.dart' show darkStart;
 import 'package:openastroara/models/sky_model_calibration.dart';
 import 'package:openastroara/screens/simple/simple_plan_panel.dart';
+import 'package:openastroara/l10n/l10n.dart';
 import 'package:openastroara/services/sequence_api.dart';
 import 'package:openastroara/services/tonight_sky_api.dart';
 import 'package:openastroara/theme/ara_colors.dart';
@@ -251,6 +252,8 @@ Future<ProviderContainer> _pump(WidgetTester tester, _Seq seq, Widget child,
   return container;
 }
 
+final _en = lookupAppLocalizations(const Locale('en'));
+
 void main() {
   test('the first plan: LRGB from the set, one unnamed row without a choice', () {
     final lrgb = simpleRunDefaultPlan(_lrgb, 300);
@@ -350,16 +353,16 @@ void main() {
   });
 
   test('simpleTargetStatus: up, below with its rise, never rises', () {
-    expect(simpleTargetStatus(_m31), '62° up · max 74°');
+    expect(simpleTargetStatus(_m31, _en), '62° up · max 74°');
     expect(
         simpleTargetStatus(PlanetariumSelection(
             name: 'M33', kind: 'Galaxy', raHours: 1.6, decDeg: 30.8, raJ2000Hours: 1.56, decJ2000Deg: 30.66,
-            altDeg: -12, maxAltDeg: 60, rise: DateTime(2026, 11, 2, 22, 40))),
+            altDeg: -12, maxAltDeg: 60, rise: DateTime(2026, 11, 2, 22, 40)), _en),
         'Below your horizon · rises 22:40');
     expect(
         simpleTargetStatus(const PlanetariumSelection(
             name: 'NGC 104', kind: 'Cluster', raHours: 0.4, decDeg: -72, raJ2000Hours: 0.4, decJ2000Deg: -72,
-            altDeg: -40, maxAltDeg: -20)),
+            altDeg: -40, maxAltDeg: -20), _en),
         'Never rises here');
   });
 
@@ -398,11 +401,11 @@ void main() {
     final up = TonightSkyObject(
         id: 'ngc7000', name: 'NGC 7000', type: 'Nebula', magnitude: 4, raDeg: 314.7, decDeg: 44.3,
         altitudeDeg: 71.4, maxAltitudeDeg: 80, windowEndUtc: DateTime.utc(2026, 11, 3, 1, 40));
-    expect(simpleSuggestionLine(up), 'Nebula · 71° up');
+    expect(simpleSuggestionLine(_en, up), 'Nebula · 71° up');
     final later = TonightSkyObject(
         id: 'm45', name: 'M45', type: 'Cluster', magnitude: 1.6, raDeg: 56.9, decDeg: 24.1,
         altitudeDeg: -5, maxAltitudeDeg: 70, windowStartUtc: DateTime(2026, 11, 2, 21, 50));
-    expect(simpleSuggestionLine(later), 'Cluster · rises 21:50');
+    expect(simpleSuggestionLine(_en, later), 'Cluster · rises 21:50');
     final sel = simpleSelectionOf(up);
     expect(sel.name, 'NGC 7000');
     expect(sel.raJ2000Hours, closeTo(314.7 / 15, 1e-9));

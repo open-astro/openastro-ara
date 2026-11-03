@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../l10n/l10n.dart';
 import '../../models/autofocus_run.dart';
 import '../../models/equipment_device_status.dart';
 import '../../state/equipment/focuser_state.dart';
@@ -25,14 +26,19 @@ double? simpleFocusHfr(AutofocusRun run) {
 /// "Auto" or "Manual": the rail chip's caption in Focus mode. The method is
 /// the one Smart Focus would use: the user's pick, else autofocus with a
 /// focuser connected, by hand without (as `MainFocusCard` decides).
-String simpleFocusSummary(WidgetRef ref) {
+String simpleFocusSummary(WidgetRef ref) =>
+    simpleFocusMethod(ref) == MainFocusMethod.autofocus
+    ? ref.context.l10n.focusAuto
+    : ref.context.l10n.focusManual;
+
+/// Autofocus with the focuser connected, the Bahtinov mask without, unless
+/// one was picked.
+MainFocusMethod simpleFocusMethod(WidgetRef ref) {
   final connected =
       ref.watch(focuserProvider).asData?.value?.connectionState ==
       EquipmentConnectionState.connected;
-  final method =
-      ref.watch(mainFocusMethodProvider) ??
+  return ref.watch(mainFocusMethodProvider) ??
       (connected ? MainFocusMethod.autofocus : MainFocusMethod.bahtinov);
-  return method == MainFocusMethod.autofocus ? 'Auto' : 'Manual';
 }
 
 /// The rail's shutter in Focus follows the chip: on Auto it starts autofocus
@@ -43,7 +49,7 @@ class SimpleFocusShutter extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    if (simpleFocusSummary(ref) != 'Auto') {
+    if (simpleFocusMethod(ref) != MainFocusMethod.autofocus) {
       return const SimpleShutter(start: true);
     }
     final live = ref.watch(autofocusLiveProvider);
@@ -55,7 +61,9 @@ class SimpleFocusShutter extends ConsumerWidget {
     return SimpleShutterButton(
       start: true,
       running: running,
-      label: running ? 'Cancel autofocus' : 'Autofocus',
+      label: running
+          ? context.l10n.focusCancelAutofocus
+          : context.l10n.focusAutofocus,
       onPressed: live.busy || !(running || connected)
           ? null
           : running
@@ -97,7 +105,7 @@ class SimpleFocusPanel extends ConsumerWidget {
               maxLines: 2,
             ),
             Text(
-              hfr == null ? 'HFR —' : 'HFR ${hfr.toStringAsFixed(2)}',
+              context.l10n.focusHfr(hfr?.toStringAsFixed(2) ?? '—'),
               style: kSimpleText.copyWith(
                 fontSize: 30,
                 fontWeight: FontWeight.w300,
@@ -115,7 +123,7 @@ class SimpleFocusPanel extends ConsumerWidget {
             // The Focuser window's dial moves it; nothing to nudge here.
             if (!connected)
               Text(
-                'No focuser connected',
+                context.l10n.focusNoFocuser,
                 style: kSimpleText.copyWith(color: AraColors.textSecondary),
               ),
           ],

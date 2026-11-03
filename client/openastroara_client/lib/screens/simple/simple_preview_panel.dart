@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart' show Ticker;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../l10n/l10n.dart';
 import '../../services/storage_space_api.dart';
 import '../../state/imaging/capture_progress_state.dart';
 import '../../state/imaging/exposure_state.dart';
@@ -64,10 +65,10 @@ String simpleUptime(double seconds) {
 
 /// "412 GB free" (whole GB from 100 up, one decimal below), or "Unplugged"
 /// when the save drive can't be read. Pure — unit-tested.
-String simpleFree(int? bytes) {
-  if (bytes == null) return 'Unplugged';
+String simpleFree(AppLocalizations l10n, int? bytes) {
+  if (bytes == null) return l10n.previewUnplugged;
   final gb = bytes / 1073741824;
-  return '${gb.toStringAsFixed(gb >= 100 ? 0 : 1)} GB free';
+  return l10n.previewFree(gb.toStringAsFixed(gb >= 100 ? 0 : 1));
 }
 
 /// "512 MB" under 1 GB, "1.5 GB" from there: memory in use. Pure —
@@ -116,14 +117,18 @@ class _SimpleSystemPanelState extends ConsumerState<SimpleSystemPanel> {
     final state = ref.watch(serverInternalStateProvider).value;
     final storage = ref.watch(storageSpaceProvider);
     final cpu = state?.cpuPercent;
+    final l10n = context.l10n;
     final facts = [
       (
-        'Storage',
-        storage.hasValue ? simpleFree(storage.value?.freeBytes) : '—',
+        l10n.previewStorage,
+        storage.hasValue ? simpleFree(l10n, storage.value?.freeBytes) : '—',
       ),
-      ('CPU', cpu == null ? '—' : '${cpu.round()} %'),
-      ('Memory', state == null ? '—' : simpleMemory(state.workingSetBytes)),
-      ('Up', state == null ? '—' : simpleUptime(state.uptimeSeconds)),
+      (l10n.previewCpu, cpu == null ? '—' : '${cpu.round()} %'),
+      (
+        l10n.previewMemory,
+        state == null ? '—' : simpleMemory(state.workingSetBytes),
+      ),
+      (l10n.previewUp, state == null ? '—' : simpleUptime(state.uptimeSeconds)),
     ];
     return SimpleFactTiles(
       key: const Key('simple-system-line'),
@@ -156,12 +161,16 @@ class SimpleInfoPanel extends ConsumerWidget {
     final clipped = analysed == null
         ? '—'
         : '${(analysed.highClipFraction * 100).toStringAsFixed(analysed.highClipFraction < 0.001 ? 0 : 2)} %';
+    final l10n = context.l10n;
     final facts = [
-      ('HFR', analysed?.hfr?.toStringAsFixed(2) ?? '—'),
-      ('Stars', analysed?.stars?.toString() ?? '—'),
-      ('Exposure', '${formatExposure(params.exposure)} · ${params.filterSlot}'),
-      ('Gain · offset', gainOffset),
-      ('Clipped', clipped),
+      (l10n.previewHfr, analysed?.hfr?.toStringAsFixed(2) ?? '—'),
+      (l10n.previewStars, analysed?.stars?.toString() ?? '—'),
+      (
+        l10n.previewExposure,
+        '${formatExposure(params.exposure)} · ${params.filterSlot}',
+      ),
+      (l10n.previewGainOffset, gainOffset),
+      (l10n.previewClipped, clipped),
     ];
     return SimpleFactTiles(facts: facts);
   }
@@ -291,9 +300,9 @@ class SimpleSettingsPopover extends ConsumerWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         spacing: AraSpace.s8,
         children: [
-          const Text(
-            'Preview settings',
-            style: TextStyle(
+          Text(
+            context.l10n.previewSettings,
+            style: const TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w600,
               color: AraColors.textPrimary,
@@ -301,7 +310,7 @@ class SimpleSettingsPopover extends ConsumerWidget {
           ),
           SimplePresetTile<Duration>(
             key: const Key('simple-exposure'),
-            label: 'Exposure',
+            label: context.l10n.previewExposure,
             value: params.exposure,
             options: exposurePresets(
               minSec: caps?.minExposureSec ?? 0,
@@ -328,9 +337,9 @@ class SimpleSettingsPopover extends ConsumerWidget {
             ),
             child: Row(
               children: [
-                for (final (v, label) in const [
-                  (PreviewShot.loop, 'Loop'),
-                  (PreviewShot.single, 'Single'),
+                for (final (v, label) in [
+                  (PreviewShot.loop, context.l10n.previewLoop),
+                  (PreviewShot.single, context.l10n.previewSingle),
                 ])
                   Expanded(
                     child: SimpleSegment(
@@ -513,7 +522,7 @@ class SimplePresetTile<T> extends StatelessWidget {
                   const Spacer(),
                   TextButton(
                     onPressed: () => Navigator.of(popup).pop(true),
-                    child: const Text('Done'),
+                    child: Text(context.l10n.previewDone),
                   ),
                 ],
               ),
@@ -566,7 +575,9 @@ class SimpleShutterButton extends StatelessWidget {
     final fg = enabled ? AraColors.textPrimary : AraColors.textDisabled;
     return Semantics(
       button: true,
-      label: label ?? (running ? 'Stop' : 'Take a frame'),
+      label:
+          label ??
+          (running ? context.l10n.previewStop : context.l10n.previewTakeFrame),
       child: InkResponse(
         key: const Key('simple-shutter'),
         onTap: onPressed,
@@ -643,9 +654,12 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
     final run = ref.watch(sequenceRunStateProvider).value;
     // A scheduled plan waits on the rig: it says when it starts instead.
     final startAt = ref.watch(simpleRunProvider.select((r) => r.startAt));
+    final l10n = context.l10n;
     final step = startAt != null && startAt.isAfter(DateTime.now())
-        ? 'Starts at ${startAt.hour.toString().padLeft(2, '0')}:'
-              '${startAt.minute.toString().padLeft(2, '0')}'
+        ? l10n.previewStartsAt(
+            '${startAt.hour.toString().padLeft(2, '0')}:'
+            '${startAt.minute.toString().padLeft(2, '0')}',
+          )
         : run?.currentInstructionDescription;
     final paused =
         run?.state == SequenceRunState.paused ||
@@ -670,53 +684,55 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
     final planActive = run?.state?.isActive ?? false;
     final exposing = !stopping && p.phase == CapturePhase.exposing;
     final (String? label, String? detail, Color dot) = stopping
-        ? ('Stopping…', null, AraColors.textSecondary)
+        ? (l10n.previewStopping, null, AraColors.textSecondary)
         : switch (p.phase) {
             CapturePhase.exposing => (
-              'Taking a frame',
+              l10n.previewTakingFrame,
               p.exposureRemaining == null
-                  ? 'Starting…'
+                  ? l10n.previewStarting
                   // Whole seconds, rounded up: "1 s left" until it's done.
-                  : '${(p.exposureRemaining!.inMilliseconds / 1000).ceil()} s left',
+                  : l10n.previewSecondsLeft(
+                      (p.exposureRemaining!.inMilliseconds / 1000).ceil(),
+                    ),
               AraColors.accentConnected,
             ),
             CapturePhase.downloading => (
-              'Downloading…',
+              l10n.previewDownloading,
               null,
               AraColors.accentConnected,
             ),
             CapturePhase.done => (
-              'Frame ready',
+              l10n.previewFrameReady,
               null,
               AraColors.accentConnected,
             ),
             CapturePhase.failed => (
-              'Capture failed',
+              l10n.previewCaptureFailed,
               p.error,
               AraColors.accentError,
             ),
             CapturePhase.idle =>
               looping
-                  ? ('Looping', null, AraColors.accentConnected)
+                  ? (l10n.previewLooping, null, AraColors.accentConnected)
                   // Between frames a running plan says what it's doing
                   // (cooling, slewing, centring, focusing).
                   : (run?.state?.isActive ?? false) &&
                         step != null &&
                         step.isNotEmpty
                   ? (
-                      paused ? 'Plan paused' : 'Plan',
+                      paused ? l10n.previewPlanPaused : l10n.previewPlan,
                       step,
                       paused ? AraColors.accentBusy : AraColors.accentInfo,
                     )
                   : parking != null
                   ? (
-                      parking ? 'Parking' : 'Unparking',
+                      parking ? l10n.previewParking : l10n.previewUnparking,
                       null,
                       AraColors.accentBusy,
                     )
                   : cooling
                   ? (
-                      'Cooling',
+                      l10n.previewCooling,
                       '${simpleCelsius(ccd)} → ${simpleCelsius(target)}',
                       AraColors.accentInfo,
                     )
@@ -738,7 +754,9 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
     return Semantics(
       container: true,
       liveRegion: true,
-      label: exposing || detail == null ? label : '$label, $detail',
+      label: exposing || detail == null
+          ? label
+          : l10n.previewStatusSpoken(label, detail),
       excludeSemantics: true,
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: kSimpleStatusMaxWidth),

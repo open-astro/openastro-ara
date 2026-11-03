@@ -38,6 +38,7 @@ import '../../state/simple_mode_state.dart';
 import 'dart:ui' show ImageFilter;
 
 import '../../app_version.dart';
+import '../../l10n/l10n.dart';
 import '../../services/plate_solve_database_api.dart';
 import '../../services/server_maintenance_api.dart';
 import '../../models/equipment_device_status.dart';
@@ -111,19 +112,19 @@ const double kSimpleStopSize = 60;
 enum SimpleModeScreen { autopilot, preview, focus, polarAlign, plan }
 
 extension SimpleModeScreenLabels on SimpleModeScreen {
-  String get label => switch (this) {
-    SimpleModeScreen.autopilot => 'Autopilot',
-    SimpleModeScreen.preview => 'Preview',
-    SimpleModeScreen.polarAlign => 'Polar align',
-    SimpleModeScreen.focus => 'Focus',
-    SimpleModeScreen.plan => 'Plan',
+  String labelOf(AppLocalizations l10n) => switch (this) {
+    SimpleModeScreen.autopilot => l10n.shellModeAutopilot,
+    SimpleModeScreen.preview => l10n.shellModePreview,
+    SimpleModeScreen.polarAlign => l10n.shellModePolarAlign,
+    SimpleModeScreen.focus => l10n.shellModeFocus,
+    SimpleModeScreen.plan => l10n.shellModePlan,
   };
 
   /// The name on the 60 px rail, where "Polar align" doesn't fit.
-  String get railLabel => switch (this) {
-    SimpleModeScreen.polarAlign => 'P.A.',
-    SimpleModeScreen.autopilot => 'Auto',
-    _ => label,
+  String railLabelOf(AppLocalizations l10n) => switch (this) {
+    SimpleModeScreen.polarAlign => l10n.shellRailPolarAlign,
+    SimpleModeScreen.autopilot => l10n.shellRailAutopilot,
+    _ => labelOf(l10n),
   };
 
   IconData get icon => switch (this) {
@@ -380,7 +381,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     }.contains(Theme.of(context).platform);
     _stopAsk = messages.show(
       SimpleMessageKind.question,
-      'Press ${mac ? '⌘.' : 'Ctrl+.'} again to stop the run',
+      context.l10n.shellStopAgain(mac ? '⌘.' : 'Ctrl+.'),
     );
     _stopDisarm = Timer(const Duration(seconds: 3), () {
       if (_stopAsk != null) messages.dismiss(_stopAsk!);
@@ -637,8 +638,8 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                             label: showSky
                                 ? null
                                 : _clean
-                                ? 'Show controls'
-                                : 'Hide controls',
+                                ? context.l10n.shellShowControls
+                                : context.l10n.shellHideControls,
                             child: GestureDetector(
                               key: const Key('simple-frame'),
                               behavior: HitTestBehavior.opaque,
@@ -672,7 +673,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                             child: IgnorePointer(
                               child: Center(
                                 child: Text(
-                                  'Tap the shutter to take a frame',
+                                  context.l10n.shellTapShutter,
                                   style: TextStyle(
                                     fontSize: 20,
                                     letterSpacing: 2,
@@ -1065,7 +1066,7 @@ class _SkyPick extends StatelessWidget {
             Text(
               [
                 if (selection.kind.isNotEmpty) selection.kind,
-                simpleTargetStatus(selection),
+                simpleTargetStatus(selection, context.l10n),
               ].join(' · '),
               style: kSimpleText.copyWith(
                 fontSize: 12,
@@ -1079,7 +1080,7 @@ class _SkyPick extends StatelessWidget {
         FilledButton(
           key: const Key('simple-sky-image-this'),
           onPressed: onImage,
-          child: const Text('Image this'),
+          child: Text(context.l10n.shellImageThis),
         ),
       ],
     ),
@@ -1189,7 +1190,7 @@ class _StatusStrip extends ConsumerWidget {
           IconButton(
             key: const Key('simple-search-button'),
             icon: const Icon(Icons.search, size: 22),
-            tooltip: 'Search',
+            tooltip: context.l10n.shellSearch,
             onPressed: onSearch,
           ),
           IconButton(
@@ -1198,12 +1199,14 @@ class _StatusStrip extends ConsumerWidget {
               size: 22,
               color: night ? AraColors.accentInfo : null,
             ),
-            tooltip: night ? 'Night mode on' : 'Night mode',
+            tooltip: night
+                ? context.l10n.shellNightModeOn
+                : context.l10n.shellNightMode,
             onPressed: () => ref.read(nightModeProvider.notifier).set(!night),
           ),
           IconButton(
             icon: const Icon(Icons.settings_outlined, size: 22),
-            tooltip: 'Settings',
+            tooltip: context.l10n.shellSettings,
             onPressed: onSettings,
           ),
         ],
@@ -1316,21 +1319,21 @@ class _LeftRail extends StatelessWidget {
         _RailButton(
           key: const Key('simple-sky'),
           icon: Icons.public,
-          label: 'Sky',
+          label: context.l10n.shellSky,
           selected: sky,
           onTap: onSky,
         ),
         _RailButton(
           key: const Key('simple-info'),
           icon: Icons.info_outline,
-          label: 'Info',
+          label: context.l10n.shellInfo,
           selected: info,
           onTap: onInfo,
         ),
         _RailButton(
           key: const Key('simple-library'),
           icon: Icons.photo_library_outlined,
-          label: 'Library',
+          label: context.l10n.shellLibrary,
           onTap: () => Navigator.of(context).push(
             MaterialPageRoute<void>(builder: (_) => const ImageLibraryScreen()),
           ),
@@ -1372,7 +1375,9 @@ class _RightRail extends ConsumerWidget {
           // The mode on top of the shutter; the settings chip under it.
           Semantics(
             button: true,
-            label: 'Mode: ${(named ?? mode).label}',
+            label: context.l10n.shellModeSemantics(
+              (named ?? mode).labelOf(context.l10n),
+            ),
             child: InkWell(
               key: const Key('simple-mode'),
               onTap: onModes,
@@ -1384,7 +1389,7 @@ class _RightRail extends ConsumerWidget {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Text(
-                      (named ?? mode).railLabel,
+                      (named ?? mode).railLabelOf(context.l10n),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: kSimpleText.copyWith(
@@ -1414,7 +1419,7 @@ class _RightRail extends ConsumerWidget {
             key: const Key('simple-settings'),
             icon: Icons.tune,
             tall: true,
-            label: _chipLabel(ref),
+            label: _chipLabel(context, ref),
             selected: popover == _Popover.settings,
             onTap: onSettings,
           ),
@@ -1425,7 +1430,7 @@ class _RightRail extends ConsumerWidget {
 
   // In Autopilot the chip names the step whose settings it shows ("Focus"
   // over "Auto"), so they don't read as random.
-  String _chipLabel(WidgetRef ref) {
+  String _chipLabel(BuildContext context, WidgetRef ref) {
     final label = switch (mode) {
       SimpleModeScreen.focus => simpleFocusSummary(ref),
       SimpleModeScreen.plan => simpleRunChip(
@@ -1435,12 +1440,13 @@ class _RightRail extends ConsumerWidget {
       SimpleModeScreen.polarAlign => simplePolarSummary(
         ref.watch(simplePolarSettingsProvider).value ??
             const PolarAlignSettings(),
+        ref.context.l10n,
       ),
       _ => simpleSettingsSummary(ref),
     };
     return named == null
         ? label
-        : '${mode.railLabel}\n${label.split('\n').first}';
+        : '${mode.railLabelOf(context.l10n)}\n${label.split('\n').first}';
   }
 }
 
@@ -1491,7 +1497,7 @@ class _ModeGrid extends ConsumerWidget {
                           ),
                           Flexible(
                             child: Text(
-                              m.label,
+                              m.labelOf(context.l10n),
                               // White on the blue reads at 4.6:1.
                               style: kSimpleText.copyWith(
                                 color: m == current
@@ -1534,10 +1540,12 @@ class _GuidingBar extends ConsumerWidget {
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Guiding', style: kSimpleText),
+                Text(context.l10n.shellGuiding, style: kSimpleText),
                 Text(
                   guiding
-                      ? 'RMS ${GuidingStrip.fmt(status?.rmsTotalArcsec, '″')}'
+                      ? context.l10n.shellGuidingRms(
+                          GuidingStrip.fmt(status?.rmsTotalArcsec, '″'),
+                        )
                       : GuidingStrip.stateLabel(status),
                   style: AraText.caption,
                   maxLines: 1,
@@ -1564,11 +1572,11 @@ class _GuidingBar extends ConsumerWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'RA',
+                context.l10n.shellRa,
                 style: AraText.caption.copyWith(color: AraColors.accentInfo),
               ),
               Text(
-                'Dec',
+                context.l10n.shellDec,
                 style: AraText.caption.copyWith(color: AraColors.errorText),
               ),
             ],
@@ -1683,9 +1691,9 @@ class _HistogramBar extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Histogram', style: kSimpleText),
+              Text(context.l10n.shellHistogram, style: kSimpleText),
               Text(
-                'Median ${h.median.round()}',
+                context.l10n.shellHistogramMedian(h.median.round()),
                 style: AraText.caption,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
@@ -1892,21 +1900,44 @@ class _SettingsSheetState extends ConsumerState<_SettingsSheet> {
     // rig knows them.
     // A device keeps the icon its dot has in the top bar.
     Widget glyph(IconData icon, Color c) => Icon(icon, size: 20, color: c);
-    final sections = <(String, Widget Function(Color), bool)>[
-      ('Rig', (c) => glyph(Icons.memory, c), false),
+    final l10n = context.l10n;
+    // The id picks the section (and a search hit names it); the label shows.
+    final sections = <(String, String, Widget Function(Color), bool)>[
+      ('Rig', l10n.shellSectionRig, (c) => glyph(Icons.memory, c), false),
       (
         'Devices',
+        l10n.shellSectionDevices,
         (c) => glyph(Icons.settings_input_component_outlined, c),
         false,
       ),
       if (ref.watch(cameraStatusProvider).value != null)
-        ('Camera', (c) => glyph(Icons.camera_alt, c), true),
+        (
+          'Camera',
+          l10n.shellSectionCamera,
+          (c) => glyph(Icons.camera_alt, c),
+          true,
+        ),
       if (ref.watch(mountProvider).value != null)
-        ('Mount', (c) => EquipmentGlyph.telescope(size: 20, color: c), true),
+        (
+          'Mount',
+          l10n.shellSectionMount,
+          (c) => EquipmentGlyph.telescope(size: 20, color: c),
+          true,
+        ),
       if (ref.watch(focuserProvider).value != null)
-        ('Focuser', (c) => glyph(Icons.center_focus_strong, c), true),
+        (
+          'Focuser',
+          l10n.shellSectionFocuser,
+          (c) => glyph(Icons.center_focus_strong, c),
+          true,
+        ),
       if (ref.watch(guiderStatusProvider).value != null)
-        ('Guider', (c) => glyph(Icons.track_changes, c), true),
+        (
+          'Guider',
+          l10n.shellSectionGuider,
+          (c) => glyph(Icons.track_changes, c),
+          true,
+        ),
     ];
     // A narrow window (Split View, a phone) keeps only the sections' icons.
     final narrow = MediaQuery.sizeOf(context).width < 600;
@@ -1920,7 +1951,7 @@ class _SettingsSheetState extends ConsumerState<_SettingsSheet> {
             child: ListView(
               padding: const EdgeInsets.all(AraSpace.s8),
               children: [
-                for (final (name, icon, device) in sections)
+                for (final (name, title, icon, device) in sections)
                   Padding(
                     padding: EdgeInsets.only(
                       bottom: 4,
@@ -1937,7 +1968,7 @@ class _SettingsSheetState extends ConsumerState<_SettingsSheet> {
                         onTap: () => setState(() => _section = name),
                         child: Semantics(
                           selected: _section == name,
-                          label: narrow ? name : null,
+                          label: narrow ? title : null,
                           child: ConstrainedBox(
                             constraints: const BoxConstraints(minHeight: 44),
                             child: Padding(
@@ -1956,7 +1987,7 @@ class _SettingsSheetState extends ConsumerState<_SettingsSheet> {
                                   if (!narrow)
                                     Expanded(
                                       child: Text(
-                                        name,
+                                        title,
                                         style: kSimpleText.copyWith(
                                           color: _section == name
                                               ? AraColors.accentInfo
@@ -2017,9 +2048,12 @@ class _Gear extends ConsumerWidget {
         key: const Key('simple-gear'),
         crossAxisAlignment: CrossAxisAlignment.start,
         spacing: AraSpace.s8,
-        children: [Text('Rig not connected', style: AraText.caption)],
+        children: [
+          Text(context.l10n.shellRigNotConnected, style: AraText.caption),
+        ],
       );
     }
+    final l10n = context.l10n;
     return Column(
       key: const Key('simple-gear'),
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -2027,32 +2061,44 @@ class _Gear extends ConsumerWidget {
       children: [
         _GearRow(
           id: 'camera',
-          type: 'Camera',
+          type: l10n.shellSectionCamera,
           provider: cameraStatusProvider,
           onOpen: () => onOpen('Camera'),
         ),
         _GearRow(
           id: 'mount',
-          type: 'Mount',
+          type: l10n.shellSectionMount,
           provider: mountProvider,
           onOpen: () => onOpen('Mount'),
         ),
         _GearRow(
           id: 'focuser',
-          type: 'Focuser',
+          type: l10n.shellSectionFocuser,
           provider: focuserProvider,
           onOpen: () => onOpen('Focuser'),
         ),
         _GuiderGearRow(onOpen: () => onOpen('Guider')),
         _GearRow(
           id: 'filterwheel',
-          type: 'Filter wheel',
+          type: l10n.shellFilterWheel,
           provider: filterWheelProvider,
         ),
-        _GearRow(id: 'rotator', type: 'Rotator', provider: rotatorProvider),
-        _GearRow(id: 'flat', type: 'Flat panel', provider: flatPanelProvider),
-        _GearRow(id: 'dome', type: 'Dome', provider: domeProvider),
-        _GearRow(id: 'weather', type: 'Weather', provider: weatherProvider),
+        _GearRow(
+          id: 'rotator',
+          type: l10n.shellRotator,
+          provider: rotatorProvider,
+        ),
+        _GearRow(
+          id: 'flat',
+          type: l10n.shellFlatPanel,
+          provider: flatPanelProvider,
+        ),
+        _GearRow(id: 'dome', type: l10n.shellDome, provider: domeProvider),
+        _GearRow(
+          id: 'weather',
+          type: l10n.shellWeather,
+          provider: weatherProvider,
+        ),
       ],
     );
   }
@@ -2079,29 +2125,44 @@ class _GearRow<T extends EquipmentDeviceStatus> extends ConsumerWidget {
     // Never set up on this rig: nothing to show (the Advanced UI picks gear).
     if (status == null) return const SizedBox.shrink();
     final notifier = ref.read(provider.notifier);
+    final l10n = context.l10n;
     final (dot, word) = switch (status.connectionState) {
       EquipmentConnectionState.connected => (
         AraColors.accentConnected,
-        'Connected',
+        l10n.shellConnected,
       ),
       EquipmentConnectionState.connecting => (
         AraColors.accentBusy,
-        'Connecting…',
+        l10n.shellConnecting,
       ),
-      EquipmentConnectionState.error => (AraColors.accentError, 'Failed'),
-      _ => (AraColors.textDisabled, 'Not connected'),
+      EquipmentConnectionState.error => (
+        AraColors.accentError,
+        l10n.shellFailed,
+      ),
+      _ => (AraColors.textDisabled, l10n.shellNotConnected),
     };
-    final (label, action) = switch (status.connectionState) {
-      EquipmentConnectionState.connected => ('Disconnect', notifier.disconnect),
-      EquipmentConnectionState.connecting => (null, null),
-      EquipmentConnectionState.error => ('Reconnect', notifier.reconnect),
-      _ => ('Connect', notifier.reconnect),
+    final (verb, label, action) = switch (status.connectionState) {
+      EquipmentConnectionState.connected => (
+        'disconnect',
+        l10n.shellDisconnect,
+        notifier.disconnect,
+      ),
+      EquipmentConnectionState.connecting => (null, null, null),
+      EquipmentConnectionState.error => (
+        'reconnect',
+        l10n.shellReconnect,
+        notifier.reconnect,
+      ),
+      _ => ('connect', l10n.shellConnect, notifier.reconnect),
     };
     return _gearTile(
       id: id,
-      title: status.name.isEmpty ? type : '$type · ${status.name}',
+      title: status.name.isEmpty
+          ? type
+          : l10n.shellGearTitle(type, status.name),
       dot: dot,
       word: word,
+      verb: verb,
       label: label,
       action: action,
       onOpen: onOpen,
@@ -2122,37 +2183,45 @@ class _GuiderGearRow extends ConsumerWidget {
     if (status == null) return const SizedBox.shrink();
     final notifier = ref.read(guiderStatusProvider.notifier);
     final camera = ref.watch(deviceDriverProvider('guidecamera')).value?.name;
-    final (dot, word, label, action) = switch (status.connectionState) {
+    final l10n = context.l10n;
+    final (dot, word, verb, label, action) = switch (status.connectionState) {
       GuiderConnectionState.connected => (
         AraColors.accentConnected,
-        'Connected',
-        'Disconnect',
+        l10n.shellConnected,
+        'disconnect',
+        l10n.shellDisconnect,
         notifier.disconnect,
       ),
       GuiderConnectionState.connecting => (
         AraColors.accentBusy,
-        'Connecting…',
+        l10n.shellConnecting,
+        null,
         null,
         null,
       ),
       GuiderConnectionState.error => (
         AraColors.accentError,
-        'Failed',
-        'Reconnect',
+        l10n.shellFailed,
+        'reconnect',
+        l10n.shellReconnect,
         notifier.connect,
       ),
       _ => (
         AraColors.textDisabled,
-        'Not connected',
-        'Connect',
+        l10n.shellNotConnected,
+        'connect',
+        l10n.shellConnect,
         notifier.connect,
       ),
     };
     return _gearTile(
       id: 'guider',
-      title: camera == null ? 'Guider' : 'Guider · $camera',
+      title: camera == null
+          ? l10n.shellSectionGuider
+          : l10n.shellGearTitle(l10n.shellSectionGuider, camera),
       dot: dot,
       word: word,
+      verb: verb,
       label: label,
       action: action,
       onOpen: onOpen,
@@ -2165,6 +2234,8 @@ Widget _gearTile({
   required String title,
   required Color dot,
   required String word,
+  // The button's English verb, for its key; [label] is what it shows.
+  required String? verb,
   required String? label,
   required Future<void> Function()? action,
   required VoidCallback? onOpen,
@@ -2197,7 +2268,7 @@ Widget _gearTile({
         ),
         if (label != null)
           TextButton(
-            key: Key('simple-gear-$id-${label.toLowerCase()}'),
+            key: Key('simple-gear-$id-$verb'),
             style: TextButton.styleFrom(minimumSize: const Size(0, 44)),
             onPressed: () => action!(),
             child: Text(label),
@@ -2239,12 +2310,13 @@ class _ThisRig extends ConsumerWidget {
   ) async {
     apply();
     final notify = userNotifier(context);
+    final l10n = context.l10n;
     final api = ref.read(profileApiProvider);
     if (api == null) return;
     try {
       await persist(api);
     } catch (e) {
-      notify("Couldn't save that", detail: friendlyError(e), error: true);
+      notify(l10n.shellCouldntSave, detail: friendlyError(e), error: true);
     }
   }
 
@@ -2253,13 +2325,14 @@ class _ThisRig extends ConsumerWidget {
   /// coordinates fall in, saved at once; and this device's clock to the rig.
   static Future<void> _useLocation(BuildContext context, WidgetRef ref) async {
     final notify = userNotifier(context);
+    final l10n = context.l10n;
     final clock = ref.read(timeSyncApiProvider);
     if (clock != null) {
       try {
         await clock.pushClientTime(DateTime.now().toUtc());
       } catch (e) {
         notify(
-          "Couldn't set the rig's clock",
+          l10n.shellCouldntSetClock,
           detail: friendlyError(e),
           error: true,
         );
@@ -2267,7 +2340,7 @@ class _ThisRig extends ConsumerWidget {
     }
     final r = await fillSiteFromGps(ref);
     if (!r.success) {
-      notify("Couldn't get a location", detail: r.message, error: true);
+      notify(l10n.shellCouldntGetLocation, detail: r.message, error: true);
       return;
     }
     final site = ref.read(siteSettingsProvider.notifier);
@@ -2280,11 +2353,15 @@ class _ThisRig extends ConsumerWidget {
       try {
         await site.persistToServer(api);
       } catch (e) {
-        notify("Couldn't save the site", detail: friendlyError(e), error: true);
+        notify(
+          l10n.shellCouldntSaveSite,
+          detail: friendlyError(e),
+          error: true,
+        );
         return;
       }
     }
-    notify('Site from ${r.sourceLabel}');
+    notify(l10n.shellSiteFrom(r.sourceLabel));
   }
 
   @override
@@ -2304,7 +2381,9 @@ class _ThisRig extends ConsumerWidget {
     final servers = rig?.alpacaServers ?? const <AlpacaServerVersion>[];
     // Name and Profile, each with its change button on the same line; set
     // close together (two facts, not two settings).
+    final l10n = context.l10n;
     Widget fact(
+      String id,
       String label,
       String value,
       String change,
@@ -2327,7 +2406,7 @@ class _ThisRig extends ConsumerWidget {
           button: true,
           excludeSemantics: true,
           child: TextButton(
-            key: Key('simple-rig-${change.toLowerCase().replaceAll(' ', '-')}'),
+            key: Key('simple-rig-change-$id'),
             style: TextButton.styleFrom(
               // 28 pt keeps the two lines close; still over WCAG 2.2's 24.
               minimumSize: const Size(0, 28),
@@ -2335,7 +2414,7 @@ class _ThisRig extends ConsumerWidget {
               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
             ),
             onPressed: onTap,
-            child: const Text('Change', style: TextStyle(fontSize: 14)),
+            child: Text(l10n.shellChange, style: const TextStyle(fontSize: 14)),
           ),
         ),
       ],
@@ -2387,23 +2466,24 @@ class _ThisRig extends ConsumerWidget {
         Column(
           children: [
             fact(
-              'Name',
+              'rig',
+              l10n.shellName,
               server == null ? '—' : server.mdnsName ?? server.hostname,
-              'Change rig',
+              l10n.shellChangeRig,
               () => relaunch(rig: true),
             ),
             fact(
-              'Profile',
+              'profile',
+              l10n.shellProfile,
               profile ?? '—',
-              'Change profile',
+              l10n.shellChangeProfile,
               () => relaunch(rig: false),
             ),
           ],
         ),
         if (running)
           Text(
-            'A plan is running. It keeps running on the rig; pick this '
-            'profile again to come back to it.',
+            l10n.shellPlanRunning,
             style: AraText.caption.copyWith(color: AraColors.accentBusy),
           ),
         // The telescope and the site: set once, kept in the profile (plate
@@ -2414,20 +2494,21 @@ class _ThisRig extends ConsumerWidget {
               // Aperture on one wheel of millimetres; focal length per digit.
               (
                 'aperture',
-                'Aperture',
+                l10n.shellAperture,
                 null,
                 ref.watch(opticsSettingsProvider).apertureMm,
                 ref.read(opticsSettingsProvider.notifier).setApertureMm,
               ),
               (
                 'focal',
-                'Focal length',
+                l10n.shellFocalLength,
                 4,
                 ref.watch(opticsSettingsProvider).focalLengthMm,
                 ref.read(opticsSettingsProvider.notifier).setFocalLengthMm,
               ),
             ])
           _RigWheelRow.millimetres(
+            l10n,
             id: id,
             label: label,
             digits: digits,
@@ -2445,18 +2526,19 @@ class _ThisRig extends ConsumerWidget {
             in <(String, String, double, void Function(double))>[
               (
                 'lat',
-                'Latitude',
+                l10n.shellLatitude,
                 ref.watch(siteSettingsProvider).latitudeDeg,
                 ref.read(siteSettingsProvider.notifier).setLatitudeDeg,
               ),
               (
                 'lng',
-                'Longitude',
+                l10n.shellLongitude,
                 ref.watch(siteSettingsProvider).longitudeDeg,
                 ref.read(siteSettingsProvider.notifier).setLongitudeDeg,
               ),
             ])
           _RigWheelRow.coordinate(
+            l10n,
             id: id,
             label: label,
             value: value,
@@ -2470,7 +2552,7 @@ class _ThisRig extends ConsumerWidget {
           ),
         _RigStepper(
           id: 'elevation',
-          label: 'Elevation',
+          label: l10n.shellElevation,
           unit: 'm',
           value: ref.watch(siteSettingsProvider).elevationM,
           onSet: (v) => _save(
@@ -2487,20 +2569,18 @@ class _ThisRig extends ConsumerWidget {
             key: const Key('simple-rig-use-location'),
             onPressed: () => _useLocation(context, ref),
             icon: const Icon(Icons.my_location, size: 18),
-            label: Text(
-              "Use ${thisDeviceLabel(clientPlatform)}'s location and time",
-            ),
+            label: Text(l10n.shellUseLocation(thisDeviceLabel(clientPlatform))),
           ),
         ),
         const Divider(height: AraSpace.s16),
         toggle(
           'pier',
-          'Permanent pier',
-          'Skips polar alignment',
+          l10n.shellPermanentPier,
+          l10n.shellPermanentPierHint,
           ref.watch(simplePermanentPierProvider).value ?? false,
           (v) => ref.read(simplePermanentPierProvider.notifier).set(v),
         ),
-        toggle('simple-mode', 'Simple Mode', null, true, (v) {
+        toggle('simple-mode', l10n.shellSimpleMode, null, true, (v) {
           if (!v) ref.read(simpleModeProvider.notifier).set(false);
         }),
         const Divider(height: AraSpace.s16),
@@ -2510,8 +2590,8 @@ class _ThisRig extends ConsumerWidget {
           key: const Key('simple-versions'),
           rows: [
             for (final (name, v) in <(String, String?)>[
-              ('This app', version),
-              ('OpenAstro Ara server', rig?.daemonVersion),
+              (l10n.shellThisApp, version),
+              (l10n.shellAraServer, rig?.daemonVersion),
               if (rig?.guiderVersion != null)
                 ('OpenAstro Guider', rig!.guiderVersion),
               for (final a in servers)
@@ -2523,10 +2603,13 @@ class _ThisRig extends ConsumerWidget {
                 ),
               if (rig?.astapVersion != null) ('ASTAP', rig!.astapVersion),
               if (stars != null && stars.isNotEmpty)
-                ('Star database', stars.map((d) => d.toUpperCase()).join(', ')),
+                (
+                  l10n.shellStarDatabase,
+                  stars.map((d) => d.toUpperCase()).join(', '),
+                ),
               if (rig != null && rig.osRelease.isNotEmpty)
                 (
-                  'System',
+                  l10n.shellSystem,
                   [
                     rig.osRelease,
                     if (rig.boardModel != null) rig.boardModel!,
@@ -2538,10 +2621,7 @@ class _ThisRig extends ConsumerWidget {
         ),
         Align(
           alignment: Alignment.centerRight,
-          child: TextButton(
-            onPressed: onLogs,
-            child: const Text('Logs & bug report'),
-          ),
+          child: TextButton(onPressed: onLogs, child: Text(l10n.shellLogs)),
         ),
       ],
     );
@@ -2559,7 +2639,7 @@ class _SettingsPage extends ConsumerWidget {
       if (!on) Navigator.of(context).maybePop();
     });
     return Scaffold(
-      appBar: AppBar(title: const Text('Settings')),
+      appBar: AppBar(title: Text(context.l10n.shellSettings)),
       body: const SettingsShell(),
     );
   }
@@ -2583,14 +2663,15 @@ class _RigWheelRow extends StatefulWidget {
 
   /// Whole millimetres: [digits] wheels, or with none one wheel over
   /// [_kApertureMm] (an unset value starts at 80).
-  factory _RigWheelRow.millimetres({
+  factory _RigWheelRow.millimetres(
+    AppLocalizations l10n, {
     required String id,
     required String label,
     required int? digits,
     required double value,
     required ValueChanged<double> onSet,
   }) {
-    final text = value > 0 ? '${value.round()} mm' : 'Not set';
+    final text = value > 0 ? '${value.round()} mm' : l10n.shellNotSet;
     if (digits == null) {
       final (lo, hi) = _kApertureMm;
       final v = value > 0 ? value.round().clamp(lo, hi) : 80;
@@ -2623,14 +2704,17 @@ class _RigWheelRow extends StatefulWidget {
   static const _kApertureMm = (10, 600);
 
   /// Latitude or longitude: hemisphere, degrees, four decimals (about 11 m).
-  factory _RigWheelRow.coordinate({
+  factory _RigWheelRow.coordinate(
+    AppLocalizations l10n, {
     required String id,
     required String label,
     required double value,
     required ValueChanged<double> onSet,
   }) {
     final lat = id == 'lat';
-    final hemi = lat ? const ['N', 'S'] : const ['E', 'W'];
+    final hemi = lat
+        ? [l10n.shellHemiNorth, l10n.shellHemiSouth]
+        : [l10n.shellHemiEast, l10n.shellHemiWest];
     final degDigits = lat ? 2 : 3;
     final deg = value.abs().floor();
     final frac = ((value.abs() - deg) * 10000).round().clamp(0, 9999);
@@ -2719,7 +2803,11 @@ class _RigWheelRowState extends State<_RigWheelRow> {
     width: widget.columns[i].length > 10 ? 72 : 36,
     height: 160,
     child: Semantics(
-      label: '${widget.label}, wheel ${i + 1} of ${widget.columns.length}',
+      label: context.l10n.shellWheelSemantics(
+        widget.label,
+        i + 1,
+        widget.columns.length,
+      ),
       child: CupertinoPicker(
         key: Key('simple-rig-${widget.id}-wheel-$i'),
         scrollController: _wheels[i],
@@ -2851,7 +2939,9 @@ class _RigStepperState extends State<_RigStepper> {
       onPressed: () => widget.onSet(widget.value + dir),
       icon: Icon(
         dir > 0 ? Icons.add : Icons.remove,
-        semanticLabel: dir > 0 ? 'Raise' : 'Lower',
+        semanticLabel: dir > 0
+            ? context.l10n.shellRaise
+            : context.l10n.shellLower,
       ),
     ),
   );
