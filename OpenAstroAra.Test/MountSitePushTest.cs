@@ -80,13 +80,14 @@ namespace OpenAstroAra.Test {
         // A connected mount behind the seam, the push run inline, following a profile store.
         private static (TelescopeService svc, FakeMount mount, Mock<IProfileStore> store) Following(SiteSettingsDto site,
                 Action<TimeSpan>? wait = null) {
+            Func<TimeSpan, Task> waitAsync = d => { wait?.Invoke(d); return Task.CompletedTask; };
             var mount = new FakeMount();
             var store = new Mock<IProfileStore>();
             store.Setup(s => s.GetSiteSettings()).Returns(() => site);
             var svc = new TelescopeService {
                 MountSiteSource = () => mount,
-                RunSitePush = push => { push(); return Task.CompletedTask; },
-                SitePushWait = wait ?? (_ => { }),
+                RunSitePush = push => push(),
+                SitePushWait = waitAsync,
             };
             svc.FollowProfileSite(store.Object);
             return (svc, mount, store);
@@ -171,11 +172,11 @@ namespace OpenAstroAra.Test {
             var store = new Mock<IProfileStore>();
             var site = Site(-36.85, 174.76, 120);
             store.Setup(s => s.GetSiteSettings()).Returns(() => site);
-            var pushes = new List<Action>();
+            var pushes = new List<Func<Task>>();
             using var svc = new TelescopeService {
                 MountSiteSource = () => mount,
                 RunSitePush = push => { pushes.Add(push); return Task.CompletedTask; },
-                SitePushWait = _ => { },
+                SitePushWait = _ => Task.CompletedTask,
             };
             svc.FollowProfileSite(store.Object);
             store.Raise(s => s.Changed += null, EventArgs.Empty);
@@ -184,7 +185,7 @@ namespace OpenAstroAra.Test {
             var inside = 0;
             var overlapped = false;
             mount.OnWrite = () => { if (Interlocked.Increment(ref inside) > 1) overlapped = true; Thread.Sleep(20); Interlocked.Decrement(ref inside); };
-            Parallel.Invoke(pushes[0], pushes[1]);
+            Task.WaitAll(Task.Run(pushes[0]), Task.Run(pushes[1]));
             Assert.That(overlapped, Is.False, "the second push waits for the first");
             Assert.That((mount.Latitude, mount.Longitude, mount.Elevation), Is.EqualTo((-37.2, 175.0, 50.0)),
                 "both read the store when they run, so the mount ends on the newest site");
@@ -223,6 +224,43 @@ namespace OpenAstroAra.Test {
             Assert.That(TelescopeService.PushSite(mount, -36.85, 174.76, 0), Is.True);
             Assert.That(mount.Writes, Is.EqualTo(LatLng), "0 m is the default nobody changed (user, 2026-11-03)");
             Assert.That(mount.Elevation, Is.EqualTo(80));
+        }
+
+        [Test]
+        public async Task A_push_waiting_out_a_slew_holds_no_thread() {
+            // Review of #1486: the wait was Thread.Sleep under a lock, a pool thread per waiting push.
+            var mount = new FakeMount { Slewing = true };
+            var store = new Mock<IProfileStore>();
+            store.Setup(s => s.GetSiteSettings()).Returns(Site(-36.85, 174.76, 120));
+            var tick = new TaskCompletionSource();
+            Task? push = null;
+            using var svc = new TelescopeService {
+                MountSiteSource = () => mount,
+                RunSitePush = p => push = p(), // on the caller's thread: a blocking wait would hang here
+                SitePushWait = _ => tick.Task,
+            };
+            svc.FollowProfileSite(store.Object);
+            store.Raise(s => s.Changed += null, EventArgs.Empty);
+            Assert.That(push, Is.Not.Null);
+            Assert.That(push!.IsCompleted, Is.False, "parked on the wait, the caller already back");
+            mount.Slewing = false;
+            tick.SetResult();
+            await push.ConfigureAwait(false);
+            Assert.That(mount.Writes, Is.EqualTo(AllThree));
+        }
+
+        [Test]
+        public void After_a_disconnect_the_next_mount_gets_the_site_even_on_a_plain_save() {
+            // Review of #1486: the site last written survived a disconnect, so only the forced push on
+            // connect kept a new mount from being skipped.
+            var (svc, mount, store) = Following(Site(-36.85, 174.76, 120));
+            using (svc) {
+                store.Raise(s => s.Changed += null, EventArgs.Empty);
+                mount.Latitude = 0; // another mount
+                svc.DisconnectAsync(null, CancellationToken.None).GetAwaiter().GetResult();
+                store.Raise(s => s.Changed += null, EventArgs.Empty);
+                Assert.That(mount.Writes, Is.EqualTo(AllThreeThenLat));
+            }
         }
     }
 }

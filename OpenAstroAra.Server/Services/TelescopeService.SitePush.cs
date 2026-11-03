@@ -15,6 +15,7 @@
 using ASCOM.Alpaca.Clients;
 using Microsoft.Extensions.Logging;
 using System;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace OpenAstroAra.Server.Services;
@@ -48,9 +49,14 @@ public sealed partial class TelescopeService {
 
     private OpenAstroAra.Server.Services.IProfileStore? _siteStore;
     // One push at a time, and the site last written in full, so a profile save that isn't the site
-    // (autofocus, storage, a saved target…) makes no Alpaca round trip.
-    private readonly object _sitePushGate = new();
-    private (double Lat, double Lng, double Elev)? _sitePushed;
+    // (autofocus, storage, a saved target…) makes no Alpaca round trip. The gate is awaited, not
+    // locked: a push waiting out a slew holds no pool thread (review of #1486).
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "CA2213:Disposable fields should be disposed",
+        Justification = "Only WaitAsync/Release are used, never AvailableWaitHandle, so it holds no OS handle; disposing it under a push still in flight would throw from that push's Release.")]
+    private readonly SemaphoreSlim _sitePushGate = new(1, 1);
+    private volatile SiteValue? _sitePushed;
+
+    private sealed record SiteValue(double Lat, double Lng, double Elev);
 
     // Some drivers refuse a site write mid-slew: wait for the slew to end, up to about three minutes.
     private const int SitePushSlewPolls = 180;
@@ -60,10 +66,14 @@ public sealed partial class TelescopeService {
     internal Func<IMountSite?>? MountSiteSource { get; set; }
 
     /// <summary>Runs a site push off the caller's thread; tests run it inline.</summary>
-    internal Func<Action, Task> RunSitePush { get; set; } = Task.Run;
+    internal Func<Func<Task>, Task> RunSitePush { get; set; } = Task.Run;
 
     /// <summary>The wait between slew checks; tests make it instant.</summary>
-    internal Action<TimeSpan> SitePushWait { get; set; } = System.Threading.Thread.Sleep;
+    internal Func<TimeSpan, Task> SitePushWait { get; set; } = d => Task.Delay(d);
+
+    /// <summary>The mount went away: the next one gets the site whatever this one held (review of
+    /// #1486; every connect also forces a push).</summary>
+    private void ForgetPushedSite() => _sitePushed = null;
 
     /// <summary>Write [lat, lng, elev] into the mount, skipping values it already holds and an elevation
     /// of 0 (unset: the default nobody changed, user 2026-11-03); each value is tried on its own, so one
@@ -114,37 +124,40 @@ public sealed partial class TelescopeService {
         if (mount is null) {
             return;
         }
-        _ = RunSitePush(() => {
-            lock (_sitePushGate) {
+        _ = RunSitePush(async () => {
+            await _sitePushGate.WaitAsync().ConfigureAwait(false);
+            try {
                 // Read under the gate, so of two close saves the later push writes the newer site.
                 var site = store.GetSiteSettings();
-                var wanted = (site.LatitudeDeg, site.LongitudeDeg, site.ElevationM);
-                if (!HasSite(wanted.LatitudeDeg, wanted.LongitudeDeg) || (!force && _sitePushed == wanted)) {
+                var wanted = new SiteValue(site.LatitudeDeg, site.LongitudeDeg, site.ElevationM);
+                if (!HasSite(wanted.Lat, wanted.Lng) || (!force && _sitePushed == wanted)) {
                     return; // no site yet must not overwrite the mount's real one; an unchanged one is there
                 }
-                if (!WaitOutSlew(mount)) {
+                if (!await WaitOutSlewAsync(mount).ConfigureAwait(false)) {
                     return; // still slewing: the next save or connect tries again
                 }
-                if (PushSite(mount, wanted.LatitudeDeg, wanted.LongitudeDeg, wanted.ElevationM)) {
+                if (PushSite(mount, wanted.Lat, wanted.Lng, wanted.Elev)) {
                     _sitePushed = wanted;
                 } else {
                     _sitePushed = null;
-                    LogSitePushIncomplete(wanted.LatitudeDeg, wanted.LongitudeDeg, wanted.ElevationM);
+                    LogSitePushIncomplete(wanted.Lat, wanted.Lng, wanted.Elev);
                 }
+            } finally {
+                _sitePushGate.Release();
             }
         });
     }
 
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "A mount that can't report Slewing is treated as not slewing: the push's own per-value error handling covers a refused write.")]
-    private bool WaitOutSlew(IMountSite mount) {
+    private async Task<bool> WaitOutSlewAsync(IMountSite mount) {
         for (var i = 0; i < SitePushSlewPolls; i++) {
             bool slewing;
             try { slewing = mount.Slewing; } catch (Exception) { slewing = false; }
             if (!slewing) {
                 return true;
             }
-            SitePushWait(SitePushSlewPoll);
+            await SitePushWait(SitePushSlewPoll).ConfigureAwait(false);
         }
         LogSitePushSlewing();
         return false;
