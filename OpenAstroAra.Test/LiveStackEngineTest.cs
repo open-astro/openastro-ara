@@ -166,6 +166,27 @@ namespace OpenAstroAra.Test {
             }
         }
 
+        // Falsified by: a resample that applies the rotation backwards (or skips it) moves each star by about 2 x 1.5 deg
+        // (or 1.5 deg) of arc at >= 120 px from the centre, so 6.3 px (or 3.1 px) off a 1.8 px sigma star; the two-frame
+        // mean then falls to about 50 % (or 60 %) of the reference star signal, below 80 %. One rotated frame only, so
+        // unrotated dithers cannot dilute the error as in the test above.
+        [Test]
+        public void A_single_rotated_frame_is_resampled_with_the_right_rotation_sign() {
+            var e = new LiveStackEngine();
+            var reference = Render(Stars, 0, 0, 0, 1);
+            e.Add(reference, W, H);
+            var r = e.Add(Render(Stars, 1.3, -0.7, 1.5, 2), W, H);
+            Assert.That(r.Outcome, Is.EqualTo(StackAddOutcome.Stacked));
+            var mean = e.SnapshotMean(out _, out _)!;
+            var far = Stars.Where(s => Math.Sqrt((s.X - W / 2.0) * (s.X - W / 2.0) + (s.Y - H / 2.0) * (s.Y - H / 2.0)) >= 120)
+                .OrderByDescending(s => s.Amp).Take(5).ToList();
+            Assert.That(far, Has.Count.EqualTo(5));
+            foreach (var (x, y, _) in far) {
+                int idx = (int)Math.Round(y) * W + (int)Math.Round(x);
+                Assert.That(mean[idx] - Bg, Is.GreaterThanOrEqualTo(0.8 * (reference[idx] - Bg)), $"star at ({x:F1}, {y:F1})");
+            }
+        }
+
         // Falsified by: keeping the enabled flag outside the engine lock, or not checking it in Add, lets a frame
         // already in flight after Disable (or after a session change) store a new reference: FramesStacked 1 and a
         // preview appear on a stack that was stopped.
