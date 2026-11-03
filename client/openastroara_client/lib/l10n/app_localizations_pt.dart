@@ -798,6 +798,18 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String get shellOk => 'OK';
+
+  @override
+  String get shellBedtimeTitle => 'Before you sleep';
+
+  @override
+  String get shellBedtimeAllGood => 'Everything is ready for the night.';
+
+  @override
+  String get shellBedtimeAnswer => 'Got it — let me go to bed';
+
+  @override
   String get shellConnected => 'Connected';
 
   @override
@@ -2707,6 +2719,18 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String shellGearActionFailed(String action, String device) {
     return '$action falhou · $device';
   }
+
+  @override
+  String get shellOk => 'OK';
+
+  @override
+  String get shellBedtimeTitle => 'Antes de dormir';
+
+  @override
+  String get shellBedtimeAllGood => 'Tudo pronto para a noite.';
+
+  @override
+  String get shellBedtimeAnswer => 'Entendi — vou dormir';
 
   @override
   String get shellConnected => 'Conectado';

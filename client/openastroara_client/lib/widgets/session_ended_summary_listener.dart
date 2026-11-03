@@ -7,7 +7,9 @@ import '../models/sequence/sequence_summary.dart';
 import '../services/notifications_api.dart';
 import '../state/app_shell_state.dart';
 import '../state/sequencer/sequence_list_state.dart';
+import '../l10n/l10n.dart';
 import '../state/session/session_summary_state.dart';
+import '../state/simple_messages_state.dart';
 import '../state/settings/settings_nav.dart';
 import '../theme/ara_colors.dart';
 import '../util/session_summary.dart';
@@ -19,7 +21,15 @@ import 'notifications/notification_center.dart';
 /// about it — with the ways out: review the incidents, go to the run, dismiss.
 class SessionEndedSummaryListener extends ConsumerStatefulWidget {
   final Widget child;
-  const SessionEndedSummaryListener({super.key, required this.child});
+
+  /// Simple Mode: a message pill instead of the dialog, and no way out into
+  /// the full UI (no popups, nothing links to it).
+  final bool quiet;
+  const SessionEndedSummaryListener({
+    super.key,
+    required this.child,
+    this.quiet = false,
+  });
 
   @override
   ConsumerState<SessionEndedSummaryListener> createState() =>
@@ -42,9 +52,31 @@ class _SessionEndedSummaryListenerState
       // open waits for the next connect instead of stacking a dialog.
       if (_showingRunId != null) return;
       _showingRunId = summary.runId;
-      unawaited(_show(summary));
+      if (widget.quiet) {
+        _pill(summary);
+      } else {
+        unawaited(_show(summary));
+      }
     });
     return widget.child;
+  }
+
+  void _pill(SessionSummary summary) {
+    ref
+        .read(simpleMessagesProvider.notifier)
+        .show(
+          SimpleMessageKind.question,
+          summary.title,
+          detail: '${summary.headline}\n${summary.framesLine}',
+          actions: [
+            SimpleMessageAction(context.l10n.shellOk, () {
+              unawaited(
+                ref.read(sessionSummaryProvider.notifier).acknowledge(summary),
+              );
+              _showingRunId = null;
+            }),
+          ],
+        );
   }
 
   Future<void> _show(SessionSummary summary) async {
@@ -69,9 +101,7 @@ class _SessionEndedSummaryListenerState
     );
     if (!mounted) return;
     // Any way out acknowledges: the card is a once-per-night surface.
-    unawaited(
-      ref.read(sessionSummaryProvider.notifier).acknowledge(summary),
-    );
+    unawaited(ref.read(sessionSummaryProvider.notifier).acknowledge(summary));
     _showingRunId = null;
   }
 }

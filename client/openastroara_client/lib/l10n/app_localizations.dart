@@ -1527,6 +1527,30 @@ abstract class AppLocalizations {
   /// **'{action} failed · {device}'**
   String shellGearActionFailed(String action, String device);
 
+  /// Message pill button that only closes it (Simple Mode's morning summary)
+  ///
+  /// In en, this message translates to:
+  /// **'OK'**
+  String get shellOk;
+
+  /// Simple Mode message pill: the once-a-night pre-sleep checklist
+  ///
+  /// In en, this message translates to:
+  /// **'Before you sleep'**
+  String get shellBedtimeTitle;
+
+  /// Pre-sleep pill when nothing needs a look
+  ///
+  /// In en, this message translates to:
+  /// **'Everything is ready for the night.'**
+  String get shellBedtimeAllGood;
+
+  /// Pre-sleep pill's one button: answers the checklist for tonight
+  ///
+  /// In en, this message translates to:
+  /// **'Got it — let me go to bed'**
+  String get shellBedtimeAnswer;
+
   /// Simple Mode Settings › Devices row: device state
   ///
   /// In en, this message translates to:

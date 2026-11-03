@@ -31,9 +31,11 @@ class ShellListeners extends StatelessWidget {
       // §58.14 / #1138 — the bedtime card: the pre-sleep checklist, once per
       // night after dark with a sequence running, whatever tab is showing.
       child: PreflightChecklistListener(
+        quiet: quiet,
         // §58.13 / #1138 — the morning card: a run that ended while nobody was
         // watching is summarised once on reconnect, whatever tab is showing.
         child: SessionEndedSummaryListener(
+          quiet: quiet,
           // #1298 — the manual filter wheel's "install the X filter" prompt
           // must reach the user on whatever tab is showing.
           child: ManualFilterSwapListener(

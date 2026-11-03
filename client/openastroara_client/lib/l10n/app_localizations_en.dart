@@ -798,6 +798,18 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get shellOk => 'OK';
+
+  @override
+  String get shellBedtimeTitle => 'Before you sleep';
+
+  @override
+  String get shellBedtimeAllGood => 'Everything is ready for the night.';
+
+  @override
+  String get shellBedtimeAnswer => 'Got it — let me go to bed';
+
+  @override
   String get shellConnected => 'Connected';
 
   @override

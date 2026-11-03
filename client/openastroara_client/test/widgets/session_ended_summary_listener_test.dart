@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/state/simple_messages_state.dart';
 import 'package:openastroara/models/sequence/sequence_summary.dart';
 import 'package:openastroara/services/notifications_api.dart';
 import 'package:openastroara/state/app_shell_state.dart';
@@ -50,8 +51,9 @@ void main() {
 
   Future<(ProviderContainer, _Seeded)> pump(
     WidgetTester tester,
-    SessionSummary? s,
-  ) async {
+    SessionSummary? s, {
+    bool quiet = false,
+  }) async {
     final notifier = _Seeded(s);
     final container = ProviderContainer(
       overrides: [
@@ -63,9 +65,9 @@ void main() {
     await tester.pumpWidget(
       UncontrolledProviderScope(
         container: container,
-        child: const MaterialApp(
+        child: MaterialApp(
           home: Scaffold(
-            body: SessionEndedSummaryListener(child: Text('shell')),
+            body: SessionEndedSummaryListener(quiet: quiet, child: const Text('shell')),
           ),
         ),
       ),
@@ -103,6 +105,21 @@ void main() {
       expect(find.text('Open the run'), findsNothing);
     },
   );
+
+  testWidgets('in Simple Mode the morning card is a pill that stays until OK, and leaves nothing for the full UI',
+      (tester) async {
+    final (container, notifier) = await pump(tester, summary, quiet: true);
+    expect(find.byType(AlertDialog), findsNothing, reason: 'no popups in Simple Mode');
+    final m = container.read(simpleMessagesProvider).single;
+    expect(m.kind, SimpleMessageKind.question, reason: 'stays until answered');
+    expect(m.title, 'Session paused — the rig needs you');
+    expect(m.detail, contains('47 frames captured'));
+    expect(m.actions.map((a) => a.label), ['OK'], reason: 'no Open the run: that is the full UI');
+    m.actions.single.onPressed();
+    await tester.pump();
+    expect(notifier.acked, ['r1']);
+    expect(container.read(selectedTabIndexProvider), isNot(kRunTabIndex));
+  });
 
   testWidgets('#1138 nothing to say → no dialog', (tester) async {
     await pump(tester, null);

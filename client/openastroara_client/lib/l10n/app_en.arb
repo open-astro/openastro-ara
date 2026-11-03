@@ -1105,6 +1105,22 @@
       }
     }
   },
+  "shellOk": "OK",
+  "@shellOk": {
+    "description": "Message pill button that only closes it (Simple Mode's morning summary)"
+  },
+  "shellBedtimeTitle": "Before you sleep",
+  "@shellBedtimeTitle": {
+    "description": "Simple Mode message pill: the once-a-night pre-sleep checklist"
+  },
+  "shellBedtimeAllGood": "Everything is ready for the night.",
+  "@shellBedtimeAllGood": {
+    "description": "Pre-sleep pill when nothing needs a look"
+  },
+  "shellBedtimeAnswer": "Got it — let me go to bed",
+  "@shellBedtimeAnswer": {
+    "description": "Pre-sleep pill's one button: answers the checklist for tonight"
+  },
   "shellConnected": "Connected",
   "@shellConnected": {
     "description": "Simple Mode Settings › Devices row: device state"
