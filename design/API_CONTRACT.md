@@ -42,6 +42,20 @@ This file captures the *reasoning* behind each contract decision — DTO shapes,
 **Related:** §X.Y of PORT_PLAYBOOK.md, PR #N
 ```
 
+### 2026-11-03 — The guide camera's model and versions: `GET /equipment/driver/guidecamera`
+
+**Endpoint(s) or area:** new `GET /api/v1/equipment/driver/guidecamera` → `DeviceDriverDto`, which gains an optional `name` (the model).
+
+**Decision:** the profile's guide camera, when it is an Alpaca pick (`… [host:port/N]`), is looked up on that server like `/driver/{type}` (name from its management listing). Otherwise the connected guider is asked which camera it has open (`get_current_equipment`); its answer usually carries the same `[host:port/N]`, which is looked up the same way, and else the model alone is answered (the `Alpaca Camera [..] - ` lead and `(driver)` tail dropped). No guider camera known → 404. Declared before `/driver/{type}` so the literal wins.
+
+**Reasoning:** the test rig's profile leaves the guide camera blank while the guider has one open; Simple Mode titles the Guider window with the camera's model, like Camera's.
+
+**Spec ref:** `Endpoints/EquipmentEndpoints.cs` (`GetGuideCameraDriverAsync`), `PHD2Guider.GetConnectedCameraNameAsync`, `IGuiderService.TryGetGuideCameraNameAsync`.
+
+**Related:** tests `DeviceDriverInfoTest`, `GuiderLiveFakeIntegrationTest`.
+
+---
+
 ### 2026-11-03 — A device's driver and SDK versions: `GET /equipment/driver/{type}`
 
 **Endpoint(s) or area:** new `GET /api/v1/equipment/driver/{type}` → `DeviceDriverDto { driver_version?, sdk_version?, firmware?, serial_number? }`.

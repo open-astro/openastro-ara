@@ -60,6 +60,19 @@ paths:
       responses:
         '200':
           description: OK
+  /api/v1/equipment/driver/guidecamera:
+    get:
+      tags:
+        - Equipment
+      summary: 'The guide camera''s name, driver, SDK and firmware versions.'
+      operationId: GetGuideCameraDriver
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceDriverDto'
   '/api/v1/equipment/driver/{type}':
     get:
       tags:
@@ -8672,6 +8685,10 @@ components:
             - 'null'
             - string
         serial_number:
+          type:
+            - 'null'
+            - string
+        name:
           type:
             - 'null'
             - string
