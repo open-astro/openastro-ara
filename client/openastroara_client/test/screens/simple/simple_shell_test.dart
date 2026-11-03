@@ -17,6 +17,10 @@ import 'package:openastroara/main.dart' show isShell, shellFor;
 import 'package:openastroara/models/frame_histogram.dart';
 import 'package:openastroara/models/server.dart';
 import 'package:openastroara/services/profile_api.dart';
+import 'package:openastroara/services/time_sync_api.dart';
+import 'package:openastroara/services/client_gps_prefs_service.dart';
+import 'package:openastroara/state/client_gps_state.dart' show clientGpsPrefsServiceProvider;
+import 'package:openastroara/state/time_sync_state.dart';
 import 'package:openastroara/models/stats/server_internal_state.dart';
 import 'package:openastroara/services/storage_space_api.dart';
 import 'package:openastroara/state/stats/server_internal_state_state.dart';
@@ -187,6 +191,25 @@ class _Mount extends MountNotifier with _Calls<MountStatus> {
   final EquipmentConnectionState state0;
   @override
   Future<MountStatus?> build() async => MountStatus.fromJson(_wire('AM5', state0));
+}
+
+class _GpsPrefs extends ClientGpsPrefsService {
+  _GpsPrefs() : super(supportDir: () async => throw UnsupportedError('unused'));
+  @override
+  Future<ClientGpsPrefs> load() async => const ClientGpsPrefs();
+  @override
+  Future<void> save(ClientGpsPrefs prefs) async {}
+}
+
+class _Clock implements TimeSyncClient {
+  final pushed = <DateTime>[];
+  @override
+  Future<TimeSyncState> getState() async =>
+      const TimeSyncState(synced: true, location: TimeSyncLocation(lat: -37.2, lng: 174.88, alt: 71));
+  @override
+  Future<void> pushClientTime(DateTime utcNow) async => pushed.add(utcNow);
+  @override
+  dynamic noSuchMethod(Invocation i) => super.noSuchMethod(i);
 }
 
 class _OpticsMount extends MountNotifier {
@@ -1143,6 +1166,27 @@ void main() {
     expect(c.read(siteSettingsProvider).elevationM, greaterThan(90), reason: 'held: it runs, set on release');
 
     expect(find.byKey(const Key('simple-rig-use-location')), findsOneWidget, reason: 'fill from this device');
+  });
+
+  testWidgets('Use this device\'s location and time sets the site, its time zone and the rig\'s clock', (tester) async {
+    final clock = _Clock();
+    final c = await _pump(tester, const Size(1024, 768), gear: [
+      timeSyncApiProvider.overrideWithValue(clock),
+      clientGpsPrefsServiceProvider.overrideWithValue(_GpsPrefs()),
+    ]);
+    c.read(siteSettingsProvider.notifier).setTimeZone('Europe/London');
+    await _openSection(tester, 'Rig');
+    final button = find.byKey(const Key('simple-rig-use-location'));
+    expect(find.descendant(of: button, matching: find.textContaining('location and time')), findsOneWidget);
+    await tester.ensureVisible(button);
+    await tester.pumpAndSettle();
+    await tester.tap(button);
+    await tester.pump(const Duration(seconds: 4)); // the fill waits up to 3 s on this computer's GPS setting
+    await tester.pumpAndSettle();
+    final site = c.read(siteSettingsProvider);
+    expect((site.latitudeDeg, site.longitudeDeg, site.elevationM), (-37.2, 174.88, 71.0));
+    expect(site.timeZone, 'Pacific/Auckland', reason: 'from the coordinates, like the full UI\'s GPS fill');
+    expect(clock.pushed, hasLength(1), reason: "this device's clock goes to the rig");
   });
 
   testWidgets('on launch Rig shows the profile\'s site and telescope, not empty fields', (tester) async {

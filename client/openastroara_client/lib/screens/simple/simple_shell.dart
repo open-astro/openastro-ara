@@ -1,3 +1,4 @@
+import 'package:lat_lng_to_timezone/lat_lng_to_timezone.dart' as tz_map;
 import 'package:flutter/material.dart';
 
 import 'dart:async';
@@ -6,6 +7,7 @@ import 'dart:math' as math;
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../state/time_sync_state.dart' show timeSyncApiProvider;
 import '../../state/sky_atlas/tonight_sky_state.dart'
     show planningSettingsBootstrapProvider;
 import '../../models/frame_histogram.dart';
@@ -2088,9 +2090,22 @@ class _ThisRig extends ConsumerWidget {
   }
 
   /// The site from this device (its GPS, or the rig's held fix): the same
-  /// lookup as the full UI's Fill from GPS, saved at once.
+  /// lookup as the full UI's Fill from GPS, with the time zone those
+  /// coordinates fall in, saved at once; and this device's clock to the rig.
   static Future<void> _useLocation(BuildContext context, WidgetRef ref) async {
     final notify = userNotifier(context);
+    final clock = ref.read(timeSyncApiProvider);
+    if (clock != null) {
+      try {
+        await clock.pushClientTime(DateTime.now().toUtc());
+      } catch (e) {
+        notify(
+          "Couldn't set the rig's clock",
+          detail: friendlyError(e),
+          error: true,
+        );
+      }
+    }
     final r = await fillSiteFromGps(ref);
     if (!r.success) {
       notify("Couldn't get a location", detail: r.message, error: true);
@@ -2100,6 +2115,7 @@ class _ThisRig extends ConsumerWidget {
     site.setLatitudeDeg(r.lat);
     site.setLongitudeDeg(r.lng);
     if (r.alt != null) site.setElevationM(r.alt!);
+    site.setTimeZone(tz_map.latLngToTimezoneString(r.lat, r.lng));
     final api = ref.read(profileApiProvider);
     if (api != null) {
       try {
@@ -2311,7 +2327,9 @@ class _ThisRig extends ConsumerWidget {
             key: const Key('simple-rig-use-location'),
             onPressed: () => _useLocation(context, ref),
             icon: const Icon(Icons.my_location, size: 18),
-            label: Text("Use ${thisDeviceLabel(clientPlatform)}'s location"),
+            label: Text(
+              "Use ${thisDeviceLabel(clientPlatform)}'s location and time",
+            ),
           ),
         ),
         const Divider(height: AraSpace.s16),
