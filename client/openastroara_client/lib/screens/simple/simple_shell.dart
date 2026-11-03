@@ -2914,9 +2914,6 @@ class _SettingsPage extends ConsumerWidget {
   }
 }
 
-/// A value the rig keeps, set by wheels: tap it and one wheel per digit
-/// (and a hemisphere for a coordinate) opens under it; a wheel at rest sets
-/// it. A second tap closes them.
 /// Reads the profile's guide optics when Rig opens, and again each time the
 /// guider connects (the rig fills unset ones then); draws [child].
 class _GuideOpticsReader extends ConsumerStatefulWidget {
@@ -2948,6 +2945,9 @@ class _GuideOpticsReaderState extends ConsumerState<_GuideOpticsReader> {
   Widget build(BuildContext context) => widget.child;
 }
 
+/// A value the rig keeps, set by wheels: tap it and one wheel per digit
+/// (and a hemisphere for a coordinate) opens under it; a wheel at rest sets
+/// it. A second tap closes them.
 class _RigWheelRow extends StatefulWidget {
   const _RigWheelRow._({
     required this.id,
