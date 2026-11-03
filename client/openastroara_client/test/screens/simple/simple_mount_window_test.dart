@@ -6,6 +6,9 @@ import 'package:openastroara/screens/simple/simple_device_windows.dart';
 import 'package:openastroara/services/equipment_driver_api.dart';
 import 'package:openastroara/state/equipment/mount_state.dart';
 import 'package:openastroara/state/settings/safety_policies_state.dart';
+import 'package:openastroara/models/sequence/sequence_summary.dart';
+import 'package:openastroara/state/sequencer/sequence_list_state.dart';
+import 'package:openastroara/screens/simple/simple_shell.dart' show SimpleSegment;
 
 /// A mount that records what it was asked to do.
 class _Mount extends MountNotifier {
@@ -15,6 +18,8 @@ class _Mount extends MountNotifier {
 
   @override
   Future<MountStatus?> build() async => MountStatus.fromJson(json);
+
+  void set(Map<String, dynamic> next) => state = AsyncData(MountStatus.fromJson(next));
 
   @override
   Future<bool> setTracking(bool enabled) async {
@@ -35,22 +40,29 @@ class _Mount extends MountNotifier {
   }
 }
 
-Map<String, dynamic> _wire({bool tracking = true, bool parked = false, String state = 'connected'}) => {
+Map<String, dynamic> _wire({bool tracking = true, bool parked = false, String state = 'connected', String runtime = 'tracking'}) => {
       'device_id': 'm',
       'name': 'EQM-35 Pro',
       'state': state,
       'capabilities': {'can_park': true, 'can_unpark': true, 'can_set_tracking': true, 'can_slew': true},
-      'runtime': {'tracking': tracking, 'parked': parked},
+      'runtime': {'state': runtime, 'tracking': tracking, 'parked': parked},
     };
 
+class _Running extends SequenceRunStateNotifier {
+  @override
+  Future<SequenceRunStateInfo?> build() async =>
+      const SequenceRunStateInfo(sequenceId: 'seq-1', state: SequenceRunState.running);
+}
+
 Future<(ProviderContainer, _Mount)> _pump(WidgetTester tester, Map<String, dynamic> wire,
-    {bool inSettings = false, DeviceDriver? driver}) async {
+    {bool inSettings = false, DeviceDriver? driver, bool planRunning = false}) async {
   await tester.pumpWidget(const SizedBox());
   await tester.pump();
   final mount = _Mount(wire);
   final c = ProviderContainer(overrides: [
     mountProvider.overrideWith(() => mount),
     deviceDriverProvider.overrideWith((ref, type) async => type == 'telescope' ? driver : null),
+    if (planRunning) sequenceRunStateProvider.overrideWith(_Running.new),
   ]);
   addTearDown(c.dispose);
   await tester.pumpWidget(UncontrolledProviderScope(
@@ -68,9 +80,6 @@ void main() {
     await tester.tap(find.byKey(const Key('simple-mount-tracking-off')));
     await tester.pump();
     expect(mount.calls, ['tracking false']);
-    await tester.tap(find.byKey(const Key('simple-mount-park')));
-    await tester.pump();
-    expect(mount.calls.last, 'park');
     c.read(safetyPoliciesProvider.notifier).setMeridianFlipAuto(true);
     await tester.pump();
     await tester.tap(find.byKey(const Key('simple-mount-flip-off')));
@@ -81,12 +90,48 @@ void main() {
     expect(row('Meridian flip'), row('Tracking'));
   });
 
-  testWidgets('a parked mount offers Unpark', (tester) async {
-    final (_, mount) = await _pump(tester, _wire(tracking: false, parked: true));
-    expect(find.text('Parked'), findsOneWidget);
-    await tester.tap(find.byKey(const Key('simple-mount-park')));
+  testWidgets('Park is Parked / Unparked segments; while it moves it reads Parking…, then the new state', (tester) async {
+    final (_, mount) = await _pump(tester, _wire());
+    await tester.tap(find.byKey(const Key('simple-mount-park-parked')));
+    await tester.pump();
+    expect(mount.calls, ['park']);
+    expect(find.text('Parking…'), findsOneWidget);
+    expect(find.byKey(const Key('simple-mount-park-parked')), findsNothing, reason: 'no second tap while it moves');
+    mount.set(_wire(tracking: false, parked: true, runtime: 'parked'));
+    await tester.pump();
+    expect(find.text('Parking…'), findsNothing);
+    expect(tester.widget<SimpleSegment>(find.byKey(const Key('simple-mount-park-parked'))).selected, isTrue);
+  });
+
+  testWidgets('a parked mount unparks from the segment, reads Unparking… while it does, and can\'t track meanwhile',
+      (tester) async {
+    final (_, mount) = await _pump(tester, _wire(tracking: false, parked: true, runtime: 'parked'));
+    expect(tester.widget<SimpleSegment>(find.byKey(const Key('simple-mount-tracking-on'))).onTap, isNull,
+        reason: 'a parked mount does not track');
+    await tester.tap(find.byKey(const Key('simple-mount-park-unparked')));
     await tester.pump();
     expect(mount.calls, ['unpark']);
+    mount.set(_wire(tracking: false, parked: true, runtime: 'unparking'));
+    await tester.pump();
+    expect(find.text('Unparking…'), findsOneWidget);
+  });
+
+  testWidgets('while a plan runs, Parked asks first, in the window', (tester) async {
+    final (_, mount) = await _pump(tester, _wire(), planRunning: true);
+    await tester.pump(); // the run state arrives
+    await tester.tap(find.byKey(const Key('simple-mount-park-parked')));
+    await tester.pump();
+    expect(mount.calls, isEmpty);
+    expect(find.textContaining('A plan is running'), findsOneWidget);
+    await tester.tap(find.text('Cancel'));
+    await tester.pump();
+    expect(mount.calls, isEmpty);
+    expect(find.textContaining('A plan is running'), findsNothing);
+    await tester.tap(find.byKey(const Key('simple-mount-park-parked')));
+    await tester.pump();
+    await tester.tap(find.text('Park anyway'));
+    await tester.pump();
+    expect(mount.calls, ['park']);
   });
 
   testWidgets('in Settings it ends with the mount\'s versions (firmware here); from the dot, none', (tester) async {
@@ -102,6 +147,6 @@ void main() {
   testWidgets('a mount that isn\'t connected shows its state and no controls', (tester) async {
     await _pump(tester, _wire(state: 'disconnected'));
     expect(find.text('Not connected'), findsOneWidget);
-    expect(find.byKey(const Key('simple-mount-park')), findsNothing);
+    expect(find.byKey(const Key('simple-mount-park-parked')), findsNothing);
   });
 }

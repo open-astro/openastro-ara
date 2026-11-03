@@ -6,6 +6,7 @@ import '../../services/equipment_device_api.dart' show describeEquipmentError;
 import '../../services/equipment_driver_api.dart';
 import '../../state/equipment/camera_state.dart';
 import '../../state/equipment/mount_state.dart';
+import '../../state/sequencer/sequence_list_state.dart';
 import '../../state/settings/safety_policies_state.dart';
 import '../../state/profile_management_state.dart';
 import '../../state/settings/imaging_defaults_state.dart';
@@ -292,12 +293,16 @@ class _OnOff extends StatelessWidget {
     required this.on,
     required this.onChanged,
     this.labels = ('On', 'Off'),
+    this.enabled = true,
   });
 
   final String id;
   final bool on;
   final ValueChanged<bool> onChanged;
   final (String, String) labels;
+
+  /// False: both segments show the state but take no tap.
+  final bool enabled;
 
   @override
   Widget build(BuildContext context) => DecoratedBox(
@@ -314,7 +319,7 @@ class _OnOff extends StatelessWidget {
             label: word,
             selected: on == v,
             radius: 8,
-            onTap: on == v ? null : () => onChanged(v),
+            onTap: on == v || !enabled ? null : () => onChanged(v),
           ),
       ],
     ),
@@ -364,16 +369,27 @@ class SimpleVersions extends StatelessWidget {
   );
 }
 
-/// The mount's window: tracking (On / Off), park or unpark, and the
+/// The mount's window: tracking (On / Off), Parked / Unparked, and the
 /// automatic meridian flip (the profile's, so plans flip by it too).
-class SimpleMountWindow extends ConsumerWidget {
+class SimpleMountWindow extends ConsumerStatefulWidget {
   const SimpleMountWindow({super.key, this.inSettings = false});
 
   /// In Settings the window ends with the mount's versions.
   final bool inSettings;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<SimpleMountWindow> createState() => _SimpleMountWindowState();
+}
+
+class _SimpleMountWindowState extends ConsumerState<SimpleMountWindow> {
+  /// Asked for and not there yet (the daemon reports a park as a slew).
+  bool? _parking;
+
+  /// Parked tapped while a plan runs: the window asks first.
+  bool _asking = false;
+
+  @override
+  Widget build(BuildContext context) {
     final m = ref.watch(mountProvider).value;
     final children = <Widget>[SimpleDeviceHeader(type: 'Mount', status: m)];
     if (m == null || !m.isConnected) {
@@ -386,47 +402,86 @@ class SimpleMountWindow extends ConsumerWidget {
     } else {
       final caps = m.capabilities;
       final notifier = ref.read(mountProvider.notifier);
+      // A park is done once the mount says so; until then it reads Parking….
+      if (_parking != null &&
+          m.parked == _parking &&
+          m.runtimeState != 'unparking') {
+        _parking = null;
+      }
+      final moving = _parking != null || m.runtimeState == 'unparking';
+      // Watched, so it's known by the time Parked is tapped.
+      final planRunning =
+          ref.watch(sequenceRunStateProvider).value?.state?.isActive ?? false;
       if (caps?.canSetTracking ?? false) {
         children.add(
           simpleWindowRow(
             'Tracking',
             _OnOff(
               id: 'simple-mount-tracking',
-              on: m.tracking,
+              on: m.tracking && !m.parked,
+              // A parked (or parking) mount doesn't track.
+              enabled: !m.parked && !moving,
               onChanged: (on) => _run(context, () => notifier.setTracking(on)),
             ),
           ),
         );
       }
-      final canAct = m.parked
-          ? caps?.canUnpark ?? false
-          : caps?.canPark ?? false;
       children.add(
         simpleWindowRow(
           'Park',
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            spacing: AraSpace.s12,
-            children: [
-              if (m.parked) const Text('Parked', style: kSimpleText),
-              TextButton(
-                key: const Key('simple-mount-park'),
-                // 44 pt like the window's other controls.
-                style: TextButton.styleFrom(
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          moving
+              ? SizedBox(
+                  height: 44,
+                  child: Center(
+                    child: Text(
+                      (_parking ?? !m.parked) ? 'Parking…' : 'Unparking…',
+                      style: kSimpleText.copyWith(color: AraColors.accentBusy),
+                    ),
+                  ),
+                )
+              : _OnOff(
+                  id: 'simple-mount-park',
+                  labels: const ('Parked', 'Unparked'),
+                  on: m.parked,
+                  enabled: m.parked
+                      ? caps?.canUnpark ?? false
+                      : caps?.canPark ?? false,
+                  onChanged: (park) {
+                    if (park && planRunning) {
+                      setState(() => _asking = true);
+                    } else {
+                      _park(context, park);
+                    }
+                  },
                 ),
-                onPressed: canAct
-                    ? () => _run(
-                        context,
-                        m.parked ? notifier.unpark : notifier.park,
-                      )
-                    : null,
-                child: Text(m.parked ? 'Unpark' : 'Park now'),
+        ),
+      );
+      if (_asking) {
+        children.add(
+          Row(
+            spacing: AraSpace.s8,
+            children: [
+              Expanded(
+                child: Text(
+                  'A plan is running. Park the mount anyway?',
+                  style: kSimpleText.copyWith(color: AraColors.accentBusy),
+                ),
+              ),
+              TextButton(
+                onPressed: () => setState(() => _asking = false),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () {
+                  setState(() => _asking = false);
+                  _park(context, true);
+                },
+                child: const Text('Park anyway'),
               ),
             ],
           ),
-        ),
-      );
+        );
+      }
       children.add(
         simpleWindowRow(
           'Meridian flip',
@@ -434,12 +489,12 @@ class SimpleMountWindow extends ConsumerWidget {
             id: 'simple-mount-flip',
             labels: const ('Auto', 'Off'),
             on: ref.watch(safetyPoliciesProvider).meridianFlipAuto,
-            onChanged: (on) => _setFlip(context, ref, on),
+            onChanged: (on) => _setFlip(context, on),
           ),
         ),
       );
     }
-    if (inSettings) {
+    if (widget.inSettings) {
       children.addAll(
         _versions(ref.watch(deviceDriverProvider('telescope')).value),
       );
@@ -452,8 +507,16 @@ class SimpleMountWindow extends ConsumerWidget {
     );
   }
 
+  void _park(BuildContext context, bool park) {
+    final notifier = ref.read(mountProvider.notifier);
+    setState(() => _parking = park);
+    _run(context, park ? notifier.park : notifier.unpark).then((ok) {
+      if (!ok && mounted) setState(() => _parking = null);
+    });
+  }
+
   /// Set once: the profile keeps it.
-  Future<void> _setFlip(BuildContext context, WidgetRef ref, bool on) async {
+  Future<void> _setFlip(BuildContext context, bool on) async {
     final policies = ref.read(safetyPoliciesProvider.notifier);
     policies.setMeridianFlipAuto(on);
     final notify = userNotifier(context);
@@ -470,19 +533,21 @@ class SimpleMountWindow extends ConsumerWidget {
     }
   }
 
-  Future<void> _run(
+  /// False when the mount refused (a pill says why).
+  Future<bool> _run(
     BuildContext context,
     Future<bool> Function() action,
   ) async {
     final notify = userNotifier(context);
     try {
-      await action();
+      return await action();
     } catch (e) {
       notify(
         "Couldn't move the mount",
         detail: describeEquipmentError(e),
         error: true,
       );
+      return false;
     }
   }
 }
