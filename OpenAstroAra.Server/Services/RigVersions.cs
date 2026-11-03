@@ -35,8 +35,9 @@ public sealed record RigVersionsResult(string? BoardModel, string? GuiderVersion
 /// one that can't be read is null (or left out), never an error.</summary>
 public sealed partial class RigVersions {
     private static readonly TimeSpan AstapTimeout = TimeSpan.FromSeconds(3);
-    // The solver binary doesn't change while the daemon runs; ask it once per path.
-    private static readonly ConcurrentDictionary<string, Task<string?>> AstapCache = new(StringComparer.Ordinal);
+    // The solver binary doesn't change while the daemon runs; once a path answers, keep its version.
+    // A miss (not installed yet, or slow on a cold start) is asked again next time.
+    private static readonly ConcurrentDictionary<string, string> AstapCache = new(StringComparer.Ordinal);
 
     private readonly IGuiderService? _guider;
     private readonly IEquipmentSelectionStore? _selections;
@@ -54,7 +55,7 @@ public sealed partial class RigVersions {
         _alpaca = alpaca;
         _astapPath = astapPath;
         _boardModel = boardModel ?? (() => ReadBoardModel("/proc/device-tree/model"));
-        _astapVersion = astapVersion ?? ((path, _) => AstapCache.GetOrAdd(path, RunAstapVersionAsync));
+        _astapVersion = astapVersion ?? ((path, _) => CachedAstapVersionAsync(path));
     }
 
     public async Task<RigVersionsResult> CollectAsync(CancellationToken ct) {
@@ -104,6 +105,17 @@ public sealed partial class RigVersions {
         }
     }
 
+    internal static async Task<string?> CachedAstapVersionAsync(string path) {
+        if (AstapCache.TryGetValue(path, out var known)) {
+            return known;
+        }
+        var version = await RunAstapVersionAsync(path).ConfigureAwait(false);
+        if (version is not null) {
+            AstapCache[path] = version;
+        }
+        return version;
+    }
+
     /// <summary>The version from ASTAP's banner ("ASTAP astrometric solver version CLI-2026.09.01").</summary>
     internal static string? ParseAstapVersion(string output) {
         var m = AstapBanner().Match(output);
@@ -130,7 +142,10 @@ public sealed partial class RigVersions {
             process.Start();
             using var timeout = new CancellationTokenSource(AstapTimeout);
             try {
+                // Drain stderr too: a full pipe would stall the solver into the timeout.
+                var errors = process.StandardError.ReadToEndAsync(timeout.Token);
                 var output = await process.StandardOutput.ReadToEndAsync(timeout.Token).ConfigureAwait(false);
+                await errors.ConfigureAwait(false);
                 await process.WaitForExitAsync(timeout.Token).ConfigureAwait(false);
                 return ParseAstapVersion(output);
             } finally {

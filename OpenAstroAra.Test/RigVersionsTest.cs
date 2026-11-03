@@ -54,6 +54,30 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        [Platform(Exclude = "Win", Reason = "the fake solver is a shell script")]
+        public async Task An_ASTAP_that_had_no_version_yet_is_asked_again() {
+            // A solver that answers only once it is "installed": the first probe finds nothing, which
+            // must not stick until the daemon restarts.
+            var dir = Directory.CreateTempSubdirectory("astap-probe").FullName;
+            try {
+                var installed = Path.Combine(dir, "installed");
+                var astap = Path.Combine(dir, "astap_cli");
+                await File.WriteAllTextAsync(astap,
+                    $"#!/bin/sh\nif [ -f '{installed}' ]; then echo 'ASTAP astrometric solver version CLI-2026.09.01'; fi\n");
+                File.SetUnixFileMode(astap, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+
+                Assert.That(await RigVersions.CachedAstapVersionAsync(astap), Is.Null);
+                await File.WriteAllTextAsync(installed, "");
+                Assert.That(await RigVersions.CachedAstapVersionAsync(astap), Is.EqualTo("CLI-2026.09.01"));
+                File.Delete(installed);
+                Assert.That(await RigVersions.CachedAstapVersionAsync(astap), Is.EqualTo("CLI-2026.09.01"),
+                    "a version once read is kept");
+            } finally {
+                Directory.Delete(dir, recursive: true);
+            }
+        }
+
+        [Test]
         public void An_Alpaca_description_gives_the_servers_name_maker_and_version() {
             const string json = """
                 {"ErrorNumber":0,"Value":{"Manufacturer":"OpenAstro.net","ManufacturerVersion":"6.0.0~nightly202610301026.g34986ef","ServerName":"AlpacaHTTP","Location":""}}
