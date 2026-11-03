@@ -76,7 +76,10 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
             var ep = PHD2Guider.ParseAlpacaSelectionEndpoint(System.Text.RegularExpressions.Regex.Match(
                 await guider.GetConnectedCameraNameAsync().ConfigureAwait(false) ?? "", @"\[[^\[\]]*\]").Value);
             var size = await guider.GetAlpacaCameraPixelSizeAsync(ep?.Host, ep?.Port, ep?.Device, ct).ConfigureAwait(false);
-            return size > 0 ? (size, scale) : null;
+            // The guider's scale includes its binning; the pixel size is the sensor's, so unbin the scale.
+            // shortcut: a guider that can't say its binning counts as 1x; skip the fill instead if a binned one shows up.
+            var binning = await guider.GetCameraBinningAsync(ct).ConfigureAwait(false) ?? 1;
+            return size > 0 ? (size, scale / binning) : null;
         } catch (Exception ex) when (ex is not OperationCanceledException) {
             return null; // not connected, or the driver can't say
         }

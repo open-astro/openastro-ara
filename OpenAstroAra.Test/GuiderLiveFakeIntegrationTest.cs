@@ -102,6 +102,28 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_binned_guide_camera_still_gives_the_scopes_focal_length() {
+            // PR #1486 review: the guider's pixel scale includes its binning. Binned 2x, the same 516 mm
+            // scope works at 3.0″/px, and dividing by the unbinned 3.75 µm alone gave 258 mm.
+            var store = new InMemoryProfileStore();
+            using var profiles = new StoreBackedProfileService(store);
+            var (fake, svc) = await ConnectedAsync(f => {
+                f.OnRpc("get_pixel_scale", JsonValue.Create(3.0));
+                f.OnRpc("get_camera_binning", JsonValue.Create(2));
+                f.OnRpc("get_current_equipment", _ => new JsonObject {
+                    ["camera"] = new JsonObject { ["name"] = "Alpaca Camera [127.0.0.1:6800/0] - ZWO ASI174MM Mini (ZWO ASI Camera Driver)", ["connected"] = true },
+                });
+                f.OnRpc("get_alpaca_camera_pixelsize", _ => new JsonObject { ["pixel_size"] = 3.75 });
+            }, store, profiles).ConfigureAwait(false);
+            await using var _ = fake;
+            using var __ = svc;
+            Assert.That(await WaitUntilAsync(() => store.GetPhd2Settings().GuideFocalLength > 0).ConfigureAwait(false), Is.True,
+                "the optics were kept");
+            Assert.That(store.GetPhd2Settings().GuideFocalLength, Is.EqualTo(516),
+                "TryGetGuideOpticsAsync unbins the scale, so polar alignment's own fallback gets it right too");
+        }
+
+        [Test]
         public async Task Guide_optics_already_in_the_profile_are_left_as_they_are() {
             var store = new InMemoryProfileStore();
             store.PutPhd2Settings(store.GetPhd2Settings() with { GuideFocalLength = 240, GuidePixelSize = 2.9 });

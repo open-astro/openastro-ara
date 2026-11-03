@@ -256,7 +256,7 @@ public interface IGuiderService {
     /// its camera is not connected (the profile never holds it; polar alignment reads the same RPC).</summary>
     Task<(int Width, int Height)?> TryGetGuideFrameSizeAsync(CancellationToken ct);
     /// <summary>The connected guider's camera pixel size (µm, from its Alpaca driver) and the guider's
-    /// working pixel scale (″/px), or null when it isn't connected or either is unknown.</summary>
+    /// pixel scale at 1x binning (″/px), or null when it isn't connected or either is unknown.</summary>
     Task<(double PixelSizeUm, double PixelScaleArcsec)?> TryGetGuideOpticsAsync(CancellationToken ct) =>
         Task.FromResult<(double, double)?>(null);
     /// <summary>The camera the connected guider has open, or null when it isn't connected or has none.</summary>
