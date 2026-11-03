@@ -64,6 +64,15 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
         }
     }
 
+    public async Task<string?> TryGetGuideCameraNameAsync(CancellationToken ct) {
+        ct.ThrowIfCancellationRequested();
+        try {
+            return await RequireConnectedGuider().GetConnectedCameraNameAsync().ConfigureAwait(false);
+        } catch (InvalidOperationException) {
+            return null; // not connected
+        }
+    }
+
     [LoggerMessage(EventId = 6368, Level = LogLevel.Debug, Message = "§36.10 guide frame size unavailable; recommending from the main camera only")]
     private partial void LogGuideFrameSizeUnavailable(Exception exception);
 

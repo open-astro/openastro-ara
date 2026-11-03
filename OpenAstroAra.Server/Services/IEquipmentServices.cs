@@ -255,6 +255,8 @@ public interface IGuiderService {
     /// <summary>§36.10 — the guide camera's frame size from the connected guider, or null when the guider or
     /// its camera is not connected (the profile never holds it; polar alignment reads the same RPC).</summary>
     Task<(int Width, int Height)?> TryGetGuideFrameSizeAsync(CancellationToken ct);
+    /// <summary>The camera the connected guider has open, or null when it isn't connected or has none.</summary>
+    Task<string?> TryGetGuideCameraNameAsync(CancellationToken ct) => Task.FromResult<string?>(null);
     Task<OperationAcceptedDto> ConnectAsync(GuiderConnectRequestDto request, string? idempotencyKey, CancellationToken ct);
     Task<OperationAcceptedDto> DisconnectAsync(string? idempotencyKey, CancellationToken ct);
     Task<OperationAcceptedDto> StartGuidingAsync(string? idempotencyKey, CancellationToken ct);

@@ -466,6 +466,21 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             return null;
         }
 
+        /// <summary>The guide camera the guider has open (<c>get_current_equipment</c>), or null when none is
+        /// connected or the call fails.</summary>
+        public async Task<string?> GetConnectedCameraNameAsync() {
+            try {
+                var resp = await SendMessage(new Phd2GetCurrentEquipment(), 10000).ConfigureAwait(false);
+                if (resp?.error == null && resp?.result is JObject equipment && equipment["camera"] is JObject camera
+                    && camera["connected"]?.Type == JTokenType.Boolean && camera.Value<bool>("connected")) {
+                    return camera.Value<string>("name");
+                }
+            } catch (Exception ex) {
+                Logger.Error(ex);
+            }
+            return null;
+        }
+
         private async Task<bool> ProfileSelectionChanged() {
             if (SelectedProfile == null) {
                 Logger.Error("No profile selected");

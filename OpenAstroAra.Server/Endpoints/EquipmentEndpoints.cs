@@ -1056,11 +1056,15 @@ public static partial class EquipmentEndpoints {
     /// <summary>The guide camera's versions and model name, from the Alpaca server the guider's
     /// "Alpaca Camera [host:port/N]" pick names; 404 when the pick is unset or not an Alpaca camera.</summary>
     public static async Task<IResult> GetGuideCameraDriverAsync(
-            IProfileStore profiles, IAlpacaManagementClient alpaca, CancellationToken ct) {
+            IProfileStore profiles, IAlpacaManagementClient alpaca, IGuiderService guider, CancellationToken ct) {
         ArgumentNullException.ThrowIfNull(profiles);
         ArgumentNullException.ThrowIfNull(alpaca);
+        ArgumentNullException.ThrowIfNull(guider);
         if (PHD2Guider.ParseAlpacaSelectionEndpoint(profiles.GetPhd2Settings().GuiderCamera) is not { } ep) {
-            return Results.Problem("No Alpaca guide camera is set up.", statusCode: StatusCodes.Status404NotFound);
+            // Not an Alpaca pick (or none in the profile): the guider still knows the camera it opened.
+            return await guider.TryGetGuideCameraNameAsync(ct).ConfigureAwait(false) is { } name
+                ? Results.Ok(new DeviceDriverDto(null, null, null, Name: name))
+                : Results.Problem("No guide camera is known.", statusCode: StatusCodes.Status404NotFound);
         }
         try {
             var listed = alpaca.GetConfiguredDevicesAsync(ep.Host, ep.Port, ct);

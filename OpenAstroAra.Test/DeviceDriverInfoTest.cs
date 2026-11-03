@@ -76,20 +76,34 @@ namespace OpenAstroAra.Test {
             alpaca.Setup(a => a.GetDriverVersionAsync("10.0.30.223", 6800, "camera", 1, It.IsAny<CancellationToken>()))
                 .ReturnsAsync("6.0.0");
 
-            var result = await EquipmentEndpoints.GetGuideCameraDriverAsync(profiles.Object, alpaca.Object, CancellationToken.None);
+            var result = await EquipmentEndpoints.GetGuideCameraDriverAsync(profiles.Object, alpaca.Object, Mock.Of<IGuiderService>(), CancellationToken.None);
 
             Assert.That((result as Ok<DeviceDriverDto>)?.Value,
                 Is.EqualTo(new DeviceDriverDto("6.0.0", "1.41.0.0", null, "0c190e111d020900", "ZWO ASI533MC Pro")));
         }
 
         [Test]
-        public async Task A_guide_camera_that_is_not_an_alpaca_pick_is_404() {
+        public async Task A_guide_camera_that_is_not_an_alpaca_pick_and_a_guider_that_cannot_say_is_404() {
             var profiles = new Mock<IProfileStore>();
             profiles.Setup(p => p.GetPhd2Settings()).Returns(new Phd2SettingsDto(
                 "localhost", 4400, "Default", true, 3, 5.0, 1.5, 10, 60, false, GuiderCamera: "ZWO ASI Camera (1)"));
             var result = await EquipmentEndpoints.GetGuideCameraDriverAsync(profiles.Object, new Mock<IAlpacaManagementClient>().Object,
-                CancellationToken.None);
+                Mock.Of<IGuiderService>(), CancellationToken.None);
             Assert.That((result as IStatusCodeHttpResult)?.StatusCode, Is.EqualTo(StatusCodes.Status404NotFound));
+        }
+
+        [Test]
+        public async Task Without_an_alpaca_pick_the_connected_guider_names_its_camera() {
+            // The rig's profile leaves the guide camera blank; the guider still knows what it opened.
+            var profiles = new Mock<IProfileStore>();
+            profiles.Setup(p => p.GetPhd2Settings()).Returns(new Phd2SettingsDto(
+                "localhost", 4400, "Default", true, 3, 5.0, 1.5, 10, 60, false, GuiderCamera: ""));
+            var guider = new Mock<IGuiderService>();
+            guider.Setup(g => g.TryGetGuideCameraNameAsync(It.IsAny<CancellationToken>())).ReturnsAsync("ZWO ASI120MM Mini");
+            var result = await EquipmentEndpoints.GetGuideCameraDriverAsync(profiles.Object, new Mock<IAlpacaManagementClient>().Object,
+                guider.Object, CancellationToken.None);
+            Assert.That((result as Ok<DeviceDriverDto>)?.Value,
+                Is.EqualTo(new DeviceDriverDto(null, null, null, null, "ZWO ASI120MM Mini")));
         }
 
         [Test]

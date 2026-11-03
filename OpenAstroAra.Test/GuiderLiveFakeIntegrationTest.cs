@@ -80,6 +80,26 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task The_guide_camera_name_comes_from_the_guiders_current_equipment() {
+            var (fake, svc) = await ConnectedAsync(f => f.OnRpc("get_current_equipment", _ => new JsonObject {
+                ["camera"] = new JsonObject { ["name"] = "ZWO ASI120MM Mini", ["connected"] = true },
+            })).ConfigureAwait(false);
+            await using var _ = fake;
+            using var __ = svc;
+            Assert.That(await svc.TryGetGuideCameraNameAsync(CancellationToken.None).ConfigureAwait(false), Is.EqualTo("ZWO ASI120MM Mini"));
+        }
+
+        [Test]
+        public async Task A_guide_camera_the_guider_has_not_opened_has_no_name() {
+            var (fake, svc) = await ConnectedAsync(f => f.OnRpc("get_current_equipment", _ => new JsonObject {
+                ["camera"] = new JsonObject { ["name"] = "ZWO ASI120MM Mini", ["connected"] = false },
+            })).ConfigureAwait(false);
+            await using var _ = fake;
+            using var __ = svc;
+            Assert.That(await svc.TryGetGuideCameraNameAsync(CancellationToken.None).ConfigureAwait(false), Is.Null);
+        }
+
+        [Test]
         public async Task The_connected_view_reads_every_field_and_rounds_the_positions() {
             var (fake, svc) = await ConnectedAsync(LiveRpcs).ConfigureAwait(false);
             await using var _ = fake;
