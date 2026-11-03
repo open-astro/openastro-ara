@@ -298,14 +298,13 @@ class AutopilotOffer extends StatelessWidget {
       border: Border.all(color: AraColors.accentConnected),
       borderRadius: BorderRadius.circular(10),
     ),
-    child: Row(
-      mainAxisSize: MainAxisSize.min,
+    // On a narrow window the buttons drop under the words, rather than the
+    // words squeezing into a column tall enough to cover the rails.
+    child: Wrap(
       spacing: AraSpace.s12,
+      crossAxisAlignment: WrapCrossAlignment.center,
       children: [
-        // Wraps on a narrow window rather than pushing the buttons off.
-        Flexible(
-          child: Text(context.l10n.autopilotNothingDone, style: kSimpleText),
-        ),
+        Text(context.l10n.autopilotNothingDone, style: kSimpleText),
         FilledButton(
           key: const Key('autopilot-start'),
           style: kSimpleGoStyle,
