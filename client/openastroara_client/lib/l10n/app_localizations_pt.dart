@@ -456,7 +456,7 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
-  String get searchSectionRig => 'Equipamento';
+  String get searchSectionRig => 'Setup';
 
   @override
   String get searchSectionDevices => 'Dispositivos';
@@ -501,7 +501,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get searchSettingChangeProfile => 'Alterar perfil';
 
   @override
-  String get searchSettingChangeRig => 'Alterar equipamento';
+  String get searchSettingChangeRig => 'Alterar setup';
 
   @override
   String get searchSettingVersions => 'Versões';
@@ -740,7 +740,7 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
-  String get shellSectionRig => 'Equipamento';
+  String get shellSectionRig => 'Setup';
 
   @override
   String get shellSectionDevices => 'Dispositivos';
@@ -758,7 +758,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get shellSectionGuider => 'Guia';
 
   @override
-  String get shellRigNotConnected => 'Equipamento não conectado';
+  String get shellRigNotConnected => 'Setup não conectado';
 
   @override
   String get shellFilterWheel => 'Roda de filtros';
@@ -806,7 +806,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get shellCouldntSetClock =>
-      'Não foi possível acertar o relógio do equipamento';
+      'Não foi possível acertar o relógio do setup';
 
   @override
   String get shellCouldntGetLocation => 'Não foi possível obter a localização';
@@ -826,7 +826,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get shellName => 'Nome';
 
   @override
-  String get shellChangeRig => 'Alterar equipamento';
+  String get shellChangeRig => 'Alterar setup';
 
   @override
   String get shellProfile => 'Perfil';
@@ -836,7 +836,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get shellPlanRunning =>
-      'Há um plano em andamento. Ele continua rodando no equipamento; escolha este perfil de novo para voltar a ele.';
+      'Há um plano em andamento. Ele continua rodando no setup; escolha este perfil de novo para voltar a ele.';
 
   @override
   String get shellAperture => 'Abertura';
