@@ -8,7 +8,8 @@ import 'package:openastroara/state/settings/filter_set_state.dart';
 import 'package:openastroara/state/settings/optics_settings_state.dart';
 import 'package:openastroara/state/settings/site_settings_state.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:openastroara/state/sky_atlas/tonight_sky_state.dart' show clockProvider, isDarkNow, skyClockProvider, tonightSkyUpNowProvider;
+import 'package:openastroara/state/sky_atlas/tonight_sky_state.dart'
+    show clockProvider, isDarkNow, skyClockProvider, tonightSkyUpNowProvider;
 import 'package:openastroara/util/imaging_regions.dart';
 import 'package:openastroara/util/tonight_sky_local.dart';
 
@@ -27,19 +28,35 @@ void main() {
   test('darkStart: the first minute tonight the sun is below the twilight line; null once dark', () {
     // 20:00 UTC Jan 14 is 15:00 local, daylight at the site.
     final at = darkStart(site, DateTime.utc(2026, 1, 14, 20))!;
-    double sun(DateTime t) => sunMoonAltitudeDeg(t, site.latitudeDeg, site.longitudeDeg).sunAltDeg;
+    double sun(DateTime t) =>
+        sunMoonAltitudeDeg(t, site.latitudeDeg, site.longitudeDeg).sunAltDeg;
     expect(sun(at), lessThan(-18));
-    expect(sun(at.subtract(const Duration(minutes: 1))), greaterThanOrEqualTo(-18));
-    expect(at.isAfter(DateTime.utc(2026, 1, 14, 23)) && at.isBefore(DateTime.utc(2026, 1, 15, 1)), isTrue,
-        reason: 'early evening local: $at');
-    expect(darkStart(site, DateTime.utc(2026, 1, 15, 3)), isNull, reason: 'already dark');
+    expect(
+      sun(at.subtract(const Duration(minutes: 1))),
+      greaterThanOrEqualTo(-18),
+    );
+    expect(
+      at.isAfter(DateTime.utc(2026, 1, 14, 23)) &&
+          at.isBefore(DateTime.utc(2026, 1, 15, 1)),
+      isTrue,
+      reason: 'early evening local: $at',
+    );
+    expect(
+      darkStart(site, DateTime.utc(2026, 1, 15, 3)),
+      isNull,
+      reason: 'already dark',
+    );
   });
 
   test('darkStart: none from the end of the night until sunrise (the daemon reads evening times then as yesterday)', () {
     // 11:30 UTC Jan 15 is 06:30 local, morning twilight at the Atlanta-ish site (sunrise ~07:40).
     expect(darkStart(site, DateTime.utc(2026, 1, 15, 11, 30)), isNull);
     expect(scheduleAllowed(site, DateTime.utc(2026, 1, 15, 11, 30)), isFalse);
-    expect(scheduleAllowed(site, DateTime.utc(2026, 1, 14, 20)), isTrue, reason: 'afternoon');
+    expect(
+      scheduleAllowed(site, DateTime.utc(2026, 1, 14, 20)),
+      isTrue,
+      reason: 'afternoon',
+    );
   });
 
   // RedCat-51-ish train on an APS-C-ish sensor.
@@ -53,23 +70,161 @@ void main() {
   );
   final winterNight = DateTime.utc(2026, 1, 15, 3);
 
-  List<TonightSkyObject> rank({DateTime? at, SiteSettings? s, int limit = 10}) =>
-      computeTonightSkyLocal(
-          site: s ?? site, optics: optics, atUtc: at ?? winterNight, limit: limit);
+  List<TonightSkyObject> rank({
+    DateTime? at,
+    SiteSettings? s,
+    int limit = 10,
+  }) => computeTonightSkyLocal(
+    site: s ?? site,
+    optics: optics,
+    atUtc: at ?? winterNight,
+    limit: limit,
+  );
 
-  test('returns ranked objects on a winter night, scores descending in [0,100]',
-      () {
-    final list = rank();
-    expect(list, isNotEmpty);
-    for (var i = 0; i < list.length; i++) {
-      expect(list[i].score, isNotNull);
-      expect(list[i].score!, inInclusiveRange(0, 100));
-      if (i > 0) {
-        expect(list[i - 1].score! >= list[i].score!, isTrue,
-            reason: 'list must be score-descending');
-      }
-    }
+  // #1176 — framing cutoffs pinned (maintainer's settled 0.15 / 0.40).
+  test('framing tiers: <0.15 too small, 0.15-0.40 good fit, >=0.40 fills', () {
+    // Short FOV side here is ~215.9' (4176 px x 3.102"/px).
+    PlanningDso sized(String id, double arcmin) => PlanningDso(
+      id: id,
+      name: id,
+      type: 'G',
+      magnitude: 9.0,
+      raDeg: 40.0,
+      decDeg: 20.0,
+      sizeMajArcmin: arcmin,
+    );
+    final byId = {
+      for (final o in computeTonightSkyLocal(
+        site: site,
+        optics: optics,
+        atUtc: DateTime.utc(2026, 1, 15, 3),
+        catalog: [
+          sized('under', 31), // 0.144
+          sized('lowEdge', 33), // 0.153
+          sized('highGood', 85), // 0.394
+          sized('fills', 87), // 0.403
+        ],
+      ))
+        o.id: o.framing,
+    };
+    expect(byId['under'], TonightFraming.tooSmall);
+    expect(byId['lowEdge'], TonightFraming.goodFit);
+    expect(byId['highGood'], TonightFraming.goodFit);
+    expect(byId['fills'], TonightFraming.good);
   });
+
+  group('moon factor (#1176)', () {
+    double f(double lit, double up, double sep, bool nb) => tonightMoonFactor(
+      illuminatedFraction: lit,
+      moonUpFraction: up,
+      separationDeg: sep,
+      narrowband: nb,
+    );
+    test('full moon, up all window, 0 deg: x0.80, x0.90 with narrowband', () {
+      expect(f(1, 1, 0, false), closeTo(0.80, 1e-9));
+      expect(f(1, 1, 0, true), closeTo(0.90, 1e-9));
+    });
+    test('60 deg or more away, new moon, moon down: x1.00', () {
+      expect(f(1, 1, 60, false), 1.0);
+      expect(f(1, 1, 120, true), 1.0);
+      expect(f(0, 1, 0, false), 1.0);
+      expect(f(1, 0, 0, false), 1.0);
+    });
+    test('moon up half the window halves the cut; proximity is linear', () {
+      expect(f(1, 0.5, 0, false), closeTo(0.90, 1e-9));
+      expect(f(1, 1, 30, false), closeTo(0.90, 1e-9));
+    });
+
+    final fullMoonNight = DateTime.utc(
+      2026,
+      1,
+      4,
+      3,
+    ); // ~99% lit, M81 ~48 deg away
+    const nb = FilterSetSettings(
+      filters: [PlanningFilter(name: 'Ha', kind: FilterKind.ha)],
+    );
+    TonightSkyObject m81({FilterSetSettings? fs, DateTime? at}) =>
+        computeTonightSkyLocal(
+          site: site,
+          optics: optics,
+          atUtc: at ?? fullMoonNight,
+          filterSet: fs ?? const FilterSetSettings(filters: []),
+          limit: 40,
+        ).singleWhere((o) => o.id == 'M81');
+
+    test('a bright nearby moon ranks the same target lower, less with narrowband glass', () {
+      final bare = m81();
+      final withNb = m81(fs: nb); // a galaxy is untouched by the filter factor
+      final k =
+          bare.moonIlluminationPct! /
+          100 *
+          bare.moonUpFraction! *
+          ((60 - bare.moonSeparationDeg!) / 60);
+      expect(withNb.score!, greaterThan(bare.score!));
+      expect(
+        bare.score! / withNb.score!,
+        closeTo((1 - 0.2 * k) / (1 - 0.1 * k), 0.01),
+      );
+      expect(
+        bare.scoreReasons!.join('|'),
+        matches(RegExp(r'moon 48° away, 99% lit \(−\d+%\)')),
+      );
+    });
+
+    test('no moon in the window: chip keeps +0 and never shows -0%', () {
+      final o = m81(at: DateTime.utc(2026, 1, 19, 3));
+      final chip = o.scoreReasons!.singleWhere(
+        (r) => r.startsWith('moon') || r.startsWith('moonless'),
+      );
+      expect(chip, endsWith('(+0)'));
+      expect(chip, isNot(contains('−0%')));
+    });
+  });
+
+  test('magnitude floor: off lists everything; on drops fainter, keeps brighter and magnitude-less', () {
+    PlanningDso mag(String id, double? m) => PlanningDso(
+      id: id,
+      name: id,
+      type: 'G',
+      magnitude: m,
+      raDeg: 40.0,
+      decDeg: 20.0,
+      sizeMajArcmin: 60,
+    );
+    final cat = [mag('m11', 11), mag('m9', 9), mag('none', null)];
+    Set<String> ids(double? floor) => {
+      for (final o in computeTonightSkyLocal(
+        site: site,
+        optics: optics,
+        atUtc: DateTime.utc(2026, 1, 15, 3),
+        catalog: cat,
+        magnitudeFloor: floor,
+      ))
+        if (cat.any((c) => c.id == o.id)) o.id, // curated regions ride along
+    };
+    expect(ids(null), {'m11', 'm9', 'none'});
+    expect(ids(10), {'m9', 'none'});
+  });
+
+  test(
+    'returns ranked objects on a winter night, scores descending in [0,100]',
+    () {
+      final list = rank();
+      expect(list, isNotEmpty);
+      for (var i = 0; i < list.length; i++) {
+        expect(list[i].score, isNotNull);
+        expect(list[i].score!, inInclusiveRange(0, 100));
+        if (i > 0) {
+          expect(
+            list[i - 1].score! >= list[i].score!,
+            isTrue,
+            reason: 'list must be score-descending',
+          );
+        }
+      }
+    },
+  );
 
   test('Orion Nebula gets a real dark window on a January night', () {
     final list = rank(limit: 20);
@@ -90,15 +245,16 @@ void main() {
     // From lat −35°, M81 (dec +69°) culminates at 90 − |−35−69| = −14° — it
     // can never clear a 20° horizon.
     final southern = rank(
-        s: const SiteSettings(
-          siteName: 'south',
-          latitudeDeg: -35.0,
-          longitudeDeg: 149.0,
-          bortleClass: 4,
-          defaultHorizonAltitudeDeg: 20,
-          twilightDefinition: TwilightDefinition.astronomical,
-        ),
-        limit: 20);
+      s: const SiteSettings(
+        siteName: 'south',
+        latitudeDeg: -35.0,
+        longitudeDeg: 149.0,
+        bortleClass: 4,
+        defaultHorizonAltitudeDeg: 20,
+        twilightDefinition: TwilightDefinition.astronomical,
+      ),
+      limit: 20,
+    );
     expect(southern.where((o) => o.id == 'M81'), isEmpty);
     expect(southern, isNotEmpty); // southern-sky staples still rank
   });
@@ -129,87 +285,110 @@ void main() {
       apertureMm: 100,
     );
     final ngc7000 = PlanningDso(
-        id: 'NGC7000',
-        name: 'North America Nebula',
-        type: 'HII',
-        magnitude: 4.0,
-        raDeg: 314.75,
-        decDeg: 44.33,
-        sizeMajArcmin: 120,
-        sizeMinArcmin: 100);
+      id: 'NGC7000',
+      name: 'North America Nebula',
+      type: 'HII',
+      magnitude: 4.0,
+      raDeg: 314.75,
+      decDeg: 44.33,
+      sizeMajArcmin: 120,
+      sizeMinArcmin: 100,
+    );
     final autumnNight = DateTime.utc(2026, 10, 15, 3);
 
     TonightSkyObject only(List<TonightSkyObject> l) =>
         l.where((o) => o.id == 'NGC7000').single;
     final single = computeTonightSkyLocal(
-        site: site, optics: longFl, atUtc: autumnNight, catalog: [ngc7000]);
+      site: site,
+      optics: longFl,
+      atUtc: autumnNight,
+      catalog: [ngc7000],
+    );
     expect(only(single).framing, TonightFraming.tooBig);
 
     final mosaic = computeTonightSkyLocal(
-        site: site,
-        optics: longFl,
-        atUtc: autumnNight,
-        catalog: [ngc7000],
-        mosaicTilesX: 3,
-        mosaicTilesY: 3);
+      site: site,
+      optics: longFl,
+      atUtc: autumnNight,
+      catalog: [ngc7000],
+      mosaicTilesX: 3,
+      mosaicTilesY: 3,
+    );
     expect(only(mosaic).framing, TonightFraming.good);
     // Framing is the dominant score term — the mosaic plan must outrank.
     expect(only(mosaic).score!, greaterThan(only(single).score!));
   });
 
-  PlanningDso dso(String id, double sizeMajArcmin,
-          {double raDeg = 314.75, double decDeg = 44.33}) =>
-      PlanningDso(
-          id: id,
-          name: id,
-          type: 'OCl',
-          magnitude: 5.0,
-          raDeg: raDeg,
-          decDeg: decDeg,
-          sizeMajArcmin: sizeMajArcmin,
-          sizeMinArcmin: sizeMajArcmin);
+  PlanningDso dso(
+    String id,
+    double sizeMajArcmin, {
+    double raDeg = 314.75,
+    double decDeg = 44.33,
+  }) => PlanningDso(
+    id: id,
+    name: id,
+    type: 'OCl',
+    magnitude: 5.0,
+    raDeg: raDeg,
+    decDeg: decDeg,
+    sizeMajArcmin: sizeMajArcmin,
+    sizeMinArcmin: sizeMajArcmin,
+  );
 
-  test('framing tiers: fills ≥40%, good fit 15–40%, small <15% of short side', () {
-    // The 250 mm train's short FOV side ≈ 4176·(206.265·3.76/250)/60 ≈ 216'.
-    final night = DateTime.utc(2026, 10, 15, 3);
-    List<TonightSkyObject> rank(double size) => computeTonightSkyLocal(
-        site: site, optics: optics, atUtc: night, catalog: [dso('x', size)]);
+  test(
+    'framing tiers: fills ≥40%, good fit 15–40%, small <15% of short side',
+    () {
+      // The 250 mm train's short FOV side ≈ 4176·(206.265·3.76/250)/60 ≈ 216'.
+      final night = DateTime.utc(2026, 10, 15, 3);
+      List<TonightSkyObject> rank(double size) => computeTonightSkyLocal(
+        site: site,
+        optics: optics,
+        atUtc: night,
+        catalog: [dso('x', size)],
+      );
 
-    TonightSkyObject one(double size) =>
-        rank(size).where((o) => o.id == 'x').single;
-    expect(one(120).framing, TonightFraming.good); // 56% → fills
-    expect(one(60).framing, TonightFraming.goodFit); // 28% → good fit
-    expect(one(14).framing, TonightFraming.tooSmall); // 6.5% → small
-    // A genuine frame-filler must outrank a good-fit which outranks a small.
-    final fills = one(120).score!;
-    final goodFit = one(60).score!;
-    final small = one(14).score!;
-    expect(fills, greaterThan(goodFit));
-    expect(goodFit, greaterThan(small));
-  });
+      TonightSkyObject one(double size) =>
+          rank(size).where((o) => o.id == 'x').single;
+      expect(one(120).framing, TonightFraming.good); // 56% → fills
+      expect(one(60).framing, TonightFraming.goodFit); // 28% → good fit
+      expect(one(14).framing, TonightFraming.tooSmall); // 6.5% → small
+      // A genuine frame-filler must outrank a good-fit which outranks a small.
+      final fills = one(120).score!;
+      final goodFit = one(60).score!;
+      final small = one(14).score!;
+      expect(fills, greaterThan(goodFit));
+      expect(goodFit, greaterThan(small));
+    },
+  );
 
   test('type + filter-capability adjust the score, advisory-sized', () {
     final night = DateTime.utc(2026, 10, 15, 3);
     PlanningDso typed(String id, String type) => PlanningDso(
-        id: id, name: id, type: type, magnitude: 5.0,
-        raDeg: 314.75, decDeg: 44.33,
-        sizeMajArcmin: 60, sizeMinArcmin: 60);
-    const nb = FilterSetSettings(filters: [
-      PlanningFilter(name: 'Ha', kind: FilterKind.ha),
-      PlanningFilter(name: 'L', kind: FilterKind.l),
-    ]);
-    const broadOnly = FilterSetSettings(filters: [
-      PlanningFilter(name: 'L', kind: FilterKind.l),
-    ]);
+      id: id,
+      name: id,
+      type: type,
+      magnitude: 5.0,
+      raDeg: 314.75,
+      decDeg: 44.33,
+      sizeMajArcmin: 60,
+      sizeMinArcmin: 60,
+    );
+    const nb = FilterSetSettings(
+      filters: [
+        PlanningFilter(name: 'Ha', kind: FilterKind.ha),
+        PlanningFilter(name: 'L', kind: FilterKind.l),
+      ],
+    );
+    const broadOnly = FilterSetSettings(
+      filters: [PlanningFilter(name: 'L', kind: FilterKind.l)],
+    );
     double scoreOf(String type, FilterSetSettings fs) => computeTonightSkyLocal(
-            site: site,
-            optics: optics,
-            atUtc: night,
-            filterSet: fs,
-            catalog: [typed('x', type)])
-        .where((o) => o.id == 'x')
-        .single
-        .score!;
+      site: site,
+      optics: optics,
+      atUtc: night,
+      filterSet: fs,
+      catalog: [typed('x', type)],
+    ).where((o) => o.id == 'x').single.score!;
 
     // Same geometry/brightness: an open cluster ranks below an HII region.
     expect(scoreOf('OCl', nb), lessThan(scoreOf('HII', nb)));
@@ -221,38 +400,73 @@ void main() {
 
   test('photometry-less emission rows: curated fields keep their score, the rest drop', () {
     final night = DateTime.utc(2026, 10, 15, 3);
-    const nb = FilterSetSettings(filters: [
-      PlanningFilter(name: 'Ha', kind: FilterKind.ha),
-    ]);
+    const nb = FilterSetSettings(
+      filters: [PlanningFilter(name: 'Ha', kind: FilterKind.ha)],
+    );
     PlanningDso sh2(String id) => PlanningDso(
-        id: id, name: id, type: 'HII', magnitude: null,
-        raDeg: 314.75, decDeg: 44.33, sizeMajArcmin: 60);
+      id: id,
+      name: id,
+      type: 'HII',
+      magnitude: null,
+      raDeg: 314.75,
+      decDeg: 44.33,
+      sizeMajArcmin: 60,
+    );
     const galaxy = PlanningDso(
-        id: 'NGC7331', name: 'NGC7331', type: 'G', magnitude: 9.5,
-        raDeg: 339.267, decDeg: 34.416,
-        sizeMajArcmin: 10.5, sizeMinArcmin: 3.7, surfaceBrightness: 22.5);
+      id: 'NGC7331',
+      name: 'NGC7331',
+      type: 'G',
+      magnitude: 9.5,
+      raDeg: 339.267,
+      decDeg: 34.416,
+      sizeMajArcmin: 10.5,
+      sizeMinArcmin: 3.7,
+      surfaceBrightness: 22.5,
+    );
     final list = computeTonightSkyLocal(
-        site: site, optics: optics, atUtc: night, filterSet: nb,
-        catalog: [sh2('Sh2-110'), sh2('Sh2-105'), sh2('Sh2-126'), galaxy],
-        limit: 50);
+      site: site,
+      optics: optics,
+      atUtc: night,
+      filterSet: nb,
+      catalog: [sh2('Sh2-110'), sh2('Sh2-105'), sh2('Sh2-126'), galaxy],
+      limit: 50,
+    );
     double score(String id) => list.firstWhere((o) => o.id == id).score!;
     // Same geometry, same (absent) photometry: the Crescent is a showpiece,
     // Sh2-126 a faint specialist field, Sh2-110 an unknown that's mostly stars.
     expect(score('Sh2-105'), greaterThan(score('Sh2-126')));
     expect(score('Sh2-126'), greaterThan(score('Sh2-110')));
-    expect(score('Sh2-110'), lessThan(score('NGC7331')),
-        reason: 'a galaxy with real photometry beats an unknown Sharpless field');
-    expect(list.firstWhere((o) => o.id == 'Sh2-110').scoreReasons!.join(' '),
-        contains('not a known imaging field'));
+    expect(
+      score('Sh2-110'),
+      lessThan(score('NGC7331')),
+      reason: 'a galaxy with real photometry beats an unknown Sharpless field',
+    );
+    expect(
+      list.firstWhere((o) => o.id == 'Sh2-110').scoreReasons!.join(' '),
+      contains('not a known imaging field'),
+    );
     // A photometry-less cluster+nebula stub (IC 1310) is the same story.
     const stub = PlanningDso(
-        id: 'IC1310', name: 'IC1310', type: 'Cl+N', magnitude: null,
-        raDeg: 314.75, decDeg: 44.33, sizeMajArcmin: 60);
+      id: 'IC1310',
+      name: 'IC1310',
+      type: 'Cl+N',
+      magnitude: null,
+      raDeg: 314.75,
+      decDeg: 44.33,
+      sizeMajArcmin: 60,
+    );
     final withStub = computeTonightSkyLocal(
-        site: site, optics: optics, atUtc: night, filterSet: nb,
-        catalog: const [stub, galaxy], limit: 50);
-    expect(withStub.firstWhere((o) => o.id == 'IC1310').score!,
-        lessThan(withStub.firstWhere((o) => o.id == 'NGC7331').score!));
+      site: site,
+      optics: optics,
+      atUtc: night,
+      filterSet: nb,
+      catalog: const [stub, galaxy],
+      limit: 50,
+    );
+    expect(
+      withStub.firstWhere((o) => o.id == 'IC1310').score!,
+      lessThan(withStub.firstWhere((o) => o.id == 'NGC7331').score!),
+    );
   });
 
   test('a curated override keeps its photometry and is a showpiece, never an unknown field', () {
@@ -260,34 +474,66 @@ void main() {
     // override rebuilt the row WITHOUT surface brightness, so NGC 7822
     // (renamed "Question Mark region") fell to the unknown-field ×0.5.
     final night = DateTime.utc(2026, 10, 15, 3);
-    const nb = FilterSetSettings(filters: [
-      PlanningFilter(name: 'Ha', kind: FilterKind.ha),
-    ]);
+    const nb = FilterSetSettings(
+      filters: [PlanningFilter(name: 'Ha', kind: FilterKind.ha)],
+    );
     const ngc7822 = PlanningDso(
-        id: 'NGC7822', name: 'NGC7822', type: 'HII', magnitude: null,
-        raDeg: 0.9, decDeg: 68.6, sizeMajArcmin: 30, surfaceBrightness: 22.0,
-        posAngleDeg: 65.0);
+      id: 'NGC7822',
+      name: 'NGC7822',
+      type: 'HII',
+      magnitude: null,
+      raDeg: 0.9,
+      decDeg: 68.6,
+      sizeMajArcmin: 30,
+      surfaceBrightness: 22.0,
+      posAngleDeg: 65.0,
+    );
     final list = computeTonightSkyLocal(
-        site: site, optics: optics, atUtc: night, filterSet: nb,
-        catalog: const [ngc7822], limit: 50);
+      site: site,
+      optics: optics,
+      atUtc: night,
+      filterSet: nb,
+      catalog: const [ngc7822],
+      limit: 50,
+    );
     final row = list.firstWhere((o) => o.id == 'NGC7822');
     expect(row.name, contains('Question Mark'));
     expect(row.surfaceBrightness, 22.0, reason: 'the override keeps the SB');
     expect(row.posAngleDeg, 65.0, reason: 'and the position angle');
     final why = row.scoreReasons!.join(' ');
     expect(why, isNot(contains('not a known imaging field')));
-    expect(why, contains('for Bortle'), reason: 'the SB term scored, not "unknown"');
-    expect(why, isNot(contains('showpiece')),
-        reason: 'a row WITH photometry is scored on it, no tier consulted');
+    expect(
+      why,
+      contains('for Bortle'),
+      reason: 'the SB term scored, not "unknown"',
+    );
+    expect(
+      why,
+      isNot(contains('showpiece')),
+      reason: 'a row WITH photometry is scored on it, no tier consulted',
+    );
     // An override with no photometry at all is a showpiece by membership.
     const california = PlanningDso(
-        id: 'NGC1499', name: 'NGC1499', type: 'HII', magnitude: null,
-        raDeg: 60.0, decDeg: 36.6, sizeMajArcmin: 145);
+      id: 'NGC1499',
+      name: 'NGC1499',
+      type: 'HII',
+      magnitude: null,
+      raDeg: 60.0,
+      decDeg: 36.6,
+      sizeMajArcmin: 145,
+    );
     final bare = computeTonightSkyLocal(
-            site: site, optics: optics, atUtc: night, filterSet: nb,
-            catalog: const [california], limit: 50)
-        .firstWhere((o) => o.id == 'NGC1499');
-    expect(bare.scoreReasons!.join(' '), contains('showpiece imaging field (+0)'));
+      site: site,
+      optics: optics,
+      atUtc: night,
+      filterSet: nb,
+      catalog: const [california],
+      limit: 50,
+    ).firstWhere((o) => o.id == 'NGC1499');
+    expect(
+      bare.scoreReasons!.join(' '),
+      contains('showpiece imaging field (+0)'),
+    );
     // Standalone regions are tier 3 by membership, no table entry needed.
     expect(photogenicTierOf('REGION-SH2-101'), 3);
     expect(photogenicTierOf('NGC1499'), 3);
@@ -297,64 +543,108 @@ void main() {
   test('a bare OSC (empty filter set) is scored as broadband, harder under bright skies', () {
     final night = DateTime.utc(2026, 10, 15, 3);
     const hii = PlanningDso(
-        id: 'X', name: 'X', type: 'HII', magnitude: 5.0,
-        raDeg: 314.75, decDeg: 44.33, sizeMajArcmin: 60, sizeMinArcmin: 60);
+      id: 'X',
+      name: 'X',
+      type: 'HII',
+      magnitude: 5.0,
+      raDeg: 314.75,
+      decDeg: 44.33,
+      sizeMajArcmin: 60,
+      sizeMinArcmin: 60,
+    );
     const galaxy = PlanningDso(
-        id: 'G', name: 'G', type: 'G', magnitude: 5.0,
-        raDeg: 314.75, decDeg: 44.33, sizeMajArcmin: 60, sizeMinArcmin: 60);
-    const nb = FilterSetSettings(filters: [
-      PlanningFilter(name: 'Ha', kind: FilterKind.ha),
-    ]);
+      id: 'G',
+      name: 'G',
+      type: 'G',
+      magnitude: 5.0,
+      raDeg: 314.75,
+      decDeg: 44.33,
+      sizeMajArcmin: 60,
+      sizeMinArcmin: 60,
+    );
+    const nb = FilterSetSettings(
+      filters: [PlanningFilter(name: 'Ha', kind: FilterKind.ha)],
+    );
     double scoreOf(String id, FilterSetSettings fs, {int bortle = 4}) =>
         computeTonightSkyLocal(
-                site: site.copyWith(bortleClass: bortle),
-                optics: optics,
-                atUtc: night,
-                filterSet: fs,
-                catalog: const [hii, galaxy])
-            .firstWhere((o) => o.id == id)
-            .score!;
+          site: site.copyWith(bortleClass: bortle),
+          optics: optics,
+          atUtc: night,
+          filterSet: fs,
+          catalog: const [hii, galaxy],
+        ).firstWhere((o) => o.id == id).score!;
     const osc = FilterSetSettings(filters: []);
     // Before: an empty set skipped the factor entirely — same as having Hα.
     expect(scoreOf('X', osc), lessThan(scoreOf('X', nb)));
     // Bortle 6 with no narrowband is penalised more than Bortle 3.
-    expect(scoreOf('X', osc, bortle: 6), lessThan(scoreOf('X', osc, bortle: 3)));
+    expect(
+      scoreOf('X', osc, bortle: 6),
+      lessThan(scoreOf('X', osc, bortle: 3)),
+    );
     // Continuum targets are untouched by any of it.
     expect(scoreOf('G', osc), scoreOf('G', nb));
     // The split applies to a declared broadband-only set the same way.
-    const broadOnly = FilterSetSettings(filters: [
-      PlanningFilter(name: 'L', kind: FilterKind.l),
-    ]);
-    expect(scoreOf('X', broadOnly, bortle: 6), lessThan(scoreOf('X', broadOnly, bortle: 3)));
-    expect(scoreOf('X', broadOnly, bortle: 3), closeTo(scoreOf('X', osc, bortle: 3), 1e-9),
-        reason: 'no narrowband is no narrowband, declared or not');
+    const broadOnly = FilterSetSettings(
+      filters: [PlanningFilter(name: 'L', kind: FilterKind.l)],
+    );
+    expect(
+      scoreOf('X', broadOnly, bortle: 6),
+      lessThan(scoreOf('X', broadOnly, bortle: 3)),
+    );
+    expect(
+      scoreOf('X', broadOnly, bortle: 3),
+      closeTo(scoreOf('X', osc, bortle: 3), 1e-9),
+      reason: 'no narrowband is no narrowband, declared or not',
+    );
   });
 
-  test('Sharpless twins of NGC/IC rows list once, as the NGC/IC row (#1141)', () {
-    final night = DateTime.utc(2026, 10, 15, 3);
-    const nb = FilterSetSettings(filters: [
-      PlanningFilter(name: 'Ha', kind: FilterKind.ha),
-    ]);
-    PlanningDso row(String id, String type) => PlanningDso(
-        id: id, name: id, type: type, magnitude: null,
-        raDeg: 92.3, decDeg: 20.5, sizeMajArcmin: 40);
-    final list = computeTonightSkyLocal(
-        site: site, optics: optics, atUtc: night, filterSet: nb,
-        catalog: [row('Sh2-252', 'HII'), row('NGC2174', 'Neb'),
-                  row('Sh2-8', 'HII') /* NGC 6334 absent */],
-        limit: 50);
-    final ids = list.map((o) => o.id).toList();
-    expect(ids, isNot(contains('Sh2-252')), reason: 'Monkey Head lists once');
-    expect(ids, contains('NGC2174'));
-    expect(ids, contains('Sh2-8'), reason: 'no twin present → the Sharpless row stays');
-    // Both sides of an anchor are showpieces by membership — the NGC row
-    // has no photometry either and must not fall to the unknown-field ×0.5.
-    expect(list.firstWhere((o) => o.id == 'NGC2174').scoreReasons!.join(' '),
-        contains('showpiece imaging field (+0)'));
-    expect(photogenicTierOf('NGC6334'), 3);
-    expect(photogenicTierOf('Sh2-8'), 3);
-    expect(photogenicTierOf('Sh2-252'), 3);
-  });
+  test(
+    'Sharpless twins of NGC/IC rows list once, as the NGC/IC row (#1141)',
+    () {
+      final night = DateTime.utc(2026, 10, 15, 3);
+      const nb = FilterSetSettings(
+        filters: [PlanningFilter(name: 'Ha', kind: FilterKind.ha)],
+      );
+      PlanningDso row(String id, String type) => PlanningDso(
+        id: id,
+        name: id,
+        type: type,
+        magnitude: null,
+        raDeg: 92.3,
+        decDeg: 20.5,
+        sizeMajArcmin: 40,
+      );
+      final list = computeTonightSkyLocal(
+        site: site,
+        optics: optics,
+        atUtc: night,
+        filterSet: nb,
+        catalog: [
+          row('Sh2-252', 'HII'),
+          row('NGC2174', 'Neb'),
+          row('Sh2-8', 'HII') /* NGC 6334 absent */,
+        ],
+        limit: 50,
+      );
+      final ids = list.map((o) => o.id).toList();
+      expect(ids, isNot(contains('Sh2-252')), reason: 'Monkey Head lists once');
+      expect(ids, contains('NGC2174'));
+      expect(
+        ids,
+        contains('Sh2-8'),
+        reason: 'no twin present → the Sharpless row stays',
+      );
+      // Both sides of an anchor are showpieces by membership — the NGC row
+      // has no photometry either and must not fall to the unknown-field ×0.5.
+      expect(
+        list.firstWhere((o) => o.id == 'NGC2174').scoreReasons!.join(' '),
+        contains('showpiece imaging field (+0)'),
+      );
+      expect(photogenicTierOf('NGC6334'), 3);
+      expect(photogenicTierOf('Sh2-8'), 3);
+      expect(photogenicTierOf('Sh2-252'), 3);
+    },
+  );
 
   test('NGC/IC overrides use the catalog\'s zero-padded ids (#1141)', () {
     // Every override/anchor key below 1000 must carry the catalog's zero
@@ -362,25 +652,49 @@ void main() {
     // and NGC 246 all did).
     final shortId = RegExp(r'^(NGC|IC)\d{1,3}$');
     for (final k in overrides.keys) {
-      expect(shortId.hasMatch(k), isFalse, reason: '$k is not catalog spelling');
+      expect(
+        shortId.hasMatch(k),
+        isFalse,
+        reason: '$k is not catalog spelling',
+      );
     }
     for (final a in sharplessAnchors) {
-      expect(shortId.hasMatch(a.$1), isFalse, reason: '${a.$1} is not catalog spelling');
+      expect(
+        shortId.hasMatch(a.$1),
+        isFalse,
+        reason: '${a.$1} is not catalog spelling',
+      );
     }
     expect(photogenicTierOf('NGC0281'), 3, reason: 'Pacman is an override');
     // 'IC443' never matched OpenNGC's 'IC0443', so the Jellyfish was never
     // renamed and Sh2-248 listed beside it.
     final night = DateTime.utc(2026, 1, 15, 3);
     const jelly = PlanningDso(
-        id: 'IC0443', name: 'IC0443', type: 'SNR', magnitude: 12.0,
-        raDeg: 94.25, decDeg: 22.5, sizeMajArcmin: 50);
+      id: 'IC0443',
+      name: 'IC0443',
+      type: 'SNR',
+      magnitude: 12.0,
+      raDeg: 94.25,
+      decDeg: 22.5,
+      sizeMajArcmin: 50,
+    );
     const sh2 = PlanningDso(
-        id: 'Sh2-248', name: 'Sh2-248', type: 'HII', magnitude: null,
-        raDeg: 94.25, decDeg: 22.5, sizeMajArcmin: 50);
+      id: 'Sh2-248',
+      name: 'Sh2-248',
+      type: 'HII',
+      magnitude: null,
+      raDeg: 94.25,
+      decDeg: 22.5,
+      sizeMajArcmin: 50,
+    );
     final list = computeTonightSkyLocal(
-        site: site, optics: optics, atUtc: night,
-        filterSet: const FilterSetSettings(filters: []),
-        catalog: const [jelly, sh2], limit: 50);
+      site: site,
+      optics: optics,
+      atUtc: night,
+      filterSet: const FilterSetSettings(filters: []),
+      catalog: const [jelly, sh2],
+      limit: 50,
+    );
     // Standalone regions ride along in every list; look at the catalog rows.
     final rows = list.where((o) => !o.id.startsWith('REGION-')).toList();
     expect(rows.map((o) => o.id), ['IC0443']);
@@ -391,19 +705,42 @@ void main() {
     final night = DateTime.utc(2026, 2, 15, 3);
     const none = FilterSetSettings(filters: []);
     const galaxy = PlanningDso(
-        id: 'NGC2903', name: 'NGC2903', type: 'G', magnitude: 9.0,
-        raDeg: 143.04, decDeg: 21.5,
-        sizeMajArcmin: 12.6, sizeMinArcmin: 6.0, surfaceBrightness: 22.8);
+      id: 'NGC2903',
+      name: 'NGC2903',
+      type: 'G',
+      magnitude: 9.0,
+      raDeg: 143.04,
+      decDeg: 21.5,
+      sizeMajArcmin: 12.6,
+      sizeMinArcmin: 6.0,
+      surfaceBrightness: 22.8,
+    );
     PlanningDso bare(String id, String type) => PlanningDso(
-        id: id, name: id, type: type, magnitude: null,
-        raDeg: 143.0, decDeg: 21.5, sizeMajArcmin: 10);
+      id: id,
+      name: id,
+      type: type,
+      magnitude: null,
+      raDeg: 143.0,
+      decDeg: 21.5,
+      sizeMajArcmin: 10,
+    );
     final list = computeTonightSkyLocal(
-        site: site, optics: optics, atUtc: night, filterSet: none,
-        catalog: [galaxy, bare('Abell 1', 'PN'), bare('Abell 21', 'PN'),
-                  bare('vdB 1', 'RfN'), bare('NGC6974', 'SNR')],
-        limit: 50);
+      site: site,
+      optics: optics,
+      atUtc: night,
+      filterSet: none,
+      catalog: [
+        galaxy,
+        bare('Abell 1', 'PN'),
+        bare('Abell 21', 'PN'),
+        bare('vdB 1', 'RfN'),
+        bare('NGC6974', 'SNR'),
+      ],
+      limit: 50,
+    );
     double score(String id) => list.firstWhere((o) => o.id == id).score!;
-    String why(String id) => list.firstWhere((o) => o.id == id).scoreReasons!.join(' ');
+    String why(String id) =>
+        list.firstWhere((o) => o.id == id).scoreReasons!.join(' ');
     // Before: Abell 1 scored 0.5 neutral on SB AND magnitude with no
     // discount, so it sat beside a mag-9 galaxy on geometry alone.
     expect(score('Abell 1'), lessThan(score('NGC2903')));
@@ -420,12 +757,25 @@ void main() {
   test('a standalone curated region replaces the raw Sharpless row', () {
     final night = DateTime.utc(2026, 10, 15, 3);
     const raw = PlanningDso(
-        id: 'Sh2-101', name: 'Sh2-101', type: 'HII', magnitude: null,
-        raDeg: 300.0, decDeg: 35.3, sizeMajArcmin: 20);
+      id: 'Sh2-101',
+      name: 'Sh2-101',
+      type: 'HII',
+      magnitude: null,
+      raDeg: 300.0,
+      decDeg: 35.3,
+      sizeMajArcmin: 20,
+    );
     final list = computeTonightSkyLocal(
-        site: site, optics: optics, atUtc: night, catalog: const [raw]);
-    expect(list.where((o) => o.id == 'Sh2-101'), isEmpty,
-        reason: 'REGION-SH2-101 (Tulip) stands in for it');
+      site: site,
+      optics: optics,
+      atUtc: night,
+      catalog: const [raw],
+    );
+    expect(
+      list.where((o) => o.id == 'Sh2-101'),
+      isEmpty,
+      reason: 'REGION-SH2-101 (Tulip) stands in for it',
+    );
     expect(list.where((o) => o.id == 'REGION-SH2-101'), hasLength(1));
   });
 
@@ -436,37 +786,67 @@ void main() {
     // 30-item list — no NGC, no Messier, nothing else.
     final night = DateTime.utc(2026, 10, 15, 3);
     PlanningDso ldn(int n) => PlanningDso(
-        id: 'LDN $n', name: 'LDN $n', type: 'DrkN', magnitude: null,
-        raDeg: 314.75 + n * 0.01, decDeg: 44.33,
-        sizeMajArcmin: 120);
+      id: 'LDN $n',
+      name: 'LDN $n',
+      type: 'DrkN',
+      magnitude: null,
+      raDeg: 314.75 + n * 0.01,
+      decDeg: 44.33,
+      sizeMajArcmin: 120,
+    );
     // A modest galaxy, small in a 250 mm frame, with honest photometry.
     const galaxy = PlanningDso(
-        id: 'NGC7331', name: 'NGC7331', type: 'G', magnitude: 9.5,
-        raDeg: 339.267, decDeg: 34.416,
-        sizeMajArcmin: 10.5, sizeMinArcmin: 3.7, surfaceBrightness: 22.5);
+      id: 'NGC7331',
+      name: 'NGC7331',
+      type: 'G',
+      magnitude: 9.5,
+      raDeg: 339.267,
+      decDeg: 34.416,
+      sizeMajArcmin: 10.5,
+      sizeMinArcmin: 3.7,
+      surfaceBrightness: 22.5,
+    );
     // An emission region from Sharpless: also magnitude-less, size only.
     const sh2 = PlanningDso(
-        id: 'Sh2-119', name: 'Sh2-119', type: 'HII', magnitude: null,
-        raDeg: 319.6, decDeg: 43.9, sizeMajArcmin: 160);
+      id: 'Sh2-119',
+      name: 'Sh2-119',
+      type: 'HII',
+      magnitude: null,
+      raDeg: 319.6,
+      decDeg: 43.9,
+      sizeMajArcmin: 160,
+    );
     final list = computeTonightSkyLocal(
-        site: site, optics: optics, atUtc: night,
-        catalog: [for (var i = 1; i <= 60; i++) ldn(i), galaxy, sh2],
-        limit: 30);
+      site: site,
+      optics: optics,
+      atUtc: night,
+      catalog: [for (var i = 1; i <= 60; i++) ldn(i), galaxy, sh2],
+      limit: 30,
+    );
     final ids = list.map((o) => o.id).toList();
     expect(ids, contains('NGC7331'));
     expect(ids, contains('Sh2-119'));
     final ldnBest = list.firstWhere((o) => o.type == 'DrkN');
-    expect(ldnBest.score!, lessThan(list.firstWhere((o) => o.id == 'NGC7331').score!));
-    expect(ldnBest.score!, lessThan(list.firstWhere((o) => o.id == 'Sh2-119').score!));
+    expect(
+      ldnBest.score!,
+      lessThan(list.firstWhere((o) => o.id == 'NGC7331').score!),
+    );
+    expect(
+      ldnBest.score!,
+      lessThan(list.firstWhere((o) => o.id == 'Sh2-119').score!),
+    );
     // "Never flood" = never crowd a real target out: with 400 dark nebulae
     // in a 30-slot list, both real targets are still listed and every dark
     // nebula that made the list sits below them. (A share-of-list assertion
     // is meaningless on a two-target synthetic catalog — the remaining
     // slots have nothing else to hold.)
     final flood = computeTonightSkyLocal(
-        site: site, optics: optics, atUtc: night,
-        catalog: [for (var i = 1; i <= 400; i++) ldn(i), galaxy, sh2],
-        limit: 30);
+      site: site,
+      optics: optics,
+      atUtc: night,
+      catalog: [for (var i = 1; i <= 400; i++) ldn(i), galaxy, sh2],
+      limit: 30,
+    );
     final ids400 = flood.map((o) => o.id).toList();
     expect(ids400, containsAll(['NGC7331', 'Sh2-119']));
     final firstDark = flood.indexWhere((o) => o.type == 'DrkN');
@@ -477,39 +857,86 @@ void main() {
     // deleting the floor left every assertion green).
     final why = ldnBest.scoreReasons!.join(' ');
     expect(why, contains('dark nebula'));
-    expect(why, contains('silhouette on the sky (+2)'),
-        reason: '12 × 0.15 floor, not the 0.5 neutral (+6)');
+    expect(
+      why,
+      contains('silhouette on the sky (+2)'),
+      reason: '12 × 0.15 floor, not the 0.5 neutral (+6)',
+    );
     // Same geometry, same missing photometry: a DrkN scores below a Neb
     // before the type factor even applies — the floor alone is worth 4 pts.
     const neb = PlanningDso(
-        id: 'NEB', name: 'NEB', type: 'Neb', magnitude: null,
-        raDeg: 314.75, decDeg: 44.33, sizeMajArcmin: 120);
+      id: 'NEB',
+      name: 'NEB',
+      type: 'Neb',
+      magnitude: null,
+      raDeg: 314.75,
+      decDeg: 44.33,
+      sizeMajArcmin: 120,
+    );
     const drk = PlanningDso(
-        id: 'DRK', name: 'DRK', type: 'DrkN', magnitude: null,
-        raDeg: 314.75, decDeg: 44.33, sizeMajArcmin: 120);
+      id: 'DRK',
+      name: 'DRK',
+      type: 'DrkN',
+      magnitude: null,
+      raDeg: 314.75,
+      decDeg: 44.33,
+      sizeMajArcmin: 120,
+    );
     final pair = computeTonightSkyLocal(
-        site: site, optics: optics, atUtc: night, catalog: const [neb, drk], limit: 50);
-    final nebWhy = pair.firstWhere((o) => o.id == 'NEB').scoreReasons!.join(' ');
+      site: site,
+      optics: optics,
+      atUtc: night,
+      catalog: const [neb, drk],
+      limit: 50,
+    );
+    final nebWhy = pair
+        .firstWhere((o) => o.id == 'NEB')
+        .scoreReasons!
+        .join(' ');
     expect(nebWhy, contains('surface brightness unknown (+6)'));
-    expect(pair.firstWhere((o) => o.id == 'DRK').scoreReasons!.join(' '),
-        contains('(+2)'));
+    expect(
+      pair.firstWhere((o) => o.id == 'DRK').scoreReasons!.join(' '),
+      contains('(+2)'),
+    );
   });
 
   test('a curated region replaces the Sharpless row it stands for — only when present', () {
     final night = DateTime.utc(2026, 10, 15, 3);
     const sh2105 = PlanningDso(
-        id: 'Sh2-105', name: 'Sh2-105', type: 'HII', magnitude: null,
-        raDeg: 303.05, decDeg: 38.35, sizeMajArcmin: 20);
+      id: 'Sh2-105',
+      name: 'Sh2-105',
+      type: 'HII',
+      magnitude: null,
+      raDeg: 303.05,
+      decDeg: 38.35,
+      sizeMajArcmin: 20,
+    );
     const ngc6888 = PlanningDso(
-        id: 'NGC6888', name: 'NGC6888', type: 'EmN', magnitude: 7.4,
-        raDeg: 303.05, decDeg: 38.35, sizeMajArcmin: 18);
+      id: 'NGC6888',
+      name: 'NGC6888',
+      type: 'EmN',
+      magnitude: 7.4,
+      raDeg: 303.05,
+      decDeg: 38.35,
+      sizeMajArcmin: 18,
+    );
     const sh2240 = PlanningDso(
-        id: 'Sh2-240', name: 'Sh2-240', type: 'HII', magnitude: null,
-        raDeg: 85.25, decDeg: 28.1, sizeMajArcmin: 180);
+      id: 'Sh2-240',
+      name: 'Sh2-240',
+      type: 'HII',
+      magnitude: null,
+      raDeg: 85.25,
+      decDeg: 28.1,
+      sizeMajArcmin: 180,
+    );
     // Sharpless installed, OpenNGC too: the Crescent lists once, as NGC 6888.
     final both = computeTonightSkyLocal(
-        site: site, optics: optics, atUtc: night,
-        catalog: const [sh2105, ngc6888, sh2240], limit: 60);
+      site: site,
+      optics: optics,
+      atUtc: night,
+      catalog: const [sh2105, ngc6888, sh2240],
+      limit: 60,
+    );
     expect(both.where((o) => o.id == 'Sh2-105'), isEmpty);
     expect(both.where((o) => o.id == 'NGC6888'), hasLength(1));
     // Simeis 147 is a STANDALONE region: Sh2-240 is always replaced by it.
@@ -518,23 +945,52 @@ void main() {
     // Sharpless only (no NGC row): Sh2-105 is the only Crescent and stays,
     // as a showpiece by membership.
     final only = computeTonightSkyLocal(
-        site: site, optics: optics, atUtc: night, catalog: const [sh2105], limit: 60);
+      site: site,
+      optics: optics,
+      atUtc: night,
+      catalog: const [sh2105],
+      limit: 60,
+    );
     final kept = only.firstWhere((o) => o.id == 'Sh2-105');
     expect(kept.scoreReasons!.join(' '), contains('showpiece'));
     expect(photogenicTierOf('Sh2-240'), 3);
     // Round 3: the remaining override/Sharpless pairs are anchored too.
     const sh225 = PlanningDso(
-        id: 'Sh2-25', name: 'Sh2-25', type: 'HII', magnitude: null,
-        raDeg: 270.9, decDeg: -24.4, sizeMajArcmin: 90);
+      id: 'Sh2-25',
+      name: 'Sh2-25',
+      type: 'HII',
+      magnitude: null,
+      raDeg: 270.9,
+      decDeg: -24.4,
+      sizeMajArcmin: 90,
+    );
     const m8 = PlanningDso(
-        id: 'NGC6523', name: 'NGC6523', type: 'HII', magnitude: 6.0,
-        raDeg: 270.9, decDeg: -24.4, sizeMajArcmin: 90);
+      id: 'NGC6523',
+      name: 'NGC6523',
+      type: 'HII',
+      magnitude: 6.0,
+      raDeg: 270.9,
+      decDeg: -24.4,
+      sizeMajArcmin: 90,
+    );
     final summer = DateTime.utc(2026, 7, 17, 6);
     final lagoon = computeTonightSkyLocal(
-        site: site, optics: optics, atUtc: summer, catalog: const [sh225, m8], limit: 60);
+      site: site,
+      optics: optics,
+      atUtc: summer,
+      catalog: const [sh225, m8],
+      limit: 60,
+    );
     expect(lagoon.where((o) => o.id == 'Sh2-25'), isEmpty);
-    expect(lagoon.firstWhere((o) => o.id == 'NGC6523').name, contains('Lagoon'));
-    expect(photogenicTierOf('Sh2-279'), 3, reason: 'M42 stands for two Sharpless rows');
+    expect(
+      lagoon.firstWhere((o) => o.id == 'NGC6523').name,
+      contains('Lagoon'),
+    );
+    expect(
+      photogenicTierOf('Sh2-279'),
+      3,
+      reason: 'M42 stands for two Sharpless rows',
+    );
     expect(photogenicTierOf('Sh2-281'), 3);
   });
 
@@ -546,24 +1002,45 @@ void main() {
     final night = DateTime.utc(2026, 7, 17, 6); // summer night, Sagittarius up
     final catalog = [
       PlanningDso(
-          id: 'NGC6618', name: 'Checkmark Nebula', type: 'Neb',
-          magnitude: 7.0, raDeg: 275.196, decDeg: -16.17,
-          sizeMajArcmin: 12.6),
+        id: 'NGC6618',
+        name: 'Checkmark Nebula',
+        type: 'Neb',
+        magnitude: 7.0,
+        raDeg: 275.196,
+        decDeg: -16.17,
+        sizeMajArcmin: 12.6,
+      ),
       PlanningDso(
-          id: 'NGC6604', name: 'NGC6604', type: 'OCl',
-          magnitude: 6.5, raDeg: 274.512, decDeg: -12.24,
-          sizeMajArcmin: 9.6),
+        id: 'NGC6604',
+        name: 'NGC6604',
+        type: 'OCl',
+        magnitude: 6.5,
+        raDeg: 274.512,
+        decDeg: -12.24,
+        sizeMajArcmin: 9.6,
+      ),
     ];
     final list = computeTonightSkyLocal(
-        site: site, optics: optics, atUtc: night, catalog: catalog, limit: 30);
+      site: site,
+      optics: optics,
+      atUtc: night,
+      catalog: catalog,
+      limit: 30,
+    );
     final swan = list.where((o) => o.id == 'NGC6618').single;
     expect(swan.name, contains('Swan'));
-    expect(swan.framing, TonightFraming.goodFit,
-        reason: "45' against a 216' short side is a good fit, not Small");
+    expect(
+      swan.framing,
+      TonightFraming.goodFit,
+      reason: "45' against a 216' short side is a good fit, not Small",
+    );
     final sh254 = list.where((o) => o.id == 'NGC6604').single;
     expect(sh254.name, contains('Sh2-54'));
-    expect(sh254.framing, TonightFraming.good,
-        reason: "150' fills the frame — and no OCl discount as an HII region");
+    expect(
+      sh254.framing,
+      TonightFraming.good,
+      reason: "150' fills the frame — and no OCl discount as an HII region",
+    );
     // Region-scale standalone fields ride along (Rho Oph is up in July).
     expect(list.where((o) => o.id == 'REGION-RHO-OPH'), hasLength(1));
   });
@@ -586,36 +1063,41 @@ void main() {
     );
     // 60° terrain wall from az 90° to 270° (the whole southern sky), open north.
     final walled = computeTonightSkyLocal(
-        site: siteWithSkyline,
-        optics: optics,
-        atUtc: night,
-        catalog: [southern],
-        customHorizon: [(0, 5), (90, 60), (270, 60), (359, 5)]);
-    expect(walled.where((o) => o.id == 'south'), isEmpty,
-        reason: 'a 60° southern wall hides a dec-0 target');
+      site: siteWithSkyline,
+      optics: optics,
+      atUtc: night,
+      catalog: [southern],
+      customHorizon: [(0, 5), (90, 60), (270, 60), (359, 5)],
+    );
+    expect(
+      walled.where((o) => o.id == 'south'),
+      isEmpty,
+      reason: 'a 60° southern wall hides a dec-0 target',
+    );
 
     // Same site, low skyline everywhere — the target is found again (and the
     // 5° southern horizon finds it EARLIER than the flat 20° default would).
     final open = computeTonightSkyLocal(
-        site: siteWithSkyline,
-        optics: optics,
-        atUtc: night,
-        catalog: [southern],
-        customHorizon: [(0, 5), (90, 5), (270, 5), (359, 5)]);
+      site: siteWithSkyline,
+      optics: optics,
+      atUtc: night,
+      catalog: [southern],
+      customHorizon: [(0, 5), (90, 5), (270, 5), (359, 5)],
+    );
     expect(open.where((o) => o.id == 'south'), hasLength(1));
 
     // useCustomHorizon off → the polygon is ignored, flat default gates.
     final toggleOff = computeTonightSkyLocal(
-        site: site,
-        optics: optics,
-        atUtc: night,
-        catalog: [southern],
-        customHorizon: [(90, 60), (270, 60)]);
+      site: site,
+      optics: optics,
+      atUtc: night,
+      catalog: [southern],
+      customHorizon: [(90, 60), (270, 60)],
+    );
     expect(toggleOff.where((o) => o.id == 'south'), hasLength(1));
   });
 
-  test('daytime scores are anchored to the coming night, not the wall clock',
-      () {
+  test('daytime scores are anchored to the coming night, not the wall clock', () {
     // Live repro of the drifting-score bug: the same site asked at mid-morning
     // vs early afternoon must describe the SAME upcoming night — identical
     // dark windows and identical scores. (The old ±12h-of-now grid clipped
@@ -626,10 +1108,16 @@ void main() {
     final b = rank(at: afternoon, limit: 20);
     expect(a.map((o) => o.id), b.map((o) => o.id));
     for (var i = 0; i < a.length; i++) {
-      expect(a[i].score, b[i].score,
-          reason: '${a[i].id} score must not drift across the day');
-      expect(a[i].windowStartUtc, b[i].windowStartUtc,
-          reason: '${a[i].id} window must be tonight\'s in both asks');
+      expect(
+        a[i].score,
+        b[i].score,
+        reason: '${a[i].id} score must not drift across the day',
+      );
+      expect(
+        a[i].windowStartUtc,
+        b[i].windowStartUtc,
+        reason: '${a[i].id} window must be tonight\'s in both asks',
+      );
       expect(a[i].integrationHours, b[i].integrationHours);
     }
     // And the daytime window is the COMING night: it opens after "now".
@@ -648,10 +1136,16 @@ void main() {
     expect(c.map((o) => o.id), a.map((o) => o.id));
     expect(d.map((o) => o.id), a.map((o) => o.id));
     for (var i = 0; i < a.length; i++) {
-      expect(c[i].windowStartUtc, a[i].windowStartUtc,
-          reason: '${a[i].id}: a small-hours ask must score the SAME night');
-      expect(d[i].windowStartUtc, a[i].windowStartUtc,
-          reason: '${a[i].id}: a near-dusk ask must score the SAME night');
+      expect(
+        c[i].windowStartUtc,
+        a[i].windowStartUtc,
+        reason: '${a[i].id}: a small-hours ask must score the SAME night',
+      );
+      expect(
+        d[i].windowStartUtc,
+        a[i].windowStartUtc,
+        reason: '${a[i].id}: a near-dusk ask must score the SAME night',
+      );
       expect(c[i].score, a[i].score);
       expect(d[i].score, a[i].score);
     }
@@ -660,17 +1154,37 @@ void main() {
   test('stars in the mirror (WR package) are searchable, never ranked', () {
     final night = DateTime.utc(2026, 10, 15, 3);
     const wr = PlanningDso(
-        id: 'WR 134', name: 'WR 134', type: 'WR*', magnitude: 8.1,
-        raDeg: 302.28, decDeg: 36.18);
+      id: 'WR 134',
+      name: 'WR 134',
+      type: 'WR*',
+      magnitude: 8.1,
+      raDeg: 302.28,
+      decDeg: 36.18,
+    );
     // OpenNGC's own star rows (bright doubles used to rank on mag ≤ 12).
     const star = PlanningDso(
-        id: 'NGC0017', name: 'NGC0017', type: '*', magnitude: 9.0,
-        raDeg: 302.0, decDeg: 40.0);
+      id: 'NGC0017',
+      name: 'NGC0017',
+      type: '*',
+      magnitude: 9.0,
+      raDeg: 302.0,
+      decDeg: 40.0,
+    );
     const dbl = PlanningDso(
-        id: 'NGC0018', name: 'NGC0018', type: '**', magnitude: 6.0,
-        raDeg: 303.0, decDeg: 41.0);
+      id: 'NGC0018',
+      name: 'NGC0018',
+      type: '**',
+      magnitude: 6.0,
+      raDeg: 303.0,
+      decDeg: 41.0,
+    );
     final list = computeTonightSkyLocal(
-        site: site, optics: optics, atUtc: night, catalog: const [wr, star, dbl], limit: 50);
+      site: site,
+      optics: optics,
+      atUtc: night,
+      catalog: const [wr, star, dbl],
+      limit: 50,
+    );
     expect(list.where((o) => o.id == 'WR 134'), isEmpty);
     expect(list.where((o) => o.type == '*' || o.type == '**'), isEmpty);
     // …but the curated WR 134 ring (a nebula) still ranks.
@@ -684,102 +1198,166 @@ void main() {
     // 15:00 MDT = 21:00 UTC: broad daylight.
     expect(isDarkNow(belen, nowUtc: DateTime.utc(2026, 9, 25, 21, 0)), isFalse);
     // The (0, 0) "not set" sentinel is never dark.
-    expect(isDarkNow(const SiteSettings(), nowUtc: DateTime.utc(2026, 9, 26, 4, 43)),
-        isFalse);
+    expect(
+      isDarkNow(const SiteSettings(), nowUtc: DateTime.utc(2026, 9, 26, 4, 43)),
+      isFalse,
+    );
   });
 
-  test('a tapped Up-now chip stays pinned when the site changes underneath it', () {
-    final c = ProviderContainer();
-    addTearDown(c.dispose);
-    // Unset site → auto = off.
-    expect(c.read(tonightSkyUpNowProvider), isFalse);
-    c.read(tonightSkyUpNowProvider.notifier).set(true);
-    expect(c.read(tonightSkyUpNowProvider), isTrue);
-    // A site edit re-runs build(); the pin must win over the auto rule
-    // (daylight at this site would otherwise flip it off).
-    c.read(siteSettingsProvider.notifier).setLatitudeDeg(34.0);
-    c.read(siteSettingsProvider.notifier).setLongitudeDeg(-106.0);
-    expect(c.read(tonightSkyUpNowProvider), isTrue);
-  });
+  test(
+    'a tapped Up-now chip stays pinned when the site changes underneath it',
+    () {
+      final c = ProviderContainer();
+      addTearDown(c.dispose);
+      // Unset site → auto = off.
+      expect(c.read(tonightSkyUpNowProvider), isFalse);
+      c.read(tonightSkyUpNowProvider.notifier).set(true);
+      expect(c.read(tonightSkyUpNowProvider), isTrue);
+      // A site edit re-runs build(); the pin must win over the auto rule
+      // (daylight at this site would otherwise flip it off).
+      c.read(siteSettingsProvider.notifier).setLatitudeDeg(34.0);
+      c.read(siteSettingsProvider.notifier).setLongitudeDeg(-106.0);
+      expect(c.read(tonightSkyUpNowProvider), isTrue);
+    },
+  );
 
-  test('Up now switches itself on when the clock crosses into dark, until pinned', () {
-    const belen = SiteSettings(latitudeDeg: 34.67, longitudeDeg: -106.79);
-    var now = DateTime.utc(2026, 9, 25, 21, 0); // 15:00 MDT, daylight
-    final ticks = StreamController<int>.broadcast();
-    addTearDown(ticks.close);
-    final c = ProviderContainer(overrides: [
-      clockProvider.overrideWithValue(() => now),
-      skyClockProvider.overrideWith((ref) => ticks.stream),
-      siteSettingsProvider.overrideWith(() => _SeededSite(belen)),
-    ]);
-    addTearDown(c.dispose);
-    final keep = c.listen(tonightSkyUpNowProvider, (_, _) {});
-    addTearDown(keep.close);
-    expect(c.read(tonightSkyUpNowProvider), isFalse);
-    // The evening passes; the next tick re-evaluates against the new clock.
-    now = DateTime.utc(2026, 9, 26, 4, 43); // 22:43 MDT
-    ticks.add(1);
-    return Future<void>.delayed(Duration.zero).then((_) {
-      expect(c.read(tonightSkyUpNowProvider), isTrue, reason: 'dark now');
-      // A tap pins it; later ticks leave it alone.
-      c.read(tonightSkyUpNowProvider.notifier).set(false);
-      now = DateTime.utc(2026, 9, 26, 5, 30);
-      ticks.add(2);
-      return Future<void>.delayed(Duration.zero);
-    }).then((_) {
-      expect(c.read(tonightSkyUpNowProvider), isFalse, reason: 'pinned');
-    });
-  });
+  test(
+    'Up now switches itself on when the clock crosses into dark, until pinned',
+    () {
+      const belen = SiteSettings(latitudeDeg: 34.67, longitudeDeg: -106.79);
+      var now = DateTime.utc(2026, 9, 25, 21, 0); // 15:00 MDT, daylight
+      final ticks = StreamController<int>.broadcast();
+      addTearDown(ticks.close);
+      final c = ProviderContainer(
+        overrides: [
+          clockProvider.overrideWithValue(() => now),
+          skyClockProvider.overrideWith((ref) => ticks.stream),
+          siteSettingsProvider.overrideWith(() => _SeededSite(belen)),
+        ],
+      );
+      addTearDown(c.dispose);
+      final keep = c.listen(tonightSkyUpNowProvider, (_, _) {});
+      addTearDown(keep.close);
+      expect(c.read(tonightSkyUpNowProvider), isFalse);
+      // The evening passes; the next tick re-evaluates against the new clock.
+      now = DateTime.utc(2026, 9, 26, 4, 43); // 22:43 MDT
+      ticks.add(1);
+      return Future<void>.delayed(Duration.zero)
+          .then((_) {
+            expect(c.read(tonightSkyUpNowProvider), isTrue, reason: 'dark now');
+            // A tap pins it; later ticks leave it alone.
+            c.read(tonightSkyUpNowProvider.notifier).set(false);
+            now = DateTime.utc(2026, 9, 26, 5, 30);
+            ticks.add(2);
+            return Future<void>.delayed(Duration.zero);
+          })
+          .then((_) {
+            expect(c.read(tonightSkyUpNowProvider), isFalse, reason: 'pinned');
+          });
+    },
+  );
   test('a Wolf-Rayet star never enters the ranked list, however bright', () {
     // Review #1105: a WR* row has no size, so the framing score is the
     // NEUTRAL 0.5 rather than the too-small floor — a mag-8 star with no
     // photometry outranked real galaxies on a wide-field rig. Orion-ish
     // coordinates so it is well up on the winter night.
     const catalog = [
-      PlanningDso(id: 'WR 1', name: 'WR 1', type: 'WR*', magnitude: 8,
-          raDeg: 85, decDeg: -5),
-      PlanningDso(id: 'NGC 1', name: 'small galaxy', type: 'G', magnitude: 11,
-          raDeg: 86, decDeg: -4, sizeMajArcmin: 3, surfaceBrightness: 22.5),
+      PlanningDso(
+        id: 'WR 1',
+        name: 'WR 1',
+        type: 'WR*',
+        magnitude: 8,
+        raDeg: 85,
+        decDeg: -5,
+      ),
+      PlanningDso(
+        id: 'NGC 1',
+        name: 'small galaxy',
+        type: 'G',
+        magnitude: 11,
+        raDeg: 86,
+        decDeg: -4,
+        sizeMajArcmin: 3,
+        surfaceBrightness: 22.5,
+      ),
     ];
     final list = computeTonightSkyLocal(
-        site: site, optics: optics, atUtc: winterNight, catalog: catalog, limit: 30);
+      site: site,
+      optics: optics,
+      atUtc: winterNight,
+      catalog: catalog,
+      limit: 30,
+    );
     expect(list.map((o) => o.id), contains('NGC 1'));
     expect(list.map((o) => o.id), isNot(contains('WR 1')));
   });
 
   test('#1140 the row carries the whole budget, and the noise-tolerance knob moves the sub', () {
-    const electronics = CameraElectronics(readNoiseE: 1.5, fullWellE: 50000, electronsPerAdu: 0.8, quantumEfficiencyPeak: 0.8);
-    const filters = FilterSetSettings(filters: [PlanningFilter(name: 'L', kind: FilterKind.l)]);
+    const electronics = CameraElectronics(
+      readNoiseE: 1.5,
+      fullWellE: 50000,
+      electronsPerAdu: 0.8,
+      quantumEfficiencyPeak: 0.8,
+    );
+    const filters = FilterSetSettings(
+      filters: [PlanningFilter(name: 'L', kind: FilterKind.l)],
+    );
     // The starter catalog carries no surface brightness; a bundled-catalog row does.
     const nan = PlanningDso(
-        id: 'NGC 7000', name: 'North America Nebula', type: 'HII', magnitude: 4.0,
-        raDeg: 314.75, decDeg: 44.33, sizeMajArcmin: 120, sizeMinArcmin: 100, surfaceBrightness: 22);
+      id: 'NGC 7000',
+      name: 'North America Nebula',
+      type: 'HII',
+      magnitude: 4.0,
+      raDeg: 314.75,
+      decDeg: 44.33,
+      sizeMajArcmin: 120,
+      sizeMinArcmin: 100,
+      surfaceBrightness: 22,
+    );
     List<TonightSkyObject> ranked(double pct) => computeTonightSkyLocal(
-          site: site,
-          optics: optics,
-          electronics: electronics,
-          filterSet: filters,
-          catalog: [nan],
-          atUtc: DateTime.utc(2026, 8, 15, 3),
-          noiseTolerancePct: pct,
-        );
+      site: site,
+      optics: optics,
+      electronics: electronics,
+      filterSet: filters,
+      catalog: [nan],
+      atUtc: DateTime.utc(2026, 8, 15, 3),
+      noiseTolerancePct: pct,
+    );
     final at5 = ranked(5).where((o) => o.id == 'NGC 7000').single;
     final at2 = ranked(2).where((o) => o.id == 'NGC 7000').single;
     expect(at5.budget, isNotNull, reason: 'a catalog SB and a computing rig');
-    expect(at5.budget!.full.hours, at5.budgetFullHours ?? at5.budget!.full.hours);
+    expect(
+      at5.budget!.full.hours,
+      at5.budgetFullHours ?? at5.budget!.full.hours,
+    );
     expect(at5.budget!.auditLines.map((l) => l.$1), contains('Sky flux'));
     expect(at5.optimalSubS, isNotNull);
-    expect(at2.optimalSubS!, greaterThan(at5.optimalSubS!), reason: 'a tighter tolerance wants longer subs');
+    expect(
+      at2.optimalSubS!,
+      greaterThan(at5.optimalSubS!),
+      reason: 'a tighter tolerance wants longer subs',
+    );
   });
 
   test('a ranked row carries its catalog aliases (#1267 item 4)', () {
     const nam = PlanningDso(
-        id: 'NGC7000', name: 'North America Nebula', type: 'Neb',
-        magnitude: null, raDeg: 314.8, decDeg: 44.5, sizeMajArcmin: 120,
-        surfaceBrightness: 22.0, aliases: ['Sh2-117', 'C 020', 'LBN 373']);
+      id: 'NGC7000',
+      name: 'North America Nebula',
+      type: 'Neb',
+      magnitude: null,
+      raDeg: 314.8,
+      decDeg: 44.5,
+      sizeMajArcmin: 120,
+      surfaceBrightness: 22.0,
+      aliases: ['Sh2-117', 'C 020', 'LBN 373'],
+    );
     final list = computeTonightSkyLocal(
-        site: site, optics: optics, atUtc: DateTime.utc(2026, 10, 15, 3),
-        catalog: const [nam], limit: 5);
+      site: site,
+      optics: optics,
+      atUtc: DateTime.utc(2026, 10, 15, 3),
+      catalog: const [nam],
+      limit: 5,
+    );
     final row = list.where((o) => o.id == 'NGC7000').single;
     expect(row.aliases, ['Sh2-117', 'C 020', 'LBN 373']);
   });
@@ -790,11 +1368,23 @@ void main() {
     // North America Nebula absorbed Sh2-117, the twin of its OWN anchor
     // (NGC 7000): it stays, renamed by the override.
     const cave = PlanningDso(
-        id: 'vdB 999', name: 'vdB 999', type: 'RfN', magnitude: null,
-        raDeg: 344.3, decDeg: 62.6, aliases: ['Sh2-155']);
+      id: 'vdB 999',
+      name: 'vdB 999',
+      type: 'RfN',
+      magnitude: null,
+      raDeg: 344.3,
+      decDeg: 62.6,
+      aliases: ['Sh2-155'],
+    );
     const nam = PlanningDso(
-        id: 'NGC7000', name: 'North America Nebula', type: 'Neb',
-        magnitude: null, raDeg: 314.8, decDeg: 44.5, aliases: ['Sh2-117']);
+      id: 'NGC7000',
+      name: 'North America Nebula',
+      type: 'Neb',
+      magnitude: null,
+      raDeg: 314.8,
+      decDeg: 44.5,
+      aliases: ['Sh2-117'],
+    );
     final out = applyImagingRegions(const [cave, nam]);
     final ids = out.map((o) => o.id).toList();
     expect(ids, isNot(contains('vdB 999')));
@@ -809,5 +1399,4 @@ class _SeededSite extends SiteSettingsNotifier {
   final SiteSettings _seed;
   @override
   SiteSettings build() => _seed;
-
 }
