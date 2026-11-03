@@ -79,6 +79,8 @@ import 'simple_device_windows.dart';
 import 'simple_focus_panel.dart';
 import '../../state/focus/autofocus_live_state.dart' show autofocusLiveProvider;
 import '../../state/focus/guide_focus_state.dart' show guideFocusProvider;
+import '../../state/settings/phd2_settings_state.dart'
+    show phd2SettingsProvider;
 import '../../state/focus/bahtinov_focus_state.dart'
     show MainFocusMethod, bahtinovFocusProvider;
 import 'simple_message_pills.dart';
@@ -2406,6 +2408,17 @@ class _ThisRig extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // The rig fills the guide optics from the guider on connect: read them
+    // back then, so the rows below show what the profile now holds.
+    ref.listen(
+      guiderStatusProvider.select((s) => s.value?.isConnected ?? false),
+      (was, now) {
+        final api = ref.read(profileApiProvider);
+        if (now && was != true && api != null) {
+          ref.read(phd2SettingsProvider.notifier).hydrateFromServer(api);
+        }
+      },
+    );
     final server = ref.watch(activeServerProvider);
     final profiles = ref.watch(profileManagementProvider).value;
     final profile = profiles?.profiles
@@ -2563,6 +2576,38 @@ class _ThisRig extends ConsumerWidget {
                   .persistToServer(api),
             ),
           ),
+        // The guide scope: read from the guider when the profile left it
+        // unset, kept in the profile (polar alignment solves with it).
+        _RigWheelRow.millimetres(
+          l10n,
+          id: 'guidefocal',
+          label: l10n.shellGuideFocalLength,
+          digits: 4,
+          value: ref.watch(phd2SettingsProvider).guideFocalLength.toDouble(),
+          onSet: (v) => _save(
+            context,
+            ref,
+            () => ref
+                .read(phd2SettingsProvider.notifier)
+                .setGuideFocalLength(v.round()),
+            (api) =>
+                ref.read(phd2SettingsProvider.notifier).persistToServer(api),
+          ),
+        ),
+        ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 44),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(l10n.shellGuidePixelSize, style: kSimpleText),
+              ),
+              Text(switch (ref.watch(phd2SettingsProvider).guidePixelSize) {
+                final p when p > 0 => '${p.toStringAsFixed(2)} µm',
+                _ => l10n.shellNotSet,
+              }, style: kSimpleText),
+            ],
+          ),
+        ),
         for (final (id, label, value, set)
             in <(String, String, double, void Function(double))>[
               (

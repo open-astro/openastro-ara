@@ -26,6 +26,7 @@ import 'package:openastroara/state/focus/autofocus_live_state.dart';
 import 'package:openastroara/state/focus/bahtinov_focus_state.dart';
 import 'package:openastroara/models/bahtinov_focus.dart';
 import 'package:openastroara/state/focus/guide_focus_state.dart';
+import 'package:openastroara/state/settings/phd2_settings_state.dart';
 import 'package:openastroara/models/guider_status.dart';
 import 'package:openastroara/widgets/status_indicator.dart' show StatusLevel;
 import 'package:openastroara/widgets/equipment/guider_chip.dart' show guiderStatusLevel;
@@ -1489,7 +1490,7 @@ void main() {
     await _openSection(tester, 'Rig');
     TextStyle? style(String t) => tester.widget<Text>(find.text(t)).style;
     for (final t in ['Name', 'Profile']) {
-      expect(style(t), style('Aperture'), reason: t);
+      expect(style(t), style('Main scope aperture'), reason: t);
     }
     // Their Change buttons are 44 pt targets (user, 2026-11-03), so each row is 44 pt.
     expect(tester.getCenter(find.text('Profile')).dy - tester.getCenter(find.text('Name')).dy, closeTo(44, 4));
@@ -1578,6 +1579,29 @@ void main() {
     await tester.tap(find.byKey(const Key('simple-menu-language-system')));
     await tester.pump();
     expect(c.read(appLocaleProvider), isNull);
+  });
+
+  testWidgets("Rig names the main scope's optics and shows the guide scope's, kept in the profile", (tester) async {
+    final c = await _pump(tester, const Size(1024, 768));
+    c.read(phd2SettingsProvider.notifier)
+      ..setGuideFocalLength(128)
+      ..setGuidePixelSize(3.75);
+    await _openSection(tester, 'Rig');
+    for (final t in ['Main scope aperture', 'Main scope focal length', 'Guide scope focal length', 'Guide camera pixel size']) {
+      await tester.ensureVisible(find.text(t));
+      expect(find.text(t), findsOneWidget, reason: t);
+    }
+    expect(find.descendant(of: find.byKey(const Key('simple-rig-guidefocal')), matching: find.text('128 mm')), findsOneWidget);
+    expect(find.text('3.75 µm'), findsOneWidget);
+    await tester.ensureVisible(find.byKey(const Key('simple-rig-guidefocal')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('simple-rig-guidefocal')));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const Key('simple-rig-guidefocal-wheel-1')));
+    await tester.pumpAndSettle();
+    await tester.drag(find.byKey(const Key('simple-rig-guidefocal-wheel-1')), const Offset(0, -44.0));
+    await tester.pumpAndSettle();
+    expect(c.read(phd2SettingsProvider).guideFocalLength, 228, reason: 'per digit, like the main scope');
   });
 
   testWidgets('Logs & bug report opens over Simple Mode; Back comes back', (tester) async {

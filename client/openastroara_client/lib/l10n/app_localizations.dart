@@ -936,13 +936,13 @@ abstract class AppLocalizations {
   /// Simple Mode search panel: a setting's name as a result; should match its name in Settings
   ///
   /// In en, this message translates to:
-  /// **'Aperture'**
+  /// **'Main scope aperture'**
   String get searchSettingAperture;
 
   /// Simple Mode search panel: a setting's name as a result; should match its name in Settings
   ///
   /// In en, this message translates to:
-  /// **'Focal length'**
+  /// **'Main scope focal length'**
   String get searchSettingFocalLength;
 
   /// Simple Mode search panel: a setting's name as a result; should match its name in Settings
@@ -1620,13 +1620,13 @@ abstract class AppLocalizations {
   /// Simple Mode Settings › Rig: the telescope's aperture
   ///
   /// In en, this message translates to:
-  /// **'Aperture'**
+  /// **'Main scope aperture'**
   String get shellAperture;
 
   /// Simple Mode Settings › Rig: the telescope's focal length
   ///
   /// In en, this message translates to:
-  /// **'Focal length'**
+  /// **'Main scope focal length'**
   String get shellFocalLength;
 
   /// Simple Mode Settings › Rig: the site's latitude
@@ -3332,6 +3332,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Done · Start imaging'**
   String get guidedDoneStartImaging;
+
+  /// Settings › Rig: the guide scope's focal length (mm), read from the guider when unset
+  ///
+  /// In en, this message translates to:
+  /// **'Guide scope focal length'**
+  String get shellGuideFocalLength;
+
+  /// Settings › Rig: the guide camera's pixel size (µm), read from AlpacaBridge through the guider
+  ///
+  /// In en, this message translates to:
+  /// **'Guide camera pixel size'**
+  String get shellGuidePixelSize;
+
+  /// Simple search: other words that find the guide scope rows (not shown)
+  ///
+  /// In en, this message translates to:
+  /// **'guide scope guider camera pixel focal polar'**
+  String get searchWordsGuideScope;
 }
 
 class _AppLocalizationsDelegate

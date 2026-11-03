@@ -52,6 +52,8 @@ List<(String, String, String)> _settings(AppLocalizations l) => [
   (l.searchSectionRig, 'Rig', l.searchWordsRig),
   (l.searchSettingAperture, 'Rig', l.searchWordsAperture),
   (l.searchSettingFocalLength, 'Rig', l.searchWordsFocalLength),
+  (l.shellGuideFocalLength, 'Rig', l.searchWordsGuideScope),
+  (l.shellGuidePixelSize, 'Rig', l.searchWordsGuideScope),
   (l.searchSettingLatitude, 'Rig', l.searchWordsSite),
   (l.searchSettingLongitude, 'Rig', l.searchWordsSite),
   (l.searchSettingElevation, 'Rig', l.searchWordsElevation),

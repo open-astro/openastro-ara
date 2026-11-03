@@ -139,8 +139,8 @@
   "searchSectionMount": "Montagem",
   "searchSectionFocuser": "Focalizador",
   "searchSectionGuider": "Guia",
-  "searchSettingAperture": "Abertura",
-  "searchSettingFocalLength": "Distância focal",
+  "searchSettingAperture": "Abertura do telescópio principal",
+  "searchSettingFocalLength": "Focal do telescópio principal",
   "searchSettingLatitude": "Latitude",
   "searchSettingLongitude": "Longitude",
   "searchSettingElevation": "Elevação",
@@ -253,8 +253,8 @@
   "shellProfile": "Perfil",
   "shellChangeProfile": "Alterar perfil",
   "shellPlanRunning": "Há um plano em andamento. Ele continua rodando no setup; escolha este perfil de novo para voltar a ele.",
-  "shellAperture": "Abertura",
-  "shellFocalLength": "Distância focal",
+  "shellAperture": "Abertura do telescópio principal",
+  "shellFocalLength": "Focal do telescópio principal",
   "shellLatitude": "Latitude",
   "shellLongitude": "Longitude",
   "shellElevation": "Elevação",
@@ -538,5 +538,8 @@
   "guidedNextPolarAlign": "Próximo: Alinhamento polar",
   "guidedStartImaging": "Iniciar a captura",
   "guidedImagingStartsAfter": "A captura começa depois do foco e do alinhamento polar.",
-  "guidedDoneStartImaging": "Pronto · Iniciar a captura"
+  "guidedDoneStartImaging": "Pronto · Iniciar a captura",
+  "shellGuideFocalLength": "Focal da luneta guia",
+  "shellGuidePixelSize": "Pixel da câmera de guia",
+  "searchWordsGuideScope": "luneta guia guiagem câmera pixel focal polar guide scope"
 }

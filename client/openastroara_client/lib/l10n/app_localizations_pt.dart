@@ -481,10 +481,10 @@ class AppLocalizationsPt extends AppLocalizations {
   String get searchSectionGuider => 'Guider';
 
   @override
-  String get searchSettingAperture => 'Aperture';
+  String get searchSettingAperture => 'Main scope aperture';
 
   @override
-  String get searchSettingFocalLength => 'Focal length';
+  String get searchSettingFocalLength => 'Main scope focal length';
 
   @override
   String get searchSettingLatitude => 'Latitude';
@@ -844,10 +844,10 @@ class AppLocalizationsPt extends AppLocalizations {
       'A plan is running. It keeps running on the rig; pick this profile again to come back to it.';
 
   @override
-  String get shellAperture => 'Aperture';
+  String get shellAperture => 'Main scope aperture';
 
   @override
-  String get shellFocalLength => 'Focal length';
+  String get shellFocalLength => 'Main scope focal length';
 
   @override
   String get shellLatitude => 'Latitude';
@@ -1884,6 +1884,16 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get guidedDoneStartImaging => 'Done · Start imaging';
+
+  @override
+  String get shellGuideFocalLength => 'Guide scope focal length';
+
+  @override
+  String get shellGuidePixelSize => 'Guide camera pixel size';
+
+  @override
+  String get searchWordsGuideScope =>
+      'guide scope guider camera pixel focal polar';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -2363,10 +2373,10 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get searchSectionGuider => 'Guia';
 
   @override
-  String get searchSettingAperture => 'Abertura';
+  String get searchSettingAperture => 'Abertura do telescópio principal';
 
   @override
-  String get searchSettingFocalLength => 'Distância focal';
+  String get searchSettingFocalLength => 'Focal do telescópio principal';
 
   @override
   String get searchSettingLatitude => 'Latitude';
@@ -2728,10 +2738,10 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
       'Há um plano em andamento. Ele continua rodando no setup; escolha este perfil de novo para voltar a ele.';
 
   @override
-  String get shellAperture => 'Abertura';
+  String get shellAperture => 'Abertura do telescópio principal';
 
   @override
-  String get shellFocalLength => 'Distância focal';
+  String get shellFocalLength => 'Focal do telescópio principal';
 
   @override
   String get shellLatitude => 'Latitude';
@@ -3774,4 +3784,14 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get guidedDoneStartImaging => 'Pronto · Iniciar a captura';
+
+  @override
+  String get shellGuideFocalLength => 'Focal da luneta guia';
+
+  @override
+  String get shellGuidePixelSize => 'Pixel da câmera de guia';
+
+  @override
+  String get searchWordsGuideScope =>
+      'luneta guia guiagem câmera pixel focal polar guide scope';
 }

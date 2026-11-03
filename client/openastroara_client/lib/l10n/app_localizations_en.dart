@@ -481,10 +481,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get searchSectionGuider => 'Guider';
 
   @override
-  String get searchSettingAperture => 'Aperture';
+  String get searchSettingAperture => 'Main scope aperture';
 
   @override
-  String get searchSettingFocalLength => 'Focal length';
+  String get searchSettingFocalLength => 'Main scope focal length';
 
   @override
   String get searchSettingLatitude => 'Latitude';
@@ -844,10 +844,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'A plan is running. It keeps running on the rig; pick this profile again to come back to it.';
 
   @override
-  String get shellAperture => 'Aperture';
+  String get shellAperture => 'Main scope aperture';
 
   @override
-  String get shellFocalLength => 'Focal length';
+  String get shellFocalLength => 'Main scope focal length';
 
   @override
   String get shellLatitude => 'Latitude';
@@ -1884,4 +1884,14 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get guidedDoneStartImaging => 'Done · Start imaging';
+
+  @override
+  String get shellGuideFocalLength => 'Guide scope focal length';
+
+  @override
+  String get shellGuidePixelSize => 'Guide camera pixel size';
+
+  @override
+  String get searchWordsGuideScope =>
+      'guide scope guider camera pixel focal polar';
 }

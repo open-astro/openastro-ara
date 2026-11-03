@@ -649,11 +649,11 @@
   "@searchSectionGuider": {
     "description": "Simple Mode search panel: name of the Settings sheet's Guider section, shown beside a setting result (and the result for the section itself)"
   },
-  "searchSettingAperture": "Aperture",
+  "searchSettingAperture": "Main scope aperture",
   "@searchSettingAperture": {
     "description": "Simple Mode search panel: a setting's name as a result; should match its name in Settings"
   },
-  "searchSettingFocalLength": "Focal length",
+  "searchSettingFocalLength": "Main scope focal length",
   "@searchSettingFocalLength": {
     "description": "Simple Mode search panel: a setting's name as a result; should match its name in Settings"
   },
@@ -1162,11 +1162,11 @@
   "@shellPlanRunning": {
     "description": "Simple Mode Settings › Rig: note under the profile while a plan runs"
   },
-  "shellAperture": "Aperture",
+  "shellAperture": "Main scope aperture",
   "@shellAperture": {
     "description": "Simple Mode Settings › Rig: the telescope's aperture"
   },
-  "shellFocalLength": "Focal length",
+  "shellFocalLength": "Main scope focal length",
   "@shellFocalLength": {
     "description": "Simple Mode Settings › Rig: the telescope's focal length"
   },
@@ -2660,5 +2660,17 @@
   "guidedDoneStartImaging": "Done · Start imaging",
   "@guidedDoneStartImaging": {
     "description": "Guided Run: the last setup step's green Done, which starts imaging"
+  },
+  "shellGuideFocalLength": "Guide scope focal length",
+  "shellGuidePixelSize": "Guide camera pixel size",
+  "@shellGuideFocalLength": {
+    "description": "Settings › Rig: the guide scope's focal length (mm), read from the guider when unset"
+  },
+  "@shellGuidePixelSize": {
+    "description": "Settings › Rig: the guide camera's pixel size (µm), read from AlpacaBridge through the guider"
+  },
+  "searchWordsGuideScope": "guide scope guider camera pixel focal polar",
+  "@searchWordsGuideScope": {
+    "description": "Simple search: other words that find the guide scope rows (not shown)"
   }
 }
