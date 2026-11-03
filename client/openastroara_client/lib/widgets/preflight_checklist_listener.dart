@@ -103,13 +103,25 @@ class _PreflightChecklistListenerState
         if (i.status != 'ok') '${i.title}: ${i.detail}',
     ];
     _pillUp = true;
-    ref
+    // The pill can outlive this listener (a switch to the full UI): its
+    // answer goes through the container, never this widget's ref.
+    final container = ProviderScope.containerOf(context, listen: false);
+    container
         .read(simpleMessagesProvider.notifier)
         .show(
           SimpleMessageKind.question,
           l10n.shellBedtimeTitle,
           detail: needs.isEmpty ? l10n.shellBedtimeAllGood : needs.join('\n'),
-          actions: [SimpleMessageAction(l10n.shellBedtimeAnswer, _answer)],
+          actions: [
+            SimpleMessageAction(l10n.shellBedtimeAnswer, () {
+              if (mounted) _pillUp = false;
+              unawaited(
+                container
+                    .read(preflightPromptProvider.notifier)
+                    .acknowledgeTonight(),
+              );
+            }),
+          ],
         );
   }
 }

@@ -118,6 +118,17 @@ void main() {
     expect(container.read(selectedTabIndexProvider), isNot(kSetupTabIndex));
   });
 
+  testWidgets("the Simple Mode pill's answer still answers after its listener has gone (a switch to the full UI)",
+      (tester) async {
+    final (container, p, _) = await pump(tester, prompt: true, checklist: _ok, quiet: true);
+    final m = container.read(simpleMessagesProvider).single;
+    await tester.pumpWidget(UncontrolledProviderScope(container: container, child: const MaterialApp(home: SizedBox())));
+    m.actions.single.onPressed();
+    await tester.pump();
+    expect(tester.takeException(), isNull);
+    expect(p.acked, 1);
+  });
+
   testWidgets('#1138 Adjust answers too and opens Setup → Before you sleep', (
     tester,
   ) async {

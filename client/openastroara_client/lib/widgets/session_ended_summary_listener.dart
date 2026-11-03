@@ -62,7 +62,10 @@ class _SessionEndedSummaryListenerState
   }
 
   void _pill(SessionSummary summary) {
-    ref
+    // The pill can outlive this listener (a switch to the full UI): its
+    // action goes through the container, never this widget's ref.
+    final container = ProviderScope.containerOf(context, listen: false);
+    container
         .read(simpleMessagesProvider.notifier)
         .show(
           SimpleMessageKind.question,
@@ -71,9 +74,11 @@ class _SessionEndedSummaryListenerState
           actions: [
             SimpleMessageAction(context.l10n.shellOk, () {
               unawaited(
-                ref.read(sessionSummaryProvider.notifier).acknowledge(summary),
+                container
+                    .read(sessionSummaryProvider.notifier)
+                    .acknowledge(summary),
               );
-              _showingRunId = null;
+              if (mounted) _showingRunId = null;
             }),
           ],
         );

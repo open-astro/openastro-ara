@@ -121,6 +121,17 @@ void main() {
     expect(container.read(selectedTabIndexProvider), isNot(kRunTabIndex));
   });
 
+  testWidgets("the Simple Mode pill's OK still acknowledges after its listener has gone (a switch to the full UI)",
+      (tester) async {
+    final (container, notifier) = await pump(tester, summary, quiet: true);
+    final m = container.read(simpleMessagesProvider).single;
+    await tester.pumpWidget(UncontrolledProviderScope(container: container, child: const MaterialApp(home: SizedBox())));
+    m.actions.single.onPressed();
+    await tester.pump();
+    expect(tester.takeException(), isNull);
+    expect(notifier.acked, ['r1']);
+  });
+
   testWidgets('#1138 nothing to say → no dialog', (tester) async {
     await pump(tester, null);
     expect(find.byType(AlertDialog), findsNothing);

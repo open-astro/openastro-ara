@@ -1224,6 +1224,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get planRunEnding => 'The run is ending; this target can\'t join it.';
 
   @override
+  String get planQueueBusy =>
+      'The queue is still updating on the rig. Try again in a moment.';
+
+  @override
   String get shellLanguage => 'Language';
 
   @override

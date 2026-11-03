@@ -971,6 +971,25 @@ void main() {
     expect(seq.calls.where((call) => call.startsWith('start ')), isEmpty);
   });
 
+  testWidgets("Guided Run's last Done while the queue is still updating says so instead of doing nothing",
+      (tester) async {
+    // Review of #1486: _op returned quietly while busy, so startQueue reported true and nothing started.
+    final (c, seq) = await run(tester);
+    await create(tester);
+    c.read(planetariumSelectionProvider.notifier).set(_m42);
+    await tester.pumpAndSettle();
+    await create(tester);
+    seq.updateGate = Completer<void>();
+    final n = c.read(simpleRunProvider.notifier);
+    final moving = n.reorder(0, 1);
+    final ok = await n.startQueue();
+    expect(ok, isFalse);
+    expect(c.read(simpleMessagesProvider).single.title, 'The queue is still updating on the rig. Try again in a moment.');
+    expect(seq.calls.where((call) => call.startsWith('start ')), isEmpty);
+    seq.updateGate!.complete();
+    await moving;
+  });
+
   testWidgets('a second Start while the first is on its way is not sent', (tester) async {
     final (c, seq) = await run(tester);
     await create(tester);

@@ -866,6 +866,17 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
   /// Starts the queue as it stands (Guided Run's last Done). With [startAt]
   /// the run starts at once but waits on the rig until then.
   Future<bool> startQueue({DateTime? startAt}) async {
+    // An edit or reorder still on its way: _op would skip the start quietly
+    // and this would report success (review of #1486).
+    if (state.busy) {
+      ref
+          .read(simpleMessagesProvider.notifier)
+          .show(
+            SimpleMessageKind.error,
+            l10nFor(ref.read(appLocaleProvider)).planQueueBusy,
+          );
+      return false;
+    }
     final api = ref.read(sequenceApiProvider);
     final id = state.sequenceId;
     final active =

@@ -120,9 +120,26 @@ void main() {
     expect(find.text('Parking…'), findsOneWidget);
     mount.set(_wire(tracking: false, runtime: 'idle')); // aborted: stopped, not parked
     await tester.pump();
+    expect(find.text('Parking…'), findsOneWidget, reason: 'a moment of grace: AtPark can lag Slewing');
+    await tester.pump(const Duration(seconds: 3));
     expect(find.text('Parking…'), findsNothing);
     expect(find.byKey(const Key('simple-mount-park-parked')), findsOneWidget, reason: 'the control is back');
     expect(c.read(simpleMessagesProvider).single.title, "The mount didn't finish parking");
+  });
+
+  testWidgets('a park whose AtPark lags its Slewing by a poll still finishes, with no "didn\'t finish"', (tester) async {
+    // Review of #1486: ASCOM drivers often drop Slewing a moment before AtPark goes true.
+    final (c, mount) = await _pump(tester, _wire());
+    await tester.tap(find.byKey(const Key('simple-mount-park-parked')));
+    await tester.pump();
+    mount.set(_wire(runtime: 'slewing'));
+    await tester.pump();
+    mount.set(_wire(tracking: false, runtime: 'idle')); // stopped, not parked yet
+    await tester.pump();
+    mount.set(_wire(tracking: false, parked: true, runtime: 'parked'));
+    await tester.pump();
+    expect(find.text('Parking…'), findsNothing);
+    expect(c.read(simpleMessagesProvider), isEmpty);
   });
 
   testWidgets('a mount that disconnects mid-park clears Parking… and says so', (tester) async {

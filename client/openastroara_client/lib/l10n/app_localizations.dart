@@ -2229,6 +2229,12 @@ abstract class AppLocalizations {
   /// **'The run is ending; this target can\'t join it.'**
   String get planRunEnding;
 
+  /// Message pill: Start (Guided Run's last Done) while an edit or reorder of the queue is still on its way
+  ///
+  /// In en, this message translates to:
+  /// **'The queue is still updating on the rig. Try again in a moment.'**
+  String get planQueueBusy;
+
   /// Settings › Rig: the app language row (this device only)
   ///
   /// In en, this message translates to:

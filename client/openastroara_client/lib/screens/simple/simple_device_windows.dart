@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -450,26 +451,51 @@ class SimpleMountMotionNotifier extends Notifier<bool?> {
   /// means the move ended short.
   bool _moved = false;
 
+  /// The look again after the mount stopped short of the ask.
+  Timer? _settle;
+
+  void _unfinished(bool asked) {
+    _settle?.cancel();
+    _settle = null;
+    _trackAfter = false;
+    state = null;
+    final l10n = l10nFor(ref.read(appLocaleProvider));
+    ref
+        .read(simpleMessagesProvider.notifier)
+        .show(
+          SimpleMessageKind.error,
+          asked ? l10n.deviceParkUnfinished : l10n.deviceUnparkUnfinished,
+        );
+  }
+
   @override
   bool? build() {
+    ref.onDispose(() => _settle?.cancel());
     ref.listen(mountProvider, (_, next) {
       final asked = state;
       if (asked == null || next.isLoading) return;
       final m = next.value;
-      // Gone, or stopped short of the ask (aborted, faulted): say so, and
-      // give the Park row its control back.
-      if (m == null || !m.isConnected || (_moved && !m.isBusy && m.parked != asked)) {
-        _trackAfter = false;
-        state = null;
-        final l10n = l10nFor(ref.read(appLocaleProvider));
-        ref
-            .read(simpleMessagesProvider.notifier)
-            .show(
-              SimpleMessageKind.error,
-              asked ? l10n.deviceParkUnfinished : l10n.deviceUnparkUnfinished,
-            );
+      // Gone: say so at once, and give the Park row its control back.
+      if (m == null || !m.isConnected) {
+        _unfinished(asked);
         return;
       }
+      // Stopped short of the ask (aborted, faulted)? Drivers often drop
+      // Slewing a moment before AtPark, so look again in a moment first
+      // (review of #1486); an unchanged mount sends no new reading.
+      if (_moved && !m.isBusy && m.parked != asked) {
+        _settle ??= Timer(const Duration(seconds: 2), () {
+          _settle = null;
+          final now = ref.read(mountProvider).value;
+          if (state == asked &&
+              (now == null || (!now.isBusy && now.parked != asked))) {
+            _unfinished(asked);
+          }
+        });
+        return;
+      }
+      _settle?.cancel();
+      _settle = null;
       if (m.isBusy) _moved = true;
       // Done once the mount says so and has stopped moving out of park.
       if (m.parked == asked &&

@@ -1731,6 +1731,10 @@
   "@planRunEnding": {
     "description": "Plan sheet: Add to queue while the run is winding down (the rig refused the append)"
   },
+  "planQueueBusy": "The queue is still updating on the rig. Try again in a moment.",
+  "@planQueueBusy": {
+    "description": "Message pill: Start (Guided Run's last Done) while an edit or reorder of the queue is still on its way"
+  },
   "shellLanguage": "Language",
   "shellLanguageSystem": "System",
   "@shellLanguage": {
