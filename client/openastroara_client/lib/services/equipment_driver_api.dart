@@ -1,6 +1,8 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../models/guider_status.dart';
+import '../state/guider/guider_state.dart';
 import '../state/saved_server_state.dart';
 
 /// A device's driver and SDK versions, and its firmware and serial number
@@ -35,6 +37,14 @@ class DeviceDriver {
 /// "focuser"…); null with no rig, nothing selected or an older daemon.
 final deviceDriverProvider = FutureProvider.autoDispose
     .family<DeviceDriver?, String>((ref, type) async {
+      // The guide camera is the guider's: ask again when it (dis)connects.
+      if (type == 'guidecamera') {
+        ref.watch(
+          guiderStatusProvider.select(
+            (s) => s.value?.connectionState ?? GuiderConnectionState.unknown,
+          ),
+        );
+      }
       final server = ref.watch(activeServerProvider);
       if (server == null) return null;
       final dio = Dio(
