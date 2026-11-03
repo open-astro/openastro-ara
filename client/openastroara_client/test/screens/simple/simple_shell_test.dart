@@ -1530,6 +1530,20 @@ void main() {
         findsOneWidget);
   });
 
+  testWidgets('the focuser\'s dot opens the Focuser window; Settings lists it under Devices', (tester) async {
+    final c = await _pump(tester, const Size(1024, 768), linkUp: true, gear: [
+      focuserProvider.overrideWith(() => _Focuser(EquipmentConnectionState.connected)),
+    ]);
+    c.read(selectedSettingsPanelProvider.notifier).select('eq.focuser');
+    c.read(selectedTabIndexProvider.notifier).select(kOptionsTabIndex);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('simple-device-focuser')), findsOneWidget);
+    expect(find.byType(SettingsShell), findsNothing);
+    await _openSection(tester, 'Focuser');
+    expect(find.descendant(of: find.byKey(const Key('simple-menu')), matching: find.byKey(const Key('simple-device-focuser'))),
+        findsOneWidget);
+  });
+
   testWidgets('Settings lists the camera under Devices; it and its Devices row open the same window', (tester) async {
     await _pump(tester, const Size(1024, 768), linkUp: true, gear: [
       cameraStatusProvider.overrideWith(() => _Camera(EquipmentConnectionState.connected)),

@@ -1,10 +1,15 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/equipment_device_status.dart';
 import '../../services/equipment_device_api.dart' show describeEquipmentError;
 import '../../services/equipment_driver_api.dart';
+import '../../models/focuser_status.dart';
 import '../../state/equipment/camera_state.dart';
+import '../../state/equipment/focuser_state.dart';
 import '../../state/imaging/exposure_state.dart';
 import '../../state/equipment/mount_state.dart';
 import '../../state/sequencer/sequence_list_state.dart';
@@ -577,4 +582,278 @@ class _SimpleGainSliderState extends ConsumerState<SimpleGainSlider> {
       ],
     );
   }
+}
+
+/// "12 000": a focuser position, grouped in thousands.
+String simpleSteps(int n) => n
+    .abs()
+    .toString()
+    .replaceAllMapped(RegExp(r'\B(?=(\d{3})+$)'), (_) => ' ')
+    .padLeft(n < 0 ? 1 : 0, '−');
+
+/// The focuser's window: where it is, its temperature, and a knob to move
+/// it. A detent (30°) is one step of the size picked under it; the target
+/// shows while turning and the focuser goes there on letting go.
+class SimpleFocuserWindow extends ConsumerStatefulWidget {
+  const SimpleFocuserWindow({super.key, this.inSettings = false});
+
+  /// In Settings the window ends with the focuser's versions.
+  final bool inSettings;
+
+  @override
+  ConsumerState<SimpleFocuserWindow> createState() =>
+      _SimpleFocuserWindowState();
+}
+
+class _SimpleFocuserWindowState extends ConsumerState<SimpleFocuserWindow> {
+  int _step = 100;
+
+  /// While the knob turns: where it will send the focuser.
+  int? _target;
+
+  /// The last place sent, for "Moving to …".
+  int? _sent;
+
+  int _clamp(int v, FocuserStatus s) {
+    final c = s.capabilities;
+    return c == null || c.maxPosition <= c.minPosition
+        ? v
+        : v.clamp(c.minPosition, c.maxPosition);
+  }
+
+  Future<void> _go(FocuserStatus s, int target) async {
+    final from = s.position ?? 0;
+    if (target == from) return;
+    setState(() => _sent = target);
+    // A relative focuser takes the change, not a position.
+    final absolute = s.capabilities?.absoluteFocuser ?? true;
+    final notify = userNotifier(context);
+    try {
+      await ref
+          .read(focuserProvider.notifier)
+          .move(absolute ? target : target - from);
+    } catch (e) {
+      notify(
+        "Couldn't move the focuser",
+        detail: describeEquipmentError(e),
+        error: true,
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = ref.watch(focuserProvider).value;
+    final children = <Widget>[SimpleDeviceHeader(type: 'Focuser', status: s)];
+    if (s == null || !s.isConnected) {
+      children.add(
+        Text(
+          s?.isConnecting ?? false ? 'Connecting…' : 'Not connected',
+          style: AraText.caption,
+        ),
+      );
+    } else {
+      final pos = s.position ?? 0;
+      final shown = _target ?? pos;
+      children.addAll([
+        simpleWindowRow(
+          'Position',
+          Text(simpleSteps(shown), style: kSimpleText),
+        ),
+        if (s.temperature != null)
+          simpleWindowRow(
+            'Temperature',
+            Text(simpleCelsius(s.temperature!), style: kSimpleText),
+          ),
+        SizedBox(
+          height: 18,
+          child: Text(
+            _target != null
+                ? 'Let go to move to ${simpleSteps(_target!)}'
+                : s.isMoving
+                ? (_sent != null
+                      ? 'Moving to ${simpleSteps(_sent!)}…'
+                      : 'Moving…')
+                : '',
+            textAlign: TextAlign.center,
+            style: AraText.caption.copyWith(color: AraColors.accentBusy),
+          ),
+        ),
+        Center(
+          child: Semantics(
+            slider: true,
+            label: 'Focus position',
+            value: simpleSteps(pos),
+            increasedValue: simpleSteps(_clamp(pos + _step, s)),
+            decreasedValue: simpleSteps(_clamp(pos - _step, s)),
+            onIncrease: () => _go(s, _clamp(pos + _step, s)),
+            onDecrease: () => _go(s, _clamp(pos - _step, s)),
+            child: _FocusKnob(
+              key: const Key('simple-focuser-knob'),
+              onDetent: (d) {
+                HapticFeedback.selectionClick();
+                setState(
+                  () => _target = _clamp((_target ?? pos) + d * _step, s),
+                );
+              },
+              onRelease: () {
+                final t = _target;
+                setState(() => _target = null);
+                if (t != null) _go(s, t);
+              },
+            ),
+          ),
+        ),
+        simpleWindowRow(
+          'Step',
+          DecoratedBox(
+            decoration: BoxDecoration(
+              color: AraColors.tileFill,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (final n in const [10, 100, 1000])
+                  SimpleSegment(
+                    key: Key('simple-focuser-step-$n'),
+                    label: '$n',
+                    selected: _step == n,
+                    radius: 8,
+                    onTap: () => setState(() => _step = n),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ]);
+    }
+    if (widget.inSettings) {
+      children.addAll(
+        _versions(ref.watch(deviceDriverProvider('focuser')).value),
+      );
+    }
+    return Column(
+      key: const Key('simple-device-focuser'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      spacing: AraSpace.s4,
+      children: children,
+    );
+  }
+}
+
+/// A focuser knob drawn like the real one: turn it round its centre and it
+/// reports each 30° detent (clockwise out, +1; counter-clockwise in, −1),
+/// then the release. iOS has no rotary control of its own.
+class _FocusKnob extends StatefulWidget {
+  const _FocusKnob({
+    super.key,
+    required this.onDetent,
+    required this.onRelease,
+  });
+
+  final ValueChanged<int> onDetent;
+  final VoidCallback onRelease;
+
+  @override
+  State<_FocusKnob> createState() => _FocusKnobState();
+}
+
+class _FocusKnobState extends State<_FocusKnob> {
+  static const _size = 200.0;
+  static const _detent = math.pi / 6;
+
+  /// The mark's angle, and the turn not yet a whole detent.
+  double _angle = 0;
+  double _pending = 0;
+  double? _last;
+
+  double _at(Offset p) => math.atan2(p.dy - _size / 2, p.dx - _size / 2);
+
+  void _turn(Offset p) {
+    final a = _at(p);
+    var d = a - (_last ?? a);
+    if (d > math.pi) d -= 2 * math.pi;
+    if (d < -math.pi) d += 2 * math.pi;
+    _last = a;
+    setState(() => _angle += d);
+    _pending += d;
+    final whole = (_pending / _detent).truncate();
+    if (whole != 0) {
+      _pending -= whole * _detent;
+      widget.onDetent(whole);
+    }
+  }
+
+  void _end() {
+    _last = null;
+    _pending = 0;
+    widget.onRelease();
+  }
+
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+    onPanStart: (d) => _last = _at(d.localPosition),
+    onPanUpdate: (d) => _turn(d.localPosition),
+    onPanEnd: (_) => _end(),
+    onPanCancel: _end,
+    child: CustomPaint(
+      size: const Size.square(_size),
+      painter: _KnobPainter(_angle),
+      child: SizedBox.square(
+        dimension: _size,
+        child: Center(
+          child: Text(
+            'Turn\nto focus',
+            textAlign: TextAlign.center,
+            style: AraText.caption,
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+class _KnobPainter extends CustomPainter {
+  _KnobPainter(this.angle);
+
+  final double angle;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final c = size.center(Offset.zero);
+    final r = size.width / 2;
+    canvas.drawCircle(c, r, Paint()..color = AraColors.tileFill);
+    canvas.drawCircle(
+      c,
+      r - 0.5,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..color = AraColors.border,
+    );
+    // The detents round the rim.
+    final tick = Paint()
+      ..color = AraColors.textSecondary
+      ..strokeWidth = 2;
+    for (var i = 0; i < 12; i++) {
+      final a = i * math.pi / 6 - math.pi / 2;
+      final dir = Offset(math.cos(a), math.sin(a));
+      canvas.drawLine(c + dir * (r - 14), c + dir * (r - 4), tick);
+    }
+    canvas.drawCircle(c, r * 0.38, Paint()..color = AraColors.bgPrimary);
+    // The mark turns with the finger.
+    final a = angle - math.pi / 2;
+    final dir = Offset(math.cos(a), math.sin(a));
+    canvas.drawLine(
+      c + dir * (r * 0.5),
+      c + dir * (r - 20),
+      Paint()
+        ..color = AraColors.accentInfo
+        ..strokeWidth = 6
+        ..strokeCap = StrokeCap.round,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_KnobPainter old) => old.angle != angle;
 }

@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Focuser Window</title>
+<style>
+  /* DESIGN.md tokens (lib/theme/ara_colors.dart + ara_metrics.dart) */
+  :root {
+    --bg: #1A1A1A; --border: #404040; --text: #E0E0E0; --text2: #A0A0A0; --link: #64B5F6;
+    --ok: #4CAF50; --busy: #FFB300; --info: #42A5F5; --sel: #1976D2; --selTint: rgba(66,165,245,.16);
+    --tile: #383838; --sys: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #0E0E0E; color: var(--text); font: 14px/1.45 var(--sys); }
+  body.night { filter: sepia(1) saturate(6) hue-rotate(-35deg) brightness(.75); }
+  .page { max-width: 1120px; margin: 0 auto; padding: 32px 16px 80px; }
+  h1 { font-size: 22px; font-weight: 600; margin: 0 0 6px; }
+  h2 { font-size: 16px; font-weight: 600; margin: 0 0 4px; }
+  p.note { color: var(--text2); margin: 0 0 14px; max-width: 88ch; }
+  .tag { font-size: 11px; letter-spacing: .5px; text-transform: uppercase; padding: 1px 7px; border-radius: 10px; border: 1px solid var(--busy); color: var(--busy); margin-left: 6px; vertical-align: 2px; }
+  .controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin: 18px 0 14px; }
+  .lbl { color: var(--text2); font-size: 13px; }
+  .seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .seg button { background: transparent; color: var(--text); border: 0; padding: 8px 14px; font: 13px var(--sys); cursor: pointer; }
+  .seg button + button { border-left: 1px solid var(--border); }
+  .seg button[aria-pressed="true"] { background: var(--sel); color: #fff; }
+
+  .ipad { width: 1024px; height: 768px; max-width: 100%; position: relative; border-radius: 18px; overflow: hidden; border: 1px solid #333;
+          background: radial-gradient(ellipse at 60% 45%, #3a3f4c 0, #12141a 55%, #08090c 100%); }
+  .star { position: absolute; left: 640px; top: 330px; width: 22px; height: 22px; border-radius: 50%; background: radial-gradient(circle, #fff 0, #fff8 30%, transparent 70%); transition: filter .2s, transform .2s; }
+  .strip { position: absolute; left: 16px; right: 16px; top: 16px; height: 56px; background: rgba(26,26,26,.9); border-radius: 10px; display: flex; align-items: center; gap: 16px; padding: 0 14px; font-size: 13px; color: var(--text2); }
+  .strip .dot { display: inline-flex; align-items: center; gap: 6px; } .strip .dot i { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); }
+  .strip .dot.hot { outline: 1.5px solid var(--sel); outline-offset: 4px; border-radius: 6px; color: var(--text); }
+  .win { position: absolute; left: 16px; top: 88px; width: 360px; background: rgba(26,26,26,.9); backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px); border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 4px; }
+  .head { display: flex; align-items: center; gap: 8px; font-weight: 600; min-height: 32px; }
+  .head i { width: 9px; height: 9px; border-radius: 50%; background: var(--ok); }
+  .r { display: flex; align-items: center; gap: 12px; min-height: 44px; }
+  .r .l { flex: 1; } .v { font-variant-numeric: tabular-nums; }
+  .dim { color: var(--text2); }
+  .big { font-size: 30px; font-weight: 600; font-variant-numeric: tabular-nums; text-align: center; }
+  .moving { color: var(--busy); font-size: 12px; text-align: center; min-height: 18px; }
+  .proposed { outline: 1.5px dashed var(--busy); padding: 8px 12px; margin: 0 -12px; border-radius: 10px; }
+
+  /* A · knob */
+  .knob { width: 200px; height: 200px; margin: 6px auto; border-radius: 50%; position: relative; touch-action: none; cursor: grab;
+          background: radial-gradient(circle at 50% 40%, #4a4a4a 0, #2c2c2c 70%); box-shadow: inset 0 0 0 1px #555, 0 6px 18px #0008; }
+  .knob .tick { position: absolute; left: 50%; top: 6px; width: 2px; height: 10px; margin-left: -1px; background: #777; transform-origin: 1px 94px; }
+  .knob .mark { position: absolute; left: 50%; top: 18px; width: 6px; height: 24px; margin-left: -3px; border-radius: 3px; background: var(--info); transform-origin: 3px 82px; }
+  .knob .c { position: absolute; inset: 62px; border-radius: 50%; background: #262626; display: grid; place-items: center; font-size: 12px; color: var(--text2); text-align: center; line-height: 1.2; }
+  /* B · thumbwheel */
+  .thumb { height: 64px; margin: 8px 0; border-radius: 10px; position: relative; overflow: hidden; touch-action: none; cursor: grab;
+           background: linear-gradient(90deg, #1e1e1e, #3a3a3a 50%, #1e1e1e); box-shadow: inset 0 0 0 1px #555; }
+  .thumb .ridges { position: absolute; inset: 0; background-image: repeating-linear-gradient(90deg, #ffffff22 0 2px, transparent 2px 14px); }
+  .thumb .mid { position: absolute; left: 50%; top: 6px; bottom: 6px; width: 3px; margin-left: -1.5px; background: var(--info); border-radius: 2px; }
+  .ends { display: flex; justify-content: space-between; font-size: 12px; color: var(--text2); }
+  /* C · buttons */
+  .btns { display: flex; gap: 8px; justify-content: center; margin: 8px 0; }
+  .btns button { min-width: 64px; height: 48px; border-radius: 10px; border: 0; background: var(--tile); color: var(--text); font: 15px var(--sys); cursor: pointer; }
+
+  .stepper { display: inline-flex; align-items: center; background: var(--tile); border-radius: 8px; }
+  .stepper button { width: 44px; height: 44px; border: 0; background: transparent; color: var(--text); font: 20px var(--sys); cursor: pointer; }
+  .stepper output { min-width: 64px; text-align: center; font-variant-numeric: tabular-nums; }
+  .segs { display: inline-flex; background: var(--tile); border-radius: 8px; overflow: hidden; }
+  .segs button { border: 0; background: transparent; color: var(--text); min-height: 44px; min-width: 56px; font: 14px var(--sys); cursor: pointer; }
+  .segs button[aria-pressed="true"] { background: var(--sel); color: #fff; }
+  .hide { display: none !important; }
+  table.inv { border-collapse: collapse; width: 100%; font-size: 13px; }
+  table.inv th, table.inv td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  table.inv th { color: var(--text2); font-weight: 500; }
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>Focuser window <span class="tag">proposed</span></h1>
+  <p class="note">Opens from the focuser's dot in the top bar (or Settings › Devices › Focuser), like Camera and Mount. Everything works: turn the knob or drag the wheel, and the star sharpens as you near best focus (12 400). The focuser moves when you let go; the dashed outline marks the part to choose.</p>
+
+  <div class="controls">
+    <span class="lbl">Move with</span>
+    <div class="seg" role="group" aria-label="Control">
+      <button data-c="knob" aria-pressed="true">A · Knob</button>
+      <button data-c="thumb">B · Thumbwheel</button>
+      <button data-c="btns">C · Buttons</button>
+    </div>
+    <div class="seg" role="group" aria-label="Look">
+      <button data-n="day" aria-pressed="true">Normal</button>
+      <button data-n="night">Night mode</button>
+    </div>
+  </div>
+
+  <div class="ipad">
+    <div class="star" id="star"></div>
+    <div class="strip"><span class="dot"><i></i>Camera</span><span class="dot"><i></i>Mount</span><span class="dot hot"><i></i>Focuser</span><span class="dot"><i></i>Filter wheel</span></div>
+    <div class="win">
+      <div class="head"><i></i>Focuser · ZWO EAF</div>
+      <div class="r"><span class="l">Position</span><span class="v" id="pos"></span></div>
+      <div class="r"><span class="l">Temperature</span><span class="v">8.4 °C</span></div>
+      <div class="proposed">
+        <div class="moving" id="moving"></div>
+        <div id="ctl"></div>
+        <div class="r"><span class="l">Step</span>
+          <span class="segs" id="step"><button data-s="10">10</button><button data-s="100" aria-pressed="true">100</button><button data-s="1000">1000</button></span></div>
+      </div>
+      <div class="r"><span class="l">Refocus when it cools by</span>
+        <span class="stepper"><button data-t="-1" aria-label="Less">−</button><output id="cool">2 °C</output><button data-t="1" aria-label="More">+</button></span></div>
+    </div>
+  </div>
+  <p class="note" id="caption" style="margin-top:12px"></p>
+
+  <section style="margin-top:32px">
+    <h2>The options</h2>
+    <table class="inv">
+      <tr><th></th><th>How it moves</th><th>Good at</th><th>Weak at</th></tr>
+      <tr><td>A · Knob</td><td>Turn it like a focuser knob: one detent (30°) is one step of the chosen size. The target shows while you turn; the focuser goes there when you let go.</td><td>Feels like the real knob; fine and coarse in one control; long runs are a few turns.</td><td>Takes the most room (200 pt); turning in a circle on a small phone is fiddly.</td></tr>
+      <tr><td>B · Thumbwheel</td><td>Drag the ridged wheel left (in) or right (out); every 14 pt is one step. Let go and it moves.</td><td>Compact, one-handed, natural for a thumb; fits a phone.</td><td>Less obviously "a focuser"; long runs mean several drags.</td></tr>
+      <tr><td>C · Buttons</td><td>« ‹ › » move by 10× step, step, step, 10× step at once.</td><td>The brief's baseline; works with gloves and a screen reader as is.</td><td>Tap, wait, tap; no feel for the run.</td></tr>
+    </table>
+    <p class="note" style="margin-top:12px">All three: Step 10 / 100 / 1000, the position updates live, "Moving to 12 500…" in amber while it travels, and Refocus when it cools by 0.5 °C steps (Off at 0). Screen readers get Move in / Move out buttons on A and B. My pick: <b>A · Knob</b>, as you suggested; B is the fallback on a phone.</p>
+  </section>
+</div>
+<script>
+  let ctl = 'knob', step = 100, pos = 12000, target = null, cool = 2, angle = 0;
+  const BEST = 12400;
+  const $ = id => document.getElementById(id);
+  function blur() { const d = Math.abs((target ?? pos) - BEST); const b = Math.min(10, d / 120); $('star').style.filter = `blur(${b}px)`; $('star').style.transform = `scale(${1 + b / 4})`; }
+  function show() {
+    $('pos').textContent = pos.toLocaleString('en').replace(',', ' ');
+    $('moving').textContent = target !== null && target !== pos ? `Moving to ${target.toLocaleString('en').replace(',', ' ')}…` : '';
+    blur();
+  }
+  function go(t) { target = Math.max(0, Math.min(60000, t)); show(); }
+  function land() { if (target === null) return; const t = target; const id = setInterval(() => { pos += Math.sign(t - pos) * Math.min(Math.abs(t - pos), 80); show(); if (pos === t) { clearInterval(id); target = null; show(); } }, 30); }
+  function render() {
+    const c = $('ctl');
+    if (ctl === 'knob') {
+      c.innerHTML = `<div class="knob" id="knob" role="slider" aria-label="Focus position">${Array.from({length: 12}, (_, i) => `<div class="tick" style="transform:rotate(${i * 30}deg)"></div>`).join('')}<div class="mark" id="mark"></div><div class="c">Turn<br>to focus</div></div>`;
+      const k = $('knob'); let last = null, acc = 0;
+      const ang = e => { const r = k.getBoundingClientRect(); return Math.atan2(e.clientY - r.top - r.height / 2, e.clientX - r.left - r.width / 2) * 180 / Math.PI; };
+      k.onpointerdown = e => { k.setPointerCapture(e.pointerId); last = ang(e); acc = 0; target = pos; };
+      k.onpointermove = e => { if (last === null) return; let a = ang(e), d = a - last; if (d > 180) d -= 360; if (d < -180) d += 360; last = a; angle += d; acc += d;
+        $('mark').style.transform = `rotate(${angle}deg)`; const det = Math.trunc(acc / 30); if (det) { acc -= det * 30; go(target + det * step); } };
+      k.onpointerup = k.onpointercancel = () => { last = null; land(); };
+      $('mark').style.transform = `rotate(${angle}deg)`;
+    } else if (ctl === 'thumb') {
+      c.innerHTML = `<div class="thumb" id="thumb" role="slider" aria-label="Focus position"><div class="ridges" id="ridges"></div><div class="mid"></div></div><div class="ends"><span>‹ In</span><span>Out ›</span></div>`;
+      const t = $('thumb'); let x0 = null, acc = 0, off = 0;
+      t.onpointerdown = e => { t.setPointerCapture(e.pointerId); x0 = e.clientX; acc = 0; target = pos; };
+      t.onpointermove = e => { if (x0 === null) return; const d = e.clientX - x0; x0 = e.clientX; off += d; acc += d; $('ridges').style.backgroundPosition = `${off}px 0`;
+        const n = Math.trunc(acc / 14); if (n) { acc -= n * 14; go(target + n * step); } };
+      t.onpointerup = t.onpointercancel = () => { x0 = null; land(); };
+    } else {
+      c.innerHTML = `<div class="btns">${[['«', -10], ['‹', -1], ['›', 1], ['»', 10]].map(([g, m]) => `<button data-m="${m}" aria-label="${m < 0 ? 'In' : 'Out'} ${Math.abs(m) * step}">${g}</button>`).join('')}</div>`;
+      c.querySelectorAll('[data-m]').forEach(b => b.onclick = () => { go((target ?? pos) + b.dataset.m * step); land(); });
+    }
+    $('caption').textContent = { knob: 'A · Knob: turn clockwise to move out, counter-clockwise in; 30° per step.', thumb: 'B · Thumbwheel: drag left to move in, right to move out.', btns: 'C · Buttons: « and » move ten steps, ‹ and › one.' }[ctl];
+    show();
+  }
+  document.querySelectorAll('[data-c]').forEach(b => b.onclick = () => { ctl = b.dataset.c; document.querySelectorAll('[data-c]').forEach(x => x.setAttribute('aria-pressed', x === b)); render(); });
+  document.querySelectorAll('[data-s]').forEach(b => b.onclick = () => { step = +b.dataset.s; document.querySelectorAll('[data-s]').forEach(x => x.setAttribute('aria-pressed', x === b)); });
+  document.querySelectorAll('[data-t]').forEach(b => b.onclick = () => { cool = Math.max(0, Math.min(10, cool + b.dataset.t * .5)); $('cool').textContent = cool ? `${cool} °C` : 'Off'; });
+  document.querySelectorAll('[data-n]').forEach(b => b.onclick = () => { document.body.classList.toggle('night', b.dataset.n === 'night'); document.querySelectorAll('[data-n]').forEach(x => x.setAttribute('aria-pressed', x === b)); });
+  render();
+</script>
+</body>
+</html>

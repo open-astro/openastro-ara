@@ -331,6 +331,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
   static const _deviceWindows = {
     'eq.camera': SimpleCameraWindow(),
     'eq.mount': SimpleMountWindow(),
+    'eq.focuser': SimpleFocuserWindow(),
   };
 
   /// Whether the camera window and a rail menu fit side by side: the window
@@ -1900,6 +1901,8 @@ class _SettingsSheetState extends ConsumerState<_SettingsSheet> {
         ('Camera', (c) => glyph(Icons.camera_alt, c), true),
       if (ref.watch(mountProvider).value != null)
         ('Mount', (c) => EquipmentGlyph.telescope(size: 20, color: c), true),
+      if (ref.watch(focuserProvider).value != null)
+        ('Focuser', (c) => glyph(Icons.center_focus_strong, c), true),
     ];
     // A narrow window (Split View, a phone) keeps only the sections' icons.
     final narrow = MediaQuery.sizeOf(context).width < 600;
@@ -1979,6 +1982,7 @@ class _SettingsSheetState extends ConsumerState<_SettingsSheet> {
                 ),
                 'Camera' => const SimpleCameraWindow(inSettings: true),
                 'Mount' => const SimpleMountWindow(inSettings: true),
+                'Focuser' => const SimpleFocuserWindow(inSettings: true),
                 _ => _Gear(onOpen: (id) => setState(() => _section = id)),
               },
             ),
@@ -2028,7 +2032,12 @@ class _Gear extends ConsumerWidget {
           provider: mountProvider,
           onOpen: () => onOpen('Mount'),
         ),
-        _GearRow(id: 'focuser', type: 'Focuser', provider: focuserProvider),
+        _GearRow(
+          id: 'focuser',
+          type: 'Focuser',
+          provider: focuserProvider,
+          onOpen: () => onOpen('Focuser'),
+        ),
         _GearRow(
           id: 'filterwheel',
           type: 'Filter wheel',
