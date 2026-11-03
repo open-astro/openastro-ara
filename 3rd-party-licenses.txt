@@ -75,10 +75,10 @@ them: the Stellarium Web Engine (AGPL-3.0,
 client/.../assets/stellarium/README.md + the open-astro/stellarium-web-engine
 fork).
 
-License summary (104 packages):
+License summary (105 packages):
     MIT: 72 packages
     Apache-2.0: 20 packages
-    BSD-3-Clause: 8 packages
+    BSD-3-Clause: 9 packages
     Microsoft .NET Library License: 2 packages
     BSD-2-Clause: 1 package
     MIT AND Ms-PL: 1 package
@@ -741,7 +741,7 @@ License source: https://licenses.nuget.org/MIT
 Project:        https://github.com/oleg-st/ZstdSharp
 
 
-CLIENT — WILMA direct runtime pub packages (19 packages; transitive pub packages ship via Flutter's in-app LicenseRegistry)
+CLIENT — WILMA direct runtime pub packages (20 packages; transitive pub packages ship via Flutter's in-app LicenseRegistry)
 ===========================================================================================================================
 
 ------------------------------------------------------------------------
@@ -809,6 +809,12 @@ Package:        geolocator 14.1.2
 Copyright:      Copyright (c) 2018 Baseflow
 License:        MIT
 License source: https://pub.dev/packages/geolocator/license
+
+------------------------------------------------------------------------
+Package:        intl 0.20.3
+Copyright:      Copyright 2013, the Dart project authors
+License:        BSD-3-Clause
+License source: https://pub.dev/packages/intl/license
 
 ------------------------------------------------------------------------
 Package:        lat_lng_to_timezone 0.2.0
