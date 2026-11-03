@@ -79,7 +79,8 @@ public sealed partial class TelescopeService {
     /// <summary>Whether the profile holds a site: the unset default (0°, 0°) is never pushed.</summary>
     internal static bool HasSite(double lat, double lng) => lat != 0 || lng != 0;
 
-    /// <summary>Follow the profile: push its site now (if a mount is connected) and on every change.</summary>
+    /// <summary>Follow the profile: push its site into the connected mount on every change (the push on
+    /// connect is in ConnectAsync).</summary>
     internal void FollowProfileSite(OpenAstroAra.Server.Services.IProfileStore store) {
         _siteStore = store;
         store.Changed += (_, _) => PushProfileSite();
