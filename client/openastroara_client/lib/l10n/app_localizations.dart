@@ -2756,6 +2756,54 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'your rig sent something Ara didn\'t understand. It may be running a different version.'**
   String get errorUnreadable;
+
+  /// A finished autofocus whose curve fit was weak; r2 is the fit's R² (e.g. 0.55)
+  ///
+  /// In en, this message translates to:
+  /// **'The curve fit was weak (R² {r2}) — passing cloud, a slew during the sweep, or probes that straddle the V unevenly. The focus here comes from the measured frame, not the fit; run again if the sky has settled.'**
+  String focusCardWeakFit(String r2);
+
+  /// Weak autofocus fit whose outer probes sit on a plateau, manual step size
+  ///
+  /// In en, this message translates to:
+  /// **'The curve fit was weak (R² {r2}): the outer probes sit on a plateau, so the sweep is wider than the V. A smaller step size would put more probes on the slope. The focus here comes from the measured frame, not the fit.'**
+  String focusCardWeakFitPlateau(String r2);
+
+  /// Weak autofocus fit on a plateau, automatic step size
+  ///
+  /// In en, this message translates to:
+  /// **'The curve fit was weak (R² {r2}): the outer probes sit on a plateau, so this sweep was wider than the V. With automatic step size on, Ara sizes the next sweep from the V\'s width where a run lets it be measured, so running again should put more probes on the slope. The focus here comes from the measured frame, not the fit.'**
+  String focusCardWeakFitPlateauAuto(String r2);
+
+  /// Simple Focus panel stat: the focuser position autofocus settled on
+  ///
+  /// In en, this message translates to:
+  /// **'Best position'**
+  String get focusBestPosition;
+
+  /// Simple Focus panel stat: stars measured in the focused frame
+  ///
+  /// In en, this message translates to:
+  /// **'Stars'**
+  String get focusStars;
+
+  /// Simple Focus panel stat: how well the V-curve fit the probes (0-1)
+  ///
+  /// In en, this message translates to:
+  /// **'Fit R²'**
+  String get focusFitR2;
+
+  /// Simple Focus panel: the focuser's position, first part of the line under the headline
+  ///
+  /// In en, this message translates to:
+  /// **'Focuser at {position}'**
+  String focusFocuserAt(String position);
+
+  /// Simple Focus panel row: show the focus run's frame with its measured stars circled, full screen
+  ///
+  /// In en, this message translates to:
+  /// **'Measured stars'**
+  String get focusMeasuredStars;
 }
 
 class _AppLocalizationsDelegate

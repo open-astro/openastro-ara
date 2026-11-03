@@ -2168,5 +2168,57 @@
   "errorUnreadable": "your rig sent something Ara didn't understand. It may be running a different version.",
   "@errorUnreadable": {
     "description": "Error message (every screen), after \"Couldn't <action> — \"; lower-case start"
+  },
+  "focusCardWeakFit": "The curve fit was weak (R² {r2}) — passing cloud, a slew during the sweep, or probes that straddle the V unevenly. The focus here comes from the measured frame, not the fit; run again if the sky has settled.",
+  "@focusCardWeakFit": {
+    "description": "A finished autofocus whose curve fit was weak; r2 is the fit's R² (e.g. 0.55)",
+    "placeholders": {
+      "r2": {
+        "type": "String"
+      }
+    }
+  },
+  "focusCardWeakFitPlateau": "The curve fit was weak (R² {r2}): the outer probes sit on a plateau, so the sweep is wider than the V. A smaller step size would put more probes on the slope. The focus here comes from the measured frame, not the fit.",
+  "@focusCardWeakFitPlateau": {
+    "description": "Weak autofocus fit whose outer probes sit on a plateau, manual step size",
+    "placeholders": {
+      "r2": {
+        "type": "String"
+      }
+    }
+  },
+  "focusCardWeakFitPlateauAuto": "The curve fit was weak (R² {r2}): the outer probes sit on a plateau, so this sweep was wider than the V. With automatic step size on, Ara sizes the next sweep from the V's width where a run lets it be measured, so running again should put more probes on the slope. The focus here comes from the measured frame, not the fit.",
+  "@focusCardWeakFitPlateauAuto": {
+    "description": "Weak autofocus fit on a plateau, automatic step size",
+    "placeholders": {
+      "r2": {
+        "type": "String"
+      }
+    }
+  },
+  "focusBestPosition": "Best position",
+  "@focusBestPosition": {
+    "description": "Simple Focus panel stat: the focuser position autofocus settled on"
+  },
+  "focusStars": "Stars",
+  "@focusStars": {
+    "description": "Simple Focus panel stat: stars measured in the focused frame"
+  },
+  "focusFitR2": "Fit R²",
+  "@focusFitR2": {
+    "description": "Simple Focus panel stat: how well the V-curve fit the probes (0-1)"
+  },
+  "focusFocuserAt": "Focuser at {position}",
+  "@focusFocuserAt": {
+    "description": "Simple Focus panel: the focuser's position, first part of the line under the headline",
+    "placeholders": {
+      "position": {
+        "type": "String"
+      }
+    }
+  },
+  "focusMeasuredStars": "Measured stars",
+  "@focusMeasuredStars": {
+    "description": "Simple Focus panel row: show the focus run's frame with its measured stars circled, full screen"
   }
 }

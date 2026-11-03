@@ -13,7 +13,8 @@ import '../../widgets/focus/focusing_pane.dart' show MainFocusCard;
 import '../../widgets/focus/v_curve_chart.dart';
 import 'simple_preview_panel.dart'
     show SimpleShutter, SimpleShutterButton, kSimpleText;
-import 'simple_shell.dart' show SimplePanel;
+import 'simple_device_windows.dart' show simpleCelsius;
+import 'simple_shell.dart' show SimplePanel, SimpleSegment;
 
 /// The HFR to show big: the confirmed one after a run, the latest kept probe
 /// while one runs, else nothing. Pure — unit-tested.
@@ -40,6 +41,18 @@ MainFocusMethod simpleFocusMethod(WidgetRef ref) {
   return ref.watch(mainFocusMethodProvider) ??
       (connected ? MainFocusMethod.autofocus : MainFocusMethod.bahtinov);
 }
+
+/// Whether the focus run's frame, its measured stars circled, fills the screen
+/// behind Focus's panels (session only; off to start).
+class SimpleFocusStarsShown extends Notifier<bool> {
+  @override
+  bool build() => false;
+
+  void set(bool shown) => state = shown;
+}
+
+final simpleFocusStarsShownProvider =
+    NotifierProvider<SimpleFocusStarsShown, bool>(SimpleFocusStarsShown.new);
 
 /// The rail's shutter in Focus follows the chip: on Auto it starts autofocus
 /// and its red square cancels it; on Manual it is Preview's, frames to focus
@@ -91,13 +104,34 @@ class SimpleFocusPanel extends ConsumerWidget {
       run,
     );
     final hfr = simpleFocusHfr(run);
+    final l10n = context.l10n;
+    final fit = run.fit;
+    final best = run.finalPosition ?? fit?.bestPosition.round();
+    final weak = MainFocusCard.weakFitText(l10n, run);
+    final starsShown = ref.watch(simpleFocusStarsShownProvider);
+    Widget stat(String label, String value) => Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        decoration: BoxDecoration(
+          color: AraColors.tileFill,
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(label, style: AraText.caption, maxLines: 1),
+            Text(value, style: kSimpleText),
+          ],
+        ),
+      ),
+    );
     final error =
         live.error ??
         (run.isFailed ? MainFocusCard.failureText(context.l10n, run) : null);
     return SimplePanel(
       padding: const EdgeInsets.all(AraSpace.s16),
       child: SizedBox(
-        width: 248,
+        width: 360,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -108,6 +142,17 @@ class SimpleFocusPanel extends ConsumerWidget {
               style: kSimpleText.copyWith(color: headlineColor),
               maxLines: 2,
             ),
+            if (connected && focuser != null)
+              Text(
+                [
+                  if (focuser.position != null)
+                    l10n.focusFocuserAt('${focuser.position}'),
+                  if (focuser.temperature != null)
+                    simpleCelsius(focuser.temperature!),
+                  if (focuser.name.isNotEmpty) focuser.name,
+                ].join(' · '),
+                style: AraText.caption,
+              ),
             Text(
               context.l10n.focusHfr(hfr?.toStringAsFixed(2) ?? '—'),
               style: kSimpleText.copyWith(
@@ -115,8 +160,69 @@ class SimpleFocusPanel extends ConsumerWidget {
                 fontWeight: FontWeight.w300,
               ),
             ),
+            // A finished run's figures, all on view (Simple Mode folds
+            // nothing away).
+            if (run.isComplete)
+              Row(
+                spacing: AraSpace.s4,
+                children: [
+                  stat(l10n.focusBestPosition, best == null ? '—' : '$best'),
+                  stat(
+                    l10n.focusStars,
+                    run.finalStars == null ? '—' : '${run.finalStars}',
+                  ),
+                  stat(
+                    l10n.focusFitR2,
+                    fit == null ? '—' : fit.rSquared.toStringAsFixed(2),
+                  ),
+                ],
+              ),
             if (run.probes.isNotEmpty)
-              SizedBox(height: 110, child: VCurveChart(run: run)),
+              SizedBox(height: 140, child: VCurveChart(run: run)),
+            if (weak != null)
+              Container(
+                padding: const EdgeInsets.all(AraSpace.s8),
+                decoration: BoxDecoration(
+                  color: AraColors.accentBusy.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(weak, style: AraText.caption),
+              ),
+            // The run's frame with its measured stars circled, full screen
+            // behind the panels; off to start.
+            if (live.frame != null)
+              Row(
+                spacing: AraSpace.s12,
+                children: [
+                  Expanded(
+                    child: Text(l10n.focusMeasuredStars, style: kSimpleText),
+                  ),
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: AraColors.tileFill,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        for (final (id, on, word) in [
+                          ('on', true, l10n.deviceOn),
+                          ('off', false, l10n.deviceOff),
+                        ])
+                          SimpleSegment(
+                            key: Key('simple-focus-stars-$id'),
+                            label: word,
+                            selected: starsShown == on,
+                            radius: 8,
+                            onTap: () => ref
+                                .read(simpleFocusStarsShownProvider.notifier)
+                                .set(on),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             if (error != null)
               Text(
                 error,

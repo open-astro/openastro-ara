@@ -100,7 +100,7 @@
   </div>
   <div class="controls">
     <div class="ctl" id="layoutCtl"><span class="lbl">Result layout</span><span class="seg" id="layout"><button data-v="A" aria-pressed="true">A · panel</button><button data-v="B">B · bottom curve</button></span></div>
-    <div class="ctl"><span class="lbl">Stars circled on the frame</span><span class="seg" id="circles"><button data-v="on" aria-pressed="true">On</button><button data-v="off">Off</button></span></div>
+    <div class="ctl"><span class="lbl">Stars circled on the frame</span><span class="seg" id="circles"><button data-v="on">On</button><button data-v="off" aria-pressed="true">Off</button></span></div>
     <div class="ctl"><span class="lbl">Language</span><span class="seg" id="lang"><button data-v="en" aria-pressed="true">English</button><button data-v="pt">Português</button></span></div>
     <div class="ctl"><span class="lbl">Night mode</span><span class="seg" id="night"><button data-v="off" aria-pressed="true">Off</button><button data-v="on">On</button></span></div>
   </div>
@@ -150,7 +150,7 @@ const T = {
         maskQ: 'Tire a máscara de Bahtinov', maskSub: 'Se ficar, ela põe espículas em todas as estrelas e rouba luz.', notYet: 'Ainda não', removed: 'Máscara retirada',
         doneH: 'Em foco · sem máscara', doneSub: 'Focado com a máscara de Bahtinov. Trave o focalizador.', exposure: 'Exposição', from: 'px do foco' },
 };
-const S = { method: 'auto', astate: 'good', mstate: 'keep', layout: 'A', circles: 'on', lang: 'en', night: 'off', details: false };
+const S = { method: 'auto', astate: 'good', mstate: 'keep', layout: 'A', circles: 'off', lang: 'en', night: 'off', details: false };
 const t = k => T[S.lang][k];
 
 // The probes from the full UI screenshot: (position, HFR, kept).

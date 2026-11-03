@@ -311,7 +311,7 @@ void main() {
     await t.pumpWidget(MaterialApp(home: Scaffold(body: StatRow(tiles: MainFocusCard.tilesFor(run)))));
     final r2 = find.ancestor(of: find.text('Fit R²'), matching: find.byType(StatTile));
     expect(find.descendant(of: r2, matching: find.text('—')), findsOneWidget);
-    expect(MainFocusCard.weakFitText(run), isNull);
+    expect(MainFocusCard.weakFitText(_en, run), isNull);
   });
 
   test('headlineFor says the state in words', () {
@@ -469,7 +469,7 @@ void main() {
       ],
     );
     test('a plateau-wing sweep with a manual step size suggests a smaller one', () {
-      final text = MainFocusCard.weakFitText(rig)!;
+      final text = MainFocusCard.weakFitText(_en, rig)!;
       expect(text, contains('R² 0.57'));
       expect(text, contains('A smaller step size would'));
     });
@@ -483,14 +483,14 @@ void main() {
         stepSize: 50,
         stepSizeSource: 'default',
       );
-      final text = MainFocusCard.weakFitText(auto)!;
+      final text = MainFocusCard.weakFitText(_en, auto)!;
       expect(text, contains('R² 0.57'));
       expect(text, contains('sizes the next sweep'));
       expect(text, isNot(contains('will use a smaller step size')), reason: 'no promise: the width may not be measurable');
       expect(text, isNot(contains('A smaller step size would')));
     });
     test('a good fit says nothing', () {
-      expect(MainFocusCard.weakFitText(_completed), isNull, reason: 'R² 0.98');
+      expect(MainFocusCard.weakFitText(_en, _completed), isNull, reason: 'R² 0.98');
     });
     test('a weak fit without a plateau blames the sky', () {
       final noisy = AutofocusRun(
@@ -498,10 +498,10 @@ void main() {
         fit: const AutofocusFit(algorithm: 'parabolic', rSquared: 0.6, bestPosition: 100, predictedHfr: 2, withinSampledRange: true, curve: []),
         probes: [fine(1, 0, 4.0), fine(2, 50, 2.5), fine(3, 100, 3.0), fine(4, 150, 2.2), fine(5, 200, 1.5), fine(6, 250, 2.8)],
       );
-      expect(MainFocusCard.weakFitText(noisy), contains('cloud'));
+      expect(MainFocusCard.weakFitText(_en, noisy), contains('cloud'));
     });
     test('a failed run says nothing here', () {
-      expect(MainFocusCard.weakFitText(const AutofocusRun(state: 'failed')), isNull);
+      expect(MainFocusCard.weakFitText(_en, const AutofocusRun(state: 'failed')), isNull);
     });
   });
 

@@ -21,6 +21,8 @@ import 'package:openastroara/models/server.dart';
 import 'package:openastroara/services/profile_api.dart';
 import 'package:openastroara/screens/simple/simple_search.dart';
 import 'package:openastroara/screens/simple/simple_device_windows.dart' show simpleMountMotionProvider;
+import 'package:openastroara/models/autofocus_run.dart';
+import 'package:openastroara/state/focus/autofocus_live_state.dart';
 import 'package:openastroara/models/guider_status.dart';
 import 'package:openastroara/widgets/status_indicator.dart' show StatusLevel;
 import 'package:openastroara/widgets/equipment/guider_chip.dart' show guiderStatusLevel;
@@ -250,6 +252,15 @@ class _GuiderGone extends _GuiderCalls {
   @override
   Future<GuiderStatus?> build() async => null;
 }
+
+class _LiveFrame extends AutofocusLiveNotifier {
+  @override
+  AutofocusLive build() => AutofocusLive(
+      run: const AutofocusRun(state: AutofocusRunStates.complete, finalHfr: 1.01), frame: Uint8List.fromList(_png));
+}
+
+// A 1x1 PNG.
+const _png = [137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 1, 0, 0, 0, 1, 8, 6, 0, 0, 0, 31, 21, 196, 137, 0, 0, 0, 13, 73, 68, 65, 84, 120, 156, 99, 248, 15, 4, 0, 9, 251, 3, 253, 227, 85, 242, 156, 0, 0, 0, 0, 73, 69, 78, 68, 174, 66, 96, 130];
 
 class _ParkingMount extends MountNotifier {
   static Map<String, dynamic> _json(bool parked, String runtime) => {
@@ -514,6 +525,20 @@ void main() {
     final long = find.descendant(of: find.byKey(const Key('simple-settings')), matching: find.text('12 h\n30 min'));
     expect(tester.widget<Text>(long).maxLines, 2);
     expect(find.descendant(of: find.byKey(const Key('simple-settings')), matching: find.byIcon(Icons.tune)), findsOneWidget);
+  });
+
+  testWidgets("Focus: Measured stars On fills the screen with the run's frame, circles and all", (tester) async {
+    final container = await _pump(tester, const Size(1024, 768), gear: [
+      autofocusLiveProvider.overrideWith(() => _LiveFrame()),
+    ]);
+    await tester.tap(find.byKey(const Key('simple-mode')));
+    await tester.pump();
+    await tester.tap(find.text('Focus'));
+    await tester.pump();
+    expect(find.byKey(const Key('simple-focus-frame')), findsNothing, reason: 'off to start');
+    container.read(simpleFocusStarsShownProvider.notifier).set(true);
+    await tester.pump();
+    expect(find.byKey(const Key('simple-focus-frame')), findsOneWidget);
   });
 
   testWidgets('Focus stays in Simple Mode: the rail reads Focus, its panel opens left of the rail; the chip is the Focus chip',

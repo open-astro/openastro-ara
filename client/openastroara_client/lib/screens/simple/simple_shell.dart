@@ -77,6 +77,7 @@ import '../shell_listeners.dart';
 import 'simple_autopilot.dart';
 import 'simple_device_windows.dart';
 import 'simple_focus_panel.dart';
+import '../../state/focus/autofocus_live_state.dart' show autofocusLiveProvider;
 import 'simple_message_pills.dart';
 import 'simple_polar_panel.dart';
 import 'simple_plan_panel.dart';
@@ -515,8 +516,15 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     final polarFrame =
         shown == SimpleModeScreen.polarAlign &&
         simplePolarActive(ref.watch(polarAlignLiveProvider));
+    // Focus can show its run's frame, measured stars circled, when asked.
+    final focusFrame =
+        shown == SimpleModeScreen.focus &&
+            ref.watch(simpleFocusStarsShownProvider)
+        ? ref.watch(autofocusLiveProvider.select((l) => l.frame))
+        : null;
     final hasFrame =
         polarFrame ||
+        focusFrame != null ||
         ref.watch(lastCapturedFrameIdProvider) != null ||
         ref.watch(liveViewControllerProvider);
     final showSky = _sky || !hasFrame;
@@ -650,7 +658,16 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                               behavior: HitTestBehavior.opaque,
                               onTap: () => _tapImage(!showSky),
                               child: !showSky
-                                  ? (polarFrame
+                                  ? (focusFrame != null
+                                        ? Image.memory(
+                                            focusFrame,
+                                            key: const Key(
+                                              'simple-focus-frame',
+                                            ),
+                                            fit: BoxFit.contain,
+                                            gaplessPlayback: true,
+                                          )
+                                        : polarFrame
                                         ? const SimplePolarFrame()
                                         : const FrameViewer())
                                   // The sky: asked for, or standing in until there

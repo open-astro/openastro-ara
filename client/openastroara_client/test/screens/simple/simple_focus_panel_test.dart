@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -6,6 +8,7 @@ import 'package:openastroara/models/equipment_device_status.dart';
 import 'package:openastroara/models/focuser_status.dart';
 import 'package:openastroara/screens/simple/simple_focus_panel.dart';
 import 'package:openastroara/screens/simple/simple_preview_panel.dart' show SimpleShutter;
+import 'package:openastroara/screens/simple/simple_shell.dart' show SimpleSegment;
 import 'package:openastroara/state/equipment/focuser_state.dart';
 import 'package:openastroara/state/focus/autofocus_live_state.dart';
 import 'package:openastroara/state/focus/bahtinov_focus_state.dart';
@@ -64,14 +67,19 @@ class _Live extends AutofocusLiveNotifier {
   Future<void> cancel() async => cancels++;
 }
 
-Future<(_Focuser, _Live)> _pump(WidgetTester tester, {FocuserStatus? focuser, AutofocusRun run = AutofocusRun.idle}) async {
+late ProviderContainer _c;
+
+Future<(_Focuser, _Live)> _pump(WidgetTester tester,
+    {FocuserStatus? focuser, AutofocusRun run = AutofocusRun.idle, Uint8List? frame}) async {
   final f = _Focuser(focuser);
-  final l = _Live(AutofocusLive(run: run));
-  await tester.pumpWidget(ProviderScope(
-    overrides: [
-      focuserProvider.overrideWith(() => f),
-      autofocusLiveProvider.overrideWith(() => l),
-    ],
+  final l = _Live(AutofocusLive(run: run, frame: frame));
+  _c = ProviderContainer(overrides: [
+    focuserProvider.overrideWith(() => f),
+    autofocusLiveProvider.overrideWith(() => l),
+  ]);
+  addTearDown(_c.dispose);
+  await tester.pumpWidget(UncontrolledProviderScope(
+    container: _c,
     child: const MaterialApp(home: Scaffold(body: Center(child: SimpleFocusPanel()))),
   ));
   await tester.pump();
@@ -120,6 +128,49 @@ void main() {
     expect(find.text('HFR 2.40'), findsOneWidget);
     expect(find.textContaining('Sweeping'), findsOneWidget);
     expect(find.text('Cancel'), findsNothing);
+  });
+
+  // A finished Smart Focus whose fit was weak (R² 0.55), like the rig's.
+  final weak = AutofocusRun(
+    state: AutofocusRunStates.complete,
+    finalHfr: 1.01,
+    finalPosition: 29463,
+    finalStars: 299,
+    probes: [for (var i = 0; i < 7; i++) _probe(i, [4.2, 3.4, 2.8, 1.4, 2.6, 3.3, 4.8][i])],
+    fit: const AutofocusFit(
+        algorithm: 'hyperbolic', rSquared: 0.554, bestPosition: 29463, predictedHfr: 1.7, withinSampledRange: true, curve: []),
+  );
+
+  testWidgets('a finished run: best position, stars and fit R², all on view', (tester) async {
+    await _pump(tester, focuser: _focuser(), run: weak);
+    for (final t in ['Best position', '29463', 'Stars', '299', 'Fit R²', '0.55']) {
+      expect(find.text(t), findsOneWidget, reason: t);
+    }
+    expect(find.textContaining('Details'), findsNothing, reason: 'nothing folded away');
+  });
+
+  testWidgets('a weak fit says so in the panel, in words', (tester) async {
+    await _pump(tester, focuser: _focuser(), run: weak);
+    expect(find.textContaining('The curve fit was weak (R² 0.55)'), findsOneWidget);
+  });
+
+  testWidgets('the focuser line: where it is and which', (tester) async {
+    await _pump(tester, focuser: _focuser(), run: weak);
+    expect(find.text('Focuser at 1000 · Focuser'), findsOneWidget);
+  });
+
+  testWidgets('the measured stars on the frame: off to start, a tap shows them', (tester) async {
+    await _pump(tester, focuser: _focuser(), run: weak, frame: Uint8List.fromList([1, 2, 3]));
+    final off = find.byKey(const Key('simple-focus-stars-off'));
+    expect(tester.widget<SimpleSegment>(off).selected, isTrue);
+    await tester.tap(find.byKey(const Key('simple-focus-stars-on')));
+    await tester.pump();
+    expect(_c.read(simpleFocusStarsShownProvider), isTrue);
+  });
+
+  testWidgets('no frame from the run: no stars switch', (tester) async {
+    await _pump(tester, focuser: _focuser(), run: weak);
+    expect(find.byKey(const Key('simple-focus-stars-on')), findsNothing);
   });
 
   group('the shutter follows the chip', () {

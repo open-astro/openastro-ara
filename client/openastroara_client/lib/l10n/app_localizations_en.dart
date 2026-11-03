@@ -1537,4 +1537,36 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get errorUnreadable =>
       'your rig sent something Ara didn\'t understand. It may be running a different version.';
+
+  @override
+  String focusCardWeakFit(String r2) {
+    return 'The curve fit was weak (R² $r2) — passing cloud, a slew during the sweep, or probes that straddle the V unevenly. The focus here comes from the measured frame, not the fit; run again if the sky has settled.';
+  }
+
+  @override
+  String focusCardWeakFitPlateau(String r2) {
+    return 'The curve fit was weak (R² $r2): the outer probes sit on a plateau, so the sweep is wider than the V. A smaller step size would put more probes on the slope. The focus here comes from the measured frame, not the fit.';
+  }
+
+  @override
+  String focusCardWeakFitPlateauAuto(String r2) {
+    return 'The curve fit was weak (R² $r2): the outer probes sit on a plateau, so this sweep was wider than the V. With automatic step size on, Ara sizes the next sweep from the V\'s width where a run lets it be measured, so running again should put more probes on the slope. The focus here comes from the measured frame, not the fit.';
+  }
+
+  @override
+  String get focusBestPosition => 'Best position';
+
+  @override
+  String get focusStars => 'Stars';
+
+  @override
+  String get focusFitR2 => 'Fit R²';
+
+  @override
+  String focusFocuserAt(String position) {
+    return 'Focuser at $position';
+  }
+
+  @override
+  String get focusMeasuredStars => 'Measured stars';
 }

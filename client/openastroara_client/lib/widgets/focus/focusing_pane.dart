@@ -251,7 +251,7 @@ class MainFocusCard extends ConsumerWidget {
             InlineNotice.error(failureText(l10n, run)),
             const SizedBox(height: 16),
           ],
-          if (weakFitText(run) case final weak?) ...[
+          if (weakFitText(context.l10n, run) case final weak?) ...[
             InlineNotice.warning(weak),
             const SizedBox(height: 16),
           ],
@@ -379,7 +379,7 @@ class MainFocusCard extends ConsumerWidget {
   /// HFR well above what the best probe measured. The measured confirmation
   /// frame already tells the truth; this tells the user what to change. Pure —
   /// unit-tested.
-  static String? weakFitText(AutofocusRun run) {
+  static String? weakFitText(AppLocalizations l, AutofocusRun run) {
     final fit = run.fit;
     if (!run.isComplete || fit == null || fit.rSquared >= 0.8) return null;
     final kept = run.sweepProbes.where((p) => p.kept && p.hfr > 0).toList();
@@ -390,14 +390,12 @@ class MainFocusCard extends ConsumerWidget {
     final plateau = edge > minHfr * 2 && (sorted.first.hfr - sorted.last.hfr).abs() < edge * 0.3;
     final r2 = fit.rSquared.toStringAsFixed(2);
     if (!plateau) {
-      return 'The curve fit was weak (R² $r2) — passing cloud, a slew during the sweep, or probes that straddle the V unevenly. The focus here comes from the measured frame, not the fit; run again if the sky has settled.';
+      return l.focusCardWeakFit(r2);
     }
     // §59.8 — an automatic step size learns the V's width from this very run,
     // so the advice is "run again", not "go change a setting".
     final auto = run.stepSizeSource != null && run.stepSizeSource != 'manual';
-    return auto
-        ? 'The curve fit was weak (R² $r2): the outer probes sit on a plateau, so this sweep was wider than the V. With automatic step size on, Ara sizes the next sweep from the V\'s width where a run lets it be measured, so running again should put more probes on the slope. The focus here comes from the measured frame, not the fit.'
-        : 'The curve fit was weak (R² $r2): the outer probes sit on a plateau, so the sweep is wider than the V. A smaller step size would put more probes on the slope. The focus here comes from the measured frame, not the fit.';
+    return auto ? l.focusCardWeakFitPlateauAuto(r2) : l.focusCardWeakFitPlateau(r2);
   }
 
   /// §59.8 — the step size row: the number, then where it came from, in words.

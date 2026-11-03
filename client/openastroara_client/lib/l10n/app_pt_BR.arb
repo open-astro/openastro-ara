@@ -442,5 +442,13 @@
   "errorRefused": "seu setup recusou a solicitação.",
   "errorConnectionFailed": "a conexão falhou. Verifique se o setup está acessível.",
   "errorFile": "um problema de arquivo atrapalhou",
-  "errorUnreadable": "seu setup enviou algo que o Ara não entendeu. Ele pode estar com outra versão."
+  "errorUnreadable": "seu setup enviou algo que o Ara não entendeu. Ele pode estar com outra versão.",
+  "focusCardWeakFit": "O ajuste da curva foi fraco (R² {r2}) — nuvem passando, um movimento durante a varredura ou sondas desiguais dos dois lados do V. O foco aqui vem do quadro medido, não do ajuste; rode de novo se o céu estabilizou.",
+  "focusCardWeakFitPlateau": "O ajuste da curva foi fraco (R² {r2}): as sondas das pontas ficaram num platô, então a varredura é mais larga que o V. Um passo menor colocaria mais sondas na rampa. O foco aqui vem do quadro medido, não do ajuste.",
+  "focusCardWeakFitPlateauAuto": "O ajuste da curva foi fraco (R² {r2}): as sondas das pontas ficaram num platô, então esta varredura foi mais larga que o V. Com o passo automático ligado, o Ara dimensiona a próxima varredura pela largura do V quando dá para medi-la, então rodar de novo deve pôr mais sondas na rampa. O foco aqui vem do quadro medido, não do ajuste.",
+  "focusBestPosition": "Melhor posição",
+  "focusStars": "Estrelas",
+  "focusFitR2": "R² do ajuste",
+  "focusFocuserAt": "Focalizador em {position}",
+  "focusMeasuredStars": "Estrelas medidas"
 }
