@@ -44,6 +44,15 @@ public sealed partial class CameraService : ILiveStackControl {
 
     private bool _liveViewSkipSensorProbe;
 
+    // Test seam (↑ara#1169): when set, the Live View loop takes its frame from here instead of the camera.
+    private Func<(ushort[] Pixels, int Width, int Height)?>? _liveViewFrameSourceForTest;
+
+    internal void SetLiveViewFrameSourceForTest(Func<(ushort[] Pixels, int Width, int Height)?> source) =>
+        _liveViewFrameSourceForTest = source;
+
+    internal void FeedLiveStackForTest(ushort[] pixels, int width, int height, long session, BayerPattern? bayerPattern) =>
+        FeedLiveStack(pixels, width, height, session, bayerPattern);
+
     /// <summary>Test seam (↑ara#1169): adopts an unreachable client as the connected camera so the real Live View loop
     /// runs (every frame fails fast) without a simulator, and skips the start-time SensorType read, which would
     /// need the device. The service owns the client and disposes it.</summary>

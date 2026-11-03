@@ -15,6 +15,7 @@
 using NUnit.Framework;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Services;
+using OpenAstroAra.Stretch;
 using System;
 using System.Diagnostics;
 using System.Threading;
@@ -24,8 +25,8 @@ namespace OpenAstroAra.Test {
 
     /// <summary>
     /// ↑ara#1169: the stack follows the Live View session. The real Live View loop runs against an unreachable client
-    /// (every frame fails fast, the loop self-stops after 10), so no simulator is needed; no frame ever reaches the
-    /// stack here, which is why these tests check lifecycle and locking, not pixels.
+    /// (every frame fails fast, the loop self-stops after 10), so no simulator is needed; except the frame-feed tests,
+    /// which swap in a synthetic frame source for the loop.
     /// </summary>
     [TestFixture]
     public class CameraServiceLiveStackLifecycleTest {
@@ -42,6 +43,46 @@ namespace OpenAstroAra.Test {
             svc.StartLiveViewAsync(new LiveViewStartRequestDto(1.0, BinX: 2, BinY: 2), CancellationToken.None);
 
         private static async Task<bool> Completes(Task t) => await Task.WhenAny(t, Task.Delay(Limit)).ConfigureAwait(false) == t;
+
+        private static (ushort[] Pixels, int Width, int Height) SyntheticFrame() =>
+            (LiveStackEngineLimitsTest.Field(1), LiveStackEngineLimitsTest.W, LiveStackEngineLimitsTest.H);
+
+        // Falsified by: deleting the FeedLiveStack call in the Live View loop leaves FramesStacked at 0.
+        [Test]
+        public async Task The_live_view_loop_feeds_frames_to_the_enabled_stack() {
+            using var svc = NewService();
+            svc.SetLiveViewFrameSourceForTest(() => SyntheticFrame());
+            await StartLiveView(svc);
+            try {
+                ((ILiveStackControl)svc).StartLiveStack();
+                var sw = Stopwatch.StartNew();
+                while (svc.LiveStack.Snapshot.FramesStacked < 2 && sw.Elapsed < Limit) { await Task.Delay(20); }
+                Assert.That(svc.LiveStack.Snapshot.FramesStacked, Is.GreaterThanOrEqualTo(2));
+                Assert.That(((ILiveStackControl)svc).GetLiveStackStatus().StackSeq, Is.GreaterThan(0));
+            } finally {
+                await svc.StopLiveViewAsync();
+            }
+        }
+
+        // Falsified by: dropping the OSC guard in FeedLiveStack would add the raw mosaic to the stack.
+        [Test]
+        public void FeedLiveStack_skips_osc_frames() {
+            using var svc = new CameraService();
+            svc.LiveStack.Enable(3);
+            var f = SyntheticFrame();
+            svc.FeedLiveStackForTest(f.Pixels, f.Width, f.Height, 3, BayerPattern.RGGB);
+            Assert.That(svc.LiveStack.Snapshot.FramesStacked, Is.EqualTo(0));
+            svc.FeedLiveStackForTest(f.Pixels, f.Width, f.Height, 3, null);
+            Assert.That(svc.LiveStack.Snapshot.FramesStacked, Is.EqualTo(1));
+        }
+
+        // Falsified by: removing the try/catch lets a stack failure (null pixels) escape into the loop's self-stop count.
+        [Test]
+        public void FeedLiveStack_swallows_a_stack_exception() {
+            using var svc = new CameraService();
+            svc.LiveStack.Enable(3);
+            Assert.DoesNotThrow(() => svc.FeedLiveStackForTest(null!, 256, 256, 3, null));
+        }
 
         // Falsified by: no opt-in (Live View start enabling the stack) shows Enabled=true with no stack/start.
         [Test]

@@ -271,8 +271,9 @@ public sealed partial class CameraService {
                     if (client is null) {
                         break; // disconnected/disposed — end the loop
                     }
-                    acquired = await AcquireLiveFramePixelsAsync(
-                        client, request, applySettings: !settingsApplied, token).ConfigureAwait(false);
+                    acquired = _liveViewFrameSourceForTest?.Invoke()
+                        ?? await AcquireLiveFramePixelsAsync(
+                            client, request, applySettings: !settingsApplied, token).ConfigureAwait(false);
                     settingsApplied = true; // settings are current (just applied, or unchanged since we hold the gate)
                 } catch (OperationCanceledException) when (token.IsCancellationRequested) {
                     throw;

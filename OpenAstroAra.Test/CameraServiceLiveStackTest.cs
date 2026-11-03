@@ -24,7 +24,8 @@ namespace OpenAstroAra.Test {
     /// <summary>
     /// RED tests for the ↑ara#1169 live-stack control surface on <see cref="CameraService"/> (planned
     /// <c>ILiveStackControl</c>, implemented by CameraService in a new partial file). Sim-free: guards and idle state only;
-    /// the loop hook is covered by the OmniSim integration companion.
+    /// the loop hook is covered in CameraServiceLiveStackLifecycleTest
+    /// through a synthetic frame source.
     /// </summary>
     [SuppressMessage("Performance", "CA1859:Use concrete types when possible",
         Justification = "The tests exercise the ILiveStackControl surface the endpoints cast to.")]
