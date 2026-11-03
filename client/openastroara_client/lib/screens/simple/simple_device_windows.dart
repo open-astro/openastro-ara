@@ -467,6 +467,7 @@ class SimpleMountMotionNotifier extends Notifier<bool?> {
   /// is asked again, up to five times a second apart.
   Future<void> _track() async {
     for (var i = 0; i < 5; i++) {
+      if (!ref.mounted) return; // gone mid-retry (#1485)
       try {
         if (await ref.read(mountProvider.notifier).setTracking(true)) return;
       } catch (_) {
