@@ -2,9 +2,9 @@
 
 Shaped 2026-11-03 (`/impeccable shape`). Mock: [`design/preview/simple-settings-mock.html`](../preview/simple-settings-mock.html) (sheet B, one window per device). Visual rules live in `DESIGN.md` ("Simple Mode: Image First"); the parent brief is [`simple-mode.md`](simple-mode.md).
 
-## Rule: 3×90% and KISS
+## Rule: 4×90% and KISS
 
-Simple Mode covers the top 90 % most used features, 90 % of the time, 90 % faster (the user's "3×90%"), and only the bare minimum for a successful imaging night (KISS). When in doubt, leave it out. A value another Simple Mode control already sets is not repeated (gain is on Preview's chip, the guiding graph on the bottom row). Everything else stays in the Advanced UI, and Simple Mode never links to it: Settings' Simple Mode switch is the way out.
+Simple Mode covers the top 90 % most used features, for 90 % of the people, 90 % of the time, 90 % faster (the user's "4×90%"), and only the bare minimum for a successful imaging night (KISS). When in doubt, leave it out. A value another Simple Mode control already sets is not repeated (gain is on Preview's chip, the guiding graph on the bottom row). Everything else stays in the Advanced UI, and Simple Mode never links to it: Settings' Simple Mode switch is the way out.
 
 ## Job and audience
 
