@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/l10n/l10n.dart';
 import 'package:openastroara/models/bahtinov_focus.dart';
 import 'package:openastroara/models/equipment_device_status.dart';
 import 'package:openastroara/models/focuser_status.dart';
@@ -118,56 +119,58 @@ Widget _harness({
       child: MaterialApp(home: Scaffold(body: SizedBox(width: width, height: height, child: const FocusingPane()))),
     );
 
+final _en = lookupAppLocalizations(const Locale('en'));
+
 void main() {
   group('bahtinovHint', () {
     test('waits, then explains a missing pattern', () {
-      expect(bahtinovHint(BahtinovFocusStatus.idle).advice, TurnAdvice.wait);
-      final none = bahtinovHint(_running([null]));
+      expect(bahtinovHint(_en, BahtinovFocusStatus.idle).advice, TurnAdvice.wait);
+      final none = bahtinovHint(_en, _running([null]));
       expect(none.title, 'No spikes');
       expect(none.detail, contains('Fit the mask'));
     });
 
     test('asks for a move until there is history', () {
-      expect(bahtinovHint(_running([2.0, 2.0])).title, 'Make a move');
+      expect(bahtinovHint(_en, _running([2.0, 2.0])).title, 'Make a move');
     });
 
     test('keep going while the offset shrinks, sized from the last move', () {
       // 3.0 → 2.0: one pixel per move, two to go.
-      final h = bahtinovHint(_running([3.0, 3.0, 3.0, 2.0, 2.0, 2.0]));
+      final h = bahtinovHint(_en, _running([3.0, 3.0, 3.0, 2.0, 2.0, 2.0]));
       expect(h.advice, TurnAdvice.keepGoing);
       expect(h.detail, 'Same way — about twice your last move again.');
     });
 
     test('go back when the offset grows', () {
-      final h = bahtinovHint(_running([1.0, 1.0, 1.0, 2.0, 2.0, 2.0]));
+      final h = bahtinovHint(_en, _running([1.0, 1.0, 1.0, 2.0, 2.0, 2.0]));
       expect(h.advice, TurnAdvice.turnBack);
       expect(h.detail, contains('Wrong way'));
     });
 
     test('passed focus when the sign flips, and how far back', () {
       // 1.2 → −0.6: a 1.8 px move overshot by 0.6 — back a third.
-      final h = bahtinovHint(_running([1.2, 1.2, 1.2, -0.6, -0.6, -0.6]));
+      final h = bahtinovHint(_en, _running([1.2, 1.2, 1.2, -0.6, -0.6, -0.6]));
       expect(h.advice, TurnAdvice.turnBack);
       expect(h.detail, 'You passed focus. Turn back about a third of your last move.');
     });
 
     test('a frame taken mid-move does not size the next move', () {
       // 2.9 → (1.4 while turning) → 0.77: about a third of the last move to go.
-      final h = bahtinovHint(_running([2.9, 2.9, 2.9, 2.9, 1.4, 0.77, 0.77, 0.77, 0.77, 0.77]));
+      final h = bahtinovHint(_en, _running([2.9, 2.9, 2.9, 2.9, 1.4, 0.77, 0.77, 0.77, 0.77, 0.77]));
       expect(h.advice, TurnAdvice.keepGoing);
       expect(h.detail, 'Same way — about a third of your last move again.');
     });
 
     test('the advice holds after the move until the next one', () {
       // Ten fast frames at the new position: still the same advice.
-      final h = bahtinovHint(_running([3.0, 3.0, 3.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0]));
+      final h = bahtinovHint(_en, _running([3.0, 3.0, 3.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0]));
       expect(h.advice, TurnAdvice.keepGoing);
       expect(h.detail, 'Same way — about twice your last move again.');
     });
 
     test('jitter is not a move; in focus inside the zone', () {
-      expect(bahtinovHint(_running([2.0, 2.05, 1.95, 2.0, 2.02, 1.98])).title, 'Make a move');
-      final h = bahtinovHint(_running([2.0, 1.0, 0.1]));
+      expect(bahtinovHint(_en, _running([2.0, 2.05, 1.95, 2.0, 2.02, 1.98])).title, 'Make a move');
+      final h = bahtinovHint(_en, _running([2.0, 1.0, 0.1]));
       expect(h.advice, TurnAdvice.atBest);
       expect(h.detail, contains('±13 µm'));
     });
@@ -175,26 +178,26 @@ void main() {
 
   group('headline', () {
     test('follows the readout', () {
-      expect(BahtinovFocusCard.headlineFor(BahtinovFocusLive.idle).$1, 'Fit the mask, then Start');
+      expect(BahtinovFocusCard.headlineFor(_en, BahtinovFocusLive.idle).$1, 'Fit the mask, then Start');
       // The headline is the median of the last five measured frames, so one
       // early 1.0 px frame does not pull it; three at 0.1 px read in focus.
-      final inFocus = BahtinovFocusCard.headlineFor(BahtinovFocusLive(status: _running([1.0, 0.1, 0.1, 0.1])));
+      final inFocus = BahtinovFocusCard.headlineFor(_en, BahtinovFocusLive(status: _running([1.0, 0.1, 0.1, 0.1])));
       expect(inFocus, ('In focus · 0.10 px', AraColors.accentConnected));
-      final jitter = BahtinovFocusCard.headlineFor(BahtinovFocusLive(status: _running([0.1, 0.1, 0.1, 0.1, 2.5])));
+      final jitter = BahtinovFocusCard.headlineFor(_en, BahtinovFocusLive(status: _running([0.1, 0.1, 0.1, 0.1, 2.5])));
       expect(jitter.$1, 'In focus · 0.10 px', reason: 'one seeing-blown frame does not move the readout');
-      final passed = BahtinovFocusCard.headlineFor(BahtinovFocusLive(status: _running([1.2, 1.2, 1.2, -0.6, -0.6, -0.6])));
+      final passed = BahtinovFocusCard.headlineFor(_en, BahtinovFocusLive(status: _running([1.2, 1.2, 1.2, -0.6, -0.6, -0.6])));
       expect(passed, ('Go back · 0.60 px from focus', AraColors.accentWarning));
-      final stopped = BahtinovFocusCard.headlineFor(BahtinovFocusLive(status: _running([1.5], active: false)));
+      final stopped = BahtinovFocusCard.headlineFor(_en, BahtinovFocusLive(status: _running([1.5], active: false)));
       expect(stopped.$1, 'Stopped · last 1.50 px from focus');
-      final off = BahtinovFocusCard.headlineFor(BahtinovFocusLive(status: _running([0.1], active: false), finished: true));
+      final off = BahtinovFocusCard.headlineFor(_en, BahtinovFocusLive(status: _running([0.1], active: false), finished: true));
       expect(off.$1, 'In focus · mask off');
       // Finish reads the same median as the live headline, never one frame:
       // a last frame blown by seeing does not deny focus, a lucky one does not
       // grant it, and mask-off frames after the last measurement do not count.
-      final jitterOff = BahtinovFocusCard.headlineFor(
+      final jitterOff = BahtinovFocusCard.headlineFor(_en, 
           BahtinovFocusLive(status: _running([0.1, 0.1, 0.1, 0.1, 2.5, null, null], active: false), finished: true));
       expect(jitterOff.$1, 'In focus · mask off');
-      final luckyOff = BahtinovFocusCard.headlineFor(
+      final luckyOff = BahtinovFocusCard.headlineFor(_en, 
           BahtinovFocusLive(status: _running([2.5, 2.5, 2.5, 2.5, 0.1], active: false), finished: true));
       expect(luckyOff.$1, 'Mask off');
     });

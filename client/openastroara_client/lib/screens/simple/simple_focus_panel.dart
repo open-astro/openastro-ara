@@ -9,12 +9,15 @@ import '../../state/focus/autofocus_live_state.dart';
 import '../../state/focus/bahtinov_focus_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
+import '../../models/focuser_status.dart';
+import '../../widgets/focus/bahtinov_focus_card.dart'
+    show BahtinovFocusCard, bahtinovHint, formatOffset;
 import '../../widgets/focus/focusing_pane.dart' show MainFocusCard;
+import '../../widgets/focus/guide_focus_card.dart' show TurnAdvice;
 import '../../widgets/focus/v_curve_chart.dart';
-import 'simple_preview_panel.dart'
-    show SimpleShutter, SimpleShutterButton, kSimpleText;
+import 'simple_preview_panel.dart' show SimpleShutterButton, kSimpleText;
 import 'simple_device_windows.dart' show simpleCelsius;
-import 'simple_shell.dart' show SimplePanel, SimpleSegment;
+import 'simple_shell.dart' show SimplePanel, SimpleSegment, kSimpleGoStyle;
 
 /// The HFR to show big: the confirmed one after a run, the latest kept probe
 /// while one runs, else nothing. Pure — unit-tested.
@@ -54,16 +57,49 @@ class SimpleFocusStarsShown extends Notifier<bool> {
 final simpleFocusStarsShownProvider =
     NotifierProvider<SimpleFocusStarsShown, bool>(SimpleFocusStarsShown.new);
 
+/// The Bahtinov readout's exposures in Simple Mode, and the one picked
+/// (shared by the panel and the shutter; 2 s to start).
+const kSimpleBahtinovExposures = [1.0, 2.0, 4.0, 8.0];
+
+class SimpleBahtinovExposure extends Notifier<double> {
+  @override
+  double build() => 2;
+
+  void set(double seconds) => state = seconds;
+}
+
+final simpleBahtinovExposureProvider =
+    NotifierProvider<SimpleBahtinovExposure, double>(
+      SimpleBahtinovExposure.new,
+    );
+
 /// The rail's shutter in Focus follows the chip: on Auto it starts autofocus
-/// and its red square cancels it; on Manual it is Preview's, frames to focus
-/// by.
+/// and its red square cancels it; on Manual it starts the Bahtinov readout
+/// and its square stops it.
 class SimpleFocusShutter extends ConsumerWidget {
   const SimpleFocusShutter({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     if (simpleFocusMethod(ref) != MainFocusMethod.autofocus) {
-      return const SimpleShutter(start: true);
+      // Manual: starts and stops the Bahtinov readout.
+      final bahtinov = ref.watch(bahtinovFocusProvider);
+      final active = bahtinov.status.active;
+      final notifier = ref.read(bahtinovFocusProvider.notifier);
+      return SimpleShutterButton(
+        start: true,
+        running: active,
+        label: active
+            ? context.l10n.focusStopBahtinov
+            : context.l10n.focusStartBahtinov,
+        onPressed: bahtinov.busy
+            ? null
+            : active
+            ? notifier.stop
+            : () => notifier.start(
+                exposureSec: ref.read(simpleBahtinovExposureProvider),
+              ),
+      );
     }
     final live = ref.watch(autofocusLiveProvider);
     final connected =
@@ -89,12 +125,26 @@ class SimpleFocusShutter extends ConsumerWidget {
 /// Focus mode's panel beside the right rail: where the run stands, the HFR,
 /// the V-curve once there are probes, the focuser position and four nudges.
 /// The shutter starts autofocus.
-class SimpleFocusPanel extends ConsumerWidget {
+class SimpleFocusPanel extends ConsumerStatefulWidget {
   const SimpleFocusPanel({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<SimpleFocusPanel> createState() => _SimpleFocusPanelState();
+}
+
+class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
+  // The mask-off question, asked in the panel (Simple Mode has no popups):
+  // by Finish, or by leaving Manual before finishing ([_thenAuto]).
+  bool _askMask = false;
+  bool _thenAuto = false;
+
+  @override
+  Widget build(BuildContext context) {
     final live = ref.watch(autofocusLiveProvider);
+    final bahtinov = ref.watch(bahtinovFocusProvider);
+    final method = simpleFocusMethod(ref);
+    final locked =
+        live.run.isRunning || bahtinov.status.active || bahtinov.busy;
     final run = live.run;
     final focuser = ref.watch(focuserProvider).asData?.value;
     final connected =
@@ -154,120 +204,285 @@ class SimpleFocusPanel extends ConsumerWidget {
                       child: SimpleSegment(
                         key: Key('simple-focus-method-$id'),
                         label: word,
-                        selected: simpleFocusMethod(ref) == m,
+                        selected: method == m,
                         radius: 8,
-                        onTap: run.isRunning
+                        onTap: locked || method == m
                             ? null
-                            : () => ref
-                                  .read(mainFocusMethodProvider.notifier)
-                                  .pick(m),
+                            : () {
+                                if (m == MainFocusMethod.autofocus &&
+                                    bahtinov.status.hasMeasurement &&
+                                    !bahtinov.finished) {
+                                  setState(() => _askMask = _thenAuto = true);
+                                  return;
+                                }
+                                ref
+                                    .read(mainFocusMethodProvider.notifier)
+                                    .pick(m);
+                              },
                       ),
                     ),
                 ],
               ),
             ),
-            Text(
-              headline,
-              style: kSimpleText.copyWith(color: headlineColor),
-              maxLines: 2,
-            ),
-            if (connected && focuser != null)
+            if (_askMask)
+              ..._maskQuestion(l10n)
+            else if (method == MainFocusMethod.bahtinov)
+              ..._bahtinov(l10n, bahtinov, connected ? focuser : null)
+            else ...[
               Text(
-                [
-                  if (focuser.position != null)
-                    l10n.focusFocuserAt('${focuser.position}'),
-                  if (focuser.temperature != null)
-                    simpleCelsius(focuser.temperature!),
-                  if (focuser.name.isNotEmpty) focuser.name,
-                ].join(' · '),
-                style: AraText.caption,
+                headline,
+                style: kSimpleText.copyWith(color: headlineColor),
+                maxLines: 2,
               ),
-            Text(
-              context.l10n.focusHfr(hfr?.toStringAsFixed(2) ?? '—'),
-              style: kSimpleText.copyWith(
-                fontSize: 30,
-                fontWeight: FontWeight.w300,
-              ),
-            ),
-            // A finished run's figures, all on view (Simple Mode folds
-            // nothing away).
-            if (run.isComplete)
-              Row(
-                spacing: AraSpace.s4,
-                children: [
-                  stat(l10n.focusBestPosition, best == null ? '—' : '$best'),
-                  stat(
-                    l10n.focusStars,
-                    run.finalStars == null ? '—' : '${run.finalStars}',
-                  ),
-                  stat(
-                    l10n.focusFitR2,
-                    fit == null ? '—' : fit.rSquared.toStringAsFixed(2),
-                  ),
-                ],
-              ),
-            if (run.probes.isNotEmpty)
-              SizedBox(height: 140, child: VCurveChart(run: run)),
-            if (weak != null)
-              Container(
-                padding: const EdgeInsets.all(AraSpace.s8),
-                decoration: BoxDecoration(
-                  color: AraColors.accentBusy.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(10),
+              if (connected && focuser != null)
+                Text(
+                  [
+                    if (focuser.position != null)
+                      l10n.focusFocuserAt('${focuser.position}'),
+                    if (focuser.temperature != null)
+                      simpleCelsius(focuser.temperature!),
+                    if (focuser.name.isNotEmpty) focuser.name,
+                  ].join(' · '),
+                  style: AraText.caption,
                 ),
-                child: Text(weak, style: AraText.caption),
-              ),
-            // The run's frame with its measured stars circled, full screen
-            // behind the panels; off to start.
-            if (live.frame != null)
-              Row(
-                spacing: AraSpace.s12,
-                children: [
-                  Expanded(
-                    child: Text(l10n.focusMeasuredStars, style: kSimpleText),
-                  ),
-                  DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: AraColors.tileFill,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        for (final (id, on, word) in [
-                          ('on', true, l10n.deviceOn),
-                          ('off', false, l10n.deviceOff),
-                        ])
-                          SimpleSegment(
-                            key: Key('simple-focus-stars-$id'),
-                            label: word,
-                            selected: starsShown == on,
-                            radius: 8,
-                            onTap: () => ref
-                                .read(simpleFocusStarsShownProvider.notifier)
-                                .set(on),
-                          ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            if (error != null)
               Text(
-                error,
-                style: kSimpleText.copyWith(color: AraColors.errorText),
-                maxLines: 4,
-                overflow: TextOverflow.ellipsis,
+                context.l10n.focusHfr(hfr?.toStringAsFixed(2) ?? '—'),
+                style: kSimpleText.copyWith(
+                  fontSize: 30,
+                  fontWeight: FontWeight.w300,
+                ),
               ),
-            // The Focuser window's dial moves it; nothing to nudge here.
-            if (!connected)
-              Text(
-                context.l10n.focusNoFocuser,
-                style: kSimpleText.copyWith(color: AraColors.textSecondary),
-              ),
+              // A finished run's figures, all on view (Simple Mode folds
+              // nothing away).
+              if (run.isComplete)
+                Row(
+                  spacing: AraSpace.s4,
+                  children: [
+                    stat(l10n.focusBestPosition, best == null ? '—' : '$best'),
+                    stat(
+                      l10n.focusStars,
+                      run.finalStars == null ? '—' : '${run.finalStars}',
+                    ),
+                    stat(
+                      l10n.focusFitR2,
+                      fit == null ? '—' : fit.rSquared.toStringAsFixed(2),
+                    ),
+                  ],
+                ),
+              if (run.probes.isNotEmpty)
+                SizedBox(height: 140, child: VCurveChart(run: run)),
+              if (weak != null)
+                Container(
+                  padding: const EdgeInsets.all(AraSpace.s8),
+                  decoration: BoxDecoration(
+                    color: AraColors.accentBusy.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(weak, style: AraText.caption),
+                ),
+              // The run's frame with its measured stars circled, full screen
+              // behind the panels; off to start.
+              if (live.frame != null)
+                Row(
+                  spacing: AraSpace.s12,
+                  children: [
+                    Expanded(
+                      child: Text(l10n.focusMeasuredStars, style: kSimpleText),
+                    ),
+                    DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: AraColors.tileFill,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          for (final (id, on, word) in [
+                            ('on', true, l10n.deviceOn),
+                            ('off', false, l10n.deviceOff),
+                          ])
+                            SimpleSegment(
+                              key: Key('simple-focus-stars-$id'),
+                              label: word,
+                              selected: starsShown == on,
+                              radius: 8,
+                              onTap: () => ref
+                                  .read(simpleFocusStarsShownProvider.notifier)
+                                  .set(on),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              if (error != null)
+                Text(
+                  error,
+                  style: kSimpleText.copyWith(color: AraColors.errorText),
+                  maxLines: 4,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              // The Focuser window's dial moves it; nothing to nudge here.
+              if (!connected)
+                Text(
+                  context.l10n.focusNoFocuser,
+                  style: kSimpleText.copyWith(color: AraColors.textSecondary),
+                ),
+            ],
           ],
         ),
       ),
     );
+  }
+
+  List<Widget> _maskQuestion(AppLocalizations l10n) => [
+    Text(l10n.bahtinovMaskQuestion, style: kSimpleText),
+    Text(l10n.bahtinovMaskQuestionDetail, style: AraText.caption),
+    Row(
+      spacing: AraSpace.s8,
+      children: [
+        Expanded(
+          child: OutlinedButton(
+            onPressed: () => setState(() => _askMask = _thenAuto = false),
+            child: Text(l10n.bahtinovNotYet),
+          ),
+        ),
+        Expanded(
+          child: FilledButton(
+            style: kSimpleGoStyle,
+            onPressed: () async {
+              final thenAuto = _thenAuto;
+              setState(() => _askMask = _thenAuto = false);
+              await ref.read(bahtinovFocusProvider.notifier).finish();
+              if (thenAuto && mounted) {
+                ref
+                    .read(mainFocusMethodProvider.notifier)
+                    .pick(MainFocusMethod.autofocus);
+              }
+            },
+            child: Text(l10n.bahtinovMaskRemoved),
+          ),
+        ),
+      ],
+    ),
+  ];
+
+  /// Manual: the full UI's Bahtinov readout, flat. The shutter starts and
+  /// stops it; the Focuser window's dial (or the hand) turns the focuser.
+  List<Widget> _bahtinov(
+    AppLocalizations l10n,
+    BahtinovFocusLive live,
+    FocuserStatus? focuser,
+  ) {
+    final status = live.status;
+    final (headline, colour) = BahtinovFocusCard.headlineFor(l10n, live);
+    final steady = status.steady;
+    final reading = status.active && steady != null && steady.detected;
+    final hint = status.active ? bahtinovHint(l10n, status) : null;
+    final exposure = ref.watch(simpleBahtinovExposureProvider);
+    final measured = status.hasMeasurement && !live.finished;
+    return [
+      Text(headline, style: kSimpleText.copyWith(color: colour), maxLines: 2),
+      if (focuser != null)
+        Text(
+          [
+            if (focuser.position != null)
+              l10n.focusFocuserAt('${focuser.position}'),
+            if (focuser.name.isNotEmpty) focuser.name,
+          ].join(' · '),
+          style: AraText.caption,
+        ),
+      if (!status.active && !status.hasMeasurement && !live.finished)
+        Text(l10n.bahtinovFitMaskDetail, style: AraText.caption),
+      if (live.frame != null)
+        ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: Image.memory(
+            live.frame!,
+            height: 160,
+            fit: BoxFit.contain,
+            gaplessPlayback: true,
+          ),
+        ),
+      if (reading) ...[
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.baseline,
+          textBaseline: TextBaseline.alphabetic,
+          spacing: AraSpace.s8,
+          children: [
+            Text(
+              formatOffset(steady.offsetPx!.abs()),
+              style: kSimpleText.copyWith(
+                fontSize: 40,
+                fontWeight: FontWeight.w300,
+                fontFeatures: const [FontFeature.tabularFigures()],
+              ),
+            ),
+            Text(l10n.bahtinovPxFromFocus, style: AraText.caption),
+          ],
+        ),
+      ],
+      if (hint != null) ...[
+        Text(
+          hint.title,
+          textAlign: TextAlign.center,
+          style: kSimpleText.copyWith(
+            fontWeight: FontWeight.w600,
+            color: switch (hint.advice) {
+              TurnAdvice.atBest => AraColors.accentConnected,
+              TurnAdvice.turnBack => AraColors.accentBusy,
+              _ => AraColors.textPrimary,
+            },
+          ),
+        ),
+        Text(hint.detail, textAlign: TextAlign.center, style: AraText.caption),
+      ],
+      if (live.error != null)
+        Text(
+          live.error!,
+          style: kSimpleText.copyWith(color: AraColors.errorText),
+          maxLines: 3,
+        ),
+      if (!live.finished)
+        Row(
+          spacing: AraSpace.s12,
+          children: [
+            Expanded(child: Text(l10n.bahtinovExposure, style: kSimpleText)),
+            DecoratedBox(
+              decoration: BoxDecoration(
+                color: AraColors.tileFill,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  for (final s in kSimpleBahtinovExposures)
+                    SimpleSegment(
+                      key: Key('simple-bahtinov-exposure-${s.round()}'),
+                      label: '${s.round()} s',
+                      selected: exposure == s,
+                      radius: 8,
+                      // A running readout keeps its exposure; Start again
+                      // takes the new one.
+                      onTap: status.active
+                          ? null
+                          : () => ref
+                                .read(simpleBahtinovExposureProvider.notifier)
+                                .set(s),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      if (measured)
+        FilledButton(
+          key: const Key('simple-bahtinov-finish'),
+          style: steady?.withinZone == true ? kSimpleGoStyle : null,
+          onPressed: live.busy ? null : () => setState(() => _askMask = true),
+          child: Text(l10n.bahtinovFinish),
+        ),
+    ];
   }
 }

@@ -1569,6 +1569,158 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get focusMeasuredStars => 'Measured stars';
+
+  @override
+  String get bahtinovInFocusMaskOff => 'In focus · mask off';
+
+  @override
+  String get bahtinovMaskOff => 'Mask off';
+
+  @override
+  String get bahtinovCameraError => 'Stopped by a camera error';
+
+  @override
+  String get bahtinovWaitingFirst => 'Waiting for the first frame';
+
+  @override
+  String bahtinovInFocusPx(String px) {
+    return 'In focus · $px px';
+  }
+
+  @override
+  String bahtinovHintPx(String hint, String px) {
+    return '$hint · $px px from focus';
+  }
+
+  @override
+  String bahtinovStoppedLast(String px) {
+    return 'Stopped · last $px px from focus';
+  }
+
+  @override
+  String get bahtinovFitMask => 'Fit the mask, then Start';
+
+  @override
+  String get bahtinovFitMaskDetail =>
+      'Put the Bahtinov mask over the front of the telescope and point at a bright star. Ara uses the brightest star in the frame.';
+
+  @override
+  String get bahtinovWaiting => 'Waiting';
+
+  @override
+  String get bahtinovWaitingDetail => 'The first frame is on its way.';
+
+  @override
+  String get bahtinovNoStar => 'No star';
+
+  @override
+  String get bahtinovNoStarDetail =>
+      'Point at a bright star, or lengthen the exposure.';
+
+  @override
+  String get bahtinovNearEdge => 'Star at the edge';
+
+  @override
+  String get bahtinovNearEdgeDetail =>
+      'Centre the star so its spikes fit in the frame.';
+
+  @override
+  String get bahtinovNoSpikes => 'No spikes';
+
+  @override
+  String get bahtinovNoSpikesDetail =>
+      'Fit the mask over the front of the telescope. Far out of focus? Turn until the star shrinks and spikes appear.';
+
+  @override
+  String get bahtinovInFocus => 'In focus';
+
+  @override
+  String bahtinovInFocusZoneDetail(String um) {
+    return 'The middle spike is centred, inside the ±$um µm focus zone. Lock the focuser, then Finish.';
+  }
+
+  @override
+  String get bahtinovInFocusDetail =>
+      'The middle spike is centred. Lock the focuser, then Finish.';
+
+  @override
+  String get bahtinovMakeMove => 'Make a move';
+
+  @override
+  String get bahtinovMakeMoveDetail =>
+      'Turn the focuser a little either way, then watch the number.';
+
+  @override
+  String get bahtinovGoBack => 'Go back';
+
+  @override
+  String bahtinovPassedDetail(String size) {
+    return 'You passed focus. Turn back about $size your last move.';
+  }
+
+  @override
+  String get bahtinovKeepGoing => 'Keep going';
+
+  @override
+  String bahtinovKeepGoingDetail(String size) {
+    return 'Same way — about $size your last move again.';
+  }
+
+  @override
+  String get bahtinovWrongWayDetail =>
+      'Wrong way — turn back past where you started.';
+
+  @override
+  String get bahtinovMoveQuarter => 'a quarter of';
+
+  @override
+  String get bahtinovMoveThird => 'a third of';
+
+  @override
+  String get bahtinovMoveHalf => 'half';
+
+  @override
+  String get bahtinovMoveThreeQuarters => 'three quarters of';
+
+  @override
+  String get bahtinovMoveSame => 'the same as';
+
+  @override
+  String get bahtinovMoveOneAndHalf => '1½×';
+
+  @override
+  String get bahtinovMoveTwice => 'twice';
+
+  @override
+  String get bahtinovMoveSeveral => 'several times';
+
+  @override
+  String get bahtinovPxFromFocus => 'px from focus';
+
+  @override
+  String get bahtinovFinish => 'Finish';
+
+  @override
+  String get bahtinovMaskQuestion => 'Take the Bahtinov mask off';
+
+  @override
+  String get bahtinovMaskQuestionDetail =>
+      'Take the mask off the front of the telescope before you image. Left on, it puts spikes on every star and costs light.';
+
+  @override
+  String get bahtinovNotYet => 'Not yet';
+
+  @override
+  String get bahtinovMaskRemoved => 'Mask removed';
+
+  @override
+  String get bahtinovExposure => 'Exposure';
+
+  @override
+  String get focusStartBahtinov => 'Start the Bahtinov readout';
+
+  @override
+  String get focusStopBahtinov => 'Stop the Bahtinov readout';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -3143,4 +3295,156 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get focusMeasuredStars => 'Estrelas medidas';
+
+  @override
+  String get bahtinovInFocusMaskOff => 'Em foco · sem máscara';
+
+  @override
+  String get bahtinovMaskOff => 'Sem máscara';
+
+  @override
+  String get bahtinovCameraError => 'Parado por um erro da câmera';
+
+  @override
+  String get bahtinovWaitingFirst => 'Aguardando o primeiro quadro';
+
+  @override
+  String bahtinovInFocusPx(String px) {
+    return 'Em foco · $px px';
+  }
+
+  @override
+  String bahtinovHintPx(String hint, String px) {
+    return '$hint · $px px do foco';
+  }
+
+  @override
+  String bahtinovStoppedLast(String px) {
+    return 'Parado · último $px px do foco';
+  }
+
+  @override
+  String get bahtinovFitMask => 'Coloque a máscara e toque em Iniciar';
+
+  @override
+  String get bahtinovFitMaskDetail =>
+      'Coloque a máscara de Bahtinov na frente do telescópio e aponte para uma estrela brilhante. O Ara usa a estrela mais brilhante do quadro.';
+
+  @override
+  String get bahtinovWaiting => 'Aguardando';
+
+  @override
+  String get bahtinovWaitingDetail => 'O primeiro quadro está a caminho.';
+
+  @override
+  String get bahtinovNoStar => 'Sem estrela';
+
+  @override
+  String get bahtinovNoStarDetail =>
+      'Aponte para uma estrela brilhante ou aumente a exposição.';
+
+  @override
+  String get bahtinovNearEdge => 'Estrela na borda';
+
+  @override
+  String get bahtinovNearEdgeDetail =>
+      'Centralize a estrela para as espículas caberem no quadro.';
+
+  @override
+  String get bahtinovNoSpikes => 'Sem espículas';
+
+  @override
+  String get bahtinovNoSpikesDetail =>
+      'Coloque a máscara na frente do telescópio. Muito fora de foco? Gire até a estrela diminuir e as espículas aparecerem.';
+
+  @override
+  String get bahtinovInFocus => 'Em foco';
+
+  @override
+  String bahtinovInFocusZoneDetail(String um) {
+    return 'A espícula do meio está centrada, dentro da zona de foco de ±$um µm. Trave o focalizador e toque em Concluir.';
+  }
+
+  @override
+  String get bahtinovInFocusDetail =>
+      'A espícula do meio está centrada. Trave o focalizador e toque em Concluir.';
+
+  @override
+  String get bahtinovMakeMove => 'Faça um movimento';
+
+  @override
+  String get bahtinovMakeMoveDetail =>
+      'Gire o focalizador um pouco para qualquer lado e observe o número.';
+
+  @override
+  String get bahtinovGoBack => 'Volte';
+
+  @override
+  String bahtinovPassedDetail(String size) {
+    return 'Você passou do foco. Volte cerca de $size do último movimento.';
+  }
+
+  @override
+  String get bahtinovKeepGoing => 'Continue';
+
+  @override
+  String bahtinovKeepGoingDetail(String size) {
+    return 'Mesmo sentido — cerca de $size do último movimento de novo.';
+  }
+
+  @override
+  String get bahtinovWrongWayDetail =>
+      'Sentido errado — volte além de onde começou.';
+
+  @override
+  String get bahtinovMoveQuarter => 'um quarto';
+
+  @override
+  String get bahtinovMoveThird => 'um terço';
+
+  @override
+  String get bahtinovMoveHalf => 'metade';
+
+  @override
+  String get bahtinovMoveThreeQuarters => 'três quartos';
+
+  @override
+  String get bahtinovMoveSame => 'o mesmo';
+
+  @override
+  String get bahtinovMoveOneAndHalf => '1½×';
+
+  @override
+  String get bahtinovMoveTwice => 'o dobro';
+
+  @override
+  String get bahtinovMoveSeveral => 'várias vezes';
+
+  @override
+  String get bahtinovPxFromFocus => 'px do foco';
+
+  @override
+  String get bahtinovFinish => 'Concluir';
+
+  @override
+  String get bahtinovMaskQuestion => 'Tire a máscara de Bahtinov';
+
+  @override
+  String get bahtinovMaskQuestionDetail =>
+      'Tire a máscara da frente do telescópio antes de fotografar. Se ficar, ela põe espículas em todas as estrelas e rouba luz.';
+
+  @override
+  String get bahtinovNotYet => 'Ainda não';
+
+  @override
+  String get bahtinovMaskRemoved => 'Máscara retirada';
+
+  @override
+  String get bahtinovExposure => 'Exposição';
+
+  @override
+  String get focusStartBahtinov => 'Iniciar a leitura de Bahtinov';
+
+  @override
+  String get focusStopBahtinov => 'Parar a leitura de Bahtinov';
 }

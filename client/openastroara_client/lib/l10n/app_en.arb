@@ -2220,5 +2220,214 @@
   "focusMeasuredStars": "Measured stars",
   "@focusMeasuredStars": {
     "description": "Simple Focus panel row: show the focus run's frame with its measured stars circled, full screen"
+  },
+  "bahtinovInFocusMaskOff": "In focus · mask off",
+  "@bahtinovInFocusMaskOff": {
+    "description": "Bahtinov focusing finished in focus, mask taken off"
+  },
+  "bahtinovMaskOff": "Mask off",
+  "@bahtinovMaskOff": {
+    "description": "Bahtinov focusing finished (not confirmed in focus), mask off"
+  },
+  "bahtinovCameraError": "Stopped by a camera error",
+  "@bahtinovCameraError": {
+    "description": "Bahtinov readout stopped by a camera error"
+  },
+  "bahtinovWaitingFirst": "Waiting for the first frame",
+  "@bahtinovWaitingFirst": {
+    "description": "Bahtinov readout running, no frame yet"
+  },
+  "bahtinovInFocusPx": "In focus · {px} px",
+  "@bahtinovInFocusPx": {
+    "description": "Bahtinov headline in focus; px is the spike offset",
+    "placeholders": {
+      "px": {
+        "type": "String"
+      }
+    }
+  },
+  "bahtinovHintPx": "{hint} · {px} px from focus",
+  "@bahtinovHintPx": {
+    "description": "Bahtinov headline: the turn advice and the offset",
+    "placeholders": {
+      "hint": {
+        "type": "String"
+      },
+      "px": {
+        "type": "String"
+      }
+    }
+  },
+  "bahtinovStoppedLast": "Stopped · last {px} px from focus",
+  "@bahtinovStoppedLast": {
+    "description": "Bahtinov readout stopped; the last offset",
+    "placeholders": {
+      "px": {
+        "type": "String"
+      }
+    }
+  },
+  "bahtinovFitMask": "Fit the mask, then Start",
+  "@bahtinovFitMask": {
+    "description": "Bahtinov before starting"
+  },
+  "bahtinovFitMaskDetail": "Put the Bahtinov mask over the front of the telescope and point at a bright star. Ara uses the brightest star in the frame.",
+  "@bahtinovFitMaskDetail": {
+    "description": "Simple Focus Manual, before starting: what to do"
+  },
+  "bahtinovWaiting": "Waiting",
+  "@bahtinovWaiting": {
+    "description": "Bahtinov turn advice: no frame yet"
+  },
+  "bahtinovWaitingDetail": "The first frame is on its way.",
+  "@bahtinovWaitingDetail": {
+    "description": "Bahtinov turn advice detail"
+  },
+  "bahtinovNoStar": "No star",
+  "@bahtinovNoStar": {
+    "description": "Bahtinov: no star found"
+  },
+  "bahtinovNoStarDetail": "Point at a bright star, or lengthen the exposure.",
+  "@bahtinovNoStarDetail": {
+    "description": "Bahtinov: no star found, what to do"
+  },
+  "bahtinovNearEdge": "Star at the edge",
+  "@bahtinovNearEdge": {
+    "description": "Bahtinov: the star is too close to the frame edge"
+  },
+  "bahtinovNearEdgeDetail": "Centre the star so its spikes fit in the frame.",
+  "@bahtinovNearEdgeDetail": {
+    "description": "Bahtinov: star at the edge, what to do"
+  },
+  "bahtinovNoSpikes": "No spikes",
+  "@bahtinovNoSpikes": {
+    "description": "Bahtinov: no diffraction spikes found"
+  },
+  "bahtinovNoSpikesDetail": "Fit the mask over the front of the telescope. Far out of focus? Turn until the star shrinks and spikes appear.",
+  "@bahtinovNoSpikesDetail": {
+    "description": "Bahtinov: no spikes, what to do"
+  },
+  "bahtinovInFocus": "In focus",
+  "@bahtinovInFocus": {
+    "description": "Bahtinov turn advice: in focus"
+  },
+  "bahtinovInFocusZoneDetail": "The middle spike is centred, inside the ±{um} µm focus zone. Lock the focuser, then Finish.",
+  "@bahtinovInFocusZoneDetail": {
+    "description": "Bahtinov in focus with the optics' zone in µm",
+    "placeholders": {
+      "um": {
+        "type": "String"
+      }
+    }
+  },
+  "bahtinovInFocusDetail": "The middle spike is centred. Lock the focuser, then Finish.",
+  "@bahtinovInFocusDetail": {
+    "description": "Bahtinov in focus"
+  },
+  "bahtinovMakeMove": "Make a move",
+  "@bahtinovMakeMove": {
+    "description": "Bahtinov turn advice: no move seen yet"
+  },
+  "bahtinovMakeMoveDetail": "Turn the focuser a little either way, then watch the number.",
+  "@bahtinovMakeMoveDetail": {
+    "description": "Bahtinov: first move"
+  },
+  "bahtinovGoBack": "Go back",
+  "@bahtinovGoBack": {
+    "description": "Bahtinov turn advice: turn back"
+  },
+  "bahtinovPassedDetail": "You passed focus. Turn back about {size} your last move.",
+  "@bahtinovPassedDetail": {
+    "description": "Bahtinov: passed focus; size is how far (e.g. 'half', 'a third of')",
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "bahtinovKeepGoing": "Keep going",
+  "@bahtinovKeepGoing": {
+    "description": "Bahtinov turn advice: same way"
+  },
+  "bahtinovKeepGoingDetail": "Same way — about {size} your last move again.",
+  "@bahtinovKeepGoingDetail": {
+    "description": "Bahtinov: keep going; size is how far",
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "bahtinovWrongWayDetail": "Wrong way — turn back past where you started.",
+  "@bahtinovWrongWayDetail": {
+    "description": "Bahtinov: turned the wrong way"
+  },
+  "bahtinovMoveQuarter": "a quarter of",
+  "@bahtinovMoveQuarter": {
+    "description": "Move size word placed in 'about {size} your last move'"
+  },
+  "bahtinovMoveThird": "a third of",
+  "@bahtinovMoveThird": {
+    "description": "Move size word"
+  },
+  "bahtinovMoveHalf": "half",
+  "@bahtinovMoveHalf": {
+    "description": "Move size word"
+  },
+  "bahtinovMoveThreeQuarters": "three quarters of",
+  "@bahtinovMoveThreeQuarters": {
+    "description": "Move size word"
+  },
+  "bahtinovMoveSame": "the same as",
+  "@bahtinovMoveSame": {
+    "description": "Move size word"
+  },
+  "bahtinovMoveOneAndHalf": "1½×",
+  "@bahtinovMoveOneAndHalf": {
+    "description": "Move size word"
+  },
+  "bahtinovMoveTwice": "twice",
+  "@bahtinovMoveTwice": {
+    "description": "Move size word"
+  },
+  "bahtinovMoveSeveral": "several times",
+  "@bahtinovMoveSeveral": {
+    "description": "Move size word"
+  },
+  "bahtinovPxFromFocus": "px from focus",
+  "@bahtinovPxFromFocus": {
+    "description": "Simple Focus Manual: unit under the big offset number"
+  },
+  "bahtinovFinish": "Finish",
+  "@bahtinovFinish": {
+    "description": "Simple Focus Manual: finish focusing (then asks to take the mask off)"
+  },
+  "bahtinovMaskQuestion": "Take the Bahtinov mask off",
+  "@bahtinovMaskQuestion": {
+    "description": "Simple Focus Manual: the mask-off question, inside the panel"
+  },
+  "bahtinovMaskQuestionDetail": "Take the mask off the front of the telescope before you image. Left on, it puts spikes on every star and costs light.",
+  "@bahtinovMaskQuestionDetail": {
+    "description": "Simple Focus Manual: why the mask must come off"
+  },
+  "bahtinovNotYet": "Not yet",
+  "@bahtinovNotYet": {
+    "description": "Mask-off question: keep the mask on for now"
+  },
+  "bahtinovMaskRemoved": "Mask removed",
+  "@bahtinovMaskRemoved": {
+    "description": "Mask-off question: the mask is off"
+  },
+  "bahtinovExposure": "Exposure",
+  "@bahtinovExposure": {
+    "description": "Simple Focus Manual: Bahtinov frame exposure"
+  },
+  "focusStartBahtinov": "Start the Bahtinov readout",
+  "@focusStartBahtinov": {
+    "description": "Screen reader label of Focus's shutter on Manual"
+  },
+  "focusStopBahtinov": "Stop the Bahtinov readout",
+  "@focusStopBahtinov": {
+    "description": "Screen reader label of Focus's shutter on Manual while it reads"
   }
 }

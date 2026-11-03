@@ -7,7 +7,6 @@ import 'package:openastroara/models/autofocus_run.dart';
 import 'package:openastroara/models/equipment_device_status.dart';
 import 'package:openastroara/models/focuser_status.dart';
 import 'package:openastroara/screens/simple/simple_focus_panel.dart';
-import 'package:openastroara/screens/simple/simple_preview_panel.dart' show SimpleShutter;
 import 'package:openastroara/screens/simple/simple_shell.dart' show SimpleSegment;
 import 'package:openastroara/state/equipment/focuser_state.dart';
 import 'package:openastroara/state/focus/autofocus_live_state.dart';
@@ -99,9 +98,9 @@ void main() {
     });
   });
 
-  testWidgets('no focuser: says so; no Autofocus button (the shutter starts it)', (tester) async {
+  testWidgets('no focuser: Manual, the Bahtinov helper; no Autofocus button', (tester) async {
     await _pump(tester);
-    expect(find.text('No focuser connected'), findsOneWidget);
+    expect(find.text('Fit the mask, then Start'), findsOneWidget);
     expect(find.text('Autofocus'), findsNothing);
   });
 
@@ -229,9 +228,9 @@ void main() {
       expect(l.starts, 0);
     });
 
-    testWidgets('Manual: Preview\'s shutter, frames to focus by', (tester) async {
+    testWidgets('Manual: the shutter starts the Bahtinov readout (no longer Preview\'s frames)', (tester) async {
       await shutter(tester, MainFocusMethod.bahtinov, focuser: _focuser());
-      expect(find.byType(SimpleShutter), findsOneWidget);
+      expect(find.bySemanticsLabel('Start the Bahtinov readout'), findsOneWidget);
       expect(find.descendant(of: find.byKey(const Key('simple-shutter')), matching: find.byIcon(Icons.play_arrow)),
           findsOneWidget, reason: 'Focus starts with play in Manual too');
     });

@@ -550,12 +550,12 @@ void main() {
     await tester.pump();
     expect(container.read(simpleModeProvider).value, isTrue, reason: 'no jump to the full UI');
     expect(find.descendant(of: find.byKey(const Key('simple-mode')), matching: find.text('Focus')), findsOneWidget);
-    expect(find.text('No focuser connected'), findsNothing, reason: 'picking a mode opens nothing');
+    expect(find.text('Fit the mask, then Start'), findsNothing, reason: 'picking a mode opens nothing');
     // Picking a mode only switches it; the chip opens its panel.
     await tester.tap(find.byKey(const Key('simple-settings')));
     await tester.pump();
     final rail = _panelOf(tester, find.byKey(const Key('simple-shutter')));
-    final panel = _panelOf(tester, find.text('No focuser connected'));
+    final panel = _panelOf(tester, find.text('Fit the mask, then Start'));
     expect(panel.right, rail.left - kSimpleInset, reason: 'left of the rail');
     expect(panel.top, rail.top, reason: 'level with its top');
 

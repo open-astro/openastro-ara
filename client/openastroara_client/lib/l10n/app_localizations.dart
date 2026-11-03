@@ -2804,6 +2804,270 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Measured stars'**
   String get focusMeasuredStars;
+
+  /// Bahtinov focusing finished in focus, mask taken off
+  ///
+  /// In en, this message translates to:
+  /// **'In focus · mask off'**
+  String get bahtinovInFocusMaskOff;
+
+  /// Bahtinov focusing finished (not confirmed in focus), mask off
+  ///
+  /// In en, this message translates to:
+  /// **'Mask off'**
+  String get bahtinovMaskOff;
+
+  /// Bahtinov readout stopped by a camera error
+  ///
+  /// In en, this message translates to:
+  /// **'Stopped by a camera error'**
+  String get bahtinovCameraError;
+
+  /// Bahtinov readout running, no frame yet
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for the first frame'**
+  String get bahtinovWaitingFirst;
+
+  /// Bahtinov headline in focus; px is the spike offset
+  ///
+  /// In en, this message translates to:
+  /// **'In focus · {px} px'**
+  String bahtinovInFocusPx(String px);
+
+  /// Bahtinov headline: the turn advice and the offset
+  ///
+  /// In en, this message translates to:
+  /// **'{hint} · {px} px from focus'**
+  String bahtinovHintPx(String hint, String px);
+
+  /// Bahtinov readout stopped; the last offset
+  ///
+  /// In en, this message translates to:
+  /// **'Stopped · last {px} px from focus'**
+  String bahtinovStoppedLast(String px);
+
+  /// Bahtinov before starting
+  ///
+  /// In en, this message translates to:
+  /// **'Fit the mask, then Start'**
+  String get bahtinovFitMask;
+
+  /// Simple Focus Manual, before starting: what to do
+  ///
+  /// In en, this message translates to:
+  /// **'Put the Bahtinov mask over the front of the telescope and point at a bright star. Ara uses the brightest star in the frame.'**
+  String get bahtinovFitMaskDetail;
+
+  /// Bahtinov turn advice: no frame yet
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting'**
+  String get bahtinovWaiting;
+
+  /// Bahtinov turn advice detail
+  ///
+  /// In en, this message translates to:
+  /// **'The first frame is on its way.'**
+  String get bahtinovWaitingDetail;
+
+  /// Bahtinov: no star found
+  ///
+  /// In en, this message translates to:
+  /// **'No star'**
+  String get bahtinovNoStar;
+
+  /// Bahtinov: no star found, what to do
+  ///
+  /// In en, this message translates to:
+  /// **'Point at a bright star, or lengthen the exposure.'**
+  String get bahtinovNoStarDetail;
+
+  /// Bahtinov: the star is too close to the frame edge
+  ///
+  /// In en, this message translates to:
+  /// **'Star at the edge'**
+  String get bahtinovNearEdge;
+
+  /// Bahtinov: star at the edge, what to do
+  ///
+  /// In en, this message translates to:
+  /// **'Centre the star so its spikes fit in the frame.'**
+  String get bahtinovNearEdgeDetail;
+
+  /// Bahtinov: no diffraction spikes found
+  ///
+  /// In en, this message translates to:
+  /// **'No spikes'**
+  String get bahtinovNoSpikes;
+
+  /// Bahtinov: no spikes, what to do
+  ///
+  /// In en, this message translates to:
+  /// **'Fit the mask over the front of the telescope. Far out of focus? Turn until the star shrinks and spikes appear.'**
+  String get bahtinovNoSpikesDetail;
+
+  /// Bahtinov turn advice: in focus
+  ///
+  /// In en, this message translates to:
+  /// **'In focus'**
+  String get bahtinovInFocus;
+
+  /// Bahtinov in focus with the optics' zone in µm
+  ///
+  /// In en, this message translates to:
+  /// **'The middle spike is centred, inside the ±{um} µm focus zone. Lock the focuser, then Finish.'**
+  String bahtinovInFocusZoneDetail(String um);
+
+  /// Bahtinov in focus
+  ///
+  /// In en, this message translates to:
+  /// **'The middle spike is centred. Lock the focuser, then Finish.'**
+  String get bahtinovInFocusDetail;
+
+  /// Bahtinov turn advice: no move seen yet
+  ///
+  /// In en, this message translates to:
+  /// **'Make a move'**
+  String get bahtinovMakeMove;
+
+  /// Bahtinov: first move
+  ///
+  /// In en, this message translates to:
+  /// **'Turn the focuser a little either way, then watch the number.'**
+  String get bahtinovMakeMoveDetail;
+
+  /// Bahtinov turn advice: turn back
+  ///
+  /// In en, this message translates to:
+  /// **'Go back'**
+  String get bahtinovGoBack;
+
+  /// Bahtinov: passed focus; size is how far (e.g. 'half', 'a third of')
+  ///
+  /// In en, this message translates to:
+  /// **'You passed focus. Turn back about {size} your last move.'**
+  String bahtinovPassedDetail(String size);
+
+  /// Bahtinov turn advice: same way
+  ///
+  /// In en, this message translates to:
+  /// **'Keep going'**
+  String get bahtinovKeepGoing;
+
+  /// Bahtinov: keep going; size is how far
+  ///
+  /// In en, this message translates to:
+  /// **'Same way — about {size} your last move again.'**
+  String bahtinovKeepGoingDetail(String size);
+
+  /// Bahtinov: turned the wrong way
+  ///
+  /// In en, this message translates to:
+  /// **'Wrong way — turn back past where you started.'**
+  String get bahtinovWrongWayDetail;
+
+  /// Move size word placed in 'about {size} your last move'
+  ///
+  /// In en, this message translates to:
+  /// **'a quarter of'**
+  String get bahtinovMoveQuarter;
+
+  /// Move size word
+  ///
+  /// In en, this message translates to:
+  /// **'a third of'**
+  String get bahtinovMoveThird;
+
+  /// Move size word
+  ///
+  /// In en, this message translates to:
+  /// **'half'**
+  String get bahtinovMoveHalf;
+
+  /// Move size word
+  ///
+  /// In en, this message translates to:
+  /// **'three quarters of'**
+  String get bahtinovMoveThreeQuarters;
+
+  /// Move size word
+  ///
+  /// In en, this message translates to:
+  /// **'the same as'**
+  String get bahtinovMoveSame;
+
+  /// Move size word
+  ///
+  /// In en, this message translates to:
+  /// **'1½×'**
+  String get bahtinovMoveOneAndHalf;
+
+  /// Move size word
+  ///
+  /// In en, this message translates to:
+  /// **'twice'**
+  String get bahtinovMoveTwice;
+
+  /// Move size word
+  ///
+  /// In en, this message translates to:
+  /// **'several times'**
+  String get bahtinovMoveSeveral;
+
+  /// Simple Focus Manual: unit under the big offset number
+  ///
+  /// In en, this message translates to:
+  /// **'px from focus'**
+  String get bahtinovPxFromFocus;
+
+  /// Simple Focus Manual: finish focusing (then asks to take the mask off)
+  ///
+  /// In en, this message translates to:
+  /// **'Finish'**
+  String get bahtinovFinish;
+
+  /// Simple Focus Manual: the mask-off question, inside the panel
+  ///
+  /// In en, this message translates to:
+  /// **'Take the Bahtinov mask off'**
+  String get bahtinovMaskQuestion;
+
+  /// Simple Focus Manual: why the mask must come off
+  ///
+  /// In en, this message translates to:
+  /// **'Take the mask off the front of the telescope before you image. Left on, it puts spikes on every star and costs light.'**
+  String get bahtinovMaskQuestionDetail;
+
+  /// Mask-off question: keep the mask on for now
+  ///
+  /// In en, this message translates to:
+  /// **'Not yet'**
+  String get bahtinovNotYet;
+
+  /// Mask-off question: the mask is off
+  ///
+  /// In en, this message translates to:
+  /// **'Mask removed'**
+  String get bahtinovMaskRemoved;
+
+  /// Simple Focus Manual: Bahtinov frame exposure
+  ///
+  /// In en, this message translates to:
+  /// **'Exposure'**
+  String get bahtinovExposure;
+
+  /// Screen reader label of Focus's shutter on Manual
+  ///
+  /// In en, this message translates to:
+  /// **'Start the Bahtinov readout'**
+  String get focusStartBahtinov;
+
+  /// Screen reader label of Focus's shutter on Manual while it reads
+  ///
+  /// In en, this message translates to:
+  /// **'Stop the Bahtinov readout'**
+  String get focusStopBahtinov;
 }
 
 class _AppLocalizationsDelegate

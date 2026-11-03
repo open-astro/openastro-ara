@@ -1569,4 +1569,156 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get focusMeasuredStars => 'Measured stars';
+
+  @override
+  String get bahtinovInFocusMaskOff => 'In focus · mask off';
+
+  @override
+  String get bahtinovMaskOff => 'Mask off';
+
+  @override
+  String get bahtinovCameraError => 'Stopped by a camera error';
+
+  @override
+  String get bahtinovWaitingFirst => 'Waiting for the first frame';
+
+  @override
+  String bahtinovInFocusPx(String px) {
+    return 'In focus · $px px';
+  }
+
+  @override
+  String bahtinovHintPx(String hint, String px) {
+    return '$hint · $px px from focus';
+  }
+
+  @override
+  String bahtinovStoppedLast(String px) {
+    return 'Stopped · last $px px from focus';
+  }
+
+  @override
+  String get bahtinovFitMask => 'Fit the mask, then Start';
+
+  @override
+  String get bahtinovFitMaskDetail =>
+      'Put the Bahtinov mask over the front of the telescope and point at a bright star. Ara uses the brightest star in the frame.';
+
+  @override
+  String get bahtinovWaiting => 'Waiting';
+
+  @override
+  String get bahtinovWaitingDetail => 'The first frame is on its way.';
+
+  @override
+  String get bahtinovNoStar => 'No star';
+
+  @override
+  String get bahtinovNoStarDetail =>
+      'Point at a bright star, or lengthen the exposure.';
+
+  @override
+  String get bahtinovNearEdge => 'Star at the edge';
+
+  @override
+  String get bahtinovNearEdgeDetail =>
+      'Centre the star so its spikes fit in the frame.';
+
+  @override
+  String get bahtinovNoSpikes => 'No spikes';
+
+  @override
+  String get bahtinovNoSpikesDetail =>
+      'Fit the mask over the front of the telescope. Far out of focus? Turn until the star shrinks and spikes appear.';
+
+  @override
+  String get bahtinovInFocus => 'In focus';
+
+  @override
+  String bahtinovInFocusZoneDetail(String um) {
+    return 'The middle spike is centred, inside the ±$um µm focus zone. Lock the focuser, then Finish.';
+  }
+
+  @override
+  String get bahtinovInFocusDetail =>
+      'The middle spike is centred. Lock the focuser, then Finish.';
+
+  @override
+  String get bahtinovMakeMove => 'Make a move';
+
+  @override
+  String get bahtinovMakeMoveDetail =>
+      'Turn the focuser a little either way, then watch the number.';
+
+  @override
+  String get bahtinovGoBack => 'Go back';
+
+  @override
+  String bahtinovPassedDetail(String size) {
+    return 'You passed focus. Turn back about $size your last move.';
+  }
+
+  @override
+  String get bahtinovKeepGoing => 'Keep going';
+
+  @override
+  String bahtinovKeepGoingDetail(String size) {
+    return 'Same way — about $size your last move again.';
+  }
+
+  @override
+  String get bahtinovWrongWayDetail =>
+      'Wrong way — turn back past where you started.';
+
+  @override
+  String get bahtinovMoveQuarter => 'a quarter of';
+
+  @override
+  String get bahtinovMoveThird => 'a third of';
+
+  @override
+  String get bahtinovMoveHalf => 'half';
+
+  @override
+  String get bahtinovMoveThreeQuarters => 'three quarters of';
+
+  @override
+  String get bahtinovMoveSame => 'the same as';
+
+  @override
+  String get bahtinovMoveOneAndHalf => '1½×';
+
+  @override
+  String get bahtinovMoveTwice => 'twice';
+
+  @override
+  String get bahtinovMoveSeveral => 'several times';
+
+  @override
+  String get bahtinovPxFromFocus => 'px from focus';
+
+  @override
+  String get bahtinovFinish => 'Finish';
+
+  @override
+  String get bahtinovMaskQuestion => 'Take the Bahtinov mask off';
+
+  @override
+  String get bahtinovMaskQuestionDetail =>
+      'Take the mask off the front of the telescope before you image. Left on, it puts spikes on every star and costs light.';
+
+  @override
+  String get bahtinovNotYet => 'Not yet';
+
+  @override
+  String get bahtinovMaskRemoved => 'Mask removed';
+
+  @override
+  String get bahtinovExposure => 'Exposure';
+
+  @override
+  String get focusStartBahtinov => 'Start the Bahtinov readout';
+
+  @override
+  String get focusStopBahtinov => 'Stop the Bahtinov readout';
 }
