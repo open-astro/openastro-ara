@@ -2180,12 +2180,15 @@ class _GuiderGearRow extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final status = ref.watch(guiderStatusProvider).value;
-    if (status == null) return const SizedBox.shrink();
+    final async = ref.watch(guiderStatusProvider);
+    if (async.isLoading && !async.hasValue) return const SizedBox.shrink();
+    // The rig forgets a disconnected guider (no status at all), so it stays
+    // here as Not connected: Connect is the way back.
+    final status = async.value;
     final notifier = ref.read(guiderStatusProvider.notifier);
     final camera = ref.watch(deviceDriverProvider('guidecamera')).value?.name;
     final l10n = context.l10n;
-    final (dot, word, verb, label, action) = switch (status.connectionState) {
+    final (dot, word, verb, label, action) = switch (status?.connectionState) {
       GuiderConnectionState.connected => (
         AraColors.accentConnected,
         l10n.shellConnected,
@@ -2225,7 +2228,7 @@ class _GuiderGearRow extends ConsumerWidget {
       verb: verb,
       label: label,
       action: action,
-      onOpen: onOpen,
+      onOpen: status == null ? null : onOpen,
     );
   }
 }

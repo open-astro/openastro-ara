@@ -232,6 +232,14 @@ class _GuiderCalls extends _GuiderUp {
   final calls = <String>[];
   @override
   Future<void> disconnect() async => calls.add('disconnect');
+  @override
+  Future<void> connect({String? host, int? port}) async => calls.add('connect');
+}
+
+/// The rig's answer once the guider is disconnected: no guider (404).
+class _GuiderGone extends _GuiderCalls {
+  @override
+  Future<GuiderStatus?> build() async => null;
 }
 
 class _ParkingMount extends MountNotifier {
@@ -1463,6 +1471,21 @@ void main() {
     await tester.tap(find.descendant(of: page, matching: find.text('Guider · ZWO ASI120MM Mini')));
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('simple-gear')), findsNothing, reason: 'the Guider section is open');
+  });
+
+  testWidgets('a disconnected guider stays in Devices with Connect (the rig forgets it until it connects)',
+      (tester) async {
+    final guider = _GuiderGone();
+    await _pump(tester, const Size(1024, 768), linkUp: true, gear: [
+      guiderStatusProvider.overrideWith(() => guider),
+    ]);
+    await _openSection(tester, 'Devices');
+    final page = find.byKey(const Key('simple-gear'));
+    expect(find.descendant(of: page, matching: find.text('Guider')), findsOneWidget);
+    expect(find.descendant(of: page, matching: find.text('Not connected')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('simple-gear-guider-connect')));
+    await tester.pump();
+    expect(guider.calls, ['connect'], reason: "the profile's guider, no chooser");
   });
 
   testWidgets('the camera\'s dot opens its window over Simple Mode, not the full Settings page', (tester) async {
