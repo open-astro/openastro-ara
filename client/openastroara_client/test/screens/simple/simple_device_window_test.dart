@@ -148,12 +148,12 @@ void main() {
     final plans = c.read(imagingDefaultsProvider).defaultGain;
     final slider = tester.widget<Slider>(find.byKey(const Key('simple-camera-gain')));
     expect((slider.min, slider.max, slider.value), (0.0, 300.0, 100.0));
-    slider.onChanged!(120);
+    slider.onChanged!(123);
     await tester.pump();
-    expect(find.text('120'), findsOneWidget);
-    tester.widget<Slider>(find.byKey(const Key('simple-camera-gain'))).onChangeEnd!(120);
+    expect(find.text('120'), findsOneWidget, reason: 'steps of 10');
+    tester.widget<Slider>(find.byKey(const Key('simple-camera-gain'))).onChangeEnd!(127);
     await tester.pump();
-    expect(c.read(exposureControllerProvider).gain, 120, reason: 'Preview\'s chip shows it too');
+    expect(c.read(exposureControllerProvider).gain, 130, reason: 'steps of 10; Preview\'s chip shows it too');
     expect(c.read(imagingDefaultsProvider).defaultGain, plans, reason: 'the plans\' gain is its own setting');
   });
 

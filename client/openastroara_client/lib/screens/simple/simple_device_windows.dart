@@ -519,9 +519,10 @@ class _SimpleMountWindowState extends ConsumerState<SimpleMountWindow> {
   }
 }
 
-/// Gain as a slider over the connected camera's range (named gain modes slide
-/// through their names), with its value beside the label; set when the thumb
-/// is let go. The Camera window and Plan's sheet share it.
+/// Gain as a slider over the connected camera's range in steps of 10 (named
+/// gain modes slide through their names), with its value beside the label;
+/// set when the thumb is let go. The Camera window, Preview's settings and
+/// Plan's sheet share it.
 class SimpleGainSlider extends ConsumerStatefulWidget {
   const SimpleGainSlider({
     super.key,
@@ -553,6 +554,9 @@ class _SimpleGainSliderState extends ConsumerState<SimpleGainSlider> {
     final gain = _drag?.round() ?? widget.value;
     String text(int g) =>
         named.isNotEmpty && g >= 0 && g < named.length ? named[g] : '$g';
+    // A numeric gain moves in steps of 10 (the range's ends stay reachable).
+    double snap(double v) =>
+        named.isNotEmpty ? v : ((v / 10).round() * 10).clamp(lo, hi).toDouble();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -564,10 +568,10 @@ class _SimpleGainSliderState extends ConsumerState<SimpleGainSlider> {
           divisions: hi > lo ? hi - lo : null,
           value: gain.clamp(lo, hi).toDouble(),
           label: text(gain),
-          onChanged: (v) => setState(() => _drag = v),
+          onChanged: (v) => setState(() => _drag = snap(v)),
           onChangeEnd: (v) {
             setState(() => _drag = null);
-            widget.onSet(v.round());
+            widget.onSet(snap(v).round());
           },
         ),
       ],
