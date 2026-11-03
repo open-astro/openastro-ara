@@ -685,7 +685,7 @@ class _SimpleFocuserWindowState extends ConsumerState<SimpleFocuserWindow> {
     final c = ref.watch(autofocusSettingsProvider).triggerTempDeltaC;
     return simpleWindowStepper(
       id: 'simple-focuser-refocus',
-      text: c <= 0 ? 'Off' : simpleCelsius(c),
+      text: c <= 0 ? 'Never' : simpleCelsius(c),
       onLess: () => _setRefocus(c - 0.5),
       onMore: () => _setRefocus(c + 0.5),
     );
@@ -802,7 +802,7 @@ class _SimpleFocuserWindowState extends ConsumerState<SimpleFocuserWindow> {
           style: AraText.caption,
         ),
         const SizedBox(height: AraSpace.s8),
-        simpleWindowRow('Refocus after a change of', _refocus()),
+        simpleWindowRow('Refocus after', _refocus()),
       ]);
     }
     if (widget.inSettings) {

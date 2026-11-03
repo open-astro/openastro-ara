@@ -1,6 +1,9 @@
+import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -47,7 +50,7 @@ class _Live extends AutofocusLiveNotifier {
 late _Live _live;
 late ProviderContainer _c;
 
-Future<_Focuser> _pump(WidgetTester tester, Map<String, dynamic> wire) async {
+Future<_Focuser> _pump(WidgetTester tester, Map<String, dynamic> wire, {double width = 360, String? font}) async {
   final focuser = _Focuser(wire);
   _live = _Live();
   final c = _c = ProviderContainer(overrides: [
@@ -58,7 +61,9 @@ Future<_Focuser> _pump(WidgetTester tester, Map<String, dynamic> wire) async {
   addTearDown(c.dispose);
   await tester.pumpWidget(UncontrolledProviderScope(
     container: c,
-    child: const MaterialApp(home: Scaffold(body: Center(child: SizedBox(width: 360, child: SimpleFocuserWindow())))),
+    child: MaterialApp(
+        theme: ThemeData(fontFamily: font),
+        home: Scaffold(body: Center(child: SizedBox(width: width, child: const SimpleFocuserWindow())))),
   ));
   await tester.pump();
   return focuser;
@@ -142,8 +147,9 @@ void main() {
     expect(turn(), isNot(closeTo(0, 1e-3)), reason: 'the face kept the turn');
   });
 
-  testWidgets('Refocus after a change of: 0.5 °C steps, Off at 0, kept in the profile', (tester) async {
+  testWidgets('Refocus after: 0.5 °C steps, Never at 0, kept in the profile', (tester) async {
     await _pump(tester, _wire());
+    expect(find.text('Refocus after'), findsOneWidget);
     expect(find.text('2 °C'), findsOneWidget, reason: "the profile's default");
     await tester.tap(find.byKey(const Key('simple-focuser-refocus-up')));
     await tester.pump();
@@ -153,8 +159,28 @@ void main() {
       await tester.pump();
     }
     expect(_c.read(autofocusSettingsProvider).triggerTempDeltaC, 0);
-    expect(find.text('Off'), findsOneWidget);
+    expect(find.text('Never'), findsOneWidget);
   });
+
+  // The test font draws every glyph as a square; fit is measured with the
+  // Roboto the Flutter SDK ships (as simple_text_scale_test does).
+  final fonts = '${Platform.environment['FLUTTER_ROOT']}/bin/cache/artifacts/material_fonts';
+  final hasFonts = File('$fonts/Roboto-Regular.ttf').existsSync();
+  for (final scale in [1.0, 1.3]) {
+    testWidgets('every row label fits on one line at ${scale}x text', skip: !hasFonts, (tester) async {
+      final roboto = FontLoader('Roboto')
+        ..addFont(Future.value(ByteData.view(File('$fonts/Roboto-Regular.ttf').readAsBytesSync().buffer)));
+      await roboto.load();
+      tester.platformDispatcher.textScaleFactorTestValue = scale;
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      // The window's inner width: 360 pt grown with the text, less its padding.
+      await _pump(tester, _wire(), width: 360 * (scale / 1.1).clamp(1, 2) - 32, font: 'Roboto');
+      for (final label in ['Position', 'Temperature', 'Refocus after']) {
+        final p = tester.renderObject<RenderParagraph>(find.text(label));
+        expect(p.size.height, lessThan(14 * scale * 2), reason: '$label wraps');
+      }
+    });
+  }
 
   testWidgets('the step sits centred under the knob, with room', (tester) async {
     await _pump(tester, _wire());
