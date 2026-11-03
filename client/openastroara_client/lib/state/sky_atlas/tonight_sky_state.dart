@@ -51,7 +51,8 @@ final planningSettingsBootstrapProvider = FutureProvider<void>((ref) async {
 });
 
 final tonightSkyProvider = FutureProvider.autoDispose<List<TonightSkyObject>>(
-    (ref) => _rankAt(ref, DateTime.now().toUtc()));
+  (ref) => _rankAt(ref, DateTime.now().toUtc()),
+);
 
 /// §36.8 session planner — the same ranking evaluated AROUND A GIVEN INSTANT
 /// (the plan window's midpoint), so a plan made in the afternoon sees
@@ -59,7 +60,9 @@ final tonightSkyProvider = FutureProvider.autoDispose<List<TonightSkyObject>>(
 /// ±12 h scan on "now"). Family-keyed by the instant; callers round it so the
 /// key is stable.
 final tonightSkyAtProvider = FutureProvider.autoDispose
-    .family<List<TonightSkyObject>, DateTime>((ref, atUtc) => _rankAt(ref, atUtc));
+    .family<List<TonightSkyObject>, DateTime>(
+      (ref, atUtc) => _rankAt(ref, atUtc),
+    );
 
 Future<List<TonightSkyObject>> _rankAt(Ref ref, DateTime atUtc) async {
   // The awaitable variant rather than collapsing a still-loading state to
@@ -106,24 +109,25 @@ Future<List<TonightSkyObject>> _rankAt(Ref ref, DateTime atUtc) async {
       const <String, double>{};
   // Rank OFF the UI isolate: the mirrored catalog is thousands of rows × a
   // 289-sample window scan each — synchronous on the UI thread is jank.
-  return Isolate.run(() => computeTonightSkyLocal(
-        site: site,
-        optics: opticsFinal,
-        filterSet: filterSet,
-        electronics: electronics,
-        catalog: catalog,
-        customHorizon: horizonPoints,
-        atUtc: atUtc,
-        // 30 (was the default 10): the panel scrolls, and a filter set that
-        // spans broadband + narrowband makes far more of the sky worth
-        // listing — a 10-row cap hid the variety the scoring surfaces.
-        limit: 30,
-        noiseTolerancePct: noiseTolerancePct,
-        magnitudeFloor: magnitudeFloor,
-        skyCalibrationK: skyCalibrationK,
-      ));
+  return Isolate.run(
+    () => computeTonightSkyLocal(
+      site: site,
+      optics: opticsFinal,
+      filterSet: filterSet,
+      electronics: electronics,
+      catalog: catalog,
+      customHorizon: horizonPoints,
+      atUtc: atUtc,
+      // 30 (was the default 10): the panel scrolls, and a filter set that
+      // spans broadband + narrowband makes far more of the sky worth
+      // listing — a 10-row cap hid the variety the scoring surfaces.
+      limit: 30,
+      noiseTolerancePct: noiseTolerancePct,
+      magnitudeFloor: magnitudeFloor,
+      skyCalibrationK: skyCalibrationK,
+    ),
+  );
 }
-
 
 /// The Tonight's Sky row the user last tapped (by [TonightSkyObject.id]), or
 /// null when nothing is selected. Tapping a row frames that object on the
@@ -182,7 +186,8 @@ final clockProvider = Provider<DateTime Function()>((_) => DateTime.now);
 /// follows the night without anyone touching it. Tests override it with a
 /// stream they drive.
 final skyClockProvider = StreamProvider<int>(
-    (_) => Stream<int>.periodic(const Duration(minutes: 5), (i) => i));
+  (_) => Stream<int>.periodic(const Duration(minutes: 5), (i) => i),
+);
 
 /// True when the sun is below −12° (nautical dark) at [site] right now; an
 /// unset site (0, 0) is never "dark" so the filter stays off there.
@@ -196,5 +201,6 @@ bool isDarkNow(SiteSettings site, {DateTime? nowUtc}) {
   return sun < -12;
 }
 
-final tonightSkyUpNowProvider =
-    NotifierProvider<TonightSkyUpNowNotifier, bool>(TonightSkyUpNowNotifier.new);
+final tonightSkyUpNowProvider = NotifierProvider<TonightSkyUpNowNotifier, bool>(
+  TonightSkyUpNowNotifier.new,
+);

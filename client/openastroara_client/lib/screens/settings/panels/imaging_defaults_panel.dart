@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+
 import '../../../util/friendly_error.dart';
 import '../../../l10n/l10n.dart';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../services/profile_api.dart';
@@ -49,8 +51,11 @@ class _ImagingDefaultsPanelState extends ConsumerState<ImagingDefaultsPanel>
       // and a real failure will resurface on Save with a clearer error.
       if (mounted) {
         setState(
-          () =>
-              _lastError = friendlyError(context.l10n, e, action: 'load your saved settings'),
+          () => _lastError = friendlyError(
+            context.l10n,
+            e,
+            action: 'load your saved settings',
+          ),
         );
       }
     }
@@ -76,7 +81,9 @@ class _ImagingDefaultsPanelState extends ConsumerState<ImagingDefaultsPanel>
       messenger.showSnackBar(const SnackBar(content: Text('Saved.')));
     } catch (e) {
       if (!mounted) return;
-      setState(() => _lastError = friendlyError(context.l10n, e, action: 'save that'));
+      setState(
+        () => _lastError = friendlyError(context.l10n, e, action: 'save that'),
+      );
       messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
     }
   }
@@ -199,7 +206,9 @@ class _ImagingDefaultsPanelState extends ConsumerState<ImagingDefaultsPanel>
         EditableNumberRow(
           label: 'Optimal-sub noise tolerance (%)',
           helpKey: 'img.defaults.noise_tolerance_pct',
-          currentValue: _fmtPct(ref.watch(planningPrefsProvider).noiseTolerancePct),
+          currentValue: _fmtPct(
+            ref.watch(planningPrefsProvider).noiseTolerancePct,
+          ),
           getCanonical: () =>
               _fmtPct(ref.read(planningPrefsProvider).noiseTolerancePct),
           parse: (s) {
@@ -215,9 +224,7 @@ class _ImagingDefaultsPanelState extends ConsumerState<ImagingDefaultsPanel>
             '${PlanningPrefs.defaultNoiseTolerancePct.toStringAsFixed(0)} % is the classic figure; '
             '${PlanningPrefs.minNoiseTolerancePct.toStringAsFixed(0)}–${PlanningPrefs.maxNoiseTolerancePct.toStringAsFixed(0)} %. '
             'Applies to Tonight\'s Sky, the plan dialog and the sequence editor\'s advisor.',
-            style: Theme.of(context)
-                .textTheme
-                .labelSmall
+            style: Theme.of(context).textTheme.labelSmall
                 ?.copyWith(color: AraColors.textDisabled),
           ),
         ),
@@ -267,7 +274,9 @@ class _ImagingDefaultsPanelState extends ConsumerState<ImagingDefaultsPanel>
         Align(
           alignment: Alignment.centerLeft,
           child: OutlinedButton.icon(
-            onPressed: _api() != null && !_refitting ? _recalibrateSkyModel : null,
+            onPressed: _api() != null && !_refitting
+                ? _recalibrateSkyModel
+                : null,
             icon: const Icon(Icons.refresh, size: 18),
             label: const Text('Recalibrate from recent frames'),
           ),
@@ -289,7 +298,13 @@ class _ImagingDefaultsPanelState extends ConsumerState<ImagingDefaultsPanel>
       ];
     }
     if (record.isLoading) {
-      return const [SettingsRow(label: 'Calibration', value: 'Reading…', helpKey: 'img.defaults.sky_model_calibration')];
+      return const [
+        SettingsRow(
+          label: 'Calibration',
+          value: 'Reading…',
+          helpKey: 'img.defaults.sky_model_calibration',
+        ),
+      ];
     }
     if (value == null) {
       return const [
@@ -320,7 +335,8 @@ class _ImagingDefaultsPanelState extends ConsumerState<ImagingDefaultsPanel>
         ),
       for (final f in value.filters)
         SettingsRow(
-          label: '${FilterKind.fromWire(f.kind).label}${f.bin > 1 ? ' · bin ${f.bin}' : ''}',
+          label:
+              '${FilterKind.fromWire(f.kind).label}${f.bin > 1 ? ' · bin ${f.bin}' : ''}',
           value: f.standing,
         ),
     ];
@@ -331,7 +347,9 @@ class _ImagingDefaultsPanelState extends ConsumerState<ImagingDefaultsPanel>
     final l10n = context.l10n;
     setState(() => _refitting = true);
     try {
-      final record = await ref.read(skyModelCalibrationProvider.notifier).recalibrate();
+      final record = await ref
+          .read(skyModelCalibrationProvider.notifier)
+          .recalibrate();
       final applied = record?.appliedK.length ?? 0;
       messenger.showSnackBar(
         SnackBar(
@@ -344,7 +362,9 @@ class _ImagingDefaultsPanelState extends ConsumerState<ImagingDefaultsPanel>
       );
     } catch (e) {
       messenger.showSnackBar(
-        SnackBar(content: Text(friendlyError(l10n, e, action: 'refit the sky model'))),
+        SnackBar(
+          content: Text(friendlyError(l10n, e, action: 'refit the sky model')),
+        ),
       );
     } finally {
       if (mounted) setState(() => _refitting = false);

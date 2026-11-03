@@ -584,9 +584,9 @@ List<TonightSkyObject> computeTonightSkyLocal({
         adjustReasons.add(
           filterSet.filters.isEmpty
               ? 'emission target with no narrowband filter (OSC/broadband'
-                  '${bright ? ', Bortle ${site.bortleClass} sky) (−25%)' : ') (−15%)'}'
+                    '${bright ? ', Bortle ${site.bortleClass} sky) (−25%)' : ') (−15%)'}'
               : 'emission target but no narrowband filter in your set'
-                  '${bright ? ' under a Bortle ${site.bortleClass} sky (−25%)' : ' (−15%)'}',
+                    '${bright ? ' under a Bortle ${site.bortleClass} sky (−25%)' : ' (−15%)'}',
         );
       }
     }
@@ -674,7 +674,7 @@ List<TonightSkyObject> computeTonightSkyLocal({
         // hours-free remainder scales by the same finalScore/score ratio.
         integrationBudget: integrationBudgetLine,
         budgetFullHours: budgetFullHours,
-      budget: budgetRecord,
+        budget: budgetRecord,
         hoursFreeScore: score > 0
             ? double.parse(
                 (finalScore * (score - hoursScore) / score).toStringAsFixed(1),
@@ -922,9 +922,11 @@ DateTime? darkStart(SiteSettings site, DateTime nowUtc) {
 /// clock rolls over at sunrise and reads an evening time as yesterday's.
 bool scheduleAllowed(SiteSettings site, DateTime nowUtc) {
   if (site.latitudeDeg == 0 && site.longitudeDeg == 0) return true;
-  double sun(DateTime t) =>
-      sunMoonAltitudeDeg(t.toUtc(), site.latitudeDeg, site.longitudeDeg)
-          .sunAltDeg;
+  double sun(DateTime t) => sunMoonAltitudeDeg(
+    t.toUtc(),
+    site.latitudeDeg,
+    site.longitudeDeg,
+  ).sunAltDeg;
   final now = sun(nowUtc);
   return !(now < 0 && sun(nowUtc.add(const Duration(minutes: 10))) > now);
 }
@@ -1174,14 +1176,13 @@ String _shortNum(double v) =>
     v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toStringAsFixed(1);
 
 /// Nebula types whose photometry-less rows are tiered (see the adjust block).
-bool _isTieredNebulaType(String type) => const {
-      'HII', 'EmN', 'Neb', 'Cl+N', 'PN', 'RfN', 'SNR',
-    }.contains(type);
+bool _isTieredNebulaType(String type) =>
+    const {'HII', 'EmN', 'Neb', 'Cl+N', 'PN', 'RfN', 'SNR'}.contains(type);
 
 /// Tier for an unlisted photometry-less row of [type]: faint planetaries,
 /// reflection nebulae and remnants are specialist targets (tier 1); an
 /// unlisted emission region is "mostly stars" and keeps the hard discount.
 int? _typeFloorTier(String type) => switch (type) {
-      'PN' || 'RfN' || 'SNR' => 1,
-      _ => null,
-    };
+  'PN' || 'RfN' || 'SNR' => 1,
+  _ => null,
+};
