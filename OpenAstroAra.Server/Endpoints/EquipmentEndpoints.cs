@@ -1031,7 +1031,9 @@ public static partial class EquipmentEndpoints {
             string type, IEquipmentSelectionStore selections, IAlpacaManagementClient alpaca, CancellationToken ct) {
         ArgumentNullException.ThrowIfNull(selections);
         ArgumentNullException.ThrowIfNull(alpaca);
-        if (!Enum.TryParse<DeviceType>(type, ignoreCase: true, out var deviceType) || deviceType == DeviceType.Guider) {
+        // A type's name only: Enum.TryParse alone also takes "3", "99" or "camera,focuser".
+        if (!Enum.GetNames<DeviceType>().Contains(type, StringComparer.OrdinalIgnoreCase)
+            || !Enum.TryParse<DeviceType>(type, ignoreCase: true, out var deviceType) || deviceType == DeviceType.Guider) {
             return Results.Problem($"'{type}' is not an Alpaca device type.", statusCode: StatusCodes.Status400BadRequest);
         }
         var devices = await selections.GetAllAsync(ct).ConfigureAwait(false);

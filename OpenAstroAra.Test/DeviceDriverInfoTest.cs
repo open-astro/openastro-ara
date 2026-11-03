@@ -171,8 +171,11 @@ namespace OpenAstroAra.Test {
             var alpaca = new Mock<IAlpacaManagementClient>();
             var none = await EquipmentEndpoints.GetDeviceDriverAsync("focuser", selections.Object, alpaca.Object, CancellationToken.None);
             Assert.That((none as IStatusCodeHttpResult)?.StatusCode, Is.EqualTo(StatusCodes.Status404NotFound));
-            var bad = await EquipmentEndpoints.GetDeviceDriverAsync("toaster", selections.Object, alpaca.Object, CancellationToken.None);
-            Assert.That((bad as IStatusCodeHttpResult)?.StatusCode, Is.EqualTo(StatusCodes.Status400BadRequest));
+            // Only a type's name: Enum parsing would also take a number or a comma list.
+            foreach (var type in new[] { "toaster", "3", "99", "camera,focuser" }) {
+                var bad = await EquipmentEndpoints.GetDeviceDriverAsync(type, selections.Object, alpaca.Object, CancellationToken.None);
+                Assert.That((bad as IStatusCodeHttpResult)?.StatusCode, Is.EqualTo(StatusCodes.Status400BadRequest), type);
+            }
         }
     }
 }
