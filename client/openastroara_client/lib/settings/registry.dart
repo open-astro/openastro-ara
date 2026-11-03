@@ -32,21 +32,24 @@ class SettingType {
       max = null,
       step = null,
       enumValues = null;
-  // ignore: prefer_initializing_formals
   const SettingType.intRange({required int min, required int max})
     : kind = SettingTypeKind.intRange,
+      // ignore: prefer_initializing_formals
       min = min,
+      // ignore: prefer_initializing_formals
       max = max,
       step = 1,
       enumValues = null;
-  // ignore: prefer_initializing_formals
   const SettingType.doubleRange({
     required double min,
     required double max,
     double step = 0.1,
   }) : kind = SettingTypeKind.doubleRange,
+       // ignore: prefer_initializing_formals
        min = min,
+       // ignore: prefer_initializing_formals
        max = max,
+       // ignore: prefer_initializing_formals
        step = step,
        enumValues = null;
   const SettingType.enumValue(List<String> values)
