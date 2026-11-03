@@ -95,6 +95,8 @@ Map<String, dynamic> buildImagingRunBody({
   bool warmAtEnd = false,
   bool autofocusAtStart = true,
   int? autofocusEveryNExposures,
+  // The profile's "refocus when it drifts N °C"; null or 0 = off.
+  double? autofocusAfterTempChangeC,
   double? positionAngleDeg,
   List<FilterPlanStep>? filterPlan,
   bool startGuiding = false,
@@ -125,6 +127,7 @@ Map<String, dynamic> buildImagingRunBody({
     filterName: filterName,
     autofocusAtStart: autofocusAtStart,
     autofocusEveryNExposures: autofocusEveryNExposures,
+    autofocusAfterTempChangeC: autofocusAfterTempChangeC,
     positionAngleDeg: positionAngleDeg,
     filterPlan: filterPlan,
     startGuiding: startGuiding,
@@ -200,6 +203,8 @@ Map<String, dynamic> buildTargetBlock({
   String? filterName,
   bool autofocusAtStart = true,
   int? autofocusEveryNExposures,
+  // The profile's "refocus when it drifts N °C"; null or 0 = off.
+  double? autofocusAfterTempChangeC,
   double? positionAngleDeg,
   List<FilterPlanStep>? filterPlan,
   bool startGuiding = false,
@@ -230,6 +235,9 @@ Map<String, dynamic> buildTargetBlock({
   final dither = guide ? ditherEveryNExposures : null;
   final afAtStart = autofocusAtStart && hasFocuser;
   final afEvery = hasFocuser ? autofocusEveryNExposures : null;
+  final afTemp = hasFocuser && (autofocusAfterTempChangeC ?? 0) > 0
+      ? autofocusAfterTempChangeC
+      : null;
   final handSwap = manualFilterSwap || !rig.filterWheel;
   if (exposureSeconds <= 0) {
     throw ArgumentError.value(
@@ -317,6 +325,15 @@ Map<String, dynamic> buildTargetBlock({
                   .round(),
             );
       triggers.add(afTriggerDef.build()..['AfterExposures'] = scaled);
+    }
+    if (afTemp != null) {
+      final def = triggerForType(autofocusAfterTempChangeType);
+      if (def == null) {
+        throw StateError(
+          'AutofocusAfterTemperatureChange missing from the trigger catalog',
+        );
+      }
+      triggers.add(def.build()..['Amount'] = afTemp);
     }
     if (dither != null) {
       final ditherDef = triggerForType(ditherAfterExposuresType);

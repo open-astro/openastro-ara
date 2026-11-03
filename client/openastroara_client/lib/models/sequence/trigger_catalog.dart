@@ -136,6 +136,11 @@ const String ditherAfterExposuresType =
 const String autofocusAfterExposuresType =
     'OpenAstroAra.Sequencer.Trigger.Autofocus.AutofocusAfterExposures, OpenAstroAra.Sequencer';
 
+/// Autofocus when the focuser has drifted `Amount` °C since the last run; the
+/// run builder adds it from the profile's autofocus temperature trigger.
+const String autofocusAfterTempChangeType =
+    'OpenAstroAra.Sequencer.Trigger.Autofocus.AutofocusAfterTemperatureChangeTrigger, OpenAstroAra.Sequencer';
+
 /// #1264 — the unguided exposure guard the run builder attaches to each
 /// imaging loop on a rig without a guider.
 const String unguidedExposureGuardType =
@@ -284,8 +289,7 @@ const List<TriggerDef> triggerCatalog = [
   // (temperature is the dominant focus-drift driver). C# class default 5; the
   // playbook recommends 1.5.
   TriggerDef(
-    type:
-        'OpenAstroAra.Sequencer.Trigger.Autofocus.AutofocusAfterTemperatureChangeTrigger, OpenAstroAra.Sequencer',
+    type: autofocusAfterTempChangeType,
     label: 'Autofocus After Temperature Change',
     icon: Icons.device_thermostat_outlined,
     fields: [
