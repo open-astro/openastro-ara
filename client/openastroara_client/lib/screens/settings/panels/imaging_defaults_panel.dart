@@ -221,6 +221,43 @@ class _ImagingDefaultsPanelState extends ConsumerState<ImagingDefaultsPanel>
                 ?.copyWith(color: AraColors.textDisabled),
           ),
         ),
+        // #1176 — optional Tonight's Sky magnitude floor (off by default).
+        SettingsSwitchRow(
+          label: 'Tonight\'s Sky magnitude floor',
+          value: ref.watch(planningPrefsProvider).magnitudeFloor != null,
+          onChanged: (on) => ref
+              .read(planningPrefsProvider.notifier)
+              .setMagnitudeFloor(
+                on ? PlanningPrefs.defaultMagnitudeFloor : null,
+              ),
+        ),
+        if (ref.watch(planningPrefsProvider).magnitudeFloor != null)
+          EditableNumberRow(
+            label: 'Tonight\'s Sky magnitude floor (mag)',
+            currentValue: ref
+                .watch(planningPrefsProvider)
+                .magnitudeFloor!
+                .toStringAsFixed(1),
+            getCanonical: () => ref
+                .read(planningPrefsProvider)
+                .magnitudeFloor!
+                .toStringAsFixed(1),
+            parse: (s) {
+              final v = double.tryParse(s.trim());
+              if (v == null) return;
+              ref.read(planningPrefsProvider.notifier).setMagnitudeFloor(v);
+            },
+          ),
+        Padding(
+          padding: const EdgeInsets.only(top: 4, left: 4),
+          child: Text(
+            'Hides Tonight\'s Sky targets fainter than this magnitude '
+            '(${PlanningPrefs.minMagnitudeFloor.toStringAsFixed(0)}–${PlanningPrefs.maxMagnitudeFloor.toStringAsFixed(0)}). '
+            'Targets with no catalogued magnitude stay listed. Off by default.',
+            style: Theme.of(context).textTheme.labelSmall
+                ?.copyWith(color: AraColors.textDisabled),
+          ),
+        ),
         // #1140 P2 — the sky-model calibration store: k per filter kind, fitted
         // by the daemon from the library's frame backgrounds.
         const SizedBox(height: 16),

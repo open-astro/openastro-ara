@@ -57,6 +57,132 @@ void main() {
       computeTonightSkyLocal(
           site: s ?? site, optics: optics, atUtc: at ?? winterNight, limit: limit);
 
+  // #1176 — framing cutoffs pinned (maintainer's settled 0.15 / 0.40).
+  test('framing tiers: <0.15 too small, 0.15-0.40 good fit, >=0.40 fills', () {
+    // Short FOV side here is ~215.9' (4176 px x 3.102"/px).
+    PlanningDso sized(String id, double arcmin) => PlanningDso(
+      id: id,
+      name: id,
+      type: 'G',
+      magnitude: 9.0,
+      raDeg: 40.0,
+      decDeg: 20.0,
+      sizeMajArcmin: arcmin,
+    );
+    final byId = {
+      for (final o in computeTonightSkyLocal(
+        site: site,
+        optics: optics,
+        atUtc: DateTime.utc(2026, 1, 15, 3),
+        catalog: [
+          sized('under', 31), // 0.144
+          sized('lowEdge', 33), // 0.153
+          sized('highGood', 85), // 0.394
+          sized('fills', 87), // 0.403
+        ],
+      ))
+        o.id: o.framing,
+    };
+    expect(byId['under'], TonightFraming.tooSmall);
+    expect(byId['lowEdge'], TonightFraming.goodFit);
+    expect(byId['highGood'], TonightFraming.goodFit);
+    expect(byId['fills'], TonightFraming.good);
+  });
+
+  group('moon factor (#1176)', () {
+    double f(double lit, double up, double sep, bool nb) => tonightMoonFactor(
+      illuminatedFraction: lit,
+      moonUpFraction: up,
+      separationDeg: sep,
+      narrowband: nb,
+    );
+    test('full moon, up all window, 0 deg: x0.80, x0.90 with narrowband', () {
+      expect(f(1, 1, 0, false), closeTo(0.80, 1e-9));
+      expect(f(1, 1, 0, true), closeTo(0.90, 1e-9));
+    });
+    test('60 deg or more away, new moon, moon down: x1.00', () {
+      expect(f(1, 1, 60, false), 1.0);
+      expect(f(1, 1, 120, true), 1.0);
+      expect(f(0, 1, 0, false), 1.0);
+      expect(f(1, 0, 0, false), 1.0);
+    });
+    test('moon up half the window halves the cut; proximity is linear', () {
+      expect(f(1, 0.5, 0, false), closeTo(0.90, 1e-9));
+      expect(f(1, 1, 30, false), closeTo(0.90, 1e-9));
+    });
+
+    final fullMoonNight = DateTime.utc(
+      2026,
+      1,
+      4,
+      3,
+    ); // ~99% lit, M81 ~48 deg away
+    const nb = FilterSetSettings(
+      filters: [PlanningFilter(name: 'Ha', kind: FilterKind.ha)],
+    );
+    TonightSkyObject m81({FilterSetSettings? fs, DateTime? at}) =>
+        computeTonightSkyLocal(
+          site: site,
+          optics: optics,
+          atUtc: at ?? fullMoonNight,
+          filterSet: fs ?? const FilterSetSettings(filters: []),
+          limit: 40,
+        ).singleWhere((o) => o.id == 'M81');
+
+    test('a bright nearby moon ranks the same target lower, less with narrowband glass', () {
+      final bare = m81();
+      final withNb = m81(fs: nb); // a galaxy is untouched by the filter factor
+      final k =
+          bare.moonIlluminationPct! /
+          100 *
+          bare.moonUpFraction! *
+          ((60 - bare.moonSeparationDeg!) / 60);
+      expect(withNb.score!, greaterThan(bare.score!));
+      expect(
+        bare.score! / withNb.score!,
+        closeTo((1 - 0.2 * k) / (1 - 0.1 * k), 0.01),
+      );
+      expect(
+        bare.scoreReasons!.join('|'),
+        matches(RegExp(r'moon 48° away, 99% lit \(−\d+%\)')),
+      );
+    });
+
+    test('no moon in the window: chip keeps +0 and never shows -0%', () {
+      final o = m81(at: DateTime.utc(2026, 1, 19, 3));
+      final chip = o.scoreReasons!.singleWhere(
+        (r) => r.startsWith('moon') || r.startsWith('moonless'),
+      );
+      expect(chip, endsWith('(+0)'));
+      expect(chip, isNot(contains('−0%')));
+    });
+  });
+
+  test('magnitude floor: off lists everything; on drops fainter, keeps brighter and magnitude-less', () {
+    PlanningDso mag(String id, double? m) => PlanningDso(
+      id: id,
+      name: id,
+      type: 'G',
+      magnitude: m,
+      raDeg: 40.0,
+      decDeg: 20.0,
+      sizeMajArcmin: 60,
+    );
+    final cat = [mag('m11', 11), mag('m9', 9), mag('none', null)];
+    Set<String> ids(double? floor) => {
+      for (final o in computeTonightSkyLocal(
+        site: site,
+        optics: optics,
+        atUtc: DateTime.utc(2026, 1, 15, 3),
+        catalog: cat,
+        magnitudeFloor: floor,
+      ))
+        if (cat.any((c) => c.id == o.id)) o.id, // curated regions ride along
+    };
+    expect(ids(null), {'m11', 'm9', 'none'});
+    expect(ids(10), {'m9', 'none'});
+  });
+
   test('returns ranked objects on a winter night, scores descending in [0,100]',
       () {
     final list = rank();

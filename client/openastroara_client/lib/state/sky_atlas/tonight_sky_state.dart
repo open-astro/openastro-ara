@@ -96,7 +96,9 @@ Future<List<TonightSkyObject>> _rankAt(Ref ref, DateTime atUtc) async {
       .read(planningPrefsProvider.notifier)
       .ready
       .timeout(const Duration(seconds: 3), onTimeout: () {});
-  final noiseTolerancePct = ref.watch(planningPrefsProvider).noiseTolerancePct;
+  final planningPrefs = ref.watch(planningPrefsProvider);
+  final noiseTolerancePct = planningPrefs.noiseTolerancePct;
+  final magnitudeFloor = planningPrefs.magnitudeFloor;
   // #1140 P2 — the rig's fitted sky-model calibration (passed kinds only); a
   // refit re-ranks. Plain map so it crosses the isolate boundary.
   final skyCalibrationK =
@@ -117,6 +119,7 @@ Future<List<TonightSkyObject>> _rankAt(Ref ref, DateTime atUtc) async {
         // listing — a 10-row cap hid the variety the scoring surfaces.
         limit: 30,
         noiseTolerancePct: noiseTolerancePct,
+        magnitudeFloor: magnitudeFloor,
         skyCalibrationK: skyCalibrationK,
       ));
 }
