@@ -20,7 +20,8 @@ import 'simple_preview_panel.dart'
         exposurePresets,
         formatExposure,
         kSimpleText;
-import 'simple_shell.dart' show SimplePanel, SimpleSegment, kSimpleGoStyle;
+import 'simple_shell.dart'
+    show SimplePanel, SimpleSegment, kSimpleGoStyle, simpleStackText;
 import '../../state/simple_messages_state.dart';
 
 /// True while the server runs any phase of the routine.
@@ -232,38 +233,71 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
       String axis,
       double? value,
       (IconData, String) hint,
-    ) => Expanded(
-      child: Container(
-        key: Key('simple-polar-turn-$id'),
-        padding: const EdgeInsets.all(AraSpace.s8),
-        decoration: BoxDecoration(
-          color: AraColors.tileFill,
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Row(
-          spacing: AraSpace.s8,
-          children: [
-            Icon(hint.$1, size: 44, color: AraColors.textPrimary),
-            Expanded(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(axis, style: AraText.caption, maxLines: 1),
-                  Text(
-                    value == null
-                        ? hint.$2
-                        : '${hint.$2} ${value.abs().toStringAsFixed(1)}′',
-                    style: kSimpleText,
-                    maxLines: 2,
-                  ),
-                ],
-              ),
+    ) => Container(
+      key: Key('simple-polar-turn-$id'),
+      padding: const EdgeInsets.all(AraSpace.s8),
+      decoration: BoxDecoration(
+        color: AraColors.tileFill,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        spacing: AraSpace.s8,
+        children: [
+          Icon(hint.$1, size: 44, color: AraColors.textPrimary),
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(axis, style: AraText.caption, maxLines: 1),
+                Text(
+                  value == null
+                      ? hint.$2
+                      : '${hint.$2} ${value.abs().toStringAsFixed(1)}′',
+                  style: kSimpleText,
+                  maxLines: 2,
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
+    // At large text the tiles go under the bullseye at their own height, and
+    // the settings stack: a caption and a two-line move no longer fit 86 px.
+    final stack = simpleStackText(context);
+    final bullseye = total == null
+        ? const SizedBox.shrink()
+        : SizedBox.square(
+            key: const Key('simple-polar-bullseye'),
+            dimension: 180,
+            child: CustomPaint(
+              painter: BullseyePainter(
+                dotFraction: bullseyeDotFraction(
+                  live.azErrorArcmin,
+                  live.altErrorArcmin,
+                  bullseyeRangeArcmin(total),
+                  southern: southern,
+                ),
+                zoneColor: color,
+                reticle: nearPoleReticle(total),
+              ),
+            ),
+          );
+    final turns = [
+      turn(
+        'alt',
+        l10n.polarAltitude,
+        live.altErrorArcmin,
+        polarAltHint(l10n, live.altErrorArcmin),
+      ),
+      turn(
+        'az',
+        l10n.polarAzimuth,
+        live.azErrorArcmin,
+        polarAzHint(l10n, live.azErrorArcmin, southern: southern),
+      ),
+    ];
 
     return SimplePanel(
       padding: const EdgeInsets.all(AraSpace.s16),
@@ -298,51 +332,27 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
                 ],
               ),
             if (active && total != null) ...[
-              Row(
-                spacing: AraSpace.s12,
+              Flex(
+                direction: stack ? Axis.vertical : Axis.horizontal,
+                crossAxisAlignment: stack
+                    ? CrossAxisAlignment.stretch
+                    : CrossAxisAlignment.center,
+                spacing: stack ? AraSpace.s8 : AraSpace.s12,
                 children: [
-                  SizedBox.square(
-                    key: const Key('simple-polar-bullseye'),
-                    dimension: 180,
-                    child: CustomPaint(
-                      painter: BullseyePainter(
-                        dotFraction: bullseyeDotFraction(
-                          live.azErrorArcmin,
-                          live.altErrorArcmin,
-                          bullseyeRangeArcmin(total),
-                          southern: southern,
+                  // Its own size, centred, when it stands over the tiles.
+                  if (stack) Center(child: bullseye) else bullseye,
+                  if (stack)
+                    ...turns
+                  else
+                    Expanded(
+                      child: SizedBox(
+                        height: 180,
+                        child: Column(
+                          spacing: AraSpace.s8,
+                          children: [for (final t in turns) Expanded(child: t)],
                         ),
-                        zoneColor: color,
-                        reticle: nearPoleReticle(total),
                       ),
                     ),
-                  ),
-                  Expanded(
-                    child: SizedBox(
-                      height: 180,
-                      child: Column(
-                        spacing: AraSpace.s8,
-                        children: [
-                          turn(
-                            'alt',
-                            l10n.polarAltitude,
-                            live.altErrorArcmin,
-                            polarAltHint(l10n, live.altErrorArcmin),
-                          ),
-                          turn(
-                            'az',
-                            l10n.polarAzimuth,
-                            live.azErrorArcmin,
-                            polarAzHint(
-                              l10n,
-                              live.azErrorArcmin,
-                              southern: southern,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
                 ],
               ),
             ],
@@ -366,26 +376,18 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
                 maxLines: 4,
                 overflow: TextOverflow.ellipsis,
               ),
-            // The settings on one line, for the next frame.
-            Row(
+            // The settings for the next frame: a row each like the Focus
+            // panel's choices (user, 2026-11-04: one row read oddly); side by
+            // side while it runs, so the bullseye panel still fits an iPad.
+            Flex(
+              direction: active && !stack ? Axis.horizontal : Axis.vertical,
+              crossAxisAlignment: active && !stack
+                  ? CrossAxisAlignment.center
+                  : CrossAxisAlignment.stretch,
               spacing: AraSpace.s8,
               children: [
-                Expanded(
-                  child: SimplePresetTile<Duration>(
-                    key: const Key('simple-polar-exposure'),
-                    label: l10n.polarExposure,
-                    value: _exposure(settings),
-                    options: exposurePresets(minSec: 0, maxSec: 60),
-                    format: formatExposure,
-                    onSelected: (d) => _save(
-                      settings.copyWith(
-                        exposureSeconds: d.inMilliseconds / 1000,
-                      ),
-                    ),
-                  ),
-                ),
-                Expanded(
-                  child: Container(
+                for (final w in <Widget>[
+                  Container(
                     decoration: BoxDecoration(
                       color: AraColors.tileFill,
                       borderRadius: BorderRadius.circular(8),
@@ -408,7 +410,20 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
                       ],
                     ),
                   ),
-                ),
+                  SimplePresetTile<Duration>(
+                    key: const Key('simple-polar-exposure'),
+                    label: l10n.polarExposure,
+                    value: _exposure(settings),
+                    options: exposurePresets(minSec: 0, maxSec: 60),
+                    format: formatExposure,
+                    onSelected: (d) => _save(
+                      settings.copyWith(
+                        exposureSeconds: d.inMilliseconds / 1000,
+                      ),
+                    ),
+                  ),
+                ])
+                  active && !stack ? Expanded(child: w) : w,
               ],
             ),
             if (active)

@@ -770,12 +770,12 @@ void main() {
     await tester.pump();
     expect(find.descendant(of: find.byKey(const Key('simple-mode')), matching: find.text('Plan')), findsOneWidget);
     expect(find.byKey(const Key('sky')), findsNothing, reason: 'back on the frame');
-    expect(find.text("Tonight's plan"), findsOneWidget);
+    expect(find.byType(SimpleRunSheet), findsOneWidget);
     expect(find.byKey(const Key('simple-sky-image-this')), findsNothing, reason: 'the sheet, not the card');
 
     await tester.tap(find.byKey(const Key('simple-run-pick-in-sky')));
     await tester.pump();
-    expect(find.text("Tonight's plan"), findsNothing);
+    expect(find.byType(SimpleRunSheet), findsNothing);
     expect(find.byKey(const Key('sky')), findsOneWidget);
     expect(find.byKey(const Key('simple-sky-image-this')), findsOneWidget);
   });
@@ -862,7 +862,7 @@ void main() {
     // "Guided Run" doesn't fit the 60 px rail: it reads Guided, as Polar align reads P.A.
     expect(find.descendant(of: find.byKey(const Key('simple-mode')), matching: find.text('Guided')), findsOneWidget);
     expect(find.bySemanticsLabel(RegExp(r'^Mode: Guided Run')), findsOneWidget, reason: 'the screen reader says it whole');
-    expect(find.text("Tonight's plan"), findsOneWidget, reason: "the plan's sheet first");
+    expect(find.byType(SimpleRunSheet), findsOneWidget, reason: "the plan's sheet first");
     await tester.tap(find.byKey(const Key('autopilot-skip')));
     await tester.pump();
     expect(find.byType(SimpleFocusPanel), findsOneWidget, reason: "then Focus's panel");
@@ -899,7 +899,7 @@ void main() {
       await _frame(tester, container);
       await tester.tap(find.byKey(const Key('autopilot-start')));
       await tester.pump();
-      final sheet = find.text("Tonight's plan");
+      final sheet = find.byType(SimpleRunSheet);
       expect(sheet, findsOneWidget);
       // Each tap must land on its control, not on whatever covers it.
       Future<void> tap(Finder f) async {
@@ -944,7 +944,7 @@ void main() {
       await tester.pumpAndSettle();
     }
     expect(c.read(simpleRunProvider).targets, hasLength(10));
-    final sheet = find.text("Tonight's plan");
+    final sheet = find.byType(SimpleRunSheet);
     expect(sheet, findsOneWidget, reason: 'the sheet stays up while queueing');
     Future<void> tap(Finder f) async {
       final box = tester.renderObject(f);
@@ -993,7 +993,7 @@ void main() {
     await tester.pump();
     expect(container.read(simpleModeProvider).value, isTrue, reason: 'no jump to the full UI');
     expect(find.byKey(const Key('autopilot-strip')), findsOneWidget);
-    expect(find.text("Tonight's plan"), findsOneWidget, reason: "the plan's sheet, open: Plan comes first");
+    expect(find.byType(SimpleRunSheet), findsOneWidget, reason: "the plan's sheet, open: Plan comes first");
   });
 
   testWidgets("Guided Run's plan step only queues: its green button reads Next: Focus and goes there", (tester) async {
@@ -1726,6 +1726,28 @@ void main() {
           reason: '${e.widget.key ?? e.widget.runtimeType} has no blur of its own');
     }
     await tester.pump(const Duration(seconds: 7)); // the result fades
+  });
+
+  testWidgets("Guided Run's plan step hugs the rail like every mode's panel, with no title (the strip names the step)",
+      (tester) async {
+    await _pump(tester, const Size(1024, 768));
+    await tester.tap(find.byKey(const Key('simple-mode')));
+    await tester.pump();
+    await tester.tap(find.text('Guided Run').first);
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+    final sheet = tester.getRect(find.byType(SimpleRunSheet));
+    final rail = tester.getRect(find.byKey(const Key('simple-mode')));
+    expect(sheet.right, closeTo(rail.left - kSimpleInset, 8), reason: 'beside the rail, not centred');
+    expect(find.text("Tonight's plan"), findsNothing);
+  });
+
+  testWidgets('Preview settings opens with no title: the chip says what it is', (tester) async {
+    await _pump(tester, const Size(1024, 768));
+    await tester.tap(find.byKey(const Key('simple-settings')));
+    await tester.pump();
+    expect(find.byKey(const Key('simple-exposure')), findsOneWidget);
+    expect(find.text('Preview settings'), findsNothing);
   });
 
   testWidgets("a Rig edit with no rig link says it wasn't saved instead of nothing", (tester) async {

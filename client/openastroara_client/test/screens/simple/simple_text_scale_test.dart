@@ -6,6 +6,10 @@ import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/models/polar_align.dart';
+import 'package:openastroara/state/polar_align/polar_align_state.dart';
+import 'package:openastroara/screens/simple/simple_polar_panel.dart';
+import 'package:openastroara/screens/simple/simple_focus_panel.dart';
 import 'package:openastroara/l10n/app_localizations.dart';
 import 'package:openastroara/models/guider_status.dart';
 import 'package:openastroara/state/guider/guider_state.dart';
@@ -103,6 +107,17 @@ class _Queue extends SimpleRunNotifier {
       ]);
 }
 
+/// A polar routine mid-adjustment: the bullseye and both turn tiles show.
+class _Adjusting extends PolarAlignLiveNotifier {
+  @override
+  PolarAlignLive build() => const PolarAlignLive(
+        phase: PolarAlignStates.adjusting,
+        altErrorArcmin: 12.4,
+        azErrorArcmin: -8.1,
+        totalErrorArcmin: 14.8,
+      );
+}
+
 TonightSkyObject _o(String name, double alt) => TonightSkyObject(
     id: name, name: name, type: 'Galaxy', magnitude: 5, raDeg: 10, decDeg: 40, altitudeDeg: alt, maxAltitudeDeg: 70);
 
@@ -123,7 +138,7 @@ void main() {
   final lang = locale.toLanguageTag();
   final l = lookupAppLocalizations(locale);
   for (final (scale, size) in cases) {
-    for (final open in ['Preview settings', 'Plan', 'Stop armed', 'Modes', 'Settings', 'Rig', 'Camera', 'Settings Focuser', 'Search', 'Wheels lat', 'Wheels lng', 'Wheels aperture', 'Wheels focal', 'Settings Guider', 'Guiding']) {
+    for (final open in ['Preview settings', 'Plan', 'Stop armed', 'Modes', 'Settings', 'Rig', 'Camera', 'Settings Focuser', 'Search', 'Wheels lat', 'Wheels lng', 'Wheels aperture', 'Wheels focal', 'Settings Guider', 'Guiding', 'Focus Auto', 'Focus Manual', 'Focus Guide', 'Polar adjusting']) {
       testWidgets('$lang text ${scale}x at ${size.width.toInt()}x${size.height.toInt()}, $open: nothing overflows',
           skip: !hasFonts, (tester) async {
         tester.view.physicalSize = size;
@@ -136,7 +151,10 @@ void main() {
           if (open == 'Camera') cameraStatusProvider.overrideWith(_Camera.new),
           if (open == 'Settings Focuser') focuserProvider.overrideWith(_Focuser.new),
           if (open == 'Search') liveLibrarySessionsProvider.overrideWith(_Sessions.new),
-          if (open == 'Settings Guider' || open == 'Guiding') guiderStatusProvider.overrideWith(_Guiding.new),
+          if (open == 'Settings Guider' || open == 'Guiding' || open == 'Focus Guide')
+            guiderStatusProvider.overrideWith(_Guiding.new),
+          if (open.startsWith('Focus')) focuserProvider.overrideWith(_Focuser.new),
+          if (open == 'Polar adjusting') polarAlignLiveProvider.overrideWith(_Adjusting.new),
           if (open == 'Plan') ...[
             tonightSkyProvider.overrideWith(
                 (ref) async => [_o('M31', 62), _o('North America Nebula', 71), _o('M33', 48), _o('M45', 30)]),
@@ -146,7 +164,10 @@ void main() {
         addTearDown(c.dispose);
         await c.read(simpleModeProvider.future);
         if (open == 'Settings Focuser') await c.read(focuserProvider.future);
-        if (open == 'Settings Guider' || open == 'Guiding') await c.read(guiderStatusProvider.future);
+        if (open == 'Settings Guider' || open == 'Guiding' || open == 'Focus Guide') {
+          await c.read(guiderStatusProvider.future);
+        }
+        if (open.startsWith('Focus')) await c.read(focuserProvider.future);
         await tester.pumpWidget(UncontrolledProviderScope(
           container: c,
           child: MaterialApp(
@@ -253,6 +274,32 @@ void main() {
           await tester.pump();
           await tester.pump();
           expect(find.byKey(const Key('simple-search-image-0')), findsOneWidget);
+        } else if (open.startsWith('Focus') || open == 'Polar adjusting') {
+          // A mode panel: the mode from the grid, then its chip shows the panel.
+          final focus = open.startsWith('Focus');
+          await tester.tap(find.byKey(const Key('simple-mode')), warnIfMissed: false);
+          await tester.pump();
+          await tester.tap(find.text(focus ? l.shellModeFocus : l.shellModePolarAlign).first, warnIfMissed: false);
+          await tester.pump();
+          await tester.tap(find.byKey(const Key('simple-settings')), warnIfMissed: false);
+          await tester.pump();
+          final panel = find.byType(focus ? SimpleFocusPanel : SimplePolarPanel);
+          // (The one-third width has no panel layout yet: phone layout, ALP-4865.)
+          if (size.width >= 768) expect(panel, findsOneWidget);
+          if (size.width < 768) {
+            // no panel to switch in
+          } else if (open == 'Focus Manual') {
+            await tester.tap(find.byKey(const Key('simple-focus-method-manual')), warnIfMissed: false);
+            await tester.pump();
+          } else if (open == 'Focus Guide') {
+            await tester.tap(find.byKey(const Key('simple-focus-scope-guide')), warnIfMissed: false);
+            await tester.pump();
+          }
+          if (!focus && size.width >= 768) expect(find.byKey(const Key('simple-polar-bullseye')), findsOneWidget);
+          // Every label whole: "Principal", "Manual", "Contínuo" were cut at 1.3x-2x.
+          for (final p in tester.renderObjectList<RenderParagraph>(find.descendant(of: panel, matching: find.byType(RichText)))) {
+            expect(p.didExceedMaxLines, isFalse, reason: '"${p.text.toPlainText()}" is cut off');
+          }
         } else if (open == 'Settings' || open == 'Rig') {
           await tester.tap(find.byTooltip(l.shellSettings));
           await tester.pump();

@@ -573,12 +573,6 @@ abstract class AppLocalizations {
   /// **'Clipped'**
   String get previewClipped;
 
-  /// Simple Mode: title of the Preview settings popover
-  ///
-  /// In en, this message translates to:
-  /// **'Preview settings'**
-  String get previewSettings;
-
   /// Simple Mode Preview settings: segment for continuous live view (frames not saved)
   ///
   /// In en, this message translates to:

@@ -313,14 +313,8 @@ class SimpleSettingsPopover extends ConsumerWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         spacing: AraSpace.s8,
         children: [
-          Text(
-            context.l10n.previewSettings,
-            style: const TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: AraColors.textPrimary,
-            ),
-          ),
+          // No title: the chip that opened it says what it is (user,
+          // 2026-11-04).
           SimplePresetTile<Duration>(
             key: const Key('simple-exposure'),
             label: context.l10n.previewExposure,

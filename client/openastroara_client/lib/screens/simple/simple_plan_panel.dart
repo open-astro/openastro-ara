@@ -1780,12 +1780,14 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       spacing: AraSpace.s8,
       children: [
-        Text(
-          editing == null
-              ? context.l10n.planTonightsPlan
-              : context.l10n.planEditTarget(run.targets[editing].name),
-          style: _head,
-        ),
+        // Guided Run's step strip already names the step (user, 2026-11-04).
+        if (!guided || editing != null)
+          Text(
+            editing == null
+                ? context.l10n.planTonightsPlan
+                : context.l10n.planEditTarget(run.targets[editing].name),
+            style: _head,
+          ),
         if (!wide && editing == null) ...lists,
         // Editing keeps the target: to change it, delete it and add another.
         if (editing == null) ...[
@@ -1867,10 +1869,19 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
               for (final f in filters)
                 FilterChip(
                   key: Key('simple-run-filter-${f.name}'),
-                  label: Text(f.name),
+                  // Picked: the segments' solid blue with white words, not a
+                  // dim tint under dark ones (user, 2026-11-04).
+                  label: Text(
+                    f.name,
+                    style: kSimpleText.copyWith(
+                      color: steps.any((s) => s.filterName == f.name)
+                          ? AraColors.selectionFg
+                          : AraColors.textPrimary,
+                    ),
+                  ),
                   selected: steps.any((s) => s.filterName == f.name),
                   showCheckmark: false,
-                  selectedColor: AraColors.selectionTint,
+                  selectedColor: AraColors.selectionBg,
                   onSelected: (on) => on
                       ? plan.add(f.name)
                       : plan.remove(

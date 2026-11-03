@@ -117,6 +117,22 @@ void main() {
     });
   });
 
+  testWidgets('Main / Guide on top, Auto / Manual on a row under it; the guide camera has no Auto / Manual row',
+      (tester) async {
+    // User, 2026-11-04: Main, Guide, Auto, Manual on one line read as four of a kind.
+    await _pump(tester);
+    final main = tester.getRect(find.byKey(const Key('simple-focus-scope-main')));
+    final guide = tester.getRect(find.byKey(const Key('simple-focus-scope-guide')));
+    final auto = tester.getRect(find.byKey(const Key('simple-focus-method-auto')));
+    expect(guide.top, main.top, reason: 'one row');
+    expect(auto.top, greaterThan(main.bottom), reason: 'the method under the camera');
+    expect(auto.left, main.left);
+    _c.read(simpleFocusScopeProvider.notifier).set(SimpleFocusScope.guide);
+    await tester.pump();
+    expect(find.byKey(const Key('simple-focus-method-auto')), findsNothing);
+    expect(find.byKey(const Key('simple-focus-method-manual')), findsNothing);
+  });
+
   testWidgets('no focuser: Manual, the Bahtinov helper; no Autofocus button', (tester) async {
     await _pump(tester);
     expect(find.text('Fit the mask, then Start'), findsOneWidget);

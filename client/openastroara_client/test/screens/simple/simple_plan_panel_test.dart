@@ -550,6 +550,14 @@ void main() {
       expect(c.read(planetariumSearchProvider), 'M42');
     });
 
+    testWidgets('a picked filter chip reads white on the solid selection blue, not dark on a dim tint', (tester) async {
+      await _pump(tester, _Seq(), SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}, onLibrary: () {}));
+      final chip = tester.widget<FilterChip>(find.byKey(const Key('simple-run-filter-L')));
+      expect(chip.selected, isTrue, reason: 'precondition: L is in the plan');
+      expect(chip.selectedColor, AraColors.selectionBg);
+      expect((chip.label as Text).style?.color, AraColors.selectionFg);
+    });
+
     testWidgets('the filters are chips: a tap adds a row, another tap takes it out; the last one stays',
         (tester) async {
       final c = await _pump(tester, _Seq(),

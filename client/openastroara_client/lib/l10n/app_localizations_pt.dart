@@ -279,9 +279,6 @@ class AppLocalizationsPt extends AppLocalizations {
   String get previewClipped => 'Clipped';
 
   @override
-  String get previewSettings => 'Preview settings';
-
-  @override
   String get previewLoop => 'Loop';
 
   @override
@@ -2201,9 +2198,6 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get previewClipped => 'Saturado';
-
-  @override
-  String get previewSettings => 'Ajustes da prévia';
 
   @override
   String get previewLoop => 'Contínuo';

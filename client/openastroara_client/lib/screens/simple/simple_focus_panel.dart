@@ -25,7 +25,8 @@ import 'simple_autopilot.dart'
     show AutopilotStep, autopilotNext, autopilotProvider;
 import 'simple_preview_panel.dart' show SimpleShutterButton, kSimpleText;
 import 'simple_device_windows.dart' show simpleCelsius;
-import 'simple_shell.dart' show SimplePanel, SimpleSegment, kSimpleGoStyle;
+import 'simple_shell.dart'
+    show SimplePanel, SimpleSegment, kSimpleGoStyle, simpleStackText;
 
 /// The HFR to show big: the confirmed one after a run, the latest kept probe
 /// while one runs, else nothing. Pure — unit-tested.
@@ -258,99 +259,121 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
     final error =
         live.error ??
         (run.isFailed ? MainFocusCard.failureText(context.l10n, run) : null);
+    // Measured stars On / Off: the run's frame, stars circled, full screen.
+    final stars = DecoratedBox(
+      decoration: BoxDecoration(
+        color: AraColors.tileFill,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (final (id, on, word) in [
+            ('on', true, l10n.deviceOn),
+            ('off', false, l10n.deviceOff),
+          ])
+            SimpleSegment(
+              key: Key('simple-focus-stars-$id'),
+              label: word,
+              selected: starsShown == on,
+              radius: 8,
+              onTap: () =>
+                  ref.read(simpleFocusStarsShownProvider.notifier).set(on),
+            ),
+        ],
+      ),
+    );
     return SimplePanel(
-      padding: const EdgeInsets.all(AraSpace.s16),
+      // 12 above and below, and 4 between rows (6 before 2026-11-04): with
+      // the Auto / Manual row under Main / Guide it still fits an iPad.
+      padding: const EdgeInsets.symmetric(
+        horizontal: AraSpace.s16,
+        vertical: AraSpace.s12,
+      ),
       child: SizedBox(
         width: 400,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
-          spacing: 6,
+          spacing: 4,
           children: [
-            // Which camera, then how to focus the main one, on one line
-            // (the panel has no room for two rows).
-            Row(
-              spacing: AraSpace.s8,
+            // Which camera, then under it how to focus the main one (the
+            // guide camera has no focuser: no Auto / Manual row).
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              spacing: 4,
               children: [
-                Expanded(
-                  child: DecoratedBox(
+                DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: AraColors.tileFill,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    children: [
+                      for (final (id, sc, word) in [
+                        ('main', SimpleFocusScope.main, l10n.focusScopeMain),
+                        ('guide', SimpleFocusScope.guide, l10n.focusScopeGuide),
+                      ])
+                        Expanded(
+                          child: SimpleSegment(
+                            key: Key('simple-focus-scope-$id'),
+                            label: word,
+                            selected: scope == sc,
+                            radius: 8,
+                            onTap: anyRunning || scope == sc
+                                ? null
+                                : () => ref
+                                      .read(simpleFocusScopeProvider.notifier)
+                                      .set(sc),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                // The method: Smart Focus with the focuser, or by hand with a
+                // Bahtinov mask. Locked while a run goes.
+                if (scope == SimpleFocusScope.main)
+                  DecoratedBox(
                     decoration: BoxDecoration(
                       color: AraColors.tileFill,
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Row(
                       children: [
-                        for (final (id, sc, word) in [
-                          ('main', SimpleFocusScope.main, l10n.focusScopeMain),
+                        for (final (id, m, word) in [
+                          ('auto', MainFocusMethod.autofocus, l10n.focusAuto),
                           (
-                            'guide',
-                            SimpleFocusScope.guide,
-                            l10n.focusScopeGuide,
+                            'manual',
+                            MainFocusMethod.bahtinov,
+                            l10n.focusManual,
                           ),
                         ])
                           Expanded(
                             child: SimpleSegment(
-                              key: Key('simple-focus-scope-$id'),
+                              key: Key('simple-focus-method-$id'),
                               label: word,
-                              selected: scope == sc,
+                              selected: method == m,
                               radius: 8,
-                              onTap: anyRunning || scope == sc
+                              onTap: locked || method == m
                                   ? null
-                                  : () => ref
-                                        .read(simpleFocusScopeProvider.notifier)
-                                        .set(sc),
+                                  : () {
+                                      if (m == MainFocusMethod.autofocus &&
+                                          bahtinov.status.hasMeasurement &&
+                                          !bahtinov.finished) {
+                                        setState(
+                                          () => _askMask = _thenAuto = true,
+                                        );
+                                        return;
+                                      }
+                                      ref
+                                          .read(
+                                            mainFocusMethodProvider.notifier,
+                                          )
+                                          .pick(m);
+                                    },
                             ),
                           ),
                       ],
-                    ),
-                  ),
-                ),
-                // The method: Smart Focus with the focuser, or by hand with a
-                // Bahtinov mask. Locked while a run goes.
-                if (scope == SimpleFocusScope.main)
-                  Expanded(
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: AraColors.tileFill,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Row(
-                        children: [
-                          for (final (id, m, word) in [
-                            ('auto', MainFocusMethod.autofocus, l10n.focusAuto),
-                            (
-                              'manual',
-                              MainFocusMethod.bahtinov,
-                              l10n.focusManual,
-                            ),
-                          ])
-                            Expanded(
-                              child: SimpleSegment(
-                                key: Key('simple-focus-method-$id'),
-                                label: word,
-                                selected: method == m,
-                                radius: 8,
-                                onTap: locked || method == m
-                                    ? null
-                                    : () {
-                                        if (m == MainFocusMethod.autofocus &&
-                                            bahtinov.status.hasMeasurement &&
-                                            !bahtinov.finished) {
-                                          setState(
-                                            () => _askMask = _thenAuto = true,
-                                          );
-                                          return;
-                                        }
-                                        ref
-                                            .read(
-                                              mainFocusMethodProvider.notifier,
-                                            )
-                                            .pick(m);
-                                      },
-                              ),
-                            ),
-                        ],
-                      ),
                     ),
                   ),
               ],
@@ -362,11 +385,29 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
             else if (method == MainFocusMethod.bahtinov)
               ..._bahtinov(l10n, bahtinov, connected ? focuser : null)
             else ...[
-              Text(
-                headline,
-                style: kSimpleText.copyWith(color: headlineColor),
-                maxLines: 2,
-              ),
+              // The headline shares its row with Measured stars when there is
+              // room, so the panel still fits an iPad under its two choice rows.
+              if (live.frame != null && !simpleStackText(context))
+                Row(
+                  spacing: AraSpace.s8,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        headline,
+                        style: kSimpleText.copyWith(color: headlineColor),
+                        maxLines: 2,
+                      ),
+                    ),
+                    Text(l10n.focusMeasuredStars, style: AraText.caption),
+                    stars,
+                  ],
+                )
+              else
+                Text(
+                  headline,
+                  style: kSimpleText.copyWith(color: headlineColor),
+                  maxLines: 2,
+                ),
               // A finished run's Best position tile says where it is.
               if (connected && focuser != null && !run.isComplete)
                 Text(
@@ -428,7 +469,7 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
                   ],
                 ),
               if (run.probes.isNotEmpty)
-                SizedBox(height: 90, child: VCurveChart(run: run)),
+                SizedBox(height: 80, child: VCurveChart(run: run)),
               if (weak != null)
                 Container(
                   padding: const EdgeInsets.all(AraSpace.s8),
@@ -440,37 +481,14 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
                 ),
               // The run's frame with its measured stars circled, full screen
               // behind the panels; off to start.
-              if (live.frame != null)
+              if (live.frame != null && simpleStackText(context))
                 Row(
                   spacing: AraSpace.s12,
                   children: [
                     Expanded(
                       child: Text(l10n.focusMeasuredStars, style: kSimpleText),
                     ),
-                    DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: AraColors.tileFill,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          for (final (id, on, word) in [
-                            ('on', true, l10n.deviceOn),
-                            ('off', false, l10n.deviceOff),
-                          ])
-                            SimpleSegment(
-                              key: Key('simple-focus-stars-$id'),
-                              label: word,
-                              selected: starsShown == on,
-                              radius: 8,
-                              onTap: () => ref
-                                  .read(simpleFocusStarsShownProvider.notifier)
-                                  .set(on),
-                            ),
-                        ],
-                      ),
-                    ),
+                    stars,
                   ],
                 ),
               if (error != null)

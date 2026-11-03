@@ -613,6 +613,25 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     final runSheet =
         shown == SimpleModeScreen.plan &&
         ((_popover == _Popover.settings && !runActive) || _adding);
+    // In Guided Run the plan's sheet hugs the rail like every mode's panel
+    // (user, 2026-11-04); in Plan it is centred over the image.
+    final guidedSheet = runSheet && _mode == SimpleModeScreen.autopilot;
+    final sheet = SimpleRunSheet(
+      editing: _editing,
+      onShowSky: () => setState(() => _sky = true),
+      onPickInSky: () => setState(() {
+        _sky = true;
+        _popover = _Popover.none;
+        _closeSheet();
+      }),
+      onCreated: () => setState(() {
+        _popover = _Popover.none;
+        _closeSheet();
+      }),
+      onLibrary: () => Navigator.of(context).push(
+        MaterialPageRoute<void>(builder: (_) => const ImageLibraryScreen()),
+      ),
+    );
     final sel = ref.watch(planetariumSelectionProvider);
     final motion = MediaQuery.disableAnimationsOf(context)
         ? Duration.zero
@@ -841,35 +860,22 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                               // sheet scrolls inside.
                               if (runSheet)
                                 Positioned(
-                                  left: 0,
-                                  right: 0,
+                                  // Guided Run's beside the rail, like every
+                                  // mode's panel, with the sheet's height.
+                                  left: guidedSheet ? kSimpleInset : 0,
+                                  right: guidedSheet
+                                      ? kSimpleInset * 2 + railWidth
+                                      : 0,
                                   top:
                                       railTop +
                                       kSimpleStatusHeight +
                                       kSimpleInset,
                                   bottom: kSimpleInset * 2 + bottomRow,
-                                  child: Center(
-                                    child: SimpleRunSheet(
-                                      editing: _editing,
-                                      onShowSky: () =>
-                                          setState(() => _sky = true),
-                                      onPickInSky: () => setState(() {
-                                        _sky = true;
-                                        _popover = _Popover.none;
-                                        _closeSheet();
-                                      }),
-                                      onCreated: () => setState(() {
-                                        _popover = _Popover.none;
-                                        _closeSheet();
-                                      }),
-                                      onLibrary: () => Navigator.of(context)
-                                          .push(
-                                            MaterialPageRoute<void>(
-                                              builder: (_) =>
-                                                  const ImageLibraryScreen(),
-                                            ),
-                                          ),
-                                    ),
+                                  child: Align(
+                                    alignment: guidedSheet
+                                        ? Alignment.centerRight
+                                        : Alignment.center,
+                                    child: sheet,
                                   ),
                                 )
                               // The rail's own popovers; Settings and Search
@@ -1335,6 +1341,12 @@ class _RailButton extends StatelessWidget {
 /// mode label ("Preview", 14 px semibold) is full from 1.1x.
 double simpleRailScale(BuildContext context) =>
     math.max(1, MediaQuery.textScalerOf(context).scale(1) / 1.1);
+
+/// Past 1.2x text a mode panel's side-by-side groups stack, so their labels
+/// keep their full words (WCAG 1.4.4): pt-BR's "Principal" and "Contínuo"
+/// were cut from 1.3x (impeccable audit, 2026-11-04).
+bool simpleStackText(BuildContext context) =>
+    MediaQuery.textScalerOf(context).scale(1) > 1.2;
 
 class _LeftRail extends StatelessWidget {
   const _LeftRail({

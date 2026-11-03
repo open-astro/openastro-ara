@@ -279,9 +279,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get previewClipped => 'Clipped';
 
   @override
-  String get previewSettings => 'Preview settings';
-
-  @override
   String get previewLoop => 'Loop';
 
   @override

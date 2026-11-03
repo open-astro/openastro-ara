@@ -364,10 +364,6 @@
   "@previewClipped": {
     "description": "Simple Mode Info tile label: share of saturated (clipped) highlight pixels"
   },
-  "previewSettings": "Preview settings",
-  "@previewSettings": {
-    "description": "Simple Mode: title of the Preview settings popover"
-  },
   "previewLoop": "Loop",
   "@previewLoop": {
     "description": "Simple Mode Preview settings: segment for continuous live view (frames not saved)"
