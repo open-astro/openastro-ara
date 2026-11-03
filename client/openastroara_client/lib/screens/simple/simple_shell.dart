@@ -2091,19 +2091,23 @@ class _ThisRig extends ConsumerWidget {
     final rig = ref.watch(daemonVersionsProvider).value;
     final stars = ref.watch(plateSolveDatabaseStatusProvider).value?.databases;
     final servers = rig?.alpacaServers ?? const <AlpacaServerVersion>[];
-    Widget fact(String label, String value) => Row(
-      children: [
-        Text(label, style: AraText.caption),
-        const SizedBox(width: AraSpace.s12),
-        Expanded(
-          child: Text(
-            value,
-            style: kSimpleText,
-            textAlign: TextAlign.right,
-            overflow: TextOverflow.ellipsis,
+    // Reads like the telescope and site rows under it.
+    Widget fact(String label, String value) => ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: 44),
+      child: Row(
+        children: [
+          Text(label, style: kSimpleText),
+          const SizedBox(width: AraSpace.s12),
+          Expanded(
+            child: Text(
+              value,
+              style: kSimpleText,
+              textAlign: TextAlign.right,
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
     Widget action(String label, VoidCallback onTap) => Expanded(
       child: TextButton(

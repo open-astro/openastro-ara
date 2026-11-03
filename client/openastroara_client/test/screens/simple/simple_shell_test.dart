@@ -1096,6 +1096,17 @@ void main() {
     expect(field('aperture'), '80');
   });
 
+  testWidgets('Rig\'s Name and Profile read like its other rows', (tester) async {
+    await _pump(tester, const Size(1024, 768));
+    await _openSection(tester, 'Rig');
+    TextStyle? style(String t) => tester.widget<Text>(find.text(t)).style;
+    for (final t in ['Name', 'Profile']) {
+      expect(style(t), style('Aperture'), reason: t);
+      expect(tester.getSize(find.ancestor(of: find.text(t), matching: find.byType(Row)).first).height,
+          greaterThanOrEqualTo(44), reason: '$t: a 44 pt row like Aperture');
+    }
+  });
+
   testWidgets('Change profile goes to the profile box; Change rig to the rig list', (tester) async {
     final c = await _pump(tester, const Size(1024, 768));
     c.read(profileGatePassedProvider.notifier).pass();
