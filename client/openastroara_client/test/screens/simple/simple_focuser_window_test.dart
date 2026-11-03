@@ -167,18 +167,21 @@ void main() {
     expect(turn(), isNot(closeTo(0, 1e-3)), reason: 'the face kept the turn');
   });
 
-  testWidgets('Refocus after: 0.5 °C steps, Never at 0, kept in the profile', (tester) async {
+  testWidgets('Refocus temp is a slider, 0-10 °C in whole degrees, Never at 0, kept in the profile', (tester) async {
     await _pump(tester, _wire());
-    expect(find.text('Refocus after'), findsOneWidget);
+    expect(find.text('Refocus temp'), findsOneWidget);
     expect(find.text('2 °C'), findsOneWidget, reason: "the profile's default");
-    await tester.tap(find.byKey(const Key('simple-focuser-refocus-up')));
+    final slider = tester.widget<Slider>(find.byKey(const Key('simple-focuser-refocus')));
+    expect((slider.min, slider.max, slider.divisions, slider.value), (0.0, 10.0, 10, 2.0));
+    slider.onChanged!(3);
     await tester.pump();
-    expect(_c.read(autofocusSettingsProvider).triggerTempDeltaC, 2.5);
-    for (var i = 0; i < 6; i++) {
-      await tester.tap(find.byKey(const Key('simple-focuser-refocus-down')));
-      await tester.pump();
-    }
-    expect(_c.read(autofocusSettingsProvider).triggerTempDeltaC, 0);
+    expect(find.text('3 °C'), findsOneWidget, reason: 'the value follows the thumb');
+    expect(_c.read(autofocusSettingsProvider).triggerTempDeltaC, 2, reason: 'saved on letting go');
+    tester.widget<Slider>(find.byKey(const Key('simple-focuser-refocus'))).onChangeEnd!(3);
+    await tester.pump();
+    expect(_c.read(autofocusSettingsProvider).triggerTempDeltaC, 3);
+    tester.widget<Slider>(find.byKey(const Key('simple-focuser-refocus'))).onChangeEnd!(0);
+    await tester.pump();
     expect(find.text('Never'), findsOneWidget);
   });
 
@@ -195,24 +198,20 @@ void main() {
       addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
       // The window's inner width: 360 pt grown with the text, less its padding.
       await _pump(tester, _wire(), width: 360 * (scale / 1.1).clamp(1, 2) - 32, font: 'Roboto');
-      for (final label in ['Position', 'Temperature', 'Step', 'Refocus after', 'Autofocus']) {
+      for (final label in ['Position', 'Temperature', 'Step', 'Refocus temp', 'Autofocus']) {
         final p = tester.renderObject<RenderParagraph>(find.text(label));
         expect(p.size.height, lessThan(14 * scale * 2), reason: '$label wraps');
       }
     });
   }
 
-  testWidgets('under the dial, Step and Refocus after are rows like the Guider window\'s: label left, control right',
+  testWidgets('under the dial, Step is a row like the Guider window\'s: label left, control right',
       (tester) async {
     await _pump(tester, _wire());
     final knob = tester.getRect(find.byKey(const Key('simple-focuser-knob')));
     final steps = tester.getRect(find.byKey(const Key('simple-focuser-steps')));
-    final refocus = tester.getRect(find.byKey(const Key('simple-focuser-refocus-up')));
     expect(find.byKey(const Key('simple-window-row-Step')), findsOneWidget);
-    expect(steps.right, closeTo(refocus.right, 1), reason: 'the controls line up on the right');
-    final refocusBox = tester.getRect(find.ancestor(
-        of: find.byKey(const Key('simple-focuser-refocus-up')), matching: find.byType(DecoratedBox)).first);
-    expect(steps.width, closeTo(refocusBox.width, 1), reason: 'Step as wide as Refocus after');
+    expect(steps.width, closeTo(kSimpleWindowControlWidth, 1));
     expect(steps.top - knob.bottom, greaterThanOrEqualTo(16), reason: 'room under the dial');
     expect(find.text('steps per click'), findsNothing);
   });

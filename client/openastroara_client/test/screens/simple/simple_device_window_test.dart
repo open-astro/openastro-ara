@@ -82,10 +82,13 @@ void main() {
       expect(find.text('Cooler'), findsOneWidget);
       expect(find.text('−10 °C'), findsOneWidget, reason: 'the target');
       expect(find.text('−9.8 °C · 34 % power'), findsOneWidget, reason: 'now');
-      // Cooler, Target and Now sit on an even rhythm: the rows are one height.
+      // Current temperature, Cooler and Target sit on an even rhythm: the rows are one height.
       double row(String label) =>
           tester.getSize(find.byKey(Key('simple-window-row-$label'))).height;
-      expect(row('Now'), row('Cooler'));
+      expect(row('Current temperature'), row('Cooler'));
+      expect(tester.getRect(find.byKey(const Key('simple-window-row-Current temperature'))).bottom,
+          lessThanOrEqualTo(tester.getRect(find.byKey(const Key('simple-window-row-Cooler'))).top),
+          reason: 'the reading first, above the cooler');
       expect(row('Target'), row('Cooler'));
       // Compact: rows and their sliders sit close, not 12 pt apart.
       final cooler = tester.getRect(find.byKey(const Key('simple-window-row-Cooler')));
@@ -131,11 +134,14 @@ void main() {
     expect(c.read(imagingDefaultsProvider).coolerTargetC, -15);
     expect(camera.calls, [(true, -15.0)]);
 
-    final (c2, off) = await _pump(tester, _wire(on: false, setpoint: null));
-    tester.widget<Slider>(find.byKey(const Key('simple-camera-target'))).onChangeEnd!(-20);
-    await tester.pump();
-    expect(c2.read(imagingDefaultsProvider).coolerTargetC, -20);
-    expect(off.calls, isEmpty, reason: 'a cooler that is off stays off');
+  });
+
+  testWidgets('the target shows only while the cooler is on', (tester) async {
+    await _pump(tester, _wire(on: false, setpoint: null));
+    expect(find.byKey(const Key('simple-camera-target')), findsNothing);
+    expect(find.byKey(const Key('simple-window-row-Target')), findsNothing);
+    await _pump(tester, _wire());
+    expect(find.byKey(const Key('simple-camera-target')), findsOneWidget);
   });
 
   testWidgets('Gain is a slider over the camera\'s range: the same gain as Preview\'s chip; plans keep their own', (tester) async {

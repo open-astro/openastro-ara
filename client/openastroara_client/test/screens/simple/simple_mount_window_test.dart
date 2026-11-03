@@ -24,8 +24,15 @@ class _Mount extends MountNotifier {
   @override
   Future<bool> setTracking(bool enabled) async {
     calls.add('tracking $enabled');
+    if (refuseTracking > 0) {
+      refuseTracking--;
+      throw StateError('Mount is slewing');
+    }
     return true;
   }
+
+  /// How many tracking asks to refuse first (a mount still settling).
+  int refuseTracking = 0;
 
   @override
   Future<bool> park() async {
@@ -116,6 +123,20 @@ void main() {
     await tester.pump();
     await tester.pump();
     expect(mount.calls, ['unpark', 'tracking true']);
+  });
+
+  testWidgets('after an unpark the mount may still be settling: tracking is asked again until it takes',
+      (tester) async {
+    final (_, mount) = await _pump(tester, _wire(tracking: false, parked: true, runtime: 'parked'));
+    mount.refuseTracking = 2;
+    await tester.tap(find.byKey(const Key('simple-mount-tracking-on')));
+    await tester.pump();
+    mount.set(_wire(tracking: false, parked: false, runtime: 'slewing'));
+    await tester.pump();
+    expect(mount.calls, ['unpark'], reason: 'still moving out of park');
+    mount.set(_wire(tracking: false, parked: false, runtime: 'idle'));
+    await tester.pump(const Duration(seconds: 5));
+    expect(mount.calls, ['unpark', 'tracking true', 'tracking true', 'tracking true'], reason: 'one tap is enough');
   });
 
   testWidgets('a parked mount unparks from the segment and reads Unparking… while it does', (tester) async {

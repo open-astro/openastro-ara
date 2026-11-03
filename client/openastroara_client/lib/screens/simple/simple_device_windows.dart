@@ -115,6 +115,12 @@ class _SimpleCameraWindowState extends ConsumerState<SimpleCameraWindow> {
         if (s.ccdTemperature != null) simpleCelsius(s.ccdTemperature!),
         if (s.coolerPowerPct != null) '${s.coolerPowerPct!.round()} % power',
       ].join(' · ');
+      // What the sensor reads, first.
+      if (now.isNotEmpty) {
+        children.add(
+          _row('Current temperature', Text(now, style: kSimpleText)),
+        );
+      }
       if (caps == null || !caps.hasCooler) {
         children.add(
           _row('Cooler', const Text('No cooler', style: kSimpleText)),
@@ -134,7 +140,8 @@ class _SimpleCameraWindowState extends ConsumerState<SimpleCameraWindow> {
             ),
           ),
         );
-        if (caps.canSetTemperature) {
+        // The target only while the cooler is on (On cools to the profile's).
+        if (caps.canSetTemperature && s.coolerOn) {
           const lo = SimpleCameraWindow.targetMin,
               hi = SimpleCameraWindow.targetMax;
           children.add(
@@ -156,9 +163,6 @@ class _SimpleCameraWindowState extends ConsumerState<SimpleCameraWindow> {
             ),
           );
         }
-      }
-      if (now.isNotEmpty) {
-        children.add(_row('Now', Text(now, style: kSimpleText)));
       }
       // The camera's gain, shared with Preview's chip.
       children.add(
@@ -396,16 +400,30 @@ class SimpleMountMotionNotifier extends Notifier<bool?> {
     ref.listen(mountProvider, (_, next) {
       final m = next.value;
       if (state == null || m == null) return;
-      if (m.parked == state && m.runtimeState != 'unparking') {
+      // Done once the mount says so and has stopped moving out of park.
+      if (m.parked == state &&
+          m.runtimeState != 'unparking' &&
+          (state == true || m.runtimeState != 'slewing')) {
         final track = _trackAfter && state == false;
         _trackAfter = false;
         state = null;
-        if (track) {
-          ref.read(mountProvider.notifier).setTracking(true).ignore();
-        }
+        if (track) _track().ignore();
       }
     });
     return null;
+  }
+
+  /// Tracking on after an unpark: a mount still settling refuses it, so it
+  /// is asked again, up to five times a second apart.
+  Future<void> _track() async {
+    for (var i = 0; i < 5; i++) {
+      try {
+        if (await ref.read(mountProvider.notifier).setTracking(true)) return;
+      } catch (_) {
+        // Still settling; ask again.
+      }
+      await Future<void>.delayed(const Duration(seconds: 1));
+    }
   }
 
   /// Parks or unparks; true when the mount took the ask (it throws why not).
@@ -725,14 +743,31 @@ class _SimpleFocuserWindowState extends ConsumerState<SimpleFocuserWindow> {
 
   /// The profile's autofocus temperature trigger: every run Ara builds
   /// refocuses after the focuser drifts this much (0 = off).
-  Widget _refocus() {
-    final c = ref.watch(autofocusSettingsProvider).triggerTempDeltaC;
-    return simpleWindowStepper(
-      id: 'simple-focuser-refocus',
-      text: c <= 0 ? 'Never' : simpleCelsius(c),
-      onLess: () => _setRefocus(c - 0.5),
-      onMore: () => _setRefocus(c + 0.5),
-    );
+  /// While the refocus thumb is held: the value it shows, saved on letting go.
+  double? _dragRefocus;
+
+  /// The profile's autofocus temperature trigger as a stepped slider under
+  /// its row: whole degrees, 0 = never.
+  List<Widget> _refocus() {
+    final saved = ref.watch(autofocusSettingsProvider).triggerTempDeltaC;
+    final c = _dragRefocus ?? saved;
+    String text(double v) => v <= 0 ? 'Never' : simpleCelsius(v);
+    return [
+      simpleWindowRow('Refocus temp', Text(text(c), style: kSimpleText)),
+      Slider(
+        key: const Key('simple-focuser-refocus'),
+        min: 0,
+        max: 10,
+        divisions: 10,
+        value: c.clamp(0, 10).roundToDouble(),
+        label: text(c.roundToDouble()),
+        onChanged: (v) => setState(() => _dragRefocus = v),
+        onChangeEnd: (v) {
+          setState(() => _dragRefocus = null);
+          _setRefocus(v.roundToDouble());
+        },
+      ),
+    ];
   }
 
   Future<void> _setRefocus(double c) async {
@@ -841,7 +876,7 @@ class _SimpleFocuserWindowState extends ConsumerState<SimpleFocuserWindow> {
             ),
           ),
         ),
-        simpleWindowRow('Refocus after', _refocus()),
+        ..._refocus(),
       ]);
     }
     if (widget.inSettings) {
