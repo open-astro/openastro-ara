@@ -6,6 +6,8 @@ import 'dart:math' as math;
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../state/sky_atlas/tonight_sky_state.dart'
+    show planningSettingsBootstrapProvider;
 import '../../models/frame_histogram.dart';
 import '../../models/guider_status.dart';
 import '../../models/polar_align.dart';
@@ -376,6 +378,9 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
 
   @override
   Widget build(BuildContext context) {
+    // The profile's site and telescope (Rig, Polar align's hemisphere, plate
+    // solving): otherwise only the full UI's panels load them.
+    ref.watch(planningSettingsBootstrapProvider);
     // A jump to Settings (a device dot, Open Storage) opens it over Simple
     // Mode and puts the tab back, so the next jump is a change again; any
     // other tab jump still leaves for the full UI.

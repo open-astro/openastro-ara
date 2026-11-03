@@ -61,6 +61,7 @@ import 'package:openastroara/widgets/emergency_stop_button.dart';
 import 'package:openastroara/widgets/imaging/histogram_strip.dart' show frameHistogramProvider;
 import 'package:openastroara/widgets/night_hotkey.dart';
 import 'package:openastroara/theme/ara_colors.dart';
+import 'package:openastroara/state/sky_atlas/tonight_sky_state.dart' show planningSettingsBootstrapProvider;
 
 class _MemPrefs extends SimpleModePrefsService {
   bool value = true;
@@ -1070,6 +1071,29 @@ void main() {
     expect(find.byKey(const Key('simple-rig-use-location')), findsOneWidget, reason: 'fill from this device');
     await enter('simple-rig-aperture', 'abc');
     expect(c.read(opticsSettingsProvider).apertureMm, 80, reason: 'not a number: kept');
+  });
+
+  testWidgets('on launch Rig shows the profile\'s site and telescope, not empty fields', (tester) async {
+    var loaded = 0;
+    await _pump(tester, const Size(1024, 768), gear: [
+      planningSettingsBootstrapProvider.overrideWith((ref) async {
+        loaded++;
+        await Future<void>.value(); // like the real fetch: no writes during the provider's build
+        ref.read(siteSettingsProvider.notifier)
+          ..setLatitudeDeg(-37.2)
+          ..setLongitudeDeg(174.9)
+          ..setElevationM(71);
+        ref.read(opticsSettingsProvider.notifier).setApertureMm(80);
+      }),
+    ]);
+    await tester.pump();
+    expect(loaded, 1, reason: 'Simple Mode loads the profile itself; nothing else may have');
+    await _openSection(tester, 'Rig');
+    String field(String id) => tester.widget<TextField>(find.byKey(Key('simple-rig-$id'))).controller!.text;
+    expect(field('lat'), '-37.2');
+    expect(field('lng'), '174.9');
+    expect(field('elevation'), '71');
+    expect(field('aperture'), '80');
   });
 
   testWidgets('Change profile goes to the profile box; Change rig to the rig list', (tester) async {
