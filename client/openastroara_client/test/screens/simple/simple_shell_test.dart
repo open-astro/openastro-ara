@@ -496,7 +496,7 @@ void main() {
     expect(find.byKey(const Key('simple-sky-image-this')), findsOneWidget);
   });
 
-  testWidgets('the settings chip opens Exposure and Gain side by side from lists, Filter and Loop/Single',
+  testWidgets('the settings chip opens Exposure from a list, the Gain slider under it, Filter and Loop/Single',
       (tester) async {
     final container = await _pump(tester, const Size(1024, 768));
     expect(find.text(_summary(container)), findsOneWidget, reason: 'the chip reads the settings');
@@ -505,7 +505,8 @@ void main() {
     expect(tester.takeException(), isNull);
     final exposure = tester.getRect(find.byKey(const Key('simple-exposure')));
     final gain = tester.getRect(find.byKey(const Key('simple-gain')));
-    expect(exposure.top, gain.top, reason: 'side by side');
+    expect(gain.top, greaterThan(exposure.bottom), reason: 'the slider gets the full width');
+    expect(find.byKey(const Key('simple-camera-gain')), findsNothing);
     expect(find.text('Filter'), findsOneWidget);
     expect(find.text('Loop'), findsOneWidget);
 
@@ -514,11 +515,9 @@ void main() {
     await tester.tap(find.text('10 s').last);
     await tester.pumpAndSettle();
     expect(container.read(exposureControllerProvider).exposure, const Duration(seconds: 10));
-    await tester.tap(find.byKey(const Key('simple-gain')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('200').last);
-    await tester.pumpAndSettle();
-    expect(container.read(exposureControllerProvider).gain, 200);
+    tester.widget<Slider>(find.byKey(const Key('simple-gain'))).onChangeEnd!(200);
+    await tester.pump();
+    expect(container.read(exposureControllerProvider).gain, 200, reason: "the camera's gain, as in the Camera window");
     expect(find.text('10 s · 200'), findsOneWidget, reason: 'the chip follows');
 
     await tester.tapAt(const Offset(400, 400));
@@ -1740,12 +1739,10 @@ void main() {
     expect(simpleMemory(1536 * 1048576), '1.5 GB');
   });
 
-  test('preset lists stay inside what the camera reports', () {
+  test('the exposure list stays inside what the camera reports', () {
     expect(exposurePresets(minSec: 1, maxSec: 60), allOf(contains(const Duration(seconds: 1)),
         contains(const Duration(seconds: 60)), isNot(contains(const Duration(milliseconds: 500))),
         isNot(contains(const Duration(seconds: 120)))));
-    expect(gainPresets(min: 0, max: 100), [0, 50, 100]);
-    expect(gainPresets(min: 0, max: 0), contains(100));
   });
 
   test('the router picks the shell from the pref, and both shells maximize the window', () {

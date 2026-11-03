@@ -20,7 +20,7 @@ import '../../widgets/imaging/exposure_controls_panel.dart' show FilterDropdown;
 import '../../widgets/imaging/histogram_strip.dart' show frameHistogramProvider;
 import '../imaging_actions.dart';
 import 'simple_plan_panel.dart' show simpleRunProvider;
-import 'simple_device_windows.dart' show simpleCelsius;
+import 'simple_device_windows.dart' show SimpleGainSlider, simpleCelsius;
 import 'simple_shell.dart'
     show SimplePanel, SimpleSegment, kSimpleRailWidth, kSimpleStatusMaxWidth;
 
@@ -271,8 +271,8 @@ Future<void> _stop(BuildContext context, WidgetRef ref) async {
   }
 }
 
-/// The mode's settings, opened from the rail's chip: Exposure and Gain side
-/// by side (picked from lists), Filter, and Loop / Single.
+/// The mode's settings, opened from the rail's chip: Exposure (picked from a
+/// list), the Gain slider, Filter, and Loop / Single.
 class SimpleSettingsPopover extends ConsumerWidget {
   const SimpleSettingsPopover({super.key});
 
@@ -283,8 +283,6 @@ class SimpleSettingsPopover extends ConsumerWidget {
     final shot = ref.watch(previewShotProvider);
     final looping = ref.watch(liveViewControllerProvider);
     final caps = ref.watch(cameraStatusProvider).asData?.value?.capabilities;
-    // Named gains (a camera with gain modes) are picked by index.
-    final namedGains = caps?.gains ?? const <String>[];
     return SimplePanel(
       padding: const EdgeInsets.all(AraSpace.s12),
       child: Column(
@@ -300,40 +298,22 @@ class SimpleSettingsPopover extends ConsumerWidget {
               color: AraColors.textPrimary,
             ),
           ),
-          Row(
-            spacing: AraSpace.s8,
-            children: [
-              Expanded(
-                child: SimplePresetTile<Duration>(
-                  key: const Key('simple-exposure'),
-                  label: 'Exposure',
-                  value: params.exposure,
-                  options: exposurePresets(
-                    minSec: caps?.minExposureSec ?? 0,
-                    maxSec: caps?.maxExposureSec ?? 0,
-                  ),
-                  format: formatExposure,
-                  onSelected: ctrl.setExposure,
-                ),
-              ),
-              Expanded(
-                child: SimplePresetTile<int>(
-                  key: const Key('simple-gain'),
-                  label: 'Gain',
-                  value: params.gain,
-                  options: namedGains.isNotEmpty
-                      ? [for (var i = 0; i < namedGains.length; i++) i]
-                      : gainPresets(
-                          min: caps?.minGain ?? 0,
-                          max: caps?.maxGain ?? 0,
-                        ),
-                  format: (g) => namedGains.isNotEmpty && g < namedGains.length
-                      ? namedGains[g]
-                      : '$g',
-                  onSelected: ctrl.setGain,
-                ),
-              ),
-            ],
+          SimplePresetTile<Duration>(
+            key: const Key('simple-exposure'),
+            label: 'Exposure',
+            value: params.exposure,
+            options: exposurePresets(
+              minSec: caps?.minExposureSec ?? 0,
+              maxSec: caps?.maxExposureSec ?? 0,
+            ),
+            format: formatExposure,
+            onSelected: ctrl.setExposure,
+          ),
+          // The camera's gain: the same slider and value as the Camera window.
+          SimpleGainSlider(
+            id: 'simple-gain',
+            value: params.gain,
+            onSet: ctrl.setGain,
           ),
           FilterDropdown(
             value: params.filterSlot,
@@ -425,30 +405,6 @@ List<Duration> exposurePresets({
     if ((minSec <= 0 || ms >= minSec * 1000) &&
         (maxSec <= 0 || ms <= maxSec * 1000))
       Duration(milliseconds: ms),
-];
-
-const _kGainPresets = [
-  0,
-  50,
-  100,
-  120,
-  150,
-  200,
-  250,
-  300,
-  350,
-  400,
-  450,
-  500,
-  600,
-];
-
-/// The gain list, trimmed to the camera's reported range (max 0 = not
-/// reported: the usual presets up to 300).
-@visibleForTesting
-List<int> gainPresets({required int min, required int max}) => [
-  for (final g in _kGainPresets)
-    if (max <= 0 ? g <= 300 : g >= min && g <= max) g,
 ];
 
 /// A labelled 48 px tile that opens a list to pick from. The current value
