@@ -1,9 +1,9 @@
 /// Represents a discovered or manually-added OpenAstro Ara server.
 ///
 /// Either populated from an mDNS scan result (`_openastroara._tcp.local`) or
-/// from a manual user entry on the first-run screen. Once the user picks one
-/// and the handshake against `/api/v1/server/info` returns 200, this is what
-/// gets persisted to local secure storage (per playbook §30).
+/// from a manual user entry on the first-run screen. Once one is picked and
+/// the handshake against `/api/v1/server/info` returns 200, it is kept for the
+/// session only (#1129); only its name outlives the app, as the last rig.
 class AraServer {
   final String hostname;
   final int port;

@@ -13,8 +13,10 @@ import '../widgets/profile/delete_profile_dialog.dart';
 import '../widgets/profile/profile_import_flow.dart';
 import 'wizard/wizard_shell.dart';
 
-/// §30.2 launch profile box — shown on every launch after the server gate,
-/// before the main shell. Dropdown of the daemon's profiles (pre-selecting the
+/// §30.2 launch profile box — after the server gate, before the main shell.
+/// Skipped on a session's first entry when the rig has an active profile
+/// (ALP-4890); shown when it has none, the active one is missing, the rig
+/// can't be reached, and after Launchpad. Dropdown of the daemon's profiles (pre-selecting the
 /// active/last-used one per §30.3) + [Image] to enter the app, with
 /// [Add a Profile] (→ §37 wizard) and [Import Profile] always visible.
 class LaunchProfileScreen extends ConsumerStatefulWidget {

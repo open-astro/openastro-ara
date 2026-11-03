@@ -110,10 +110,11 @@ class OpenAstroAraApp extends StatelessWidget {
   }
 }
 
-/// §30.1 launch sequence: FirstRunScreen (the network scan — nothing is stored
-/// between launches, #1129) → the
-/// LaunchProfileScreen profile box (always shown, §30.2/§30.3) → AppShell
-/// once the user clicks [Image] and the launch gate passes. "Plan offline"
+/// §30.1 launch sequence: FirstRunScreen (the network scan — no address is
+/// stored, #1129; the last rig, kept by name, connects on its own, ALP-4890) →
+/// the LaunchProfileScreen profile box (§30.2/§30.3; skipped on a session's
+/// first entry when the rig has an active profile) → AppShell once the user
+/// clicks [Image] or the launch gate passes on its own. "Plan offline"
 /// (§2 — the client is a planning workstation, not a thin viewer) bypasses both
 /// gates and enters the shell with no server for the session.
 class _RootRouter extends ConsumerWidget {
