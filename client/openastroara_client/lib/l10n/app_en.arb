@@ -1731,6 +1731,10 @@
       }
     }
   },
+  "planRunEnding": "The run is ending; this target can't join it.",
+  "@planRunEnding": {
+    "description": "Plan sheet: Add to queue while the run is winding down (the rig refused the append)"
+  },
   "shellLanguage": "Language",
   "shellLanguageSystem": "System",
   "@shellLanguage": {

@@ -2414,7 +2414,9 @@ class _ThisRig extends ConsumerWidget {
         );
       }
     }
+    if (!context.mounted) return; // Rig closed while the clock was set
     final r = await fillSiteFromGps(ref);
+    if (!context.mounted) return;
     if (!r.success) {
       notify(l10n.shellCouldntGetLocation, detail: r.message, error: true);
       return;

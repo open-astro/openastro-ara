@@ -174,22 +174,25 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
   }
 
   // [action] completes "Couldn't <action>".
-  Future<void> _run(
+  /// True when the rig took it.
+  Future<bool> _run(
     String action,
     Future<void> Function(PolarAlignClient api) op,
   ) async {
     final api = ref.read(polarAlignApiProvider);
-    if (api == null) return;
+    if (api == null) return false;
     setState(() {
       _busy = true;
       _error = null;
     });
     try {
       await op(api);
+      return true;
     } catch (e) {
       if (mounted) {
         setState(() => _error = friendlyError(context.l10n, e, action: action));
       }
+      return false;
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -436,15 +439,18 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
                               total != null &&
                               total < settings.targetToleranceArcmin
                           ? () async {
-                              await _run(
+                              // Read before the await: the panel may have
+                              // closed by the time the rig answers.
+                              final pilot = ref.read(
+                                autopilotProvider.notifier,
+                              );
+                              final done = await _run(
                                 l10n.polarActionComplete,
                                 (api) => api.complete(),
                               );
                               // In Guided Run, Done moves on (the routine
                               // is complete: nothing to stop).
-                              if (autopilot && _error == null) {
-                                ref.read(autopilotProvider.notifier).polarDone();
-                              }
+                              if (autopilot && done) pilot.polarDone();
                             }
                           : null,
                       child: Text(

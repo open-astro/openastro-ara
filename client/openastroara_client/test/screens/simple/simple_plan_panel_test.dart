@@ -85,8 +85,15 @@ class _Seq implements SequenceClient {
   @override
   Future<SequenceDetail> getSequenceDetail(String id) async => SequenceDetail(id: id, body: bodies[id] ?? const {});
 
+  /// Updates that go through before the rest fail (the link drops); -1: none fail.
+  int updatesBeforeFail = -1;
+  /// Holds every update until completed (a slow link).
+  Completer<void>? updateGate;
   @override
   Future<SequenceDetail> updateSequence(String id, {String? name, String? description, Map<String, dynamic>? body}) async {
+    await updateGate?.future;
+    if (updatesBeforeFail == 0) throw DioException(requestOptions: RequestOptions(), message: 'link dropped');
+    if (updatesBeforeFail > 0) updatesBeforeFail--;
     calls.add('update $id');
     if (body != null) bodies[id] = body;
     return SequenceDetail(id: id, body: bodies[id] ?? const {});
@@ -1117,6 +1124,37 @@ void main() {
       expect(c.read(simpleRunProvider).targets.map((t) => t.name), ['M31', 'M42', 'M45']);
     });
 
+    testWidgets('Undo still puts the target back after the queue panel has closed', (tester) async {
+      final (c, seq) = await queueOfThree(tester);
+      await tester.drag(find.byKey(const Key('simple-run-edit-0')), const Offset(-400, 0));
+      await tester.pumpAndSettle();
+      final pill = c.read(simpleMessagesProvider).single;
+      // The panel closes (another mode, the sheet shut); the Undo pill stays up for 6 s.
+      await tester.pumpWidget(UncontrolledProviderScope(container: c, child: const MaterialApp(home: SizedBox())));
+      pill.actions.single.onPressed();
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(seq.targets('seq-1'), ['M31', 'M42', 'M45']);
+      expect(c.read(simpleRunProvider).targets.map((t) => t.name), ['M31', 'M42', 'M45']);
+      await tester.pump(const Duration(seconds: 7)); // the pills fade
+    });
+
+    testWidgets('a second reorder while the first is on its way is not sent', (tester) async {
+      final (c, seq) = await queueOfThree(tester);
+      seq.updateGate = Completer<void>();
+      final before = seq.calls.length;
+      final n = c.read(simpleRunProvider.notifier);
+      final first = n.reorder(0, 2);
+      final second = n.reorder(1, 0);
+      seq.updateGate!.complete();
+      await Future.wait([first, second]);
+      await tester.pumpAndSettle();
+      expect(seq.calls.skip(before).where((call) => call.startsWith('update')), hasLength(2),
+          reason: "the first reorder's two moves only");
+      expect(seq.targets('seq-1'), ['M42', 'M45', 'M31']);
+      expect(c.read(simpleRunProvider).targets.map((t) => t.name), ['M42', 'M45', 'M31']);
+    });
+
     testWidgets('queued targets reorder by dragging their handle; the rig follows', (tester) async {
       final (c, seq) = await queueOfThree(tester);
       expect(find.byKey(const Key('simple-run-drag-0')), findsOneWidget, reason: 'a visible handle');
@@ -1159,6 +1197,33 @@ void main() {
       expect(c.read(simpleRunProvider).targets[1].steps.first.frameCount, 7);
       expect(c.read(simpleRunProvider).targets.map((t) => t.name), ['M31', 'M42']);
       expect(closed, 1);
+    });
+
+    testWidgets('an edit the rig loses halfway shows the queue as the rig has it, and says so', (tester) async {
+      // Review: edit removes the block, then adds it back; a drop in between left the screen showing a
+      // target the rig no longer had, so it was never imaged.
+      final seq = _Seq();
+      final c = await _pump(tester, seq,
+          SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}, onLibrary: () {}));
+      await create(tester);
+      await pick(tester, c, _m42);
+      await create(tester);
+      c.read(simpleRunPlanProvider.notifier).load(c.read(simpleRunProvider).targets[1].steps);
+      await tester.pumpWidget(UncontrolledProviderScope(
+        container: c,
+        child: MaterialApp(
+            home: Scaffold(
+                body: Center(
+                    child: SimpleRunSheet(
+                        editing: 1, onShowSky: () {}, onPickInSky: () {}, onCreated: () {}, onLibrary: () {})))),
+      ));
+      await tester.pumpAndSettle();
+      seq.updatesBeforeFail = 1; // the remove goes through; adding it back does not
+      await tester.tap(find.byKey(const Key('simple-run-save')));
+      await tester.pumpAndSettle();
+      expect(seq.targets('seq-1'), ['M31']);
+      expect(c.read(simpleRunProvider).targets.map((t) => t.name), ['M31'], reason: 'what the rig will image');
+      expect(c.read(simpleRunProvider).error, isNotNull);
     });
 
     testWidgets('while imaging: the panel offers Add to queue; the sheet only adds', (tester) async {

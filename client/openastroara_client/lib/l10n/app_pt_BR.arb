@@ -355,6 +355,7 @@
   "planAddTarget": "Adicionar alvo",
   "planMagnitude": "mag {value}",
   "planAlreadyQueued": "{name} já está na fila.",
+  "planRunEnding": "A sessão está terminando; este alvo não pode entrar nela.",
   "shellLanguage": "Idioma",
   "shellLanguageSystem": "Sistema",
   "estopCompactStop": "PARAR",

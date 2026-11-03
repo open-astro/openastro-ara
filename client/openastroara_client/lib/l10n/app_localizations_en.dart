@@ -1224,6 +1224,9 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get planRunEnding => 'The run is ending; this target can\'t join it.';
+
+  @override
   String get shellLanguage => 'Language';
 
   @override

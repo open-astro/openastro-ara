@@ -121,7 +121,10 @@ void showImagingRunFeedback(
 /// daemon into a reported failure (and, on the append path, into a duplicate
 /// fresh run via the fallback).
 Future<ImagingRunResult?> createImagingRun(
-  WidgetRef ref, {
+  WidgetRef? ref, {
+  // In place of [ref], for a caller whose widget may be gone by then (Simple
+  // Mode's Undo, pressed on a pill after its panel closed).
+  ProviderContainer? container,
   required double raDeg,
   required double decDeg,
   required String targetName,
@@ -162,11 +165,12 @@ Future<ImagingRunResult?> createImagingRun(
   // establish connection after the adapter was closed" and was saved as an
   // OFFLINE DRAFT while the status bar said connected (seen on the rig,
   // 2026-10-04). The listen keeps one live client until the create returns.
-  final container = ProviderScope.containerOf(ref.context, listen: false);
-  final keepApi = container.listen(sequenceApiProvider, (_, _) {});
+  final c = container ?? ProviderScope.containerOf(ref!.context, listen: false);
+  final keepApi = c.listen(sequenceApiProvider, (_, _) {});
   try {
     return await _createImagingRunPinned(
       ref,
+      c,
       raDeg: raDeg,
       decDeg: decDeg,
       targetName: targetName,
@@ -188,7 +192,8 @@ Future<ImagingRunResult?> createImagingRun(
 }
 
 Future<ImagingRunResult?> _createImagingRunPinned(
-  WidgetRef ref, {
+  WidgetRef? ref,
+  ProviderContainer container, {
   required double raDeg,
   required double decDeg,
   required String targetName,
@@ -205,8 +210,7 @@ Future<ImagingRunResult?> _createImagingRunPinned(
   bool alwaysCenter = false,
   int? gainOverride,
 }) async {
-  final api = ref.read(sequenceApiProvider);
-  final container = ProviderScope.containerOf(ref.context, listen: false);
+  final api = container.read(sequenceApiProvider);
 
   // Resolve the target list once: a mosaic becomes N named panels, anything
   // else a single panel at the given coordinates — every path below (offline
@@ -568,7 +572,7 @@ Future<void> hydratePlanningSettings(ProviderContainer container) async {
 /// real alternative (empty / OSC-only) or the calling widget's context is
 /// gone. Null = the user explicitly cancelled — create nothing.
 Future<TargetPlanChoice?> _choosePlan(
-  WidgetRef ref,
+  WidgetRef? ref,
   ProviderContainer container, {
   required String targetName,
   required double raDeg,
@@ -581,8 +585,11 @@ Future<TargetPlanChoice?> _choosePlan(
   if (!planOptionsAvailable(container.read(filterSetProvider).filters)) {
     return TargetPlanChoice(guide: rig.guider);
   }
-  final context = ref.context;
-  if (!context.mounted) return TargetPlanChoice(guide: rig.guider);
+  // No widget (a container caller), or it is gone: the silent choice.
+  final context = ref?.context;
+  if (context == null || !context.mounted) {
+    return TargetPlanChoice(guide: rig.guider);
+  }
   return showTargetPlanDialog(
     context,
     targetName: targetName,

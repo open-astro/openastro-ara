@@ -196,8 +196,8 @@ class SimpleFocusShutter extends ConsumerWidget {
 }
 
 /// Focus mode's panel beside the right rail: where the run stands, the HFR,
-/// the V-curve once there are probes, the focuser position and four nudges.
-/// The shutter starts autofocus.
+/// the V-curve once there are probes and the focuser position (the Focuser
+/// window's dial moves it). The shutter starts autofocus.
 class SimpleFocusPanel extends ConsumerStatefulWidget {
   const SimpleFocusPanel({super.key});
 

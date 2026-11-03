@@ -218,9 +218,16 @@ class SimpleRunPlanNotifier extends Notifier<List<FilterPlanStep>> {
     // A re-read of the settings assigns new objects (they have no ==), so
     // only a real change of filters or default sub starts the rows afresh,
     // and never under a queued target's own rows.
-    ref.listen(filterSetProvider.select((s) => [for (final f in s.filters) '${f.name}/${f.kind}'].join('|')),
-        (_, _) => _reseed());
-    ref.listen(imagingDefaultsProvider.select((d) => d.defaultExposure), (_, _) => _reseed());
+    ref.listen(
+      filterSetProvider.select(
+        (s) => [for (final f in s.filters) '${f.name}/${f.kind}'].join('|'),
+      ),
+      (_, _) => _reseed(),
+    );
+    ref.listen(
+      imagingDefaultsProvider.select((d) => d.defaultExposure),
+      (_, _) => _reseed(),
+    );
     _darkHours = ref.read(simpleDarkHoursProvider);
     return _defaults();
   }
@@ -557,7 +564,8 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
     if (queued >= 0) {
       if (!first) {
         state = state.copyWith(
-          error: l10nFor(this.ref.read(appLocaleProvider)).planAlreadyQueued(sel.name),
+          error: l10nFor(this.ref.read(appLocaleProvider))
+              .planAlreadyQueued(sel.name),
         );
         return false;
       }
@@ -601,7 +609,7 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
         } catch (_) {}
         state = state.copyWith(
           busy: false,
-          error: "The run is ending; this target can't join it.",
+          error: l10nFor(this.ref.read(appLocaleProvider)).planRunEnding,
         );
         return false;
       }
@@ -707,8 +715,30 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
       );
       return true;
     } catch (e) {
-      state = state.copyWith(busy: false, error: _why(e, 'save the edit'));
+      state = state.copyWith(
+        busy: false,
+        error: _why(e, 'save the edit'),
+        targets: await _asOnRig(api, id),
+      );
       return false;
+    }
+  }
+
+  /// The queue as the rig holds it, after an edit or reorder that stopped
+  /// halfway: the targets still on it, in its order. The list as it was when
+  /// the rig can't be read either.
+  Future<List<SimpleTarget>> _asOnRig(SequenceClient api, String id) async {
+    try {
+      final body = (await api.getSequenceDetail(id)).body;
+      final at = {
+        for (final t in state.targets) t.name: indexOfTargetBlock(body, t.name),
+      };
+      return [
+        for (final t in state.targets)
+          if (at[t.name]! >= 0) t,
+      ]..sort((a, b) => at[a.name]!.compareTo(at[b.name]!));
+    } catch (_) {
+      return state.targets;
     }
   }
 
@@ -726,15 +756,17 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
   }
 
   /// Put a removed target back at [at] (Undo after a swipe): added to the
-  /// rig again and moved into place. True once back.
-  Future<bool> restore(WidgetRef ref, SimpleTarget t, int at) async {
+  /// rig again and moved into place. True once back. Through this notifier's
+  /// container, not a widget's ref: the pill outlives the queue panel.
+  Future<bool> restore(SimpleTarget t, int at) async {
     final id = state.sequenceId;
     if (id == null || state.busy || t.steps.isEmpty) return false;
     state = state.copyWith(busy: true);
     try {
-      this.ref.read(selectedSequenceIdProvider.notifier).select(id);
+      ref.read(selectedSequenceIdProvider.notifier).select(id);
       final r = await createImagingRun(
-        ref,
+        null,
+        container: ref.container,
         raDeg: t.raDeg,
         decDeg: t.decDeg,
         targetName: t.name,
@@ -771,6 +803,7 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
     final id = state.sequenceId;
     final n = state.targets.length;
     if (id == null ||
+        state.busy ||
         from == to ||
         from < 0 ||
         to < 0 ||
@@ -790,7 +823,12 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
       }
       state = state.copyWith(targets: wanted, busy: false);
     } catch (e) {
-      state = state.copyWith(busy: false, error: _why(e, 'reorder the queue'));
+      final api = ref.read(sequenceApiProvider);
+      state = state.copyWith(
+        busy: false,
+        error: _why(e, 'reorder the queue'),
+        targets: api == null ? null : await _asOnRig(api, id),
+      );
     }
   }
 
@@ -905,7 +943,9 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
       );
       // Also as a pill: the sheet and queue panel that show the error may be
       // closed (a failed Stop from the shutter, with the rig still imaging).
-      ref.read(simpleMessagesProvider.notifier).show(SimpleMessageKind.error, why);
+      ref
+          .read(simpleMessagesProvider.notifier)
+          .show(SimpleMessageKind.error, why);
     }
     await ref.read(sequenceRunStateProvider.notifier).refresh();
   }
@@ -2145,16 +2185,19 @@ class _QueueList extends ConsumerWidget {
     Future<void> remove(int i) async {
       final t = run.targets[i];
       final l10n = context.l10n;
+      // Read before the await: this row may be gone when it returns.
+      final container = ProviderScope.containerOf(context, listen: false);
       await notifier.remove(i);
-      if (ref.read(simpleRunProvider).sequenceId == null) return;
-      final messages = ref.read(simpleMessagesProvider.notifier);
-      messages.show(
-        SimpleMessageKind.result,
-        l10n.planTargetRemoved(t.name),
-        actions: [
-          SimpleMessageAction(l10n.planUndo, () => notifier.restore(ref, t, i)),
-        ],
-      );
+      if (container.read(simpleRunProvider).sequenceId == null) return;
+      container
+          .read(simpleMessagesProvider.notifier)
+          .show(
+            SimpleMessageKind.result,
+            l10n.planTargetRemoved(t.name),
+            actions: [
+              SimpleMessageAction(l10n.planUndo, () => notifier.restore(t, i)),
+            ],
+          );
     }
 
     Widget row(int i) {

@@ -1224,6 +1224,9 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String get planRunEnding => 'The run is ending; this target can\'t join it.';
+
+  @override
   String get shellLanguage => 'Language';
 
   @override
@@ -3148,6 +3151,10 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String planAlreadyQueued(String name) {
     return '$name já está na fila.';
   }
+
+  @override
+  String get planRunEnding =>
+      'A sessão está terminando; este alvo não pode entrar nela.';
 
   @override
   String get shellLanguage => 'Idioma';

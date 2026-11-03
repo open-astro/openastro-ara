@@ -2229,6 +2229,12 @@ abstract class AppLocalizations {
   /// **'{name} is already in the queue.'**
   String planAlreadyQueued(String name);
 
+  /// Plan sheet: Add to queue while the run is winding down (the rig refused the append)
+  ///
+  /// In en, this message translates to:
+  /// **'The run is ending; this target can\'t join it.'**
+  String get planRunEnding;
+
   /// Settings › Rig: the app language row (this device only)
   ///
   /// In en, this message translates to:
