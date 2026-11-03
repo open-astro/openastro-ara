@@ -21,7 +21,7 @@ import 'simple_preview_panel.dart'
         formatExposure,
         kSimpleText;
 import 'simple_shell.dart'
-    show SimplePanel, SimpleSegment, kSimpleGoStyle, simpleStackText;
+    show SimplePanel, SimpleSegments, kSimpleGoStyle, simpleStackText;
 import '../../state/simple_messages_state.dart';
 
 /// True while the server runs any phase of the routine.
@@ -387,28 +387,13 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
               spacing: AraSpace.s8,
               children: [
                 for (final w in <Widget>[
-                  Container(
-                    decoration: BoxDecoration(
-                      color: AraColors.tileFill,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Row(
-                      children: [
-                        for (final (mode, label) in [
-                          (PolarAlignLoopModes.loop, l10n.polarLoop),
-                          (PolarAlignLoopModes.single, l10n.polarSingle),
-                        ])
-                          Expanded(
-                            child: SimpleSegment(
-                              label: label,
-                              selected: settings.loopMode == mode,
-                              radius: 8,
-                              onTap: () =>
-                                  _save(settings.copyWith(loopMode: mode)),
-                            ),
-                          ),
-                      ],
-                    ),
+                  SimpleSegments<String>(
+                    options: [
+                      (PolarAlignLoopModes.loop, l10n.polarLoop, 'loop'),
+                      (PolarAlignLoopModes.single, l10n.polarSingle, 'single'),
+                    ],
+                    selected: settings.loopMode,
+                    onPick: (mode) => _save(settings.copyWith(loopMode: mode)),
                   ),
                   SimplePresetTile<Duration>(
                     key: const Key('simple-polar-exposure'),

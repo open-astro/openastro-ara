@@ -11,6 +11,7 @@ import 'package:openastroara/state/setup/setup_readiness.dart';
 import 'package:openastroara/state/simple_mode_state.dart';
 import 'package:openastroara/services/simple_mode_prefs_service.dart';
 import 'package:openastroara/screens/simple/simple_focus_panel.dart';
+import 'package:openastroara/theme/ara_colors.dart';
 import 'package:openastroara/screens/simple/simple_shell.dart' show SimpleSegment;
 import 'package:openastroara/state/equipment/focuser_state.dart';
 import 'package:openastroara/state/focus/autofocus_live_state.dart';
@@ -186,6 +187,17 @@ void main() {
   testWidgets('a weak fit says so in the panel, in words', (tester) async {
     await _pump(tester, focuser: _focuser(), run: weak);
     expect(find.textContaining('Weak curve fit (R² 0.55)'), findsOneWidget);
+  });
+
+  testWidgets('the weak-fit warning is icon + colour + text, not a tint alone (night mode drops tints)', (tester) async {
+    // DESIGN.md: pair every warning with icon + colour + text (impeccable audit, P2).
+    await _pump(tester, focuser: _focuser(), run: weak);
+    final box = find.byKey(const Key('simple-focus-weak-fit'));
+    expect(find.descendant(of: box, matching: find.byIcon(Icons.warning_amber_rounded)), findsOneWidget);
+    final icon = tester.widget<Icon>(find.descendant(of: box, matching: find.byIcon(Icons.warning_amber_rounded)));
+    expect(icon.color, AraColors.accentWarning);
+    final text = tester.widget<Text>(find.descendant(of: box, matching: find.textContaining('Weak curve fit')));
+    expect(text.style?.color, AraColors.accentWarning);
   });
 
   testWidgets('the focuser line: where it is and which (before a result; then Best position says it)', (tester) async {

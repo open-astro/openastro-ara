@@ -1863,6 +1863,53 @@ class SimpleSegment extends StatelessWidget {
   );
 }
 
+/// A row of [SimpleSegment]s on one tile: [options] as (value, label, id),
+/// the selected one in the selection blue. A null [onPick] locks them, and
+/// the picked one takes no tap. [expand]: the segments share the width; else
+/// they hug their labels. Keys read '[keyPrefix]-id'.
+class SimpleSegments<T> extends StatelessWidget {
+  const SimpleSegments({
+    super.key,
+    required this.options,
+    required this.selected,
+    required this.onPick,
+    this.keyPrefix,
+    this.expand = true,
+  });
+
+  final List<(T, String, String)> options;
+  final T? selected;
+  final ValueChanged<T>? onPick;
+  final String? keyPrefix;
+  final bool expand;
+
+  @override
+  Widget build(BuildContext context) => DecoratedBox(
+    decoration: BoxDecoration(
+      color: AraColors.tileFill,
+      borderRadius: BorderRadius.circular(8),
+    ),
+    child: Row(
+      mainAxisSize: expand ? MainAxisSize.max : MainAxisSize.min,
+      children: [
+        for (final (value, label, id) in options)
+          () {
+            final segment = SimpleSegment(
+              key: keyPrefix == null ? null : Key('$keyPrefix-$id'),
+              label: label,
+              selected: value == selected,
+              radius: 8,
+              onTap: onPick == null || value == selected
+                  ? null
+                  : () => onPick!(value),
+            );
+            return expand ? Expanded(child: segment) : segment;
+          }(),
+      ],
+    ),
+  );
+}
+
 /// Simple Mode's density (DESIGN.md "Two Densities"): 10 px corners on
 /// buttons and fields instead of Material's pills, 44 px minimum targets,
 /// fields as borderless tiles.

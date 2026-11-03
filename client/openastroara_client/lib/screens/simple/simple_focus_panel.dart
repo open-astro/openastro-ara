@@ -26,7 +26,7 @@ import 'simple_autopilot.dart'
 import 'simple_preview_panel.dart' show SimpleShutterButton, kSimpleText;
 import 'simple_device_windows.dart' show simpleCelsius;
 import 'simple_shell.dart'
-    show SimplePanel, SimpleSegment, kSimpleGoStyle, simpleStackText;
+    show SimplePanel, SimpleSegments, kSimpleGoStyle, simpleStackText;
 
 /// The HFR to show big: the confirmed one after a run, the latest kept probe
 /// while one runs, else nothing. Pure — unit-tested.
@@ -240,48 +240,16 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
         ? null
         : l10n.focusWeakFitShort(fit!.rSquared.toStringAsFixed(2));
     final starsShown = ref.watch(simpleFocusStarsShownProvider);
-    Widget stat(String label, String value) => Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-        decoration: BoxDecoration(
-          color: AraColors.tileFill,
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(label, style: AraText.caption, maxLines: 1),
-            Text(value, style: kSimpleText),
-          ],
-        ),
-      ),
-    );
     final error =
         live.error ??
         (run.isFailed ? MainFocusCard.failureText(context.l10n, run) : null);
     // Measured stars On / Off: the run's frame, stars circled, full screen.
-    final stars = DecoratedBox(
-      decoration: BoxDecoration(
-        color: AraColors.tileFill,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          for (final (id, on, word) in [
-            ('on', true, l10n.deviceOn),
-            ('off', false, l10n.deviceOff),
-          ])
-            SimpleSegment(
-              key: Key('simple-focus-stars-$id'),
-              label: word,
-              selected: starsShown == on,
-              radius: 8,
-              onTap: () =>
-                  ref.read(simpleFocusStarsShownProvider.notifier).set(on),
-            ),
-        ],
-      ),
+    final stars = SimpleSegments<bool>(
+      keyPrefix: 'simple-focus-stars',
+      expand: false,
+      options: [(true, l10n.deviceOn, 'on'), (false, l10n.deviceOff, 'off')],
+      selected: starsShown,
+      onPick: (on) => ref.read(simpleFocusStarsShownProvider.notifier).set(on),
     );
     return SimplePanel(
       // 12 above and below, and 4 between rows (6 before 2026-11-04): with
@@ -303,78 +271,39 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               spacing: 4,
               children: [
-                DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: AraColors.tileFill,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Row(
-                    children: [
-                      for (final (id, sc, word) in [
-                        ('main', SimpleFocusScope.main, l10n.focusScopeMain),
-                        ('guide', SimpleFocusScope.guide, l10n.focusScopeGuide),
-                      ])
-                        Expanded(
-                          child: SimpleSegment(
-                            key: Key('simple-focus-scope-$id'),
-                            label: word,
-                            selected: scope == sc,
-                            radius: 8,
-                            onTap: anyRunning || scope == sc
-                                ? null
-                                : () => ref
-                                      .read(simpleFocusScopeProvider.notifier)
-                                      .set(sc),
-                          ),
-                        ),
-                    ],
-                  ),
+                SimpleSegments<SimpleFocusScope>(
+                  keyPrefix: 'simple-focus-scope',
+                  options: [
+                    (SimpleFocusScope.main, l10n.focusScopeMain, 'main'),
+                    (SimpleFocusScope.guide, l10n.focusScopeGuide, 'guide'),
+                  ],
+                  selected: scope,
+                  onPick: anyRunning
+                      ? null
+                      : (sc) =>
+                            ref.read(simpleFocusScopeProvider.notifier).set(sc),
                 ),
                 // The method: Smart Focus with the focuser, or by hand with a
                 // Bahtinov mask. Locked while a run goes.
                 if (scope == SimpleFocusScope.main)
-                  DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: AraColors.tileFill,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Row(
-                      children: [
-                        for (final (id, m, word) in [
-                          ('auto', MainFocusMethod.autofocus, l10n.focusAuto),
-                          (
-                            'manual',
-                            MainFocusMethod.bahtinov,
-                            l10n.focusManual,
-                          ),
-                        ])
-                          Expanded(
-                            child: SimpleSegment(
-                              key: Key('simple-focus-method-$id'),
-                              label: word,
-                              selected: method == m,
-                              radius: 8,
-                              onTap: locked || method == m
-                                  ? null
-                                  : () {
-                                      if (m == MainFocusMethod.autofocus &&
-                                          bahtinov.status.hasMeasurement &&
-                                          !bahtinov.finished) {
-                                        setState(
-                                          () => _askMask = _thenAuto = true,
-                                        );
-                                        return;
-                                      }
-                                      ref
-                                          .read(
-                                            mainFocusMethodProvider.notifier,
-                                          )
-                                          .pick(m);
-                                    },
-                            ),
-                          ),
-                      ],
-                    ),
+                  SimpleSegments<MainFocusMethod>(
+                    keyPrefix: 'simple-focus-method',
+                    options: [
+                      (MainFocusMethod.autofocus, l10n.focusAuto, 'auto'),
+                      (MainFocusMethod.bahtinov, l10n.focusManual, 'manual'),
+                    ],
+                    selected: method,
+                    onPick: locked
+                        ? null
+                        : (m) {
+                            if (m == MainFocusMethod.autofocus &&
+                                bahtinov.status.hasMeasurement &&
+                                !bahtinov.finished) {
+                              setState(() => _askMask = _thenAuto = true);
+                              return;
+                            }
+                            ref.read(mainFocusMethodProvider.notifier).pick(m);
+                          },
                   ),
               ],
             ),
@@ -457,12 +386,15 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
                 Row(
                   spacing: AraSpace.s4,
                   children: [
-                    stat(l10n.focusBestPosition, best == null ? '—' : '$best'),
-                    stat(
+                    _figure(
+                      l10n.focusBestPosition,
+                      best == null ? '—' : '$best',
+                    ),
+                    _figure(
                       l10n.focusStars,
                       run.finalStars == null ? '—' : '${run.finalStars}',
                     ),
-                    stat(
+                    _figure(
                       l10n.focusFitR2,
                       fit == null ? '—' : fit.rSquared.toStringAsFixed(2),
                     ),
@@ -470,14 +402,35 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
                 ),
               if (run.probes.isNotEmpty)
                 SizedBox(height: 80, child: VCurveChart(run: run)),
+              // Icon + colour + text (DESIGN.md): the tint alone all but
+              // vanishes in night mode.
               if (weak != null)
                 Container(
+                  key: const Key('simple-focus-weak-fit'),
                   padding: const EdgeInsets.all(AraSpace.s8),
                   decoration: BoxDecoration(
-                    color: AraColors.accentBusy.withValues(alpha: 0.12),
+                    color: AraColors.accentWarning.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: Text(weak, style: AraText.caption),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    spacing: AraSpace.s8,
+                    children: [
+                      const Icon(
+                        Icons.warning_amber_rounded,
+                        size: 18,
+                        color: AraColors.accentWarning,
+                      ),
+                      Expanded(
+                        child: Text(
+                          weak,
+                          style: AraText.caption.copyWith(
+                            color: AraColors.accentWarning,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               // The run's frame with its measured stars circled, full screen
               // behind the panels; off to start.
@@ -615,30 +568,21 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
           spacing: AraSpace.s12,
           children: [
             Expanded(child: Text(l10n.bahtinovExposure, style: kSimpleText)),
-            DecoratedBox(
-              decoration: BoxDecoration(
-                color: AraColors.tileFill,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  for (final s in kSimpleBahtinovExposures)
-                    SimpleSegment(
-                      key: Key('simple-bahtinov-exposure-${s.round()}'),
-                      label: '${s.round()} s',
-                      selected: exposure == s,
-                      radius: 8,
-                      // A running readout keeps its exposure; Start again
-                      // takes the new one.
-                      onTap: status.active
-                          ? null
-                          : () => ref
-                                .read(simpleBahtinovExposureProvider.notifier)
-                                .set(s),
-                    ),
-                ],
-              ),
+            SimpleSegments<double>(
+              keyPrefix: 'simple-bahtinov-exposure',
+              expand: false,
+              options: [
+                for (final s in kSimpleBahtinovExposures)
+                  (s, '${s.round()} s', '${s.round()}'),
+              ],
+              selected: exposure,
+              // A running readout keeps its exposure; Start again takes the
+              // new one.
+              onPick: status.active
+                  ? null
+                  : (s) => ref
+                        .read(simpleBahtinovExposureProvider.notifier)
+                        .set(s),
             ),
           ],
         ),
@@ -673,22 +617,6 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
     final latest = status.latest;
     final hint = status.active ? guideFocusHint(l10n, status) : null;
     final exposure = ref.watch(simpleGuideExposureProvider);
-    Widget fact(String label, String value) => Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-        decoration: BoxDecoration(
-          color: AraColors.tileFill,
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(label, style: AraText.caption, maxLines: 1),
-            Text(value, style: kSimpleText),
-          ],
-        ),
-      ),
-    );
     return [
       Text(headline, style: kSimpleText.copyWith(color: colour), maxLines: 2),
       Text(
@@ -709,8 +637,8 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
         Row(
           spacing: AraSpace.s4,
           children: [
-            fact(l10n.focusStars, '${latest.stars}'),
-            fact(l10n.focusFrames, '${status.seq}'),
+            _figure(l10n.focusStars, '${latest.stars}'),
+            _figure(l10n.focusFrames, '${status.seq}'),
           ],
         ),
       if (hint != null) ...[
@@ -738,31 +666,40 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
         spacing: AraSpace.s12,
         children: [
           Expanded(child: Text(l10n.bahtinovExposure, style: kSimpleText)),
-          DecoratedBox(
-            decoration: BoxDecoration(
-              color: AraColors.tileFill,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                for (final s in kSimpleGuideExposures)
-                  SimpleSegment(
-                    key: Key('simple-guide-exposure-${s.round()}'),
-                    label: '${s.round()} s',
-                    selected: exposure == s,
-                    radius: 8,
-                    onTap: status.active
-                        ? null
-                        : () => ref
-                              .read(simpleGuideExposureProvider.notifier)
-                              .set(s),
-                  ),
-              ],
-            ),
+          SimpleSegments<double>(
+            keyPrefix: 'simple-guide-exposure',
+            expand: false,
+            options: [
+              for (final s in kSimpleGuideExposures)
+                (s, '${s.round()} s', '${s.round()}'),
+            ],
+            selected: exposure,
+            onPick: status.active
+                ? null
+                : (s) => ref.read(simpleGuideExposureProvider.notifier).set(s),
           ),
         ],
       ),
     ];
   }
 }
+
+/// A figure tile: its label over its value, sharing a row with its siblings
+/// (a finished run's best position / stars / fit R², the guide camera's
+/// stars and frames).
+Widget _figure(String label, String value) => Expanded(
+  child: Container(
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+    decoration: BoxDecoration(
+      color: AraColors.tileFill,
+      borderRadius: BorderRadius.circular(10),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: AraText.caption, maxLines: 1),
+        Text(value, style: kSimpleText),
+      ],
+    ),
+  ),
+);
