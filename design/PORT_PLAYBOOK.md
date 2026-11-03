@@ -3162,7 +3162,7 @@ No user-facing knobs for rotation cadence / size cap in the initial release — 
    - mDNS finds 0 servers (manual IP/port entry), OR
    - mDNS finds 2+ servers (user picks)
    - If the scan finds the last rig this client used (by name, ALP-4890), skip this screen and connect (no auth per §67); otherwise show the list, even with one rig (#1129)
-3. **Profile box** — skipped on launch when the rig has an active profile (ALP-4890); shown when it has none, the active one is missing, or the user chose *Choose a different rig* / Launchpad. Layout below
+3. **Profile box** — skipped until the first entry when the rig has an active profile (ALP-4890), including a rig picked through *Choose a different rig* before that entry; shown when the rig has no profile, its active one is missing or the rig can't be reached, and after Launchpad. Layout below
 4. **Main app** — the NINA-style shell from §25
 
 ### 30.2 Profile box
