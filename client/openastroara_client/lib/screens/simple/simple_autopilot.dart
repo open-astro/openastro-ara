@@ -93,12 +93,16 @@ class AutopilotNotifier extends Notifier<AutopilotStep?> {
 
   /// The plan's Next, a Done, or Skip: on to the next step; from the last one,
   /// imaging starts (at dark when it is before dark, as the plan sheet's
-  /// green button would).
+  /// green button would), or, with nothing queued, back to the plan.
   void next() {
     final s = state;
     if (s == null) return;
     if (_next(s) case final n?) {
       _go(n);
+      return;
+    }
+    if (ref.read(simpleRunProvider).sequenceId == null) {
+      _go(AutopilotStep.plan); // the plan was skipped: nothing to start yet
       return;
     }
     final startAt = ref.read(simpleScheduleAllowedProvider)

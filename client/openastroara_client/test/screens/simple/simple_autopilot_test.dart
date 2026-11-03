@@ -132,6 +132,21 @@ void main() {
     expect(c.read(autopilotProvider), isNull, reason: 'imaging: Guided Run is done');
   });
 
+  test('with nothing queued the last Done goes back to the plan instead of doing nothing', () async {
+    // PR #1486 review: Skip on the plan with nothing queued, then the last Done reached startQueue, which
+    // returns silently without a queue.
+    final (c, _) = await _container();
+    final plan = c.read(simpleRunProvider.notifier) as _Plan;
+    c.read(autopilotProvider.notifier).start();
+    c.read(autopilotProvider.notifier).next(); // Skip the plan
+    c.read(_focus.notifier).set(SetupStepState.done);
+    expect(c.read(autopilotProvider), AutopilotStep.polarAlign);
+    c.read(autopilotProvider.notifier).next(); // Done · Start imaging
+    await Future<void>.value();
+    expect(plan.starts, isEmpty);
+    expect(c.read(autopilotProvider), AutopilotStep.plan, reason: 'pick something to image first');
+  });
+
   testWidgets('the strip shows Plan, Focus, Polar align, the current one lit; Skip and Back move', (tester) async {
     final (c, _) = await _container();
     c.read(autopilotProvider.notifier).start();
