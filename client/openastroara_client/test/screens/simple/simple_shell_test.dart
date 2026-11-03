@@ -1260,8 +1260,10 @@ void main() {
     final sheet = find.byKey(const Key('simple-menu'));
     expect(sheet, findsOneWidget);
     final rect = tester.getRect(sheet);
-    expect(rect.left, kSimpleInset);
-    expect(rect.right, size.width - kSimpleInset, reason: 'the width of the window');
+    // Under the gear, no wider than its content needs (user, 2026-11-04: the
+    // window-wide sheet was mostly empty space).
+    expect(rect.right, size.width - kSimpleInset, reason: 'hugs the right edge, under the gear');
+    expect(rect.width, kSimpleSettingsMaxWidth);
     final blur = tester.widget<BackdropFilter>(find.descendant(of: sheet, matching: find.byType(BackdropFilter)));
     expect(blur.filter, ImageFilter.blur(sigmaX: 5, sigmaY: 5));
     final box = tester.widget<Container>(find.descendant(of: sheet, matching: find.byKey(const Key('simple-frosted-surface'))));

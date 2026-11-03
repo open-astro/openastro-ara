@@ -1043,21 +1043,35 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                   right: kSimpleInset,
                                   top: railTop,
                                   bottom: kSimpleInset * 2 + bottomRow,
-                                  child: _SettingsSheet(
-                                    key: ValueKey(_menuSection),
-                                    section: _menuSection,
-                                    onClose: () => setState(
-                                      () => _popover = _Popover.none,
+                                  // Under the gear, as wide as its content
+                                  // needs (user, 2026-11-04: window-wide was
+                                  // mostly empty space).
+                                  child: Align(
+                                    alignment: Alignment.topRight,
+                                    child: ConstrainedBox(
+                                      constraints: BoxConstraints(
+                                        // Grows with the text, like the rails.
+                                        maxWidth:
+                                            kSimpleSettingsMaxWidth *
+                                            simpleRailScale(context),
+                                      ),
+                                      child: _SettingsSheet(
+                                        key: ValueKey(_menuSection),
+                                        section: _menuSection,
+                                        onClose: () => setState(
+                                          () => _popover = _Popover.none,
+                                        ),
+                                        onLogs: () {
+                                          ref
+                                              .read(
+                                                selectedSettingsPanelProvider
+                                                    .notifier,
+                                              )
+                                              .select('support.logs');
+                                          _openSettings();
+                                        },
+                                      ),
                                     ),
-                                    onLogs: () {
-                                      ref
-                                          .read(
-                                            selectedSettingsPanelProvider
-                                                .notifier,
-                                          )
-                                          .select('support.logs');
-                                      _openSettings();
-                                    },
                                   ),
                                 ),
                               ],
@@ -1336,6 +1350,10 @@ class _RailButton extends StatelessWidget {
 /// Every Settings › Rig value (a wheel's, the elevation stepper's, the read-only
 /// pixel size) is this wide, so they line up.
 const double kSimpleRigControlWidth = 160;
+
+/// Simple Mode's Settings sheet at its widest: the section list and a section
+/// whose rows are a label and a [kSimpleRigControlWidth] value.
+const double kSimpleSettingsMaxWidth = 640;
 
 double simpleRailScale(BuildContext context) =>
     math.max(1, MediaQuery.textScalerOf(context).scale(1) / 1.1);
