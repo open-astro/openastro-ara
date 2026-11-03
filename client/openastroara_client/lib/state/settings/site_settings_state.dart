@@ -130,7 +130,8 @@ class SiteSettingsNotifier extends Notifier<SiteSettings>
     // Below sea level → Dead Sea (-430m) is the practical floor. Above
     // 9000m is no longer reachable by a tripod-mounted scope.
     if (v < -500 || v > 9000) return;
-    state = state.copyWith(elevationM: v);
+    // Whole metres: a GPS fix's centimetres are noise.
+    state = state.copyWith(elevationM: v.roundToDouble());
   }
 
   void setTimeZone(String s) {

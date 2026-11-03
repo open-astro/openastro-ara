@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/services/profile_api.dart';
 import 'package:openastroara/state/settings/site_settings_state.dart';
 
 void main() {
@@ -49,6 +50,15 @@ void main() {
       expect(container.read(siteSettingsProvider).elevationM, 0);
       n.setElevationM(2400);
       expect(container.read(siteSettingsProvider).elevationM, 2400);
+    });
+
+    test('elevation is whole metres (a GPS fix, a typed decimal, the saved profile)', () {
+      final n = container.read(siteSettingsProvider.notifier);
+      n.setElevationM(71.12);
+      expect(container.read(siteSettingsProvider).elevationM, 71);
+      n.setElevationM(-2.5);
+      expect(container.read(siteSettingsProvider).elevationM, -3);
+      expect(ProfileApi.siteSettingsFromJson({'elevation_m': 71.6}).elevationM, 72);
     });
 
     test('setBortleClass clamps to [1, 9]', () {

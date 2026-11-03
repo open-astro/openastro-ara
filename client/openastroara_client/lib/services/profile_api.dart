@@ -1374,7 +1374,7 @@ class ProfileApi {
         siteName: (j['site_name'] as String?) ?? 'Backyard',
         latitudeDeg: (j['latitude_deg'] as num?)?.toDouble() ?? 0,
         longitudeDeg: (j['longitude_deg'] as num?)?.toDouble() ?? 0,
-        elevationM: (j['elevation_m'] as num?)?.toDouble() ?? 0,
+        elevationM: (j['elevation_m'] as num?)?.roundToDouble() ?? 0,
         timeZone: (j['time_zone'] as String?) ?? 'UTC',
         useCustomHorizon: (j['use_custom_horizon'] as bool?) ?? false,
         defaultHorizonAltitudeDeg:
