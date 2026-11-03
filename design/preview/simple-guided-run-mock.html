@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Guided Run Order</title>
+<style>
+  /* DESIGN.md tokens (lib/theme/ara_colors.dart + ara_metrics.dart) */
+  :root {
+    --bg: #1A1A1A; --border: #404040; --text: #E0E0E0; --text2: #A0A0A0; --link: #64B5F6;
+    --ok: #4CAF50; --okText: #81C784; --busy: #FFB300; --info: #42A5F5; --err: #EF5350; --sel: #1976D2;
+    --tile: #383838; --warnBg: rgba(255,179,0,.12); --sys: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #0E0E0E; color: var(--text); font: 14px/1.45 var(--sys); }
+  body.night .ipad { filter: sepia(1) saturate(6) hue-rotate(-35deg) brightness(.75); }
+  .page { max-width: 1120px; margin: 0 auto; padding: 32px 16px 80px; }
+  h1 { font-size: 22px; font-weight: 600; margin: 0 0 6px; }
+  h2 { font-size: 16px; font-weight: 600; margin: 28px 0 4px; }
+  p.note { color: var(--text2); margin: 0 0 12px; max-width: 92ch; }
+  .controls { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; margin: 16px 0 14px; }
+  .ctl { display: flex; gap: 8px; align-items: center; }
+  .lbl { color: var(--text2); font-size: 13px; }
+  .seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .seg button { background: transparent; color: var(--text); border: 0; padding: 7px 12px; font: 13px var(--sys); cursor: pointer; }
+  .seg button + button { border-left: 1px solid var(--border); }
+  .seg button[aria-pressed="true"] { background: var(--sel); color: #fff; }
+  .tag { font-size: 11px; letter-spacing: .5px; text-transform: uppercase; padding: 1px 7px; border-radius: 10px; border: 1px solid var(--busy); color: var(--busy); margin-left: 6px; vertical-align: 2px; }
+
+  /* The iPad, landscape: Simple Mode's two rails (DESIGN.md "Simple Mode: Image First", ara-design-preview.html) */
+  .ipad { --in: 16px; --bar: 56px; --rail: 72px; --stop: 60px; --top: calc(2 * var(--in) + var(--bar)); --scrim: rgba(26,26,26,.9);
+          width: 1024px; height: 768px; max-width: 100%; position: relative; border-radius: 18px; overflow: hidden; border: 1px solid #333; background: #050608; font-size: 14px; }
+  .frame { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .p { position: absolute; background: var(--scrim); border-radius: 10px; backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px); }
+  .s-strip { left: var(--in); right: var(--in); top: var(--in); height: var(--bar); display: flex; align-items: center; gap: 14px; padding: 0 8px 0 16px; color: var(--text2); font-size: 13px; }
+  .s-strip .dev { display: inline-flex; align-items: center; gap: 6px; } .s-strip .dev i { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); }
+  .s-strip .grow { flex: 1; } .s-strip .ib { width: 44px; text-align: center; font-size: 18px; color: var(--text); }
+  .s-pill { right: var(--in); top: var(--top); height: 48px; display: flex; align-items: center; gap: 8px; padding: 0 16px; white-space: nowrap; }
+  .s-pill i { width: 10px; height: 10px; border-radius: 50%; background: var(--ok); }
+  .s-col { position: absolute; width: var(--rail); display: flex; align-items: center; }
+  .s-col.l { left: var(--in); top: var(--top); bottom: var(--top); }
+  .s-col.r { right: var(--in); top: var(--top); bottom: calc(2 * var(--in) + var(--stop)); }
+  .s-anchor { position: relative; width: 100%; }
+  .s-rail { position: relative; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 8px 6px; }
+  .s-rb { width: 60px; height: 56px; border-radius: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; color: var(--text2); font-size: 11.5px; text-align: center; }
+  .s-rb b { font-size: 18px; font-weight: 400; color: var(--text); }
+  .s-chip { height: 72px; }
+  .s-mode { width: 60px; height: 48px; display: flex; flex-direction: column; align-items: center; justify-content: center; font-weight: 600; }
+  .s-mode small { color: var(--text2); font-size: 10px; }
+  .s-shut { width: 60px; height: 60px; border-radius: 50%; border: 3px solid var(--text); display: grid; place-items: center; cursor: pointer; }
+  .s-shut .tri { width: 0; height: 0; border-left: 18px solid #fff; border-top: 11px solid transparent; border-bottom: 11px solid transparent; margin-left: 5px; }
+  .s-shut .sq { width: 22px; height: 22px; border-radius: 3px; background: #E53935; }
+  .s-pop { right: calc(100% + var(--in)); top: 0; padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; }
+  .s-pop.narrow { width: 280px; } .s-pop.wide { width: 360px; }
+  .s-stop { position: absolute; right: calc(var(--in) + (var(--rail) - var(--stop)) / 2); bottom: var(--in); width: var(--stop); height: var(--stop); padding: 2px; border: 1px solid #D32F2F; border-radius: 13px; background: #1A1A1A; }
+  .s-stop div { width: 100%; height: 100%; border-radius: 10px; background: #D32F2F; color: #fff; font: 700 12px var(--sys); display: grid; place-items: center; }
+  .f-star { left: calc(2 * var(--in) + var(--rail)); top: calc(var(--top) + 48px + var(--in)); width: 240px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+  .f-star .zoom { height: 180px; border-radius: 8px; background: #050505; overflow: hidden; }
+  .f-star .lb { font-size: 11px; font-weight: 600; letter-spacing: .6px; text-transform: uppercase; color: var(--text2); }
+  .s-bottom { left: calc(2 * var(--in) + var(--rail)); right: calc(2 * var(--in) + var(--rail)); bottom: var(--in); padding: 10px 14px; }
+  .head { font-weight: 600; font-size: 16px; }
+  .head.ok { color: var(--okText); } .head.busy { color: var(--busy); } .head.err { color: var(--err); }
+  .sub { color: var(--text2); font-size: 12px; }
+  .hfr { font-size: 30px; font-weight: 300; font-variant-numeric: tabular-nums; }
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .stat { background: var(--tile); border-radius: 10px; padding: 6px 8px; }
+  .stat .k { font-size: 11px; color: var(--text2); } .stat .v { font-size: 16px; font-variant-numeric: tabular-nums; }
+  .warn { background: var(--warnBg); border-radius: 10px; padding: 8px 10px; font-size: 12.5px; color: #FFE082; display: flex; gap: 8px; }
+  .warn b { color: var(--busy); }
+  .error { color: #EF9A9A; font-size: 12.5px; }
+  .more { color: var(--link); font-size: 13px; cursor: pointer; user-select: none; }
+  .details { font-size: 12px; color: var(--text2); display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; }
+  .details span:nth-child(odd) { color: var(--text2); } .details span:nth-child(even) { color: var(--text); text-align: right; font-variant-numeric: tabular-nums; }
+  svg text { font: 10px var(--sys); fill: var(--text2); }
+  .proposed { outline: 1.5px dashed var(--busy); outline-offset: 3px; border-radius: 10px; }
+  .btnrow { display: flex; gap: 8px; }
+  .btn { flex: 1; height: 44px; border-radius: 10px; border: 0; font: 600 14px var(--sys); cursor: pointer; }
+  .btn.go { background: var(--ok); color: #1A1A1A; } .btn.plain { background: var(--tile); color: var(--text); }
+  .big { font-size: 40px; font-weight: 300; text-align: center; font-variant-numeric: tabular-nums; }
+  .advice { text-align: center; font-weight: 600; font-size: 18px; }
+  .advice.ok { color: var(--okText); } .advice.go { color: var(--info); } .advice.back { color: var(--busy); }
+  .zone { height: 8px; border-radius: 4px; background: var(--tile); position: relative; }
+  .zone .z { position: absolute; left: 44%; width: 12%; top: 0; bottom: 0; background: rgba(76,175,80,.45); border-radius: 4px; }
+  .zone .p { position: absolute; top: -4px; width: 4px; height: 16px; border-radius: 2px; background: #fff; transition: left .3s; }
+  .segs { display: flex; gap: 0; border-radius: 8px; overflow: hidden; background: var(--tile); }
+  .segs span { flex: 1; text-align: center; padding: 8px 0; font-size: 13px; color: var(--text2); }
+  .segs span.on { background: #0D47A1; color: #fff; }
+  .legend { color: var(--text2); font-size: 12px; margin-top: 8px; }
+</style>
+<style>
+  .strip2 { left: 50%; transform: translateX(-50%); top: var(--top); height: 48px; display: flex; align-items: center; gap: 2px; padding: 0 8px; white-space: nowrap; }
+  .stp { padding: 6px 10px; border-radius: 8px; color: var(--text2); font-size: 13px; display: inline-flex; gap: 6px; align-items: center; }
+  .stp.cur { background: var(--sel); color: #fff; } .stp .tick { color: var(--ok); }
+  .chev { color: #666; } .sb { color: var(--link); font-size: 13px; padding: 0 8px; }
+  .sheet { left: 50%; top: 150px; transform: translateX(-50%); width: 560px; padding: 18px; display: flex; flex-direction: column; gap: 10px; }
+  .sheet .hd { font-size: 16px; font-weight: 600; }
+  .q { display: flex; gap: 8px; } .q span { flex: 1; height: 44px; border-radius: 8px; background: var(--tile); display: grid; place-items: center; }
+  .btns2 { display: flex; gap: 8px; } .btns2 button { flex: 1; height: 48px; border-radius: 10px; font: 600 14px var(--sys); }
+  .outl { background: transparent; border: 1px solid #777; color: var(--text); } .grn { background: var(--ok); border: 0; color: #1A1A1A; }
+  .note2 { color: var(--text2); font-size: 12.5px; }
+  .squares { position: absolute; right: 104px; bottom: 16px; display: flex; gap: 8px; }
+  .sq2 { width: 72px; height: 100px; border-radius: 10px; background: rgba(26,26,26,.9); border: 1px solid var(--ok); display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 12px; gap: 2px; }
+  .sq2 b { font-size: 14px; }
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>Guided Run: Plan first</h1>
+  <p class="note">The order becomes <b>Plan → Focus → Polar align → Start</b>: pick tonight's targets first, then focus and polar-align, then imaging starts. Step through it with the buttons. Pick <b>how imaging starts</b> at the end: A, a last <b>Start</b> step whose shutter starts the queue; B, the last setup step's green Done starts it ("Done · Start imaging"). <span class="tag">proposed</span></p>
+  <div class="controls">
+    <div class="ctl"><span class="lbl">Step</span><span class="seg" id="step"><button data-v="plan" aria-pressed="true">1 · Plan</button><button data-v="focus">2 · Focus</button><button data-v="pa">3 · Polar align</button><button data-v="start">4 · Start (A)</button></span></div>
+    <div class="ctl"><span class="lbl">How imaging starts</span><span class="seg" id="variant"><button data-v="A" aria-pressed="true">A · a Start step</button><button data-v="B">B · the last Done starts it</button></span></div>
+    <div class="ctl"><span class="lbl">Permanent pier</span><span class="seg" id="pier"><button data-v="off" aria-pressed="true">Off</button><button data-v="on">On (no Polar align)</button></span></div>
+  </div>
+  <div class="ipad" id="ipad">
+    <svg class="frame" id="frame" viewBox="0 0 1024 768" preserveAspectRatio="none"></svg>
+    <div class="p s-strip"><span class="dev"><i></i>Camera</span><span class="dev"><i></i>Mount</span><span class="dev"><i></i>Guider</span><span class="dev"><i></i>Focuser</span><span class="grow"></span><span class="ib">⌕</span><span class="ib">☾</span><span class="ib">⚙</span></div>
+    <div class="p s-pill" id="pill" hidden><i></i><span id="pillText"></span></div>
+        <div class="s-col l"><div class="p s-rail"><div class="s-rb"><b>◍</b>Sky</div><div class="s-rb"><b>ⓘ</b>Info</div><div class="s-rb"><b>▤</b>Library</div></div></div>
+    <div class="s-col r"><div class="s-anchor">
+      <div class="p s-rail"><div class="s-mode">Focus<small>▾</small></div><div class="s-shut" id="shutter"><div class="tri"></div></div><div class="s-rb s-chip"><b>⚟</b><span id="chip">Auto</span></div></div>
+      <div id="ui"></div>
+    </div></div>
+    <div id="bottom"></div>
+    <div class="s-stop"><div>STOP</div></div>
+  </div>
+  <h2>Notes for the decision</h2>
+  <p class="note">• <b>Plan</b> is the plan sheet as today, but it only queues: Add to queue, then a green <b>Next: Focus</b> once one target is in. Nothing starts imaging here.<br>
+  • <b>Focus</b> and <b>Polar align</b> work as today (a finished autofocus moves on; Polar align starts its routine on entry). Steps already done tonight are skipped, Polar align too on a permanent pier.<br>
+  • <b>A:</b> a fourth step, Start: the queue squares show, the rail's shutter is the plan's ▶, and one tap starts imaging; Guided Run ends there. One more tap, but nothing starts by surprise, and the last check (clouds, the mask, the dew heater) happens before it.<br>
+  • <b>B:</b> no fourth step: the last setup step's Done reads "Done · Start imaging" (Polar align's, or on a permanent pier the focus step's). One tap fewer.<br>
+  • A scheduled start (Start at dark) still applies: the start waits on the rig as today.</p>
+</div>
+<script>
+const S = { step: 'plan', variant: 'A', pier: 'off' };
+function steps() {
+  const all = [['plan','Plan'],['focus','Focus'],['pa','Polar align']];
+  if (S.variant === 'A') all.push(['start','Start']);
+  return all.filter(([k]) => !(k === 'pa' && S.pier === 'on'));
+}
+function strip() {
+  const list = steps(), idx = list.findIndex(([k]) => k === S.step);
+  return `<div class="p strip2">${list.map(([k, l], i) => `${i ? '<span class="chev">›</span>' : ''}<span class="stp ${k === S.step ? 'cur' : ''}">${i < idx ? '<span class="tick">✓</span>' : ''}${l}</span>`).join('')}<span class="sb">Back</span><span class="sb">Skip</span></div>`;
+}
+function lastSetup() { return S.pier === 'on' ? 'focus' : 'pa'; }
+function panel() {
+  if (S.step === 'plan') return `<div class="p sheet"><div class="hd">Tonight's targets</div><div class="note2">TONIGHT'S BEST · M 42 · NGC 2244 · IC 434 · M 1</div>
+      <div class="q"><span>M 42 · L R G B · 2 h</span><span>NGC 2244 · Hα · 1 h 30 min</span></div>
+      <div class="note2">2 in the queue · 3 h 30 min</div>
+      <div class="btns2"><button class="outl">Add to queue</button><button class="grn proposed">Next: Focus</button></div>
+      <div class="note2 proposed">Imaging starts after focus and polar alignment.</div></div>`;
+  if (S.step === 'focus') {
+    const done = S.variant === 'B' && lastSetup() === 'focus';
+    return `<div class="p s-pop wide"><div class="segrow"><span class="on">Main</span><span>Guide</span></div><div class="head busy">Smart Focus — shot 2 of 5</div><div class="sub">The shutter runs autofocus; a finished run moves on.</div>${done ? '<div class="sub proposed">When it finishes, imaging starts (Done · Start imaging shows here first).</div>' : ''}</div>`;
+  }
+  if (S.step === 'pa') {
+    const label = S.variant === 'B' ? 'Done · Start imaging' : 'Done · Next: Start';
+    return `<div class="p s-pop wide"><div class="head ok">Within tolerance · 4.2′</div><div class="sub">↓ Lower 1.1′ · ← Move west 3.9′</div><button class="btn go proposed">${label}</button></div>`;
+  }
+  return `<div class="p s-pop wide proposed"><div class="head">Ready to image</div><div class="sub">2 targets · 3 h 30 min · starts now (or at dark, 21:47)</div><div class="sub">Tap the shutter to start the queue.</div></div>`;
+}
+function render() {
+  if (S.variant === 'B' && S.step === 'start') S.step = lastSetup();
+  if (S.pier === 'on' && S.step === 'pa') S.step = 'focus';
+  document.querySelectorAll('#step button').forEach(b => { b.setAttribute('aria-pressed', String(b.dataset.v === S.step)); b.hidden = (b.dataset.v === 'start' && S.variant === 'B') || (b.dataset.v === 'pa' && S.pier === 'on'); });
+  document.getElementById('chip').textContent = { plan: 'Plan', focus: 'Auto', pa: '1 s', start: '3 h 30' }[S.step];
+  document.getElementById('pill').hidden = true;
+  document.getElementById('bottom').innerHTML = (S.step === 'start' || S.step === 'plan') ? '' : '';
+  document.getElementById('ui').innerHTML = S.step === 'plan' ? '' : panel();
+  const extra = document.getElementById('extra') || Object.assign(document.createElement('div'), { id: 'extra' });
+  document.getElementById('ipad').appendChild(extra);
+  extra.innerHTML = strip() + (S.step === 'plan' ? panel() : '') + (S.step !== 'plan' ? '<div class="squares"><div class="sq2"><b>NGC 2244</b><span>0 / 36</span><span>1 h 30</span></div><div class="sq2"><b>M 42</b><span>0 / 60</span><span>2 h</span></div></div>' : '');
+  document.getElementById('frame').innerHTML = '<rect width="1024" height="768" fill="#0b0d12"/>';
+}
+for (const id of ['step','variant','pier'])
+  document.querySelectorAll(`#${id} button`).forEach(b => b.onclick = () => { S[id] = b.dataset.v; document.querySelectorAll(`#${id} button`).forEach(x => x.setAttribute('aria-pressed', String(x.dataset.v === S[id]))); render(); });
+render();
+</script>
+</body>
+</html>
