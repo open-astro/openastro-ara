@@ -16,6 +16,7 @@ using NUnit.Framework;
 using OpenAstroAra.Server.Services.LiveStack;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace OpenAstroAra.Test {
 
@@ -24,6 +25,8 @@ namespace OpenAstroAra.Test {
     /// <c>OpenAstroAra.Server.Services.LiveStack</c> and fail to compile on current code (the types do not exist).
     /// Convention under test: a frame's stars sit at <c>R(rot)·(p − centre) + centre + (dx, dy)</c> relative to the
     /// reference; the engine reports that (dx, dy, rot) in <see cref="StackAddResult"/>.
+    /// A new engine is enabled for session 0; <c>Add</c> returns <see cref="StackAddOutcome.Dropped"/> when the
+    /// engine is disabled or the session id differs (the enabled flag and session live under the engine lock).
     /// </summary>
     [TestFixture]
     public class LiveStackEngineTest {
@@ -118,19 +121,77 @@ namespace OpenAstroAra.Test {
             Assert.That(single / stacked, Is.GreaterThan(3.2));
         }
 
-        // Falsified by: dropping the sigma clip (plain mean) lets the 60000-ADU streak in frame 9 lift the stacked
-        // pixel by ≈ 5900 ADU, failing the 100 ADU bound; clipping during warm-up too would reject real signal.
-        [Test]
-        public void A_satellite_streak_in_one_post_warm_up_frame_is_clipped_out() {
+        private static long RunWithOptionalStreak(bool streak) {
             var e = new LiveStackEngine(sigma: 3.0, warmUp: 5);
             for (int i = 0; i < 12; i++) {
                 var f = Render(Stars, 0, 0, 0, 200 + i);
-                if (i == 9) { for (int x = 20; x < 70; x++) f[40 * W + x] = 61000; }
+                if (streak && i == 9) { for (int x = 20; x < 70; x++) f[40 * W + x] = 61000; }
                 e.Add(f, W, H);
             }
             var mean = e.SnapshotMean(out _, out _)!;
             Assert.That(mean[40 * W + 45], Is.EqualTo(Bg).Within(100));
-            Assert.That(e.RejectedSamples, Is.GreaterThanOrEqualTo(50));
+            return e.RejectedSamples;
+        }
+
+        // Falsified by: dropping the sigma clip (plain mean) lets the 60000-ADU streak in frame 9 lift the stacked
+        // pixel by ≈ 5900 ADU, failing the 100 ADU bound; clipping during warm-up too would reject real signal.
+        // The rejected-sample assertion is a difference against the same run without the streak: a 3-sigma clip
+        // rejects ≈ 0.27 % of pure noise on its own, so an absolute count would pass even with the streak kept.
+        [Test]
+        public void A_satellite_streak_in_one_post_warm_up_frame_is_clipped_out() {
+            long withStreak = RunWithOptionalStreak(true);
+            long without = RunWithOptionalStreak(false);
+            Assert.That(withStreak - without, Is.GreaterThanOrEqualTo(40));
+        }
+
+        // Falsified by: an engine that measures (dx, dy, rot) right but never resamples (plain mean of unshifted
+        // frames) or resamples with the opposite sign leaves the star peaks smeared over ±5 px (star sigma 1.8 px),
+        // so the stacked peak falls far below 80 % of the reference peak at the five brightest stars.
+        [Test]
+        public void Registration_is_applied_to_the_pixels_so_star_peaks_survive_the_stack() {
+            var e = new LiveStackEngine();
+            var reference = Render(Stars, 0, 0, 0, 1);
+            e.Add(reference, W, H);
+            var dithers = new (double X, double Y, double Rot)[] {
+                (4.5, -3.2, 0), (-5, 2.7, 0), (3.1, 4.8, 1.5), (-2.4, -4.9, 0), (5, 5, 0), (-4.1, 3.3, 0), (0.8, -5, 0), (2.2, 1.7, 0),
+            };
+            for (int i = 0; i < dithers.Length; i++) {
+                var r = e.Add(Render(Stars, dithers[i].X, dithers[i].Y, dithers[i].Rot, 300 + i), W, H);
+                Assert.That(r.Outcome, Is.EqualTo(StackAddOutcome.Stacked));
+            }
+            var mean = e.SnapshotMean(out _, out _)!;
+            foreach (var (x, y, _) in Stars.OrderByDescending(s => s.Amp).Take(5)) {
+                int idx = (int)Math.Round(y) * W + (int)Math.Round(x);
+                Assert.That(mean[idx], Is.GreaterThanOrEqualTo(0.8 * reference[idx]), $"star at ({x:F1}, {y:F1})");
+            }
+        }
+
+        // Falsified by: keeping the enabled flag outside the engine lock, or not checking it in Add, lets a frame
+        // already in flight after Disable (or after a session change) store a new reference: FramesStacked 1 and a
+        // preview appear on a stack that was stopped.
+        [Test]
+        public void Add_after_Disable_is_dropped_and_leaves_the_stack_empty() {
+            var e = new LiveStackEngine();
+            e.Add(Render(Stars, 0, 0, 0, 1), W, H);
+            e.Disable();
+            var r = e.Add(Render(Stars, 0, 0, 0, 2), W, H);
+            Assert.That(r.Outcome, Is.EqualTo(StackAddOutcome.Dropped));
+            Assert.That(e.FramesStacked, Is.EqualTo(0));
+            Assert.That(e.SnapshotMean(out _, out _), Is.Null);
+            Assert.That(e.RenderPreview(), Is.Null);
+        }
+
+        // Falsified by: ignoring the session id lets a frame from an ended Live View session (id 1) join the stack
+        // bound to the new session (id 2).
+        [Test]
+        public void Add_from_another_session_is_dropped() {
+            var e = new LiveStackEngine();
+            e.Enable(session: 2);
+            var r = e.Add(Render(Stars, 0, 0, 0, 1), W, H, session: 1);
+            Assert.That(r.Outcome, Is.EqualTo(StackAddOutcome.Dropped));
+            Assert.That(e.FramesStacked, Is.EqualTo(0));
+            Assert.That(e.RenderPreview(), Is.Null);
+            Assert.That(e.Add(Render(Stars, 0, 0, 0, 2), W, H, session: 2).Outcome, Is.EqualTo(StackAddOutcome.Reference));
         }
 
         // Falsified by: stacking every frame regardless of the match leaves FramesStacked at 2 and shifts the mean,
