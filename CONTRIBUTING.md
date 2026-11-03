@@ -96,7 +96,8 @@ Two hard-won conventions worth knowing before a reviewer tells you:
   hears goes in `client/openastroara_client/lib/l10n/app_en.arb` (with an `@key` description saying
   where it shows) and is read with `context.l10n.key`, never typed into the widget. Adding or
   changing an English message means adding or changing it in **every** `app_<locale>.arb` too
-  (today `app_pt.arb`, Brazilian Portuguese) in the same commit; then run `flutter gen-l10n` and
+  (today `app_pt_BR.arb`, Brazilian Portuguese; `app_pt.arb` is the empty fallback gen-l10n requires,
+  so Portuguese from Portugal reads English) in the same commit; then run `flutter gen-l10n` and
   commit the generated `app_localizations*.dart`. `test/l10n/app_localizations_test.dart` fails when
   a locale is missing a key. Widget keys keep English ids, never the translated label.
 - New C# files carry the Ara MPL-2.0 header; new client code is AGPL-3.0.

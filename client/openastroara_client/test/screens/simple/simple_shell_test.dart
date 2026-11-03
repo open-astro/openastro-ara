@@ -1450,7 +1450,7 @@ void main() {
     expect(tester.widget<SimpleSegment>(find.byKey(const Key('simple-menu-language-system'))).selected, isTrue);
     await tester.tap(pt);
     await tester.pump();
-    expect(c.read(appLocaleProvider), const Locale('pt'));
+    expect(c.read(appLocaleProvider), const Locale('pt', 'BR'));
     await tester.tap(find.byKey(const Key('simple-menu-language-system')));
     await tester.pump();
     expect(c.read(appLocaleProvider), isNull);

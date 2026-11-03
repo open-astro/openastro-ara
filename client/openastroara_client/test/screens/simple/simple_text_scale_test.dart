@@ -119,8 +119,9 @@ void main() {
     (1.0, const Size(320, 768)),
   ];
   // In each language Simple Mode ships: Portuguese runs longer than English.
-  for (final lang in ['en', 'pt']) {
-  final l = lookupAppLocalizations(Locale(lang));
+  for (final locale in const [Locale('en'), Locale('pt', 'BR')]) {
+  final lang = locale.toLanguageTag();
+  final l = lookupAppLocalizations(locale);
   for (final (scale, size) in cases) {
     for (final open in ['Preview settings', 'Plan', 'Stop armed', 'Modes', 'Settings', 'Rig', 'Camera', 'Settings Focuser', 'Search', 'Wheels lat', 'Wheels lng', 'Wheels aperture', 'Wheels focal', 'Settings Guider', 'Guiding']) {
       testWidgets('$lang text ${scale}x at ${size.width.toInt()}x${size.height.toInt()}, $open: nothing overflows',
@@ -149,7 +150,7 @@ void main() {
         await tester.pumpWidget(UncontrolledProviderScope(
           container: c,
           child: MaterialApp(
-            locale: Locale(lang),
+            locale: locale,
             localizationsDelegates: AppLocalizations.localizationsDelegates,
             supportedLocales: AppLocalizations.supportedLocales,
             theme: ThemeData(fontFamily: 'Roboto'),

@@ -16,20 +16,25 @@ void main() {
   });
 
   test(
-    'Portuguese has every English message, and the iPad set to pt-BR gets it',
+    'Brazilian Portuguese has every English message, and the iPad set to pt-BR gets it',
     () {
       Set<String> keys(String f) => (jsonDecode(
         File('lib/l10n/$f').readAsStringSync(),
       ) as Map<String, dynamic>).keys.where((k) => !k.startsWith('@')).toSet();
-      expect(keys('app_pt.arb'), keys('app_en.arb'));
+      expect(keys('app_pt_BR.arb'), keys('app_en.arb'));
       final pt = lookupAppLocalizations(const Locale('pt', 'BR'));
-      expect(pt.localeName, 'pt');
+      expect(pt.localeName, 'pt_BR');
       expect(pt.pillsMoreSemantics(1), isNot(en.pillsMoreSemantics(1)));
     },
   );
 
+  test('Portuguese from Portugal reads English: only pt-BR is translated', () {
+    final ptPt = lookupAppLocalizations(const Locale('pt', 'PT'));
+    expect(ptPt.pillsMoreSemantics(1), en.pillsMoreSemantics(1));
+  });
+
   test('shared wording reads in Portuguese, the action included', () {
-    final pt = lookupAppLocalizations(const Locale('pt'));
+    final pt = lookupAppLocalizations(const Locale('pt', 'BR'));
     expect(
       friendlyError(
         pt,

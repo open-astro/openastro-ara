@@ -2618,7 +2618,7 @@ class _ThisRig extends ConsumerWidget {
                   for (final (id, locale, name) in [
                     ('system', null, l10n.shellLanguageSystem),
                     ('en', const Locale('en'), 'English'),
-                    ('pt', const Locale('pt'), 'Português Brasileiro'),
+                    ('pt', const Locale('pt', 'BR'), 'Português Brasileiro'),
                   ])
                     SimpleSegment(
                       key: Key('simple-menu-language-$id'),

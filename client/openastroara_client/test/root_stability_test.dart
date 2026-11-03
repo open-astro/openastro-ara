@@ -110,9 +110,9 @@ void main() {
     String shown() => tester.widget<Text>(find.byKey(const Key('localized'))).data!;
     expect(shown(), 'Simple Mode', reason: 'the system language (English in tests)');
 
-    container.read(appLocaleProvider.notifier).set(const Locale('pt'));
+    container.read(appLocaleProvider.notifier).set(const Locale('pt', 'BR'));
     await tester.pump();
-    expect(shown(), lookupAppLocalizations(const Locale('pt')).shellSimpleMode);
+    expect(shown(), lookupAppLocalizations(const Locale('pt', 'BR')).shellSimpleMode);
     final after = snapshot(tester);
     expect(after.nav, same(before.nav), reason: 'Navigator state replaced');
     expect(after.app, same(before.app), reason: 'MaterialApp widget rebuilt');
