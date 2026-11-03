@@ -66,6 +66,33 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task The_guide_camera_route_answers_the_guiders_alpaca_camera_with_its_name() {
+            var profiles = new Mock<IProfileStore>();
+            profiles.Setup(p => p.GetPhd2Settings()).Returns(new Phd2SettingsDto(
+                "localhost", 4400, "Default", true, 3, 5.0, 1.5, 10, 60, false, GuiderCamera: "Alpaca Camera [10.0.30.223:6800/1]"));
+            var alpaca = new Mock<IAlpacaManagementClient>();
+            alpaca.Setup(a => a.GetConfiguredDevicesAsync("10.0.30.223", 6800, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(AlpacaManagementClient.ParseConfiguredDevices(Devices));
+            alpaca.Setup(a => a.GetDriverVersionAsync("10.0.30.223", 6800, "camera", 1, It.IsAny<CancellationToken>()))
+                .ReturnsAsync("6.0.0");
+
+            var result = await EquipmentEndpoints.GetGuideCameraDriverAsync(profiles.Object, alpaca.Object, CancellationToken.None);
+
+            Assert.That((result as Ok<DeviceDriverDto>)?.Value,
+                Is.EqualTo(new DeviceDriverDto("6.0.0", "1.41.0.0", null, "0c190e111d020900", "ZWO ASI533MC Pro")));
+        }
+
+        [Test]
+        public async Task A_guide_camera_that_is_not_an_alpaca_pick_is_404() {
+            var profiles = new Mock<IProfileStore>();
+            profiles.Setup(p => p.GetPhd2Settings()).Returns(new Phd2SettingsDto(
+                "localhost", 4400, "Default", true, 3, 5.0, 1.5, 10, 60, false, GuiderCamera: "ZWO ASI Camera (1)"));
+            var result = await EquipmentEndpoints.GetGuideCameraDriverAsync(profiles.Object, new Mock<IAlpacaManagementClient>().Object,
+                CancellationToken.None);
+            Assert.That((result as IStatusCodeHttpResult)?.StatusCode, Is.EqualTo(StatusCodes.Status404NotFound));
+        }
+
+        [Test]
         public async Task No_selected_device_is_404_and_an_unknown_type_400() {
             var selections = new Mock<IEquipmentSelectionStore>();
             selections.Setup(s => s.GetAllAsync(It.IsAny<CancellationToken>())).ReturnsAsync(new List<DiscoveredDeviceDto>());

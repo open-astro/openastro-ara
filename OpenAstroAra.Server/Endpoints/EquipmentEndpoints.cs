@@ -17,6 +17,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
+using OpenAstroAra.Equipment.Equipment.MyGuider.PHD2;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Services;
 
@@ -187,6 +188,11 @@ public static partial class EquipmentEndpoints {
         });
 
         // A device's driver and SDK versions (Simple Mode's device windows).
+        // The guider's camera: its Alpaca pick lives in the guider settings, not the equipment selections.
+        equipment.MapGet("/driver/guidecamera", GetGuideCameraDriverAsync)
+            .Produces<DeviceDriverDto>(StatusCodes.Status200OK)
+            .WithName("GetGuideCameraDriver")
+            .WithSummary("The guide camera's name, driver, SDK and firmware versions.");
         equipment.MapGet("/driver/{type}", GetDeviceDriverAsync)
             .Produces<DeviceDriverDto>(StatusCodes.Status200OK)
             .WithName("GetDeviceDriver")
@@ -1044,6 +1050,27 @@ public static partial class EquipmentEndpoints {
                 entry?.SerialNumber));
         } catch (System.ArgumentException) {
             return Results.Ok(new DeviceDriverDto(null, null, null)); // a remembered host that isn't valid
+        }
+    }
+
+    /// <summary>The guide camera's versions and model name, from the Alpaca server the guider's
+    /// "Alpaca Camera [host:port/N]" pick names; 404 when the pick is unset or not an Alpaca camera.</summary>
+    public static async Task<IResult> GetGuideCameraDriverAsync(
+            IProfileStore profiles, IAlpacaManagementClient alpaca, CancellationToken ct) {
+        ArgumentNullException.ThrowIfNull(profiles);
+        ArgumentNullException.ThrowIfNull(alpaca);
+        if (PHD2Guider.ParseAlpacaSelectionEndpoint(profiles.GetPhd2Settings().GuiderCamera) is not { } ep) {
+            return Results.Problem("No Alpaca guide camera is set up.", statusCode: StatusCodes.Status404NotFound);
+        }
+        try {
+            var listed = alpaca.GetConfiguredDevicesAsync(ep.Host, ep.Port, ct);
+            var driver = alpaca.GetDriverVersionAsync(ep.Host, ep.Port, "camera", ep.Device, ct);
+            var entry = (await listed.ConfigureAwait(false)).GetValueOrDefault(
+                $"camera/{ep.Device.ToString(System.Globalization.CultureInfo.InvariantCulture)}");
+            return Results.Ok(new DeviceDriverDto(await driver.ConfigureAwait(false), entry?.SdkVersion, entry?.Firmware,
+                entry?.SerialNumber, entry?.Name));
+        } catch (System.ArgumentException) {
+            return Results.Ok(new DeviceDriverDto(null, null, null));
         }
     }
 
