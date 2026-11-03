@@ -27,23 +27,37 @@
   .seg button[aria-pressed="true"] { background: var(--sel); color: #fff; }
   .tag { font-size: 11px; letter-spacing: .5px; text-transform: uppercase; padding: 1px 7px; border-radius: 10px; border: 1px solid var(--busy); color: var(--busy); margin-left: 6px; vertical-align: 2px; }
 
-  /* The iPad, landscape */
-  .ipad { width: 1024px; height: 768px; max-width: 100%; position: relative; border-radius: 18px; overflow: hidden; border: 1px solid #333; background: #050608; }
-  .frame { position: absolute; inset: 0; }
-  .strip { position: absolute; left: 16px; right: 16px; top: 16px; height: 52px; background: rgba(26,26,26,.9); border-radius: 10px; display: flex; align-items: center; gap: 16px; padding: 0 14px; font-size: 13px; color: var(--text2); z-index: 3; }
-  .strip i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--ok); margin-right: 6px; }
-  .rail { position: absolute; top: 84px; width: 72px; background: rgba(26,26,26,.9); border-radius: 12px; padding: 8px 6px; display: flex; flex-direction: column; gap: 6px; z-index: 3; }
-  .rail.left { left: 16px; } .rail.right { right: 16px; align-items: center; }
-  .rail .m { height: 52px; border-radius: 10px; display: grid; place-items: center; font-size: 11px; color: var(--text2); text-align: center; }
-  .rail .m.on { background: rgba(66,165,245,.16); color: var(--info); }
-  .chip { width: 60px; border-radius: 10px; background: var(--tile); font-size: 11px; text-align: center; padding: 6px 2px; color: var(--text); }
-  .shutter { width: 60px; height: 60px; border-radius: 50%; border: 3px solid #fff; display: grid; place-items: center; cursor: pointer; }
-  .shutter .tri { width: 0; height: 0; border-left: 18px solid #fff; border-top: 11px solid transparent; border-bottom: 11px solid transparent; margin-left: 5px; }
-  .shutter .sq { width: 20px; height: 20px; border-radius: 4px; background: #D32F2F; }
-
-  .panel { position: absolute; left: 104px; top: 84px; background: rgba(26,26,26,.9); backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px); border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 8px; z-index: 3; }
-  .panel.narrow { width: 280px; } .panel.wide { width: 360px; }
-  .bottom { position: absolute; left: 104px; right: 104px; bottom: 16px; background: rgba(26,26,26,.9); backdrop-filter: blur(5px); border-radius: 14px; padding: 12px 16px; display: flex; gap: 16px; align-items: stretch; z-index: 3; }
+  /* The iPad, landscape: Simple Mode's two rails (DESIGN.md "Simple Mode: Image First", ara-design-preview.html) */
+  .ipad { --in: 16px; --bar: 56px; --rail: 72px; --stop: 60px; --top: calc(2 * var(--in) + var(--bar)); --scrim: rgba(26,26,26,.9);
+          width: 1024px; height: 768px; max-width: 100%; position: relative; border-radius: 18px; overflow: hidden; border: 1px solid #333; background: #050608; font-size: 14px; }
+  .frame { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .p { position: absolute; background: var(--scrim); border-radius: 10px; backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px); }
+  .s-strip { left: var(--in); right: var(--in); top: var(--in); height: var(--bar); display: flex; align-items: center; gap: 14px; padding: 0 8px 0 16px; color: var(--text2); font-size: 13px; }
+  .s-strip .dev { display: inline-flex; align-items: center; gap: 6px; } .s-strip .dev i { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); }
+  .s-strip .grow { flex: 1; } .s-strip .ib { width: 44px; text-align: center; font-size: 18px; color: var(--text); }
+  .s-pill { right: var(--in); top: var(--top); height: 48px; display: flex; align-items: center; gap: 8px; padding: 0 16px; white-space: nowrap; }
+  .s-pill i { width: 10px; height: 10px; border-radius: 50%; background: var(--ok); }
+  .s-col { position: absolute; width: var(--rail); display: flex; align-items: center; }
+  .s-col.l { left: var(--in); top: var(--top); bottom: var(--top); }
+  .s-col.r { right: var(--in); top: var(--top); bottom: calc(2 * var(--in) + var(--stop)); }
+  .s-anchor { position: relative; width: 100%; }
+  .s-rail { position: relative; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 8px 6px; }
+  .s-rb { width: 60px; height: 56px; border-radius: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; color: var(--text2); font-size: 11.5px; text-align: center; }
+  .s-rb b { font-size: 18px; font-weight: 400; color: var(--text); }
+  .s-chip { height: 72px; }
+  .s-mode { width: 60px; height: 48px; display: flex; flex-direction: column; align-items: center; justify-content: center; font-weight: 600; }
+  .s-mode small { color: var(--text2); font-size: 10px; }
+  .s-shut { width: 60px; height: 60px; border-radius: 50%; border: 3px solid var(--text); display: grid; place-items: center; cursor: pointer; }
+  .s-shut .tri { width: 0; height: 0; border-left: 18px solid #fff; border-top: 11px solid transparent; border-bottom: 11px solid transparent; margin-left: 5px; }
+  .s-shut .sq { width: 22px; height: 22px; border-radius: 3px; background: #E53935; }
+  .s-pop { right: calc(100% + var(--in)); top: 0; padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; }
+  .s-pop.narrow { width: 280px; } .s-pop.wide { width: 360px; }
+  .s-stop { position: absolute; right: calc(var(--in) + (var(--rail) - var(--stop)) / 2); bottom: var(--in); width: var(--stop); height: var(--stop); padding: 2px; border: 1px solid #D32F2F; border-radius: 13px; background: #1A1A1A; }
+  .s-stop div { width: 100%; height: 100%; border-radius: 10px; background: #D32F2F; color: #fff; font: 700 12px var(--sys); display: grid; place-items: center; }
+  .f-star { left: calc(2 * var(--in) + var(--rail)); top: calc(var(--top) + 48px + var(--in)); width: 240px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+  .f-star .zoom { height: 180px; border-radius: 8px; background: #050505; overflow: hidden; }
+  .f-star .lb { font-size: 11px; font-weight: 600; letter-spacing: .6px; text-transform: uppercase; color: var(--text2); }
+  .s-bottom { left: calc(2 * var(--in) + var(--rail)); right: calc(2 * var(--in) + var(--rail)); bottom: var(--in); padding: 10px 14px; }
   .head { font-weight: 600; font-size: 16px; }
   .head.ok { color: var(--okText); } .head.busy { color: var(--busy); } .head.err { color: var(--err); }
   .sub { color: var(--text2); font-size: 12px; }
@@ -77,7 +91,7 @@
 <body>
 <div class="page">
   <h1>Simple Focus: Smart Focus result and the Bahtinov helper</h1>
-  <p class="note">One Focus panel, two methods (the chip on the right rail: Auto / Manual). Auto shows the Smart Focus result the full UI shows (headline, HFR, stats, the V-curve, the weak-fit warning, details); Manual is the Bahtinov mask helper, with the mask-off question asked inside the panel (Simple Mode has no popups). Pick a <b>result layout</b> for Auto: A grows the panel on the left, B puts the curve along the bottom. Parts tagged <span class="tag">proposed</span> are new to Simple Mode.</p>
+  <p class="note">One Focus panel, two methods (the chip on the right rail: Auto / Manual). Auto shows the Smart Focus result the full UI shows (headline, HFR, stats, the V-curve, the weak-fit warning), all on view: nothing folded away; Manual is the Bahtinov mask helper, its spikes drawn in the zoomed star under the status pill, with the mask-off question asked inside the panel (Simple Mode has no popups). Pick a <b>result layout</b> for Auto: A grows the Focus panel (left of the right rail, as today), B keeps the panel small and puts the curve in the bottom row. Parts tagged <span class="tag">proposed</span> are new to Simple Mode.</p>
 
   <div class="controls">
     <div class="ctl"><span class="lbl">Method</span><span class="seg" id="method"><button data-v="auto" aria-pressed="true">Auto (Smart Focus)</button><button data-v="manual">Manual (Bahtinov)</button></span></div>
@@ -93,10 +107,16 @@
 
   <div class="ipad" id="ipad">
     <svg class="frame" id="frame" viewBox="0 0 1024 768" preserveAspectRatio="none"></svg>
-    <div class="strip"><span><i></i>Camera</span><span><i></i>Mount</span><span><i></i>Focuser</span><span><i></i>Guider</span><span style="margin-left:auto">⌕ &nbsp; ☾ &nbsp; ⚙</span></div>
-    <div class="rail left"><div class="m">Auto</div><div class="m">Preview</div><div class="m on">Focus</div><div class="m">P.A.</div><div class="m">Plan</div></div>
-    <div class="rail right"><div class="chip" id="chip">Auto</div><div class="shutter" id="shutter"><div class="tri"></div></div></div>
-    <div id="ui"></div>
+    <div class="p s-strip"><span class="dev"><i></i>Camera</span><span class="dev"><i></i>Mount</span><span class="dev"><i></i>Guider</span><span class="dev"><i></i>Focuser</span><span class="grow"></span><span class="ib">⌕</span><span class="ib">☾</span><span class="ib">⚙</span></div>
+    <div class="p s-pill" id="pill" hidden><i></i><span id="pillText"></span></div>
+    <div class="p f-star" id="star"><span class="lb" id="starLbl">Star, zoomed</span><div class="zoom"><svg id="zoom" viewBox="0 0 216 180" width="216" height="180"></svg></div><span class="sub" id="starSub"></span></div>
+    <div class="s-col l"><div class="p s-rail"><div class="s-rb"><b>◍</b>Sky</div><div class="s-rb"><b>ⓘ</b>Info</div><div class="s-rb"><b>▤</b>Library</div></div></div>
+    <div class="s-col r"><div class="s-anchor">
+      <div class="p s-rail"><div class="s-mode">Focus<small>▾</small></div><div class="s-shut" id="shutter"><div class="tri"></div></div><div class="s-rb s-chip"><b>⚟</b><span id="chip">Auto</span></div></div>
+      <div id="ui"></div>
+    </div></div>
+    <div id="bottom"></div>
+    <div class="s-stop"><div>STOP</div></div>
   </div>
   <p class="legend">Behind the panels is the frame Simple Mode already shows full screen. With "stars circled" on, the stars the focus run measured are ringed on that frame (green: kept, grey: dropped) instead of a second thumbnail, like the full UI's FOCUSED image.</p>
 
@@ -163,16 +183,6 @@ function frame() {
     if (!manual && S.circles === 'on' && S.astate !== 'running' && S.astate !== 'failed' && i % 2 === 0)
       s += `<circle cx="${x}" cy="${y}" r="7" fill="none" stroke="${i % 23 === 0 ? '#888' : '#66BB6A'}" stroke-width="1.2"/>`;
   }
-  if (manual) {
-    // The bright star with Bahtinov spikes, the middle spike offset by state.
-    const off = { fit: 0, keep: 9, back: -6, focus: .5, maskoff: .5, done: 0 }[S.mstate];
-    const cx = 640, cy = 400;
-    s += `<circle cx="${cx}" cy="${cy}" r="10" fill="url(#g)"/>`;
-    if (S.mstate !== 'fit' && S.mstate !== 'done') {
-      s += `<line x1="${cx-140}" y1="${cy-50}" x2="${cx+140}" y2="${cy+50}" stroke="#fff6" stroke-width="2"/><line x1="${cx-140}" y1="${cy+50}" x2="${cx+140}" y2="${cy-50}" stroke="#fff6" stroke-width="2"/>`;
-      s += `<line x1="${cx-150}" y1="${cy+off}" x2="${cx+150}" y2="${cy+off}" stroke="#fff9" stroke-width="2"/>`;
-    }
-  }
   document.getElementById('frame').innerHTML = s;
 }
 
@@ -183,28 +193,46 @@ function autoPanel() {
   const stats = running || failed ? '' : `<div class="stats proposed"><div class="stat"><div class="k">${t('best')}</div><div class="v">29463</div></div><div class="stat"><div class="k">${t('stars')}</div><div class="v">299</div></div><div class="stat"><div class="k">${t('r2')}</div><div class="v" style="color:${weak ? 'var(--busy)' : 'inherit'}">${weak ? '0.554' : '0.97'}</div></div></div>`;
   const warn = weak ? `<div class="warn proposed"><b>⚠</b><span>${t('weak')}</span></div>` : '';
   const err = failed ? `<div class="error">${t('failText')}</div>` : '';
-  const det = running || failed ? '' : `<div class="more proposed" id="more">${S.details ? t('hide') : t('details')} ▾</div>` + (S.details ? `<div class="details"><span>${t('method')}</span><span>Smart Focus · 3 shots</span><span>${t('took')}</span><span>1 min 48 s</span><span>${t('step')}</span><span>50 · auto, from the last V-curve</span><span>${t('temp')}</span><span>26.8 °C</span></div>` : '');
+  const det = '';
   const hfr = failed ? '' : `<div class="hfr">${t('hfr')} ${running ? '3.40' : '1.01'}</div>`;
   if (S.layout === 'A' || running || failed) {
-    return `<div class="panel wide">${head}${sub}${hfr}${stats}<div class="${running ? '' : 'proposed'}">${curve(328, running ? 110 : 170, running)}</div>${warn}${err}${det}</div>`;
+    return `<div class="p s-pop wide">${head}${sub}${hfr}${stats}<div class="${running ? '' : 'proposed'}">${curve(328, running ? 100 : 140, running)}</div>${warn}${err}${det}</div>`;
   }
-  return `<div class="panel narrow">${head}${sub}${hfr}${stats}${warn}${det}</div><div class="bottom proposed"><div style="flex:1">${curve(780, 150, false)}</div></div>`;
+  document.getElementById('bottom').innerHTML = `<div class="p s-bottom proposed">${curve(740, 130, false)}</div>`;
+  return `<div class="p s-pop narrow">${head}${sub}${hfr}${stats}${warn}${det}</div>`;
 }
 
 function manualPanel() {
   const st = S.mstate;
   const exp = `<div class="sub">${t('exposure')}</div><div class="segs"><span>1 s</span><span class="on">2 s</span><span>5 s</span></div>`;
-  if (st === 'fit') return `<div class="panel narrow"><div class="head">${t('fitMask')}</div><div class="sub">${t('fitMaskSub')}</div>${exp}</div>`;
-  if (st === 'maskoff') return `<div class="panel narrow proposed"><div class="head">${t('maskQ')}</div><div class="sub">${t('maskSub')}</div><div class="btnrow"><button class="btn plain">${t('notYet')}</button><button class="btn go">${t('removed')}</button></div></div>`;
-  if (st === 'done') return `<div class="panel narrow"><div class="head ok">${t('doneH')}</div><div class="sub">${t('doneSub')}</div></div>`;
+  if (st === 'fit') return `<div class="p s-pop narrow"><div class="head">${t('fitMask')}</div><div class="sub">${t('fitMaskSub')}</div>${exp}</div>`;
+  if (st === 'maskoff') return `<div class="p s-pop narrow proposed"><div class="head">${t('maskQ')}</div><div class="sub">${t('maskSub')}</div><div class="btnrow"><button class="btn plain">${t('notYet')}</button><button class="btn go">${t('removed')}</button></div></div>`;
+  if (st === 'done') return `<div class="p s-pop narrow"><div class="head ok">${t('doneH')}</div><div class="sub">${t('doneSub')}</div></div>`;
   const px = { keep: '+3.2', back: '−2.1', focus: '0.2' }[st];
   const pos = { keep: 78, back: 26, focus: 49.5 }[st];
   const [adv, cls, sub] = { keep: [t('keep'), 'go', t('keepSub')], back: [t('back'), 'back', t('backSub')], focus: [t('inF'), 'ok', t('inFSub')] }[st];
   const fin = st === 'focus' ? `<button class="btn go" id="finish">${t('finish')}</button>` : '';
-  return `<div class="panel narrow"><div class="head ${st === 'focus' ? 'ok' : ''}">${st === 'focus' ? t('inF') + ' · 0.2 px' : 'Bahtinov'}</div><div class="sub">Focuser at 29463 · ZWO EAF</div>
+  return `<div class="p s-pop narrow"><div class="head ${st === 'focus' ? 'ok' : ''}">${st === 'focus' ? t('inF') + ' · 0.2 px' : 'Bahtinov'}</div><div class="sub">Focuser at 29463 · ZWO EAF</div>
     <div class="big">${px} <span style="font-size:14px;color:var(--text2)">${t('from')}</span></div>
     <div class="zone proposed" aria-hidden="true"><div class="z"></div><div class="p" style="left:${pos}%"></div></div>
     <div class="advice ${cls}">${adv}</div><div class="sub" style="text-align:center">${sub}</div>${exp}${fin}</div>`;
+}
+
+function zoom() {
+  // The zoomed star under the status pill: its HFR ring (Auto), or its Bahtinov spikes (Manual).
+  const m = S.method === 'manual', cx = 108, cy = 90;
+  let z = `<defs><radialGradient id="zg"><stop offset="0" stop-color="#fff"/><stop offset=".35" stop-color="#fffd"/><stop offset="1" stop-color="#fff0"/></radialGradient></defs>`;
+  const r = m ? 14 : { running: 26, good: 12, weak: 13, failed: 30 }[S.astate];
+  z += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="url(#zg)"/>`;
+  if (!m) z += `<circle cx="${cx}" cy="${cy}" r="${r + 10}" fill="none" stroke="rgba(66,165,245,.8)" stroke-dasharray="3 3"/>`;
+  if (m && !['fit','done'].includes(S.mstate)) {
+    const off = { keep: 9, back: -6, focus: .5, maskoff: .5 }[S.mstate];
+    z += `<line x1="${cx-95}" y1="${cy-34}" x2="${cx+95}" y2="${cy+34}" stroke="#fffa" stroke-width="2"/><line x1="${cx-95}" y1="${cy+34}" x2="${cx+95}" y2="${cy-34}" stroke="#fffa" stroke-width="2"/>`;
+    z += `<line x1="${cx-100}" y1="${cy+off}" x2="${cx+100}" y2="${cy+off}" stroke="#fff" stroke-width="2.5"/>`;
+  }
+  document.getElementById('zoom').innerHTML = z;
+  document.getElementById('starLbl').textContent = m ? 'Star, zoomed · Bahtinov' : 'Star, zoomed';
+  document.getElementById('starSub').textContent = m ? (S.mstate === 'fit' || S.mstate === 'done' ? '' : 'Middle spike vs the centre of the X') : 'HFR ring: ' + { running: '3.40', good: '1.01', weak: '1.01', failed: '—' }[S.astate] + ' px';
 }
 
 function render() {
@@ -215,9 +243,13 @@ function render() {
   document.getElementById('chip').textContent = S.method === 'auto' ? 'Auto' : 'Manual';
   const live = (S.method === 'auto' && S.astate === 'running') || (S.method === 'manual' && ['keep','back','focus'].includes(S.mstate));
   document.getElementById('shutter').innerHTML = live ? '<div class="sq"></div>' : '<div class="tri"></div>';
+  document.getElementById('bottom').innerHTML = '';
   document.getElementById('ui').innerHTML = S.method === 'auto' ? autoPanel() : manualPanel();
+  const pill = document.getElementById('pill');
+  pill.hidden = !live;
+  document.getElementById('pillText').textContent = S.method === 'auto' ? 'Taking a frame · 2 s left' : 'Looping';
+  zoom();
   frame();
-  const more = document.getElementById('more'); if (more) more.onclick = () => { S.details = !S.details; render(); };
   const fin = document.getElementById('finish'); if (fin) fin.onclick = () => { S.mstate = 'maskoff'; sync('mstate'); render(); };
   document.querySelectorAll('.btnrow .btn').forEach(b => b.onclick = () => { S.mstate = b.classList.contains('go') ? 'done' : 'focus'; sync('mstate'); render(); });
 }
