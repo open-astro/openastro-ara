@@ -16,6 +16,7 @@ using NUnit.Framework;
 using OpenAstroAra.Server.Services.LiveStack;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 
 namespace OpenAstroAra.Test {
@@ -28,6 +29,8 @@ namespace OpenAstroAra.Test {
     /// A new engine is enabled for session 0; <c>Add</c> returns <see cref="StackAddOutcome.Dropped"/> when the
     /// engine is disabled or the session id differs (the enabled flag and session live under the engine lock).
     /// </summary>
+    [SuppressMessage("Security", "CA5394:Do not use insecure randomness",
+        Justification = "Seeded System.Random makes the synthetic star field and noise deterministic; test-only, nothing security related.")]
     [TestFixture]
     public class LiveStackEngineTest {
 

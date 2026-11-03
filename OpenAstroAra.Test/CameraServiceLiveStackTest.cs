@@ -16,6 +16,7 @@ using NUnit.Framework;
 using OpenAstroAra.Server.Services;
 using OpenAstroAra.Server.Services.LiveStack;
 using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Threading.Tasks;
 
 namespace OpenAstroAra.Test {
@@ -25,6 +26,8 @@ namespace OpenAstroAra.Test {
     /// <c>ILiveStackControl</c>, implemented by CameraService in a new partial file). Sim-free: guards and idle state only;
     /// the loop hook is covered by the OmniSim integration companion.
     /// </summary>
+    [SuppressMessage("Performance", "CA1859:Use concrete types when possible",
+        Justification = "The tests exercise the ILiveStackControl surface the endpoints cast to.")]
     [TestFixture]
     public class CameraServiceLiveStackTest {
 
