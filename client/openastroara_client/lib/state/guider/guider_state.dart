@@ -56,7 +56,7 @@ class GuiderStatusNotifier extends AsyncNotifier<GuiderStatus?> {
 
   /// How often [connect] re-reads while the guider is connecting.
   @visibleForTesting
-  static Duration settleInterval = const Duration(seconds: 1);
+  static Duration settleInterval = const Duration(milliseconds: 250);
 
   Future<void> connect({String? host, int? port}) async {
     // Re-entrancy guard: ignore a second call while one is in flight (loading),
@@ -96,8 +96,8 @@ class GuiderStatusNotifier extends AsyncNotifier<GuiderStatus?> {
     // could pick up a different server if the active one changed in between.
     await refresh(api);
     // The connect is 202-Accepted and nothing else polls the guider, so read
-    // until it settles (~15 s at most) rather than stay on Connecting….
-    for (var i = 0; i < 15; i++) {
+    // until it settles (the rig takes ~50 ms; 15 s at most) rather than stay on Connecting….
+    for (var i = 0; i < 60; i++) {
       if (!ref.mounted ||
           state.value?.connectionState != GuiderConnectionState.connecting) {
         return;
