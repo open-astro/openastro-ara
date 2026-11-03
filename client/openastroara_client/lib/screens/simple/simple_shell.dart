@@ -2127,33 +2127,43 @@ class _ThisRig extends ConsumerWidget {
     final rig = ref.watch(daemonVersionsProvider).value;
     final stars = ref.watch(plateSolveDatabaseStatusProvider).value?.databases;
     final servers = rig?.alpacaServers ?? const <AlpacaServerVersion>[];
-    // Reads like the telescope and site rows under it.
-    Widget fact(String label, String value) => ConstrainedBox(
-      constraints: const BoxConstraints(minHeight: 44),
-      child: Row(
-        children: [
-          Text(label, style: kSimpleText),
-          const SizedBox(width: AraSpace.s12),
-          Expanded(
-            child: Text(
-              value,
-              style: kSimpleText,
-              textAlign: TextAlign.right,
-              overflow: TextOverflow.ellipsis,
-            ),
+    // Name and Profile, each with its change button on the same line; set
+    // close together (two facts, not two settings).
+    Widget fact(
+      String label,
+      String value,
+      String change,
+      VoidCallback onTap,
+    ) => Row(
+      spacing: AraSpace.s12,
+      children: [
+        Text(label, style: kSimpleText),
+        Expanded(
+          child: Text(
+            value,
+            style: kSimpleText,
+            textAlign: TextAlign.right,
+            overflow: TextOverflow.ellipsis,
           ),
-        ],
-      ),
-    );
-    Widget action(String label, VoidCallback onTap) => Expanded(
-      child: TextButton(
-        style: TextButton.styleFrom(
-          backgroundColor: AraColors.tileFill,
-          minimumSize: const Size(0, 44),
         ),
-        onPressed: onTap,
-        child: Text(label, style: kSimpleText, textAlign: TextAlign.center),
-      ),
+        // A plain blue "Change"; a screen reader hears what it changes.
+        Semantics(
+          label: change,
+          button: true,
+          excludeSemantics: true,
+          child: TextButton(
+            key: Key('simple-rig-${change.toLowerCase().replaceAll(' ', '-')}'),
+            style: TextButton.styleFrom(
+              // 28 pt keeps the two lines close; still over WCAG 2.2's 24.
+              minimumSize: const Size(0, 28),
+              padding: const EdgeInsets.symmetric(horizontal: AraSpace.s8),
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            onPressed: onTap,
+            child: const Text('Change', style: TextStyle(fontSize: 14)),
+          ),
+        ),
+      ],
     );
     // A list-style setting: the platform's switch (DESIGN.md: segments stay
     // for the panels over the image).
@@ -2199,78 +2209,80 @@ class _ThisRig extends ConsumerWidget {
       spacing: AraSpace.s8,
       children: [
         const SimpleSystemPanel(expand: true),
-        fact('Name', server == null ? '—' : server.mdnsName ?? server.hostname),
-        fact('Profile', profile ?? '—'),
+        Column(
+          children: [
+            fact(
+              'Name',
+              server == null ? '—' : server.mdnsName ?? server.hostname,
+              'Change rig',
+              () => relaunch(rig: true),
+            ),
+            fact(
+              'Profile',
+              profile ?? '—',
+              'Change profile',
+              () => relaunch(rig: false),
+            ),
+          ],
+        ),
         if (running)
           Text(
             'A plan is running. It keeps running on the rig; pick this '
             'profile again to come back to it.',
             style: AraText.caption.copyWith(color: AraColors.accentBusy),
           ),
-        Row(
-          spacing: AraSpace.s8,
-          children: [
-            action('Change profile', () => relaunch(rig: false)),
-            action('Change rig', () => relaunch(rig: true)),
-          ],
-        ),
         // The telescope and the site: set once, kept in the profile (plate
         // solving, framing and the night's times use them).
         const Divider(height: AraSpace.s16),
-        _RigNumber(
-          id: 'aperture',
-          label: 'Aperture',
-          unit: 'mm',
-          value: ref.watch(opticsSettingsProvider).apertureMm,
-          onSet: (v) => _save(
-            context,
-            ref,
-            () => ref.read(opticsSettingsProvider.notifier).setApertureMm(v),
-            (api) =>
-                ref.read(opticsSettingsProvider.notifier).persistToServer(api),
+        for (final (id, label, digits, value, set)
+            in <(String, String, int, double, void Function(double))>[
+              (
+                'aperture',
+                'Aperture',
+                3,
+                ref.watch(opticsSettingsProvider).apertureMm,
+                ref.read(opticsSettingsProvider.notifier).setApertureMm,
+              ),
+              (
+                'focal',
+                'Focal length',
+                4,
+                ref.watch(opticsSettingsProvider).focalLengthMm,
+                ref.read(opticsSettingsProvider.notifier).setFocalLengthMm,
+              ),
+            ])
+          _RigWheelRow.millimetres(
+            id: id,
+            label: label,
+            digits: digits,
+            value: value,
+            onSet: (v) => _save(
+              context,
+              ref,
+              () => set(v),
+              (api) => ref
+                  .read(opticsSettingsProvider.notifier)
+                  .persistToServer(api),
+            ),
           ),
-        ),
-        _RigNumber(
-          id: 'focal',
-          label: 'Focal length',
-          unit: 'mm',
-          value: ref.watch(opticsSettingsProvider).focalLengthMm,
-          onSet: (v) => _save(
-            context,
-            ref,
-            () => ref.read(opticsSettingsProvider.notifier).setFocalLengthMm(v),
-            (api) =>
-                ref.read(opticsSettingsProvider.notifier).persistToServer(api),
-          ),
-        ),
-        for (final (id, label, unit, value, set)
-            in <(String, String, String, double, void Function(double))>[
+        for (final (id, label, value, set)
+            in <(String, String, double, void Function(double))>[
               (
                 'lat',
                 'Latitude',
-                '°',
                 ref.watch(siteSettingsProvider).latitudeDeg,
                 ref.read(siteSettingsProvider.notifier).setLatitudeDeg,
               ),
               (
                 'lng',
                 'Longitude',
-                '°',
                 ref.watch(siteSettingsProvider).longitudeDeg,
                 ref.read(siteSettingsProvider.notifier).setLongitudeDeg,
               ),
-              (
-                'elevation',
-                'Elevation',
-                'm',
-                ref.watch(siteSettingsProvider).elevationM,
-                ref.read(siteSettingsProvider.notifier).setElevationM,
-              ),
             ])
-          _RigNumber(
+          _RigWheelRow.coordinate(
             id: id,
             label: label,
-            unit: unit,
             value: value,
             onSet: (v) => _save(
               context,
@@ -2280,6 +2292,19 @@ class _ThisRig extends ConsumerWidget {
                   ref.read(siteSettingsProvider.notifier).persistToServer(api),
             ),
           ),
+        _RigStepper(
+          id: 'elevation',
+          label: 'Elevation',
+          unit: 'm',
+          value: ref.watch(siteSettingsProvider).elevationM,
+          onSet: (v) => _save(
+            context,
+            ref,
+            () => ref.read(siteSettingsProvider.notifier).setElevationM(v),
+            (api) =>
+                ref.read(siteSettingsProvider.notifier).persistToServer(api),
+          ),
+        ),
         Align(
           alignment: Alignment.centerLeft,
           child: TextButton.icon(
@@ -2362,11 +2387,210 @@ class _SettingsPage extends ConsumerWidget {
   }
 }
 
-/// A number the rig keeps (aperture, a coordinate): label, field, unit; a
-/// value is set on Done or on leaving the field, and the field always shows
-/// what was kept (a rejected value goes back).
-class _RigNumber extends StatefulWidget {
-  const _RigNumber({
+/// A value the rig keeps, set by wheels: tap it and one wheel per digit
+/// (and a hemisphere for a coordinate) opens under it; a wheel at rest sets
+/// it. A second tap closes them.
+class _RigWheelRow extends StatefulWidget {
+  const _RigWheelRow._({
+    required this.id,
+    required this.label,
+    required this.text,
+    required this.columns,
+    required this.initial,
+    required this.unit,
+    required this.read,
+    required this.onSet,
+    this.dotAfter,
+  });
+
+  /// Whole millimetres, [digits] wheels.
+  factory _RigWheelRow.millimetres({
+    required String id,
+    required String label,
+    required int digits,
+    required double value,
+    required ValueChanged<double> onSet,
+  }) => _RigWheelRow._(
+    id: id,
+    label: label,
+    text: value > 0 ? '${value.round()} mm' : 'Not set',
+    columns: List.filled(digits, _kDigits),
+    initial: _digitsOf(value.round(), digits),
+    unit: 'mm',
+    read: (w) => int.parse(w.join()).toDouble(),
+    onSet: onSet,
+  );
+
+  /// Latitude or longitude: hemisphere, degrees, four decimals (about 11 m).
+  factory _RigWheelRow.coordinate({
+    required String id,
+    required String label,
+    required double value,
+    required ValueChanged<double> onSet,
+  }) {
+    final lat = id == 'lat';
+    final hemi = lat ? const ['N', 'S'] : const ['E', 'W'];
+    final degDigits = lat ? 2 : 3;
+    final deg = value.abs().floor();
+    final frac = ((value.abs() - deg) * 10000).round().clamp(0, 9999);
+    return _RigWheelRow._(
+      id: id,
+      label: label,
+      text:
+          '${value.abs().toStringAsFixed(4)}° ${value < 0 ? hemi[1] : hemi[0]}',
+      columns: [hemi, ...List.filled(degDigits + 4, _kDigits)],
+      initial: [
+        value < 0 ? 1 : 0,
+        ..._digitsOf(deg, degDigits),
+        ..._digitsOf(frac, 4),
+      ],
+      unit: '°',
+      dotAfter: degDigits,
+      read: (w) {
+        final v = math.min(
+          int.parse(w.sublist(1, 1 + degDigits).join()) +
+              int.parse(w.sublist(1 + degDigits).join()) / 10000,
+          lat ? 90.0 : 180.0,
+        );
+        return w[0] == 1 ? -v : v;
+      },
+      onSet: onSet,
+    );
+  }
+
+  static const _kDigits = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
+
+  static List<int> _digitsOf(int v, int n) => [
+    for (final c
+        in v
+            .clamp(0, math.pow(10, n).toInt() - 1)
+            .toString()
+            .padLeft(n, '0')
+            .split(''))
+      int.parse(c),
+  ];
+
+  final String id;
+  final String label;
+  final String text;
+  final List<List<String>> columns;
+  final List<int> initial;
+  final String unit;
+
+  /// The wheels' column that a '.' follows.
+  final int? dotAfter;
+  final double Function(List<int> wheels) read;
+  final ValueChanged<double> onSet;
+
+  @override
+  State<_RigWheelRow> createState() => _RigWheelRowState();
+}
+
+class _RigWheelRowState extends State<_RigWheelRow> {
+  bool _open = false;
+  List<FixedExtentScrollController> _wheels = const [];
+
+  void _toggle() => setState(() {
+    _open = !_open;
+    for (final w in _wheels) {
+      w.dispose();
+    }
+    _wheels = _open
+        ? [
+            for (final i in widget.initial)
+              FixedExtentScrollController(initialItem: i),
+          ]
+        : const [];
+  });
+
+  @override
+  void dispose() {
+    for (final w in _wheels) {
+      w.dispose();
+    }
+    super.dispose();
+  }
+
+  Widget _wheel(int i) => Container(
+    width: 40,
+    height: 132,
+    decoration: BoxDecoration(
+      color: AraColors.tileFill,
+      borderRadius: BorderRadius.circular(8),
+    ),
+    child: Semantics(
+      label: '${widget.label}, wheel ${i + 1} of ${widget.columns.length}',
+      child: ListWheelScrollView(
+        key: Key('simple-rig-${widget.id}-wheel-$i'),
+        controller: _wheels[i],
+        itemExtent: 44,
+        diameterRatio: 3,
+        physics: const FixedExtentScrollPhysics(),
+        children: [
+          for (final o in widget.columns[i])
+            Center(child: Text(o, style: kSimpleText.copyWith(fontSize: 20))),
+        ],
+      ),
+    ),
+  );
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 44),
+        child: Row(
+          spacing: AraSpace.s12,
+          children: [
+            Expanded(child: Text(widget.label, style: kSimpleText)),
+            TextButton(
+              key: Key('simple-rig-${widget.id}'),
+              style: TextButton.styleFrom(
+                backgroundColor: AraColors.tileFill,
+                minimumSize: const Size(120, 44),
+                side: _open
+                    ? const BorderSide(color: AraColors.selectionBg, width: 2)
+                    : null,
+              ),
+              onPressed: _toggle,
+              child: Text(widget.text, style: kSimpleText),
+            ),
+          ],
+        ),
+      ),
+      if (_open)
+        // Set when a wheel comes to rest, not on every digit it passes.
+        NotificationListener<ScrollEndNotification>(
+          onNotification: (_) {
+            final v = widget.read([for (final w in _wheels) w.selectedItem]);
+            widget.onSet(v);
+            return false;
+          },
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: AraSpace.s4),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              spacing: AraSpace.s4,
+              children: [
+                for (var i = 0; i < widget.columns.length; i++) ...[
+                  _wheel(i),
+                  if (i == widget.dotAfter)
+                    Text('.', style: kSimpleText.copyWith(fontSize: 20)),
+                ],
+                Text(widget.unit, style: AraText.caption),
+              ],
+            ),
+          ),
+        ),
+    ],
+  );
+}
+
+/// A whole number stepped with − and +: a tap is one, a hold runs (1, then
+/// 10, then 50 at a time) and sets it on release.
+class _RigStepper extends StatefulWidget {
+  const _RigStepper({
     required this.id,
     required this.label,
     required this.unit,
@@ -2381,47 +2605,52 @@ class _RigNumber extends StatefulWidget {
   final ValueChanged<double> onSet;
 
   @override
-  State<_RigNumber> createState() => _RigNumberState();
+  State<_RigStepper> createState() => _RigStepperState();
 }
 
-class _RigNumberState extends State<_RigNumber> {
-  late final _text = TextEditingController(text: _format(widget.value));
-  final _focus = FocusNode();
+class _RigStepperState extends State<_RigStepper> {
+  double? _held;
+  Timer? _run;
+  int _steps = 0;
 
-  static String _format(double v) =>
-      v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toString();
+  void _bump(int dir) => setState(() {
+    final by = _steps > 25 ? 50 : (_steps > 10 ? 10 : 1);
+    _held = (_held ?? widget.value) + dir * by;
+    _steps++;
+  });
 
-  @override
-  void initState() {
-    super.initState();
-    _focus.addListener(() {
-      if (!_focus.hasFocus) _commit();
-    });
+  void _start(int dir) {
+    _steps = 0;
+    _bump(dir);
+    _run = Timer.periodic(const Duration(milliseconds: 100), (_) => _bump(dir));
   }
 
-  @override
-  void didUpdateWidget(_RigNumber old) {
-    super.didUpdateWidget(old);
-    if (!_focus.hasFocus && old.value != widget.value) {
-      _text.text = _format(widget.value);
-    }
+  void _end() {
+    _run?.cancel();
+    final v = _held;
+    setState(() => _held = null);
+    if (v != null) widget.onSet(v);
   }
 
   @override
   void dispose() {
-    _text.dispose();
-    _focus.dispose();
+    _run?.cancel();
     super.dispose();
   }
 
-  void _commit() {
-    final v = double.tryParse(_text.text.trim().replaceAll('−', '-'));
-    if (v != null && v != widget.value) widget.onSet(v);
-    // Shows what was kept: a rejected or unreadable value goes back.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted && !_focus.hasFocus) _text.text = _format(widget.value);
-    });
-  }
+  Widget _button(int dir) => GestureDetector(
+    onLongPressStart: (_) => _start(dir),
+    onLongPressEnd: (_) => _end(),
+    // No tooltip: its own long press would take the hold.
+    child: IconButton(
+      key: Key('simple-rig-${widget.id}-${dir > 0 ? 'up' : 'down'}'),
+      onPressed: () => widget.onSet(widget.value + dir),
+      icon: Icon(
+        dir > 0 ? Icons.add : Icons.remove,
+        semanticLabel: dir > 0 ? 'Raise' : 'Lower',
+      ),
+    ),
+  );
 
   @override
   Widget build(BuildContext context) => ConstrainedBox(
@@ -2430,21 +2659,25 @@ class _RigNumberState extends State<_RigNumber> {
       spacing: AraSpace.s12,
       children: [
         Expanded(child: Text(widget.label, style: kSimpleText)),
-        SizedBox(
-          width: 120,
-          child: TextField(
-            key: Key('simple-rig-${widget.id}'),
-            controller: _text,
-            focusNode: _focus,
-            style: kSimpleText,
-            textAlign: TextAlign.right,
-            keyboardType: const TextInputType.numberWithOptions(
-              signed: true,
-              decimal: true,
-            ),
-            textInputAction: TextInputAction.done,
-            onSubmitted: (_) => _commit(),
-            decoration: InputDecoration(suffixText: widget.unit),
+        DecoratedBox(
+          decoration: BoxDecoration(
+            color: AraColors.tileFill,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _button(-1),
+              SizedBox(
+                width: 72,
+                child: Text(
+                  '${(_held ?? widget.value).round()} ${widget.unit}',
+                  style: kSimpleText,
+                  textAlign: TextAlign.center,
+                ),
+              ),
+              _button(1),
+            ],
           ),
         ),
       ],

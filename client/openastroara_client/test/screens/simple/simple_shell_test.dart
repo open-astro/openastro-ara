@@ -1062,7 +1062,7 @@ void main() {
     expect(tiles.last.center.dx - tiles.first.center.dx, greaterThan(page.width * 0.6));
     expect(find.descendant(of: sheet, matching: find.text('Name')), findsOneWidget, reason: 'not "Rig" twice');
     expect(find.descendant(of: sheet, matching: find.text('Rig')), findsOneWidget, reason: 'the section list names the page; no title repeats it');
-    for (final t in ['astro', 'Backyard Rig', 'Change profile', 'Change rig', 'Permanent pier', 'Simple Mode', 'Logs & bug report']) {
+    for (final t in ['astro', 'Backyard Rig', 'Change', 'Permanent pier', 'Simple Mode', 'Logs & bug report']) {
       expect(find.descendant(of: sheet, matching: find.text(t)), findsWidgets, reason: t);
     }
     expect(c.read(simpleModeProvider).value, isTrue);
@@ -1071,28 +1071,78 @@ void main() {
     await tester.pump(const Duration(seconds: 5));
   });
 
-  testWidgets('Rig holds the telescope (aperture, focal length) and the site (coordinates, elevation), saved to the '
-      'profile; the site can come from this device', (tester) async {
+  testWidgets('Rig sets the telescope with digit wheels and the site with this device\'s location, adjust wheels and '
+      'an elevation stepper, saved to the profile; no text fields', (tester) async {
     final c = await _pump(tester, const Size(1024, 768));
+    c.read(opticsSettingsProvider.notifier)
+      ..setApertureMm(80)
+      ..setFocalLengthMm(480);
+    c.read(siteSettingsProvider.notifier)
+      ..setLatitudeDeg(-37.2037)
+      ..setLongitudeDeg(174.8824)
+      ..setElevationM(71);
     await _openSection(tester, 'Rig');
-    Future<void> enter(String key, String text) async {
-      await tester.enterText(find.byKey(Key(key)), text);
-      await tester.testTextInput.receiveAction(TextInputAction.done);
-      await tester.pump();
+    expect(find.byType(TextField), findsNothing, reason: 'touch only');
+    Finder value(String id, String text) => find.descendant(of: find.byKey(Key('simple-rig-$id')), matching: find.text(text));
+    expect(value('aperture', '80 mm'), findsOneWidget);
+    expect(value('lat', '37.2037° S'), findsOneWidget);
+    expect(value('lng', '174.8824° E'), findsOneWidget);
+    expect(find.text('71 m'), findsOneWidget);
+    Future<void> roll(String wheel, int items) async {
+      await tester.ensureVisible(find.byKey(Key(wheel)));
+      await tester.pumpAndSettle();
+      await tester.drag(find.byKey(Key(wheel)), Offset(0, -44.0 * items));
+      await tester.pumpAndSettle();
     }
-    await enter('simple-rig-aperture', '80');
-    await enter('simple-rig-focal', '480');
-    await enter('simple-rig-lat', '-36.85');
-    await enter('simple-rig-lng', '174.76');
-    await enter('simple-rig-elevation', '120');
-    expect(c.read(opticsSettingsProvider).apertureMm, 80);
-    expect(c.read(opticsSettingsProvider).focalLengthMm, 480);
-    expect(c.read(siteSettingsProvider).latitudeDeg, -36.85);
-    expect(c.read(siteSettingsProvider).longitudeDeg, 174.76);
-    expect(c.read(siteSettingsProvider).elevationM, 120);
+
+    // One wheel per digit; a wheel at rest sets the value.
+    await tester.tap(find.byKey(const Key('simple-rig-aperture')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('simple-rig-aperture-wheel-2')), findsOneWidget, reason: 'three digits');
+    await roll('simple-rig-aperture-wheel-2', 2);
+    expect(c.read(opticsSettingsProvider).apertureMm, 82);
+    await tester.ensureVisible(find.byKey(const Key('simple-rig-aperture')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('simple-rig-aperture')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('simple-rig-aperture-wheel-0')), findsNothing, reason: 'a second tap closes it');
+
+    await tester.ensureVisible(find.byKey(const Key('simple-rig-focal')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('simple-rig-focal')));
+    await tester.pumpAndSettle();
+    await roll('simple-rig-focal-wheel-0', 1);
+    expect(c.read(opticsSettingsProvider).focalLengthMm, 1480);
+
+    // Latitude: hemisphere, degrees, four decimals.
+    await tester.ensureVisible(find.byKey(const Key('simple-rig-focal')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('simple-rig-focal')));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const Key('simple-rig-lat')));
+    await tester.tap(find.byKey(const Key('simple-rig-lat')));
+    await tester.pumpAndSettle();
+    await roll('simple-rig-lat-wheel-0', -1);
+    expect(c.read(siteSettingsProvider).latitudeDeg, closeTo(37.2037, 1e-9), reason: 'S to N');
+    await roll('simple-rig-lat-wheel-6', 1);
+    expect(c.read(siteSettingsProvider).latitudeDeg, closeTo(37.2038, 1e-9));
+
+    // Elevation: a tap is a metre; a hold runs.
+    await tester.ensureVisible(find.byKey(const Key('simple-rig-elevation-up')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('simple-rig-elevation-up')));
+    await tester.pump();
+    expect(c.read(siteSettingsProvider).elevationM, 72);
+    final hold = await tester.startGesture(tester.getCenter(find.byKey(const Key('simple-rig-elevation-up'))));
+    await tester.pump(const Duration(milliseconds: 600));
+    for (var i = 0; i < 20; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    await hold.up();
+    await tester.pump();
+    expect(c.read(siteSettingsProvider).elevationM, greaterThan(90), reason: 'held: it runs, set on release');
+
     expect(find.byKey(const Key('simple-rig-use-location')), findsOneWidget, reason: 'fill from this device');
-    await enter('simple-rig-aperture', 'abc');
-    expect(c.read(opticsSettingsProvider).apertureMm, 80, reason: 'not a number: kept');
   });
 
   testWidgets('on launch Rig shows the profile\'s site and telescope, not empty fields', (tester) async {
@@ -1111,22 +1161,22 @@ void main() {
     await tester.pump();
     expect(loaded, 1, reason: 'Simple Mode loads the profile itself; nothing else may have');
     await _openSection(tester, 'Rig');
-    String field(String id) => tester.widget<TextField>(find.byKey(Key('simple-rig-$id'))).controller!.text;
-    expect(field('lat'), '-37.2');
-    expect(field('lng'), '174.9');
-    expect(field('elevation'), '71');
-    expect(field('aperture'), '80');
+    Finder value(String id, String text) => find.descendant(of: find.byKey(Key('simple-rig-$id')), matching: find.text(text));
+    expect(value('lat', '37.2000° S'), findsOneWidget);
+    expect(value('lng', '174.9000° E'), findsOneWidget);
+    expect(find.text('71 m'), findsOneWidget);
+    expect(value('aperture', '80 mm'), findsOneWidget);
   });
 
-  testWidgets('Rig\'s Name and Profile read like its other rows', (tester) async {
+  testWidgets('Rig\'s Name and Profile read like its other rows, set close together', (tester) async {
     await _pump(tester, const Size(1024, 768));
     await _openSection(tester, 'Rig');
     TextStyle? style(String t) => tester.widget<Text>(find.text(t)).style;
     for (final t in ['Name', 'Profile']) {
       expect(style(t), style('Aperture'), reason: t);
-      expect(tester.getSize(find.ancestor(of: find.text(t), matching: find.byType(Row)).first).height,
-          greaterThanOrEqualTo(44), reason: '$t: a 44 pt row like Aperture');
     }
+    expect(tester.getCenter(find.text('Profile')).dy - tester.getCenter(find.text('Name')).dy, lessThanOrEqualTo(30),
+        reason: 'read-only facts sit close together, not 44 pt apart');
   });
 
   testWidgets('a telescope the profile doesn\'t know comes from the mount, saved to the profile; a known one stays',
@@ -1158,14 +1208,14 @@ void main() {
     final c = await _pump(tester, const Size(1024, 768));
     c.read(profileGatePassedProvider.notifier).pass();
     await _openSection(tester, 'Rig');
-    await tester.tap(find.text('Change profile'));
+    await tester.tap(find.byKey(const Key('simple-rig-change-profile')));
     await tester.pump();
     expect(c.read(profileGatePassedProvider), isFalse);
     expect(c.read(serverChooserRequestedProvider), isFalse, reason: 'the same rig: straight to its profiles');
 
     c.read(profileGatePassedProvider.notifier).pass();
     await _openSection(tester, 'Rig');
-    await tester.tap(find.text('Change rig'));
+    await tester.tap(find.byKey(const Key('simple-rig-change-rig')));
     await tester.pump();
     expect(c.read(profileGatePassedProvider), isFalse);
     expect(c.read(serverChooserRequestedProvider), isTrue, reason: 'the rig list, which never connects on its own');
