@@ -9,9 +9,6 @@ import 'package:openastroara/screens/simple/simple_preview_panel.dart' show Simp
 import 'package:openastroara/state/equipment/focuser_state.dart';
 import 'package:openastroara/state/focus/autofocus_live_state.dart';
 import 'package:openastroara/state/focus/bahtinov_focus_state.dart';
-import 'package:openastroara/services/simple_mode_prefs_service.dart';
-import 'package:openastroara/state/simple_messages_state.dart';
-import 'package:openastroara/state/simple_mode_state.dart';
 
 FocuserStatus _focuser({int? position = 1000, bool absolute = true, int max = 1100, String runtime = 'idle'}) =>
     FocuserStatus(
@@ -81,41 +78,7 @@ Future<(_Focuser, _Live)> _pump(WidgetTester tester, {FocuserStatus? focuser, Au
   return (f, l);
 }
 
-class _StuckFocuser extends _Focuser {
-  _StuckFocuser(super.status);
-  @override
-  Future<bool> move(int targetPosition, {bool useTempComp = false}) async => throw StateError('Focuser is busy');
-}
-
-class _SimplePrefs extends SimpleModePrefsService {
-  @override
-  Future<bool> load() async => true;
-  @override
-  Future<void> save(bool enabled) async {}
-}
-
 void main() {
-  testWidgets('a nudge that fails says so in a pill, not a snackbar', (tester) async {
-    final c = ProviderContainer(overrides: [
-      focuserProvider.overrideWith(() => _StuckFocuser(_focuser())),
-      autofocusLiveProvider.overrideWith(() => _Live(const AutofocusLive(run: AutofocusRun.idle))),
-      simpleModePrefsProvider.overrideWithValue(_SimplePrefs()),
-    ]);
-    addTearDown(c.dispose);
-    await c.read(simpleModeProvider.future);
-    await tester.pumpWidget(UncontrolledProviderScope(
-      container: c,
-      child: const MaterialApp(home: Scaffold(body: Center(child: SimpleFocusPanel()))),
-    ));
-    await tester.pump();
-    await tester.tap(find.byIcon(Icons.chevron_left));
-    await tester.pump();
-    final m = c.read(simpleMessagesProvider).single;
-    expect(m.kind, SimpleMessageKind.error);
-    expect(m.title, "Couldn't move");
-    expect(find.byType(SnackBar), findsNothing);
-  });
-
   group('simpleFocusHfr', () {
     test('nothing before a run', () => expect(simpleFocusHfr(AutofocusRun.idle), isNull));
     test('the latest kept probe while running', () {
@@ -128,43 +91,23 @@ void main() {
     });
   });
 
-  group('simpleNudgeTarget', () {
-    test('absolute: position + delta, clamped to the range', () {
-      expect(simpleNudgeTarget(_focuser(), -50), 950);
-      expect(simpleNudgeTarget(_focuser(), 250), 1100);
-    });
-    test('absolute with no range known: not clamped', () {
-      expect(simpleNudgeTarget(_focuser(max: 0), 250), 1250);
-    });
-    test('absolute with no position yet: nothing to send', () {
-      expect(simpleNudgeTarget(_focuser(position: null), 50), isNull);
-    });
-    test('relative: the delta itself', () {
-      expect(simpleNudgeTarget(_focuser(absolute: false), -250), -250);
-    });
-  });
-
-  testWidgets('no focuser: says so, the nudges are off; no Autofocus button (the shutter starts it)', (tester) async {
+  testWidgets('no focuser: says so; no Autofocus button (the shutter starts it)', (tester) async {
     await _pump(tester);
     expect(find.text('No focuser connected'), findsOneWidget);
     expect(find.text('Autofocus'), findsNothing);
-    for (final icon in [Icons.chevron_left, Icons.chevron_right]) {
-      final ink = find.ancestor(of: find.byIcon(icon), matching: find.byType(InkWell));
-      expect(tester.widget<InkWell>(ink).onTap, isNull);
+  });
+
+  testWidgets('a connected focuser: the HFR, no position or nudges (the Focuser window\'s dial moves it)',
+      (tester) async {
+    await _pump(tester, focuser: _focuser());
+    expect(find.text('HFR —'), findsOneWidget);
+    expect(find.textContaining('Position'), findsNothing);
+    for (final icon in [Icons.chevron_left, Icons.chevron_right, Icons.keyboard_double_arrow_left]) {
+      expect(find.byIcon(icon), findsNothing);
     }
   });
 
-  testWidgets('a connected focuser: position, nudges move by the step size', (tester) async {
-    final (f, _) = await _pump(tester, focuser: _focuser());
-    expect(find.text('Position 1000'), findsOneWidget);
-    expect(find.text('HFR —'), findsOneWidget);
-    // The profile's default step is 50; large is five steps.
-    await tester.tap(find.byIcon(Icons.chevron_left));
-    await tester.tap(find.byIcon(Icons.keyboard_double_arrow_right));
-    expect(f.moves, [950, 1100]);
-  });
-
-  testWidgets('while a run goes: the curve, no Cancel (the shutter\'s square), no nudges', (tester) async {
+  testWidgets('while a run goes: the curve, no Cancel (the shutter\'s square)', (tester) async {
     final run = AutofocusRun(
       state: AutofocusRunStates.running,
       phase: 'sweep',
@@ -173,12 +116,10 @@ void main() {
       stepSize: 80,
       probes: [_probe(0, 3.1), _probe(1, 2.4)],
     );
-    final (f, _) = await _pump(tester, focuser: _focuser(), run: run);
+    await _pump(tester, focuser: _focuser(), run: run);
     expect(find.text('HFR 2.40'), findsOneWidget);
     expect(find.textContaining('Sweeping'), findsOneWidget);
     expect(find.text('Cancel'), findsNothing);
-    await tester.tap(find.byIcon(Icons.chevron_left));
-    expect(f.moves, isEmpty);
   });
 
   group('the shutter follows the chip', () {
