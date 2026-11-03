@@ -66,6 +66,24 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_flat_device_selection_asks_alpaca_for_its_covercalibrator() {
+            // FlatDevice is NINA's name for the device; Alpaca only knows covercalibrator.
+            var selections = new Mock<IEquipmentSelectionStore>();
+            selections.Setup(s => s.GetAllAsync(It.IsAny<CancellationToken>())).ReturnsAsync(new List<DiscoveredDeviceDto> {
+                new("u3", "Flat panel", DeviceType.FlatDevice, "rig.local", "10.0.30.223", 6800, 0, false),
+            });
+            var alpaca = new Mock<IAlpacaManagementClient>();
+            alpaca.Setup(a => a.GetConfiguredDevicesAsync("10.0.30.223", 6800, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(AlpacaManagementClient.ParseConfiguredDevices(Devices));
+            alpaca.Setup(a => a.GetDriverVersionAsync("10.0.30.223", 6800, "covercalibrator", 0, It.IsAny<CancellationToken>()))
+                .ReturnsAsync("1.2.0");
+
+            var result = await EquipmentEndpoints.GetDeviceDriverAsync("flatdevice", selections.Object, alpaca.Object, CancellationToken.None);
+
+            Assert.That((result as Ok<DeviceDriverDto>)?.Value?.DriverVersion, Is.EqualTo("1.2.0"));
+        }
+
+        [Test]
         public async Task The_guide_camera_route_answers_the_guiders_alpaca_camera_with_its_name() {
             var profiles = new Mock<IProfileStore>();
             profiles.Setup(p => p.GetPhd2Settings()).Returns(new Phd2SettingsDto(

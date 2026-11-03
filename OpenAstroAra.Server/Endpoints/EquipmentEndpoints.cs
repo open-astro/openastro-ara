@@ -1040,7 +1040,7 @@ public static partial class EquipmentEndpoints {
             return Results.Problem($"No {type} is set up.", statusCode: StatusCodes.Status404NotFound);
         }
         var host = string.IsNullOrWhiteSpace(device.IpAddress) ? device.HostName : device.IpAddress;
-        var wire = device.Type.ToString().ToLowerInvariant();
+        var wire = device.Type.Canonical().ToString().ToLowerInvariant();
         try {
             var listed = alpaca.GetConfiguredDevicesAsync(host, device.IpPort, ct);
             var driver = alpaca.GetDriverVersionAsync(host, device.IpPort, wire, device.AlpacaDeviceNumber, ct);
