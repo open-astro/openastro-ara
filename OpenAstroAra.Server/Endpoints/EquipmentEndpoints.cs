@@ -1060,21 +1060,31 @@ public static partial class EquipmentEndpoints {
         ArgumentNullException.ThrowIfNull(profiles);
         ArgumentNullException.ThrowIfNull(alpaca);
         ArgumentNullException.ThrowIfNull(guider);
-        if (PHD2Guider.ParseAlpacaSelectionEndpoint(profiles.GetPhd2Settings().GuiderCamera) is not { } ep) {
-            // Not an Alpaca pick (or none in the profile): the guider still knows the camera it opened.
-            return await guider.TryGetGuideCameraNameAsync(ct).ConfigureAwait(false) is { } name
-                ? Results.Ok(new DeviceDriverDto(null, null, null, Name: name))
-                : Results.Problem("No guide camera is known.", statusCode: StatusCodes.Status404NotFound);
+        var ep = PHD2Guider.ParseAlpacaSelectionEndpoint(profiles.GetPhd2Settings().GuiderCamera);
+        string? model = null;
+        if (ep is null) {
+            // Not an Alpaca pick (or none in the profile): the guider still knows the camera it opened, and
+            // an Alpaca one carries its server ("Alpaca Camera [127.0.0.1:6800/0] - ZWO ASI120MM Mini (…)").
+            if (await guider.TryGetGuideCameraNameAsync(ct).ConfigureAwait(false) is not { } name) {
+                return Results.Problem("No guide camera is known.", statusCode: StatusCodes.Status404NotFound);
+            }
+            ep = PHD2Guider.ParseAlpacaSelectionEndpoint(System.Text.RegularExpressions.Regex.Match(name, @"\[[^\[\]]*\]").Value);
+            // The title wants the model only: drop the "Alpaca Camera [host:port/N] - " lead and "(driver)" tail.
+            model = System.Text.RegularExpressions.Regex.Replace(name, @"^.*\]\s*-\s*|\s*\([^()]*\)$", "");
+            if (ep is null) {
+                return Results.Ok(new DeviceDriverDto(null, null, null, Name: model));
+            }
         }
         try {
-            var listed = alpaca.GetConfiguredDevicesAsync(ep.Host, ep.Port, ct);
-            var driver = alpaca.GetDriverVersionAsync(ep.Host, ep.Port, "camera", ep.Device, ct);
+            var (host, port, device) = ep.Value;
+            var listed = alpaca.GetConfiguredDevicesAsync(host, port, ct);
+            var driver = alpaca.GetDriverVersionAsync(host, port, "camera", device, ct);
             var entry = (await listed.ConfigureAwait(false)).GetValueOrDefault(
-                $"camera/{ep.Device.ToString(System.Globalization.CultureInfo.InvariantCulture)}");
+                $"camera/{device.ToString(System.Globalization.CultureInfo.InvariantCulture)}");
             return Results.Ok(new DeviceDriverDto(await driver.ConfigureAwait(false), entry?.SdkVersion, entry?.Firmware,
-                entry?.SerialNumber, entry?.Name));
+                entry?.SerialNumber, entry?.Name ?? model));
         } catch (System.ArgumentException) {
-            return Results.Ok(new DeviceDriverDto(null, null, null));
+            return Results.Ok(new DeviceDriverDto(null, null, null, Name: model));
         }
     }
 

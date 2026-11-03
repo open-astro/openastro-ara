@@ -93,6 +93,46 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task The_guiders_own_alpaca_camera_is_looked_up_like_a_profile_pick() {
+            // What the rig's guider really answers: its Alpaca selection, with the server in the middle.
+            var profiles = new Mock<IProfileStore>();
+            profiles.Setup(p => p.GetPhd2Settings()).Returns(new Phd2SettingsDto(
+                "localhost", 4400, "Default", true, 3, 5.0, 1.5, 10, 60, false, GuiderCamera: ""));
+            var guider = new Mock<IGuiderService>();
+            guider.Setup(g => g.TryGetGuideCameraNameAsync(It.IsAny<CancellationToken>()))
+                .ReturnsAsync("Alpaca Camera [127.0.0.1:6800/1] - ZWO ASI120MM Mini (ZWO ASI Camera Driver)");
+            var alpaca = new Mock<IAlpacaManagementClient>();
+            alpaca.Setup(a => a.GetConfiguredDevicesAsync("127.0.0.1", 6800, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(AlpacaManagementClient.ParseConfiguredDevices(Devices));
+            alpaca.Setup(a => a.GetDriverVersionAsync("127.0.0.1", 6800, "camera", 1, It.IsAny<CancellationToken>()))
+                .ReturnsAsync("6.0.0");
+
+            var result = await EquipmentEndpoints.GetGuideCameraDriverAsync(profiles.Object, alpaca.Object, guider.Object, CancellationToken.None);
+
+            Assert.That((result as Ok<DeviceDriverDto>)?.Value,
+                Is.EqualTo(new DeviceDriverDto("6.0.0", "1.41.0.0", null, "0c190e111d020900", "ZWO ASI533MC Pro")));
+        }
+
+        [Test]
+        public async Task A_guider_camera_its_alpaca_server_does_not_list_is_named_by_its_model_only() {
+            var profiles = new Mock<IProfileStore>();
+            profiles.Setup(p => p.GetPhd2Settings()).Returns(new Phd2SettingsDto(
+                "localhost", 4400, "Default", true, 3, 5.0, 1.5, 10, 60, false, GuiderCamera: ""));
+            var guider = new Mock<IGuiderService>();
+            guider.Setup(g => g.TryGetGuideCameraNameAsync(It.IsAny<CancellationToken>()))
+                .ReturnsAsync("Alpaca Camera [127.0.0.1:6800/0] - ZWO ASI120MM Mini (ZWO ASI Camera Driver)");
+            var alpaca = new Mock<IAlpacaManagementClient>();
+            alpaca.Setup(a => a.GetConfiguredDevicesAsync("127.0.0.1", 6800, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(AlpacaManagementClient.ParseConfiguredDevices(Devices));
+            alpaca.Setup(a => a.GetDriverVersionAsync("127.0.0.1", 6800, "camera", 0, It.IsAny<CancellationToken>()))
+                .ReturnsAsync((string?)null);
+
+            var result = await EquipmentEndpoints.GetGuideCameraDriverAsync(profiles.Object, alpaca.Object, guider.Object, CancellationToken.None);
+
+            Assert.That((result as Ok<DeviceDriverDto>)?.Value?.Name, Is.EqualTo("ZWO ASI120MM Mini"));
+        }
+
+        [Test]
         public async Task Without_an_alpaca_pick_the_connected_guider_names_its_camera() {
             // The rig's profile leaves the guide camera blank; the guider still knows what it opened.
             var profiles = new Mock<IProfileStore>();
