@@ -19,6 +19,7 @@ import '../../state/sequencer/create_imaging_run.dart';
 import '../../state/sequencer/sequence_list_state.dart';
 import '../../state/settings/filter_set_state.dart';
 import '../../state/setup/setup_readiness.dart';
+import '../../state/imaging/exposure_state.dart';
 import '../../state/simple_messages_state.dart';
 import '../../state/simple_mode_state.dart';
 import '../../state/time_sync_state.dart';
@@ -43,6 +44,7 @@ import '../../widgets/emergency_stop_button.dart' show kEmergencyStopHold;
 import '../../widgets/stop_mount_overlay.dart' show SlewWsEvents;
 import '../../widgets/sequencer/run_completion_sheet.dart'
     show runFramesPerFilter;
+import 'simple_device_windows.dart' show SimpleGainSlider;
 import 'simple_preview_panel.dart'
     show SimplePresetTile, exposurePresets, formatExposure, kSimpleText;
 import 'simple_shell.dart'
@@ -262,6 +264,20 @@ final simpleRunPlanProvider =
       SimpleRunPlanNotifier.new,
     );
 
+/// The gain of the plan in Plan's sheet: seeded from the camera's when the
+/// sheet opens (or the edited target's), changed there without touching the
+/// camera's.
+class SimpleRunGainNotifier extends Notifier<int?> {
+  @override
+  int? build() => null;
+
+  void set(int? g) => state = g;
+}
+
+final simpleRunGainProvider = NotifierProvider<SimpleRunGainNotifier, int?>(
+  SimpleRunGainNotifier.new,
+);
+
 /// Where the selection stands, in words: "62° up · max 74°", "Below your
 /// horizon · rises 22:40", "Never rises here". Pure — unit-tested.
 String simpleTargetStatus(PlanetariumSelection s) {
@@ -342,9 +358,15 @@ class SimpleTarget {
     this.raDeg = 0,
     this.decDeg = 0,
     this.rise,
+    this.gain,
   });
 
   final String name;
+
+  /// The plan's own gain (seeded from the camera's when the sheet opened);
+  /// null: the profile's default. Fixed once queued: changing the camera's
+  /// gain later doesn't touch a queued or running target.
+  final int? gain;
 
   /// The catalog tag for the plan square (null: its name).
   final String? tag;
@@ -499,6 +521,7 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
   Future<bool> create(WidgetRef ref, {bool first = false}) async {
     final sel = ref.read(planetariumSelectionProvider);
     final steps = ref.read(simpleRunPlanProvider);
+    final gain = ref.read(simpleRunGainProvider);
     if (sel == null || state.busy) return false;
     final queue = state.sequenceId;
     state = state.copyWith(busy: true);
@@ -518,6 +541,7 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
         filterPlan: steps.first.filterName.isEmpty ? null : steps,
         exposureSeconds: steps.first.exposureSeconds,
         frameCount: steps.first.frameCount,
+        gain: gain,
       );
       if (r == null || r.draft) {
         state = state.copyWith(
@@ -547,6 +571,7 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
         raDeg: sel.raJ2000Hours * 15,
         decDeg: sel.decJ2000Deg,
         rise: sel.belowHorizon ? sel.rise : null,
+        gain: gain,
       );
       if (queue == null) {
         state = SimpleRun(sequenceId: r.sequenceId, targets: [target]);
@@ -590,7 +615,12 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
   /// Edit target [i]'s rows (one not started yet): its block is replaced on
   /// the rig (removed, added again with [steps], moved back into place), live
   /// while imaging. True once saved.
-  Future<bool> edit(WidgetRef ref, int i, List<FilterPlanStep> steps) async {
+  Future<bool> edit(
+    WidgetRef ref,
+    int i,
+    List<FilterPlanStep> steps, {
+    int? gain,
+  }) async {
     final api = this.ref.read(sequenceApiProvider);
     final id = state.sequenceId;
     if (api == null || id == null || i >= state.targets.length || state.busy) {
@@ -615,6 +645,7 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
         filterPlan: steps.first.filterName.isEmpty ? null : steps,
         exposureSeconds: steps.first.exposureSeconds,
         frameCount: steps.first.frameCount,
+        gain: gain,
       );
       if (r == null || r.draft || r.sequenceId != id) {
         throw StateError("the rig didn't take the edited plan");
@@ -627,6 +658,7 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
         raDeg: t.raDeg,
         decDeg: t.decDeg,
         rise: t.rise,
+        gain: gain,
       );
       state = state.copyWith(
         targets: [...state.targets]..[i] = edited,
@@ -671,6 +703,7 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
         filterPlan: t.steps.first.filterName.isEmpty ? null : t.steps,
         exposureSeconds: t.steps.first.exposureSeconds,
         frameCount: t.steps.first.frameCount,
+        gain: t.gain,
       );
       if (r == null || r.draft || r.sequenceId != id) {
         throw StateError("the rig didn't take it back");
@@ -1410,7 +1443,22 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
   void initState() {
     super.initState();
     // The rows start from the profile's filters and default exposure.
-    hydratePlanningSettings(ProviderScope.containerOf(context, listen: false));
+    final container = ProviderScope.containerOf(context, listen: false);
+    hydratePlanningSettings(container);
+    // The plan's gain starts from the camera's (an edit, from its target's);
+    // after this frame, since a provider can't change while the tree builds.
+    final editing = widget.editing;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final targets = container.read(simpleRunProvider).targets;
+      container
+          .read(simpleRunGainProvider.notifier)
+          .set(
+            (editing != null && editing < targets.length
+                    ? targets[editing].gain
+                    : null) ??
+                container.read(exposureControllerProvider).gain,
+          );
+    });
   }
 
   @override
@@ -1752,6 +1800,16 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
               ),
             ],
           ),
+        // The plan's gain: starts from the camera's; changing it here leaves
+        // the camera's alone, and a queued target keeps the one it was made
+        // with.
+        SimpleGainSlider(
+          id: 'simple-run-gain',
+          value:
+              ref.watch(simpleRunGainProvider) ??
+              ref.watch(exposureControllerProvider).gain,
+          onSet: ref.read(simpleRunGainProvider.notifier).set,
+        ),
         if (hint != null)
           Row(
             children: [
@@ -1862,7 +1920,12 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
                       : () async {
                           final ok = await ref
                               .read(simpleRunProvider.notifier)
-                              .edit(ref, editing, steps);
+                              .edit(
+                                ref,
+                                editing,
+                                steps,
+                                gain: ref.read(simpleRunGainProvider),
+                              );
                           if (ok) widget.onCreated();
                         },
                   child: Text(run.busy ? 'Saving…' : 'Save'),

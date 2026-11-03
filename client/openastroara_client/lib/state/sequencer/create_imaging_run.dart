@@ -151,6 +151,9 @@ Future<ImagingRunResult?> createImagingRun(
   bool appendToOpen = true,
   // Simple Mode: every target centres, whatever Settings → Plate Solving says.
   bool alwaysCenter = false,
+  // Simple Mode: the plan's own gain (seeded from the camera's); null = the
+  // profile's default.
+  int? gain,
 }) async {
   // Pin the autoDispose API for the whole create. With no widget watching
   // it (the coordinate-entry dialog, a Tonight's Sky row whose panel just
@@ -177,6 +180,7 @@ Future<ImagingRunResult?> createImagingRun(
       frameCountOverride: frameCount,
       appendToOpen: appendToOpen,
       alwaysCenter: alwaysCenter,
+      gainOverride: gain,
     );
   } finally {
     keepApi.close();
@@ -199,6 +203,7 @@ Future<ImagingRunResult?> _createImagingRunPinned(
   bool appendToOpen = true,
   // Simple Mode: every target centres, whatever Settings → Plate Solving says.
   bool alwaysCenter = false,
+  int? gainOverride,
 }) async {
   final api = ref.read(sequenceApiProvider);
   final container = ProviderScope.containerOf(ref.context, listen: false);
@@ -252,7 +257,7 @@ Future<ImagingRunResult?> _createImagingRunPinned(
       decDeg: panels.first.decDeg,
       targetName: panels.first.name,
       exposureSeconds: exposureSeconds,
-      gain: defaults.defaultGain,
+      gain: gainOverride ?? defaults.defaultGain,
       offset: defaults.defaultOffset,
       binning: defaults.defaultBin,
       frameCount: frameCount,
@@ -280,7 +285,7 @@ Future<ImagingRunResult?> _createImagingRunPinned(
           decDeg: p.decDeg,
           targetName: p.name,
           exposureSeconds: exposureSeconds,
-          gain: defaults.defaultGain,
+          gain: gainOverride ?? defaults.defaultGain,
           offset: defaults.defaultOffset,
           binning: defaults.defaultBin,
           frameCount: frameCount,
@@ -311,7 +316,7 @@ Future<ImagingRunResult?> _createImagingRunPinned(
             decDeg: p.decDeg,
             targetName: p.name,
             exposureSeconds: exposureSeconds,
-            gain: defaults.defaultGain,
+            gain: gainOverride ?? defaults.defaultGain,
             offset: defaults.defaultOffset,
             binning: defaults.defaultBin,
             frameCount: frameCount,
@@ -398,7 +403,7 @@ Future<ImagingRunResult?> _createImagingRunPinned(
           decDeg: p.decDeg,
           targetName: p.name,
           exposureSeconds: exposureSeconds,
-          gain: defaults.defaultGain,
+          gain: gainOverride ?? defaults.defaultGain,
           offset: defaults.defaultOffset,
           binning: defaults.defaultBin,
           frameCount: frameCount,
@@ -449,7 +454,7 @@ Future<ImagingRunResult?> _createImagingRunPinned(
     decDeg: panels.first.decDeg,
     targetName: panels.first.name,
     exposureSeconds: exposureSeconds,
-    gain: defaults.defaultGain,
+    gain: gainOverride ?? defaults.defaultGain,
     offset: defaults.defaultOffset,
     binning: defaults.defaultBin,
     frameCount: frameCount,
@@ -476,7 +481,7 @@ Future<ImagingRunResult?> _createImagingRunPinned(
         decDeg: p.decDeg,
         targetName: p.name,
         exposureSeconds: exposureSeconds,
-        gain: defaults.defaultGain,
+        gain: gainOverride ?? defaults.defaultGain,
         offset: defaults.defaultOffset,
         binning: defaults.defaultBin,
         frameCount: frameCount,

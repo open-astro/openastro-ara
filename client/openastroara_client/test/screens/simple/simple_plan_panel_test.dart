@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/gestures.dart' show PointerDeviceKind, kSecondaryMouseButton;
+import 'dart:convert';
+import 'package:openastroara/state/imaging/exposure_state.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -59,6 +61,11 @@ const _lrgb = [
 
 /// The daemon as the Run mode sees it: create, start and the lifecycle calls
 /// are recorded; the run state is whatever the test sets.
+class _Gain150 extends ExposureController {
+  @override
+  ExposureParams build() => super.build().copyWith(gain: 150);
+}
+
 class _Seq implements SequenceClient {
   final calls = <String>[];
   SequenceRunStateInfo? runState;
@@ -508,6 +515,24 @@ void main() {
       await tester.pumpAndSettle();
       expect(c.read(simpleRunPlanProvider).first.frameCount, 5);
       expect(wheel, findsNothing);
+    });
+
+    testWidgets('a plan starts from the camera\'s gain and keeps its own; the run shoots at the plan\'s', (tester) async {
+      final seq = _Seq();
+      final c = await _pump(tester, seq,
+          SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}, onLibrary: () {}),
+          overrides: [exposureControllerProvider.overrideWith(_Gain150.new)]);
+      final slider = find.byKey(const Key('simple-run-gain'));
+      expect(tester.widget<Slider>(slider).value, 150, reason: 'seeded from the camera when the sheet opens');
+      tester.widget<Slider>(slider).onChanged!(200);
+      tester.widget<Slider>(slider).onChangeEnd!(200);
+      await tester.pump();
+      expect(c.read(exposureControllerProvider).gain, 150, reason: 'the camera keeps its gain');
+      await tester.tap(find.byKey(const Key('simple-run-queue')));
+      await tester.pumpAndSettle();
+      expect(jsonEncode(seq.bodies['seq-1']), contains('"Gain":200'));
+      expect(jsonEncode(seq.bodies['seq-1']), isNot(contains('"Gain":150')));
+      expect(c.read(simpleRunProvider).targets.single.gain, 200, reason: 'kept with the target, for an edit');
     });
 
     testWidgets('typing offers matching objects as you go; tapping one searches it', (tester) async {

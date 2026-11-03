@@ -5,6 +5,7 @@ import '../../models/equipment_device_status.dart';
 import '../../services/equipment_device_api.dart' show describeEquipmentError;
 import '../../services/equipment_driver_api.dart';
 import '../../state/equipment/camera_state.dart';
+import '../../state/imaging/exposure_state.dart';
 import '../../state/equipment/mount_state.dart';
 import '../../state/sequencer/sequence_list_state.dart';
 import '../../state/settings/safety_policies_state.dart';
@@ -83,15 +84,12 @@ class SimpleCameraWindow extends ConsumerStatefulWidget {
 class _SimpleCameraWindowState extends ConsumerState<SimpleCameraWindow> {
   // While a thumb is held: the value it shows, sent only on letting go.
   double? _dragTarget;
-  double? _dragGain;
 
   @override
   Widget build(BuildContext context) {
     final s = ref.watch(cameraStatusProvider).value;
     final target =
         _dragTarget ?? ref.watch(imagingDefaultsProvider).coolerTargetC;
-    final gain =
-        _dragGain?.round() ?? ref.watch(imagingDefaultsProvider).defaultGain;
     final children = <Widget>[SimpleDeviceHeader(type: 'Camera', status: s)];
     if (s == null || !s.isConnected) {
       children.add(
@@ -151,30 +149,12 @@ class _SimpleCameraWindowState extends ConsumerState<SimpleCameraWindow> {
       if (now.isNotEmpty) {
         children.add(_row('Now', Text(now, style: kSimpleText)));
       }
-      // The profile's gain: what plans shoot at (Preview's chip sets its own).
-      // Named gain modes slide through their names.
-      final named = caps?.gains ?? const <String>[];
-      final gMin = named.isNotEmpty ? 0 : caps?.minGain ?? 0;
-      final reported = caps?.maxGain ?? 0;
-      final gMax = named.isNotEmpty
-          ? named.length - 1
-          : (reported > 0 ? reported : 300);
-      String gainText(int g) =>
-          named.isNotEmpty && g >= 0 && g < named.length ? named[g] : '$g';
-      children.add(_row('Gain', Text(gainText(gain), style: kSimpleText)));
+      // The camera's gain, shared with Preview's chip.
       children.add(
-        Slider(
-          key: const Key('simple-camera-gain'),
-          min: gMin.toDouble(),
-          max: gMax.toDouble(),
-          divisions: gMax > gMin ? gMax - gMin : null,
-          value: gain.clamp(gMin, gMax).toDouble(),
-          label: gainText(gain),
-          onChanged: (v) => setState(() => _dragGain = v),
-          onChangeEnd: (v) {
-            setState(() => _dragGain = null);
-            _setGain(v.round());
-          },
+        SimpleGainSlider(
+          id: 'simple-camera-gain',
+          value: ref.watch(exposureControllerProvider).gain,
+          onSet: _setGain,
         ),
       );
     }
@@ -223,23 +203,10 @@ class _SimpleCameraWindowState extends ConsumerState<SimpleCameraWindow> {
     }
   }
 
-  /// Set once, like the target: the profile keeps it.
-  Future<void> _setGain(int gain) async {
-    final defaults = ref.read(imagingDefaultsProvider.notifier);
-    defaults.setGain(gain);
-    final notify = userNotifier(context);
-    final api = ref.read(profileApiProvider);
-    if (api == null) return;
-    try {
-      await defaults.persistToServer(api);
-    } catch (e) {
-      notify(
-        "Couldn't save the gain",
-        detail: describeEquipmentError(e),
-        error: true,
-      );
-    }
-  }
+  /// The camera's gain, the same one Preview's chip sets (a plan starts from
+  /// it and keeps its own).
+  void _setGain(int gain) =>
+      ref.read(exposureControllerProvider.notifier).setGain(gain);
 
   Future<void> _run(Future<bool> Function() action) async {
     final notify = userNotifier(context);
@@ -549,5 +516,61 @@ class _SimpleMountWindowState extends ConsumerState<SimpleMountWindow> {
       );
       return false;
     }
+  }
+}
+
+/// Gain as a slider over the connected camera's range (named gain modes slide
+/// through their names), with its value beside the label; set when the thumb
+/// is let go. The Camera window and Plan's sheet share it.
+class SimpleGainSlider extends ConsumerStatefulWidget {
+  const SimpleGainSlider({
+    super.key,
+    required this.id,
+    required this.value,
+    required this.onSet,
+  });
+
+  final String id;
+  final int value;
+  final ValueChanged<int> onSet;
+
+  @override
+  ConsumerState<SimpleGainSlider> createState() => _SimpleGainSliderState();
+}
+
+class _SimpleGainSliderState extends ConsumerState<SimpleGainSlider> {
+  double? _drag;
+
+  @override
+  Widget build(BuildContext context) {
+    final caps = ref.watch(cameraStatusProvider).value?.capabilities;
+    final named = caps?.gains ?? const <String>[];
+    final lo = named.isNotEmpty ? 0 : caps?.minGain ?? 0;
+    final reported = caps?.maxGain ?? 0;
+    final hi = named.isNotEmpty
+        ? named.length - 1
+        : (reported > 0 ? reported : 300);
+    final gain = _drag?.round() ?? widget.value;
+    String text(int g) =>
+        named.isNotEmpty && g >= 0 && g < named.length ? named[g] : '$g';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        simpleWindowRow('Gain', Text(text(gain), style: kSimpleText)),
+        Slider(
+          key: Key(widget.id),
+          min: lo.toDouble(),
+          max: hi.toDouble(),
+          divisions: hi > lo ? hi - lo : null,
+          value: gain.clamp(lo, hi).toDouble(),
+          label: text(gain),
+          onChanged: (v) => setState(() => _drag = v),
+          onChangeEnd: (v) {
+            setState(() => _drag = null);
+            widget.onSet(v.round());
+          },
+        ),
+      ],
+    );
   }
 }

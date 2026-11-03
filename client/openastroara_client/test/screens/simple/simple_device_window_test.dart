@@ -6,6 +6,7 @@ import 'package:openastroara/services/equipment_driver_api.dart';
 import 'package:openastroara/screens/simple/simple_device_windows.dart';
 import 'package:openastroara/state/equipment/camera_state.dart';
 import 'package:openastroara/state/settings/imaging_defaults_state.dart';
+import 'package:openastroara/state/imaging/exposure_state.dart';
 
 /// A camera with a cooler; records the cooler commands instead of sending them.
 class _Camera extends CameraStatusNotifier {
@@ -137,11 +138,14 @@ void main() {
     expect(off.calls, isEmpty, reason: 'a cooler that is off stays off');
   });
 
-  testWidgets('Gain is a slider over the camera\'s range; letting go keeps it in the profile', (tester) async {
+  testWidgets('Gain is a slider over the camera\'s range: the same gain as Preview\'s chip; plans keep their own', (tester) async {
     final (c, _) = await _pump(tester, {
       ..._wire(),
       'capabilities': {'has_cooler': true, 'can_set_temperature': true, 'min_gain': 0, 'max_gain': 300},
     });
+    c.read(exposureControllerProvider.notifier).setGain(100);
+    await tester.pump();
+    final plans = c.read(imagingDefaultsProvider).defaultGain;
     final slider = tester.widget<Slider>(find.byKey(const Key('simple-camera-gain')));
     expect((slider.min, slider.max, slider.value), (0.0, 300.0, 100.0));
     slider.onChanged!(120);
@@ -149,7 +153,8 @@ void main() {
     expect(find.text('120'), findsOneWidget);
     tester.widget<Slider>(find.byKey(const Key('simple-camera-gain'))).onChangeEnd!(120);
     await tester.pump();
-    expect(c.read(imagingDefaultsProvider).defaultGain, 120);
+    expect(c.read(exposureControllerProvider).gain, 120, reason: 'Preview\'s chip shows it too');
+    expect(c.read(imagingDefaultsProvider).defaultGain, plans, reason: 'the plans\' gain is its own setting');
   });
 
   testWidgets('a camera with named gain modes slides through the names', (tester) async {
@@ -157,7 +162,7 @@ void main() {
       ..._wire(),
       'capabilities': {'has_cooler': true, 'can_set_temperature': true, 'gains': ['Low', 'Medium', 'High']},
     });
-    c.read(imagingDefaultsProvider.notifier).setGain(1);
+    c.read(exposureControllerProvider.notifier).setGain(1);
     await tester.pump();
     final slider = tester.widget<Slider>(find.byKey(const Key('simple-camera-gain')));
     expect((slider.min, slider.max, slider.divisions), (0.0, 2.0, 2));
