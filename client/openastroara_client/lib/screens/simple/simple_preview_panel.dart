@@ -443,62 +443,74 @@ class SimplePresetTile<T> extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final items = options.contains(value) ? options : [value, ...options];
-    final tile = Container(
+    // Ink, so the focus and press highlight paints over the fill, not under.
+    final tile = ConstrainedBox(
       // At least 48 px; taller when the user's text is larger.
       constraints: const BoxConstraints(minHeight: 48),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: AraColors.tileFill,
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: AraText.caption,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-          Text(
-            format(value),
-            style: kSimpleText,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ],
+      child: Ink(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          color: AraColors.tileFill,
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              label,
+              style: AraText.caption,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            Text(
+              format(value),
+              style: kSimpleText,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ),
       ),
     );
+    // Its own transparent Material: the fill and highlight paint here, over
+    // the panel's scrim, not on a Material further down.
     if (wheel) {
-      return Semantics(
-        button: true,
-        label: label,
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: () => _showWheel(context, items),
-          child: tile,
+      // An InkWell, not a bare tap: Tab reaches it and Enter opens the wheel.
+      return Material(
+        type: MaterialType.transparency,
+        child: Semantics(
+          button: true,
+          label: label,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(10),
+            onTap: () => _showWheel(context, items),
+            child: tile,
+          ),
         ),
       );
     }
-    return PopupMenuButton<T>(
-      tooltip: label,
-      initialValue: value,
-      onSelected: onSelected,
-      position: PopupMenuPosition.under,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.all(Radius.circular(10)),
+    return Material(
+      type: MaterialType.transparency,
+      child: PopupMenuButton<T>(
+        tooltip: label,
+        initialValue: value,
+        onSelected: onSelected,
+        position: PopupMenuPosition.under,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(10)),
+        ),
+        constraints: const BoxConstraints(minWidth: 96, maxHeight: 360),
+        itemBuilder: (_) => [
+          for (final o in items)
+            PopupMenuItem<T>(
+              value: o,
+              height: 44,
+              child: Text(format(o), style: kSimpleText),
+            ),
+        ],
+        child: tile,
       ),
-      constraints: const BoxConstraints(minWidth: 96, maxHeight: 360),
-      itemBuilder: (_) => [
-        for (final o in items)
-          PopupMenuItem<T>(
-            value: o,
-            height: 44,
-            child: Text(format(o), style: kSimpleText),
-          ),
-      ],
-      child: tile,
     );
   }
 

@@ -212,7 +212,7 @@ class _SimpleSearchPanelState extends ConsumerState<SimpleSearchPanel> {
       l10n,
       q,
       sections: {
-      // Only a device appearing or going rebuilds this, not each reading.
+        // Only a device appearing or going rebuilds this, not each reading.
         'Rig',
         'Devices',
         if (ref.watch(cameraStatusProvider.select((v) => v.value != null)))

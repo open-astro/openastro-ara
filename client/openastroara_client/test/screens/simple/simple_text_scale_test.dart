@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/cupertino.dart' show CupertinoPicker;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter/services.dart';
@@ -106,7 +107,7 @@ void main() {
     (1.0, const Size(320, 768)),
   ];
   for (final (scale, size) in cases) {
-    for (final open in ['Preview settings', 'Plan', 'Stop armed', 'Modes', 'Settings', 'Rig', 'Camera', 'Settings Focuser', 'Search']) {
+    for (final open in ['Preview settings', 'Plan', 'Stop armed', 'Modes', 'Settings', 'Rig', 'Camera', 'Settings Focuser', 'Search', 'Wheels lat', 'Wheels lng', 'Wheels aperture', 'Wheels focal']) {
       testWidgets('text ${scale}x at ${size.width.toInt()}x${size.height.toInt()}, $open: nothing overflows',
           skip: !hasFonts, (tester) async {
         tester.view.physicalSize = size;
@@ -191,6 +192,30 @@ void main() {
           await tester.tap(find.byKey(const Key('simple-menu-nav-Focuser')));
           await tester.pump();
           expect(find.byKey(const Key('simple-focuser-knob')), findsOneWidget);
+        } else if (open.startsWith('Wheels')) {
+          // Settings › Rig with a wheel row open: every wheel inside the
+          // sheet, every digit whole in its slot.
+          await tester.tap(find.byTooltip('Settings'));
+          await tester.pump();
+          await tester.tap(find.byKey(const Key('simple-menu-nav-Rig')));
+          await tester.pump();
+          final id = open.split(' ').last;
+          final row = find.byKey(Key('simple-rig-$id'));
+          await tester.ensureVisible(row);
+          await tester.pump();
+          await tester.tap(row);
+          await tester.pump();
+          final wheel = find.byKey(Key('simple-rig-$id-wheel-0'));
+          expect(wheel, findsOneWidget);
+          await tester.ensureVisible(wheel);
+          await tester.pump();
+          for (final p in tester.renderObjectList<RenderParagraph>(
+              find.descendant(of: find.byType(CupertinoPicker), matching: find.byType(RichText)))) {
+            expect(p.textSize.height, lessThanOrEqualTo(p.size.height + 0.5),
+                reason: '"${p.text.toPlainText()}" is clipped in its slot');
+            expect(p.textSize.width, lessThanOrEqualTo(p.size.width + 0.5),
+                reason: '"${p.text.toPlainText()}" is squeezed in its wheel');
+          }
         } else if (open == 'Search') {
           await tester.tap(find.byKey(const Key('simple-search-button')));
           await tester.pump();

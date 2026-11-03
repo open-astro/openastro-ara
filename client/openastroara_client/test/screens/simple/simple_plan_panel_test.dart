@@ -254,6 +254,27 @@ Future<ProviderContainer> _pump(WidgetTester tester, _Seq seq, Widget child,
 
 final _en = lookupAppLocalizations(const Locale('en'));
 
+
+/// Tabs (at most [max] times) until keyboard focus is inside the widget keyed [k].
+Future<bool> _tabTo(WidgetTester tester, Key k, {int max = 40}) async {
+  bool inside() {
+    var found = false;
+    final ctx = FocusManager.instance.primaryFocus?.context;
+    if (ctx == null) return false;
+    if (ctx.widget.key == k) return true;
+    ctx.visitAncestorElements((e) {
+      if (e.widget.key == k) found = true;
+      return !found;
+    });
+    return found;
+  }
+  for (var i = 0; i < max && !inside(); i++) {
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pump();
+  }
+  return inside();
+}
+
 void main() {
   test('the first plan: LRGB from the set, one unnamed row without a choice', () {
     final lrgb = simpleRunDefaultPlan(_lrgb, 300);
@@ -518,6 +539,15 @@ void main() {
       await tester.pumpAndSettle();
       expect(c.read(simpleRunPlanProvider).first.frameCount, 5);
       expect(wheel, findsNothing);
+    });
+
+    testWidgets('a keyboard reaches Frames and Enter opens its wheel (WCAG 2.1.1)', (tester) async {
+      await _pump(tester, _Seq(),
+          SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}, onLibrary: () {}));
+      expect(await _tabTo(tester, const Key('simple-run-frames-0')), isTrue, reason: 'Tab reaches it like the other tiles');
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pumpAndSettle();
+      expect(find.byType(CupertinoPicker), findsOneWidget);
     });
 
     testWidgets('a plan starts from the camera\'s gain and keeps its own; the run shoots at the plan\'s', (tester) async {

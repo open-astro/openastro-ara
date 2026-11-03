@@ -374,6 +374,27 @@ String _summary(ProviderContainer c) {
   return '${formatExposure(p.exposure)} · ${p.gain}';
 }
 
+
+/// Tabs (at most [max] times) until keyboard focus is inside the widget keyed [k].
+Future<bool> _tabTo(WidgetTester tester, Key k, {int max = 40}) async {
+  bool inside() {
+    var found = false;
+    final ctx = FocusManager.instance.primaryFocus?.context;
+    if (ctx == null) return false;
+    if (ctx.widget.key == k) return true;
+    ctx.visitAncestorElements((e) {
+      if (e.widget.key == k) found = true;
+      return !found;
+    });
+    return found;
+  }
+  for (var i = 0; i < max && !inside(); i++) {
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pump();
+  }
+  return inside();
+}
+
 void main() {
   for (final size in const [Size(1024, 768), Size(1024, 744), Size(1470, 854)]) {
     testWidgets('at $size: compact right rail (mode, settings, shutter), Stop below, left rail (Sky, Info, Library)',
@@ -1480,6 +1501,17 @@ void main() {
     await tester.tap(find.descendant(of: page, matching: find.text('Guider · ZWO ASI120MM Mini')));
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('simple-gear')), findsNothing, reason: 'the Guider section is open');
+  });
+
+  testWidgets('a keyboard opens a device from its Devices row', (tester) async {
+    await _pump(tester, const Size(1024, 768), linkUp: true, gear: [
+      cameraStatusProvider.overrideWith(() => _Camera(EquipmentConnectionState.connected)),
+    ]);
+    await _openSection(tester, 'Devices');
+    expect(await _tabTo(tester, const Key('simple-gear-camera')), isTrue);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('simple-gear')), findsNothing, reason: 'the Camera section is open');
   });
 
   testWidgets("a Devices row's dot is the top bar chip's: one status, one colour", (tester) async {

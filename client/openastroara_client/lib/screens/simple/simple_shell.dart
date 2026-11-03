@@ -2237,7 +2237,8 @@ Widget _gearTile({
   required Future<void> Function()? action,
   required VoidCallback? onOpen,
 }) {
-  final row = Container(
+  // Ink, so the focus and press highlight paints over the fill, not under.
+  final row = Ink(
     padding: const EdgeInsets.symmetric(
       horizontal: AraSpace.s12,
       vertical: AraSpace.s8,
@@ -2275,17 +2276,23 @@ Widget _gearTile({
       ],
     ),
   );
-  // A device with a window opens it from its row.
-  return onOpen == null
-      ? row
-      : Semantics(
-          button: true,
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: onOpen,
-            child: row,
+  // Its own transparent Material: the fill and highlight paint here, over
+  // the sheet's scrim. A device with a window opens it from its row.
+  return Material(
+    type: MaterialType.transparency,
+    child: onOpen == null
+        ? row
+        : Semantics(
+            button: true,
+            // Focusable, so a keyboard opens the window too.
+            child: InkWell(
+              key: Key('simple-gear-$id'),
+              borderRadius: BorderRadius.circular(10),
+              onTap: onOpen,
+              child: row,
+            ),
           ),
-        );
+  );
 }
 
 /// Settings › Rig: what belongs to no device. The rig's figures, the rig
@@ -2832,87 +2839,113 @@ class _RigWheelRowState extends State<_RigWheelRow> {
     super.dispose();
   }
 
-  // iOS's own picker: the value under the band magnified, the wheels
-  // sharing one band like the Clock app's timer.
-  Widget _wheel(int i) => SizedBox(
-    // A digit's wheel, or wide enough for "600".
-    width: widget.columns[i].length > 10 ? 72 : 36,
-    height: 160,
-    child: Semantics(
-      label: context.l10n.shellWheelSemantics(
-        widget.label,
-        i + 1,
-        widget.columns.length,
-      ),
-      child: CupertinoPicker(
-        key: Key('simple-rig-${widget.id}-wheel-$i'),
-        scrollController: _wheels[i],
-        itemExtent: 36,
-        useMagnifier: true,
-        magnification: 1.2,
-        selectionOverlay: CupertinoPickerDefaultSelectionOverlay(
-          capStartEdge: i == 0,
-          capEndEdge: i == widget.columns.length - 1,
+  // iOS's own picker: the value under the band magnified, the wheels of a
+  // group sharing one band like the Clock app's timer. [k] is the user's
+  // text size, so a digit keeps its slot (WCAG 1.4.4).
+  Widget _wheel(int i, double k, {required bool first, required bool last}) =>
+      SizedBox(
+        // A digit's wheel, or wide enough for "600".
+        width: (widget.columns[i].length > 10 ? 72 : 36) * k,
+        height: 160 * k,
+        child: Semantics(
+          label: context.l10n.shellWheelSemantics(
+            widget.label,
+            i + 1,
+            widget.columns.length,
+          ),
+          child: CupertinoPicker(
+            key: Key('simple-rig-${widget.id}-wheel-$i'),
+            scrollController: _wheels[i],
+            itemExtent: 36 * k,
+            useMagnifier: true,
+            magnification: 1.2,
+            selectionOverlay: CupertinoPickerDefaultSelectionOverlay(
+              capStartEdge: first,
+              capEndEdge: last,
+            ),
+            onSelectedItemChanged: (_) {},
+            children: [
+              for (final o in widget.columns[i])
+                Center(
+                  child: Text(o, style: kSimpleText.copyWith(fontSize: 20)),
+                ),
+            ],
+          ),
         ),
-        onSelectedItemChanged: (_) {},
-        children: [
-          for (final o in widget.columns[i])
-            Center(child: Text(o, style: kSimpleText.copyWith(fontSize: 20))),
-        ],
-      ),
-    ),
+      );
+
+  /// Wheels [from] up to [to] on one band, then [tail].
+  Widget _group(int from, int to, double k, List<Widget> tail) => Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      for (var i = from; i < to; i++)
+        _wheel(i, k, first: i == from, last: i == to - 1),
+      ...tail,
+    ],
   );
 
   @override
-  Widget build(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.stretch,
-    children: [
-      ConstrainedBox(
-        constraints: const BoxConstraints(minHeight: 44),
-        child: Row(
-          spacing: AraSpace.s12,
-          children: [
-            Expanded(child: Text(widget.label, style: kSimpleText)),
-            TextButton(
-              key: Key('simple-rig-${widget.id}'),
-              style: TextButton.styleFrom(
-                backgroundColor: AraColors.tileFill,
-                minimumSize: const Size(120, 44),
-                side: _open
-                    ? const BorderSide(color: AraColors.selectionBg, width: 2)
-                    : null,
+  Widget build(BuildContext context) {
+    final k = MediaQuery.textScalerOf(context).scale(20) / 20;
+    final n = widget.columns.length;
+    final dot = widget.dotAfter;
+    final unit = Text(widget.unit, style: AraText.caption);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 44),
+          child: Row(
+            spacing: AraSpace.s12,
+            children: [
+              Expanded(child: Text(widget.label, style: kSimpleText)),
+              TextButton(
+                key: Key('simple-rig-${widget.id}'),
+                style: TextButton.styleFrom(
+                  backgroundColor: AraColors.tileFill,
+                  minimumSize: const Size(120, 44),
+                  side: _open
+                      ? const BorderSide(color: AraColors.selectionBg, width: 2)
+                      : null,
+                ),
+                onPressed: _toggle,
+                child: Text(widget.text, style: kSimpleText),
               ),
-              onPressed: _toggle,
-              child: Text(widget.text, style: kSimpleText),
-            ),
-          ],
-        ),
-      ),
-      if (_open)
-        // Set when a wheel comes to rest, not on every digit it passes.
-        NotificationListener<ScrollEndNotification>(
-          onNotification: (_) {
-            final v = widget.read([for (final w in _wheels) w.selectedItem]);
-            widget.onSet(v);
-            return false;
-          },
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: AraSpace.s4),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                for (var i = 0; i < widget.columns.length; i++) ...[
-                  _wheel(i),
-                  if (i == widget.dotAfter)
-                    Text('.', style: kSimpleText.copyWith(fontSize: 20)),
-                ],
-                Text(widget.unit, style: AraText.caption),
-              ],
-            ),
+            ],
           ),
         ),
-    ],
-  );
+        if (_open)
+          // Set when a wheel comes to rest, not on every digit it passes.
+          NotificationListener<ScrollEndNotification>(
+            onNotification: (_) {
+              final v = widget.read([for (final w in _wheels) w.selectedItem]);
+              widget.onSet(v);
+              return false;
+            },
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: AraSpace.s4),
+              // A coordinate's decimals drop under its degrees when one line
+              // won't fit (a narrow window, large text).
+              child: Wrap(
+                alignment: WrapAlignment.end,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                runSpacing: AraSpace.s4,
+                children: dot == null
+                    ? [
+                        _group(0, n, k, [unit]),
+                      ]
+                    : [
+                        _group(0, dot + 1, k, [
+                          Text('.', style: kSimpleText.copyWith(fontSize: 20)),
+                        ]),
+                        _group(dot + 1, n, k, [unit]),
+                      ],
+              ),
+            ),
+          ),
+      ],
+    );
+  }
 }
 
 /// A whole number stepped with − and +: a tap is one, a hold runs (1, then
