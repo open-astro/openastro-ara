@@ -16,6 +16,7 @@ import 'package:openastroara/state/sky_atlas/planetarium_selection_state.dart';
 import 'package:openastroara/main.dart' show isShell, shellFor;
 import 'package:openastroara/models/frame_histogram.dart';
 import 'package:openastroara/models/server.dart';
+import 'package:openastroara/services/profile_api.dart';
 import 'package:openastroara/models/stats/server_internal_state.dart';
 import 'package:openastroara/services/storage_space_api.dart';
 import 'package:openastroara/state/stats/server_internal_state_state.dart';
@@ -186,6 +187,27 @@ class _Mount extends MountNotifier with _Calls<MountStatus> {
   final EquipmentConnectionState state0;
   @override
   Future<MountStatus?> build() async => MountStatus.fromJson(_wire('AM5', state0));
+}
+
+class _OpticsMount extends MountNotifier {
+  _OpticsMount(this.caps);
+  final Map<String, dynamic> caps;
+  @override
+  Future<MountStatus?> build() async =>
+      MountStatus.fromJson({..._wire('AM5', EquipmentConnectionState.connected), 'capabilities': caps});
+}
+
+class _OpticsApi extends ProfileApi {
+  _OpticsApi(this.optics) : super(const AraServer(hostname: 'test', port: 1));
+  OpticsSettings optics;
+  final puts = <OpticsSettings>[];
+  @override
+  Future<OpticsSettings> getOptics() async => optics;
+  @override
+  Future<OpticsSettings> putOptics(OpticsSettings value) async {
+    puts.add(value);
+    return optics = value;
+  }
 }
 
 /// A camera cooling to −10 °C from [ccd]; [set] moves the reading.
@@ -1105,6 +1127,31 @@ void main() {
       expect(tester.getSize(find.ancestor(of: find.text(t), matching: find.byType(Row)).first).height,
           greaterThanOrEqualTo(44), reason: '$t: a 44 pt row like Aperture');
     }
+  });
+
+  testWidgets('a telescope the profile doesn\'t know comes from the mount, saved to the profile; a known one stays',
+      (tester) async {
+    final api = _OpticsApi(const OpticsSettings(focalLengthMm: 600));
+    final c = await _pump(tester, const Size(1024, 768), gear: [
+      profileApiProvider.overrideWithValue(api),
+      mountProvider.overrideWith(() => _OpticsMount({'focal_length_mm': 480, 'aperture_diameter_mm': 80})),
+    ]);
+    await tester.pump();
+    await tester.pump();
+    expect(api.puts.single.apertureMm, 80, reason: 'unknown: the mount\'s, saved to the profile');
+    expect(api.puts.single.focalLengthMm, 600, reason: 'the profile\'s own value wins');
+    expect(c.read(opticsSettingsProvider).apertureMm, 80);
+  });
+
+  testWidgets('a mount that reports no optics leaves the profile alone', (tester) async {
+    final api = _OpticsApi(const OpticsSettings());
+    await _pump(tester, const Size(1024, 768), gear: [
+      profileApiProvider.overrideWithValue(api),
+      mountProvider.overrideWith(() => _OpticsMount({})),
+    ]);
+    await tester.pump();
+    await tester.pump();
+    expect(api.puts, isEmpty);
   });
 
   testWidgets('Change profile goes to the profile box; Change rig to the rig list', (tester) async {

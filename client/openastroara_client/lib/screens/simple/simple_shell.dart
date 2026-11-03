@@ -40,6 +40,7 @@ import '../../state/equipment/filter_wheel_state.dart';
 import '../../state/equipment/flat_panel_state.dart';
 import '../../state/equipment/focuser_state.dart';
 import '../../state/equipment/mount_state.dart';
+import '../../models/mount_status.dart' show MountCapabilities;
 import '../../state/equipment/rotator_state.dart';
 import '../../state/equipment/weather_state.dart';
 import '../../state/ws/ws_providers.dart';
@@ -256,6 +257,41 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _focus.requestFocus();
     });
+    ref.listenManual(mountProvider, (previous, next) {
+      final caps = next.value?.capabilities;
+      final was = previous?.value?.capabilities;
+      if (caps != null &&
+          (was == null || previous?.value?.deviceId != next.value?.deviceId)) {
+        _opticsFromMount(caps);
+      }
+    }, fireImmediately: true);
+  }
+
+  /// The profile owns the telescope; a value it doesn't know (0) is filled
+  /// from what the connected mount reports and saved to the profile.
+  Future<void> _opticsFromMount(MountCapabilities caps) async {
+    if (caps.apertureMm == null && caps.focalLengthMm == null) return;
+    final api = ref.read(profileApiProvider);
+    if (api == null) return;
+    final optics = ref.read(opticsSettingsProvider.notifier);
+    try {
+      // The profile's own values first: never fill over one not loaded yet.
+      await optics.hydrateFromServer(api);
+      if (!mounted) return;
+      final known = ref.read(opticsSettingsProvider);
+      var changed = false;
+      if (known.apertureMm <= 0 && caps.apertureMm != null) {
+        optics.setApertureMm(caps.apertureMm!);
+        changed = true;
+      }
+      if (known.focalLengthMm <= 0 && caps.focalLengthMm != null) {
+        optics.setFocalLengthMm(caps.focalLengthMm!);
+        changed = true;
+      }
+      if (changed) await optics.persistToServer(api);
+    } catch (e) {
+      debugPrint('[simple] telescope from the mount: $e');
+    }
   }
 
   @override
