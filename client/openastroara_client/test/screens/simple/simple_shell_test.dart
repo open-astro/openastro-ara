@@ -19,6 +19,8 @@ import 'package:openastroara/models/frame_histogram.dart';
 import 'package:openastroara/models/server.dart';
 import 'package:openastroara/services/profile_api.dart';
 import 'package:openastroara/screens/simple/simple_search.dart';
+import 'package:openastroara/models/guider_status.dart';
+import 'package:openastroara/state/guider/guider_state.dart';
 import 'package:openastroara/services/dso_catalog_service.dart';
 import 'package:openastroara/state/sky_atlas/dso_catalog_state.dart';
 import 'package:openastroara/services/time_sync_api.dart';
@@ -214,6 +216,12 @@ class _Clock implements TimeSyncClient {
   Future<void> pushClientTime(DateTime utcNow) async => pushed.add(utcNow);
   @override
   dynamic noSuchMethod(Invocation i) => super.noSuchMethod(i);
+}
+
+class _GuiderUp extends GuiderStatusNotifier {
+  @override
+  Future<GuiderStatus?> build() async =>
+      GuiderStatus.fromJson(const {'device_id': 'g', 'name': 'PHD2', 'state': 'connected', 'runtime': {'state': 'guiding'}});
 }
 
 class _OpticsMount extends MountNotifier {
@@ -1541,6 +1549,20 @@ void main() {
     expect(find.byType(SettingsShell), findsNothing);
     await _openSection(tester, 'Focuser');
     expect(find.descendant(of: find.byKey(const Key('simple-menu')), matching: find.byKey(const Key('simple-device-focuser'))),
+        findsOneWidget);
+  });
+
+  testWidgets('the guider\'s dot opens the Guider window; Settings lists it under Devices', (tester) async {
+    final c = await _pump(tester, const Size(1024, 768), linkUp: true, gear: [
+      guiderStatusProvider.overrideWith(() => _GuiderUp()),
+    ]);
+    c.read(selectedSettingsPanelProvider.notifier).select('eq.guider');
+    c.read(selectedTabIndexProvider.notifier).select(kOptionsTabIndex);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('simple-device-guider')), findsOneWidget);
+    expect(find.byType(SettingsShell), findsNothing);
+    await _openSection(tester, 'Guider');
+    expect(find.descendant(of: find.byKey(const Key('simple-menu')), matching: find.byKey(const Key('simple-device-guider'))),
         findsOneWidget);
   });
 

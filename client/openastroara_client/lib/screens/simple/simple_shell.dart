@@ -332,6 +332,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     'eq.camera': SimpleCameraWindow(),
     'eq.mount': SimpleMountWindow(),
     'eq.focuser': SimpleFocuserWindow(),
+    'eq.guider': SimpleGuiderWindow(),
   };
 
   /// Whether the camera window and a rail menu fit side by side: the window
@@ -1903,6 +1904,8 @@ class _SettingsSheetState extends ConsumerState<_SettingsSheet> {
         ('Mount', (c) => EquipmentGlyph.telescope(size: 20, color: c), true),
       if (ref.watch(focuserProvider).value != null)
         ('Focuser', (c) => glyph(Icons.center_focus_strong, c), true),
+      if (ref.watch(guiderStatusProvider).value != null)
+        ('Guider', (c) => glyph(Icons.track_changes, c), true),
     ];
     // A narrow window (Split View, a phone) keeps only the sections' icons.
     final narrow = MediaQuery.sizeOf(context).width < 600;
@@ -1983,6 +1986,7 @@ class _SettingsSheetState extends ConsumerState<_SettingsSheet> {
                 'Camera' => const SimpleCameraWindow(inSettings: true),
                 'Mount' => const SimpleMountWindow(inSettings: true),
                 'Focuser' => const SimpleFocuserWindow(inSettings: true),
+                'Guider' => const SimpleGuiderWindow(),
                 _ => _Gear(onOpen: (id) => setState(() => _section = id)),
               },
             ),

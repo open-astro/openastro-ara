@@ -10,7 +10,10 @@ import '../../services/equipment_device_api.dart' show describeEquipmentError;
 import '../../services/equipment_driver_api.dart';
 import '../../models/focuser_status.dart';
 import '../../state/equipment/camera_state.dart';
+import '../../models/guider_status.dart';
 import '../../state/equipment/focuser_state.dart';
+import '../../state/guider/guider_state.dart';
+import '../../state/settings/phd2_settings_state.dart';
 import '../../state/focus/autofocus_live_state.dart';
 import '../../state/settings/autofocus_settings_state.dart';
 import '../../state/imaging/exposure_state.dart';
@@ -245,6 +248,38 @@ List<Widget> _versions(DeviceDriver? d) {
   return rows.isEmpty
       ? const []
       : [const Divider(height: AraSpace.s16), SimpleVersions(rows: rows)];
+}
+
+/// − value +, for a device window's numbers (refocus, dither).
+Widget simpleWindowStepper({
+  required String id,
+  required String text,
+  required VoidCallback onLess,
+  required VoidCallback onMore,
+}) {
+  Widget button(String dir, IconData icon, String label, VoidCallback onTap) =>
+      IconButton(
+        key: Key('$id-$dir'),
+        onPressed: onTap,
+        icon: Icon(icon, semanticLabel: label),
+      );
+  return DecoratedBox(
+    decoration: BoxDecoration(
+      color: AraColors.tileFill,
+      borderRadius: BorderRadius.circular(8),
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        button('down', Icons.remove, 'Less', onLess),
+        SizedBox(
+          width: 96,
+          child: Text(text, textAlign: TextAlign.center, style: kSimpleText),
+        ),
+        button('up', Icons.add, 'More', onMore),
+      ],
+    ),
+  );
 }
 
 /// One height for every row of a device window (the 44 pt of its controls),
@@ -648,34 +683,11 @@ class _SimpleFocuserWindowState extends ConsumerState<SimpleFocuserWindow> {
   /// refocuses after the focuser drifts this much (0 = off).
   Widget _refocus() {
     final c = ref.watch(autofocusSettingsProvider).triggerTempDeltaC;
-    Widget button(int dir) => IconButton(
-      key: Key('simple-focuser-refocus-${dir > 0 ? 'up' : 'down'}'),
-      onPressed: () => _setRefocus(c + dir * 0.5),
-      icon: Icon(
-        dir > 0 ? Icons.add : Icons.remove,
-        semanticLabel: dir > 0 ? 'More' : 'Less',
-      ),
-    );
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: AraColors.tileFill,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          button(-1),
-          SizedBox(
-            width: 64,
-            child: Text(
-              c <= 0 ? 'Off' : simpleCelsius(c),
-              textAlign: TextAlign.center,
-              style: kSimpleText,
-            ),
-          ),
-          button(1),
-        ],
-      ),
+    return simpleWindowStepper(
+      id: 'simple-focuser-refocus',
+      text: c <= 0 ? 'Off' : simpleCelsius(c),
+      onLess: () => _setRefocus(c - 0.5),
+      onMore: () => _setRefocus(c + 0.5),
     );
   }
 
@@ -997,5 +1009,117 @@ class _AutofocusButton extends ConsumerWidget {
         ),
       ),
     );
+  }
+}
+
+/// The guider's window: what it is doing, the guiding RMS, and how often a
+/// plan dithers (the profile's, so every run Ara builds dithers by it).
+class SimpleGuiderWindow extends ConsumerWidget {
+  const SimpleGuiderWindow({super.key});
+
+  static String _arcsec(double v) => '${v.toStringAsFixed(2)}″';
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final g = ref.watch(guiderStatusProvider).value;
+    final colour = switch (g?.connectionState) {
+      GuiderConnectionState.connected => AraColors.accentConnected,
+      GuiderConnectionState.connecting => AraColors.accentBusy,
+      GuiderConnectionState.error => AraColors.accentError,
+      _ => AraColors.textDisabled,
+    };
+    final children = <Widget>[
+      Row(
+        spacing: AraSpace.s8,
+        children: [
+          Container(
+            width: 10,
+            height: 10,
+            decoration: BoxDecoration(color: colour, shape: BoxShape.circle),
+          ),
+          Expanded(
+            child: Text(
+              g == null ? 'Guider' : 'Guider · ${g.name}',
+              style: kSimpleText.copyWith(fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
+      ),
+    ];
+    if (g == null || !g.isConnected) {
+      children.add(
+        Text(
+          g?.connectionState == GuiderConnectionState.connecting
+              ? 'Connecting…'
+              : 'Not connected',
+          style: AraText.caption,
+        ),
+      );
+    } else {
+      children.add(
+        simpleWindowRow('State', Text(g.runtimeSummary, style: kSimpleText)),
+      );
+      if (g.rmsTotalArcsec != null) {
+        children.add(
+          simpleWindowRow(
+            'RMS',
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(_arcsec(g.rmsTotalArcsec!), style: kSimpleText),
+                if (g.rmsRaArcsec != null && g.rmsDecArcsec != null)
+                  Text(
+                    'RA ${_arcsec(g.rmsRaArcsec!)} · Dec ${_arcsec(g.rmsDecArcsec!)}',
+                    style: AraText.caption,
+                  ),
+              ],
+            ),
+          ),
+        );
+      }
+    }
+    final phd2 = ref.watch(phd2SettingsProvider);
+    final every = phd2.ditherEnabled ? math.max(1, phd2.ditherEveryNFrames) : 0;
+    children.add(
+      simpleWindowRow(
+        'Dither',
+        simpleWindowStepper(
+          id: 'simple-guider-dither',
+          text: switch (every) {
+            0 => 'Off',
+            1 => 'Every frame',
+            _ => '$every frames',
+          },
+          onLess: () => _setDither(context, ref, every - 1),
+          onMore: () => _setDither(context, ref, every + 1),
+        ),
+      ),
+    );
+    return Column(
+      key: const Key('simple-device-guider'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      spacing: AraSpace.s4,
+      children: children,
+    );
+  }
+
+  /// 0 turns dithering off; 1 and up dithers every that many frames.
+  Future<void> _setDither(BuildContext context, WidgetRef ref, int n) async {
+    if (n < 0 || n > 20) return;
+    final p = ref.read(phd2SettingsProvider.notifier);
+    p.setDitherEnabled(n > 0);
+    if (n > 0) p.setDitherEveryNFrames(n);
+    final api = ref.read(profileApiProvider);
+    if (api == null) return;
+    final notify = userNotifier(context);
+    try {
+      await p.persistToServer(api);
+    } catch (e) {
+      notify(
+        "Couldn't save that",
+        detail: describeEquipmentError(e),
+        error: true,
+      );
+    }
   }
 }

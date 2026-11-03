@@ -5,6 +5,7 @@ import '../../services/dso_catalog_service.dart';
 import '../../state/equipment/camera_state.dart';
 import '../../state/equipment/focuser_state.dart';
 import '../../state/equipment/mount_state.dart';
+import '../../state/guider/guider_state.dart';
 import '../../state/library/live_library_state.dart';
 import '../../state/sky_atlas/dso_catalog_state.dart';
 import '../../theme/ara_colors.dart';
@@ -44,7 +45,8 @@ class SimpleImageHit extends SimpleSearchHit {
 }
 
 /// Simple Mode's settings by section: (title, section, other words for it).
-/// Camera, Mount and Focuser rows only count while that device is there.
+/// Camera, Mount, Focuser and Guider rows only count while that device is
+/// there.
 const _kSettings = <(String, String, String)>[
   ('Rig', 'Rig', 'system profile'),
   ('Aperture', 'Rig', 'telescope diameter'),
@@ -71,6 +73,8 @@ const _kSettings = <(String, String, String)>[
   ('Meridian flip', 'Mount', 'mount pier side'),
   ('Focuser', 'Focuser', 'focus position knob move'),
   ('Focuser step', 'Focuser', 'focus move'),
+  ('Guider', 'Guider', 'guiding rms phd2'),
+  ('Dither', 'Guider', 'guiding dithering'),
 ];
 
 /// The hits for [query] among Simple Mode's settings, modes and imaged
@@ -191,6 +195,7 @@ class _SimpleSearchPanelState extends ConsumerState<SimpleSearchPanel> {
         if (ref.watch(cameraStatusProvider).value != null) 'Camera',
         if (ref.watch(mountProvider).value != null) 'Mount',
         if (ref.watch(focuserProvider).value != null) 'Focuser',
+        if (ref.watch(guiderStatusProvider).value != null) 'Guider',
       },
       // The library is only asked once there is something to look for.
       targets: q.trim().length < 2
