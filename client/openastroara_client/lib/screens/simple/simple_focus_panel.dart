@@ -137,6 +137,35 @@ class SimpleFocusPanel extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           spacing: AraSpace.s8,
           children: [
+            // The method: Smart Focus with the focuser, or by hand with a
+            // Bahtinov mask. Locked while a run goes.
+            DecoratedBox(
+              decoration: BoxDecoration(
+                color: AraColors.tileFill,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  for (final (id, m, word) in [
+                    ('auto', MainFocusMethod.autofocus, l10n.focusAuto),
+                    ('manual', MainFocusMethod.bahtinov, l10n.focusManual),
+                  ])
+                    Expanded(
+                      child: SimpleSegment(
+                        key: Key('simple-focus-method-$id'),
+                        label: word,
+                        selected: simpleFocusMethod(ref) == m,
+                        radius: 8,
+                        onTap: run.isRunning
+                            ? null
+                            : () => ref
+                                  .read(mainFocusMethodProvider.notifier)
+                                  .pick(m),
+                      ),
+                    ),
+                ],
+              ),
+            ),
             Text(
               headline,
               style: kSimpleText.copyWith(color: headlineColor),

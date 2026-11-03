@@ -173,6 +173,22 @@ void main() {
     expect(find.byKey(const Key('simple-focus-stars-on')), findsNothing);
   });
 
+  testWidgets('Auto / Manual at the top of the panel picks the method (the chip follows)', (tester) async {
+    await _pump(tester, focuser: _focuser());
+    expect(tester.widget<SimpleSegment>(find.byKey(const Key('simple-focus-method-auto'))).selected, isTrue,
+        reason: 'a connected focuser: Auto to start');
+    await tester.tap(find.byKey(const Key('simple-focus-method-manual')));
+    await tester.pump();
+    expect(_c.read(mainFocusMethodProvider), MainFocusMethod.bahtinov);
+    expect(tester.widget<SimpleSegment>(find.byKey(const Key('simple-focus-method-manual'))).selected, isTrue);
+  });
+
+  testWidgets('the method is locked while autofocus runs', (tester) async {
+    await _pump(tester,
+        focuser: _focuser(), run: AutofocusRun(state: AutofocusRunStates.running, probes: [_probe(0, 3.1)]));
+    expect(tester.widget<SimpleSegment>(find.byKey(const Key('simple-focus-method-manual'))).onTap, isNull);
+  });
+
   group('the shutter follows the chip', () {
     Future<_Live> shutter(WidgetTester tester, MainFocusMethod pick,
         {FocuserStatus? focuser, AutofocusRun run = AutofocusRun.idle}) async {
