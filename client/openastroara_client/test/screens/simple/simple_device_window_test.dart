@@ -170,10 +170,14 @@ void main() {
       driver: const DeviceDriver(
         driverVersion: '6.0.0~nightly',
         sdkVersion: '1.41.0.0',
+        serialNumber: '0c190e111d020900',
       ),
     );
     await tester.pump();
-    expect(find.text('SDK 1.41.0.0 · Driver 6.0.0~nightly'), findsOneWidget);
+    expect(
+      find.text('SDK 1.41.0.0 · Driver 6.0.0~nightly · S/N 0c190e111d020900'),
+      findsOneWidget,
+    );
   });
 
   testWidgets(

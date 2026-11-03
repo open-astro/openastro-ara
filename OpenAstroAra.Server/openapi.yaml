@@ -8671,6 +8671,10 @@ components:
           type:
             - 'null'
             - string
+        serial_number:
+          type:
+            - 'null'
+            - string
     DeviceIdentityDto:
       required:
         - unique_id

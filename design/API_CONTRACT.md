@@ -44,9 +44,9 @@ This file captures the *reasoning* behind each contract decision — DTO shapes,
 
 ### 2026-11-03 — A device's driver and SDK versions: `GET /equipment/driver/{type}`
 
-**Endpoint(s) or area:** new `GET /api/v1/equipment/driver/{type}` → `DeviceDriverDto { driver_version?, sdk_version?, firmware? }`.
+**Endpoint(s) or area:** new `GET /api/v1/equipment/driver/{type}` → `DeviceDriverDto { driver_version?, sdk_version?, firmware?, serial_number? }`.
 
-**Decision:** for the selected (remembered) device of `{type}` (a `DeviceType` token; `guider` and unknown types → 400; nothing selected → 404), the driver version is its Alpaca `driverversion`, and the SDK version and firmware come from its server's `/management/v1/configureddevices` entry (`SdkVersion`, `Firmware`, which OpenAstro AlpacaBridge adds; null elsewhere). Both reads use the management client's 3 s timeout, in parallel; a silent server answers nulls. ZWO cameras report no firmware.
+**Decision:** for the selected (remembered) device of `{type}` (a `DeviceType` token; `guider` and unknown types → 400; nothing selected → 404), the driver version is its Alpaca `driverversion`, and the SDK version and firmware come from its server's `/management/v1/configureddevices` entry (`SdkVersion`, `Firmware` and `Config.serialNumber`, which OpenAstro AlpacaBridge adds; null elsewhere). Both reads use the management client's 3 s timeout, in parallel; a silent server answers nulls. ZWO cameras report no firmware.
 
 **Reasoning:** Simple Mode's device windows show the versions support asks for, at their foot.
 

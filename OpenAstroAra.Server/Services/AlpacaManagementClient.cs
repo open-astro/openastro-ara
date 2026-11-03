@@ -57,8 +57,10 @@ public interface IAlpacaManagementClient {
 public sealed record AlpacaServerDescription(string? ServerName, string? Manufacturer, string? Version);
 
 /// <summary>One <c>configureddevices</c> entry: the name and the server's <c>UniqueID</c> ("" when absent),
-/// plus the vendor SDK version and firmware an OpenAstro AlpacaBridge adds (null when not reported).</summary>
-public sealed record AlpacaConfiguredDevice(string Name, string UniqueId, string? SdkVersion = null, string? Firmware = null);
+/// plus the vendor SDK version, firmware and serial number an OpenAstro AlpacaBridge adds (null when not
+/// reported; the serial sits in the entry's <c>Config</c>).</summary>
+public sealed record AlpacaConfiguredDevice(string Name, string UniqueId, string? SdkVersion = null, string? Firmware = null,
+    string? SerialNumber = null);
 
 public sealed partial class AlpacaManagementClient : IAlpacaManagementClient, IDisposable {
     private static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(3);
@@ -249,7 +251,9 @@ public sealed partial class AlpacaManagementClient : IAlpacaManagementClient, ID
                 static string? Str(JsonElement o, string key) =>
                     o.TryGetProperty(key, out var p) && p.ValueKind == JsonValueKind.String ? p.GetString() : null;
                 names[$"{type.GetString()!.ToLowerInvariant()}/{deviceNumber.ToString(CultureInfo.InvariantCulture)}"] =
-                    new AlpacaConfiguredDevice(deviceName, uniqueId, Str(entry, "SdkVersion"), Str(entry, "Firmware"));
+                    new AlpacaConfiguredDevice(deviceName, uniqueId, Str(entry, "SdkVersion"), Str(entry, "Firmware"),
+                        entry.TryGetProperty("Config", out var config) && config.ValueKind == JsonValueKind.Object
+                            ? Str(config, "serialNumber") : null);
             }
         }
         return names;

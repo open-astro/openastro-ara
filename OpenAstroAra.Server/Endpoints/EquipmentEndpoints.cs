@@ -1040,7 +1040,8 @@ public static partial class EquipmentEndpoints {
             var driver = alpaca.GetDriverVersionAsync(host, device.IpPort, wire, device.AlpacaDeviceNumber, ct);
             var entry = (await listed.ConfigureAwait(false)).GetValueOrDefault(
                 $"{wire}/{device.AlpacaDeviceNumber.ToString(System.Globalization.CultureInfo.InvariantCulture)}");
-            return Results.Ok(new DeviceDriverDto(await driver.ConfigureAwait(false), entry?.SdkVersion, entry?.Firmware));
+            return Results.Ok(new DeviceDriverDto(await driver.ConfigureAwait(false), entry?.SdkVersion, entry?.Firmware,
+                entry?.SerialNumber));
         } catch (System.ArgumentException) {
             return Results.Ok(new DeviceDriverDto(null, null, null)); // a remembered host that isn't valid
         }

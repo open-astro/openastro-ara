@@ -32,7 +32,7 @@ namespace OpenAstroAra.Test {
 
         private const string Devices = """
             {"Value":[
-              {"DeviceType":"Camera","DeviceNumber":1,"DeviceName":"ZWO ASI533MC Pro","UniqueID":"u1","SdkVersion":"1.41.0.0","Vendor":"zwo"},
+              {"DeviceType":"Camera","DeviceNumber":1,"DeviceName":"ZWO ASI533MC Pro","UniqueID":"u1","SdkVersion":"1.41.0.0","Vendor":"zwo","Config":{"serialNumber":"0c190e111d020900"}},
               {"DeviceType":"Telescope","DeviceNumber":0,"DeviceName":"EQM-35 Pro","UniqueID":"u2","Firmware":"3.47"}
             ]}
             """;
@@ -43,6 +43,8 @@ namespace OpenAstroAra.Test {
             Assert.That(d["camera/1"].SdkVersion, Is.EqualTo("1.41.0.0"));
             Assert.That(d["camera/1"].Firmware, Is.Null);
             Assert.That(d["telescope/0"].Firmware, Is.EqualTo("3.47"));
+            Assert.That(d["camera/1"].SerialNumber, Is.EqualTo("0c190e111d020900"));
+            Assert.That(d["telescope/0"].SerialNumber, Is.Null);
         }
 
         [Test]
@@ -60,7 +62,7 @@ namespace OpenAstroAra.Test {
             var result = await EquipmentEndpoints.GetDeviceDriverAsync("camera", selections.Object, alpaca.Object, CancellationToken.None);
 
             var ok = result as Ok<DeviceDriverDto>;
-            Assert.That(ok?.Value, Is.EqualTo(new DeviceDriverDto("6.0.0~nightly", "1.41.0.0", null)));
+            Assert.That(ok?.Value, Is.EqualTo(new DeviceDriverDto("6.0.0~nightly", "1.41.0.0", null, "0c190e111d020900")));
         }
 
         [Test]
