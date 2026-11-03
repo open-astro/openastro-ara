@@ -240,7 +240,7 @@ void main() {
           runtimeState: GuiderRuntimeState.stopped,
         ));
     expect(find.text('Guiding'), findsOneWidget);
-    expect(find.text('stopped'), findsOneWidget);
+    expect(find.text('not guiding'), findsOneWidget);
     expect(find.text('RMS —'), findsOneWidget);
     expect(find.text('Not guiding'), findsOneWidget);
     // Telemetry only — no tuning controls inline.

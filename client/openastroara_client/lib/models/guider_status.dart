@@ -64,7 +64,7 @@ bool guiderIsGuiding(GuiderRuntimeState state) => switch (state) {
 /// #1364 item 6 — the one wording of a guider phase, used by the guiding
 /// strip, the guider dialog and the Run tab alike.
 String guiderRuntimeText(GuiderRuntimeState state) => switch (state) {
-      GuiderRuntimeState.stopped => 'Stopped',
+      GuiderRuntimeState.stopped => 'Not guiding',
       GuiderRuntimeState.looping => 'Looping',
       GuiderRuntimeState.starSelected => 'Star selected',
       GuiderRuntimeState.calibrating => 'Calibrating',

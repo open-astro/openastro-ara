@@ -51,6 +51,12 @@ void main() {
     expect(find.text('RA 0.41″ · Dec 0.47″'), findsOneWidget);
   });
 
+  testWidgets('a connected guider that is not guiding says Not guiding, not Stopped', (tester) async {
+    await _pump(tester, _wire(runtime: 'stopped'));
+    expect(find.text('Not guiding'), findsOneWidget);
+    expect(find.text('Stopped'), findsNothing);
+  });
+
   testWidgets('not connected says so', (tester) async {
     await _pump(tester, _wire(state: 'disconnected', runtime: 'stopped'));
     expect(find.text('Not connected'), findsOneWidget);
