@@ -143,6 +143,16 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void Only_an_ASTAP_solver_is_asked_its_version() {
+            static PlateSolveSettingsDto Solver(string engine, string path) =>
+                new(engine, path, "", 30, 0, 60, false, false, false, 3, 30);
+            Assert.That(RigVersions.AstapPathOf(Solver("astap", " /opt/openastroara/astap_cli ")), Is.EqualTo("/opt/openastroara/astap_cli"));
+            Assert.That(RigVersions.AstapPathOf(Solver("ASTAP", "/usr/bin/astap")), Is.EqualTo("/usr/bin/astap"));
+            Assert.That(RigVersions.AstapPathOf(Solver("astrometry.net", "/usr/bin/solve-field")), Is.Null,
+                "another solver is never started with -h on every /server/versions call");
+        }
+
+        [Test]
         public void The_versions_serialize_through_the_aot_context() {
             var dto = new ApiVersionsDto("1.0.0.0", "abc", "10.0.14", "Debian GNU/Linux 13 (trixie)", "arm64", "2.1.0", "0.4.6",
                 Array.Empty<ApiSurfaceVersionDto>(),

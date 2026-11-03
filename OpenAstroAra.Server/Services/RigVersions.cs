@@ -105,6 +105,11 @@ public sealed partial class RigVersions {
         }
     }
 
+    /// <summary>The solver path to probe for an ASTAP version: null unless the profile's engine is ASTAP,
+    /// so another solver (solve-field…) is never started with -h.</summary>
+    internal static string? AstapPathOf(PlateSolveSettingsDto settings) =>
+        string.Equals(settings.Engine, "astap", StringComparison.OrdinalIgnoreCase) ? settings.PathOrEndpoint?.Trim() : null;
+
     internal static async Task<string?> CachedAstapVersionAsync(string path) {
         if (AstapCache.TryGetValue(path, out var known)) {
             return known;

@@ -55,7 +55,7 @@ public sealed class PlaceholderServerStateService : IServerStateService {
         _diagnostics = diagnostics;
         _notifications = notifications;
         _rig = new RigVersions(guider, selections, alpaca,
-            astapPath: profiles is null ? null : () => profiles.GetPlateSolveSettings().PathOrEndpoint?.Trim());
+            astapPath: profiles is null ? null : () => RigVersions.AstapPathOf(profiles.GetPlateSolveSettings()));
     }
 
     public async Task<ServerStateDto> GetSnapshotAsync(CancellationToken ct) {
