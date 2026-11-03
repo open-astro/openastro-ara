@@ -383,6 +383,52 @@ class SimpleVersions extends StatelessWidget {
   );
 }
 
+/// A park (true) or unpark (false) Simple Mode asked for, until the mount
+/// gets there: the Mount window reads Parking… / Unparking… and the status
+/// pill says so. The daemon reports a park as a slew, so the ask is what
+/// tells a park from any other move. Null when none is under way.
+class SimpleMountMotionNotifier extends Notifier<bool?> {
+  /// Tracking On on a parked mount: track once the unpark lands.
+  bool _trackAfter = false;
+
+  @override
+  bool? build() {
+    ref.listen(mountProvider, (_, next) {
+      final m = next.value;
+      if (state == null || m == null) return;
+      if (m.parked == state && m.runtimeState != 'unparking') {
+        final track = _trackAfter && state == false;
+        _trackAfter = false;
+        state = null;
+        if (track) {
+          ref.read(mountProvider.notifier).setTracking(true).ignore();
+        }
+      }
+    });
+    return null;
+  }
+
+  /// Parks or unparks; true when the mount took the ask (it throws why not).
+  Future<bool> park(bool park, {bool thenTrack = false}) async {
+    final mount = ref.read(mountProvider.notifier);
+    state = park;
+    _trackAfter = thenTrack;
+    try {
+      final ok = await (park ? mount.park() : mount.unpark());
+      if (!ok) state = null;
+      return ok;
+    } catch (_) {
+      state = null;
+      rethrow;
+    }
+  }
+}
+
+final simpleMountMotionProvider =
+    NotifierProvider<SimpleMountMotionNotifier, bool?>(
+      SimpleMountMotionNotifier.new,
+    );
+
 /// The mount's window: tracking (On / Off), Parked / Unparked, and the
 /// automatic meridian flip (the profile's, so plans flip by it too).
 class SimpleMountWindow extends ConsumerStatefulWidget {
@@ -396,9 +442,6 @@ class SimpleMountWindow extends ConsumerStatefulWidget {
 }
 
 class _SimpleMountWindowState extends ConsumerState<SimpleMountWindow> {
-  /// Asked for and not there yet (the daemon reports a park as a slew).
-  bool? _parking;
-
   /// Parked tapped while a plan runs: the window asks first.
   bool _asking = false;
 
@@ -417,12 +460,8 @@ class _SimpleMountWindowState extends ConsumerState<SimpleMountWindow> {
       final caps = m.capabilities;
       final notifier = ref.read(mountProvider.notifier);
       // A park is done once the mount says so; until then it reads Parking….
-      if (_parking != null &&
-          m.parked == _parking &&
-          m.runtimeState != 'unparking') {
-        _parking = null;
-      }
-      final moving = _parking != null || m.runtimeState == 'unparking';
+      final parking = ref.watch(simpleMountMotionProvider);
+      final moving = parking != null || m.runtimeState == 'unparking';
       // Watched, so it's known by the time Parked is tapped.
       final planRunning =
           ref.watch(sequenceRunStateProvider).value?.state?.isActive ?? false;
@@ -433,9 +472,11 @@ class _SimpleMountWindowState extends ConsumerState<SimpleMountWindow> {
             _OnOff(
               id: 'simple-mount-tracking',
               on: m.tracking && !m.parked,
-              // A parked (or parking) mount doesn't track.
-              enabled: !m.parked && !moving,
-              onChanged: (on) => _run(context, () => notifier.setTracking(on)),
+              // A parked mount unparks first, then tracks; none while moving.
+              enabled: !moving && (!m.parked || (caps?.canUnpark ?? false)),
+              onChanged: (on) => on && m.parked
+                  ? _park(context, false, thenTrack: true)
+                  : _run(context, () => notifier.setTracking(on)),
             ),
           ),
         );
@@ -448,7 +489,7 @@ class _SimpleMountWindowState extends ConsumerState<SimpleMountWindow> {
                   height: 44,
                   child: Center(
                     child: Text(
-                      (_parking ?? !m.parked) ? 'Parking…' : 'Unparking…',
+                      (parking ?? !m.parked) ? 'Parking…' : 'Unparking…',
                       style: kSimpleText.copyWith(color: AraColors.accentBusy),
                     ),
                   ),
@@ -521,13 +562,12 @@ class _SimpleMountWindowState extends ConsumerState<SimpleMountWindow> {
     );
   }
 
-  void _park(BuildContext context, bool park) {
-    final notifier = ref.read(mountProvider.notifier);
-    setState(() => _parking = park);
-    _run(context, park ? notifier.park : notifier.unpark).then((ok) {
-      if (!ok && mounted) setState(() => _parking = null);
-    });
-  }
+  void _park(BuildContext context, bool park, {bool thenTrack = false}) => _run(
+    context,
+    () => ref
+        .read(simpleMountMotionProvider.notifier)
+        .park(park, thenTrack: thenTrack),
+  );
 
   /// Set once: the profile keeps it.
   Future<void> _setFlip(BuildContext context, bool on) async {

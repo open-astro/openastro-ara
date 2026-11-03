@@ -19,6 +19,7 @@ import 'package:openastroara/models/frame_histogram.dart';
 import 'package:openastroara/models/server.dart';
 import 'package:openastroara/services/profile_api.dart';
 import 'package:openastroara/screens/simple/simple_search.dart';
+import 'package:openastroara/screens/simple/simple_device_windows.dart' show simpleMountMotionProvider;
 import 'package:openastroara/models/guider_status.dart';
 import 'package:openastroara/state/guider/guider_state.dart';
 import 'package:openastroara/services/dso_catalog_service.dart';
@@ -222,6 +223,19 @@ class _GuiderUp extends GuiderStatusNotifier {
   @override
   Future<GuiderStatus?> build() async =>
       GuiderStatus.fromJson(const {'device_id': 'g', 'name': 'PHD2', 'state': 'connected', 'runtime': {'state': 'guiding'}});
+}
+
+class _ParkingMount extends MountNotifier {
+  static Map<String, dynamic> _json(bool parked, String runtime) => {
+        ..._wire('AM5', EquipmentConnectionState.connected),
+        'capabilities': {'can_park': true, 'can_unpark': true},
+        'runtime': {'state': runtime, 'parked': parked},
+      };
+  @override
+  Future<MountStatus?> build() async => MountStatus.fromJson(_json(false, 'tracking'));
+  void set({required bool parked, required String runtime}) => state = AsyncData(MountStatus.fromJson(_json(parked, runtime)));
+  @override
+  Future<bool> park() async => true;
 }
 
 class _OpticsMount extends MountNotifier {
@@ -1749,6 +1763,23 @@ void main() {
     expect(pill(), contains('Taking a frame'));
     container.read(captureProgressProvider.notifier).reset();
     await tester.pump(const Duration(seconds: 1));
+  });
+
+  testWidgets('parking from Simple Mode: the status pill says Parking until the mount is parked', (tester) async {
+    final mount = _ParkingMount();
+    final c = await _pump(tester, const Size(1024, 768), gear: [mountProvider.overrideWith(() => mount)]);
+    await tester.pump();
+    String pill() => find
+        .descendant(of: find.byType(SimpleStatusPill), matching: find.byType(RichText))
+        .evaluate()
+        .map((e) => (e.widget as RichText).text.toPlainText())
+        .join();
+    await c.read(simpleMountMotionProvider.notifier).park(true);
+    await tester.pump();
+    expect(pill(), contains('Parking'));
+    mount.set(parked: true, runtime: 'parked');
+    await tester.pump();
+    expect(pill(), isNot(contains('Parking')));
   });
 
   testWidgets('a running step that reports how far it has got shows a bar along the pill\'s foot', (tester) async {

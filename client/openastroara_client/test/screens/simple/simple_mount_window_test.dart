@@ -103,11 +103,23 @@ void main() {
     expect(tester.widget<SimpleSegment>(find.byKey(const Key('simple-mount-park-parked'))).selected, isTrue);
   });
 
-  testWidgets('a parked mount unparks from the segment, reads Unparking… while it does, and can\'t track meanwhile',
-      (tester) async {
+  testWidgets('Tracking On on a parked mount unparks it first, then tracks once it is unparked', (tester) async {
     final (_, mount) = await _pump(tester, _wire(tracking: false, parked: true, runtime: 'parked'));
-    expect(tester.widget<SimpleSegment>(find.byKey(const Key('simple-mount-tracking-on'))).onTap, isNull,
-        reason: 'a parked mount does not track');
+    await tester.tap(find.byKey(const Key('simple-mount-tracking-on')));
+    await tester.pump();
+    expect(mount.calls, ['unpark'], reason: 'not tracking yet: it is still parked');
+    expect(find.text('Unparking…'), findsOneWidget);
+    mount.set(_wire(tracking: false, parked: true, runtime: 'unparking'));
+    await tester.pump();
+    expect(mount.calls, ['unpark']);
+    mount.set(_wire(tracking: false, parked: false, runtime: 'idle'));
+    await tester.pump();
+    await tester.pump();
+    expect(mount.calls, ['unpark', 'tracking true']);
+  });
+
+  testWidgets('a parked mount unparks from the segment and reads Unparking… while it does', (tester) async {
+    final (_, mount) = await _pump(tester, _wire(tracking: false, parked: true, runtime: 'parked'));
     await tester.tap(find.byKey(const Key('simple-mount-park-unparked')));
     await tester.pump();
     expect(mount.calls, ['unpark']);

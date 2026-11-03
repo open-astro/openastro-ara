@@ -20,7 +20,8 @@ import '../../widgets/imaging/exposure_controls_panel.dart' show FilterDropdown;
 import '../../widgets/imaging/histogram_strip.dart' show frameHistogramProvider;
 import '../imaging_actions.dart';
 import 'simple_plan_panel.dart' show simpleRunProvider;
-import 'simple_device_windows.dart' show SimpleGainSlider, simpleCelsius;
+import 'simple_device_windows.dart'
+    show SimpleGainSlider, simpleCelsius, simpleMountMotionProvider;
 import 'simple_shell.dart'
     show SimplePanel, SimpleSegment, kSimpleRailWidth, kSimpleStatusMaxWidth;
 
@@ -664,6 +665,8 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
         target != null &&
         ccd - target > 0.5;
     _coolStart = cooling ? (_coolStart ?? ccd) : null;
+    // A park or unpark asked for in Simple Mode, until the mount gets there.
+    final parking = ref.watch(simpleMountMotionProvider);
     final planActive = run?.state?.isActive ?? false;
     final exposing = !stopping && p.phase == CapturePhase.exposing;
     final (String? label, String? detail, Color dot) = stopping
@@ -704,6 +707,12 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
                       paused ? 'Plan paused' : 'Plan',
                       step,
                       paused ? AraColors.accentBusy : AraColors.accentInfo,
+                    )
+                  : parking != null
+                  ? (
+                      parking ? 'Parking' : 'Unparking',
+                      null,
+                      AraColors.accentBusy,
                     )
                   : cooling
                   ? (
