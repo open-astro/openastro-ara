@@ -4,6 +4,8 @@ import 'dart:developer' as developer;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'l10n/app_localizations.dart';
+
 import 'app_version.dart';
 import 'screens/app_shell.dart';
 import 'screens/simple/simple_shell.dart';
@@ -80,6 +82,9 @@ class OpenAstroAraApp extends StatelessWidget {
     return MaterialApp(
       title: 'OpenAstro Ara',
       theme: araTheme,
+      // The device's language where Ara has it (lib/l10n), English otherwise.
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
       // The diagonal DEBUG ribbon overlaps top-right app-bar actions (e.g. the
       // first-run Rescan button); it adds nothing for users, so hide it.
       debugShowCheckedModeBanner: false,
