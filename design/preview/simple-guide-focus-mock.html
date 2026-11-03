@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Simple Guide Focus</title>
+<style>
+  /* DESIGN.md tokens (lib/theme/ara_colors.dart + ara_metrics.dart) */
+  :root {
+    --bg: #1A1A1A; --border: #404040; --text: #E0E0E0; --text2: #A0A0A0; --link: #64B5F6;
+    --ok: #4CAF50; --okText: #81C784; --busy: #FFB300; --info: #42A5F5; --err: #EF5350; --sel: #1976D2;
+    --tile: #383838; --warnBg: rgba(255,179,0,.12); --sys: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #0E0E0E; color: var(--text); font: 14px/1.45 var(--sys); }
+  body.night .ipad { filter: sepia(1) saturate(6) hue-rotate(-35deg) brightness(.75); }
+  .page { max-width: 1120px; margin: 0 auto; padding: 32px 16px 80px; }
+  h1 { font-size: 22px; font-weight: 600; margin: 0 0 6px; }
+  h2 { font-size: 16px; font-weight: 600; margin: 28px 0 4px; }
+  p.note { color: var(--text2); margin: 0 0 12px; max-width: 92ch; }
+  .controls { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; margin: 16px 0 14px; }
+  .ctl { display: flex; gap: 8px; align-items: center; }
+  .lbl { color: var(--text2); font-size: 13px; }
+  .seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .seg button { background: transparent; color: var(--text); border: 0; padding: 7px 12px; font: 13px var(--sys); cursor: pointer; }
+  .seg button + button { border-left: 1px solid var(--border); }
+  .seg button[aria-pressed="true"] { background: var(--sel); color: #fff; }
+  .tag { font-size: 11px; letter-spacing: .5px; text-transform: uppercase; padding: 1px 7px; border-radius: 10px; border: 1px solid var(--busy); color: var(--busy); margin-left: 6px; vertical-align: 2px; }
+
+  /* The iPad, landscape: Simple Mode's two rails (DESIGN.md "Simple Mode: Image First", ara-design-preview.html) */
+  .ipad { --in: 16px; --bar: 56px; --rail: 72px; --stop: 60px; --top: calc(2 * var(--in) + var(--bar)); --scrim: rgba(26,26,26,.9);
+          width: 1024px; height: 768px; max-width: 100%; position: relative; border-radius: 18px; overflow: hidden; border: 1px solid #333; background: #050608; font-size: 14px; }
+  .frame { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .p { position: absolute; background: var(--scrim); border-radius: 10px; backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px); }
+  .s-strip { left: var(--in); right: var(--in); top: var(--in); height: var(--bar); display: flex; align-items: center; gap: 14px; padding: 0 8px 0 16px; color: var(--text2); font-size: 13px; }
+  .s-strip .dev { display: inline-flex; align-items: center; gap: 6px; } .s-strip .dev i { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); }
+  .s-strip .grow { flex: 1; } .s-strip .ib { width: 44px; text-align: center; font-size: 18px; color: var(--text); }
+  .s-pill { right: var(--in); top: var(--top); height: 48px; display: flex; align-items: center; gap: 8px; padding: 0 16px; white-space: nowrap; }
+  .s-pill i { width: 10px; height: 10px; border-radius: 50%; background: var(--ok); }
+  .s-col { position: absolute; width: var(--rail); display: flex; align-items: center; }
+  .s-col.l { left: var(--in); top: var(--top); bottom: var(--top); }
+  .s-col.r { right: var(--in); top: var(--top); bottom: calc(2 * var(--in) + var(--stop)); }
+  .s-anchor { position: relative; width: 100%; }
+  .s-rail { position: relative; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 8px 6px; }
+  .s-rb { width: 60px; height: 56px; border-radius: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; color: var(--text2); font-size: 11.5px; text-align: center; }
+  .s-rb b { font-size: 18px; font-weight: 400; color: var(--text); }
+  .s-chip { height: 72px; }
+  .s-mode { width: 60px; height: 48px; display: flex; flex-direction: column; align-items: center; justify-content: center; font-weight: 600; }
+  .s-mode small { color: var(--text2); font-size: 10px; }
+  .s-shut { width: 60px; height: 60px; border-radius: 50%; border: 3px solid var(--text); display: grid; place-items: center; cursor: pointer; }
+  .s-shut .tri { width: 0; height: 0; border-left: 18px solid #fff; border-top: 11px solid transparent; border-bottom: 11px solid transparent; margin-left: 5px; }
+  .s-shut .sq { width: 22px; height: 22px; border-radius: 3px; background: #E53935; }
+  .s-pop { right: calc(100% + var(--in)); top: 0; padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; }
+  .s-pop.narrow { width: 280px; } .s-pop.wide { width: 360px; }
+  .s-stop { position: absolute; right: calc(var(--in) + (var(--rail) - var(--stop)) / 2); bottom: var(--in); width: var(--stop); height: var(--stop); padding: 2px; border: 1px solid #D32F2F; border-radius: 13px; background: #1A1A1A; }
+  .s-stop div { width: 100%; height: 100%; border-radius: 10px; background: #D32F2F; color: #fff; font: 700 12px var(--sys); display: grid; place-items: center; }
+  .f-star { left: calc(2 * var(--in) + var(--rail)); top: calc(var(--top) + 48px + var(--in)); width: 240px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+  .f-star .zoom { height: 180px; border-radius: 8px; background: #050505; overflow: hidden; }
+  .f-star .lb { font-size: 11px; font-weight: 600; letter-spacing: .6px; text-transform: uppercase; color: var(--text2); }
+  .s-bottom { left: calc(2 * var(--in) + var(--rail)); right: calc(2 * var(--in) + var(--rail)); bottom: var(--in); padding: 10px 14px; }
+  .head { font-weight: 600; font-size: 16px; }
+  .head.ok { color: var(--okText); } .head.busy { color: var(--busy); } .head.err { color: var(--err); }
+  .sub { color: var(--text2); font-size: 12px; }
+  .hfr { font-size: 30px; font-weight: 300; font-variant-numeric: tabular-nums; }
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .stat { background: var(--tile); border-radius: 10px; padding: 6px 8px; }
+  .stat .k { font-size: 11px; color: var(--text2); } .stat .v { font-size: 16px; font-variant-numeric: tabular-nums; }
+  .warn { background: var(--warnBg); border-radius: 10px; padding: 8px 10px; font-size: 12.5px; color: #FFE082; display: flex; gap: 8px; }
+  .warn b { color: var(--busy); }
+  .error { color: #EF9A9A; font-size: 12.5px; }
+  .more { color: var(--link); font-size: 13px; cursor: pointer; user-select: none; }
+  .details { font-size: 12px; color: var(--text2); display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; }
+  .details span:nth-child(odd) { color: var(--text2); } .details span:nth-child(even) { color: var(--text); text-align: right; font-variant-numeric: tabular-nums; }
+  svg text { font: 10px var(--sys); fill: var(--text2); }
+  .proposed { outline: 1.5px dashed var(--busy); outline-offset: 3px; border-radius: 10px; }
+  .btnrow { display: flex; gap: 8px; }
+  .btn { flex: 1; height: 44px; border-radius: 10px; border: 0; font: 600 14px var(--sys); cursor: pointer; }
+  .btn.go { background: var(--ok); color: #1A1A1A; } .btn.plain { background: var(--tile); color: var(--text); }
+  .big { font-size: 40px; font-weight: 300; text-align: center; font-variant-numeric: tabular-nums; }
+  .advice { text-align: center; font-weight: 600; font-size: 18px; }
+  .advice.ok { color: var(--okText); } .advice.go { color: var(--info); } .advice.back { color: var(--busy); }
+  .zone { height: 8px; border-radius: 4px; background: var(--tile); position: relative; }
+  .zone .z { position: absolute; left: 44%; width: 12%; top: 0; bottom: 0; background: rgba(76,175,80,.45); border-radius: 4px; }
+  .zone .p { position: absolute; top: -4px; width: 4px; height: 16px; border-radius: 2px; background: #fff; transition: left .3s; }
+  .segs { display: flex; gap: 0; border-radius: 8px; overflow: hidden; background: var(--tile); }
+  .segs span { flex: 1; text-align: center; padding: 8px 0; font-size: 13px; color: var(--text2); }
+  .segs span.on { background: #0D47A1; color: #fff; }
+  .legend { color: var(--text2); font-size: 12px; margin-top: 8px; }
+</style>
+<style>
+  .segrow { display: flex; border-radius: 8px; overflow: hidden; background: var(--tile); }
+  .segrow span { flex: 1; text-align: center; padding: 0 6px; height: 44px; display: grid; place-items: center; font-size: 13px; color: var(--text2); }
+  .segrow span.on { background: var(--sel); color: #fff; }
+  .hint { text-align: center; font-weight: 600; } .hint.ok { color: var(--okText); } .hint.back { color: var(--busy); }
+  .facts { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .btnline { height: 44px; border-radius: 10px; border: 1px solid #555; background: transparent; color: var(--text); font: 600 14px var(--sys); }
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>Simple Focus: the guide camera</h1>
+  <p class="note">Focusing the guide camera in Simple Mode: its own live HFR readout while you turn the guide scope's focuser (or slide the camera in its draw tube; an off-axis guider's helical focuser), with the full UI's turn advice. The guide camera's frames fill the screen behind the panels while it runs, as Manual's Bahtinov crop does. Pick <b>where the choice lives</b>: A, a Main telescope / Guide camera row above Auto / Manual; B, a third segment beside them. Everything is on view; nothing folds away. <span class="tag">proposed</span></p>
+  <div class="controls">
+    <div class="ctl"><span class="lbl">Where the choice lives</span><span class="seg" id="variant"><button data-v="A" aria-pressed="true">A · Main / Guide row</button><button data-v="B">B · Auto / Manual / Guide</button></span></div>
+    <div class="ctl"><span class="lbl">State</span><span class="seg" id="gstate"><button data-v="noguider">Guider not connected</button><button data-v="busy">Guider guiding</button><button data-v="oag">OAG, main not focused</button><button data-v="ready">Ready</button><button data-v="keep" aria-pressed="true">Live · keep going</button><button data-v="back">Live · go back</button><button data-v="focus">Live · in focus</button><button data-v="stopped">Stopped</button></span></div>
+  </div>
+  <div class="controls">
+    <div class="ctl"><span class="lbl">Language</span><span class="seg" id="lang"><button data-v="en" aria-pressed="true">English</button><button data-v="pt">Português</button></span></div>
+    <div class="ctl"><span class="lbl">Night mode</span><span class="seg" id="night"><button data-v="off" aria-pressed="true">Off</button><button data-v="on">On</button></span></div>
+  </div>
+  <div class="ipad" id="ipad">
+    <svg class="frame" id="frame" viewBox="0 0 1024 768" preserveAspectRatio="none"></svg>
+    <div class="p s-strip"><span class="dev"><i></i>Camera</span><span class="dev"><i></i>Mount</span><span class="dev"><i></i>Guider</span><span class="dev"><i></i>Focuser</span><span class="grow"></span><span class="ib">⌕</span><span class="ib">☾</span><span class="ib">⚙</span></div>
+    <div class="p s-pill" id="pill" hidden><i></i><span id="pillText"></span></div>
+        <div class="s-col l"><div class="p s-rail"><div class="s-rb"><b>◍</b>Sky</div><div class="s-rb"><b>ⓘ</b>Info</div><div class="s-rb"><b>▤</b>Library</div></div></div>
+    <div class="s-col r"><div class="s-anchor">
+      <div class="p s-rail"><div class="s-mode">Focus<small>▾</small></div><div class="s-shut" id="shutter"><div class="tri"></div></div><div class="s-rb s-chip"><b>⚟</b><span id="chip">Auto</span></div></div>
+      <div id="ui"></div>
+    </div></div>
+    <div id="bottom"></div>
+    <div class="s-stop"><div>STOP</div></div>
+  </div>
+  <h2>Notes for the decision</h2>
+  <p class="note">• The shutter starts and stops the guide camera's live focus, as it does Smart Focus and the Bahtinov readout.<br>
+  • The readout, the turn advice ("Keep going — same way you just moved, a small move") and the in-focus target come from the full UI's guide-focus card, translated: one source of truth.<br>
+  • Blockers say what to do in the panel: connect the guider, or stop guiding first (the guider owns its camera while it loops or guides). With an off-axis guider the main telescope comes first, with "Already in focus" for someone who focused by hand.<br>
+  • Left out: the full UI's Guiding Assistant button (a full-UI tool).</p>
+</div>
+<script>
+const T = {
+  en: { main: 'Main telescope', guide: 'Guide camera', auto: 'Auto', manual: 'Manual', live: 'Live · HFR 2.31', liveBest: 'Live · HFR 1.62 — in focus', ready: 'Ready to focus', stopped: 'Stopped · best HFR 1.62',
+        noguider: 'Not ready', noguiderSub: 'Connect the guider first — the frames come through it.', busy: 'Not ready', busySub: 'Stop guiding first; the guider owns its camera while it loops or guides.',
+        oag: 'Waiting for the main telescope', oagSub: 'Focus the main telescope first — an off-axis guider sees the same focal plane.', already: 'Already in focus',
+        scope: 'Guide scope · ASI120MM Mini · turn the focuser or slide the camera, in small moves', readySub: 'Point at a star field, then tap the shutter.',
+        hfr: 'HFR', stars: 'Stars', frames: 'Frames', exposure: 'Exposure',
+        keep: 'Keep going', keepSub: 'Same way you just moved — a small move.', back: 'Go back', backSub: 'The other way from your last move — a small move.', inF: 'In focus', inFSub: 'Stars are as tight as this camera resolves (in focus ≤ 1.70 px). Lock the focuser.' },
+  pt: { main: 'Telescópio principal', guide: 'Câmera de guia', auto: 'Auto', manual: 'Manual', live: 'Ao vivo · HFR 2.31', liveBest: 'Ao vivo · HFR 1.62 — em foco', ready: 'Pronto para focar', stopped: 'Parado · melhor HFR 1.62',
+        noguider: 'Não está pronto', noguiderSub: 'Conecte a guiagem primeiro — os quadros vêm por ela.', busy: 'Não está pronto', busySub: 'Pare a guiagem primeiro; ela usa a câmera enquanto faz loop ou guia.',
+        oag: 'Aguardando o telescópio principal', oagSub: 'Foque o telescópio principal primeiro — um guia fora do eixo vê o mesmo plano focal.', already: 'Já está em foco',
+        scope: 'Luneta guia · ASI120MM Mini · gire o focalizador ou deslize a câmera, em movimentos pequenos', readySub: 'Aponte para um campo de estrelas e toque no obturador.',
+        hfr: 'HFR', stars: 'Estrelas', frames: 'Quadros', exposure: 'Exposição',
+        keep: 'Continue', keepSub: 'Mesmo sentido do último movimento — um movimento pequeno.', back: 'Volte', backSub: 'O sentido contrário ao último movimento — um movimento pequeno.', inF: 'Em foco', inFSub: 'As estrelas estão tão finas quanto esta câmera resolve (em foco ≤ 1.70 px). Trave o focalizador.' },
+};
+const S = { variant: 'A', gstate: 'keep', lang: 'en', night: 'off' };
+const t = k => T[S.lang][k];
+function frame() {
+  let s = '<defs><radialGradient id="g"><stop offset="0" stop-color="#fff"/><stop offset=".5" stop-color="#fff8"/><stop offset="1" stop-color="#fff0"/></radialGradient></defs><rect width="1024" height="768" fill="#0b0d12"/>';
+  const liveish = ['keep','back','focus','stopped'].includes(S.gstate);
+  if (liveish) { let seed = 3; const r = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    const size = { keep: 3.2, back: 4, focus: 1.6, stopped: 1.6 }[S.gstate];
+    for (let i = 0; i < 90; i++) s += `<circle cx="${r()*1024}" cy="${70 + r()*690}" r="${size * (.6 + r())}" fill="url(#g)"/>`; }
+  document.getElementById('frame').innerHTML = s;
+}
+function selector() {
+  const g = '<span class="on">' + t('guide') + '</span>';
+  return S.variant === 'A'
+    ? `<div class="segrow proposed"><span>${t('main')}</span>${g}</div>`
+    : `<div class="segrow proposed"><span>${t('auto')}</span><span>${t('manual')}</span>${g}</div>`;
+}
+function panel() {
+  const st = S.gstate;
+  const exp = `<div style="display:flex;align-items:center;gap:12px"><span style="flex:1">${t('exposure')}</span><div class="segrow" style="width:200px"><span>1 s</span><span class="on">2 s</span><span>3 s</span><span>5 s</span></div></div>`;
+  let body;
+  if (st === 'noguider' || st === 'busy') body = `<div class="head">${t(st)}</div><div class="sub">${t(st + 'Sub')}</div>`;
+  else if (st === 'oag') body = `<div class="head">${t('oag')}</div><div class="sub">${t('oagSub')}</div><button class="btnline">${t('already')}</button>`;
+  else if (st === 'ready') body = `<div class="head">${t('ready')}</div><div class="sub">${t('scope')}</div><div class="sub">${t('readySub')}</div>${exp}`;
+  else {
+    const hfr = { keep: '2.31', back: '2.74', focus: '1.62', stopped: '1.62' }[st];
+    const head = st === 'stopped' ? t('stopped') : st === 'focus' ? t('liveBest') : t('live').replace('2.31', hfr);
+    const [h, cls, sub] = { keep: [t('keep'), '', t('keepSub')], back: [t('back'), 'back', t('backSub')], focus: [t('inF'), 'ok', t('inFSub')], stopped: [null] }[st];
+    body = `<div class="head ${st === 'focus' || st === 'stopped' ? 'ok' : ''}">${head}</div><div class="sub">${t('scope')}</div>
+      <div class="facts"><div class="stat"><div class="k">${t('stars')}</div><div class="v">48</div></div><div class="stat"><div class="k">${t('frames')}</div><div class="v">37</div></div></div>`
+      + (h ? `<div class="hint ${cls}">${h}</div><div class="sub" style="text-align:center">${sub}</div>` : '') + exp;
+  }
+  return `<div class="p s-pop wide">${selector()}${body}</div>`;
+}
+function render() {
+  document.body.classList.toggle('night', S.night === 'on');
+  const live = ['keep','back','focus'].includes(S.gstate);
+  document.getElementById('chip').textContent = 'Guide';
+  document.getElementById('shutter').innerHTML = live ? '<div class="sq"></div>' : '<div class="tri"></div>';
+  document.getElementById('pill').hidden = !live;
+  document.getElementById('pillText').textContent = S.lang === 'pt' ? 'Câmera de guia · ao vivo' : 'Guide camera · live';
+  document.getElementById('bottom').innerHTML = '';
+  document.getElementById('ui').innerHTML = panel();
+  frame();
+}
+function sync(id) { document.querySelectorAll(`#${id} button`).forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === S[id]))); }
+for (const id of ['variant','gstate','lang','night'])
+  document.querySelectorAll(`#${id} button`).forEach(b => b.onclick = () => { S[id] = b.dataset.v; sync(id); render(); });
+render();
+</script>
+</body>
+</html>
