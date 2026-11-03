@@ -63,15 +63,6 @@ public partial class Program {
         }
     }
 
-    /// <summary>
-    /// Everything <see cref="Main"/> does before <c>app.Run()</c>: the §8.1 service graph, the
-    /// middleware and endpoint maps, the startup reconciliation and the boot probes. Split out
-    /// (#1128) so a test can build the REAL composition root — the one the daemon boots with — and
-    /// resolve from it without listening on a port: #1089 found <c>IGuiderMediator</c> had silently
-    /// reverted to the headless stub because nothing ever built this graph outside <c>Main</c>.
-    /// Kestrel binds only in <c>Run</c>, so building is side-effect-free on the network; the profile
-    /// directory (<c>OPENASTROARA_PROFILE_DIR</c>) is created and the catalog opened, as at boot.
-    /// </summary>
     // The profile's site follows into the mount, on connect and on every profile change (the
     // profile is its one source of truth).
     private static TelescopeService FollowSite(IServiceProvider sp, TelescopeService mount) {
@@ -81,6 +72,15 @@ public partial class Program {
         return mount;
     }
 
+    /// <summary>
+    /// Everything <see cref="Main"/> does before <c>app.Run()</c>: the §8.1 service graph, the
+    /// middleware and endpoint maps, the startup reconciliation and the boot probes. Split out
+    /// (#1128) so a test can build the REAL composition root — the one the daemon boots with — and
+    /// resolve from it without listening on a port: #1089 found <c>IGuiderMediator</c> had silently
+    /// reverted to the headless stub because nothing ever built this graph outside <c>Main</c>.
+    /// Kestrel binds only in <c>Run</c>, so building is side-effect-free on the network; the profile
+    /// directory (<c>OPENASTROARA_PROFILE_DIR</c>) is created and the catalog opened, as at boot.
+    /// </summary>
     internal static WebApplication BuildApp(string[] args) {
         var builder = WebApplication.CreateSlimBuilder(new WebApplicationOptions {
             Args = args,
