@@ -392,10 +392,10 @@ abstract class AppLocalizations {
   /// **'Never'**
   String get deviceNever;
 
-  /// Focuser window row: refocus after the temperature drifts this much
+  /// Focuser window row: refocus every time the temperature changes by this much (the value reads e.g. "2 °C", or "Never")
   ///
   /// In en, this message translates to:
-  /// **'Refocus temp'**
+  /// **'Refocus every'**
   String get deviceRefocusTemp;
 
   /// Focuser window row: the focuser's position in steps

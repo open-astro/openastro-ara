@@ -211,9 +211,9 @@
   "@deviceNever": {
     "description": "Focuser window, Refocus temp row: never refocus on temperature"
   },
-  "deviceRefocusTemp": "Refocus temp",
+  "deviceRefocusTemp": "Refocus every",
   "@deviceRefocusTemp": {
-    "description": "Focuser window row: refocus after the temperature drifts this much"
+    "description": "Focuser window row: refocus every time the temperature changes by this much (the value reads e.g. \"2 °C\", or \"Never\")"
   },
   "devicePosition": "Position",
   "@devicePosition": {

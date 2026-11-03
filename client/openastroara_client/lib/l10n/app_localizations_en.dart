@@ -171,7 +171,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get deviceNever => 'Never';
 
   @override
-  String get deviceRefocusTemp => 'Refocus temp';
+  String get deviceRefocusTemp => 'Refocus every';
 
   @override
   String get devicePosition => 'Position';

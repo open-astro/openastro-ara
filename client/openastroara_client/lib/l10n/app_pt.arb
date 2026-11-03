@@ -49,7 +49,7 @@
   "deviceCouldntMoveFocuser": "Não foi possível mover o focalizador",
   "deviceCouldntSaveThat": "Não foi possível salvar",
   "deviceNever": "Nunca",
-  "deviceRefocusTemp": "Refocar por temp.",
+  "deviceRefocusTemp": "Refocar a cada",
   "devicePosition": "Posição",
   "deviceTemperature": "Temperatura",
   "deviceMoving": "Movendo…",

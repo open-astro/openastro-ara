@@ -171,9 +171,9 @@ void main() {
     expect(turn(), isNot(closeTo(0, 1e-3)), reason: 'the face kept the turn');
   });
 
-  testWidgets('Refocus temp is a slider, 0-10 °C in whole degrees, Never at 0, kept in the profile', (tester) async {
+  testWidgets('Refocus every is a slider, 0-10 °C in whole degrees, Never at 0, kept in the profile', (tester) async {
     await _pump(tester, _wire());
-    expect(find.text('Refocus temp'), findsOneWidget);
+    expect(find.text('Refocus every'), findsOneWidget);
     expect(find.text('2 °C'), findsOneWidget, reason: "the profile's default");
     final slider = tester.widget<Slider>(find.byKey(const Key('simple-focuser-refocus')));
     expect((slider.min, slider.max, slider.divisions, slider.value), (0.0, 10.0, 10, 2.0));
@@ -202,7 +202,7 @@ void main() {
       addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
       // The window's inner width: 360 pt grown with the text, less its padding.
       await _pump(tester, _wire(), width: 360 * (scale / 1.1).clamp(1, 2) - 32, font: 'Roboto');
-      for (final label in ['Position', 'Temperature', 'Step', 'Refocus temp', 'Autofocus']) {
+      for (final label in ['Position', 'Temperature', 'Step', 'Refocus every', 'Autofocus']) {
         final p = tester.renderObject<RenderParagraph>(find.text(label));
         expect(p.size.height, lessThan(14 * scale * 2), reason: '$label wraps');
       }

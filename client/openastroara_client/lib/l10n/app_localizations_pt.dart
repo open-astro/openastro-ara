@@ -172,7 +172,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get deviceNever => 'Nunca';
 
   @override
-  String get deviceRefocusTemp => 'Refocar por temp.';
+  String get deviceRefocusTemp => 'Refocar a cada';
 
   @override
   String get devicePosition => 'Posição';
