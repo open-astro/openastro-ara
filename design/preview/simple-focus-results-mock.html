@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Simple Focus Results</title>
+<style>
+  /* DESIGN.md tokens (lib/theme/ara_colors.dart + ara_metrics.dart) */
+  :root {
+    --bg: #1A1A1A; --border: #404040; --text: #E0E0E0; --text2: #A0A0A0; --link: #64B5F6;
+    --ok: #4CAF50; --okText: #81C784; --busy: #FFB300; --info: #42A5F5; --err: #EF5350; --sel: #1976D2;
+    --tile: #383838; --warnBg: rgba(255,179,0,.12); --sys: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #0E0E0E; color: var(--text); font: 14px/1.45 var(--sys); }
+  body.night .ipad { filter: sepia(1) saturate(6) hue-rotate(-35deg) brightness(.75); }
+  .page { max-width: 1120px; margin: 0 auto; padding: 32px 16px 80px; }
+  h1 { font-size: 22px; font-weight: 600; margin: 0 0 6px; }
+  h2 { font-size: 16px; font-weight: 600; margin: 28px 0 4px; }
+  p.note { color: var(--text2); margin: 0 0 12px; max-width: 92ch; }
+  .controls { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; margin: 16px 0 14px; }
+  .ctl { display: flex; gap: 8px; align-items: center; }
+  .lbl { color: var(--text2); font-size: 13px; }
+  .seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .seg button { background: transparent; color: var(--text); border: 0; padding: 7px 12px; font: 13px var(--sys); cursor: pointer; }
+  .seg button + button { border-left: 1px solid var(--border); }
+  .seg button[aria-pressed="true"] { background: var(--sel); color: #fff; }
+  .tag { font-size: 11px; letter-spacing: .5px; text-transform: uppercase; padding: 1px 7px; border-radius: 10px; border: 1px solid var(--busy); color: var(--busy); margin-left: 6px; vertical-align: 2px; }
+
+  /* The iPad, landscape */
+  .ipad { width: 1024px; height: 768px; max-width: 100%; position: relative; border-radius: 18px; overflow: hidden; border: 1px solid #333; background: #050608; }
+  .frame { position: absolute; inset: 0; }
+  .strip { position: absolute; left: 16px; right: 16px; top: 16px; height: 52px; background: rgba(26,26,26,.9); border-radius: 10px; display: flex; align-items: center; gap: 16px; padding: 0 14px; font-size: 13px; color: var(--text2); z-index: 3; }
+  .strip i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--ok); margin-right: 6px; }
+  .rail { position: absolute; top: 84px; width: 72px; background: rgba(26,26,26,.9); border-radius: 12px; padding: 8px 6px; display: flex; flex-direction: column; gap: 6px; z-index: 3; }
+  .rail.left { left: 16px; } .rail.right { right: 16px; align-items: center; }
+  .rail .m { height: 52px; border-radius: 10px; display: grid; place-items: center; font-size: 11px; color: var(--text2); text-align: center; }
+  .rail .m.on { background: rgba(66,165,245,.16); color: var(--info); }
+  .chip { width: 60px; border-radius: 10px; background: var(--tile); font-size: 11px; text-align: center; padding: 6px 2px; color: var(--text); }
+  .shutter { width: 60px; height: 60px; border-radius: 50%; border: 3px solid #fff; display: grid; place-items: center; cursor: pointer; }
+  .shutter .tri { width: 0; height: 0; border-left: 18px solid #fff; border-top: 11px solid transparent; border-bottom: 11px solid transparent; margin-left: 5px; }
+  .shutter .sq { width: 20px; height: 20px; border-radius: 4px; background: #D32F2F; }
+
+  .panel { position: absolute; left: 104px; top: 84px; background: rgba(26,26,26,.9); backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px); border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 8px; z-index: 3; }
+  .panel.narrow { width: 280px; } .panel.wide { width: 360px; }
+  .bottom { position: absolute; left: 104px; right: 104px; bottom: 16px; background: rgba(26,26,26,.9); backdrop-filter: blur(5px); border-radius: 14px; padding: 12px 16px; display: flex; gap: 16px; align-items: stretch; z-index: 3; }
+  .head { font-weight: 600; font-size: 16px; }
+  .head.ok { color: var(--okText); } .head.busy { color: var(--busy); } .head.err { color: var(--err); }
+  .sub { color: var(--text2); font-size: 12px; }
+  .hfr { font-size: 30px; font-weight: 300; font-variant-numeric: tabular-nums; }
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .stat { background: var(--tile); border-radius: 10px; padding: 6px 8px; }
+  .stat .k { font-size: 11px; color: var(--text2); } .stat .v { font-size: 16px; font-variant-numeric: tabular-nums; }
+  .warn { background: var(--warnBg); border-radius: 10px; padding: 8px 10px; font-size: 12.5px; color: #FFE082; display: flex; gap: 8px; }
+  .warn b { color: var(--busy); }
+  .error { color: #EF9A9A; font-size: 12.5px; }
+  .more { color: var(--link); font-size: 13px; cursor: pointer; user-select: none; }
+  .details { font-size: 12px; color: var(--text2); display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; }
+  .details span:nth-child(odd) { color: var(--text2); } .details span:nth-child(even) { color: var(--text); text-align: right; font-variant-numeric: tabular-nums; }
+  svg text { font: 10px var(--sys); fill: var(--text2); }
+  .proposed { outline: 1.5px dashed var(--busy); outline-offset: 3px; border-radius: 10px; }
+  .btnrow { display: flex; gap: 8px; }
+  .btn { flex: 1; height: 44px; border-radius: 10px; border: 0; font: 600 14px var(--sys); cursor: pointer; }
+  .btn.go { background: var(--ok); color: #1A1A1A; } .btn.plain { background: var(--tile); color: var(--text); }
+  .big { font-size: 40px; font-weight: 300; text-align: center; font-variant-numeric: tabular-nums; }
+  .advice { text-align: center; font-weight: 600; font-size: 18px; }
+  .advice.ok { color: var(--okText); } .advice.go { color: var(--info); } .advice.back { color: var(--busy); }
+  .zone { height: 8px; border-radius: 4px; background: var(--tile); position: relative; }
+  .zone .z { position: absolute; left: 44%; width: 12%; top: 0; bottom: 0; background: rgba(76,175,80,.45); border-radius: 4px; }
+  .zone .p { position: absolute; top: -4px; width: 4px; height: 16px; border-radius: 2px; background: #fff; transition: left .3s; }
+  .segs { display: flex; gap: 0; border-radius: 8px; overflow: hidden; background: var(--tile); }
+  .segs span { flex: 1; text-align: center; padding: 8px 0; font-size: 13px; color: var(--text2); }
+  .segs span.on { background: #0D47A1; color: #fff; }
+  .legend { color: var(--text2); font-size: 12px; margin-top: 8px; }
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>Simple Focus: Smart Focus result and the Bahtinov helper</h1>
+  <p class="note">One Focus panel, two methods (the chip on the right rail: Auto / Manual). Auto shows the Smart Focus result the full UI shows (headline, HFR, stats, the V-curve, the weak-fit warning, details); Manual is the Bahtinov mask helper, with the mask-off question asked inside the panel (Simple Mode has no popups). Pick a <b>result layout</b> for Auto: A grows the panel on the left, B puts the curve along the bottom. Parts tagged <span class="tag">proposed</span> are new to Simple Mode.</p>
+
+  <div class="controls">
+    <div class="ctl"><span class="lbl">Method</span><span class="seg" id="method"><button data-v="auto" aria-pressed="true">Auto (Smart Focus)</button><button data-v="manual">Manual (Bahtinov)</button></span></div>
+    <div class="ctl" id="autoStates"><span class="lbl">State</span><span class="seg" id="astate"><button data-v="running">Running</button><button data-v="good" aria-pressed="true">In focus</button><button data-v="weak">Weak fit</button><button data-v="failed">Failed</button></span></div>
+    <div class="ctl" id="manStates" hidden><span class="lbl">State</span><span class="seg" id="mstate"><button data-v="fit">Fit the mask</button><button data-v="keep" aria-pressed="true">Keep going</button><button data-v="back">Go back</button><button data-v="focus">In focus</button><button data-v="maskoff">Finish → mask off?</button><button data-v="done">Done</button></span></div>
+  </div>
+  <div class="controls">
+    <div class="ctl" id="layoutCtl"><span class="lbl">Result layout</span><span class="seg" id="layout"><button data-v="A" aria-pressed="true">A · panel</button><button data-v="B">B · bottom curve</button></span></div>
+    <div class="ctl"><span class="lbl">Stars circled on the frame</span><span class="seg" id="circles"><button data-v="on" aria-pressed="true">On</button><button data-v="off">Off</button></span></div>
+    <div class="ctl"><span class="lbl">Language</span><span class="seg" id="lang"><button data-v="en" aria-pressed="true">English</button><button data-v="pt">Português</button></span></div>
+    <div class="ctl"><span class="lbl">Night mode</span><span class="seg" id="night"><button data-v="off" aria-pressed="true">Off</button><button data-v="on">On</button></span></div>
+  </div>
+
+  <div class="ipad" id="ipad">
+    <svg class="frame" id="frame" viewBox="0 0 1024 768" preserveAspectRatio="none"></svg>
+    <div class="strip"><span><i></i>Camera</span><span><i></i>Mount</span><span><i></i>Focuser</span><span><i></i>Guider</span><span style="margin-left:auto">⌕ &nbsp; ☾ &nbsp; ⚙</span></div>
+    <div class="rail left"><div class="m">Auto</div><div class="m">Preview</div><div class="m on">Focus</div><div class="m">P.A.</div><div class="m">Plan</div></div>
+    <div class="rail right"><div class="chip" id="chip">Auto</div><div class="shutter" id="shutter"><div class="tri"></div></div></div>
+    <div id="ui"></div>
+  </div>
+  <p class="legend">Behind the panels is the frame Simple Mode already shows full screen. With "stars circled" on, the stars the focus run measured are ringed on that frame (green: kept, grey: dropped) instead of a second thumbnail, like the full UI's FOCUSED image.</p>
+
+  <h2>Notes for the decision</h2>
+  <p class="note">• Everything Auto shows comes from the same pure helpers the full UI uses (headline, weak-fit text, step size text, the V-curve chart), already translated: one source of truth.<br>
+  • <b>Guide camera focus</b> (the full UI's second tab) is left out of Simple Mode: it's a once-per-setup task, not a nightly one (4×90 rule). Say if you want it.<br>
+  • Manual's turn advice (Make a move / Keep going / Go back / In focus) and the px readout are the full UI's Bahtinov card logic; Finish asks for the mask to come off inside the panel, and Simple Mode won't start a frame or a plan with the mask still marked on.<br>
+  • The shutter is Start/Stop in both methods, as today.</p>
+</div>
+
+<script>
+const T = {
+  en: { infocus: 'In focus · HFR 1.01', running: 'Smart Focus — shot 2 of 5', failed: 'Autofocus failed', focuserLine: 'Focuser at 29463 · 26.8 °C · ZWO EAF',
+        hfr: 'HFR', best: 'Best position', stars: 'Stars', r2: 'Fit R²',
+        weak: 'The curve fit was weak (R² 0.55) — passing cloud, a slew during the sweep, or probes that straddle the V unevenly. The focus comes from the measured frame; run again if the sky has settled.',
+        failText: 'No stars found in the frame. The focuser is back at 29463.', details: 'Details', hide: 'Hide details',
+        took: 'Took', step: 'Step size', method: 'Method', temp: 'Temperature',
+        fitMask: 'Fit the mask, then Start', fitMaskSub: 'Put the Bahtinov mask over the front of the telescope and point at a bright star.',
+        keep: 'Keep going', keepSub: 'Same way — about half your last move again.', back: 'Go back', backSub: 'You passed focus. Turn back about a third of your last move.',
+        inF: 'In focus', inFSub: 'The middle spike is centred. Lock the focuser, then Finish.', finish: 'Finish',
+        maskQ: 'Take the Bahtinov mask off', maskSub: 'Left on, it puts spikes on every star and costs light.', notYet: 'Not yet', removed: 'Mask removed',
+        doneH: 'In focus · mask off', doneSub: 'Focused with the Bahtinov mask. Lock the focuser.', exposure: 'Exposure', from: 'px from focus' },
+  pt: { infocus: 'Em foco · HFR 1.01', running: 'Foco inteligente — foto 2 de 5', failed: 'Falha no foco automático', focuserLine: 'Focalizador em 29463 · 26.8 °C · ZWO EAF',
+        hfr: 'HFR', best: 'Melhor posição', stars: 'Estrelas', r2: 'R² do ajuste',
+        weak: 'O ajuste da curva foi fraco (R² 0.55) — nuvem passando, um movimento durante a varredura ou sondas desiguais dos dois lados do V. O foco vem do quadro medido; rode de novo se o céu estabilizou.',
+        failText: 'Nenhuma estrela no quadro. O focalizador voltou para 29463.', details: 'Detalhes', hide: 'Ocultar detalhes',
+        took: 'Duração', step: 'Passo', method: 'Método', temp: 'Temperatura',
+        fitMask: 'Coloque a máscara e toque em Iniciar', fitMaskSub: 'Coloque a máscara de Bahtinov na frente do telescópio e aponte para uma estrela brilhante.',
+        keep: 'Continue', keepSub: 'Mesmo sentido — cerca de metade do último movimento.', back: 'Volte', backSub: 'Passou do foco. Volte cerca de um terço do último movimento.',
+        inF: 'Em foco', inFSub: 'A espícula do meio está centrada. Trave o focalizador e toque em Concluir.', finish: 'Concluir',
+        maskQ: 'Tire a máscara de Bahtinov', maskSub: 'Se ficar, ela põe espículas em todas as estrelas e rouba luz.', notYet: 'Ainda não', removed: 'Máscara retirada',
+        doneH: 'Em foco · sem máscara', doneSub: 'Focado com a máscara de Bahtinov. Trave o focalizador.', exposure: 'Exposição', from: 'px do foco' },
+};
+const S = { method: 'auto', astate: 'good', mstate: 'keep', layout: 'A', circles: 'on', lang: 'en', night: 'off', details: false };
+const t = k => T[S.lang][k];
+
+// The probes from the full UI screenshot: (position, HFR, kept).
+const P = [[29110,4.2,1],[29110,11.7,0],[29160,3.4,1],[29210,4.2,1],[29260,3.6,1],[29310,2.8,1],[29360,1.6,1],[29410,1.4,1],[29463,1.6,1],[29463,5.6,0],[29510,2.6,1],[29560,3.7,1],[29610,3.3,1],[29660,3.0,1],[29710,4.8,1],[29760,4.7,1],[29810,2.8,1],[29810,10.4,0]];
+
+function curve(w, h, running) {
+  const x0 = 29078, x1 = 29862, y1 = running ? 8 : 13;
+  const X = x => 28 + (x - x0) / (x1 - x0) * (w - 36), Y = y => h - 18 - y / y1 * (h - 26);
+  const pts = running ? P.slice(0, 2) : P;
+  let s = `<svg width="${w}" height="${h}" role="img" aria-label="V-curve: HFR against focuser position">`;
+  s += `<line x1="28" y1="${h-18}" x2="${w-8}" y2="${h-18}" stroke="#404040"/><line x1="28" y1="6" x2="28" y2="${h-18}" stroke="#404040"/>`;
+  if (!running) {
+    let d = ''; for (let x = 29110; x <= 29810; x += 10) { const y = 1.75 + Math.pow((x - 29463) / 360, 2) * 2.3; d += (d ? 'L' : 'M') + X(x).toFixed(1) + ' ' + Y(y).toFixed(1); }
+    s += `<path d="${d}" fill="none" stroke="#42A5F5" stroke-width="2"/>`;
+    s += `<line x1="${X(29463)}" y1="6" x2="${X(29463)}" y2="${h-18}" stroke="#4CAF50"/><text x="${X(29463)+4}" y="14" style="fill:#42A5F5">29463</text>`;
+  }
+  for (const [x, y, k] of pts) s += `<circle cx="${X(x)}" cy="${Y(y)}" r="3.5" fill="${k ? '#fff' : '#777'}"/>`;
+  s += `<text x="28" y="${h-4}">29078</text><text x="${w-38}" y="${h-4}">29862</text><text x="2" y="12">HFR</text></svg>`;
+  return s;
+}
+
+function frame() {
+  // A deterministic star field; rings only for the focus run's stars.
+  let s = '<defs><radialGradient id="g"><stop offset="0" stop-color="#fff"/><stop offset=".5" stop-color="#fff8"/><stop offset="1" stop-color="#fff0"/></radialGradient></defs><rect width="1024" height="768" fill="#0b0d12"/>';
+  let seed = 7; const r = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const manual = S.method === 'manual';
+  for (let i = 0; i < 260; i++) {
+    const x = r() * 1024, y = 70 + r() * 690, m = .6 + r() * 1.8;
+    s += `<circle cx="${x}" cy="${y}" r="${m}" fill="url(#g)"/>`;
+    if (!manual && S.circles === 'on' && S.astate !== 'running' && S.astate !== 'failed' && i % 2 === 0)
+      s += `<circle cx="${x}" cy="${y}" r="7" fill="none" stroke="${i % 23 === 0 ? '#888' : '#66BB6A'}" stroke-width="1.2"/>`;
+  }
+  if (manual) {
+    // The bright star with Bahtinov spikes, the middle spike offset by state.
+    const off = { fit: 0, keep: 9, back: -6, focus: .5, maskoff: .5, done: 0 }[S.mstate];
+    const cx = 640, cy = 400;
+    s += `<circle cx="${cx}" cy="${cy}" r="10" fill="url(#g)"/>`;
+    if (S.mstate !== 'fit' && S.mstate !== 'done') {
+      s += `<line x1="${cx-140}" y1="${cy-50}" x2="${cx+140}" y2="${cy+50}" stroke="#fff6" stroke-width="2"/><line x1="${cx-140}" y1="${cy+50}" x2="${cx+140}" y2="${cy-50}" stroke="#fff6" stroke-width="2"/>`;
+      s += `<line x1="${cx-150}" y1="${cy+off}" x2="${cx+150}" y2="${cy+off}" stroke="#fff9" stroke-width="2"/>`;
+    }
+  }
+  document.getElementById('frame').innerHTML = s;
+}
+
+function autoPanel() {
+  const st = S.astate, running = st === 'running', failed = st === 'failed', weak = st === 'weak';
+  const head = running ? `<div class="head busy">${t('running')}</div>` : failed ? `<div class="head err">${t('failed')}</div>` : `<div class="head ok">${t('infocus')}</div>`;
+  const sub = `<div class="sub">${t('focuserLine')}</div>`;
+  const stats = running || failed ? '' : `<div class="stats proposed"><div class="stat"><div class="k">${t('best')}</div><div class="v">29463</div></div><div class="stat"><div class="k">${t('stars')}</div><div class="v">299</div></div><div class="stat"><div class="k">${t('r2')}</div><div class="v" style="color:${weak ? 'var(--busy)' : 'inherit'}">${weak ? '0.554' : '0.97'}</div></div></div>`;
+  const warn = weak ? `<div class="warn proposed"><b>⚠</b><span>${t('weak')}</span></div>` : '';
+  const err = failed ? `<div class="error">${t('failText')}</div>` : '';
+  const det = running || failed ? '' : `<div class="more proposed" id="more">${S.details ? t('hide') : t('details')} ▾</div>` + (S.details ? `<div class="details"><span>${t('method')}</span><span>Smart Focus · 3 shots</span><span>${t('took')}</span><span>1 min 48 s</span><span>${t('step')}</span><span>50 · auto, from the last V-curve</span><span>${t('temp')}</span><span>26.8 °C</span></div>` : '');
+  const hfr = failed ? '' : `<div class="hfr">${t('hfr')} ${running ? '3.40' : '1.01'}</div>`;
+  if (S.layout === 'A' || running || failed) {
+    return `<div class="panel wide">${head}${sub}${hfr}${stats}<div class="${running ? '' : 'proposed'}">${curve(328, running ? 110 : 170, running)}</div>${warn}${err}${det}</div>`;
+  }
+  return `<div class="panel narrow">${head}${sub}${hfr}${stats}${warn}${det}</div><div class="bottom proposed"><div style="flex:1">${curve(780, 150, false)}</div></div>`;
+}
+
+function manualPanel() {
+  const st = S.mstate;
+  const exp = `<div class="sub">${t('exposure')}</div><div class="segs"><span>1 s</span><span class="on">2 s</span><span>5 s</span></div>`;
+  if (st === 'fit') return `<div class="panel narrow"><div class="head">${t('fitMask')}</div><div class="sub">${t('fitMaskSub')}</div>${exp}</div>`;
+  if (st === 'maskoff') return `<div class="panel narrow proposed"><div class="head">${t('maskQ')}</div><div class="sub">${t('maskSub')}</div><div class="btnrow"><button class="btn plain">${t('notYet')}</button><button class="btn go">${t('removed')}</button></div></div>`;
+  if (st === 'done') return `<div class="panel narrow"><div class="head ok">${t('doneH')}</div><div class="sub">${t('doneSub')}</div></div>`;
+  const px = { keep: '+3.2', back: '−2.1', focus: '0.2' }[st];
+  const pos = { keep: 78, back: 26, focus: 49.5 }[st];
+  const [adv, cls, sub] = { keep: [t('keep'), 'go', t('keepSub')], back: [t('back'), 'back', t('backSub')], focus: [t('inF'), 'ok', t('inFSub')] }[st];
+  const fin = st === 'focus' ? `<button class="btn go" id="finish">${t('finish')}</button>` : '';
+  return `<div class="panel narrow"><div class="head ${st === 'focus' ? 'ok' : ''}">${st === 'focus' ? t('inF') + ' · 0.2 px' : 'Bahtinov'}</div><div class="sub">Focuser at 29463 · ZWO EAF</div>
+    <div class="big">${px} <span style="font-size:14px;color:var(--text2)">${t('from')}</span></div>
+    <div class="zone proposed" aria-hidden="true"><div class="z"></div><div class="p" style="left:${pos}%"></div></div>
+    <div class="advice ${cls}">${adv}</div><div class="sub" style="text-align:center">${sub}</div>${exp}${fin}</div>`;
+}
+
+function render() {
+  document.body.classList.toggle('night', S.night === 'on');
+  document.getElementById('autoStates').hidden = S.method !== 'auto';
+  document.getElementById('manStates').hidden = S.method !== 'manual';
+  document.getElementById('layoutCtl').style.opacity = S.method === 'auto' ? 1 : .4;
+  document.getElementById('chip').textContent = S.method === 'auto' ? 'Auto' : 'Manual';
+  const live = (S.method === 'auto' && S.astate === 'running') || (S.method === 'manual' && ['keep','back','focus'].includes(S.mstate));
+  document.getElementById('shutter').innerHTML = live ? '<div class="sq"></div>' : '<div class="tri"></div>';
+  document.getElementById('ui').innerHTML = S.method === 'auto' ? autoPanel() : manualPanel();
+  frame();
+  const more = document.getElementById('more'); if (more) more.onclick = () => { S.details = !S.details; render(); };
+  const fin = document.getElementById('finish'); if (fin) fin.onclick = () => { S.mstate = 'maskoff'; sync('mstate'); render(); };
+  document.querySelectorAll('.btnrow .btn').forEach(b => b.onclick = () => { S.mstate = b.classList.contains('go') ? 'done' : 'focus'; sync('mstate'); render(); });
+}
+function sync(id) { document.querySelectorAll(`#${id} button`).forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === S[id]))); }
+for (const id of ['method','astate','mstate','layout','circles','lang','night'])
+  document.querySelectorAll(`#${id} button`).forEach(b => b.onclick = () => { S[id] = b.dataset.v; sync(id); render(); });
+render();
+</script>
+</body>
+</html>
