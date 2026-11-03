@@ -693,13 +693,17 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                         ),
                         // The planetarium takes taps itself, so while a
                         // window is open a layer over the background closes
-                        // them all instead.
+                        // them all instead. It paints (1/255, unseen): on
+                        // macOS a click reaches the native sky view unless
+                        // Flutter has drawn over that spot (iOS asks Flutter
+                        // first either way).
                         if (_anyOpen)
                           Positioned.fill(
                             child: GestureDetector(
                               key: const Key('simple-background-close'),
                               behavior: HitTestBehavior.opaque,
                               onTap: () => _tapImage(!showSky),
+                              child: const ColoredBox(color: Color(0x01000000)),
                             ),
                           ),
                         if (!hasFrame)
