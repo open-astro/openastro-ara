@@ -59,11 +59,17 @@ public sealed class PolarAlignFrameSolver : IPolarAlignFrameSolver {
     private readonly IProfileService _profileService;
     private readonly IProfileStore _store;
     private readonly IPlateSolverFactory _solverFactory;
+    private readonly Func<CancellationToken, Task<(double PixelSizeUm, double PixelScaleArcsec)?>>? _guiderOptics;
 
-    public PolarAlignFrameSolver(IProfileService profileService, IProfileStore store, IPlateSolverFactory solverFactory) {
+    /// <param name="guiderOptics">The connected guider's camera pixel size (its Alpaca driver, through the
+    /// guider) and its working pixel scale, for a profile that leaves the guide optics unset; null when the
+    /// guider can't say.</param>
+    public PolarAlignFrameSolver(IProfileService profileService, IProfileStore store, IPlateSolverFactory solverFactory,
+            Func<CancellationToken, Task<(double PixelSizeUm, double PixelScaleArcsec)?>>? guiderOptics = null) {
         _profileService = profileService;
         _store = store;
         _solverFactory = solverFactory;
+        _guiderOptics = guiderOptics;
     }
 
     public async Task<PolarAlignSolveOutcome> SolveAsync(
@@ -83,6 +89,17 @@ public sealed class PolarAlignFrameSolver : IPolarAlignFrameSolver {
         var phd2 = _store.GetPhd2Settings();
         double focalLength = phd2.GuideFocalLength;
         double pixelSize = phd2.GuidePixelSize;
+        // Unset in the profile: read them, as the main camera's are read, from the guider's camera
+        // (AlpacaBridge) and the guider's own pixel scale, which fixes the focal length.
+        if ((!(focalLength > 0) || !(pixelSize > 0)) && _guiderOptics is not null
+            && await _guiderOptics(ct).ConfigureAwait(false) is { } optics) {
+            if (!(pixelSize > 0)) {
+                pixelSize = optics.PixelSizeUm;
+            }
+            if (!(focalLength > 0) && pixelSize > 0 && optics.PixelScaleArcsec > 0) {
+                focalLength = 206.265 * pixelSize / optics.PixelScaleArcsec;
+            }
+        }
         if (!(focalLength > 0) || !(pixelSize > 0)) {
             throw new PlateSolverConfigurationException(
                 $"Cannot polar-align: the guide focal length ({focalLength}) and guide-camera pixel size ({pixelSize}) " +

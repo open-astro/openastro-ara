@@ -80,6 +80,46 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task On_connect_unset_guide_optics_are_read_and_kept_in_the_profile() {
+            // The rig: the profile leaves the guide focal length and pixel size at 0; the guider's camera
+            // reports 3.75 µm over AlpacaBridge and the guider works at 1.5″/px here, so the guide scope is
+            // 206.265 × 3.75 / 1.5 = 515.66 mm, kept as 516 (whole mm, as the profile holds it). Both are kept in the profile, which polar alignment reads.
+            var store = new InMemoryProfileStore();
+            using var profiles = new StoreBackedProfileService(store);
+            var (fake, svc) = await ConnectedAsync(f => {
+                f.OnRpc("get_current_equipment", _ => new JsonObject {
+                    ["camera"] = new JsonObject { ["name"] = "Alpaca Camera [127.0.0.1:6800/0] - ZWO ASI120MM Mini (ZWO ASI Camera Driver)", ["connected"] = true },
+                });
+                f.OnRpc("get_alpaca_camera_pixelsize", _ => new JsonObject { ["pixel_size"] = 3.75 });
+            }, store, profiles).ConfigureAwait(false);
+            await using var _ = fake;
+            using var __ = svc;
+            Assert.That(await WaitUntilAsync(() => store.GetPhd2Settings().GuideFocalLength > 0).ConfigureAwait(false), Is.True,
+                "the optics were kept");
+            var phd2 = store.GetPhd2Settings();
+            Assert.That(phd2.GuidePixelSize, Is.EqualTo(3.75).Within(1e-9));
+            Assert.That(phd2.GuideFocalLength, Is.EqualTo(516));
+        }
+
+        [Test]
+        public async Task Guide_optics_already_in_the_profile_are_left_as_they_are() {
+            var store = new InMemoryProfileStore();
+            store.PutPhd2Settings(store.GetPhd2Settings() with { GuideFocalLength = 240, GuidePixelSize = 2.9 });
+            using var profiles = new StoreBackedProfileService(store);
+            var (fake, svc) = await ConnectedAsync(f => {
+                f.OnRpc("get_current_equipment", _ => new JsonObject {
+                    ["camera"] = new JsonObject { ["name"] = "Alpaca Camera [127.0.0.1:6800/0] - X", ["connected"] = true },
+                });
+                f.OnRpc("get_alpaca_camera_pixelsize", _ => new JsonObject { ["pixel_size"] = 3.75 });
+            }, store, profiles).ConfigureAwait(false);
+            await using var _ = fake;
+            using var __ = svc;
+            await Task.Delay(300).ConfigureAwait(false);
+            var phd2 = store.GetPhd2Settings();
+            Assert.That((phd2.GuideFocalLength, phd2.GuidePixelSize), Is.EqualTo((240, 2.9)));
+        }
+
+        [Test]
         public async Task The_guide_camera_name_comes_from_the_guiders_current_equipment() {
             var (fake, svc) = await ConnectedAsync(f => f.OnRpc("get_current_equipment", _ => new JsonObject {
                 ["camera"] = new JsonObject { ["name"] = "ZWO ASI120MM Mini", ["connected"] = true },

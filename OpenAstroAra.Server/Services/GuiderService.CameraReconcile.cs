@@ -54,6 +54,7 @@ public sealed partial class GuiderService {
         try {
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
             cts.CancelAfter(ReconcileTimeout);
+            await FillUnsetGuideOpticsAsync(cts.Token).ConfigureAwait(false);
             var settings = _profileService.ActiveProfile.GuiderSettings;
             var camera = settings.GuiderCamera;
             var pinnedId = settings.GuiderCameraAlpacaUniqueId;
@@ -137,6 +138,33 @@ public sealed partial class GuiderService {
             LogGuideCameraReconcileFailed(ex);
         }
     }
+
+    /// <summary>A profile that leaves the guide pixel size or focal length unset gets them from the guider:
+    /// its camera's pixel size (AlpacaBridge, through the guider) and the focal length its working pixel
+    /// scale implies. Kept in the profile (polar alignment reads them there); a value already set stays.</summary>
+    private async Task FillUnsetGuideOpticsAsync(CancellationToken ct) {
+        if (_profileStore is null) {
+            return;
+        }
+        var before = _profileStore.GetPhd2Settings();
+        if (before.GuidePixelSize > 0 && before.GuideFocalLength > 0) {
+            return;
+        }
+        if (await TryGetGuideOpticsAsync(ct).ConfigureAwait(false) is not { } optics) {
+            return;
+        }
+        var now = _profileStore.GetPhd2Settings();
+        var pixel = now.GuidePixelSize > 0 ? now.GuidePixelSize : optics.PixelSizeUm;
+        var focal = now.GuideFocalLength > 0
+            ? now.GuideFocalLength
+            : (int)Math.Round(206.265 * pixel / optics.PixelScaleArcsec); // whole mm, as the profile keeps it
+        _profileStore.PutPhd2Settings(now with { GuidePixelSize = pixel, GuideFocalLength = focal });
+        LogGuideOpticsFilled(pixel, focal);
+    }
+
+    [LoggerMessage(Level = LogLevel.Information,
+        Message = "Guide optics read from the guider and kept in the profile: pixel size {PixelSize} µm, focal length {FocalLength} mm")]
+    private partial void LogGuideOpticsFilled(double pixelSize, int focalLength);
 
     // The store is the source of truth (the in-memory settings are hydrated from it on every Put), so the
     // write goes through it; a headless service with no store sets the active profile directly.
