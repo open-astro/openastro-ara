@@ -440,9 +440,10 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
                                 l10n.polarActionComplete,
                                 (api) => api.complete(),
                               );
-                              // In Autopilot, Done moves on to the plan.
+                              // In Guided Run, Done moves on (the routine
+                              // is complete: nothing to stop).
                               if (autopilot && _error == null) {
-                                ref.read(autopilotProvider.notifier).next();
+                                ref.read(autopilotProvider.notifier).polarDone();
                               }
                             }
                           : null,

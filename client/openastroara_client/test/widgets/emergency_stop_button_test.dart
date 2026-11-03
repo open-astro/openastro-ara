@@ -69,6 +69,8 @@ void main() {
           savedServersProvider.overrideWith(_FixedServers.new),
           serverApiFactoryProvider.overrideWithValue((server) => fake),
           simpleModePrefsProvider.overrideWithValue(_Prefs(simpleMode)),
+          // Simple Mode shows only with the Experimental switch on too.
+          simpleModeFeaturePrefsProvider.overrideWithValue(_Prefs(true)),
         ],
         child: MaterialApp(home: Scaffold(body: button)),
       ),
@@ -80,6 +82,7 @@ void main() {
     );
     await container.read(savedServersProvider.future);
     await container.read(simpleModeProvider.future);
+    await container.read(simpleModeFeatureProvider.future);
     await tester.pumpAndSettle();
   }
 

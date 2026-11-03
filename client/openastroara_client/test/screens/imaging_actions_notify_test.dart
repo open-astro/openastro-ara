@@ -19,10 +19,13 @@ class _Prefs extends SimpleModePrefsService {
 Future<ProviderContainer> _pump(WidgetTester tester, {required bool simple}) async {
   final c = ProviderContainer(overrides: [
     simpleModePrefsProvider.overrideWithValue(_Prefs(simple)),
+    // Simple Mode shows only with the Experimental switch on too.
+    simpleModeFeaturePrefsProvider.overrideWithValue(_Prefs(true)),
     activeServerProvider.overrideWithValue(null),
   ]);
   addTearDown(c.dispose);
   await c.read(simpleModeProvider.future);
+  await c.read(simpleModeFeatureProvider.future);
   await tester.pumpWidget(UncontrolledProviderScope(
     container: c,
     child: MaterialApp(

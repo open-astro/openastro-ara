@@ -33,7 +33,10 @@ class _SimpleMessagePillsState extends ConsumerState<SimpleMessagePills> {
     // Budgeted at one line a pill plus the gap; a two-line pill can push the
     // stack a few pixels past it.
     const step = kSimpleMessageHeight + AraSpace.s8;
-    var fit = ((widget.maxHeight + AraSpace.s8) / step).floor();
+    // No limit (the immersive view): every message shows.
+    var fit = widget.maxHeight.isFinite
+        ? ((widget.maxHeight + AraSpace.s8) / step).floor()
+        : messages.length;
     if (fit < messages.length) fit = ((widget.maxHeight - 44) / step).floor();
     fit = fit.clamp(1, messages.length);
     final folded = !_all && fit < messages.length;

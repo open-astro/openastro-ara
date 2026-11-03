@@ -17,6 +17,7 @@ import '../../state/sky_atlas/tonight_sky_state.dart'
     show planningSettingsBootstrapProvider;
 import '../../models/frame_histogram.dart';
 import '../../models/guider_status.dart';
+import '../../services/equipment_device_api.dart' show describeEquipmentError;
 import '../../services/equipment_driver_api.dart';
 import '../../models/polar_align.dart';
 import '../../state/app_shell_state.dart';
@@ -87,7 +88,6 @@ import 'simple_message_pills.dart';
 import 'simple_polar_panel.dart';
 import 'simple_plan_panel.dart';
 import 'simple_preview_panel.dart';
-import 'simple_safety_alarm.dart';
 
 /// Inset from the frame edge and between panels.
 const double kSimpleInset = 16;
@@ -1075,8 +1075,6 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                 ),
               ),
             ),
-            // Over everything, outside the safe area: the one popup kept.
-            const SimpleSafetyAlarm(),
           ],
         ),
       ),
@@ -2311,11 +2309,27 @@ Widget _gearTile({
           ),
         ),
         if (label != null)
-          TextButton(
-            key: Key('simple-gear-$id-$verb'),
-            style: TextButton.styleFrom(minimumSize: const Size(0, 44)),
-            onPressed: () => action!(),
-            child: Text(label),
+          Builder(
+            builder: (context) => TextButton(
+              key: Key('simple-gear-$id-$verb'),
+              style: TextButton.styleFrom(minimumSize: const Size(0, 44)),
+              // The device notifiers throw why a command failed: say so,
+              // or a refused Connect looks like a dead button.
+              onPressed: () async {
+                final notify = userNotifier(context);
+                final l10n = context.l10n;
+                try {
+                  await action!();
+                } catch (e) {
+                  notify(
+                    l10n.shellGearActionFailed(label, title),
+                    detail: describeEquipmentError(e),
+                    error: true,
+                  );
+                }
+              },
+              child: Text(label),
+            ),
           ),
         if (onOpen != null)
           const Icon(Icons.chevron_right, color: AraColors.textSecondary),
@@ -2362,7 +2376,11 @@ class _ThisRig extends ConsumerWidget {
     final notify = userNotifier(context);
     final l10n = context.l10n;
     final api = ref.read(profileApiProvider);
-    if (api == null) return;
+    if (api == null) {
+      // Shown, not kept: the next read from the rig puts the old value back.
+      notify(l10n.shellCouldntSave, detail: l10n.shellRigNotConnected, error: true);
+      return;
+    }
     try {
       await persist(api);
     } catch (e) {
@@ -2403,17 +2421,19 @@ class _ThisRig extends ConsumerWidget {
     if (r.alt != null) site.setElevationM(r.alt!);
     site.setTimeZone(tz_map.latLngToTimezoneString(r.lat, r.lng));
     final api = ref.read(profileApiProvider);
-    if (api != null) {
-      try {
-        await site.persistToServer(api);
-      } catch (e) {
-        notify(
-          l10n.shellCouldntSaveSite,
-          detail: friendlyError(l10n, e),
-          error: true,
-        );
-        return;
-      }
+    if (api == null) {
+      notify(l10n.shellCouldntSaveSite, detail: l10n.shellRigNotConnected, error: true);
+      return;
+    }
+    try {
+      await site.persistToServer(api);
+    } catch (e) {
+      notify(
+        l10n.shellCouldntSaveSite,
+        detail: friendlyError(l10n, e),
+        error: true,
+      );
+      return;
     }
     notify(l10n.shellSiteFrom(r.sourceLabel));
   }

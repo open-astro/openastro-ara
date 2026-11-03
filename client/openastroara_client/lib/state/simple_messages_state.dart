@@ -121,7 +121,9 @@ UserNotify userNotifier(BuildContext context) {
     bool? snackBarRed,
     Duration? snackBarDuration,
   }) {
-    if (container.read(simpleModeProvider).value ?? false) {
+    // Active, not just chosen: with the Experimental switch off the full UI
+    // shows, and a pill there would reach nobody.
+    if (container.read(simpleModeActiveProvider)) {
       container
           .read(simpleMessagesProvider.notifier)
           .show(

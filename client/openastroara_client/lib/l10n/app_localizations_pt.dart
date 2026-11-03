@@ -130,6 +130,12 @@ class AppLocalizationsPt extends AppLocalizations {
   String get deviceUnparking => 'Unparking…';
 
   @override
+  String get deviceParkUnfinished => 'The mount didn\'t finish parking';
+
+  @override
+  String get deviceUnparkUnfinished => 'The mount didn\'t finish unparking';
+
+  @override
   String get deviceParked => 'Parked';
 
   @override
@@ -787,6 +793,11 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String shellGearActionFailed(String action, String device) {
+    return '$action failed · $device';
+  }
+
+  @override
   String get shellConnected => 'Connected';
 
   @override
@@ -1193,6 +1204,11 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String planMagnitude(String value) {
     return 'mag $value';
+  }
+
+  @override
+  String planAlreadyQueued(String name) {
+    return '$name is already in the queue.';
   }
 
   @override
@@ -2022,6 +2038,13 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get deviceUnparking => 'Desestacionando…';
 
   @override
+  String get deviceParkUnfinished => 'A montagem não terminou de estacionar';
+
+  @override
+  String get deviceUnparkUnfinished =>
+      'A montagem não terminou de desestacionar';
+
+  @override
   String get deviceParked => 'Estacionada';
 
   @override
@@ -2681,6 +2704,11 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   }
 
   @override
+  String shellGearActionFailed(String action, String device) {
+    return '$action falhou · $device';
+  }
+
+  @override
   String get shellConnected => 'Conectado';
 
   @override
@@ -3090,6 +3118,11 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String planMagnitude(String value) {
     return 'mag $value';
+  }
+
+  @override
+  String planAlreadyQueued(String name) {
+    return '$name já está na fila.';
   }
 
   @override

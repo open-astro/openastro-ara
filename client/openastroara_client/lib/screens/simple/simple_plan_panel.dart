@@ -36,6 +36,7 @@ import '../../state/sky_atlas/tonight_sky_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
 import '../../l10n/l10n.dart';
+import '../../state/app_locale_state.dart';
 import '../../util/friendly_error.dart';
 import '../../util/tonight_sky_local.dart' show darkStart, scheduleAllowed;
 import '../../widgets/sequencer/target_plan_dialog.dart'
@@ -203,19 +204,35 @@ final simpleDarkHoursProvider = Provider<double?>((ref) {
 class SimpleRunPlanNotifier extends Notifier<List<FilterPlanStep>> {
   double? _darkHours;
 
+  /// A queued target's rows ([load]): settings changes leave them alone.
+  bool _loaded = false;
+
   @override
   List<FilterPlanStep> build() {
+    _loaded = false;
     ref.listen(simpleDarkHoursProvider, (prev, next) {
       if (prev == next) return;
       _darkHours = next;
       state = [for (final s in state) _fit(s, s.exposureSeconds)];
     });
+    // A re-read of the settings assigns new objects (they have no ==), so
+    // only a real change of filters or default sub starts the rows afresh,
+    // and never under a queued target's own rows.
+    ref.listen(filterSetProvider.select((s) => [for (final f in s.filters) '${f.name}/${f.kind}'].join('|')),
+        (_, _) => _reseed());
+    ref.listen(imagingDefaultsProvider.select((d) => d.defaultExposure), (_, _) => _reseed());
     _darkHours = ref.read(simpleDarkHoursProvider);
-    return simpleRunDefaultPlan(
-      ref.watch(filterSetProvider).filters,
-      ref.watch(imagingDefaultsProvider).defaultExposure.inMilliseconds / 1000,
-      remainingDarkHours: _darkHours,
-    );
+    return _defaults();
+  }
+
+  List<FilterPlanStep> _defaults() => simpleRunDefaultPlan(
+    ref.read(filterSetProvider).filters,
+    ref.read(imagingDefaultsProvider).defaultExposure.inMilliseconds / 1000,
+    remainingDarkHours: _darkHours,
+  );
+
+  void _reseed() {
+    if (!_loaded) state = _defaults();
   }
 
   FilterPlanStep _fit(FilterPlanStep s, double exposureSeconds) =>
@@ -242,7 +259,10 @@ class SimpleRunPlanNotifier extends Notifier<List<FilterPlanStep>> {
 
   // Without a window the count the user set stays.
   /// Editing a queued target: its rows, to change and save back.
-  void load(List<FilterPlanStep> steps) => state = [...steps];
+  void load(List<FilterPlanStep> steps) {
+    _loaded = true;
+    state = [...steps];
+  }
 
   void setExposure(int i, double seconds) => _darkHours == null
       ? _set(i, exposureSeconds: seconds)
@@ -531,6 +551,19 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
     final steps = ref.read(simpleRunPlanProvider);
     final gain = ref.read(simpleRunGainProvider);
     if (sel == null || state.busy) return false;
+    // One block per name (the rig finds a target's block by it): a queued
+    // target isn't added again; Start now moves it to the front instead.
+    final queued = state.targets.indexWhere((t) => t.name == sel.name);
+    if (queued >= 0) {
+      if (!first) {
+        state = state.copyWith(
+          error: l10nFor(this.ref.read(appLocaleProvider)).planAlreadyQueued(sel.name),
+        );
+        return false;
+      }
+      if (queued > 0) await reorder(queued, 0);
+      return state.error == null;
+    }
     final queue = state.sequenceId;
     state = state.copyWith(busy: true);
     try {
@@ -853,19 +886,26 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
     final id = (info?.state?.isActive ?? false)
         ? info!.sequenceId
         : state.sequenceId;
-    if (api == null || id == null || id.isEmpty) return;
+    // One at a time: a second tap while the first is on its way isn't sent.
+    if (api == null || id == null || id.isEmpty || state.busy) return;
     final undo = state;
-    state = (before ?? state).copyWith();
+    state = (before ?? state).copyWith(busy: true);
     try {
       await op(api, id);
+      state = state.copyWith(busy: false);
     } catch (e) {
+      final why = _why(e, action);
       state = undo.copyWith(
-        error: _why(e, action),
+        busy: false,
+        error: why,
         noStorage:
             e is DioException &&
             e.response?.data is Map &&
             e.response!.data['title'] == 'store_unavailable',
       );
+      // Also as a pill: the sheet and queue panel that show the error may be
+      // closed (a failed Stop from the shutter, with the rig still imaging).
+      ref.read(simpleMessagesProvider.notifier).show(SimpleMessageKind.error, why);
     }
     await ref.read(sequenceRunStateProvider.notifier).refresh();
   }

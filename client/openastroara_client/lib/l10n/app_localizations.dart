@@ -315,6 +315,18 @@ abstract class AppLocalizations {
   /// **'Unparking…'**
   String get deviceUnparking;
 
+  /// Message pill when a park Simple Mode asked for stopped short (aborted, faulted, or the mount disconnected)
+  ///
+  /// In en, this message translates to:
+  /// **'The mount didn\'t finish parking'**
+  String get deviceParkUnfinished;
+
+  /// Message pill when an unpark Simple Mode asked for stopped short
+  ///
+  /// In en, this message translates to:
+  /// **'The mount didn\'t finish unparking'**
+  String get deviceUnparkUnfinished;
+
   /// Mount window segment in the Park row: the mount is parked
   ///
   /// In en, this message translates to:
@@ -1509,6 +1521,12 @@ abstract class AppLocalizations {
   /// **'{type} · {name}'**
   String shellGearTitle(String type, String name);
 
+  /// Message pill: a Connect / Disconnect / Reconnect in Settings › Devices failed; action is the button's label, device the row's title
+  ///
+  /// In en, this message translates to:
+  /// **'{action} failed · {device}'**
+  String shellGearActionFailed(String action, String device);
+
   /// Simple Mode Settings › Devices row: device state
   ///
   /// In en, this message translates to:
@@ -2180,6 +2198,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'mag {value}'**
   String planMagnitude(String value);
+
+  /// Plan sheet: Add to queue on a target the queue already holds
+  ///
+  /// In en, this message translates to:
+  /// **'{name} is already in the queue.'**
+  String planAlreadyQueued(String name);
 
   /// Settings › Rig: the app language row (this device only)
   ///

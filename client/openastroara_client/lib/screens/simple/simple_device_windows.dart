@@ -23,6 +23,7 @@ import '../../state/sequencer/sequence_list_state.dart';
 import '../../state/settings/safety_policies_state.dart';
 import '../../state/profile_management_state.dart';
 import '../../state/settings/imaging_defaults_state.dart';
+import '../../state/app_locale_state.dart';
 import '../../state/simple_messages_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
@@ -445,16 +446,36 @@ class SimpleMountMotionNotifier extends Notifier<bool?> {
   /// Tracking On on a parked mount: track once the unpark lands.
   bool _trackAfter = false;
 
+  /// The mount has moved since the ask: stopping now without getting there
+  /// means the move ended short.
+  bool _moved = false;
+
   @override
   bool? build() {
     ref.listen(mountProvider, (_, next) {
+      final asked = state;
+      if (asked == null || next.isLoading) return;
       final m = next.value;
-      if (state == null || m == null) return;
+      // Gone, or stopped short of the ask (aborted, faulted): say so, and
+      // give the Park row its control back.
+      if (m == null || !m.isConnected || (_moved && !m.isBusy && m.parked != asked)) {
+        _trackAfter = false;
+        state = null;
+        final l10n = l10nFor(ref.read(appLocaleProvider));
+        ref
+            .read(simpleMessagesProvider.notifier)
+            .show(
+              SimpleMessageKind.error,
+              asked ? l10n.deviceParkUnfinished : l10n.deviceUnparkUnfinished,
+            );
+        return;
+      }
+      if (m.isBusy) _moved = true;
       // Done once the mount says so and has stopped moving out of park.
-      if (m.parked == state &&
+      if (m.parked == asked &&
           m.runtimeState != 'unparking' &&
-          (state == true || m.runtimeState != 'slewing')) {
-        final track = _trackAfter && state == false;
+          (asked || m.runtimeState != 'slewing')) {
+        final track = _trackAfter && !asked;
         _trackAfter = false;
         state = null;
         if (track) _track().ignore();
@@ -482,6 +503,7 @@ class SimpleMountMotionNotifier extends Notifier<bool?> {
     final mount = ref.read(mountProvider.notifier);
     state = park;
     _trackAfter = thenTrack;
+    _moved = false;
     try {
       final ok = await (park ? mount.park() : mount.unpark());
       if (!ok) state = null;

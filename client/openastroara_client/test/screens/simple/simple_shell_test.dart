@@ -74,6 +74,7 @@ import 'package:openastroara/state/equipment/mount_state.dart';
 import 'package:openastroara/widgets/equipment/equipment_glyphs.dart';
 import 'package:openastroara/state/settings/settings_nav.dart';
 import 'package:openastroara/state/simple_mode_state.dart';
+import 'package:openastroara/screens/simple/simple_safety_alarm.dart';
 import 'package:openastroara/state/night_mode_state.dart';
 import 'package:openastroara/state/settings/optics_settings_state.dart';
 import 'package:openastroara/state/settings/site_settings_state.dart';
@@ -151,13 +152,18 @@ Future<ProviderContainer> _pump(WidgetTester tester, Size size,
     if (plan != null) simpleRunProvider.overrideWith(() => queueing ? _Queueing(plan) : _Plan(plan)),
     if (runState != null) sequenceRunStateProvider.overrideWith(() => _RunState(runState)),
     if (manualAlarm) safetyAlarmProvider.overrideWith(_ManualAlarm.new),
+    // The app shows Simple Mode's alarm over every screen while Simple Mode is on.
+    if (manualAlarm) simpleModeActiveProvider.overrideWithValue(true),
   ]);
   addTearDown(container.dispose);
   await container.read(simpleModeProvider.future);
   if (feature) await container.read(simpleModeFeatureProvider.future);
   await tester.pumpWidget(UncontrolledProviderScope(
     container: container,
-    child: const MaterialApp(home: SimpleShell(planetarium: SizedBox(key: Key('sky')))),
+    child: MaterialApp(
+      builder: (context, child) => SimpleSafetyAlarmLayer(child: child!),
+      home: const SimpleShell(planetarium: SizedBox(key: Key('sky'))),
+    ),
   ));
   await tester.pump();
   return container;
@@ -209,6 +215,13 @@ class _Mount extends MountNotifier with _Calls<MountStatus> {
   final EquipmentConnectionState state0;
   @override
   Future<MountStatus?> build() async => MountStatus.fromJson(_wire('AM5', state0));
+}
+
+/// A mount whose connect the rig refuses (the device notifiers throw why).
+class _RefusingMount extends _Mount {
+  _RefusingMount() : super(EquipmentConnectionState.disconnected);
+  @override
+  Future<bool> reconnect() async => throw StateError('The mount did not answer');
 }
 
 class _GpsPrefs extends ClientGpsPrefsService {
@@ -1647,6 +1660,23 @@ void main() {
     expect(api.reads, settled, reason: 'it stops reading once both are filled');
   });
 
+  testWidgets("a Rig edit with no rig link says it wasn't saved instead of nothing", (tester) async {
+    // Review: _save returned silently when there was no ProfileApi, and the value reverted at the next read.
+    final c = await _pump(tester, const Size(1024, 768), feature: true);
+    expect(c.read(profileApiProvider), isNull, reason: 'precondition: no rig');
+    await _openSection(tester, 'Rig');
+    await tester.ensureVisible(find.byKey(const Key('simple-rig-guidefocal')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('simple-rig-guidefocal')));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const Key('simple-rig-guidefocal-wheel-1')));
+    await tester.pumpAndSettle();
+    await tester.drag(find.byKey(const Key('simple-rig-guidefocal-wheel-1')), const Offset(0, -44.0));
+    await tester.pumpAndSettle();
+    final m = c.read(simpleMessagesProvider).single;
+    expect((m.kind, m.title, m.detail), (SimpleMessageKind.error, "Couldn't save that", 'Rig not connected'));
+  });
+
   testWidgets('Logs & bug report opens over Simple Mode; Back comes back', (tester) async {
     final c = await _pump(tester, const Size(1024, 768));
     await _openSection(tester, 'Rig');
@@ -1683,6 +1713,20 @@ void main() {
     expect(camera.calls, ['disconnect']);
     expect(focuser.calls, ['reconnect']);
     expect(mount.calls, ['reconnect'], reason: 'Connect: the device the rig remembers, no chooser');
+  });
+
+  testWidgets('a Connect the rig refuses says why in a pill instead of looking like a dead button', (tester) async {
+    final c = await _pump(tester, const Size(1024, 768), linkUp: true, feature: true, gear: [
+      mountProvider.overrideWith(_RefusingMount.new),
+    ]);
+    await _openSection(tester, 'Devices');
+    await tester.tap(find.byKey(const Key('simple-gear-mount-connect')));
+    await tester.pump();
+    expect(tester.takeException(), isNull);
+    final m = c.read(simpleMessagesProvider).single;
+    expect(m.kind, SimpleMessageKind.error);
+    expect(m.title, 'Connect failed · Mount · AM5');
+    expect(m.detail, contains('The mount did not answer'));
   });
 
   testWidgets('Devices lists the guider, named by its camera like its window; Disconnect, and the row opens it',
@@ -2209,6 +2253,22 @@ void main() {
       expect(alarm, findsNothing);
     });
   }
+
+  testWidgets('the safety alarm shows over a screen pushed over Simple Mode (the Image Library, full Settings)',
+      (tester) async {
+    final container = await _pump(tester, const Size(1024, 768), manualAlarm: true);
+    Navigator.of(tester.element(find.byType(SimpleShell)))
+        .push(MaterialPageRoute<void>(builder: (_) => const Scaffold(body: Text('Image Library'))));
+    await tester.pumpAndSettle();
+    expect(find.text('Image Library'), findsOneWidget);
+    (container.read(safetyAlarmProvider.notifier) as _ManualAlarm).raise('Safety monitor: unsafe (rain)');
+    await tester.pump();
+    final alarm = find.byKey(const Key('simple-safety-alarm'));
+    expect(alarm.hitTestable(), findsOneWidget, reason: 'on top, not under the pushed screen');
+    await tester.tap(find.byKey(const Key('simple-safety-silence')));
+    await tester.pump();
+    expect(alarm, findsNothing);
+  });
 
   testWidgets('an emergency stop pressed on this device: no full screen and no tone; other alarms still show',
       (tester) async {

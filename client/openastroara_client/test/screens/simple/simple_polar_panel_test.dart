@@ -216,9 +216,12 @@ void main() {
         polarAlignApiProvider.overrideWithValue(api),
         polarAlignLiveProvider.overrideWith(() => _Live(const PolarAlignLive())),
         simpleModePrefsProvider.overrideWithValue(_SimplePrefs()),
+        // Simple Mode on: the Experimental switch too, or the full UI shows (snackbars).
+        simpleModeFeaturePrefsProvider.overrideWithValue(_SimplePrefs()),
       ]);
       addTearDown(c.dispose);
       await c.read(simpleModeProvider.future);
+      await c.read(simpleModeFeatureProvider.future);
       await tester.pumpWidget(UncontrolledProviderScope(
         container: c,
         child: const MaterialApp(home: Scaffold(body: Center(child: SimplePolarShutter()))),

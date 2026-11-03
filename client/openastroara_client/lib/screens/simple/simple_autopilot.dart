@@ -4,11 +4,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../l10n/l10n.dart';
+import '../../state/app_locale_state.dart';
 import '../../state/polar_align/polar_align_state.dart';
 import '../../state/setup/setup_readiness.dart';
+import '../../state/simple_messages_state.dart';
 import '../../state/simple_mode_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
+import '../../util/friendly_error.dart';
 import 'simple_plan_panel.dart'
     show
         simpleDarkStartProvider,
@@ -78,14 +81,41 @@ class AutopilotNotifier extends Notifier<AutopilotStep?> {
     permanentPier: ref.read(simplePermanentPierProvider).value ?? false,
   );
 
+  /// The polar step's Done completed its routine: leaving stops nothing.
+  bool _polarFinished = false;
+
   void _go(AutopilotStep step) {
+    if (state == AutopilotStep.polarAlign && step != AutopilotStep.polarAlign) {
+      _endPolar();
+    }
+    if (step == AutopilotStep.polarAlign) _polarFinished = false;
     state = step;
     // Entering polar align starts the routine (an Autopilot-only exception
     // to the shutter starting things; its red square still stops it).
     if (step == AutopilotStep.polarAlign &&
         !simplePolarActive(ref.read(polarAlignLiveProvider))) {
       final api = ref.read(polarAlignApiProvider);
-      if (api != null) unawaited(api.start().catchError((_) {}));
+      if (api != null) unawaited(_polar(api.start, (l) => l.polarActionStart));
+    }
+  }
+
+  /// A polar start or stop; one that fails says why in a pill (a step whose
+  /// routine never started, or a mount still moving).
+  Future<void> _polar(
+    Future<void> Function() op,
+    String Function(AppLocalizations l10n) action,
+  ) async {
+    try {
+      await op();
+    } catch (e) {
+      if (!ref.mounted) return;
+      final l10n = l10nFor(ref.read(appLocaleProvider));
+      ref
+          .read(simpleMessagesProvider.notifier)
+          .show(
+            SimpleMessageKind.error,
+            friendlyError(l10n, e, action: action(l10n)),
+          );
     }
   }
 
@@ -105,6 +135,7 @@ class AutopilotNotifier extends Notifier<AutopilotStep?> {
       _go(AutopilotStep.plan); // the plan was skipped: nothing to start yet
       return;
     }
+    if (s == AutopilotStep.polarAlign) _endPolar();
     final startAt = ref.read(simpleScheduleAllowedProvider)
         ? ref.read(simpleDarkStartProvider)
         : null;
@@ -113,12 +144,32 @@ class AutopilotNotifier extends Notifier<AutopilotStep?> {
     );
   }
 
+  /// The polar step's Done: its routine is complete, then on as [next].
+  void polarDone() {
+    _polarFinished = true;
+    next();
+  }
+
   void back() {
     final s = state;
     if (s != null && s.index > 0) _go(AutopilotStep.values[s.index - 1]);
   }
 
-  void stop() => state = null;
+  void stop() {
+    if (state == AutopilotStep.polarAlign) _endPolar();
+    state = null;
+  }
+
+  /// Leaving the polar step (Skip, Back, another mode) with its routine still
+  /// running stops it: it moves the mount, and its stop button leaves the
+  /// screen with the step. Done has already finished it.
+  void _endPolar() {
+    if (_polarFinished || !simplePolarActive(ref.read(polarAlignLiveProvider))) {
+      return;
+    }
+    final api = ref.read(polarAlignApiProvider);
+    if (api != null) unawaited(_polar(api.stop, (l) => l.polarActionStop));
+  }
 }
 
 final autopilotProvider = NotifierProvider<AutopilotNotifier, AutopilotStep?>(

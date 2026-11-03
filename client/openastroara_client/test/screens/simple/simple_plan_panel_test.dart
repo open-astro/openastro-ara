@@ -114,13 +114,21 @@ class _Seq implements SequenceClient {
 
   /// What start throws instead, as the daemon refuses.
   Object? startError;
+  /// Holds start until completed (a slow link).
+  Completer<void>? startGate;
   @override
   Future<String> start(String id) async {
     if (startError case final e?) throw e;
+    await startGate?.future;
     return _op('start $id');
   }
+  /// What stop throws instead.
+  Object? stopError;
   @override
-  Future<String> stop(String id) async => _op('stop $id');
+  Future<String> stop(String id) async {
+    if (stopError case final e?) throw e;
+    return _op('stop $id');
+  }
   @override
   Future<String> pause(String id) async => _op('pause $id');
   @override
@@ -322,6 +330,25 @@ void main() {
       await Future<void>.delayed(Duration.zero);
       return c;
     }
+
+    test('a settings re-read that changes nothing keeps the rows; a queued target\'s rows stay while editing',
+        () async {
+      // Review: hydrate always assigns a new object and the settings have no ==, so the rows reset to the
+      // defaults about one round trip after opening an edit, and Save wrote the defaults.
+      final c = await plan([m31(2)]);
+      final rows = c.read(simpleRunPlanProvider.notifier);
+      rows.setExposure(0, 120);
+      final edited = c.read(simpleRunPlanProvider);
+      await c.read(filterSetProvider.notifier).hydrateGuarded(() async => FilterSetSettings(filters: [..._lrgb]));
+      expect(c.read(simpleRunPlanProvider), edited, reason: 'the same filters read again');
+      const queued = [FilterPlanStep(filterName: 'Ha', exposureSeconds: 300, frameCount: 12)];
+      rows.load(queued);
+      await c.read(filterSetProvider.notifier).hydrateGuarded(() async => const FilterSetSettings(filters: _duo));
+      expect(c.read(simpleRunPlanProvider), queued, reason: "editing a queued target: its own rows");
+      c.invalidate(simpleRunPlanProvider);
+      expect(c.read(simpleRunPlanProvider).map((s) => s.filterName), ['L-enhance', 'L-eXtreme'],
+          reason: 'a new plan follows the filters');
+    });
 
     test('the picked target\'s window splits across the rows; a new sub refits its row', () async {
       final c = await plan([m31(2)]);
@@ -650,6 +677,31 @@ void main() {
       expect(created, 1);
     });
 
+    testWidgets('a target already in the queue is not queued twice; Start now moves it to the front instead',
+        (tester) async {
+      // The rig finds a target's block by its name: a second M31 made removing or editing either hit the first.
+      final seq = _Seq();
+      final c = await _pump(tester, seq,
+          SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}, onLibrary: () {}));
+      await create(tester);
+      c.read(planetariumSelectionProvider.notifier).set(_m42);
+      await tester.pumpAndSettle();
+      await create(tester);
+      c.read(planetariumSelectionProvider.notifier).set(_m31);
+      await tester.pumpAndSettle();
+      await create(tester);
+      expect(seq.calls, ['create M31', 'update seq-1'], reason: 'no second M31 on the rig');
+      expect(c.read(simpleRunProvider).targets.map((t) => t.name), ['M31', 'M42']);
+      expect(find.text('M31 is already in the queue.'), findsOneWidget);
+      c.read(planetariumSelectionProvider.notifier).set(_m42);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('simple-run-start')));
+      await tester.pumpAndSettle();
+      expect(c.read(simpleRunProvider).targets.map((t) => t.name), ['M42', 'M31'], reason: 'moved, not copied');
+      expect(seq.targets('seq-1'), ['M42', 'M31']);
+      expect(seq.calls.last, 'start seq-1');
+    });
+
     testWidgets('Create and start creates the run and starts it, then closes the sheet', (tester) async {
       var created = 0;
       final seq = _Seq();
@@ -864,6 +916,31 @@ void main() {
     final text = tester.getRect(name);
     expect(text.left, greaterThanOrEqualTo(box.left + 4), reason: 'clear of the left border');
     expect(text.right, lessThanOrEqualTo(box.right - 4), reason: 'clear of the right border');
+  });
+
+  testWidgets('a failed Stop says so in a pill, so it shows with the sheet and queue panel closed', (tester) async {
+    final (c, seq) = await run(tester);
+    await create(tester);
+    seq.stopError = DioException(
+      requestOptions: RequestOptions(),
+      response: Response(requestOptions: RequestOptions(), statusCode: 409, data: {'detail': 'The run is between targets.'}),
+    );
+    await c.read(simpleRunProvider.notifier).stop();
+    expect(c.read(simpleMessagesProvider).map((m) => (m.kind, m.title)),
+        [(SimpleMessageKind.error, 'The run is between targets.')]);
+  });
+
+  testWidgets('a second Start while the first is on its way is not sent', (tester) async {
+    final (c, seq) = await run(tester);
+    await create(tester);
+    seq.startGate = Completer<void>();
+    final n = c.read(simpleRunProvider.notifier);
+    final first = n.start();
+    final second = n.start();
+    seq.startGate!.complete();
+    await Future.wait([first, second]);
+    expect(seq.calls.where((call) => call.startsWith('start ')), hasLength(1));
+    expect(c.read(simpleRunProvider).busy, isFalse);
   });
 
   testWidgets('no storage disk: the daemon\'s words and Open Storage, which leaves for the full UI\'s page', (tester) async {

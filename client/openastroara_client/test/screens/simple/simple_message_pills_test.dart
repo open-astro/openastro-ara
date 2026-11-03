@@ -15,10 +15,15 @@ class _Prefs extends SimpleModePrefsService {
   Future<void> save(bool enabled) async => value = enabled;
 }
 
-Future<ProviderContainer> _pump(WidgetTester tester, {bool simple = true, double maxHeight = 600}) async {
-  final c = ProviderContainer(overrides: [simpleModePrefsProvider.overrideWithValue(_Prefs(simple))]);
+Future<ProviderContainer> _pump(WidgetTester tester,
+    {bool simple = true, bool feature = true, double maxHeight = 600}) async {
+  final c = ProviderContainer(overrides: [
+    simpleModePrefsProvider.overrideWithValue(_Prefs(simple)),
+    simpleModeFeaturePrefsProvider.overrideWithValue(_Prefs(feature)),
+  ]);
   addTearDown(c.dispose);
   await c.read(simpleModeProvider.future);
+  await c.read(simpleModeFeatureProvider.future);
   await tester.pumpWidget(UncontrolledProviderScope(
     container: c,
     child: MaterialApp(
@@ -40,6 +45,25 @@ Future<ProviderContainer> _pump(WidgetTester tester, {bool simple = true, double
 }
 
 void main() {
+  testWidgets('the immersive view (no height limit) shows every message instead of crashing', (tester) async {
+    final c = await _pump(tester, maxHeight: double.infinity);
+    c.read(simpleMessagesProvider.notifier)
+      ..show(SimpleMessageKind.error, "Couldn't start imaging")
+      ..show(SimpleMessageKind.error, "Couldn't stop the run");
+    await tester.pump();
+    expect(tester.takeException(), isNull);
+    expect(find.textContaining("Couldn't start imaging"), findsOneWidget);
+    expect(find.textContaining("Couldn't stop the run"), findsOneWidget);
+  });
+
+  testWidgets('with the Experimental switch off the full UI shows, so messages go to a snackbar', (tester) async {
+    final c = await _pump(tester, feature: false);
+    await tester.tap(find.byKey(const Key('notify')));
+    await tester.pump();
+    expect(c.read(simpleMessagesProvider), isEmpty, reason: 'no pill nobody would see');
+    expect(find.byType(SnackBar), findsOneWidget);
+  });
+
   testWidgets('a result fades after 6 s; an error stays until ×', (tester) async {
     final c = await _pump(tester);
     final n = c.read(simpleMessagesProvider.notifier);

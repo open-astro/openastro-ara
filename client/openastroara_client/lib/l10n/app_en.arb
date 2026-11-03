@@ -159,6 +159,14 @@
   "@deviceUnparking": {
     "description": "Mount window: shown in the Park row while the mount unparks"
   },
+  "deviceParkUnfinished": "The mount didn't finish parking",
+  "@deviceParkUnfinished": {
+    "description": "Message pill when a park Simple Mode asked for stopped short (aborted, faulted, or the mount disconnected)"
+  },
+  "deviceUnparkUnfinished": "The mount didn't finish unparking",
+  "@deviceUnparkUnfinished": {
+    "description": "Message pill when an unpark Simple Mode asked for stopped short"
+  },
   "deviceParked": "Parked",
   "@deviceParked": {
     "description": "Mount window segment in the Park row: the mount is parked"
@@ -1085,6 +1093,18 @@
       }
     }
   },
+  "shellGearActionFailed": "{action} failed · {device}",
+  "@shellGearActionFailed": {
+    "description": "Message pill: a Connect / Disconnect / Reconnect in Settings › Devices failed; action is the button's label, device the row's title",
+    "placeholders": {
+      "action": {
+        "type": "String"
+      },
+      "device": {
+        "type": "String"
+      }
+    }
+  },
   "shellConnected": "Connected",
   "@shellConnected": {
     "description": "Simple Mode Settings › Devices row: device state"
@@ -1682,6 +1702,15 @@
     "description": "Search suggestion: the object's magnitude, e.g. mag 8.4",
     "placeholders": {
       "value": {
+        "type": "String"
+      }
+    }
+  },
+  "planAlreadyQueued": "{name} is already in the queue.",
+  "@planAlreadyQueued": {
+    "description": "Plan sheet: Add to queue on a target the queue already holds",
+    "placeholders": {
+      "name": {
         "type": "String"
       }
     }
