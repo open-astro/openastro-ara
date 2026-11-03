@@ -115,13 +115,13 @@ void main() {
     expect(off.calls, [(true, -15.0)], reason: 'the profile\'s target');
   });
 
-  testWidgets('the target is a stepped slider (5 °C steps, −30 to +10); letting go sets it, a running cooler '
+  testWidgets('the target is a stepped slider (5 °C steps, −40 to +10); letting go sets it, a running cooler '
       'follows and plans use it too', (tester) async {
     final (c, camera) = await _pump(tester, _wire());
     c.read(imagingDefaultsProvider.notifier).setCoolerTargetC(-10);
     await tester.pump();
     final slider = tester.widget<Slider>(find.byKey(const Key('simple-camera-target')));
-    expect((slider.min, slider.max, slider.divisions, slider.value), (-30.0, 10.0, 8, -10.0));
+    expect((slider.min, slider.max, slider.divisions, slider.value), (-40.0, 10.0, 10, -10.0));
     slider.onChanged!(-15);
     await tester.pump();
     expect(find.text('−15 °C'), findsOneWidget, reason: 'the value follows the thumb');

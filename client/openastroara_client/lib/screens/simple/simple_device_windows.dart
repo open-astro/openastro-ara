@@ -75,7 +75,7 @@ class SimpleCameraWindow extends ConsumerStatefulWidget {
   final bool inSettings;
 
   /// The target slider's range and step (user, 2026-11-03: a stepped slider).
-  static const double targetMin = -30, targetMax = 10, targetStep = 5;
+  static const double targetMin = -40, targetMax = 10, targetStep = 5;
 
   @override
   ConsumerState<SimpleCameraWindow> createState() => _SimpleCameraWindowState();
