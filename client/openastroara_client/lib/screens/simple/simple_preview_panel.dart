@@ -20,6 +20,7 @@ import '../../widgets/imaging/exposure_controls_panel.dart' show FilterDropdown;
 import '../../widgets/imaging/histogram_strip.dart' show frameHistogramProvider;
 import '../imaging_actions.dart';
 import 'simple_plan_panel.dart' show simpleRunProvider;
+import 'simple_device_windows.dart' show simpleCelsius;
 import 'simple_shell.dart'
     show SimplePanel, SimpleSegment, kSimpleRailWidth, kSimpleStatusMaxWidth;
 
@@ -657,6 +658,9 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
     with SingleTickerProviderStateMixin {
   late final Ticker _ticker = createTicker((_) => setState(() {}));
 
+  /// Where the sensor was when the pill first saw it cooling: the bar's 0.
+  double? _coolStart;
+
   @override
   void dispose() {
     _ticker.dispose();
@@ -690,6 +694,21 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
         run?.state == SequenceRunState.paused ||
         run?.state == SequenceRunState.pausedAwaitingUser;
     _syncTick(p.isActive);
+    // A cooler turned on by hand: the pill shows it cooling until it is
+    // within half a degree of its target (a plan's own cooling step shows
+    // as the plan's step instead).
+    final cam = ref.watch(cameraStatusProvider).value;
+    final ccd = cam?.ccdTemperature;
+    final target = cam?.coolerSetpointC;
+    final cooling =
+        cam != null &&
+        cam.isConnected &&
+        cam.coolerOn &&
+        ccd != null &&
+        target != null &&
+        ccd - target > 0.5;
+    _coolStart = cooling ? (_coolStart ?? ccd) : null;
+    final planActive = run?.state?.isActive ?? false;
     final exposing = !stopping && p.phase == CapturePhase.exposing;
     final (String? label, String? detail, Color dot) = stopping
         ? ('Stopping…', null, AraColors.textSecondary)
@@ -730,17 +749,24 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
                       step,
                       paused ? AraColors.accentBusy : AraColors.accentInfo,
                     )
+                  : cooling
+                  ? (
+                      'Cooling',
+                      '${simpleCelsius(ccd)} → ${simpleCelsius(target)}',
+                      AraColors.accentInfo,
+                    )
                   : (null, null, AraColors.textSecondary),
           };
     if (label == null) return const SizedBox.shrink();
     // The plan's step shows how far it has got (cooling, a wait, autofocus)
     // as a line along the pill's foot.
-    final stepProgress =
-        !stopping &&
-            !looping &&
-            p.phase == CapturePhase.idle &&
-            (run?.state?.isActive ?? false)
+    final idle = !stopping && !looping && p.phase == CapturePhase.idle;
+    final stepProgress = idle && planActive
         ? run?.currentInstructionProgress
+        : idle && cooling
+        ? (_coolStart! - target) <= 0
+              ? 0.0
+              : ((_coolStart! - ccd) / (_coolStart! - target)).clamp(0.0, 1.0)
         : null;
     // Announced when it changes: the label and the plan's step, not each
     // second of an exposure's countdown.

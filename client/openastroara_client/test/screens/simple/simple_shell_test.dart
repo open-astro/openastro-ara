@@ -182,6 +182,22 @@ class _Mount extends MountNotifier with _Calls<MountStatus> {
   Future<MountStatus?> build() async => MountStatus.fromJson(_wire('AM5', state0));
 }
 
+/// A camera cooling to −10 °C from [ccd]; [set] moves the reading.
+class _CoolingCamera extends CameraStatusNotifier {
+  _CoolingCamera(this.ccd);
+  double ccd;
+  static Map<String, dynamic> _wire(double t) => {
+        'device_id': 'c',
+        'name': 'ASI2600MM',
+        'state': 'connected',
+        'capabilities': {'has_cooler': true, 'can_set_temperature': true},
+        'runtime': {'ccd_temperature': t, 'cooler_on': true, 'cooler_setpoint_c': -10},
+      };
+  @override
+  Future<CameraStatus?> build() async => CameraStatus.fromJson(_wire(ccd));
+  void set(double t) => state = AsyncData(CameraStatus.fromJson(_wire(t)));
+}
+
 class _Profiles extends ProfileManagementNotifier {
   _Profiles(this.value);
   final ProfileList value;
@@ -1357,6 +1373,24 @@ void main() {
     final words = tester.getRect(find.descendant(of: find.byType(SimpleStatusPill), matching: find.textContaining('Cooling camera')));
     expect((words.top - pill.top) - (pill.bottom - tester.getRect(bar).bottom), lessThan(3),
         reason: 'words $words, bar ${tester.getRect(bar)}, pill $pill');
+  });
+
+  testWidgets('a cooler turned on by hand shows Cooling in the pill, with a bar for how far it has got', (tester) async {
+    final camera = _CoolingCamera(-2);
+    await _pump(tester, const Size(1024, 768), linkUp: true, gear: [cameraStatusProvider.overrideWith(() => camera)]);
+    await tester.pump();
+    final pill = find.byType(SimpleStatusPill);
+    expect(find.descendant(of: pill, matching: find.textContaining('Cooling')), findsOneWidget);
+    expect(find.descendant(of: pill, matching: find.textContaining('−2 °C → −10 °C')), findsOneWidget);
+    final bar = find.descendant(of: pill, matching: find.byType(LinearProgressIndicator));
+    expect(tester.widget<LinearProgressIndicator>(bar).value, 0, reason: 'starts where it was when seen first');
+    camera.set(-6);
+    await tester.pump();
+    expect(tester.widget<LinearProgressIndicator>(bar).value, closeTo(0.5, 0.01), reason: 'halfway from −2 to −10');
+    camera.set(-9.8);
+    await tester.pump();
+    expect(find.descendant(of: pill, matching: find.textContaining('Cooling')), findsNothing,
+        reason: 'at the target (within half a degree) the pill has nothing to say');
   });
 
   testWidgets('a scheduled plan waiting on the rig: the pill says when it starts', (tester) async {
