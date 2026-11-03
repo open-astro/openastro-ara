@@ -2418,6 +2418,26 @@ class _ThisRig extends ConsumerWidget {
     notify(l10n.shellSiteFrom(r.sourceLabel));
   }
 
+  /// The rig fills unset guide optics a few guider round trips after the
+  /// guider reports connected, so one read then usually beats it: read again
+  /// each second, up to ten times, until both are set.
+  static Future<void> _readGuideOptics(BuildContext context, WidgetRef ref) async {
+    for (var i = 0; i < 10; i++) {
+      if (i > 0) await Future<void>.delayed(const Duration(seconds: 1));
+      if (!context.mounted) return;
+      final api = ref.read(profileApiProvider);
+      if (api == null) return;
+      try {
+        await ref.read(phd2SettingsProvider.notifier).hydrateFromServer(api);
+      } catch (_) {
+        // Unreachable for a moment: the next try reads again.
+      }
+      if (!context.mounted) return;
+      final s = ref.read(phd2SettingsProvider);
+      if (s.guideFocalLength > 0 && s.guidePixelSize > 0) return;
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     // The rig fills the guide optics from the guider on connect: read them
@@ -2425,10 +2445,7 @@ class _ThisRig extends ConsumerWidget {
     ref.listen(
       guiderStatusProvider.select((s) => s.value?.isConnected ?? false),
       (was, now) {
-        final api = ref.read(profileApiProvider);
-        if (now && was != true && api != null) {
-          ref.read(phd2SettingsProvider.notifier).hydrateFromServer(api);
-        }
+        if (now && was != true) unawaited(_readGuideOptics(context, ref));
       },
     );
     final server = ref.watch(activeServerProvider);

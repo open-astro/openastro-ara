@@ -251,6 +251,25 @@ class _GuiderConnecting extends _GuiderCalls {
       GuiderStatus.fromJson(const {'device_id': 'g', 'name': 'PHD2', 'state': 'connecting'});
 }
 
+/// A guider mid-connect that [up] brings to connected.
+class _GuiderComingUp extends _GuiderConnecting {
+  void up() => state = AsyncData(GuiderStatus.fromJson(const {'device_id': 'g', 'name': 'PHD2', 'state': 'connected'}));
+}
+
+/// The rig's guide optics: unset for the first [unsetReads] reads, then filled (the rig fills them a
+/// few round trips after the guider connects).
+class _GuideOpticsApi extends ProfileApi {
+  _GuideOpticsApi(this.unsetReads) : super(const AraServer(hostname: 'test', port: 1));
+  int unsetReads;
+  int reads = 0;
+  @override
+  Future<Phd2Settings> getPhd2Settings() async => ++reads > unsetReads
+      ? const Phd2Settings(guideFocalLength: 128, guidePixelSize: 3.75)
+      : const Phd2Settings();
+  @override
+  Future<OpticsSettings> getOptics() async => const OpticsSettings();
+}
+
 /// The rig's answer once the guider is disconnected: no guider (404).
 class _GuiderGone extends _GuiderCalls {
   @override
@@ -1604,6 +1623,28 @@ void main() {
     await tester.drag(find.byKey(const Key('simple-rig-guidefocal-wheel-1')), const Offset(0, -44.0));
     await tester.pumpAndSettle();
     expect(c.read(phd2SettingsProvider).guideFocalLength, 228, reason: 'per digit, like the main scope');
+  });
+
+  testWidgets("Rig shows the guide optics the rig fills a few seconds after the guider connects", (tester) async {
+    // PR #1486 review: one read on Connected usually lands before the rig's fill, leaving 0 / Not set.
+    final guider = _GuiderComingUp();
+    final api = _GuideOpticsApi(2);
+    await _pump(tester, const Size(1024, 768), linkUp: true,
+        profiles: const ProfileList(activeId: 'p1', profiles: [ProfileMeta(id: 'p1', name: 'Backyard Rig')]), gear: [
+      guiderStatusProvider.overrideWith(() => guider),
+      profileApiProvider.overrideWithValue(api),
+    ]);
+    await _openSection(tester, 'Rig');
+    guider.up();
+    for (var i = 0; i < 5; i++) {
+      await tester.pump(const Duration(seconds: 1));
+    }
+    await tester.ensureVisible(find.byKey(const Key('simple-rig-guidefocal')));
+    expect(find.descendant(of: find.byKey(const Key('simple-rig-guidefocal')), matching: find.text('128 mm')), findsOneWidget);
+    expect(find.text('3.75 µm'), findsOneWidget);
+    final settled = api.reads;
+    await tester.pump(const Duration(seconds: 5));
+    expect(api.reads, settled, reason: 'it stops reading once both are filled');
   });
 
   testWidgets('Logs & bug report opens over Simple Mode; Back comes back', (tester) async {
