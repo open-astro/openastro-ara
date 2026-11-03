@@ -160,9 +160,9 @@ class _Pill extends ConsumerWidget {
                           ],
                         ],
                       ),
+                      // Whole, however long: an Emergency Stop's summary
+                      // was cut at two lines (user, 2026-11-04).
                       style: kSimpleText,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                 ),
