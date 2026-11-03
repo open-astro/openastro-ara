@@ -1742,6 +1742,20 @@ void main() {
     expect(find.text("Tonight's plan"), findsNothing);
   });
 
+  testWidgets("Plan's sheet sits beside the rail too, not centred over the image", (tester) async {
+    await _pump(tester, const Size(1024, 768));
+    await tester.tap(find.byKey(const Key('simple-mode')));
+    await tester.pump();
+    await tester.tap(find.text('Plan').first);
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('simple-settings')));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+    final sheet = tester.getRect(find.byType(SimpleRunSheet));
+    final rail = tester.getRect(find.byKey(const Key('simple-mode')));
+    expect(sheet.right, closeTo(rail.left - kSimpleInset, 8));
+  });
+
   testWidgets('Preview settings opens with no title: the chip says what it is', (tester) async {
     await _pump(tester, const Size(1024, 768));
     await tester.tap(find.byKey(const Key('simple-settings')));

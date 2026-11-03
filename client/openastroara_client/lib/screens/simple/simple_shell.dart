@@ -613,9 +613,6 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     final runSheet =
         shown == SimpleModeScreen.plan &&
         ((_popover == _Popover.settings && !runActive) || _adding);
-    // In Guided Run the plan's sheet hugs the rail like every mode's panel
-    // (user, 2026-11-04); in Plan it is centred over the image.
-    final guidedSheet = runSheet && _mode == SimpleModeScreen.autopilot;
     final sheet = SimpleRunSheet(
       editing: _editing,
       onShowSky: () => setState(() => _sky = true),
@@ -852,29 +849,26 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                   ),
                                 ),
                               ),
-                              // Plan's sheet and Night done: a sheet centred over
-                              // the image; while imaging, its panel sits beside
-                              // the rail like any mode's.
+                              // Plan's sheet and Night done: beside the rail;
+                              // while imaging, its panel sits there like any
+                              // mode's.
                               // Between the status pill and the bottom row (the
                               // plan squares step aside while it shows); a tall
                               // sheet scrolls inside.
                               if (runSheet)
                                 Positioned(
-                                  // Guided Run's beside the rail, like every
-                                  // mode's panel, with the sheet's height.
-                                  left: guidedSheet ? kSimpleInset : 0,
-                                  right: guidedSheet
-                                      ? kSimpleInset * 2 + railWidth
-                                      : 0,
+                                  // Beside the rail like every mode's panel,
+                                  // with the sheet's height (user, 2026-11-04;
+                                  // it was centred over the image).
+                                  left: kSimpleInset,
+                                  right: kSimpleInset * 2 + railWidth,
                                   top:
                                       railTop +
                                       kSimpleStatusHeight +
                                       kSimpleInset,
                                   bottom: kSimpleInset * 2 + bottomRow,
                                   child: Align(
-                                    alignment: guidedSheet
-                                        ? Alignment.centerRight
-                                        : Alignment.center,
+                                    alignment: Alignment.centerRight,
                                     child: sheet,
                                   ),
                                 )
