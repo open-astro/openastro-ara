@@ -91,6 +91,7 @@ namespace OpenAstroAra.Server;
 [JsonSerializable(typeof(CameraCoolerRequestDto))]
 [JsonSerializable(typeof(LiveViewStartRequestDto))]
 [JsonSerializable(typeof(LiveViewStatusDto))]
+[JsonSerializable(typeof(LiveStackStatusDto))]
 [JsonSerializable(typeof(ConnectRequestDto))]
 // §27 single-client connection policy (connect/disconnect/session + the WS
 // takeover control frames).

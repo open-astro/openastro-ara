@@ -287,6 +287,7 @@ public static partial class EquipmentEndpoints {
                 frame.Value.SessionId.ToString(System.Globalization.CultureInfo.InvariantCulture);
             return Results.Bytes(frame.Value.Jpeg, "image/jpeg");
         });
+        camera.MapLiveStackEndpoints();
 
         // ─── Telescope ───
         var telescope = equipment.MapGroup("/telescope");

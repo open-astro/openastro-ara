@@ -234,6 +234,41 @@ paths:
       responses:
         '200':
           description: OK
+  /api/v1/equipment/camera/liveview/stack/start:
+    post:
+      tags:
+        - Equipment
+      responses:
+        '200':
+          description: OK
+  /api/v1/equipment/camera/liveview/stack/reset:
+    post:
+      tags:
+        - Equipment
+      responses:
+        '200':
+          description: OK
+  /api/v1/equipment/camera/liveview/stack/stop:
+    post:
+      tags:
+        - Equipment
+      responses:
+        '200':
+          description: OK
+  /api/v1/equipment/camera/liveview/stack:
+    get:
+      tags:
+        - Equipment
+      responses:
+        '200':
+          description: OK
+  /api/v1/equipment/camera/liveview/stack/frame:
+    get:
+      tags:
+        - Equipment
+      responses:
+        '200':
+          description: OK
   /api/v1/equipment/camera/reconnect:
     post:
       tags:

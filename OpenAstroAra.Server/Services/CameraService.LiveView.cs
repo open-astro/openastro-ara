@@ -114,7 +114,7 @@ public sealed partial class CameraService {
         // so every frame would fail — the loop would spin forever with Active=true and no frame.
         // Refuse up front rather than hide that behind an infinite retry (mono + RGGB are fine: both
         // yield a 2D array ConvertImageArray handles).
-        if (probe.SensorType == SensorType.Color) {
+        if (!_liveViewSkipSensorProbe && probe.SensorType == SensorType.Color) {
             throw new InvalidOperationException(
                 "Live View does not support tri-colour (SensorType.Color) cameras, which return an already-debayered 3-plane image array.");
         }
@@ -147,6 +147,11 @@ public sealed partial class CameraService {
                 bayerPattern = parsedPattern;
             }
             var session = Interlocked.Increment(ref _liveViewSession);
+            // ↑ara#1169: a new session never inherits a stack, and stacking stays off until POST stack/start.
+            _liveStack.Disable();
+            _liveViewBayerPattern = bayerPattern;
+            _liveViewExpectedSize = _capabilities is { SensorWidth: > 0, SensorHeight: > 0 } caps
+                ? (caps.SensorWidth / request.BinX, caps.SensorHeight / request.BinY) : null;
             Volatile.Write(ref _liveViewActive, 1);
             _liveViewLoop = Task.Run(
                 () => RunLiveViewLoopAsync(request, session, bayerPattern, cts.Token),
@@ -197,6 +202,7 @@ public sealed partial class CameraService {
             // legitimate "started, no frame yet" shape — not a frame-without-config contradiction.
             _liveViewFrame = null;
             _liveViewMeta = null;
+            OnLiveViewSessionEnded();
         } finally {
             _liveViewMutex.Release();
         }
@@ -265,8 +271,9 @@ public sealed partial class CameraService {
                     if (client is null) {
                         break; // disconnected/disposed — end the loop
                     }
-                    acquired = await AcquireLiveFramePixelsAsync(
-                        client, request, applySettings: !settingsApplied, token).ConfigureAwait(false);
+                    acquired = _liveViewFrameSourceForTest?.Invoke()
+                        ?? await AcquireLiveFramePixelsAsync(
+                            client, request, applySettings: !settingsApplied, token).ConfigureAwait(false);
                     settingsApplied = true; // settings are current (just applied, or unchanged since we hold the gate)
                 } catch (OperationCanceledException) when (token.IsCancellationRequested) {
                     throw;
@@ -286,6 +293,8 @@ public sealed partial class CameraService {
                 if (acquired is { } frame) {
                     try {
                         PublishLiveFrame(frame.Pixels, frame.Width, frame.Height, request, session, bayerPattern);
+                        // ↑ara#1169: own try/catch inside, so a stack failure never reaches the self-stop count.
+                        FeedLiveStack(frame.Pixels, frame.Width, frame.Height, session, bayerPattern);
                         produced = true;
                     } catch (Exception ex) {
                         // Render/encode failure: the device was untouched (settings stay
@@ -320,6 +329,9 @@ public sealed partial class CameraService {
             // transient is frame=null + meta=set, i.e. the legitimate "started, no frame yet" shape.
             _liveViewFrame = null;
             _liveViewMeta = null;
+            // ↑ara#1169: NO _liveViewMutex here. StopLiveViewAsync holds it while it awaits this very task, so taking
+            // it would hang every Stop. The engine lock is a leaf lock, safe from this thread.
+            OnLiveViewSessionEnded();
         }
     }
 
@@ -454,6 +466,8 @@ public sealed partial class CameraService {
         // mutex-protected Start/Stop own the field lifecycle and dispose the CTS.
         var cts = _liveViewCts;
         Volatile.Write(ref _liveViewActive, 0);
+        // ↑ara#1169: takes only the leaf engine lock, so it may wait for one in-flight Add (a few hundred ms at 12 MP).
+        OnLiveViewSessionEnded();
         if (cts is not null) {
             // Guard both: a concurrent StopLiveViewAsync (under the mutex) may dispose the same CTS.
             // Dispose is idempotent, but guard it to match the Cancel guard above and stay consistent.
