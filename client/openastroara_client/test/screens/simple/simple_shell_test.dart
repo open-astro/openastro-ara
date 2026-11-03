@@ -51,6 +51,8 @@ import 'package:openastroara/state/equipment/mount_state.dart';
 import 'package:openastroara/state/settings/settings_nav.dart';
 import 'package:openastroara/state/simple_mode_state.dart';
 import 'package:openastroara/state/night_mode_state.dart';
+import 'package:openastroara/state/settings/optics_settings_state.dart';
+import 'package:openastroara/state/settings/site_settings_state.dart';
 import 'package:openastroara/services/night_mode_prefs_service.dart';
 import 'package:openastroara/state/simple_messages_state.dart';
 import 'package:openastroara/screens/simple/simple_message_pills.dart';
@@ -1046,6 +1048,30 @@ void main() {
     await tester.pump(const Duration(seconds: 5));
   });
 
+  testWidgets('Rig holds the telescope (aperture, focal length) and the site (coordinates, elevation), saved to the '
+      'profile; the site can come from this device', (tester) async {
+    final c = await _pump(tester, const Size(1024, 768));
+    await _openSection(tester, 'Rig');
+    Future<void> enter(String key, String text) async {
+      await tester.enterText(find.byKey(Key(key)), text);
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pump();
+    }
+    await enter('simple-rig-aperture', '80');
+    await enter('simple-rig-focal', '480');
+    await enter('simple-rig-lat', '-36.85');
+    await enter('simple-rig-lng', '174.76');
+    await enter('simple-rig-elevation', '120');
+    expect(c.read(opticsSettingsProvider).apertureMm, 80);
+    expect(c.read(opticsSettingsProvider).focalLengthMm, 480);
+    expect(c.read(siteSettingsProvider).latitudeDeg, -36.85);
+    expect(c.read(siteSettingsProvider).longitudeDeg, 174.76);
+    expect(c.read(siteSettingsProvider).elevationM, 120);
+    expect(find.byKey(const Key('simple-rig-use-location')), findsOneWidget, reason: 'fill from this device');
+    await enter('simple-rig-aperture', 'abc');
+    expect(c.read(opticsSettingsProvider).apertureMm, 80, reason: 'not a number: kept');
+  });
+
   testWidgets('Change profile goes to the profile box; Change rig to the rig list', (tester) async {
     final c = await _pump(tester, const Size(1024, 768));
     c.read(profileGatePassedProvider.notifier).pass();
@@ -1081,10 +1107,12 @@ void main() {
     expect(find.byKey(const Key('simple-menu-pier-on')), findsNothing);
     final pier = find.byKey(const Key('simple-menu-pier'));
     expect(tester.widget<Switch>(pier).value, isFalse);
+    await tester.ensureVisible(pier); // Rig scrolls
     await tester.tap(pier);
     await tester.pump();
     expect(c.read(simplePermanentPierProvider).value, isTrue);
     expect(tester.widget<Switch>(find.byKey(const Key('simple-menu-simple-mode'))).value, isTrue);
+    await tester.ensureVisible(find.byKey(const Key('simple-menu-simple-mode')));
     await tester.tap(find.byKey(const Key('simple-menu-simple-mode')));
     await tester.pump();
     expect(c.read(simpleModeProvider).value, isFalse, reason: 'off: the full UI');
@@ -1093,6 +1121,7 @@ void main() {
   testWidgets('Logs & bug report opens over Simple Mode; Back comes back', (tester) async {
     final c = await _pump(tester, const Size(1024, 768));
     await _openSection(tester, 'Rig');
+    await tester.ensureVisible(find.text('Logs & bug report')); // Rig scrolls
     await tester.tap(find.text('Logs & bug report'));
     await tester.pumpAndSettle();
     expect(find.byType(SettingsShell), findsOneWidget);

@@ -41,6 +41,11 @@ import '../../state/equipment/mount_state.dart';
 import '../../state/equipment/rotator_state.dart';
 import '../../state/equipment/weather_state.dart';
 import '../../state/ws/ws_providers.dart';
+import '../../state/settings/optics_settings_state.dart';
+import '../../state/settings/site_settings_state.dart';
+import '../../util/gps_site_fill.dart';
+import '../../util/friendly_error.dart';
+import '../../services/profile_api.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
 import '../../widgets/emergency_stop_button.dart';
@@ -2018,6 +2023,49 @@ class _ThisRig extends ConsumerWidget {
   final VoidCallback onClose;
   final VoidCallback onLogs;
 
+  /// Apply a value and keep it in the profile; a failed save says so.
+  static Future<void> _save(
+    BuildContext context,
+    WidgetRef ref,
+    void Function() apply,
+    Future<Object?> Function(ProfileApi api) persist,
+  ) async {
+    apply();
+    final notify = userNotifier(context);
+    final api = ref.read(profileApiProvider);
+    if (api == null) return;
+    try {
+      await persist(api);
+    } catch (e) {
+      notify("Couldn't save that", detail: friendlyError(e), error: true);
+    }
+  }
+
+  /// The site from this device (its GPS, or the rig's held fix): the same
+  /// lookup as the full UI's Fill from GPS, saved at once.
+  static Future<void> _useLocation(BuildContext context, WidgetRef ref) async {
+    final notify = userNotifier(context);
+    final r = await fillSiteFromGps(ref);
+    if (!r.success) {
+      notify("Couldn't get a location", detail: r.message, error: true);
+      return;
+    }
+    final site = ref.read(siteSettingsProvider.notifier);
+    site.setLatitudeDeg(r.lat);
+    site.setLongitudeDeg(r.lng);
+    if (r.alt != null) site.setElevationM(r.alt!);
+    final api = ref.read(profileApiProvider);
+    if (api != null) {
+      try {
+        await site.persistToServer(api);
+      } catch (e) {
+        notify("Couldn't save the site", detail: friendlyError(e), error: true);
+        return;
+      }
+    }
+    notify('Site from ${r.sourceLabel}');
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final server = ref.watch(activeServerProvider);
@@ -2116,6 +2164,81 @@ class _ThisRig extends ConsumerWidget {
             action('Change rig', () => relaunch(rig: true)),
           ],
         ),
+        // The telescope and the site: set once, kept in the profile (plate
+        // solving, framing and the night's times use them).
+        const Divider(height: AraSpace.s16),
+        _RigNumber(
+          id: 'aperture',
+          label: 'Aperture',
+          unit: 'mm',
+          value: ref.watch(opticsSettingsProvider).apertureMm,
+          onSet: (v) => _save(
+            context,
+            ref,
+            () => ref.read(opticsSettingsProvider.notifier).setApertureMm(v),
+            (api) =>
+                ref.read(opticsSettingsProvider.notifier).persistToServer(api),
+          ),
+        ),
+        _RigNumber(
+          id: 'focal',
+          label: 'Focal length',
+          unit: 'mm',
+          value: ref.watch(opticsSettingsProvider).focalLengthMm,
+          onSet: (v) => _save(
+            context,
+            ref,
+            () => ref.read(opticsSettingsProvider.notifier).setFocalLengthMm(v),
+            (api) =>
+                ref.read(opticsSettingsProvider.notifier).persistToServer(api),
+          ),
+        ),
+        for (final (id, label, unit, value, set)
+            in <(String, String, String, double, void Function(double))>[
+              (
+                'lat',
+                'Latitude',
+                '°',
+                ref.watch(siteSettingsProvider).latitudeDeg,
+                ref.read(siteSettingsProvider.notifier).setLatitudeDeg,
+              ),
+              (
+                'lng',
+                'Longitude',
+                '°',
+                ref.watch(siteSettingsProvider).longitudeDeg,
+                ref.read(siteSettingsProvider.notifier).setLongitudeDeg,
+              ),
+              (
+                'elevation',
+                'Elevation',
+                'm',
+                ref.watch(siteSettingsProvider).elevationM,
+                ref.read(siteSettingsProvider.notifier).setElevationM,
+              ),
+            ])
+          _RigNumber(
+            id: id,
+            label: label,
+            unit: unit,
+            value: value,
+            onSet: (v) => _save(
+              context,
+              ref,
+              () => set(v),
+              (api) =>
+                  ref.read(siteSettingsProvider.notifier).persistToServer(api),
+            ),
+          ),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            key: const Key('simple-rig-use-location'),
+            onPressed: () => _useLocation(context, ref),
+            icon: const Icon(Icons.my_location, size: 18),
+            label: Text("Use ${thisDeviceLabel(clientPlatform)}'s location"),
+          ),
+        ),
         const Divider(height: AraSpace.s16),
         toggle(
           'pier',
@@ -2187,4 +2310,94 @@ class _SettingsPage extends ConsumerWidget {
       body: const SettingsShell(),
     );
   }
+}
+
+/// A number the rig keeps (aperture, a coordinate): label, field, unit; a
+/// value is set on Done or on leaving the field, and the field always shows
+/// what was kept (a rejected value goes back).
+class _RigNumber extends StatefulWidget {
+  const _RigNumber({
+    required this.id,
+    required this.label,
+    required this.unit,
+    required this.value,
+    required this.onSet,
+  });
+
+  final String id;
+  final String label;
+  final String unit;
+  final double value;
+  final ValueChanged<double> onSet;
+
+  @override
+  State<_RigNumber> createState() => _RigNumberState();
+}
+
+class _RigNumberState extends State<_RigNumber> {
+  late final _text = TextEditingController(text: _format(widget.value));
+  final _focus = FocusNode();
+
+  static String _format(double v) =>
+      v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toString();
+
+  @override
+  void initState() {
+    super.initState();
+    _focus.addListener(() {
+      if (!_focus.hasFocus) _commit();
+    });
+  }
+
+  @override
+  void didUpdateWidget(_RigNumber old) {
+    super.didUpdateWidget(old);
+    if (!_focus.hasFocus && old.value != widget.value) {
+      _text.text = _format(widget.value);
+    }
+  }
+
+  @override
+  void dispose() {
+    _text.dispose();
+    _focus.dispose();
+    super.dispose();
+  }
+
+  void _commit() {
+    final v = double.tryParse(_text.text.trim().replaceAll('−', '-'));
+    if (v != null && v != widget.value) widget.onSet(v);
+    // Shows what was kept: a rejected or unreadable value goes back.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && !_focus.hasFocus) _text.text = _format(widget.value);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) => ConstrainedBox(
+    constraints: const BoxConstraints(minHeight: 44),
+    child: Row(
+      spacing: AraSpace.s12,
+      children: [
+        Expanded(child: Text(widget.label, style: kSimpleText)),
+        SizedBox(
+          width: 120,
+          child: TextField(
+            key: Key('simple-rig-${widget.id}'),
+            controller: _text,
+            focusNode: _focus,
+            style: kSimpleText,
+            textAlign: TextAlign.right,
+            keyboardType: const TextInputType.numberWithOptions(
+              signed: true,
+              decimal: true,
+            ),
+            textInputAction: TextInputAction.done,
+            onSubmitted: (_) => _commit(),
+            decoration: InputDecoration(suffixText: widget.unit),
+          ),
+        ),
+      ],
+    ),
+  );
 }
