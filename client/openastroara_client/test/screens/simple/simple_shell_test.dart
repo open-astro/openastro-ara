@@ -381,7 +381,7 @@ void main() {
     expect(find.descendant(of: chip, matching: find.text(_summary(container))), findsNothing);
     expect(find.descendant(of: chip, matching: find.text('Manual')), findsOneWidget,
         reason: 'no focuser connected, so focus is by hand');
-    await tester.tap(chip);
+    await tester.tap(chip, warnIfMissed: false); // the chip again: through the outside-tap layer
     await tester.pump();
     expect(find.byType(SimpleFocusPanel), findsNothing, reason: 'the chip hides the Focus panel');
     expect(find.text('Exposure'), findsNothing, reason: "never Preview's settings in Focus");
@@ -390,6 +390,10 @@ void main() {
     await tester.pump();
     expect(find.byType(SimpleFocusPanel), findsOneWidget, reason: 'and shows it again');
 
+    // A tap outside the panel only closes it; the next one opens the modes.
+    await tester.tap(find.byKey(const Key('simple-mode')), warnIfMissed: false);
+    await tester.pump();
+    expect(find.byType(SimpleFocusPanel), findsNothing);
     await tester.tap(find.byKey(const Key('simple-mode')));
     await tester.pump();
     await tester.tap(find.text('Preview').first);
@@ -1114,6 +1118,36 @@ void main() {
     await tester.tapAt(const Offset(512, 700)); // the image closes it
     await tester.pump();
     expect(find.byKey(const Key('simple-device-camera')), findsNothing);
+  });
+
+  testWidgets('a menu or window closes on a second tap of what opened it, or a tap anywhere outside it', (tester) async {
+    final c = await _pump(tester, const Size(1024, 768), linkUp: true, gear: [
+      cameraStatusProvider.overrideWith(() => _Camera(EquipmentConnectionState.connected)),
+    ]);
+    Future<void> cameraDot() async {
+      c.read(selectedSettingsPanelProvider.notifier).select('eq.camera');
+      c.read(selectedTabIndexProvider.notifier).select(kOptionsTabIndex);
+      await tester.pumpAndSettle();
+    }
+    final window = find.byKey(const Key('simple-device-camera'));
+    await cameraDot();
+    expect(window, findsOneWidget);
+    await cameraDot();
+    expect(window, findsNothing, reason: 'the dot again closes it');
+
+    await cameraDot();
+    final info = find.byKey(const Key('simple-info'));
+    await tester.tap(info); // outside the window, on the left rail
+    await tester.pump();
+    expect(window, findsNothing, reason: 'a tap outside closes it');
+    expect(find.byType(SimpleInfoPanel), findsNothing, reason: 'that tap only closes; it does not press Info');
+
+    await tester.tap(find.byKey(const Key('simple-mode')));
+    await tester.pump();
+    expect(find.text('Polar align'), findsWidgets, reason: 'the modes are open');
+    await tester.tap(info);
+    await tester.pump();
+    expect(find.text('Polar align'), findsNothing, reason: 'the same for the rail\'s menus');
   });
 
   testWidgets('Settings lists the camera under Devices; it and its Devices row open the same window', (tester) async {

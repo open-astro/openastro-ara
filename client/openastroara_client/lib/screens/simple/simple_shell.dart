@@ -348,7 +348,12 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
         // A device with its own window opens it; the rest still get the full
         // Settings page over Simple Mode.
         if (ref.read(selectedSettingsPanelProvider) == 'eq.camera') {
-          setState(() => _popover = _Popover.device);
+          // The dot again closes it.
+          setState(
+            () => _popover = _popover == _Popover.device
+                ? _Popover.none
+                : _Popover.device,
+          );
         } else {
           _openSettings();
         }
@@ -640,6 +645,21 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                               // Between the status pill and the bottom row (the
                               // plan squares step aside while it shows); a tall
                               // sheet scrolls inside.
+                              // Every menu and window closes on a tap outside
+                              // it; that tap only closes (Settings has its
+                              // own veil, Plan's sheet its own rules).
+                              if (_popover != _Popover.none &&
+                                  _popover != _Popover.menu &&
+                                  !runSheet)
+                                Positioned.fill(
+                                  child: GestureDetector(
+                                    key: const Key('simple-popover-barrier'),
+                                    behavior: HitTestBehavior.opaque,
+                                    onTap: () => setState(
+                                      () => _popover = _Popover.none,
+                                    ),
+                                  ),
+                                ),
                               if (runSheet)
                                 Positioned(
                                   left: 0,
