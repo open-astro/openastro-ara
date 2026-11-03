@@ -1906,8 +1906,8 @@ cd client/openastroara_client
 flutter build macos --debug    # or: flutter run -d macos  (foreground only)
 open "build/macos/Build/Products/Debug/OpenAstro Ara.app"
 ```
-Every launch scans the network (nothing about the rig is stored, #1129) and you
-pick the rig from the list. A connected device's state lives daemon-side, so the
+Every launch scans the network (no address is stored, #1129); the app reconnects to
+the last rig by name (ALP-4890), otherwise you pick the rig from the list. A connected device's state lives daemon-side, so the
 app reflects it on reconnect.
 
 ---
@@ -2058,7 +2058,7 @@ Three stacked sections, each collapsible:
 `Row` along the bottom of the main window:
 - Left: local time + sidereal time (computed from server's reported lat/long)
 - Center: current operation ("Capturing target M42 — frame 4/20, 180s") + progress bar
-- Right: server connection state ("Connected: pi-observatory.local — v0.0.1-ara.1"). Nothing about the rig is stored on the client (#1129), so there is no "Forget this server"; the Launchpad action returns to the network scan
+- Right: server connection state ("Connected: pi-observatory.local — v0.0.1-ara.1"). No address is stored on the client (#1129), only the last rig's name (ALP-4890), so there is no "Forget this server"; the Launchpad action returns to the network scan
 
 ### 25.8 Mobile differences
 
@@ -3161,8 +3161,8 @@ No user-facing knobs for rotation cadence / size cap in the initial release — 
 2. **Server connect** — only shown when:
    - mDNS finds 0 servers (manual IP/port entry), OR
    - mDNS finds 2+ servers (user picks)
-   - If exactly 1 server is found, skip this screen and connect automatically (no auth per §67)
-3. **Profile box** — always shown, layout below
+   - If the scan finds the last rig this client used (by name, ALP-4890), skip this screen and connect (no auth per §67); otherwise show the list, even with one rig (#1129)
+3. **Profile box** — skipped on launch when the rig has an active profile (ALP-4890); shown when it has none, the active one is missing, or the user chose *Choose a different rig* / Launchpad. Layout below
 4. **Main app** — the NINA-style shell from §25
 
 ### 30.2 Profile box
@@ -3191,7 +3191,7 @@ No user-facing knobs for rotation cadence / size cap in the initial release — 
 
 Splash → network scan → the last rig connects on its own when the scan finds it (no auth per §67) → main app on the rig's active profile (the last one loaded). **No taps from cold-launch to imaging** (ALP-4890); a rig the client hasn't used before is one tap. The profile box still shows when the rig has no profile, or the active one is missing, or the profile list can't load (Retry / Plan offline); a Retry that succeeds goes straight in too. Only a session's first entry is automatic: the shell's Launchpad action shows the box, so switching profile stays one action away.
 
-Nothing about the rig is stored on the client (#1129): its address and even its name can change between nights (backyard, remote site, a new DHCP lease), so every launch scans (mDNS plus the subnet sweep; on iOS the system's Bonjour browse via NWBrowser, then the subnet sweep if it finds nothing, since iOS refuses raw multicast without Apple's multicast entitlement). A typed address is used for that session only. Versions before #1129 saved the list with addresses; the first launch of a newer client deletes it. The scan never picks a rig on its own, even when only one answers: a site can have four or five rigs, some not up yet, so the user taps the one they mean. The one exception is the last rig this client connected to (ALP-4890): the client keeps its name (not its address) and connects when the scan finds a rig by that name. Launchpad and *Choose a different rig* always show the list. Once connected, a dropped link (Wi-Fi blip, Pi reboot) reconnects to that same rig automatically, with backoff.
+No rig address is stored on the client (#1129): its address and even its name can change between nights (backyard, remote site, a new DHCP lease), so every launch scans (mDNS plus the subnet sweep; on iOS the system's Bonjour browse via NWBrowser, then the subnet sweep if it finds nothing, since iOS refuses raw multicast without Apple's multicast entitlement). A typed address is used for that session only. Versions before #1129 saved the list with addresses; the first launch of a newer client deletes it. The scan never picks a rig on its own, even when only one answers: a site can have four or five rigs, some not up yet, so the user taps the one they mean. The one exception is the last rig this client connected to (ALP-4890): the client keeps its name (not its address) and connects when the scan finds a rig by that name. Launchpad and *Choose a different rig* always show the list. Once connected, a dropped link (Wi-Fi blip, Pi reboot) reconnects to that same rig automatically, with backoff.
 
 ### 30.4 Add a Profile
 
@@ -3357,7 +3357,7 @@ User can search "equipment changed" and jump to the equipment-change-check scree
 
 ARA's typical deployment is one Pi per rig. Observatory operators sometimes run two scopes on two Pis simultaneously, controlled from a single WILMA app. ARA supports this today via **one-server-at-a-time** with explicit server switching — distinct from §27's per-server single-client policy, which governs how many WILMAs can talk to one Pi. This section governs how one WILMA tracks multiple Pis.
 
-> **Superseded in part (#1129, 2026-10-02):** the client stores no server list. Every launch scans the network and the user picks the rig; nothing is picked automatically, and nothing is stored. The "known/saved servers", "[Save + Connect]", default-on-launch and saved-server rows below predate that decision and describe planned multi-server UX, not current behaviour.
+> **Superseded in part (#1129, 2026-10-02):** the client stores no server list. Every launch scans the network and the user picks the rig; since ALP-4890 the one exception is the last rig used, whose name (not address) is kept in `last_rig.json` and which is connected without a tap when the scan finds it. The "known/saved servers", "[Save + Connect]", default-on-launch and saved-server rows below predate that decision and describe planned multi-server UX, not current behaviour.
 
 **Current model: one active connection at a time, chosen from the scan.**
 
@@ -3371,7 +3371,7 @@ Multi-server-concurrent introduces per-server state forking throughout WILMA (pe
 
 - mDNS discovery (§32.4) finds *all* ARA servers on the LAN, not just the previously-connected ones
 - Discovery flow runs continuously in the background (low-frequency) so the Servers menu shows up-to-date online/offline indicators for known servers + any newly-discovered ones
-- Every discovered server appears in the scan list; picking one connects for the session (nothing is saved, #1129)
+- Every discovered server appears in the scan list; picking one connects for the session (no address is saved, #1129; only its name, as the last rig, ALP-4890)
 
 **Servers menu UI (always available in WILMA app shell, top-left next to server name):**
 
@@ -3488,7 +3488,7 @@ WebSocket events from background-watcher mode use the same shapes as §46 notifi
 ### 30.8.2 §61 search registry
 
 - `app.servers.switch` — keywords: `switch server, change pi, multi-pi, multi-rig, observatory, two scopes, multiple servers`
-- `app.servers.manage` — keywords: `manage servers, rename pi, server list, choose rig, rescan` (no forget/default/auto-connect: nothing is stored and the user always picks, #1129)
+- `app.servers.manage` — keywords: `manage servers, rename pi, server list, choose rig, rescan` (no forget/default: no address is stored, #1129; the only auto-connect is to the last rig by name, ALP-4890)
 - `app.servers.watcher` — keywords: `background watcher, monitor other rig, notifications from other pi, cross-rig notifications`
 
 ### 30.8.3 §14 test cases
