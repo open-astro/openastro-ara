@@ -110,6 +110,27 @@ void main() {
     expect(f.moves.last, 10000, reason: 'from the reported position, 1000 a detent');
   });
 
+  testWidgets('Position is where the focuser is; the target only shows in the line above the dial', (tester) async {
+    await _pump(tester, _wire());
+    final knob = find.byKey(const Key('simple-focuser-knob'));
+    final centre = tester.getCenter(knob);
+    final r = tester.getSize(knob).width * 0.4;
+    Offset at(double deg) {
+      final a = (deg - 90) * math.pi / 180;
+      return centre + Offset(r * math.cos(a), r * math.sin(a));
+    }
+    final g = await tester.startGesture(at(0));
+    for (var d = 5.0; d <= 95; d += 5) {
+      await g.moveTo(at(d));
+      await tester.pump();
+    }
+    expect(find.descendant(of: find.byKey(const Key('simple-window-row-Position')), matching: find.text('12 000')),
+        findsOneWidget);
+    expect(find.text('Let go to move to 12 300'), findsOneWidget);
+    await g.up();
+    await tester.pump();
+  });
+
   testWidgets('a relative focuser is sent the change, not a position', (tester) async {
     final f = await _pump(tester, _wire(absolute: false));
     await _turn(tester, 65);

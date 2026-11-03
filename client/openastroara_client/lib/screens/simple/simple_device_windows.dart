@@ -721,12 +721,9 @@ class _SimpleFocuserWindowState extends ConsumerState<SimpleFocuserWindow> {
       );
     } else {
       final pos = s.position ?? 0;
-      final shown = _target ?? pos;
       children.addAll([
-        simpleWindowRow(
-          'Position',
-          Text(simpleSteps(shown), style: kSimpleText),
-        ),
+        // Where the focuser is; where it will go shows above the dial.
+        simpleWindowRow('Position', Text(simpleSteps(pos), style: kSimpleText)),
         if (s.temperature != null)
           simpleWindowRow(
             'Temperature',
