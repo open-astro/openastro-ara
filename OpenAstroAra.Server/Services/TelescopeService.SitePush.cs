@@ -46,6 +46,12 @@ public sealed partial class TelescopeService {
 
     private OpenAstroAra.Server.Services.IProfileStore? _siteStore;
 
+    /// <summary>The connected mount's site, null when none is connected; tests swap in a fake.</summary>
+    internal Func<IMountSite?>? MountSiteSource { get; set; }
+
+    /// <summary>Runs a site push off the caller's thread; tests run it inline.</summary>
+    internal Func<Action, Task> RunSitePush { get; set; } = Task.Run;
+
     /// <summary>Write [lat, lng, elev] into the mount, skipping values it already holds; each value
     /// is tried on its own, so one the driver refuses doesn't stop the rest. False when any failed.</summary>
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
@@ -86,22 +92,27 @@ public sealed partial class TelescopeService {
         if (store is null) {
             return;
         }
-        AlpacaTelescope? client;
-        lock (_gate) {
-            client = _state == OpenAstroAra.Server.Contracts.EquipmentConnectionState.Connected ? _client : null;
-        }
-        if (client is null) {
+        var mount = MountSiteSource is { } source ? source() : ConnectedAlpacaSite();
+        if (mount is null) {
             return;
         }
         var site = store.GetSiteSettings();
         if (!HasSite(site.LatitudeDeg, site.LongitudeDeg)) {
             return; // a profile with no site yet must not overwrite the mount's real one
         }
-        _ = Task.Run(() => {
-            if (!PushSite(new AlpacaMountSite(client), site.LatitudeDeg, site.LongitudeDeg, site.ElevationM)) {
+        _ = RunSitePush(() => {
+            if (!PushSite(mount, site.LatitudeDeg, site.LongitudeDeg, site.ElevationM)) {
                 LogSitePushIncomplete(site.LatitudeDeg, site.LongitudeDeg, site.ElevationM);
             }
         });
+    }
+
+    private AlpacaMountSite? ConnectedAlpacaSite() {
+        lock (_gate) {
+            return _state == OpenAstroAra.Server.Contracts.EquipmentConnectionState.Connected && _client is { } client
+                ? new AlpacaMountSite(client)
+                : null;
+        }
     }
 
     [LoggerMessage(Level = LogLevel.Warning,

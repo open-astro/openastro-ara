@@ -12,10 +12,13 @@
 
 #endregion "copyright"
 
+using Moq;
 using NUnit.Framework;
+using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Services;
 using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 
 namespace OpenAstroAra.Test {
 
@@ -61,6 +64,51 @@ namespace OpenAstroAra.Test {
             Assert.That(TelescopeService.HasSite(0, 0), Is.False, "the default 0, 0 is not a place anyone observes from");
             Assert.That(TelescopeService.HasSite(-37.2036, 174.8825), Is.True);
             Assert.That(TelescopeService.HasSite(0, 174.8825), Is.True);
+        }
+
+        private static SiteSettingsDto Site(double lat, double lng, double elev) =>
+            new("Home", lat, lng, elev, "Pacific/Auckland", false, 0, 4, 2, "astronomical");
+
+        // A connected mount behind the seam, the push run inline, following a profile store.
+        private static (TelescopeService svc, FakeMount mount, Mock<IProfileStore> store) Following(SiteSettingsDto site) {
+            var mount = new FakeMount();
+            var store = new Mock<IProfileStore>();
+            store.Setup(s => s.GetSiteSettings()).Returns(site);
+            var svc = new TelescopeService {
+                MountSiteSource = () => mount,
+                RunSitePush = push => { push(); return Task.CompletedTask; },
+            };
+            svc.FollowProfileSite(store.Object);
+            return (svc, mount, store);
+        }
+
+        [Test]
+        public void A_profile_change_pushes_its_site_into_the_connected_mount() {
+            var (svc, mount, store) = Following(Site(-36.85, 174.76, 120));
+            using (svc) {
+                store.Raise(s => s.Changed += null, EventArgs.Empty);
+                Assert.That(mount.Writes, Is.EqualTo(AllThree));
+            }
+        }
+
+        [Test]
+        public void A_profile_change_with_no_site_leaves_the_mounts_alone() {
+            var (svc, mount, store) = Following(Site(0, 0, 0));
+            using (svc) {
+                store.Raise(s => s.Changed += null, EventArgs.Empty);
+                Assert.That(mount.Writes, Is.Empty);
+            }
+        }
+
+        [Test]
+        public void With_no_mount_connected_a_profile_change_pushes_nothing() {
+            var store = new Mock<IProfileStore>();
+            store.Setup(s => s.GetSiteSettings()).Returns(Site(-36.85, 174.76, 120));
+            var pushes = 0;
+            using var svc = new TelescopeService { RunSitePush = _ => { pushes++; return Task.CompletedTask; } };
+            svc.FollowProfileSite(store.Object);
+            store.Raise(s => s.Changed += null, EventArgs.Empty);
+            Assert.That(pushes, Is.Zero, "a fresh service has no mount connected");
         }
 
         [Test]
