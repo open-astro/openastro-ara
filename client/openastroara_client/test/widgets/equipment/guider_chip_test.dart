@@ -13,6 +13,7 @@ import 'package:openastroara/widgets/equipment/guider_chip.dart';
 import 'package:openastroara/widgets/equipment/equipment_state_chip.dart';
 import 'package:openastroara/widgets/equipment/guider_dialog.dart';
 import 'package:openastroara/widgets/status_indicator.dart';
+import 'package:openastroara/l10n/l10n.dart';
 
 GuiderStatus _status(GuiderConnectionState c, GuiderRuntimeState r) => GuiderStatus(
       deviceId: 'phd2',
@@ -61,6 +62,8 @@ Widget _app(GuiderClient fake) => ProviderScope(
       ],
       child: const MaterialApp(home: Scaffold(body: GuiderConnectionSection())),
     );
+
+final _en = lookupAppLocalizations(const Locale('en'));
 
 void main() {
   group('guiderStatusLevel', () {
@@ -155,8 +158,8 @@ void main() {
 
   group('labels', () {
     test('runtime labels', () {
-      expect(guiderRuntimeLabel(GuiderRuntimeState.guiding), 'Guiding');
-      expect(guiderRuntimeLabel(GuiderRuntimeState.starLost), 'Star lost');
+      expect(guiderRuntimeLabel(_en, GuiderRuntimeState.guiding), 'Guiding');
+      expect(guiderRuntimeLabel(_en, GuiderRuntimeState.starLost), 'Star lost');
     });
   });
 

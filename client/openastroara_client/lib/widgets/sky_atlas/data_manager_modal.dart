@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/data_package.dart';
 import '../../state/sky_atlas/data_manager_state.dart';
 import '../../util/friendly_error.dart';
+import '../../l10n/l10n.dart';
 import '../../theme/ara_colors.dart';
 
 /// §36 Data Manager — the real sky-data package manager. Lists the curated
@@ -352,7 +353,7 @@ class _PackageRow extends ConsumerWidget {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(
-            SnackBar(content: Text(friendlyError(e, action: action))));
+            SnackBar(content: Text(friendlyError(context.l10n, e, action: action))));
       }
     }
   }

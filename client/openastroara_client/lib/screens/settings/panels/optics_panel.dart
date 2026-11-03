@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../util/friendly_error.dart';
+import '../../../l10n/l10n.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../services/camera_geometry_api.dart';
@@ -46,7 +47,7 @@ class _OpticsPanelState extends ConsumerState<OpticsPanel>
       if (mounted) {
         setState(
           () =>
-              _lastError = friendlyError(e, action: 'load your saved settings'),
+              _lastError = friendlyError(context.l10n, e, action: 'load your saved settings'),
         );
       }
     }
@@ -76,7 +77,7 @@ class _OpticsPanelState extends ConsumerState<OpticsPanel>
       messenger.showSnackBar(const SnackBar(content: Text('Saved.')));
     } catch (e) {
       if (!mounted) return;
-      setState(() => _lastError = friendlyError(e, action: 'save that'));
+      setState(() => _lastError = friendlyError(context.l10n, e, action: 'save that'));
       messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -88,6 +89,7 @@ class _OpticsPanelState extends ConsumerState<OpticsPanel>
   Future<void> _refreshFromCamera() async {
     final server = ref.read(activeServerProvider);
     final messenger = ScaffoldMessenger.of(context);
+    final l10n = context.l10n;
     if (server == null) {
       messenger.showSnackBar(
         const SnackBar(
@@ -142,7 +144,7 @@ class _OpticsPanelState extends ConsumerState<OpticsPanel>
       }
     } catch (e) {
       // Set the field without its own setState; the finally's setState rebuilds with it.
-      _lastError = friendlyError(e, action: 'read the camera');
+      _lastError = friendlyError(l10n, e, action: 'read the camera');
       if (mounted) messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
     } finally {
       if (mounted) setState(() => _refreshing = false);

@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../state/imaging/last_frame_state.dart';
 import '../../util/friendly_error.dart';
+import '../../l10n/l10n.dart';
 import '../../state/imaging/live_view_frame_state.dart';
 import '../../theme/ara_colors.dart';
 
@@ -34,7 +35,7 @@ class FrameViewer extends ConsumerWidget {
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(
           child: Text(
-            friendlyError(e, action: 'load the preview'),
+            friendlyError(context.l10n, e, action: 'load the preview'),
             style: Theme.of(context)
                 .textTheme
                 .bodySmall

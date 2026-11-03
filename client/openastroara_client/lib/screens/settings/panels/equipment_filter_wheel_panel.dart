@@ -16,6 +16,7 @@ import '../../../widgets/equipment/manual_filter_wheel_body.dart';
 import '../../../widgets/settings/editable_field.dart';
 import '../../../widgets/settings/settings_row.dart';
 import '../../../util/friendly_error.dart';
+import '../../../l10n/l10n.dart';
 
 /// §37.4 Filter Wheel panel. Shows the connected wheel's live slots (the device's
 /// own names + focus offsets) with a per-slot select, via the shared connection
@@ -437,7 +438,7 @@ Future<void> _persistLabels(BuildContext context, WidgetRef ref) async {
     if (context.mounted) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(friendlyError(e, action: 'save the slot labels'))));
+      ).showSnackBar(SnackBar(content: Text(friendlyError(context.l10n, e, action: 'save the slot labels'))));
     }
   }
 }

@@ -1225,7 +1225,7 @@ class _SimpleGuiderWindowState extends ConsumerState<SimpleGuiderWindow> {
         simpleWindowRow(
           context.l10n.deviceState,
           id: 'State',
-          Text(g.runtimeSummary, style: kSimpleText),
+          Text(g.runtimeSummary(context.l10n), style: kSimpleText),
         ),
       );
       if (g.rmsTotalArcsec != null) {

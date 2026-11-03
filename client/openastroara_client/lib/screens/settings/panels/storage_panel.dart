@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../util/friendly_error.dart';
+import '../../../l10n/l10n.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../services/profile_api.dart';
@@ -50,7 +51,7 @@ class _StoragePanelState extends ConsumerState<StoragePanel>
       if (mounted) {
         setState(
           () =>
-              _lastError = friendlyError(e, action: 'load your saved settings'),
+              _lastError = friendlyError(context.l10n, e, action: 'load your saved settings'),
         );
       }
     }
@@ -85,7 +86,7 @@ class _StoragePanelState extends ConsumerState<StoragePanel>
       messenger.showSnackBar(const SnackBar(content: Text('Saved.')));
     } catch (e) {
       if (!mounted) return;
-      setState(() => _lastError = friendlyError(e, action: 'save that'));
+      setState(() => _lastError = friendlyError(context.l10n, e, action: 'save that'));
       messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
     }
   }
@@ -615,7 +616,7 @@ class _EjectButtonState extends ConsumerState<_EjectButton> {
       );
     } catch (e) {
       messenger.showSnackBar(
-        SnackBar(content: Text(friendlyError(e, action: 'eject the drive'))),
+        SnackBar(content: Text(friendlyError(context.l10n, e, action: 'eject the drive'))),
       );
     } finally {
       api.close();
@@ -708,7 +709,7 @@ class _CheckDiskButtonState extends ConsumerState<_CheckDiskButton> {
       );
     } catch (e) {
       messenger.showSnackBar(
-        SnackBar(content: Text(friendlyError(e, action: 'check the disk'))),
+        SnackBar(content: Text(friendlyError(context.l10n, e, action: 'check the disk'))),
       );
     } finally {
       api.close();
@@ -757,7 +758,7 @@ class _RescanButtonState extends ConsumerState<_RescanButton> {
     } catch (e) {
       messenger.showSnackBar(
         SnackBar(
-          content: Text(friendlyError(e, action: 'check the disk for frames')),
+          content: Text(friendlyError(context.l10n, e, action: 'check the disk for frames')),
         ),
       );
     } finally {
@@ -835,7 +836,7 @@ class _PreviewCacheRowState extends ConsumerState<_PreviewCacheRow> {
       if (!mounted) return;
       messenger.showSnackBar(
         SnackBar(
-          content: Text(friendlyError(e, action: 'clean the preview cache')),
+          content: Text(friendlyError(context.l10n, e, action: 'clean the preview cache')),
         ),
       );
     } finally {

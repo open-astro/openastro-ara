@@ -1192,4 +1192,338 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get shellLanguageSystem => 'System';
+
+  @override
+  String get estopCompactStop => 'STOP';
+
+  @override
+  String get estopCompactHold => 'HOLD';
+
+  @override
+  String get estopCompactPressAgain => 'PRESS\nAGAIN';
+
+  @override
+  String get estopStopping => 'Stopping…';
+
+  @override
+  String get estopHoldToConfirm => 'Hold to confirm';
+
+  @override
+  String get estopPressAgain => 'Press again';
+
+  @override
+  String get estopLabel => 'Emergency Stop';
+
+  @override
+  String get estopPressAgainAnnouncement =>
+      'Press again within 3 seconds to stop everything';
+
+  @override
+  String get estopConfirmTitle => 'Stop everything now?';
+
+  @override
+  String get estopConfirmBody =>
+      'This aborts the running sequence and the in-flight exposure, stops guiding, parks the mount, and switches the flat panel light and the camera cooler off. It cannot be undone — the sequence does not resume.';
+
+  @override
+  String get estopCancel => 'Cancel';
+
+  @override
+  String get estopConfirm => 'EMERGENCY STOP';
+
+  @override
+  String get estopNoServer => 'No server connected — nothing to stop.';
+
+  @override
+  String estopFailed(String error) {
+    return 'EMERGENCY STOP FAILED — $error Check your rig manually.';
+  }
+
+  @override
+  String get estopActionReach => 'reach the rig';
+
+  @override
+  String get estopAlreadyRunning =>
+      'An emergency stop is already running — no second volley sent.';
+
+  @override
+  String estopRunsAborted(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count sequence run(s) aborted',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get estopNoSequence => 'no sequence was running';
+
+  @override
+  String get estopExposureAborted => 'exposure aborted';
+
+  @override
+  String get estopGuidingStopped => 'guiding stopped';
+
+  @override
+  String get estopParkRequested => 'mount told to park';
+
+  @override
+  String get estopFlatPanelOff => 'flat panel light off';
+
+  @override
+  String get estopCoolerOff => 'camera cooler off';
+
+  @override
+  String estopSummary(String parts) {
+    return 'Emergency stop executed: $parts.';
+  }
+
+  @override
+  String estopCheckRig(String failures) {
+    return 'CHECK THE RIG: $failures.';
+  }
+
+  @override
+  String get estopFailAbortRuns =>
+      'SEQUENCE ABORT FAILED (the run may still be executing)';
+
+  @override
+  String get estopFailAbortExposure => 'EXPOSURE ABORT FAILED';
+
+  @override
+  String get estopFailStopGuiding =>
+      'GUIDING MAY STILL BE ACTIVE (stop failed)';
+
+  @override
+  String get estopFailPark => 'MOUNT PARK FAILED — verify it manually';
+
+  @override
+  String get estopFailFlatPanel => 'FLAT PANEL LIGHT-OFF FAILED';
+
+  @override
+  String get estopFailCooler =>
+      'CAMERA COOLER STILL ON (switching it off failed)';
+
+  @override
+  String estopFailOther(String step) {
+    return '$step FAILED';
+  }
+
+  @override
+  String get focusCardInFocus => 'In focus';
+
+  @override
+  String focusCardInFocusHfr(String hfr) {
+    return 'In focus · HFR $hfr';
+  }
+
+  @override
+  String get focusCardFailed => 'Autofocus failed';
+
+  @override
+  String get focusCardCancelled => 'Cancelled';
+
+  @override
+  String get focusCardNotFocused => 'Not focused yet';
+
+  @override
+  String get focusCardFailedSeeLogs => 'Autofocus failed — see Support → Logs';
+
+  @override
+  String focusCardBackAt(String position) {
+    return 'The focuser is back at $position.';
+  }
+
+  @override
+  String focusCardSmart(String shot, String total) {
+    return 'Smart Focus — shot $shot of $total';
+  }
+
+  @override
+  String get focusCardCoarse => 'Finding rough focus…';
+
+  @override
+  String focusCardSweeping(String done, String total) {
+    return 'Sweeping — probe $done of $total';
+  }
+
+  @override
+  String focusCardPass(String pass) {
+    return '(pass $pass)';
+  }
+
+  @override
+  String get focusCardFitting => 'Fitting the curve…';
+
+  @override
+  String get focusCardMoving => 'Moving to best focus…';
+
+  @override
+  String get focusCardConfirming => 'Confirming focus…';
+
+  @override
+  String get focusCardBacklash => 'Measuring focuser backlash…';
+
+  @override
+  String get focusCardRunning => 'Autofocus running…';
+
+  @override
+  String focusCardInFocusAt(String position) {
+    return 'In focus at $position';
+  }
+
+  @override
+  String focusCardTook(String duration) {
+    return 'in $duration';
+  }
+
+  @override
+  String focusCardFailedReason(String reason) {
+    return 'Failed: $reason';
+  }
+
+  @override
+  String get focusCardSeeLogs => 'see Support → Logs';
+
+  @override
+  String focusCardRestoredPosition(String position) {
+    return 'focuser restored to $position';
+  }
+
+  @override
+  String get focusCardNoRunYet => 'No autofocus yet this session.';
+
+  @override
+  String get filterDropdownLabel => 'Filter';
+
+  @override
+  String get filterDropdownDidntMove =>
+      'Couldn\'t change the filter - the wheel didn\'t start moving.';
+
+  @override
+  String filterDropdownNotASlot(String name) {
+    return 'Filter \'$name\' isn\'t a slot on the connected wheel.';
+  }
+
+  @override
+  String get filterDropdownBusy => 'Another action is still in progress.';
+
+  @override
+  String get filterDropdownActionChange => 'change the filter';
+
+  @override
+  String get polarHintOnTarget => 'On target';
+
+  @override
+  String get polarHintLower => 'Lower';
+
+  @override
+  String get polarHintRaise => 'Raise';
+
+  @override
+  String get polarHintMoveWest => 'Move west';
+
+  @override
+  String get polarHintMoveEast => 'Move east';
+
+  @override
+  String get polarHintAltitudeWorse =>
+      'Altitude got worse after that turn — the altitude bolt moves the axis the other way on this mount. Turn it back past where you started.';
+
+  @override
+  String get polarHintAzimuthWorse =>
+      'Azimuth got worse after that turn — the azimuth bolt moves the axis the other way on this mount. Turn it back past where you started.';
+
+  @override
+  String get guiderStateNotGuiding => 'Not guiding';
+
+  @override
+  String get guiderStateLooping => 'Looping';
+
+  @override
+  String get guiderStateStarSelected => 'Star selected';
+
+  @override
+  String get guiderStateCalibrating => 'Calibrating';
+
+  @override
+  String get guiderStateGuiding => 'Guiding';
+
+  @override
+  String get guiderStateSettling => 'Settling';
+
+  @override
+  String get guiderStatePaused => 'Paused';
+
+  @override
+  String get guiderStateStarLost => 'Star lost';
+
+  @override
+  String get guiderStateDithering => 'Dithering';
+
+  @override
+  String get guiderStateAssistant => 'Guiding Assistant';
+
+  @override
+  String get guiderStateUnknown => 'Unknown';
+
+  @override
+  String get guiderStateNotConnected => 'Not connected';
+
+  @override
+  String guiderStateCalibrationStep(String direction, String step) {
+    return '$direction step $step';
+  }
+
+  @override
+  String errorCouldnt(String action) {
+    return 'Couldn\'t $action';
+  }
+
+  @override
+  String get errorActionDefault => 'do that';
+
+  @override
+  String errorNoAnswer(String device) {
+    return 'your rig didn\'t answer. Check it\'s powered on and on the same network as $device.';
+  }
+
+  @override
+  String get errorTooSlow =>
+      'your rig took too long to answer. It may be busy; try again in a moment.';
+
+  @override
+  String get errorUntrusted => 'the connection wasn\'t trusted.';
+
+  @override
+  String get errorCancelled => 'the request was cancelled.';
+
+  @override
+  String get errorNotFound =>
+      'your rig doesn\'t have that. It may be running an older version of Ara.';
+
+  @override
+  String get errorBusy => 'something else is using it right now.';
+
+  @override
+  String get errorRefusedValues => 'your rig refused those values.';
+
+  @override
+  String get errorServer =>
+      'your rig hit an error. Support → Logs has the details.';
+
+  @override
+  String get errorRefused => 'your rig refused the request.';
+
+  @override
+  String get errorConnectionFailed =>
+      'the connection failed. Check your rig is reachable.';
+
+  @override
+  String get errorFile => 'a file problem got in the way';
+
+  @override
+  String get errorUnreadable =>
+      'your rig sent something Ara didn\'t understand. It may be running a different version.';
 }

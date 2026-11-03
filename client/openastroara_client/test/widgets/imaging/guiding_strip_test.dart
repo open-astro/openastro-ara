@@ -29,6 +29,7 @@ import 'package:openastroara/state/ws/ws_providers.dart';
 import 'package:openastroara/theme/ara_colors.dart';
 import 'package:openastroara/widgets/imaging/guiding_strip.dart';
 import 'package:openastroara/widgets/imaging/guiding_tune_dialog.dart';
+import 'package:openastroara/l10n/l10n.dart';
 
 /// Records the painter's rectangles; every other canvas call is a no-op.
 class _RectCanvas implements Canvas {
@@ -180,6 +181,8 @@ Future<void> _teardownPanel(WidgetTester tester, ProviderContainer c) async {
   c.dispose();
   await tester.pump();
 }
+
+final _en = lookupAppLocalizations(const Locale('en'));
 
 void main() {
   // 2026-10-17: guiding stopped from the guide camera's Stop had no way back
@@ -905,20 +908,20 @@ void main() {
     GuiderStatus st(GuiderRuntimeState r, {Map<String, dynamic>? cal}) => cal == null
         ? GuiderStatus(name: 'G', connectionState: GuiderConnectionState.connected, runtimeState: r)
         : GuiderStatus.fromJson(<String, dynamic>{'state': 'connected', 'runtime': cal});
-    expect(GuidingStrip.stateLabel(st(GuiderRuntimeState.looping)), 'looping');
-    expect(GuidingStrip.stateLabel(st(GuiderRuntimeState.starSelected)), 'star selected');
-    expect(GuidingStrip.stateLabel(st(GuiderRuntimeState.settling)), 'settling');
-    expect(GuidingStrip.stateLabel(st(GuiderRuntimeState.starLost)), 'star lost');
-    expect(GuidingStrip.stateLabel(st(GuiderRuntimeState.unknown)), 'connected', reason: 'not yet polled');
-    expect(GuidingStrip.stateLabel(null), 'disconnected');
+    expect(GuidingStrip.stateLabel(_en, st(GuiderRuntimeState.looping)), 'looping');
+    expect(GuidingStrip.stateLabel(_en, st(GuiderRuntimeState.starSelected)), 'star selected');
+    expect(GuidingStrip.stateLabel(_en, st(GuiderRuntimeState.settling)), 'settling');
+    expect(GuidingStrip.stateLabel(_en, st(GuiderRuntimeState.starLost)), 'star lost');
+    expect(GuidingStrip.stateLabel(_en, st(GuiderRuntimeState.unknown)), 'connected', reason: 'not yet polled');
+    expect(GuidingStrip.stateLabel(_en, null), 'disconnected');
     expect(
-      GuidingStrip.stateLabel(st(GuiderRuntimeState.calibrating, cal: {
+      GuidingStrip.stateLabel(_en, st(GuiderRuntimeState.calibrating, cal: {
         'state': 'calibrating', 'calibration_direction': 'East', 'calibration_step': 4, 'calibration_distance_px': 6.0,
       })),
       'calibrating · East step 4 · 6.0 px',
     );
     for (final r in GuiderRuntimeState.values.where((r) => r != GuiderRuntimeState.unknown)) {
-      expect(GuidingStrip.stateLabel(st(r)), guiderRuntimeText(r).toLowerCase(), reason: '$r drifts from the shared wording');
+      expect(GuidingStrip.stateLabel(_en, st(r)), guiderRuntimeText(_en, r).toLowerCase(), reason: '$r drifts from the shared wording');
     }
   });
 

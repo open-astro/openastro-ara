@@ -12,6 +12,7 @@ import '../state/imaging/live_view_state.dart';
 import '../state/imaging/solve_state.dart';
 import '../state/saved_server_state.dart';
 import '../util/friendly_error.dart';
+import '../l10n/l10n.dart';
 import '../state/simple_messages_state.dart';
 
 // Capture actions shared by the Live tab and Simple Mode's Preview, moved out
@@ -66,6 +67,7 @@ Future<void> toggleLiveView(
 /// just surface accepted/failed to the user.
 Future<void> takeOne(BuildContext context, WidgetRef ref) async {
   final notify = userNotifier(context);
+  final l10n = context.l10n;
   // Commit any half-typed control edit (the fields commit on focus loss)
   // before reading the exposure params this shot will use. The zero delay
   // lets the focus system deliver the change listeners.
@@ -93,7 +95,7 @@ Future<void> takeOne(BuildContext context, WidgetRef ref) async {
     frameId = await CameraExposureApi(server).takeOne(params);
   } catch (e) {
     progress.fail(
-      friendlyError(e, action: 'take that exposure'),
+      friendlyError(l10n, e, action: 'take that exposure'),
       generation: generation,
     );
     return;
@@ -133,7 +135,7 @@ Future<void> takeOne(BuildContext context, WidgetRef ref) async {
     }
   } catch (e) {
     progress.fail(
-      friendlyError(e, action: 'confirm the frame arrived'),
+      friendlyError(l10n, e, action: 'confirm the frame arrived'),
       generation: generation,
     );
     return;
@@ -184,6 +186,9 @@ Future<void> cancelCapture(BuildContext context, WidgetRef ref) async {
     // double-tap race where the first abort won, or the capture finished
     // while the abort was in flight) — nothing to warn about.
     if (!context.mounted) return;
-    notify(friendlyError(e, action: 'abort the capture'), error: true);
+    notify(
+      friendlyError(context.l10n, e, action: 'abort the capture'),
+      error: true,
+    );
   }
 }

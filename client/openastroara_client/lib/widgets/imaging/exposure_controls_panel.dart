@@ -11,6 +11,7 @@ import '../../state/imaging/exposure_state.dart';
 import '../../state/settings/filter_wheel_labels_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../util/friendly_error.dart';
+import '../../l10n/l10n.dart';
 
 /// Right-side controls in the Imaging tab per §25.5.1 — exposure / gain /
 /// offset / bin / filter / frame type + Take One + Live View toggle.
@@ -540,9 +541,8 @@ class _FilterDropdownState extends ConsumerState<FilterDropdown>
       _sawMove = false;
       _resetToken++;
     });
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-      content: Text("Couldn't change the filter - the wheel "
-          'didn\'t start moving.'),
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(context.l10n.filterDropdownDidntMove),
       backgroundColor: AraColors.accentError,
     ));
   }
@@ -630,7 +630,7 @@ class _FilterDropdownState extends ConsumerState<FilterDropdown>
     final busy = _phase == _FilterPhase.changing;
     final blink = _blinkColor;
     final decoration = InputDecoration(
-      labelText: 'Filter',
+      labelText: context.l10n.filterDropdownLabel,
       enabledBorder: blink == null
           ? null
           : UnderlineInputBorder(
@@ -672,7 +672,7 @@ class _FilterDropdownState extends ConsumerState<FilterDropdown>
                 if (!context.mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                   content: Text(
-                    "Filter '$n' isn't a slot on the connected wheel.",
+                    context.l10n.filterDropdownNotASlot(n),
                   ),
                   backgroundColor: AraColors.accentError,
                 ));
@@ -713,8 +713,8 @@ class _FilterDropdownState extends ConsumerState<FilterDropdown>
                     });
                   }
                   if (!context.mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                    content: Text('Another action is still in progress.'),
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                    content: Text(context.l10n.filterDropdownBusy),
                   ));
                   return;
                 }
@@ -740,7 +740,7 @@ class _FilterDropdownState extends ConsumerState<FilterDropdown>
                 }
                 if (!context.mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                  content: Text(friendlyError(e, action: 'change the filter')),
+                  content: Text(friendlyError(context.l10n, e, action: context.l10n.filterDropdownActionChange)),
                   backgroundColor: AraColors.accentError,
                 ));
               }

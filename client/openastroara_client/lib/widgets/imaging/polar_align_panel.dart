@@ -12,6 +12,7 @@ import '../../state/settings/site_settings_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
 import '../../util/friendly_error.dart';
+import '../../l10n/l10n.dart';
 import '../fit_pane.dart';
 import 'polar_error_rating.dart';
 
@@ -57,8 +58,9 @@ const double polarSolveNoiseArcmin = 0.5;
 /// bump or a re-seat, not a bolt direction, and says nothing; nor does an
 /// axis that crossed zero (the right way, too far — an overshoot, however
 /// large), since "turn it back past where you started" would be wrong.
+/// The axis to name: true altitude, false azimuth, null none.
 /// Pure — unit-tested.
-String? boltDirectionNudge({
+bool? boltDirectionNudge({
   required double? prevAlt,
   required double? prevAz,
   required double? alt,
@@ -71,12 +73,10 @@ String? boltDirectionNudge({
       after.abs() - before.abs() > math.max(noiseArcmin, before.abs() * 0.1);
   bool still(double before, double after) => (after - before).abs() <= noiseArcmin;
   if (grew(prevAlt, alt) && still(prevAz, az)) {
-    return 'Altitude got worse after that turn — the altitude bolt moves the '
-        'axis the other way on this mount. Turn it back past where you started.';
+    return true;
   }
   if (grew(prevAz, az) && still(prevAlt, alt)) {
-    return 'Azimuth got worse after that turn — the azimuth bolt moves the '
-        'axis the other way on this mount. Turn it back past where you started.';
+    return false;
   }
   return null;
 }
@@ -88,12 +88,11 @@ class BoltNudgeTracker {
   double? _prevAlt;
   double? _prevAz;
   int _iteration = 0;
-  bool _axisAlt = true;
   int _untilIteration = 0;
   static const _frames = 3;
 
-  /// The amber line to show, or null.
-  String? nudge;
+  /// The axis the amber line names (true altitude, false azimuth), or null.
+  bool? nudge;
 
   /// Compare this frame's errors with the previous frame's. Call on every
   /// live-state change; a seed or a new run resets the baseline.
@@ -115,13 +114,12 @@ class BoltNudgeTracker {
         prevAlt: _prevAlt, prevAz: _prevAz, alt: live.altErrorArcmin, az: live.azErrorArcmin);
     if (found != null) {
       nudge = found;
-      _axisAlt = found.startsWith('Altitude');
       _untilIteration = live.iteration + _frames;
     } else if (nudge != null) {
       // Cleared as soon as the named axis actually improves by more than the
       // noise (the user turned the bolt back), else after a few frames.
-      final before = _axisAlt ? _prevAlt : _prevAz;
-      final after = _axisAlt ? live.altErrorArcmin : live.azErrorArcmin;
+      final before = nudge! ? _prevAlt : _prevAz;
+      final after = nudge! ? live.altErrorArcmin : live.azErrorArcmin;
       final improved = before != null &&
           after != null &&
           before.abs() - after.abs() > polarSolveNoiseArcmin;
@@ -149,10 +147,10 @@ Offset bullseyeDotFraction(double? azErrArcmin, double? altErrArcmin, double ran
 /// Altitude knob direction for the current error (§45 design: decoupled
 /// knob directions, since chasing one coupled 2-D error is what makes people
 /// feel lost). Positive = axis above the pole → lower. Pure.
-(IconData, String) polarAltHint(double? alt) {
+(IconData, String) polarAltHint(AppLocalizations l, double? alt) {
   if (alt == null) return (Icons.remove, '—');
-  if (alt.abs() <= 0.05) return (Icons.check, 'On target');
-  return alt > 0 ? (Icons.arrow_downward, 'Lower') : (Icons.arrow_upward, 'Raise');
+  if (alt.abs() <= 0.05) return (Icons.check, l.polarHintOnTarget);
+  return alt > 0 ? (Icons.arrow_downward, l.polarHintLower) : (Icons.arrow_upward, l.polarHintRaise);
 }
 
 /// Azimuth knob direction for the current error: positive = axis east of the
@@ -160,13 +158,13 @@ Offset bullseyeDotFraction(double? azErrArcmin, double? altErrArcmin, double ran
 /// facing the pole: west is on the LEFT facing the NCP and on the RIGHT facing
 /// the SCP ([southern]). 2026-10-17: a southern site read "Move east" beside an
 /// arrow to the right. Pure — unit-tested.
-(IconData, String) polarAzHint(double? az, {required bool southern}) {
+(IconData, String) polarAzHint(AppLocalizations l, double? az, {required bool southern}) {
   if (az == null) return (Icons.remove, '—');
-  if (az.abs() <= 0.05) return (Icons.check, 'On target');
+  if (az.abs() <= 0.05) return (Icons.check, l.polarHintOnTarget);
   final westIsLeft = !southern;
   return az > 0
-      ? (westIsLeft ? Icons.arrow_back : Icons.arrow_forward, 'Move west')
-      : (westIsLeft ? Icons.arrow_forward : Icons.arrow_back, 'Move east');
+      ? (westIsLeft ? Icons.arrow_back : Icons.arrow_forward, l.polarHintMoveWest)
+      : (westIsLeft ? Icons.arrow_forward : Icons.arrow_back, l.polarHintMoveEast);
 }
 
 /// Format a signed arcminute value like `+14.2′` / `−23.4′`.
@@ -341,7 +339,7 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
       await op();
     } catch (e) {
       if (mounted) {
-        setState(() => _status = friendlyError(e, action: action));
+        setState(() => _status = friendlyError(context.l10n, e, action: action));
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -862,9 +860,9 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
               IntrinsicHeight(
                 child: Row(
                   children: [
-                    Expanded(child: _axisStat('Altitude', live.altErrorArcmin, polarAltHint(live.altErrorArcmin), color)),
+                    Expanded(child: _axisStat('Altitude', live.altErrorArcmin, polarAltHint(context.l10n, live.altErrorArcmin), color)),
                     const VerticalDivider(width: 1, color: Color(0x1FFFFFFF)),
-                    Expanded(child: _axisStat('Azimuth', live.azErrorArcmin, polarAzHint(live.azErrorArcmin, southern: _southern), color)),
+                    Expanded(child: _axisStat('Azimuth', live.azErrorArcmin, polarAzHint(context.l10n, live.azErrorArcmin, southern: _southern), color)),
                   ],
                 ),
               ),
@@ -923,8 +921,8 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
               ],
             ),
           ),
-          Expanded(child: _axisStat('Altitude', live.altErrorArcmin, polarAltHint(live.altErrorArcmin), color)),
-          Expanded(child: _axisStat('Azimuth', live.azErrorArcmin, polarAzHint(live.azErrorArcmin, southern: _southern), color)),
+          Expanded(child: _axisStat('Altitude', live.altErrorArcmin, polarAltHint(context.l10n, live.altErrorArcmin), color)),
+          Expanded(child: _axisStat('Azimuth', live.azErrorArcmin, polarAzHint(context.l10n, live.azErrorArcmin, southern: _southern), color)),
         ],
       );
     return _card(
@@ -942,14 +940,14 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
   }
 
   /// §45.16 the bolt-direction nudge, amber, under the knob directions.
-  Widget _nudgeLine(String nudge) => Row(
+  Widget _nudgeLine(bool altitude) => Row(
         key: const Key('polar-align-nudge'),
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Icon(Icons.u_turn_left, size: 18, color: AraColors.accentBusy),
           const SizedBox(width: 8),
           Expanded(
-            child: Text(nudge,
+            child: Text(altitude ? context.l10n.polarHintAltitudeWorse : context.l10n.polarHintAzimuthWorse,
                 style: const TextStyle(fontSize: _smallFont, color: AraColors.accentBusy, height: 1.3)),
           ),
         ],

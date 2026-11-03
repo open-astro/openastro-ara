@@ -91,7 +91,7 @@ class SimplePolarShutter extends ConsumerWidget {
         await op();
       } catch (e) {
         notify(
-          friendlyError(e, action: action),
+          friendlyError(l10n, e, action: action),
           error: true,
           snackBarRed: false,
         );
@@ -187,7 +187,9 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
     try {
       await op(api);
     } catch (e) {
-      if (mounted) setState(() => _error = friendlyError(e, action: action));
+      if (mounted) {
+        setState(() => _error = friendlyError(context.l10n, e, action: action));
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -290,22 +292,19 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
               turn(
                 l10n.polarAltitude,
                 live.altErrorArcmin,
-                polarAltHint(live.altErrorArcmin),
+                polarAltHint(l10n, live.altErrorArcmin),
               ),
               turn(
                 l10n.polarAzimuth,
                 live.azErrorArcmin,
-                polarAzHint(live.azErrorArcmin, southern: southern),
+                polarAzHint(l10n, live.azErrorArcmin, southern: southern),
               ),
             ],
             // The full panel's nudge, cut to two lines for the 248 px panel.
             if (active && _bolt.nudge != null)
               Text(
-                // BoltNudgeTracker's nudge is English; only its axis is read.
                 l10n.polarBoltWorse(
-                  _bolt.nudge!.startsWith('Altitude')
-                      ? l10n.polarAltitude
-                      : l10n.polarAzimuth,
+                  _bolt.nudge! ? l10n.polarAltitude : l10n.polarAzimuth,
                 ),
                 style: kSimpleText.copyWith(color: AraColors.accentBusy),
               ),

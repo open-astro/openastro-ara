@@ -7,6 +7,7 @@ import '../../services/storage_devices_api.dart';
 import '../../state/saved_server_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../util/friendly_error.dart';
+import '../../l10n/l10n.dart';
 
 /// Copy the store — all of it, or folders picked on it — onto a second drive
 /// plugged into the server. Copy only: nothing on either drive is deleted or
@@ -138,7 +139,7 @@ class _CopyDialogState extends ConsumerState<_CopyDialog> {
       if (mounted) setState(() => _error = copyFailureMessage(e.code, e.detail));
     } catch (e) {
       if (mounted) {
-        setState(() => _error = friendlyError(e, action: 'start the copy'));
+        setState(() => _error = friendlyError(context.l10n, e, action: 'start the copy'));
       }
     } finally {
       api.close();
@@ -154,7 +155,7 @@ class _CopyDialogState extends ConsumerState<_CopyDialog> {
       await api.cancel();
     } catch (e) {
       if (mounted) {
-        setState(() => _error = friendlyError(e, action: 'cancel the copy'));
+        setState(() => _error = friendlyError(context.l10n, e, action: 'cancel the copy'));
       }
     } finally {
       api.close();
@@ -212,7 +213,7 @@ class _CopyDialogState extends ConsumerState<_CopyDialog> {
       error: (e, _) => SizedBox(
         height: 140,
         child: Center(
-            child: Text(friendlyError(e, action: "read the server's disks"),
+            child: Text(friendlyError(context.l10n, e, action: "read the server's disks"),
                 textAlign: TextAlign.center)),
       ),
       data: (all) {
@@ -420,7 +421,7 @@ class _FolderChecklistState extends ConsumerState<_FolderChecklist> {
       });
     } catch (e) {
       if (mounted) {
-        setState(() => _error = friendlyError(e, action: 'list the folders'));
+        setState(() => _error = friendlyError(context.l10n, e, action: 'list the folders'));
       }
     } finally {
       api.close();

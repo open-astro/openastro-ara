@@ -1,12 +1,16 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/util/friendly_error.dart';
+import 'package:flutter/widgets.dart' show Locale;
+import 'package:openastroara/l10n/l10n.dart';
 
 /// Pins the user-facing error copy: a raw DioException dump ("The request
 /// connection took longer than 0:00:03.000000… RequestOptions.connectTimeout…")
 /// must never reach a SnackBar — timeouts and connection failures read as
 /// sentences a person can act on, and the server's own problem-detail wins when
 /// it sent one.
+final _en = lookupAppLocalizations(const Locale('en'));
+
 void main() {
   test('connection timeout reads as an actionable sentence, not raw Dio text',
       () {
@@ -18,7 +22,7 @@ void main() {
           'aborted. To get rid of this exception, try raising the '
           'RequestOptions.connectTimeout above the duration of 0:00:03.000000',
     );
-    final msg = friendlyError(e, action: 'read the camera');
+    final msg = friendlyError(_en, e, action: 'read the camera');
     expect(msg, contains("Couldn't read the camera"));
     expect(msg, contains("didn't answer"));
     expect(msg, isNot(contains('connectTimeout')));
@@ -31,7 +35,7 @@ void main() {
       requestOptions: RequestOptions(path: '/x'),
       type: DioExceptionType.receiveTimeout,
     );
-    final msg = friendlyError(e, action: 'save your settings');
+    final msg = friendlyError(_en, e, action: 'save your settings');
     expect(msg, contains("Couldn't save your settings"));
     expect(msg, contains('took too long'));
   });
@@ -46,7 +50,7 @@ void main() {
         data: {'detail': 'this camera does not support cooling'},
       ),
     );
-    expect(friendlyError(e, action: 'set the cooler'),
+    expect(friendlyError(_en, e, action: 'set the cooler'),
         'this camera does not support cooling');
   });
 
@@ -59,7 +63,7 @@ void main() {
         statusCode: 500,
       ),
     );
-    final msg = friendlyError(e, action: 'load the library');
+    final msg = friendlyError(_en, e, action: 'load the library');
     expect(msg, contains("Couldn't load the library"));
     expect(msg, contains('Logs'));
   });

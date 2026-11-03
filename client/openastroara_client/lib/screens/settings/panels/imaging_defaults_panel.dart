@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../util/friendly_error.dart';
+import '../../../l10n/l10n.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../services/profile_api.dart';
@@ -49,7 +50,7 @@ class _ImagingDefaultsPanelState extends ConsumerState<ImagingDefaultsPanel>
       if (mounted) {
         setState(
           () =>
-              _lastError = friendlyError(e, action: 'load your saved settings'),
+              _lastError = friendlyError(context.l10n, e, action: 'load your saved settings'),
         );
       }
     }
@@ -75,7 +76,7 @@ class _ImagingDefaultsPanelState extends ConsumerState<ImagingDefaultsPanel>
       messenger.showSnackBar(const SnackBar(content: Text('Saved.')));
     } catch (e) {
       if (!mounted) return;
-      setState(() => _lastError = friendlyError(e, action: 'save that'));
+      setState(() => _lastError = friendlyError(context.l10n, e, action: 'save that'));
       messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
     }
   }
@@ -290,6 +291,7 @@ class _ImagingDefaultsPanelState extends ConsumerState<ImagingDefaultsPanel>
 
   Future<void> _recalibrateSkyModel() async {
     final messenger = ScaffoldMessenger.of(context);
+    final l10n = context.l10n;
     setState(() => _refitting = true);
     try {
       final record = await ref.read(skyModelCalibrationProvider.notifier).recalibrate();
@@ -305,7 +307,7 @@ class _ImagingDefaultsPanelState extends ConsumerState<ImagingDefaultsPanel>
       );
     } catch (e) {
       messenger.showSnackBar(
-        SnackBar(content: Text(friendlyError(e, action: 'refit the sky model'))),
+        SnackBar(content: Text(friendlyError(l10n, e, action: 'refit the sky model'))),
       );
     } finally {
       if (mounted) setState(() => _refitting = false);

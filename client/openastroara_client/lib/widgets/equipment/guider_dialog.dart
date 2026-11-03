@@ -4,11 +4,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/equipment_device_status.dart';
 import '../../models/guider_status.dart';
 import '../../state/guider/guider_state.dart';
+import '../../l10n/l10n.dart';
 import '../../theme/ara_colors.dart';
 import 'equipment_state_chip.dart';
 
 /// Human-readable runtime-phase label (one wording for every screen, #1364).
-String guiderRuntimeLabel(GuiderRuntimeState state) => guiderRuntimeText(state);
+String guiderRuntimeLabel(AppLocalizations l, GuiderRuntimeState state) => guiderRuntimeText(l, state);
 
 /// The §63 guider link: status rows plus Refresh and Connect/Disconnect. Lives
 /// at the top of the guider's Settings panel, where the top-bar GUIDE chip
@@ -148,7 +149,7 @@ class _StatusBody extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _row(context, 'State', guiderRuntimeLabel(status.runtimeState)),
+        _row(context, 'State', guiderRuntimeLabel(context.l10n, status.runtimeState)),
         if (status.currentProfile != null) _row(context, 'Profile', status.currentProfile!),
         if (rms != null) _row(context, 'RMS', '${rms.toStringAsFixed(2)}"'),
       ],

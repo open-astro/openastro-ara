@@ -1548,7 +1548,7 @@ class _GuidingBar extends ConsumerWidget {
                       ? context.l10n.shellGuidingRms(
                           GuidingStrip.fmt(status?.rmsTotalArcsec, '″'),
                         )
-                      : GuidingStrip.stateLabel(status),
+                      : GuidingStrip.stateLabel(context.l10n, status),
                   style: AraText.caption,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -2312,7 +2312,11 @@ class _ThisRig extends ConsumerWidget {
     try {
       await persist(api);
     } catch (e) {
-      notify(l10n.shellCouldntSave, detail: friendlyError(e), error: true);
+      notify(
+        l10n.shellCouldntSave,
+        detail: friendlyError(l10n, e),
+        error: true,
+      );
     }
   }
 
@@ -2329,7 +2333,7 @@ class _ThisRig extends ConsumerWidget {
       } catch (e) {
         notify(
           l10n.shellCouldntSetClock,
-          detail: friendlyError(e),
+          detail: friendlyError(l10n, e),
           error: true,
         );
       }
@@ -2351,7 +2355,7 @@ class _ThisRig extends ConsumerWidget {
       } catch (e) {
         notify(
           l10n.shellCouldntSaveSite,
-          detail: friendlyError(e),
+          detail: friendlyError(l10n, e),
           error: true,
         );
         return;

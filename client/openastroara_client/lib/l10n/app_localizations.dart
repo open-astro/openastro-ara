@@ -2191,6 +2191,564 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'System'**
   String get shellLanguageSystem;
+
+  /// Emergency Stop button (Simple Mode rail and full UI status bar): the compact square's label at rest; keep it short (60 px)
+  ///
+  /// In en, this message translates to:
+  /// **'STOP'**
+  String get estopCompactStop;
+
+  /// Emergency Stop button (Simple Mode rail and full UI status bar): the compact square's label while held
+  ///
+  /// In en, this message translates to:
+  /// **'HOLD'**
+  String get estopCompactHold;
+
+  /// Emergency Stop button (Simple Mode rail and full UI status bar): the compact square's label after one keyboard/screen-reader press; two short lines (60 px)
+  ///
+  /// In en, this message translates to:
+  /// **'PRESS\nAGAIN'**
+  String get estopCompactPressAgain;
+
+  /// Emergency Stop button (Simple Mode rail and full UI status bar): label while the stop request is in flight
+  ///
+  /// In en, this message translates to:
+  /// **'Stopping…'**
+  String get estopStopping;
+
+  /// Emergency Stop button (Simple Mode rail and full UI status bar): label while the press is held
+  ///
+  /// In en, this message translates to:
+  /// **'Hold to confirm'**
+  String get estopHoldToConfirm;
+
+  /// Emergency Stop button (Simple Mode rail and full UI status bar): label after one keyboard/screen-reader press
+  ///
+  /// In en, this message translates to:
+  /// **'Press again'**
+  String get estopPressAgain;
+
+  /// Emergency Stop button (Simple Mode rail and full UI status bar): label at rest
+  ///
+  /// In en, this message translates to:
+  /// **'Emergency Stop'**
+  String get estopLabel;
+
+  /// Emergency Stop button (Simple Mode rail and full UI status bar): screen-reader announcement after the first press
+  ///
+  /// In en, this message translates to:
+  /// **'Press again within 3 seconds to stop everything'**
+  String get estopPressAgainAnnouncement;
+
+  /// Emergency Stop confirm dialog (keyboard/screen reader, full UI): title
+  ///
+  /// In en, this message translates to:
+  /// **'Stop everything now?'**
+  String get estopConfirmTitle;
+
+  /// Emergency Stop confirm dialog: what the stop does
+  ///
+  /// In en, this message translates to:
+  /// **'This aborts the running sequence and the in-flight exposure, stops guiding, parks the mount, and switches the flat panel light and the camera cooler off. It cannot be undone — the sequence does not resume.'**
+  String get estopConfirmBody;
+
+  /// Emergency Stop confirm dialog: cancel button
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get estopCancel;
+
+  /// Emergency Stop confirm dialog: the confirm button
+  ///
+  /// In en, this message translates to:
+  /// **'EMERGENCY STOP'**
+  String get estopConfirm;
+
+  /// Emergency Stop message when no rig is connected
+  ///
+  /// In en, this message translates to:
+  /// **'No server connected — nothing to stop.'**
+  String get estopNoServer;
+
+  /// Emergency Stop message when the request itself failed; error is a full sentence saying why
+  ///
+  /// In en, this message translates to:
+  /// **'EMERGENCY STOP FAILED — {error} Check your rig manually.'**
+  String estopFailed(String error);
+
+  /// Emergency Stop: error message tail after "Couldn't " when the rig can't be reached; lower-case, no period
+  ///
+  /// In en, this message translates to:
+  /// **'reach the rig'**
+  String get estopActionReach;
+
+  /// Emergency Stop result when a stop was already in progress
+  ///
+  /// In en, this message translates to:
+  /// **'An emergency stop is already running — no second volley sent.'**
+  String get estopAlreadyRunning;
+
+  /// Emergency Stop result, one item of the comma-separated list: running sequences aborted
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, other{{count} sequence run(s) aborted}}'**
+  String estopRunsAborted(int count);
+
+  /// Emergency Stop result list item
+  ///
+  /// In en, this message translates to:
+  /// **'no sequence was running'**
+  String get estopNoSequence;
+
+  /// Emergency Stop result list item
+  ///
+  /// In en, this message translates to:
+  /// **'exposure aborted'**
+  String get estopExposureAborted;
+
+  /// Emergency Stop result list item
+  ///
+  /// In en, this message translates to:
+  /// **'guiding stopped'**
+  String get estopGuidingStopped;
+
+  /// Emergency Stop result list item
+  ///
+  /// In en, this message translates to:
+  /// **'mount told to park'**
+  String get estopParkRequested;
+
+  /// Emergency Stop result list item
+  ///
+  /// In en, this message translates to:
+  /// **'flat panel light off'**
+  String get estopFlatPanelOff;
+
+  /// Emergency Stop result list item
+  ///
+  /// In en, this message translates to:
+  /// **'camera cooler off'**
+  String get estopCoolerOff;
+
+  /// Emergency Stop result; parts is the comma-separated list of what each step did
+  ///
+  /// In en, this message translates to:
+  /// **'Emergency stop executed: {parts}.'**
+  String estopSummary(String parts);
+
+  /// Emergency Stop result when a step failed; failures is the semicolon-separated list
+  ///
+  /// In en, this message translates to:
+  /// **'CHECK THE RIG: {failures}.'**
+  String estopCheckRig(String failures);
+
+  /// Emergency Stop failed step
+  ///
+  /// In en, this message translates to:
+  /// **'SEQUENCE ABORT FAILED (the run may still be executing)'**
+  String get estopFailAbortRuns;
+
+  /// Emergency Stop failed step
+  ///
+  /// In en, this message translates to:
+  /// **'EXPOSURE ABORT FAILED'**
+  String get estopFailAbortExposure;
+
+  /// Emergency Stop failed step
+  ///
+  /// In en, this message translates to:
+  /// **'GUIDING MAY STILL BE ACTIVE (stop failed)'**
+  String get estopFailStopGuiding;
+
+  /// Emergency Stop failed step
+  ///
+  /// In en, this message translates to:
+  /// **'MOUNT PARK FAILED — verify it manually'**
+  String get estopFailPark;
+
+  /// Emergency Stop failed step
+  ///
+  /// In en, this message translates to:
+  /// **'FLAT PANEL LIGHT-OFF FAILED'**
+  String get estopFailFlatPanel;
+
+  /// Emergency Stop failed step
+  ///
+  /// In en, this message translates to:
+  /// **'CAMERA COOLER STILL ON (switching it off failed)'**
+  String get estopFailCooler;
+
+  /// Emergency Stop failed step the app has no wording for; step is the daemon's token
+  ///
+  /// In en, this message translates to:
+  /// **'{step} FAILED'**
+  String estopFailOther(String step);
+
+  /// Focus panel, main telescope card (Simple Mode Focus and full UI): headline after a run
+  ///
+  /// In en, this message translates to:
+  /// **'In focus'**
+  String get focusCardInFocus;
+
+  /// Focus panel, main telescope card (Simple Mode Focus and full UI): headline after a run, with the final HFR
+  ///
+  /// In en, this message translates to:
+  /// **'In focus · HFR {hfr}'**
+  String focusCardInFocusHfr(String hfr);
+
+  /// Focus panel, main telescope card (Simple Mode Focus and full UI): headline after a failed run
+  ///
+  /// In en, this message translates to:
+  /// **'Autofocus failed'**
+  String get focusCardFailed;
+
+  /// Focus panel, main telescope card (Simple Mode Focus and full UI): headline/phase after a cancelled run
+  ///
+  /// In en, this message translates to:
+  /// **'Cancelled'**
+  String get focusCardCancelled;
+
+  /// Focus panel, main telescope card (Simple Mode Focus and full UI): headline before any run
+  ///
+  /// In en, this message translates to:
+  /// **'Not focused yet'**
+  String get focusCardNotFocused;
+
+  /// Focus panel, main telescope card (Simple Mode Focus and full UI): failure banner when the daemon gave no reason
+  ///
+  /// In en, this message translates to:
+  /// **'Autofocus failed — see Support → Logs'**
+  String get focusCardFailedSeeLogs;
+
+  /// Focus panel, main telescope card (Simple Mode Focus and full UI): failure banner tail; position is the focuser step
+  ///
+  /// In en, this message translates to:
+  /// **'The focuser is back at {position}.'**
+  String focusCardBackAt(String position);
+
+  /// Focus panel, main telescope card (Simple Mode Focus and full UI): phase while Smart Focus runs
+  ///
+  /// In en, this message translates to:
+  /// **'Smart Focus — shot {shot} of {total}'**
+  String focusCardSmart(String shot, String total);
+
+  /// Focus panel, main telescope card (Simple Mode Focus and full UI): phase
+  ///
+  /// In en, this message translates to:
+  /// **'Finding rough focus…'**
+  String get focusCardCoarse;
+
+  /// Focus panel, main telescope card (Simple Mode Focus and full UI): phase during the V-curve sweep
+  ///
+  /// In en, this message translates to:
+  /// **'Sweeping — probe {done} of {total}'**
+  String focusCardSweeping(String done, String total);
+
+  /// Focus panel, main telescope card (Simple Mode Focus and full UI): after the sweep phase when it is not the first sweep
+  ///
+  /// In en, this message translates to:
+  /// **'(pass {pass})'**
+  String focusCardPass(String pass);
+
+  /// Focus panel, main telescope card (Simple Mode Focus and full UI): phase
+  ///
+  /// In en, this message translates to:
+  /// **'Fitting the curve…'**
+  String get focusCardFitting;
+
+  /// Focus panel, main telescope card (Simple Mode Focus and full UI): phase
+  ///
+  /// In en, this message translates to:
+  /// **'Moving to best focus…'**
+  String get focusCardMoving;
+
+  /// Focus panel, main telescope card (Simple Mode Focus and full UI): phase
+  ///
+  /// In en, this message translates to:
+  /// **'Confirming focus…'**
+  String get focusCardConfirming;
+
+  /// Focus panel, main telescope card (Simple Mode Focus and full UI): phase
+  ///
+  /// In en, this message translates to:
+  /// **'Measuring focuser backlash…'**
+  String get focusCardBacklash;
+
+  /// Focus panel, main telescope card (Simple Mode Focus and full UI): phase the app has no wording for
+  ///
+  /// In en, this message translates to:
+  /// **'Autofocus running…'**
+  String get focusCardRunning;
+
+  /// Focus panel, main telescope card (Simple Mode Focus and full UI): phase line after a run; position is the focuser step
+  ///
+  /// In en, this message translates to:
+  /// **'In focus at {position}'**
+  String focusCardInFocusAt(String position);
+
+  /// Focus panel, main telescope card (Simple Mode Focus and full UI): after the In focus phase line; duration like 2m 00s
+  ///
+  /// In en, this message translates to:
+  /// **'in {duration}'**
+  String focusCardTook(String duration);
+
+  /// Focus panel, main telescope card (Simple Mode Focus and full UI): phase line after a failed run; reason is the daemon's text
+  ///
+  /// In en, this message translates to:
+  /// **'Failed: {reason}'**
+  String focusCardFailedReason(String reason);
+
+  /// Focus panel, main telescope card (Simple Mode Focus and full UI): failed phase line when the daemon gave no reason
+  ///
+  /// In en, this message translates to:
+  /// **'see Support → Logs'**
+  String get focusCardSeeLogs;
+
+  /// Focus panel, main telescope card (Simple Mode Focus and full UI): after a failed/cancelled phase line, following a dash
+  ///
+  /// In en, this message translates to:
+  /// **'focuser restored to {position}'**
+  String focusCardRestoredPosition(String position);
+
+  /// Focus panel, main telescope card (Simple Mode Focus and full UI): phase line before any run
+  ///
+  /// In en, this message translates to:
+  /// **'No autofocus yet this session.'**
+  String get focusCardNoRunYet;
+
+  /// Filter picker (Simple Mode camera window and full UI): field label
+  ///
+  /// In en, this message translates to:
+  /// **'Filter'**
+  String get filterDropdownLabel;
+
+  /// Filter picker: message when the wheel never moved
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t change the filter - the wheel didn\'t start moving.'**
+  String get filterDropdownDidntMove;
+
+  /// Filter picker: the picked name matches no slot on the wheel
+  ///
+  /// In en, this message translates to:
+  /// **'Filter \'{name}\' isn\'t a slot on the connected wheel.'**
+  String filterDropdownNotASlot(String name);
+
+  /// Filter picker: the rig is busy with another action
+  ///
+  /// In en, this message translates to:
+  /// **'Another action is still in progress.'**
+  String get filterDropdownBusy;
+
+  /// Filter picker: error message tail after "Couldn't "; lower-case, no period
+  ///
+  /// In en, this message translates to:
+  /// **'change the filter'**
+  String get filterDropdownActionChange;
+
+  /// Polar align (Simple Mode panel and full UI): an axis within tolerance
+  ///
+  /// In en, this message translates to:
+  /// **'On target'**
+  String get polarHintOnTarget;
+
+  /// Polar align (Simple Mode panel and full UI): altitude bolt direction
+  ///
+  /// In en, this message translates to:
+  /// **'Lower'**
+  String get polarHintLower;
+
+  /// Polar align (Simple Mode panel and full UI): altitude bolt direction
+  ///
+  /// In en, this message translates to:
+  /// **'Raise'**
+  String get polarHintRaise;
+
+  /// Polar align (Simple Mode panel and full UI): azimuth bolt direction
+  ///
+  /// In en, this message translates to:
+  /// **'Move west'**
+  String get polarHintMoveWest;
+
+  /// Polar align (Simple Mode panel and full UI): azimuth bolt direction
+  ///
+  /// In en, this message translates to:
+  /// **'Move east'**
+  String get polarHintMoveEast;
+
+  /// Polar align (Simple Mode panel and full UI) full UI: warning after an altitude bolt turn made the error worse
+  ///
+  /// In en, this message translates to:
+  /// **'Altitude got worse after that turn — the altitude bolt moves the axis the other way on this mount. Turn it back past where you started.'**
+  String get polarHintAltitudeWorse;
+
+  /// Polar align (Simple Mode panel and full UI) full UI: warning after an azimuth bolt turn made the error worse
+  ///
+  /// In en, this message translates to:
+  /// **'Azimuth got worse after that turn — the azimuth bolt moves the axis the other way on this mount. Turn it back past where you started.'**
+  String get polarHintAzimuthWorse;
+
+  /// Guider state (Simple Mode guider window, guiding strip, full UI guider page and Run tab)
+  ///
+  /// In en, this message translates to:
+  /// **'Not guiding'**
+  String get guiderStateNotGuiding;
+
+  /// Guider state (Simple Mode guider window, guiding strip, full UI guider page and Run tab)
+  ///
+  /// In en, this message translates to:
+  /// **'Looping'**
+  String get guiderStateLooping;
+
+  /// Guider state (Simple Mode guider window, guiding strip, full UI guider page and Run tab)
+  ///
+  /// In en, this message translates to:
+  /// **'Star selected'**
+  String get guiderStateStarSelected;
+
+  /// Guider state (Simple Mode guider window, guiding strip, full UI guider page and Run tab)
+  ///
+  /// In en, this message translates to:
+  /// **'Calibrating'**
+  String get guiderStateCalibrating;
+
+  /// Guider state (Simple Mode guider window, guiding strip, full UI guider page and Run tab)
+  ///
+  /// In en, this message translates to:
+  /// **'Guiding'**
+  String get guiderStateGuiding;
+
+  /// Guider state (Simple Mode guider window, guiding strip, full UI guider page and Run tab)
+  ///
+  /// In en, this message translates to:
+  /// **'Settling'**
+  String get guiderStateSettling;
+
+  /// Guider state (Simple Mode guider window, guiding strip, full UI guider page and Run tab)
+  ///
+  /// In en, this message translates to:
+  /// **'Paused'**
+  String get guiderStatePaused;
+
+  /// Guider state (Simple Mode guider window, guiding strip, full UI guider page and Run tab)
+  ///
+  /// In en, this message translates to:
+  /// **'Star lost'**
+  String get guiderStateStarLost;
+
+  /// Guider state (Simple Mode guider window, guiding strip, full UI guider page and Run tab)
+  ///
+  /// In en, this message translates to:
+  /// **'Dithering'**
+  String get guiderStateDithering;
+
+  /// Guider state (Simple Mode guider window, guiding strip, full UI guider page and Run tab)
+  ///
+  /// In en, this message translates to:
+  /// **'Guiding Assistant'**
+  String get guiderStateAssistant;
+
+  /// Guider state (Simple Mode guider window, guiding strip, full UI guider page and Run tab)
+  ///
+  /// In en, this message translates to:
+  /// **'Unknown'**
+  String get guiderStateUnknown;
+
+  /// Guider state (Simple Mode guider window, guiding strip, full UI guider page and Run tab)
+  ///
+  /// In en, this message translates to:
+  /// **'Not connected'**
+  String get guiderStateNotConnected;
+
+  /// Guider state (Simple Mode guider window, guiding strip, full UI guider page and Run tab): the calibration leg; direction is the guider's own word (North, West)
+  ///
+  /// In en, this message translates to:
+  /// **'{direction} step {step}'**
+  String guiderStateCalibrationStep(String direction, String step);
+
+  /// Error message lead (every screen); action is a lower-case phrase like "save that"
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t {action}'**
+  String errorCouldnt(String action);
+
+  /// Error message: the action when the screen names none, after "Couldn't "
+  ///
+  /// In en, this message translates to:
+  /// **'do that'**
+  String get errorActionDefault;
+
+  /// Error message (every screen), after "Couldn't <action> — "; lower-case start; device names this device (e.g. this iPhone or iPad)
+  ///
+  /// In en, this message translates to:
+  /// **'your rig didn\'t answer. Check it\'s powered on and on the same network as {device}.'**
+  String errorNoAnswer(String device);
+
+  /// Error message (every screen), after "Couldn't <action> — "; lower-case start
+  ///
+  /// In en, this message translates to:
+  /// **'your rig took too long to answer. It may be busy; try again in a moment.'**
+  String get errorTooSlow;
+
+  /// Error message (every screen), after "Couldn't <action> — "; lower-case start
+  ///
+  /// In en, this message translates to:
+  /// **'the connection wasn\'t trusted.'**
+  String get errorUntrusted;
+
+  /// Error message (every screen), after "Couldn't <action> — "; lower-case start
+  ///
+  /// In en, this message translates to:
+  /// **'the request was cancelled.'**
+  String get errorCancelled;
+
+  /// Error message (every screen), after "Couldn't <action> — "; lower-case start
+  ///
+  /// In en, this message translates to:
+  /// **'your rig doesn\'t have that. It may be running an older version of Ara.'**
+  String get errorNotFound;
+
+  /// Error message (every screen), after "Couldn't <action> — "; lower-case start
+  ///
+  /// In en, this message translates to:
+  /// **'something else is using it right now.'**
+  String get errorBusy;
+
+  /// Error message (every screen), after "Couldn't <action> — "; lower-case start
+  ///
+  /// In en, this message translates to:
+  /// **'your rig refused those values.'**
+  String get errorRefusedValues;
+
+  /// Error message (every screen), after "Couldn't <action> — "; lower-case start
+  ///
+  /// In en, this message translates to:
+  /// **'your rig hit an error. Support → Logs has the details.'**
+  String get errorServer;
+
+  /// Error message (every screen), after "Couldn't <action> — "; lower-case start
+  ///
+  /// In en, this message translates to:
+  /// **'your rig refused the request.'**
+  String get errorRefused;
+
+  /// Error message (every screen), after "Couldn't <action> — "; lower-case start
+  ///
+  /// In en, this message translates to:
+  /// **'the connection failed. Check your rig is reachable.'**
+  String get errorConnectionFailed;
+
+  /// Error message (every screen), after "Couldn't <action> — "; lower-case start; followed by a period or by ": <reason>."
+  ///
+  /// In en, this message translates to:
+  /// **'a file problem got in the way'**
+  String get errorFile;
+
+  /// Error message (every screen), after "Couldn't <action> — "; lower-case start
+  ///
+  /// In en, this message translates to:
+  /// **'your rig sent something Ara didn\'t understand. It may be running a different version.'**
+  String get errorUnreadable;
 }
 
 class _AppLocalizationsDelegate

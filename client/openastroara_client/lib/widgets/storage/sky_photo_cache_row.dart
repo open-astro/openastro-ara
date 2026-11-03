@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../services/stellarium_server.dart';
 import '../../theme/ara_colors.dart';
 import '../../util/friendly_error.dart';
+import '../../l10n/l10n.dart';
 import '../help_icon.dart';
 
 /// Files and bytes in this computer's DSS2 tile cache.
@@ -70,7 +71,9 @@ class _SkyPhotoCacheRowState extends ConsumerState<SkyPhotoCacheRow> {
       if (!mounted) return;
       messenger.showSnackBar(
         SnackBar(
-          content: Text(friendlyError(e, action: 'clean the sky photo cache')),
+          content: Text(
+            friendlyError(context.l10n, e, action: 'clean the sky photo cache'),
+          ),
         ),
       );
     } finally {

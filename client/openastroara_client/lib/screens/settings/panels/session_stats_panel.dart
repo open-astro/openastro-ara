@@ -6,6 +6,7 @@ import '../../../services/storage_space_api.dart';
 import '../../../state/saved_server_state.dart';
 import '../../../theme/ara_colors.dart';
 import '../../../util/friendly_error.dart';
+import '../../../l10n/l10n.dart';
 import '../../../widgets/settings/settings_row.dart';
 
 /// §50 Stats maintenance. The Stats views (and the image library) are fed by
@@ -74,7 +75,11 @@ class _SessionStatsPanelState extends ConsumerState<SessionStatsPanel> {
       setState(
         () => _lastOutcome = body is Map && body['detail'] != null
             ? 'Couldn\'t rebuild: ${body['detail']}'
-            : friendlyError(e, action: 'rebuild the stats catalog'),
+            : friendlyError(
+                context.l10n,
+                e,
+                action: 'rebuild the stats catalog',
+              ),
       );
     } finally {
       dio.close();

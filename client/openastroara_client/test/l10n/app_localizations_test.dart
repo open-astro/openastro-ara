@@ -4,6 +4,8 @@ import 'dart:io';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/l10n/l10n.dart';
+import 'package:openastroara/models/guider_status.dart';
+import 'package:openastroara/util/friendly_error.dart';
 
 void main() {
   final en = lookupAppLocalizations(const Locale('en'));
@@ -25,4 +27,18 @@ void main() {
       expect(pt.pillsMoreSemantics(1), isNot(en.pillsMoreSemantics(1)));
     },
   );
+
+  test('shared wording reads in Portuguese, the action included', () {
+    final pt = lookupAppLocalizations(const Locale('pt'));
+    expect(
+      friendlyError(
+        pt,
+        const FormatException('x'),
+        action: pt.filterDropdownActionChange,
+      ),
+      startsWith('Não foi possível trocar o filtro — '),
+    );
+    expect(friendlyError(pt, Exception()), 'Não foi possível fazer isso.');
+    expect(guiderRuntimeText(pt, GuiderRuntimeState.stopped), 'Sem guiagem');
+  });
 }

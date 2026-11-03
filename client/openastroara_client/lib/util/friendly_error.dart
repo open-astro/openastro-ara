@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:dio/dio.dart';
+import '../l10n/l10n.dart';
 import 'gps_site_fill.dart' show clientPlatform, thisDeviceLabel;
 
 /// Turns whatever went wrong into a sentence a person can act on.
@@ -13,9 +14,10 @@ import 'gps_site_fill.dart' show clientPlatform, thisDeviceLabel;
 /// what failed and what to check.
 ///
 /// [action] names what was being attempted, lower-case and without a period:
-/// "save your settings", "load the library". It appears as `Couldn't <action>`.
-String friendlyError(Object error, {String action = 'do that'}) {
-  final prefix = "Couldn't $action";
+/// "save your settings", "load the library". It appears as `Couldn't <action>`
+/// in [l]'s language (the action should be in it too).
+String friendlyError(AppLocalizations l, Object error, {String? action}) {
+  final prefix = l.errorCouldnt(action ?? l.errorActionDefault);
 
   if (error is DioException) {
     // The server speaks human in its Problem responses — prefer its words.
@@ -36,40 +38,34 @@ String friendlyError(Object error, {String action = 'do that'}) {
     return switch (error.type) {
       DioExceptionType.connectionTimeout ||
       DioExceptionType.connectionError =>
-        "$prefix — your rig didn't answer. Check it's powered on and on the "
-            'same network as ${thisDeviceLabel(clientPlatform)}.',
+        '$prefix — ${l.errorNoAnswer(thisDeviceLabel(clientPlatform))}',
       DioExceptionType.sendTimeout ||
       DioExceptionType.receiveTimeout =>
-        '$prefix — your rig took too long to answer. It may be busy; try again '
-            'in a moment.',
+        '$prefix — ${l.errorTooSlow}',
       DioExceptionType.badCertificate =>
-        "$prefix — the connection wasn't trusted.",
-      DioExceptionType.cancel => '$prefix — the request was cancelled.',
+        '$prefix — ${l.errorUntrusted}',
+      DioExceptionType.cancel => '$prefix — ${l.errorCancelled}',
       DioExceptionType.badResponse => switch (error.response?.statusCode ?? 0) {
-          404 => "$prefix — your rig doesn't have that. It may be running an "
-              'older version of Ara.',
-          409 => "$prefix — something else is using it right now.",
-          422 => "$prefix — your rig refused those values.",
-          >= 500 => '$prefix — your rig hit an error. Support → Logs has the '
-              'details.',
-          _ => '$prefix — your rig refused the request.',
+          404 => '$prefix — ${l.errorNotFound}',
+          409 => '$prefix — ${l.errorBusy}',
+          422 => '$prefix — ${l.errorRefusedValues}',
+          >= 500 => '$prefix — ${l.errorServer}',
+          _ => '$prefix — ${l.errorRefused}',
         },
-      _ => '$prefix — the connection failed. Check your rig is reachable.',
+      _ => '$prefix — ${l.errorConnectionFailed}',
     };
   }
 
   if (error is SocketException) {
-    return "$prefix — your rig didn't answer. Check it's powered on and on the "
-        'same network as ${thisDeviceLabel(clientPlatform)}.';
+    return '$prefix — ${l.errorNoAnswer(thisDeviceLabel(clientPlatform))}';
   }
   if (error is FileSystemException) {
     final reason = error.osError?.message;
-    return '$prefix — a file problem got in the way'
+    return '$prefix — ${l.errorFile}'
         '${reason == null ? '.' : ': $reason.'}';
   }
   if (error is FormatException) {
-    return "$prefix — your rig sent something Ara didn't understand. It may be "
-        'running a different version.';
+    return '$prefix — ${l.errorUnreadable}';
   }
   // StateError carries our own written-for-people messages (e.g. "Connect to
   // your rig first.") — pass those straight through.

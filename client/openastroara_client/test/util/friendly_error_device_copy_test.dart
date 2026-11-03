@@ -4,11 +4,15 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/services/server_discovery_service.dart';
 import 'package:openastroara/util/friendly_error.dart';
 import 'package:openastroara/util/gps_site_fill.dart';
+import 'package:flutter/widgets.dart' show Locale;
+import 'package:openastroara/l10n/l10n.dart';
+
+final _en = lookupAppLocalizations(const Locale('en'));
 
 void main() {
   // #1129, seen on a Pixel Tablet: the unreachable-rig copy said "this computer".
   test('an unreachable rig names the device the client runs on', () {
-    final msg = friendlyError(const SocketException('No route to host'));
+    final msg = friendlyError(_en, const SocketException('No route to host'));
     expect(msg, contains('same network as ${thisDeviceLabel(clientPlatform)}.'));
   });
 

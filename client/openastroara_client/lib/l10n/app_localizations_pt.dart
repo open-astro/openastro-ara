@@ -1197,4 +1197,341 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get shellLanguageSystem => 'Sistema';
+
+  @override
+  String get estopCompactStop => 'PARAR';
+
+  @override
+  String get estopCompactHold => 'SEGURE';
+
+  @override
+  String get estopCompactPressAgain => 'OUTRA\nVEZ';
+
+  @override
+  String get estopStopping => 'Parando…';
+
+  @override
+  String get estopHoldToConfirm => 'Segure para confirmar';
+
+  @override
+  String get estopPressAgain => 'Pressione de novo';
+
+  @override
+  String get estopLabel => 'Parada de emergência';
+
+  @override
+  String get estopPressAgainAnnouncement =>
+      'Pressione de novo em até 3 segundos para parar tudo';
+
+  @override
+  String get estopConfirmTitle => 'Parar tudo agora?';
+
+  @override
+  String get estopConfirmBody =>
+      'Isto aborta a sequência em andamento e a exposição atual, para a guiagem, estaciona a montagem e desliga a luz do painel de flat e a refrigeração da câmera. Não pode ser desfeito — a sequência não é retomada.';
+
+  @override
+  String get estopCancel => 'Cancelar';
+
+  @override
+  String get estopConfirm => 'PARADA DE EMERGÊNCIA';
+
+  @override
+  String get estopNoServer => 'Nenhum servidor conectado — nada para parar.';
+
+  @override
+  String estopFailed(String error) {
+    return 'FALHA NA PARADA DE EMERGÊNCIA — $error Verifique seu setup manualmente.';
+  }
+
+  @override
+  String get estopActionReach => 'contatar o setup';
+
+  @override
+  String get estopAlreadyRunning =>
+      'Uma parada de emergência já está em andamento — nenhum segundo comando enviado.';
+
+  @override
+  String estopRunsAborted(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count sequências abortadas',
+      one: '1 sequência abortada',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get estopNoSequence => 'nenhuma sequência em andamento';
+
+  @override
+  String get estopExposureAborted => 'exposição abortada';
+
+  @override
+  String get estopGuidingStopped => 'guiagem parada';
+
+  @override
+  String get estopParkRequested => 'montagem instruída a estacionar';
+
+  @override
+  String get estopFlatPanelOff => 'luz do painel de flat desligada';
+
+  @override
+  String get estopCoolerOff => 'refrigeração da câmera desligada';
+
+  @override
+  String estopSummary(String parts) {
+    return 'Parada de emergência executada: $parts.';
+  }
+
+  @override
+  String estopCheckRig(String failures) {
+    return 'VERIFIQUE O SETUP: $failures.';
+  }
+
+  @override
+  String get estopFailAbortRuns =>
+      'FALHA AO ABORTAR A SEQUÊNCIA (ela pode ainda estar rodando)';
+
+  @override
+  String get estopFailAbortExposure => 'FALHA AO ABORTAR A EXPOSIÇÃO';
+
+  @override
+  String get estopFailStopGuiding =>
+      'A GUIAGEM PODE AINDA ESTAR ATIVA (falha ao parar)';
+
+  @override
+  String get estopFailPark =>
+      'FALHA AO ESTACIONAR A MONTAGEM — verifique manualmente';
+
+  @override
+  String get estopFailFlatPanel => 'FALHA AO DESLIGAR A LUZ DO PAINEL DE FLAT';
+
+  @override
+  String get estopFailCooler =>
+      'REFRIGERAÇÃO DA CÂMERA AINDA LIGADA (falha ao desligar)';
+
+  @override
+  String estopFailOther(String step) {
+    return '$step FALHOU';
+  }
+
+  @override
+  String get focusCardInFocus => 'Em foco';
+
+  @override
+  String focusCardInFocusHfr(String hfr) {
+    return 'Em foco · HFR $hfr';
+  }
+
+  @override
+  String get focusCardFailed => 'Foco automático falhou';
+
+  @override
+  String get focusCardCancelled => 'Cancelado';
+
+  @override
+  String get focusCardNotFocused => 'Ainda sem foco';
+
+  @override
+  String get focusCardFailedSeeLogs =>
+      'O foco automático falhou — veja Suporte → Logs';
+
+  @override
+  String focusCardBackAt(String position) {
+    return 'O focalizador voltou para $position.';
+  }
+
+  @override
+  String focusCardSmart(String shot, String total) {
+    return 'Smart Focus — imagem $shot de $total';
+  }
+
+  @override
+  String get focusCardCoarse => 'Buscando o foco aproximado…';
+
+  @override
+  String focusCardSweeping(String done, String total) {
+    return 'Varrendo — ponto $done de $total';
+  }
+
+  @override
+  String focusCardPass(String pass) {
+    return '(passada $pass)';
+  }
+
+  @override
+  String get focusCardFitting => 'Ajustando a curva…';
+
+  @override
+  String get focusCardMoving => 'Indo para o melhor foco…';
+
+  @override
+  String get focusCardConfirming => 'Confirmando o foco…';
+
+  @override
+  String get focusCardBacklash => 'Medindo a folga do focalizador…';
+
+  @override
+  String get focusCardRunning => 'Foco automático em andamento…';
+
+  @override
+  String focusCardInFocusAt(String position) {
+    return 'Em foco em $position';
+  }
+
+  @override
+  String focusCardTook(String duration) {
+    return 'em $duration';
+  }
+
+  @override
+  String focusCardFailedReason(String reason) {
+    return 'Falhou: $reason';
+  }
+
+  @override
+  String get focusCardSeeLogs => 'veja Suporte → Logs';
+
+  @override
+  String focusCardRestoredPosition(String position) {
+    return 'focalizador de volta em $position';
+  }
+
+  @override
+  String get focusCardNoRunYet => 'Nenhum foco automático nesta sessão ainda.';
+
+  @override
+  String get filterDropdownLabel => 'Filtro';
+
+  @override
+  String get filterDropdownDidntMove =>
+      'Não foi possível trocar o filtro - a roda não começou a se mover.';
+
+  @override
+  String filterDropdownNotASlot(String name) {
+    return 'O filtro \'$name\' não é uma posição da roda conectada.';
+  }
+
+  @override
+  String get filterDropdownBusy => 'Outra ação ainda está em andamento.';
+
+  @override
+  String get filterDropdownActionChange => 'trocar o filtro';
+
+  @override
+  String get polarHintOnTarget => 'No alvo';
+
+  @override
+  String get polarHintLower => 'Abaixar';
+
+  @override
+  String get polarHintRaise => 'Levantar';
+
+  @override
+  String get polarHintMoveWest => 'Mover para oeste';
+
+  @override
+  String get polarHintMoveEast => 'Mover para leste';
+
+  @override
+  String get polarHintAltitudeWorse =>
+      'A altitude piorou depois desse giro — nesta montagem o parafuso de altitude move o eixo no sentido oposto. Volte-o além de onde você começou.';
+
+  @override
+  String get polarHintAzimuthWorse =>
+      'O azimute piorou depois desse giro — nesta montagem o parafuso de azimute move o eixo no sentido oposto. Volte-o além de onde você começou.';
+
+  @override
+  String get guiderStateNotGuiding => 'Sem guiagem';
+
+  @override
+  String get guiderStateLooping => 'Em contínuo';
+
+  @override
+  String get guiderStateStarSelected => 'Estrela selecionada';
+
+  @override
+  String get guiderStateCalibrating => 'Calibrando';
+
+  @override
+  String get guiderStateGuiding => 'Guiando';
+
+  @override
+  String get guiderStateSettling => 'Estabilizando';
+
+  @override
+  String get guiderStatePaused => 'Pausado';
+
+  @override
+  String get guiderStateStarLost => 'Estrela perdida';
+
+  @override
+  String get guiderStateDithering => 'Fazendo dither';
+
+  @override
+  String get guiderStateAssistant => 'Assistente de guiagem';
+
+  @override
+  String get guiderStateUnknown => 'Desconhecido';
+
+  @override
+  String get guiderStateNotConnected => 'Não conectado';
+
+  @override
+  String guiderStateCalibrationStep(String direction, String step) {
+    return '$direction passo $step';
+  }
+
+  @override
+  String errorCouldnt(String action) {
+    return 'Não foi possível $action';
+  }
+
+  @override
+  String get errorActionDefault => 'fazer isso';
+
+  @override
+  String errorNoAnswer(String device) {
+    return 'seu setup não respondeu. Verifique se ele está ligado e na mesma rede que $device.';
+  }
+
+  @override
+  String get errorTooSlow =>
+      'seu setup demorou demais para responder. Ele pode estar ocupado; tente de novo em instantes.';
+
+  @override
+  String get errorUntrusted => 'a conexão não era confiável.';
+
+  @override
+  String get errorCancelled => 'a solicitação foi cancelada.';
+
+  @override
+  String get errorNotFound =>
+      'seu setup não tem isso. Ele pode estar com uma versão mais antiga do Ara.';
+
+  @override
+  String get errorBusy => 'outra coisa está usando isso agora.';
+
+  @override
+  String get errorRefusedValues => 'seu setup recusou esses valores.';
+
+  @override
+  String get errorServer =>
+      'seu setup teve um erro. Suporte → Logs tem os detalhes.';
+
+  @override
+  String get errorRefused => 'seu setup recusou a solicitação.';
+
+  @override
+  String get errorConnectionFailed =>
+      'a conexão falhou. Verifique se o setup está acessível.';
+
+  @override
+  String get errorFile => 'um problema de arquivo atrapalhou';
+
+  @override
+  String get errorUnreadable =>
+      'seu setup enviou algo que o Ara não entendeu. Ele pode estar com outra versão.';
 }

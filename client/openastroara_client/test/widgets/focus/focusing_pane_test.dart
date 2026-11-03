@@ -15,6 +15,7 @@ import 'package:openastroara/widgets/focus/focusing_pane.dart';
 import 'package:openastroara/widgets/focus/guide_focus_card.dart';
 import 'package:openastroara/widgets/focus/v_curve_chart.dart';
 import 'package:openastroara/widgets/focus/focus_section.dart';
+import 'package:openastroara/l10n/l10n.dart';
 
 class _StubAutofocus extends AutofocusLiveNotifier {
   final AutofocusLive initial;
@@ -121,6 +122,8 @@ const _guideLive = GuideFocusStatus(
   bestSeq: 9,
   recent: [GuideFocusSample(seq: 13, hfr: 2.4, stars: 6, peakAdu: 20000, fwhm: 4.0), GuideFocusSample(seq: 14, hfr: 2.31, stars: 6, peakAdu: 21000, fwhm: 3.9)],
 );
+
+final _en = lookupAppLocalizations(const Locale('en'));
 
 void main() {
   group('fits the window', () {
@@ -290,14 +293,14 @@ void main() {
   });
 
   test('phaseText covers every phase', () {
-    expect(MainFocusCard.phaseText(const AutofocusRun(state: 'running', phase: 'coarse')), 'Finding rough focus…');
-    expect(MainFocusCard.phaseText(const AutofocusRun(state: 'running', phase: 'sweep', totalSteps: 9, completedSteps: 2, sweepAttempt: 2)), contains('pass 2'));
-    expect(MainFocusCard.phaseText(const AutofocusRun(state: 'running', phase: 'fitting')), 'Fitting the curve…');
-    expect(MainFocusCard.phaseText(const AutofocusRun(state: 'running', phase: 'moving')), 'Moving to best focus…');
-    expect(MainFocusCard.phaseText(const AutofocusRun(state: 'running', phase: 'confirming')), 'Confirming focus…');
-    expect(MainFocusCard.phaseText(const AutofocusRun(state: 'running', phase: 'backlash')), 'Measuring focuser backlash…');
-    expect(MainFocusCard.phaseText(const AutofocusRun(state: 'complete', finalPosition: 1, finalHfr: 1.5, durationSeconds: 120)), 'In focus at 1 — HFR 1.50 in 2m 00s');
-    expect(MainFocusCard.phaseText(const AutofocusRun(state: 'cancelled', restoredPosition: 5)), 'Cancelled — focuser restored to 5');
+    expect(MainFocusCard.phaseText(_en, const AutofocusRun(state: 'running', phase: 'coarse')), 'Finding rough focus…');
+    expect(MainFocusCard.phaseText(_en, const AutofocusRun(state: 'running', phase: 'sweep', totalSteps: 9, completedSteps: 2, sweepAttempt: 2)), contains('pass 2'));
+    expect(MainFocusCard.phaseText(_en, const AutofocusRun(state: 'running', phase: 'fitting')), 'Fitting the curve…');
+    expect(MainFocusCard.phaseText(_en, const AutofocusRun(state: 'running', phase: 'moving')), 'Moving to best focus…');
+    expect(MainFocusCard.phaseText(_en, const AutofocusRun(state: 'running', phase: 'confirming')), 'Confirming focus…');
+    expect(MainFocusCard.phaseText(_en, const AutofocusRun(state: 'running', phase: 'backlash')), 'Measuring focuser backlash…');
+    expect(MainFocusCard.phaseText(_en, const AutofocusRun(state: 'complete', finalPosition: 1, finalHfr: 1.5, durationSeconds: 120)), 'In focus at 1 — HFR 1.50 in 2m 00s');
+    expect(MainFocusCard.phaseText(_en, const AutofocusRun(state: 'cancelled', restoredPosition: 5)), 'Cancelled — focuser restored to 5');
   });
 
   testWidgets('a bracket-confirmed Smart run shows the calibration curve without an R²', (t) async {
@@ -312,12 +315,12 @@ void main() {
   });
 
   test('headlineFor says the state in words', () {
-    expect(MainFocusCard.headlineFor(const AutofocusRun()).$1, 'Not focused yet');
-    expect(MainFocusCard.headlineFor(const AutofocusRun(state: 'complete', finalHfr: 1.5)).$1, 'In focus · HFR 1.50');
-    expect(MainFocusCard.headlineFor(const AutofocusRun(state: 'complete')).$1, 'In focus');
-    expect(MainFocusCard.headlineFor(const AutofocusRun(state: 'failed')).$1, 'Autofocus failed');
-    expect(MainFocusCard.headlineFor(const AutofocusRun(state: 'cancelled')).$1, 'Cancelled');
-    expect(MainFocusCard.headlineFor(const AutofocusRun(state: 'running', phase: 'moving')).$1, 'Moving to best focus…');
+    expect(MainFocusCard.headlineFor(_en, const AutofocusRun()).$1, 'Not focused yet');
+    expect(MainFocusCard.headlineFor(_en, const AutofocusRun(state: 'complete', finalHfr: 1.5)).$1, 'In focus · HFR 1.50');
+    expect(MainFocusCard.headlineFor(_en, const AutofocusRun(state: 'complete')).$1, 'In focus');
+    expect(MainFocusCard.headlineFor(_en, const AutofocusRun(state: 'failed')).$1, 'Autofocus failed');
+    expect(MainFocusCard.headlineFor(_en, const AutofocusRun(state: 'cancelled')).$1, 'Cancelled');
+    expect(MainFocusCard.headlineFor(_en, const AutofocusRun(state: 'running', phase: 'moving')).$1, 'Moving to best focus…');
   });
 
   test('guide headlineFor turns green against the expected HFR, live and after a stop', () {
@@ -353,11 +356,11 @@ void main() {
   });
 
   test('failureText reads as sentences', () {
-    expect(MainFocusCard.failureText(const AutofocusRun(state: 'failed', reason: 'curve fit unusable', restoredPosition: 7)),
+    expect(MainFocusCard.failureText(_en, const AutofocusRun(state: 'failed', reason: 'curve fit unusable', restoredPosition: 7)),
         'Curve fit unusable. The focuser is back at 7.');
-    expect(MainFocusCard.failureText(const AutofocusRun(state: 'failed', reason: 'focuser is not connected')),
+    expect(MainFocusCard.failureText(_en, const AutofocusRun(state: 'failed', reason: 'focuser is not connected')),
         'Focuser is not connected.');
-    expect(MainFocusCard.failureText(const AutofocusRun(state: 'failed')), 'Autofocus failed — see Support → Logs.');
+    expect(MainFocusCard.failureText(_en, const AutofocusRun(state: 'failed')), 'Autofocus failed — see Support → Logs.');
   });
 
   group('guideFocusHint', () {

@@ -86,10 +86,14 @@ class SimpleFocusPanel extends ConsumerWidget {
     final focuser = ref.watch(focuserProvider).asData?.value;
     final connected =
         focuser?.connectionState == EquipmentConnectionState.connected;
-    final (headline, headlineColor) = MainFocusCard.headlineFor(run);
+    final (headline, headlineColor) = MainFocusCard.headlineFor(
+      context.l10n,
+      run,
+    );
     final hfr = simpleFocusHfr(run);
     final error =
-        live.error ?? (run.isFailed ? MainFocusCard.failureText(run) : null);
+        live.error ??
+        (run.isFailed ? MainFocusCard.failureText(context.l10n, run) : null);
     return SimplePanel(
       padding: const EdgeInsets.all(AraSpace.s16),
       child: SizedBox(

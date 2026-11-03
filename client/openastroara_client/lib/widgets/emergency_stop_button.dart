@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../l10n/l10n.dart';
 import '../services/server_api.dart';
 import '../state/equipment/camera_state.dart';
 import '../theme/ara_colors.dart';
@@ -127,7 +128,7 @@ class _EmergencyStopButtonState extends ConsumerState<EmergencyStopButton>
     setState(() => _armed = true);
     SemanticsService.sendAnnouncement(
       View.of(context),
-      'Press again within 3 seconds to stop everything',
+      context.l10n.estopPressAgainAnnouncement,
       Directionality.of(context),
     );
     _disarm = Timer(_pressAgainWindow, () {
@@ -136,6 +137,7 @@ class _EmergencyStopButtonState extends ConsumerState<EmergencyStopButton>
   }
 
   Future<void> _confirmAndStop() async {
+    final l10n = context.l10n;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -144,24 +146,19 @@ class _EmergencyStopButtonState extends ConsumerState<EmergencyStopButton>
           color: Theme.of(dialogContext).colorScheme.error,
           size: 32,
         ),
-        title: const Text('Stop everything now?'),
-        content: const Text(
-          'This aborts the running sequence and the in-flight exposure, '
-          'stops guiding, parks the mount, and switches the flat panel '
-          'light and the camera cooler off. It cannot be undone — the '
-          'sequence does not resume.',
-        ),
+        title: Text(l10n.estopConfirmTitle),
+        content: Text(l10n.estopConfirmBody),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('Cancel'),
+            child: Text(l10n.estopCancel),
           ),
           FilledButton(
             style: FilledButton.styleFrom(
               backgroundColor: Theme.of(dialogContext).colorScheme.error,
             ),
             onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('EMERGENCY STOP'),
+            child: Text(l10n.estopConfirm),
           ),
         ],
       ),
@@ -174,12 +171,9 @@ class _EmergencyStopButtonState extends ConsumerState<EmergencyStopButton>
     if (_inFlight) return;
     final server = ref.read(activeServerProvider);
     final notify = userNotifier(context);
+    final l10n = context.l10n;
     if (server == null) {
-      notify(
-        'No server connected — nothing to stop.',
-        error: true,
-        snackBarRed: false,
-      );
+      notify(l10n.estopNoServer, error: true, snackBarRed: false);
       return;
     }
     setState(() => _inFlight = true);
@@ -194,16 +188,18 @@ class _EmergencyStopButtonState extends ConsumerState<EmergencyStopButton>
       }
       // A rung that failed keeps its pill up until it is read.
       notify(
-        _summarize(result, failuresFirst: widget.simple || widget.compact),
+        _summarize(
+          l10n,
+          result,
+          failuresFirst: widget.simple || widget.compact,
+        ),
         error: result.failedRungs.isNotEmpty,
         snackBarRed: false,
         snackBarDuration: const Duration(seconds: 10),
       );
     } catch (e) {
       notify(
-        'EMERGENCY STOP FAILED — '
-        '${friendlyError(e, action: 'reach the rig')} '
-        'Check your rig manually.',
+        l10n.estopFailed(friendlyError(l10n, e, action: l10n.estopActionReach)),
         error: true,
         snackBarRed: false,
         snackBarDuration: const Duration(seconds: 10),
@@ -216,45 +212,47 @@ class _EmergencyStopButtonState extends ConsumerState<EmergencyStopButton>
   /// Wire tokens → operator-facing failure phrases. Every attempted-but-
   /// failed rung is loud — a hung guider that kept correcting is exactly as
   /// dangerous as an unparked mount, so no rung fails silently.
-  static const _failurePhrases = <String, String>{
-    'abort_runs': 'SEQUENCE ABORT FAILED (the run may still be executing)',
-    'abort_exposure': 'EXPOSURE ABORT FAILED',
-    'stop_guiding': 'GUIDING MAY STILL BE ACTIVE (stop failed)',
-    'park': 'MOUNT PARK FAILED — verify it manually',
-    'flat_panel_light_off': 'FLAT PANEL LIGHT-OFF FAILED',
-    'cooler_off': 'CAMERA COOLER STILL ON (switching it off failed)',
-  };
+  static String _failurePhrase(AppLocalizations l, String rung) =>
+      switch (rung) {
+        'abort_runs' => l.estopFailAbortRuns,
+        'abort_exposure' => l.estopFailAbortExposure,
+        'stop_guiding' => l.estopFailStopGuiding,
+        'park' => l.estopFailPark,
+        'flat_panel_light_off' => l.estopFailFlatPanel,
+        'cooler_off' => l.estopFailCooler,
+        _ => l.estopFailOther(rung),
+      };
 
   /// [failuresFirst]: Simple Mode's message pill shows two lines, so a
   /// failed rung leads instead of trailing off past them.
   static String _summarize(
+    AppLocalizations l,
     EmergencyStopResult r, {
     bool failuresFirst = false,
   }) {
     if (r.alreadyInProgress) {
-      return 'An emergency stop is already running — no second volley sent.';
+      return l.estopAlreadyRunning;
     }
     final parts = <String>[
-      r.runsAborted > 0
-          ? '${r.runsAborted} sequence run(s) aborted'
-          : 'no sequence was running',
-      if (r.exposureAborted) 'exposure aborted',
-      if (r.guidingStopped) 'guiding stopped',
-      if (r.parkRequested) 'mount told to park',
-      if (r.flatPanelLightOff) 'flat panel light off',
-      if (r.coolerOff) 'camera cooler off',
+      r.runsAborted > 0 ? l.estopRunsAborted(r.runsAborted) : l.estopNoSequence,
+      if (r.exposureAborted) l.estopExposureAborted,
+      if (r.guidingStopped) l.estopGuidingStopped,
+      if (r.parkRequested) l.estopParkRequested,
+      if (r.flatPanelLightOff) l.estopFlatPanelOff,
+      if (r.coolerOff) l.estopCoolerOff,
     ];
     final failures = r.failedRungs
-        .map((rung) => _failurePhrases[rung] ?? '$rung FAILED')
+        .map((rung) => _failurePhrase(l, rung))
         .toList(growable: false);
-    final summary = 'Emergency stop executed: ${parts.join(', ')}.';
+    final summary = l.estopSummary(parts.join(', '));
     if (failures.isEmpty) return summary;
-    final check = 'CHECK THE RIG: ${failures.join('; ')}.';
+    final check = l.estopCheckRig(failures.join('; '));
     return failuresFirst ? '$check $summary' : '$summary $check';
   }
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final compact = widget.compact;
     final simple = widget.simple || compact;
     final red = simple
@@ -273,17 +271,17 @@ class _EmergencyStopButtonState extends ConsumerState<EmergencyStopButton>
           ? (_inFlight
                 ? '…'
                 : _holding
-                ? 'HOLD'
+                ? l10n.estopCompactHold
                 : _armed
-                ? 'PRESS\nAGAIN'
-                : 'STOP')
+                ? l10n.estopCompactPressAgain
+                : l10n.estopCompactStop)
           : _inFlight
-          ? 'Stopping…'
+          ? l10n.estopStopping
           : _holding
-          ? 'Hold to confirm'
+          ? l10n.estopHoldToConfirm
           : _armed
-          ? 'Press again'
-          : 'Emergency Stop',
+          ? l10n.estopPressAgain
+          : l10n.estopLabel,
       maxLines: _armed && compact ? 2 : 1,
       textAlign: TextAlign.center,
     );

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../models/profile_draft.dart';
 import '../../../util/friendly_error.dart';
+import '../../../l10n/l10n.dart';
 import '../../../state/sky_atlas/data_manager_state.dart';
 import '../../../models/solver_recommendation.dart';
 import '../../../state/wizard_state.dart';
@@ -423,7 +424,7 @@ class _SolverDatabaseSectionState extends ConsumerState<_SolverDatabaseSection> 
       draft.plateSolve.solverDatabasePackageIds = const [];
       setState(() {
         _loading = false;
-        _error = friendlyError(e, action: 'work out which star database this rig needs');
+        _error = friendlyError(context.l10n, e, action: 'work out which star database this rig needs');
       });
     }
   }

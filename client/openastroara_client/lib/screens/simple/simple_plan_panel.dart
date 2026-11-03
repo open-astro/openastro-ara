@@ -864,7 +864,11 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
       final detail = data is Map ? data['detail'] : null;
       if (detail is String && detail.trim().isNotEmpty) return detail.trim();
     }
-    return friendlyError(e, action: action);
+    return friendlyError(
+      lookupAppLocalizations(const Locale('en')),
+      e,
+      action: action,
+    );
   }
 }
 

@@ -11,6 +11,7 @@ import '../state/launch_gate_state.dart';
 import '../state/saved_server_state.dart';
 import '../state/server_state.dart';
 import '../util/friendly_error.dart';
+import '../l10n/l10n.dart';
 import '../widgets/plan_offline_button.dart';
 
 /// Phase 11 first-run screen — server discovery + selection + handshake.
@@ -316,7 +317,7 @@ class _HandshakePanel extends StatelessWidget {
                 style: TextStyle(color: Theme.of(context).colorScheme.error),
               ),
               Text(
-                friendlyError(e),
+                friendlyError(context.l10n, e),
                 style: Theme.of(context).textTheme.bodySmall,
               ),
             ],

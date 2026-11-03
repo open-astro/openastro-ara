@@ -12,6 +12,7 @@ import '../../state/settings/settings_nav.dart';
 import '../../theme/ara_colors.dart';
 import '../../widgets/library/load_more_button.dart';
 import '../../util/friendly_error.dart';
+import '../../l10n/l10n.dart';
 
 /// §39.10 Calibration screen — live over `/api/v1/calibration/*`.
 ///
@@ -64,7 +65,7 @@ class _SessionsTab extends ConsumerWidget {
     return sessions.when(
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (e, _) => _ErrorRetry(
-        message: friendlyError(e, action: 'load the sessions'),
+        message: friendlyError(context.l10n, e, action: 'load the sessions'),
         onRetry: () => ref.read(calibrationSessionsProvider.notifier).refresh(),
       ),
       data: (list) {
@@ -495,7 +496,7 @@ class _MatchingFlatsDialogState extends ConsumerState<MatchingFlatsDialog> {
       if (!mounted) return;
       setState(() {
         _busy = false;
-        _error = friendlyError(e, action: 'generate the calibration');
+        _error = friendlyError(context.l10n, e, action: 'generate the calibration');
       });
     }
   }
@@ -703,7 +704,7 @@ class _DarkLibraryTab extends ConsumerWidget {
     return status.when(
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (e, _) => _ErrorRetry(
-        message: friendlyError(e, action: 'load the dark library'),
+        message: friendlyError(context.l10n, e, action: 'load the dark library'),
         onRetry: () => ref.read(darkLibraryStatusProvider.notifier).refresh(),
       ),
       data: (state) {
@@ -956,7 +957,7 @@ class _DarkBuildFormState extends ConsumerState<DarkBuildForm> {
       if (!mounted) return;
       setState(() {
         _busy = false;
-        _error = friendlyError(e, action: 'build the calibration');
+        _error = friendlyError(context.l10n, e, action: 'build the calibration');
       });
     }
   }

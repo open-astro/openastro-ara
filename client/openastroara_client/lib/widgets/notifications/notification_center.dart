@@ -7,6 +7,7 @@ import '../../services/notifications_api.dart';
 import '../../state/notifications/notifications_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../util/friendly_error.dart';
+import '../../l10n/l10n.dart';
 
 /// §46 — the inbox the app never had. Things Ara decides on its own overnight
 /// (the guider gave up, a fault reaction fired, the sequence stopped early)
@@ -170,7 +171,7 @@ class _NotificationCenter extends ConsumerWidget {
                           error: (e, _) => _Empty(
                             icon: Icons.cloud_off,
                             title:
-                                friendlyError(e, action: 'load your notifications'),
+                                friendlyError(context.l10n, e, action: 'load your notifications'),
                           ),
                           data: (items) => _Body(items: items),
                         ),

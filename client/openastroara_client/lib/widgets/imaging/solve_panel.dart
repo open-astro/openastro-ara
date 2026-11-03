@@ -9,6 +9,7 @@ import '../../state/saved_server_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../util/coord_format.dart';
 import '../../util/friendly_error.dart';
+import '../../l10n/l10n.dart';
 
 /// §18.I — plate-solve the last captured frame and show its astrometric
 /// solution (RA / Dec / rotation / scale). Sits under the frame viewer on the
@@ -72,7 +73,7 @@ class SolvePanel extends ConsumerWidget {
     return result.when(
       loading: () => Text('Solving with ASTAP…', style: mono),
       error: (e, _) => Text(
-        e is PlateSolveException ? e.message : friendlyError(e, action: 'solve the frame'),
+        e is PlateSolveException ? e.message : friendlyError(context.l10n, e, action: 'solve the frame'),
         style: mono?.copyWith(color: AraColors.accentError),
       ),
       data: (r) {
