@@ -119,7 +119,8 @@ class AutopilotNotifier extends Notifier<AutopilotStep?> {
     }
   }
 
-  void start() => _go(_next(null)!);
+  // The plan always comes first; the fallback keeps a reordered list safe.
+  void start() => _go(_next(null) ?? AutopilotStep.plan);
 
   /// The plan's Next, a Done, or Skip: on to the next step; from the last one,
   /// imaging starts (at dark when it is before dark, as the plan sheet's

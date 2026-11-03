@@ -883,7 +883,10 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
           ),
         );
       } catch (e) {
-        state = state.copyWith(error: _why(e, 'schedule the start'));
+        final why = _why(e, 'schedule the start');
+        state = state.copyWith(error: why);
+        // A pill too, as _op's: Guided Run's last Done starts it with no sheet open.
+        ref.read(simpleMessagesProvider.notifier).show(SimpleMessageKind.error, why);
         return false;
       }
     }

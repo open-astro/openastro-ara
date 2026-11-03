@@ -960,6 +960,17 @@ void main() {
         [(SimpleMessageKind.error, 'The run is between targets.')]);
   });
 
+  testWidgets("a scheduled start the rig refuses says so in a pill too (Guided Run's last Done has no sheet open)",
+      (tester) async {
+    final (c, seq) = await run(tester);
+    await create(tester);
+    seq.updatesBeforeFail = 0; // writing the start time fails
+    final ok = await c.read(simpleRunProvider.notifier).startQueue(startAt: DateTime.now().add(const Duration(hours: 2)));
+    expect(ok, isFalse);
+    expect(c.read(simpleMessagesProvider).map((m) => m.kind), [SimpleMessageKind.error]);
+    expect(seq.calls.where((call) => call.startsWith('start ')), isEmpty);
+  });
+
   testWidgets('a second Start while the first is on its way is not sent', (tester) async {
     final (c, seq) = await run(tester);
     await create(tester);
