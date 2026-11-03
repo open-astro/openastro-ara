@@ -2006,45 +2006,35 @@ class _ThisRig extends ConsumerWidget {
         child: Text(label, style: kSimpleText, textAlign: TextAlign.center),
       ),
     );
-    // Segments name their states, never a bare toggle (DESIGN.md).
+    // A list-style setting: the platform's switch (DESIGN.md: segments stay
+    // for the panels over the image).
     Widget toggle(
       String id,
       String label,
       String? hint,
       bool on,
       ValueChanged<bool> set,
-    ) => Row(
-      spacing: AraSpace.s12,
-      children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(label, style: kSimpleText),
-              if (hint != null) Text(hint, style: AraText.caption),
-            ],
+    ) => MergeSemantics(
+      // Read as one control: "Permanent pier, switch, off".
+      child: Row(
+        spacing: AraSpace.s12,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label, style: kSimpleText),
+                if (hint != null) Text(hint, style: AraText.caption),
+              ],
+            ),
           ),
-        ),
-        DecoratedBox(
-          decoration: BoxDecoration(
-            color: AraColors.tileFill,
-            borderRadius: BorderRadius.circular(8),
+          Switch.adaptive(
+            key: Key('simple-menu-$id'),
+            value: on,
+            onChanged: set,
           ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              for (final (v, word) in const [(true, 'On'), (false, 'Off')])
-                SimpleSegment(
-                  key: Key('simple-menu-$id-${word.toLowerCase()}'),
-                  label: word,
-                  selected: on == v,
-                  radius: 8,
-                  onTap: on == v ? null : () => set(v),
-                ),
-            ],
-          ),
-        ),
-      ],
+        ],
+      ),
     );
     void relaunch({required bool rig}) {
       onClose();

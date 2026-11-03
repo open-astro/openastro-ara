@@ -1070,10 +1070,16 @@ void main() {
   testWidgets('Permanent pier (the one thing Ara can\'t know) and the Simple Mode switch (the way out)', (tester) async {
     final c = await _pump(tester, const Size(1024, 768), pier: true);
     await _openSection(tester, 'Rig');
-    await tester.tap(find.byKey(const Key('simple-menu-pier-on')));
+    // List-style settings use the platform's switch (segments stay for the
+    // panels over the image).
+    expect(find.byKey(const Key('simple-menu-pier-on')), findsNothing);
+    final pier = find.byKey(const Key('simple-menu-pier'));
+    expect(tester.widget<Switch>(pier).value, isFalse);
+    await tester.tap(pier);
     await tester.pump();
     expect(c.read(simplePermanentPierProvider).value, isTrue);
-    await tester.tap(find.byKey(const Key('simple-menu-simple-mode-off')));
+    expect(tester.widget<Switch>(find.byKey(const Key('simple-menu-simple-mode'))).value, isTrue);
+    await tester.tap(find.byKey(const Key('simple-menu-simple-mode')));
     await tester.pump();
     expect(c.read(simpleModeProvider).value, isFalse, reason: 'off: the full UI');
   });
