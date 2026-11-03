@@ -80,6 +80,9 @@ void main() {
       await _pump(tester, _wire());
       expect(find.text('Camera · ASI2600MM'), findsOneWidget);
       expect(find.text('Cooler'), findsOneWidget);
+      expect(find.text('Temperature'), findsOneWidget, reason: 'what the sensor reads');
+      expect(find.text('Target temperature'), findsOneWidget);
+      expect(find.text('Current temperature'), findsNothing);
       expect(find.text('−10 °C'), findsOneWidget, reason: 'the target');
       expect(find.text('−9.8 °C · 34 % power'), findsOneWidget, reason: 'now');
       // Current temperature, Cooler and Target sit on an even rhythm: the rows are one height.

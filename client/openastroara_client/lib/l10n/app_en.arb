@@ -83,7 +83,7 @@
   "@deviceNotConnected": {
     "description": "Device window caption when the device is not connected"
   },
-  "deviceCurrentTemperature": "Current temperature",
+  "deviceCurrentTemperature": "Temperature",
   "@deviceCurrentTemperature": {
     "description": "Camera window row: what the sensor reads now"
   },
@@ -95,7 +95,7 @@
   "@deviceNoCooler": {
     "description": "Camera window: shown in the Cooler row when the camera has no cooler"
   },
-  "deviceTarget": "Target",
+  "deviceTarget": "Target temperature",
   "@deviceTarget": {
     "description": "Camera window row: the cooler's target temperature"
   },

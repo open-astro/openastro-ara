@@ -203,7 +203,7 @@ abstract class AppLocalizations {
   /// Camera window row: what the sensor reads now
   ///
   /// In en, this message translates to:
-  /// **'Current temperature'**
+  /// **'Temperature'**
   String get deviceCurrentTemperature;
 
   /// Camera window row: the cooler's On / Off
@@ -221,7 +221,7 @@ abstract class AppLocalizations {
   /// Camera window row: the cooler's target temperature
   ///
   /// In en, this message translates to:
-  /// **'Target'**
+  /// **'Target temperature'**
   String get deviceTarget;
 
   /// Error message when the cooler target could not be saved to the profile
