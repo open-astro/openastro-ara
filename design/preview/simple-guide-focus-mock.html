@@ -101,6 +101,7 @@
   <h1>Simple Focus: the guide camera</h1>
   <p class="note">Focusing the guide camera in Simple Mode: its own live HFR readout while you turn the guide scope's focuser (or slide the camera in its draw tube; an off-axis guider's helical focuser), with the full UI's turn advice. The guide camera's frames fill the screen behind the panels while it runs, as Manual's Bahtinov crop does. Pick <b>where the choice lives</b>: A, a Main telescope / Guide camera row above Auto / Manual; B, a third segment beside them. Everything is on view; nothing folds away. <span class="tag">proposed</span></p>
   <div class="controls">
+    <div class="ctl"><span class="lbl">Picked</span><span class="seg" id="scope"><button data-v="main">Main telescope</button><button data-v="guide" aria-pressed="true">Guide camera</button></span></div>
     <div class="ctl"><span class="lbl">Where the choice lives</span><span class="seg" id="variant"><button data-v="A" aria-pressed="true">A · Main / Guide row</button><button data-v="B">B · Auto / Manual / Guide</button></span></div>
     <div class="ctl"><span class="lbl">State</span><span class="seg" id="gstate"><button data-v="noguider">Guider not connected</button><button data-v="busy">Guider guiding</button><button data-v="oag">OAG, main not focused</button><button data-v="ready">Ready</button><button data-v="keep" aria-pressed="true">Live · keep going</button><button data-v="back">Live · go back</button><button data-v="focus">Live · in focus</button><button data-v="stopped">Stopped</button></span></div>
   </div>
@@ -141,7 +142,7 @@ const T = {
         hfr: 'HFR', stars: 'Estrelas', frames: 'Quadros', exposure: 'Exposição',
         keep: 'Continue', keepSub: 'Mesmo sentido do último movimento — um movimento pequeno.', back: 'Volte', backSub: 'O sentido contrário ao último movimento — um movimento pequeno.', inF: 'Em foco', inFSub: 'As estrelas estão tão finas quanto esta câmera resolve (em foco ≤ 1.70 px). Trave o focalizador.' },
 };
-const S = { variant: 'A', gstate: 'keep', lang: 'en', night: 'off' };
+const S = { scope: 'guide', variant: 'A', gstate: 'keep', lang: 'en', night: 'off' };
 const t = k => T[S.lang][k];
 function frame() {
   let s = '<defs><radialGradient id="g"><stop offset="0" stop-color="#fff"/><stop offset=".5" stop-color="#fff8"/><stop offset="1" stop-color="#fff0"/></radialGradient></defs><rect width="1024" height="768" fill="#0b0d12"/>';
@@ -152,10 +153,12 @@ function frame() {
   document.getElementById('frame').innerHTML = s;
 }
 function selector() {
-  const g = '<span class="on">' + t('guide') + '</span>';
-  return S.variant === 'A'
-    ? `<div class="segrow proposed"><span>${t('main')}</span>${g}</div>`
-    : `<div class="segrow proposed"><span>${t('auto')}</span><span>${t('manual')}</span>${g}</div>`;
+  const main = S.scope === 'main', on = c => c ? ' class="on"' : '';
+  if (S.variant === 'B')
+    return `<div class="segrow proposed"><span${on(main)}>${t('auto')}</span><span>${t('manual')}</span><span${on(!main)}>${t('guide')}</span></div>`;
+  // A: which camera first; Auto / Manual under it, only for the main telescope.
+  return `<div class="segrow proposed"><span${on(main)}>${t('main')}</span><span${on(!main)}>${t('guide')}</span></div>`
+    + (main ? `<div class="segrow"><span class="on">${t('auto')}</span><span>${t('manual')}</span></div>` : '');
 }
 function panel() {
   const st = S.gstate;
@@ -172,12 +175,13 @@ function panel() {
       <div class="facts"><div class="stat"><div class="k">${t('stars')}</div><div class="v">48</div></div><div class="stat"><div class="k">${t('frames')}</div><div class="v">37</div></div></div>`
       + (h ? `<div class="hint ${cls}">${h}</div><div class="sub" style="text-align:center">${sub}</div>` : '') + exp;
   }
+  if (S.scope === 'main') body = `<div class="head ok">In focus · HFR 1.01</div><div class="stats"><div class="stat"><div class="k">Best position</div><div class="v">29463</div></div><div class="stat"><div class="k">Stars</div><div class="v">299</div></div><div class="stat"><div class="k">Fit R²</div><div class="v">0.97</div></div></div><div class="sub" style="text-align:center;padding:30px 0">(the Smart Focus result, as built)</div>`;
   return `<div class="p s-pop wide">${selector()}${body}</div>`;
 }
 function render() {
   document.body.classList.toggle('night', S.night === 'on');
   const live = ['keep','back','focus'].includes(S.gstate);
-  document.getElementById('chip').textContent = 'Guide';
+  document.getElementById('chip').textContent = S.scope === 'main' ? 'Auto' : 'Guide';
   document.getElementById('shutter').innerHTML = live ? '<div class="sq"></div>' : '<div class="tri"></div>';
   document.getElementById('pill').hidden = !live;
   document.getElementById('pillText').textContent = S.lang === 'pt' ? 'Câmera de guia · ao vivo' : 'Guide camera · live';
@@ -186,7 +190,7 @@ function render() {
   frame();
 }
 function sync(id) { document.querySelectorAll(`#${id} button`).forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === S[id]))); }
-for (const id of ['variant','gstate','lang','night'])
+for (const id of ['scope','variant','gstate','lang','night'])
   document.querySelectorAll(`#${id} button`).forEach(b => b.onclick = () => { S[id] = b.dataset.v; sync(id); render(); });
 render();
 </script>
