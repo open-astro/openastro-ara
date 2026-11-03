@@ -2406,7 +2406,7 @@ abstract class AppLocalizations {
   /// Focus panel, main telescope card (Simple Mode Focus and full UI): headline/phase after a cancelled run
   ///
   /// In en, this message translates to:
-  /// **'Cancelled'**
+  /// **'Canceled'**
   String get focusCardCancelled;
 
   /// Focus panel, main telescope card (Simple Mode Focus and full UI): headline before any run
@@ -2700,7 +2700,7 @@ abstract class AppLocalizations {
   /// Error message (every screen), after "Couldn't <action> — "; lower-case start
   ///
   /// In en, this message translates to:
-  /// **'the request was cancelled.'**
+  /// **'the request was canceled.'**
   String get errorCancelled;
 
   /// Error message (every screen), after "Couldn't <action> — "; lower-case start
@@ -2886,7 +2886,7 @@ abstract class AppLocalizations {
   /// Bahtinov: star at the edge, what to do
   ///
   /// In en, this message translates to:
-  /// **'Centre the star so its spikes fit in the frame.'**
+  /// **'Center the star so its spikes fit in the frame.'**
   String get bahtinovNearEdgeDetail;
 
   /// Bahtinov: no diffraction spikes found
@@ -2910,13 +2910,13 @@ abstract class AppLocalizations {
   /// Bahtinov in focus with the optics' zone in µm
   ///
   /// In en, this message translates to:
-  /// **'The middle spike is centred, inside the ±{um} µm focus zone. Lock the focuser, then Finish.'**
+  /// **'The middle spike is centered, inside the ±{um} µm focus zone. Lock the focuser, then Finish.'**
   String bahtinovInFocusZoneDetail(String um);
 
   /// Bahtinov in focus
   ///
   /// In en, this message translates to:
-  /// **'The middle spike is centred. Lock the focuser, then Finish.'**
+  /// **'The middle spike is centered. Lock the focuser, then Finish.'**
   String get bahtinovInFocusDetail;
 
   /// Bahtinov turn advice: no move seen yet

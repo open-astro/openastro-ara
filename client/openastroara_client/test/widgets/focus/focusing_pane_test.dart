@@ -300,7 +300,7 @@ void main() {
     expect(MainFocusCard.phaseText(_en, const AutofocusRun(state: 'running', phase: 'confirming')), 'Confirming focus…');
     expect(MainFocusCard.phaseText(_en, const AutofocusRun(state: 'running', phase: 'backlash')), 'Measuring focuser backlash…');
     expect(MainFocusCard.phaseText(_en, const AutofocusRun(state: 'complete', finalPosition: 1, finalHfr: 1.5, durationSeconds: 120)), 'In focus at 1 — HFR 1.50 in 2m 00s');
-    expect(MainFocusCard.phaseText(_en, const AutofocusRun(state: 'cancelled', restoredPosition: 5)), 'Cancelled — focuser restored to 5');
+    expect(MainFocusCard.phaseText(_en, const AutofocusRun(state: 'cancelled', restoredPosition: 5)), 'Canceled — focuser restored to 5');
   });
 
   testWidgets('a bracket-confirmed Smart run shows the calibration curve without an R²', (t) async {
@@ -319,7 +319,7 @@ void main() {
     expect(MainFocusCard.headlineFor(_en, const AutofocusRun(state: 'complete', finalHfr: 1.5)).$1, 'In focus · HFR 1.50');
     expect(MainFocusCard.headlineFor(_en, const AutofocusRun(state: 'complete')).$1, 'In focus');
     expect(MainFocusCard.headlineFor(_en, const AutofocusRun(state: 'failed')).$1, 'Autofocus failed');
-    expect(MainFocusCard.headlineFor(_en, const AutofocusRun(state: 'cancelled')).$1, 'Cancelled');
+    expect(MainFocusCard.headlineFor(_en, const AutofocusRun(state: 'cancelled')).$1, 'Canceled', reason: 'US English');
     expect(MainFocusCard.headlineFor(_en, const AutofocusRun(state: 'running', phase: 'moving')).$1, 'Moving to best focus…');
   });
 

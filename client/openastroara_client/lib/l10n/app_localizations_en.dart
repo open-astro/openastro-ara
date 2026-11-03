@@ -1330,7 +1330,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get focusCardFailed => 'Autofocus failed';
 
   @override
-  String get focusCardCancelled => 'Cancelled';
+  String get focusCardCancelled => 'Canceled';
 
   @override
   String get focusCardNotFocused => 'Not focused yet';
@@ -1505,7 +1505,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get errorUntrusted => 'the connection wasn\'t trusted.';
 
   @override
-  String get errorCancelled => 'the request was cancelled.';
+  String get errorCancelled => 'the request was canceled.';
 
   @override
   String get errorNotFound =>
@@ -1619,7 +1619,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get bahtinovNearEdgeDetail =>
-      'Centre the star so its spikes fit in the frame.';
+      'Center the star so its spikes fit in the frame.';
 
   @override
   String get bahtinovNoSpikes => 'No spikes';
@@ -1633,12 +1633,12 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String bahtinovInFocusZoneDetail(String um) {
-    return 'The middle spike is centred, inside the ±$um µm focus zone. Lock the focuser, then Finish.';
+    return 'The middle spike is centered, inside the ±$um µm focus zone. Lock the focuser, then Finish.';
   }
 
   @override
   String get bahtinovInFocusDetail =>
-      'The middle spike is centred. Lock the focuser, then Finish.';
+      'The middle spike is centered. Lock the focuser, then Finish.';
 
   @override
   String get bahtinovMakeMove => 'Make a move';
