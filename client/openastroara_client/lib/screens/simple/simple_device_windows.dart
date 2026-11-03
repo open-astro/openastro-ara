@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/equipment_device_status.dart';
 import '../../services/equipment_device_api.dart' show describeEquipmentError;
+import '../../services/equipment_driver_api.dart';
 import '../../state/equipment/camera_state.dart';
 import '../../state/profile_management_state.dart';
 import '../../state/settings/imaging_defaults_state.dart';
@@ -169,6 +170,11 @@ class _SimpleCameraWindowState extends ConsumerState<SimpleCameraWindow> {
           },
         ),
       );
+    }
+    // The versions the rig reports, small at the foot (support asks).
+    final driver = ref.watch(deviceDriverProvider('camera')).value?.line ?? '';
+    if (driver.isNotEmpty) {
+      children.add(Text(driver, style: AraText.caption));
     }
     return Column(
       key: const Key('simple-device-camera'),

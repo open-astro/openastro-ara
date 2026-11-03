@@ -46,13 +46,19 @@ public interface IAlpacaManagementClient {
     /// it doesn't answer. Best-effort like the names.</summary>
     Task<AlpacaServerDescription?> GetDescriptionAsync(string host, int port, CancellationToken ct) =>
         Task.FromResult<AlpacaServerDescription?>(null);
+
+    /// <summary>A device's <c>driverversion</c> (<c>/api/v1/{type}/{number}/driverversion</c>), or null
+    /// when it doesn't answer. Best-effort like the names.</summary>
+    Task<string?> GetDriverVersionAsync(string host, int port, string type, int number, CancellationToken ct) =>
+        Task.FromResult<string?>(null);
 }
 
 /// <summary>An Alpaca server's <c>description</c>: <c>ServerName</c>, <c>Manufacturer</c>, <c>ManufacturerVersion</c>.</summary>
 public sealed record AlpacaServerDescription(string? ServerName, string? Manufacturer, string? Version);
 
-/// <summary>One <c>configureddevices</c> entry: the name and the server's <c>UniqueID</c> ("" when absent).</summary>
-public sealed record AlpacaConfiguredDevice(string Name, string UniqueId);
+/// <summary>One <c>configureddevices</c> entry: the name and the server's <c>UniqueID</c> ("" when absent),
+/// plus the vendor SDK version and firmware an OpenAstro AlpacaBridge adds (null when not reported).</summary>
+public sealed record AlpacaConfiguredDevice(string Name, string UniqueId, string? SdkVersion = null, string? Firmware = null);
 
 public sealed partial class AlpacaManagementClient : IAlpacaManagementClient, IDisposable {
     private static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(3);
@@ -117,6 +123,27 @@ public sealed partial class AlpacaManagementClient : IAlpacaManagementClient, ID
                 return null;
             }
             return ParseDescription(await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false));
+        } catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested) {
+            LogLookupThrew(_logger, host, port, ex);
+            return null;
+        }
+    }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Best-effort lookup boundary: a device that doesn't answer just has no driver version to show.")]
+    public async Task<string?> GetDriverVersionAsync(string host, int port, string type, int number, CancellationToken ct) {
+        // The device API sits beside the management one on the same server.
+        var mgmt = ManagementUri(host, port, "description");
+        var uri = new Uri(mgmt, $"/api/v1/{Uri.EscapeDataString(type)}/{number.ToString(CultureInfo.InvariantCulture)}/driverversion");
+        try {
+            using var response = await _http.GetAsync(uri, HttpCompletionOption.ResponseContentRead, ct).ConfigureAwait(false);
+            if (!response.IsSuccessStatusCode) {
+                LogLookupFailed(_logger, host, port, (int)response.StatusCode);
+                return null;
+            }
+            using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false));
+            return doc.RootElement.TryGetProperty("Value", out var v) && v.ValueKind == JsonValueKind.String
+                ? v.GetString() : null;
         } catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested) {
             LogLookupThrew(_logger, host, port, ex);
             return null;
@@ -219,8 +246,10 @@ public sealed partial class AlpacaManagementClient : IAlpacaManagementClient, ID
                 }
                 var uniqueId = entry.TryGetProperty("UniqueID", out var uid) && uid.ValueKind == JsonValueKind.String
                     ? uid.GetString() ?? string.Empty : string.Empty;
+                static string? Str(JsonElement o, string key) =>
+                    o.TryGetProperty(key, out var p) && p.ValueKind == JsonValueKind.String ? p.GetString() : null;
                 names[$"{type.GetString()!.ToLowerInvariant()}/{deviceNumber.ToString(CultureInfo.InvariantCulture)}"] =
-                    new AlpacaConfiguredDevice(deviceName, uniqueId);
+                    new AlpacaConfiguredDevice(deviceName, uniqueId, Str(entry, "SdkVersion"), Str(entry, "Firmware"));
             }
         }
         return names;

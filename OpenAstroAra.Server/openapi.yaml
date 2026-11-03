@@ -60,6 +60,25 @@ paths:
       responses:
         '200':
           description: OK
+  '/api/v1/equipment/driver/{type}':
+    get:
+      tags:
+        - Equipment
+      summary: 'The selected device''s driver, SDK and firmware versions.'
+      operationId: GetDeviceDriver
+      parameters:
+        - name: type
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceDriverDto'
   /api/v1/equipment/camera:
     get:
       tags:
@@ -8630,6 +8649,25 @@ components:
           type: boolean
           default: false
         install_path:
+          type:
+            - 'null'
+            - string
+    DeviceDriverDto:
+      required:
+        - driver_version
+        - sdk_version
+        - firmware
+      type: object
+      properties:
+        driver_version:
+          type:
+            - 'null'
+            - string
+        sdk_version:
+          type:
+            - 'null'
+            - string
+        firmware:
           type:
             - 'null'
             - string

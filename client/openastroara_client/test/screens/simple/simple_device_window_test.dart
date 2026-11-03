@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/camera_status.dart';
+import 'package:openastroara/services/equipment_driver_api.dart';
 import 'package:openastroara/screens/simple/simple_device_windows.dart';
 import 'package:openastroara/state/equipment/camera_state.dart';
 import 'package:openastroara/state/settings/imaging_defaults_state.dart';
@@ -42,11 +43,20 @@ Map<String, dynamic> _wire({
 
 Future<(ProviderContainer, _Camera)> _pump(
   WidgetTester tester,
-  Map<String, dynamic> wire,
-) async {
+  Map<String, dynamic> wire, {
+  DeviceDriver? driver,
+}) async {
+  // A test that pumps twice lets the first window's providers wind down.
+  await tester.pumpWidget(const SizedBox());
+  await tester.pump();
   final camera = _Camera(wire);
   final c = ProviderContainer(
-    overrides: [cameraStatusProvider.overrideWith(() => camera)],
+    overrides: [
+      cameraStatusProvider.overrideWith(() => camera),
+      deviceDriverProvider.overrideWith(
+        (ref, type) async => type == 'camera' ? driver : null,
+      ),
+    ],
   );
   addTearDown(c.dispose);
   await tester.pumpWidget(
@@ -149,6 +159,21 @@ void main() {
     final slider = tester.widget<Slider>(find.byKey(const Key('simple-camera-gain')));
     expect((slider.min, slider.max, slider.divisions), (0.0, 2.0, 2));
     expect(find.text('Medium'), findsOneWidget);
+  });
+
+  testWidgets('a footer names the SDK and driver versions the rig reports', (
+    tester,
+  ) async {
+    await _pump(
+      tester,
+      _wire(),
+      driver: const DeviceDriver(
+        driverVersion: '6.0.0~nightly',
+        sdkVersion: '1.41.0.0',
+      ),
+    );
+    await tester.pump();
+    expect(find.text('SDK 1.41.0.0 · Driver 6.0.0~nightly'), findsOneWidget);
   });
 
   testWidgets(

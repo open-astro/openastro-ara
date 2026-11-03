@@ -69,6 +69,10 @@ public sealed record DiscoveredDeviceDto(
 /// <summary>Connect-request body. Idempotency-Key header per §60.5.</summary>
 public sealed record ConnectRequestDto(DiscoveredDeviceDto Device);
 
+/// <summary>GET /api/v1/equipment/driver/{type}: the selected device's Alpaca driver version and, when its
+/// server reports them (AlpacaBridge does), the vendor SDK version and firmware; each null when not known.</summary>
+public sealed record DeviceDriverDto(string? DriverVersion, string? SdkVersion, string? Firmware);
+
 // OperationAcceptedDto lives in SharedDtos.cs (added in Phase 7 — same record
 // shape reused for every long-running operation across Phases 6-9). Phase 6's
 // original stub OperationAcceptedDto(string) was superseded.

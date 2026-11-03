@@ -42,6 +42,20 @@ This file captures the *reasoning* behind each contract decision — DTO shapes,
 **Related:** §X.Y of PORT_PLAYBOOK.md, PR #N
 ```
 
+### 2026-11-03 — A device's driver and SDK versions: `GET /equipment/driver/{type}`
+
+**Endpoint(s) or area:** new `GET /api/v1/equipment/driver/{type}` → `DeviceDriverDto { driver_version?, sdk_version?, firmware? }`.
+
+**Decision:** for the selected (remembered) device of `{type}` (a `DeviceType` token; `guider` and unknown types → 400; nothing selected → 404), the driver version is its Alpaca `driverversion`, and the SDK version and firmware come from its server's `/management/v1/configureddevices` entry (`SdkVersion`, `Firmware`, which OpenAstro AlpacaBridge adds; null elsewhere). Both reads use the management client's 3 s timeout, in parallel; a silent server answers nulls. ZWO cameras report no firmware.
+
+**Reasoning:** Simple Mode's device windows show the versions support asks for, at their foot.
+
+**Spec ref:** `Endpoints/EquipmentEndpoints.cs` (`GetDeviceDriverAsync`), `Services/AlpacaManagementClient.cs`; client `services/equipment_driver_api.dart`.
+
+**Related:** tests `DeviceDriverInfoTest`.
+
+---
+
 ### 2026-11-03 — Every version on the rig: `/server/versions` gains the board, the guider, the Alpaca servers and ASTAP
 
 **Endpoint(s) or area:** `GET /api/v1/server/versions` (`ApiVersionsDto`): new optional `board_model`, `guider_version`, `alpaca_servers`, `astap_version`.

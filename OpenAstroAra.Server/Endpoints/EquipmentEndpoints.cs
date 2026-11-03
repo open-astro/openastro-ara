@@ -186,6 +186,12 @@ public static partial class EquipmentEndpoints {
             return Results.Ok(devices);
         });
 
+        // A device's driver and SDK versions (Simple Mode's device windows).
+        equipment.MapGet("/driver/{type}", GetDeviceDriverAsync)
+            .Produces<DeviceDriverDto>(StatusCodes.Status200OK)
+            .WithName("GetDeviceDriver")
+            .WithSummary("The selected device's driver, SDK and firmware versions.");
+
         // ─── Camera ───
         var camera = equipment.MapGroup("/camera");
         camera.MapGet("", async (ICameraService svc, CancellationToken ct) => {
@@ -1010,6 +1016,33 @@ public static partial class EquipmentEndpoints {
             return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict);
         } catch (OpenAstroAra.Equipment.Equipment.MyGuider.PHD2.GuiderRpcException ex) {
             return Results.Problem(ex.Message, statusCode: StatusCodes.Status422UnprocessableEntity);
+        }
+    }
+
+    // The selected device of [type]'s versions: the driver's own, and the SDK / firmware its Alpaca server
+    // lists in configureddevices. Unknown type → 400; nothing selected → 404; a silent server → nulls.
+    public static async Task<IResult> GetDeviceDriverAsync(
+            string type, IEquipmentSelectionStore selections, IAlpacaManagementClient alpaca, CancellationToken ct) {
+        ArgumentNullException.ThrowIfNull(selections);
+        ArgumentNullException.ThrowIfNull(alpaca);
+        if (!Enum.TryParse<DeviceType>(type, ignoreCase: true, out var deviceType) || deviceType == DeviceType.Guider) {
+            return Results.Problem($"'{type}' is not an Alpaca device type.", statusCode: StatusCodes.Status400BadRequest);
+        }
+        var devices = await selections.GetAllAsync(ct).ConfigureAwait(false);
+        var device = devices.FirstOrDefault(d => d.Type.Canonical() == deviceType.Canonical());
+        if (device is null) {
+            return Results.Problem($"No {type} is set up.", statusCode: StatusCodes.Status404NotFound);
+        }
+        var host = string.IsNullOrWhiteSpace(device.IpAddress) ? device.HostName : device.IpAddress;
+        var wire = device.Type.ToString().ToLowerInvariant();
+        try {
+            var listed = alpaca.GetConfiguredDevicesAsync(host, device.IpPort, ct);
+            var driver = alpaca.GetDriverVersionAsync(host, device.IpPort, wire, device.AlpacaDeviceNumber, ct);
+            var entry = (await listed.ConfigureAwait(false)).GetValueOrDefault(
+                $"{wire}/{device.AlpacaDeviceNumber.ToString(System.Globalization.CultureInfo.InvariantCulture)}");
+            return Results.Ok(new DeviceDriverDto(await driver.ConfigureAwait(false), entry?.SdkVersion, entry?.Firmware));
+        } catch (System.ArgumentException) {
+            return Results.Ok(new DeviceDriverDto(null, null, null)); // a remembered host that isn't valid
         }
     }
 
