@@ -1692,7 +1692,7 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
               _query.text,
               limit: 5,
             ).indexed)
-              _Suggestion(
+              SimpleSuggestion(
                 key: Key('simple-run-suggestion-$i'),
                 hit: hit,
                 onTap: () {
@@ -2452,8 +2452,10 @@ class SimpleRunPanel extends ConsumerWidget {
 
 /// One search suggestion: the designation that matched, the common name and
 /// what it is, 44 pt tall.
-class _Suggestion extends StatelessWidget {
-  const _Suggestion({super.key, required this.hit, required this.onTap});
+/// A catalog suggestion as a row: the designation, then its common name and
+/// magnitude. Plan's search and Simple Mode's search list them.
+class SimpleSuggestion extends StatelessWidget {
+  const SimpleSuggestion({super.key, required this.hit, required this.onTap});
 
   final DsoSuggestion hit;
   final VoidCallback onTap;

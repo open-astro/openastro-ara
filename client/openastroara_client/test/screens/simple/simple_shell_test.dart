@@ -17,6 +17,9 @@ import 'package:openastroara/main.dart' show isShell, shellFor;
 import 'package:openastroara/models/frame_histogram.dart';
 import 'package:openastroara/models/server.dart';
 import 'package:openastroara/services/profile_api.dart';
+import 'package:openastroara/screens/simple/simple_search.dart';
+import 'package:openastroara/services/dso_catalog_service.dart';
+import 'package:openastroara/state/sky_atlas/dso_catalog_state.dart';
 import 'package:openastroara/services/time_sync_api.dart';
 import 'package:openastroara/services/client_gps_prefs_service.dart';
 import 'package:openastroara/state/client_gps_state.dart' show clientGpsPrefsServiceProvider;
@@ -1189,6 +1192,60 @@ void main() {
     expect(clock.pushed, hasLength(1), reason: "this device's clock goes to the rig");
   });
 
+  testWidgets('Search finds Simple Mode\'s settings, modes and sky objects and opens each inside Simple Mode',
+      (tester) async {
+    final c = await _pump(tester, const Size(1024, 768), gear: [
+      bundledCatalogProvider.overrideWith((ref) async => const [
+            PlanningDso(id: 'NGC0224', name: 'Andromeda Galaxy', type: 'G', magnitude: 3.4, raDeg: 10.7, decDeg: 41.3, aliases: ['M 31']),
+          ]),
+    ]);
+    Future<void> search(String q) async {
+      await tester.tap(find.byKey(const Key('simple-search-button')));
+      await tester.pump();
+      expect(find.byKey(const Key('simple-search')), findsOneWidget);
+      await tester.enterText(find.byKey(const Key('simple-search-field')), q);
+      await tester.pump();
+      await tester.pump();
+    }
+
+    await search('eleva');
+    expect(find.descendant(of: find.byKey(const Key('simple-search-setting-0')), matching: find.text('Elevation')),
+        findsOneWidget);
+    await tester.tap(find.byKey(const Key('simple-search-setting-0')));
+    await tester.pump();
+    expect(find.byKey(const Key('simple-search')), findsNothing);
+    expect(find.byKey(const Key('simple-rig-elevation-up')), findsOneWidget, reason: 'Settings, on Rig');
+    await tester.tap(find.byKey(const Key('simple-menu-veil')));
+    await tester.pump();
+
+    await search('cool');
+    expect(find.textContaining('Nothing in Simple Mode matches'), findsOneWidget, reason: 'no camera, no Cooler');
+    await tester.tap(find.byKey(const Key('simple-search-button')));
+    await tester.pump();
+
+    await search('foc');
+    expect(find.descendant(of: find.byKey(const Key('simple-search-mode-0')), matching: find.text('Focus')),
+        findsOneWidget);
+    await tester.tap(find.byKey(const Key('simple-search-mode-0')));
+    await tester.pump();
+    expect(find.descendant(of: find.byKey(const Key('simple-mode')), matching: find.text('Focus')), findsOneWidget);
+
+    await search('m3');
+    await tester.tap(find.byKey(const Key('simple-search-sky-0')));
+    await tester.pump();
+    expect(c.read(planetariumSearchProvider), 'M 31');
+    expect(find.byKey(const Key('simple-planetarium')), findsOneWidget, reason: 'the sky, pointed at it');
+  });
+
+  testWidgets('⌘K opens Search too', (tester) async {
+    await _pump(tester, const Size(1024, 768));
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyK);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
+    await tester.pump();
+    expect(find.byKey(const Key('simple-search')), findsOneWidget);
+  });
+
   testWidgets('on launch Rig shows the profile\'s site and telescope, not empty fields', (tester) async {
     var loaded = 0;
     await _pump(tester, const Size(1024, 768), gear: [
@@ -1913,6 +1970,17 @@ void main() {
     expect(simpleFree(null), 'Unplugged');
     expect(simpleMemory(512 * 1048576), '512 MB');
     expect(simpleMemory(1536 * 1048576), '1.5 GB');
+  });
+
+  test('Simple search: settings only for the devices there, modes by name, each imaged target once', () {
+    expect(simpleSearch('c'), isEmpty, reason: 'two characters at least');
+    final cool = simpleSearch('cool', sections: {'Rig', 'Devices', 'Camera'});
+    expect(cool.whereType<SimpleSettingHit>().map((h) => (h.title, h.section)),
+        [('Cooler', 'Camera'), ('Cooler target', 'Camera')]);
+    expect(simpleSearch('cool'), isEmpty, reason: 'no camera');
+    expect(simpleSearch('polar').whereType<SimpleModeHit>().map((h) => h.mode), [SimpleModeScreen.polarAlign]);
+    expect(simpleSearch('m 31', targets: ['M 31', 'M 31', 'M 33']).whereType<SimpleImageHit>().map((h) => h.target),
+        ['M 31']);
   });
 
   test('the exposure list stays inside what the camera reports', () {

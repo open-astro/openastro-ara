@@ -1,4 +1,7 @@
 import 'package:lat_lng_to_timezone/lat_lng_to_timezone.dart' as tz_map;
+
+import 'simple_search.dart';
+
 import 'package:flutter/material.dart';
 
 import 'dart:async';
@@ -7,6 +10,7 @@ import 'dart:math' as math;
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../state/library/live_library_state.dart' show libraryFilterProvider;
 import '../../state/time_sync_state.dart' show timeSyncApiProvider;
 import '../../state/sky_atlas/tonight_sky_state.dart'
     show planningSettingsBootstrapProvider;
@@ -104,7 +108,7 @@ const double kSimpleStopSize = 60;
 /// The modes, in the decided order.
 enum SimpleModeScreen { autopilot, preview, focus, polarAlign, plan }
 
-extension on SimpleModeScreen {
+extension SimpleModeScreenLabels on SimpleModeScreen {
   String get label => switch (this) {
     SimpleModeScreen.autopilot => 'Autopilot',
     SimpleModeScreen.preview => 'Preview',
@@ -132,7 +136,7 @@ extension on SimpleModeScreen {
 /// The one popover open beside a rail, if any. [settings] is the chip's: the
 /// current mode's options (Preview's exposure, Focus's panel).
 /// [menu] is the top bar's Settings menu.
-enum _Popover { none, modes, settings, queue, menu }
+enum _Popover { none, modes, settings, queue, menu, search }
 
 /// Simple Mode (ALP-4810): the latest frame fills the window and only the
 /// shutter is always out. A right rail holds the mode (tap for the five
@@ -380,6 +384,46 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     });
   }
 
+  void _pickMode(SimpleModeScreen m) {
+    if (m == SimpleModeScreen.autopilot) return _startAutopilot();
+    setState(() {
+      _mode = m;
+      _popover = _Popover.none;
+    });
+    // Picking a mode leaves Autopilot.
+    ref.read(autopilotProvider.notifier).stop();
+  }
+
+  /// The Settings sheet's section to open on (a search hit names one).
+  String _menuSection = 'Rig';
+
+  void _openMenu({String section = 'Rig'}) {
+    _menuSection = section;
+    _toggle(_Popover.menu);
+  }
+
+  /// A search hit, opened where it lives in Simple Mode.
+  void _openHit(SimpleSearchHit hit) {
+    setState(() => _popover = _Popover.none);
+    switch (hit) {
+      case SimpleSkyHit(:final suggestion):
+        // As Plan's search: the sky, pointed at it, its card offering Image this.
+        setState(() => _sky = true);
+        ref.read(planetariumSearchProvider.notifier).search(suggestion.label);
+      case SimpleSettingHit(:final section):
+        _openMenu(section: section);
+      case SimpleModeHit(:final mode):
+        _pickMode(mode);
+      case SimpleImageHit(:final target):
+        ref.read(libraryFilterProvider.notifier).setQuery(target);
+        unawaited(
+          Navigator.of(context).push(
+            MaterialPageRoute<void>(builder: (_) => const ImageLibraryScreen()),
+          ),
+        );
+    }
+  }
+
   void _toggle(_Popover p) => setState(() {
     // Settings covers everything; a rail menu that would cover the camera
     // window closes it.
@@ -553,16 +597,22 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
               quiet: true,
               child: CallbackShortcuts(
                 bindings: <ShortcutActivator, VoidCallback>{
-                  const SingleActivator(
-                    LogicalKeyboardKey.comma,
-                    meta: true,
-                  ): () =>
-                      _toggle(_Popover.menu),
+                  const SingleActivator(LogicalKeyboardKey.comma, meta: true):
+                      _openMenu,
                   const SingleActivator(
                     LogicalKeyboardKey.comma,
                     control: true,
+                  ): _openMenu,
+                  const SingleActivator(
+                    LogicalKeyboardKey.keyK,
+                    meta: true,
                   ): () =>
-                      _toggle(_Popover.menu),
+                      _toggle(_Popover.search),
+                  const SingleActivator(
+                    LogicalKeyboardKey.keyK,
+                    control: true,
+                  ): () =>
+                      _toggle(_Popover.search),
                   // Hold-to-stop for keyboards: ⌘. / Ctrl+. twice stops a run.
                   const SingleActivator(LogicalKeyboardKey.period, meta: true):
                       _stopRun,
@@ -669,7 +719,8 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                 top: kSimpleInset,
                                 height: kSimpleBarHeight,
                                 child: _StatusStrip(
-                                  onSettings: () => _toggle(_Popover.menu),
+                                  onSearch: () => _toggle(_Popover.search),
+                                  onSettings: () => _openMenu(),
                                 ),
                               ),
                               // Info: fact tiles hugging the bottom-left corner,
@@ -800,24 +851,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                                 current: _mode,
                                                 // Picking a mode only switches it; the
                                                 // chip opens its panel (user, 2026-11-02).
-                                                onPicked: (m) {
-                                                  if (m ==
-                                                      SimpleModeScreen
-                                                          .autopilot) {
-                                                    return _startAutopilot();
-                                                  }
-                                                  setState(() {
-                                                    _mode = m;
-                                                    _popover = _Popover.none;
-                                                  });
-                                                  // Picking a mode leaves Autopilot.
-                                                  ref
-                                                      .read(
-                                                        autopilotProvider
-                                                            .notifier,
-                                                      )
-                                                      .stop();
-                                                },
+                                                onPicked: _pickMode,
                                               )
                                             : switch (shown) {
                                                 SimpleModeScreen.focus =>
@@ -909,6 +943,24 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                     child: _deviceWindows[_device]!,
                                   ),
                                 ),
+                              // Search drops from the strip, centred.
+                              if (_popover == _Popover.search)
+                                Positioned(
+                                  top: railTop,
+                                  left: 0,
+                                  right: 0,
+                                  bottom: kSimpleInset * 2 + kSimpleBarHeight,
+                                  child: Align(
+                                    alignment: Alignment.topCenter,
+                                    child: SizedBox(
+                                      width: math.min(
+                                        480.0,
+                                        width - kSimpleInset * 2,
+                                      ),
+                                      child: SimpleSearchPanel(onHit: _openHit),
+                                    ),
+                                  ),
+                                ),
                               if (_popover == _Popover.menu) ...[
                                 // Under the strip, which stays live (its
                                 // gear closes Settings, the rest still work).
@@ -934,6 +986,8 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                   top: railTop,
                                   bottom: kSimpleInset * 2 + kSimpleBarHeight,
                                   child: _SettingsSheet(
+                                    key: ValueKey(_menuSection),
+                                    section: _menuSection,
                                     onClose: () => setState(
                                       () => _popover = _Popover.none,
                                     ),
@@ -1091,8 +1145,9 @@ class SimpleFrostedPanel extends StatelessWidget {
 
 /// Device dots (connected gear only), then Night mode and the Settings menu.
 class _StatusStrip extends ConsumerWidget {
-  const _StatusStrip({required this.onSettings});
+  const _StatusStrip({required this.onSearch, required this.onSettings});
 
+  final VoidCallback onSearch;
   final VoidCallback onSettings;
 
   @override
@@ -1119,6 +1174,14 @@ class _StatusStrip extends ConsumerWidget {
                 ),
               ),
             ),
+          ),
+          // Simple Mode's own search: the sky, its settings, its modes and
+          // the Image Library; nothing it finds leads out.
+          IconButton(
+            key: const Key('simple-search-button'),
+            icon: const Icon(Icons.search, size: 22),
+            tooltip: 'Search',
+            onPressed: onSearch,
           ),
           IconButton(
             icon: Icon(
@@ -1795,8 +1858,15 @@ ThemeData simpleTheme(ThemeData base) {
 /// with its sections on the left and the picked one on the right, on the
 /// 90 % panel scrim over a 5 px blur of the image.
 class _SettingsSheet extends ConsumerStatefulWidget {
-  const _SettingsSheet({required this.onClose, required this.onLogs});
+  const _SettingsSheet({
+    super.key,
+    this.section = 'Rig',
+    required this.onClose,
+    required this.onLogs,
+  });
 
+  /// The section it opens on.
+  final String section;
   final VoidCallback onClose;
   final VoidCallback onLogs;
 
@@ -1805,7 +1875,7 @@ class _SettingsSheet extends ConsumerStatefulWidget {
 }
 
 class _SettingsSheetState extends ConsumerState<_SettingsSheet> {
-  String _section = 'Rig';
+  late String _section = widget.section;
 
   @override
   Widget build(BuildContext context) {
