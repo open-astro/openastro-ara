@@ -250,6 +250,10 @@ List<Widget> _versions(DeviceDriver? d) {
       : [const Divider(height: AraSpace.s16), SimpleVersions(rows: rows)];
 }
 
+/// The width of a device window's steppers and segment rows, so the controls
+/// under each other line up as one column.
+const double kSimpleWindowControlWidth = 216;
+
 /// − value +, for a device window's numbers (refocus, dither).
 Widget simpleWindowStepper({
   required String id,
@@ -273,7 +277,7 @@ Widget simpleWindowStepper({
       children: [
         button('down', Icons.remove, 'Less', onLess),
         SizedBox(
-          width: 96,
+          width: kSimpleWindowControlWidth - 96, // less the two 48 pt buttons
           child: Text(text, textAlign: TextAlign.center, style: kSimpleText),
         ),
         button('up', Icons.add, 'More', onMore),
@@ -774,22 +778,24 @@ class _SimpleFocuserWindowState extends ConsumerState<SimpleFocuserWindow> {
         // Rows like the Guider window's: label left, control right.
         simpleWindowRow(
           'Step',
-          DecoratedBox(
+          Container(
             key: const Key('simple-focuser-steps'),
+            width: kSimpleWindowControlWidth,
             decoration: BoxDecoration(
               color: AraColors.tileFill,
               borderRadius: BorderRadius.circular(8),
             ),
             child: Row(
-              mainAxisSize: MainAxisSize.min,
               children: [
                 for (final n in const [10, 100, 1000])
-                  SimpleSegment(
-                    key: Key('simple-focuser-step-$n'),
-                    label: '$n',
-                    selected: _step == n,
-                    radius: 8,
-                    onTap: () => setState(() => _step = n),
+                  Expanded(
+                    child: SimpleSegment(
+                      key: Key('simple-focuser-step-$n'),
+                      label: '$n',
+                      selected: _step == n,
+                      radius: 8,
+                      onTap: () => setState(() => _step = n),
+                    ),
                   ),
               ],
             ),

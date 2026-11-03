@@ -210,6 +210,9 @@ void main() {
     final refocus = tester.getRect(find.byKey(const Key('simple-focuser-refocus-up')));
     expect(find.byKey(const Key('simple-window-row-Step')), findsOneWidget);
     expect(steps.right, closeTo(refocus.right, 1), reason: 'the controls line up on the right');
+    final refocusBox = tester.getRect(find.ancestor(
+        of: find.byKey(const Key('simple-focuser-refocus-up')), matching: find.byType(DecoratedBox)).first);
+    expect(steps.width, closeTo(refocusBox.width, 1), reason: 'Step as wide as Refocus after');
     expect(steps.top - knob.bottom, greaterThanOrEqualTo(16), reason: 'room under the dial');
     expect(find.text('steps per click'), findsNothing);
   });
