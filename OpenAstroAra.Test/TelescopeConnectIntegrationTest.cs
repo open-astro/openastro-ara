@@ -12,6 +12,7 @@
 
 #endregion "copyright"
 
+using Moq;
 using NUnit.Framework;
 using OpenAstroAra.Astrometry;
 using OpenAstroAra.Equipment.Interfaces;
@@ -44,11 +45,20 @@ namespace OpenAstroAra.Test {
             Assert.That(device, Is.Not.Null, "no Telescope discovered from the running OmniSim");
 
             using var svc = new TelescopeService();
+            // The profile's site goes into the mount on connect (PushSite's own tests cover the writes).
+            var store = new Mock<IProfileStore>();
+            store.Setup(s => s.GetSiteSettings()).Returns(new SiteSettingsDto(
+                "Home", -36.85, 174.76, 120, "Pacific/Auckland", false, 0, 4, 2, "astronomical"));
+            svc.FollowProfileSite(store.Object);
+            var sitePushed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            svc.RunSitePush = push => { sitePushed.TrySetResult(); return Task.Run(push); };
 
             await svc.ConnectAsync(new ConnectRequestDto(device!), idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
             var connected = await PollUntilAsync(svc, d => d.State != EquipmentConnectionState.Connecting).ConfigureAwait(false);
             Assert.That(connected, Is.Not.Null, "connection never left the Connecting state");
             Assert.That(connected!.State, Is.EqualTo(EquipmentConnectionState.Connected));
+            Assert.That(await Task.WhenAny(sitePushed.Task, Task.Delay(TimeSpan.FromSeconds(10))).ConfigureAwait(false),
+                Is.SameAs(sitePushed.Task), "connecting should push the profile's site into the mount");
             Assert.That(connected.Capabilities, Is.Not.Null, "capabilities should be populated once connected");
 
             // Drive the mount inside a try/finally so the simulator is always disconnected even if an

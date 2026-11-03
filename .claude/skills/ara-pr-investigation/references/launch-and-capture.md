@@ -72,9 +72,10 @@ open "build/macos/Build/Products/Debug/OpenAstro Ara.app"
   first-run/connect screen appears with no rig listed, either allow the app
   under System Settings → Privacy & Security → Local Network and tap ⟳, or
   enter host `localhost` port `5555` by hand (or `openastro.lan`). The client
-  stores no server (#1129): every launch scans and lists what it finds; tap
-  the rig (it never auto-picks, even with one rig) — say which daemon you
-  connected to.
+  stores no server address (#1129): every launch scans and lists what it
+  finds; tap the rig. It reconnects on its own only to the last rig it used,
+  by name (ALP-4890), so check it picked the daemon you meant and say which
+  one you connected to.
 - Linux hosts: `flutter build linux --debug` and run the bundle on native
   Wayland (no `GDK_BACKEND=x11`); the `planetarium_overlay:` lines on stderr
   say which overlay path was taken, and a `WEBKIT_DISABLE_DMABUF_RENDERER`

@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rig Touch Controls</title>
+<style>
+  /* DESIGN.md tokens (lib/theme/ara_colors.dart + ara_metrics.dart) */
+  :root {
+    --bg: #1A1A1A; --panel: #262626; --input: #333333; --border: #404040;
+    --text: #E0E0E0; --text2: #A0A0A0; --link: #64B5F6;
+    --ok: #4CAF50; --busy: #FFB300; --err: #E53935; --info: #42A5F5;
+    --sel: #1976D2; --selTint: rgba(66,165,245,.16); --tile: #383838;
+    --scrim: rgba(26,26,26,.9);
+    --sys: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #0E0E0E; color: var(--text); font: 14px/1.45 var(--sys); }
+  body.night { filter: sepia(1) saturate(6) hue-rotate(-35deg) brightness(.75); }
+  .page { max-width: 1120px; margin: 0 auto; padding: 32px 16px 80px; }
+  h1 { font-size: 22px; font-weight: 600; margin: 0 0 6px; }
+  h2 { font-size: 16px; font-weight: 600; margin: 0 0 4px; }
+  p.note { color: var(--text2); margin: 0 0 14px; max-width: 88ch; }
+  .tag { font-size: 11px; letter-spacing: .5px; text-transform: uppercase; padding: 1px 7px; border-radius: 10px; border: 1px solid var(--busy); color: var(--busy); margin-left: 6px; vertical-align: 2px; }
+  .controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin: 18px 0 14px; }
+  .controls .lbl { color: var(--text2); font-size: 13px; }
+  .seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--border); border-radius: 18px; overflow: hidden; }
+  .seg button { background: transparent; color: var(--text); border: 0; padding: 7px 14px; font: 13px var(--sys); cursor: pointer; }
+  .seg button + button { border-left: 1px solid var(--border); }
+  .seg button[aria-pressed="true"] { background: var(--sel); color: #fff; }
+
+  /* the iPad at 1:1 (1024 x 768 logical) */
+  .ipad { width: 1024px; height: 768px; max-width: 100%; position: relative; border-radius: 18px; overflow: hidden; border: 1px solid #333;
+          background: radial-gradient(ellipse at 30% 40%, #2b2f3a 0, #12141a 55%, #08090c 100%); }
+  .veil { position: absolute; inset: 0; background: rgba(0,0,0,.35); }
+  .surface { position: absolute; left: 51px; right: 51px; top: 38px; bottom: 38px; background: rgba(26,26,26,.9);
+             backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px); border-radius: 14px; display: flex; overflow: hidden; }
+  .nav { width: 230px; border-right: 1px solid var(--border); padding: 10px; display: flex; flex-direction: column; gap: 2px; flex-shrink: 0; }
+  .nav .row { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 0 12px; border-radius: 8px; }
+  .nav .row.on { background: var(--selTint); color: var(--info); }
+  .nav .row.dev { padding-left: 34px; }
+  .nav .row .sub { margin-left: auto; color: var(--text2); font-size: 12px; }
+  .body { flex: 1; padding: 14px 20px; overflow: auto; display: flex; flex-direction: column; gap: 8px; }
+  .hr { border-top: 1px solid var(--border); margin: 8px 0; }
+  .r { display: flex; align-items: center; gap: 12px; min-height: 44px; }
+  .r .l { flex: 1; }
+  .r .v { font-variant-numeric: tabular-nums; }
+  .from { font-size: 12px; color: var(--text2); margin-left: 6px; }
+  .proposed { outline: 1.5px dashed var(--busy); padding: 4px 12px; margin: 0 -12px; border-radius: 8px; }
+
+  /* stepper: tap ±1, hold repeats and speeds up */
+  .step { display: inline-flex; align-items: center; background: var(--tile); border-radius: 10px; }
+  .step button { width: 44px; height: 44px; border: 0; background: transparent; color: var(--text); font: 22px var(--sys); cursor: pointer; border-radius: 10px; user-select: none; touch-action: none; }
+  .step button:active { background: var(--selTint); }
+  .step output { min-width: 96px; text-align: center; font-variant-numeric: tabular-nums; }
+
+  /* digit wheels */
+  .valbtn { background: var(--tile); border: 0; color: var(--text); font: 14px var(--sys); border-radius: 10px; min-height: 44px; min-width: 120px; padding: 0 14px; cursor: pointer; font-variant-numeric: tabular-nums; }
+  .valbtn.open { outline: 2px solid var(--sel); }
+  .wheels { display: flex; align-items: center; gap: 4px; justify-content: flex-end; padding: 6px 0 4px; }
+  .wheel { position: relative; width: 40px; height: 132px; overflow-y: scroll; scroll-snap-type: y mandatory; scrollbar-width: none; background: var(--tile); border-radius: 8px;
+           mask-image: linear-gradient(transparent, #000 30%, #000 70%, transparent); -webkit-mask-image: linear-gradient(transparent, #000 30%, #000 70%, transparent); }
+  .wheel::-webkit-scrollbar { display: none; }
+  .wheel div { height: 44px; display: grid; place-items: center; scroll-snap-align: center; font-size: 20px; font-variant-numeric: tabular-nums; }
+  .wheel .pad { scroll-snap-align: none; }
+  .wheels .u { color: var(--text2); margin-left: 6px; }
+  .wheels .sep { font-size: 20px; }
+
+  .linkbtn { background: none; border: 0; color: var(--link); font: 14px var(--sys); min-height: 44px; padding: 0; cursor: pointer; display: inline-flex; gap: 6px; align-items: center; }
+  .sw { width: 51px; height: 31px; border-radius: 16px; background: var(--ok); position: relative; }
+  .sw::after { content: ''; position: absolute; right: 2px; top: 2px; width: 27px; height: 27px; border-radius: 50%; background: #fff; }
+  .sw.off { background: #555; } .sw.off::after { right: auto; left: 2px; }
+  .cap { font-size: 12px; color: var(--text2); }
+  .hide { display: none !important; }
+  table.inv { border-collapse: collapse; width: 100%; font-size: 13px; }
+  table.inv th, table.inv td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  table.inv th { color: var(--text2); font-weight: 500; }
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>Rig without text fields <span class="tag">proposed</span></h1>
+  <p class="note">Aperture, focal length and the site, set by touch. Everything here works: tap or hold the steppers, flick the wheels. The dashed outline marks what changes; the rest is Rig as it is on the iPad today. Values the profile didn't have and the mount reported read "from the mount".</p>
+
+  <div class="controls">
+    <span class="lbl">Telescope</span>
+    <div class="seg" role="group" aria-label="Telescope control">
+      <button data-t="step" aria-pressed="true">A · Stepper</button>
+      <button data-t="wheel">B · Digit wheels</button>
+    </div>
+    <span class="lbl">Site</span>
+    <div class="seg" role="group" aria-label="Site control">
+      <button data-s="loc" aria-pressed="true">A · Location only</button>
+      <button data-s="adjust">B · Location + Adjust</button>
+    </div>
+    <div class="seg" role="group" aria-label="Look">
+      <button data-n="day" aria-pressed="true">Normal</button>
+      <button data-n="night">Night mode</button>
+    </div>
+  </div>
+
+  <div class="ipad">
+    <div class="veil"></div>
+    <div class="surface">
+      <div class="nav">
+        <div class="row on">⌂&nbsp; Rig</div>
+        <div class="row">◉&nbsp; Devices<span class="sub">4 of 4</span></div>
+        <div class="row dev"><span style="color:var(--ok)">●</span> Camera</div>
+        <div class="row dev"><span style="color:var(--ok)">●</span> Mount</div>
+      </div>
+      <div class="body" id="body">
+        <div class="r"><span class="l">Name</span><span class="v">openastro</span></div>
+        <div class="r"><span class="l">Profile</span><span class="v">Backyard Rig</span></div>
+        <div class="hr"></div>
+        <div id="telescope" class="proposed"></div>
+        <div class="hr"></div>
+        <div id="site" class="proposed"></div>
+        <div class="hr"></div>
+        <div class="r"><span class="l">Permanent pier<br><span class="cap">Skips polar alignment</span></span><span class="sw off"></span></div>
+        <div class="r"><span class="l">Simple Mode</span><span class="sw"></span></div>
+      </div>
+    </div>
+  </div>
+  <p class="note" id="caption" style="margin-top:12px"></p>
+
+  <section style="margin-top:32px">
+    <h2>The options</h2>
+    <table class="inv">
+      <tr><th></th><th>How it sets a value</th><th>Good at</th><th>Weak at</th></tr>
+      <tr><td>Telescope A · Stepper</td><td>Tap − / + for 1 mm; hold and it repeats, speeding up to 10 mm, then 50 mm steps.</td><td>Small corrections (a reducer: 480 → 510). One control, no popup.</td><td>Big jumps from nothing (0 → 2000 mm is a long hold), though the mount usually fills it first.</td></tr>
+      <tr><td>Telescope B · Digit wheels</td><td>Tap the value; one wheel per digit opens under it, like the iOS timer. Tap again to close; it saves on close.</td><td>Any exact number in a few flicks (2350 is four).</td><td>Takes room while open; a digit at a time is fiddly with gloves.</td></tr>
+      <tr><td>Site A · Location only</td><td>"Use this iPad's location" fills latitude, longitude and elevation. Coordinates only read out; elevation has a stepper (the iPad's height is often off).</td><td>The 90 %: you're at the rig with the iPad. Nothing to type, nothing to get wrong.</td><td>An iPad with location off, or setting up a remote site: send them to the full UI (Simple never links there, so they'd switch out).</td></tr>
+      <tr><td>Site B · Location + Adjust</td><td>As A, plus Adjust opens digit wheels for latitude and longitude (N/S, E/W wheel, degrees, 4 decimals).</td><td>Location off or a remote site without leaving Simple Mode.</td><td>More controls on the page; most nights never touch it.</td></tr>
+    </table>
+    <p class="note" style="margin-top:12px">My pick: <b>Telescope A</b> (the mount fills the usual case; the stepper fixes reducers and odd scopes) and <b>Site A</b> (4×90 %: location covers the night at the rig). Elevation gets the stepper in both, whole metres.</p>
+  </section>
+</div>
+<script>
+  const state = { aperture: 80, focal: 480, elevation: 71, lat: -37.2037, lng: 174.8824, ap_from: true, fl_from: false };
+  let t = 'step', s = 'loc', open = null;
+
+  function stepper(key, unit) {
+    return `<span class="step" data-k="${key}"><button data-d="-1" aria-label="Less">−</button><output>${state[key]} ${unit}</output><button data-d="1" aria-label="More">+</button></span>`;
+  }
+  function digits(v, n) { return String(Math.abs(Math.round(v))).padStart(n, '0').split(''); }
+  function wheel(vals, cur, id) {
+    return `<div class="wheel" data-w="${id}"><div class="pad"></div>${vals.map(x => `<div>${x}</div>`).join('')}<div class="pad"></div></div>`;
+  }
+  function digitWheels(key, n, unit) {
+    const ds = digits(state[key], n);
+    return `<div class="wheels" data-dk="${key}">${ds.map((d, i) => wheel([0,1,2,3,4,5,6,7,8,9], +d, key + i)).join('')}<span class="u">${unit}</span></div>`;
+  }
+  function coordWheels(key) {
+    const v = state[key], neg = v < 0, deg = Math.floor(Math.abs(v)), dec = Math.round((Math.abs(v) - deg) * 10000);
+    const hemi = key === 'lat' ? ['N', 'S'] : ['E', 'W'];
+    const degN = key === 'lat' ? 2 : 3;
+    return `<div class="wheels" data-ck="${key}">${wheel(hemi, neg ? 1 : 0, key + 'h')}
+      ${digits(deg, degN).map((d, i) => wheel([0,1,2,3,4,5,6,7,8,9], +d, key + 'd' + i)).join('')}<span class="sep">.</span>
+      ${digits(dec, 4).map((d, i) => wheel([0,1,2,3,4,5,6,7,8,9], +d, key + 'f' + i)).join('')}<span class="u">°</span></div>`;
+  }
+  const from = k => state[k] ? '<span class="from">from the mount</span>' : '';
+
+  function render() {
+    const tel = document.getElementById('telescope');
+    if (t === 'step') {
+      tel.innerHTML = `<div class="r"><span class="l">Aperture${from('ap_from')}</span>${stepper('aperture', 'mm')}</div>
+        <div class="r"><span class="l">Focal length${from('fl_from')}</span>${stepper('focal', 'mm')}</div>`;
+    } else {
+      tel.innerHTML = `<div class="r"><span class="l">Aperture${from('ap_from')}</span><button class="valbtn ${open === 'aperture' ? 'open' : ''}" data-open="aperture">${state.aperture} mm</button></div>
+        ${open === 'aperture' ? digitWheels('aperture', 3, 'mm') : ''}
+        <div class="r"><span class="l">Focal length${from('fl_from')}</span><button class="valbtn ${open === 'focal' ? 'open' : ''}" data-open="focal">${state.focal} mm</button></div>
+        ${open === 'focal' ? digitWheels('focal', 4, 'mm') : ''}`;
+    }
+    const fmt = (v, p, n) => `${Math.abs(v).toFixed(4)}° ${v < 0 ? n : p}`;
+    const site = document.getElementById('site');
+    site.innerHTML = `
+      <div class="r"><span class="l">Latitude</span>${s === 'adjust'
+        ? `<button class="valbtn ${open === 'lat' ? 'open' : ''}" data-open="lat">${fmt(state.lat, 'N', 'S')}</button>` : `<span class="v">${fmt(state.lat, 'N', 'S')}</span>`}</div>
+      ${open === 'lat' ? coordWheels('lat') : ''}
+      <div class="r"><span class="l">Longitude</span>${s === 'adjust'
+        ? `<button class="valbtn ${open === 'lng' ? 'open' : ''}" data-open="lng">${fmt(state.lng, 'E', 'W')}</button>` : `<span class="v">${fmt(state.lng, 'E', 'W')}</span>`}</div>
+      ${open === 'lng' ? coordWheels('lng') : ''}
+      <div class="r"><span class="l">Elevation</span>${stepper('elevation', 'm')}</div>
+      <div class="r"><button class="linkbtn" id="loc">⌖ Use this iPad's location</button></div>`;
+    wire();
+    document.getElementById('caption').textContent =
+      (t === 'step' ? 'Telescope A: tap for 1 mm, hold to run (1 → 10 → 50 mm). ' : 'Telescope B: tap a value to open its digit wheels; tap it again to close and save. ') +
+      (s === 'loc' ? 'Site A: the coordinates only read out; Use this iPad\'s location sets them, and elevation has the stepper.' : 'Site B: tap a coordinate to adjust it with wheels (hemisphere, degrees, 4 decimals ≈ 11 m).');
+  }
+
+  function wire() {
+    document.querySelectorAll('.step').forEach(st => {
+      const k = st.dataset.k;
+      st.querySelectorAll('button').forEach(b => {
+        let timer, n;
+        const bump = () => {
+          const big = n > 25 ? 50 : n > 10 ? 10 : 1;
+          state[k] = Math.max(k === 'elevation' ? -500 : 0, state[k] + (+b.dataset.d) * big);
+          if (k === 'aperture') state.ap_from = false; if (k === 'focal') state.fl_from = false;
+          st.querySelector('output').textContent = `${state[k]} ${k === 'elevation' ? 'm' : 'mm'}`;
+          n++;
+        };
+        const stop = () => { clearTimeout(timer); if (n !== undefined) { n = undefined; render(); } };
+        b.onpointerdown = e => { e.preventDefault(); n = 0; bump(); const loop = () => { bump(); timer = setTimeout(loop, n > 10 ? 60 : 120); }; timer = setTimeout(loop, 400); };
+        b.onpointerup = b.onpointerleave = b.onpointercancel = stop;
+      });
+    });
+    document.querySelectorAll('[data-open]').forEach(b => b.onclick = () => { open = open === b.dataset.open ? null : b.dataset.open; render(); });
+    document.querySelectorAll('.wheel').forEach(w => {
+      const items = [...w.children].filter(c => !c.classList.contains('pad'));
+      const box = w.closest('.wheels');
+      const cur = box.dataset.dk ? digits(state[box.dataset.dk], box.children.length - 1)[[...box.querySelectorAll('.wheel')].indexOf(w)] : null;
+      const idx = w.dataset.w.endsWith('h') ? (state[box.dataset.ck] < 0 ? 1 : 0) : (cur !== null ? +cur : +initCoord(box.dataset.ck, w.dataset.w));
+      w.scrollTop = idx * 44;
+      let to;
+      w.onscroll = () => { clearTimeout(to); to = setTimeout(() => read(box), 120); };
+    });
+    const loc = document.getElementById('loc');
+    if (loc) loc.onclick = () => { state.lat = -37.2037; state.lng = 174.8824; state.elevation = 71; open = null; render(); };
+  }
+  function initCoord(key, id) {
+    const v = state[key], deg = Math.floor(Math.abs(v)), dec = Math.round((Math.abs(v) - deg) * 10000);
+    const m = id.match(/([df])(\d)$/); const i = +m[2];
+    return m[1] === 'd' ? digits(deg, key === 'lat' ? 2 : 3)[i] : digits(dec, 4)[i];
+  }
+  function read(box) {
+    const ws = [...box.querySelectorAll('.wheel')].map(w => Math.round(w.scrollTop / 44));
+    if (box.dataset.dk) {
+      state[box.dataset.dk] = +ws.join('');
+      if (box.dataset.dk === 'aperture') state.ap_from = false; else state.fl_from = false;
+    } else {
+      const key = box.dataset.ck, degN = key === 'lat' ? 2 : 3;
+      const deg = +ws.slice(1, 1 + degN).join(''), dec = +ws.slice(1 + degN).join('');
+      let v = Math.min(deg + dec / 10000, key === 'lat' ? 90 : 180);
+      state[key] = ws[0] === 1 ? -v : v;
+    }
+    document.querySelectorAll('[data-open]').forEach(b => {
+      const k = b.dataset.open, v = state[k];
+      b.textContent = k === 'lat' ? `${Math.abs(v).toFixed(4)}° ${v < 0 ? 'S' : 'N'}` : k === 'lng' ? `${Math.abs(v).toFixed(4)}° ${v < 0 ? 'W' : 'E'}` : `${v} mm`;
+    });
+  }
+  document.querySelectorAll('[data-t]').forEach(b => b.onclick = () => { t = b.dataset.t; open = null; document.querySelectorAll('[data-t]').forEach(x => x.setAttribute('aria-pressed', x === b)); render(); });
+  document.querySelectorAll('[data-s]').forEach(b => b.onclick = () => { s = b.dataset.s; open = null; document.querySelectorAll('[data-s]').forEach(x => x.setAttribute('aria-pressed', x === b)); render(); });
+  document.querySelectorAll('[data-n]').forEach(b => b.onclick = () => { document.body.classList.toggle('night', b.dataset.n === 'night'); document.querySelectorAll('[data-n]').forEach(x => x.setAttribute('aria-pressed', x === b)); });
+  render();
+</script>
+</body>
+</html>

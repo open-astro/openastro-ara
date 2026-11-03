@@ -12,6 +12,7 @@ import '../../../state/settings/site_settings_state.dart';
 import '../../../state/tracking/tracking_calibration_state.dart';
 import '../../../theme/ara_colors.dart';
 import '../../../util/friendly_error.dart';
+import '../../../l10n/l10n.dart';
 import '../../../widgets/settings/editable_field.dart';
 import '../../../widgets/settings/settings_row.dart';
 
@@ -52,7 +53,7 @@ class _ImagingUnguidedPanelState extends ConsumerState<ImagingUnguidedPanel>
       await ref.read(unguidedSettingsProvider.notifier).hydrateFromServer(api);
     } catch (e) {
       if (mounted) {
-        setState(() => _lastError = friendlyError(e, action: 'load your saved settings'));
+        setState(() => _lastError = friendlyError(context.l10n, e, action: 'load your saved settings'));
       }
     }
   }
@@ -75,13 +76,14 @@ class _ImagingUnguidedPanelState extends ConsumerState<ImagingUnguidedPanel>
       messenger.showSnackBar(const SnackBar(content: Text('Saved.')));
     } catch (e) {
       if (!mounted) return;
-      setState(() => _lastError = friendlyError(e, action: 'save that'));
+      setState(() => _lastError = friendlyError(context.l10n, e, action: 'save that'));
       messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
     }
   }
 
   Future<void> _recalibrate() async {
     final messenger = ScaffoldMessenger.of(context);
+    final l10n = context.l10n;
     setState(() => _busy = true);
     try {
       await ref.read(trackingCalibrationProvider.notifier).recalibrate();
@@ -92,7 +94,7 @@ class _ImagingUnguidedPanelState extends ConsumerState<ImagingUnguidedPanel>
       );
     } catch (e) {
       messenger.showSnackBar(
-        SnackBar(content: Text(friendlyError(e, action: 'clear the ceiling'))),
+        SnackBar(content: Text(friendlyError(l10n, e, action: 'clear the ceiling'))),
       );
     } finally {
       if (mounted) setState(() => _busy = false);

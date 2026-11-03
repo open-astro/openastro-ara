@@ -4,6 +4,9 @@ import 'dart:developer' as developer;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'l10n/app_localizations.dart';
+import 'state/app_locale_state.dart';
+
 import 'app_version.dart';
 import 'screens/app_shell.dart';
 import 'screens/simple/simple_shell.dart';
@@ -80,6 +83,9 @@ class OpenAstroAraApp extends StatelessWidget {
     return MaterialApp(
       title: 'OpenAstro Ara',
       theme: araTheme,
+      // The device's language where Ara has it (lib/l10n), English otherwise.
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
       // The diagonal DEBUG ribbon overlaps top-right app-bar actions (e.g. the
       // first-run Rescan button); it adds nothing for users, so hide it.
       debugShowCheckedModeBanner: false,
@@ -88,17 +94,27 @@ class OpenAstroAraApp extends StatelessWidget {
       navigatorObservers: [planetariumRouteObserver],
       // Always the same widget type above the Navigator, on or off — see
       // NightFilter for why the Navigator's parent must never change.
-      builder: (context, child) =>
-          NightFilter(child: child ?? const SizedBox.shrink()),
+      // The language pick overrides below MaterialApp, so a change never
+      // rebuilds the root; with no pick the override keeps the device's.
+      builder: (context, child) => NightFilter(
+        child: Consumer(
+          builder: (context, ref, _) => Localizations.override(
+            context: context,
+            locale: ref.watch(appLocaleProvider),
+            child: child ?? const SizedBox.shrink(),
+          ),
+        ),
+      ),
       home: NightHotkey(child: home ?? const _RootRouter()),
     );
   }
 }
 
-/// §30.1 launch sequence: FirstRunScreen (the network scan — nothing is stored
-/// between launches, #1129) → the
-/// LaunchProfileScreen profile box (always shown, §30.2/§30.3) → AppShell
-/// once the user clicks [Image] and the launch gate passes. "Plan offline"
+/// §30.1 launch sequence: FirstRunScreen (the network scan — no address is
+/// stored, #1129; the last rig, kept by name, connects on its own, ALP-4890) →
+/// the LaunchProfileScreen profile box (§30.2/§30.3; skipped on a session's
+/// first entry when the rig has an active profile) → AppShell once the user
+/// clicks [Image] or the launch gate passes on its own. "Plan offline"
 /// (§2 — the client is a planning workstation, not a thin viewer) bypasses both
 /// gates and enters the shell with no server for the session.
 class _RootRouter extends ConsumerWidget {
@@ -132,6 +148,8 @@ class _RootRouter extends ConsumerWidget {
     // #1137 — a different server mid-session re-arms the launch gate: the
     // profile box, the cache seed and the gear hydration belong to the old rig.
     ref.listen(launchGateRearmProvider, (previous, next) {});
+    // ALP-4890 — a relaunch enters on the rig's active profile.
+    ref.listen(launchAutoEnterProvider, (previous, next) {});
     final saved = ref.watch(savedServersProvider);
     final gatePassed = ref.watch(profileGatePassedProvider);
     final offline = ref.watch(offlineModeProvider);

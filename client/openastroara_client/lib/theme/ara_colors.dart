@@ -33,6 +33,11 @@ class AraColors {
   /// over a bright one).
   static const errorText = Color(0xFFFF8A80);
 
+  /// Text-button labels on Simple Mode's panels and tiles: [accentInfo]
+  /// lightened so it reads at 4.5:1 on a tile (#383838) as well as the scrim
+  /// (Info Blue itself is 4.4:1 there, the button primary 2:1).
+  static const linkText = Color(0xFF64B5F6);
+
   /// The tile fill behind Simple Mode's fields, presets and mode tiles
   /// (DESIGN.md `tile-fill`): dark enough that [textSecondary] on it reads
   /// at 4.5:1 over a white frame.

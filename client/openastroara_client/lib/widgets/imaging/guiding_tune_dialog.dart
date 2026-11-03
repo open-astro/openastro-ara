@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../util/friendly_error.dart';
+import '../../l10n/l10n.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../services/profile_api.dart';
@@ -104,7 +105,7 @@ class _GuidingTuneDialogState extends ConsumerState<GuidingTuneDialog> {
       }
     } catch (e) {
       if (mounted) {
-        setState(() => _hydrateError = friendlyError(e, action: 'load your saved settings'));
+        setState(() => _hydrateError = friendlyError(context.l10n, e, action: 'load your saved settings'));
       }
     } finally {
       _hydrating = false;

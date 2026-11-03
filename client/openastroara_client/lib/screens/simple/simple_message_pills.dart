@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../l10n/l10n.dart';
 import '../../state/simple_messages_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
@@ -69,7 +70,9 @@ class _SimpleMessagePillsState extends ConsumerState<SimpleMessagePills> {
                   padding: const EdgeInsets.symmetric(horizontal: 14),
                   alignment: Alignment.center,
                   child: Text(
-                    folded ? '+$more more' : 'Show fewer',
+                    folded
+                        ? context.l10n.pillsMore(more)
+                        : context.l10n.pillsShowFewer,
                     style: kSimpleText.copyWith(color: AraColors.textSecondary),
                   ),
                 ),
@@ -162,13 +165,13 @@ class _Pill extends ConsumerWidget {
                     key: const Key('simple-messages-more'),
                     onPressed: onMore,
                     child: Text(
-                      '+$more',
-                      semanticsLabel: '$more more messages',
+                      context.l10n.pillsMoreShort(more!),
+                      semanticsLabel: context.l10n.pillsMoreSemantics(more!),
                     ),
                   ),
                 if (m.kind == SimpleMessageKind.error)
                   IconButton(
-                    tooltip: 'Dismiss',
+                    tooltip: context.l10n.pillsDismiss,
                     icon: const Icon(Icons.close, size: 18),
                     onPressed: () => notifier.dismiss(m.id),
                   ),
@@ -195,6 +198,13 @@ class _Pill extends ConsumerWidget {
                                 ),
                       ],
                     ),
+                  )
+                else if (m.kind == SimpleMessageKind.result &&
+                    m.actions.isNotEmpty)
+                  // A result's one action (Undo), there while the pill lasts.
+                  TextButton(
+                    onPressed: () => _answer(notifier, 0),
+                    child: Text(m.actions.first.label),
                   )
                 else if (m.kind == SimpleMessageKind.result)
                   const SizedBox(width: kSimpleInset - 4),

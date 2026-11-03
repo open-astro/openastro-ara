@@ -167,7 +167,7 @@ void main() {
     final s = container.read(siteSettingsProvider);
     expect(s.latitudeDeg, closeTo(38.85, 1e-9), reason: 'rounded to 2 dp like every fill');
     expect(s.longitudeDeg, closeTo(-77.04, 1e-9));
-    expect(s.elevationM, closeTo(120.5, 1e-9));
+    expect(s.elevationM, 121, reason: 'whole metres');
     expect(find.textContaining('Filled from the GPS dongle on this'), findsOneWidget);
   });
 
@@ -209,7 +209,7 @@ void main() {
     }
     final s = container.read(siteSettingsProvider);
     expect(s.latitudeDeg, closeTo(38.85, 1e-9), reason: 'the probed dongle, not the device location');
-    expect(s.elevationM, closeTo(120.5, 1e-9));
+    expect(s.elevationM, 121, reason: 'whole metres');
     expect(find.textContaining('now enabled in Settings'), findsOneWidget);
     final saved = await prefs.load();
     expect(saved.enabled, isTrue);

@@ -105,7 +105,27 @@ ProviderContainer _container(List<AraServer> servers, GuiderClient api) {
   return c;
 }
 
+/// Reports connecting for two reads after the connect, then connected.
+class _SettlingGuiderApi extends _FakeGuiderApi {
+  int _reads = 0;
+  @override
+  Future<GuiderStatus?> getStatus() async {
+    if (status?.connectionState == GuiderConnectionState.connecting && ++_reads > 2) {
+      status = const GuiderStatus(
+        deviceId: 'phd2',
+        name: 'OpenAstro Guider',
+        connectionState: GuiderConnectionState.connected,
+        runtimeState: GuiderRuntimeState.stopped,
+      );
+    }
+    return status;
+  }
+}
+
 void main() {
+  // connect() re-reads while connecting; no real waits in tests.
+  setUp(() => GuiderStatusNotifier.settleInterval = Duration.zero);
+
   group('guiderStatusProvider', () {
     const server = AraServer(hostname: 'h', port: 5555);
 
@@ -151,6 +171,24 @@ void main() {
       expect(api.lastHost, '10.0.0.5');
       expect(api.lastPort, 4401);
       expect(c.read(guiderStatusProvider).value!.connectionState, GuiderConnectionState.connecting);
+    });
+
+    test('connect() keeps reading until the guider settles (nothing else polls it)', () async {
+      final api = _SettlingGuiderApi()
+        ..status = const GuiderStatus(
+          deviceId: 'phd2',
+          name: 'OpenAstro Guider',
+          connectionState: GuiderConnectionState.disconnected,
+          runtimeState: GuiderRuntimeState.stopped,
+        );
+      final c = _container(const [server], api);
+      await c.read(savedServersProvider.future);
+      await c.read(guiderStatusProvider.future);
+
+      await c.read(guiderStatusProvider.notifier).connect(host: '10.0.0.5', port: 4401);
+
+      expect(c.read(guiderStatusProvider).value!.connectionState, GuiderConnectionState.connected,
+          reason: 'not left on Connecting…');
     });
 
     test('a no-args connect() targets the PROFILE phd2 host/port, not localhost',

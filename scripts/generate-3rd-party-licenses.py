@@ -199,6 +199,12 @@ PUB_LICENSES: dict[str, dict[str, str]] = {
         "license": "BSD-3-Clause",
         "copyright": "Copyright 2017 German Saprykin",
     },
+    "intl": {
+        # 0.20.3 verified 2026-11-03: LICENSE is BSD-3-Clause, body identical to collection's.
+        "version": "0.20.3",
+        "license": "BSD-3-Clause",
+        "copyright": "Copyright 2013, the Dart project authors",
+    },
     "multicast_dns": {
         # 0.3.3+1 verified 2026-09-19: LICENSE drops the trailing "All rights
         # reserved." from the copyright line; terms unchanged.

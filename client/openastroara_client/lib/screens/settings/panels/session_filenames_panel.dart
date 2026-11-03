@@ -11,6 +11,7 @@ import '../../../state/settings/storage_settings_state.dart';
 import '../../../theme/ara_colors.dart';
 import '../../../util/frame_naming.dart';
 import '../../../util/friendly_error.dart';
+import '../../../l10n/l10n.dart';
 import '../../../widgets/settings/editable_field.dart';
 import '../../../widgets/settings/settings_row.dart';
 import '../../../widgets/storage/fits_header_reference.dart';
@@ -62,7 +63,7 @@ class _SessionFilenamesPanelState extends ConsumerState<SessionFilenamesPanel>
       if (mounted) {
         setState(
           () =>
-              _lastError = friendlyError(e, action: 'load your saved settings'),
+              _lastError = friendlyError(context.l10n, e, action: 'load your saved settings'),
         );
       }
     }
@@ -108,7 +109,7 @@ class _SessionFilenamesPanelState extends ConsumerState<SessionFilenamesPanel>
       messenger.showSnackBar(const SnackBar(content: Text('Saved.')));
     } catch (e) {
       if (!mounted) return;
-      setState(() => _lastError = friendlyError(e, action: 'save that'));
+      setState(() => _lastError = friendlyError(context.l10n, e, action: 'save that'));
       messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
     }
   }

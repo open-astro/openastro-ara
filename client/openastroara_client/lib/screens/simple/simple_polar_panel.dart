@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../l10n/l10n.dart';
 import '../../models/polar_align.dart';
 import '../../services/polar_align_api.dart';
 import '../../state/polar_align/polar_align_state.dart';
@@ -36,8 +37,10 @@ bool _single(PolarAlignSettings s) => s.loopMode == PolarAlignLoopModes.single;
 /// "45 s" over "Single": the rail chip's caption in Polar align, the
 /// routine's setup on two lines (one doesn't fit the 60 px chip). Pure —
 /// unit-tested.
-String simplePolarSummary(PolarAlignSettings s) =>
-    '${formatExposure(_exposure(s))}\n${_single(s) ? 'Single' : 'Loop'}';
+String simplePolarSummary(PolarAlignSettings s, AppLocalizations l10n) {
+  return '${formatExposure(_exposure(s))}\n'
+      '${_single(s) ? l10n.polarSingle : l10n.polarLoop}';
+}
 
 /// The profile's polar-align settings (exposure, Loop/Single, tolerance). A
 /// save applies to the routine's next frame; a failed save rolls back.
@@ -82,12 +85,13 @@ class SimplePolarShutter extends ConsumerWidget {
     final api = ref.watch(polarAlignApiProvider);
     final active = simplePolarActive(ref.watch(polarAlignLiveProvider));
     final notify = userNotifier(context);
+    final l10n = context.l10n;
     Future<void> run(String action, Future<void> Function() op) async {
       try {
         await op();
       } catch (e) {
         notify(
-          friendlyError(e, action: action),
+          friendlyError(l10n, e, action: action),
           error: true,
           snackBarRed: false,
         );
@@ -97,24 +101,25 @@ class SimplePolarShutter extends ConsumerWidget {
     return SimpleShutterButton(
       start: true,
       running: active,
-      label: active ? 'Stop' : 'Start polar alignment',
+      label: active ? l10n.polarStop : l10n.polarStart,
       onPressed: api == null
           ? null
           : active
-          ? () => run('stop polar alignment', api.stop)
-          : () => run('start polar alignment', api.start),
+          ? () => run(l10n.polarActionStop, api.stop)
+          : () => run(l10n.polarActionStart, api.start),
     );
   }
 }
 
 /// The phase in words. Pure — unit-tested.
-String simplePolarPhase(PolarAlignLive live) => switch (live.phase) {
-  PolarAlignStates.seeding => 'Finding the pole…',
-  PolarAlignStates.adjusting => 'Adjusting',
-  PolarAlignStates.paused => 'Paused',
-  PolarAlignStates.failed => 'Polar alignment failed',
-  _ => 'Ready',
-};
+String simplePolarPhase(PolarAlignLive live, AppLocalizations l10n) =>
+    switch (live.phase) {
+      PolarAlignStates.seeding => l10n.polarPhaseSeeding,
+      PolarAlignStates.adjusting => l10n.polarPhaseAdjusting,
+      PolarAlignStates.paused => l10n.polarPhasePaused,
+      PolarAlignStates.failed => l10n.polarPhaseFailed,
+      _ => l10n.polarPhaseReady,
+    };
 
 /// The polar-align camera's latest frame, refetched after each finished
 /// frame; null until there is one. Keeps the previous picture while the next
@@ -182,19 +187,22 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
     try {
       await op(api);
     } catch (e) {
-      if (mounted) setState(() => _error = friendlyError(e, action: action));
+      if (mounted) {
+        setState(() => _error = friendlyError(context.l10n, e, action: action));
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
   }
 
   void _save(PolarAlignSettings next) => _run(
-    'save the polar-align settings',
+    context.l10n.polarActionSave,
     (_) => ref.read(simplePolarSettingsProvider.notifier).save(next),
   );
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final autopilot = ref.watch(autopilotProvider) == AutopilotStep.polarAlign;
     final live = ref.watch(polarAlignLiveProvider);
     ref.listen(
@@ -249,7 +257,7 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
           spacing: AraSpace.s8,
           children: [
             if (active || live.phase == PolarAlignStates.failed)
-              Text(simplePolarPhase(live), style: kSimpleText),
+              Text(simplePolarPhase(live, l10n), style: kSimpleText),
             if (active && total != null) ...[
               Row(
                 spacing: AraSpace.s8,
@@ -282,26 +290,27 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
                 ),
               ),
               turn(
-                'Altitude',
+                l10n.polarAltitude,
                 live.altErrorArcmin,
-                polarAltHint(live.altErrorArcmin),
+                polarAltHint(l10n, live.altErrorArcmin),
               ),
               turn(
-                'Azimuth',
+                l10n.polarAzimuth,
                 live.azErrorArcmin,
-                polarAzHint(live.azErrorArcmin, southern: southern),
+                polarAzHint(l10n, live.azErrorArcmin, southern: southern),
               ),
             ],
             // The full panel's nudge, cut to two lines for the 248 px panel.
             if (active && _bolt.nudge != null)
               Text(
-                '${_bolt.nudge!.startsWith('Altitude') ? 'Altitude' : 'Azimuth'} got '
-                'worse. Turn that bolt back past where you started.',
+                l10n.polarBoltWorse(
+                  _bolt.nudge! ? l10n.polarAltitude : l10n.polarAzimuth,
+                ),
                 style: kSimpleText.copyWith(color: AraColors.accentBusy),
               ),
             if (active && live.consecutiveSolveFailures > 0)
               Text(
-                'No solve (${live.consecutiveSolveFailures} in a row). Check the sky.',
+                l10n.polarNoSolve(live.consecutiveSolveFailures),
                 style: kSimpleText.copyWith(color: AraColors.accentBusy),
               ),
             if (error != null)
@@ -313,7 +322,7 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
               ),
             SimplePresetTile<Duration>(
               key: const Key('simple-polar-exposure'),
-              label: 'Exposure',
+              label: l10n.polarExposure,
               value: _exposure(settings),
               options: exposurePresets(minSec: 0, maxSec: 60),
               format: formatExposure,
@@ -328,9 +337,9 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
               ),
               child: Row(
                 children: [
-                  for (final (mode, label) in const [
-                    (PolarAlignLoopModes.loop, 'Loop'),
-                    (PolarAlignLoopModes.single, 'Single'),
+                  for (final (mode, label) in [
+                    (PolarAlignLoopModes.loop, l10n.polarLoop),
+                    (PolarAlignLoopModes.single, l10n.polarSingle),
                   ])
                     Expanded(
                       child: SimpleSegment(
@@ -356,10 +365,10 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
                         onPressed: _busy
                             ? null
                             : () => _run(
-                                'take a frame',
+                                l10n.polarActionCapture,
                                 (api) => api.requestCapture(),
                               ),
-                        child: const Text('Take frame'),
+                        child: Text(l10n.polarTakeFrame),
                       ),
                     ),
                   Expanded(
@@ -372,7 +381,7 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
                               total < settings.targetToleranceArcmin
                           ? () async {
                               await _run(
-                                'complete polar alignment',
+                                l10n.polarActionComplete,
                                 (api) => api.complete(),
                               );
                               // In Autopilot, Done moves on to the plan.
@@ -381,7 +390,9 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
                               }
                             }
                           : null,
-                      child: Text(autopilot ? 'Done · Next: Plan' : 'Done'),
+                      child: Text(
+                        autopilot ? l10n.polarDoneNextPlan : l10n.polarDone,
+                      ),
                     ),
                   ),
                 ],

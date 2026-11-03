@@ -364,7 +364,8 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                     GuiderFork = forkIdentity.ForkName;
                     OverlapSupport = forkIdentity.OverlapSupport;
 
-                    var reportedVersion = versionRpc?.Version ?? Version?.PHDVersion ?? "(unknown)";
+                    GuiderVersion = versionRpc?.Version ?? Version?.PHDVersion;
+                    var reportedVersion = GuiderVersion ?? "(unknown)";
                     if (Version == null && versionRpc == null) {
                         Logger.Warning("PHD2 version handshake produced neither a get_version result nor a Version event within 2s; cannot identify openastro-guider vs upstream. Some §63 features may behave unexpectedly.");
                     } else if (forkIdentity.IsOpenAstroGuider) {
@@ -458,6 +459,21 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                 var resp = await SendMessage(new Phd2GetCurrentEquipment(), 10000).ConfigureAwait(false);
                 if (resp?.error == null && resp?.result is JObject equipment) {
                     return equipment["AO"] is JObject ao && ao["connected"]?.Type == JTokenType.Boolean && ao.Value<bool>("connected");
+                }
+            } catch (Exception ex) {
+                Logger.Error(ex);
+            }
+            return null;
+        }
+
+        /// <summary>The guide camera the guider has open (<c>get_current_equipment</c>), or null when none is
+        /// connected or the call fails.</summary>
+        public async Task<string?> GetConnectedCameraNameAsync() {
+            try {
+                var resp = await SendMessage(new Phd2GetCurrentEquipment(), 10000).ConfigureAwait(false);
+                if (resp?.error == null && resp?.result is JObject equipment && equipment["camera"] is JObject camera
+                    && camera["connected"]?.Type == JTokenType.Boolean && camera.Value<bool>("connected")) {
+                    return camera.Value<string>("name");
                 }
             } catch (Exception ex) {
                 Logger.Error(ex);

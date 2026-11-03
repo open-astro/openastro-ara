@@ -303,6 +303,56 @@ class CatalogNameIndex {
 /// "SH2-129", "b 33", "ldn1235" and common names ("horsehead") all resolve.
 /// Exact normalized id/name match wins; otherwise the first object whose
 /// common name contains the query. Null when nothing matches.
+/// One search suggestion: the object and the name of it that matched.
+typedef DsoSuggestion = ({PlanningDso dso, String label});
+
+/// Suggestions while a target name is typed (Simple Mode's Plan search): an
+/// exact designation first, then designations that start with what was typed
+/// (spacing, case and zero padding ignored, the same keys as the search),
+/// then common names with a word starting with it; brighter first within
+/// each, at most [limit]. Nothing under two characters.
+List<DsoSuggestion> searchSuggestions(
+  List<PlanningDso> catalog,
+  String query, {
+  int limit = 6,
+}) {
+  final q = query.trim();
+  if (q.length < 2) return const [];
+  final key = designationKey(q);
+  final loose = key.contains('-') ? null : looseDesignationKey(q);
+  final words = q.toLowerCase();
+  final ranked = <(int, DsoSuggestion)>[];
+  for (final o in catalog) {
+    (int, String)? best;
+    void consider(int rank, String label) {
+      if (best == null || rank < best!.$1) best = (rank, label);
+    }
+
+    for (final d in [o.id, ...o.aliases]) {
+      final k = designationKey(d);
+      if (k == key) {
+        consider(0, d);
+      } else if (k.startsWith(key) ||
+          (loose != null && looseDesignationKey(d).startsWith(loose))) {
+        consider(1, d);
+      }
+    }
+    if (best?.$1 != 0 && o.name.isNotEmpty) {
+      final name = o.name.toLowerCase();
+      if (name.startsWith(words) || name.contains(' $words')) {
+        consider(2, o.name);
+      }
+    }
+    if (best != null) ranked.add((best!.$1, (dso: o, label: best!.$2)));
+  }
+  ranked.sort((a, b) {
+    final r = a.$1.compareTo(b.$1);
+    if (r != 0) return r;
+    return (a.$2.dso.magnitude ?? 99).compareTo(b.$2.dso.magnitude ?? 99);
+  });
+  return [for (final r in ranked.take(limit)) r.$2];
+}
+
 PlanningDso? findCatalogObject(List<PlanningDso> catalog, String query) {
   // Two normalisations: a dash-PRESERVING one first, because designations
   // with a suffix collide with plain numbers once dashes go — "WR 2-1" and

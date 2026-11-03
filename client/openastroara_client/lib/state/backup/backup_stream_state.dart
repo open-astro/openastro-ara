@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:ui' show Locale;
 import '../../util/friendly_error.dart';
+import '../../l10n/l10n.dart';
 import 'dart:io';
 
 import 'package:crypto/crypto.dart';
@@ -336,7 +338,7 @@ class BackupStreamController extends Notifier<BackupStreamState> {
       if (target != null && ref.read(activeServerProvider)?.baseUrl != target.baseUrl) {
         return;
       }
-      state = state.copyWith(active: false, problem: friendlyError(e, action: 'start copying frames'));
+      state = state.copyWith(active: false, problem: friendlyError(lookupAppLocalizations(const Locale('en')), e, action: 'start copying frames'));
     } finally {
       _claiming = false;
     }
@@ -416,7 +418,7 @@ class BackupStreamController extends Notifier<BackupStreamState> {
           // flatten it to a generic sentence and lose the cause.
           state = state.copyWith(
             problem: 'Backup of ${entry.id} failing: '
-                '${error is String ? error : friendlyError(error, action: 'back up that entry')}');
+                '${error is String ? error : friendlyError(lookupAppLocalizations(const Locale('en')), error, action: 'back up that entry')}');
           // Failed attempts still moved bytes over the link (a checksum
           // mismatch is a full discarded transfer) — the cap must hold on
           // exactly the flaky links that produce failures, so pace the full
@@ -471,7 +473,7 @@ class BackupStreamController extends Notifier<BackupStreamState> {
       // tick retries.
       state = state.copyWith(
           problem: 'Backup stream hiccup: '
-              '${friendlyError(e, action: 'keep the backup stream going')}');
+              '${friendlyError(lookupAppLocalizations(const Locale('en')), e, action: 'keep the backup stream going')}');
     } finally {
       _polling = false;
     }

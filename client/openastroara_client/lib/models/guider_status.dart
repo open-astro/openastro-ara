@@ -6,6 +6,8 @@ library;
 
 import 'package:flutter/foundation.dart' show mapEquals;
 
+import '../l10n/l10n.dart';
+
 import 'pa_residual.dart';
 
 /// Link state of the guider device itself (mirrors the server
@@ -63,18 +65,18 @@ bool guiderIsGuiding(GuiderRuntimeState state) => switch (state) {
 
 /// #1364 item 6 — the one wording of a guider phase, used by the guiding
 /// strip, the guider dialog and the Run tab alike.
-String guiderRuntimeText(GuiderRuntimeState state) => switch (state) {
-      GuiderRuntimeState.stopped => 'Stopped',
-      GuiderRuntimeState.looping => 'Looping',
-      GuiderRuntimeState.starSelected => 'Star selected',
-      GuiderRuntimeState.calibrating => 'Calibrating',
-      GuiderRuntimeState.guiding => 'Guiding',
-      GuiderRuntimeState.settling => 'Settling',
-      GuiderRuntimeState.paused => 'Paused',
-      GuiderRuntimeState.starLost => 'Star lost',
-      GuiderRuntimeState.dithering => 'Dithering',
-      GuiderRuntimeState.assistant => 'Guiding Assistant',
-      GuiderRuntimeState.unknown => 'Unknown',
+String guiderRuntimeText(AppLocalizations l, GuiderRuntimeState state) => switch (state) {
+      GuiderRuntimeState.stopped => l.guiderStateNotGuiding,
+      GuiderRuntimeState.looping => l.guiderStateLooping,
+      GuiderRuntimeState.starSelected => l.guiderStateStarSelected,
+      GuiderRuntimeState.calibrating => l.guiderStateCalibrating,
+      GuiderRuntimeState.guiding => l.guiderStateGuiding,
+      GuiderRuntimeState.settling => l.guiderStateSettling,
+      GuiderRuntimeState.paused => l.guiderStatePaused,
+      GuiderRuntimeState.starLost => l.guiderStateStarLost,
+      GuiderRuntimeState.dithering => l.guiderStateDithering,
+      GuiderRuntimeState.assistant => l.guiderStateAssistant,
+      GuiderRuntimeState.unknown => l.guiderStateUnknown,
     };
 
 GuiderRuntimeState _runtimeFromWire(String? token) {
@@ -157,21 +159,21 @@ class GuiderStatus {
   });
 
   /// "North step 7 · 11.9 px" while a calibration leg is reported; null otherwise.
-  String? get calibrationText {
+  String? calibrationText(AppLocalizations l) {
     final dir = calibrationDirection;
     if (dir == null || dir.isEmpty) return null;
     final parts = [
-      calibrationStep == null ? dir : '$dir step $calibrationStep',
+      calibrationStep == null ? dir : l.guiderStateCalibrationStep(dir, '$calibrationStep'),
       if (calibrationDistancePx != null) '${calibrationDistancePx!.toStringAsFixed(1)} px',
     ];
     return parts.join(' · ');
   }
 
   /// "Calibrating · North step 7 · 11.9 px", "Guiding", "Not connected".
-  String get runtimeSummary {
-    if (!isConnected) return 'Not connected';
-    final base = guiderRuntimeText(runtimeState);
-    final leg = runtimeState == GuiderRuntimeState.calibrating ? calibrationText : null;
+  String runtimeSummary(AppLocalizations l) {
+    if (!isConnected) return l.guiderStateNotConnected;
+    final base = guiderRuntimeText(l, runtimeState);
+    final leg = runtimeState == GuiderRuntimeState.calibrating ? calibrationText(l) : null;
     return leg == null ? base : '$base · $leg';
   }
 

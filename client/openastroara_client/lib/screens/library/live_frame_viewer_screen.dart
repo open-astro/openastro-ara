@@ -8,6 +8,7 @@ import '../../models/library/live_library.dart';
 import '../../state/library/live_library_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../util/friendly_error.dart';
+import '../../l10n/l10n.dart';
 
 /// §40.5 frame viewer over the live wire model. 12f.2 shipped the pinch-zoom
 /// thumbnail + metadata; this slice adds the §65 stretched preview — a palette
@@ -154,7 +155,7 @@ class _LiveFrameViewerScreenState extends ConsumerState<LiveFrameViewerScreen>
       setState(() => _tagBusy = false);
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(friendlyError(e, action: 'update the tag'))));
+      ).showSnackBar(SnackBar(content: Text(friendlyError(context.l10n, e, action: 'update the tag'))));
     }
   }
 
@@ -250,7 +251,7 @@ class _LiveFrameViewerScreenState extends ConsumerState<LiveFrameViewerScreen>
       if (!mounted || gen != _fetchGen) return;
       setState(() {
         _loading = false;
-        _error = friendlyError(e, action: 'load the preview');
+        _error = friendlyError(context.l10n, e, action: 'load the preview');
         // Keep the last good render on screen, but snap the picker back to
         // the palette it was actually rendered with (r1: the dropdown must
         // never read as if the failed palette succeeded).
@@ -283,7 +284,7 @@ class _LiveFrameViewerScreenState extends ConsumerState<LiveFrameViewerScreen>
       });
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(friendlyError(e, action: 'rate the frame'))));
+      ).showSnackBar(SnackBar(content: Text(friendlyError(context.l10n, e, action: 'rate the frame'))));
     }
   }
 

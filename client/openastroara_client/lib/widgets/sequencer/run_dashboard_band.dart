@@ -16,6 +16,7 @@ import '../../state/sequencer/run_spotlight_state.dart';
 import '../../state/sequencer/sequence_editor_state.dart';
 import '../../state/sequencer/sequence_list_state.dart';
 import '../../state/tracking/tracking_probe_live_state.dart';
+import '../../l10n/l10n.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
 import 'run_state_badge.dart';
@@ -436,7 +437,7 @@ class _RunGuiderLineState extends ConsumerState<RunGuiderLine> {
           const SizedBox(width: 4),
           Expanded(
             child: Text(
-              'Guider · ${status.runtimeSummary}',
+              'Guider · ${status.runtimeSummary(context.l10n)}',
               key: const Key('run-guider-line'),
               style: AraText.caption.copyWith(color: color),
               overflow: TextOverflow.ellipsis,

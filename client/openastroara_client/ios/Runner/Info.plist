@@ -6,6 +6,11 @@
 	<true/>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
+	<key>CFBundleLocalizations</key>
+	<array>
+		<string>en</string>
+		<string>pt-BR</string>
+	</array>
 	<key>CFBundleDisplayName</key>
 	<string>OpenAstro Ara</string>
 	<key>CFBundleExecutable</key>

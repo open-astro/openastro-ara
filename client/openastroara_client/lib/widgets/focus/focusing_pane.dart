@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../l10n/l10n.dart';
 import '../../models/autofocus_run.dart';
 import '../../models/equipment_device_status.dart';
 import '../../models/guide_focus.dart';
@@ -224,7 +225,8 @@ class MainFocusCard extends ConsumerWidget {
             label: Text(run.isComplete ? 'Run again' : 'Run autofocus'),
           );
 
-    final (headline, headlineColor) = headlineFor(run);
+    final l10n = context.l10n;
+    final (headline, headlineColor) = headlineFor(l10n, run);
 
     return FocusSection(
       title: 'Main telescope',
@@ -246,7 +248,7 @@ class MainFocusCard extends ConsumerWidget {
             const SizedBox(height: 16),
           ],
           if (run.isFailed) ...[
-            InlineNotice.error(failureText(run)),
+            InlineNotice.error(failureText(l10n, run)),
             const SizedBox(height: 16),
           ],
           if (weakFitText(run) case final weak?) ...[
@@ -352,22 +354,22 @@ class MainFocusCard extends ConsumerWidget {
   }
 
   /// The headline in words + its colour. Pure — unit-tested.
-  static (String, Color?) headlineFor(AutofocusRun run) {
+  static (String, Color?) headlineFor(AppLocalizations l, AutofocusRun run) {
     switch (run.state) {
       case AutofocusRunStates.running:
-        return (phaseText(run), AraColors.accentBusy);
+        return (phaseText(l, run), AraColors.accentBusy);
       case AutofocusRunStates.complete:
         final hfr = run.finalHfr;
         return (
-          'In focus${hfr != null && hfr > 0 ? ' · HFR ${hfr.toStringAsFixed(2)}' : ''}',
+          hfr != null && hfr > 0 ? l.focusCardInFocusHfr(hfr.toStringAsFixed(2)) : l.focusCardInFocus,
           AraColors.accentConnected,
         );
       case AutofocusRunStates.failed:
-        return ('Autofocus failed', AraColors.accentError);
+        return (l.focusCardFailed, AraColors.accentError);
       case AutofocusRunStates.cancelled:
-        return ('Cancelled', null);
+        return (l.focusCardCancelled, null);
       default:
-        return ('Not focused yet', null);
+        return (l.focusCardNotFocused, null);
     }
   }
 
@@ -415,45 +417,45 @@ class MainFocusCard extends ConsumerWidget {
 
   /// The failure banner text: the daemon's reason as a sentence, then where the
   /// focuser was left. Pure — unit-tested.
-  static String failureText(AutofocusRun run) {
-    var reason = (run.reason ?? 'Autofocus failed — see Support → Logs').trim();
+  static String failureText(AppLocalizations l, AutofocusRun run) {
+    var reason = (run.reason ?? l.focusCardFailedSeeLogs).trim();
     if (reason.isNotEmpty) {
       reason = reason[0].toUpperCase() + reason.substring(1);
       if (!RegExp(r'[.!?]$').hasMatch(reason)) reason = '$reason.';
     }
     return run.restoredPosition != null
-        ? '$reason The focuser is back at ${run.restoredPosition}.'
+        ? '$reason ${l.focusCardBackAt('${run.restoredPosition}')}'
         : reason;
   }
 
   /// The one-line phase while running. Pure — unit-tested.
-  static String phaseText(AutofocusRun run) {
+  static String phaseText(AppLocalizations l, AutofocusRun run) {
+    final restored =
+        run.restoredPosition != null ? ' — ${l.focusCardRestoredPosition('${run.restoredPosition}')}' : '';
     switch (run.state) {
       case AutofocusRunStates.running:
         return switch (run.phase) {
-          'smart' => 'Smart Focus — shot ${run.sweepProbes.length} of ${run.totalSteps > 0 ? run.totalSteps : 5}',
-          'coarse' => 'Finding rough focus…',
-          'sweep' => 'Sweeping — probe ${run.completedSteps} of ${run.totalSteps}'
-              '${run.sweepAttempt > 1 ? ' (pass ${run.sweepAttempt})' : ''}',
-          'fitting' => 'Fitting the curve…',
-          'moving' => 'Moving to best focus…',
-          'confirming' => 'Confirming focus…',
-          'backlash' => 'Measuring focuser backlash…',
-          _ => 'Autofocus running…',
+          'smart' => l.focusCardSmart('${run.sweepProbes.length}', '${run.totalSteps > 0 ? run.totalSteps : 5}'),
+          'coarse' => l.focusCardCoarse,
+          'sweep' => l.focusCardSweeping('${run.completedSteps}', '${run.totalSteps}') +
+              (run.sweepAttempt > 1 ? ' ${l.focusCardPass('${run.sweepAttempt}')}' : ''),
+          'fitting' => l.focusCardFitting,
+          'moving' => l.focusCardMoving,
+          'confirming' => l.focusCardConfirming,
+          'backlash' => l.focusCardBacklash,
+          _ => l.focusCardRunning,
         };
       case AutofocusRunStates.complete:
         final hfr = run.finalHfr;
-        return 'In focus at ${run.finalPosition}'
-            '${hfr != null && hfr > 0 ? ' — HFR ${hfr.toStringAsFixed(2)}' : ''}'
-            '${run.durationSeconds != null ? ' in ${durationText(run.durationSeconds!)}' : ''}';
+        return l.focusCardInFocusAt('${run.finalPosition}') +
+            (hfr != null && hfr > 0 ? ' — HFR ${hfr.toStringAsFixed(2)}' : '') +
+            (run.durationSeconds != null ? ' ${l.focusCardTook(durationText(run.durationSeconds!))}' : '');
       case AutofocusRunStates.failed:
-        return 'Failed: ${run.reason ?? 'see Support → Logs'}'
-            '${run.restoredPosition != null ? ' — focuser restored to ${run.restoredPosition}' : ''}';
+        return l.focusCardFailedReason(run.reason ?? l.focusCardSeeLogs) + restored;
       case AutofocusRunStates.cancelled:
-        return 'Cancelled'
-            '${run.restoredPosition != null ? ' — focuser restored to ${run.restoredPosition}' : ''}';
+        return l.focusCardCancelled + restored;
       default:
-        return 'No autofocus yet this session.';
+        return l.focusCardNoRunYet;
     }
   }
 

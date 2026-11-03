@@ -172,6 +172,28 @@ void main() {
       expect(triggersOf(imaging), isEmpty);
     });
 
+    test('a refocus-after-temperature-change amount adds that trigger to each loop; none without a focuser', () {
+      List<String> loopTriggers(Map<String, dynamic> b) => [
+            for (final l in childrenOf(b).where((c) => (c['Name'] as String? ?? '').endsWith('Imaging')))
+              for (final t in triggersOf(l)) t[r'$type'] as String,
+          ];
+      final b = buildTargetBlock(raDeg: 1, decDeg: 2, exposureSeconds: 60, frameCount: 10, autofocusAfterTempChangeC: 2);
+      final loop = childrenOf(b).singleWhere((c) => c['Name'] == 'Imaging');
+      final temp = triggersOf(loop).singleWhere((t) => t[r'$type'] == autofocusAfterTempChangeType);
+      expect(temp['Amount'], 2.0);
+      expect(loopTriggers(buildTargetBlock(raDeg: 1, decDeg: 2, exposureSeconds: 60, frameCount: 10)),
+          isNot(contains(autofocusAfterTempChangeType)), reason: 'off unless asked');
+      expect(
+          loopTriggers(buildTargetBlock(
+              raDeg: 1, decDeg: 2, exposureSeconds: 60, frameCount: 10, autofocusAfterTempChangeC: 2,
+              rig: RigCapabilities.nothing)),
+          isNot(contains(autofocusAfterTempChangeType)),
+          reason: 'no focuser, nothing to refocus');
+      final run = buildImagingRunBody(raDeg: 1, decDeg: 2, targetName: 'T', exposureSeconds: 60, frameCount: 10,
+          autofocusAfterTempChangeC: 1.5);
+      expect(loopTriggers(childrenOf(run).singleWhere((c) => c['Name'] == 'T')), contains(autofocusAfterTempChangeType));
+    });
+
     test('a chosen filter emits a SwitchFilter matched by name (slot -1)', () {
       final root = build(filterName: 'Ha');
       final filter = childrenOf(targetBlockOf(root))

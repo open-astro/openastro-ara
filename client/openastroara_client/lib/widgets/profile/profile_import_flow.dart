@@ -11,6 +11,7 @@ import '../../services/profile_share_file.dart';
 import '../../state/profile_management_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../util/friendly_error.dart';
+import '../../l10n/l10n.dart';
 
 /// Opens the OS file picker for a profile share. Swappable in widget tests
 /// (the real FilePicker plugin isn't available there) — the same seam shape as
@@ -274,7 +275,7 @@ String friendlyDaemonError(Object e, {String fallback = 'Something went wrong'})
     // them; the re-check inside friendlyError only serves as a belt-and-braces
     // fallback and picks up the ProblemDetails `title` as well.
     if (data is Map && data['detail'] is String) return data['detail'] as String;
-    return friendlyError(e, action: _actionFromFallback(fallback));
+    return friendlyError(lookupAppLocalizations(const Locale('en')), e, action: _actionFromFallback(fallback));
   }
   if (e is StateError) return e.message;
   return fallback;

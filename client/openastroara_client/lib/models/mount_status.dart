@@ -29,6 +29,11 @@ class MountCapabilities {
   /// #1264 — the bridge's spec sheet for this mount, when the driver ships one.
   final MountSpecSheet? specs;
 
+  /// The telescope the driver reports, in mm; null when it doesn't (most
+  /// mounts NotImplement FocalLength / ApertureDiameter).
+  final double? focalLengthMm;
+  final double? apertureMm;
+
   const MountCapabilities({
     required this.canSlew,
     required this.canSync,
@@ -40,6 +45,8 @@ class MountCapabilities {
     this.axisRatesDegPerSec = const [],
     this.axisRateBands = const [],
     this.specs,
+    this.focalLengthMm,
+    this.apertureMm,
   });
 
   /// The bands the speed picker is built from: [axisRateBands] when the daemon
@@ -48,6 +55,8 @@ class MountCapabilities {
   List<SlewRateBand> get padRateBands => axisRateBands.isNotEmpty
       ? axisRateBands
       : slewRateBandsFromLegacyRates(axisRatesDegPerSec);
+
+  static double? _mm(Object? v) => v is num && v > 0 ? v.toDouble() : null;
 
   factory MountCapabilities.fromJson(Map<String, dynamic> json) => MountCapabilities(
         canSlew: json['can_slew'] as bool? ?? false,
@@ -58,6 +67,8 @@ class MountCapabilities {
         canFindHome: json['can_find_home'] as bool? ?? false,
         canMoveAxis: json['can_move_axis'] as bool? ?? false,
         specs: MountSpecSheet.fromJson(json['mount_specs']),
+        focalLengthMm: _mm(json['focal_length_mm']),
+        apertureMm: _mm(json['aperture_diameter_mm']),
         axisRatesDegPerSec: (json['move_axis_rates_deg_per_sec'] as List<dynamic>?)
                 ?.map((e) {
                   if (e is! num) {

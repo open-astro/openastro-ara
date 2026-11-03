@@ -60,6 +60,38 @@ paths:
       responses:
         '200':
           description: OK
+  /api/v1/equipment/driver/guidecamera:
+    get:
+      tags:
+        - Equipment
+      summary: 'The guide camera''s name, driver, SDK and firmware versions.'
+      operationId: GetGuideCameraDriver
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceDriverDto'
+  '/api/v1/equipment/driver/{type}':
+    get:
+      tags:
+        - Equipment
+      summary: 'The selected device''s driver, SDK and firmware versions.'
+      operationId: GetDeviceDriver
+      parameters:
+        - name: type
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceDriverDto'
   /api/v1/equipment/camera:
     get:
       tags:
@@ -6667,6 +6699,35 @@ paths:
                 $ref: '#/components/schemas/ProblemDetails'
 components:
   schemas:
+    AlpacaServerVersionDto:
+      required:
+        - host
+        - port
+        - server_name
+        - manufacturer
+        - version
+      type: object
+      properties:
+        host:
+          type: string
+        port:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+        server_name:
+          type:
+            - 'null'
+            - string
+        manufacturer:
+          type:
+            - 'null'
+            - string
+        version:
+          type:
+            - 'null'
+            - string
     ApiSurfaceVersionDto:
       required:
         - name
@@ -6716,6 +6777,24 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ApiSurfaceVersionDto'
+        board_model:
+          type:
+            - 'null'
+            - string
+        guider_version:
+          type:
+            - 'null'
+            - string
+        alpaca_servers:
+          type:
+            - 'null'
+            - array
+          items:
+            $ref: '#/components/schemas/AlpacaServerVersionDto'
+        astap_version:
+          type:
+            - 'null'
+            - string
     AutoFlatsDecisionRequestDto:
       required:
         - choice
@@ -8583,6 +8662,33 @@ components:
           type: boolean
           default: false
         install_path:
+          type:
+            - 'null'
+            - string
+    DeviceDriverDto:
+      required:
+        - driver_version
+        - sdk_version
+        - firmware
+      type: object
+      properties:
+        driver_version:
+          type:
+            - 'null'
+            - string
+        sdk_version:
+          type:
+            - 'null'
+            - string
+        firmware:
+          type:
+            - 'null'
+            - string
+        serial_number:
+          type:
+            - 'null'
+            - string
+        name:
           type:
             - 'null'
             - string

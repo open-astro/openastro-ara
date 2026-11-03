@@ -1,5 +1,6 @@
 import 'package:file_picker/file_picker.dart';
 import '../../util/friendly_error.dart';
+import '../../l10n/l10n.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -34,7 +35,7 @@ class LibraryBulkActionBar extends ConsumerWidget {
     } on Exception catch (e) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(friendlyError(e, action: 'apply that to the selected frames'))));
+          .showSnackBar(SnackBar(content: Text(friendlyError(context.l10n, e, action: 'apply that to the selected frames'))));
     }
   }
 
@@ -148,7 +149,7 @@ class LibraryBulkActionBar extends ConsumerWidget {
                                 } on Exception catch (e) {
                                   if (context.mounted) {
                                     ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(content: Text(friendlyError(e, action: 'export those frames'))));
+                                        SnackBar(content: Text(friendlyError(context.l10n, e, action: 'export those frames'))));
                                   }
                                   return (const <int>[], '', 0);
                                 }
@@ -168,7 +169,7 @@ class LibraryBulkActionBar extends ConsumerWidget {
                                   ScaffoldMessenger.of(context).showSnackBar(
                                       SnackBar(
                                           content:
-                                              Text(friendlyError(e, action: 'save that'))));
+                                              Text(friendlyError(context.l10n, e, action: 'save that'))));
                                 }
                                 return;
                               }

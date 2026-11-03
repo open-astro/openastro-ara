@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/guider_status.dart';
@@ -53,6 +54,10 @@ class GuiderStatusNotifier extends AsyncNotifier<GuiderStatus?> {
     return api.getStatus();
   }
 
+  /// How often [connect] re-reads while the guider is connecting.
+  @visibleForTesting
+  static Duration settleInterval = const Duration(milliseconds: 250);
+
   Future<void> connect({String? host, int? port}) async {
     // Re-entrancy guard: ignore a second call while one is in flight (loading),
     // so a double-tap doesn't fire two daemon requests with a racing refresh.
@@ -90,6 +95,17 @@ class GuiderStatusNotifier extends AsyncNotifier<GuiderStatus?> {
     // Refresh against the SAME client we just acted on — re-reading the provider
     // could pick up a different server if the active one changed in between.
     await refresh(api);
+    // The connect is 202-Accepted and nothing else polls the guider, so read
+    // until it settles (the rig takes ~50 ms; 15 s at most) rather than stay on Connecting….
+    for (var i = 0; i < 60; i++) {
+      if (!ref.mounted ||
+          state.value?.connectionState != GuiderConnectionState.connecting) {
+        return;
+      }
+      await Future<void>.delayed(settleInterval);
+      if (!ref.mounted) return;
+      await refresh(api);
+    }
   }
 
   Future<void> disconnect() async {

@@ -1,3 +1,8 @@
+import 'package:lat_lng_to_timezone/lat_lng_to_timezone.dart' as tz_map;
+
+import 'simple_search.dart';
+
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 import 'dart:async';
@@ -6,10 +11,18 @@ import 'dart:math' as math;
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../state/library/live_library_state.dart' show libraryFilterProvider;
+import '../../state/time_sync_state.dart' show timeSyncApiProvider;
+import '../../state/sky_atlas/tonight_sky_state.dart'
+    show planningSettingsBootstrapProvider;
 import '../../models/frame_histogram.dart';
 import '../../models/guider_status.dart';
+import '../../services/equipment_driver_api.dart';
 import '../../models/polar_align.dart';
 import '../../state/app_shell_state.dart';
+import '../../state/launch_gate_state.dart';
+import '../../state/profile_management_state.dart';
+import '../../state/saved_server_state.dart';
 import '../../state/guider/guide_step_state.dart';
 import '../../state/guider/guider_state.dart';
 import '../../state/imaging/last_frame_state.dart';
@@ -21,11 +34,37 @@ import '../../state/sky_atlas/planetarium_selection_state.dart';
 import '../../state/settings/settings_nav.dart';
 import '../../state/simple_messages_state.dart';
 import '../../state/simple_mode_state.dart';
+
+import 'dart:ui' show ImageFilter;
+
+import '../../app_version.dart';
+import '../../l10n/l10n.dart';
+import '../../state/app_locale_state.dart';
+import '../../services/plate_solve_database_api.dart';
+import '../../services/server_maintenance_api.dart';
+import '../../models/equipment_device_status.dart';
+import '../../state/equipment/camera_state.dart';
+import '../../state/equipment/dome_state.dart';
+import '../../state/equipment/equipment_device_state.dart';
+import '../../state/equipment/filter_wheel_state.dart';
+import '../../state/equipment/flat_panel_state.dart';
+import '../../state/equipment/focuser_state.dart';
+import '../../state/equipment/mount_state.dart';
+import '../../models/mount_status.dart' show MountCapabilities;
+import '../../state/equipment/rotator_state.dart';
+import '../../state/equipment/weather_state.dart';
+import '../../state/ws/ws_providers.dart';
+import '../../state/settings/optics_settings_state.dart';
+import '../../state/settings/site_settings_state.dart';
+import '../../util/gps_site_fill.dart';
+import '../../util/friendly_error.dart';
+import '../../services/profile_api.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
-import '../../widgets/command_palette.dart';
 import '../../widgets/emergency_stop_button.dart';
+import '../../widgets/equipment/equipment_glyphs.dart';
 import '../../widgets/equipment/equipment_status_chip.dart';
+import '../../widgets/equipment/guider_chip.dart' show guiderStatusLevel;
 import '../../widgets/equipment_chip.dart'
     show EquipmentChipCompact, EquipmentChipHideDisconnected;
 import '../../widgets/imaging/frame_viewer.dart';
@@ -33,8 +72,10 @@ import '../../widgets/imaging/guiding_strip.dart';
 import '../../widgets/imaging/histogram_strip.dart' show frameHistogramProvider;
 import '../../widgets/sky_atlas/stellarium_view.dart';
 import '../library/image_library_screen.dart';
+import '../settings/settings_shell.dart';
 import '../shell_listeners.dart';
 import 'simple_autopilot.dart';
+import 'simple_device_windows.dart';
 import 'simple_focus_panel.dart';
 import 'simple_message_pills.dart';
 import 'simple_polar_panel.dart';
@@ -50,6 +91,11 @@ const double kSimpleBarHeight = 56;
 
 /// Width of the left and right rails.
 const double kSimpleRailWidth = 72;
+
+/// A device window's width (at 1x text), and the widest rail menu's (the
+/// mode grid with its padding): together they say whether both fit.
+const double kSimpleDeviceWindowWidth = 360;
+const double kSimpleWidestPopover = 316;
 
 /// The status pill's widest (top-left under the strip); Info starts right of
 /// it.
@@ -67,20 +113,20 @@ const double kSimpleStopSize = 60;
 /// The modes, in the decided order.
 enum SimpleModeScreen { autopilot, preview, focus, polarAlign, plan }
 
-extension on SimpleModeScreen {
-  String get label => switch (this) {
-    SimpleModeScreen.autopilot => 'Autopilot',
-    SimpleModeScreen.preview => 'Preview',
-    SimpleModeScreen.polarAlign => 'Polar align',
-    SimpleModeScreen.focus => 'Focus',
-    SimpleModeScreen.plan => 'Plan',
+extension SimpleModeScreenLabels on SimpleModeScreen {
+  String labelOf(AppLocalizations l10n) => switch (this) {
+    SimpleModeScreen.autopilot => l10n.shellModeAutopilot,
+    SimpleModeScreen.preview => l10n.shellModePreview,
+    SimpleModeScreen.polarAlign => l10n.shellModePolarAlign,
+    SimpleModeScreen.focus => l10n.shellModeFocus,
+    SimpleModeScreen.plan => l10n.shellModePlan,
   };
 
   /// The name on the 60 px rail, where "Polar align" doesn't fit.
-  String get railLabel => switch (this) {
-    SimpleModeScreen.polarAlign => 'P.A.',
-    SimpleModeScreen.autopilot => 'Auto',
-    _ => label,
+  String railLabelOf(AppLocalizations l10n) => switch (this) {
+    SimpleModeScreen.polarAlign => l10n.shellRailPolarAlign,
+    SimpleModeScreen.autopilot => l10n.shellRailAutopilot,
+    _ => labelOf(l10n),
   };
 
   IconData get icon => switch (this) {
@@ -90,29 +136,12 @@ extension on SimpleModeScreen {
     SimpleModeScreen.polarAlign => Icons.explore_outlined,
     SimpleModeScreen.plan => Icons.playlist_play,
   };
-
-  /// The full-UI tab a mode opens until its Simple Mode screen exists
-  /// (brief: Preview, Polar align and Focus open Live).
-  // shortcut: Run always opens Sequence; the brief wants Live while a run is
-  // imaging — switch on the sequence state when the Run screen is built.
-  int get fullUiTab => switch (this) {
-    SimpleModeScreen.autopilot ||
-    SimpleModeScreen.preview ||
-    SimpleModeScreen.polarAlign ||
-    SimpleModeScreen.focus => kLiveTabIndex,
-    SimpleModeScreen.plan => kRunTabIndex,
-  };
-}
-
-/// Leave Simple Mode for the full UI, showing [tab].
-void leaveSimpleMode(WidgetRef ref, int tab) {
-  ref.read(selectedTabIndexProvider.notifier).select(tab);
-  ref.read(simpleModeProvider.notifier).set(false);
 }
 
 /// The one popover open beside a rail, if any. [settings] is the chip's: the
 /// current mode's options (Preview's exposure, Focus's panel).
-enum _Popover { none, modes, settings, queue }
+/// [menu] is the top bar's Settings menu.
+enum _Popover { none, modes, settings, queue, menu, search }
 
 /// Simple Mode (ALP-4810): the latest frame fills the window and only the
 /// shutter is always out. A right rail holds the mode (tap for the five
@@ -122,8 +151,9 @@ enum _Popover { none, modes, settings, queue }
 /// beside the rail and close with a tap on the image. Tapping the image with
 /// nothing open hides everything (the immersive view).
 ///
-/// All five modes stay here; any tab jump made from here (Settings, a
-/// device dot, ⌘K) opens the full UI.
+/// All five modes stay here, and nothing here leads to the full UI: Settings
+/// (the gear's menu, ⌘, a device dot, Open Storage) opens over Simple Mode.
+/// The way out is Settings' own Simple Mode switch.
 class SimpleShell extends ConsumerStatefulWidget {
   const SimpleShell({
     super.key,
@@ -141,7 +171,6 @@ class SimpleShell extends ConsumerStatefulWidget {
 class _SimpleShellState extends ConsumerState<SimpleShell> {
   bool _clean = false;
   bool _info = false;
-  bool _system = false;
 
   /// The planetarium on demand (the left rail's Sky), over any frame.
   bool _sky = false;
@@ -239,6 +268,41 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _focus.requestFocus();
     });
+    ref.listenManual(mountProvider, (previous, next) {
+      final caps = next.value?.capabilities;
+      final was = previous?.value?.capabilities;
+      if (caps != null &&
+          (was == null || previous?.value?.deviceId != next.value?.deviceId)) {
+        _opticsFromMount(caps);
+      }
+    }, fireImmediately: true);
+  }
+
+  /// The profile owns the telescope; a value it doesn't know (0) is filled
+  /// from what the connected mount reports and saved to the profile.
+  Future<void> _opticsFromMount(MountCapabilities caps) async {
+    if (caps.apertureMm == null && caps.focalLengthMm == null) return;
+    final api = ref.read(profileApiProvider);
+    if (api == null) return;
+    final optics = ref.read(opticsSettingsProvider.notifier);
+    try {
+      // The profile's own values first: never fill over one not loaded yet.
+      await optics.hydrateFromServer(api);
+      if (!mounted) return;
+      final known = ref.read(opticsSettingsProvider);
+      var changed = false;
+      if (known.apertureMm <= 0 && caps.apertureMm != null) {
+        optics.setApertureMm(caps.apertureMm!);
+        changed = true;
+      }
+      if (known.focalLengthMm <= 0 && caps.focalLengthMm != null) {
+        optics.setFocalLengthMm(caps.focalLengthMm!);
+        changed = true;
+      }
+      if (changed) await optics.persistToServer(api);
+    } catch (e) {
+      debugPrint('[simple] telescope from the mount: $e');
+    }
   }
 
   @override
@@ -249,9 +313,45 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     super.dispose();
   }
 
-  // ⌘, / Ctrl+, opens Settings, which (for now) returns to the full UI.
-  void _openSettings() =>
-      ref.read(selectedTabIndexProvider.notifier).select(kOptionsTabIndex);
+  /// The full Settings page over Simple Mode, on whatever panel was picked
+  /// last (Logs, a device dot).
+  // shortcut: a device dot still opens the full Settings page; each device
+  // gets its own window from its dot as it is built
+  // (design/briefs/simple-mode-settings.md).
+  void _openSettings() {
+    setState(() => _popover = _Popover.none);
+    unawaited(
+      Navigator.of(context)
+          .push(MaterialPageRoute<void>(builder: (_) => const _SettingsPage())),
+    );
+  }
+
+  /// The device window open (from its dot), by its Settings panel id, or
+  /// null. Separate from [_popover]: it sits top-left and stays open beside a
+  /// rail menu when they don't overlap.
+  String? _device;
+
+  /// The devices with a window of their own, by their Settings panel id.
+  static const _deviceWindows = {
+    'eq.camera': SimpleCameraWindow(),
+    'eq.mount': SimpleMountWindow(),
+    'eq.focuser': SimpleFocuserWindow(),
+    'eq.guider': SimpleGuiderWindow(),
+  };
+
+  /// Whether the camera window and a rail menu fit side by side: the window
+  /// on the left, the widest menu left of the rail, with the insets.
+  bool _sideBySide(BuildContext context) {
+    final scale = simpleRailScale(context);
+    return MediaQuery.sizeOf(context).width >=
+        kSimpleDeviceWindowWidth * scale +
+            kSimpleWidestPopover * scale +
+            kSimpleRailWidth * scale +
+            kSimpleInset * 4;
+  }
+
+  /// Set while a jump to the Settings tab is turned back (see build).
+  bool _restoringTab = false;
 
   /// The first ⌘. / Ctrl+. asks; a second within 3 s stops (the keyboard's
   /// stand-in for the shutter's 2 s hold, as the Emergency Stop does).
@@ -283,7 +383,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     }.contains(Theme.of(context).platform);
     _stopAsk = messages.show(
       SimpleMessageKind.question,
-      'Press ${mac ? '⌘.' : 'Ctrl+.'} again to stop the run',
+      context.l10n.shellStopAgain(mac ? '⌘.' : 'Ctrl+.'),
     );
     _stopDisarm = Timer(const Duration(seconds: 3), () {
       if (_stopAsk != null) messages.dismiss(_stopAsk!);
@@ -291,7 +391,50 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     });
   }
 
+  void _pickMode(SimpleModeScreen m) {
+    if (m == SimpleModeScreen.autopilot) return _startAutopilot();
+    setState(() {
+      _mode = m;
+      _popover = _Popover.none;
+    });
+    // Picking a mode leaves Autopilot.
+    ref.read(autopilotProvider.notifier).stop();
+  }
+
+  /// The Settings sheet's section to open on (a search hit names one).
+  String _menuSection = 'Rig';
+
+  void _openMenu({String section = 'Rig'}) {
+    _menuSection = section;
+    _toggle(_Popover.menu);
+  }
+
+  /// A search hit, opened where it lives in Simple Mode.
+  void _openHit(SimpleSearchHit hit) {
+    setState(() => _popover = _Popover.none);
+    switch (hit) {
+      case SimpleSkyHit(:final suggestion):
+        // As Plan's search: the sky, pointed at it, its card offering Image this.
+        setState(() => _sky = true);
+        ref.read(planetariumSearchProvider.notifier).search(suggestion.label);
+      case SimpleSettingHit(:final section):
+        _openMenu(section: section);
+      case SimpleModeHit(:final mode):
+        _pickMode(mode);
+      case SimpleImageHit(:final target):
+        ref.read(libraryFilterProvider.notifier).setQuery(target);
+        unawaited(
+          Navigator.of(context).push(
+            MaterialPageRoute<void>(builder: (_) => const ImageLibraryScreen()),
+          ),
+        );
+    }
+  }
+
   void _toggle(_Popover p) => setState(() {
+    // Settings covers everything; a rail menu that would cover the camera
+    // window closes it.
+    if (p == _Popover.menu || !_sideBySide(context)) _device = null;
     // The sheet opened from the queue's Add target / edit outranks every
     // popover, so a rail tap closes it first (it used to stay up for good on
     // a touchscreen, user 2026-11-03); the chip, which opens that sheet, just
@@ -306,8 +449,15 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
 
   /// A tap on the image closes what's open, or else toggles the immersive
   /// view (only once there is a frame to look at).
+  /// Whether any window is open (a device window, a rail menu, Plan's sheet
+  /// or the Info tiles): a tap on the background closes them all.
+  bool get _anyOpen =>
+      _device != null || _popover != _Popover.none || _adding || _info;
+
   void _tapImage(bool hasFrame) => setState(() {
-    if (_popover != _Popover.none || _adding) {
+    if (_anyOpen) {
+      _device = null;
+      _info = false;
       _popover = _Popover.none;
       _closeSheet();
     } else if (hasFrame) {
@@ -317,7 +467,38 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
 
   @override
   Widget build(BuildContext context) {
+    // The profile's site and telescope (Rig, Polar align's hemisphere, plate
+    // solving): otherwise only the full UI's panels load them.
+    ref.watch(planningSettingsBootstrapProvider);
+    // A jump to Settings (a device dot, Open Storage) opens it over Simple
+    // Mode and puts the tab back, so the next jump is a change again; any
+    // other tab jump still leaves for the full UI.
     ref.listen(selectedTabIndexProvider, (previous, next) {
+      if (_restoringTab) return;
+      if (next == kOptionsTabIndex) {
+        _restoringTab = true;
+        ref
+            .read(selectedTabIndexProvider.notifier)
+            .select(previous ?? kLiveTabIndex);
+        _restoringTab = false;
+        // A device with its own window opens it; the rest still get the full
+        // Settings page over Simple Mode.
+        final panel = ref.read(selectedSettingsPanelProvider);
+        if (_deviceWindows.containsKey(panel)) {
+          // The dot again closes it; another device's dot swaps it.
+          setState(() {
+            _device = _device == panel ? null : panel;
+            // It would cover the open rail menu, or sit under Settings.
+            if (_device != null &&
+                (_popover == _Popover.menu || !_sideBySide(context))) {
+              _popover = _Popover.none;
+            }
+          });
+        } else {
+          _openSettings();
+        }
+        return;
+      }
       ref.read(simpleModeProvider.notifier).set(false);
     });
     // Autopilot opens each step on its panel, and ends on the plan.
@@ -361,6 +542,9 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     final railWidth = kSimpleRailWidth * simpleRailScale(context);
     // Stop grows with the rails, so its label fits at the user's text size.
     final stopSize = kSimpleStopSize * simpleRailScale(context);
+    // The bottom row (guiding, histogram) grows with the text like the
+    // rails, so its two lines of labels fit at the user's size.
+    final bottomRow = kSimpleBarHeight * simpleRailScale(context);
     final width = MediaQuery.sizeOf(context).width;
     final autopilotRow =
         _mode == SimpleModeScreen.autopilot ||
@@ -396,7 +580,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
         ? double.infinity
         : height -
               kSimpleInset * 3 -
-              kSimpleBarHeight -
+              bottomRow -
               (planSquares
                   ? kSimplePlanSquareHeight * simpleRailScale(context) +
                         kSimpleInset
@@ -423,22 +607,22 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
               quiet: true,
               child: CallbackShortcuts(
                 bindings: <ShortcutActivator, VoidCallback>{
+                  const SingleActivator(LogicalKeyboardKey.comma, meta: true):
+                      _openMenu,
+                  const SingleActivator(
+                    LogicalKeyboardKey.comma,
+                    control: true,
+                  ): _openMenu,
                   const SingleActivator(
                     LogicalKeyboardKey.keyK,
                     meta: true,
                   ): () =>
-                      showCommandPalette(context),
+                      _toggle(_Popover.search),
                   const SingleActivator(
                     LogicalKeyboardKey.keyK,
                     control: true,
                   ): () =>
-                      showCommandPalette(context),
-                  const SingleActivator(LogicalKeyboardKey.comma, meta: true):
-                      _openSettings,
-                  const SingleActivator(
-                    LogicalKeyboardKey.comma,
-                    control: true,
-                  ): _openSettings,
+                      _toggle(_Popover.search),
                   // Hold-to-stop for keyboards: ⌘. / Ctrl+. twice stops a run.
                   const SingleActivator(LogicalKeyboardKey.period, meta: true):
                       _stopRun,
@@ -459,8 +643,8 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                             label: showSky
                                 ? null
                                 : _clean
-                                ? 'Show controls'
-                                : 'Hide controls',
+                                ? context.l10n.shellShowControls
+                                : context.l10n.shellHideControls,
                             child: GestureDetector(
                               key: const Key('simple-frame'),
                               behavior: HitTestBehavior.opaque,
@@ -478,12 +662,23 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                             ),
                           ),
                         ),
+                        // The planetarium takes taps itself, so while a
+                        // window is open a layer over the background closes
+                        // them all instead.
+                        if (_anyOpen)
+                          Positioned.fill(
+                            child: GestureDetector(
+                              key: const Key('simple-background-close'),
+                              behavior: HitTestBehavior.opaque,
+                              onTap: () => _tapImage(!showSky),
+                            ),
+                          ),
                         if (!hasFrame)
                           Positioned.fill(
                             child: IgnorePointer(
                               child: Center(
                                 child: Text(
-                                  'Tap the shutter to take a frame',
+                                  context.l10n.shellTapShutter,
                                   style: TextStyle(
                                     fontSize: 20,
                                     letterSpacing: 2,
@@ -528,29 +723,23 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                           visible: panels,
                           child: Stack(
                             children: [
-                              const Positioned(
+                              Positioned(
                                 left: kSimpleInset,
                                 right: kSimpleInset,
                                 top: kSimpleInset,
                                 height: kSimpleBarHeight,
-                                child: _StatusStrip(),
+                                child: _StatusStrip(
+                                  onSearch: () => _toggle(_Popover.search),
+                                  onSettings: () => _openMenu(),
+                                ),
                               ),
-                              // Info and System: fact tiles hugging the bottom-left
-                              // corner, above the bottom row; System's row sits
-                              // above Info's.
-                              if (_info || _system)
+                              // Info: fact tiles hugging the bottom-left corner,
+                              // above the bottom row.
+                              if (_info)
                                 Positioned(
                                   left: kSimpleInset,
-                                  bottom: kSimpleInset * 2 + kSimpleBarHeight,
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    spacing: AraSpace.s8,
-                                    children: [
-                                      if (_system) const SimpleSystemPanel(),
-                                      if (_info) const SimpleInfoPanel(),
-                                    ],
-                                  ),
+                                  bottom: kSimpleInset * 2 + bottomRow,
+                                  child: const SimpleInfoPanel(),
                                 ),
                               // Guiding and the histogram along the bottom, each
                               // once it has data: 16 px from the edge and from Stop.
@@ -560,7 +749,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                     kSimpleInset * 2 +
                                     (railWidth + stopSize) / 2,
                                 bottom: kSimpleInset,
-                                height: kSimpleBarHeight,
+                                height: bottomRow,
                                 child: const _StatsRow(),
                               ),
                               Positioned(
@@ -574,12 +763,9 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                     key: _leftRailKey,
                                     child: _LeftRail(
                                       info: _info,
-                                      system: _system,
                                       sky: showSky,
                                       onInfo: () =>
                                           setState(() => _info = !_info),
-                                      onSystem: () =>
-                                          setState(() => _system = !_system),
                                       // With no frame there is only the sky.
                                       onSky: hasFrame
                                           ? () => setState(() => _sky = !_sky)
@@ -628,7 +814,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                       railTop +
                                       kSimpleStatusHeight +
                                       kSimpleInset,
-                                  bottom: kSimpleInset * 2 + kSimpleBarHeight,
+                                  bottom: kSimpleInset * 2 + bottomRow,
                                   child: Center(
                                     child: SimpleRunSheet(
                                       editing: _editing,
@@ -653,7 +839,13 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                     ),
                                   ),
                                 )
-                              else if (_popover != _Popover.none)
+                              // The rail's own popovers; Settings and Search
+                              // have their places of their own.
+                              else if (const {
+                                _Popover.modes,
+                                _Popover.settings,
+                                _Popover.queue,
+                              }.contains(_popover))
                                 Positioned(
                                   left: 0,
                                   top: 0,
@@ -674,24 +866,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                                 current: _mode,
                                                 // Picking a mode only switches it; the
                                                 // chip opens its panel (user, 2026-11-02).
-                                                onPicked: (m) {
-                                                  if (m ==
-                                                      SimpleModeScreen
-                                                          .autopilot) {
-                                                    return _startAutopilot();
-                                                  }
-                                                  setState(() {
-                                                    _mode = m;
-                                                    _popover = _Popover.none;
-                                                  });
-                                                  // Picking a mode leaves Autopilot.
-                                                  ref
-                                                      .read(
-                                                        autopilotProvider
-                                                            .notifier,
-                                                      )
-                                                      .stop();
-                                                },
+                                                onPicked: _pickMode,
                                               )
                                             : switch (shown) {
                                                 SimpleModeScreen.focus =>
@@ -738,7 +913,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                 Positioned(
                                   left: width / 2,
                                   right: kSimpleInset,
-                                  bottom: kSimpleInset * 2 + kSimpleBarHeight,
+                                  bottom: kSimpleInset * 2 + bottomRow,
                                   child: Align(
                                     alignment: Alignment.bottomRight,
                                     child: SimpleRunTracker(
@@ -767,6 +942,82 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                     ),
                                   ),
                                 ),
+                              // Settings: a sheet over the dimmed image, from the
+                              // strip down to the bottom row; Stop stays above
+                              // the veil, within reach.
+                              // A device's window, under the strip's dots.
+                              if (_device != null)
+                                Positioned(
+                                  left: kSimpleInset,
+                                  top: railTop,
+                                  width:
+                                      kSimpleDeviceWindowWidth *
+                                      simpleRailScale(context),
+                                  child: SimpleFrostedPanel(
+                                    padding: const EdgeInsets.all(AraSpace.s16),
+                                    child: _deviceWindows[_device]!,
+                                  ),
+                                ),
+                              // Search drops from the strip, centred.
+                              if (_popover == _Popover.search)
+                                Positioned(
+                                  top: railTop,
+                                  left: 0,
+                                  right: 0,
+                                  bottom: kSimpleInset * 2 + bottomRow,
+                                  child: Align(
+                                    alignment: Alignment.topCenter,
+                                    child: SizedBox(
+                                      width: math.min(
+                                        480.0,
+                                        width - kSimpleInset * 2,
+                                      ),
+                                      child: SimpleSearchPanel(onHit: _openHit),
+                                    ),
+                                  ),
+                                ),
+                              if (_popover == _Popover.menu) ...[
+                                // Under the strip, which stays live (its
+                                // gear closes Settings, the rest still work).
+                                Positioned(
+                                  left: 0,
+                                  right: 0,
+                                  bottom: 0,
+                                  top: kSimpleInset + kSimpleBarHeight,
+                                  child: GestureDetector(
+                                    key: const Key('simple-menu-veil'),
+                                    behavior: HitTestBehavior.opaque,
+                                    onTap: () => setState(
+                                      () => _popover = _Popover.none,
+                                    ),
+                                    child: const ColoredBox(
+                                      color: Color(0x59000000), // 35 %
+                                    ),
+                                  ),
+                                ),
+                                Positioned(
+                                  left: kSimpleInset,
+                                  right: kSimpleInset,
+                                  top: railTop,
+                                  bottom: kSimpleInset * 2 + bottomRow,
+                                  child: _SettingsSheet(
+                                    key: ValueKey(_menuSection),
+                                    section: _menuSection,
+                                    onClose: () => setState(
+                                      () => _popover = _Popover.none,
+                                    ),
+                                    onLogs: () {
+                                      ref
+                                          .read(
+                                            selectedSettingsPanelProvider
+                                                .notifier,
+                                          )
+                                          .select('support.logs');
+                                      _openSettings();
+                                    },
+                                  ),
+                                ),
+                              ],
                               // Stop on its own at the bottom, under the rail.
                               Positioned(
                                 right:
@@ -809,32 +1060,36 @@ class _SkyPick extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       spacing: AraSpace.s16,
       children: [
-        Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              selection.name,
-              style: kSimpleText.copyWith(fontWeight: FontWeight.w600),
-            ),
-            Text(
-              [
-                if (selection.kind.isNotEmpty) selection.kind,
-                simpleTargetStatus(selection),
-              ].join(' · '),
-              style: kSimpleText.copyWith(
-                fontSize: 12,
-                color: selection.belowHorizon
-                    ? AraColors.accentBusy
-                    : AraColors.textSecondary,
+        // Wraps in a narrow window (or a longer language) so Image this
+        // keeps its place.
+        Flexible(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                selection.name,
+                style: kSimpleText.copyWith(fontWeight: FontWeight.w600),
               ),
-            ),
-          ],
+              Text(
+                [
+                  if (selection.kind.isNotEmpty) selection.kind,
+                  simpleTargetStatus(selection, context.l10n),
+                ].join(' · '),
+                style: kSimpleText.copyWith(
+                  fontSize: 12,
+                  color: selection.belowHorizon
+                      ? AraColors.accentBusy
+                      : AraColors.textSecondary,
+                ),
+              ),
+            ],
+          ),
         ),
         FilledButton(
           key: const Key('simple-sky-image-this'),
           onPressed: onImage,
-          child: const Text('Image this'),
+          child: Text(context.l10n.shellImageThis),
         ),
       ],
     ),
@@ -884,10 +1139,35 @@ class SimplePanel extends StatelessWidget {
   );
 }
 
-/// Device dots (connected gear only), then Search, Night mode, Show all
-/// options and Settings, in the full UI's top-bar order.
+/// The Settings sheet's and the device windows' look: the 90 % panel scrim
+/// over a 5 px blur of the image behind (user, 2026-11-03).
+class SimpleFrostedPanel extends StatelessWidget {
+  const SimpleFrostedPanel({super.key, required this.child, this.padding});
+
+  final Widget child;
+  final EdgeInsetsGeometry? padding;
+
+  @override
+  Widget build(BuildContext context) => ClipRRect(
+    borderRadius: BorderRadius.circular(10),
+    child: BackdropFilter(
+      filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+      child: Container(
+        key: const Key('simple-frosted-surface'),
+        padding: padding,
+        decoration: const BoxDecoration(color: AraColors.overlayScrim),
+        child: child,
+      ),
+    ),
+  );
+}
+
+/// Device dots (connected gear only), then Night mode and the Settings menu.
 class _StatusStrip extends ConsumerWidget {
-  const _StatusStrip();
+  const _StatusStrip({required this.onSearch, required this.onSettings});
+
+  final VoidCallback onSearch;
+  final VoidCallback onSettings;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -914,10 +1194,13 @@ class _StatusStrip extends ConsumerWidget {
               ),
             ),
           ),
+          // Simple Mode's own search: the sky, its settings, its modes and
+          // the Image Library; nothing it finds leads out.
           IconButton(
+            key: const Key('simple-search-button'),
             icon: const Icon(Icons.search, size: 22),
-            tooltip: 'Search settings',
-            onPressed: () => showCommandPalette(context),
+            tooltip: context.l10n.shellSearch,
+            onPressed: onSearch,
           ),
           IconButton(
             icon: Icon(
@@ -925,22 +1208,15 @@ class _StatusStrip extends ConsumerWidget {
               size: 22,
               color: night ? AraColors.accentInfo : null,
             ),
-            tooltip: night ? 'Night mode on' : 'Night mode',
+            tooltip: night
+                ? context.l10n.shellNightModeOn
+                : context.l10n.shellNightMode,
             onPressed: () => ref.read(nightModeProvider.notifier).set(!night),
-          ),
-          // The full UI's Simple Mode button, mirrored: the way back.
-          IconButton(
-            icon: const Icon(Icons.fit_screen, size: 22),
-            tooltip: 'Show all options',
-            onPressed: () =>
-                leaveSimpleMode(ref, SimpleModeScreen.preview.fullUiTab),
           ),
           IconButton(
             icon: const Icon(Icons.settings_outlined, size: 22),
-            tooltip: 'Settings',
-            onPressed: () => ref
-                .read(selectedTabIndexProvider.notifier)
-                .select(kOptionsTabIndex),
+            tooltip: context.l10n.shellSettings,
+            onPressed: onSettings,
           ),
         ],
       ),
@@ -1032,18 +1308,14 @@ double simpleRailScale(BuildContext context) =>
 class _LeftRail extends StatelessWidget {
   const _LeftRail({
     required this.info,
-    required this.system,
     required this.sky,
     required this.onInfo,
-    required this.onSystem,
     required this.onSky,
   });
 
   final bool info;
-  final bool system;
   final bool sky;
   final VoidCallback onInfo;
-  final VoidCallback onSystem;
   final VoidCallback? onSky;
 
   @override
@@ -1056,28 +1328,21 @@ class _LeftRail extends StatelessWidget {
         _RailButton(
           key: const Key('simple-sky'),
           icon: Icons.public,
-          label: 'Sky',
+          label: context.l10n.shellSky,
           selected: sky,
           onTap: onSky,
         ),
         _RailButton(
           key: const Key('simple-info'),
           icon: Icons.info_outline,
-          label: 'Info',
+          label: context.l10n.shellInfo,
           selected: info,
           onTap: onInfo,
         ),
         _RailButton(
-          key: const Key('simple-system'),
-          icon: Icons.memory,
-          label: 'System',
-          selected: system,
-          onTap: onSystem,
-        ),
-        _RailButton(
           key: const Key('simple-library'),
           icon: Icons.photo_library_outlined,
-          label: 'Library',
+          label: context.l10n.shellLibrary,
           onTap: () => Navigator.of(context).push(
             MaterialPageRoute<void>(builder: (_) => const ImageLibraryScreen()),
           ),
@@ -1119,7 +1384,9 @@ class _RightRail extends ConsumerWidget {
           // The mode on top of the shutter; the settings chip under it.
           Semantics(
             button: true,
-            label: 'Mode: ${(named ?? mode).label}',
+            label: context.l10n.shellModeSemantics(
+              (named ?? mode).labelOf(context.l10n),
+            ),
             child: InkWell(
               key: const Key('simple-mode'),
               onTap: onModes,
@@ -1131,7 +1398,7 @@ class _RightRail extends ConsumerWidget {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Text(
-                      (named ?? mode).railLabel,
+                      (named ?? mode).railLabelOf(context.l10n),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: kSimpleText.copyWith(
@@ -1161,7 +1428,7 @@ class _RightRail extends ConsumerWidget {
             key: const Key('simple-settings'),
             icon: Icons.tune,
             tall: true,
-            label: _chipLabel(ref),
+            label: _chipLabel(context, ref),
             selected: popover == _Popover.settings,
             onTap: onSettings,
           ),
@@ -1172,7 +1439,7 @@ class _RightRail extends ConsumerWidget {
 
   // In Autopilot the chip names the step whose settings it shows ("Focus"
   // over "Auto"), so they don't read as random.
-  String _chipLabel(WidgetRef ref) {
+  String _chipLabel(BuildContext context, WidgetRef ref) {
     final label = switch (mode) {
       SimpleModeScreen.focus => simpleFocusSummary(ref),
       SimpleModeScreen.plan => simpleRunChip(
@@ -1182,12 +1449,13 @@ class _RightRail extends ConsumerWidget {
       SimpleModeScreen.polarAlign => simplePolarSummary(
         ref.watch(simplePolarSettingsProvider).value ??
             const PolarAlignSettings(),
+        ref.context.l10n,
       ),
       _ => simpleSettingsSummary(ref),
     };
     return named == null
         ? label
-        : '${mode.railLabel}\n${label.split('\n').first}';
+        : '${mode.railLabelOf(context.l10n)}\n${label.split('\n').first}';
   }
 }
 
@@ -1238,7 +1506,7 @@ class _ModeGrid extends ConsumerWidget {
                           ),
                           Flexible(
                             child: Text(
-                              m.label,
+                              m.labelOf(context.l10n),
                               // White on the blue reads at 4.6:1.
                               style: kSimpleText.copyWith(
                                 color: m == current
@@ -1281,11 +1549,13 @@ class _GuidingBar extends ConsumerWidget {
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Guiding', style: kSimpleText),
+                Text(context.l10n.shellGuiding, style: kSimpleText),
                 Text(
                   guiding
-                      ? 'RMS ${GuidingStrip.fmt(status?.rmsTotalArcsec, '″')}'
-                      : GuidingStrip.stateLabel(status),
+                      ? context.l10n.shellGuidingRms(
+                          GuidingStrip.fmt(status?.rmsTotalArcsec, '″'),
+                        )
+                      : GuidingStrip.stateLabel(context.l10n, status),
                   style: AraText.caption,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -1311,11 +1581,11 @@ class _GuidingBar extends ConsumerWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'RA',
+                context.l10n.shellRa,
                 style: AraText.caption.copyWith(color: AraColors.accentInfo),
               ),
               Text(
-                'Dec',
+                context.l10n.shellDec,
                 style: AraText.caption.copyWith(color: AraColors.errorText),
               ),
             ],
@@ -1430,9 +1700,9 @@ class _HistogramBar extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Histogram', style: kSimpleText),
+              Text(context.l10n.shellHistogram, style: kSimpleText),
               Text(
-                'Median ${h.median.round()}',
+                context.l10n.shellHistogramMedian(h.median.round()),
                 style: AraText.caption,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
@@ -1580,11 +1850,20 @@ ThemeData simpleTheme(ThemeData base) {
     filledButtonTheme: FilledButtonThemeData(
       style: buttons.merge(base.filledButtonTheme.style),
     ),
+    // The theme's primary (#1565C0) reads at 3:1 on a panel and 2:1 on a
+    // tile; labels need 4.5:1 (WCAG 2.2 AA): text buttons in linkText,
+    // outlined ones in white.
     textButtonTheme: TextButtonThemeData(
-      style: buttons.merge(base.textButtonTheme.style),
+      style: buttons
+          .merge(TextButton.styleFrom(foregroundColor: AraColors.linkText))
+          .merge(base.textButtonTheme.style),
     ),
     outlinedButtonTheme: OutlinedButtonThemeData(
-      style: buttons.merge(base.outlinedButtonTheme.style),
+      style: buttons
+          .merge(
+            OutlinedButton.styleFrom(foregroundColor: AraColors.textPrimary),
+          )
+          .merge(base.outlinedButtonTheme.style),
     ),
     inputDecorationTheme: base.inputDecorationTheme.copyWith(
       // 48 px tiles (DESIGN.md layout C), label inside.
@@ -1597,6 +1876,1196 @@ ThemeData simpleTheme(ThemeData base) {
       focusedBorder: tile.copyWith(
         borderSide: const BorderSide(color: AraColors.accentInfo),
       ),
+    ),
+  );
+}
+
+/// Simple Mode's Settings (design/briefs/simple-mode-settings.md): a sheet
+/// with its sections on the left and the picked one on the right, on the
+/// 90 % panel scrim over a 5 px blur of the image.
+class _SettingsSheet extends ConsumerStatefulWidget {
+  const _SettingsSheet({
+    super.key,
+    this.section = 'Rig',
+    required this.onClose,
+    required this.onLogs,
+  });
+
+  /// The section it opens on.
+  final String section;
+  final VoidCallback onClose;
+  final VoidCallback onLogs;
+
+  @override
+  ConsumerState<_SettingsSheet> createState() => _SettingsSheetState();
+}
+
+class _SettingsSheetState extends ConsumerState<_SettingsSheet> {
+  late String _section = widget.section;
+
+  @override
+  Widget build(BuildContext context) {
+    // The devices with a window of their own, listed under Devices once the
+    // rig knows them.
+    // A device keeps the icon its dot has in the top bar.
+    Widget glyph(IconData icon, Color c) => Icon(icon, size: 20, color: c);
+    final l10n = context.l10n;
+    // Only a device appearing or going rebuilds this, not each 1 s reading.
+    // The id picks the section (and a search hit names it); the label shows.
+    final sections = <(String, String, Widget Function(Color), bool)>[
+      ('Rig', l10n.shellSectionRig, (c) => glyph(Icons.memory, c), false),
+      (
+        'Devices',
+        l10n.shellSectionDevices,
+        (c) => glyph(Icons.settings_input_component_outlined, c),
+        false,
+      ),
+      if (ref.watch(cameraStatusProvider.select((v) => v.value != null)))
+        (
+          'Camera',
+          l10n.shellSectionCamera,
+          (c) => glyph(Icons.camera_alt, c),
+          true,
+        ),
+      if (ref.watch(mountProvider.select((v) => v.value != null)))
+        (
+          'Mount',
+          l10n.shellSectionMount,
+          (c) => EquipmentGlyph.telescope(size: 20, color: c),
+          true,
+        ),
+      if (ref.watch(focuserProvider.select((v) => v.value != null)))
+        (
+          'Focuser',
+          l10n.shellSectionFocuser,
+          (c) => glyph(Icons.center_focus_strong, c),
+          true,
+        ),
+      if (ref.watch(guiderStatusProvider.select((v) => v.value != null)))
+        (
+          'Guider',
+          l10n.shellSectionGuider,
+          (c) => glyph(Icons.track_changes, c),
+          true,
+        ),
+    ];
+    // A narrow window (Split View, a phone) keeps only the sections' icons.
+    final narrow = MediaQuery.sizeOf(context).width < 600;
+    return SimpleFrostedPanel(
+      key: const Key('simple-menu'),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SizedBox(
+            width: narrow ? 60 : 200 * simpleRailScale(context),
+            child: ListView(
+              padding: const EdgeInsets.all(AraSpace.s8),
+              children: [
+                for (final (name, title, icon, device) in sections)
+                  Padding(
+                    padding: EdgeInsets.only(
+                      bottom: 4,
+                      left: device && !narrow ? AraSpace.s16 : 0,
+                    ),
+                    child: Material(
+                      color: _section == name
+                          ? AraColors.selectionTint
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(8),
+                      child: InkWell(
+                        key: Key('simple-menu-nav-$name'),
+                        borderRadius: BorderRadius.circular(8),
+                        onTap: () => setState(() => _section = name),
+                        child: Semantics(
+                          selected: _section == name,
+                          label: narrow ? title : null,
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(minHeight: 44),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: AraSpace.s12,
+                                vertical: AraSpace.s8,
+                              ),
+                              child: Row(
+                                spacing: AraSpace.s12,
+                                children: [
+                                  icon(
+                                    _section == name
+                                        ? AraColors.linkText
+                                        : AraColors.textPrimary,
+                                  ),
+                                  if (!narrow)
+                                    Expanded(
+                                      child: Text(
+                                        title,
+                                        style: kSimpleText.copyWith(
+                                          color: _section == name
+                                              ? AraColors.linkText
+                                              : null,
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          const VerticalDivider(width: 1, color: AraColors.border),
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(AraSpace.s16),
+              child: switch (_section) {
+                'Rig' => _ThisRig(
+                  onClose: widget.onClose,
+                  onLogs: widget.onLogs,
+                ),
+                'Camera' => const SimpleCameraWindow(inSettings: true),
+                'Mount' => const SimpleMountWindow(inSettings: true),
+                'Focuser' => const SimpleFocuserWindow(inSettings: true),
+                'Guider' => const SimpleGuiderWindow(inSettings: true),
+                _ => _Gear(onOpen: (id) => setState(() => _section = id)),
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Settings › Devices: the profile's devices with their state, and the only
+/// place Simple Mode connects or disconnects one (a device's own window has
+/// neither). Ara connects the profile's gear on its own; Connect asks the rig
+/// for the device it remembers, never a chooser.
+// shortcut: the switches have their own state type; they join this list
+// with a window of their own.
+class _Gear extends ConsumerWidget {
+  const _Gear({required this.onOpen});
+
+  /// Opens a device's window (the ones that have one) in Settings.
+  final ValueChanged<String> onOpen;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (!ref.watch(serverLinkUpProvider)) {
+      return Column(
+        key: const Key('simple-gear'),
+        crossAxisAlignment: CrossAxisAlignment.start,
+        spacing: AraSpace.s8,
+        children: [
+          Text(context.l10n.shellRigNotConnected, style: AraText.caption),
+        ],
+      );
+    }
+    final l10n = context.l10n;
+    return Column(
+      key: const Key('simple-gear'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      spacing: AraSpace.s8,
+      children: [
+        _GearRow(
+          id: 'camera',
+          type: l10n.shellSectionCamera,
+          provider: cameraStatusProvider,
+          onOpen: () => onOpen('Camera'),
+        ),
+        _GearRow(
+          id: 'mount',
+          type: l10n.shellSectionMount,
+          provider: mountProvider,
+          onOpen: () => onOpen('Mount'),
+        ),
+        _GearRow(
+          id: 'focuser',
+          type: l10n.shellSectionFocuser,
+          provider: focuserProvider,
+          onOpen: () => onOpen('Focuser'),
+        ),
+        _GuiderGearRow(onOpen: () => onOpen('Guider')),
+        _GearRow(
+          id: 'filterwheel',
+          type: l10n.shellFilterWheel,
+          provider: filterWheelProvider,
+        ),
+        _GearRow(
+          id: 'rotator',
+          type: l10n.shellRotator,
+          provider: rotatorProvider,
+        ),
+        _GearRow(
+          id: 'flat',
+          type: l10n.shellFlatPanel,
+          provider: flatPanelProvider,
+        ),
+        _GearRow(id: 'dome', type: l10n.shellDome, provider: domeProvider),
+        _GearRow(
+          id: 'weather',
+          type: l10n.shellWeather,
+          provider: weatherProvider,
+        ),
+      ],
+    );
+  }
+}
+
+class _GearRow<T extends EquipmentDeviceStatus> extends ConsumerWidget {
+  const _GearRow({
+    required this.id,
+    required this.type,
+    required this.provider,
+    this.onOpen,
+  });
+
+  /// The device's window, for the ones that have one.
+  final VoidCallback? onOpen;
+
+  final String id;
+  final String type;
+  final AsyncNotifierProvider<EquipmentDeviceNotifier<T>, T?> provider;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final status = ref.watch(provider).value;
+    // Never set up on this rig: nothing to show (the Advanced UI picks gear).
+    if (status == null) return const SizedBox.shrink();
+    final notifier = ref.read(provider.notifier);
+    final l10n = context.l10n;
+    // The dot is the top bar chip's, so the two always agree.
+    final dot = equipmentStatusLevel(status).color;
+    final word = switch (status.connectionState) {
+      EquipmentConnectionState.connected => l10n.shellConnected,
+      EquipmentConnectionState.connecting => l10n.shellConnecting,
+      EquipmentConnectionState.error => l10n.shellFailed,
+      _ => l10n.shellNotConnected,
+    };
+    final (verb, label, action) = switch (status.connectionState) {
+      EquipmentConnectionState.connected => (
+        'disconnect',
+        l10n.shellDisconnect,
+        notifier.disconnect,
+      ),
+      EquipmentConnectionState.connecting => (null, null, null),
+      EquipmentConnectionState.error => (
+        'reconnect',
+        l10n.shellReconnect,
+        notifier.reconnect,
+      ),
+      _ => ('connect', l10n.shellConnect, notifier.reconnect),
+    };
+    return _gearTile(
+      id: id,
+      title: status.name.isEmpty
+          ? type
+          : l10n.shellGearTitle(type, status.name),
+      dot: dot,
+      word: word,
+      verb: verb,
+      label: label,
+      action: action,
+      onOpen: onOpen,
+    );
+  }
+}
+
+/// The guider's row: its own state type, named by its camera as its window
+/// is.
+class _GuiderGearRow extends ConsumerWidget {
+  const _GuiderGearRow({required this.onOpen});
+
+  final VoidCallback onOpen;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final async = ref.watch(guiderStatusProvider);
+    if (async.isLoading && !async.hasValue) return const SizedBox.shrink();
+    // The rig forgets a disconnected guider (no status at all), so it stays
+    // here as Not connected: Connect is the way back.
+    final status = async.value;
+    final notifier = ref.read(guiderStatusProvider.notifier);
+    final camera = ref.watch(deviceDriverProvider('guidecamera')).value?.name;
+    final l10n = context.l10n;
+    // The dot is the top bar chip's, so the two always agree.
+    final dot = guiderStatusLevel(status).color;
+    final (word, verb, label, action) = switch (status?.connectionState) {
+      GuiderConnectionState.connected => (
+        l10n.shellConnected,
+        'disconnect',
+        l10n.shellDisconnect,
+        notifier.disconnect,
+      ),
+      GuiderConnectionState.connecting => (
+        l10n.shellConnecting,
+        null,
+        null,
+        null,
+      ),
+      GuiderConnectionState.error => (
+        l10n.shellFailed,
+        'reconnect',
+        l10n.shellReconnect,
+        notifier.connect,
+      ),
+      _ => (
+        l10n.shellNotConnected,
+        'connect',
+        l10n.shellConnect,
+        notifier.connect,
+      ),
+    };
+    return _gearTile(
+      id: 'guider',
+      title: camera == null
+          ? l10n.shellSectionGuider
+          : l10n.shellGearTitle(l10n.shellSectionGuider, camera),
+      dot: dot,
+      word: word,
+      verb: verb,
+      label: label,
+      action: action,
+      onOpen: status == null ? null : onOpen,
+    );
+  }
+}
+
+Widget _gearTile({
+  required String id,
+  required String title,
+  required Color dot,
+  required String word,
+  // The button's English verb, for its key; [label] is what it shows.
+  required String? verb,
+  required String? label,
+  required Future<void> Function()? action,
+  required VoidCallback? onOpen,
+}) {
+  // Ink, so the focus and press highlight paints over the fill, not under.
+  final row = Ink(
+    padding: const EdgeInsets.symmetric(
+      horizontal: AraSpace.s12,
+      vertical: AraSpace.s8,
+    ),
+    decoration: BoxDecoration(
+      color: AraColors.tileFill,
+      borderRadius: BorderRadius.circular(10),
+    ),
+    child: Row(
+      spacing: AraSpace.s12,
+      children: [
+        Container(
+          width: 10,
+          height: 10,
+          decoration: BoxDecoration(color: dot, shape: BoxShape.circle),
+        ),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title, style: kSimpleText),
+              Text(word, style: AraText.caption),
+            ],
+          ),
+        ),
+        if (label != null)
+          TextButton(
+            key: Key('simple-gear-$id-$verb'),
+            style: TextButton.styleFrom(minimumSize: const Size(0, 44)),
+            onPressed: () => action!(),
+            child: Text(label),
+          ),
+        if (onOpen != null)
+          const Icon(Icons.chevron_right, color: AraColors.textSecondary),
+      ],
+    ),
+  );
+  // Its own transparent Material: the fill and highlight paint here, over
+  // the sheet's scrim. A device with a window opens it from its row.
+  return Material(
+    type: MaterialType.transparency,
+    child: onOpen == null
+        ? row
+        : Semantics(
+            button: true,
+            // Focusable, so a keyboard opens the window too.
+            child: InkWell(
+              key: Key('simple-gear-$id'),
+              borderRadius: BorderRadius.circular(10),
+              onTap: onOpen,
+              child: row,
+            ),
+          ),
+  );
+}
+
+/// Settings › Rig: what belongs to no device. The rig's figures, the rig
+/// and profile with the way to change them, the one setting Ara can't find out
+/// (a permanent pier, asked once), the way out of Simple Mode, the version
+/// and the logs.
+class _ThisRig extends ConsumerWidget {
+  const _ThisRig({required this.onClose, required this.onLogs});
+
+  final VoidCallback onClose;
+  final VoidCallback onLogs;
+
+  /// Apply a value and keep it in the profile; a failed save says so.
+  static Future<void> _save(
+    BuildContext context,
+    WidgetRef ref,
+    void Function() apply,
+    Future<Object?> Function(ProfileApi api) persist,
+  ) async {
+    apply();
+    final notify = userNotifier(context);
+    final l10n = context.l10n;
+    final api = ref.read(profileApiProvider);
+    if (api == null) return;
+    try {
+      await persist(api);
+    } catch (e) {
+      notify(
+        l10n.shellCouldntSave,
+        detail: friendlyError(l10n, e),
+        error: true,
+      );
+    }
+  }
+
+  /// The site from this device (its GPS, or the rig's held fix): the same
+  /// lookup as the full UI's Fill from GPS, with the time zone those
+  /// coordinates fall in, saved at once; and this device's clock to the rig.
+  static Future<void> _useLocation(BuildContext context, WidgetRef ref) async {
+    final notify = userNotifier(context);
+    final l10n = context.l10n;
+    final clock = ref.read(timeSyncApiProvider);
+    if (clock != null) {
+      try {
+        await clock.pushClientTime(DateTime.now().toUtc());
+      } catch (e) {
+        notify(
+          l10n.shellCouldntSetClock,
+          detail: friendlyError(l10n, e),
+          error: true,
+        );
+      }
+    }
+    final r = await fillSiteFromGps(ref);
+    if (!r.success) {
+      notify(l10n.shellCouldntGetLocation, detail: r.message, error: true);
+      return;
+    }
+    final site = ref.read(siteSettingsProvider.notifier);
+    site.setLatitudeDeg(r.lat);
+    site.setLongitudeDeg(r.lng);
+    if (r.alt != null) site.setElevationM(r.alt!);
+    site.setTimeZone(tz_map.latLngToTimezoneString(r.lat, r.lng));
+    final api = ref.read(profileApiProvider);
+    if (api != null) {
+      try {
+        await site.persistToServer(api);
+      } catch (e) {
+        notify(
+          l10n.shellCouldntSaveSite,
+          detail: friendlyError(l10n, e),
+          error: true,
+        );
+        return;
+      }
+    }
+    notify(l10n.shellSiteFrom(r.sourceLabel));
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final server = ref.watch(activeServerProvider);
+    final profiles = ref.watch(profileManagementProvider).value;
+    final profile = profiles?.profiles
+        .where((p) => p.id == profiles.activeId)
+        .firstOrNull
+        ?.name;
+    final running = ref.watch(
+      sequenceRunStateProvider.select((s) => s.value?.state?.isActive ?? false),
+    );
+    final version = ref.watch(appDisplayVersionProvider).value;
+    final rig = ref.watch(daemonVersionsProvider).value;
+    final stars = ref.watch(plateSolveDatabaseStatusProvider).value?.databases;
+    final servers = rig?.alpacaServers ?? const <AlpacaServerVersion>[];
+    // Name and Profile, each with its change button on the same line; set
+    // close together (two facts, not two settings).
+    final l10n = context.l10n;
+    Widget fact(
+      String id,
+      String label,
+      String value,
+      String change,
+      VoidCallback onTap,
+    ) => Row(
+      spacing: AraSpace.s12,
+      children: [
+        Text(label, style: kSimpleText),
+        Expanded(
+          child: Text(
+            value,
+            style: kSimpleText,
+            textAlign: TextAlign.right,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        // A plain blue "Change"; a screen reader hears what it changes.
+        Semantics(
+          label: change,
+          button: true,
+          excludeSemantics: true,
+          child: TextButton(
+            key: Key('simple-rig-change-$id'),
+            style: TextButton.styleFrom(
+              // Simple Mode's 44 pt target (user, 2026-11-03), over keeping
+              // the two lines close.
+              minimumSize: const Size(0, 44),
+              padding: const EdgeInsets.symmetric(horizontal: AraSpace.s8),
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            onPressed: onTap,
+            child: Text(l10n.shellChange, style: const TextStyle(fontSize: 14)),
+          ),
+        ),
+      ],
+    );
+    // A list-style setting: the platform's switch (DESIGN.md: segments stay
+    // for the panels over the image).
+    Widget toggle(
+      String id,
+      String label,
+      String? hint,
+      bool on,
+      ValueChanged<bool> set,
+    ) => MergeSemantics(
+      // Read as one control: "Permanent pier, switch, off".
+      child: Row(
+        spacing: AraSpace.s12,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label, style: kSimpleText),
+                if (hint != null) Text(hint, style: AraText.caption),
+              ],
+            ),
+          ),
+          Switch.adaptive(
+            key: Key('simple-menu-$id'),
+            value: on,
+            onChanged: set,
+          ),
+        ],
+      ),
+    );
+    void relaunch({required bool rig}) {
+      onClose();
+      ref.read(offlineModeProvider.notifier).exit();
+      ref.read(profileGatePassedProvider.notifier).reset();
+      // Changing rig starts at the rig list; changing profile stays on this
+      // rig and opens its profile box.
+      if (rig) ref.read(serverChooserRequestedProvider.notifier).request();
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      spacing: AraSpace.s8,
+      children: [
+        const SimpleSystemPanel(expand: true),
+        Column(
+          children: [
+            fact(
+              'rig',
+              l10n.shellName,
+              server == null ? '—' : server.mdnsName ?? server.hostname,
+              l10n.shellChangeRig,
+              () => relaunch(rig: true),
+            ),
+            fact(
+              'profile',
+              l10n.shellProfile,
+              profile ?? '—',
+              l10n.shellChangeProfile,
+              () => relaunch(rig: false),
+            ),
+          ],
+        ),
+        if (running)
+          Text(
+            l10n.shellPlanRunning,
+            style: AraText.caption.copyWith(color: AraColors.accentBusy),
+          ),
+        // The telescope and the site: set once, kept in the profile (plate
+        // solving, framing and the night's times use them).
+        const Divider(height: AraSpace.s16),
+        for (final (id, label, digits, value, set)
+            in <(String, String, int?, double, void Function(double))>[
+              // Aperture on one wheel of millimetres; focal length per digit.
+              (
+                'aperture',
+                l10n.shellAperture,
+                null,
+                ref.watch(opticsSettingsProvider).apertureMm,
+                ref.read(opticsSettingsProvider.notifier).setApertureMm,
+              ),
+              (
+                'focal',
+                l10n.shellFocalLength,
+                4,
+                ref.watch(opticsSettingsProvider).focalLengthMm,
+                ref.read(opticsSettingsProvider.notifier).setFocalLengthMm,
+              ),
+            ])
+          _RigWheelRow.millimetres(
+            l10n,
+            id: id,
+            label: label,
+            digits: digits,
+            value: value,
+            onSet: (v) => _save(
+              context,
+              ref,
+              () => set(v),
+              (api) => ref
+                  .read(opticsSettingsProvider.notifier)
+                  .persistToServer(api),
+            ),
+          ),
+        for (final (id, label, value, set)
+            in <(String, String, double, void Function(double))>[
+              (
+                'lat',
+                l10n.shellLatitude,
+                ref.watch(siteSettingsProvider).latitudeDeg,
+                ref.read(siteSettingsProvider.notifier).setLatitudeDeg,
+              ),
+              (
+                'lng',
+                l10n.shellLongitude,
+                ref.watch(siteSettingsProvider).longitudeDeg,
+                ref.read(siteSettingsProvider.notifier).setLongitudeDeg,
+              ),
+            ])
+          _RigWheelRow.coordinate(
+            l10n,
+            id: id,
+            label: label,
+            value: value,
+            onSet: (v) => _save(
+              context,
+              ref,
+              () => set(v),
+              (api) =>
+                  ref.read(siteSettingsProvider.notifier).persistToServer(api),
+            ),
+          ),
+        _RigStepper(
+          id: 'elevation',
+          label: l10n.shellElevation,
+          unit: 'm',
+          value: ref.watch(siteSettingsProvider).elevationM,
+          onSet: (v) => _save(
+            context,
+            ref,
+            () => ref.read(siteSettingsProvider.notifier).setElevationM(v),
+            (api) =>
+                ref.read(siteSettingsProvider.notifier).persistToServer(api),
+          ),
+        ),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            key: const Key('simple-rig-use-location'),
+            onPressed: () => _useLocation(context, ref),
+            icon: const Icon(Icons.my_location, size: 18),
+            label: Text(l10n.shellUseLocation(thisDeviceLabel(clientPlatform))),
+          ),
+        ),
+        const Divider(height: AraSpace.s16),
+        toggle(
+          'pier',
+          l10n.shellPermanentPier,
+          l10n.shellPermanentPierHint,
+          ref.watch(simplePermanentPierProvider).value ?? false,
+          (v) => ref.read(simplePermanentPierProvider.notifier).set(v),
+        ),
+        toggle('simple-mode', l10n.shellSimpleMode, null, true, (v) {
+          if (!v) ref.read(simpleModeProvider.notifier).set(false);
+        }),
+        // Each language in its own words; System follows the device.
+        Wrap(
+          spacing: AraSpace.s12,
+          runSpacing: AraSpace.s8,
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            Text(l10n.shellLanguage, style: kSimpleText),
+            DecoratedBox(
+              decoration: BoxDecoration(
+                color: AraColors.tileFill,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              // Wraps at large text sizes rather than overflow.
+              child: Wrap(
+                children: [
+                  for (final (id, locale, name) in [
+                    ('system', null, l10n.shellLanguageSystem),
+                    ('en', const Locale('en'), 'English'),
+                    ('pt', const Locale('pt', 'BR'), 'Português Brasileiro'),
+                  ])
+                    SimpleSegment(
+                      key: Key('simple-menu-language-$id'),
+                      label: name,
+                      selected: ref.watch(appLocaleProvider) == locale,
+                      radius: 8,
+                      onTap: () =>
+                          ref.read(appLocaleProvider.notifier).set(locale),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const Divider(height: AraSpace.s16),
+        // Every version on the rig, for a bug report or a support question;
+        // a part the rig can't read is left out.
+        SimpleVersions(
+          key: const Key('simple-versions'),
+          rows: [
+            for (final (name, v) in <(String, String?)>[
+              (l10n.shellThisApp, version),
+              (l10n.shellAraServer, rig?.daemonVersion),
+              if (rig?.guiderVersion != null)
+                ('OpenAstro Guider', rig!.guiderVersion),
+              for (final a in servers)
+                (
+                  servers.length > 1
+                      ? '${a.label} (${a.host}:${a.port})'
+                      : a.label,
+                  a.version,
+                ),
+              if (rig?.astapVersion != null) ('ASTAP', rig!.astapVersion),
+              if (stars != null && stars.isNotEmpty)
+                (
+                  l10n.shellStarDatabase,
+                  stars.map((d) => d.toUpperCase()).join(', '),
+                ),
+              if (rig != null && rig.osRelease.isNotEmpty)
+                (
+                  l10n.shellSystem,
+                  [
+                    rig.osRelease,
+                    if (rig.boardModel != null) rig.boardModel!,
+                  ].join(' · '),
+                ),
+            ])
+              (name, v ?? '—'),
+          ],
+        ),
+        Align(
+          alignment: Alignment.centerRight,
+          child: TextButton(onPressed: onLogs, child: Text(l10n.shellLogs)),
+        ),
+      ],
+    );
+  }
+}
+
+/// Settings over Simple Mode, closed with Back. Turning Simple Mode off in
+/// it closes it onto the full UI.
+class _SettingsPage extends ConsumerWidget {
+  const _SettingsPage();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    ref.listen(simpleModeActiveProvider, (_, on) {
+      if (!on) Navigator.of(context).maybePop();
+    });
+    return Scaffold(
+      appBar: AppBar(title: Text(context.l10n.shellSettings)),
+      body: const SettingsShell(),
+    );
+  }
+}
+
+/// A value the rig keeps, set by wheels: tap it and one wheel per digit
+/// (and a hemisphere for a coordinate) opens under it; a wheel at rest sets
+/// it. A second tap closes them.
+class _RigWheelRow extends StatefulWidget {
+  const _RigWheelRow._({
+    required this.id,
+    required this.label,
+    required this.text,
+    required this.columns,
+    required this.initial,
+    required this.unit,
+    required this.read,
+    required this.onSet,
+    this.dotAfter,
+  });
+
+  /// Whole millimetres: [digits] wheels, or with none one wheel over
+  /// [_kApertureMm] (an unset value starts at 80).
+  factory _RigWheelRow.millimetres(
+    AppLocalizations l10n, {
+    required String id,
+    required String label,
+    required int? digits,
+    required double value,
+    required ValueChanged<double> onSet,
+  }) {
+    final text = value > 0 ? '${value.round()} mm' : l10n.shellNotSet;
+    if (digits == null) {
+      final (lo, hi) = _kApertureMm;
+      final v = value > 0 ? value.round().clamp(lo, hi) : 80;
+      return _RigWheelRow._(
+        id: id,
+        label: label,
+        text: text,
+        columns: [
+          [for (var mm = lo; mm <= hi; mm++) '$mm'],
+        ],
+        initial: [v - lo],
+        unit: 'mm',
+        read: (w) => (lo + w.single).toDouble(),
+        onSet: onSet,
+      );
+    }
+    return _RigWheelRow._(
+      id: id,
+      label: label,
+      text: text,
+      columns: List.filled(digits, _kDigits),
+      initial: _digitsOf(value.round(), digits),
+      unit: 'mm',
+      read: (w) => int.parse(w.join()).toDouble(),
+      onSet: onSet,
+    );
+  }
+
+  /// A small refractor to a big Dobsonian.
+  static const _kApertureMm = (10, 600);
+
+  /// Latitude or longitude: hemisphere, degrees, four decimals (about 11 m).
+  factory _RigWheelRow.coordinate(
+    AppLocalizations l10n, {
+    required String id,
+    required String label,
+    required double value,
+    required ValueChanged<double> onSet,
+  }) {
+    final lat = id == 'lat';
+    final hemi = lat
+        ? [l10n.shellHemiNorth, l10n.shellHemiSouth]
+        : [l10n.shellHemiEast, l10n.shellHemiWest];
+    final degDigits = lat ? 2 : 3;
+    final deg = value.abs().floor();
+    final frac = ((value.abs() - deg) * 10000).round().clamp(0, 9999);
+    return _RigWheelRow._(
+      id: id,
+      label: label,
+      text:
+          '${value.abs().toStringAsFixed(4)}° ${value < 0 ? hemi[1] : hemi[0]}',
+      columns: [hemi, ...List.filled(degDigits + 4, _kDigits)],
+      initial: [
+        value < 0 ? 1 : 0,
+        ..._digitsOf(deg, degDigits),
+        ..._digitsOf(frac, 4),
+      ],
+      unit: '°',
+      dotAfter: degDigits,
+      read: (w) {
+        final v = math.min(
+          int.parse(w.sublist(1, 1 + degDigits).join()) +
+              int.parse(w.sublist(1 + degDigits).join()) / 10000,
+          lat ? 90.0 : 180.0,
+        );
+        return w[0] == 1 ? -v : v;
+      },
+      onSet: onSet,
+    );
+  }
+
+  static const _kDigits = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
+
+  static List<int> _digitsOf(int v, int n) => [
+    for (final c
+        in v
+            .clamp(0, math.pow(10, n).toInt() - 1)
+            .toString()
+            .padLeft(n, '0')
+            .split(''))
+      int.parse(c),
+  ];
+
+  final String id;
+  final String label;
+  final String text;
+  final List<List<String>> columns;
+  final List<int> initial;
+  final String unit;
+
+  /// The wheels' column that a '.' follows.
+  final int? dotAfter;
+  final double Function(List<int> wheels) read;
+  final ValueChanged<double> onSet;
+
+  @override
+  State<_RigWheelRow> createState() => _RigWheelRowState();
+}
+
+class _RigWheelRowState extends State<_RigWheelRow> {
+  bool _open = false;
+  List<FixedExtentScrollController> _wheels = const [];
+
+  void _toggle() => setState(() {
+    _open = !_open;
+    for (final w in _wheels) {
+      w.dispose();
+    }
+    _wheels = _open
+        ? [
+            for (final i in widget.initial)
+              FixedExtentScrollController(initialItem: i),
+          ]
+        : const [];
+  });
+
+  @override
+  void dispose() {
+    for (final w in _wheels) {
+      w.dispose();
+    }
+    super.dispose();
+  }
+
+  // iOS's own picker: the value under the band magnified, the wheels of a
+  // group sharing one band like the Clock app's timer. [k] is the user's
+  // text size, so a digit keeps its slot (WCAG 1.4.4).
+  Widget _wheel(
+    int i,
+    double k, {
+    required bool first,
+    required bool last,
+  }) => SizedBox(
+    // A digit's wheel, or wide enough for "600".
+    width: (widget.columns[i].length > 10 ? 72 : 36) * k,
+    height: 160 * k,
+    child: Semantics(
+      label: context.l10n.shellWheelSemantics(
+        widget.label,
+        i + 1,
+        widget.columns.length,
+      ),
+      child: SimpleWheelKeys(
+        debugLabel: 'simple-rig-${widget.id}-wheel-$i',
+        onStep: SimpleWheelKeys.stepper(_wheels[i], widget.columns[i].length),
+        child: CupertinoPicker(
+          key: Key('simple-rig-${widget.id}-wheel-$i'),
+          scrollController: _wheels[i],
+          itemExtent: 36 * k,
+          useMagnifier: true,
+          magnification: 1.2,
+          selectionOverlay: CupertinoPickerDefaultSelectionOverlay(
+            capStartEdge: first,
+            capEndEdge: last,
+          ),
+          onSelectedItemChanged: (_) {},
+          children: [
+            for (final o in widget.columns[i])
+              Center(child: Text(o, style: kSimpleText.copyWith(fontSize: 20))),
+          ],
+        ),
+      ),
+    ),
+  );
+
+  /// Wheels [from] up to [to] on one band, then [tail].
+  Widget _group(int from, int to, double k, List<Widget> tail) => Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      for (var i = from; i < to; i++)
+        _wheel(i, k, first: i == from, last: i == to - 1),
+      ...tail,
+    ],
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    final k = MediaQuery.textScalerOf(context).scale(20) / 20;
+    final n = widget.columns.length;
+    final dot = widget.dotAfter;
+    final unit = Text(widget.unit, style: AraText.caption);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 44),
+          child: Row(
+            spacing: AraSpace.s12,
+            children: [
+              Expanded(child: Text(widget.label, style: kSimpleText)),
+              TextButton(
+                key: Key('simple-rig-${widget.id}'),
+                style: TextButton.styleFrom(
+                  backgroundColor: AraColors.tileFill,
+                  minimumSize: const Size(120, 44),
+                  side: _open
+                      ? const BorderSide(color: AraColors.selectionBg, width: 2)
+                      : null,
+                ),
+                onPressed: _toggle,
+                child: Text(widget.text, style: kSimpleText),
+              ),
+            ],
+          ),
+        ),
+        if (_open)
+          // Set when a wheel comes to rest, not on every digit it passes.
+          NotificationListener<ScrollEndNotification>(
+            onNotification: (_) {
+              final v = widget.read([for (final w in _wheels) w.selectedItem]);
+              widget.onSet(v);
+              return false;
+            },
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: AraSpace.s4),
+              // A coordinate's decimals drop under its degrees when one line
+              // won't fit (a narrow window, large text).
+              child: Wrap(
+                alignment: WrapAlignment.end,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                runSpacing: AraSpace.s4,
+                children: dot == null
+                    ? [
+                        _group(0, n, k, [unit]),
+                      ]
+                    : [
+                        _group(0, dot + 1, k, [
+                          Text('.', style: kSimpleText.copyWith(fontSize: 20)),
+                        ]),
+                        _group(dot + 1, n, k, [unit]),
+                      ],
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+/// A whole number stepped with − and +: a tap is one, a hold runs (1, then
+/// 10, then 50 at a time) and sets it on release.
+class _RigStepper extends StatefulWidget {
+  const _RigStepper({
+    required this.id,
+    required this.label,
+    required this.unit,
+    required this.value,
+    required this.onSet,
+  });
+
+  final String id;
+  final String label;
+  final String unit;
+  final double value;
+  final ValueChanged<double> onSet;
+
+  @override
+  State<_RigStepper> createState() => _RigStepperState();
+}
+
+class _RigStepperState extends State<_RigStepper> {
+  double? _held;
+  Timer? _run;
+  int _steps = 0;
+
+  void _bump(int dir) => setState(() {
+    final by = _steps > 25 ? 50 : (_steps > 10 ? 10 : 1);
+    _held = (_held ?? widget.value) + dir * by;
+    _steps++;
+  });
+
+  void _start(int dir) {
+    _run?.cancel();
+    _steps = 0;
+    _bump(dir);
+    _run = Timer.periodic(const Duration(milliseconds: 100), (_) => _bump(dir));
+  }
+
+  void _end() {
+    _run?.cancel();
+    final v = _held;
+    setState(() => _held = null);
+    if (v != null) widget.onSet(v);
+  }
+
+  /// The system took the finger mid-hold: stop and set nothing.
+  void _cancel() {
+    _run?.cancel();
+    _run = null;
+    if (_held != null) setState(() => _held = null);
+  }
+
+  @override
+  void dispose() {
+    _run?.cancel();
+    super.dispose();
+  }
+
+  Widget _button(int dir) => GestureDetector(
+    onLongPressStart: (_) => _start(dir),
+    onLongPressEnd: (_) => _end(),
+    onLongPressCancel: _cancel,
+    // No tooltip: its own long press would take the hold.
+    child: IconButton(
+      key: Key('simple-rig-${widget.id}-${dir > 0 ? 'up' : 'down'}'),
+      onPressed: () => widget.onSet(widget.value + dir),
+      icon: Icon(
+        dir > 0 ? Icons.add : Icons.remove,
+        semanticLabel: dir > 0
+            ? context.l10n.shellRaise
+            : context.l10n.shellLower,
+      ),
+    ),
+  );
+
+  @override
+  Widget build(BuildContext context) => ConstrainedBox(
+    constraints: const BoxConstraints(minHeight: 44),
+    child: Row(
+      spacing: AraSpace.s12,
+      children: [
+        Expanded(child: Text(widget.label, style: kSimpleText)),
+        DecoratedBox(
+          decoration: BoxDecoration(
+            color: AraColors.tileFill,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _button(-1),
+              SizedBox(
+                width: 72,
+                child: Text(
+                  '${(_held ?? widget.value).round()} ${widget.unit}',
+                  style: kSimpleText,
+                  textAlign: TextAlign.center,
+                ),
+              ),
+              _button(1),
+            ],
+          ),
+        ),
+      ],
     ),
   );
 }

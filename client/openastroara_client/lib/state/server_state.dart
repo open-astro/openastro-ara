@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/server.dart';
+import '../services/last_rig_service.dart';
 import '../services/server_api.dart';
 import '../services/server_discovery_service.dart';
 
@@ -30,14 +31,41 @@ class SelectedServerNotifier extends Notifier<AraServer?> {
 }
 
 final selectedServerProvider =
-    NotifierProvider<SelectedServerNotifier, AraServer?>(SelectedServerNotifier.new);
+    NotifierProvider<SelectedServerNotifier, AraServer?>(
+      SelectedServerNotifier.new,
+    );
 
 /// Result of the /api/v1/server/info handshake against [selectedServerProvider].
 /// Null until a server is selected; AsyncValue otherwise (loading / data / error).
-final serverHandshakeProvider = FutureProvider.autoDispose<ServerInfo?>(
-  (ref) async {
-    final server = ref.watch(selectedServerProvider);
-    if (server == null) return null;
-    return ServerApi(server).getInfo();
-  },
+final serverHandshakeProvider = FutureProvider.autoDispose<ServerInfo?>((
+  ref,
+) async {
+  final server = ref.watch(selectedServerProvider);
+  if (server == null) return null;
+  return ServerApi(server).getInfo();
+});
+
+/// ALP-4890 — where the last rig's name is kept; overridden in tests.
+final lastRigServiceProvider = Provider<LastRigService>(
+  (ref) => LastRigService(),
 );
+
+/// The name of the rig this client last connected to, or null.
+final lastRigNameProvider = FutureProvider<String?>(
+  (ref) => ref.read(lastRigServiceProvider).load(),
+);
+
+/// ALP-4890 — the rig to connect to without a tap: the first one found by
+/// the last rig's name. mDNS advertises the name with its dots as dashes and
+/// the subnet sweep reports it as is, so both spellings match.
+// shortcut: a rig on two addresses (Ethernet and Wi-Fi) and two rigs sharing
+// a hostname look alike, so the first found wins; match on the daemon's uuid
+// (in its mDNS TXT record) if two same-named rigs ever share a site.
+AraServer? autoPickRig(Iterable<AraServer> found, String? lastName) {
+  if (lastName == null || lastName.isEmpty) return null;
+  String key(String n) => n.replaceAll('.', '-').toLowerCase();
+  for (final s in found) {
+    if (s.mdnsName != null && key(s.mdnsName!) == key(lastName)) return s;
+  }
+  return null;
+}

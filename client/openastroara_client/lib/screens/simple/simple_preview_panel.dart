@@ -1,9 +1,12 @@
 import 'dart:async';
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart' show Ticker;
+import 'package:flutter/services.dart' show LogicalKeyboardKey;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../l10n/l10n.dart';
 import '../../services/storage_space_api.dart';
 import '../../state/imaging/capture_progress_state.dart';
 import '../../state/imaging/exposure_state.dart';
@@ -19,6 +22,8 @@ import '../../widgets/imaging/exposure_controls_panel.dart' show FilterDropdown;
 import '../../widgets/imaging/histogram_strip.dart' show frameHistogramProvider;
 import '../imaging_actions.dart';
 import 'simple_plan_panel.dart' show simpleRunProvider;
+import 'simple_device_windows.dart'
+    show SimpleGainSlider, simpleCelsius, simpleMountMotionProvider;
 import 'simple_shell.dart'
     show SimplePanel, SimpleSegment, kSimpleRailWidth, kSimpleStatusMaxWidth;
 
@@ -61,10 +66,10 @@ String simpleUptime(double seconds) {
 
 /// "412 GB free" (whole GB from 100 up, one decimal below), or "Unplugged"
 /// when the save drive can't be read. Pure — unit-tested.
-String simpleFree(int? bytes) {
-  if (bytes == null) return 'Unplugged';
+String simpleFree(AppLocalizations l10n, int? bytes) {
+  if (bytes == null) return l10n.previewUnplugged;
   final gb = bytes / 1073741824;
-  return '${gb.toStringAsFixed(gb >= 100 ? 0 : 1)} GB free';
+  return l10n.previewFree(gb.toStringAsFixed(gb >= 100 ? 0 : 1));
 }
 
 /// "512 MB" under 1 GB, "1.5 GB" from there: memory in use. Pure —
@@ -81,7 +86,10 @@ String simpleMemory(int bytes) {
 /// are Ara's own process until the server reports the whole Pi. Re-read
 /// every 5 s while it shows.
 class SimpleSystemPanel extends ConsumerStatefulWidget {
-  const SimpleSystemPanel({super.key});
+  const SimpleSystemPanel({super.key, this.expand = false});
+
+  /// Spread the tiles across the width they're given (Settings › This rig).
+  final bool expand;
 
   @override
   ConsumerState<SimpleSystemPanel> createState() => _SimpleSystemPanelState();
@@ -110,16 +118,24 @@ class _SimpleSystemPanelState extends ConsumerState<SimpleSystemPanel> {
     final state = ref.watch(serverInternalStateProvider).value;
     final storage = ref.watch(storageSpaceProvider);
     final cpu = state?.cpuPercent;
+    final l10n = context.l10n;
     final facts = [
       (
-        'Storage',
-        storage.hasValue ? simpleFree(storage.value?.freeBytes) : '—',
+        l10n.previewStorage,
+        storage.hasValue ? simpleFree(l10n, storage.value?.freeBytes) : '—',
       ),
-      ('CPU', cpu == null ? '—' : '${cpu.round()} %'),
-      ('Memory', state == null ? '—' : simpleMemory(state.workingSetBytes)),
-      ('Up', state == null ? '—' : simpleUptime(state.uptimeSeconds)),
+      (l10n.previewCpu, cpu == null ? '—' : '${cpu.round()} %'),
+      (
+        l10n.previewMemory,
+        state == null ? '—' : simpleMemory(state.workingSetBytes),
+      ),
+      (l10n.previewUp, state == null ? '—' : simpleUptime(state.uptimeSeconds)),
     ];
-    return SimpleFactTiles(key: const Key('simple-system-line'), facts: facts);
+    return SimpleFactTiles(
+      key: const Key('simple-system-line'),
+      facts: facts,
+      expand: widget.expand,
+    );
   }
 }
 
@@ -146,12 +162,16 @@ class SimpleInfoPanel extends ConsumerWidget {
     final clipped = analysed == null
         ? '—'
         : '${(analysed.highClipFraction * 100).toStringAsFixed(analysed.highClipFraction < 0.001 ? 0 : 2)} %';
+    final l10n = context.l10n;
     final facts = [
-      ('HFR', analysed?.hfr?.toStringAsFixed(2) ?? '—'),
-      ('Stars', analysed?.stars?.toString() ?? '—'),
-      ('Exposure', '${formatExposure(params.exposure)} · ${params.filterSlot}'),
-      ('Gain · offset', gainOffset),
-      ('Clipped', clipped),
+      (l10n.previewHfr, analysed?.hfr?.toStringAsFixed(2) ?? '—'),
+      (l10n.previewStars, analysed?.stars?.toString() ?? '—'),
+      (
+        l10n.previewExposure,
+        '${formatExposure(params.exposure)} · ${params.filterSlot}',
+      ),
+      (l10n.previewGainOffset, gainOffset),
+      (l10n.previewClipped, clipped),
     ];
     return SimpleFactTiles(facts: facts);
   }
@@ -162,9 +182,12 @@ class SimpleInfoPanel extends ConsumerWidget {
 /// the tiles would squeeze it back down, so the facts read as one list
 /// instead, a label and value per line (WCAG 1.4.4).
 class SimpleFactTiles extends StatelessWidget {
-  const SimpleFactTiles({super.key, required this.facts});
+  const SimpleFactTiles({super.key, required this.facts, this.expand = false});
 
   final List<(String, String)> facts;
+
+  /// Equal tiles across the full width instead of 72 px each.
+  final bool expand;
 
   static final _value = kSimpleText.copyWith(
     fontSize: 13,
@@ -205,32 +228,34 @@ class SimpleFactTiles extends StatelessWidget {
   }
 
   Widget _tiles() => Row(
-    mainAxisSize: MainAxisSize.min,
+    mainAxisSize: expand ? MainAxisSize.max : MainAxisSize.min,
     spacing: AraSpace.s8,
-    children: [
-      for (final (label, value) in facts)
-        Container(
-          width: kSimpleRailWidth,
-          height: 56,
-          padding: const EdgeInsets.symmetric(horizontal: 4),
-          decoration: _box,
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            spacing: 1,
-            children: [
-              FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Text(label, style: AraText.caption, maxLines: 1),
-              ),
-              FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Text(value, style: _value, maxLines: 1),
-              ),
-            ],
-          ),
-        ),
-    ],
+    children: [for (final (label, value) in facts) _tile(label, value)],
   );
+
+  Widget _tile(String label, String value) {
+    final tile = Container(
+      width: expand ? null : kSimpleRailWidth,
+      height: 56,
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      decoration: _box,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        spacing: 1,
+        children: [
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(label, style: AraText.caption, maxLines: 1),
+          ),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(value, style: _value, maxLines: 1),
+          ),
+        ],
+      ),
+    );
+    return expand ? Expanded(child: tile) : tile;
+  }
 }
 
 /// True from the tap on the square until the daemon has answered the abort:
@@ -257,8 +282,8 @@ Future<void> _stop(BuildContext context, WidgetRef ref) async {
   }
 }
 
-/// The mode's settings, opened from the rail's chip: Exposure and Gain side
-/// by side (picked from lists), Filter, and Loop / Single.
+/// The mode's settings, opened from the rail's chip: Exposure (picked from a
+/// list), the Gain slider, Filter, and Loop / Single.
 class SimpleSettingsPopover extends ConsumerWidget {
   const SimpleSettingsPopover({super.key});
 
@@ -269,8 +294,6 @@ class SimpleSettingsPopover extends ConsumerWidget {
     final shot = ref.watch(previewShotProvider);
     final looping = ref.watch(liveViewControllerProvider);
     final caps = ref.watch(cameraStatusProvider).asData?.value?.capabilities;
-    // Named gains (a camera with gain modes) are picked by index.
-    final namedGains = caps?.gains ?? const <String>[];
     return SimplePanel(
       padding: const EdgeInsets.all(AraSpace.s12),
       child: Column(
@@ -278,48 +301,30 @@ class SimpleSettingsPopover extends ConsumerWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         spacing: AraSpace.s8,
         children: [
-          const Text(
-            'Preview settings',
-            style: TextStyle(
+          Text(
+            context.l10n.previewSettings,
+            style: const TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w600,
               color: AraColors.textPrimary,
             ),
           ),
-          Row(
-            spacing: AraSpace.s8,
-            children: [
-              Expanded(
-                child: SimplePresetTile<Duration>(
-                  key: const Key('simple-exposure'),
-                  label: 'Exposure',
-                  value: params.exposure,
-                  options: exposurePresets(
-                    minSec: caps?.minExposureSec ?? 0,
-                    maxSec: caps?.maxExposureSec ?? 0,
-                  ),
-                  format: formatExposure,
-                  onSelected: ctrl.setExposure,
-                ),
-              ),
-              Expanded(
-                child: SimplePresetTile<int>(
-                  key: const Key('simple-gain'),
-                  label: 'Gain',
-                  value: params.gain,
-                  options: namedGains.isNotEmpty
-                      ? [for (var i = 0; i < namedGains.length; i++) i]
-                      : gainPresets(
-                          min: caps?.minGain ?? 0,
-                          max: caps?.maxGain ?? 0,
-                        ),
-                  format: (g) => namedGains.isNotEmpty && g < namedGains.length
-                      ? namedGains[g]
-                      : '$g',
-                  onSelected: ctrl.setGain,
-                ),
-              ),
-            ],
+          SimplePresetTile<Duration>(
+            key: const Key('simple-exposure'),
+            label: context.l10n.previewExposure,
+            value: params.exposure,
+            options: exposurePresets(
+              minSec: caps?.minExposureSec ?? 0,
+              maxSec: caps?.maxExposureSec ?? 0,
+            ),
+            format: formatExposure,
+            onSelected: ctrl.setExposure,
+          ),
+          // The camera's gain: the same slider and value as the Camera window.
+          SimpleGainSlider(
+            id: 'simple-gain',
+            value: params.gain,
+            onSet: ctrl.setGain,
           ),
           FilterDropdown(
             value: params.filterSlot,
@@ -333,9 +338,9 @@ class SimpleSettingsPopover extends ConsumerWidget {
             ),
             child: Row(
               children: [
-                for (final (v, label) in const [
-                  (PreviewShot.loop, 'Loop'),
-                  (PreviewShot.single, 'Single'),
+                for (final (v, label) in [
+                  (PreviewShot.loop, context.l10n.previewLoop),
+                  (PreviewShot.single, context.l10n.previewSingle),
                 ])
                   Expanded(
                     child: SimpleSegment(
@@ -413,32 +418,78 @@ List<Duration> exposurePresets({
       Duration(milliseconds: ms),
 ];
 
-const _kGainPresets = [
-  0,
-  50,
-  100,
-  120,
-  150,
-  200,
-  250,
-  300,
-  350,
-  400,
-  450,
-  500,
-  600,
-];
-
-/// The gain list, trimmed to the camera's reported range (max 0 = not
-/// reported: the usual presets up to 300).
-@visibleForTesting
-List<int> gainPresets({required int min, required int max}) => [
-  for (final g in _kGainPresets)
-    if (max <= 0 ? g <= 300 : g >= min && g <= max) g,
-];
-
 /// A labelled 48 px tile that opens a list to pick from. The current value
 /// stays listed even when it isn't a preset (set in the full UI, say).
+/// Arrow keys for a wheel, which Flutter's pickers lack (WCAG 2.1.1): Tab
+/// reaches it, Down moves to the next item and Up to the one before, and a
+/// ring shows it has focus. [debugLabel] names its focus node.
+class SimpleWheelKeys extends StatefulWidget {
+  const SimpleWheelKeys({
+    super.key,
+    required this.debugLabel,
+    required this.onStep,
+    required this.child,
+    this.autofocus = false,
+  });
+
+  final String debugLabel;
+  final ValueChanged<int> onStep;
+  final Widget child;
+  final bool autofocus;
+
+  /// [onStep] for a picker on [c] with [count] items: one item, kept in range.
+  static ValueChanged<int> stepper(FixedExtentScrollController c, int count) =>
+      (d) {
+        final to = (c.selectedItem + d).clamp(0, count - 1);
+        if (to != c.selectedItem) c.jumpToItem(to);
+      };
+
+  @override
+  State<SimpleWheelKeys> createState() => _SimpleWheelKeysState();
+}
+
+class _SimpleWheelKeysState extends State<SimpleWheelKeys> {
+  late final _focus = FocusNode(debugLabel: widget.debugLabel);
+  bool _ring = false;
+
+  @override
+  void dispose() {
+    _focus.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => FocusableActionDetector(
+    focusNode: _focus,
+    autofocus: widget.autofocus,
+    onShowFocusHighlight: (v) => setState(() => _ring = v),
+    shortcuts: const {
+      SingleActivator(LogicalKeyboardKey.arrowDown): _WheelStep(1),
+      SingleActivator(LogicalKeyboardKey.arrowUp): _WheelStep(-1),
+    },
+    actions: {
+      _WheelStep: CallbackAction<_WheelStep>(
+        onInvoke: (i) => widget.onStep(i.dir),
+      ),
+    },
+    child: DecoratedBox(
+      position: DecorationPosition.foreground,
+      decoration: BoxDecoration(
+        border: _ring
+            ? Border.all(color: AraColors.accentInfo, width: 2)
+            : null,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: widget.child,
+    ),
+  );
+}
+
+class _WheelStep extends Intent {
+  const _WheelStep(this.dir);
+  final int dir;
+}
+
 class SimplePresetTile<T> extends StatelessWidget {
   const SimplePresetTile({
     super.key,
@@ -447,6 +498,7 @@ class SimplePresetTile<T> extends StatelessWidget {
     required this.options,
     required this.format,
     required this.onSelected,
+    this.wheel = false,
   });
 
   final String label;
@@ -455,29 +507,18 @@ class SimplePresetTile<T> extends StatelessWidget {
   final String Function(T) format;
   final ValueChanged<T> onSelected;
 
+  /// Pick on an iOS-style wheel (spun with a thumb, the neighbours in view)
+  /// instead of a list: for a long ordered set like a frame count.
+  final bool wheel;
+
   @override
   Widget build(BuildContext context) {
     final items = options.contains(value) ? options : [value, ...options];
-    return PopupMenuButton<T>(
-      tooltip: label,
-      initialValue: value,
-      onSelected: onSelected,
-      position: PopupMenuPosition.under,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.all(Radius.circular(10)),
-      ),
-      constraints: const BoxConstraints(minWidth: 96, maxHeight: 360),
-      itemBuilder: (_) => [
-        for (final o in items)
-          PopupMenuItem<T>(
-            value: o,
-            height: 44,
-            child: Text(format(o), style: kSimpleText),
-          ),
-      ],
-      child: Container(
-        // At least 48 px; taller when the user's text is larger.
-        constraints: const BoxConstraints(minHeight: 48),
+    // Ink, so the focus and press highlight paints over the fill, not under.
+    final tile = ConstrainedBox(
+      // At least 48 px; taller when the user's text is larger.
+      constraints: const BoxConstraints(minHeight: 48),
+      child: Ink(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
         decoration: BoxDecoration(
           color: AraColors.tileFill,
@@ -503,6 +544,98 @@ class SimplePresetTile<T> extends StatelessWidget {
         ),
       ),
     );
+    // Its own transparent Material: the fill and highlight paint here, over
+    // the panel's scrim, not on a Material further down.
+    if (wheel) {
+      // An InkWell, not a bare tap: Tab reaches it and Enter opens the wheel.
+      return Material(
+        type: MaterialType.transparency,
+        child: Semantics(
+          button: true,
+          label: label,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(10),
+            onTap: () => _showWheel(context, items),
+            child: tile,
+          ),
+        ),
+      );
+    }
+    return Material(
+      type: MaterialType.transparency,
+      child: PopupMenuButton<T>(
+        tooltip: label,
+        initialValue: value,
+        onSelected: onSelected,
+        position: PopupMenuPosition.under,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(10)),
+        ),
+        constraints: const BoxConstraints(minWidth: 96, maxHeight: 360),
+        itemBuilder: (_) => [
+          for (final o in items)
+            PopupMenuItem<T>(
+              value: o,
+              height: 44,
+              child: Text(format(o), style: kSimpleText),
+            ),
+        ],
+        child: tile,
+      ),
+    );
+  }
+
+  Future<void> _showWheel(BuildContext context, List<T> items) async {
+    var picked = value;
+    final wheel = FixedExtentScrollController(
+      initialItem: items.indexOf(value),
+    );
+    final done = await showCupertinoModalPopup<bool>(
+      context: context,
+      builder: (popup) => Container(
+        height: 280,
+        color: AraColors.bgPanel,
+        child: SafeArea(
+          top: false,
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(left: 16),
+                    child: Text(label, style: kSimpleText),
+                  ),
+                  const Spacer(),
+                  TextButton(
+                    onPressed: () => Navigator.of(popup).pop(true),
+                    child: Text(context.l10n.previewDone),
+                  ),
+                ],
+              ),
+              Expanded(
+                // Focused on opening, so the arrows turn it at once.
+                child: SimpleWheelKeys(
+                  debugLabel: 'simple-wheel-$label',
+                  autofocus: true,
+                  onStep: SimpleWheelKeys.stepper(wheel, items.length),
+                  child: CupertinoPicker(
+                    itemExtent: 44,
+                    scrollController: wheel,
+                    onSelectedItemChanged: (i) => picked = items[i],
+                    children: [
+                      for (final o in items)
+                        Center(child: Text(format(o), style: kSimpleText)),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    wheel.dispose();
+    if (done ?? false) onSelected(picked);
   }
 }
 
@@ -533,7 +666,9 @@ class SimpleShutterButton extends StatelessWidget {
     final fg = enabled ? AraColors.textPrimary : AraColors.textDisabled;
     return Semantics(
       button: true,
-      label: label ?? (running ? 'Stop' : 'Take a frame'),
+      label:
+          label ??
+          (running ? context.l10n.previewStop : context.l10n.previewTakeFrame),
       child: InkResponse(
         key: const Key('simple-shutter'),
         onTap: onPressed,
@@ -582,6 +717,9 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
     with SingleTickerProviderStateMixin {
   late final Ticker _ticker = createTicker((_) => setState(() {}));
 
+  /// Where the sensor was when the pill first saw it cooling: the bar's 0.
+  double? _coolStart;
+
   @override
   void dispose() {
     _ticker.dispose();
@@ -607,72 +745,109 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
     final run = ref.watch(sequenceRunStateProvider).value;
     // A scheduled plan waits on the rig: it says when it starts instead.
     final startAt = ref.watch(simpleRunProvider.select((r) => r.startAt));
+    final l10n = context.l10n;
     final step = startAt != null && startAt.isAfter(DateTime.now())
-        ? 'Starts at ${startAt.hour.toString().padLeft(2, '0')}:'
-              '${startAt.minute.toString().padLeft(2, '0')}'
+        ? l10n.previewStartsAt(
+            '${startAt.hour.toString().padLeft(2, '0')}:'
+            '${startAt.minute.toString().padLeft(2, '0')}',
+          )
         : run?.currentInstructionDescription;
     final paused =
         run?.state == SequenceRunState.paused ||
         run?.state == SequenceRunState.pausedAwaitingUser;
     _syncTick(p.isActive);
+    // A cooler turned on by hand: the pill shows it cooling until it is
+    // within half a degree of its target (a plan's own cooling step shows
+    // as the plan's step instead).
+    final cam = ref.watch(cameraStatusProvider).value;
+    final ccd = cam?.ccdTemperature;
+    final target = cam?.coolerSetpointC;
+    final cooling =
+        cam != null &&
+        cam.isConnected &&
+        cam.coolerOn &&
+        ccd != null &&
+        target != null &&
+        ccd - target > 0.5;
+    _coolStart = cooling ? (_coolStart ?? ccd) : null;
+    // A park or unpark asked for in Simple Mode, until the mount gets there.
+    final parking = ref.watch(simpleMountMotionProvider);
+    final planActive = run?.state?.isActive ?? false;
     final exposing = !stopping && p.phase == CapturePhase.exposing;
     final (String? label, String? detail, Color dot) = stopping
-        ? ('Stopping…', null, AraColors.textSecondary)
+        ? (l10n.previewStopping, null, AraColors.textSecondary)
         : switch (p.phase) {
             CapturePhase.exposing => (
-              'Taking a frame',
+              l10n.previewTakingFrame,
               p.exposureRemaining == null
-                  ? 'Starting…'
+                  ? l10n.previewStarting
                   // Whole seconds, rounded up: "1 s left" until it's done.
-                  : '${(p.exposureRemaining!.inMilliseconds / 1000).ceil()} s left',
+                  : l10n.previewSecondsLeft(
+                      (p.exposureRemaining!.inMilliseconds / 1000).ceil(),
+                    ),
               AraColors.accentConnected,
             ),
             CapturePhase.downloading => (
-              'Downloading…',
+              l10n.previewDownloading,
               null,
               AraColors.accentConnected,
             ),
             CapturePhase.done => (
-              'Frame ready',
+              l10n.previewFrameReady,
               null,
               AraColors.accentConnected,
             ),
             CapturePhase.failed => (
-              'Capture failed',
+              l10n.previewCaptureFailed,
               p.error,
               AraColors.accentError,
             ),
             CapturePhase.idle =>
               looping
-                  ? ('Looping', null, AraColors.accentConnected)
+                  ? (l10n.previewLooping, null, AraColors.accentConnected)
                   // Between frames a running plan says what it's doing
                   // (cooling, slewing, centring, focusing).
                   : (run?.state?.isActive ?? false) &&
                         step != null &&
                         step.isNotEmpty
                   ? (
-                      paused ? 'Plan paused' : 'Plan',
+                      paused ? l10n.previewPlanPaused : l10n.previewPlan,
                       step,
                       paused ? AraColors.accentBusy : AraColors.accentInfo,
+                    )
+                  : parking != null
+                  ? (
+                      parking ? l10n.previewParking : l10n.previewUnparking,
+                      null,
+                      AraColors.accentBusy,
+                    )
+                  : cooling
+                  ? (
+                      l10n.previewCooling,
+                      '${simpleCelsius(ccd)} → ${simpleCelsius(target)}',
+                      AraColors.accentInfo,
                     )
                   : (null, null, AraColors.textSecondary),
           };
     if (label == null) return const SizedBox.shrink();
     // The plan's step shows how far it has got (cooling, a wait, autofocus)
     // as a line along the pill's foot.
-    final stepProgress =
-        !stopping &&
-            !looping &&
-            p.phase == CapturePhase.idle &&
-            (run?.state?.isActive ?? false)
+    final idle = !stopping && !looping && p.phase == CapturePhase.idle;
+    final stepProgress = idle && planActive
         ? run?.currentInstructionProgress
+        : idle && cooling
+        ? (_coolStart! - target) <= 0
+              ? 0.0
+              : ((_coolStart! - ccd) / (_coolStart! - target)).clamp(0.0, 1.0)
         : null;
     // Announced when it changes: the label and the plan's step, not each
     // second of an exposure's countdown.
     return Semantics(
       container: true,
       liveRegion: true,
-      label: exposing || detail == null ? label : '$label, $detail',
+      label: exposing || detail == null
+          ? label
+          : l10n.previewStatusSpoken(label, detail),
       excludeSemantics: true,
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: kSimpleStatusMaxWidth),

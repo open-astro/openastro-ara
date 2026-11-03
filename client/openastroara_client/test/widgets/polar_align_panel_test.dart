@@ -11,6 +11,7 @@ import 'package:openastroara/state/polar_align/polar_align_state.dart';
 import 'package:openastroara/theme/ara_colors.dart';
 import 'package:openastroara/widgets/fit_pane.dart';
 import 'package:openastroara/widgets/imaging/polar_align_panel.dart';
+import 'package:openastroara/l10n/l10n.dart';
 
 /// Pure fake — records calls; scripted status/settings.
 class _FakePolarAlignClient implements PolarAlignClient {
@@ -79,6 +80,8 @@ Future<void> _expand(WidgetTester tester) async {
   await tester.pumpAndSettle();
 }
 
+final _en = lookupAppLocalizations(const Locale('en'));
+
 void main() {
   group('bullseye pure helpers', () {
     test('range zooms in as the error shrinks', () {
@@ -103,11 +106,11 @@ void main() {
       // Altitude grew by 3′ (well over the 0.5′ noise), azimuth held.
       expect(
           boltDirectionNudge(prevAlt: 10.0, prevAz: -4.0, alt: 13.0, az: -4.2),
-          contains('altitude bolt'));
+          isTrue);
       // Azimuth grew (more negative = further east), altitude held.
       expect(
           boltDirectionNudge(prevAlt: 10.0, prevAz: -4.0, alt: 10.3, az: -7.0),
-          contains('azimuth bolt'));
+          isFalse);
       // Improvement, or growth inside the solve noise, says nothing.
       expect(boltDirectionNudge(prevAlt: 10.0, prevAz: -4.0, alt: 7.0, az: -4.0), isNull);
       expect(boltDirectionNudge(prevAlt: 10.0, prevAz: -4.0, alt: 10.4, az: -4.0), isNull);
@@ -153,12 +156,12 @@ void main() {
     test('azimuth arrows point the way the words say, for the pole the user faces', () {
       // 2026-10-17, southern site: "Move east" came with an arrow to the right, but facing the
       // south pole east is on the left. The words were right; the arrows assumed the NCP.
-      expect(polarAzHint(5, southern: false), (Icons.arrow_back, 'Move west'));
-      expect(polarAzHint(-5, southern: false), (Icons.arrow_forward, 'Move east'));
-      expect(polarAzHint(5, southern: true), (Icons.arrow_forward, 'Move west'));
-      expect(polarAzHint(-5, southern: true), (Icons.arrow_back, 'Move east'));
-      expect(polarAzHint(0.01, southern: true), (Icons.check, 'On target'));
-      expect(polarAzHint(null, southern: true), (Icons.remove, '—'));
+      expect(polarAzHint(_en, 5, southern: false), (Icons.arrow_back, 'Move west'));
+      expect(polarAzHint(_en, -5, southern: false), (Icons.arrow_forward, 'Move east'));
+      expect(polarAzHint(_en, 5, southern: true), (Icons.arrow_forward, 'Move west'));
+      expect(polarAzHint(_en, -5, southern: true), (Icons.arrow_back, 'Move east'));
+      expect(polarAzHint(_en, 0.01, southern: true), (Icons.check, 'On target'));
+      expect(polarAzHint(_en, null, southern: true), (Icons.remove, '—'));
     });
 
     test('RA/Dec render as sexagesimal', () {

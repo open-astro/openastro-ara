@@ -7,6 +7,7 @@ import '../../state/time_sync_state.dart';
 import 'editable_field.dart';
 import 'settings_row.dart';
 import '../../util/friendly_error.dart';
+import '../../l10n/l10n.dart';
 
 /// §31.1 waterfall steps 4 + 5, surfaced in the Site panel: the daemon's
 /// time-sync status, the "use a GPS dongle on this computer" guidance
@@ -40,7 +41,7 @@ class TimeSyncSection extends ConsumerWidget {
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 8),
               child: Text(
-                friendlyError(e, action: 'read the server clock state'),
+                friendlyError(context.l10n, e, action: 'read the server clock state'),
                 style: TextStyle(color: theme.colorScheme.error),
               ),
             ),
@@ -148,7 +149,7 @@ class TimeSyncSection extends ConsumerWidget {
       );
     } catch (e) {
       if (!context.mounted) return;
-      messenger.showSnackBar(SnackBar(content: Text(friendlyError(e, action: 'push the time'))));
+      messenger.showSnackBar(SnackBar(content: Text(friendlyError(context.l10n, e, action: 'push the time'))));
     }
     ref.invalidate(timeSyncStatusProvider);
   }
@@ -269,7 +270,7 @@ class _TimeSyncManualDialogState extends State<_TimeSyncManualDialog> {
       if (!mounted) return;
       setState(() {
         _applying = false;
-        _error = friendlyError(e, action: 'push the time');
+        _error = friendlyError(context.l10n, e, action: 'push the time');
       });
     }
   }

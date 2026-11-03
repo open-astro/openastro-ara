@@ -17,6 +17,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
+using OpenAstroAra.Equipment.Equipment.MyGuider.PHD2;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Services;
 
@@ -185,6 +186,17 @@ public static partial class EquipmentEndpoints {
             var devices = await svc.DiscoverAsync(deviceType, forceRefresh ?? false, ct);
             return Results.Ok(devices);
         });
+
+        // A device's driver and SDK versions (Simple Mode's device windows).
+        // The guider's camera: its Alpaca pick lives in the guider settings, not the equipment selections.
+        equipment.MapGet("/driver/guidecamera", GetGuideCameraDriverAsync)
+            .Produces<DeviceDriverDto>(StatusCodes.Status200OK)
+            .WithName("GetGuideCameraDriver")
+            .WithSummary("The guide camera's name, driver, SDK and firmware versions.");
+        equipment.MapGet("/driver/{type}", GetDeviceDriverAsync)
+            .Produces<DeviceDriverDto>(StatusCodes.Status200OK)
+            .WithName("GetDeviceDriver")
+            .WithSummary("The selected device's driver, SDK and firmware versions.");
 
         // ─── Camera ───
         var camera = equipment.MapGroup("/camera");
@@ -1010,6 +1022,71 @@ public static partial class EquipmentEndpoints {
             return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict);
         } catch (OpenAstroAra.Equipment.Equipment.MyGuider.PHD2.GuiderRpcException ex) {
             return Results.Problem(ex.Message, statusCode: StatusCodes.Status422UnprocessableEntity);
+        }
+    }
+
+    // The selected device of [type]'s versions: the driver's own, and the SDK / firmware its Alpaca server
+    // lists in configureddevices. Unknown type → 400; nothing selected → 404; a silent server → nulls.
+    public static async Task<IResult> GetDeviceDriverAsync(
+            string type, IEquipmentSelectionStore selections, IAlpacaManagementClient alpaca, CancellationToken ct) {
+        ArgumentNullException.ThrowIfNull(selections);
+        ArgumentNullException.ThrowIfNull(alpaca);
+        // A type's name only: Enum.TryParse alone also takes "3", "99" or "camera,focuser".
+        if (!Enum.GetNames<DeviceType>().Contains(type, StringComparer.OrdinalIgnoreCase)
+            || !Enum.TryParse<DeviceType>(type, ignoreCase: true, out var deviceType) || deviceType == DeviceType.Guider) {
+            return Results.Problem($"'{type}' is not an Alpaca device type.", statusCode: StatusCodes.Status400BadRequest);
+        }
+        var devices = await selections.GetAllAsync(ct).ConfigureAwait(false);
+        var device = devices.FirstOrDefault(d => d.Type.Canonical() == deviceType.Canonical());
+        if (device is null) {
+            return Results.Problem($"No {type} is set up.", statusCode: StatusCodes.Status404NotFound);
+        }
+        var host = string.IsNullOrWhiteSpace(device.IpAddress) ? device.HostName : device.IpAddress;
+        var wire = device.Type.Canonical().ToString().ToLowerInvariant();
+        try {
+            var listed = alpaca.GetConfiguredDevicesAsync(host, device.IpPort, ct);
+            var driver = alpaca.GetDriverVersionAsync(host, device.IpPort, wire, device.AlpacaDeviceNumber, ct);
+            var entry = (await listed.ConfigureAwait(false)).GetValueOrDefault(
+                $"{wire}/{device.AlpacaDeviceNumber.ToString(System.Globalization.CultureInfo.InvariantCulture)}");
+            return Results.Ok(new DeviceDriverDto(await driver.ConfigureAwait(false), entry?.SdkVersion, entry?.Firmware,
+                entry?.SerialNumber));
+        } catch (System.ArgumentException) {
+            return Results.Ok(new DeviceDriverDto(null, null, null)); // a remembered host that isn't valid
+        }
+    }
+
+    /// <summary>The guide camera's versions and model name, from the Alpaca server the guider's
+    /// "Alpaca Camera [host:port/N]" pick names; 404 when the pick is unset or not an Alpaca camera.</summary>
+    public static async Task<IResult> GetGuideCameraDriverAsync(
+            IProfileStore profiles, IAlpacaManagementClient alpaca, IGuiderService guider, CancellationToken ct) {
+        ArgumentNullException.ThrowIfNull(profiles);
+        ArgumentNullException.ThrowIfNull(alpaca);
+        ArgumentNullException.ThrowIfNull(guider);
+        var ep = PHD2Guider.ParseAlpacaSelectionEndpoint(profiles.GetPhd2Settings().GuiderCamera);
+        string? model = null;
+        if (ep is null) {
+            // Not an Alpaca pick (or none in the profile): the guider still knows the camera it opened, and
+            // an Alpaca one carries its server ("Alpaca Camera [127.0.0.1:6800/0] - ZWO ASI120MM Mini (…)").
+            if (await guider.TryGetGuideCameraNameAsync(ct).ConfigureAwait(false) is not { } name) {
+                return Results.Problem("No guide camera is known.", statusCode: StatusCodes.Status404NotFound);
+            }
+            ep = PHD2Guider.ParseAlpacaSelectionEndpoint(System.Text.RegularExpressions.Regex.Match(name, @"\[[^\[\]]*\]").Value);
+            // The title wants the model only: drop the "Alpaca Camera [host:port/N] - " lead and "(driver)" tail.
+            model = System.Text.RegularExpressions.Regex.Replace(name, @"^.*\]\s*-\s*|\s*\([^()]*\)$", "");
+            if (ep is null) {
+                return Results.Ok(new DeviceDriverDto(null, null, null, Name: model));
+            }
+        }
+        try {
+            var (host, port, device) = ep.Value;
+            var listed = alpaca.GetConfiguredDevicesAsync(host, port, ct);
+            var driver = alpaca.GetDriverVersionAsync(host, port, "camera", device, ct);
+            var entry = (await listed.ConfigureAwait(false)).GetValueOrDefault(
+                $"camera/{device.ToString(System.Globalization.CultureInfo.InvariantCulture)}");
+            return Results.Ok(new DeviceDriverDto(await driver.ConfigureAwait(false), entry?.SdkVersion, entry?.Firmware,
+                entry?.SerialNumber, entry?.Name ?? model));
+        } catch (System.ArgumentException) {
+            return Results.Ok(new DeviceDriverDto(null, null, null, Name: model));
         }
     }
 

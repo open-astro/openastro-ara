@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import '../../util/friendly_error.dart';
+import '../../l10n/l10n.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -66,7 +67,7 @@ class ImageLibraryScreen extends ConsumerWidget {
       body: sessions.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => _CenteredNotice(
-          message: friendlyError(e, action: 'load your library'),
+          message: friendlyError(context.l10n, e, action: 'load your library'),
           action: OutlinedButton(
             onPressed: () =>
                 ref.read(liveLibrarySessionsProvider.notifier).refresh(),
@@ -641,7 +642,7 @@ class _SessionHeader extends ConsumerWidget {
           if (!context.mounted) return;
           ScaffoldMessenger.of(
             context,
-          ).showSnackBar(SnackBar(content: Text(friendlyError(e, action: 'resume the sequence'))));
+          ).showSnackBar(SnackBar(content: Text(friendlyError(context.l10n, e, action: 'resume the sequence'))));
         }
     }
   }
@@ -761,7 +762,7 @@ class _SessionFramesGrid extends ConsumerWidget {
         child: Padding(
           padding: _padding,
           child: Text(
-            friendlyError(e, action: 'load the frames'),
+            friendlyError(context.l10n, e, action: 'load the frames'),
             style: Theme.of(
               context,
             ).textTheme.bodySmall?.copyWith(color: AraColors.textSecondary),

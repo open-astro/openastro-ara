@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../util/friendly_error.dart';
+import '../../../l10n/l10n.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../services/profile_api.dart';
@@ -43,7 +44,7 @@ class _CameraElectronicsPanelState extends ConsumerState<CameraElectronicsPanel>
       if (mounted) {
         setState(
           () =>
-              _lastError = friendlyError(e, action: 'load your saved settings'),
+              _lastError = friendlyError(context.l10n, e, action: 'load your saved settings'),
         );
       }
     }
@@ -69,7 +70,7 @@ class _CameraElectronicsPanelState extends ConsumerState<CameraElectronicsPanel>
       messenger.showSnackBar(const SnackBar(content: Text('Saved.')));
     } catch (e) {
       if (!mounted) return;
-      setState(() => _lastError = friendlyError(e, action: 'save that'));
+      setState(() => _lastError = friendlyError(context.l10n, e, action: 'save that'));
       messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
     }
   }

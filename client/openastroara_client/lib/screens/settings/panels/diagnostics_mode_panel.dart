@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../util/friendly_error.dart';
+import '../../../l10n/l10n.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../services/profile_api.dart';
@@ -56,7 +57,7 @@ class _DiagnosticsModePanelState extends ConsumerState<DiagnosticsModePanel> {
     } catch (e) {
       if (!mounted) return;
       messenger.showSnackBar(
-        SnackBar(content: Text(friendlyError(e, action: 'save that'))),
+        SnackBar(content: Text(friendlyError(context.l10n, e, action: 'save that'))),
       );
     }
   }

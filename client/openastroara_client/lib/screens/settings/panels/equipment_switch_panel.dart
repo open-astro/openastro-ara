@@ -13,6 +13,7 @@ import '../../../state/settings/equipment_connection_state.dart';
 import '../../../state/ws/ws_providers.dart';
 import '../../../theme/ara_colors.dart';
 import '../../../util/friendly_error.dart';
+import '../../../l10n/l10n.dart';
 import '../../../widgets/equipment/alpaca_chooser_dialog.dart';
 import '../../../widgets/equipment/switch_device_body.dart';
 import '../../../widgets/settings/editable_field.dart';
@@ -586,7 +587,7 @@ String _msg(Object? e) {
       e is FileSystemException ||
       e is FormatException ||
       e is StateError) {
-    final full = friendlyError(e);
+    final full = friendlyError(lookupAppLocalizations(const Locale('en')), e);
     // Strip only friendlyError's own generic lead-in. Splitting on the first
     // ' — ' would also cut a server message that happens to contain one
     // ('port is locked — stop the sequence first' → 'stop the sequence

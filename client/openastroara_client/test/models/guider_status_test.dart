@@ -1,5 +1,9 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/guider_status.dart';
+import 'package:flutter/widgets.dart' show Locale;
+import 'package:openastroara/l10n/l10n.dart';
+
+final _en = lookupAppLocalizations(const Locale('en'));
 
 void main() {
   group('GuiderStatus.fromJson', () {
@@ -88,12 +92,12 @@ void main() {
         },
       });
       expect(s.runtimeState, GuiderRuntimeState.calibrating);
-      expect(s.calibrationText, 'North step 7 · 11.9 px');
+      expect(s.calibrationText(_en), 'North step 7 · 11.9 px');
       final bare = GuiderStatus.fromJson(<String, dynamic>{
         'state': 'connected',
         'runtime': <String, dynamic>{'state': 'calibrating'},
       });
-      expect(bare.calibrationText, isNull, reason: 'no leg reported yet');
+      expect(bare.calibrationText(_en), isNull, reason: 'no leg reported yet');
     });
 
     test('looping, a selected star and settling are their own phases', () {
@@ -105,9 +109,9 @@ void main() {
       expect(withState('star_selected').runtimeState, GuiderRuntimeState.starSelected);
       expect(withState('settling').runtimeState, GuiderRuntimeState.settling);
       expect(withState('assistant').runtimeState, GuiderRuntimeState.assistant);
-      expect(withState('assistant').runtimeSummary, 'Guiding Assistant');
-      expect(withState('looping').runtimeSummary, 'Looping');
-      expect(withState('settling').runtimeSummary, 'Settling');
+      expect(withState('assistant').runtimeSummary(_en), 'Guiding Assistant');
+      expect(withState('looping').runtimeSummary(_en), 'Looping');
+      expect(withState('settling').runtimeSummary(_en), 'Settling');
       expect(withState('settling').isGuiding, isFalse, reason: 'isGuiding stays the plain guiding phase');
     });
 
@@ -121,10 +125,10 @@ void main() {
           'calibration_distance_px': 4.2,
         },
       });
-      expect(cal.runtimeSummary, 'Calibrating · West step 3 · 4.2 px');
-      expect(GuiderStatus.fromJson(<String, dynamic>{'state': 'disconnected'}).runtimeSummary, 'Not connected');
+      expect(cal.runtimeSummary(_en), 'Calibrating · West step 3 · 4.2 px');
+      expect(GuiderStatus.fromJson(<String, dynamic>{'state': 'disconnected'}).runtimeSummary(_en), 'Not connected');
       for (final s in GuiderRuntimeState.values) {
-        expect(guiderRuntimeText(s), isNotEmpty);
+        expect(guiderRuntimeText(_en, s), isNotEmpty);
       }
     });
 

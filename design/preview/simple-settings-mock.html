@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Simple Settings</title>
+<style>
+  /* DESIGN.md tokens (lib/theme/ara_colors.dart + ara_metrics.dart) */
+  :root {
+    --bg: #1A1A1A; --panel: #262626; --input: #333333; --border: #404040;
+    --text: #E0E0E0; --text2: #A0A0A0;
+    --ok: #4CAF50; --busy: #FFB300; --err: #E53935; --errText: #FF8A80; --info: #42A5F5;
+    --sel: #1976D2; --selTint: rgba(66,165,245,.16); --tile: #383838;
+    --scrim: rgba(26,26,26,.9);
+    --sys: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #0E0E0E; color: var(--text); font: 14px/1.45 var(--sys); }
+  body.night { filter: sepia(1) saturate(6) hue-rotate(-35deg) brightness(.75); }
+  .page { max-width: 1120px; margin: 0 auto; padding: 32px 16px 80px; }
+  h1 { font-size: 22px; font-weight: 600; margin: 0 0 6px; }
+  h2 { font-size: 16px; font-weight: 600; margin: 0 0 4px; }
+  p.note { color: var(--text2); margin: 0 0 14px; max-width: 88ch; }
+  .tag { font-size: 11px; letter-spacing: .5px; text-transform: uppercase; padding: 1px 7px; border-radius: 10px; border: 1px solid var(--busy); color: var(--busy); margin-left: 6px; vertical-align: 2px; }
+  .controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin: 18px 0 14px; }
+  .seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--border); border-radius: 18px; overflow: hidden; }
+  .seg button { background: transparent; color: var(--text); border: 0; padding: 7px 14px; font: 13px var(--sys); cursor: pointer; }
+  .seg button + button { border-left: 1px solid var(--border); }
+  .seg button[aria-pressed="true"] { background: var(--sel); color: #fff; }
+  .seg button:focus-visible { outline: 2px solid var(--info); outline-offset: -2px; }
+  section { margin-top: 40px; }
+
+  /* the iPad, 1024x768 at 0.75 */
+  .ipad { width: 768px; height: 576px; max-width: 100%; position: relative; border-radius: 14px; overflow: hidden; border: 1px solid #333;
+          background: radial-gradient(ellipse at 30% 40%, #2b2f3a 0, #12141a 55%, #08090c 100%); }
+  .stars { position: absolute; inset: 0; background-image: radial-gradient(1px 1px at 20% 30%, #fff8 50%, transparent 51%), radial-gradient(1px 1px at 70% 60%, #fff6 50%, transparent 51%), radial-gradient(1.5px 1.5px at 45% 75%, #fff7 50%, transparent 51%), radial-gradient(1px 1px at 85% 20%, #fff5 50%, transparent 51%); }
+  .strip { position: absolute; left: 12px; right: 12px; top: 12px; height: 42px; background: var(--scrim); border-radius: 10px; display: flex; align-items: center; padding: 0 8px; gap: 8px; font-size: 11px; color: var(--text2); }
+  .strip .dot { display: inline-flex; align-items: center; gap: 4px; }
+  .strip .dot i { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); }
+  .strip .icons { margin-left: auto; display: flex; gap: 14px; font-size: 16px; color: var(--text); }
+  .strip .gear.on { background: var(--sel); color: #fff; border-radius: 6px; padding: 0 5px; }
+  .lrail, .rrail { position: absolute; width: 54px; background: var(--scrim); border-radius: 10px; padding: 6px 4px; display: flex; flex-direction: column; gap: 4px; align-items: center; font-size: 11px; color: var(--text2); }
+  .lrail { left: 12px; top: 200px; } .rrail { right: 12px; top: 170px; }
+  .rb { width: 46px; height: 40px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  .rb .ic { font-size: 14px; color: var(--text); }
+  .shut { width: 40px; height: 40px; border-radius: 50%; border: 3px solid var(--text); display: grid; place-items: center; }
+  .shut i { width: 22px; height: 22px; border-radius: 50%; background: var(--text); }
+  .estop { position: absolute; right: 12px; bottom: 12px; width: 44px; height: 44px; border-radius: 8px; background: #D32F2F; display: grid; place-items: center; font-size: 11px; font-weight: 700; color: #fff; }
+
+  /* the settings surface */
+  .veil { position: absolute; inset: 0; background: rgba(0,0,0,var(--veilA,.35)); }
+  .ipad.flat { background: #d8d8d8; } .ipad.flat .stars { display: none; }
+  .ctl { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text2); }
+  .ctl output { color: var(--text); font-variant-numeric: tabular-nums; min-width: 4ch; }
+  .contrast { font-size: 13px; }
+  .surface { position: absolute; background: rgba(26,26,26,var(--sheetA,.9)); backdrop-filter: blur(var(--blur,5px)); -webkit-backdrop-filter: blur(var(--blur,5px)); border-radius: 12px; display: flex; overflow: hidden; font-size: 12.5px; }
+  .surface.a { right: 12px; top: 62px; bottom: 66px; width: 300px; flex-direction: column; }
+  .surface.b { left: 12px; right: 12px; top: 62px; bottom: 66px; }
+  .surface.dot { left: 60px; top: 62px; width: 330px; max-height: 440px; flex-direction: column; }
+  .surface.dot .nav { display: none; }
+  .surface.dot .body { overflow: auto; }
+  .nav .row.dev { padding-left: 26px; font-size: 12px; }
+  .strip .dot.hot { outline: 1.5px solid var(--sel); border-radius: 6px; padding: 1px 4px; }
+  .graph { height: 46px; border-radius: 6px; background: var(--scrim); position: relative; overflow: hidden; }
+  .graph svg { position: absolute; inset: 0; }
+  .winhead { display: flex; align-items: center; gap: 8px; }
+  .winhead .x { margin-left: auto; color: var(--text2); font-size: 15px; }
+  .nav { width: 190px; border-right: 1px solid var(--border); padding: 8px; display: flex; flex-direction: column; gap: 3px; flex-shrink: 0; }
+  .surface.a .nav { width: auto; border-right: 0; }
+  .nav .row { display: flex; align-items: center; gap: 9px; padding: 8px 9px; border-radius: 8px; cursor: pointer; }
+  .nav .row .ic { width: 18px; text-align: center; }
+  .nav .row .sub { margin-left: auto; color: var(--text2); font-size: 11px; }
+  .nav .row.on { background: var(--selTint); color: var(--info); }
+  .nav .row:hover { background: var(--tile); }
+  .nav .grp { color: var(--text2); font-size: 11px; text-transform: uppercase; letter-spacing: .5px; margin: 8px 9px 2px; }
+  .body { flex: 1; padding: 12px 14px; overflow: auto; display: flex; flex-direction: column; gap: 10px; }
+  .back { color: var(--info); font-size: 12px; cursor: pointer; }
+  .h { font-weight: 600; font-size: 14px; }
+  .dim { color: var(--text2); }
+  .card { background: var(--tile); border-radius: 10px; padding: 9px 11px; display: flex; flex-direction: column; gap: 7px; }
+  .kv { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 26px; }
+  .kv .l { display: flex; align-items: center; gap: 7px; }
+  .kv i.d { width: 8px; height: 8px; border-radius: 50%; }
+  .seg2 { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; font-size: 11.5px; }
+  .seg2 span { padding: 4px 9px; } .seg2 span + span { border-left: 1px solid var(--border); }
+  .seg2 span.on { background: var(--sel); color: #fff; }
+  .val { background: var(--input); border-radius: 6px; padding: 3px 9px; font-variant-numeric: tabular-nums; }
+  .btn { border: 1px solid var(--border); border-radius: 10px; padding: 5px 10px; font-size: 11.5px; }
+  .tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+  .tiles div { background: var(--scrim); border-radius: 8px; padding: 5px 7px; font-size: 11px; color: var(--text2); }
+  .tiles b { display: block; color: var(--text); font-size: 12.5px; }
+  .warn { color: var(--busy); font-size: 11.5px; }
+  .hide { display: none !important; }
+  table.inv { border-collapse: collapse; width: 100%; font-size: 13px; }
+  table.inv th, table.inv td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  table.inv th { color: var(--text2); font-weight: 500; }
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>Simple Mode's own Settings: sheet B, one window per device, bare minimum <span class="tag">proposed</span></h1>
+  <p class="note">The gear opens Simple Mode's Settings: only what the top 90 % of nights touch, never the full UI's form. Your pick B: a sheet over the image, sections on the left. Each device has its own window, and the same window opens from its dot in the top bar (toggle "From the device dot"): one piece of code, two places. iPad 6 at 1024×768, drawn at 75 %. Trimmed to the bare minimum for a successful night (KISS). Everything here is a mock; the values are examples.</p>
+
+  <div class="controls">
+    <div class="seg" role="group" aria-label="Where it opens">
+      <button data-v="b" aria-pressed="true">In Settings (gear)</button>
+      <button data-v="dot">From the device dot</button>
+    </div>
+    <div class="seg" role="group" aria-label="Section">
+      <button data-s="gear" aria-pressed="true">Devices</button>
+      <button data-s="camera">Camera</button>
+      <button data-s="mount">Mount</button>
+      <button data-s="focuser">Focuser</button>
+      <button data-s="wheel">Filter wheel</button>
+      <button data-s="guider">Guider</button>
+      <button data-s="site">Site</button>
+      <button data-s="storage">Storage</button>
+      <button data-s="night">End of night</button>
+      <button data-s="alerts">Alerts</button>
+      <button data-s="rig">Rig</button>
+    </div>
+    <label class="ctl">Sheet opacity <input type="range" id="sheetA" min="40" max="95" value="90"><output id="sheetAo">90 %</output></label>
+    <label class="ctl">Blur behind <input type="range" id="blur" min="0" max="20" value="5"><output id="bluro">5 px</output></label>
+    <div class="seg" role="group" aria-label="Behind">
+      <button data-bg="sky" aria-pressed="true">Dark sky</button>
+      <button data-bg="flat">Bright flat (worst case)</button>
+    </div>
+    <span class="contrast" id="contrast"></span>
+    <div class="seg" role="group" aria-label="Look">
+      <button data-n="day" aria-pressed="true">Normal</button>
+      <button data-n="night">Night mode</button>
+    </div>
+  </div>
+
+  <div class="ipad">
+    <div class="stars"></div>
+    <div class="strip"><span class="dot" data-dot="camera"><i></i>Cam</span><span class="dot" data-dot="mount"><i></i>Mount</span><span class="dot" data-dot="focuser"><i></i>Focus</span><span class="dot" data-dot="wheel"><i></i>EFW</span><span class="dot" data-dot="guider"><i style="background:var(--busy)"></i>Guide</span><span class="icons"><span>☾</span><span class="gear on">⚙</span></span></div>
+    <div class="lrail"><div class="rb"><span class="ic">◍</span>Sky</div><div class="rb"><span class="ic">ⓘ</span>Info</div><div class="rb"><span class="ic">▣</span>Library</div></div>
+    <div class="rrail"><b style="color:var(--text)">Preview</b><div class="shut"><i></i></div><div class="rb"><span class="ic">⚙</span>5 s</div></div>
+    <div class="estop">STOP</div>
+    <div class="veil" id="veil"></div>
+
+    <div class="surface b" id="surface">
+      <div class="nav" id="nav">
+        <div class="grp">Rig</div>
+        <div class="row" data-go="gear"><span class="ic">◉</span>Devices<span class="sub">4 of 5</span></div>
+        <div class="row dev" data-go="camera"><span class="ic" style="color:var(--ok)">●</span>Camera</div>
+        <div class="row dev" data-go="mount"><span class="ic" style="color:var(--ok)">●</span>Mount</div>
+        <div class="row dev" data-go="focuser"><span class="ic" style="color:var(--ok)">●</span>Focuser</div>
+        <div class="row dev" data-go="wheel"><span class="ic" style="color:var(--ok)">●</span>Filter wheel</div>
+        <div class="row dev" data-go="guider"><span class="ic" style="color:var(--busy)">●</span>Guider</div>
+        <div class="row" data-go="site"><span class="ic">⌖</span>Site<span class="sub">Auckland</span></div>
+        <div class="row" data-go="storage"><span class="ic">▤</span>Storage<span class="sub">212 GB free</span></div>
+        <div class="grp">Night</div>
+        <div class="row" data-go="night"><span class="ic">◐</span>End of night<span class="sub">Dawn · park</span></div>
+        <div class="row" data-go="alerts"><span class="ic">♪</span>Alerts<span class="sub">Sound on</span></div>
+        <div class="grp">App</div>
+        <div class="row" data-go="rig"><span class="ic">⌂</span>Rig<span class="sub">astro · Backyard</span></div>
+      </div>
+      <div class="body" id="body"></div>
+    </div>
+  </div>
+  <p class="note" id="caption" style="margin-top:12px"></p>
+
+  <section>
+    <h2>What's in it, and where it comes from</h2>
+    <table class="inv">
+      <tr><th>Place</th><th>Holds (bare minimum)</th><th>Cut, stays in the Advanced UI</th></tr>
+      <tr><td>Camera</td><td>Connect, cooler on/off, target, current temperature.</td><td>Gain (Preview's chip has it), warm-up (End of night has it), electronics.</td></tr>
+      <tr><td>Mount</td><td>Connect, tracking, park, meridian flip on/off.</td><td>Flip timing, refocus after flip, pointing readout, limits.</td></tr>
+      <tr><td>Focuser</td><td>Connect, position, four move buttons, refocus when it cools by N °C.</td><td>Frame-count and filter-change triggers, backlash.</td></tr>
+      <tr><td>Filter wheel</td><td>Connect, filter in place, tap a filter to move.</td><td>Renaming filters, offsets.</td></tr>
+      <tr><td>Guider</td><td>Connect, RMS, dither every N frames.</td><td>Graph (the bottom row has it), settle, tuning, calibration.</td></tr>
+      <tr><td>Site</td><td>Location (GPS or typed), time zone.</td><td>Clock check, horizon, Bortle/SQM.</td></tr>
+      <tr><td>Storage</td><td>Which drive, free space.</td><td>Copy to another disk, file names.</td></tr>
+      <tr><td>End of night</td><td>Stop at dawn / at a time / never, park, warm the camera.</td><td>Flats, safety policies.</td></tr>
+      <tr><td>Alerts</td><td>Safety alarm sound, silent delay.</td><td>Where alerts go (they're in-app only today).</td></tr>
+      <tr><td>Rig</td><td>System figures, Change profile / Change rig, permanent pier, Simple Mode switch, version, logs &amp; bug report.</td><td>Profile editing, wizard, sky data.</td></tr>
+    </table>
+    <p class="note" style="margin-top:12px">ASIAir's settings were the reference for the Gear details (its main camera, mount with meridian flip, EAF autofocus triggers, guiding dither, storage and Wi-Fi pages). Wi-Fi and power outputs aren't here: the rig's network is the Pi's, and Ara has no power-port control yet.</p>
+  </section>
+</div>
+<script>
+  const sections = {
+    gear: `<div class="h">Devices</div><div class="card">
+      <div class="kv"><span class="l"><i class="d" style="background:var(--ok)"></i>Camera · ASI2600MM</span><span class="btn">Disconnect</span></div>
+      <div class="kv"><span class="l"><i class="d" style="background:var(--ok)"></i>Mount · AM5</span><span class="btn">Disconnect</span></div>
+      <div class="kv"><span class="l"><i class="d" style="background:var(--ok)"></i>Focuser · EAF</span><span class="btn">Disconnect</span></div>
+      <div class="kv"><span class="l"><i class="d" style="background:var(--ok)"></i>Filter wheel · EFW 7</span><span class="btn">Disconnect</span></div>
+      <div class="kv"><span class="l"><i class="d" style="background:var(--busy)"></i>Guider · connecting…</span><span class="btn">Cancel</span></div>
+      <div class="kv"><span class="l"><i class="d" style="background:var(--err)"></i>Flat panel <span class="dim">· no answer</span></span><span class="btn">Reconnect</span></div></div>
+      <div class="dim" style="font-size:11.5px">Tap a device for its window (the same one its dot in the top bar opens). Ara connects the profile's gear and reconnects what drops; a device that fails shows red with the reason and Reconnect. Connect and Disconnect live here, on the Gear page only; a device's own window has none. Changing which device is which stays in the Advanced UI.</div>`,
+    camera: `<div class="winhead"><i class="d" style="width:9px;height:9px;border-radius:50%;background:var(--ok)"></i><span class="h">Camera · ASI2600MM</span></div><div class="card">
+      <div class="kv"><span>Cooler</span><span class="seg2"><span class="on">On</span><span>Off</span></span></div>
+      <div class="kv"><span>Target</span><span class="val">−10 °C</span></div>
+      <div class="kv"><span class="dim">Now</span><span>−9.8 °C · 34 % power</span></div></div>`,
+    mount: `<div class="winhead"><i class="d" style="width:9px;height:9px;border-radius:50%;background:var(--ok)"></i><span class="h">Mount · AM5</span></div><div class="card">
+      <div class="kv"><span>Tracking</span><span class="seg2"><span class="on">On</span><span>Off</span></span></div>
+      <div class="kv"><span>Park</span><span class="btn">Park now</span></div></div>
+      <div class="card"><div class="kv"><span>Meridian flip</span><span class="seg2"><span class="on">Auto</span><span>Off</span></span></div></div>`,
+    focuser: `<div class="winhead"><i class="d" style="width:9px;height:9px;border-radius:50%;background:var(--ok)"></i><span class="h">Focuser · EAF</span></div>
+      <div class="card"><div class="kv"><span class="dim">Position</span><span>12 480 · 8.4 °C</span></div>
+      <div class="kv"><span>Move</span><span style="display:flex;gap:6px"><span class="btn">«</span><span class="btn">‹</span><span class="btn">›</span><span class="btn">»</span></span></div></div>
+      <div class="card"><div class="kv"><span>Refocus when it cools by</span><span class="val">2 °C</span></div></div>`,
+    wheel: `<div class="winhead"><i class="d" style="width:9px;height:9px;border-radius:50%;background:var(--ok)"></i><span class="h">Filter wheel · EFW 7</span></div>
+      <div class="card"><div class="kv"><span class="dim">In place</span><span>L</span></div>
+      <div class="kv"><span>Filters</span><span style="display:flex;gap:4px"><span class="val">L</span><span class="val">R</span><span class="val">G</span><span class="val">B</span><span class="val">Ha</span><span class="val">OIII</span><span class="val">SII</span></span></div></div>
+      <div class="dim" style="font-size:11.5px">Tap a filter to move to it. Renaming filters stays in the Advanced UI.</div>`,
+    guider: `<div class="winhead"><i class="d" style="width:9px;height:9px;border-radius:50%;background:var(--busy)"></i><span class="h">Guider · connecting…</span></div>
+      <div class="card"><div class="kv"><span class="dim">RMS</span><span>0.62″</span></div></div>
+      <div class="card"><div class="kv"><span>Dither every</span><span class="val">3 frames</span></div></div>`,
+    site: `<div class="h">Site</div><div class="card">
+      <div class="kv"><span>Location</span><span>−36.85°, 174.76°</span></div>
+      <div class="kv"><span class="dim">From</span><span class="seg2"><span class="on">This iPad's GPS</span><span>Typed</span></span></div>
+      <div class="kv"><span>Time zone</span><span>Pacific/Auckland</span></div></div>`,
+    storage: `<div class="h">Storage</div><div class="card">
+      <div class="kv"><span>Frames go to</span><span class="val">USB · Samsung T7 ▾</span></div>
+      <div class="kv"><span class="dim">Free</span><span>212 GB of 466 GB</span></div></div>`,
+    night: `<div class="h">End of night</div><div class="card">
+      <div class="kv"><span>Stop</span><span class="seg2"><span class="on">At dawn</span><span>At a time</span><span>Never</span></span></div>
+      <div class="kv"><span class="dim">Tonight</span><span>05:12 (astronomical dawn)</span></div>
+      <div class="kv"><span>Then park</span><span class="seg2"><span class="on">On</span><span>Off</span></span></div>
+      <div class="kv"><span>Warm the camera</span><span class="seg2"><span class="on">On</span><span>Off</span></span></div></div>`,
+    alerts: `<div class="h">Alerts</div><div class="card">
+      <div class="kv"><span>Safety alarm sound</span><span class="seg2"><span class="on">On</span><span>Off</span></span></div>
+      <div class="kv"><span>Silent delay</span><span class="val">5 s</span></div></div>`,
+    rig: `<div class="h">Rig</div><div class="tiles"><div>Storage<b>212 GB</b></div><div>CPU<b>14 %</b></div><div>Memory<b>410 MB</b></div><div>Up<b>2 h 10</b></div></div>
+      <div class="card"><div class="kv"><span class="dim">Rig</span><span>astro</span></div><div class="kv"><span class="dim">Profile</span><span>Backyard Rig</span></div>
+      <div class="kv"><span class="btn">Change profile</span><span class="btn">Change rig</span></div></div>
+      <div class="card"><div class="kv"><span>Permanent pier</span><span class="seg2"><span>On</span><span class="on">Off</span></span></div>
+      <div class="kv"><span>Simple Mode</span><span class="seg2"><span class="on">On</span><span>Off</span></span></div></div>
+      <div class="kv dim" style="font-size:11.5px"><span>Version 0.0.1</span><span class="back">Logs &amp; bug report ›</span></div>`,
+  };
+  const devices = ['camera','mount','focuser','wheel','guider'];
+  const captions = {
+    b: 'In Settings: a sheet over the dimmed image, sections on the left (each device listed under Gear), the section or device window on the right. A tap outside or Close returns to the image.',
+    dot: 'From the device dot: tapping a dot in the top bar opens that device\'s window on its own, under the dot, with the image still visible. It is the same widget as the right pane in Settings.',
+  };
+  let v = 'b', s = 'gear';
+  function render() {
+    if (v === 'dot' && !devices.includes(s)) s = 'camera';
+    document.querySelectorAll('[data-v]').forEach(b => b.setAttribute('aria-pressed', b.dataset.v === v));
+    document.querySelectorAll('[data-s]').forEach(b => b.setAttribute('aria-pressed', b.dataset.s === s));
+    const surface = document.getElementById('surface');
+    surface.className = 'surface ' + v;
+    document.getElementById('veil').classList.toggle('hide', v !== 'b');
+    document.querySelectorAll('[data-dot]').forEach(d => d.classList.toggle('hot', v === 'dot' && d.dataset.dot === s));
+    const nav = document.getElementById('nav'), body = document.getElementById('body');
+    nav.querySelectorAll('.row').forEach(r => r.classList.toggle('on', r.dataset.go === s));
+    body.innerHTML = sections[s];
+    if (v === 'dot') { const i = devices.indexOf(s); surface.style.left = (60 + i * 52) + 'px'; } else surface.style.left = '';
+    document.getElementById('caption').textContent = captions[v];
+    body.querySelectorAll('[data-go]').forEach(e => e.onclick = () => { s = e.dataset.go; render(); });
+  }
+  document.querySelectorAll('[data-dot]').forEach(d => d.onclick = () => { v = 'dot'; s = d.dataset.dot; render(); });
+  document.querySelectorAll('[data-v]').forEach(b => b.onclick = () => { v = b.dataset.v; render(); });
+  document.querySelectorAll('[data-s]').forEach(b => b.onclick = () => { s = b.dataset.s; render(); });
+  document.querySelectorAll('[data-n]').forEach(b => b.onclick = () => { document.body.classList.toggle('night', b.dataset.n === 'night'); document.querySelectorAll('[data-n]').forEach(x => x.setAttribute('aria-pressed', x === b)); });
+  document.getElementById('nav').querySelectorAll('[data-go]').forEach(e => e.onclick = () => { s = e.dataset.go; render(); });
+  render();
+  // Contrast of the dimmest text (#A0A0A0) on the sheet over the worst background.
+  const lum = v => { v /= 255; return v <= .03928 ? v / 12.92 : Math.pow((v + .055) / 1.055, 2.4); };
+  function looks() {
+    const a = document.getElementById('sheetA').value / 100, blur = document.getElementById('blur').value;
+    const ipad = document.querySelector('.ipad');
+    ipad.style.setProperty('--sheetA', a);
+    ipad.style.setProperty('--blur', blur + 'px');
+    document.getElementById('sheetAo').textContent = Math.round(a * 100) + ' %';
+    document.getElementById('bluro').textContent = blur + ' px';
+    const flat = ipad.classList.contains('flat');
+    const under = (flat ? 216 : 18) * (1 - .35);              // the image under the veil
+    const bg = 26 * a + under * (1 - a);                       // the sheet over it
+    const c = (lum(160) + .05) / (lum(bg) + .05);
+    const ok = c >= 4.5;
+    document.getElementById('contrast').innerHTML = `Dimmest text: <b style="color:${ok ? 'var(--ok)' : 'var(--errText)'}">${c.toFixed(1)}:1</b> ${ok ? '(AA ✓)' : '(below AA 4.5:1)'} on ${flat ? 'a white flat' : 'the sky'}`;
+  }
+  document.getElementById('sheetA').oninput = looks;
+  document.getElementById('blur').oninput = looks;
+  document.querySelectorAll('[data-bg]').forEach(b => b.onclick = () => {
+    document.querySelector('.ipad').classList.toggle('flat', b.dataset.bg === 'flat');
+    document.querySelectorAll('[data-bg]').forEach(x => x.setAttribute('aria-pressed', x === b));
+    looks();
+  });
+  looks();
+</script>
+</body>
+</html>

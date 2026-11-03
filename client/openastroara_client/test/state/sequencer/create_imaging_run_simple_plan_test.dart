@@ -7,6 +7,9 @@ import 'package:openastroara/models/sequence/imaging_run_body.dart';
 import 'package:openastroara/services/sequence_api.dart';
 import 'package:openastroara/state/sequencer/create_imaging_run.dart';
 import 'package:openastroara/state/sequencer/sequence_list_state.dart';
+import 'package:openastroara/models/focuser_status.dart';
+import 'package:openastroara/state/equipment/focuser_state.dart';
+import 'package:openastroara/state/settings/autofocus_settings_state.dart';
 
 /// Simple Mode's Run hands createImagingRun a finished plan: no plan chooser,
 /// its own sub length and frame count, and a run of its own even with a
@@ -31,6 +34,13 @@ class _SeqClient implements SequenceClient {
   @override
   void noSuchMethod(Invocation invocation) =>
       throw UnimplementedError('${invocation.memberName}');
+}
+
+// A rig with a focuser: the temperature trigger is gated on one.
+class _Focuser extends FocuserNotifier {
+  @override
+  Future<FocuserStatus?> build() async =>
+      FocuserStatus.fromJson({'device_id': 'd', 'name': 'EAF', 'state': 'connected'});
 }
 
 Future<ImagingRunResult?> _run(
@@ -122,4 +132,32 @@ void main() {
     expect(json, contains('"ExposureTime":120.0'));
     expect(json, contains('"Iterations":30'));
   });
+
+  // The profile's refocus-on-temperature amount reaches the run, plan or not.
+  for (final withPlan in [true, false]) {
+    testWidgets('the profile\'s temperature refocus becomes the run\'s trigger (plan: $withPlan)', (
+      tester,
+    ) async {
+      container.dispose();
+      container = ProviderContainer(
+        overrides: [
+          sequenceApiProvider.overrideWith((ref) => seq),
+          focuserProvider.overrideWith(_Focuser.new),
+        ],
+      );
+      container.read(autofocusSettingsProvider.notifier).setTriggerTempDeltaC(1.5);
+      await _run(
+        tester,
+        container,
+        filterPlan: withPlan
+            ? const [FilterPlanStep(filterName: 'L', exposureSeconds: 300, frameCount: 40)]
+            : null,
+        exposureSeconds: withPlan ? null : 120,
+        frameCount: withPlan ? null : 30,
+      );
+      final json = jsonEncode(seq.bodies.single);
+      expect(json, contains('AutofocusAfterTemperatureChange'));
+      expect(json, contains('"Amount":1.5'));
+    });
+  }
 }

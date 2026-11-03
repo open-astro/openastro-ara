@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../state/sequencer/sequence_list_state.dart';
 import '../state/ws/ws_providers.dart';
 import '../util/friendly_error.dart';
+import '../l10n/l10n.dart';
 
 /// §48 "capture calibration tonight?" surfacing. Wraps the app shell's body
 /// and listens for the daemon's `sequence.auto_flats_prompt` event (emitted
@@ -69,7 +70,7 @@ class _AutoFlatsPromptListenerState
               if (!mounted) return;
               ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                   content:
-                      Text(friendlyError(e, action: 'send the calibration choice'))));
+                      Text(friendlyError(context.l10n, e, action: 'send the calibration choice'))));
             }
           },
         ),

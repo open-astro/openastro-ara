@@ -17,6 +17,7 @@ import '../../state/guider/guider_state.dart';
 import '../../state/guider/pa_residual_state.dart';
 import '../../state/guider/live_guiding_state.dart';
 import '../../state/settings/phd2_settings_state.dart';
+import '../../l10n/l10n.dart';
 import '../../theme/ara_colors.dart';
 import '../../util/guide_graph_stats.dart';
 import '../../util/phd2_guide_log.dart';
@@ -121,7 +122,7 @@ class GuidingStrip extends ConsumerWidget {
                       style: Theme.of(context).textTheme.titleSmall),
                   const SizedBox(width: 12),
                   Text(
-                    stateLabel(status),
+                    stateLabel(context.l10n, status),
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           color: _stateColor(status),
                         ),
@@ -207,13 +208,13 @@ class GuidingStrip extends ConsumerWidget {
   /// The phase in the one shared wording (`guiderRuntimeText`), lower case,
   /// with the calibration leg while calibrating (#1364 item 6). Only an
   /// unpolled runtime reads differently: "connected", not "unknown".
-  static String stateLabel(GuiderStatus? status) {
+  static String stateLabel(AppLocalizations l, GuiderStatus? status) {
     if (status == null || !status.isConnected) return 'disconnected';
     if (status.runtimeState == GuiderRuntimeState.unknown) return 'connected';
     // The leg and step while the guider calibrates — its own page only says
     // "guiding" for the same minutes (2026-10-16).
-    final base = guiderRuntimeText(status.runtimeState).toLowerCase();
-    final leg = status.runtimeState == GuiderRuntimeState.calibrating ? status.calibrationText : null;
+    final base = guiderRuntimeText(l, status.runtimeState).toLowerCase();
+    final leg = status.runtimeState == GuiderRuntimeState.calibrating ? status.calibrationText(l) : null;
     return leg == null ? base : '$base · $leg';
   }
 

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' show Locale;
 
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
@@ -7,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../services/client_gps_prefs_service.dart';
 import '../services/serial_gps_source.dart';
 import '../util/friendly_error.dart';
+import '../l10n/l10n.dart';
 import '../util/nmea_parser.dart';
 import 'time_sync_state.dart';
 
@@ -259,7 +261,7 @@ class ClientGpsNotifier extends AsyncNotifier<ClientGpsStatus> {
               '${others.isEmpty ? '' : ' — the GPS may be on ${others.join(' or ')}; choose it in GPS on this computer.'}'
           // The read worked; the daemon refused the push. A 422 here is a rig running a
           // daemon that predates client-side GPS (it does not know source gps-client).
-          : 'Fix read, but the rig refused it: ${friendlyError(e, action: 'push the GPS fix')}'
+          : 'Fix read, but the rig refused it: ${friendlyError(lookupAppLocalizations(const Locale('en')), e, action: 'push the GPS fix')}'
               '${e is DioException && e.response?.statusCode == 422 ? ' — update Ara Server on the rig; this daemon predates GPS on this computer.' : ''}';
       debugPrint('[client-gps] $error');
     }

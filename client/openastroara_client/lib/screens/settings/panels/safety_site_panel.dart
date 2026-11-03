@@ -8,6 +8,7 @@ import '../../../state/settings/panel_save_registry.dart';
 import '../../../state/settings/custom_horizon_state.dart';
 import '../../../state/settings/site_settings_state.dart';
 import '../../../util/friendly_error.dart';
+import '../../../l10n/l10n.dart';
 import '../../../util/gps_site_fill.dart';
 import '../../../widgets/settings/editable_field.dart';
 import '../../../widgets/settings/settings_row.dart';
@@ -49,7 +50,7 @@ class _SafetySitePanelState extends ConsumerState<SafetySitePanel>
       if (mounted) {
         setState(
           () =>
-              _lastError = friendlyError(e, action: 'load your saved settings'),
+              _lastError = friendlyError(context.l10n, e, action: 'load your saved settings'),
         );
       }
     }
@@ -84,8 +85,8 @@ class _SafetySitePanelState extends ConsumerState<SafetySitePanel>
       setState(
         () => _lastError = siteSaved
             ? 'Site preferences saved, but the horizon skyline was not. '
-                '${friendlyError(e, action: 'save the horizon skyline')}'
-            : friendlyError(e, action: 'save that'),
+                '${friendlyError(context.l10n, e, action: 'save the horizon skyline')}'
+            : friendlyError(context.l10n, e, action: 'save that'),
       );
       messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
     }

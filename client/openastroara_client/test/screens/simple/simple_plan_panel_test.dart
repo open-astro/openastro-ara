@@ -1,11 +1,17 @@
 import 'dart:async';
 
 import 'package:flutter/gestures.dart' show PointerDeviceKind, kSecondaryMouseButton;
+import 'dart:convert';
+import 'package:openastroara/state/imaging/exposure_state.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/state/simple_messages_state.dart';
+import 'package:openastroara/services/dso_catalog_service.dart';
+import 'package:openastroara/state/sky_atlas/dso_catalog_state.dart';
 import 'package:dio/dio.dart';
 import 'package:openastroara/models/sequence/imaging_run_body.dart';
 import 'package:openastroara/models/sequence/sequence_summary.dart';
@@ -14,6 +20,7 @@ import 'package:openastroara/models/sequence/instruction_catalog.dart' show wait
 import 'package:openastroara/util/tonight_sky_local.dart' show darkStart;
 import 'package:openastroara/models/sky_model_calibration.dart';
 import 'package:openastroara/screens/simple/simple_plan_panel.dart';
+import 'package:openastroara/l10n/l10n.dart';
 import 'package:openastroara/services/sequence_api.dart';
 import 'package:openastroara/services/tonight_sky_api.dart';
 import 'package:openastroara/theme/ara_colors.dart';
@@ -39,6 +46,9 @@ import 'package:openastroara/state/library/live_library_state.dart';
 const _m42 = PlanetariumSelection(
     name: 'M42', kind: 'Nebula', raHours: 5.59, decDeg: -5.39, raJ2000Hours: 5.59, decJ2000Deg: -5.39, altDeg: 30, maxAltDeg: 45);
 
+const _m45 = PlanetariumSelection(
+    name: 'M45', kind: 'Cluster', raHours: 3.79, decDeg: 24.1, raJ2000Hours: 3.79, decJ2000Deg: 24.1, altDeg: 40, maxAltDeg: 60);
+
 const _m31 = PlanetariumSelection(
     name: 'M31', kind: 'Galaxy', raHours: 0.73, decDeg: 41.4, raJ2000Hours: 0.71, decJ2000Deg: 41.27, altDeg: 62.4, maxAltDeg: 74.2);
 
@@ -52,6 +62,11 @@ const _lrgb = [
 
 /// The daemon as the Run mode sees it: create, start and the lifecycle calls
 /// are recorded; the run state is whatever the test sets.
+class _Gain150 extends ExposureController {
+  @override
+  ExposureParams build() => super.build().copyWith(gain: 150);
+}
+
 class _Seq implements SequenceClient {
   final calls = <String>[];
   SequenceRunStateInfo? runState;
@@ -237,6 +252,39 @@ Future<ProviderContainer> _pump(WidgetTester tester, _Seq seq, Widget child,
   return container;
 }
 
+final _en = lookupAppLocalizations(const Locale('en'));
+
+
+/// Tabs (at most [max] times) until keyboard focus is inside the widget keyed [k].
+Future<bool> _tabTo(WidgetTester tester, Key k, {int max = 40}) async {
+  bool inside() {
+    var found = false;
+    final ctx = FocusManager.instance.primaryFocus?.context;
+    if (ctx == null) return false;
+    if (ctx.widget.key == k) return true;
+    ctx.visitAncestorElements((e) {
+      if (e.widget.key == k) found = true;
+      return !found;
+    });
+    return found;
+  }
+  for (var i = 0; i < max && !inside(); i++) {
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pump();
+  }
+  return inside();
+}
+
+
+/// Tabs (at most [max] times) until the focused node is the one labelled [label].
+Future<bool> _tabToLabel(WidgetTester tester, String label, {int max = 60}) async {
+  for (var i = 0; i < max && FocusManager.instance.primaryFocus?.debugLabel != label; i++) {
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pump();
+  }
+  return FocusManager.instance.primaryFocus?.debugLabel == label;
+}
+
 void main() {
   test('the first plan: LRGB from the set, one unnamed row without a choice', () {
     final lrgb = simpleRunDefaultPlan(_lrgb, 300);
@@ -336,16 +384,16 @@ void main() {
   });
 
   test('simpleTargetStatus: up, below with its rise, never rises', () {
-    expect(simpleTargetStatus(_m31), '62° up · max 74°');
+    expect(simpleTargetStatus(_m31, _en), '62° up · max 74°');
     expect(
         simpleTargetStatus(PlanetariumSelection(
             name: 'M33', kind: 'Galaxy', raHours: 1.6, decDeg: 30.8, raJ2000Hours: 1.56, decJ2000Deg: 30.66,
-            altDeg: -12, maxAltDeg: 60, rise: DateTime(2026, 11, 2, 22, 40))),
+            altDeg: -12, maxAltDeg: 60, rise: DateTime(2026, 11, 2, 22, 40)), _en),
         'Below your horizon · rises 22:40');
     expect(
         simpleTargetStatus(const PlanetariumSelection(
             name: 'NGC 104', kind: 'Cluster', raHours: 0.4, decDeg: -72, raJ2000Hours: 0.4, decJ2000Deg: -72,
-            altDeg: -40, maxAltDeg: -20)),
+            altDeg: -40, maxAltDeg: -20), _en),
         'Never rises here');
   });
 
@@ -384,11 +432,11 @@ void main() {
     final up = TonightSkyObject(
         id: 'ngc7000', name: 'NGC 7000', type: 'Nebula', magnitude: 4, raDeg: 314.7, decDeg: 44.3,
         altitudeDeg: 71.4, maxAltitudeDeg: 80, windowEndUtc: DateTime.utc(2026, 11, 3, 1, 40));
-    expect(simpleSuggestionLine(up), 'Nebula · 71° up');
+    expect(simpleSuggestionLine(_en, up), 'Nebula · 71° up');
     final later = TonightSkyObject(
         id: 'm45', name: 'M45', type: 'Cluster', magnitude: 1.6, raDeg: 56.9, decDeg: 24.1,
         altitudeDeg: -5, maxAltitudeDeg: 70, windowStartUtc: DateTime(2026, 11, 2, 21, 50));
-    expect(simpleSuggestionLine(later), 'Cluster · rises 21:50');
+    expect(simpleSuggestionLine(_en, later), 'Cluster · rises 21:50');
     final sel = simpleSelectionOf(up);
     expect(sel.name, 'NGC 7000');
     expect(sel.raJ2000Hours, closeTo(314.7 / 15, 1e-9));
@@ -466,6 +514,110 @@ void main() {
       await tester.pump();
       expect(showSky, 1, reason: 'the search runs in the planetarium');
       expect(c.read(planetariumSearchProvider), 'M42');
+    });
+
+    testWidgets('the filters are chips: a tap adds a row, another tap takes it out; the last one stays',
+        (tester) async {
+      final c = await _pump(tester, _Seq(),
+          SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}, onLibrary: () {}));
+      List<String> rows() => [for (final s in c.read(simpleRunPlanProvider)) s.filterName];
+      final before = rows();
+      final f = before.last;
+      await tester.tap(find.byKey(Key('simple-run-filter-$f')));
+      await tester.pump();
+      expect(rows(), [...before]..remove(f));
+      await tester.tap(find.byKey(Key('simple-run-filter-$f')));
+      await tester.pump();
+      expect(rows(), before);
+      expect(find.text('Add filter'), findsNothing, reason: 'the chips replace the menu');
+      for (final f in [...before]) {
+        await tester.tap(find.byKey(Key('simple-run-filter-$f')));
+        await tester.pump();
+      }
+      expect(rows(), hasLength(1), reason: 'a run needs something to take');
+    });
+
+    testWidgets('Frames opens a wheel; spinning it and Done sets the count', (tester) async {
+      final c = await _pump(tester, _Seq(),
+          SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}, onLibrary: () {}));
+      await tester.tap(find.byKey(const Key('simple-run-frames-0')));
+      await tester.pumpAndSettle();
+      final wheel = find.byType(CupertinoPicker);
+      expect(wheel, findsOneWidget);
+      tester.widget<CupertinoPicker>(wheel).onSelectedItemChanged!(0); // 5 frames
+      await tester.tap(find.text('Done'));
+      await tester.pumpAndSettle();
+      expect(c.read(simpleRunPlanProvider).first.frameCount, 5);
+      expect(wheel, findsNothing);
+    });
+
+    testWidgets('a keyboard reaches Frames and Enter opens its wheel (WCAG 2.1.1)', (tester) async {
+      await _pump(tester, _Seq(),
+          SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}, onLibrary: () {}));
+      expect(await _tabTo(tester, const Key('simple-run-frames-0')), isTrue, reason: 'Tab reaches it like the other tiles');
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pumpAndSettle();
+      expect(find.byType(CupertinoPicker), findsOneWidget);
+    });
+
+    testWidgets('the Frames wheel turns with the arrow keys: Enter opens it focused, Down is the next count', (tester) async {
+      final c = await _pump(tester, _Seq(),
+          SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}, onLibrary: () {}));
+      final before = c.read(simpleRunPlanProvider).first.frameCount;
+      expect(await _tabTo(tester, const Key('simple-run-frames-0')), isTrue);
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pumpAndSettle();
+      expect(FocusManager.instance.primaryFocus?.debugLabel, 'simple-wheel-Frames', reason: 'focus lands on the wheel');
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Done'));
+      await tester.pumpAndSettle();
+      expect(c.read(simpleRunPlanProvider).first.frameCount, greaterThan(before));
+    });
+
+    testWidgets('a plan starts from the camera\'s gain and keeps its own; the run shoots at the plan\'s', (tester) async {
+      final seq = _Seq();
+      final c = await _pump(tester, seq,
+          SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}, onLibrary: () {}),
+          overrides: [exposureControllerProvider.overrideWith(_Gain150.new)]);
+      final slider = find.byKey(const Key('simple-run-gain'));
+      expect(tester.widget<Slider>(slider).value, 150, reason: 'seeded from the camera when the sheet opens');
+      tester.widget<Slider>(slider).onChanged!(200);
+      tester.widget<Slider>(slider).onChangeEnd!(200);
+      await tester.pump();
+      expect(c.read(exposureControllerProvider).gain, 150, reason: 'the camera keeps its gain');
+      await tester.tap(find.byKey(const Key('simple-run-queue')));
+      await tester.pumpAndSettle();
+      expect(jsonEncode(seq.bodies['seq-1']), contains('"Gain":200'));
+      expect(jsonEncode(seq.bodies['seq-1']), isNot(contains('"Gain":150')));
+      expect(c.read(simpleRunProvider).targets.single.gain, 200, reason: 'kept with the target, for an edit');
+    });
+
+    testWidgets('typing offers matching objects as you go; tapping one searches it', (tester) async {
+      var showSky = 0;
+      final c = await _pump(
+          tester,
+          _Seq(),
+          SimpleRunSheet(onShowSky: () => showSky++, onPickInSky: () {}, onCreated: () {}, onLibrary: () {}),
+          sel: null,
+          overrides: [
+            bundledCatalogProvider.overrideWith((ref) async => const [
+                  PlanningDso(id: 'NGC0224', name: 'Andromeda Galaxy', type: 'G', magnitude: 3.4, raDeg: 10.7, decDeg: 41.3, aliases: ['M 31']),
+                  PlanningDso(id: 'NGC0598', name: 'Triangulum Galaxy', type: 'G', magnitude: 5.7, raDeg: 23.5, decDeg: 30.7, aliases: ['M 33']),
+                ]),
+          ]);
+      await tester.enterText(find.byKey(const Key('simple-run-search')), 'm3');
+      await tester.pump();
+      await tester.pump();
+      expect(find.byKey(const Key('simple-run-suggestion-0')), findsOneWidget);
+      expect(find.textContaining('M 31'), findsOneWidget);
+      expect(find.textContaining('Andromeda Galaxy'), findsOneWidget, reason: 'the common name beside the designation');
+      expect(tester.getSize(find.byKey(const Key('simple-run-suggestion-0'))).height, greaterThanOrEqualTo(44));
+      await tester.tap(find.textContaining('M 31'));
+      await tester.pump();
+      expect(c.read(planetariumSearchProvider), 'M 31');
+      expect(showSky, 1);
+      expect(find.byKey(const Key('simple-run-suggestion-0')), findsNothing, reason: 'the list closes on a pick');
     });
 
     testWidgets('Add to queue creates the run without starting it and keeps the sheet up for the next pick; again it appends',
@@ -561,6 +713,24 @@ void main() {
         await tester.tap(find.byKey(const Key('simple-run-start')));
         await tester.pumpAndSettle();
         expect(seq.calls, ['create M31', 'start seq-1'], reason: 'starting now leaves the plan as it was');
+      });
+
+      testWidgets('the start-time wheel takes the arrow keys: Down is 5 minutes later', (tester) async {
+        await _pump(tester, _Seq(),
+            SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}, onLibrary: () {}),
+            overrides: overrides);
+        await tester.tap(find.byKey(const Key('simple-run-pick-time')));
+        await tester.pump();
+        expect(await _tabToLabel(tester, 'simple-run-time-wheel'), isTrue);
+        // The wheel starts at dark on its 5-minute grid.
+        final grid = dark.subtract(Duration(minutes: dark.minute % 5));
+        await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+        await tester.pumpAndSettle();
+        expect(go(tester), 'Start at ${hhmm(grid.add(const Duration(minutes: 5)))}');
+        await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+        await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+        await tester.pumpAndSettle();
+        expect(go(tester), 'Start at ${hhmm(grid.subtract(const Duration(minutes: 5)))}');
       });
     });
 
@@ -666,8 +836,9 @@ void main() {
     await _pump(tester, _Seq(),
         SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}, onLibrary: () {}),
         filters: _duo);
-    _whole(tester, find.text('L-enhance'));
-    _whole(tester, find.text('L-eXtreme'));
+    // .last: the row (the chips above name the filters too).
+    _whole(tester, find.text('L-enhance').last);
+    _whole(tester, find.text('L-eXtreme').last);
   });
 
   testWidgets('the plan square shows the catalog tag; the sheet keeps the whole name', (tester) async {
@@ -715,7 +886,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(c.read(selectedSettingsPanelProvider), 'session.storage');
     expect(c.read(selectedTabIndexProvider), kOptionsTabIndex);
-    expect(prefs.value, isFalse, reason: 'Simple Mode left');
+    expect(prefs.value, isTrue, reason: 'Settings opens over Simple Mode (the shell shows it)');
   });
 
   testWidgets('Night done: how long, how it ended, where it stopped, and the frames the library filed per filter',
@@ -830,6 +1001,55 @@ void main() {
       await tester.pumpAndSettle();
       expect(seq.targets('seq-1'), ['M31']);
       expect(c.read(simpleRunProvider).targets.map((t) => t.name), ['M31']);
+      await tester.pump(const Duration(seconds: 7)); // the Undo pill fades
+    });
+
+    Future<(ProviderContainer, _Seq)> queueOfThree(WidgetTester tester) async {
+      final seq = _Seq();
+      final c = await _pump(
+          tester,
+          seq,
+          SingleChildScrollView(
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}, onLibrary: () {}),
+              SimpleRunPanel(onAdd: () {}, onEdit: (_) {}),
+            ]),
+          ));
+      await create(tester);
+      await pick(tester, c, _m42);
+      await create(tester);
+      await pick(tester, c, _m45);
+      await create(tester);
+      expect(seq.targets('seq-1'), ['M31', 'M42', 'M45']);
+      return (c, seq);
+    }
+
+    testWidgets('a swipe left removes a queued target; Undo puts it back where it was', (tester) async {
+      final (c, seq) = await queueOfThree(tester);
+      await tester.drag(find.byKey(const Key('simple-run-edit-0')), const Offset(-400, 0));
+      await tester.pumpAndSettle();
+      expect(seq.targets('seq-1'), ['M42', 'M45']);
+      expect(c.read(simpleRunProvider).targets.map((t) => t.name), ['M42', 'M45']);
+      final pill = c.read(simpleMessagesProvider).single;
+      expect(pill.title, 'M31 removed');
+      expect(pill.actions.single.label, 'Undo');
+      c.read(simpleMessagesProvider.notifier).dismiss(pill.id); // what the pill's Undo does first
+      pill.actions.single.onPressed();
+      await tester.pumpAndSettle();
+      expect(seq.targets('seq-1'), ['M31', 'M42', 'M45']);
+      expect(c.read(simpleRunProvider).targets.map((t) => t.name), ['M31', 'M42', 'M45']);
+    });
+
+    testWidgets('queued targets reorder by dragging their handle; the rig follows', (tester) async {
+      final (c, seq) = await queueOfThree(tester);
+      expect(find.byKey(const Key('simple-run-drag-0')), findsOneWidget, reason: 'a visible handle');
+      await c.read(simpleRunProvider.notifier).reorder(0, 2);
+      await tester.pumpAndSettle();
+      expect(seq.targets('seq-1'), ['M42', 'M45', 'M31']);
+      expect(c.read(simpleRunProvider).targets.map((t) => t.name), ['M42', 'M45', 'M31']);
+      await c.read(simpleRunProvider.notifier).reorder(2, 0);
+      await tester.pumpAndSettle();
+      expect(seq.targets('seq-1'), ['M31', 'M42', 'M45']);
     });
 
     testWidgets('editing a queued target: the sheet edits its rows only; Save updates it in place', (tester) async {
