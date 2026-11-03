@@ -115,6 +115,10 @@ class _Pill extends ConsumerWidget {
         AraColors.accentBusy,
         AraColors.accentBusy,
       ),
+      SimpleMessageKind.warning => (
+        AraColors.accentWarning,
+        AraColors.accentWarning,
+      ),
     };
     final reduced = MediaQuery.disableAnimationsOf(context);
     return Semantics(
@@ -175,7 +179,8 @@ class _Pill extends ConsumerWidget {
                       semanticsLabel: context.l10n.pillsMoreSemantics(more!),
                     ),
                   ),
-                if (m.kind == SimpleMessageKind.error || m.stays)
+                if (m.kind == SimpleMessageKind.error ||
+                    m.kind == SimpleMessageKind.warning)
                   IconButton(
                     tooltip: context.l10n.pillsDismiss,
                     icon: const Icon(Icons.close, size: 18),

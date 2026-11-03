@@ -164,7 +164,8 @@ class AutopilotNotifier extends Notifier<AutopilotStep?> {
   /// running stops it: it moves the mount, and its stop button leaves the
   /// screen with the step. Done has already finished it.
   void _endPolar() {
-    if (_polarFinished || !simplePolarActive(ref.read(polarAlignLiveProvider))) {
+    if (_polarFinished ||
+        !simplePolarActive(ref.read(polarAlignLiveProvider))) {
       return;
     }
     final api = ref.read(polarAlignApiProvider);
@@ -191,47 +192,53 @@ class AutopilotStrip extends ConsumerWidget {
     final aligned =
         ref.watch(setupPolarAlignStateProvider) == SetupStepState.done ||
         (ref.watch(simplePermanentPierProvider).value ?? false);
-    return SimplePanel(
-      key: const Key('autopilot-strip'),
-      padding: const EdgeInsets.symmetric(horizontal: AraSpace.s8),
-      child: SizedBox(
-        height: 48,
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            for (final s in AutopilotStep.values) ...[
-              if (s.index > 0)
-                const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 2),
-                  child: Icon(
-                    Icons.chevron_right,
-                    size: 16,
-                    color: AraColors.textDisabled,
+    // shortcut: on a window narrower than the strip (a one-third Split View) it
+    // shrinks to fit rather than overflowing by ~125 px; the phone layout
+    // (ALP-4865) should drop the labels of the steps behind and ahead instead.
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      child: SimplePanel(
+        key: const Key('autopilot-strip'),
+        padding: const EdgeInsets.symmetric(horizontal: AraSpace.s8),
+        child: SizedBox(
+          height: 48,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (final s in AutopilotStep.values) ...[
+                if (s.index > 0)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 2),
+                    child: Icon(
+                      Icons.chevron_right,
+                      size: 16,
+                      color: AraColors.textDisabled,
+                    ),
                   ),
+                _Step(
+                  step: s,
+                  current: step,
+                  done: switch (s) {
+                    AutopilotStep.focus => focused,
+                    AutopilotStep.polarAlign => aligned,
+                    AutopilotStep.plan =>
+                      ref.watch(simpleRunProvider).sequenceId != null,
+                  },
                 ),
-              _Step(
-                step: s,
-                current: step,
-                done: switch (s) {
-                  AutopilotStep.focus => focused,
-                  AutopilotStep.polarAlign => aligned,
-                  AutopilotStep.plan =>
-                    ref.watch(simpleRunProvider).sequenceId != null,
-                },
+              ],
+              const SizedBox(width: AraSpace.s8),
+              TextButton(
+                key: const Key('autopilot-back'),
+                onPressed: step.index > 0 ? pilot.back : null,
+                child: Text(context.l10n.autopilotBack),
+              ),
+              TextButton(
+                key: const Key('autopilot-skip'),
+                onPressed: pilot.next,
+                child: Text(context.l10n.autopilotSkip),
               ),
             ],
-            const SizedBox(width: AraSpace.s8),
-            TextButton(
-              key: const Key('autopilot-back'),
-              onPressed: step.index > 0 ? pilot.back : null,
-              child: Text(context.l10n.autopilotBack),
-            ),
-            TextButton(
-              key: const Key('autopilot-skip'),
-              onPressed: pilot.next,
-              child: Text(context.l10n.autopilotSkip),
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -347,33 +354,33 @@ class AutopilotOffer extends StatelessWidget {
   @override
   Widget build(BuildContext context) => simpleFrost(
     Container(
-    key: const Key('autopilot-offer'),
-    padding: const EdgeInsets.fromLTRB(16, 6, 4, 6),
-    decoration: BoxDecoration(
-      color: AraColors.overlayScrim,
-      border: Border.all(color: AraColors.accentConnected),
-      borderRadius: BorderRadius.circular(10),
+      key: const Key('autopilot-offer'),
+      padding: const EdgeInsets.fromLTRB(16, 6, 4, 6),
+      decoration: BoxDecoration(
+        color: AraColors.overlayScrim,
+        border: Border.all(color: AraColors.accentConnected),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      // On a narrow window the buttons drop under the words, rather than the
+      // words squeezing into a column tall enough to cover the rails.
+      child: Wrap(
+        spacing: AraSpace.s12,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          Text(context.l10n.autopilotNothingDone, style: kSimpleText),
+          FilledButton(
+            key: const Key('autopilot-start'),
+            style: kSimpleGoStyle,
+            onPressed: onStart,
+            child: Text(context.l10n.autopilotStart),
+          ),
+          IconButton(
+            tooltip: context.l10n.autopilotNotNow,
+            icon: const Icon(Icons.close, size: 18),
+            onPressed: onDismiss,
+          ),
+        ],
+      ),
     ),
-    // On a narrow window the buttons drop under the words, rather than the
-    // words squeezing into a column tall enough to cover the rails.
-    child: Wrap(
-      spacing: AraSpace.s12,
-      crossAxisAlignment: WrapCrossAlignment.center,
-      children: [
-        Text(context.l10n.autopilotNothingDone, style: kSimpleText),
-        FilledButton(
-          key: const Key('autopilot-start'),
-          style: kSimpleGoStyle,
-          onPressed: onStart,
-          child: Text(context.l10n.autopilotStart),
-        ),
-        IconButton(
-          tooltip: context.l10n.autopilotNotNow,
-          icon: const Icon(Icons.close, size: 18),
-          onPressed: onDismiss,
-        ),
-      ],
-    ),
-  ),
   );
 }

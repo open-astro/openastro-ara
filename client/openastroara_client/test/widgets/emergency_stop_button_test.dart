@@ -191,6 +191,9 @@ void main() {
     await tester.pump(const Duration(minutes: 1));
     final pill = find.byKey(const Key('simple-message-0'));
     expect(pill, findsOneWidget, reason: 'a safety summary waits to be read');
+    final container = ProviderScope.containerOf(tester.element(find.byType(EmergencyStopButton)));
+    expect(container.read(simpleMessagesProvider).single.kind, SimpleMessageKind.warning,
+        reason: 'amber: done, but the rig needs a look');
     await tester.tap(find.descendant(of: pill, matching: find.byTooltip('Dismiss')));
     await tester.pump();
     expect(pill, findsNothing);

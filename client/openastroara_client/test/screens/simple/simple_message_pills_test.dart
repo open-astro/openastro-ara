@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/theme/ara_colors.dart';
 import 'package:openastroara/screens/simple/simple_message_pills.dart';
 import 'package:openastroara/services/simple_mode_prefs_service.dart';
 import 'package:openastroara/state/simple_messages_state.dart';
@@ -74,6 +75,21 @@ void main() {
     await tester.pump(kSimpleResultLife + const Duration(milliseconds: 100));
     expect(find.textContaining('Frame saved'), findsNothing, reason: 'the result faded');
     expect(find.textContaining("Couldn't start live view"), findsOneWidget, reason: 'the error stays');
+    await tester.tap(find.byTooltip('Dismiss'));
+    await tester.pump();
+    expect(c.read(simpleMessagesProvider), isEmpty);
+  });
+
+  testWidgets('a warning is amber and stays until ×, with no time-left line (it ran out while the pill stayed)',
+      (tester) async {
+    final c = await _pump(tester);
+    c.read(simpleMessagesProvider.notifier).show(SimpleMessageKind.warning, 'Emergency stop: mount parked');
+    await tester.pump();
+    expect(find.byType(TweenAnimationBuilder<double>), findsNothing, reason: 'no countdown for a pill that stays');
+    final box = tester.widget<Container>(find.byKey(const Key('simple-message-0'))).decoration! as BoxDecoration;
+    expect((box.border! as Border).top.color, AraColors.accentWarning);
+    await tester.pump(kSimpleResultLife * 3);
+    expect(find.textContaining('Emergency stop'), findsOneWidget);
     await tester.tap(find.byTooltip('Dismiss'));
     await tester.pump();
     expect(c.read(simpleMessagesProvider), isEmpty);
