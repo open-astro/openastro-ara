@@ -3211,7 +3211,7 @@ Modal with a file picker:
 
 ### 30.6 Server connection management
 
-- No saved servers (#1129): the confirmed rig is held for the session only; every launch scans again (§30.3)
+- No saved servers (#1129): no address is kept and every launch scans again (§30.3). Only the last rig's name is remembered (`last_rig.json`, ALP-4890), so the scan can reconnect to it
 - No auth tokens to manage per §67
 - Settings → Server panel: shows current server + connection state
 - **Choose a different rig** (profile box) and the shell's Launchpad action return to the scan list (Pi-side state is unaffected)
@@ -3449,8 +3449,8 @@ WILMA preferences that are *user-global* (theme, font size, reduce-motion, ⌘K 
 
 | Scenario | Behavior |
 |---|---|
-| joey-north + joey-south both answer the scan after WILMA restarts | Show the scan list (no auto-connect). Don't surprise users by auto-connecting to a random Pi. (#1129: the scan never auto-picks, even with one rig.) |
-| Two rigs share a nickname | Treated as two rigs (different `server_uuid`); never auto-picked; the list shows the address as discriminator |
+| joey-north + joey-south both answer the scan after WILMA restarts | Connect to the one whose name matches the last rig used (ALP-4890); show the scan list when neither matches. Never auto-connect to a rig this client hasn't used. |
+| Two rigs share a nickname | Treated as two rigs (different `server_uuid`); the list shows the address as discriminator. If the shared name is the last rig's, the first one the scan finds is auto-connected (ALP-4890); *Choose a different rig* reaches the other |
 | A rig's hostname/IP changes (DHCP lease moved it) | Nothing to update: the next launch's scan finds it wherever it is (#1129) |
 | A rig the user picked by name reports a different UUID than before (Pi was reflashed) — planned, see the superseded note above | Modal: "joey-south reports a new server identity. This usually means the Pi was reflashed. [Use as new] / [Forget old] / [Cancel]". Prevents silent association with a stranger's Pi at a star party |
 
