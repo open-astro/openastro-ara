@@ -1060,27 +1060,31 @@ class _SkyPick extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       spacing: AraSpace.s16,
       children: [
-        Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              selection.name,
-              style: kSimpleText.copyWith(fontWeight: FontWeight.w600),
-            ),
-            Text(
-              [
-                if (selection.kind.isNotEmpty) selection.kind,
-                simpleTargetStatus(selection, context.l10n),
-              ].join(' · '),
-              style: kSimpleText.copyWith(
-                fontSize: 12,
-                color: selection.belowHorizon
-                    ? AraColors.accentBusy
-                    : AraColors.textSecondary,
+        // Wraps in a narrow window (or a longer language) so Image this
+        // keeps its place.
+        Flexible(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                selection.name,
+                style: kSimpleText.copyWith(fontWeight: FontWeight.w600),
               ),
-            ),
-          ],
+              Text(
+                [
+                  if (selection.kind.isNotEmpty) selection.kind,
+                  simpleTargetStatus(selection, context.l10n),
+                ].join(' · '),
+                style: kSimpleText.copyWith(
+                  fontSize: 12,
+                  color: selection.belowHorizon
+                      ? AraColors.accentBusy
+                      : AraColors.textSecondary,
+                ),
+              ),
+            ],
+          ),
         ),
         FilledButton(
           key: const Key('simple-sky-image-this'),

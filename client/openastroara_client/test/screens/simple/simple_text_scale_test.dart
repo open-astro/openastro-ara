@@ -6,6 +6,7 @@ import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/l10n/app_localizations.dart';
 import 'package:openastroara/models/guider_status.dart';
 import 'package:openastroara/state/guider/guider_state.dart';
 import 'package:openastroara/models/sequence/imaging_run_body.dart';
@@ -117,9 +118,12 @@ void main() {
     for (final s in [1.0, 1.3, 1.6, 2.0]) ...[(s, const Size(1024, 768)), (s, const Size(768, 1024))],
     (1.0, const Size(320, 768)),
   ];
+  // In each language Simple Mode ships: Portuguese runs longer than English.
+  for (final lang in ['en', 'pt']) {
+  final l = lookupAppLocalizations(Locale(lang));
   for (final (scale, size) in cases) {
     for (final open in ['Preview settings', 'Plan', 'Stop armed', 'Modes', 'Settings', 'Rig', 'Camera', 'Settings Focuser', 'Search', 'Wheels lat', 'Wheels lng', 'Wheels aperture', 'Wheels focal', 'Settings Guider', 'Guiding']) {
-      testWidgets('text ${scale}x at ${size.width.toInt()}x${size.height.toInt()}, $open: nothing overflows',
+      testWidgets('$lang text ${scale}x at ${size.width.toInt()}x${size.height.toInt()}, $open: nothing overflows',
           skip: !hasFonts, (tester) async {
         tester.view.physicalSize = size;
         tester.view.devicePixelRatio = 1;
@@ -145,6 +149,9 @@ void main() {
         await tester.pumpWidget(UncontrolledProviderScope(
           container: c,
           child: MaterialApp(
+            locale: Locale(lang),
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
             theme: ThemeData(fontFamily: 'Roboto'),
             builder: (context, child) => MediaQuery(
               data: MediaQuery.of(context).copyWith(textScaler: TextScaler.linear(scale)),
@@ -157,7 +164,7 @@ void main() {
         if (open == 'Plan') {
           await tester.tap(find.byKey(const Key('simple-mode')), warnIfMissed: false);
           await tester.pump();
-          await tester.tap(find.text('Plan').first, warnIfMissed: false);
+          await tester.tap(find.text(l.shellModePlan).first, warnIfMissed: false);
           await tester.pump();
           c.read(planetariumSelectionProvider.notifier).set(const PlanetariumSelection(
               name: 'M31', kind: 'Galaxy', raHours: 0.73, decDeg: 41.4, raJ2000Hours: 0.71, decJ2000Deg: 41.27,
@@ -168,13 +175,13 @@ void main() {
           await tester.pump();
           // (The one-third width has no sheet layout yet: phone layout, ALP-4865.)
           if (size.width >= 768) {
-            expect(find.textContaining("TONIGHT'S BEST"), findsOneWidget, reason: 'the sheet with its suggestions');
+            expect(find.textContaining(l.planTonightsBest), findsOneWidget, reason: 'the sheet with its suggestions');
           }
         } else if (open == 'Modes') {
           await tester.tap(find.byKey(const Key('simple-mode')), warnIfMissed: false);
           await tester.pump();
           // Every mode name whole, on the rail and in the grid: no "Previ…".
-          for (final name in ['Autopilot', 'Preview', 'Focus', 'Polar align', 'Plan']) {
+          for (final name in [l.shellModeAutopilot, l.shellModePreview, l.shellModeFocus, l.shellModePolarAlign, l.shellModePlan]) {
             for (final p in tester.renderObjectList<RenderParagraph>(find.text(name))) {
               expect(p.didExceedMaxLines, isFalse, reason: '"$name" is cut off');
             }
@@ -185,7 +192,7 @@ void main() {
                   of: find.byType(EmergencyStopButton), matching: find.byType(FilledButton)))
               .onPressed!();
           await tester.pump();
-          expect(find.textContaining('AGAIN'), findsOneWidget);
+          expect(find.textContaining(l.estopCompactPressAgain.split('\n').last), findsOneWidget);
           // A clipped or mid-word-broken label throws nothing, so check the lines.
           for (final p in tester.renderObjectList<RenderParagraph>(
               find.descendant(of: find.byType(EmergencyStopButton), matching: find.byType(RichText)))) {
@@ -200,7 +207,7 @@ void main() {
           expect(find.byKey(const Key('simple-device-camera')), findsOneWidget);
         } else if (open == 'Settings Focuser') {
           // Its page in Settings: the dial and the step segments.
-          await tester.tap(find.byTooltip('Settings'));
+          await tester.tap(find.byTooltip(l.shellSettings));
           await tester.pump();
           await tester.tap(find.byKey(const Key('simple-menu-nav-Focuser')));
           await tester.pump();
@@ -208,7 +215,7 @@ void main() {
         } else if (open.startsWith('Wheels')) {
           // Settings › Rig with a wheel row open: every wheel inside the
           // sheet, every digit whole in its slot.
-          await tester.tap(find.byTooltip('Settings'));
+          await tester.tap(find.byTooltip(l.shellSettings));
           await tester.pump();
           await tester.tap(find.byKey(const Key('simple-menu-nav-Rig')));
           await tester.pump();
@@ -231,7 +238,7 @@ void main() {
           }
         } else if (open == 'Settings Guider') {
           // Its page in Settings: state, RMS, gain and the dither steppers.
-          await tester.tap(find.byTooltip('Settings'));
+          await tester.tap(find.byTooltip(l.shellSettings));
           await tester.pump();
           await tester.tap(find.byKey(const Key('simple-menu-nav-Guider')));
           await tester.pump();
@@ -246,7 +253,7 @@ void main() {
           await tester.pump();
           expect(find.byKey(const Key('simple-search-image-0')), findsOneWidget);
         } else if (open == 'Settings' || open == 'Rig') {
-          await tester.tap(find.byTooltip('Settings'));
+          await tester.tap(find.byTooltip(l.shellSettings));
           await tester.pump();
           if (open == 'Rig') {
             await tester.tap(find.byKey(const Key('simple-menu-nav-Rig')));
@@ -260,5 +267,6 @@ void main() {
         expect(tester.takeException(), isNull);
       });
     }
+  }
   }
 }

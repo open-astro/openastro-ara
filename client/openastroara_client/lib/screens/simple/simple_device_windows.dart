@@ -27,7 +27,7 @@ import '../../state/simple_messages_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
 import 'simple_preview_panel.dart' show kSimpleText;
-import 'simple_shell.dart' show SimpleSegment;
+import 'simple_shell.dart' show SimpleSegment, simpleRailScale;
 
 /// One window per device in Simple Mode (design/briefs/simple-mode-settings.md):
 /// the same widget opens from the device's dot in the top bar and as its page
@@ -946,7 +946,9 @@ class _SimpleFocuserWindowState extends ConsumerState<SimpleFocuserWindow> {
                 child: _FocusKnob(
                   key: const Key('simple-focuser-knob'),
                   focused: _dialFocused,
-                  size: math.min(220, box.maxWidth),
+                  // Grows with the text like the rails, so the label in its
+                  // middle fits; never wider than the window.
+                  size: math.min(220 * simpleRailScale(context), box.maxWidth),
                   onDetent: (d) {
                     HapticFeedback.selectionClick();
                     setState(
@@ -1029,7 +1031,8 @@ class _FocusKnob extends StatefulWidget {
     this.size = 220,
   });
 
-  /// The dial's diameter: 220, less in a narrow window.
+  /// The dial's diameter: 220, more with large text, less in a narrow
+  /// window.
   final double size;
 
   final ValueChanged<int> onDetent;
