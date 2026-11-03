@@ -50,6 +50,21 @@ class PlanningPrefsNotifier extends Notifier<PlanningPrefs> {
     );
     unawaited(ref.read(planningPrefsServiceProvider).save(state));
   }
+
+  /// #1176 — null switches the magnitude floor off; a finite value is clamped
+  /// to [PlanningPrefs.minMagnitudeFloor]..[PlanningPrefs.maxMagnitudeFloor]
+  /// (non-finite ignored).
+  void setMagnitudeFloor(double? floor) {
+    if (floor != null && !floor.isFinite) return;
+    _userTouched = true;
+    state = state.withMagnitudeFloor(
+      floor?.clamp(
+        PlanningPrefs.minMagnitudeFloor,
+        PlanningPrefs.maxMagnitudeFloor,
+      ),
+    );
+    unawaited(ref.read(planningPrefsServiceProvider).save(state));
+  }
 }
 
 final planningPrefsProvider =

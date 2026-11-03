@@ -10,7 +10,18 @@ class PlanningPrefs {
   /// Glover noise tolerance: the percent of stack noise the read noise may
   /// add. 5 is the classic figure; lower = longer subs for the same sky.
   final double noiseTolerancePct;
-  const PlanningPrefs({this.noiseTolerancePct = defaultNoiseTolerancePct});
+
+  /// #1176 — Tonight's Sky magnitude floor: targets fainter than this are
+  /// hidden. Null = off (the default); magnitude-less targets always stay.
+  final double? magnitudeFloor;
+  const PlanningPrefs({
+    this.noiseTolerancePct = defaultNoiseTolerancePct,
+    this.magnitudeFloor,
+  });
+
+  static const double minMagnitudeFloor = 6.0;
+  static const double maxMagnitudeFloor = 15.0;
+  static const double defaultMagnitudeFloor = 12.0;
 
   static const double defaultNoiseTolerancePct = 5.0;
   static const double minNoiseTolerancePct = 1.0;
@@ -18,16 +29,30 @@ class PlanningPrefs {
 
   PlanningPrefs copyWith({double? noiseTolerancePct}) => PlanningPrefs(
     noiseTolerancePct: noiseTolerancePct ?? this.noiseTolerancePct,
+    magnitudeFloor: magnitudeFloor,
   );
 
-  Map<String, dynamic> toJson() => {'noise_tolerance_pct': noiseTolerancePct};
+  /// Sets or clears (null) the floor; copyWith cannot express "clear".
+  PlanningPrefs withMagnitudeFloor(double? floor) => PlanningPrefs(
+    noiseTolerancePct: noiseTolerancePct,
+    magnitudeFloor: floor,
+  );
+
+  Map<String, dynamic> toJson() => {
+    'noise_tolerance_pct': noiseTolerancePct,
+    'magnitude_floor': magnitudeFloor,
+  };
 
   /// Tolerant parse: a missing or hand-edited value falls back to the default
   /// (clamped like the write path).
   static PlanningPrefs fromJson(Object? json) {
     if (json is! Map) return const PlanningPrefs();
     final v = json['noise_tolerance_pct'];
+    final f = json['magnitude_floor'];
     return PlanningPrefs(
+      magnitudeFloor: f is num && f.isFinite
+          ? f.toDouble().clamp(minMagnitudeFloor, maxMagnitudeFloor)
+          : null,
       noiseTolerancePct: v is num && v.isFinite
           ? v.toDouble().clamp(minNoiseTolerancePct, maxNoiseTolerancePct)
           : defaultNoiseTolerancePct,
