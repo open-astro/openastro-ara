@@ -49,6 +49,7 @@ import '../../services/profile_api.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
 import '../../widgets/emergency_stop_button.dart';
+import '../../widgets/equipment/equipment_glyphs.dart';
 import '../../widgets/equipment/equipment_status_chip.dart';
 import '../../widgets/equipment_chip.dart'
     show EquipmentChipCompact, EquipmentChipHideDisconnected;
@@ -1767,13 +1768,19 @@ class _SettingsSheetState extends ConsumerState<_SettingsSheet> {
   Widget build(BuildContext context) {
     // The devices with a window of their own, listed under Devices once the
     // rig knows them.
-    final sections = [
-      ('Rig', Icons.memory, false),
-      ('Devices', Icons.settings_input_component_outlined, false),
+    // A device keeps the icon its dot has in the top bar.
+    Widget glyph(IconData icon, Color c) => Icon(icon, size: 20, color: c);
+    final sections = <(String, Widget Function(Color), bool)>[
+      ('Rig', (c) => glyph(Icons.memory, c), false),
+      (
+        'Devices',
+        (c) => glyph(Icons.settings_input_component_outlined, c),
+        false,
+      ),
       if (ref.watch(cameraStatusProvider).value != null)
-        ('Camera', Icons.photo_camera_outlined, true),
+        ('Camera', (c) => glyph(Icons.camera_alt, c), true),
       if (ref.watch(mountProvider).value != null)
-        ('Mount', Icons.explore_outlined, true),
+        ('Mount', (c) => EquipmentGlyph.telescope(size: 20, color: c), true),
     ];
     // A narrow window (Split View, a phone) keeps only the sections' icons.
     final narrow = MediaQuery.sizeOf(context).width < 600;
@@ -1815,10 +1822,8 @@ class _SettingsSheetState extends ConsumerState<_SettingsSheet> {
                               child: Row(
                                 spacing: AraSpace.s12,
                                 children: [
-                                  Icon(
-                                    icon,
-                                    size: 20,
-                                    color: _section == name
+                                  icon(
+                                    _section == name
                                         ? AraColors.accentInfo
                                         : AraColors.textPrimary,
                                   ),

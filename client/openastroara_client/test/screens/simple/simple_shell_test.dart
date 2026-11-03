@@ -48,6 +48,7 @@ import 'package:openastroara/state/equipment/camera_state.dart';
 import 'package:openastroara/state/equipment/equipment_device_state.dart';
 import 'package:openastroara/state/equipment/focuser_state.dart';
 import 'package:openastroara/state/equipment/mount_state.dart';
+import 'package:openastroara/widgets/equipment/equipment_glyphs.dart';
 import 'package:openastroara/state/settings/settings_nav.dart';
 import 'package:openastroara/state/simple_mode_state.dart';
 import 'package:openastroara/state/night_mode_state.dart';
@@ -1277,6 +1278,11 @@ void main() {
     expect(find.byKey(const Key('simple-device-mount')), findsNothing, reason: 'one device window at a time (same spot)');
     await _openSection(tester, 'Mount');
     expect(find.descendant(of: find.byKey(const Key('simple-menu')), matching: find.byKey(const Key('simple-device-mount'))),
+        findsOneWidget);
+    // The same icons as the top bar's dots.
+    final nav = find.byKey(const Key('simple-menu-nav-Mount'));
+    expect(find.descendant(of: nav, matching: find.byType(EquipmentGlyph)), findsOneWidget, reason: 'the mount chip\'s telescope');
+    expect(find.descendant(of: find.byKey(const Key('simple-menu-nav-Camera')), matching: find.byIcon(Icons.camera_alt)),
         findsOneWidget);
   });
 
