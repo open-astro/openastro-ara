@@ -222,82 +222,125 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
             ? live.errorMessage ?? live.errorReason
             : null);
 
-    Widget turn(String axis, double? value, (IconData, String) hint) => Row(
-      spacing: AraSpace.s8,
-      children: [
-        Expanded(
-          child: Text(
-            axis,
-            style: kSimpleText.copyWith(color: AraColors.textSecondary),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
+    // A turn as a tile: the axis, a big arrow and the move, read at arm's
+    // length while the hands are on the bolts.
+    Widget turn(
+      String id,
+      String axis,
+      double? value,
+      (IconData, String) hint,
+    ) => Expanded(
+      child: Container(
+        key: Key('simple-polar-turn-$id'),
+        padding: const EdgeInsets.all(AraSpace.s8),
+        decoration: BoxDecoration(
+          color: AraColors.tileFill,
+          borderRadius: BorderRadius.circular(10),
         ),
-        Icon(hint.$1, size: 20, color: AraColors.textPrimary),
-        Flexible(
-          child: Text(
-            value == null
-                ? hint.$2
-                : '${hint.$2} ${value.abs().toStringAsFixed(1)}′',
-            style: kSimpleText,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
+        child: Row(
+          spacing: AraSpace.s8,
+          children: [
+            Icon(hint.$1, size: 44, color: AraColors.textPrimary),
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(axis, style: AraText.caption, maxLines: 1),
+                  Text(
+                    value == null
+                        ? hint.$2
+                        : '${hint.$2} ${value.abs().toStringAsFixed(1)}′',
+                    style: kSimpleText,
+                    maxLines: 2,
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
-      ],
+      ),
     );
 
     return SimplePanel(
       padding: const EdgeInsets.all(AraSpace.s16),
       child: SizedBox(
-        width: 248,
+        width: 420,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           spacing: AraSpace.s8,
           children: [
+            // The phase and the total error on one line.
             if (active || live.phase == PolarAlignStates.failed)
-              Text(simplePolarPhase(live, l10n), style: kSimpleText),
-            if (active && total != null) ...[
               Row(
                 spacing: AraSpace.s8,
                 children: [
-                  Icon(Icons.circle, size: 12, color: color),
-                  Text(
-                    '${total.toStringAsFixed(1)}′',
-                    style: kSimpleText.copyWith(
-                      fontSize: 30,
-                      fontWeight: FontWeight.w300,
+                  Expanded(
+                    child: Text(
+                      simplePolarPhase(live, l10n),
+                      style: kSimpleText,
+                    ),
+                  ),
+                  if (active && total != null) ...[
+                    Icon(Icons.circle, size: 12, color: color),
+                    Text(
+                      '${total.toStringAsFixed(1)}′',
+                      style: kSimpleText.copyWith(
+                        fontSize: 30,
+                        fontWeight: FontWeight.w300,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            if (active && total != null) ...[
+              Row(
+                spacing: AraSpace.s12,
+                children: [
+                  SizedBox.square(
+                    key: const Key('simple-polar-bullseye'),
+                    dimension: 180,
+                    child: CustomPaint(
+                      painter: BullseyePainter(
+                        dotFraction: bullseyeDotFraction(
+                          live.azErrorArcmin,
+                          live.altErrorArcmin,
+                          bullseyeRangeArcmin(total),
+                          southern: southern,
+                        ),
+                        zoneColor: color,
+                        reticle: nearPoleReticle(total),
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: SizedBox(
+                      height: 180,
+                      child: Column(
+                        spacing: AraSpace.s8,
+                        children: [
+                          turn(
+                            'alt',
+                            l10n.polarAltitude,
+                            live.altErrorArcmin,
+                            polarAltHint(l10n, live.altErrorArcmin),
+                          ),
+                          turn(
+                            'az',
+                            l10n.polarAzimuth,
+                            live.azErrorArcmin,
+                            polarAzHint(
+                              l10n,
+                              live.azErrorArcmin,
+                              southern: southern,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ],
-              ),
-              Center(
-                child: SizedBox.square(
-                  dimension: 140,
-                  child: CustomPaint(
-                    painter: BullseyePainter(
-                      dotFraction: bullseyeDotFraction(
-                        live.azErrorArcmin,
-                        live.altErrorArcmin,
-                        bullseyeRangeArcmin(total),
-                        southern: southern,
-                      ),
-                      zoneColor: color,
-                      reticle: nearPoleReticle(total),
-                    ),
-                  ),
-                ),
-              ),
-              turn(
-                l10n.polarAltitude,
-                live.altErrorArcmin,
-                polarAltHint(l10n, live.altErrorArcmin),
-              ),
-              turn(
-                l10n.polarAzimuth,
-                live.azErrorArcmin,
-                polarAzHint(l10n, live.azErrorArcmin, southern: southern),
               ),
             ],
             // The full panel's nudge, cut to two lines for the 248 px panel.
@@ -320,37 +363,50 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
                 maxLines: 4,
                 overflow: TextOverflow.ellipsis,
               ),
-            SimplePresetTile<Duration>(
-              key: const Key('simple-polar-exposure'),
-              label: l10n.polarExposure,
-              value: _exposure(settings),
-              options: exposurePresets(minSec: 0, maxSec: 60),
-              format: formatExposure,
-              onSelected: (d) => _save(
-                settings.copyWith(exposureSeconds: d.inMilliseconds / 1000),
-              ),
-            ),
-            Container(
-              decoration: BoxDecoration(
-                color: AraColors.tileFill,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                children: [
-                  for (final (mode, label) in [
-                    (PolarAlignLoopModes.loop, l10n.polarLoop),
-                    (PolarAlignLoopModes.single, l10n.polarSingle),
-                  ])
-                    Expanded(
-                      child: SimpleSegment(
-                        label: label,
-                        selected: settings.loopMode == mode,
-                        radius: 8,
-                        onTap: () => _save(settings.copyWith(loopMode: mode)),
+            // The settings on one line, for the next frame.
+            Row(
+              spacing: AraSpace.s8,
+              children: [
+                Expanded(
+                  child: SimplePresetTile<Duration>(
+                    key: const Key('simple-polar-exposure'),
+                    label: l10n.polarExposure,
+                    value: _exposure(settings),
+                    options: exposurePresets(minSec: 0, maxSec: 60),
+                    format: formatExposure,
+                    onSelected: (d) => _save(
+                      settings.copyWith(
+                        exposureSeconds: d.inMilliseconds / 1000,
                       ),
                     ),
-                ],
-              ),
+                  ),
+                ),
+                Expanded(
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: AraColors.tileFill,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      children: [
+                        for (final (mode, label) in [
+                          (PolarAlignLoopModes.loop, l10n.polarLoop),
+                          (PolarAlignLoopModes.single, l10n.polarSingle),
+                        ])
+                          Expanded(
+                            child: SimpleSegment(
+                              label: label,
+                              selected: settings.loopMode == mode,
+                              radius: 8,
+                              onTap: () =>
+                                  _save(settings.copyWith(loopMode: mode)),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             ),
             if (active)
               Row(
@@ -391,7 +447,9 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
                             }
                           : null,
                       child: Text(
-                        autopilot ? l10n.guidedDoneStartImaging : l10n.polarDone,
+                        autopilot
+                            ? l10n.guidedDoneStartImaging
+                            : l10n.polarDone,
                       ),
                     ),
                   ),

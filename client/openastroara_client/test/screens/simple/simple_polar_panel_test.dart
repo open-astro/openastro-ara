@@ -122,6 +122,21 @@ void main() {
     expect(api!.calls, isEmpty);
   });
 
+  testWidgets('the turns read at a glance: big arrows beside a big bullseye, like the full UI', (tester) async {
+    await _pump(tester, _adjusting);
+    for (final axis in ['alt', 'az']) {
+      final arrow = find.descendant(of: find.byKey(Key('simple-polar-turn-$axis')), matching: find.byType(Icon));
+      expect(tester.widget<Icon>(arrow).size, greaterThanOrEqualTo(40), reason: axis);
+    }
+    final bullseye = find.byKey(const Key('simple-polar-bullseye'));
+    expect(tester.getSize(bullseye).width, greaterThanOrEqualTo(180));
+  });
+
+  testWidgets('while it runs, the whole panel fits the room beside the rail on an iPad (388 pt)', (tester) async {
+    await _pump(tester, _adjusting, loopMode: PolarAlignLoopModes.single);
+    expect(tester.getSize(find.byType(SimplePolarPanel)).height, lessThanOrEqualTo(388));
+  });
+
   testWidgets('Single running: Take frame takes the next one', (tester) async {
     final api = await _pump(tester, _adjusting, loopMode: PolarAlignLoopModes.single);
     await tester.tap(find.byKey(const Key('simple-polar-capture')));
