@@ -22,6 +22,8 @@ void main() {
         File('lib/l10n/$f').readAsStringSync(),
       ) as Map<String, dynamic>).keys.where((k) => !k.startsWith('@')).toSet();
       expect(keys('app_pt_BR.arb'), keys('app_en.arb'));
+      expect(keys('app_pt.arb'), isEmpty,
+          reason: 'only the base gen-l10n needs: pt alone is Portugal too');
       final pt = lookupAppLocalizations(const Locale('pt', 'BR'));
       expect(pt.localeName, 'pt_BR');
       expect(pt.pillsMoreSemantics(1), isNot(en.pillsMoreSemantics(1)));
