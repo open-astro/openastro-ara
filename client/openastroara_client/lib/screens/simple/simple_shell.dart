@@ -17,6 +17,7 @@ import '../../state/sky_atlas/tonight_sky_state.dart'
     show planningSettingsBootstrapProvider;
 import '../../models/frame_histogram.dart';
 import '../../models/guider_status.dart';
+import '../../services/equipment_device_api.dart' show describeEquipmentError;
 import '../../services/equipment_driver_api.dart';
 import '../../models/polar_align.dart';
 import '../../state/app_shell_state.dart';
@@ -77,11 +78,16 @@ import '../shell_listeners.dart';
 import 'simple_autopilot.dart';
 import 'simple_device_windows.dart';
 import 'simple_focus_panel.dart';
+import '../../state/focus/autofocus_live_state.dart' show autofocusLiveProvider;
+import '../../state/focus/guide_focus_state.dart' show guideFocusProvider;
+import '../../state/settings/phd2_settings_state.dart'
+    show phd2SettingsProvider;
+import '../../state/focus/bahtinov_focus_state.dart'
+    show MainFocusMethod, bahtinovFocusProvider;
 import 'simple_message_pills.dart';
 import 'simple_polar_panel.dart';
 import 'simple_plan_panel.dart';
 import 'simple_preview_panel.dart';
-import 'simple_safety_alarm.dart';
 
 /// Inset from the frame edge and between panels.
 const double kSimpleInset = 16;
@@ -515,8 +521,20 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     final polarFrame =
         shown == SimpleModeScreen.polarAlign &&
         simplePolarActive(ref.watch(polarAlignLiveProvider));
+    // Focus can show its run's frame, measured stars circled, when asked.
+    // Manual shows the Bahtinov readout's crop, spikes and all, there.
+    final focusFrame = shown != SimpleModeScreen.focus
+        ? null
+        : ref.watch(simpleFocusScopeProvider) == SimpleFocusScope.guide
+        ? ref.watch(guideFocusProvider.select((l) => l.frame))
+        : simpleFocusMethod(ref) == MainFocusMethod.bahtinov
+        ? ref.watch(bahtinovFocusProvider.select((l) => l.frame))
+        : ref.watch(simpleFocusStarsShownProvider)
+        ? ref.watch(autofocusLiveProvider.select((l) => l.frame))
+        : null;
     final hasFrame =
         polarFrame ||
+        focusFrame != null ||
         ref.watch(lastCapturedFrameIdProvider) != null ||
         ref.watch(liveViewControllerProvider);
     final showSky = _sky || !hasFrame;
@@ -546,13 +564,15 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     // rails, so its two lines of labels fit at the user's size.
     final bottomRow = kSimpleBarHeight * simpleRailScale(context);
     final width = MediaQuery.sizeOf(context).width;
-    final autopilotRow =
-        _mode == SimpleModeScreen.autopilot ||
-        (!_offerDismissed &&
-            _mode == SimpleModeScreen.preview &&
-            autopilotOffered(ref));
+    // Guided Run's step strip, under the status strip; its offer sits at the
+    // bottom (user, 2026-11-03).
+    final autopilotRow = _mode == SimpleModeScreen.autopilot;
+    final autopilotOffer =
+        !_offerDismissed &&
+        _mode == SimpleModeScreen.preview &&
+        autopilotOffered(ref);
     // Messages share the top row with the status pill, which keeps at most
-    // half of it; they start under the Autopilot strip when it shows.
+    // half of it; they start under the Guided Run strip when it shows.
     final statusRoom = math.min(
       kSimpleStatusMaxWidth,
       (width - kSimpleInset * 3) / 2,
@@ -593,6 +613,22 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     final runSheet =
         shown == SimpleModeScreen.plan &&
         ((_popover == _Popover.settings && !runActive) || _adding);
+    final sheet = SimpleRunSheet(
+      editing: _editing,
+      onShowSky: () => setState(() => _sky = true),
+      onPickInSky: () => setState(() {
+        _sky = true;
+        _popover = _Popover.none;
+        _closeSheet();
+      }),
+      onCreated: () => setState(() {
+        _popover = _Popover.none;
+        _closeSheet();
+      }),
+      onLibrary: () => Navigator.of(context).push(
+        MaterialPageRoute<void>(builder: (_) => const ImageLibraryScreen()),
+      ),
+    );
     final sel = ref.watch(planetariumSelectionProvider);
     final motion = MediaQuery.disableAnimationsOf(context)
         ? Duration.zero
@@ -650,7 +686,16 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                               behavior: HitTestBehavior.opaque,
                               onTap: () => _tapImage(!showSky),
                               child: !showSky
-                                  ? (polarFrame
+                                  ? (focusFrame != null
+                                        ? Image.memory(
+                                            focusFrame,
+                                            key: const Key(
+                                              'simple-focus-frame',
+                                            ),
+                                            fit: BoxFit.contain,
+                                            gaplessPlayback: true,
+                                          )
+                                        : polarFrame
                                         ? const SimplePolarFrame()
                                         : const FrameViewer())
                                   // The sky: asked for, or standing in until there
@@ -664,13 +709,17 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                         ),
                         // The planetarium takes taps itself, so while a
                         // window is open a layer over the background closes
-                        // them all instead.
+                        // them all instead. It paints (1/255, unseen): on
+                        // macOS a click reaches the native sky view unless
+                        // Flutter has drawn over that spot (iOS asks Flutter
+                        // first either way).
                         if (_anyOpen)
                           Positioned.fill(
                             child: GestureDetector(
                               key: const Key('simple-background-close'),
                               behavior: HitTestBehavior.opaque,
                               onTap: () => _tapImage(!showSky),
+                              child: const ColoredBox(color: Color(0x01000000)),
                             ),
                           ),
                         if (!hasFrame)
@@ -800,43 +849,27 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                   ),
                                 ),
                               ),
-                              // Plan's sheet and Night done: a sheet centred over
-                              // the image; while imaging, its panel sits beside
-                              // the rail like any mode's.
+                              // Plan's sheet and Night done: beside the rail;
+                              // while imaging, its panel sits there like any
+                              // mode's.
                               // Between the status pill and the bottom row (the
                               // plan squares step aside while it shows); a tall
                               // sheet scrolls inside.
                               if (runSheet)
                                 Positioned(
-                                  left: 0,
-                                  right: 0,
+                                  // Beside the rail like every mode's panel,
+                                  // with the sheet's height (user, 2026-11-04;
+                                  // it was centred over the image).
+                                  left: kSimpleInset,
+                                  right: kSimpleInset * 2 + railWidth,
                                   top:
                                       railTop +
                                       kSimpleStatusHeight +
                                       kSimpleInset,
                                   bottom: kSimpleInset * 2 + bottomRow,
-                                  child: Center(
-                                    child: SimpleRunSheet(
-                                      editing: _editing,
-                                      onShowSky: () =>
-                                          setState(() => _sky = true),
-                                      onPickInSky: () => setState(() {
-                                        _sky = true;
-                                        _popover = _Popover.none;
-                                        _closeSheet();
-                                      }),
-                                      onCreated: () => setState(() {
-                                        _popover = _Popover.none;
-                                        _closeSheet();
-                                      }),
-                                      onLibrary: () => Navigator.of(context)
-                                          .push(
-                                            MaterialPageRoute<void>(
-                                              builder: (_) =>
-                                                  const ImageLibraryScreen(),
-                                            ),
-                                          ),
-                                    ),
+                                  child: Align(
+                                    alignment: Alignment.centerRight,
+                                    child: sheet,
                                   ),
                                 )
                               // The rail's own popovers; Settings and Search
@@ -895,14 +928,24 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                   child: Center(
                                     child: KeyedSubtree(
                                       key: _autopilotRowKey,
-                                      child: _mode == SimpleModeScreen.autopilot
-                                          ? const AutopilotStrip()
-                                          : AutopilotOffer(
-                                              onStart: _startAutopilot,
-                                              onDismiss: () => setState(
-                                                () => _offerDismissed = true,
-                                              ),
-                                            ),
+                                      child: const AutopilotStrip(),
+                                    ),
+                                  ),
+                                ),
+                              // The offer, centred just above the bottom row,
+                              // under the rails (centred higher up); it wraps on
+                              // a narrow window.
+                              if (autopilotOffer)
+                                Positioned(
+                                  left: kSimpleInset,
+                                  right: kSimpleInset,
+                                  bottom: kSimpleInset * 2 + kSimpleBarHeight,
+                                  child: Center(
+                                    child: AutopilotOffer(
+                                      onStart: _startAutopilot,
+                                      onDismiss: () => setState(
+                                        () => _offerDismissed = true,
+                                      ),
                                     ),
                                   ),
                                 ),
@@ -953,7 +996,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                   width:
                                       kSimpleDeviceWindowWidth *
                                       simpleRailScale(context),
-                                  child: SimpleFrostedPanel(
+                                  child: SimplePanel(
                                     padding: const EdgeInsets.all(AraSpace.s16),
                                     child: _deviceWindows[_device]!,
                                   ),
@@ -1000,21 +1043,35 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                   right: kSimpleInset,
                                   top: railTop,
                                   bottom: kSimpleInset * 2 + bottomRow,
-                                  child: _SettingsSheet(
-                                    key: ValueKey(_menuSection),
-                                    section: _menuSection,
-                                    onClose: () => setState(
-                                      () => _popover = _Popover.none,
+                                  // Under the gear, as wide as its content
+                                  // needs (user, 2026-11-04: window-wide was
+                                  // mostly empty space).
+                                  child: Align(
+                                    alignment: Alignment.topRight,
+                                    child: ConstrainedBox(
+                                      constraints: BoxConstraints(
+                                        // Grows with the text, like the rails.
+                                        maxWidth:
+                                            kSimpleSettingsMaxWidth *
+                                            simpleRailScale(context),
+                                      ),
+                                      child: _SettingsSheet(
+                                        key: ValueKey(_menuSection),
+                                        section: _menuSection,
+                                        onClose: () => setState(
+                                          () => _popover = _Popover.none,
+                                        ),
+                                        onLogs: () {
+                                          ref
+                                              .read(
+                                                selectedSettingsPanelProvider
+                                                    .notifier,
+                                              )
+                                              .select('support.logs');
+                                          _openSettings();
+                                        },
+                                      ),
                                     ),
-                                    onLogs: () {
-                                      ref
-                                          .read(
-                                            selectedSettingsPanelProvider
-                                                .notifier,
-                                          )
-                                          .select('support.logs');
-                                      _openSettings();
-                                    },
                                   ),
                                 ),
                               ],
@@ -1036,8 +1093,6 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                 ),
               ),
             ),
-            // Over everything, outside the safe area: the one popup kept.
-            const SimpleSafetyAlarm(),
           ],
         ),
       ),
@@ -1122,6 +1177,9 @@ class _Fade extends StatelessWidget {
 }
 
 /// One floating panel: overlay scrim, 10 px corners, no border.
+/// Every Simple Mode panel's look: the 90 % scrim over a blur of the image
+/// behind ([AraBlur.panel]), first the Settings sheet's and the device
+/// windows', now every panel's, for legibility (user, 2026-11-04).
 class SimplePanel extends StatelessWidget {
   const SimplePanel({super.key, required this.child, this.padding});
 
@@ -1129,38 +1187,25 @@ class SimplePanel extends StatelessWidget {
   final EdgeInsetsGeometry? padding;
 
   @override
-  Widget build(BuildContext context) => Container(
-    padding: padding,
-    decoration: BoxDecoration(
-      color: AraColors.overlayScrim,
-      borderRadius: BorderRadius.circular(10),
+  Widget build(BuildContext context) => simpleFrost(
+    Container(
+      key: const Key('simple-frosted-surface'),
+      padding: padding,
+      decoration: const BoxDecoration(color: AraColors.overlayScrim),
+      child: child,
     ),
+  );
+}
+
+/// The panel blur under [child], clipped to the panels' 10 px corners: for
+/// the surfaces that draw their own scrim (pills, tiles, plan squares).
+Widget simpleFrost(Widget child) => ClipRRect(
+  borderRadius: BorderRadius.circular(10),
+  child: BackdropFilter(
+    filter: ImageFilter.blur(sigmaX: AraBlur.panel, sigmaY: AraBlur.panel),
     child: child,
-  );
-}
-
-/// The Settings sheet's and the device windows' look: the 90 % panel scrim
-/// over a 5 px blur of the image behind (user, 2026-11-03).
-class SimpleFrostedPanel extends StatelessWidget {
-  const SimpleFrostedPanel({super.key, required this.child, this.padding});
-
-  final Widget child;
-  final EdgeInsetsGeometry? padding;
-
-  @override
-  Widget build(BuildContext context) => ClipRRect(
-    borderRadius: BorderRadius.circular(10),
-    child: BackdropFilter(
-      filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
-      child: Container(
-        key: const Key('simple-frosted-surface'),
-        padding: padding,
-        decoration: const BoxDecoration(color: AraColors.overlayScrim),
-        child: child,
-      ),
-    ),
-  );
-}
+  ),
+);
 
 /// Device dots (connected gear only), then Night mode and the Settings menu.
 class _StatusStrip extends ConsumerWidget {
@@ -1302,8 +1347,22 @@ class _RailButton extends StatelessWidget {
 /// How much the rails grow: none up to 1.1x text, then with the text, so
 /// their labels follow the user's size all the way (WCAG 1.4.4). The 60 px
 /// mode label ("Preview", 14 px semibold) is full from 1.1x.
+/// Every Settings › Rig value (a wheel's, the elevation stepper's, the read-only
+/// pixel size) is this wide, so they line up.
+const double kSimpleRigControlWidth = 160;
+
+/// Simple Mode's Settings sheet at its widest: the section list and a section
+/// whose rows are a label and a [kSimpleRigControlWidth] value.
+const double kSimpleSettingsMaxWidth = 640;
+
 double simpleRailScale(BuildContext context) =>
     math.max(1, MediaQuery.textScalerOf(context).scale(1) / 1.1);
+
+/// Past 1.2x text a mode panel's side-by-side groups stack, so their labels
+/// keep their full words (WCAG 1.4.4): pt-BR's "Principal" and "Contínuo"
+/// were cut from 1.3x (impeccable audit, 2026-11-04).
+bool simpleStackText(BuildContext context) =>
+    MediaQuery.textScalerOf(context).scale(1) > 1.2;
 
 class _LeftRail extends StatelessWidget {
   const _LeftRail({
@@ -1820,6 +1879,53 @@ class SimpleSegment extends StatelessWidget {
   );
 }
 
+/// A row of [SimpleSegment]s on one tile: [options] as (value, label, id),
+/// the selected one in the selection blue. A null [onPick] locks them, and
+/// the picked one takes no tap. [expand]: the segments share the width; else
+/// they hug their labels. Keys read '[keyPrefix]-id'.
+class SimpleSegments<T> extends StatelessWidget {
+  const SimpleSegments({
+    super.key,
+    required this.options,
+    required this.selected,
+    required this.onPick,
+    this.keyPrefix,
+    this.expand = true,
+  });
+
+  final List<(T, String, String)> options;
+  final T? selected;
+  final ValueChanged<T>? onPick;
+  final String? keyPrefix;
+  final bool expand;
+
+  @override
+  Widget build(BuildContext context) => DecoratedBox(
+    decoration: BoxDecoration(
+      color: AraColors.tileFill,
+      borderRadius: BorderRadius.circular(8),
+    ),
+    child: Row(
+      mainAxisSize: expand ? MainAxisSize.max : MainAxisSize.min,
+      children: [
+        for (final (value, label, id) in options)
+          () {
+            final segment = SimpleSegment(
+              key: keyPrefix == null ? null : Key('$keyPrefix-$id'),
+              label: label,
+              selected: value == selected,
+              radius: 8,
+              onTap: onPick == null || value == selected
+                  ? null
+                  : () => onPick!(value),
+            );
+            return expand ? Expanded(child: segment) : segment;
+          }(),
+      ],
+    ),
+  );
+}
+
 /// Simple Mode's density (DESIGN.md "Two Densities"): 10 px corners on
 /// buttons and fields instead of Material's pills, 44 px minimum targets,
 /// fields as borderless tiles.
@@ -1951,7 +2057,7 @@ class _SettingsSheetState extends ConsumerState<_SettingsSheet> {
     ];
     // A narrow window (Split View, a phone) keeps only the sections' icons.
     final narrow = MediaQuery.sizeOf(context).width < 600;
-    return SimpleFrostedPanel(
+    return SimplePanel(
       key: const Key('simple-menu'),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -2272,11 +2378,27 @@ Widget _gearTile({
           ),
         ),
         if (label != null)
-          TextButton(
-            key: Key('simple-gear-$id-$verb'),
-            style: TextButton.styleFrom(minimumSize: const Size(0, 44)),
-            onPressed: () => action!(),
-            child: Text(label),
+          Builder(
+            builder: (context) => TextButton(
+              key: Key('simple-gear-$id-$verb'),
+              style: TextButton.styleFrom(minimumSize: const Size(0, 44)),
+              // The device notifiers throw why a command failed: say so,
+              // or a refused Connect looks like a dead button.
+              onPressed: () async {
+                final notify = userNotifier(context);
+                final l10n = context.l10n;
+                try {
+                  await action!();
+                } catch (e) {
+                  notify(
+                    l10n.shellGearActionFailed(label, title),
+                    detail: describeEquipmentError(e),
+                    error: true,
+                  );
+                }
+              },
+              child: Text(label),
+            ),
           ),
         if (onOpen != null)
           const Icon(Icons.chevron_right, color: AraColors.textSecondary),
@@ -2323,7 +2445,15 @@ class _ThisRig extends ConsumerWidget {
     final notify = userNotifier(context);
     final l10n = context.l10n;
     final api = ref.read(profileApiProvider);
-    if (api == null) return;
+    if (api == null) {
+      // Shown, not kept: the next read from the rig puts the old value back.
+      notify(
+        l10n.shellCouldntSave,
+        detail: l10n.shellRigNotConnected,
+        error: true,
+      );
+      return;
+    }
     try {
       await persist(api);
     } catch (e) {
@@ -2353,7 +2483,9 @@ class _ThisRig extends ConsumerWidget {
         );
       }
     }
+    if (!context.mounted) return; // Rig closed while the clock was set
     final r = await fillSiteFromGps(ref);
+    if (!context.mounted) return;
     if (!r.success) {
       notify(l10n.shellCouldntGetLocation, detail: r.message, error: true);
       return;
@@ -2364,19 +2496,50 @@ class _ThisRig extends ConsumerWidget {
     if (r.alt != null) site.setElevationM(r.alt!);
     site.setTimeZone(tz_map.latLngToTimezoneString(r.lat, r.lng));
     final api = ref.read(profileApiProvider);
-    if (api != null) {
-      try {
-        await site.persistToServer(api);
-      } catch (e) {
-        notify(
-          l10n.shellCouldntSaveSite,
-          detail: friendlyError(l10n, e),
-          error: true,
-        );
-        return;
-      }
+    if (api == null) {
+      notify(
+        l10n.shellCouldntSaveSite,
+        detail: l10n.shellRigNotConnected,
+        error: true,
+      );
+      return;
+    }
+    try {
+      await site.persistToServer(api);
+    } catch (e) {
+      notify(
+        l10n.shellCouldntSaveSite,
+        detail: friendlyError(l10n, e),
+        error: true,
+      );
+      return;
     }
     notify(l10n.shellSiteFrom(r.sourceLabel));
+  }
+
+  /// The profile's guide optics. With [retry] (the guider connected): the
+  /// rig fills unset ones a few guider round trips later, so one read then
+  /// usually beats it: read again each second, up to ten times, until both
+  /// are set.
+  static Future<void> _readGuideOptics(
+    BuildContext context,
+    WidgetRef ref, {
+    bool retry = true,
+  }) async {
+    for (var i = 0; i < (retry ? 10 : 1); i++) {
+      if (i > 0) await Future<void>.delayed(const Duration(seconds: 1));
+      if (!context.mounted) return;
+      final api = ref.read(profileApiProvider);
+      if (api == null) return;
+      try {
+        await ref.read(phd2SettingsProvider.notifier).hydrateFromServer(api);
+      } catch (_) {
+        // Unreachable for a moment: the next try reads again.
+      }
+      if (!context.mounted) return;
+      final s = ref.read(phd2SettingsProvider);
+      if (s.guideFocalLength > 0 && s.guidePixelSize > 0) return;
+    }
   }
 
   @override
@@ -2538,6 +2701,62 @@ class _ThisRig extends ConsumerWidget {
                   .persistToServer(api),
             ),
           ),
+        // The guide scope: read from the guider when the profile left it
+        // unset, kept in the profile (polar alignment solves with it).
+        _GuideOpticsReader(
+          child: _RigWheelRow.millimetres(
+            l10n,
+            id: 'guidefocal',
+            label: l10n.shellGuideFocalLength,
+            digits: 4,
+            value: ref.watch(phd2SettingsProvider).guideFocalLength.toDouble(),
+            onSet: (v) => _save(
+              context,
+              ref,
+              () => ref
+                  .read(phd2SettingsProvider.notifier)
+                  .setGuideFocalLength(v.round()),
+              (api) =>
+                  ref.read(phd2SettingsProvider.notifier).persistToServer(api),
+            ),
+          ),
+        ),
+        ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 44),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(l10n.shellGuidePixelSize, style: kSimpleText),
+              ),
+              // Read only (it comes from the guider), in the same tile as
+              // the value above it: its button, never enabled, read as text.
+              Builder(
+                builder: (context) {
+                  final pixel = switch (ref
+                      .watch(phd2SettingsProvider)
+                      .guidePixelSize) {
+                    final p when p > 0 => '${p.toStringAsFixed(2)} µm',
+                    _ => l10n.shellNotSet,
+                  };
+                  return Semantics(
+                    excludeSemantics: true,
+                    label: pixel,
+                    child: TextButton(
+                      key: const Key('simple-rig-guidepixel'),
+                      style: TextButton.styleFrom(
+                        backgroundColor: AraColors.tileFill,
+                        disabledBackgroundColor: AraColors.tileFill,
+                        minimumSize: const Size(kSimpleRigControlWidth, 44),
+                      ),
+                      onPressed: null,
+                      child: Text(pixel, style: kSimpleText),
+                    ),
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
         for (final (id, label, value, set)
             in <(String, String, double, void Function(double))>[
               (
@@ -2693,6 +2912,37 @@ class _SettingsPage extends ConsumerWidget {
       body: const SettingsShell(),
     );
   }
+}
+
+/// Reads the profile's guide optics when Rig opens, and again each time the
+/// guider connects (the rig fills unset ones then); draws [child].
+class _GuideOpticsReader extends ConsumerStatefulWidget {
+  const _GuideOpticsReader({required this.child});
+
+  final Widget child;
+
+  @override
+  ConsumerState<_GuideOpticsReader> createState() => _GuideOpticsReaderState();
+}
+
+class _GuideOpticsReaderState extends ConsumerState<_GuideOpticsReader> {
+  @override
+  void initState() {
+    super.initState();
+    ref.listenManual(
+      guiderStatusProvider.select((s) => s.value?.isConnected ?? false),
+      (was, now) {
+        // Open (was null), or the guider just connected.
+        if (was == null || (now && !was)) {
+          unawaited(_ThisRig._readGuideOptics(context, ref, retry: now));
+        }
+      },
+      fireImmediately: true,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }
 
 /// A value the rig keeps, set by wheels: tap it and one wheel per digit
@@ -2916,7 +3166,7 @@ class _RigWheelRowState extends State<_RigWheelRow> {
                 key: Key('simple-rig-${widget.id}'),
                 style: TextButton.styleFrom(
                   backgroundColor: AraColors.tileFill,
-                  minimumSize: const Size(120, 44),
+                  minimumSize: const Size(kSimpleRigControlWidth, 44),
                   side: _open
                       ? const BorderSide(color: AraColors.selectionBg, width: 2)
                       : null,
@@ -3044,21 +3294,25 @@ class _RigStepperState extends State<_RigStepper> {
       spacing: AraSpace.s12,
       children: [
         Expanded(child: Text(widget.label, style: kSimpleText)),
-        DecoratedBox(
+        // The wheels' width, so every Rig value lines up (user, 2026-11-04).
+        Container(
+          key: Key('simple-rig-${widget.id}'),
+          width: kSimpleRigControlWidth,
           decoration: BoxDecoration(
             color: AraColors.tileFill,
             borderRadius: BorderRadius.circular(8),
           ),
           child: Row(
-            mainAxisSize: MainAxisSize.min,
             children: [
               _button(-1),
-              SizedBox(
-                width: 72,
+              Expanded(
                 child: Text(
                   '${(_held ?? widget.value).round()} ${widget.unit}',
                   style: kSimpleText,
                   textAlign: TextAlign.center,
+                  maxLines: 1,
+                  softWrap: false,
+                  overflow: TextOverflow.visible,
                 ),
               ),
               _button(1),

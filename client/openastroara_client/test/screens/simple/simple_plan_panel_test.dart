@@ -85,8 +85,15 @@ class _Seq implements SequenceClient {
   @override
   Future<SequenceDetail> getSequenceDetail(String id) async => SequenceDetail(id: id, body: bodies[id] ?? const {});
 
+  /// Updates that go through before the rest fail (the link drops); -1: none fail.
+  int updatesBeforeFail = -1;
+  /// Holds every update until completed (a slow link).
+  Completer<void>? updateGate;
   @override
   Future<SequenceDetail> updateSequence(String id, {String? name, String? description, Map<String, dynamic>? body}) async {
+    await updateGate?.future;
+    if (updatesBeforeFail == 0) throw DioException(requestOptions: RequestOptions(), message: 'link dropped');
+    if (updatesBeforeFail > 0) updatesBeforeFail--;
     calls.add('update $id');
     if (body != null) bodies[id] = body;
     return SequenceDetail(id: id, body: bodies[id] ?? const {});
@@ -114,13 +121,21 @@ class _Seq implements SequenceClient {
 
   /// What start throws instead, as the daemon refuses.
   Object? startError;
+  /// Holds start until completed (a slow link).
+  Completer<void>? startGate;
   @override
   Future<String> start(String id) async {
     if (startError case final e?) throw e;
+    await startGate?.future;
     return _op('start $id');
   }
+  /// What stop throws instead.
+  Object? stopError;
   @override
-  Future<String> stop(String id) async => _op('stop $id');
+  Future<String> stop(String id) async {
+    if (stopError case final e?) throw e;
+    return _op('stop $id');
+  }
   @override
   Future<String> pause(String id) async => _op('pause $id');
   @override
@@ -323,6 +338,25 @@ void main() {
       return c;
     }
 
+    test('a settings re-read that changes nothing keeps the rows; a queued target\'s rows stay while editing',
+        () async {
+      // Review: hydrate always assigns a new object and the settings have no ==, so the rows reset to the
+      // defaults about one round trip after opening an edit, and Save wrote the defaults.
+      final c = await plan([m31(2)]);
+      final rows = c.read(simpleRunPlanProvider.notifier);
+      rows.setExposure(0, 120);
+      final edited = c.read(simpleRunPlanProvider);
+      await c.read(filterSetProvider.notifier).hydrateGuarded(() async => FilterSetSettings(filters: [..._lrgb]));
+      expect(c.read(simpleRunPlanProvider), edited, reason: 'the same filters read again');
+      const queued = [FilterPlanStep(filterName: 'Ha', exposureSeconds: 300, frameCount: 12)];
+      rows.load(queued);
+      await c.read(filterSetProvider.notifier).hydrateGuarded(() async => const FilterSetSettings(filters: _duo));
+      expect(c.read(simpleRunPlanProvider), queued, reason: "editing a queued target: its own rows");
+      c.invalidate(simpleRunPlanProvider);
+      expect(c.read(simpleRunPlanProvider).map((s) => s.filterName), ['L-enhance', 'L-eXtreme'],
+          reason: 'a new plan follows the filters');
+    });
+
     test('the picked target\'s window splits across the rows; a new sub refits its row', () async {
       final c = await plan([m31(2)]);
       // 2 h over four rows = 30 min each; 5 s subs fit 360, capped at 300.
@@ -505,7 +539,7 @@ void main() {
           SimpleRunSheet(onShowSky: () => showSky++, onPickInSky: () => pick++, onCreated: () {}, onLibrary: () {}),
           sel: null);
       expect(find.text('Search, or pick in the sky.'), findsOneWidget);
-      expect(tester.widget<OutlinedButton>(find.byKey(const Key('simple-run-queue'))).onPressed, isNull);
+      expect(tester.widget<ButtonStyleButton>(find.byKey(const Key('simple-run-queue'))).onPressed, isNull);
       expect(tester.widget<FilledButton>(find.byKey(const Key('simple-run-start'))).onPressed, isNull);
       await tester.tap(find.byKey(const Key('simple-run-pick-in-sky')));
       expect(pick, 1);
@@ -514,6 +548,29 @@ void main() {
       await tester.pump();
       expect(showSky, 1, reason: 'the search runs in the planetarium');
       expect(c.read(planetariumSearchProvider), 'M42');
+    });
+
+    testWidgets('Add to queue is a solid button (button-primary, white words), not an outline', (tester) async {
+      // User, 2026-11-04: the outline read too faintly beside the green Create and start.
+      await _pump(tester, _Seq(), SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}, onLibrary: () {}));
+      final button = tester.widget<FilledButton>(find.byKey(const Key('simple-run-queue')));
+      expect(button.style?.backgroundColor?.resolve({}), AraColors.buttonPrimary);
+      expect(button.style?.foregroundColor?.resolve({}), AraColors.selectionFg);
+    });
+
+    testWidgets("the queue panel's Add target is solid too (button-primary, white words)", (tester) async {
+      await _pump(tester, _Seq(), SimpleRunPanel(onAdd: () {}, onEdit: (_) {}));
+      final button = tester.widget<FilledButton>(find.byKey(const Key('simple-run-add')));
+      expect(button.style?.backgroundColor?.resolve({}), AraColors.buttonPrimary);
+      expect(button.style?.foregroundColor?.resolve({}), AraColors.selectionFg);
+    });
+
+    testWidgets('a picked filter chip reads white on the solid selection blue, not dark on a dim tint', (tester) async {
+      await _pump(tester, _Seq(), SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}, onLibrary: () {}));
+      final chip = tester.widget<FilterChip>(find.byKey(const Key('simple-run-filter-L')));
+      expect(chip.selected, isTrue, reason: 'precondition: L is in the plan');
+      expect(chip.selectedColor, AraColors.selectionBg);
+      expect((chip.label as Text).style?.color, AraColors.selectionFg);
     });
 
     testWidgets('the filters are chips: a tap adds a row, another tap takes it out; the last one stays',
@@ -648,6 +705,31 @@ void main() {
       await tester.pumpAndSettle();
       expect(c.read(simpleRunProvider).busy, isFalse, reason: 'an append ends the busy state');
       expect(created, 1);
+    });
+
+    testWidgets('a target already in the queue is not queued twice; Start now moves it to the front instead',
+        (tester) async {
+      // The rig finds a target's block by its name: a second M31 made removing or editing either hit the first.
+      final seq = _Seq();
+      final c = await _pump(tester, seq,
+          SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}, onLibrary: () {}));
+      await create(tester);
+      c.read(planetariumSelectionProvider.notifier).set(_m42);
+      await tester.pumpAndSettle();
+      await create(tester);
+      c.read(planetariumSelectionProvider.notifier).set(_m31);
+      await tester.pumpAndSettle();
+      await create(tester);
+      expect(seq.calls, ['create M31', 'update seq-1'], reason: 'no second M31 on the rig');
+      expect(c.read(simpleRunProvider).targets.map((t) => t.name), ['M31', 'M42']);
+      expect(find.text('M31 is already in the queue.'), findsOneWidget);
+      c.read(planetariumSelectionProvider.notifier).set(_m42);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('simple-run-start')));
+      await tester.pumpAndSettle();
+      expect(c.read(simpleRunProvider).targets.map((t) => t.name), ['M42', 'M31'], reason: 'moved, not copied');
+      expect(seq.targets('seq-1'), ['M42', 'M31']);
+      expect(seq.calls.last, 'start seq-1');
     });
 
     testWidgets('Create and start creates the run and starts it, then closes the sheet', (tester) async {
@@ -866,6 +948,61 @@ void main() {
     expect(text.right, lessThanOrEqualTo(box.right - 4), reason: 'clear of the right border');
   });
 
+  testWidgets('a failed Stop says so in a pill, so it shows with the sheet and queue panel closed', (tester) async {
+    final (c, seq) = await run(tester);
+    await create(tester);
+    seq.stopError = DioException(
+      requestOptions: RequestOptions(),
+      response: Response(requestOptions: RequestOptions(), statusCode: 409, data: {'detail': 'The run is between targets.'}),
+    );
+    await c.read(simpleRunProvider.notifier).stop();
+    expect(c.read(simpleMessagesProvider).map((m) => (m.kind, m.title)),
+        [(SimpleMessageKind.error, 'The run is between targets.')]);
+  });
+
+  testWidgets("a scheduled start the rig refuses says so in a pill too (Guided Run's last Done has no sheet open)",
+      (tester) async {
+    final (c, seq) = await run(tester);
+    await create(tester);
+    seq.updatesBeforeFail = 0; // writing the start time fails
+    final ok = await c.read(simpleRunProvider.notifier).startQueue(startAt: DateTime.now().add(const Duration(hours: 2)));
+    expect(ok, isFalse);
+    expect(c.read(simpleMessagesProvider).map((m) => m.kind), [SimpleMessageKind.error]);
+    expect(seq.calls.where((call) => call.startsWith('start ')), isEmpty);
+  });
+
+  testWidgets("Guided Run's last Done while the queue is still updating says so instead of doing nothing",
+      (tester) async {
+    // Review of #1486: _op returned quietly while busy, so startQueue reported true and nothing started.
+    final (c, seq) = await run(tester);
+    await create(tester);
+    c.read(planetariumSelectionProvider.notifier).set(_m42);
+    await tester.pumpAndSettle();
+    await create(tester);
+    seq.updateGate = Completer<void>();
+    final n = c.read(simpleRunProvider.notifier);
+    final moving = n.reorder(0, 1);
+    final ok = await n.startQueue();
+    expect(ok, isFalse);
+    expect(c.read(simpleMessagesProvider).single.title, 'The queue is still updating on the rig. Try again in a moment.');
+    expect(seq.calls.where((call) => call.startsWith('start ')), isEmpty);
+    seq.updateGate!.complete();
+    await moving;
+  });
+
+  testWidgets('a second Start while the first is on its way is not sent', (tester) async {
+    final (c, seq) = await run(tester);
+    await create(tester);
+    seq.startGate = Completer<void>();
+    final n = c.read(simpleRunProvider.notifier);
+    final first = n.start();
+    final second = n.start();
+    seq.startGate!.complete();
+    await Future.wait([first, second]);
+    expect(seq.calls.where((call) => call.startsWith('start ')), hasLength(1));
+    expect(c.read(simpleRunProvider).busy, isFalse);
+  });
+
   testWidgets('no storage disk: the daemon\'s words and Open Storage, which leaves for the full UI\'s page', (tester) async {
     final seq = _Seq()
       ..startError = DioException(
@@ -1001,7 +1138,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(seq.targets('seq-1'), ['M31']);
       expect(c.read(simpleRunProvider).targets.map((t) => t.name), ['M31']);
-      await tester.pump(const Duration(seconds: 7)); // the Undo pill fades
+      await tester.pump(kSimpleResultLife + const Duration(seconds: 1)); // the Undo pill fades
     });
 
     Future<(ProviderContainer, _Seq)> queueOfThree(WidgetTester tester) async {
@@ -1038,6 +1175,37 @@ void main() {
       await tester.pumpAndSettle();
       expect(seq.targets('seq-1'), ['M31', 'M42', 'M45']);
       expect(c.read(simpleRunProvider).targets.map((t) => t.name), ['M31', 'M42', 'M45']);
+    });
+
+    testWidgets('Undo still puts the target back after the queue panel has closed', (tester) async {
+      final (c, seq) = await queueOfThree(tester);
+      await tester.drag(find.byKey(const Key('simple-run-edit-0')), const Offset(-400, 0));
+      await tester.pumpAndSettle();
+      final pill = c.read(simpleMessagesProvider).single;
+      // The panel closes (another mode, the sheet shut); the Undo pill stays up for 6 s.
+      await tester.pumpWidget(UncontrolledProviderScope(container: c, child: const MaterialApp(home: SizedBox())));
+      pill.actions.single.onPressed();
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(seq.targets('seq-1'), ['M31', 'M42', 'M45']);
+      expect(c.read(simpleRunProvider).targets.map((t) => t.name), ['M31', 'M42', 'M45']);
+      await tester.pump(kSimpleResultLife + const Duration(seconds: 1)); // the pills fade
+    });
+
+    testWidgets('a second reorder while the first is on its way is not sent', (tester) async {
+      final (c, seq) = await queueOfThree(tester);
+      seq.updateGate = Completer<void>();
+      final before = seq.calls.length;
+      final n = c.read(simpleRunProvider.notifier);
+      final first = n.reorder(0, 2);
+      final second = n.reorder(1, 0);
+      seq.updateGate!.complete();
+      await Future.wait([first, second]);
+      await tester.pumpAndSettle();
+      expect(seq.calls.skip(before).where((call) => call.startsWith('update')), hasLength(2),
+          reason: "the first reorder's two moves only");
+      expect(seq.targets('seq-1'), ['M42', 'M45', 'M31']);
+      expect(c.read(simpleRunProvider).targets.map((t) => t.name), ['M42', 'M45', 'M31']);
     });
 
     testWidgets('queued targets reorder by dragging their handle; the rig follows', (tester) async {
@@ -1082,6 +1250,33 @@ void main() {
       expect(c.read(simpleRunProvider).targets[1].steps.first.frameCount, 7);
       expect(c.read(simpleRunProvider).targets.map((t) => t.name), ['M31', 'M42']);
       expect(closed, 1);
+    });
+
+    testWidgets('an edit the rig loses halfway shows the queue as the rig has it, and says so', (tester) async {
+      // Review: edit removes the block, then adds it back; a drop in between left the screen showing a
+      // target the rig no longer had, so it was never imaged.
+      final seq = _Seq();
+      final c = await _pump(tester, seq,
+          SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}, onLibrary: () {}));
+      await create(tester);
+      await pick(tester, c, _m42);
+      await create(tester);
+      c.read(simpleRunPlanProvider.notifier).load(c.read(simpleRunProvider).targets[1].steps);
+      await tester.pumpWidget(UncontrolledProviderScope(
+        container: c,
+        child: MaterialApp(
+            home: Scaffold(
+                body: Center(
+                    child: SimpleRunSheet(
+                        editing: 1, onShowSky: () {}, onPickInSky: () {}, onCreated: () {}, onLibrary: () {})))),
+      ));
+      await tester.pumpAndSettle();
+      seq.updatesBeforeFail = 1; // the remove goes through; adding it back does not
+      await tester.tap(find.byKey(const Key('simple-run-save')));
+      await tester.pumpAndSettle();
+      expect(seq.targets('seq-1'), ['M31']);
+      expect(c.read(simpleRunProvider).targets.map((t) => t.name), ['M31'], reason: 'what the rig will image');
+      expect(c.read(simpleRunProvider).error, isNotNull);
     });
 
     testWidgets('while imaging: the panel offers Add to queue; the sheet only adds', (tester) async {
@@ -1192,7 +1387,7 @@ void main() {
           name: 'Omega Cen', kind: 'Globular', raHours: 13.4, decDeg: -47.5, raJ2000Hours: 13.4,
           decJ2000Deg: -47.5, altDeg: -30, maxAltDeg: -5);
       await run(tester, sel: never);
-      expect(tester.widget<OutlinedButton>(find.byKey(const Key('simple-run-queue'))).onPressed, isNull);
+      expect(tester.widget<ButtonStyleButton>(find.byKey(const Key('simple-run-queue'))).onPressed, isNull);
       expect(tester.widget<FilledButton>(find.byKey(const Key('simple-run-start'))).onPressed, isNull);
     });
 

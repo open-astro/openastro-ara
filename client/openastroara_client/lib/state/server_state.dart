@@ -50,22 +50,30 @@ final lastRigServiceProvider = Provider<LastRigService>(
   (ref) => LastRigService(),
 );
 
-/// The name of the rig this client last connected to, or null.
-final lastRigNameProvider = FutureProvider<String?>(
+/// The rig this client last connected to, or null.
+final lastRigProvider = FutureProvider<LastRig?>(
   (ref) => ref.read(lastRigServiceProvider).load(),
 );
 
-/// ALP-4890 — the rig to connect to without a tap: the first one found by
-/// the last rig's name. mDNS advertises the name with its dots as dashes and
-/// the subnet sweep reports it as is, so both spellings match.
-// shortcut: a rig on two addresses (Ethernet and Wi-Fi) and two rigs sharing
-// a hostname look alike, so the first found wins; match on the daemon's uuid
-// (in its mDNS TXT record) if two same-named rigs ever share a site.
-AraServer? autoPickRig(Iterable<AraServer> found, String? lastName) {
-  if (lastName == null || lastName.isEmpty) return null;
+/// ALP-4890 — the rig to connect to without a tap: the first one found that
+/// is the last rig. A rig that says its uuid is matched on it (#1485: two
+/// rigs sharing a hostname, or one with no nickname); one that can't is
+/// matched by name, which mDNS advertises with its dots as dashes and the
+/// subnet sweep reports as is, so both spellings match.
+// shortcut: the raw-multicast mDNS path (macOS, Android) reads no TXT record,
+// so its rigs carry no uuid and fall back to the name; read TXT there if two
+// same-named rigs ever share a site with those clients.
+AraServer? autoPickRig(Iterable<AraServer> found, LastRig? last) {
+  if (last == null) return null;
   String key(String n) => n.replaceAll('.', '-').toLowerCase();
   for (final s in found) {
-    if (s.mdnsName != null && key(s.mdnsName!) == key(lastName)) return s;
+    if (last.uuid != null && s.uuid != null) {
+      if (s.uuid == last.uuid) return s;
+    } else if (last.name.isNotEmpty &&
+        s.mdnsName != null &&
+        key(s.mdnsName!) == key(last.name)) {
+      return s;
+    }
   }
   return null;
 }

@@ -33,12 +33,17 @@ class _FakeDiscovery extends ServerDiscoveryService {
 
 /// In-memory last rig.
 class _MemLastRig extends LastRigService {
-  _MemLastRig([this.name]);
-  String? name;
+  _MemLastRig([this.rig]);
+  LastRig? rig;
+  int saves = 0;
+  String? get name => rig?.name;
   @override
-  Future<String?> load() async => name;
+  Future<LastRig?> load() async => rig;
   @override
-  Future<void> save(String name) async => this.name = name;
+  Future<void> save(LastRig rig) async {
+    saves++;
+    this.rig = rig;
+  }
 }
 
 /// ALP-4890: the scan screen with a remembered rig and a handshake that
@@ -51,7 +56,9 @@ Future<ProviderContainer> _scan(WidgetTester tester, List<AraServer> rigs, _MemL
     lastRigServiceProvider.overrideWithValue(last),
     serverHandshakeProvider.overrideWith((ref) async {
       final s = ref.watch(selectedServerProvider);
-      return s == null ? null : ServerInfo(name: s.mdnsName ?? s.hostname, version: '1', apiVersion: '1');
+      return s == null
+          ? null
+          : ServerInfo(name: s.mdnsName ?? s.hostname, version: '1', apiVersion: '1', uuid: 'uuid-${s.hostname}');
     }),
   ]);
   addTearDown(container.dispose);
@@ -71,18 +78,57 @@ void main() {
     const sweep = AraServer(hostname: '10.0.0.5', port: 5555, mdnsName: 'astro.lan');
     const mdns = AraServer(hostname: '10.0.0.6', port: 5555, mdnsName: 'astro-lan');
     const other = AraServer(hostname: '10.0.0.7', port: 5555, mdnsName: 'garage');
-    expect(autoPickRig([other, sweep], 'astro.lan'), sweep);
-    expect(autoPickRig([mdns], 'Astro.lan'), mdns);
-    expect(autoPickRig([mdns, sweep], 'astro.lan'), mdns);
-    expect(autoPickRig([other], 'astro.lan'), isNull);
+    expect(autoPickRig([other, sweep], const LastRig('astro.lan')), sweep);
+    expect(autoPickRig([mdns], const LastRig('Astro.lan')), mdns);
+    expect(autoPickRig([mdns, sweep], const LastRig('astro.lan')), mdns);
+    expect(autoPickRig([other], const LastRig('astro.lan')), isNull);
     expect(autoPickRig([sweep], null), isNull);
-    expect(autoPickRig([const AraServer(hostname: '10.0.0.8', port: 5555)], 'astro.lan'), isNull);
+    expect(autoPickRig([const AraServer(hostname: '10.0.0.8', port: 5555)], const LastRig('astro.lan')), isNull);
+  });
+
+  test('autoPickRig: a rig that says its uuid is matched on it, not on its name (#1485)', () {
+    const mine = AraServer(hostname: '10.0.0.5', port: 5555, mdnsName: 'astro', uuid: 'u-mine');
+    const twin = AraServer(hostname: '10.0.0.6', port: 5555, mdnsName: 'astro', uuid: 'u-twin');
+    const unnamed = AraServer(hostname: '10.0.0.9', port: 5555, uuid: 'u-mine');
+    const noUuid = AraServer(hostname: '10.0.0.7', port: 5555, mdnsName: 'astro');
+    expect(autoPickRig([twin, mine], const LastRig('astro', uuid: 'u-mine')), mine, reason: 'two rigs, one hostname');
+    expect(autoPickRig([twin], const LastRig('astro', uuid: 'u-mine')), isNull);
+    expect(autoPickRig([unnamed], const LastRig('OpenAstro Ara', uuid: 'u-mine')), unnamed,
+        reason: 'a rig with no nickname still comes back');
+    expect(autoPickRig([noUuid], const LastRig('astro', uuid: 'u-mine')), noUuid,
+        reason: 'a path that cannot say the uuid (raw multicast) falls back to the name');
+    expect(autoPickRig([twin], const LastRig('astro')), twin, reason: 'a rig remembered before uuids: by name');
+  });
+
+  testWidgets('the auto-picked rig is confirmed once, however often the handshake answers (#1485)', (tester) async {
+    const rig = AraServer(hostname: '10.0.0.5', port: 5555, mdnsName: 'astro');
+    final last = _MemLastRig(const LastRig('astro'));
+    final c = await _scan(tester, const [rig], last);
+    expect(last.saves, 1);
+    c.invalidate(serverHandshakeProvider);
+    await tester.pump();
+    await tester.pump();
+    expect(last.saves, 1);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('a confirmed rig is remembered with its uuid', (tester) async {
+    const rig = AraServer(hostname: '10.0.0.5', port: 5555, mdnsName: 'astro');
+    final last = _MemLastRig();
+    await _scan(tester, const [rig], last);
+    await tester.tap(find.text('astro'));
+    await tester.pump();
+    await tester.pump();
+    await tester.tap(find.text('Continue'));
+    await tester.pump();
+    expect(last.rig, const LastRig('astro', uuid: 'uuid-10.0.0.5'));
+    await tester.pumpWidget(const SizedBox.shrink());
   });
 
   testWidgets('ALP-4890: the last rig connects on its own when the scan finds it', (tester) async {
     const rig = AraServer(hostname: '10.0.0.5', port: 5555, mdnsName: 'astro');
     const other = AraServer(hostname: '10.0.0.7', port: 5555, mdnsName: 'garage');
-    final c = await _scan(tester, const [other, rig], _MemLastRig('astro'));
+    final c = await _scan(tester, const [other, rig], _MemLastRig(const LastRig('astro')));
     expect(c.read(selectedServerProvider), rig);
     expect(await c.read(savedServersProvider.future), [rig]);
     await tester.pumpWidget(const SizedBox.shrink());
@@ -90,7 +136,7 @@ void main() {
 
   testWidgets('ALP-4890: no remembered rig, or another rig, waits for a tap; a tap remembers it', (tester) async {
     const rig = AraServer(hostname: '10.0.0.5', port: 5555, mdnsName: 'astro');
-    final last = _MemLastRig('garage');
+    final last = _MemLastRig(const LastRig('garage'));
     final c = await _scan(tester, const [rig], last);
     expect(c.read(selectedServerProvider), isNull);
     expect(await c.read(savedServersProvider.future), isEmpty);
@@ -105,7 +151,7 @@ void main() {
 
   testWidgets('ALP-4890: Launchpad\'s chooser never connects on its own', (tester) async {
     const rig = AraServer(hostname: '10.0.0.5', port: 5555, mdnsName: 'astro');
-    final c = await _scan(tester, const [rig], _MemLastRig('astro'), chooser: true);
+    final c = await _scan(tester, const [rig], _MemLastRig(const LastRig('astro')), chooser: true);
     expect(c.read(selectedServerProvider), isNull);
     expect(await c.read(savedServersProvider.future), isEmpty);
     await tester.pumpWidget(const SizedBox.shrink());

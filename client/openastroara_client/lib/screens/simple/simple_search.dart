@@ -14,7 +14,7 @@ import '../../theme/ara_metrics.dart';
 import 'simple_plan_panel.dart' show SimpleSuggestion;
 import 'simple_preview_panel.dart' show kSimpleText;
 import 'simple_shell.dart'
-    show SimpleFrostedPanel, SimpleModeScreen, SimpleModeScreenLabels;
+    show SimplePanel, SimpleModeScreen, SimpleModeScreenLabels;
 
 /// What a search hit opens, all inside Simple Mode: an object in the sky, a
 /// Settings section, a mode, or the Image Library on a target.
@@ -52,6 +52,8 @@ List<(String, String, String)> _settings(AppLocalizations l) => [
   (l.searchSectionRig, 'Rig', l.searchWordsRig),
   (l.searchSettingAperture, 'Rig', l.searchWordsAperture),
   (l.searchSettingFocalLength, 'Rig', l.searchWordsFocalLength),
+  (l.shellGuideFocalLength, 'Rig', l.searchWordsGuideScope),
+  (l.shellGuidePixelSize, 'Rig', l.searchWordsGuideScope),
   (l.searchSettingLatitude, 'Rig', l.searchWordsSite),
   (l.searchSettingLongitude, 'Rig', l.searchWordsSite),
   (l.searchSettingElevation, 'Rig', l.searchWordsElevation),
@@ -241,7 +243,7 @@ class _SimpleSearchPanelState extends ConsumerState<SimpleSearchPanel> {
         settings.isEmpty &&
         modes.isEmpty &&
         images.isEmpty;
-    return SimpleFrostedPanel(
+    return SimplePanel(
       key: const Key('simple-search'),
       padding: const EdgeInsets.all(AraSpace.s12),
       child: Column(

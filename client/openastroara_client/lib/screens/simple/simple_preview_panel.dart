@@ -25,7 +25,12 @@ import 'simple_plan_panel.dart' show simpleRunProvider;
 import 'simple_device_windows.dart'
     show SimpleGainSlider, simpleCelsius, simpleMountMotionProvider;
 import 'simple_shell.dart'
-    show SimplePanel, SimpleSegment, kSimpleRailWidth, kSimpleStatusMaxWidth;
+    show
+        SimplePanel,
+        SimpleSegment,
+        kSimpleRailWidth,
+        kSimpleStatusMaxWidth,
+        simpleFrost;
 
 /// Simple Mode body text: 14 px minimum (brief), tabular for live numbers.
 const kSimpleText = TextStyle(
@@ -200,10 +205,14 @@ class SimpleFactTiles extends StatelessWidget {
     borderRadius: BorderRadius.circular(10),
   );
 
+  // On the image, the panel blur; in Settings › Rig the sheet already has it.
+  Widget _frost(Widget child) => expand ? child : simpleFrost(child);
+
   @override
   Widget build(BuildContext context) {
     if (MediaQuery.textScalerOf(context).scale(1) > 1.3) {
-      return Container(
+      return _frost(
+        Container(
         key: const Key('simple-facts-list'),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: _box,
@@ -222,6 +231,7 @@ class SimpleFactTiles extends StatelessWidget {
               ),
           ],
         ),
+      ),
       );
     }
     return _tiles();
@@ -234,7 +244,8 @@ class SimpleFactTiles extends StatelessWidget {
   );
 
   Widget _tile(String label, String value) {
-    final tile = Container(
+    final tile = _frost(
+        Container(
       width: expand ? null : kSimpleRailWidth,
       height: 56,
       padding: const EdgeInsets.symmetric(horizontal: 4),
@@ -253,7 +264,8 @@ class SimpleFactTiles extends StatelessWidget {
           ),
         ],
       ),
-    );
+    ),
+      );
     return expand ? Expanded(child: tile) : tile;
   }
 }
@@ -301,14 +313,8 @@ class SimpleSettingsPopover extends ConsumerWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         spacing: AraSpace.s8,
         children: [
-          Text(
-            context.l10n.previewSettings,
-            style: const TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: AraColors.textPrimary,
-            ),
-          ),
+          // No title: the chip that opened it says what it is (user,
+          // 2026-11-04).
           SimplePresetTile<Duration>(
             key: const Key('simple-exposure'),
             label: context.l10n.previewExposure,
@@ -683,15 +689,12 @@ class SimpleShutterButton extends StatelessWidget {
           alignment: Alignment.center,
           child: start && !running
               ? Icon(Icons.play_arrow, size: 40, color: fg)
+              : running
+              ? SimpleStopSquare(color: enabled ? AraColors.accentError : fg)
               : Container(
-                  width: running ? 22 : 40,
-                  height: running ? 22 : 40,
-                  decoration: BoxDecoration(
-                    // The stop square is red: stop reads as stop.
-                    color: running && enabled ? AraColors.accentError : fg,
-                    shape: running ? BoxShape.rectangle : BoxShape.circle,
-                    borderRadius: running ? BorderRadius.circular(4) : null,
-                  ),
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(color: fg, shape: BoxShape.circle),
                 ),
         ),
       ),
@@ -703,6 +706,28 @@ class SimpleShutterButton extends StatelessWidget {
 /// REC light): looping, taking a frame with its countdown and bar,
 /// stopping, frame ready, or why it failed. Nothing while idle. It sits
 /// outside the panels, so it stays in the immersive view.
+/// The stop square's side: the shutter's while it works, and the Focuser
+/// dial's middle while autofocus runs.
+const double kSimpleStopSquare = 22;
+
+/// The square that stops what is running; red, so stop reads as stop.
+class SimpleStopSquare extends StatelessWidget {
+  const SimpleStopSquare({super.key, this.color = AraColors.accentError});
+
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    key: const Key('simple-stop-square'),
+    width: kSimpleStopSquare,
+    height: kSimpleStopSquare,
+    decoration: BoxDecoration(
+      color: color,
+      borderRadius: BorderRadius.circular(4),
+    ),
+  );
+}
+
 /// The status pill's height (Plan's sheet starts below it).
 const double kSimpleStatusHeight = 48;
 

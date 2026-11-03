@@ -22,6 +22,8 @@ void main() {
         File('lib/l10n/$f').readAsStringSync(),
       ) as Map<String, dynamic>).keys.where((k) => !k.startsWith('@')).toSet();
       expect(keys('app_pt_BR.arb'), keys('app_en.arb'));
+      expect(keys('app_pt.arb'), isEmpty,
+          reason: 'only the base gen-l10n needs: pt alone is Portugal too');
       final pt = lookupAppLocalizations(const Locale('pt', 'BR'));
       expect(pt.localeName, 'pt_BR');
       expect(pt.pillsMoreSemantics(1), isNot(en.pillsMoreSemantics(1)));
@@ -45,5 +47,17 @@ void main() {
     );
     expect(friendlyError(pt, Exception()), 'Não foi possível fazer isso.');
     expect(guiderRuntimeText(pt, GuiderRuntimeState.stopped), 'Sem guiagem');
+  });
+
+  test('the English is US English: the project is maintained in the US', () {
+    final words = RegExp(
+        r'\b(centre\w*|centred|centring|cancell\w*|colour\w*|metres?|grey|favour\w*|behaviour\w*|licence|catalogue\w*)\b',
+        caseSensitive: false);
+    final en = jsonDecode(File('lib/l10n/app_en.arb').readAsStringSync()) as Map<String, dynamic>;
+    final british = {
+      for (final e in en.entries)
+        if (!e.key.startsWith('@') && e.value is String && words.hasMatch(e.value as String)) e.key: e.value,
+    };
+    expect(british, isEmpty);
   });
 }

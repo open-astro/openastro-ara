@@ -6,7 +6,7 @@ import '../../state/simple_messages_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
 import 'simple_preview_panel.dart' show kSimpleText;
-import 'simple_shell.dart' show kSimpleInset;
+import 'simple_shell.dart' show kSimpleInset, simpleFrost;
 
 /// A pill's height when its words take one line (two lines grow it).
 const double kSimpleMessageHeight = 48;
@@ -33,7 +33,10 @@ class _SimpleMessagePillsState extends ConsumerState<SimpleMessagePills> {
     // Budgeted at one line a pill plus the gap; a two-line pill can push the
     // stack a few pixels past it.
     const step = kSimpleMessageHeight + AraSpace.s8;
-    var fit = ((widget.maxHeight + AraSpace.s8) / step).floor();
+    // No limit (the immersive view): every message shows.
+    var fit = widget.maxHeight.isFinite
+        ? ((widget.maxHeight + AraSpace.s8) / step).floor()
+        : messages.length;
     if (fit < messages.length) fit = ((widget.maxHeight - 44) / step).floor();
     fit = fit.clamp(1, messages.length);
     final folded = !_all && fit < messages.length;
@@ -58,7 +61,8 @@ class _SimpleMessagePillsState extends ConsumerState<SimpleMessagePills> {
         if ((folded && !inline) || (_all && messages.length > fit))
           Semantics(
             button: true,
-            child: Material(
+            child: simpleFrost(
+              Material(
               color: AraColors.overlayScrim,
               borderRadius: BorderRadius.circular(10),
               child: InkWell(
@@ -77,6 +81,7 @@ class _SimpleMessagePillsState extends ConsumerState<SimpleMessagePills> {
                   ),
                 ),
               ),
+            ),
             ),
           ),
       ],
@@ -110,13 +115,18 @@ class _Pill extends ConsumerWidget {
         AraColors.accentBusy,
         AraColors.accentBusy,
       ),
+      SimpleMessageKind.warning => (
+        AraColors.accentWarning,
+        AraColors.accentWarning,
+      ),
     };
     final reduced = MediaQuery.disableAnimationsOf(context);
     return Semantics(
       // Read out as it appears.
       liveRegion: true,
       container: true,
-      child: Container(
+      child: simpleFrost(
+        Container(
         key: Key('simple-message-${m.id}'),
         constraints: const BoxConstraints(minHeight: kSimpleMessageHeight),
         padding: const EdgeInsets.only(left: 14, right: 4),
@@ -154,9 +164,9 @@ class _Pill extends ConsumerWidget {
                           ],
                         ],
                       ),
+                      // Whole, however long: an Emergency Stop's summary
+                      // was cut at two lines (user, 2026-11-04).
                       style: kSimpleText,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                 ),
@@ -169,7 +179,8 @@ class _Pill extends ConsumerWidget {
                       semanticsLabel: context.l10n.pillsMoreSemantics(more!),
                     ),
                   ),
-                if (m.kind == SimpleMessageKind.error)
+                if (m.kind == SimpleMessageKind.error ||
+                    m.kind == SimpleMessageKind.warning)
                   IconButton(
                     tooltip: context.l10n.pillsDismiss,
                     icon: const Icon(Icons.close, size: 18),
@@ -233,6 +244,7 @@ class _Pill extends ConsumerWidget {
               ),
           ],
         ),
+      ),
       ),
     );
   }

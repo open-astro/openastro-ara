@@ -1047,6 +1047,8 @@ public static partial class EquipmentEndpoints {
         try {
             var listed = alpaca.GetConfiguredDevicesAsync(host, device.IpPort, ct);
             var driver = alpaca.GetDriverVersionAsync(host, device.IpPort, wire, device.AlpacaDeviceNumber, ct);
+            // Await both: a list that throws must not leave the driver lookup's fault unobserved (#1485).
+            await Task.WhenAll(listed, driver).ConfigureAwait(false);
             var entry = (await listed.ConfigureAwait(false)).GetValueOrDefault(
                 $"{wire}/{device.AlpacaDeviceNumber.ToString(System.Globalization.CultureInfo.InvariantCulture)}");
             return Results.Ok(new DeviceDriverDto(await driver.ConfigureAwait(false), entry?.SdkVersion, entry?.Firmware,
@@ -1082,6 +1084,8 @@ public static partial class EquipmentEndpoints {
             var (host, port, device) = ep.Value;
             var listed = alpaca.GetConfiguredDevicesAsync(host, port, ct);
             var driver = alpaca.GetDriverVersionAsync(host, port, "camera", device, ct);
+            // Await both: a list that throws must not leave the driver lookup's fault unobserved (#1485).
+            await Task.WhenAll(listed, driver).ConfigureAwait(false);
             var entry = (await listed.ConfigureAwait(false)).GetValueOrDefault(
                 $"camera/{device.ToString(System.Globalization.CultureInfo.InvariantCulture)}");
             return Results.Ok(new DeviceDriverDto(await driver.ConfigureAwait(false), entry?.SdkVersion, entry?.Firmware,

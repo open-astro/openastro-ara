@@ -57,6 +57,15 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             return (size[0], size[1]);
         }
 
+        /// <summary>The binning the guider runs its camera at, or null when it can't say (no camera, or a
+        /// guider without <c>get_camera_binning</c>).</summary>
+        public async Task<int?> GetCameraBinningAsync(CancellationToken ct) {
+            ct.ThrowIfCancellationRequested();
+            RequireConnectedForLive();
+            var response = await SendMessage<Phd2IntResponse>(new Phd2NamedGetter("get_camera_binning"), LiveRpcTimeoutMs, notifyOnError: false).ConfigureAwait(false);
+            return response.error == null && response.result is > 0 ? response.result : null;
+        }
+
         /// <summary>The locked star's position, or null when none is locked. Quiet: no star is the
         /// normal answer while stopped, never an inbox error (the live view polls it).</summary>
         public async Task<LockPosition?> GetLockPositionQuietlyAsync(CancellationToken ct) {

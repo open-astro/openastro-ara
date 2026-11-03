@@ -36,6 +36,7 @@ import '../../state/sky_atlas/tonight_sky_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
 import '../../l10n/l10n.dart';
+import '../../state/app_locale_state.dart';
 import '../../util/friendly_error.dart';
 import '../../util/tonight_sky_local.dart' show darkStart, scheduleAllowed;
 import '../../widgets/sequencer/target_plan_dialog.dart'
@@ -45,6 +46,8 @@ import '../../widgets/emergency_stop_button.dart' show kEmergencyStopHold;
 import '../../widgets/stop_mount_overlay.dart' show SlewWsEvents;
 import '../../widgets/sequencer/run_completion_sheet.dart'
     show runFramesPerFilter;
+import 'simple_autopilot.dart'
+    show AutopilotStep, autopilotNext, autopilotProvider;
 import 'simple_device_windows.dart' show SimpleGainSlider;
 import 'simple_preview_panel.dart'
     show
@@ -56,6 +59,7 @@ import 'simple_preview_panel.dart'
 import 'simple_shell.dart'
     show
         SimplePanel,
+        simpleFrost,
         kSimpleGoStyle,
         kSimpleInset,
         kSimpleRailWidth,
@@ -201,19 +205,42 @@ final simpleDarkHoursProvider = Provider<double?>((ref) {
 class SimpleRunPlanNotifier extends Notifier<List<FilterPlanStep>> {
   double? _darkHours;
 
+  /// A queued target's rows ([load]): settings changes leave them alone.
+  bool _loaded = false;
+
   @override
   List<FilterPlanStep> build() {
+    _loaded = false;
     ref.listen(simpleDarkHoursProvider, (prev, next) {
       if (prev == next) return;
       _darkHours = next;
       state = [for (final s in state) _fit(s, s.exposureSeconds)];
     });
-    _darkHours = ref.read(simpleDarkHoursProvider);
-    return simpleRunDefaultPlan(
-      ref.watch(filterSetProvider).filters,
-      ref.watch(imagingDefaultsProvider).defaultExposure.inMilliseconds / 1000,
-      remainingDarkHours: _darkHours,
+    // A re-read of the settings assigns new objects (they have no ==), so
+    // only a real change of filters or default sub starts the rows afresh,
+    // and never under a queued target's own rows.
+    ref.listen(
+      filterSetProvider.select(
+        (s) => [for (final f in s.filters) '${f.name}/${f.kind}'].join('|'),
+      ),
+      (_, _) => _reseed(),
     );
+    ref.listen(
+      imagingDefaultsProvider.select((d) => d.defaultExposure),
+      (_, _) => _reseed(),
+    );
+    _darkHours = ref.read(simpleDarkHoursProvider);
+    return _defaults();
+  }
+
+  List<FilterPlanStep> _defaults() => simpleRunDefaultPlan(
+    ref.read(filterSetProvider).filters,
+    ref.read(imagingDefaultsProvider).defaultExposure.inMilliseconds / 1000,
+    remainingDarkHours: _darkHours,
+  );
+
+  void _reseed() {
+    if (!_loaded) state = _defaults();
   }
 
   FilterPlanStep _fit(FilterPlanStep s, double exposureSeconds) =>
@@ -240,7 +267,10 @@ class SimpleRunPlanNotifier extends Notifier<List<FilterPlanStep>> {
 
   // Without a window the count the user set stays.
   /// Editing a queued target: its rows, to change and save back.
-  void load(List<FilterPlanStep> steps) => state = [...steps];
+  void load(List<FilterPlanStep> steps) {
+    _loaded = true;
+    state = [...steps];
+  }
 
   void setExposure(int i, double seconds) => _darkHours == null
       ? _set(i, exposureSeconds: seconds)
@@ -529,6 +559,20 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
     final steps = ref.read(simpleRunPlanProvider);
     final gain = ref.read(simpleRunGainProvider);
     if (sel == null || state.busy) return false;
+    // One block per name (the rig finds a target's block by it): a queued
+    // target isn't added again; Start now moves it to the front instead.
+    final queued = state.targets.indexWhere((t) => t.name == sel.name);
+    if (queued >= 0) {
+      if (!first) {
+        state = state.copyWith(
+          error: l10nFor(this.ref.read(appLocaleProvider))
+              .planAlreadyQueued(sel.name),
+        );
+        return false;
+      }
+      if (queued > 0) await reorder(queued, 0);
+      return state.error == null;
+    }
     final queue = state.sequenceId;
     state = state.copyWith(busy: true);
     try {
@@ -566,7 +610,7 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
         } catch (_) {}
         state = state.copyWith(
           busy: false,
-          error: "The run is ending; this target can't join it.",
+          error: l10nFor(this.ref.read(appLocaleProvider)).planRunEnding,
         );
         return false;
       }
@@ -672,8 +716,30 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
       );
       return true;
     } catch (e) {
-      state = state.copyWith(busy: false, error: _why(e, 'save the edit'));
+      state = state.copyWith(
+        busy: false,
+        error: _why(e, 'save the edit'),
+        targets: await _asOnRig(api, id),
+      );
       return false;
+    }
+  }
+
+  /// The queue as the rig holds it, after an edit or reorder that stopped
+  /// halfway: the targets still on it, in its order. The list as it was when
+  /// the rig can't be read either.
+  Future<List<SimpleTarget>> _asOnRig(SequenceClient api, String id) async {
+    try {
+      final body = (await api.getSequenceDetail(id)).body;
+      final at = {
+        for (final t in state.targets) t.name: indexOfTargetBlock(body, t.name),
+      };
+      return [
+        for (final t in state.targets)
+          if (at[t.name]! >= 0) t,
+      ]..sort((a, b) => at[a.name]!.compareTo(at[b.name]!));
+    } catch (_) {
+      return state.targets;
     }
   }
 
@@ -691,15 +757,17 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
   }
 
   /// Put a removed target back at [at] (Undo after a swipe): added to the
-  /// rig again and moved into place. True once back.
-  Future<bool> restore(WidgetRef ref, SimpleTarget t, int at) async {
+  /// rig again and moved into place. True once back. Through this notifier's
+  /// container, not a widget's ref: the pill outlives the queue panel.
+  Future<bool> restore(SimpleTarget t, int at) async {
     final id = state.sequenceId;
     if (id == null || state.busy || t.steps.isEmpty) return false;
     state = state.copyWith(busy: true);
     try {
-      this.ref.read(selectedSequenceIdProvider.notifier).select(id);
+      ref.read(selectedSequenceIdProvider.notifier).select(id);
       final r = await createImagingRun(
-        ref,
+        null,
+        container: ref.container,
         raDeg: t.raDeg,
         decDeg: t.decDeg,
         targetName: t.name,
@@ -736,6 +804,7 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
     final id = state.sequenceId;
     final n = state.targets.length;
     if (id == null ||
+        state.busy ||
         from == to ||
         from < 0 ||
         to < 0 ||
@@ -755,7 +824,12 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
       }
       state = state.copyWith(targets: wanted, busy: false);
     } catch (e) {
-      state = state.copyWith(busy: false, error: _why(e, 'reorder the queue'));
+      final api = ref.read(sequenceApiProvider);
+      state = state.copyWith(
+        busy: false,
+        error: _why(e, 'reorder the queue'),
+        targets: api == null ? null : await _asOnRig(api, id),
+      );
     }
   }
 
@@ -786,14 +860,31 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
   /// at once but waits on the rig until then (cooling 15 min before).
   Future<bool> createAndStart(WidgetRef ref, {DateTime? startAt}) async {
     if (!await create(ref, first: state.sequenceId != null)) return false;
-    final api = this.ref.read(sequenceApiProvider);
+    return startQueue(startAt: startAt);
+  }
+
+  /// Starts the queue as it stands (Guided Run's last Done). With [startAt]
+  /// the run starts at once but waits on the rig until then.
+  Future<bool> startQueue({DateTime? startAt}) async {
+    // An edit or reorder still on its way: _op would skip the start quietly
+    // and this would report success (review of #1486).
+    if (state.busy) {
+      ref
+          .read(simpleMessagesProvider.notifier)
+          .show(
+            SimpleMessageKind.error,
+            l10nFor(ref.read(appLocaleProvider)).planQueueBusy,
+          );
+      return false;
+    }
+    final api = ref.read(sequenceApiProvider);
     final id = state.sequenceId;
     final active =
-        this.ref.read(sequenceRunStateProvider).value?.state?.isActive ?? false;
+        ref.read(sequenceRunStateProvider).value?.state?.isActive ?? false;
     if (startAt != null && api != null && id != null && !active) {
       try {
         final body = (await api.getSequenceDetail(id)).body;
-        final clock = await this.ref.read(timeSyncApiProvider)?.getState();
+        final clock = await ref.read(timeSyncApiProvider)?.getState();
         await api.updateSequence(
           id,
           body: scheduleRunBody(
@@ -803,7 +894,10 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
           ),
         );
       } catch (e) {
-        state = state.copyWith(error: _why(e, 'schedule the start'));
+        final why = _why(e, 'schedule the start');
+        state = state.copyWith(error: why);
+        // A pill too, as _op's: Guided Run's last Done starts it with no sheet open.
+        ref.read(simpleMessagesProvider.notifier).show(SimpleMessageKind.error, why);
         return false;
       }
     }
@@ -845,19 +939,28 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
     final id = (info?.state?.isActive ?? false)
         ? info!.sequenceId
         : state.sequenceId;
-    if (api == null || id == null || id.isEmpty) return;
+    // One at a time: a second tap while the first is on its way isn't sent.
+    if (api == null || id == null || id.isEmpty || state.busy) return;
     final undo = state;
-    state = (before ?? state).copyWith();
+    state = (before ?? state).copyWith(busy: true);
     try {
       await op(api, id);
+      state = state.copyWith(busy: false);
     } catch (e) {
+      final why = _why(e, action);
       state = undo.copyWith(
-        error: _why(e, action),
+        busy: false,
+        error: why,
         noStorage:
             e is DioException &&
             e.response?.data is Map &&
             e.response!.data['title'] == 'store_unavailable',
       );
+      // Also as a pill: the sheet and queue panel that show the error may be
+      // closed (a failed Stop from the shutter, with the rig still imaging).
+      ref
+          .read(simpleMessagesProvider.notifier)
+          .show(SimpleMessageKind.error, why);
     }
     await ref.read(sequenceRunStateProvider.notifier).refresh();
   }
@@ -1111,7 +1214,8 @@ class _PlanSquare extends StatelessWidget {
     return Semantics(
       button: true,
       label: context.l10n.planSquareLabel(label ?? name),
-      child: Material(
+      child: simpleFrost(
+        Material(
         color: AraColors.overlayScrim,
         shape: RoundedRectangleBorder(
           side: BorderSide(color: color),
@@ -1168,6 +1272,7 @@ class _PlanSquare extends StatelessWidget {
             ),
           ),
         ),
+      ),
       ),
     );
   }
@@ -1585,6 +1690,19 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
     final imaging =
         ref.watch(sequenceRunStateProvider).value?.state?.isActive ?? false;
     final off = sel == null || sel.belowHorizon || run.busy || imaging;
+    // Guided Run's plan step only queues; its green button moves on (or, with
+    // focus and polar alignment done, starts imaging).
+    final guided = ref.watch(autopilotProvider) == AutopilotStep.plan;
+    final guidedNext = guided
+        ? autopilotNext(
+            after: AutopilotStep.plan,
+            focused: ref.watch(setupFocusStateProvider) == SetupStepState.done,
+            aligned:
+                ref.watch(setupPolarAlignStateProvider) == SetupStepState.done,
+            permanentPier:
+                ref.watch(simplePermanentPierProvider).value ?? false,
+          )
+        : null;
     final now = ref.watch(clockProvider)();
     final dark = ref.watch(simpleDarkStartProvider);
     final canSchedule = ref.watch(simpleScheduleAllowedProvider);
@@ -1676,12 +1794,14 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       spacing: AraSpace.s8,
       children: [
-        Text(
-          editing == null
-              ? context.l10n.planTonightsPlan
-              : context.l10n.planEditTarget(run.targets[editing].name),
-          style: _head,
-        ),
+        // Guided Run's step strip already names the step (user, 2026-11-04).
+        if (!guided || editing != null)
+          Text(
+            editing == null
+                ? context.l10n.planTonightsPlan
+                : context.l10n.planEditTarget(run.targets[editing].name),
+            style: _head,
+          ),
         if (!wide && editing == null) ...lists,
         // Editing keeps the target: to change it, delete it and add another.
         if (editing == null) ...[
@@ -1763,10 +1883,19 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
               for (final f in filters)
                 FilterChip(
                   key: Key('simple-run-filter-${f.name}'),
-                  label: Text(f.name),
+                  // Picked: the segments' solid blue with white words, not a
+                  // dim tint under dark ones (user, 2026-11-04).
+                  label: Text(
+                    f.name,
+                    style: kSimpleText.copyWith(
+                      color: steps.any((s) => s.filterName == f.name)
+                          ? AraColors.selectionFg
+                          : AraColors.textPrimary,
+                    ),
+                  ),
                   selected: steps.any((s) => s.filterName == f.name),
                   showCheckmark: false,
-                  selectedColor: AraColors.selectionTint,
+                  selectedColor: AraColors.selectionBg,
                   onSelected: (on) => on
                       ? plan.add(f.name)
                       : plan.remove(
@@ -1870,7 +1999,9 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
             style: kSimpleText.copyWith(color: AraColors.accentConnected),
           ),
         if (run.error != null) _RunError(run),
-        if (editing == null && !imaging) ...[
+        if (guided && editing == null)
+          Text(context.l10n.guidedImagingStartsAfter, style: _dim)
+        else if (editing == null && !imaging) ...[
           Wrap(
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
@@ -1974,8 +2105,14 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
             spacing: AraSpace.s8,
             children: [
               Expanded(
-                child: OutlinedButton(
+                // Solid, so it reads beside the green Create and start (user,
+                // 2026-11-04): button-primary is the fill colour.
+                child: FilledButton(
                   key: const Key('simple-run-queue'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AraColors.buttonPrimary,
+                    foregroundColor: AraColors.selectionFg,
+                  ),
                   onPressed: queueOff
                       ? null
                       : () async {
@@ -2001,7 +2138,11 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
                 child: FilledButton(
                   key: const Key('simple-run-start'),
                   style: kSimpleGoStyle,
-                  onPressed: off
+                  onPressed: guided
+                      ? (run.sequenceId == null || run.busy
+                            ? null
+                            : ref.read(autopilotProvider.notifier).next)
+                      : off
                       ? null
                       : () async {
                           final ok = await ref
@@ -2013,7 +2154,14 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
                           if (ok) widget.onCreated();
                         },
                   child: Text(
-                    run.busy
+                    guided
+                        ? switch (guidedNext) {
+                            AutopilotStep.focus => context.l10n.guidedNextFocus,
+                            AutopilotStep.polarAlign =>
+                              context.l10n.guidedNextPolarAlign,
+                            _ => context.l10n.guidedStartImaging,
+                          }
+                        : run.busy
                         ? context.l10n.planStarting
                         : startAt != null && !imaging
                         ? context.l10n.planStartAt(_hhmm(startAt))
@@ -2071,16 +2219,19 @@ class _QueueList extends ConsumerWidget {
     Future<void> remove(int i) async {
       final t = run.targets[i];
       final l10n = context.l10n;
+      // Read before the await: this row may be gone when it returns.
+      final container = ProviderScope.containerOf(context, listen: false);
       await notifier.remove(i);
-      if (ref.read(simpleRunProvider).sequenceId == null) return;
-      final messages = ref.read(simpleMessagesProvider.notifier);
-      messages.show(
-        SimpleMessageKind.result,
-        l10n.planTargetRemoved(t.name),
-        actions: [
-          SimpleMessageAction(l10n.planUndo, () => notifier.restore(ref, t, i)),
-        ],
-      );
+      if (container.read(simpleRunProvider).sequenceId == null) return;
+      container
+          .read(simpleMessagesProvider.notifier)
+          .show(
+            SimpleMessageKind.result,
+            l10n.planTargetRemoved(t.name),
+            actions: [
+              SimpleMessageAction(l10n.planUndo, () => notifier.restore(t, i)),
+            ],
+          );
     }
 
     Widget row(int i) {
@@ -2489,8 +2640,13 @@ class SimpleRunPanel extends ConsumerWidget {
                 context.l10n.planHintPause,
                 style: _dim.copyWith(fontSize: 12),
               ),
-            TextButton(
+            // Solid like the sheet's Add to queue (user, 2026-11-04).
+            FilledButton(
               key: const Key('simple-run-add'),
+              style: FilledButton.styleFrom(
+                backgroundColor: AraColors.buttonPrimary,
+                foregroundColor: AraColors.selectionFg,
+              ),
               onPressed: onAdd,
               child: Text(context.l10n.planAddTarget),
             ),

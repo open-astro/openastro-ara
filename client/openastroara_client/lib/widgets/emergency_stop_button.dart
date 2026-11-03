@@ -196,6 +196,9 @@ class _EmergencyStopButtonState extends ConsumerState<EmergencyStopButton>
         error: result.failedRungs.isNotEmpty,
         snackBarRed: false,
         snackBarDuration: const Duration(seconds: 10),
+        // Red when a rung failed; else amber, done but the rig needs a look.
+        // Either way it waits to be read (user, 2026-11-04).
+        warning: true,
       );
     } catch (e) {
       notify(

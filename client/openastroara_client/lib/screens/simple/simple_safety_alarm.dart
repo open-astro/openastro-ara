@@ -3,11 +3,30 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../l10n/l10n.dart';
 import '../../state/alarm/safety_alarm_state.dart';
+import '../../state/simple_mode_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../widgets/emergency_stop_button.dart'
     show localEmergencyStopProvider;
 import '../../theme/ara_metrics.dart';
 import 'simple_preview_panel.dart' show kSimpleText;
+
+/// Simple Mode's safety alarm over every screen: MaterialApp's builder puts
+/// it above the Navigator, so the Image Library or the full Settings page
+/// pushed over the shell can't hide it.
+class SimpleSafetyAlarmLayer extends ConsumerWidget {
+  const SimpleSafetyAlarmLayer({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) => Stack(
+    fit: StackFit.expand,
+    children: [
+      child,
+      if (ref.watch(simpleModeActiveProvider)) const SimpleSafetyAlarm(),
+    ],
+  );
+}
 
 /// Simple Mode's safety alarm (unsafe conditions or an emergency stop): the
 /// one popup it keeps, as a full-screen warning over everything, immersive

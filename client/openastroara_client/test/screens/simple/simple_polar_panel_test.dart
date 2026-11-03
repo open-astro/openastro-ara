@@ -122,6 +122,21 @@ void main() {
     expect(api!.calls, isEmpty);
   });
 
+  testWidgets('the turns read at a glance: big arrows beside a big bullseye, like the full UI', (tester) async {
+    await _pump(tester, _adjusting);
+    for (final axis in ['alt', 'az']) {
+      final arrow = find.descendant(of: find.byKey(Key('simple-polar-turn-$axis')), matching: find.byType(Icon));
+      expect(tester.widget<Icon>(arrow).size, greaterThanOrEqualTo(40), reason: axis);
+    }
+    final bullseye = find.byKey(const Key('simple-polar-bullseye'));
+    expect(tester.getSize(bullseye).width, greaterThanOrEqualTo(180));
+  });
+
+  testWidgets('while it runs, the whole panel fits the room beside the rail on an iPad (388 pt)', (tester) async {
+    await _pump(tester, _adjusting, loopMode: PolarAlignLoopModes.single);
+    expect(tester.getSize(find.byType(SimplePolarPanel)).height, lessThanOrEqualTo(388));
+  });
+
   testWidgets('Single running: Take frame takes the next one', (tester) async {
     final api = await _pump(tester, _adjusting, loopMode: PolarAlignLoopModes.single);
     await tester.tap(find.byKey(const Key('simple-polar-capture')));
@@ -139,7 +154,7 @@ void main() {
     expect(api!.calls, ['complete']);
   });
 
-  testWidgets('in Autopilot, Done reads Done · Next: Plan and moves on to the plan', (tester) async {
+  testWidgets('in Guided Run, polar align is the last step: Done reads Done · Start imaging', (tester) async {
     final api = _Api()..settings = PolarAlignSettings();
     final c = ProviderContainer(overrides: [
       polarAlignApiProvider.overrideWithValue(api),
@@ -155,14 +170,14 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Done'), findsOneWidget, reason: 'outside Autopilot');
     c.read(autopilotProvider.notifier).start();
+    c.read(autopilotProvider.notifier).next(); // past the plan, to Focus
     c.read(autopilotProvider.notifier).next(); // past Focus, to polar align
     await tester.pumpAndSettle();
     expect(c.read(autopilotProvider), AutopilotStep.polarAlign);
-    expect(find.text('Done · Next: Plan'), findsOneWidget);
+    expect(find.text('Done · Start imaging'), findsOneWidget);
     await tester.tap(find.byKey(const Key('simple-polar-done')));
     await tester.pumpAndSettle();
     expect(api.calls.last, 'complete');
-    expect(c.read(autopilotProvider), AutopilotStep.plan);
   });
 
   testWidgets('a bolt turned the wrong way gets the full UI\'s nudge', (tester) async {
@@ -201,9 +216,12 @@ void main() {
         polarAlignApiProvider.overrideWithValue(api),
         polarAlignLiveProvider.overrideWith(() => _Live(const PolarAlignLive())),
         simpleModePrefsProvider.overrideWithValue(_SimplePrefs()),
+        // Simple Mode on: the Experimental switch too, or the full UI shows (snackbars).
+        simpleModeFeaturePrefsProvider.overrideWithValue(_SimplePrefs()),
       ]);
       addTearDown(c.dispose);
       await c.read(simpleModeProvider.future);
+      await c.read(simpleModeFeatureProvider.future);
       await tester.pumpWidget(UncontrolledProviderScope(
         container: c,
         child: const MaterialApp(home: Scaffold(body: Center(child: SimplePolarShutter()))),

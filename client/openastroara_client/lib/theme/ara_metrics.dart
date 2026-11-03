@@ -14,6 +14,12 @@ class AraSpace {
   static const double s24 = 24;
 }
 
+/// Backdrop blur (DESIGN.md `panel-blur`): Simple Mode's panels blur the
+/// image behind their 90 % scrim, so their words stand off a busy frame.
+class AraBlur {
+  static const double panel = 5;
+}
+
 class AraText {
   /// Pane / dialog titles.
   static const TextStyle title = TextStyle(

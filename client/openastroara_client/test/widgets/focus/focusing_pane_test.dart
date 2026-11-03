@@ -300,7 +300,7 @@ void main() {
     expect(MainFocusCard.phaseText(_en, const AutofocusRun(state: 'running', phase: 'confirming')), 'Confirming focus…');
     expect(MainFocusCard.phaseText(_en, const AutofocusRun(state: 'running', phase: 'backlash')), 'Measuring focuser backlash…');
     expect(MainFocusCard.phaseText(_en, const AutofocusRun(state: 'complete', finalPosition: 1, finalHfr: 1.5, durationSeconds: 120)), 'In focus at 1 — HFR 1.50 in 2m 00s');
-    expect(MainFocusCard.phaseText(_en, const AutofocusRun(state: 'cancelled', restoredPosition: 5)), 'Cancelled — focuser restored to 5');
+    expect(MainFocusCard.phaseText(_en, const AutofocusRun(state: 'cancelled', restoredPosition: 5)), 'Canceled — focuser restored to 5');
   });
 
   testWidgets('a bracket-confirmed Smart run shows the calibration curve without an R²', (t) async {
@@ -311,7 +311,7 @@ void main() {
     await t.pumpWidget(MaterialApp(home: Scaffold(body: StatRow(tiles: MainFocusCard.tilesFor(run)))));
     final r2 = find.ancestor(of: find.text('Fit R²'), matching: find.byType(StatTile));
     expect(find.descendant(of: r2, matching: find.text('—')), findsOneWidget);
-    expect(MainFocusCard.weakFitText(run), isNull);
+    expect(MainFocusCard.weakFitText(_en, run), isNull);
   });
 
   test('headlineFor says the state in words', () {
@@ -319,23 +319,23 @@ void main() {
     expect(MainFocusCard.headlineFor(_en, const AutofocusRun(state: 'complete', finalHfr: 1.5)).$1, 'In focus · HFR 1.50');
     expect(MainFocusCard.headlineFor(_en, const AutofocusRun(state: 'complete')).$1, 'In focus');
     expect(MainFocusCard.headlineFor(_en, const AutofocusRun(state: 'failed')).$1, 'Autofocus failed');
-    expect(MainFocusCard.headlineFor(_en, const AutofocusRun(state: 'cancelled')).$1, 'Cancelled');
+    expect(MainFocusCard.headlineFor(_en, const AutofocusRun(state: 'cancelled')).$1, 'Canceled', reason: 'US English');
     expect(MainFocusCard.headlineFor(_en, const AutofocusRun(state: 'running', phase: 'moving')).$1, 'Moving to best focus…');
   });
 
   test('guide headlineFor turns green against the expected HFR, live and after a stop', () {
     const sample = GuideFocusSample(seq: 9, hfr: 0.8, stars: 10, peakAdu: 60000, fwhm: 1.5);
     const live = GuideFocusStatus(active: true, state: 'running', bestHfr: 0.68, expectedHfr: 0.7, latest: sample);
-    final liveLine = GuideFocusCard.headlineFor(live, gated: false, blocked: false);
+    final liveLine = GuideFocusCard.headlineFor(_en, live, gated: false, blocked: false);
     expect(liveLine.$1, 'Live · HFR 0.80 — in focus');
     expect(liveLine.$2, AraColors.accentConnected);
     const stopped = GuideFocusStatus(active: false, state: 'stopped', bestHfr: 0.68, expectedHfr: 0.7, latest: sample);
-    final stoppedLine = GuideFocusCard.headlineFor(stopped, gated: false, blocked: false);
+    final stoppedLine = GuideFocusCard.headlineFor(_en, stopped, gated: false, blocked: false);
     expect(stoppedLine.$1, 'In focus · best HFR 0.68');
     expect(stoppedLine.$2, AraColors.accentConnected);
     expect(stopped.focusedThisSession, isTrue);
     const selfStopped = GuideFocusStatus(active: false, state: 'stopped', bestHfr: 0.68, latest: sample, stopReason: 'in_focus');
-    final selfLine = GuideFocusCard.headlineFor(selfStopped, gated: false, blocked: false);
+    final selfLine = GuideFocusCard.headlineFor(_en, selfStopped, gated: false, blocked: false);
     expect(selfLine.$1, 'In focus — held, stopped · best HFR 0.68');
     expect(selfLine.$2, AraColors.accentConnected);
     expect(selfStopped.focusedThisSession, isTrue, reason: 'the daemon\'s own stop is the verdict even without a target');
@@ -344,15 +344,15 @@ void main() {
   });
 
   test('guide headlineFor covers idle, gated, blocked, live and stopped', () {
-    expect(GuideFocusCard.headlineFor(GuideFocusStatus.idle, gated: false, blocked: false).$1, 'Ready to focus');
-    expect(GuideFocusCard.headlineFor(GuideFocusStatus.idle, gated: true, blocked: false).$1, 'Waiting for the main telescope');
-    expect(GuideFocusCard.headlineFor(GuideFocusStatus.idle, gated: false, blocked: true).$1, 'Not ready');
-    expect(GuideFocusCard.headlineFor(const GuideFocusStatus(active: true, state: 'running'), gated: false, blocked: false).$1, 'Starting…');
+    expect(GuideFocusCard.headlineFor(_en, GuideFocusStatus.idle, gated: false, blocked: false).$1, 'Ready to focus');
+    expect(GuideFocusCard.headlineFor(_en, GuideFocusStatus.idle, gated: true, blocked: false).$1, 'Waiting for the main telescope');
+    expect(GuideFocusCard.headlineFor(_en, GuideFocusStatus.idle, gated: false, blocked: true).$1, 'Not ready');
+    expect(GuideFocusCard.headlineFor(_en, const GuideFocusStatus(active: true, state: 'running'), gated: false, blocked: false).$1, 'Starting…');
     const live = GuideFocusStatus(active: true, state: 'running', bestHfr: 2.0, latest: GuideFocusSample(seq: 3, hfr: 2.0, stars: 5, peakAdu: 1, fwhm: 3));
-    expect(GuideFocusCard.headlineFor(live, gated: false, blocked: false).$1, 'Live · HFR 2.00 — best so far');
+    expect(GuideFocusCard.headlineFor(_en, live, gated: false, blocked: false).$1, 'Live · HFR 2.00 — best so far');
     const stopped = GuideFocusStatus(state: 'stopped', bestHfr: 2.0, latest: GuideFocusSample(seq: 3, hfr: 2.4, stars: 5, peakAdu: 1, fwhm: 3));
-    expect(GuideFocusCard.headlineFor(stopped, gated: false, blocked: false).$1, 'Stopped · best HFR 2.00');
-    expect(GuideFocusCard.headlineFor(const GuideFocusStatus(state: 'error'), gated: false, blocked: false).$1, 'Stopped on an error');
+    expect(GuideFocusCard.headlineFor(_en, stopped, gated: false, blocked: false).$1, 'Stopped · best HFR 2.00');
+    expect(GuideFocusCard.headlineFor(_en, const GuideFocusStatus(state: 'error'), gated: false, blocked: false).$1, 'Stopped on an error');
   });
 
   test('failureText reads as sentences', () {
@@ -375,34 +375,34 @@ void main() {
         );
 
     test('waits before the first frame', () {
-      expect(guideFocusHint(const GuideFocusStatus(active: true, state: 'running')).advice, TurnAdvice.wait);
+      expect(guideFocusHint(_en, const GuideFocusStatus(active: true, state: 'running')).advice, TurnAdvice.wait);
     });
     test('no stars is its own advice', () {
       final s = GuideFocusStatus(active: true, state: 'running', latest: sample(1, 0, stars: 0));
-      expect(guideFocusHint(s).advice, TurnAdvice.noStars);
+      expect(guideFocusHint(_en, s).advice, TurnAdvice.noStars);
     });
     test('a falling HFR says keep turning the same way', () {
-      final h = guideFocusHint(status([4.0, 3.6, 3.2, 2.9, 2.6, 2.4], best: 1.5));
+      final h = guideFocusHint(_en, status([4.0, 3.6, 3.2, 2.9, 2.6, 2.4], best: 1.5));
       expect(h.advice, TurnAdvice.keepGoing);
       expect(h.title, 'Keep going');
       expect(h.detail, contains('Same way you just moved'));
       expect(h.detail, contains('big moves'), reason: '2.4 is far above the best of 1.5');
     });
     test('a rising HFR says turn back', () {
-      final h = guideFocusHint(status([1.6, 1.7, 1.8, 1.9, 2.0, 2.1], best: 1.55));
+      final h = guideFocusHint(_en, status([1.6, 1.7, 1.8, 1.9, 2.0, 2.1], best: 1.55));
       expect(h.advice, TurnAdvice.turnBack);
       expect(h.title, 'Go back');
       expect(h.detail, contains('other way'));
       expect(h.detail, contains('small moves'));
     });
     test('within a few percent of the best is "sharpest so far"', () {
-      expect(guideFocusHint(status([2.0, 1.8, 1.6, 1.52, 1.5, 1.51])).advice, TurnAdvice.atBest);
+      expect(guideFocusHint(_en, status([2.0, 1.8, 1.6, 1.52, 1.5, 1.51])).advice, TurnAdvice.atBest);
     });
     test('a flat trend holds', () {
-      expect(guideFocusHint(status([2.0, 2.01, 1.99, 2.0, 2.0, 2.01], best: 1.9)).advice, TurnAdvice.hold);
+      expect(guideFocusHint(_en, status([2.0, 2.01, 1.99, 2.0, 2.0, 2.01], best: 1.9)).advice, TurnAdvice.hold);
     });
     test('too few frames asks for a first turn', () {
-      expect(guideFocusHint(status([2.0, 2.2], best: 1.5)).advice, TurnAdvice.hold);
+      expect(guideFocusHint(_en, status([2.0, 2.2], best: 1.5)).advice, TurnAdvice.hold);
     });
     test('at or under the expected in-focus HFR is "In focus", whatever the trend', () {
       // A guide scope at 6.4"/px sits at the detector floor (0.70): 0.76 with ±0.05 jitter
@@ -415,7 +415,7 @@ void main() {
         expectedHfr: 0.7,
         recent: [for (final (i, h) in [0.76, 0.75, 0.8, 0.74, 0.79, 0.81].indexed) sample(i + 1, h)],
       );
-      final h = guideFocusHint(s);
+      final h = guideFocusHint(_en, s);
       expect(h.advice, TurnAdvice.atBest);
       expect(h.title, 'In focus');
       expect(h.detail, contains('0.70 px'));
@@ -429,10 +429,10 @@ void main() {
         expectedHfr: 0.7,
         recent: [for (final (i, h) in [4.0, 3.6, 3.2, 2.9, 2.6, 2.4].indexed) sample(i + 1, h)],
       );
-      expect(guideFocusHint(s).advice, TurnAdvice.keepGoing);
+      expect(guideFocusHint(_en, s).advice, TurnAdvice.keepGoing);
     });
     test('single-frame jitter on a flat run does not become advice', () {
-      expect(guideFocusHint(status([2.0, 2.08, 1.96, 2.02, 2.1, 1.95, 2.07], best: 1.9)).advice, TurnAdvice.hold);
+      expect(guideFocusHint(_en, status([2.0, 2.08, 1.96, 2.02, 2.1, 1.95, 2.07], best: 1.9)).advice, TurnAdvice.hold);
     });
   });
 
@@ -469,7 +469,7 @@ void main() {
       ],
     );
     test('a plateau-wing sweep with a manual step size suggests a smaller one', () {
-      final text = MainFocusCard.weakFitText(rig)!;
+      final text = MainFocusCard.weakFitText(_en, rig)!;
       expect(text, contains('R² 0.57'));
       expect(text, contains('A smaller step size would'));
     });
@@ -483,14 +483,14 @@ void main() {
         stepSize: 50,
         stepSizeSource: 'default',
       );
-      final text = MainFocusCard.weakFitText(auto)!;
+      final text = MainFocusCard.weakFitText(_en, auto)!;
       expect(text, contains('R² 0.57'));
       expect(text, contains('sizes the next sweep'));
       expect(text, isNot(contains('will use a smaller step size')), reason: 'no promise: the width may not be measurable');
       expect(text, isNot(contains('A smaller step size would')));
     });
     test('a good fit says nothing', () {
-      expect(MainFocusCard.weakFitText(_completed), isNull, reason: 'R² 0.98');
+      expect(MainFocusCard.weakFitText(_en, _completed), isNull, reason: 'R² 0.98');
     });
     test('a weak fit without a plateau blames the sky', () {
       final noisy = AutofocusRun(
@@ -498,10 +498,10 @@ void main() {
         fit: const AutofocusFit(algorithm: 'parabolic', rSquared: 0.6, bestPosition: 100, predictedHfr: 2, withinSampledRange: true, curve: []),
         probes: [fine(1, 0, 4.0), fine(2, 50, 2.5), fine(3, 100, 3.0), fine(4, 150, 2.2), fine(5, 200, 1.5), fine(6, 250, 2.8)],
       );
-      expect(MainFocusCard.weakFitText(noisy), contains('cloud'));
+      expect(MainFocusCard.weakFitText(_en, noisy), contains('cloud'));
     });
     test('a failed run says nothing here', () {
-      expect(MainFocusCard.weakFitText(const AutofocusRun(state: 'failed')), isNull);
+      expect(MainFocusCard.weakFitText(_en, const AutofocusRun(state: 'failed')), isNull);
     });
   });
 

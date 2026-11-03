@@ -315,6 +315,18 @@ abstract class AppLocalizations {
   /// **'Unparking…'**
   String get deviceUnparking;
 
+  /// Message pill when a park Simple Mode asked for stopped short (aborted, faulted, or the mount disconnected)
+  ///
+  /// In en, this message translates to:
+  /// **'The mount didn\'t finish parking'**
+  String get deviceParkUnfinished;
+
+  /// Message pill when an unpark Simple Mode asked for stopped short
+  ///
+  /// In en, this message translates to:
+  /// **'The mount didn\'t finish unparking'**
+  String get deviceUnparkUnfinished;
+
   /// Mount window segment in the Park row: the mount is parked
   ///
   /// In en, this message translates to:
@@ -560,12 +572,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Clipped'**
   String get previewClipped;
-
-  /// Simple Mode: title of the Preview settings popover
-  ///
-  /// In en, this message translates to:
-  /// **'Preview settings'**
-  String get previewSettings;
 
   /// Simple Mode Preview settings: segment for continuous live view (frames not saved)
   ///
@@ -849,12 +855,6 @@ abstract class AppLocalizations {
   /// **'Done'**
   String get polarDone;
 
-  /// Simple Mode Polar align panel: finish button in Autopilot, which then moves on to the Plan step
-  ///
-  /// In en, this message translates to:
-  /// **'Done · Next: Plan'**
-  String get polarDoneNextPlan;
-
   /// Simple Mode search panel: search field placeholder
   ///
   /// In en, this message translates to:
@@ -942,13 +942,13 @@ abstract class AppLocalizations {
   /// Simple Mode search panel: a setting's name as a result; should match its name in Settings
   ///
   /// In en, this message translates to:
-  /// **'Aperture'**
+  /// **'Main scope aperture'**
   String get searchSettingAperture;
 
   /// Simple Mode search panel: a setting's name as a result; should match its name in Settings
   ///
   /// In en, this message translates to:
-  /// **'Focal length'**
+  /// **'Main scope focal length'**
   String get searchSettingFocalLength;
 
   /// Simple Mode search panel: a setting's name as a result; should match its name in Settings
@@ -1209,73 +1209,73 @@ abstract class AppLocalizations {
   /// **'guiding dithering'**
   String get searchWordsDither;
 
-  /// Simple Mode Autopilot strip: step name: autofocus
+  /// Simple Mode Guided Run strip: step name: autofocus
   ///
   /// In en, this message translates to:
   /// **'Focus'**
   String get autopilotStepFocus;
 
-  /// Simple Mode Autopilot strip: step name: polar alignment
+  /// Simple Mode Guided Run strip: step name: polar alignment
   ///
   /// In en, this message translates to:
   /// **'Polar align'**
   String get autopilotStepPolarAlign;
 
-  /// Simple Mode Autopilot strip: step name: the imaging plan
+  /// Simple Mode Guided Run strip: step name: the imaging plan
   ///
   /// In en, this message translates to:
   /// **'Plan'**
   String get autopilotStepPlan;
 
-  /// Simple Mode Autopilot strip: screen-reader label of a step done tonight
+  /// Simple Mode Guided Run strip: screen-reader label of a step done tonight
   ///
   /// In en, this message translates to:
   /// **'{step}, done'**
   String autopilotStepDone(String step);
 
-  /// Simple Mode Autopilot strip: screen-reader label of a skipped step
+  /// Simple Mode Guided Run strip: screen-reader label of a skipped step
   ///
   /// In en, this message translates to:
   /// **'{step}, skipped'**
   String autopilotStepSkipped(String step);
 
-  /// Simple Mode Autopilot strip: screen-reader label of the current step
+  /// Simple Mode Guided Run strip: screen-reader label of the current step
   ///
   /// In en, this message translates to:
   /// **'{step}, current step'**
   String autopilotStepCurrent(String step);
 
-  /// Simple Mode Autopilot strip: screen-reader label of a step still ahead
+  /// Simple Mode Guided Run strip: screen-reader label of a step still ahead
   ///
   /// In en, this message translates to:
   /// **'{step}, next'**
   String autopilotStepNext(String step);
 
-  /// Simple Mode Autopilot strip: button that goes back one step
+  /// Simple Mode Guided Run strip: button that goes back one step
   ///
   /// In en, this message translates to:
   /// **'Back'**
   String get autopilotBack;
 
-  /// Simple Mode Autopilot strip: button that skips the current step
+  /// Simple Mode Guided Run strip: button that skips the current step
   ///
   /// In en, this message translates to:
   /// **'Skip'**
   String get autopilotSkip;
 
-  /// Simple Mode Autopilot offer under the status strip: why Autopilot is offered
+  /// Simple Mode Guided Run offer under the status strip: why Guided Run is offered
   ///
   /// In en, this message translates to:
   /// **'Nothing done yet tonight'**
   String get autopilotNothingDone;
 
-  /// Simple Mode Autopilot offer: button that starts Autopilot
+  /// Simple Mode Guided Run offer: button that starts Guided Run
   ///
   /// In en, this message translates to:
-  /// **'Start Autopilot'**
+  /// **'Start Guided Run'**
   String get autopilotStart;
 
-  /// Simple Mode Autopilot offer: tooltip of the × that dismisses it
+  /// Simple Mode Guided Run offer: tooltip of the × that dismisses it
   ///
   /// In en, this message translates to:
   /// **'Not now'**
@@ -1284,7 +1284,7 @@ abstract class AppLocalizations {
   /// Simple Mode mode name (mode grid, Mode: label for screen readers)
   ///
   /// In en, this message translates to:
-  /// **'Autopilot'**
+  /// **'Guided Run'**
   String get shellModeAutopilot;
 
   /// Simple Mode mode name
@@ -1317,10 +1317,10 @@ abstract class AppLocalizations {
   /// **'P.A.'**
   String get shellRailPolarAlign;
 
-  /// Simple Mode right rail: short name of Autopilot (60 px wide rail, keep very short)
+  /// Simple Mode right rail: short name of Guided Run (60 px wide rail, keep very short)
   ///
   /// In en, this message translates to:
-  /// **'Auto'**
+  /// **'Guided'**
   String get shellRailAutopilot;
 
   /// Simple Mode message after the stop keyboard shortcut once; shortcut is the key combo (⌘. or Ctrl+.)
@@ -1515,6 +1515,36 @@ abstract class AppLocalizations {
   /// **'{type} · {name}'**
   String shellGearTitle(String type, String name);
 
+  /// Message pill: a Connect / Disconnect / Reconnect in Settings › Devices failed; action is the button's label, device the row's title
+  ///
+  /// In en, this message translates to:
+  /// **'{action} failed · {device}'**
+  String shellGearActionFailed(String action, String device);
+
+  /// Message pill button that only closes it (Simple Mode's morning summary)
+  ///
+  /// In en, this message translates to:
+  /// **'OK'**
+  String get shellOk;
+
+  /// Simple Mode message pill: the once-a-night pre-sleep checklist
+  ///
+  /// In en, this message translates to:
+  /// **'Before you sleep'**
+  String get shellBedtimeTitle;
+
+  /// Pre-sleep pill when nothing needs a look
+  ///
+  /// In en, this message translates to:
+  /// **'Everything is ready for the night.'**
+  String get shellBedtimeAllGood;
+
+  /// Pre-sleep pill's one button: answers the checklist for tonight
+  ///
+  /// In en, this message translates to:
+  /// **'Got it — let me go to bed'**
+  String get shellBedtimeAnswer;
+
   /// Simple Mode Settings › Devices row: device state
   ///
   /// In en, this message translates to:
@@ -1626,13 +1656,13 @@ abstract class AppLocalizations {
   /// Simple Mode Settings › Rig: the telescope's aperture
   ///
   /// In en, this message translates to:
-  /// **'Aperture'**
+  /// **'Main scope aperture'**
   String get shellAperture;
 
   /// Simple Mode Settings › Rig: the telescope's focal length
   ///
   /// In en, this message translates to:
-  /// **'Focal length'**
+  /// **'Main scope focal length'**
   String get shellFocalLength;
 
   /// Simple Mode Settings › Rig: the site's latitude
@@ -2187,6 +2217,24 @@ abstract class AppLocalizations {
   /// **'mag {value}'**
   String planMagnitude(String value);
 
+  /// Plan sheet: Add to queue on a target the queue already holds
+  ///
+  /// In en, this message translates to:
+  /// **'{name} is already in the queue.'**
+  String planAlreadyQueued(String name);
+
+  /// Plan sheet: Add to queue while the run is winding down (the rig refused the append)
+  ///
+  /// In en, this message translates to:
+  /// **'The run is ending; this target can\'t join it.'**
+  String get planRunEnding;
+
+  /// Message pill: Start (Guided Run's last Done) while an edit or reorder of the queue is still on its way
+  ///
+  /// In en, this message translates to:
+  /// **'The queue is still updating on the rig. Try again in a moment.'**
+  String get planQueueBusy;
+
   /// Settings › Rig: the app language row (this device only)
   ///
   /// In en, this message translates to:
@@ -2412,7 +2460,7 @@ abstract class AppLocalizations {
   /// Focus panel, main telescope card (Simple Mode Focus and full UI): headline/phase after a cancelled run
   ///
   /// In en, this message translates to:
-  /// **'Cancelled'**
+  /// **'Canceled'**
   String get focusCardCancelled;
 
   /// Focus panel, main telescope card (Simple Mode Focus and full UI): headline before any run
@@ -2706,7 +2754,7 @@ abstract class AppLocalizations {
   /// Error message (every screen), after "Couldn't <action> — "; lower-case start
   ///
   /// In en, this message translates to:
-  /// **'the request was cancelled.'**
+  /// **'the request was canceled.'**
   String get errorCancelled;
 
   /// Error message (every screen), after "Couldn't <action> — "; lower-case start
@@ -2756,6 +2804,606 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'your rig sent something Ara didn\'t understand. It may be running a different version.'**
   String get errorUnreadable;
+
+  /// A finished autofocus whose curve fit was weak; r2 is the fit's R² (e.g. 0.55)
+  ///
+  /// In en, this message translates to:
+  /// **'The curve fit was weak (R² {r2}) — passing cloud, a slew during the sweep, or probes that straddle the V unevenly. The focus here comes from the measured frame, not the fit; run again if the sky has settled.'**
+  String focusCardWeakFit(String r2);
+
+  /// Weak autofocus fit whose outer probes sit on a plateau, manual step size
+  ///
+  /// In en, this message translates to:
+  /// **'The curve fit was weak (R² {r2}): the outer probes sit on a plateau, so the sweep is wider than the V. A smaller step size would put more probes on the slope. The focus here comes from the measured frame, not the fit.'**
+  String focusCardWeakFitPlateau(String r2);
+
+  /// Weak autofocus fit on a plateau, automatic step size
+  ///
+  /// In en, this message translates to:
+  /// **'The curve fit was weak (R² {r2}): the outer probes sit on a plateau, so this sweep was wider than the V. With automatic step size on, Ara sizes the next sweep from the V\'s width where a run lets it be measured, so running again should put more probes on the slope. The focus here comes from the measured frame, not the fit.'**
+  String focusCardWeakFitPlateauAuto(String r2);
+
+  /// Simple Focus panel stat: the focuser position autofocus settled on
+  ///
+  /// In en, this message translates to:
+  /// **'Best position'**
+  String get focusBestPosition;
+
+  /// Simple Focus panel stat: stars measured in the focused frame
+  ///
+  /// In en, this message translates to:
+  /// **'Stars'**
+  String get focusStars;
+
+  /// Simple Focus panel stat: how well the V-curve fit the probes (0-1)
+  ///
+  /// In en, this message translates to:
+  /// **'Fit R²'**
+  String get focusFitR2;
+
+  /// Simple Focus panel: the focuser's position, first part of the line under the headline
+  ///
+  /// In en, this message translates to:
+  /// **'Focuser at {position}'**
+  String focusFocuserAt(String position);
+
+  /// Simple Focus panel row: show the focus run's frame with its measured stars circled, full screen
+  ///
+  /// In en, this message translates to:
+  /// **'Measured stars'**
+  String get focusMeasuredStars;
+
+  /// Bahtinov focusing finished in focus, mask taken off
+  ///
+  /// In en, this message translates to:
+  /// **'In focus · mask off'**
+  String get bahtinovInFocusMaskOff;
+
+  /// Bahtinov focusing finished (not confirmed in focus), mask off
+  ///
+  /// In en, this message translates to:
+  /// **'Mask off'**
+  String get bahtinovMaskOff;
+
+  /// Bahtinov readout stopped by a camera error
+  ///
+  /// In en, this message translates to:
+  /// **'Stopped by a camera error'**
+  String get bahtinovCameraError;
+
+  /// Bahtinov readout running, no frame yet
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for the first frame'**
+  String get bahtinovWaitingFirst;
+
+  /// Bahtinov headline in focus; px is the spike offset
+  ///
+  /// In en, this message translates to:
+  /// **'In focus · {px} px'**
+  String bahtinovInFocusPx(String px);
+
+  /// Bahtinov headline: the turn advice and the offset
+  ///
+  /// In en, this message translates to:
+  /// **'{hint} · {px} px from focus'**
+  String bahtinovHintPx(String hint, String px);
+
+  /// Bahtinov readout stopped; the last offset
+  ///
+  /// In en, this message translates to:
+  /// **'Stopped · last {px} px from focus'**
+  String bahtinovStoppedLast(String px);
+
+  /// Bahtinov before starting
+  ///
+  /// In en, this message translates to:
+  /// **'Fit the mask, then Start'**
+  String get bahtinovFitMask;
+
+  /// Simple Focus Manual, before starting: what to do
+  ///
+  /// In en, this message translates to:
+  /// **'Put the Bahtinov mask over the front of the telescope and point at a bright star. Ara uses the brightest star in the frame.'**
+  String get bahtinovFitMaskDetail;
+
+  /// Bahtinov turn advice: no frame yet
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting'**
+  String get bahtinovWaiting;
+
+  /// Bahtinov turn advice detail
+  ///
+  /// In en, this message translates to:
+  /// **'The first frame is on its way.'**
+  String get bahtinovWaitingDetail;
+
+  /// Bahtinov: no star found
+  ///
+  /// In en, this message translates to:
+  /// **'No star'**
+  String get bahtinovNoStar;
+
+  /// Bahtinov: no star found, what to do
+  ///
+  /// In en, this message translates to:
+  /// **'Point at a bright star, or lengthen the exposure.'**
+  String get bahtinovNoStarDetail;
+
+  /// Bahtinov: the star is too close to the frame edge
+  ///
+  /// In en, this message translates to:
+  /// **'Star at the edge'**
+  String get bahtinovNearEdge;
+
+  /// Bahtinov: star at the edge, what to do
+  ///
+  /// In en, this message translates to:
+  /// **'Center the star so its spikes fit in the frame.'**
+  String get bahtinovNearEdgeDetail;
+
+  /// Bahtinov: no diffraction spikes found
+  ///
+  /// In en, this message translates to:
+  /// **'No spikes'**
+  String get bahtinovNoSpikes;
+
+  /// Bahtinov: no spikes, what to do
+  ///
+  /// In en, this message translates to:
+  /// **'Fit the mask over the front of the telescope. Far out of focus? Turn until the star shrinks and spikes appear.'**
+  String get bahtinovNoSpikesDetail;
+
+  /// Bahtinov turn advice: in focus
+  ///
+  /// In en, this message translates to:
+  /// **'In focus'**
+  String get bahtinovInFocus;
+
+  /// Bahtinov in focus with the optics' zone in µm
+  ///
+  /// In en, this message translates to:
+  /// **'The middle spike is centered, inside the ±{um} µm focus zone. Lock the focuser, then Finish.'**
+  String bahtinovInFocusZoneDetail(String um);
+
+  /// Bahtinov in focus
+  ///
+  /// In en, this message translates to:
+  /// **'The middle spike is centered. Lock the focuser, then Finish.'**
+  String get bahtinovInFocusDetail;
+
+  /// Bahtinov turn advice: no move seen yet
+  ///
+  /// In en, this message translates to:
+  /// **'Make a move'**
+  String get bahtinovMakeMove;
+
+  /// Bahtinov: first move
+  ///
+  /// In en, this message translates to:
+  /// **'Turn the focuser a little either way, then watch the number.'**
+  String get bahtinovMakeMoveDetail;
+
+  /// Bahtinov turn advice: turn back
+  ///
+  /// In en, this message translates to:
+  /// **'Go back'**
+  String get bahtinovGoBack;
+
+  /// Bahtinov: passed focus; size is how far (e.g. 'half', 'a third of')
+  ///
+  /// In en, this message translates to:
+  /// **'You passed focus. Turn back about {size} your last move.'**
+  String bahtinovPassedDetail(String size);
+
+  /// Bahtinov turn advice: same way
+  ///
+  /// In en, this message translates to:
+  /// **'Keep going'**
+  String get bahtinovKeepGoing;
+
+  /// Bahtinov: keep going; size is how far
+  ///
+  /// In en, this message translates to:
+  /// **'Same way — about {size} your last move again.'**
+  String bahtinovKeepGoingDetail(String size);
+
+  /// Bahtinov: turned the wrong way
+  ///
+  /// In en, this message translates to:
+  /// **'Wrong way — turn back past where you started.'**
+  String get bahtinovWrongWayDetail;
+
+  /// Move size word placed in 'about {size} your last move'
+  ///
+  /// In en, this message translates to:
+  /// **'a quarter of'**
+  String get bahtinovMoveQuarter;
+
+  /// Move size word
+  ///
+  /// In en, this message translates to:
+  /// **'a third of'**
+  String get bahtinovMoveThird;
+
+  /// Move size word
+  ///
+  /// In en, this message translates to:
+  /// **'half'**
+  String get bahtinovMoveHalf;
+
+  /// Move size word
+  ///
+  /// In en, this message translates to:
+  /// **'three quarters of'**
+  String get bahtinovMoveThreeQuarters;
+
+  /// Move size word
+  ///
+  /// In en, this message translates to:
+  /// **'the same as'**
+  String get bahtinovMoveSame;
+
+  /// Move size word
+  ///
+  /// In en, this message translates to:
+  /// **'1½×'**
+  String get bahtinovMoveOneAndHalf;
+
+  /// Move size word
+  ///
+  /// In en, this message translates to:
+  /// **'twice'**
+  String get bahtinovMoveTwice;
+
+  /// Move size word
+  ///
+  /// In en, this message translates to:
+  /// **'several times'**
+  String get bahtinovMoveSeveral;
+
+  /// Simple Focus Manual: unit under the big offset number
+  ///
+  /// In en, this message translates to:
+  /// **'px from focus'**
+  String get bahtinovPxFromFocus;
+
+  /// Simple Focus Manual: finish focusing (then asks to take the mask off)
+  ///
+  /// In en, this message translates to:
+  /// **'Finish'**
+  String get bahtinovFinish;
+
+  /// Simple Focus Manual: the mask-off question, inside the panel
+  ///
+  /// In en, this message translates to:
+  /// **'Take the Bahtinov mask off'**
+  String get bahtinovMaskQuestion;
+
+  /// Simple Focus Manual: why the mask must come off
+  ///
+  /// In en, this message translates to:
+  /// **'Take the mask off the front of the telescope before you image. Left on, it puts spikes on every star and costs light.'**
+  String get bahtinovMaskQuestionDetail;
+
+  /// Mask-off question: keep the mask on for now
+  ///
+  /// In en, this message translates to:
+  /// **'Not yet'**
+  String get bahtinovNotYet;
+
+  /// Mask-off question: the mask is off
+  ///
+  /// In en, this message translates to:
+  /// **'Mask removed'**
+  String get bahtinovMaskRemoved;
+
+  /// Simple Focus Manual: Bahtinov frame exposure
+  ///
+  /// In en, this message translates to:
+  /// **'Exposure'**
+  String get bahtinovExposure;
+
+  /// Screen reader label of Focus's shutter on Manual
+  ///
+  /// In en, this message translates to:
+  /// **'Start the Bahtinov readout'**
+  String get focusStartBahtinov;
+
+  /// Screen reader label of Focus's shutter on Manual while it reads
+  ///
+  /// In en, this message translates to:
+  /// **'Stop the Bahtinov readout'**
+  String get focusStopBahtinov;
+
+  /// Simple Focus panel: a finished autofocus whose curve fit was weak, short form
+  ///
+  /// In en, this message translates to:
+  /// **'Weak curve fit (R² {r2}): the focus comes from the measured frame. Run again if the sky has settled.'**
+  String focusWeakFitShort(String r2);
+
+  /// Guide camera live focus: starting
+  ///
+  /// In en, this message translates to:
+  /// **'Starting…'**
+  String get guideFocusStarting;
+
+  /// Guide camera live focus headline: no stars
+  ///
+  /// In en, this message translates to:
+  /// **'Live · no stars measured'**
+  String get guideFocusNoStarsMeasured;
+
+  /// Guide camera live focus headline
+  ///
+  /// In en, this message translates to:
+  /// **'Live · HFR {hfr}'**
+  String guideFocusLive(String hfr);
+
+  /// Guide camera live focus headline, in focus
+  ///
+  /// In en, this message translates to:
+  /// **'Live · HFR {hfr} — in focus'**
+  String guideFocusLiveInFocus(String hfr);
+
+  /// Guide camera live focus headline, the best so far
+  ///
+  /// In en, this message translates to:
+  /// **'Live · HFR {hfr} — best so far'**
+  String guideFocusLiveBest(String hfr);
+
+  /// Guide camera live focus stopped on an error
+  ///
+  /// In en, this message translates to:
+  /// **'Stopped on an error'**
+  String get guideFocusStoppedError;
+
+  /// Guide focus stopped on its own once held in focus
+  ///
+  /// In en, this message translates to:
+  /// **'In focus — held, stopped'**
+  String get guideFocusHeld;
+
+  /// Same, with the best HFR
+  ///
+  /// In en, this message translates to:
+  /// **'In focus — held, stopped · best HFR {hfr}'**
+  String guideFocusHeldBest(String hfr);
+
+  /// Guide focus stopped, in focus
+  ///
+  /// In en, this message translates to:
+  /// **'In focus · best HFR {hfr}'**
+  String guideFocusInFocusBest(String hfr);
+
+  /// Guide focus stopped
+  ///
+  /// In en, this message translates to:
+  /// **'Stopped'**
+  String get guideFocusStopped;
+
+  /// Guide focus stopped with the best HFR
+  ///
+  /// In en, this message translates to:
+  /// **'Stopped · best HFR {hfr}'**
+  String guideFocusStoppedBest(String hfr);
+
+  /// Off-axis guider: the main telescope must be focused first
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for the main telescope'**
+  String get guideFocusWaitingMain;
+
+  /// Guide focus can't start yet
+  ///
+  /// In en, this message translates to:
+  /// **'Not ready'**
+  String get guideFocusNotReady;
+
+  /// Guide focus can start
+  ///
+  /// In en, this message translates to:
+  /// **'Ready to focus'**
+  String get guideFocusReady;
+
+  /// Guide focus blocker
+  ///
+  /// In en, this message translates to:
+  /// **'Connect the guider first — the frames come through it.'**
+  String get guideFocusConnectGuider;
+
+  /// Guide focus blocker
+  ///
+  /// In en, this message translates to:
+  /// **'Stop the guider first; it owns its camera while it is looping, guiding, calibrating or paused.'**
+  String get guideFocusStopGuider;
+
+  /// Guide focus advice: no stars
+  ///
+  /// In en, this message translates to:
+  /// **'No stars'**
+  String get guideFocusNoStars;
+
+  /// Guide focus advice detail: no stars
+  ///
+  /// In en, this message translates to:
+  /// **'Point at a star field or lengthen the exposure. Far out of focus? Make big moves until stars appear.'**
+  String get guideFocusNoStarsDetail;
+
+  /// Move size inside the guide focus advice
+  ///
+  /// In en, this message translates to:
+  /// **'big moves'**
+  String get guideFocusBigMoves;
+
+  /// Move size inside the guide focus advice
+  ///
+  /// In en, this message translates to:
+  /// **'small moves'**
+  String get guideFocusSmallMoves;
+
+  /// Guide focus in focus
+  ///
+  /// In en, this message translates to:
+  /// **'Stars are as tight as this camera resolves (in focus ≤ {target} px). Lock the focuser.'**
+  String guideFocusInFocusDetail(String target);
+
+  /// Guide focus advice: at the best HFR seen
+  ///
+  /// In en, this message translates to:
+  /// **'Sharpest so far'**
+  String get guideFocusSharpest;
+
+  /// Guide focus advice detail
+  ///
+  /// In en, this message translates to:
+  /// **'Hold here, or nudge a touch either way to confirm.'**
+  String get guideFocusSharpestDetail;
+
+  /// Guide focus first move; size is 'small moves'/'big moves'
+  ///
+  /// In en, this message translates to:
+  /// **'In or out, {size} — then watch which way the number goes.'**
+  String guideFocusMakeMoveDetail(String size);
+
+  /// Guide focus keep going
+  ///
+  /// In en, this message translates to:
+  /// **'Same way you just moved — {size}.'**
+  String guideFocusKeepGoingDetail(String size);
+
+  /// Guide focus go back
+  ///
+  /// In en, this message translates to:
+  /// **'The other way from your last move — {size}.'**
+  String guideFocusGoBackDetail(String size);
+
+  /// Guide focus advice: no change seen
+  ///
+  /// In en, this message translates to:
+  /// **'Holding'**
+  String get guideFocusHolding;
+
+  /// Guide focus holding, far
+  ///
+  /// In en, this message translates to:
+  /// **'Still well off focus — make a bigger move and watch the number.'**
+  String get guideFocusHoldingFar;
+
+  /// Guide focus holding, near
+  ///
+  /// In en, this message translates to:
+  /// **'Try a small move either way.'**
+  String get guideFocusHoldingNear;
+
+  /// Focus mode rail chip: focusing the guide camera
+  ///
+  /// In en, this message translates to:
+  /// **'Guide'**
+  String get focusGuide;
+
+  /// Focus panel, guide camera: what to turn (guide scope)
+  ///
+  /// In en, this message translates to:
+  /// **'Guide scope: turn its focuser, or slide the camera in the draw tube, in small moves and watch the number fall.'**
+  String get focusGuideScope;
+
+  /// Focus panel, guide camera: what to turn (off-axis guider)
+  ///
+  /// In en, this message translates to:
+  /// **'Off-axis guider: it shares the main scope\'s focus. Turn the OAG\'s helical focuser in small moves and watch the number fall.'**
+  String get focusGuideOag;
+
+  /// Focus panel, guide camera, off-axis guider gate
+  ///
+  /// In en, this message translates to:
+  /// **'Focus the main telescope first: an off-axis guider sees the same focal plane, so its HFR only means something once the main scope is in focus.'**
+  String get focusGuideMainFirst;
+
+  /// Focus panel: the main telescope was focused by hand
+  ///
+  /// In en, this message translates to:
+  /// **'Already in focus'**
+  String get focusAlreadyInFocus;
+
+  /// Focus panel, guide camera: frames taken
+  ///
+  /// In en, this message translates to:
+  /// **'Frames'**
+  String get focusFrames;
+
+  /// Screen reader label of Focus's shutter, guide camera
+  ///
+  /// In en, this message translates to:
+  /// **'Start the guide camera\'s live focus'**
+  String get focusStartGuide;
+
+  /// Screen reader label of Focus's shutter, guide camera, while it reads
+  ///
+  /// In en, this message translates to:
+  /// **'Stop the guide camera\'s live focus'**
+  String get focusStopGuide;
+
+  /// Focus panel: focus the main telescope (short, shares a line with Auto / Manual)
+  ///
+  /// In en, this message translates to:
+  /// **'Main'**
+  String get focusScopeMain;
+
+  /// Focus panel: focus the guide camera (short)
+  ///
+  /// In en, this message translates to:
+  /// **'Guide'**
+  String get focusScopeGuide;
+
+  /// Guided Run plan step: green button, on to focusing
+  ///
+  /// In en, this message translates to:
+  /// **'Next: Focus'**
+  String get guidedNextFocus;
+
+  /// Guided Run plan step: green button, on to polar alignment
+  ///
+  /// In en, this message translates to:
+  /// **'Next: Polar align'**
+  String get guidedNextPolarAlign;
+
+  /// Guided Run plan step: green button when focus and polar alignment are done already
+  ///
+  /// In en, this message translates to:
+  /// **'Start imaging'**
+  String get guidedStartImaging;
+
+  /// Guided Run plan step: line above the buttons
+  ///
+  /// In en, this message translates to:
+  /// **'Imaging starts after focus and polar alignment.'**
+  String get guidedImagingStartsAfter;
+
+  /// Guided Run: the last setup step's green Done, which starts imaging
+  ///
+  /// In en, this message translates to:
+  /// **'Done · Start imaging'**
+  String get guidedDoneStartImaging;
+
+  /// Settings › Rig: the guide scope's focal length (mm), read from the guider when unset
+  ///
+  /// In en, this message translates to:
+  /// **'Guide scope focal length'**
+  String get shellGuideFocalLength;
+
+  /// Settings › Rig: the guide camera's pixel size (µm), read from AlpacaBridge through the guider
+  ///
+  /// In en, this message translates to:
+  /// **'Guide camera pixel size'**
+  String get shellGuidePixelSize;
+
+  /// Simple search: other words that find the guide scope rows (not shown)
+  ///
+  /// In en, this message translates to:
+  /// **'guide scope guider camera pixel focal polar'**
+  String get searchWordsGuideScope;
 }
 
 class _AppLocalizationsDelegate

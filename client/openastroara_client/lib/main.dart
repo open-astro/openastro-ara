@@ -9,6 +9,7 @@ import 'state/app_locale_state.dart';
 
 import 'app_version.dart';
 import 'screens/app_shell.dart';
+import 'screens/simple/simple_safety_alarm.dart';
 import 'screens/simple/simple_shell.dart';
 import 'state/simple_mode_state.dart';
 import 'screens/first_run_screen.dart';
@@ -101,7 +102,8 @@ class OpenAstroAraApp extends StatelessWidget {
           builder: (context, ref, _) => Localizations.override(
             context: context,
             locale: ref.watch(appLocaleProvider),
-            child: child ?? const SizedBox.shrink(),
+            // Simple Mode's alarm, over every screen (the one popup kept).
+            child: SimpleSafetyAlarmLayer(child: child ?? const SizedBox.shrink()),
           ),
         ),
       ),

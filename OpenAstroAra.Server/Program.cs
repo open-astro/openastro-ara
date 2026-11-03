@@ -490,7 +490,8 @@ public partial class Program {
             new PolarAlignFrameSolver(
                 sp.GetRequiredService<OpenAstroAra.Profile.Interfaces.IProfileService>(),
                 sp.GetRequiredService<IProfileStore>(),
-                sp.GetRequiredService<OpenAstroAra.PlateSolving.Interfaces.IPlateSolverFactory>()));
+                sp.GetRequiredService<OpenAstroAra.PlateSolving.Interfaces.IPlateSolverFactory>(),
+                ct => sp.GetRequiredService<IGuiderService>().TryGetGuideOpticsAsync(ct)));
         builder.Services.AddSingleton<IPolarAlignmentLog>(sp =>
             new SqlitePolarAlignmentLog(sp.GetRequiredService<IAraDatabase>()));
         builder.Services.AddSingleton<IPaResidualLog>(sp =>

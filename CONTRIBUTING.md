@@ -99,7 +99,8 @@ Two hard-won conventions worth knowing before a reviewer tells you:
   (today `app_pt_BR.arb`, Brazilian Portuguese; `app_pt.arb` is the empty fallback gen-l10n requires,
   so Portuguese from Portugal reads English) in the same commit; then run `flutter gen-l10n` and
   commit the generated `app_localizations*.dart`. `test/l10n/app_localizations_test.dart` fails when
-  a locale is missing a key. Widget keys keep English ids, never the translated label.
+  a locale is missing a key. Widget keys keep English ids, never the translated label. The English is US
+  English (center, canceled, color); the same test fails on British spellings.
 - New C# files carry the Ara MPL-2.0 header; new client code is AGPL-3.0.
 - Wire format: snake_case JSON, lowercase enum tokens.
 

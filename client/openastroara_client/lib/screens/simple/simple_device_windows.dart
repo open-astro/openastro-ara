@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -23,10 +24,11 @@ import '../../state/sequencer/sequence_list_state.dart';
 import '../../state/settings/safety_policies_state.dart';
 import '../../state/profile_management_state.dart';
 import '../../state/settings/imaging_defaults_state.dart';
+import '../../state/app_locale_state.dart';
 import '../../state/simple_messages_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
-import 'simple_preview_panel.dart' show kSimpleText;
+import 'simple_preview_panel.dart' show SimpleStopSquare, kSimpleText;
 import 'simple_shell.dart' show SimpleSegment, simpleRailScale;
 
 /// One window per device in Simple Mode (design/briefs/simple-mode-settings.md):
@@ -445,16 +447,61 @@ class SimpleMountMotionNotifier extends Notifier<bool?> {
   /// Tracking On on a parked mount: track once the unpark lands.
   bool _trackAfter = false;
 
+  /// The mount has moved since the ask: stopping now without getting there
+  /// means the move ended short.
+  bool _moved = false;
+
+  /// The look again after the mount stopped short of the ask.
+  Timer? _settle;
+
+  void _unfinished(bool asked) {
+    _settle?.cancel();
+    _settle = null;
+    _trackAfter = false;
+    state = null;
+    final l10n = l10nFor(ref.read(appLocaleProvider));
+    ref
+        .read(simpleMessagesProvider.notifier)
+        .show(
+          SimpleMessageKind.error,
+          asked ? l10n.deviceParkUnfinished : l10n.deviceUnparkUnfinished,
+        );
+  }
+
   @override
   bool? build() {
+    ref.onDispose(() => _settle?.cancel());
     ref.listen(mountProvider, (_, next) {
+      final asked = state;
+      if (asked == null || next.isLoading) return;
       final m = next.value;
-      if (state == null || m == null) return;
+      // Gone: say so at once, and give the Park row its control back.
+      if (m == null || !m.isConnected) {
+        _unfinished(asked);
+        return;
+      }
+      // Stopped short of the ask (aborted, faulted)? Drivers often drop
+      // Slewing a moment before AtPark, so look again in a moment first
+      // (review of #1486); an unchanged mount sends no new reading.
+      if (_moved && !m.isBusy && m.parked != asked) {
+        _settle ??= Timer(const Duration(seconds: 2), () {
+          _settle = null;
+          final now = ref.read(mountProvider).value;
+          if (state == asked &&
+              (now == null || (!now.isBusy && now.parked != asked))) {
+            _unfinished(asked);
+          }
+        });
+        return;
+      }
+      _settle?.cancel();
+      _settle = null;
+      if (m.isBusy) _moved = true;
       // Done once the mount says so and has stopped moving out of park.
-      if (m.parked == state &&
+      if (m.parked == asked &&
           m.runtimeState != 'unparking' &&
-          (state == true || m.runtimeState != 'slewing')) {
-        final track = _trackAfter && state == false;
+          (asked || m.runtimeState != 'slewing')) {
+        final track = _trackAfter && !asked;
         _trackAfter = false;
         state = null;
         if (track) _track().ignore();
@@ -467,6 +514,7 @@ class SimpleMountMotionNotifier extends Notifier<bool?> {
   /// is asked again, up to five times a second apart.
   Future<void> _track() async {
     for (var i = 0; i < 5; i++) {
+      if (!ref.mounted) return; // gone mid-retry (#1485)
       try {
         if (await ref.read(mountProvider.notifier).setTracking(true)) return;
       } catch (_) {
@@ -481,6 +529,7 @@ class SimpleMountMotionNotifier extends Notifier<bool?> {
     final mount = ref.read(mountProvider.notifier);
     state = park;
     _trackAfter = thenTrack;
+    _moved = false;
     try {
       final ok = await (park ? mount.park() : mount.unpark());
       if (!ok) state = null;
@@ -801,8 +850,14 @@ class _SimpleFocuserWindowState extends ConsumerState<SimpleFocuserWindow> {
         : v.clamp(c.minPosition, c.maxPosition);
   }
 
+  /// The dial moves nothing while autofocus runs (a touch would spoil its
+  /// curve) or while the position is unknown (a turn would jump from 0).
+  bool _locked(FocuserStatus s) =>
+      s.position == null || ref.read(autofocusLiveProvider).run.isRunning;
+
   Future<void> _go(FocuserStatus s, int target) async {
-    final from = s.position ?? 0;
+    if (_locked(s)) return;
+    final from = s.position!;
     if (target == from) return;
     setState(() => _sent = target);
     // A relative focuser takes the change, not a position.
@@ -946,6 +1001,11 @@ class _SimpleFocuserWindowState extends ConsumerState<SimpleFocuserWindow> {
                 child: _FocusKnob(
                   key: const Key('simple-focuser-knob'),
                   focused: _dialFocused,
+                  enabled:
+                      s.position != null &&
+                      !ref.watch(
+                        autofocusLiveProvider.select((l) => l.run.isRunning),
+                      ),
                   // Grows with the text like the rails, so the label in its
                   // middle fits; never wider than the window.
                   size: math.min(220 * simpleRailScale(context), box.maxWidth),
@@ -1029,6 +1089,7 @@ class _FocusKnob extends StatefulWidget {
     required this.centre,
     this.focused = false,
     this.size = 220,
+    this.enabled = true,
   });
 
   /// The dial's diameter: 220, more with large text, less in a narrow
@@ -1041,6 +1102,9 @@ class _FocusKnob extends StatefulWidget {
   /// A turn the system cut off (a pointer cancel), instead of [onRelease].
   final VoidCallback onCancel;
   final Widget centre;
+
+  /// Off: the face is dimmed and turns nothing; the middle still works.
+  final bool enabled;
 
   /// Keyboard focus: a ring round the face.
   final bool focused;
@@ -1061,6 +1125,7 @@ class _FocusKnobState extends State<_FocusKnob> {
   double _at(Offset p) => math.atan2(p.dy - _size / 2, p.dx - _size / 2);
 
   void _turn(Offset p) {
+    if (!widget.enabled) return;
     final a = _at(p);
     var d = a - (_last ?? a);
     if (d > math.pi) d -= 2 * math.pi;
@@ -1128,12 +1193,15 @@ class _FocusKnobState extends State<_FocusKnob> {
                 },
               ),
             },
-            child: Transform.rotate(
-              key: const Key('simple-focuser-dial-face'),
-              angle: _angle,
-              child: CustomPaint(
-                size: Size.square(_size),
-                painter: const _DialPainter(),
+            child: Opacity(
+              opacity: widget.enabled ? 1 : 0.4,
+              child: Transform.rotate(
+                key: const Key('simple-focuser-dial-face'),
+                angle: _angle,
+                child: CustomPaint(
+                  size: Size.square(_size),
+                  painter: const _DialPainter(),
+                ),
               ),
             ),
           ),
@@ -1234,7 +1302,7 @@ class _AutofocusButton extends ConsumerWidget {
           excludeSemantics: true,
           child: Center(
             child: running
-                ? const Icon(Icons.stop, color: AraColors.accentError, size: 32)
+                ? const SimpleStopSquare()
                 : Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [

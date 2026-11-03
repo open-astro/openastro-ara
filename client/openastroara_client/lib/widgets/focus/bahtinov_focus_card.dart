@@ -6,6 +6,8 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../l10n/l10n.dart';
+
 import '../../models/bahtinov_focus.dart';
 import '../../models/equipment_device_status.dart';
 import '../../state/equipment/focuser_state.dart';
@@ -32,32 +34,32 @@ class BahtinovFocusCard extends ConsumerStatefulWidget {
   ConsumerState<BahtinovFocusCard> createState() => _BahtinovFocusCardState();
 
   /// The card's headline and its colour. Pure — unit-tested.
-  static (String, Color) headlineFor(BahtinovFocusLive live) {
+  static (String, Color) headlineFor(AppLocalizations l, BahtinovFocusLive live) {
     final status = live.status;
     final latest = status.steady;
     if (live.finished) {
       return status.hasMeasurement && status.lastSteady?.withinZone == true
-          ? ('In focus · mask off', AraColors.accentConnected)
-          : ('Mask off', AraColors.textPrimary);
+          ? (l.bahtinovInFocusMaskOff, AraColors.accentConnected)
+          : (l.bahtinovMaskOff, AraColors.textPrimary);
     }
     if (status.state == BahtinovFocusStates.error) {
-      return ('Stopped by a camera error', AraColors.accentError);
+      return (l.bahtinovCameraError, AraColors.accentError);
     }
     if (status.active) {
-      if (latest == null) return ('Waiting for the first frame', AraColors.textPrimary);
-      if (!latest.detected) return (bahtinovHint(status).title, AraColors.accentWarning);
+      if (latest == null) return (l.bahtinovWaitingFirst, AraColors.textPrimary);
+      if (!latest.detected) return (bahtinovHint(l, status).title, AraColors.accentWarning);
       final px = formatOffset(latest.offsetPx!.abs());
-      if (latest.withinZone) return ('In focus · $px px', AraColors.accentConnected);
-      final hint = bahtinovHint(status);
+      if (latest.withinZone) return (l.bahtinovInFocusPx(px), AraColors.accentConnected);
+      final hint = bahtinovHint(l, status);
       return (
-        '${hint.title} · $px px from focus',
+        l.bahtinovHintPx(hint.title, px),
         hint.advice == TurnAdvice.turnBack ? AraColors.accentWarning : AraColors.textPrimary,
       );
     }
     if (status.lastSteady case final last?) {
-      return ('Stopped · last ${formatOffset(last.offsetPx!.abs())} px from focus', AraColors.textPrimary);
+      return (l.bahtinovStoppedLast(formatOffset(last.offsetPx!.abs())), AraColors.textPrimary);
     }
-    return ('Fit the mask, then Start', AraColors.textPrimary);
+    return (l.bahtinovFitMask, AraColors.textPrimary);
   }
 }
 
@@ -84,7 +86,7 @@ class _BahtinovFocusCardState extends ConsumerState<BahtinovFocusCard> {
     final latest = status.steady;
     final hasData = live.frame != null || latest != null;
     final measured = status.hasMeasurement;
-    final (headline, headlineColor) = BahtinovFocusCard.headlineFor(live);
+    final (headline, headlineColor) = BahtinovFocusCard.headlineFor(context.l10n, live);
 
     final exposure = active && status.exposureSec > 0 ? status.exposureSec : _exposureSec;
     final subhead = [
@@ -365,33 +367,30 @@ String _seconds(double s) => s == s.roundToDouble() ? '${s.round()} s' : '$s s';
 /// noise allowance. Comparing with a fixed number of frames back instead
 /// forgot the move after a couple of seconds of fast frames and said
 /// "Holding" while the user was still deciding where to turn next.
-GuideFocusHint bahtinovHint(BahtinovFocusStatus status, {int lookback = 3}) {
+GuideFocusHint bahtinovHint(AppLocalizations l, BahtinovFocusStatus status, {int lookback = 3}) {
   final latest = status.latest;
   if (latest == null) {
-    return const GuideFocusHint(TurnAdvice.wait, 'Waiting', 'The first frame is on its way.');
+    return GuideFocusHint(TurnAdvice.wait, l.bahtinovWaiting, l.bahtinovWaitingDetail);
   }
   if (!latest.detected) {
     return switch (latest.problem) {
-      BahtinovProblems.noStar => const GuideFocusHint(TurnAdvice.noStars, 'No star',
-          'Point at a bright star, or lengthen the exposure.'),
-      BahtinovProblems.nearEdge => const GuideFocusHint(TurnAdvice.noStars, 'Star at the edge',
-          'Centre the star so its spikes fit in the frame.'),
-      _ => const GuideFocusHint(TurnAdvice.noStars, 'No spikes',
-          'Fit the mask over the front of the telescope. Far out of focus? Turn until the star shrinks and spikes appear.'),
+      BahtinovProblems.noStar => GuideFocusHint(TurnAdvice.noStars, l.bahtinovNoStar, l.bahtinovNoStarDetail),
+      BahtinovProblems.nearEdge => GuideFocusHint(TurnAdvice.noStars, l.bahtinovNearEdge, l.bahtinovNearEdgeDetail),
+      _ => GuideFocusHint(TurnAdvice.noStars, l.bahtinovNoSpikes, l.bahtinovNoSpikesDetail),
     };
   }
   final zone = status.zonePx;
   if (latest.withinZone) {
-    return GuideFocusHint(TurnAdvice.atBest, 'In focus',
+    return GuideFocusHint(TurnAdvice.atBest, l.bahtinovInFocus,
         status.zoneUm != null
-            ? 'The middle spike is centred, inside the ±${status.zoneUm!.toStringAsFixed(0)} µm focus zone. Lock the focuser, then Finish.'
-            : 'The middle spike is centred. Lock the focuser, then Finish.');
+            ? l.bahtinovInFocusZoneDetail(status.zoneUm!.toStringAsFixed(0))
+            : l.bahtinovInFocusDetail);
   }
   final offsets = [
     for (final s in status.recent)
       if (s.detected && s.offsetPx != null) s.offsetPx!,
   ];
-  const firstMove = GuideFocusHint(TurnAdvice.hold, 'Make a move', 'Turn the focuser a little either way, then watch the number.');
+  final firstMove = GuideFocusHint(TurnAdvice.hold, l.bahtinovMakeMove, l.bahtinovMakeMoveDetail);
   if (offsets.length <= lookback) return firstMove;
   final now = _medianEndingAt(offsets, offsets.length - 1);
   final tolerance = math.max(zone / 2, 0.15);
@@ -408,26 +407,26 @@ GuideFocusHint bahtinovHint(BahtinovFocusStatus status, {int lookback = 3}) {
   if (earlier == null) return firstMove;
   final moved = now - earlier;
   if (now.sign != earlier.sign && earlier.abs() > zone) {
-    return GuideFocusHint(TurnAdvice.turnBack, 'Go back',
-        'You passed focus. Turn back about ${_moveSize(now.abs() / moved.abs())} your last move.');
+    return GuideFocusHint(TurnAdvice.turnBack, l.bahtinovGoBack,
+        l.bahtinovPassedDetail(_moveSize(l, now.abs() / moved.abs())));
   }
   if (now.abs() < earlier.abs()) {
-    return GuideFocusHint(TurnAdvice.keepGoing, 'Keep going',
-        'Same way — about ${_moveSize(now.abs() / moved.abs())} your last move again.');
+    return GuideFocusHint(TurnAdvice.keepGoing, l.bahtinovKeepGoing,
+        l.bahtinovKeepGoingDetail(_moveSize(l, now.abs() / moved.abs())));
   }
-  return const GuideFocusHint(TurnAdvice.turnBack, 'Go back', 'Wrong way — turn back past where you started.');
+  return GuideFocusHint(TurnAdvice.turnBack, l.bahtinovGoBack, l.bahtinovWrongWayDetail);
 }
 
 /// A move as a multiple of the last one, in words.
-String _moveSize(double r) {
-  if (r < 0.29) return 'a quarter of';
-  if (r < 0.42) return 'a third of';
-  if (r < 0.65) return 'half';
-  if (r < 0.85) return 'three quarters of';
-  if (r < 1.25) return 'the same as';
-  if (r < 1.75) return '1½×';
-  if (r < 2.5) return 'twice';
-  return 'several times';
+String _moveSize(AppLocalizations l, double r) {
+  if (r < 0.29) return l.bahtinovMoveQuarter;
+  if (r < 0.42) return l.bahtinovMoveThird;
+  if (r < 0.65) return l.bahtinovMoveHalf;
+  if (r < 0.85) return l.bahtinovMoveThreeQuarters;
+  if (r < 1.25) return l.bahtinovMoveSame;
+  if (r < 1.75) return l.bahtinovMoveOneAndHalf;
+  if (r < 2.5) return l.bahtinovMoveTwice;
+  return l.bahtinovMoveSeveral;
 }
 
 double _spreadEndingAt(List<double> values, int end) {
@@ -508,7 +507,7 @@ class _Hero extends StatelessWidget {
                     style: TextStyle(fontSize: short ? 14 : 16, color: AraColors.textSecondary, fontFeatures: _tabular)),
                 if (status.active) ...[
                   SizedBox(height: short ? 8 : 14),
-                  TurnHint(hint: bahtinovHint(status)),
+                  TurnHint(hint: bahtinovHint(context.l10n, status)),
                 ],
                 SizedBox(height: short ? 10 : 18),
                 const Divider(height: 1, color: Color(0x1FFFFFFF)),

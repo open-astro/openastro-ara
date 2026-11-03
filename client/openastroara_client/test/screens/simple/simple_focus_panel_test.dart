@@ -1,11 +1,18 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/autofocus_run.dart';
 import 'package:openastroara/models/equipment_device_status.dart';
 import 'package:openastroara/models/focuser_status.dart';
+import 'package:openastroara/screens/simple/simple_autopilot.dart';
+import 'package:openastroara/state/setup/setup_readiness.dart';
+import 'package:openastroara/state/simple_mode_state.dart';
+import 'package:openastroara/services/simple_mode_prefs_service.dart';
 import 'package:openastroara/screens/simple/simple_focus_panel.dart';
-import 'package:openastroara/screens/simple/simple_preview_panel.dart' show SimpleShutter;
+import 'package:openastroara/theme/ara_colors.dart';
+import 'package:openastroara/screens/simple/simple_shell.dart' show SimpleSegment;
 import 'package:openastroara/state/equipment/focuser_state.dart';
 import 'package:openastroara/state/focus/autofocus_live_state.dart';
 import 'package:openastroara/state/focus/bahtinov_focus_state.dart';
@@ -64,14 +71,34 @@ class _Live extends AutofocusLiveNotifier {
   Future<void> cancel() async => cancels++;
 }
 
-Future<(_Focuser, _Live)> _pump(WidgetTester tester, {FocuserStatus? focuser, AutofocusRun run = AutofocusRun.idle}) async {
+late ProviderContainer _c;
+
+class _Pilot extends AutopilotNotifier {
+  int nexts = 0;
+  @override
+  AutopilotStep? build() => AutopilotStep.focus;
+  @override
+  void next() => nexts++;
+}
+
+class _PierPrefs extends SimpleModePrefsService {
+  @override
+  Future<bool> load() async => true;
+  @override
+  Future<void> save(bool enabled) async {}
+}
+
+Future<(_Focuser, _Live)> _pump(WidgetTester tester,
+    {FocuserStatus? focuser, AutofocusRun run = AutofocusRun.idle, Uint8List? frame}) async {
   final f = _Focuser(focuser);
-  final l = _Live(AutofocusLive(run: run));
-  await tester.pumpWidget(ProviderScope(
-    overrides: [
-      focuserProvider.overrideWith(() => f),
-      autofocusLiveProvider.overrideWith(() => l),
-    ],
+  final l = _Live(AutofocusLive(run: run, frame: frame));
+  _c = ProviderContainer(overrides: [
+    focuserProvider.overrideWith(() => f),
+    autofocusLiveProvider.overrideWith(() => l),
+  ]);
+  addTearDown(_c.dispose);
+  await tester.pumpWidget(UncontrolledProviderScope(
+    container: _c,
     child: const MaterialApp(home: Scaffold(body: Center(child: SimpleFocusPanel()))),
   ));
   await tester.pump();
@@ -91,9 +118,25 @@ void main() {
     });
   });
 
-  testWidgets('no focuser: says so; no Autofocus button (the shutter starts it)', (tester) async {
+  testWidgets('Main / Guide on top, Auto / Manual on a row under it; the guide camera has no Auto / Manual row',
+      (tester) async {
+    // User, 2026-11-04: Main, Guide, Auto, Manual on one line read as four of a kind.
     await _pump(tester);
-    expect(find.text('No focuser connected'), findsOneWidget);
+    final main = tester.getRect(find.byKey(const Key('simple-focus-scope-main')));
+    final guide = tester.getRect(find.byKey(const Key('simple-focus-scope-guide')));
+    final auto = tester.getRect(find.byKey(const Key('simple-focus-method-auto')));
+    expect(guide.top, main.top, reason: 'one row');
+    expect(auto.top, greaterThan(main.bottom), reason: 'the method under the camera');
+    expect(auto.left, main.left);
+    _c.read(simpleFocusScopeProvider.notifier).set(SimpleFocusScope.guide);
+    await tester.pump();
+    expect(find.byKey(const Key('simple-focus-method-auto')), findsNothing);
+    expect(find.byKey(const Key('simple-focus-method-manual')), findsNothing);
+  });
+
+  testWidgets('no focuser: Manual, the Bahtinov helper; no Autofocus button', (tester) async {
+    await _pump(tester);
+    expect(find.text('Fit the mask, then Start'), findsOneWidget);
     expect(find.text('Autofocus'), findsNothing);
   });
 
@@ -120,6 +163,98 @@ void main() {
     expect(find.text('HFR 2.40'), findsOneWidget);
     expect(find.textContaining('Sweeping'), findsOneWidget);
     expect(find.text('Cancel'), findsNothing);
+  });
+
+  // A finished Smart Focus whose fit was weak (R² 0.55), like the rig's.
+  final weak = AutofocusRun(
+    state: AutofocusRunStates.complete,
+    finalHfr: 1.01,
+    finalPosition: 29463,
+    finalStars: 299,
+    probes: [for (var i = 0; i < 7; i++) _probe(i, [4.2, 3.4, 2.8, 1.4, 2.6, 3.3, 4.8][i])],
+    fit: const AutofocusFit(
+        algorithm: 'hyperbolic', rSquared: 0.554, bestPosition: 29463, predictedHfr: 1.7, withinSampledRange: true, curve: []),
+  );
+
+  testWidgets('a finished run: best position, stars and fit R², all on view', (tester) async {
+    await _pump(tester, focuser: _focuser(), run: weak);
+    for (final t in ['Best position', '29463', 'Stars', '299', 'Fit R²', '0.55']) {
+      expect(find.text(t), findsOneWidget, reason: t);
+    }
+    expect(find.textContaining('Details'), findsNothing, reason: 'nothing folded away');
+  });
+
+  testWidgets('a weak fit says so in the panel, in words', (tester) async {
+    await _pump(tester, focuser: _focuser(), run: weak);
+    expect(find.textContaining('Weak curve fit (R² 0.55)'), findsOneWidget);
+  });
+
+  testWidgets('the weak-fit warning is icon + colour + text, not a tint alone (night mode drops tints)', (tester) async {
+    // DESIGN.md: pair every warning with icon + colour + text (impeccable audit, P2).
+    await _pump(tester, focuser: _focuser(), run: weak);
+    final box = find.byKey(const Key('simple-focus-weak-fit'));
+    expect(find.descendant(of: box, matching: find.byIcon(Icons.warning_amber_rounded)), findsOneWidget);
+    final icon = tester.widget<Icon>(find.descendant(of: box, matching: find.byIcon(Icons.warning_amber_rounded)));
+    expect(icon.color, AraColors.accentWarning);
+    final text = tester.widget<Text>(find.descendant(of: box, matching: find.textContaining('Weak curve fit')));
+    expect(text.style?.color, AraColors.accentWarning);
+  });
+
+  testWidgets('the focuser line: where it is and which (before a result; then Best position says it)', (tester) async {
+    await _pump(tester, focuser: _focuser());
+    expect(find.text('Focuser at 1000 · Focuser'), findsOneWidget);
+  });
+
+  testWidgets('the measured stars on the frame: off to start, a tap shows them', (tester) async {
+    await _pump(tester, focuser: _focuser(), run: weak, frame: Uint8List.fromList([1, 2, 3]));
+    final off = find.byKey(const Key('simple-focus-stars-off'));
+    expect(tester.widget<SimpleSegment>(off).selected, isTrue);
+    await tester.tap(find.byKey(const Key('simple-focus-stars-on')));
+    await tester.pump();
+    expect(_c.read(simpleFocusStarsShownProvider), isTrue);
+  });
+
+  testWidgets('no frame from the run: no stars switch', (tester) async {
+    await _pump(tester, focuser: _focuser(), run: weak);
+    expect(find.byKey(const Key('simple-focus-stars-on')), findsNothing);
+  });
+
+  testWidgets('Auto / Manual at the top of the panel picks the method (the chip follows)', (tester) async {
+    await _pump(tester, focuser: _focuser());
+    expect(tester.widget<SimpleSegment>(find.byKey(const Key('simple-focus-method-auto'))).selected, isTrue,
+        reason: 'a connected focuser: Auto to start');
+    await tester.tap(find.byKey(const Key('simple-focus-method-manual')));
+    await tester.pump();
+    expect(_c.read(mainFocusMethodProvider), MainFocusMethod.bahtinov);
+    expect(tester.widget<SimpleSegment>(find.byKey(const Key('simple-focus-method-manual'))).selected, isTrue);
+  });
+
+  testWidgets('the method is locked while autofocus runs', (tester) async {
+    await _pump(tester,
+        focuser: _focuser(), run: AutofocusRun(state: AutofocusRunStates.running, probes: [_probe(0, 3.1)]));
+    expect(tester.widget<SimpleSegment>(find.byKey(const Key('simple-focus-method-manual'))).onTap, isNull);
+  });
+
+  testWidgets("Guided Run on a permanent pier: focus is the last step, so its Done starts imaging", (tester) async {
+    final f = _Focuser(_focuser());
+    final pilot = _Pilot();
+    _c = ProviderContainer(overrides: [
+      focuserProvider.overrideWith(() => f),
+      autofocusLiveProvider.overrideWith(() => _Live(AutofocusLive(run: weak))),
+      setupFocusStateProvider.overrideWithValue(SetupStepState.done),
+      setupPolarAlignStateProvider.overrideWithValue(SetupStepState.pending),
+      simplePermanentPierPrefsProvider.overrideWithValue(_PierPrefs()),
+      autopilotProvider.overrideWith(() => pilot),
+    ]);
+    addTearDown(_c.dispose);
+    await _c.read(simplePermanentPierProvider.future);
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: _c,
+      child: const MaterialApp(home: Scaffold(body: Center(child: SimpleFocusPanel()))),
+    ));
+    await tester.pump();
+    await tester.tap(find.text('Done · Start imaging'));
+    expect(pilot.nexts, 1);
   });
 
   group('the shutter follows the chip', () {
@@ -162,9 +297,9 @@ void main() {
       expect(l.starts, 0);
     });
 
-    testWidgets('Manual: Preview\'s shutter, frames to focus by', (tester) async {
+    testWidgets('Manual: the shutter starts the Bahtinov readout (no longer Preview\'s frames)', (tester) async {
       await shutter(tester, MainFocusMethod.bahtinov, focuser: _focuser());
-      expect(find.byType(SimpleShutter), findsOneWidget);
+      expect(find.bySemanticsLabel('Start the Bahtinov readout'), findsOneWidget);
       expect(find.descendant(of: find.byKey(const Key('simple-shutter')), matching: find.byIcon(Icons.play_arrow)),
           findsOneWidget, reason: 'Focus starts with play in Manual too');
     });

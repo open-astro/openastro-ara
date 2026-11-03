@@ -5,6 +5,8 @@ import 'package:flutter/gestures.dart'
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/screens/simple/simple_message_pills.dart';
+import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:openastroara/models/server.dart';
 import 'package:openastroara/services/server_api.dart';
 import 'package:openastroara/state/saved_server_state.dart';
@@ -61,6 +63,7 @@ void main() {
     WidgetTester tester, {
     EmergencyStopButton button = const EmergencyStopButton(),
     bool simpleMode = false,
+    bool pills = false,
   }) async {
     fake = _FakeServerApi();
     await tester.pumpWidget(
@@ -69,8 +72,17 @@ void main() {
           savedServersProvider.overrideWith(_FixedServers.new),
           serverApiFactoryProvider.overrideWithValue((server) => fake),
           simpleModePrefsProvider.overrideWithValue(_Prefs(simpleMode)),
+          // Simple Mode shows only with the Experimental switch on too.
+          simpleModeFeaturePrefsProvider.overrideWithValue(_Prefs(true)),
         ],
-        child: MaterialApp(home: Scaffold(body: button)),
+        child: MaterialApp(
+          home: Scaffold(
+            body: pills
+                // The pill the stop's message lands in, as Simple Mode shows it.
+                ? Column(children: [const SizedBox(width: 420, child: SimpleMessagePills(maxHeight: 600)), button])
+                : button,
+          ),
+        ),
       ),
     );
     // Materialize + settle the async saved-servers load so
@@ -80,6 +92,7 @@ void main() {
     );
     await container.read(savedServersProvider.future);
     await container.read(simpleModeProvider.future);
+    await container.read(simpleModeFeatureProvider.future);
     await tester.pumpAndSettle();
   }
 
@@ -158,6 +171,57 @@ void main() {
     final title = container.read(simpleMessagesProvider).first.title;
     expect(title, startsWith('CHECK THE RIG: MOUNT PARK FAILED'));
     expect(title, contains('1 sequence run(s) aborted'), reason: 'what worked still follows');
+  });
+
+  testWidgets('Simple Mode: a stop that went through stays in its pill until closed (user, 2026-11-04: 6 s was too fast)',
+      (tester) async {
+    await pumpButton(tester, button: const EmergencyStopButton(compact: true), simpleMode: true, pills: true);
+    fake.result = const EmergencyStopResult(
+      alreadyInProgress: false,
+      runsAborted: 1,
+      exposureAborted: true,
+      guidingStopped: true,
+      parkRequested: true,
+      flatPanelLightOff: true,
+      failedRungs: [],
+    );
+    await activateWithoutPointer(tester);
+    await activateWithoutPointer(tester);
+    await tester.pumpAndSettle();
+    await tester.pump(const Duration(minutes: 1));
+    final pill = find.byKey(const Key('simple-message-0'));
+    expect(pill, findsOneWidget, reason: 'a safety summary waits to be read');
+    final container = ProviderScope.containerOf(tester.element(find.byType(EmergencyStopButton)));
+    expect(container.read(simpleMessagesProvider).single.kind, SimpleMessageKind.warning,
+        reason: 'amber: done, but the rig needs a look');
+    await tester.tap(find.descendant(of: pill, matching: find.byTooltip('Dismiss')));
+    await tester.pump();
+    expect(pill, findsNothing);
+  });
+
+  testWidgets('Simple Mode: the stop\'s message shows whole in its pill, every line (user, 2026-11-04: it was cut)',
+      (tester) async {
+    tester.view.physicalSize = const Size(1024, 768);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await pumpButton(tester, button: const EmergencyStopButton(compact: true), simpleMode: true, pills: true);
+    fake.result = const EmergencyStopResult(
+      alreadyInProgress: false,
+      runsAborted: 1,
+      exposureAborted: true,
+      guidingStopped: true,
+      parkRequested: true,
+      flatPanelLightOff: true,
+      failedRungs: ['park'],
+    );
+    await activateWithoutPointer(tester);
+    await activateWithoutPointer(tester);
+    await tester.pumpAndSettle();
+    final pill = find.byKey(const Key('simple-message-0'));
+    expect(pill, findsOneWidget);
+    for (final p in tester.renderObjectList<RenderParagraph>(find.descendant(of: pill, matching: find.byType(RichText)))) {
+      expect(p.didExceedMaxLines, isFalse, reason: '"${p.text.toPlainText()}" is cut short');
+    }
   });
 
   group('Simple Mode: keyboard and screen readers press again, no dialog', () {

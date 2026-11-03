@@ -9,8 +9,11 @@ void main() {
     addTearDown(() => dir.delete(recursive: true));
     LastRigService svc() => LastRigService(supportDir: () async => dir);
     expect(await svc().load(), isNull);
-    await svc().save('astro.lan');
-    expect(await svc().load(), 'astro.lan');
+    await svc().save(const LastRig('astro.lan', uuid: 'u1'));
+    expect(await svc().load(), const LastRig('astro.lan', uuid: 'u1'));
+    // A file from before uuids were kept: the name alone.
+    await File('${dir.path}/last_rig.json').writeAsString('{"name":"astro.lan"}');
+    expect(await svc().load(), const LastRig('astro.lan'));
     await File('${dir.path}/last_rig.json').writeAsString('not json');
     expect(await svc().load(), isNull);
   });

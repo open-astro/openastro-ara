@@ -954,14 +954,16 @@ void _preferLocalSubnetTests() {
         mdnsClientFactory: () => throw StateError('iOS must not open mDNS'),
         localAddresses: () async => const ['192.0.2.10'],
         nativeBrowse: () async => [
-          {'name': 'openastro', 'host': '198.51.100.20', 'port': 5555},
+          {'name': 'openastro', 'host': '198.51.100.20', 'port': 5555, 'uuid': 'u-ios'},
           {'name': 'broken', 'host': null, 'port': 5555},
         ],
         sweepSource: () => const Stream<AraServer>.empty(),
       );
-      expect(await svc.discover().toList(), [
+      final found = await svc.discover().toList();
+      expect(found, [
         const AraServer(hostname: '198.51.100.20', port: 5555, mdnsName: 'openastro'),
       ]);
+      expect(found.single.uuid, 'u-ios', reason: 'from the TXT record (#1485)');
       expect(svc.localNetworkBlocked.value, isFalse);
     });
 
@@ -1139,6 +1141,7 @@ void _preferLocalSubnetTests() {
       addTearDown(() => http.close(force: true));
       final r = await ServerDiscoveryService.probeForTest('127.0.0.1', http.port);
       expect(r.server?.mdnsName, 'openastro');
+      expect(r.server?.uuid, 'u', reason: 'the auto-connect matches on it (#1485)');
       expect(r.server?.port, http.port);
       expect(r.answered, isTrue);
     });

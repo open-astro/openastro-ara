@@ -113,6 +113,40 @@ namespace OpenAstroAra.Test {
             Assert.That(seen.Timeout, Is.EqualTo(TimeSpan.FromSeconds(25)), "the profile's timeout reaches the solver");
         }
 
+        [Test]
+        public async Task Unset_guide_optics_come_from_the_guider_its_cameras_pixel_size_and_its_pixel_scale() {
+            // The rig: the profile leaves both 0, the guider's camera reports 3.75 µm over AlpacaBridge
+            // and the guider works at 6.04292″/px, so the guide scope is 206.265 × 3.75 / 6.04292 = 128 mm.
+            var store = new InMemoryProfileStore();
+            PlateSolveParameter? seen = null;
+            var imageSolver = new Mock<IImageSolver>();
+            imageSolver.Setup(s => s.Solve(It.IsAny<IImageData>(), It.IsAny<PlateSolveParameter>(),
+                    It.IsAny<IProgress<ApplicationStatus>?>(), It.IsAny<CancellationToken>()))
+                .Callback<IImageData, PlateSolveParameter, IProgress<ApplicationStatus>?, CancellationToken>((_, p, _, _) => seen = p)
+                .ReturnsAsync(new PlateSolveResult { Success = false });
+            var factory = new Mock<IPlateSolverFactory>();
+            factory.Setup(f => f.GetPlateSolver(It.IsAny<IPlateSolveSettings>())).Returns(Mock.Of<IPlateSolver>());
+            factory.Setup(f => f.GetImageSolver(It.IsAny<IPlateSolver>(), It.IsAny<IPlateSolver>())).Returns(imageSolver.Object);
+            var sut = new PolarAlignFrameSolver(new HeadlessProfileService(), store, factory.Object,
+                _ => Task.FromResult<(double, double)?>((3.75, 6.04292)));
+
+            await sut.SolveAsync(WriteFrame(), 1, null, null, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(seen, Is.Not.Null, "solved instead of refusing");
+            Assert.That(seen!.PixelSize, Is.EqualTo(3.75).Within(1e-9));
+            Assert.That(seen.FocalLength, Is.EqualTo(128).Within(0.1));
+        }
+
+        [Test]
+        public async Task With_no_optics_anywhere_it_still_says_what_is_missing() {
+            var store = new InMemoryProfileStore();
+            var sut = new PolarAlignFrameSolver(new HeadlessProfileService(), store, Mock.Of<IPlateSolverFactory>(),
+                _ => Task.FromResult<(double, double)?>(null));
+            await Assert.ThatAsync(
+                () => sut.SolveAsync(WriteFrame(), 1, null, null, CancellationToken.None),
+                Throws.TypeOf<PlateSolverConfigurationException>()).ConfigureAwait(false);
+        }
+
         [TestCase(0)]
         [TestCase(-1)]
         public async Task A_binning_below_one_is_refused(int binning) {

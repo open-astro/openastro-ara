@@ -15,12 +15,16 @@ enum SimpleMessageKind {
   /// Red outline; stays until dismissed.
   error,
 
+  /// Amber outline; stays until dismissed: done, but the rig needs a look (an
+  /// Emergency Stop that went through).
+  warning,
+
   /// Amber outline with its buttons; stays until answered.
   question,
 }
 
 /// How long a result pill stays.
-const kSimpleResultLife = Duration(seconds: 6);
+const kSimpleResultLife = Duration(seconds: 10); // 6 until 2026-11-04 (user: too fast)
 
 class SimpleMessageAction {
   const SimpleMessageAction(this.label, this.onPressed);
@@ -107,6 +111,7 @@ typedef UserNotify = void Function(
   bool error,
   bool? snackBarRed,
   Duration? snackBarDuration,
+  bool warning,
 });
 
 /// A [UserNotify] for [context], captured before any await (the context may
@@ -120,12 +125,19 @@ UserNotify userNotifier(BuildContext context) {
     bool error = false,
     bool? snackBarRed,
     Duration? snackBarDuration,
+    bool warning = false,
   }) {
-    if (container.read(simpleModeProvider).value ?? false) {
+    // Active, not just chosen: with the Experimental switch off the full UI
+    // shows, and a pill there would reach nobody.
+    if (container.read(simpleModeActiveProvider)) {
       container
           .read(simpleMessagesProvider.notifier)
           .show(
-            error ? SimpleMessageKind.error : SimpleMessageKind.result,
+            error
+                ? SimpleMessageKind.error
+                : warning
+                ? SimpleMessageKind.warning
+                : SimpleMessageKind.result,
             title,
             detail: detail,
           );

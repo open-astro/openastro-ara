@@ -130,6 +130,12 @@ class AppLocalizationsPt extends AppLocalizations {
   String get deviceUnparking => 'Unparking…';
 
   @override
+  String get deviceParkUnfinished => 'The mount didn\'t finish parking';
+
+  @override
+  String get deviceUnparkUnfinished => 'The mount didn\'t finish unparking';
+
+  @override
   String get deviceParked => 'Parked';
 
   @override
@@ -271,9 +277,6 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get previewClipped => 'Clipped';
-
-  @override
-  String get previewSettings => 'Preview settings';
 
   @override
   String get previewLoop => 'Loop';
@@ -429,9 +432,6 @@ class AppLocalizationsPt extends AppLocalizations {
   String get polarDone => 'Done';
 
   @override
-  String get polarDoneNextPlan => 'Done · Next: Plan';
-
-  @override
   String get searchHint => 'Objects, settings, modes, images';
 
   @override
@@ -484,10 +484,10 @@ class AppLocalizationsPt extends AppLocalizations {
   String get searchSectionGuider => 'Guider';
 
   @override
-  String get searchSettingAperture => 'Aperture';
+  String get searchSettingAperture => 'Main scope aperture';
 
   @override
-  String get searchSettingFocalLength => 'Focal length';
+  String get searchSettingFocalLength => 'Main scope focal length';
 
   @override
   String get searchSettingLatitude => 'Latitude';
@@ -657,13 +657,13 @@ class AppLocalizationsPt extends AppLocalizations {
   String get autopilotNothingDone => 'Nothing done yet tonight';
 
   @override
-  String get autopilotStart => 'Start Autopilot';
+  String get autopilotStart => 'Start Guided Run';
 
   @override
   String get autopilotNotNow => 'Not now';
 
   @override
-  String get shellModeAutopilot => 'Autopilot';
+  String get shellModeAutopilot => 'Guided Run';
 
   @override
   String get shellModePreview => 'Preview';
@@ -681,7 +681,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get shellRailPolarAlign => 'P.A.';
 
   @override
-  String get shellRailAutopilot => 'Auto';
+  String get shellRailAutopilot => 'Guided';
 
   @override
   String shellStopAgain(String shortcut) {
@@ -790,6 +790,23 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String shellGearActionFailed(String action, String device) {
+    return '$action failed · $device';
+  }
+
+  @override
+  String get shellOk => 'OK';
+
+  @override
+  String get shellBedtimeTitle => 'Before you sleep';
+
+  @override
+  String get shellBedtimeAllGood => 'Everything is ready for the night.';
+
+  @override
+  String get shellBedtimeAnswer => 'Got it — let me go to bed';
+
+  @override
   String get shellConnected => 'Connected';
 
   @override
@@ -847,10 +864,10 @@ class AppLocalizationsPt extends AppLocalizations {
       'A plan is running. It keeps running on the rig; pick this profile again to come back to it.';
 
   @override
-  String get shellAperture => 'Aperture';
+  String get shellAperture => 'Main scope aperture';
 
   @override
-  String get shellFocalLength => 'Focal length';
+  String get shellFocalLength => 'Main scope focal length';
 
   @override
   String get shellLatitude => 'Latitude';
@@ -1199,6 +1216,18 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String planAlreadyQueued(String name) {
+    return '$name is already in the queue.';
+  }
+
+  @override
+  String get planRunEnding => 'The run is ending; this target can\'t join it.';
+
+  @override
+  String get planQueueBusy =>
+      'The queue is still updating on the rig. Try again in a moment.';
+
+  @override
   String get shellLanguage => 'Language';
 
   @override
@@ -1333,7 +1362,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get focusCardFailed => 'Autofocus failed';
 
   @override
-  String get focusCardCancelled => 'Cancelled';
+  String get focusCardCancelled => 'Canceled';
 
   @override
   String get focusCardNotFocused => 'Not focused yet';
@@ -1508,7 +1537,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get errorUntrusted => 'the connection wasn\'t trusted.';
 
   @override
-  String get errorCancelled => 'the request was cancelled.';
+  String get errorCancelled => 'the request was canceled.';
 
   @override
   String get errorNotFound =>
@@ -1537,6 +1566,366 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String get errorUnreadable =>
       'your rig sent something Ara didn\'t understand. It may be running a different version.';
+
+  @override
+  String focusCardWeakFit(String r2) {
+    return 'The curve fit was weak (R² $r2) — passing cloud, a slew during the sweep, or probes that straddle the V unevenly. The focus here comes from the measured frame, not the fit; run again if the sky has settled.';
+  }
+
+  @override
+  String focusCardWeakFitPlateau(String r2) {
+    return 'The curve fit was weak (R² $r2): the outer probes sit on a plateau, so the sweep is wider than the V. A smaller step size would put more probes on the slope. The focus here comes from the measured frame, not the fit.';
+  }
+
+  @override
+  String focusCardWeakFitPlateauAuto(String r2) {
+    return 'The curve fit was weak (R² $r2): the outer probes sit on a plateau, so this sweep was wider than the V. With automatic step size on, Ara sizes the next sweep from the V\'s width where a run lets it be measured, so running again should put more probes on the slope. The focus here comes from the measured frame, not the fit.';
+  }
+
+  @override
+  String get focusBestPosition => 'Best position';
+
+  @override
+  String get focusStars => 'Stars';
+
+  @override
+  String get focusFitR2 => 'Fit R²';
+
+  @override
+  String focusFocuserAt(String position) {
+    return 'Focuser at $position';
+  }
+
+  @override
+  String get focusMeasuredStars => 'Measured stars';
+
+  @override
+  String get bahtinovInFocusMaskOff => 'In focus · mask off';
+
+  @override
+  String get bahtinovMaskOff => 'Mask off';
+
+  @override
+  String get bahtinovCameraError => 'Stopped by a camera error';
+
+  @override
+  String get bahtinovWaitingFirst => 'Waiting for the first frame';
+
+  @override
+  String bahtinovInFocusPx(String px) {
+    return 'In focus · $px px';
+  }
+
+  @override
+  String bahtinovHintPx(String hint, String px) {
+    return '$hint · $px px from focus';
+  }
+
+  @override
+  String bahtinovStoppedLast(String px) {
+    return 'Stopped · last $px px from focus';
+  }
+
+  @override
+  String get bahtinovFitMask => 'Fit the mask, then Start';
+
+  @override
+  String get bahtinovFitMaskDetail =>
+      'Put the Bahtinov mask over the front of the telescope and point at a bright star. Ara uses the brightest star in the frame.';
+
+  @override
+  String get bahtinovWaiting => 'Waiting';
+
+  @override
+  String get bahtinovWaitingDetail => 'The first frame is on its way.';
+
+  @override
+  String get bahtinovNoStar => 'No star';
+
+  @override
+  String get bahtinovNoStarDetail =>
+      'Point at a bright star, or lengthen the exposure.';
+
+  @override
+  String get bahtinovNearEdge => 'Star at the edge';
+
+  @override
+  String get bahtinovNearEdgeDetail =>
+      'Center the star so its spikes fit in the frame.';
+
+  @override
+  String get bahtinovNoSpikes => 'No spikes';
+
+  @override
+  String get bahtinovNoSpikesDetail =>
+      'Fit the mask over the front of the telescope. Far out of focus? Turn until the star shrinks and spikes appear.';
+
+  @override
+  String get bahtinovInFocus => 'In focus';
+
+  @override
+  String bahtinovInFocusZoneDetail(String um) {
+    return 'The middle spike is centered, inside the ±$um µm focus zone. Lock the focuser, then Finish.';
+  }
+
+  @override
+  String get bahtinovInFocusDetail =>
+      'The middle spike is centered. Lock the focuser, then Finish.';
+
+  @override
+  String get bahtinovMakeMove => 'Make a move';
+
+  @override
+  String get bahtinovMakeMoveDetail =>
+      'Turn the focuser a little either way, then watch the number.';
+
+  @override
+  String get bahtinovGoBack => 'Go back';
+
+  @override
+  String bahtinovPassedDetail(String size) {
+    return 'You passed focus. Turn back about $size your last move.';
+  }
+
+  @override
+  String get bahtinovKeepGoing => 'Keep going';
+
+  @override
+  String bahtinovKeepGoingDetail(String size) {
+    return 'Same way — about $size your last move again.';
+  }
+
+  @override
+  String get bahtinovWrongWayDetail =>
+      'Wrong way — turn back past where you started.';
+
+  @override
+  String get bahtinovMoveQuarter => 'a quarter of';
+
+  @override
+  String get bahtinovMoveThird => 'a third of';
+
+  @override
+  String get bahtinovMoveHalf => 'half';
+
+  @override
+  String get bahtinovMoveThreeQuarters => 'three quarters of';
+
+  @override
+  String get bahtinovMoveSame => 'the same as';
+
+  @override
+  String get bahtinovMoveOneAndHalf => '1½×';
+
+  @override
+  String get bahtinovMoveTwice => 'twice';
+
+  @override
+  String get bahtinovMoveSeveral => 'several times';
+
+  @override
+  String get bahtinovPxFromFocus => 'px from focus';
+
+  @override
+  String get bahtinovFinish => 'Finish';
+
+  @override
+  String get bahtinovMaskQuestion => 'Take the Bahtinov mask off';
+
+  @override
+  String get bahtinovMaskQuestionDetail =>
+      'Take the mask off the front of the telescope before you image. Left on, it puts spikes on every star and costs light.';
+
+  @override
+  String get bahtinovNotYet => 'Not yet';
+
+  @override
+  String get bahtinovMaskRemoved => 'Mask removed';
+
+  @override
+  String get bahtinovExposure => 'Exposure';
+
+  @override
+  String get focusStartBahtinov => 'Start the Bahtinov readout';
+
+  @override
+  String get focusStopBahtinov => 'Stop the Bahtinov readout';
+
+  @override
+  String focusWeakFitShort(String r2) {
+    return 'Weak curve fit (R² $r2): the focus comes from the measured frame. Run again if the sky has settled.';
+  }
+
+  @override
+  String get guideFocusStarting => 'Starting…';
+
+  @override
+  String get guideFocusNoStarsMeasured => 'Live · no stars measured';
+
+  @override
+  String guideFocusLive(String hfr) {
+    return 'Live · HFR $hfr';
+  }
+
+  @override
+  String guideFocusLiveInFocus(String hfr) {
+    return 'Live · HFR $hfr — in focus';
+  }
+
+  @override
+  String guideFocusLiveBest(String hfr) {
+    return 'Live · HFR $hfr — best so far';
+  }
+
+  @override
+  String get guideFocusStoppedError => 'Stopped on an error';
+
+  @override
+  String get guideFocusHeld => 'In focus — held, stopped';
+
+  @override
+  String guideFocusHeldBest(String hfr) {
+    return 'In focus — held, stopped · best HFR $hfr';
+  }
+
+  @override
+  String guideFocusInFocusBest(String hfr) {
+    return 'In focus · best HFR $hfr';
+  }
+
+  @override
+  String get guideFocusStopped => 'Stopped';
+
+  @override
+  String guideFocusStoppedBest(String hfr) {
+    return 'Stopped · best HFR $hfr';
+  }
+
+  @override
+  String get guideFocusWaitingMain => 'Waiting for the main telescope';
+
+  @override
+  String get guideFocusNotReady => 'Not ready';
+
+  @override
+  String get guideFocusReady => 'Ready to focus';
+
+  @override
+  String get guideFocusConnectGuider =>
+      'Connect the guider first — the frames come through it.';
+
+  @override
+  String get guideFocusStopGuider =>
+      'Stop the guider first; it owns its camera while it is looping, guiding, calibrating or paused.';
+
+  @override
+  String get guideFocusNoStars => 'No stars';
+
+  @override
+  String get guideFocusNoStarsDetail =>
+      'Point at a star field or lengthen the exposure. Far out of focus? Make big moves until stars appear.';
+
+  @override
+  String get guideFocusBigMoves => 'big moves';
+
+  @override
+  String get guideFocusSmallMoves => 'small moves';
+
+  @override
+  String guideFocusInFocusDetail(String target) {
+    return 'Stars are as tight as this camera resolves (in focus ≤ $target px). Lock the focuser.';
+  }
+
+  @override
+  String get guideFocusSharpest => 'Sharpest so far';
+
+  @override
+  String get guideFocusSharpestDetail =>
+      'Hold here, or nudge a touch either way to confirm.';
+
+  @override
+  String guideFocusMakeMoveDetail(String size) {
+    return 'In or out, $size — then watch which way the number goes.';
+  }
+
+  @override
+  String guideFocusKeepGoingDetail(String size) {
+    return 'Same way you just moved — $size.';
+  }
+
+  @override
+  String guideFocusGoBackDetail(String size) {
+    return 'The other way from your last move — $size.';
+  }
+
+  @override
+  String get guideFocusHolding => 'Holding';
+
+  @override
+  String get guideFocusHoldingFar =>
+      'Still well off focus — make a bigger move and watch the number.';
+
+  @override
+  String get guideFocusHoldingNear => 'Try a small move either way.';
+
+  @override
+  String get focusGuide => 'Guide';
+
+  @override
+  String get focusGuideScope =>
+      'Guide scope: turn its focuser, or slide the camera in the draw tube, in small moves and watch the number fall.';
+
+  @override
+  String get focusGuideOag =>
+      'Off-axis guider: it shares the main scope\'s focus. Turn the OAG\'s helical focuser in small moves and watch the number fall.';
+
+  @override
+  String get focusGuideMainFirst =>
+      'Focus the main telescope first: an off-axis guider sees the same focal plane, so its HFR only means something once the main scope is in focus.';
+
+  @override
+  String get focusAlreadyInFocus => 'Already in focus';
+
+  @override
+  String get focusFrames => 'Frames';
+
+  @override
+  String get focusStartGuide => 'Start the guide camera\'s live focus';
+
+  @override
+  String get focusStopGuide => 'Stop the guide camera\'s live focus';
+
+  @override
+  String get focusScopeMain => 'Main';
+
+  @override
+  String get focusScopeGuide => 'Guide';
+
+  @override
+  String get guidedNextFocus => 'Next: Focus';
+
+  @override
+  String get guidedNextPolarAlign => 'Next: Polar align';
+
+  @override
+  String get guidedStartImaging => 'Start imaging';
+
+  @override
+  String get guidedImagingStartsAfter =>
+      'Imaging starts after focus and polar alignment.';
+
+  @override
+  String get guidedDoneStartImaging => 'Done · Start imaging';
+
+  @override
+  String get shellGuideFocalLength => 'Guide scope focal length';
+
+  @override
+  String get shellGuidePixelSize => 'Guide camera pixel size';
+
+  @override
+  String get searchWordsGuideScope =>
+      'guide scope guider camera pixel focal polar';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -1663,6 +2052,13 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get deviceUnparking => 'Desestacionando…';
+
+  @override
+  String get deviceParkUnfinished => 'A montagem não terminou de estacionar';
+
+  @override
+  String get deviceUnparkUnfinished =>
+      'A montagem não terminou de desestacionar';
 
   @override
   String get deviceParked => 'Estacionada';
@@ -1806,9 +2202,6 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get previewClipped => 'Saturado';
-
-  @override
-  String get previewSettings => 'Ajustes da prévia';
 
   @override
   String get previewLoop => 'Contínuo';
@@ -1964,9 +2357,6 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get polarDone => 'Concluir';
 
   @override
-  String get polarDoneNextPlan => 'Concluir · Próximo: Plano';
-
-  @override
   String get searchHint => 'Objetos, ajustes, modos, imagens';
 
   @override
@@ -2019,10 +2409,11 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get searchSectionGuider => 'Guia';
 
   @override
-  String get searchSettingAperture => 'Abertura';
+  String get searchSettingAperture => 'Abertura do telescópio principal';
 
   @override
-  String get searchSettingFocalLength => 'Distância focal';
+  String get searchSettingFocalLength =>
+      'Distância focal do telescópio principal';
 
   @override
   String get searchSettingLatitude => 'Latitude';
@@ -2193,13 +2584,13 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get autopilotNothingDone => 'Nada feito ainda esta noite';
 
   @override
-  String get autopilotStart => 'Iniciar Piloto automático';
+  String get autopilotStart => 'Iniciar sessão guiada';
 
   @override
   String get autopilotNotNow => 'Agora não';
 
   @override
-  String get shellModeAutopilot => 'Piloto automático';
+  String get shellModeAutopilot => 'Sessão guiada';
 
   @override
   String get shellModePreview => 'Prévia';
@@ -2217,7 +2608,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get shellRailPolarAlign => 'A.P.';
 
   @override
-  String get shellRailAutopilot => 'Auto';
+  String get shellRailAutopilot => 'Guiada';
 
   @override
   String shellStopAgain(String shortcut) {
@@ -2326,6 +2717,23 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   }
 
   @override
+  String shellGearActionFailed(String action, String device) {
+    return '$action falhou · $device';
+  }
+
+  @override
+  String get shellOk => 'OK';
+
+  @override
+  String get shellBedtimeTitle => 'Antes de dormir';
+
+  @override
+  String get shellBedtimeAllGood => 'Tudo pronto para a noite.';
+
+  @override
+  String get shellBedtimeAnswer => 'Entendi — vou dormir';
+
+  @override
   String get shellConnected => 'Conectado';
 
   @override
@@ -2384,10 +2792,10 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
       'Há um plano em andamento. Ele continua rodando no setup; escolha este perfil de novo para voltar a ele.';
 
   @override
-  String get shellAperture => 'Abertura';
+  String get shellAperture => 'Abertura do telescópio principal';
 
   @override
-  String get shellFocalLength => 'Distância focal';
+  String get shellFocalLength => 'Distância focal do telescópio principal';
 
   @override
   String get shellLatitude => 'Latitude';
@@ -2738,6 +3146,19 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   }
 
   @override
+  String planAlreadyQueued(String name) {
+    return '$name já está na fila.';
+  }
+
+  @override
+  String get planRunEnding =>
+      'A sessão está terminando; este alvo não pode entrar nela.';
+
+  @override
+  String get planQueueBusy =>
+      'A fila ainda está sendo atualizada no setup. Tente de novo em instantes.';
+
+  @override
   String get shellLanguage => 'Idioma';
 
   @override
@@ -3079,4 +3500,365 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get errorUnreadable =>
       'seu setup enviou algo que o Ara não entendeu. Ele pode estar com outra versão.';
+
+  @override
+  String focusCardWeakFit(String r2) {
+    return 'O ajuste da curva foi fraco (R² $r2) — nuvem passando, um movimento durante a varredura ou sondas desiguais dos dois lados do V. O foco aqui vem do quadro medido, não do ajuste; rode de novo se o céu estabilizou.';
+  }
+
+  @override
+  String focusCardWeakFitPlateau(String r2) {
+    return 'O ajuste da curva foi fraco (R² $r2): as sondas das pontas ficaram num platô, então a varredura é mais larga que o V. Um passo menor colocaria mais sondas na rampa. O foco aqui vem do quadro medido, não do ajuste.';
+  }
+
+  @override
+  String focusCardWeakFitPlateauAuto(String r2) {
+    return 'O ajuste da curva foi fraco (R² $r2): as sondas das pontas ficaram num platô, então esta varredura foi mais larga que o V. Com o passo automático ligado, o Ara dimensiona a próxima varredura pela largura do V quando dá para medi-la, então rodar de novo deve pôr mais sondas na rampa. O foco aqui vem do quadro medido, não do ajuste.';
+  }
+
+  @override
+  String get focusBestPosition => 'Melhor posição';
+
+  @override
+  String get focusStars => 'Estrelas';
+
+  @override
+  String get focusFitR2 => 'R² do ajuste';
+
+  @override
+  String focusFocuserAt(String position) {
+    return 'Focalizador em $position';
+  }
+
+  @override
+  String get focusMeasuredStars => 'Estrelas medidas';
+
+  @override
+  String get bahtinovInFocusMaskOff => 'Em foco · sem máscara';
+
+  @override
+  String get bahtinovMaskOff => 'Sem máscara';
+
+  @override
+  String get bahtinovCameraError => 'Parado por um erro da câmera';
+
+  @override
+  String get bahtinovWaitingFirst => 'Aguardando o primeiro quadro';
+
+  @override
+  String bahtinovInFocusPx(String px) {
+    return 'Em foco · $px px';
+  }
+
+  @override
+  String bahtinovHintPx(String hint, String px) {
+    return '$hint · $px px do foco';
+  }
+
+  @override
+  String bahtinovStoppedLast(String px) {
+    return 'Parado · último $px px do foco';
+  }
+
+  @override
+  String get bahtinovFitMask => 'Coloque a máscara e toque em Iniciar';
+
+  @override
+  String get bahtinovFitMaskDetail =>
+      'Coloque a máscara de Bahtinov na frente do telescópio e aponte para uma estrela brilhante. O Ara usa a estrela mais brilhante do quadro.';
+
+  @override
+  String get bahtinovWaiting => 'Aguardando';
+
+  @override
+  String get bahtinovWaitingDetail => 'O primeiro quadro está a caminho.';
+
+  @override
+  String get bahtinovNoStar => 'Sem estrela';
+
+  @override
+  String get bahtinovNoStarDetail =>
+      'Aponte para uma estrela brilhante ou aumente a exposição.';
+
+  @override
+  String get bahtinovNearEdge => 'Estrela na borda';
+
+  @override
+  String get bahtinovNearEdgeDetail =>
+      'Centralize a estrela para as espículas caberem no quadro.';
+
+  @override
+  String get bahtinovNoSpikes => 'Sem espículas';
+
+  @override
+  String get bahtinovNoSpikesDetail =>
+      'Coloque a máscara na frente do telescópio. Muito fora de foco? Gire até a estrela diminuir e as espículas aparecerem.';
+
+  @override
+  String get bahtinovInFocus => 'Em foco';
+
+  @override
+  String bahtinovInFocusZoneDetail(String um) {
+    return 'A espícula do meio está centrada, dentro da zona de foco de ±$um µm. Trave o focalizador e toque em Concluir.';
+  }
+
+  @override
+  String get bahtinovInFocusDetail =>
+      'A espícula do meio está centrada. Trave o focalizador e toque em Concluir.';
+
+  @override
+  String get bahtinovMakeMove => 'Faça um movimento';
+
+  @override
+  String get bahtinovMakeMoveDetail =>
+      'Gire o focalizador um pouco para qualquer lado e observe o número.';
+
+  @override
+  String get bahtinovGoBack => 'Volte';
+
+  @override
+  String bahtinovPassedDetail(String size) {
+    return 'Você passou do foco. Volte cerca de $size do último movimento.';
+  }
+
+  @override
+  String get bahtinovKeepGoing => 'Continue';
+
+  @override
+  String bahtinovKeepGoingDetail(String size) {
+    return 'Mesmo sentido — cerca de $size do último movimento de novo.';
+  }
+
+  @override
+  String get bahtinovWrongWayDetail =>
+      'Sentido errado — volte além de onde começou.';
+
+  @override
+  String get bahtinovMoveQuarter => 'um quarto';
+
+  @override
+  String get bahtinovMoveThird => 'um terço';
+
+  @override
+  String get bahtinovMoveHalf => 'metade';
+
+  @override
+  String get bahtinovMoveThreeQuarters => 'três quartos';
+
+  @override
+  String get bahtinovMoveSame => 'o mesmo';
+
+  @override
+  String get bahtinovMoveOneAndHalf => '1½×';
+
+  @override
+  String get bahtinovMoveTwice => 'o dobro';
+
+  @override
+  String get bahtinovMoveSeveral => 'várias vezes';
+
+  @override
+  String get bahtinovPxFromFocus => 'px do foco';
+
+  @override
+  String get bahtinovFinish => 'Concluir';
+
+  @override
+  String get bahtinovMaskQuestion => 'Tire a máscara de Bahtinov';
+
+  @override
+  String get bahtinovMaskQuestionDetail =>
+      'Tire a máscara da frente do telescópio antes de fotografar. Se ficar, ela põe espículas em todas as estrelas e rouba luz.';
+
+  @override
+  String get bahtinovNotYet => 'Ainda não';
+
+  @override
+  String get bahtinovMaskRemoved => 'Máscara retirada';
+
+  @override
+  String get bahtinovExposure => 'Exposição';
+
+  @override
+  String get focusStartBahtinov => 'Iniciar a leitura de Bahtinov';
+
+  @override
+  String get focusStopBahtinov => 'Parar a leitura de Bahtinov';
+
+  @override
+  String focusWeakFitShort(String r2) {
+    return 'Ajuste da curva fraco (R² $r2): o foco vem do quadro medido. Rode de novo se o céu estabilizou.';
+  }
+
+  @override
+  String get guideFocusStarting => 'Iniciando…';
+
+  @override
+  String get guideFocusNoStarsMeasured => 'Ao vivo · nenhuma estrela medida';
+
+  @override
+  String guideFocusLive(String hfr) {
+    return 'Ao vivo · HFR $hfr';
+  }
+
+  @override
+  String guideFocusLiveInFocus(String hfr) {
+    return 'Ao vivo · HFR $hfr — em foco';
+  }
+
+  @override
+  String guideFocusLiveBest(String hfr) {
+    return 'Ao vivo · HFR $hfr — o melhor até agora';
+  }
+
+  @override
+  String get guideFocusStoppedError => 'Parado por um erro';
+
+  @override
+  String get guideFocusHeld => 'Em foco — mantido, parado';
+
+  @override
+  String guideFocusHeldBest(String hfr) {
+    return 'Em foco — mantido, parado · melhor HFR $hfr';
+  }
+
+  @override
+  String guideFocusInFocusBest(String hfr) {
+    return 'Em foco · melhor HFR $hfr';
+  }
+
+  @override
+  String get guideFocusStopped => 'Parado';
+
+  @override
+  String guideFocusStoppedBest(String hfr) {
+    return 'Parado · melhor HFR $hfr';
+  }
+
+  @override
+  String get guideFocusWaitingMain => 'Aguardando o telescópio principal';
+
+  @override
+  String get guideFocusNotReady => 'Não está pronto';
+
+  @override
+  String get guideFocusReady => 'Pronto para focar';
+
+  @override
+  String get guideFocusConnectGuider =>
+      'Conecte a guiagem primeiro — os quadros vêm por ela.';
+
+  @override
+  String get guideFocusStopGuider =>
+      'Pare a guiagem primeiro; ela usa a câmera enquanto faz loop, guia, calibra ou está pausada.';
+
+  @override
+  String get guideFocusNoStars => 'Sem estrelas';
+
+  @override
+  String get guideFocusNoStarsDetail =>
+      'Aponte para um campo de estrelas ou aumente a exposição. Muito fora de foco? Faça movimentos grandes até as estrelas aparecerem.';
+
+  @override
+  String get guideFocusBigMoves => 'movimentos grandes';
+
+  @override
+  String get guideFocusSmallMoves => 'movimentos pequenos';
+
+  @override
+  String guideFocusInFocusDetail(String target) {
+    return 'As estrelas estão tão finas quanto esta câmera resolve (em foco ≤ $target px). Trave o focalizador.';
+  }
+
+  @override
+  String get guideFocusSharpest => 'O mais nítido até agora';
+
+  @override
+  String get guideFocusSharpestDetail =>
+      'Fique aqui, ou mexa um pouquinho para qualquer lado para confirmar.';
+
+  @override
+  String guideFocusMakeMoveDetail(String size) {
+    return 'Para dentro ou para fora, $size — e veja para onde o número vai.';
+  }
+
+  @override
+  String guideFocusKeepGoingDetail(String size) {
+    return 'Mesmo sentido do último movimento — $size.';
+  }
+
+  @override
+  String guideFocusGoBackDetail(String size) {
+    return 'O sentido contrário ao último movimento — $size.';
+  }
+
+  @override
+  String get guideFocusHolding => 'Parado no lugar';
+
+  @override
+  String get guideFocusHoldingFar =>
+      'Ainda bem fora de foco — faça um movimento maior e observe o número.';
+
+  @override
+  String get guideFocusHoldingNear =>
+      'Tente um movimento pequeno para qualquer lado.';
+
+  @override
+  String get focusGuide => 'Guia';
+
+  @override
+  String get focusGuideScope =>
+      'Luneta guia: gire o focalizador, ou deslize a câmera no tubo, em movimentos pequenos e veja o número cair.';
+
+  @override
+  String get focusGuideOag =>
+      'Guia fora do eixo: compartilha o foco do telescópio principal. Gire o focalizador helicoidal do OAG em movimentos pequenos e veja o número cair.';
+
+  @override
+  String get focusGuideMainFirst =>
+      'Foque o telescópio principal primeiro: um guia fora do eixo vê o mesmo plano focal, então o HFR dele só vale depois que o principal estiver em foco.';
+
+  @override
+  String get focusAlreadyInFocus => 'Já está em foco';
+
+  @override
+  String get focusFrames => 'Quadros';
+
+  @override
+  String get focusStartGuide => 'Iniciar o foco ao vivo da câmera de guia';
+
+  @override
+  String get focusStopGuide => 'Parar o foco ao vivo da câmera de guia';
+
+  @override
+  String get focusScopeMain => 'Principal';
+
+  @override
+  String get focusScopeGuide => 'Guia';
+
+  @override
+  String get guidedNextFocus => 'Próximo: Foco';
+
+  @override
+  String get guidedNextPolarAlign => 'Próximo: Alinhamento polar';
+
+  @override
+  String get guidedStartImaging => 'Iniciar a captura';
+
+  @override
+  String get guidedImagingStartsAfter =>
+      'A captura começa depois do foco e do alinhamento polar.';
+
+  @override
+  String get guidedDoneStartImaging => 'Pronto · Iniciar a captura';
+
+  @override
+  String get shellGuideFocalLength => 'Distância focal da luneta guia';
+
+  @override
+  String get shellGuidePixelSize => 'Pixel da câmera de guia';
+
+  @override
+  String get searchWordsGuideScope =>
+      'luneta guia guiagem câmera pixel distância focal polar guide scope';
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/theme/ara_colors.dart';
 import 'package:openastroara/screens/simple/simple_message_pills.dart';
 import 'package:openastroara/services/simple_mode_prefs_service.dart';
 import 'package:openastroara/state/simple_messages_state.dart';
@@ -15,10 +16,15 @@ class _Prefs extends SimpleModePrefsService {
   Future<void> save(bool enabled) async => value = enabled;
 }
 
-Future<ProviderContainer> _pump(WidgetTester tester, {bool simple = true, double maxHeight = 600}) async {
-  final c = ProviderContainer(overrides: [simpleModePrefsProvider.overrideWithValue(_Prefs(simple))]);
+Future<ProviderContainer> _pump(WidgetTester tester,
+    {bool simple = true, bool feature = true, double maxHeight = 600}) async {
+  final c = ProviderContainer(overrides: [
+    simpleModePrefsProvider.overrideWithValue(_Prefs(simple)),
+    simpleModeFeaturePrefsProvider.overrideWithValue(_Prefs(feature)),
+  ]);
   addTearDown(c.dispose);
   await c.read(simpleModeProvider.future);
+  await c.read(simpleModeFeatureProvider.future);
   await tester.pumpWidget(UncontrolledProviderScope(
     container: c,
     child: MaterialApp(
@@ -40,6 +46,25 @@ Future<ProviderContainer> _pump(WidgetTester tester, {bool simple = true, double
 }
 
 void main() {
+  testWidgets('the immersive view (no height limit) shows every message instead of crashing', (tester) async {
+    final c = await _pump(tester, maxHeight: double.infinity);
+    c.read(simpleMessagesProvider.notifier)
+      ..show(SimpleMessageKind.error, "Couldn't start imaging")
+      ..show(SimpleMessageKind.error, "Couldn't stop the run");
+    await tester.pump();
+    expect(tester.takeException(), isNull);
+    expect(find.textContaining("Couldn't start imaging"), findsOneWidget);
+    expect(find.textContaining("Couldn't stop the run"), findsOneWidget);
+  });
+
+  testWidgets('with the Experimental switch off the full UI shows, so messages go to a snackbar', (tester) async {
+    final c = await _pump(tester, feature: false);
+    await tester.tap(find.byKey(const Key('notify')));
+    await tester.pump();
+    expect(c.read(simpleMessagesProvider), isEmpty, reason: 'no pill nobody would see');
+    expect(find.byType(SnackBar), findsOneWidget);
+  });
+
   testWidgets('a result fades after 6 s; an error stays until ×', (tester) async {
     final c = await _pump(tester);
     final n = c.read(simpleMessagesProvider.notifier);
@@ -50,6 +75,21 @@ void main() {
     await tester.pump(kSimpleResultLife + const Duration(milliseconds: 100));
     expect(find.textContaining('Frame saved'), findsNothing, reason: 'the result faded');
     expect(find.textContaining("Couldn't start live view"), findsOneWidget, reason: 'the error stays');
+    await tester.tap(find.byTooltip('Dismiss'));
+    await tester.pump();
+    expect(c.read(simpleMessagesProvider), isEmpty);
+  });
+
+  testWidgets('a warning is amber and stays until ×, with no time-left line (it ran out while the pill stayed)',
+      (tester) async {
+    final c = await _pump(tester);
+    c.read(simpleMessagesProvider.notifier).show(SimpleMessageKind.warning, 'Emergency stop: mount parked');
+    await tester.pump();
+    expect(find.byType(TweenAnimationBuilder<double>), findsNothing, reason: 'no countdown for a pill that stays');
+    final box = tester.widget<Container>(find.byKey(const Key('simple-message-0'))).decoration! as BoxDecoration;
+    expect((box.border! as Border).top.color, AraColors.accentWarning);
+    await tester.pump(kSimpleResultLife * 3);
+    expect(find.textContaining('Emergency stop'), findsOneWidget);
     await tester.tap(find.byTooltip('Dismiss'));
     await tester.pump();
     expect(c.read(simpleMessagesProvider), isEmpty);

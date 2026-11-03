@@ -21,6 +21,12 @@ import 'package:openastroara/models/server.dart';
 import 'package:openastroara/services/profile_api.dart';
 import 'package:openastroara/screens/simple/simple_search.dart';
 import 'package:openastroara/screens/simple/simple_device_windows.dart' show simpleMountMotionProvider;
+import 'package:openastroara/models/autofocus_run.dart';
+import 'package:openastroara/state/focus/autofocus_live_state.dart';
+import 'package:openastroara/state/focus/bahtinov_focus_state.dart';
+import 'package:openastroara/models/bahtinov_focus.dart';
+import 'package:openastroara/state/focus/guide_focus_state.dart';
+import 'package:openastroara/state/settings/phd2_settings_state.dart';
 import 'package:openastroara/models/guider_status.dart';
 import 'package:openastroara/widgets/status_indicator.dart' show StatusLevel;
 import 'package:openastroara/widgets/equipment/guider_chip.dart' show guiderStatusLevel;
@@ -68,6 +74,8 @@ import 'package:openastroara/state/equipment/mount_state.dart';
 import 'package:openastroara/widgets/equipment/equipment_glyphs.dart';
 import 'package:openastroara/state/settings/settings_nav.dart';
 import 'package:openastroara/state/simple_mode_state.dart';
+import 'package:openastroara/theme/ara_metrics.dart' show AraBlur;
+import 'package:openastroara/screens/simple/simple_safety_alarm.dart';
 import 'package:openastroara/state/night_mode_state.dart';
 import 'package:openastroara/state/settings/optics_settings_state.dart';
 import 'package:openastroara/state/settings/site_settings_state.dart';
@@ -145,13 +153,18 @@ Future<ProviderContainer> _pump(WidgetTester tester, Size size,
     if (plan != null) simpleRunProvider.overrideWith(() => queueing ? _Queueing(plan) : _Plan(plan)),
     if (runState != null) sequenceRunStateProvider.overrideWith(() => _RunState(runState)),
     if (manualAlarm) safetyAlarmProvider.overrideWith(_ManualAlarm.new),
+    // The app shows Simple Mode's alarm over every screen while Simple Mode is on.
+    if (manualAlarm) simpleModeActiveProvider.overrideWithValue(true),
   ]);
   addTearDown(container.dispose);
   await container.read(simpleModeProvider.future);
   if (feature) await container.read(simpleModeFeatureProvider.future);
   await tester.pumpWidget(UncontrolledProviderScope(
     container: container,
-    child: const MaterialApp(home: SimpleShell(planetarium: SizedBox(key: Key('sky')))),
+    child: MaterialApp(
+      builder: (context, child) => SimpleSafetyAlarmLayer(child: child!),
+      home: const SimpleShell(planetarium: SizedBox(key: Key('sky'))),
+    ),
   ));
   await tester.pump();
   return container;
@@ -205,6 +218,13 @@ class _Mount extends MountNotifier with _Calls<MountStatus> {
   Future<MountStatus?> build() async => MountStatus.fromJson(_wire('AM5', state0));
 }
 
+/// A mount whose connect the rig refuses (the device notifiers throw why).
+class _RefusingMount extends _Mount {
+  _RefusingMount() : super(EquipmentConnectionState.disconnected);
+  @override
+  Future<bool> reconnect() async => throw StateError('The mount did not answer');
+}
+
 class _GpsPrefs extends ClientGpsPrefsService {
   _GpsPrefs() : super(supportDir: () async => throw UnsupportedError('unused'));
   @override
@@ -245,11 +265,94 @@ class _GuiderConnecting extends _GuiderCalls {
       GuiderStatus.fromJson(const {'device_id': 'g', 'name': 'PHD2', 'state': 'connecting'});
 }
 
+/// A guider mid-connect that [up] brings to connected.
+class _GuiderComingUp extends _GuiderConnecting {
+  void up() => state = AsyncData(GuiderStatus.fromJson(const {'device_id': 'g', 'name': 'PHD2', 'state': 'connected'}));
+}
+
+/// The rig's guide optics: unset for the first [unsetReads] reads, then filled (the rig fills them a
+/// few round trips after the guider connects).
+class _GuideOpticsApi extends ProfileApi {
+  _GuideOpticsApi(this.unsetReads) : super(const AraServer(hostname: 'test', port: 1));
+  int unsetReads;
+  int reads = 0;
+  @override
+  Future<Phd2Settings> getPhd2Settings() async => ++reads > unsetReads
+      ? const Phd2Settings(guideFocalLength: 128, guidePixelSize: 3.75)
+      : const Phd2Settings();
+  @override
+  Future<OpticsSettings> getOptics() async => const OpticsSettings();
+}
+
 /// The rig's answer once the guider is disconnected: no guider (404).
 class _GuiderGone extends _GuiderCalls {
   @override
   Future<GuiderStatus?> build() async => null;
 }
+
+class _LiveFrame extends AutofocusLiveNotifier {
+  @override
+  AutofocusLive build() => AutofocusLive(
+      run: const AutofocusRun(state: AutofocusRunStates.complete, finalHfr: 1.01), frame: Uint8List.fromList(_png));
+}
+
+/// A finished Smart Focus with a weak fit and its frame: the tallest Auto panel.
+class _LiveWeak extends AutofocusLiveNotifier {
+  @override
+  AutofocusLive build() => AutofocusLive(
+      run: AutofocusRun(
+        state: AutofocusRunStates.complete,
+        finalHfr: 1.01,
+        finalPosition: 29463,
+        finalStars: 299,
+        probes: [
+          for (var i = 0; i < 7; i++)
+            AutofocusProbe(
+                index: i, phase: AutofocusProbePhases.fine, position: 29300 + i * 50,
+                hfr: [4.2, 3.4, 2.8, 1.4, 2.6, 3.3, 4.8][i], stars: 40, kept: true),
+        ],
+        fit: const AutofocusFit(
+            algorithm: 'hyperbolic', rSquared: 0.554, bestPosition: 29463, predictedHfr: 1.7,
+            withinSampledRange: true, curve: []),
+      ),
+      frame: Uint8List.fromList(_png));
+}
+
+/// A Bahtinov readout running with a frame: the tallest Manual panel.
+class _BahtinovReading extends BahtinovFocusNotifier {
+  @override
+  BahtinovFocusLive build() {
+    final recent = [
+      for (var i = 0; i < 6; i++)
+        BahtinovSample(seq: i + 1, detected: true, offsetPx: i < 3 ? 3.0 : 2.0, withinZone: false),
+    ];
+    return BahtinovFocusLive(
+      status: BahtinovFocusStatus(
+          active: true, state: BahtinovFocusStates.running, exposureSec: 2, seq: 6, latest: recent.last,
+          recent: recent, zonePx: 0.3, zoneFromOptics: false, hasFrame: true),
+      frame: Uint8List.fromList(_png),
+      frameSeq: 6,
+    );
+  }
+}
+
+class _GuideFrame extends GuideFocusNotifier {
+  @override
+  GuideFocusLive build() => GuideFocusLive(frame: Uint8List.fromList(_png), frameSeq: 1);
+}
+
+class _ManualPick extends MainFocusMethodNotifier {
+  @override
+  MainFocusMethod? build() => MainFocusMethod.bahtinov;
+}
+
+class _AutoPick extends MainFocusMethodNotifier {
+  @override
+  MainFocusMethod? build() => MainFocusMethod.autofocus;
+}
+
+// A 1x1 PNG.
+const _png = [137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 1, 0, 0, 0, 1, 8, 6, 0, 0, 0, 31, 21, 196, 137, 0, 0, 0, 13, 73, 68, 65, 84, 120, 156, 99, 248, 15, 4, 0, 9, 251, 3, 253, 227, 85, 242, 156, 0, 0, 0, 0, 73, 69, 78, 68, 174, 66, 96, 130];
 
 class _ParkingMount extends MountNotifier {
   static Map<String, dynamic> _json(bool parked, String runtime) => {
@@ -466,7 +569,7 @@ void main() {
     final container = await _pump(tester, const Size(1024, 768));
     await tester.tap(find.byKey(const Key('simple-mode')));
     await tester.pump();
-    final modes = ['Autopilot', 'Preview', 'Focus', 'Polar align', 'Plan'];
+    final modes = ['Guided Run', 'Preview', 'Focus', 'Polar align', 'Plan'];
     // The grid's tile, not the rail's label (which also reads Preview): the leftmost match.
     // The tile's corner, not the text's: a name on two lines sits higher in its tile.
     Offset tile(String m) => (find.text(m).evaluate().map((e) => tester.getTopLeft(
@@ -516,6 +619,58 @@ void main() {
     expect(find.descendant(of: find.byKey(const Key('simple-settings')), matching: find.byIcon(Icons.tune)), findsOneWidget);
   });
 
+  testWidgets("Focus: Measured stars On fills the screen with the run's frame, circles and all", (tester) async {
+    final container = await _pump(tester, const Size(1024, 768), gear: [
+      autofocusLiveProvider.overrideWith(() => _LiveFrame()),
+      mainFocusMethodProvider.overrideWith(_AutoPick.new),
+    ]);
+    await tester.tap(find.byKey(const Key('simple-mode')));
+    await tester.pump();
+    await tester.tap(find.text('Focus'));
+    await tester.pump();
+    expect(find.byKey(const Key('simple-focus-frame')), findsNothing, reason: 'off to start');
+    container.read(simpleFocusStarsShownProvider.notifier).set(true);
+    await tester.pump();
+    expect(find.byKey(const Key('simple-focus-frame')), findsOneWidget);
+  });
+
+  for (final (name, gear) in [
+    ('Auto, a finished weak-fit run', <Override>[
+      autofocusLiveProvider.overrideWith(_LiveWeak.new),
+      focuserProvider.overrideWith(() => _Focuser(EquipmentConnectionState.connected)),
+    ]),
+    ('Manual, the Bahtinov readout with a frame', <Override>[
+      bahtinovFocusProvider.overrideWith(_BahtinovReading.new),
+      mainFocusMethodProvider.overrideWith(_ManualPick.new),
+    ]),
+  ]) {
+    testWidgets('the Focus panel fits on an iPad without scrolling: $name', (tester) async {
+      await _pump(tester, const Size(1024, 768), gear: gear);
+      await tester.tap(find.byKey(const Key('simple-mode')));
+      await tester.pump();
+      await tester.tap(find.text('Focus'));
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('simple-settings')));
+      await tester.pump();
+      final scroll = find.ancestor(of: find.byType(SimpleFocusPanel), matching: find.byType(Scrollable)).first;
+      expect(tester.state<ScrollableState>(scroll).position.maxScrollExtent, 0, reason: 'everything in view');
+    });
+  }
+
+  testWidgets("Focus on the guide camera fills the screen with the guide camera's frames", (tester) async {
+    final container = await _pump(tester, const Size(1024, 768), gear: [
+      guideFocusProvider.overrideWith(_GuideFrame.new),
+    ]);
+    await tester.tap(find.byKey(const Key('simple-mode')));
+    await tester.pump();
+    await tester.tap(find.text('Focus'));
+    await tester.pump();
+    expect(find.byKey(const Key('simple-focus-frame')), findsNothing, reason: 'the main telescope to start');
+    container.read(simpleFocusScopeProvider.notifier).set(SimpleFocusScope.guide);
+    await tester.pump();
+    expect(find.byKey(const Key('simple-focus-frame')), findsOneWidget);
+  });
+
   testWidgets('Focus stays in Simple Mode: the rail reads Focus, its panel opens left of the rail; the chip is the Focus chip',
       (tester) async {
     final container = await _pump(tester, const Size(1024, 768));
@@ -525,12 +680,12 @@ void main() {
     await tester.pump();
     expect(container.read(simpleModeProvider).value, isTrue, reason: 'no jump to the full UI');
     expect(find.descendant(of: find.byKey(const Key('simple-mode')), matching: find.text('Focus')), findsOneWidget);
-    expect(find.text('No focuser connected'), findsNothing, reason: 'picking a mode opens nothing');
+    expect(find.text('Fit the mask, then Start'), findsNothing, reason: 'picking a mode opens nothing');
     // Picking a mode only switches it; the chip opens its panel.
     await tester.tap(find.byKey(const Key('simple-settings')));
     await tester.pump();
     final rail = _panelOf(tester, find.byKey(const Key('simple-shutter')));
-    final panel = _panelOf(tester, find.text('No focuser connected'));
+    final panel = _panelOf(tester, find.text('Fit the mask, then Start'));
     expect(panel.right, rail.left - kSimpleInset, reason: 'left of the rail');
     expect(panel.top, rail.top, reason: 'level with its top');
 
@@ -615,12 +770,12 @@ void main() {
     await tester.pump();
     expect(find.descendant(of: find.byKey(const Key('simple-mode')), matching: find.text('Plan')), findsOneWidget);
     expect(find.byKey(const Key('sky')), findsNothing, reason: 'back on the frame');
-    expect(find.text("Tonight's plan"), findsOneWidget);
+    expect(find.byType(SimpleRunSheet), findsOneWidget);
     expect(find.byKey(const Key('simple-sky-image-this')), findsNothing, reason: 'the sheet, not the card');
 
     await tester.tap(find.byKey(const Key('simple-run-pick-in-sky')));
     await tester.pump();
-    expect(find.text("Tonight's plan"), findsNothing);
+    expect(find.byType(SimpleRunSheet), findsNothing);
     expect(find.byKey(const Key('sky')), findsOneWidget);
     expect(find.byKey(const Key('simple-sky-image-this')), findsOneWidget);
   });
@@ -696,7 +851,7 @@ void main() {
     expect(rail(), before, reason: 'modes open');
   });
 
-  testWidgets('with nothing done tonight Preview offers Autopilot; it walks Focus first, the rail reads Auto',
+  testWidgets('with nothing done tonight Preview offers Autopilot; it walks Plan first, the rail reads Guided',
       (tester) async {
     await _pump(tester, const Size(1024, 768));
     expect(find.byKey(const Key('autopilot-offer')), findsOneWidget);
@@ -704,16 +859,16 @@ void main() {
     await tester.pump();
     expect(find.byKey(const Key('autopilot-offer')), findsNothing);
     expect(find.byKey(const Key('autopilot-strip')), findsOneWidget);
-    // "Autopilot" doesn't fit the 60 px rail: it reads Auto, as Polar align reads P.A.
-    expect(find.descendant(of: find.byKey(const Key('simple-mode')), matching: find.text('Auto')), findsOneWidget);
-    expect(find.bySemanticsLabel(RegExp(r'^Mode: Autopilot')), findsOneWidget, reason: 'the screen reader says it whole');
-    expect(find.byType(SimpleFocusPanel), findsOneWidget, reason: "Focus's panel, open");
+    // "Guided Run" doesn't fit the 60 px rail: it reads Guided, as Polar align reads P.A.
+    expect(find.descendant(of: find.byKey(const Key('simple-mode')), matching: find.text('Guided')), findsOneWidget);
+    expect(find.bySemanticsLabel(RegExp(r'^Mode: Guided Run')), findsOneWidget, reason: 'the screen reader says it whole');
+    expect(find.byType(SimpleRunSheet), findsOneWidget, reason: "the plan's sheet first");
     await tester.tap(find.byKey(const Key('autopilot-skip')));
     await tester.pump();
-    expect(find.byType(SimplePolarPanel), findsOneWidget, reason: "on to polar align's panel");
+    expect(find.byType(SimpleFocusPanel), findsOneWidget, reason: "then Focus's panel");
     await tester.tap(find.byKey(const Key('autopilot-skip')));
     await tester.pump();
-    expect(find.text("Tonight's plan"), findsOneWidget, reason: "then the plan's sheet");
+    expect(find.byType(SimplePolarPanel), findsOneWidget, reason: "then polar align's panel");
     // Picking a mode leaves Autopilot.
     await tester.tap(find.byKey(const Key('simple-mode')));
     await tester.pump();
@@ -744,11 +899,7 @@ void main() {
       await _frame(tester, container);
       await tester.tap(find.byKey(const Key('autopilot-start')));
       await tester.pump();
-      await tester.tap(find.byKey(const Key('autopilot-skip')));
-      await tester.pump();
-      await tester.tap(find.byKey(const Key('autopilot-skip')));
-      await tester.pump();
-      final sheet = find.text("Tonight's plan");
+      final sheet = find.byType(SimpleRunSheet);
       expect(sheet, findsOneWidget);
       // Each tap must land on its control, not on whatever covers it.
       Future<void> tap(Finder f) async {
@@ -771,7 +922,7 @@ void main() {
       await tap(find.byKey(const Key('simple-settings')));
       await tap(find.byKey(const Key('simple-mode')));
       expect(sheet, findsNothing, reason: 'the modes replace it');
-      expect(find.text('Autopilot'), findsOneWidget, reason: 'the modes are open');
+      expect(find.text('Guided Run'), findsOneWidget, reason: 'the modes are open');
       await tap(find.ancestor(of: find.text('Focus'), matching: find.byType(InkWell)).first);
       expect(find.byKey(const Key('autopilot-strip')), findsNothing, reason: 'Focus picked: Autopilot left');
       expect(find.byType(SimpleFocusPanel), findsNothing, reason: 'picking a mode opens nothing');
@@ -783,10 +934,6 @@ void main() {
     await _pump(tester, const Size(1024, 768), plan: const SimpleRun(), queueing: true);
     await tester.tap(find.byKey(const Key('autopilot-start')));
     await tester.pump();
-    await tester.tap(find.byKey(const Key('autopilot-skip')));
-    await tester.pump();
-    await tester.tap(find.byKey(const Key('autopilot-skip')));
-    await tester.pump();
     final c = ProviderScope.containerOf(tester.element(find.byType(SimpleShell)));
     for (var i = 1; i <= 10; i++) {
       c.read(planetariumSelectionProvider.notifier).set(PlanetariumSelection(
@@ -797,7 +944,7 @@ void main() {
       await tester.pumpAndSettle();
     }
     expect(c.read(simpleRunProvider).targets, hasLength(10));
-    final sheet = find.text("Tonight's plan");
+    final sheet = find.byType(SimpleRunSheet);
     expect(sheet, findsOneWidget, reason: 'the sheet stays up while queueing');
     Future<void> tap(Finder f) async {
       final box = tester.renderObject(f);
@@ -842,11 +989,26 @@ void main() {
     final container = await _pump(tester, const Size(1024, 768));
     await tester.tap(find.byKey(const Key('simple-mode')));
     await tester.pump();
-    await tester.tap(find.text('Autopilot'));
+    await tester.tap(find.text('Guided Run'));
     await tester.pump();
     expect(container.read(simpleModeProvider).value, isTrue, reason: 'no jump to the full UI');
     expect(find.byKey(const Key('autopilot-strip')), findsOneWidget);
-    expect(find.byType(SimpleFocusPanel), findsOneWidget, reason: "Focus's panel, open");
+    expect(find.byType(SimpleRunSheet), findsOneWidget, reason: "the plan's sheet, open: Plan comes first");
+  });
+
+  testWidgets("Guided Run's plan step only queues: its green button reads Next: Focus and goes there", (tester) async {
+    await _pump(tester, const Size(1024, 768),
+        plan: const SimpleRun(sequenceId: 'seq-1', targets: [
+          SimpleTarget(name: 'M 42', steps: [FilterPlanStep(filterName: 'L', exposureSeconds: 120, frameCount: 30)]),
+        ]));
+    await tester.tap(find.byKey(const Key('autopilot-start')));
+    await tester.pump();
+    final next = find.byKey(const Key('simple-run-start'));
+    expect(find.descendant(of: next, matching: find.text('Next: Focus')), findsOneWidget);
+    expect(find.text('Imaging starts after focus and polar alignment.'), findsOneWidget);
+    await tester.tap(next);
+    await tester.pump();
+    expect(find.byType(SimpleFocusPanel), findsOneWidget);
   });
 
   testWidgets('in Autopilot the chip names the step whose settings it shows', (tester) async {
@@ -854,18 +1016,18 @@ void main() {
     await tester.tap(find.byKey(const Key('autopilot-start')));
     await tester.pump();
     final chip = find.byKey(const Key('simple-settings'));
+    expect(find.descendant(of: chip, matching: find.text('Plan\n5 min')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('autopilot-skip')));
+    await tester.pump();
     expect(find.descendant(of: chip, matching: find.text('Focus\nManual')), findsOneWidget);
     await tester.tap(find.byKey(const Key('autopilot-skip')));
     await tester.pump();
     expect(find.descendant(of: chip, matching: find.text('P.A.\n1 s')), findsOneWidget);
-    await tester.tap(find.byKey(const Key('autopilot-skip')));
-    await tester.pump();
-    expect(find.descendant(of: chip, matching: find.text('Plan\n5 min')), findsOneWidget);
   });
 
   for (final size in const [Size(1024, 768), Size(768, 1024), Size(507, 768)]) {
     testWidgets('at $size: message pills sit top-left, beside the status pill, above the left rail, '
-        'under the Autopilot offer', (tester) async {
+        'the Guided Run offer at the bottom', (tester) async {
       final container = await _pump(tester, size);
       await _frame(tester, container);
       container.read(captureProgressProvider.notifier).beginExposing(const Duration(seconds: 5));
@@ -880,7 +1042,9 @@ void main() {
       final rail = _panelOf(tester, find.text('Library'));
       final offer = tester.getRect(find.byKey(const Key('autopilot-offer')));
       expect(pills.left, kSimpleInset, reason: 'the top-left corner');
-      expect(pills.top, greaterThanOrEqualTo(offer.bottom), reason: 'under the Autopilot offer');
+      expect(pills.top, lessThan(offer.top), reason: 'the offer moved to the bottom (user, 2026-11-03)');
+      expect(offer.bottom, size.height - kSimpleInset * 2 - kSimpleBarHeight, reason: 'just above the bottom row');
+      expect(offer.center.dx, closeTo(size.width / 2, 1), reason: 'centred');
       expect(pills.right, lessThanOrEqualTo(status.left), reason: 'beside the status pill, never under it');
       expect(pills.bottom, lessThanOrEqualTo(rail.top), reason: 'above the left rail');
       expect(find.byKey(const Key('simple-messages-more')), findsOneWidget, reason: 'six don\'t fit: the rest fold');
@@ -1033,10 +1197,6 @@ void main() {
           ]));
       await tester.tap(find.byKey(const Key('autopilot-start')));
       await tester.pump();
-      await tester.tap(find.byKey(const Key('autopilot-skip')));
-      await tester.pump();
-      await tester.tap(find.byKey(const Key('autopilot-skip')));
-      await tester.pump();
       await tester.tap(find.byKey(const Key('simple-settings')));
       await tester.pump();
       final strip = tester.getRect(find.byKey(const Key('autopilot-strip')));
@@ -1100,8 +1260,10 @@ void main() {
     final sheet = find.byKey(const Key('simple-menu'));
     expect(sheet, findsOneWidget);
     final rect = tester.getRect(sheet);
-    expect(rect.left, kSimpleInset);
-    expect(rect.right, size.width - kSimpleInset, reason: 'the width of the window');
+    // Under the gear, no wider than its content needs (user, 2026-11-04: the
+    // window-wide sheet was mostly empty space).
+    expect(rect.right, size.width - kSimpleInset, reason: 'hugs the right edge, under the gear');
+    expect(rect.width, kSimpleSettingsMaxWidth);
     final blur = tester.widget<BackdropFilter>(find.descendant(of: sheet, matching: find.byType(BackdropFilter)));
     expect(blur.filter, ImageFilter.blur(sigmaX: 5, sigmaY: 5));
     final box = tester.widget<Container>(find.descendant(of: sheet, matching: find.byKey(const Key('simple-frosted-surface'))));
@@ -1365,7 +1527,7 @@ void main() {
     await _openSection(tester, 'Rig');
     TextStyle? style(String t) => tester.widget<Text>(find.text(t)).style;
     for (final t in ['Name', 'Profile']) {
-      expect(style(t), style('Aperture'), reason: t);
+      expect(style(t), style('Main scope aperture'), reason: t);
     }
     // Their Change buttons are 44 pt targets (user, 2026-11-03), so each row is 44 pt.
     expect(tester.getCenter(find.text('Profile')).dy - tester.getCenter(find.text('Name')).dy, closeTo(44, 4));
@@ -1456,6 +1618,190 @@ void main() {
     expect(c.read(appLocaleProvider), isNull);
   });
 
+  testWidgets("Rig names the main scope's optics and shows the guide scope's, kept in the profile", (tester) async {
+    final c = await _pump(tester, const Size(1024, 768));
+    c.read(phd2SettingsProvider.notifier)
+      ..setGuideFocalLength(128)
+      ..setGuidePixelSize(3.75);
+    await _openSection(tester, 'Rig');
+    for (final t in ['Main scope aperture', 'Main scope focal length', 'Guide scope focal length', 'Guide camera pixel size']) {
+      await tester.ensureVisible(find.text(t));
+      expect(find.text(t), findsOneWidget, reason: t);
+    }
+    expect(find.descendant(of: find.byKey(const Key('simple-rig-guidefocal')), matching: find.text('128 mm')), findsOneWidget);
+    expect(find.text('3.75 µm'), findsOneWidget);
+    await tester.ensureVisible(find.byKey(const Key('simple-rig-guidefocal')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('simple-rig-guidefocal')));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const Key('simple-rig-guidefocal-wheel-1')));
+    await tester.pumpAndSettle();
+    await tester.drag(find.byKey(const Key('simple-rig-guidefocal-wheel-1')), const Offset(0, -44.0));
+    await tester.pumpAndSettle();
+    expect(c.read(phd2SettingsProvider).guideFocalLength, 228, reason: 'per digit, like the main scope');
+  });
+
+  testWidgets("Rig shows the guide optics the rig fills a few seconds after the guider connects", (tester) async {
+    // PR #1486 review: one read on Connected usually lands before the rig's fill, leaving 0 / Not set.
+    final guider = _GuiderComingUp();
+    final api = _GuideOpticsApi(2);
+    await _pump(tester, const Size(1024, 768), linkUp: true,
+        profiles: const ProfileList(activeId: 'p1', profiles: [ProfileMeta(id: 'p1', name: 'Backyard Rig')]), gear: [
+      guiderStatusProvider.overrideWith(() => guider),
+      profileApiProvider.overrideWithValue(api),
+    ]);
+    await _openSection(tester, 'Rig');
+    guider.up();
+    for (var i = 0; i < 5; i++) {
+      await tester.pump(const Duration(seconds: 1));
+    }
+    await tester.ensureVisible(find.byKey(const Key('simple-rig-guidefocal')));
+    expect(find.descendant(of: find.byKey(const Key('simple-rig-guidefocal')), matching: find.text('128 mm')), findsOneWidget);
+    expect(find.text('3.75 µm'), findsOneWidget);
+    final settled = api.reads;
+    await tester.pump(const Duration(seconds: 5));
+    expect(api.reads, settled, reason: 'it stops reading once both are filled');
+  });
+
+  testWidgets("Rig reads the guide optics from the rig when it opens, the guider already connected", (tester) async {
+    // On the iPad (2026-11-03): the rig held 128 mm / 3.75 µm but Rig showed Not set — nothing read the
+    // profile's guider section unless the guider connected while Rig was open.
+    final api = _GuideOpticsApi(0);
+    await _pump(tester, const Size(1024, 768), linkUp: true,
+        profiles: const ProfileList(activeId: 'p1', profiles: [ProfileMeta(id: 'p1', name: 'Backyard Rig')]), gear: [
+      guiderStatusProvider.overrideWith(_GuiderUp.new),
+      profileApiProvider.overrideWithValue(api),
+    ]);
+    await _openSection(tester, 'Rig');
+    await tester.pump();
+    await tester.ensureVisible(find.byKey(const Key('simple-rig-guidefocal')));
+    expect(find.descendant(of: find.byKey(const Key('simple-rig-guidefocal')), matching: find.text('128 mm')), findsOneWidget);
+    expect(find.text('3.75 µm'), findsOneWidget);
+  });
+
+  testWidgets("every Rig adjustment is one width: the wheels, the elevation stepper and the read-only tile",
+      (tester) async {
+    // User, 2026-11-04: the elevation stepper was wider than the rows above it.
+    await _pump(tester, const Size(1024, 768));
+    await _openSection(tester, 'Rig');
+    final elevation = find.byKey(const Key('simple-rig-elevation'));
+    await tester.ensureVisible(elevation);
+    await tester.pumpAndSettle();
+    final widths = {
+      for (final id in ['aperture', 'focal', 'guidefocal', 'guidepixel', 'lat', 'lng', 'elevation'])
+        id: tester.getSize(find.byKey(Key('simple-rig-$id'))).width,
+    };
+    expect(widths.values.toSet(), hasLength(1), reason: '$widths');
+    final right = {
+      for (final id in ['focal', 'elevation']) id: tester.getRect(find.byKey(Key('simple-rig-$id'))).right,
+    };
+    expect(right.values.toSet(), hasLength(1), reason: 'one right edge: $right');
+  });
+
+  testWidgets("Rig's two guide rows show Not set in the same tile, the same size and edge", (tester) async {
+    await _pump(tester, const Size(1024, 768));
+    await _openSection(tester, 'Rig');
+    await tester.ensureVisible(find.byKey(const Key('simple-rig-guidepixel')));
+    await tester.pumpAndSettle();
+    final focal = tester.getRect(find.byKey(const Key('simple-rig-guidefocal')));
+    final pixel = tester.getRect(find.byKey(const Key('simple-rig-guidepixel')));
+    expect(find.descendant(of: find.byKey(const Key('simple-rig-guidefocal')), matching: find.text('Not set')), findsOneWidget);
+    expect(find.descendant(of: find.byKey(const Key('simple-rig-guidepixel')), matching: find.text('Not set')), findsOneWidget);
+    expect((pixel.width, pixel.height, pixel.right), (focal.width, focal.height, focal.right));
+  });
+
+  testWidgets('every panel on the image blurs what is behind it, as the Settings sheet does (AraBlur.panel)',
+      (tester) async {
+    // User, 2026-11-04: the Settings sheet's 90 % scrim + blur on every Simple Mode panel, for legibility.
+    final c = await _pump(tester, const Size(1024, 768),
+        plan: SimpleRun(sequenceId: 'seq-1', targets: [
+          SimpleTarget(name: 'M31', tag: 'M31', steps: const [FilterPlanStep(filterName: 'L', exposureSeconds: 60, frameCount: 10)],
+              raDeg: 10.7, decDeg: 41.3),
+        ]));
+    await _frame(tester, c);
+    await tester.tap(find.byKey(const Key('simple-info'))); // the Info tiles
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('simple-mode')));
+    await tester.pump();
+    await tester.tap(find.text('Plan').first); // the plan squares
+    await tester.pump();
+    c.read(simpleMessagesProvider.notifier)
+      ..show(SimpleMessageKind.error, "Couldn't start imaging")
+      ..show(SimpleMessageKind.result, 'Frame saved');
+    await tester.pump();
+    expect(find.byKey(const Key('simple-run-tracker')), findsOneWidget, reason: 'precondition: a plan square');
+    bool scrim(Widget w) =>
+        (w is Container && w.decoration is BoxDecoration && (w.decoration! as BoxDecoration).color == AraColors.overlayScrim) ||
+        (w is Material && w.color == AraColors.overlayScrim);
+    // Each scrim's own blur sits right above it (inside its clip), not some outer panel's.
+    final surfaces = find.byWidgetPredicate(scrim).evaluate().toList();
+    expect(surfaces.length, greaterThanOrEqualTo(8), reason: 'strip, rails, status, Info tiles, pills, plan square');
+    for (final e in surfaces) {
+      BackdropFilter? blur;
+      var up = 0;
+      e.visitAncestorElements((a) {
+        if (a.widget is BackdropFilter) blur = a.widget as BackdropFilter;
+        return blur == null && ++up < 4; // its own, a few elements up
+      });
+      expect(blur?.filter, ImageFilter.blur(sigmaX: AraBlur.panel, sigmaY: AraBlur.panel),
+          reason: '${e.widget.key ?? e.widget.runtimeType} has no blur of its own');
+    }
+    await tester.pump(kSimpleResultLife + const Duration(seconds: 1)); // the result fades
+  });
+
+  testWidgets("Guided Run's plan step hugs the rail like every mode's panel, with no title (the strip names the step)",
+      (tester) async {
+    await _pump(tester, const Size(1024, 768));
+    await tester.tap(find.byKey(const Key('simple-mode')));
+    await tester.pump();
+    await tester.tap(find.text('Guided Run').first);
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+    final sheet = tester.getRect(find.byType(SimpleRunSheet));
+    final rail = tester.getRect(find.byKey(const Key('simple-mode')));
+    expect(sheet.right, closeTo(rail.left - kSimpleInset, 8), reason: 'beside the rail, not centred');
+    expect(find.text("Tonight's plan"), findsNothing);
+  });
+
+  testWidgets("Plan's sheet sits beside the rail too, not centred over the image", (tester) async {
+    await _pump(tester, const Size(1024, 768));
+    await tester.tap(find.byKey(const Key('simple-mode')));
+    await tester.pump();
+    await tester.tap(find.text('Plan').first);
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('simple-settings')));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+    final sheet = tester.getRect(find.byType(SimpleRunSheet));
+    final rail = tester.getRect(find.byKey(const Key('simple-mode')));
+    expect(sheet.right, closeTo(rail.left - kSimpleInset, 8));
+  });
+
+  testWidgets('Preview settings opens with no title: the chip says what it is', (tester) async {
+    await _pump(tester, const Size(1024, 768));
+    await tester.tap(find.byKey(const Key('simple-settings')));
+    await tester.pump();
+    expect(find.byKey(const Key('simple-exposure')), findsOneWidget);
+    expect(find.text('Preview settings'), findsNothing);
+  });
+
+  testWidgets("a Rig edit with no rig link says it wasn't saved instead of nothing", (tester) async {
+    // Review: _save returned silently when there was no ProfileApi, and the value reverted at the next read.
+    final c = await _pump(tester, const Size(1024, 768), feature: true);
+    expect(c.read(profileApiProvider), isNull, reason: 'precondition: no rig');
+    await _openSection(tester, 'Rig');
+    await tester.ensureVisible(find.byKey(const Key('simple-rig-guidefocal')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('simple-rig-guidefocal')));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const Key('simple-rig-guidefocal-wheel-1')));
+    await tester.pumpAndSettle();
+    await tester.drag(find.byKey(const Key('simple-rig-guidefocal-wheel-1')), const Offset(0, -44.0));
+    await tester.pumpAndSettle();
+    final m = c.read(simpleMessagesProvider).single;
+    expect((m.kind, m.title, m.detail), (SimpleMessageKind.error, "Couldn't save that", 'Rig not connected'));
+  });
+
   testWidgets('Logs & bug report opens over Simple Mode; Back comes back', (tester) async {
     final c = await _pump(tester, const Size(1024, 768));
     await _openSection(tester, 'Rig');
@@ -1492,6 +1838,20 @@ void main() {
     expect(camera.calls, ['disconnect']);
     expect(focuser.calls, ['reconnect']);
     expect(mount.calls, ['reconnect'], reason: 'Connect: the device the rig remembers, no chooser');
+  });
+
+  testWidgets('a Connect the rig refuses says why in a pill instead of looking like a dead button', (tester) async {
+    final c = await _pump(tester, const Size(1024, 768), linkUp: true, feature: true, gear: [
+      mountProvider.overrideWith(_RefusingMount.new),
+    ]);
+    await _openSection(tester, 'Devices');
+    await tester.tap(find.byKey(const Key('simple-gear-mount-connect')));
+    await tester.pump();
+    expect(tester.takeException(), isNull);
+    final m = c.read(simpleMessagesProvider).single;
+    expect(m.kind, SimpleMessageKind.error);
+    expect(m.title, 'Connect failed · Mount · AM5');
+    expect(m.detail, contains('The mount did not answer'));
   });
 
   testWidgets('Devices lists the guider, named by its camera like its window; Disconnect, and the row opens it',
@@ -2018,6 +2378,22 @@ void main() {
       expect(alarm, findsNothing);
     });
   }
+
+  testWidgets('the safety alarm shows over a screen pushed over Simple Mode (the Image Library, full Settings)',
+      (tester) async {
+    final container = await _pump(tester, const Size(1024, 768), manualAlarm: true);
+    Navigator.of(tester.element(find.byType(SimpleShell)))
+        .push(MaterialPageRoute<void>(builder: (_) => const Scaffold(body: Text('Image Library'))));
+    await tester.pumpAndSettle();
+    expect(find.text('Image Library'), findsOneWidget);
+    (container.read(safetyAlarmProvider.notifier) as _ManualAlarm).raise('Safety monitor: unsafe (rain)');
+    await tester.pump();
+    final alarm = find.byKey(const Key('simple-safety-alarm'));
+    expect(alarm.hitTestable(), findsOneWidget, reason: 'on top, not under the pushed screen');
+    await tester.tap(find.byKey(const Key('simple-safety-silence')));
+    await tester.pump();
+    expect(alarm, findsNothing);
+  });
 
   testWidgets('an emergency stop pressed on this device: no full screen and no tone; other alarms still show',
       (tester) async {

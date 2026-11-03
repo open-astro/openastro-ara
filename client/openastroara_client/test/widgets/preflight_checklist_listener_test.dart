@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/state/simple_messages_state.dart';
 import 'package:openastroara/models/preflight_checklist.dart';
 import 'package:openastroara/state/app_shell_state.dart';
 import 'package:openastroara/state/preflight/preflight_state.dart';
@@ -54,6 +55,7 @@ void main() {
     WidgetTester tester, {
     required bool prompt,
     PreflightChecklist? checklist,
+    bool quiet = false,
   }) async {
     final p = _Prompt(prompt);
     final c = _Checklist(checklist);
@@ -67,9 +69,9 @@ void main() {
     await tester.pumpWidget(
       UncontrolledProviderScope(
         container: container,
-        child: const MaterialApp(
+        child: MaterialApp(
           home: Scaffold(
-            body: PreflightChecklistListener(child: Text('shell')),
+            body: PreflightChecklistListener(quiet: quiet, child: const Text('shell')),
           ),
         ),
       ),
@@ -92,6 +94,40 @@ void main() {
       expect(p.acked, 1);
     },
   );
+
+  testWidgets('in Simple Mode the bedtime card is a pill: what needs a look, and one answer; no Adjust into the full UI',
+      (tester) async {
+    final warn = PreflightChecklist(
+      generatedUtc: DateTime.utc(2026, 7, 19, 5),
+      items: const [
+        PreflightItem(key: 'mount', status: 'ok', title: 'Mount safety', detail: 'Tracking.'),
+        PreflightItem(key: 'disk', status: 'warn', title: 'Disk space', detail: 'Room for 40 frames.'),
+      ],
+      allGood: false,
+    );
+    final (container, p, _) = await pump(tester, prompt: true, checklist: warn, quiet: true);
+    expect(find.byType(AlertDialog), findsNothing, reason: 'no popups in Simple Mode');
+    final m = container.read(simpleMessagesProvider).single;
+    expect(m.kind, SimpleMessageKind.question);
+    expect(m.title, 'Before you sleep');
+    expect(m.detail, 'Disk space: Room for 40 frames.', reason: 'only what needs a look');
+    expect(m.actions.map((a) => a.label), ['Got it — let me go to bed']);
+    m.actions.single.onPressed();
+    await tester.pump();
+    expect(p.acked, 1);
+    expect(container.read(selectedTabIndexProvider), isNot(kSetupTabIndex));
+  });
+
+  testWidgets("the Simple Mode pill's answer still answers after its listener has gone (a switch to the full UI)",
+      (tester) async {
+    final (container, p, _) = await pump(tester, prompt: true, checklist: _ok, quiet: true);
+    final m = container.read(simpleMessagesProvider).single;
+    await tester.pumpWidget(UncontrolledProviderScope(container: container, child: const MaterialApp(home: SizedBox())));
+    m.actions.single.onPressed();
+    await tester.pump();
+    expect(tester.takeException(), isNull);
+    expect(p.acked, 1);
+  });
 
   testWidgets('#1138 Adjust answers too and opens Setup → Before you sleep', (
     tester,

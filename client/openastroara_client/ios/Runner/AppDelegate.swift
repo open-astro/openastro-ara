@@ -67,7 +67,8 @@ final class BonjourBrowser {
   private let queue = DispatchQueue(label: "openastroara.bonjour")
 
   func browse(type: String, timeout: TimeInterval, completion: @escaping ([[String: Any]]) -> Void) {
-    let browser = NWBrowser(for: .bonjour(type: type, domain: nil), using: .tcp)
+    // With the TXT record: its uuid lets the auto-connect tell two same-named rigs apart (#1485).
+    let browser = NWBrowser(for: .bonjourWithTXTRecord(type: type, domain: nil), using: .tcp)
     var found: [String: [String: Any]] = [:]
     var resolving: Set<String> = []
     var connections: [NWConnection] = []
@@ -75,6 +76,8 @@ final class BonjourBrowser {
     browser.browseResultsChangedHandler = { [queue] results, _ in
       for result in results {
         guard case let .service(name, _, _, _) = result.endpoint, resolving.insert(name).inserted else { continue }
+        var uuid: String?
+        if case let .bonjour(txt) = result.metadata { uuid = txt["uuid"] }
         let params = NWParameters.tcp
         if let ip = params.defaultProtocolStack.internetProtocol as? NWProtocolIP.Options {
           ip.version = .v4
@@ -86,7 +89,9 @@ final class BonjourBrowser {
                 case let .hostPort(host, port)? = connection.currentPath?.remoteEndpoint else { return }
           // An IPv4 literal prints bare; drop any "%interface" scope suffix.
           let address = "\(host)".split(separator: "%").first.map(String.init) ?? "\(host)"
-          found[name] = ["name": name, "host": address, "port": Int(port.rawValue)]
+          var rig: [String: Any] = ["name": name, "host": address, "port": Int(port.rawValue)]
+          if let uuid { rig["uuid"] = uuid }
+          found[name] = rig
           connection.cancel()
         }
         connection.start(queue: queue)

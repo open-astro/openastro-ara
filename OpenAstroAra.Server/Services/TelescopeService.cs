@@ -243,6 +243,7 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
             _connectGeneration++;
             client = _client;
             _client = null;
+            ForgetPushedSite();
             if (_device is not null) {
                 SetState(EquipmentConnectionState.Disconnected);
             }
@@ -1315,7 +1316,7 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
             }
             if (stillConnected) {
                 LogConnected(device.Name, host, device.IpPort, device.AlpacaDeviceNumber);
-                PushProfileSite(); // the profile's site into the mount (one source of truth)
+                PushProfileSite(force: true); // the profile's site into the mount (one source of truth)
             }
         } catch (Exception ex) {
             if (!adopted) {
@@ -1364,6 +1365,7 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
     private AlpacaTelescope? TakeClientLocked() {
         var c = _client;
         _client = null;
+        ForgetPushedSite();
         return c;
     }
 

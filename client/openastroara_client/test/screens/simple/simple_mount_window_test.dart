@@ -5,6 +5,7 @@ import 'package:openastroara/models/mount_status.dart';
 import 'package:openastroara/screens/simple/simple_device_windows.dart';
 import 'package:openastroara/services/equipment_driver_api.dart';
 import 'package:openastroara/state/equipment/mount_state.dart';
+import 'package:openastroara/state/simple_messages_state.dart';
 import 'package:openastroara/state/settings/safety_policies_state.dart';
 import 'package:openastroara/models/sequence/sequence_summary.dart';
 import 'package:openastroara/state/sequencer/sequence_list_state.dart';
@@ -108,6 +109,47 @@ void main() {
     await tester.pump();
     expect(find.text('Parking…'), findsNothing);
     expect(tester.widget<SimpleSegment>(find.byKey(const Key('simple-mount-park-parked'))).selected, isTrue);
+  });
+
+  testWidgets('a park that stops short clears Parking… and says so', (tester) async {
+    final (c, mount) = await _pump(tester, _wire());
+    await tester.tap(find.byKey(const Key('simple-mount-park-parked')));
+    await tester.pump();
+    mount.set(_wire(runtime: 'slewing'));
+    await tester.pump();
+    expect(find.text('Parking…'), findsOneWidget);
+    mount.set(_wire(tracking: false, runtime: 'idle')); // aborted: stopped, not parked
+    await tester.pump();
+    expect(find.text('Parking…'), findsOneWidget, reason: 'a moment of grace: AtPark can lag Slewing');
+    await tester.pump(const Duration(seconds: 3));
+    expect(find.text('Parking…'), findsNothing);
+    expect(find.byKey(const Key('simple-mount-park-parked')), findsOneWidget, reason: 'the control is back');
+    expect(c.read(simpleMessagesProvider).single.title, "The mount didn't finish parking");
+  });
+
+  testWidgets('a park whose AtPark lags its Slewing by a poll still finishes, with no "didn\'t finish"', (tester) async {
+    // Review of #1486: ASCOM drivers often drop Slewing a moment before AtPark goes true.
+    final (c, mount) = await _pump(tester, _wire());
+    await tester.tap(find.byKey(const Key('simple-mount-park-parked')));
+    await tester.pump();
+    mount.set(_wire(runtime: 'slewing'));
+    await tester.pump();
+    mount.set(_wire(tracking: false, runtime: 'idle')); // stopped, not parked yet
+    await tester.pump();
+    mount.set(_wire(tracking: false, parked: true, runtime: 'parked'));
+    await tester.pump();
+    expect(find.text('Parking…'), findsNothing);
+    expect(c.read(simpleMessagesProvider), isEmpty);
+  });
+
+  testWidgets('a mount that disconnects mid-park clears Parking… and says so', (tester) async {
+    final (c, mount) = await _pump(tester, _wire());
+    await tester.tap(find.byKey(const Key('simple-mount-park-parked')));
+    await tester.pump();
+    mount.set(_wire(state: 'disconnected'));
+    await tester.pump();
+    expect(c.read(simpleMountMotionProvider), isNull);
+    expect(c.read(simpleMessagesProvider).single.title, "The mount didn't finish parking");
   });
 
   testWidgets('Tracking On on a parked mount unparks it first, then tracks once it is unparked', (tester) async {
