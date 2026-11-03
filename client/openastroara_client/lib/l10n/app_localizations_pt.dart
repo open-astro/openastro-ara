@@ -2376,7 +2376,8 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get searchSettingAperture => 'Abertura do telescópio principal';
 
   @override
-  String get searchSettingFocalLength => 'Focal do telescópio principal';
+  String get searchSettingFocalLength =>
+      'Distância focal do telescópio principal';
 
   @override
   String get searchSettingLatitude => 'Latitude';
@@ -2741,7 +2742,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get shellAperture => 'Abertura do telescópio principal';
 
   @override
-  String get shellFocalLength => 'Focal do telescópio principal';
+  String get shellFocalLength => 'Distância focal do telescópio principal';
 
   @override
   String get shellLatitude => 'Latitude';
@@ -3786,12 +3787,12 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get guidedDoneStartImaging => 'Pronto · Iniciar a captura';
 
   @override
-  String get shellGuideFocalLength => 'Focal da luneta guia';
+  String get shellGuideFocalLength => 'Distância focal da luneta guia';
 
   @override
   String get shellGuidePixelSize => 'Pixel da câmera de guia';
 
   @override
   String get searchWordsGuideScope =>
-      'luneta guia guiagem câmera pixel focal polar guide scope';
+      'luneta guia guiagem câmera pixel distância focal polar guide scope';
 }
