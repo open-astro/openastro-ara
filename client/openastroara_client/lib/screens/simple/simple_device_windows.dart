@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -10,6 +11,8 @@ import '../../services/equipment_driver_api.dart';
 import '../../models/focuser_status.dart';
 import '../../state/equipment/camera_state.dart';
 import '../../state/equipment/focuser_state.dart';
+import '../../state/focus/autofocus_live_state.dart';
+import '../../state/settings/autofocus_settings_state.dart';
 import '../../state/imaging/exposure_state.dart';
 import '../../state/equipment/mount_state.dart';
 import '../../state/sequencer/sequence_list_state.dart';
@@ -641,6 +644,58 @@ class _SimpleFocuserWindowState extends ConsumerState<SimpleFocuserWindow> {
     }
   }
 
+  /// The profile's autofocus temperature trigger: every run Ara builds
+  /// refocuses after the focuser drifts this much (0 = off).
+  Widget _refocus() {
+    final c = ref.watch(autofocusSettingsProvider).triggerTempDeltaC;
+    Widget button(int dir) => IconButton(
+      key: Key('simple-focuser-refocus-${dir > 0 ? 'up' : 'down'}'),
+      onPressed: () => _setRefocus(c + dir * 0.5),
+      icon: Icon(
+        dir > 0 ? Icons.add : Icons.remove,
+        semanticLabel: dir > 0 ? 'More' : 'Less',
+      ),
+    );
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: AraColors.tileFill,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          button(-1),
+          SizedBox(
+            width: 64,
+            child: Text(
+              c <= 0 ? 'Off' : simpleCelsius(c),
+              textAlign: TextAlign.center,
+              style: kSimpleText,
+            ),
+          ),
+          button(1),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _setRefocus(double c) async {
+    final af = ref.read(autofocusSettingsProvider.notifier);
+    af.setTriggerTempDeltaC(c.clamp(0, 10).toDouble());
+    final api = ref.read(profileApiProvider);
+    if (api == null) return;
+    final notify = userNotifier(context);
+    try {
+      await af.persistToServer(api);
+    } catch (e) {
+      notify(
+        "Couldn't save that",
+        detail: describeEquipmentError(e),
+        error: true,
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final s = ref.watch(focuserProvider).value;
@@ -701,12 +756,15 @@ class _SimpleFocuserWindowState extends ConsumerState<SimpleFocuserWindow> {
                 setState(() => _target = null);
                 if (t != null) _go(s, t);
               },
+              // The middle runs autofocus (its square cancels it).
+              centre: const _AutofocusButton(),
             ),
           ),
         ),
-        simpleWindowRow(
-          'Step',
-          DecoratedBox(
+        const SizedBox(height: AraSpace.s16),
+        Center(
+          child: DecoratedBox(
+            key: const Key('simple-focuser-steps'),
             decoration: BoxDecoration(
               color: AraColors.tileFill,
               borderRadius: BorderRadius.circular(8),
@@ -726,6 +784,13 @@ class _SimpleFocuserWindowState extends ConsumerState<SimpleFocuserWindow> {
             ),
           ),
         ),
+        Text(
+          'steps per click',
+          textAlign: TextAlign.center,
+          style: AraText.caption,
+        ),
+        const SizedBox(height: AraSpace.s8),
+        simpleWindowRow('Refocus after a change of', _refocus()),
       ]);
     }
     if (widget.inSettings) {
@@ -742,28 +807,33 @@ class _SimpleFocuserWindowState extends ConsumerState<SimpleFocuserWindow> {
   }
 }
 
-/// A focuser knob drawn like the real one: turn it round its centre and it
-/// reports each 30° detent (clockwise out, +1; counter-clockwise in, −1),
-/// then the release. iOS has no rotary control of its own.
+/// A focuser knob drawn like a safe's dial: the whole face turns under a
+/// fixed mark, reporting each 30° detent (clockwise out, +1;
+/// counter-clockwise in, −1), then the release. [centre] sits in the middle
+/// and takes its own taps. It claims the finger at once (no drag slop), so
+/// the dial follows from the first touch. iOS has no rotary control of its
+/// own.
 class _FocusKnob extends StatefulWidget {
   const _FocusKnob({
     super.key,
     required this.onDetent,
     required this.onRelease,
+    required this.centre,
   });
 
   final ValueChanged<int> onDetent;
   final VoidCallback onRelease;
+  final Widget centre;
 
   @override
   State<_FocusKnob> createState() => _FocusKnobState();
 }
 
 class _FocusKnobState extends State<_FocusKnob> {
-  static const _size = 200.0;
+  static const _size = 220.0;
   static const _detent = math.pi / 6;
 
-  /// The mark's angle, and the turn not yet a whole detent.
+  /// The face's angle, and the turn not yet a whole detent.
   double _angle = 0;
   double _pending = 0;
   double? _last;
@@ -786,74 +856,146 @@ class _FocusKnobState extends State<_FocusKnob> {
   }
 
   void _end() {
+    if (_last == null) return;
     _last = null;
     _pending = 0;
     widget.onRelease();
   }
 
   @override
-  Widget build(BuildContext context) => GestureDetector(
-    onPanStart: (d) => _last = _at(d.localPosition),
-    onPanUpdate: (d) => _turn(d.localPosition),
-    onPanEnd: (_) => _end(),
-    onPanCancel: _end,
-    child: CustomPaint(
-      size: const Size.square(_size),
-      painter: _KnobPainter(_angle),
-      child: SizedBox.square(
-        dimension: _size,
-        child: Center(
-          child: Text(
-            'Turn\nto focus',
-            textAlign: TextAlign.center,
-            style: AraText.caption,
+  Widget build(BuildContext context) => SizedBox.square(
+    dimension: _size,
+    child: Stack(
+      alignment: Alignment.center,
+      children: [
+        RawGestureDetector(
+          gestures: {
+            _EagerPan: GestureRecognizerFactoryWithHandlers<_EagerPan>(
+              _EagerPan.new,
+              (r) {
+                r
+                  ..dragStartBehavior = DragStartBehavior.down
+                  ..onStart = (d) {
+                    _last = _at(d.localPosition);
+                  }
+                  ..onUpdate = (d) {
+                    _turn(d.localPosition);
+                  }
+                  ..onEnd = (_) {
+                    _end();
+                  }
+                  ..onCancel = _end;
+              },
+            ),
+          },
+          child: Transform.rotate(
+            key: const Key('simple-focuser-dial-face'),
+            angle: _angle,
+            child: const CustomPaint(
+              size: Size.square(_size),
+              painter: _DialPainter(),
+            ),
           ),
         ),
-      ),
+        // The fixed mark the face turns under; a finger on it turns the dial.
+        const Positioned(
+          top: 0,
+          child: IgnorePointer(
+            child: Icon(
+              Icons.arrow_drop_down,
+              size: 28,
+              color: AraColors.accentInfo,
+            ),
+          ),
+        ),
+        SizedBox.square(dimension: _size * 0.42, child: widget.centre),
+      ],
     ),
   );
 }
 
-class _KnobPainter extends CustomPainter {
-  _KnobPainter(this.angle);
+/// A pan that wins the finger on touch-down, ahead of the sheet's scroll and
+/// without waiting for the drag slop.
+class _EagerPan extends PanGestureRecognizer {
+  _EagerPan({super.debugOwner});
 
-  final double angle;
+  @override
+  void addAllowedPointer(PointerDownEvent event) {
+    super.addAllowedPointer(event);
+    resolve(GestureDisposition.accepted);
+  }
+}
+
+/// The dial's face: a knurled rim and graduations, every 30° (a detent)
+/// long, every 6° short.
+class _DialPainter extends CustomPainter {
+  const _DialPainter();
 
   @override
   void paint(Canvas canvas, Size size) {
     final c = size.center(Offset.zero);
-    final r = size.width / 2;
+    final r = size.width / 2 - 14;
     canvas.drawCircle(c, r, Paint()..color = AraColors.tileFill);
-    canvas.drawCircle(
-      c,
-      r - 0.5,
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..color = AraColors.border,
-    );
-    // The detents round the rim.
-    final tick = Paint()
-      ..color = AraColors.textSecondary
+    // The knurled grip round the edge.
+    final grip = Paint()
+      ..color = AraColors.border
       ..strokeWidth = 2;
-    for (var i = 0; i < 12; i++) {
-      final a = i * math.pi / 6 - math.pi / 2;
+    for (var i = 0; i < 90; i++) {
+      final a = i * 2 * math.pi / 90;
       final dir = Offset(math.cos(a), math.sin(a));
-      canvas.drawLine(c + dir * (r - 14), c + dir * (r - 4), tick);
+      canvas.drawLine(c + dir * (r - 6), c + dir * r, grip);
     }
-    canvas.drawCircle(c, r * 0.38, Paint()..color = AraColors.bgPrimary);
-    // The mark turns with the finger.
-    final a = angle - math.pi / 2;
-    final dir = Offset(math.cos(a), math.sin(a));
-    canvas.drawLine(
-      c + dir * (r * 0.5),
-      c + dir * (r - 20),
-      Paint()
-        ..color = AraColors.accentInfo
-        ..strokeWidth = 6
-        ..strokeCap = StrokeCap.round,
-    );
+    for (var i = 0; i < 60; i++) {
+      final a = i * math.pi / 30 - math.pi / 2;
+      final dir = Offset(math.cos(a), math.sin(a));
+      final major = i % 5 == 0;
+      canvas.drawLine(
+        c + dir * (r - (major ? 26 : 16)),
+        c + dir * (r - 10),
+        Paint()
+          ..color = major ? AraColors.textPrimary : AraColors.textSecondary
+          ..strokeWidth = major ? 3 : 1.5,
+      );
+    }
   }
 
   @override
-  bool shouldRepaint(_KnobPainter old) => old.angle != angle;
+  bool shouldRepaint(_DialPainter old) => false;
+}
+
+/// The dial's middle: Autofocus, a square to cancel while it runs.
+class _AutofocusButton extends ConsumerWidget {
+  const _AutofocusButton();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final live = ref.watch(autofocusLiveProvider);
+    final running = live.run.isRunning;
+    final af = ref.read(autofocusLiveProvider.notifier);
+    return Material(
+      color: AraColors.bgPrimary,
+      shape: const CircleBorder(side: BorderSide(color: AraColors.border)),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        key: const Key('simple-focuser-autofocus'),
+        onTap: live.busy ? null : (running ? af.cancel : af.start),
+        child: Semantics(
+          button: true,
+          label: running ? 'Cancel autofocus' : 'Autofocus',
+          excludeSemantics: true,
+          child: Center(
+            child: running
+                ? const Icon(Icons.stop, color: AraColors.accentError, size: 32)
+                : Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.center_focus_strong, size: 26),
+                      Text('Autofocus', style: AraText.caption),
+                    ],
+                  ),
+          ),
+        ),
+      ),
+    );
+  }
 }

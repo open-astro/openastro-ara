@@ -8,6 +8,8 @@ import 'package:openastroara/models/focuser_status.dart';
 import 'package:openastroara/screens/simple/simple_device_windows.dart';
 import 'package:openastroara/services/equipment_driver_api.dart';
 import 'package:openastroara/state/equipment/focuser_state.dart';
+import 'package:openastroara/state/focus/autofocus_live_state.dart';
+import 'package:openastroara/state/settings/autofocus_settings_state.dart';
 import 'package:openastroara/screens/simple/simple_shell.dart' show SimpleSegment;
 
 /// A focuser that records where it was sent.
@@ -34,9 +36,22 @@ Map<String, dynamic> _wire({bool absolute = true, String runtime = 'idle', int p
       'runtime': {'state': runtime, 'position': position, 'temperature': 8.4},
     };
 
+class _Live extends AutofocusLiveNotifier {
+  int starts = 0;
+  @override
+  AutofocusLive build() => const AutofocusLive();
+  @override
+  Future<void> start() async => starts++;
+}
+
+late _Live _live;
+late ProviderContainer _c;
+
 Future<_Focuser> _pump(WidgetTester tester, Map<String, dynamic> wire) async {
   final focuser = _Focuser(wire);
-  final c = ProviderContainer(overrides: [
+  _live = _Live();
+  final c = _c = ProviderContainer(overrides: [
+    autofocusLiveProvider.overrideWith(() => _live),
     focuserProvider.overrideWith(() => focuser),
     deviceDriverProvider.overrideWith((ref, type) async => null),
   ]);
@@ -109,5 +124,43 @@ void main() {
     node.owner!.performAction(node.id, SemanticsAction.increase);
     await tester.pump();
     expect(f.moves, [12100]);
+  });
+
+  testWidgets('the middle of the knob runs autofocus', (tester) async {
+    final f = await _pump(tester, _wire());
+    await tester.tap(find.byKey(const Key('simple-focuser-autofocus')));
+    await tester.pump();
+    expect(_live.starts, 1);
+    expect(f.moves, isEmpty, reason: 'a tap in the middle is not a turn');
+  });
+
+  testWidgets('the whole dial turns, like a safe\'s', (tester) async {
+    await _pump(tester, _wire());
+    double turn() => tester.widget<Transform>(find.byKey(const Key('simple-focuser-dial-face'))).transform.getRotation().entry(1, 0);
+    expect(turn(), closeTo(0, 1e-9));
+    await _turn(tester, 45);
+    expect(turn(), isNot(closeTo(0, 1e-3)), reason: 'the face kept the turn');
+  });
+
+  testWidgets('Refocus after a change of: 0.5 °C steps, Off at 0, kept in the profile', (tester) async {
+    await _pump(tester, _wire());
+    expect(find.text('2 °C'), findsOneWidget, reason: "the profile's default");
+    await tester.tap(find.byKey(const Key('simple-focuser-refocus-up')));
+    await tester.pump();
+    expect(_c.read(autofocusSettingsProvider).triggerTempDeltaC, 2.5);
+    for (var i = 0; i < 6; i++) {
+      await tester.tap(find.byKey(const Key('simple-focuser-refocus-down')));
+      await tester.pump();
+    }
+    expect(_c.read(autofocusSettingsProvider).triggerTempDeltaC, 0);
+    expect(find.text('Off'), findsOneWidget);
+  });
+
+  testWidgets('the step sits centred under the knob, with room', (tester) async {
+    await _pump(tester, _wire());
+    final knob = tester.getRect(find.byKey(const Key('simple-focuser-knob')));
+    final steps = tester.getRect(find.byKey(const Key('simple-focuser-steps')));
+    expect(steps.center.dx, closeTo(knob.center.dx, 1));
+    expect(steps.top - knob.bottom, greaterThanOrEqualTo(16));
   });
 }
