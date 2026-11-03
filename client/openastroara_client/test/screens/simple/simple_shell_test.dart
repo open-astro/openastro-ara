@@ -1209,6 +1209,27 @@ void main() {
     expect(window, findsNothing, reason: 'they would overlap');
   });
 
+  testWidgets('the mount\'s dot opens the Mount window; a second device dot swaps the window', (tester) async {
+    final c = await _pump(tester, const Size(1024, 768), linkUp: true, gear: [
+      cameraStatusProvider.overrideWith(() => _Camera(EquipmentConnectionState.connected)),
+      mountProvider.overrideWith(() => _Mount(EquipmentConnectionState.connected)),
+    ]);
+    Future<void> dot(String panel) async {
+      c.read(selectedSettingsPanelProvider.notifier).select(panel);
+      c.read(selectedTabIndexProvider.notifier).select(kOptionsTabIndex);
+      await tester.pumpAndSettle();
+    }
+    await dot('eq.mount');
+    expect(find.byKey(const Key('simple-device-mount')), findsOneWidget);
+    expect(find.byType(SettingsShell), findsNothing);
+    await dot('eq.camera');
+    expect(find.byKey(const Key('simple-device-camera')), findsOneWidget);
+    expect(find.byKey(const Key('simple-device-mount')), findsNothing, reason: 'one device window at a time (same spot)');
+    await _openSection(tester, 'Mount');
+    expect(find.descendant(of: find.byKey(const Key('simple-menu')), matching: find.byKey(const Key('simple-device-mount'))),
+        findsOneWidget);
+  });
+
   testWidgets('Settings lists the camera under Devices; it and its Devices row open the same window', (tester) async {
     await _pump(tester, const Size(1024, 768), linkUp: true, gear: [
       cameraStatusProvider.overrideWith(() => _Camera(EquipmentConnectionState.connected)),

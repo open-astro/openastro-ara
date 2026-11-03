@@ -5,6 +5,8 @@ import '../../models/equipment_device_status.dart';
 import '../../services/equipment_device_api.dart' show describeEquipmentError;
 import '../../services/equipment_driver_api.dart';
 import '../../state/equipment/camera_state.dart';
+import '../../state/equipment/mount_state.dart';
+import '../../state/settings/safety_policies_state.dart';
 import '../../state/profile_management_state.dart';
 import '../../state/settings/imaging_defaults_state.dart';
 import '../../state/simple_messages_state.dart';
@@ -178,17 +180,9 @@ class _SimpleCameraWindowState extends ConsumerState<SimpleCameraWindow> {
     // In Settings, the versions the rig reports (support asks), set out like
     // Rig's.
     if (widget.inSettings) {
-      final d = ref.watch(deviceDriverProvider('camera')).value;
-      final rows = [
-        if (d?.sdkVersion != null) ('SDK', d!.sdkVersion!),
-        if (d?.driverVersion != null) ('Driver', d!.driverVersion!),
-        if (d?.firmware != null) ('Firmware', d!.firmware!),
-        if (d?.serialNumber != null) ('Serial number', d!.serialNumber!),
-      ];
-      if (rows.isNotEmpty) {
-        children.add(const Divider(height: AraSpace.s16));
-        children.add(SimpleVersions(rows: rows));
-      }
+      children.addAll(
+        _versions(ref.watch(deviceDriverProvider('camera')).value),
+      );
     }
     return Column(
       key: const Key('simple-device-camera'),
@@ -259,27 +253,51 @@ class _SimpleCameraWindowState extends ConsumerState<SimpleCameraWindow> {
     }
   }
 
-  // One height for every row (the 44 pt of the On / Off and − / + controls),
-  // so a text-only row like Now keeps the rhythm.
-  static Widget _row(String label, Widget value) => ConstrainedBox(
-    key: Key('simple-window-row-$label'),
-    constraints: const BoxConstraints(minHeight: 44),
-    child: Row(
-      children: [
-        Expanded(child: Text(label, style: kSimpleText)),
-        value,
-      ],
-    ),
-  );
+  static Widget _row(String label, Widget value) =>
+      simpleWindowRow(label, value);
 }
 
-/// On / Off as named segments, never a bare toggle (DESIGN.md).
+/// What the rig reports of a device's versions, set out like Rig's (only in
+/// Settings, under a divider); nothing when it reports none.
+List<Widget> _versions(DeviceDriver? d) {
+  final rows = [
+    if (d?.sdkVersion != null) ('SDK', d!.sdkVersion!),
+    if (d?.driverVersion != null) ('Driver', d!.driverVersion!),
+    if (d?.firmware != null) ('Firmware', d!.firmware!),
+    if (d?.serialNumber != null) ('Serial number', d!.serialNumber!),
+  ];
+  return rows.isEmpty
+      ? const []
+      : [const Divider(height: AraSpace.s16), SimpleVersions(rows: rows)];
+}
+
+/// One height for every row of a device window (the 44 pt of its controls),
+/// so a text-only row keeps the rhythm.
+Widget simpleWindowRow(String label, Widget value) => ConstrainedBox(
+  key: Key('simple-window-row-$label'),
+  constraints: const BoxConstraints(minHeight: 44),
+  child: Row(
+    children: [
+      Expanded(child: Text(label, style: kSimpleText)),
+      value,
+    ],
+  ),
+);
+
+/// On / Off as named segments, never a bare toggle (DESIGN.md); [labels]
+/// names them otherwise ("Auto" / "Off").
 class _OnOff extends StatelessWidget {
-  const _OnOff({required this.id, required this.on, required this.onChanged});
+  const _OnOff({
+    required this.id,
+    required this.on,
+    required this.onChanged,
+    this.labels = ('On', 'Off'),
+  });
 
   final String id;
   final bool on;
   final ValueChanged<bool> onChanged;
+  final (String, String) labels;
 
   @override
   Widget build(BuildContext context) => DecoratedBox(
@@ -290,7 +308,7 @@ class _OnOff extends StatelessWidget {
     child: Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        for (final (v, word) in const [(true, 'On'), (false, 'Off')])
+        for (final (v, word) in [(true, labels.$1), (false, labels.$2)])
           SimpleSegment(
             key: Key('$id-${word.toLowerCase()}'),
             label: word,
@@ -344,4 +362,127 @@ class SimpleVersions extends StatelessWidget {
       ),
     ],
   );
+}
+
+/// The mount's window: tracking (On / Off), park or unpark, and the
+/// automatic meridian flip (the profile's, so plans flip by it too).
+class SimpleMountWindow extends ConsumerWidget {
+  const SimpleMountWindow({super.key, this.inSettings = false});
+
+  /// In Settings the window ends with the mount's versions.
+  final bool inSettings;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final m = ref.watch(mountProvider).value;
+    final children = <Widget>[SimpleDeviceHeader(type: 'Mount', status: m)];
+    if (m == null || !m.isConnected) {
+      children.add(
+        Text(
+          m?.isConnecting ?? false ? 'Connecting…' : 'Not connected',
+          style: AraText.caption,
+        ),
+      );
+    } else {
+      final caps = m.capabilities;
+      final notifier = ref.read(mountProvider.notifier);
+      if (caps?.canSetTracking ?? false) {
+        children.add(
+          simpleWindowRow(
+            'Tracking',
+            _OnOff(
+              id: 'simple-mount-tracking',
+              on: m.tracking,
+              onChanged: (on) => _run(context, () => notifier.setTracking(on)),
+            ),
+          ),
+        );
+      }
+      final canAct = m.parked
+          ? caps?.canUnpark ?? false
+          : caps?.canPark ?? false;
+      children.add(
+        simpleWindowRow(
+          'Park',
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            spacing: AraSpace.s12,
+            children: [
+              if (m.parked) const Text('Parked', style: kSimpleText),
+              TextButton(
+                key: const Key('simple-mount-park'),
+                // 44 pt like the window's other controls.
+                style: TextButton.styleFrom(
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                onPressed: canAct
+                    ? () => _run(
+                        context,
+                        m.parked ? notifier.unpark : notifier.park,
+                      )
+                    : null,
+                child: Text(m.parked ? 'Unpark' : 'Park now'),
+              ),
+            ],
+          ),
+        ),
+      );
+      children.add(
+        simpleWindowRow(
+          'Meridian flip',
+          _OnOff(
+            id: 'simple-mount-flip',
+            labels: const ('Auto', 'Off'),
+            on: ref.watch(safetyPoliciesProvider).meridianFlipAuto,
+            onChanged: (on) => _setFlip(context, ref, on),
+          ),
+        ),
+      );
+    }
+    if (inSettings) {
+      children.addAll(
+        _versions(ref.watch(deviceDriverProvider('telescope')).value),
+      );
+    }
+    return Column(
+      key: const Key('simple-device-mount'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      spacing: AraSpace.s4,
+      children: children,
+    );
+  }
+
+  /// Set once: the profile keeps it.
+  Future<void> _setFlip(BuildContext context, WidgetRef ref, bool on) async {
+    final policies = ref.read(safetyPoliciesProvider.notifier);
+    policies.setMeridianFlipAuto(on);
+    final notify = userNotifier(context);
+    final api = ref.read(profileApiProvider);
+    if (api == null) return;
+    try {
+      await policies.persistToServer(api);
+    } catch (e) {
+      notify(
+        "Couldn't save the meridian flip",
+        detail: describeEquipmentError(e),
+        error: true,
+      );
+    }
+  }
+
+  Future<void> _run(
+    BuildContext context,
+    Future<bool> Function() action,
+  ) async {
+    final notify = userNotifier(context);
+    try {
+      await action();
+    } catch (e) {
+      notify(
+        "Couldn't move the mount",
+        detail: describeEquipmentError(e),
+        error: true,
+      );
+    }
+  }
 }

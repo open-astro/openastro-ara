@@ -271,9 +271,16 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     );
   }
 
-  /// The camera's window, opened from its dot. Separate from [_popover]: it
-  /// sits top-left and stays open beside a rail menu when they don't overlap.
-  bool _device = false;
+  /// The device window open (from its dot), by its Settings panel id, or
+  /// null. Separate from [_popover]: it sits top-left and stays open beside a
+  /// rail menu when they don't overlap.
+  String? _device;
+
+  /// The devices with a window of their own, by their Settings panel id.
+  static const _deviceWindows = {
+    'eq.camera': SimpleCameraWindow(),
+    'eq.mount': SimpleMountWindow(),
+  };
 
   /// Whether the camera window and a rail menu fit side by side: the window
   /// on the left, the widest menu left of the rail, with the insets.
@@ -330,7 +337,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
   void _toggle(_Popover p) => setState(() {
     // Settings covers everything; a rail menu that would cover the camera
     // window closes it.
-    if (p == _Popover.menu || !_sideBySide(context)) _device = false;
+    if (p == _Popover.menu || !_sideBySide(context)) _device = null;
     // The sheet opened from the queue's Add target / edit outranks every
     // popover, so a rail tap closes it first (it used to stay up for good on
     // a touchscreen, user 2026-11-03); the chip, which opens that sheet, just
@@ -346,8 +353,8 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
   /// A tap on the image closes what's open, or else toggles the immersive
   /// view (only once there is a frame to look at).
   void _tapImage(bool hasFrame) => setState(() {
-    if (_device || _popover != _Popover.none || _adding) {
-      _device = false;
+    if (_device != null || _popover != _Popover.none || _adding) {
+      _device = null;
       _popover = _Popover.none;
       _closeSheet();
     } else if (hasFrame) {
@@ -370,12 +377,13 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
         _restoringTab = false;
         // A device with its own window opens it; the rest still get the full
         // Settings page over Simple Mode.
-        if (ref.read(selectedSettingsPanelProvider) == 'eq.camera') {
-          // The dot again closes it.
+        final panel = ref.read(selectedSettingsPanelProvider);
+        if (_deviceWindows.containsKey(panel)) {
+          // The dot again closes it; another device's dot swaps it.
           setState(() {
-            _device = !_device;
+            _device = _device == panel ? null : panel;
             // It would cover the open rail menu, or sit under Settings.
-            if (_device &&
+            if (_device != null &&
                 (_popover == _Popover.menu || !_sideBySide(context))) {
               _popover = _Popover.none;
             }
@@ -823,16 +831,16 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                               // strip down to the bottom row; Stop stays above
                               // the veil, within reach.
                               // A device's window, under the strip's dots.
-                              if (_device)
+                              if (_device != null)
                                 Positioned(
                                   left: kSimpleInset,
                                   top: railTop,
                                   width:
                                       kSimpleDeviceWindowWidth *
                                       simpleRailScale(context),
-                                  child: const SimpleFrostedPanel(
-                                    padding: EdgeInsets.all(AraSpace.s16),
-                                    child: SimpleCameraWindow(),
+                                  child: SimpleFrostedPanel(
+                                    padding: const EdgeInsets.all(AraSpace.s16),
+                                    child: _deviceWindows[_device]!,
                                   ),
                                 ),
                               if (_popover == _Popover.menu) ...[
@@ -1742,6 +1750,8 @@ class _SettingsSheetState extends ConsumerState<_SettingsSheet> {
       ('Devices', Icons.settings_input_component_outlined, false),
       if (ref.watch(cameraStatusProvider).value != null)
         ('Camera', Icons.photo_camera_outlined, true),
+      if (ref.watch(mountProvider).value != null)
+        ('Mount', Icons.explore_outlined, true),
     ];
     // A narrow window (Split View, a phone) keeps only the sections' icons.
     final narrow = MediaQuery.sizeOf(context).width < 600;
@@ -1822,6 +1832,7 @@ class _SettingsSheetState extends ConsumerState<_SettingsSheet> {
                   onLogs: widget.onLogs,
                 ),
                 'Camera' => const SimpleCameraWindow(inSettings: true),
+                'Mount' => const SimpleMountWindow(inSettings: true),
                 _ => _Gear(onOpen: (id) => setState(() => _section = id)),
               },
             ),
@@ -1865,7 +1876,12 @@ class _Gear extends ConsumerWidget {
           provider: cameraStatusProvider,
           onOpen: () => onOpen('Camera'),
         ),
-        _GearRow(id: 'mount', type: 'Mount', provider: mountProvider),
+        _GearRow(
+          id: 'mount',
+          type: 'Mount',
+          provider: mountProvider,
+          onOpen: () => onOpen('Mount'),
+        ),
         _GearRow(id: 'focuser', type: 'Focuser', provider: focuserProvider),
         _GearRow(
           id: 'filterwheel',
