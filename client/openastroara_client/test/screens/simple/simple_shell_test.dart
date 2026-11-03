@@ -1062,7 +1062,7 @@ void main() {
     expect(tiles.last.center.dx - tiles.first.center.dx, greaterThan(page.width * 0.6));
     expect(find.descendant(of: sheet, matching: find.text('Name')), findsOneWidget, reason: 'not "Rig" twice');
     expect(find.descendant(of: sheet, matching: find.text('Rig')), findsOneWidget, reason: 'the section list names the page; no title repeats it');
-    for (final t in ['astro ›', 'Backyard Rig ›', 'Permanent pier', 'Simple Mode', 'Logs & bug report']) {
+    for (final t in ['astro', 'Backyard Rig', 'Change', 'Permanent pier', 'Simple Mode', 'Logs & bug report']) {
       expect(find.descendant(of: sheet, matching: find.text(t)), findsWidgets, reason: t);
     }
     expect(c.read(simpleModeProvider).value, isTrue);
@@ -1175,12 +1175,8 @@ void main() {
     for (final t in ['Name', 'Profile']) {
       expect(style(t), style('Aperture'), reason: t);
     }
-    expect(tester.getCenter(find.text('Profile')).dy - tester.getCenter(find.text('Name')).dy, lessThanOrEqualTo(36),
-        reason: 'close together, not 44 pt apart');
-    // The value is the button, shaded like Aperture's, with › (it leaves for the rig list or profile box).
-    expect(find.descendant(of: find.byKey(const Key('simple-rig-change-profile')), matching: find.textContaining(' ›')),
-        findsOneWidget);
-    expect(find.text('Change'), findsNothing);
+    expect(tester.getCenter(find.text('Profile')).dy - tester.getCenter(find.text('Name')).dy, lessThanOrEqualTo(30),
+        reason: 'read-only facts sit close together, not 44 pt apart');
   });
 
   testWidgets('a telescope the profile doesn\'t know comes from the mount, saved to the profile; a known one stays',
