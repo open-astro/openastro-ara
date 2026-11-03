@@ -72,6 +72,11 @@ const double kSimpleBarHeight = 56;
 /// Width of the left and right rails.
 const double kSimpleRailWidth = 72;
 
+/// A device window's width (at 1x text), and the widest rail menu's (the
+/// mode grid with its padding): together they say whether both fit.
+const double kSimpleDeviceWindowWidth = 360;
+const double kSimpleWidestPopover = 316;
+
 /// The status pill's widest (top-left under the strip); Info starts right of
 /// it.
 const double kSimpleStatusMaxWidth = 300;
@@ -116,8 +121,7 @@ extension on SimpleModeScreen {
 /// The one popover open beside a rail, if any. [settings] is the chip's: the
 /// current mode's options (Preview's exposure, Focus's panel).
 /// [menu] is the top bar's Settings menu.
-/// [device] is a device's window, opened from its dot in the top bar.
-enum _Popover { none, modes, settings, queue, menu, device }
+enum _Popover { none, modes, settings, queue, menu }
 
 /// Simple Mode (ALP-4810): the latest frame fills the window and only the
 /// shutter is always out. A right rail holds the mode (tap for the five
@@ -267,6 +271,21 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     );
   }
 
+  /// The camera's window, opened from its dot. Separate from [_popover]: it
+  /// sits top-left and stays open beside a rail menu when they don't overlap.
+  bool _device = false;
+
+  /// Whether the camera window and a rail menu fit side by side: the window
+  /// on the left, the widest menu left of the rail, with the insets.
+  bool _sideBySide(BuildContext context) {
+    final scale = simpleRailScale(context);
+    return MediaQuery.sizeOf(context).width >=
+        kSimpleDeviceWindowWidth * scale +
+            kSimpleWidestPopover * scale +
+            kSimpleRailWidth * scale +
+            kSimpleInset * 4;
+  }
+
   /// Set while a jump to the Settings tab is turned back (see build).
   bool _restoringTab = false;
 
@@ -309,6 +328,9 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
   }
 
   void _toggle(_Popover p) => setState(() {
+    // Settings covers everything; a rail menu that would cover the camera
+    // window closes it.
+    if (p == _Popover.menu || !_sideBySide(context)) _device = false;
     // The sheet opened from the queue's Add target / edit outranks every
     // popover, so a rail tap closes it first (it used to stay up for good on
     // a touchscreen, user 2026-11-03); the chip, which opens that sheet, just
@@ -324,7 +346,8 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
   /// A tap on the image closes what's open, or else toggles the immersive
   /// view (only once there is a frame to look at).
   void _tapImage(bool hasFrame) => setState(() {
-    if (_popover != _Popover.none || _adding) {
+    if (_device || _popover != _Popover.none || _adding) {
+      _device = false;
       _popover = _Popover.none;
       _closeSheet();
     } else if (hasFrame) {
@@ -349,11 +372,14 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
         // Settings page over Simple Mode.
         if (ref.read(selectedSettingsPanelProvider) == 'eq.camera') {
           // The dot again closes it.
-          setState(
-            () => _popover = _popover == _Popover.device
-                ? _Popover.none
-                : _Popover.device,
-          );
+          setState(() {
+            _device = !_device;
+            // It would cover the open rail menu, or sit under Settings.
+            if (_device &&
+                (_popover == _Popover.menu || !_sideBySide(context))) {
+              _popover = _Popover.none;
+            }
+          });
         } else {
           _openSettings();
         }
@@ -645,21 +671,6 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                               // Between the status pill and the bottom row (the
                               // plan squares step aside while it shows); a tall
                               // sheet scrolls inside.
-                              // Every menu and window closes on a tap outside
-                              // it; that tap only closes (Settings has its
-                              // own veil, Plan's sheet its own rules).
-                              if (_popover != _Popover.none &&
-                                  _popover != _Popover.menu &&
-                                  !runSheet)
-                                Positioned.fill(
-                                  child: GestureDetector(
-                                    key: const Key('simple-popover-barrier'),
-                                    behavior: HitTestBehavior.opaque,
-                                    onTap: () => setState(
-                                      () => _popover = _Popover.none,
-                                    ),
-                                  ),
-                                ),
                               if (runSheet)
                                 Positioned(
                                   left: 0,
@@ -694,8 +705,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                   ),
                                 )
                               else if (_popover != _Popover.none &&
-                                  _popover != _Popover.menu &&
-                                  _popover != _Popover.device)
+                                  _popover != _Popover.menu)
                                 Positioned(
                                   left: 0,
                                   top: 0,
@@ -813,18 +823,26 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                               // strip down to the bottom row; Stop stays above
                               // the veil, within reach.
                               // A device's window, under the strip's dots.
-                              if (_popover == _Popover.device)
+                              if (_device)
                                 Positioned(
                                   left: kSimpleInset,
                                   top: railTop,
-                                  width: 360 * simpleRailScale(context),
+                                  width:
+                                      kSimpleDeviceWindowWidth *
+                                      simpleRailScale(context),
                                   child: const SimpleFrostedPanel(
                                     padding: EdgeInsets.all(AraSpace.s16),
                                     child: SimpleCameraWindow(),
                                   ),
                                 ),
                               if (_popover == _Popover.menu) ...[
-                                Positioned.fill(
+                                // Under the strip, which stays live (its
+                                // gear closes Settings, the rest still work).
+                                Positioned(
+                                  left: 0,
+                                  right: 0,
+                                  bottom: 0,
+                                  top: kSimpleInset + kSimpleBarHeight,
                                   child: GestureDetector(
                                     key: const Key('simple-menu-veil'),
                                     behavior: HitTestBehavior.opaque,

@@ -50,6 +50,8 @@ import 'package:openastroara/state/equipment/focuser_state.dart';
 import 'package:openastroara/state/equipment/mount_state.dart';
 import 'package:openastroara/state/settings/settings_nav.dart';
 import 'package:openastroara/state/simple_mode_state.dart';
+import 'package:openastroara/state/night_mode_state.dart';
+import 'package:openastroara/services/night_mode_prefs_service.dart';
 import 'package:openastroara/state/simple_messages_state.dart';
 import 'package:openastroara/screens/simple/simple_message_pills.dart';
 import 'package:openastroara/widgets/emergency_stop_button.dart';
@@ -196,6 +198,14 @@ class _CoolingCamera extends CameraStatusNotifier {
   @override
   Future<CameraStatus?> build() async => CameraStatus.fromJson(_wire(ccd));
   void set(double t) => state = AsyncData(CameraStatus.fromJson(_wire(t)));
+}
+
+class _NightPrefs extends NightModePrefsService {
+  bool value = false;
+  @override
+  Future<bool> load() async => value;
+  @override
+  Future<void> save(bool enabled) async => value = enabled;
 }
 
 class _Profiles extends ProfileManagementNotifier {
@@ -397,7 +407,7 @@ void main() {
     expect(find.descendant(of: chip, matching: find.text(_summary(container))), findsNothing);
     expect(find.descendant(of: chip, matching: find.text('Manual')), findsOneWidget,
         reason: 'no focuser connected, so focus is by hand');
-    await tester.tap(chip, warnIfMissed: false); // the chip again: through the outside-tap layer
+    await tester.tap(chip);
     await tester.pump();
     expect(find.byType(SimpleFocusPanel), findsNothing, reason: 'the chip hides the Focus panel');
     expect(find.text('Exposure'), findsNothing, reason: "never Preview's settings in Focus");
@@ -406,10 +416,6 @@ void main() {
     await tester.pump();
     expect(find.byType(SimpleFocusPanel), findsOneWidget, reason: 'and shows it again');
 
-    // A tap outside the panel only closes it; the next one opens the modes.
-    await tester.tap(find.byKey(const Key('simple-mode')), warnIfMissed: false);
-    await tester.pump();
-    expect(find.byType(SimpleFocusPanel), findsNothing);
     await tester.tap(find.byKey(const Key('simple-mode')));
     await tester.pump();
     await tester.tap(find.text('Preview').first);
@@ -1142,7 +1148,8 @@ void main() {
     expect(find.byKey(const Key('simple-device-camera')), findsNothing);
   });
 
-  testWidgets('a menu or window closes on a second tap of what opened it, or a tap anywhere outside it', (tester) async {
+  testWidgets('one tap opens what was tapped; windows that don\'t overlap stay open together; the image or a '
+      'second tap closes', (tester) async {
     final c = await _pump(tester, const Size(1024, 768), linkUp: true, gear: [
       cameraStatusProvider.overrideWith(() => _Camera(EquipmentConnectionState.connected)),
     ]);
@@ -1158,18 +1165,48 @@ void main() {
     expect(window, findsNothing, reason: 'the dot again closes it');
 
     await cameraDot();
-    final info = find.byKey(const Key('simple-info'));
-    await tester.tap(info); // outside the window, on the left rail
+    await tester.tap(find.byKey(const Key('simple-info')));
     await tester.pump();
-    expect(window, findsNothing, reason: 'a tap outside closes it');
-    expect(find.byType(SimpleInfoPanel), findsNothing, reason: 'that tap only closes; it does not press Info');
-
+    expect(find.byType(SimpleInfoPanel), findsOneWidget, reason: 'one tap opens Info');
+    expect(window, findsOneWidget, reason: 'they don\'t overlap, so both stay');
     await tester.tap(find.byKey(const Key('simple-mode')));
     await tester.pump();
-    expect(find.text('Polar align'), findsWidgets, reason: 'the modes are open');
-    await tester.tap(info);
+    expect(find.text('Polar align'), findsWidgets, reason: 'one tap opens the modes, beside the window');
+    expect(window, findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('simple-frame')));
     await tester.pump();
-    expect(find.text('Polar align'), findsNothing, reason: 'the same for the rail\'s menus');
+    expect(window, findsNothing, reason: 'the image closes them');
+    expect(find.text('Polar align'), findsNothing);
+  });
+
+  testWidgets('with Settings open, the top strip still works in one tap (the veil starts under it)', (tester) async {
+    final c = await _pump(tester, const Size(1024, 768), gear: [nightModePrefsProvider.overrideWithValue(_NightPrefs())]);
+    await tester.tap(find.byTooltip('Settings'));
+    await tester.pump();
+    await tester.tap(find.byTooltip('Night mode'));
+    await tester.pump();
+    await tester.pump();
+    expect(c.read(nightModeProvider).value, isTrue, reason: 'Night mode toggled by the first tap');
+    expect(find.byKey(const Key('simple-menu')), findsOneWidget, reason: 'Settings stays: they don\'t overlap');
+    await tester.tap(find.byTooltip('Settings'));
+    await tester.pump();
+    expect(find.byKey(const Key('simple-menu')), findsNothing, reason: 'the gear again closes it');
+  });
+
+  testWidgets('on a narrow window, opening a rail menu closes the camera window it would cover', (tester) async {
+    final c = await _pump(tester, const Size(768, 1024), linkUp: true, gear: [
+      cameraStatusProvider.overrideWith(() => _Camera(EquipmentConnectionState.connected)),
+    ]);
+    c.read(selectedSettingsPanelProvider.notifier).select('eq.camera');
+    c.read(selectedTabIndexProvider.notifier).select(kOptionsTabIndex);
+    await tester.pumpAndSettle();
+    final window = find.byKey(const Key('simple-device-camera'));
+    expect(window, findsOneWidget);
+    await tester.tap(find.byKey(const Key('simple-mode')));
+    await tester.pump();
+    expect(find.text('Polar align'), findsWidgets, reason: 'one tap opens the modes');
+    expect(window, findsNothing, reason: 'they would overlap');
   });
 
   testWidgets('Settings lists the camera under Devices; it and its Devices row open the same window', (tester) async {
