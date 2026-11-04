@@ -27,6 +27,7 @@ import '../../state/saved_server_state.dart';
 import '../../state/guider/guide_step_state.dart';
 import '../../state/guider/guider_state.dart';
 import '../../state/imaging/last_frame_state.dart';
+import '../../state/imaging/live_view_frame_state.dart';
 import '../../state/imaging/live_view_state.dart';
 import '../../state/night_mode_state.dart';
 import '../../state/polar_align/polar_align_state.dart';
@@ -283,6 +284,9 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
   void initState() {
     super.initState();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    // Brings the live view notifier up, so a loop the daemon still runs is
+    // adopted (the Loop shows as running and its square stops it).
+    ref.read(liveViewFrameProvider);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _focus.requestFocus();
     });

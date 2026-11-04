@@ -406,8 +406,12 @@ class SimpleShutter extends ConsumerWidget {
       running: (looping || capturing) && !stopping,
       onPressed: stopping
           ? null
+          // A loop adopted from the daemon runs under either shot pick: the
+          // square stops it (DESIGN.md: whatever starts something stops it).
+          : looping
+          ? () => toggleLiveView(context, ref, false)
           : switch (shot) {
-              PreviewShot.loop => () => toggleLiveView(context, ref, !looping),
+              PreviewShot.loop => () => toggleLiveView(context, ref, true),
               // The square stops the shot in flight, like a loop.
               PreviewShot.single =>
                 capturing

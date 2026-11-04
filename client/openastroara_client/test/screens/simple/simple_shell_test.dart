@@ -18,6 +18,9 @@ import 'package:openastroara/state/sky_atlas/planetarium_selection_state.dart';
 import 'package:openastroara/main.dart' show isShell, shellFor;
 import 'package:openastroara/models/frame_histogram.dart';
 import 'package:openastroara/models/server.dart';
+import 'package:openastroara/state/imaging/live_view_state.dart';
+import 'package:openastroara/state/imaging/live_view_frame_state.dart';
+import 'package:openastroara/services/live_view_api.dart';
 import 'package:openastroara/services/profile_api.dart';
 import 'package:openastroara/screens/simple/simple_search.dart';
 import 'package:openastroara/screens/simple/simple_device_windows.dart' show simpleMountMotionProvider;
@@ -264,6 +267,21 @@ class _GuiderUp extends GuiderStatusNotifier {
 }
 
 /// A polar alignment adjusting; [fail] ends it with why.
+/// A daemon whose Live View loop is still running (the app died mid-Loop).
+class _LoopOnRig implements LiveViewClient {
+  final calls = <String>[];
+  @override
+  Future<bool> isActive() async => !calls.contains('stop');
+  @override
+  Future<void> start({required double exposureSec, int? gain, int binX = 2, int binY = 2}) async => calls.add('start');
+  @override
+  Future<void> stop() async => calls.add('stop');
+  @override
+  Future<LiveFrame?> fetchFrame() async => null;
+  @override
+  void close() {}
+}
+
 class _PolarRun extends PolarAlignLiveNotifier {
   @override
   PolarAlignLive build() => const PolarAlignLive(phase: PolarAlignStates.adjusting);
@@ -2537,6 +2555,24 @@ void main() {
     expect(frame.right, guiding.right, reason: 'right-aligned under the strip');
     c.read(captureProgressProvider.notifier).reset();
     await tester.pump(const Duration(seconds: 1));
+  });
+
+  testWidgets("a Loop the daemon still runs is adopted on connect: the shutter shows its square and stops it "
+      "(rig 2026-11-05: the app died mid-Loop and every shot was refused with nothing to stop)", (tester) async {
+    final rig = _LoopOnRig();
+    final c = await _pump(tester, const Size(1024, 768), server: const AraServer(hostname: 'h', port: 5555),
+        gear: [liveViewApiFactoryProvider.overrideWithValue((_) => rig)]);
+    await tester.pump();
+    expect(c.read(liveViewControllerProvider), isTrue);
+    expect(find.byKey(const Key('simple-stop-square')), findsOneWidget, reason: 'the Loop reads as running');
+    expect(rig.calls, isEmpty, reason: 'adopted, not started again');
+    await tester.tap(find.byKey(const Key('simple-shutter')));
+    await tester.pump();
+    expect(rig.calls, ['stop']);
+    expect(c.read(liveViewControllerProvider), isFalse);
+    await tester.pumpWidget(const SizedBox());
+    c.dispose();
+    await tester.pump(const Duration(seconds: 5));
   });
 
   testWidgets('a tap on a message opens what it came from, as the status pills do (user, 2026-11-04)', (tester) async {
