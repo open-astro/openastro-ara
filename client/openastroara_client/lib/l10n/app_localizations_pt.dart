@@ -903,7 +903,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get shellThisApp => 'This app';
 
   @override
-  String get shellAraServer => 'OpenAstro Ara server';
+  String get shellAraServer => 'Ara server';
 
   @override
   String get shellStarDatabase => 'Star database';
@@ -2838,7 +2838,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get shellThisApp => 'Este app';
 
   @override
-  String get shellAraServer => 'Servidor OpenAstro Ara';
+  String get shellAraServer => 'Servidor Ara';
 
   @override
   String get shellStarDatabase => 'Banco de estrelas';

@@ -903,7 +903,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get shellThisApp => 'This app';
 
   @override
-  String get shellAraServer => 'OpenAstro Ara server';
+  String get shellAraServer => 'Ara server';
 
   @override
   String get shellStarDatabase => 'Star database';

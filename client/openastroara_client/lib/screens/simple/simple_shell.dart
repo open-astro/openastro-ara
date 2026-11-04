@@ -2939,7 +2939,7 @@ class _ThisRig extends ConsumerWidget {
               (l10n.shellThisApp, version),
               (l10n.shellAraServer, rig?.daemonVersion),
               if (rig?.guiderVersion != null)
-                ('OpenAstro Guider', rig!.guiderVersion),
+                (l10n.deviceGuider, rig!.guiderVersion),
               for (final a in servers)
                 (
                   servers.length > 1

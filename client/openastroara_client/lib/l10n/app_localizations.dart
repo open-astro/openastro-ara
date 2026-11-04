@@ -1728,7 +1728,7 @@ abstract class AppLocalizations {
   /// Simple Mode Settings › Rig versions list: the rig's server (OpenAstro Ara is the product name)
   ///
   /// In en, this message translates to:
-  /// **'OpenAstro Ara server'**
+  /// **'Ara server'**
   String get shellAraServer;
 
   /// Simple Mode Settings › Rig versions list: the plate solving star databases

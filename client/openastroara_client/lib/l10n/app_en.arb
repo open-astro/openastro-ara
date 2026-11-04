@@ -1247,7 +1247,7 @@
   "@shellThisApp": {
     "description": "Simple Mode Settings › Rig versions list: this app's version"
   },
-  "shellAraServer": "OpenAstro Ara server",
+  "shellAraServer": "Ara server",
   "@shellAraServer": {
     "description": "Simple Mode Settings › Rig versions list: the rig's server (OpenAstro Ara is the product name)"
   },

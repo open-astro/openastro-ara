@@ -1365,8 +1365,8 @@ void main() {
     // Every version on the rig, for a bug report or a support question.
     final versions = find.byKey(const Key('simple-versions'));
     for (final (name, value) in const [
-      ('OpenAstro Ara server', '0.0.1-ara.7'),
-      ('OpenAstro Guider', '2.6.13dev7'),
+      ('Ara server', '0.0.1-ara.7'),
+      ('Guider', '2.6.13dev7'),
       ('AlpacaBridge', '6.0.0~nightly'),
       ('ASTAP', 'CLI-2026.09.01'),
       ('Star database', 'D05, D80'),
@@ -1378,7 +1378,7 @@ void main() {
     expect(find.descendant(of: find.byKey(const Key('simple-versions')), matching: find.text('This app')), findsOneWidget);
     expect(find.text('0.0.1-ara.7'), findsOneWidget);
     // Beside its name and in readable type, not at the far edge in a caption.
-    final name = tester.getRect(find.text('OpenAstro Ara server'));
+    final name = tester.getRect(find.text('Ara server'));
     final value = tester.getRect(find.text('0.0.1-ara.7'));
     expect(value.left - name.right, lessThan(48), reason: 'the version sits next to its name');
     expect(tester.widget<Text>(find.text('Versions')).style!.fontSize, greaterThanOrEqualTo(14));
