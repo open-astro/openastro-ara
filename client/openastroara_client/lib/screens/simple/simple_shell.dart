@@ -1763,10 +1763,19 @@ class _GuidingBar extends ConsumerWidget {
     // Nothing to show until the guider has produced a step or is guiding.
     if (!guiding && steps.isEmpty) return const SizedBox.shrink();
     return SimplePanel(
-      padding: const EdgeInsets.symmetric(horizontal: AraSpace.s16),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AraSpace.s16,
+        vertical: AraSpace.s4,
+      ),
       child: Row(
         children: [
-          Flexible(
+          // The labels take what they need (a third at most); the graph fills
+          // the rest of the panel, its whole height (iPad, 2026-11-04: it had
+          // half the width and 32 pt).
+          ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: MediaQuery.sizeOf(context).width / 3,
+            ),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1789,12 +1798,10 @@ class _GuidingBar extends ConsumerWidget {
           ),
           const SizedBox(width: 14),
           Expanded(
-            child: SizedBox(
-              height: 32,
-              child: CustomPaint(
-                key: const Key('simple-guide-trace'),
-                painter: _TracePainter(steps),
-              ),
+            child: CustomPaint(
+              key: const Key('simple-guide-trace'),
+              painter: _TracePainter(steps),
+              size: Size.infinite,
             ),
           ),
           const SizedBox(width: 10),

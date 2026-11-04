@@ -2366,6 +2366,15 @@ void main() {
     Rect hist(WidgetTester t) => _panelOf(t, find.byKey(const Key('simple-histogram')));
     double end(WidgetTester t) => t.getRect(find.byType(EmergencyStopButton)).left - kSimpleInset;
 
+    testWidgets('the graph fills its panel, not half of it (iPad, 2026-11-04)', (tester) async {
+      await _pump(tester, size, steps: _someSteps, gear: [guiderStatusProvider.overrideWith(_GuiderUp.new)]);
+      await tester.pump();
+      final panel = guiding(tester);
+      final trace = tester.getRect(find.byKey(const Key('simple-guide-trace')));
+      expect(trace.width, greaterThan(panel.width * 0.6), reason: 'the labels take only what they need');
+      expect(trace.height, greaterThanOrEqualTo(panel.height - 16), reason: 'nearly the whole height');
+    });
+
     testWidgets('a stopped guider hides the guiding graph, old steps or not (user, 2026-11-04)', (tester) async {
       await _pump(tester, size, steps: _someSteps, gear: [guiderStatusProvider.overrideWith(() => _GuiderAt('stopped'))]);
       await tester.pump();
