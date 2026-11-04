@@ -61,10 +61,15 @@ updates:
         patterns:
           - "*"
 
-  # The ERFA + SuperNOVAS astrometry sources (third_party/, built into the daemon's
-  # natives on every build). Dependabot moves a submodule to the tracked branch's
-  # head, not to a release tag, so each bump PR is gated by the astrometry tests
-  # (NovasEphemerisAgreementTest, NovasAbiTest, AstrometryNativeTransformTest).
+  # Git submodules under third_party/. Dependabot moves a submodule to the tracked
+  # branch's head, not to a release tag.
+  # - ERFA + SuperNOVAS (built into the daemon's natives): each bump PR is gated by
+  #   the astrometry tests (NovasEphemerisAgreementTest, NovasAbiTest,
+  #   AstrometryNativeTransformTest).
+  # - ASTAP (open-astro/astap branch `ara`, built into astap_cli): the branch only
+  #   moves when we merge Han Kleijn's updates into it (OPENASTRO.md there), so a bump
+  #   PR follows a sync that was already checked against Han's build; CI builds it,
+  #   smoke-tests -h in the image and solves a fixture frame (astap-solve job).
   - package-ecosystem: gitsubmodule
     directory: /
     schedule:
@@ -74,7 +79,11 @@ updates:
     groups:
       astrometry-sources:
         patterns:
-          - "*"
+          - "third_party/erfa"
+          - "third_party/supernovas"
+      astap-solver:
+        patterns:
+          - "third_party/astap"
 
   # The .NET SDK pin in global.json (feature-band roll-forward is in the file;
   # this bumps the pinned version itself).

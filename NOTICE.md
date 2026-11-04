@@ -96,13 +96,13 @@ disclosure fresh):
   unmodified.
 
 - **ASTAP command-line solver** (`astap_cli`; git submodule `third_party/astap`,
-  OpenAstro's fork at https://github.com/open-astro/astap, `main`, of
+  OpenAstro's fork at https://github.com/open-astro/astap, branch `ara`, of
   Han Kleijn's https://github.com/han-k59/astap) — the astrometric plate solver
   the daemon runs for centering and polar alignment. **MPL-2.0** (Copyright (C)
   Han Kleijn, www.hnsky.org). The fork's changes (a worker pool that spreads the
-  FITS load, binning, star detection and the spiral database search over every
-  core, plus `-threads` / `ASTAP_THREADS`) are published in that repository under
-  the same license, as the MPL requires. `scripts/build-astap-cli.sh` compiles it
+  FITS load, binning and star detection over the cores Han's multi-core spiral
+  search already uses) are published in that repository under the same license,
+  as the MPL requires. `scripts/build-astap-cli.sh` compiles it
   with Free Pascal into `astap_cli` on every build. The star databases are not
   part of ARA's binaries: the Data Manager downloads them on demand from
   https://github.com/open-astro/sky-data/releases (release `astap-2026.10`),
