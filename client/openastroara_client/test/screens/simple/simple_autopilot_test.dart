@@ -324,24 +324,4 @@ void main() {
     await tester.pump();
     expect(c.read(autopilotProvider), AutopilotStep.focus);
   });
-
-  testWidgets('offered only while nothing is done tonight', (tester) async {
-    final (c, _) = await _container();
-    bool? offered;
-    await tester.pumpWidget(UncontrolledProviderScope(
-      container: c,
-      child: MaterialApp(home: Consumer(builder: (_, ref, _) {
-        offered = autopilotOffered(ref);
-        return const SizedBox();
-      })),
-    ));
-    expect(offered, isTrue);
-    c.read(_focus.notifier).set(SetupStepState.done);
-    await tester.pump();
-    expect(offered, isFalse, reason: 'focused already');
-    c.read(_focus.notifier).set(SetupStepState.pending);
-    c.read(autopilotProvider.notifier).start();
-    await tester.pump();
-    expect(offered, isFalse, reason: 'Autopilot is running');
-  });
 }

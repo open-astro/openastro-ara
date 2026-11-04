@@ -901,18 +901,6 @@
   "@autopilotSkip": {
     "description": "Simple Mode Guided Run strip: button that skips the current step"
   },
-  "autopilotNothingDone": "Nothing done yet tonight",
-  "@autopilotNothingDone": {
-    "description": "Simple Mode Guided Run offer under the status strip: why Guided Run is offered"
-  },
-  "autopilotStart": "Start Guided Run",
-  "@autopilotStart": {
-    "description": "Simple Mode Guided Run offer: button that starts Guided Run"
-  },
-  "autopilotNotNow": "Not now",
-  "@autopilotNotNow": {
-    "description": "Simple Mode Guided Run offer: tooltip of the × that dismisses it"
-  },
   "shellModeAutopilot": "Guided Run",
   "@shellModeAutopilot": {
     "description": "Simple Mode mode name (mode grid, Mode: label for screen readers)"

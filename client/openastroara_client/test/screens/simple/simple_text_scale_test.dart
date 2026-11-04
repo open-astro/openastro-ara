@@ -276,15 +276,16 @@ void main() {
           await tester.pump();
           expect(find.byKey(const Key('simple-search-image-0')), findsOneWidget);
         } else if (open == 'Guided Run') {
-          // The offer first (nothing done tonight), then the step strip once it runs.
+          // The step strip once it runs.
           void whole(Finder of) {
             for (final p in tester.renderObjectList<RenderParagraph>(find.descendant(of: of, matching: find.byType(RichText)))) {
               expect(p.didExceedMaxLines, isFalse, reason: '"${p.text.toPlainText()}" is cut off');
             }
           }
-          final offer = find.byKey(const Key('autopilot-offer'));
-          if (offer.evaluate().isNotEmpty) whole(offer);
-          await tester.tap(find.byKey(const Key('autopilot-start')), warnIfMissed: false);
+          // Started from the modes (the Start banner went, user 2026-11-04).
+          await tester.tap(find.byKey(const Key('simple-mode')), warnIfMissed: false);
+          await tester.pump();
+          await tester.tap(find.byKey(const Key('simple-mode-autopilot')), warnIfMissed: false);
           await tester.pump();
           final strip = find.byKey(const Key('autopilot-strip'));
           if (size.width >= 768) expect(strip, findsOneWidget);

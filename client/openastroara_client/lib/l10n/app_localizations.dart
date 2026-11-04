@@ -1275,24 +1275,6 @@ abstract class AppLocalizations {
   /// **'Skip'**
   String get autopilotSkip;
 
-  /// Simple Mode Guided Run offer under the status strip: why Guided Run is offered
-  ///
-  /// In en, this message translates to:
-  /// **'Nothing done yet tonight'**
-  String get autopilotNothingDone;
-
-  /// Simple Mode Guided Run offer: button that starts Guided Run
-  ///
-  /// In en, this message translates to:
-  /// **'Start Guided Run'**
-  String get autopilotStart;
-
-  /// Simple Mode Guided Run offer: tooltip of the × that dismisses it
-  ///
-  /// In en, this message translates to:
-  /// **'Not now'**
-  String get autopilotNotNow;
-
   /// Simple Mode mode name (mode grid, Mode: label for screen readers)
   ///
   /// In en, this message translates to:

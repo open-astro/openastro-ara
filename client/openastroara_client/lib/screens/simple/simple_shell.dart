@@ -248,7 +248,6 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
   });
 
   /// The Autopilot offer was dismissed (until Simple Mode opens again).
-  bool _offerDismissed = false;
 
   /// What shows: the picked mode, or Autopilot's current step.
   SimpleModeScreen _shown(AutopilotStep? step) =>
@@ -667,16 +666,10 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     // What reaches the right edge stays clear of Stop, which sits over
     // everything (iPad, 2026-11-04: Settings ran under it).
     final aboveStop = math.max(aboveRow, kSimpleInset * 2 + stopSize);
-    // Beside Stop: as far as the bottom row reaches.
-    final besideStop = kSimpleInset * 2 + (railWidth + stopSize) / 2;
     final width = MediaQuery.sizeOf(context).width;
     // Guided Run's step strip, under the status strip; its offer sits at the
     // bottom (user, 2026-11-03).
     final autopilotRow = _mode == SimpleModeScreen.autopilot;
-    final autopilotOffer =
-        !_offerDismissed &&
-        _mode == SimpleModeScreen.preview &&
-        autopilotOffered(ref);
     // Messages share the top row with the status pill, which keeps at most
     // half of it; they start under the Guided Run strip when it shows.
     final statusRoom = math.min(
@@ -1051,27 +1044,6 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                     child: KeyedSubtree(
                                       key: _autopilotRowKey,
                                       child: const AutopilotStrip(),
-                                    ),
-                                  ),
-                                ),
-                              // The offer, centred just above the bottom row,
-                              // under the rails (centred higher up); it wraps on
-                              // a narrow window.
-                              if (autopilotOffer)
-                                AnimatedPositioned(
-                                  key: const ValueKey('offer'),
-                                  // Even margins keep it centred.
-                                  left: besideStop,
-                                  right: besideStop,
-                                  bottom: aboveRow,
-                                  duration: motion,
-                                  curve: Curves.easeOut,
-                                  child: Center(
-                                    child: AutopilotOffer(
-                                      onStart: _startAutopilot,
-                                      onDismiss: () => setState(
-                                        () => _offerDismissed = true,
-                                      ),
                                     ),
                                   ),
                                 ),

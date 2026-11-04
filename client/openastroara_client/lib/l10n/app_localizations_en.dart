@@ -661,15 +661,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get autopilotSkip => 'Skip';
 
   @override
-  String get autopilotNothingDone => 'Nothing done yet tonight';
-
-  @override
-  String get autopilotStart => 'Start Guided Run';
-
-  @override
-  String get autopilotNotNow => 'Not now';
-
-  @override
   String get shellModeAutopilot => 'Guided Run';
 
   @override

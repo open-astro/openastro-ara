@@ -545,6 +545,14 @@ Future<void> _frame(WidgetTester tester, ProviderContainer c) async {
   await tester.pump();
 }
 
+/// Starts Guided Run from the modes menu (the Start banner went, user 2026-11-04).
+Future<void> _startGuidedRun(WidgetTester tester) async {
+  await tester.tap(find.byKey(const Key('simple-mode')));
+  await tester.pump();
+  await tester.tap(find.byKey(const Key('simple-mode-autopilot')));
+  await tester.pump();
+}
+
 Rect _panelOf(WidgetTester tester, Finder f) =>
     tester.getRect(find.ancestor(of: f, matching: find.byType(SimplePanel)).first);
 
@@ -1077,13 +1085,11 @@ void main() {
     expect(rail(), before, reason: 'modes open');
   });
 
-  testWidgets('with nothing done tonight Preview offers Autopilot; it walks Plan first, the rail reads Guided',
+  testWidgets('no Start Guided Run banner (user, 2026-11-04); from the modes it walks Plan first, the rail reads Guided',
       (tester) async {
     await _pump(tester, const Size(1024, 768));
-    expect(find.byKey(const Key('autopilot-offer')), findsOneWidget);
-    await tester.tap(find.byKey(const Key('autopilot-start')));
-    await tester.pump();
-    expect(find.byKey(const Key('autopilot-offer')), findsNothing);
+    expect(find.text('Start Guided Run'), findsNothing, reason: 'the banner went');
+    await _startGuidedRun(tester);
     expect(find.byKey(const Key('autopilot-strip')), findsOneWidget);
     // "Guided Run" doesn't fit the 60 px rail: it reads Guided, as Polar align reads P.A.
     expect(find.descendant(of: find.byKey(const Key('simple-mode')), matching: find.text('Guided')), findsOneWidget);
@@ -1123,8 +1129,7 @@ void main() {
                     SimpleTarget(name: 'M$i', steps: const [FilterPlanStep(filterName: 'L', exposureSeconds: 120, frameCount: 30)]),
                 ]));
       await _frame(tester, container);
-      await tester.tap(find.byKey(const Key('autopilot-start')));
-      await tester.pump();
+      await _startGuidedRun(tester);
       final sheet = find.byType(SimpleRunSheet);
       expect(sheet, findsOneWidget);
       // Each tap must land on its control, not on whatever covers it.
@@ -1158,8 +1163,7 @@ void main() {
   testWidgets('in Autopilot\'s Plan step over the sky, after Add to queue ten times, the chip and the modes still '
       'put the sheet away', (tester) async {
     await _pump(tester, const Size(1024, 768), plan: const SimpleRun(), queueing: true);
-    await tester.tap(find.byKey(const Key('autopilot-start')));
-    await tester.pump();
+    await _startGuidedRun(tester);
     final c = ProviderScope.containerOf(tester.element(find.byType(SimpleShell)));
     for (var i = 1; i <= 10; i++) {
       c.read(planetariumSelectionProvider.notifier).set(PlanetariumSelection(
@@ -1227,8 +1231,7 @@ void main() {
         plan: const SimpleRun(sequenceId: 'seq-1', targets: [
           SimpleTarget(name: 'M 42', steps: [FilterPlanStep(filterName: 'L', exposureSeconds: 120, frameCount: 30)]),
         ]));
-    await tester.tap(find.byKey(const Key('autopilot-start')));
-    await tester.pump();
+    await _startGuidedRun(tester);
     final next = find.byKey(const Key('simple-run-start'));
     expect(find.descendant(of: next, matching: find.text('Next: Focus')), findsOneWidget);
     expect(find.text('Imaging starts after focus and polar alignment.'), findsOneWidget);
@@ -1239,8 +1242,7 @@ void main() {
 
   testWidgets('in Autopilot the chip names the step whose settings it shows', (tester) async {
     await _pump(tester, const Size(1024, 768));
-    await tester.tap(find.byKey(const Key('autopilot-start')));
-    await tester.pump();
+    await _startGuidedRun(tester);
     final chip = find.byKey(const Key('simple-settings'));
     expect(find.descendant(of: chip, matching: find.text('Plan\n5 min')), findsOneWidget);
     await tester.tap(find.byKey(const Key('autopilot-skip')));
@@ -1253,7 +1255,7 @@ void main() {
 
   for (final size in const [Size(1024, 768), Size(768, 1024), Size(507, 768)]) {
     testWidgets('at $size: message pills sit top-left, beside the status pill, above the left rail, '
-        'the Guided Run offer at the bottom', (tester) async {
+        'clear of the status pills', (tester) async {
       final container = await _pump(tester, size);
       await _frame(tester, container);
       container.read(captureProgressProvider.notifier).beginExposing(const Duration(seconds: 5));
@@ -1261,18 +1263,12 @@ void main() {
         container.read(simpleMessagesProvider.notifier).show(SimpleMessageKind.error, 'Message $i');
       }
       await tester.pump();
-      // The rail and the offer are measured after the first frame.
+      // The rail is measured after the first frame.
       await tester.pump(const Duration(milliseconds: 300));
       final pills = tester.getRect(find.byType(SimpleMessagePills));
       final status = _panelOf(tester, find.textContaining('Taking a frame'));
       final rail = _panelOf(tester, find.text('Library'));
-      final offer = tester.getRect(find.byKey(const Key('autopilot-offer')));
       expect(pills.left, kSimpleInset, reason: 'the top-left corner');
-      expect(pills.top, lessThan(offer.top), reason: 'the offer moved to the bottom (user, 2026-11-03)');
-      expect(offer.bottom, size.height - kSimpleInset, reason: 'the bottom row is empty: at the inset (ALP-4935)');
-      expect(offer.center.dx, closeTo(size.width / 2, 1), reason: 'centred');
-      expect(offer.right, lessThanOrEqualTo(tester.getRect(find.byType(EmergencyStopButton)).left - kSimpleInset),
-          reason: 'clear of Stop beside it');
       expect(pills.right, lessThanOrEqualTo(status.left), reason: 'beside the status pill, never under it');
       expect(pills.bottom, lessThanOrEqualTo(rail.top), reason: 'above the left rail');
       expect(find.byKey(const Key('simple-messages-more')), findsOneWidget, reason: 'six don\'t fit: the rest fold');
@@ -1280,13 +1276,6 @@ void main() {
       await tester.pump(const Duration(seconds: 1));
     });
   }
-
-  testWidgets('the Autopilot offer can be dismissed', (tester) async {
-    await _pump(tester, const Size(1024, 768));
-    await tester.tap(find.byTooltip('Not now'));
-    await tester.pump();
-    expect(find.byKey(const Key('autopilot-offer')), findsNothing);
-  });
 
   testWidgets('⌘. stops a running plan only when pressed twice within 3 s, like the keyboard\'s Stop', (tester) async {
     final container = await _pump(tester, const Size(1024, 768),
@@ -1424,8 +1413,7 @@ void main() {
             for (var i = 1; i <= 6; i++)
               SimpleTarget(name: 'M$i', steps: const [FilterPlanStep(filterName: 'L', exposureSeconds: 120, frameCount: 30)]),
           ]));
-      await tester.tap(find.byKey(const Key('autopilot-start')));
-      await tester.pump();
+      await _startGuidedRun(tester);
       await tester.tap(find.byKey(const Key('simple-settings')));
       await tester.pump();
       final strip = tester.getRect(find.byKey(const Key('autopilot-strip')));
@@ -2467,7 +2455,7 @@ void main() {
     });
   });
 
-  testWidgets('the Info tiles and the offer sit above guiding while it shows, at the inset without it (ALP-4935)',
+  testWidgets('the Info tiles sit above guiding while it shows, at the inset without it (ALP-4935)',
       (tester) async {
     final guider = _GuiderAt('guiding');
     final container = await _pump(tester, const Size(1024, 768), steps: _someSteps,
@@ -2477,13 +2465,11 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
     const above = 768 - kSimpleInset * 2 - kSimpleBarHeight;
     expect(tester.getRect(find.byType(SimpleInfoPanel)).bottom, above, reason: 'just above the guiding row');
-    expect(tester.getRect(find.byKey(const Key('autopilot-offer'))).bottom, above);
     guider.at('stopped'); // the guider stopped: the guiding row goes
     guider.rig = 'stopped';
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
     expect(tester.getRect(find.byType(SimpleInfoPanel)).bottom, 768 - kSimpleInset, reason: 'the row went: down');
-    expect(tester.getRect(find.byKey(const Key('autopilot-offer'))).bottom, 768 - kSimpleInset);
   });
 
   testWidgets('screen readers can hide and show the controls over a frame', (tester) async {

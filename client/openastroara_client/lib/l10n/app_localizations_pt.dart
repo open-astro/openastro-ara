@@ -661,15 +661,6 @@ class AppLocalizationsPt extends AppLocalizations {
   String get autopilotSkip => 'Skip';
 
   @override
-  String get autopilotNothingDone => 'Nothing done yet tonight';
-
-  @override
-  String get autopilotStart => 'Start Guided Run';
-
-  @override
-  String get autopilotNotNow => 'Not now';
-
-  @override
   String get shellModeAutopilot => 'Guided Run';
 
   @override
@@ -2647,15 +2638,6 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get autopilotSkip => 'Pular';
-
-  @override
-  String get autopilotNothingDone => 'Nada feito ainda esta noite';
-
-  @override
-  String get autopilotStart => 'Iniciar sessão guiada';
-
-  @override
-  String get autopilotNotNow => 'Agora não';
 
   @override
   String get shellModeAutopilot => 'Sessão guiada';

@@ -21,7 +21,7 @@ import 'simple_plan_panel.dart'
 import 'simple_guide_panel.dart' show simpleGuideActive, simpleGuiding;
 import 'simple_polar_panel.dart' show simplePolarActive;
 import 'simple_preview_panel.dart' show kSimpleText;
-import 'simple_shell.dart' show SimplePanel, kSimpleGoStyle, simpleFrost;
+import 'simple_shell.dart' show SimplePanel;
 
 /// Guided Run's steps, in the night's order: tonight's targets first, then
 /// focus (polar alignment plate-solves and fails on a soft focus), then polar
@@ -380,60 +380,4 @@ class _Step extends StatelessWidget {
       ),
     );
   }
-}
-
-/// Whether to offer Autopilot: nothing done yet tonight (no focus, no polar
-/// alignment unless the pier is permanent, no plan started).
-// shortcut: doesn't check that it's night; gate on the site's twilight once
-// the client has it at hand.
-bool autopilotOffered(WidgetRef ref) =>
-    ref.watch(autopilotProvider) == null &&
-    ref.watch(setupFocusStateProvider) != SetupStepState.done &&
-    ref.watch(setupPolarAlignStateProvider) != SetupStepState.done &&
-    !ref.watch(simpleRunProvider).started;
-
-/// The offer under the status strip: "Nothing done yet tonight", Start
-/// Autopilot, and × to dismiss it.
-class AutopilotOffer extends StatelessWidget {
-  const AutopilotOffer({
-    super.key,
-    required this.onStart,
-    required this.onDismiss,
-  });
-
-  final VoidCallback onStart;
-  final VoidCallback onDismiss;
-
-  @override
-  Widget build(BuildContext context) => simpleFrost(
-    Container(
-      key: const Key('autopilot-offer'),
-      padding: const EdgeInsets.fromLTRB(16, 6, 4, 6),
-      decoration: BoxDecoration(
-        color: AraColors.overlayScrim,
-        border: Border.all(color: AraColors.accentConnected),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      // On a narrow window the buttons drop under the words, rather than the
-      // words squeezing into a column tall enough to cover the rails.
-      child: Wrap(
-        spacing: AraSpace.s12,
-        crossAxisAlignment: WrapCrossAlignment.center,
-        children: [
-          Text(context.l10n.autopilotNothingDone, style: kSimpleText),
-          FilledButton(
-            key: const Key('autopilot-start'),
-            style: kSimpleGoStyle,
-            onPressed: onStart,
-            child: Text(context.l10n.autopilotStart),
-          ),
-          IconButton(
-            tooltip: context.l10n.autopilotNotNow,
-            icon: const Icon(Icons.close, size: 18),
-            onPressed: onDismiss,
-          ),
-        ],
-      ),
-    ),
-  );
 }
