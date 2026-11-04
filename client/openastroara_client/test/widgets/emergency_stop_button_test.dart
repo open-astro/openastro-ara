@@ -199,6 +199,31 @@ void main() {
     expect(pill, findsNothing);
   });
 
+  testWidgets('Simple Mode: a stop with a failed rung is a red pill that outlives the 20 s error fade, until × '
+      '(review, #1490: the fade had taken it)', (tester) async {
+    await pumpButton(tester, button: const EmergencyStopButton(compact: true), simpleMode: true, pills: true);
+    fake.result = const EmergencyStopResult(
+      alreadyInProgress: false,
+      runsAborted: 1,
+      exposureAborted: true,
+      guidingStopped: true,
+      parkRequested: false,
+      flatPanelLightOff: true,
+      failedRungs: ['park'],
+    );
+    await activateWithoutPointer(tester);
+    await activateWithoutPointer(tester);
+    await tester.pumpAndSettle();
+    await tester.pump(kSimpleErrorLife + const Duration(seconds: 1));
+    final pill = find.byKey(const Key('simple-message-0'));
+    expect(pill, findsOneWidget, reason: 'a failed rung waits to be read');
+    final container = ProviderScope.containerOf(tester.element(find.byType(EmergencyStopButton)));
+    expect(container.read(simpleMessagesProvider).single.kind, SimpleMessageKind.error, reason: 'red');
+    await tester.tap(find.descendant(of: pill, matching: find.byTooltip('Dismiss')));
+    await tester.pump();
+    expect(pill, findsNothing);
+  });
+
   testWidgets('Simple Mode: the stop\'s message shows whole in its pill, every line (user, 2026-11-04: it was cut)',
       (tester) async {
     tester.view.physicalSize = const Size(1024, 768);
