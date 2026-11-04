@@ -188,7 +188,7 @@ namespace OpenAstroAra.Test {
                         // client went away mid-write — irrelevant to the test
                     } catch (ObjectDisposedException) {
                         // listener torn down mid-write — irrelevant to the test
-                    } catch (InvalidOperationException) {
+                    } catch (InvalidOperationException) when (_cts.IsCancellationRequested) {
                         // listener closed under a pending response (Linux's managed listener marks it
                         // submitted, so the next header write throws): teardown, not a device answer, as
                         // in ScriptedAlpacaDevice (#1269).

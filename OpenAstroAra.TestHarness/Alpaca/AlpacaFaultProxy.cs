@@ -365,7 +365,7 @@ public sealed class AlpacaFaultProxy : IAsyncDisposable {
             // Response already torn down (e.g. concurrent disposal).
         } catch (OperationCanceledException) {
             // Proxy disposed mid-write — abandon the response.
-        } catch (InvalidOperationException) {
+        } catch (InvalidOperationException) when (cancellationToken.IsCancellationRequested) {
             // listener closed under a pending response (Linux's managed listener marks it
             // submitted, so the next header write throws): teardown, not a device answer, as
             // in ScriptedAlpacaDevice (#1269).
@@ -396,7 +396,7 @@ public sealed class AlpacaFaultProxy : IAsyncDisposable {
             // Proxy disposed mid-drop — abandon it.
         } catch (IOException) {
             // Stream faulted mid-write — also a drop from the client's view.
-        } catch (InvalidOperationException) {
+        } catch (InvalidOperationException) when (cancellationToken.IsCancellationRequested) {
             // listener closed under a pending response (Linux's managed listener marks it
             // submitted, so the next header write throws): teardown, not a device answer, as
             // in ScriptedAlpacaDevice (#1269).
