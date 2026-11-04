@@ -79,6 +79,8 @@ public sealed class PolarAlignFrameSolver : IPolarAlignFrameSolver {
     // The guider's last answer, reused for a minute: frames come about once a second and each ask is three
     // guider RPCs (ALP-4982). A minute still picks up a swapped guide camera within a routine.
     private static readonly TimeSpan GuiderOpticsLife = TimeSpan.FromMinutes(1);
+    // Unsynchronised on purpose: SolveAsync runs one frame at a time per routine and the solver
+    // isn't shared. Share it across concurrent solves and these two need a lock (or one record).
     private (double PixelSizeUm, double PixelScaleArcsec)? _lastGuiderOptics;
     private DateTimeOffset _lastGuiderOpticsAt;
 

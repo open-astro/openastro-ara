@@ -91,7 +91,9 @@ class LiveViewFrameNotifier extends Notifier<LiveFrameState> {
     } catch (_) {
       active = false;
     }
-    if (!active || _api != null || state.active) {
+    // Disposed while the ask was out (a server switch, teardown): a read of
+    // state or ref would throw, and the client it built would leak.
+    if (_disposed || !active || _api != null || state.active) {
       api.close();
       return;
     }
@@ -102,7 +104,10 @@ class LiveViewFrameNotifier extends Notifier<LiveFrameState> {
     _scheduleNext();
   }
 
+  bool _disposed = false;
+
   void _teardown() {
+    _disposed = true;
     _timer?.cancel();
     _timer = null;
     _api?.close();

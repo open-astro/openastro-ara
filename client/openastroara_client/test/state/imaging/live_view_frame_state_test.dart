@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:fake_async/fake_async.dart';
@@ -44,10 +45,12 @@ class _FakeLiveViewClient implements LiveViewClient {
   void close() => calls.add('close');
   /// What the daemon says when asked: a loop a dead app left running.
   bool activeOnServer = false;
+  /// When set, the daemon answers only once it completes.
+  Completer<bool>? activeAnswer;
   @override
   Future<bool> isActive() async {
     calls.add('isActive');
-    return activeOnServer;
+    return activeAnswer?.future ?? activeOnServer;
   }
 }
 
@@ -89,6 +92,21 @@ void main() {
       expect(c.read(liveViewFrameProvider).seq, 1, reason: 'polling the frame');
       expect(client.calls.where((x) => x.startsWith('start')), isEmpty);
     });
+  });
+
+  test('disposed while the daemon is still answering: no throw, the client it built is closed (review, #1490)',
+      () async {
+    final client = _FakeLiveViewClient(const [])..activeAnswer = Completer<bool>();
+    final c = _container(_FakeSavedServerService(const [AraServer(hostname: 'h', port: 5555)]), client);
+    c.read(savedServersProvider);
+    await Future<void>.delayed(Duration.zero);
+    c.read(liveViewFrameProvider);
+    await Future<void>.delayed(Duration.zero);
+    expect(client.calls, ['isActive'], reason: 'the ask is out');
+    c.dispose();
+    client.activeAnswer!.complete(true);
+    await Future<void>.delayed(Duration.zero);
+    expect(client.calls, ['isActive', 'close']);
   });
 
   test('nothing running on the daemon: connect changes nothing', () {
