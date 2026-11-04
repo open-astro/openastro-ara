@@ -21,7 +21,6 @@ import '../../models/sequence/sequence_summary.dart';
 import '../../state/stats/server_internal_state_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
-import '../../models/polar_align.dart';
 import '../../state/focus/autofocus_live_state.dart';
 import '../../state/focus/bahtinov_focus_state.dart';
 import '../../state/focus/guide_focus_state.dart';
@@ -1115,8 +1114,8 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
               : ((_coolStart! - ccd) / (_coolStart! - target)).clamp(0.0, 1.0),
           spoken: l10n.previewCooling,
         ),
-      // Every mode's routine has a pill while it runs, and a failure says
-      // why (user, 2026-11-04).
+      // Every mode's routine has a pill while it runs; a failure is a message
+      // on the left that fades, posted by the shell (user, 2026-11-04).
       if (af.isRunning)
         _PillData(
           SimpleStatusOrigin.focus,
@@ -1124,13 +1123,6 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
           MainFocusCard.phaseText(l10n, af),
           AraColors.accentInfo,
           spoken: l10n.shellModeFocus,
-        )
-      else if (af.isFailed)
-        _PillData(
-          SimpleStatusOrigin.focus,
-          l10n.shellModeFocus,
-          MainFocusCard.failureText(l10n, af),
-          AraColors.accentError,
         )
       else if (bahtinov)
         _PillData(
@@ -1148,14 +1140,7 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
           AraColors.accentConnected,
           working: true,
         ),
-      if (polar.phase == PolarAlignStates.failed)
-        _PillData(
-          SimpleStatusOrigin.polar,
-          l10n.shellModePolarAlign,
-          polar.errorMessage ?? polar.errorReason ?? simplePolarPhase(polar, l10n),
-          AraColors.accentError,
-        )
-      else if (simplePolarActive(polar))
+      if (simplePolarActive(polar))
         _PillData(
           SimpleStatusOrigin.polar,
           l10n.shellModePolarAlign,

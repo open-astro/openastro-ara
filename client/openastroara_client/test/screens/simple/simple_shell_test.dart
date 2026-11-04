@@ -263,11 +263,11 @@ class _GuiderUp extends GuiderStatusNotifier {
   Future<void> refresh([GuiderClient? client]) async {}
 }
 
-/// A polar alignment that failed, and why.
-class _PolarFailed extends PolarAlignLiveNotifier {
+/// A polar alignment adjusting; [fail] ends it with why.
+class _PolarRun extends PolarAlignLiveNotifier {
   @override
-  PolarAlignLive build() =>
-      const PolarAlignLive(phase: PolarAlignStates.failed, errorMessage: 'no stars found');
+  PolarAlignLive build() => const PolarAlignLive(phase: PolarAlignStates.adjusting);
+  void fail(String why) => state = PolarAlignLive(phase: PolarAlignStates.failed, errorMessage: why);
 }
 
 /// A connected guider in [runtime], with a calibration leg and an RMS; [at] moves it on.
@@ -2541,12 +2541,19 @@ void main() {
     await tester.pump(const Duration(seconds: 1));
   });
 
-  testWidgets('a failed polar alignment says so in its own pill, with why (user, 2026-11-04)', (tester) async {
-    await _pump(tester, const Size(1024, 768), gear: [polarAlignLiveProvider.overrideWith(_PolarFailed.new)]);
+  testWidgets('a failed polar alignment says so, with why, as a message on the left that fades (user, 2026-11-04)',
+      (tester) async {
+    final polar = _PolarRun();
+    final c = await _pump(tester, const Size(1024, 768), gear: [polarAlignLiveProvider.overrideWith(() => polar)]);
     await tester.pump();
-    final pill = find.byKey(const Key('simple-status-pill'));
-    expect(find.descendant(of: pill, matching: find.textContaining('Polar align')), findsOneWidget);
-    expect(find.descendant(of: pill, matching: find.textContaining('no stars found')), findsOneWidget);
+    polar.fail('no stars found');
+    await tester.pump();
+    final m = c.read(simpleMessagesProvider).single;
+    expect((m.kind, m.title, m.detail), (SimpleMessageKind.error, 'Polar alignment failed', 'no stars found'));
+    expect(find.descendant(of: find.byType(SimpleStatusPill), matching: find.textContaining('no stars found')),
+        findsNothing, reason: 'not a sticky status pill');
+    await tester.pump(kSimpleErrorLife + const Duration(seconds: 1));
+    expect(c.read(simpleMessagesProvider), isEmpty);
   });
 
   testWidgets('a tap on the status pill opens what it is about (user, 2026-11-04)', (tester) async {

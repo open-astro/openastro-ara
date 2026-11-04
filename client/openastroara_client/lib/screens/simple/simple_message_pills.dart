@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -26,9 +28,40 @@ class SimpleMessagePills extends ConsumerStatefulWidget {
 class _SimpleMessagePillsState extends ConsumerState<SimpleMessagePills> {
   bool _all = false;
 
+  // An error fades after a while on screen (user, 2026-11-04: not a sticky
+  // pill); the timers live with the pills, so none outlives the screen.
+  final _fades = <int, Timer>{};
+
+  void _fadeErrors(List<SimpleMessage> messages) {
+    final ids = {for (final m in messages) m.id};
+    _fades.removeWhere((id, t) {
+      if (ids.contains(id)) return false;
+      t.cancel();
+      return true;
+    });
+    for (final m in messages) {
+      if (m.kind != SimpleMessageKind.error || _fades.containsKey(m.id)) {
+        continue;
+      }
+      _fades[m.id] = Timer(
+        kSimpleErrorLife,
+        () => ref.read(simpleMessagesProvider.notifier).dismiss(m.id),
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    for (final t in _fades.values) {
+      t.cancel();
+    }
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     final messages = ref.watch(simpleMessagesProvider);
+    _fadeErrors(messages);
     if (messages.isEmpty) return const SizedBox.shrink();
     // Budgeted at one line a pill plus the gap; a two-line pill can push the
     // stack a few pixels past it.

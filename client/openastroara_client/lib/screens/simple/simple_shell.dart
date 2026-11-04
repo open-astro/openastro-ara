@@ -84,6 +84,7 @@ import 'simple_autopilot.dart';
 import 'simple_device_windows.dart';
 import 'simple_focus_panel.dart';
 import '../../state/focus/autofocus_live_state.dart' show autofocusLiveProvider;
+import '../../widgets/focus/focusing_pane.dart' show MainFocusCard;
 import '../../state/focus/guide_focus_state.dart' show guideFocusProvider;
 import '../../state/settings/phd2_settings_state.dart'
     show phd2SettingsProvider;
@@ -599,6 +600,31 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
         if (next == null) _mode = SimpleModeScreen.plan;
         _popover = next == null ? _Popover.none : _Popover.settings;
       });
+    });
+    // A routine that fails says why on the left, fading like any error
+    // (user, 2026-11-04: not a sticky status pill).
+    ref.listen(polarAlignLiveProvider, (prev, next) {
+      if (prev?.phase == PolarAlignStates.failed ||
+          next.phase != PolarAlignStates.failed) {
+        return;
+      }
+      ref
+          .read(simpleMessagesProvider.notifier)
+          .show(
+            SimpleMessageKind.error,
+            context.l10n.polarPhaseFailed,
+            detail: next.errorMessage ?? next.errorReason,
+          );
+    });
+    ref.listen(autofocusLiveProvider.select((l) => l.run), (prev, next) {
+      if ((prev?.isFailed ?? false) || !next.isFailed) return;
+      ref
+          .read(simpleMessagesProvider.notifier)
+          .show(
+            SimpleMessageKind.error,
+            context.l10n.focusCardFailed,
+            detail: MainFocusCard.failureText(context.l10n, next),
+          );
     });
     final pilot = ref.watch(autopilotProvider);
     final shown = _shown(pilot);

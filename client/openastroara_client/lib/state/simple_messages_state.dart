@@ -12,7 +12,7 @@ enum SimpleMessageKind {
   /// Green dot; fades after [kSimpleResultLife].
   result,
 
-  /// Red outline; stays until dismissed.
+  /// Red outline; fades after [kSimpleErrorLife] on screen, or on ×.
   error,
 
   /// Amber outline; stays until dismissed: done, but the rig needs a look (an
@@ -25,6 +25,10 @@ enum SimpleMessageKind {
 
 /// How long a result pill stays.
 const kSimpleResultLife = Duration(seconds: 10); // 6 until 2026-11-04 (user: too fast)
+
+/// How long an error pill stays: longer than a result, but it fades too
+/// (user, 2026-11-04: not a sticky pill); × closes it sooner.
+const kSimpleErrorLife = Duration(seconds: 20);
 
 class SimpleMessageAction {
   const SimpleMessageAction(this.label, this.onPressed);
