@@ -1979,4 +1979,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get guideStopping => 'Stopping…';
+
+  @override
+  String get guideExposureOwn => 'The guider\'s own';
 }

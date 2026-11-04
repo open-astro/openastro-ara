@@ -2789,5 +2789,9 @@
   "guideStopping": "Stopping…",
   "@guideStopping": {
     "description": "While a stop is on its way (the guider finishes its frame first)"
+  },
+  "guideExposureOwn": "The guider's own",
+  "@guideExposureOwn": {
+    "description": "Guide exposure picker value when the profile leaves it to the guider"
   }
 }

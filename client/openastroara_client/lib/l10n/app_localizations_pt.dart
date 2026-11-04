@@ -1979,6 +1979,9 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get guideStopping => 'Stopping…';
+
+  @override
+  String get guideExposureOwn => 'The guider\'s own';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -3968,4 +3971,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get guideStopping => 'Parando…';
+
+  @override
+  String get guideExposureOwn => 'O do guia';
 }

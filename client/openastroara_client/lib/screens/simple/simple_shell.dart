@@ -1855,13 +1855,11 @@ class _TracePainter extends CustomPainter {
   bool shouldRepaint(_TracePainter old) => old._steps != _steps;
 }
 
-bool _guidingShown(WidgetRef ref) =>
-    ref.watch(
-      guiderStatusProvider.select(
-        (s) => s.asData?.value?.runtimeState == GuiderRuntimeState.guiding,
-      ),
-    ) ||
-    ref.watch(guideStepsProvider.select((s) => s.isNotEmpty));
+// The guiding graph shows while the guider runs, never once it is stopped,
+// whatever steps are left from before (user, 2026-11-04).
+bool _guidingShown(WidgetRef ref) => ref.watch(
+  guiderStatusProvider.select((s) => simpleGuideActive(s.asData?.value)),
+);
 
 // The histogram is for saved frames (the daemon analyses those).
 String? _histogramFrame(WidgetRef ref) => ref.watch(liveViewControllerProvider)

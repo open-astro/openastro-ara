@@ -3506,6 +3506,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Stopping…'**
   String get guideStopping;
+
+  /// Guide exposure picker value when the profile leaves it to the guider
+  ///
+  /// In en, this message translates to:
+  /// **'The guider\'s own'**
+  String get guideExposureOwn;
 }
 
 class _AppLocalizationsDelegate

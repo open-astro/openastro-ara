@@ -14,6 +14,7 @@ import '../../models/focuser_status.dart';
 import '../../state/equipment/camera_state.dart';
 import '../../models/guider_status.dart';
 import '../../state/equipment/focuser_state.dart';
+import '../../state/guider/guider_equipment_state.dart';
 import '../../state/guider/guider_state.dart';
 import '../../state/settings/phd2_settings_state.dart';
 import '../../state/focus/autofocus_live_state.dart';
@@ -1353,8 +1354,6 @@ class SimpleGuiderWindow extends ConsumerStatefulWidget {
 }
 
 class _SimpleGuiderWindowState extends ConsumerState<SimpleGuiderWindow> {
-  double? _dragGain;
-
   @override
   Widget build(BuildContext context) {
     final g = ref.watch(guiderStatusProvider).value;
@@ -1395,29 +1394,8 @@ class _SimpleGuiderWindowState extends ConsumerState<SimpleGuiderWindow> {
         ),
       );
     }
-    final phd2 = ref.watch(phd2SettingsProvider);
-    // The guider's own gain scale: percent of the camera's range.
-    final gain = _dragGain ?? phd2.guideCameraGain.toDouble();
-    children.addAll([
-      simpleWindowRow(
-        context.l10n.deviceGain,
-        id: 'Gain',
-        Text('${gain.round()} %', style: kSimpleText),
-      ),
-      Slider(
-        key: const Key('simple-guider-gain'),
-        min: 0,
-        max: 100,
-        divisions: 20,
-        value: gain.clamp(0, 100),
-        label: '${gain.round()} %',
-        onChanged: (v) => setState(() => _dragGain = v),
-        onChangeEnd: (v) {
-          setState(() => _dragGain = null);
-          _save((p) => p.setGuideCameraGain(v.round()));
-        },
-      ),
-    ]);
+    // The guide camera's gain, the same slider and value as Guide mode's.
+    children.add(const SimpleGuideGainSlider());
     if (widget.inSettings) children.addAll(_versions(context, camera));
     return Column(
       key: const Key('simple-device-guider'),
@@ -1426,23 +1404,83 @@ class _SimpleGuiderWindowState extends ConsumerState<SimpleGuiderWindow> {
       children: children,
     );
   }
+}
 
-  /// Changes the guider settings and saves them to the profile.
-  Future<void> _save(void Function(Phd2SettingsNotifier) change) async {
-    final p = ref.read(phd2SettingsProvider.notifier);
-    change(p);
-    final api = ref.read(profileApiProvider);
-    if (api == null) return;
-    final notify = userNotifier(context);
-    final l10n = context.l10n;
-    try {
-      await p.persistToServer(api);
-    } catch (e) {
-      notify(
-        l10n.deviceCouldntSaveThat,
-        detail: describeEquipmentError(e),
-        error: true,
-      );
+/// Changes the guider settings and saves them to the profile; [live] also
+/// sends the guider its tuning (exposure, gain) without stopping guiding.
+Future<void> simpleSaveGuider(
+  BuildContext context,
+  WidgetRef ref,
+  void Function(Phd2SettingsNotifier) change, {
+  bool live = false,
+}) async {
+  final p = ref.read(phd2SettingsProvider.notifier);
+  change(p);
+  final api = ref.read(profileApiProvider);
+  if (api == null) return;
+  final notify = userNotifier(context);
+  final l10n = context.l10n;
+  try {
+    await p.persistToServer(api);
+    if (live && ref.read(guiderStatusProvider).value?.isConnected == true) {
+      await ref
+          .read(guiderEquipmentProvider.notifier)
+          .pushProfile(tuningOnly: true);
     }
+  } catch (e) {
+    notify(
+      l10n.deviceCouldntSaveThat,
+      detail: describeEquipmentError(e),
+      error: true,
+    );
+  }
+}
+
+/// The guide camera's gain: the guider's own scale, percent of the camera's
+/// range, set when the thumb is let go (Guide mode and the Guider Camera
+/// window share it).
+class SimpleGuideGainSlider extends ConsumerStatefulWidget {
+  const SimpleGuideGainSlider({super.key});
+
+  @override
+  ConsumerState<SimpleGuideGainSlider> createState() =>
+      _SimpleGuideGainSliderState();
+}
+
+class _SimpleGuideGainSliderState extends ConsumerState<SimpleGuideGainSlider> {
+  double? _drag;
+
+  @override
+  Widget build(BuildContext context) {
+    final gain =
+        _drag ?? ref.watch(phd2SettingsProvider).guideCameraGain.toDouble();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        simpleWindowRow(
+          context.l10n.deviceGain,
+          id: 'Gain',
+          Text('${gain.round()} %', style: kSimpleText),
+        ),
+        Slider(
+          key: const Key('simple-guider-gain'),
+          min: 0,
+          max: 100,
+          divisions: 20,
+          value: gain.clamp(0, 100),
+          label: '${gain.round()} %',
+          onChanged: (v) => setState(() => _drag = v),
+          onChangeEnd: (v) {
+            setState(() => _drag = null);
+            simpleSaveGuider(
+              context,
+              ref,
+              (p) => p.setGuideCameraGain(v.round()),
+              live: true,
+            );
+          },
+        ),
+      ],
+    );
   }
 }

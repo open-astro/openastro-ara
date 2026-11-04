@@ -2325,8 +2325,15 @@ void main() {
     Rect hist(WidgetTester t) => _panelOf(t, find.byKey(const Key('simple-histogram')));
     double end(WidgetTester t) => t.getRect(find.byType(EmergencyStopButton)).left - kSimpleInset;
 
+    testWidgets('a stopped guider hides the guiding graph, old steps or not (user, 2026-11-04)', (tester) async {
+      await _pump(tester, size, steps: _someSteps, gear: [guiderStatusProvider.overrideWith(() => _GuiderAt('stopped'))]);
+      await tester.pump();
+      expect(find.byKey(const Key('simple-guide-trace')), findsNothing);
+    });
+
     testWidgets('guiding alone fills the row', (tester) async {
-      await _pump(tester, size, steps: _someSteps);
+      await _pump(tester, size, steps: _someSteps, gear: [guiderStatusProvider.overrideWith(_GuiderUp.new)]);
+      await tester.pump();
       // RA and Dec are named, not told apart by colour alone (WCAG 1.4.1).
       final trace = find.ancestor(of: find.byKey(const Key('simple-guide-trace')), matching: find.byType(Row)).first;
       expect(find.descendant(of: trace, matching: find.text('RA')), findsOneWidget);
@@ -2346,7 +2353,8 @@ void main() {
     });
 
     testWidgets('both split it equally, guiding on the left', (tester) async {
-      final c = await _pump(tester, size, steps: _someSteps, histogram: histogram);
+      final c = await _pump(tester, size, steps: _someSteps, histogram: histogram,
+          gear: [guiderStatusProvider.overrideWith(_GuiderUp.new)]);
       await _frame(tester, c);
       await tester.pump();
       final g = guiding(tester), h = hist(tester);
@@ -2359,14 +2367,17 @@ void main() {
 
   testWidgets('the Info tiles and the offer sit above guiding while it shows, at the inset without it (ALP-4935)',
       (tester) async {
-    final container = await _pump(tester, const Size(1024, 768), steps: _someSteps);
+    final guider = _GuiderAt('guiding');
+    final container = await _pump(tester, const Size(1024, 768), steps: _someSteps,
+        gear: [guiderStatusProvider.overrideWith(() => guider)]);
     await _frame(tester, container);
     await tester.tap(find.byKey(const Key('simple-info')));
     await tester.pump(const Duration(milliseconds: 300));
     const above = 768 - kSimpleInset * 2 - kSimpleBarHeight;
     expect(tester.getRect(find.byType(SimpleInfoPanel)).bottom, above, reason: 'just above the guiding row');
     expect(tester.getRect(find.byKey(const Key('autopilot-offer'))).bottom, above);
-    container.read(guideStepsProvider.notifier).clear();
+    guider.at('stopped'); // the guider stopped: the guiding row goes
+    guider.rig = 'stopped';
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
     expect(tester.getRect(find.byType(SimpleInfoPanel)).bottom, 768 - kSimpleInset, reason: 'the row went: down');

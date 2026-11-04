@@ -141,6 +141,20 @@ void main() {
     expect(find.text('Not guiding'), findsOneWidget);
   });
 
+  testWidgets("the guide camera's exposure, a tile like Preview's, and its gain slider (user, 2026-11-04)",
+      (tester) async {
+    final c = await _pump(tester, _wire());
+    c.read(phd2SettingsProvider.notifier).setGuideExposureMs(2000);
+    await tester.pump();
+    final tile = find.byKey(const Key('simple-guide-exposure'));
+    expect(find.descendant(of: tile, matching: find.text('2 s')), findsOneWidget);
+    final slider = tester.widget<Slider>(find.byKey(const Key('simple-guider-gain')));
+    expect((slider.min, slider.max), (0.0, 100.0), reason: "the Guider Camera window's slider, one value");
+    slider.onChangeEnd!(70);
+    await tester.pump();
+    expect(c.read(phd2SettingsProvider).guideCameraGain, 70);
+  });
+
   testWidgets('Dither every: frames up and down, Off below 1, kept in the profile', (tester) async {
     final c = await _pump(tester, _wire());
     c.read(phd2SettingsProvider.notifier)

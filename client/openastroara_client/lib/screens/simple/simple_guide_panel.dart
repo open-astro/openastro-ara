@@ -6,9 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../l10n/l10n.dart';
 import '../../models/guider_status.dart';
-import '../../services/equipment_device_api.dart' show describeEquipmentError;
 import '../../state/guider/guider_state.dart';
-import '../../state/profile_management_state.dart';
 import '../../state/settings/phd2_settings_state.dart';
 import '../../state/simple_messages_state.dart';
 import '../../theme/ara_colors.dart';
@@ -17,8 +15,14 @@ import '../../widgets/equipment/guider_chip.dart' show guiderStatusLevel;
 import '../../util/friendly_error.dart';
 import 'simple_autopilot.dart'
     show AutopilotStep, autopilotProvider, simpleAutopilotNext;
-import 'simple_device_windows.dart' show simpleWindowRow, simpleWindowStepper;
-import 'simple_preview_panel.dart' show SimpleShutterButton, kSimpleText;
+import 'simple_device_windows.dart'
+    show
+        SimpleGuideGainSlider,
+        simpleSaveGuider,
+        simpleWindowRow,
+        simpleWindowStepper;
+import 'simple_preview_panel.dart'
+    show SimplePresetTile, SimpleShutterButton, formatExposure, kSimpleText;
 import 'simple_shell.dart' show SimplePanel, kSimpleGoStyle;
 
 /// Guide mode: the guider's routine (loop, pick a star, calibrate when
@@ -235,6 +239,26 @@ class SimpleGuidePanel extends ConsumerWidget {
                 child: Text(l10n.guidedDoneStartImaging),
               ),
             const Divider(height: AraSpace.s16),
+            // The guide camera's exposure, picked as Preview's; set live.
+            SimplePresetTile<int>(
+              key: const Key('simple-guide-exposure'),
+              label: l10n.previewExposure,
+              value: phd2.guideExposureMs,
+              options: [
+                for (final ms in guideExposureChoicesMs)
+                  if (ms >= 200 && ms <= 15000) ms,
+              ],
+              format: (ms) => ms <= 0
+                  ? l10n.guideExposureOwn
+                  : formatExposure(Duration(milliseconds: ms)),
+              onSelected: (ms) => simpleSaveGuider(
+                context,
+                ref,
+                (p) => p.setGuideExposureMs(ms),
+                live: true,
+              ),
+            ),
+            const SimpleGuideGainSlider(),
             simpleWindowRow(
               l10n.deviceDither,
               id: 'Dither',
@@ -278,26 +302,9 @@ class SimpleGuidePanel extends ConsumerWidget {
     });
   }
 
-  /// Changes the guider settings and saves them to the profile.
   static Future<void> _save(
     BuildContext context,
     WidgetRef ref,
     void Function(Phd2SettingsNotifier) change,
-  ) async {
-    final p = ref.read(phd2SettingsProvider.notifier);
-    change(p);
-    final api = ref.read(profileApiProvider);
-    if (api == null) return;
-    final notify = userNotifier(context);
-    final l10n = context.l10n;
-    try {
-      await p.persistToServer(api);
-    } catch (e) {
-      notify(
-        l10n.deviceCouldntSaveThat,
-        detail: describeEquipmentError(e),
-        error: true,
-      );
-    }
-  }
+  ) => simpleSaveGuider(context, ref, change);
 }

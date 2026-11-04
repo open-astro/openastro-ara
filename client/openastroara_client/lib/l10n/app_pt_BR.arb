@@ -567,5 +567,6 @@
   "deviceGuiderCamera": "Câmera de guiagem",
   "shellNoDevices": "Nenhum dispositivo conectado",
   "guideStarting": "Iniciando…",
-  "guideStopping": "Parando…"
+  "guideStopping": "Parando…",
+  "guideExposureOwn": "O do guia"
 }
