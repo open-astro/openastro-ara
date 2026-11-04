@@ -241,7 +241,7 @@ class SwitchListNotifier extends AsyncNotifier<List<SwitchDevice>> {
     final api = ref.read(switchApiProvider);
     if (api == null) return false; // no active server — dropped
     _acting = true;
-    // §25.3 — mirror the guard onto the chip's busy signal (amber while actuating).
+    // §25.3 — mirror the guard onto the chip's busy signal (blue while actuating).
     ref.read(switchActingProvider.notifier).set(true);
     final gen = _generation;
     try {

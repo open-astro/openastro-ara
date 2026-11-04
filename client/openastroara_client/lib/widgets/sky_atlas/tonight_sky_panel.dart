@@ -446,7 +446,7 @@ class _ObjectRowState extends ConsumerState<_ObjectRow> {
                     ),
                   ),
                   const SizedBox(width: 6),
-                  // The altitude NOW; amber while the window hasn't opened
+                  // The altitude NOW; blue while the window hasn't opened
                   // (too low / still rising) so a 90-score row that can't
                   // be shot yet doesn't read as shootable.
                   Text(

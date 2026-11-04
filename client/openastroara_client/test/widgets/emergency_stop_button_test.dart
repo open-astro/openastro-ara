@@ -29,9 +29,12 @@ class _FakeServerApi implements ServerApi {
     flatPanelLightOff: true,
   );
 
+  /// The daemon can't be reached: the stop never happened.
+  Object? error;
   @override
   Future<EmergencyStopResult> emergencyStop() async {
     calls++;
+    if (error != null) throw error!;
     return result;
   }
 
@@ -222,6 +225,20 @@ void main() {
     await tester.tap(find.descendant(of: pill, matching: find.byTooltip('Dismiss')));
     await tester.pump();
     expect(pill, findsNothing);
+  });
+
+  testWidgets('Simple Mode: a stop that never reached the daemon is a red pill that waits to be read, past the '
+      '20 s fade (ALP-5016)', (tester) async {
+    await pumpButton(tester, button: const EmergencyStopButton(compact: true), simpleMode: true, pills: true);
+    fake.error = Exception('connection refused');
+    await activateWithoutPointer(tester);
+    await activateWithoutPointer(tester);
+    await tester.pumpAndSettle();
+    await tester.pump(kSimpleErrorLife + const Duration(seconds: 1));
+    final pill = find.byKey(const Key('simple-message-0'));
+    expect(pill, findsOneWidget, reason: 'the stop did NOT happen: nobody may have read it yet');
+    final container = ProviderScope.containerOf(tester.element(find.byType(EmergencyStopButton)));
+    expect(container.read(simpleMessagesProvider).single.kind, SimpleMessageKind.error);
   });
 
   testWidgets('Simple Mode: the stop\'s message shows whole in its pill, every line (user, 2026-11-04: it was cut)',

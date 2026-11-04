@@ -22,8 +22,8 @@ StatusLevel guiderChipLevel(AsyncValue<GuiderStatus?> async) {
 }
 
 /// The status dot for a resolved [GuiderStatus]: the link state, with the
-/// runtime phase overriding it when connected (a lost star is an error; an
-/// active calibrate/dither is busy).
+/// runtime phase overriding it when connected (a lost star is a warning,
+/// amber; calibrating, settling or dithering is changing, blue).
 StatusLevel guiderStatusLevel(GuiderStatus? status) {
   if (status == null) return StatusLevel.disconnected;
   switch (status.connectionState) {

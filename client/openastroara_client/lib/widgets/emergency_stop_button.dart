@@ -207,6 +207,8 @@ class _EmergencyStopButtonState extends ConsumerState<EmergencyStopButton>
         error: true,
         snackBarRed: false,
         snackBarDuration: const Duration(seconds: 10),
+        // The stop did NOT happen: it waits to be read (ALP-5016).
+        sticky: true,
       );
     } finally {
       if (mounted) setState(() => _inFlight = false);
