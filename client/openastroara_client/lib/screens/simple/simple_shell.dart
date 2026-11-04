@@ -675,16 +675,17 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     final rightRailTop =
         railTop +
         (height - railTop - kSimpleInset * 2 - stopSize - _rightRailHeight) / 2;
-    final popoverMaxHeight = _rightRailHeight == 0
-        ? double.infinity
-        : height -
-              kSimpleInset -
-              (planSquares
-                  ? aboveStop +
-                        kSimplePlanSquareHeight * simpleRailScale(context) +
-                        kSimpleInset
-                  : aboveRow) -
-              rightRailTop;
+    // The rail's popovers (a mode's panel, the modes, the queue) take the room
+    // from under the status pill down to the screen's inset, over the bottom
+    // row while open (they sit left of the rail, clear of Stop), and above
+    // the plan squares; level with the rail's top when they fit, higher when
+    // they don't, so they don't scroll (iPad, 2026-11-04).
+    final popoverTop = railTop + kSimpleStatusHeight + kSimpleInset;
+    final popoverBottom = planSquares
+        ? aboveStop +
+              kSimplePlanSquareHeight * simpleRailScale(context) +
+              kSimpleInset
+        : kSimpleInset;
     final queuePanel = SimpleRunPanel(
       onAdd: () => _openSheet(),
       onEdit: (i) => _openSheet(edit: i),
@@ -951,7 +952,9 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                       railTop +
                                       kSimpleStatusHeight +
                                       kSimpleInset,
-                                  bottom: aboveRow,
+                                  // Down to the inset, over the bottom row
+                                  // while it's open (iPad, 2026-11-04).
+                                  bottom: kSimpleInset,
                                   child: Align(
                                     alignment: Alignment.centerRight,
                                     child: sheet,
@@ -966,17 +969,17 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                               }.contains(_popover))
                                 Positioned(
                                   left: 0,
-                                  top: 0,
-                                  child: CompositedTransformFollower(
-                                    link: _railLink,
-                                    targetAnchor: Alignment.topLeft,
-                                    followerAnchor: Alignment.topRight,
-                                    offset: const Offset(-kSimpleInset, 0),
-                                    child: ConstrainedBox(
-                                      constraints: BoxConstraints(
-                                        maxHeight: popoverMaxHeight,
+                                  right: kSimpleInset * 2 + railWidth,
+                                  top: popoverTop,
+                                  bottom: popoverBottom,
+                                  child: CustomSingleChildLayout(
+                                    delegate: _BesideRail(
+                                      preferredTop: math.max(
+                                        0,
+                                        rightRailTop - popoverTop,
                                       ),
-                                      child: SingleChildScrollView(
+                                    ),
+                                    child: SingleChildScrollView(
                                         child: _popover == _Popover.queue
                                             ? queuePanel
                                             : _popover == _Popover.modes
@@ -1001,7 +1004,6 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                                       SimpleSettingsPopover(),
                                                 ),
                                               },
-                                      ),
                                     ),
                                   ),
                                 ),
@@ -1302,6 +1304,29 @@ Widget simpleFrost(Widget child) => ClipRRect(
 );
 
 /// Device dots (connected gear only), then Night mode and the Settings menu.
+/// A rail popover in its room: right-aligned, at [preferredTop] (level with
+/// the rail) when it fits below, moved up as much as it needs when it doesn't.
+class _BesideRail extends SingleChildLayoutDelegate {
+  const _BesideRail({required this.preferredTop});
+
+  final double preferredTop;
+
+  // Height only: a panel wider than a phone-width window runs off its left
+  // edge, as before (phone layout: ALP-4865).
+  @override
+  BoxConstraints getConstraintsForChild(BoxConstraints constraints) =>
+      BoxConstraints(maxHeight: constraints.maxHeight);
+
+  @override
+  Offset getPositionForChild(Size size, Size childSize) => Offset(
+    size.width - childSize.width,
+    preferredTop.clamp(0, math.max(0, size.height - childSize.height)),
+  );
+
+  @override
+  bool shouldRelayout(_BesideRail old) => old.preferredTop != preferredTop;
+}
+
 /// Whether any top-bar chip shows: a device not disconnected, or a standing
 /// fault (the chips' own rule).
 bool _anyDeviceShown(WidgetRef ref) {

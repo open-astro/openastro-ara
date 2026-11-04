@@ -122,6 +122,12 @@ class _Steps extends GuideStepNotifier {
   List<GuideStep> build() => steps;
 }
 
+/// A frame's histogram: the bottom row's right half.
+final _histogram = FrameHistogram(
+    bins: List<int>.generate(256, (i) => i < 40 ? 1000 - (i - 20).abs() * 40 : 0),
+    minAdu: 0, minCount: 0, maxAdu: 65535, maxCount: 1000, meanAdu: 900, stdDev: 50, median: 880, mad: 30,
+    lowClipFraction: 0, highClipFraction: 0, width: 100, height: 100, bitDepth: 16);
+
 final _someSteps = [
   for (var i = 0; i < 20; i++)
     GuideStep(at: DateTime(2026, 11, 1, 22, 0, i), raPx: (i % 5 - 2) * 0.3, decPx: (i % 3 - 1) * 0.2),
@@ -793,6 +799,32 @@ void main() {
         reason: 'the target is the Guide mode now');
     expect(find.descendant(of: strip, matching: find.byTooltip('Guider Camera')), findsOneWidget);
     expect(find.descendant(of: strip, matching: find.byTooltip('Main Camera')), findsOneWidget);
+  });
+
+  testWidgets('with the histogram showing, a mode panel still fits without scrolling (iPad, 2026-11-04)', (tester) async {
+    // It was cut off: it started level with the centred rail and stopped above the bottom row. The test font
+    // draws the panel shorter than the iPad's, so 1.3x text stands in for it.
+    tester.platformDispatcher.textScaleFactorTestValue = 1.3;
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    final c = await _pump(tester, const Size(1024, 768), histogram: _histogram,
+        gear: [guiderStatusProvider.overrideWith(_GuiderUp.new)]);
+    await _frame(tester, c);
+    await tester.pump();
+    expect(find.byKey(const Key('simple-histogram')), findsOneWidget, reason: 'precondition: the bottom row shows');
+    await tester.tap(find.byKey(const Key('simple-mode')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('simple-mode-guide')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('simple-settings')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    final panel = tester.getRect(find.byKey(const Key('simple-guide-panel')));
+    final scroll = tester.state<ScrollableState>(
+        find.ancestor(of: find.byKey(const Key('simple-guide-panel')), matching: find.byType(Scrollable)).first);
+    expect(scroll.position.maxScrollExtent, 0, reason: 'everything fits: no scrolling');
+    expect(panel.bottom, lessThanOrEqualTo(768 - kSimpleInset));
+    expect(panel.top, greaterThanOrEqualTo(kSimpleInset * 3 + kSimpleBarHeight + kSimpleStatusHeight),
+        reason: 'under the status pill');
   });
 
   testWidgets('Guide is a mode: its shutter starts guiding, its chip shows the RMS and opens the Guide panel',
