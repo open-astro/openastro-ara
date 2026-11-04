@@ -94,3 +94,26 @@ class VmBuildPr(unittest.TestCase):
         deb = text.find("bash packaging/build-deb.sh publish")
         self.assertGreater(cli, -1, "vm.sh must run build-astap-cli.sh")
         self.assertLess(cli, deb, "build-astap-cli.sh must run before build-deb.sh")
+
+
+CI_YML = REPO_ROOT / ".github" / "workflows" / "ci.yml"
+DATA_MANAGER = REPO_ROOT / "OpenAstroAra.Server" / "Services" / "DataManagerService.cs"
+
+
+class CiSolveCheck(unittest.TestCase):
+    """The astap-solve CI job downloads the D05 package Settings → Sky data installs; the URL and
+    checksum it pins must be the daemon's, so a sky-data release bump moves both together."""
+
+    def test_d05_url_and_checksum_match_the_daemon_catalog(self) -> None:
+        daemon = DATA_MANAGER.read_text()
+        url = re.search(r'SourceUrl: new Uri\("([^"]+/astap-d05\.tar\.gz)"\)', daemon)
+        sha = re.search(r'\["astap-d05"\] = "([0-9a-f]{64})"', daemon)
+        self.assertIsNotNone(url, "DataManagerService: D05 SourceUrl not found")
+        self.assertIsNotNone(sha, "DataManagerService: D05 CatalogSha256 not found")
+        job = CI_YML.read_text().split("\n  astap-solve:\n", 1)
+        self.assertEqual(len(job), 2, "ci.yml has no astap-solve job")
+        job[1] = re.split(r"\n  [A-Za-z0-9_-]+:\n", job[1], maxsplit=1)[0]  # this job only
+        self.assertIn(url[1], job[1], "astap-solve must download the daemon's D05 package")
+        self.assertIn(f"echo \"{sha[1]}  ", job[1], "astap-solve must verify the daemon's D05 checksum")
+        self.assertIn(f"key: astap-d05-{sha[1]}", job[1], "the D05 cache key must follow the checksum")
+        self.assertIn("scripts/ci-astap-solve.sh", job[1])

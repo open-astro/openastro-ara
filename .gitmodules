@@ -7,5 +7,5 @@
 [submodule "third_party/astap"]
 	path = third_party/astap
 	url = https://github.com/open-astro/astap.git
-	branch = main
+	branch = ara
 	shallow = true
