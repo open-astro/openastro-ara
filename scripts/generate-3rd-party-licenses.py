@@ -307,7 +307,7 @@ here so this file's --check gate flags any drift):
     Unlicense). Compiled unmodified into libsupernovas with its legacy JPL
     ephemeris reader.
   * ASTAP command-line solver (astap_cli) — git submodule third_party/astap,
-    OpenAstro's fork https://github.com/open-astro/astap (main) of
+    OpenAstro's fork https://github.com/open-astro/astap (branch ara) of
     Han Kleijn's https://github.com/han-k59/astap. MPL-2.0, Copyright (C) Han
     Kleijn, www.hnsky.org. The fork's multi-core changes are published in that
     repository under the same license, as the MPL requires. Compiled with Free

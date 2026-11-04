@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # Builds the bundled ASTAP command-line plate solver (astap_cli) from the git submodule under
-# third_party/astap: OpenAstro's fork of han-k59/astap (main; upstream PR han-k59/astap#2), whose command-line
-# solver spreads the FITS load, binning, star detection and the spiral database search over
-# every core. On a 4-core Pi a hinted solve of a 26 MP frame drops from 1.6 s to 0.7 s and a
-# blind solve from 12 s to 4 s against the stock binary; with ASTAP_THREADS=1 (or -threads 1)
-# the output is bit-identical to upstream. MPL-2.0, see NOTICE.md.
+# third_party/astap: branch `ara` of open-astro/astap, which is Han Kleijn's han-k59/astap `main`
+# (multi-core spiral search since v2026.11.01) plus an OpenAstro patch that also spreads the
+# FITS load, binning and star detection over every core (OPENASTRO.md in the submodule; merged
+# with Han's updates, not sent upstream). On the 4-core CM4 with a 26 MP frame a hinted solve
+# takes 0.63 s against Han's 1.60 s and a blind solve 2.7 s against 3.7 s, with output
+# identical to Han's build at any -threads value. MPL-2.0, see NOTICE.md.
 #
 # The daemon runs it as /opt/openastroara/astap_cli (the .deb and the Docker image both put
 # the daemon directory there; scripts/tests/test_astap_cli_bundle_guards.py pins it), passing the profile's star
@@ -35,7 +36,8 @@ echo "fpc $("$FPC" -iV) for $("$FPC" -iTP)-$("$FPC" -iTO)"
 
 # Per-arch tuning mirrors the project's astap_command_line_linux_<arch>.lpi files: -O3 everywhere,
 # ARMv8 code generation on aarch64. Everything else is what lazbuild derives from the .lpi
-# (Delphi syntax mode, long strings, smart linking, cthreads via the -dUseCThreads define).
+# (Delphi syntax mode, long strings, smart linking). The program links cthreads on Unix itself;
+# -dUseCThreads is kept for older trees of the submodule.
 ARCH_OPTS=()
 case "$("$FPC" -iTP)" in
     aarch64) ARCH_OPTS=(-CpARMV8 -OpARMV8) ;;
