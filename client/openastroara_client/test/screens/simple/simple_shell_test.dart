@@ -48,6 +48,7 @@ import 'package:openastroara/screens/simple/simple_focus_panel.dart';
 import 'package:openastroara/screens/simple/simple_polar_panel.dart';
 import 'package:openastroara/screens/simple/simple_preview_panel.dart';
 import 'package:openastroara/screens/simple/simple_shell.dart';
+import 'package:openastroara/state/simple_night_setup_state.dart';
 import 'package:openastroara/services/simple_mode_prefs_service.dart';
 import 'package:openastroara/state/app_shell_state.dart';
 import 'package:openastroara/state/guider/guide_step_state.dart';
@@ -780,6 +781,27 @@ void main() {
     expect(find.byKey(const Key('simple-sky-image-this')), findsOneWidget);
   });
 
+  // Falsified by: simple_shell.dart _SkyPick onImage, pick(plan) unconditionally (the old `_mode = plan`).
+  testWidgets("Image this over the sky in Night Setup's Plan step stays in Night Setup", (tester) async {
+    final container = await _pump(tester, const Size(1024, 768));
+    await _frame(tester, container);
+    await tester.tap(find.byKey(const Key('night-setup-start')));
+    await tester.pump();
+    expect(container.read(nightSetupProvider), NightSetupStep.plan);
+    await tester.tap(find.byKey(const Key('simple-run-pick-in-sky')));
+    await tester.pump();
+    container.read(planetariumSelectionProvider.notifier).set(const PlanetariumSelection(
+        name: 'M31', kind: 'Galaxy', raHours: 0.73, decDeg: 41.4, raJ2000Hours: 0.71, decJ2000Deg: 41.27,
+        altDeg: 62.4, maxAltDeg: 74.2));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('simple-sky-image-this')));
+    await tester.pump();
+    expect(container.read(nightSetupProvider), NightSetupStep.plan, reason: 'Plan shows already: no pick');
+    expect(find.byKey(const Key('night-setup-strip')), findsOneWidget);
+    expect(find.byType(SimpleRunSheet), findsOneWidget, reason: 'back on the plan sheet');
+    expect(find.byKey(const Key('sky')), findsNothing);
+  });
+
   testWidgets('the settings chip opens Exposure from a list, the Gain slider under it, Filter and Loop/Single',
       (tester) async {
     final container = await _pump(tester, const Size(1024, 768));
@@ -875,6 +897,28 @@ void main() {
     await tester.tap(find.text('Preview').first);
     await tester.pump();
     expect(find.byKey(const Key('night-setup-strip')), findsNothing);
+  });
+
+  // Falsified by: simple_night_setup_state.dart SimpleShowingNotifier.build, drop the simpleModeProvider listen.
+  testWidgets('Simple Mode opens on Preview again: a reopen ends a Night Setup left running and offers it anew',
+      (tester) async {
+    final container = await _pump(tester, const Size(1024, 768));
+    await tester.tap(find.byKey(const Key('night-setup-start')));
+    await tester.pump();
+    expect(find.byKey(const Key('night-setup-strip')), findsOneWidget);
+    expect(container.read(simpleShowingProvider), SimpleModeScreen.plan);
+    // Leave for the full UI and come back: a new shell on the same providers.
+    await container.read(simpleModeProvider.notifier).set(false);
+    await tester.pumpWidget(UncontrolledProviderScope(container: container, child: const SizedBox()));
+    await container.read(simpleModeProvider.notifier).set(true);
+    await tester.pumpWidget(UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: SimpleShell(planetarium: SizedBox(key: Key('sky'))))));
+    await tester.pump();
+    expect(container.read(simpleShowingProvider), SimpleModeScreen.preview);
+    expect(container.read(nightSetupProvider), isNull);
+    expect(find.byKey(const Key('night-setup-strip')), findsNothing);
+    expect(find.byKey(const Key('night-setup-offer')), findsOneWidget, reason: 'offered again on a new opening');
   });
 
   for (final (size, scale, queued) in const [

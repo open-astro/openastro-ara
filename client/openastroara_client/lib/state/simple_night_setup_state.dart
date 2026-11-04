@@ -47,7 +47,16 @@ extension SimpleModeScreenLabels on SimpleModeScreen {
 /// Setup, whose first step is what shows.
 class SimpleShowingNotifier extends Notifier<SimpleModeScreen> {
   @override
-  SimpleModeScreen build() => SimpleModeScreen.preview;
+  SimpleModeScreen build() {
+    // Simple Mode opens on Preview, as when the shell held what shows; the
+    // pick also ends a Night Setup left running (its strip was hidden before).
+    ref.listen(simpleModeProvider, (prev, next) {
+      if (prev?.value == false && next.value == true) {
+        pick(SimpleModeScreen.preview);
+      }
+    });
+    return SimpleModeScreen.preview;
+  }
 
   /// The mode grid, the rail, a search hit: picking a mode leaves Night Setup.
   void pick(SimpleModeScreen m) {

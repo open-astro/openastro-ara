@@ -65,6 +65,7 @@ Future<ProviderContainer> _container() async {
     setupPolarAlignStateProvider.overrideWith((ref) => ref.watch(_aligned)),
     polarAlignApiProvider.overrideWithValue(_PolarApi()),
     simplePermanentPierPrefsProvider.overrideWithValue(_Prefs(false)),
+    simpleModePrefsProvider.overrideWithValue(_Prefs(true)),
     simpleRunProvider.overrideWith(_Plan.new),
   ]);
   addTearDown(c.dispose);
@@ -80,6 +81,18 @@ void main() {
   test('Simple Mode opens on Preview', () async {
     final c = await _container();
     expect(c.read(simpleShowingProvider), SimpleModeScreen.preview);
+  });
+
+  // Falsified by: simple_night_setup_state.dart SimpleShowingNotifier.build, drop the simpleModeProvider listen.
+  test('Simple Mode opening again shows Preview and ends a Night Setup left running', () async {
+    final c = await _container();
+    await c.read(simpleModeProvider.future);
+    c.read(simpleShowingProvider.notifier).pick(SimpleModeScreen.nightSetup);
+    await c.read(simpleModeProvider.notifier).set(false);
+    expect(c.read(nightSetupProvider), NightSetupStep.plan, reason: 'leaving changes nothing');
+    await c.read(simpleModeProvider.notifier).set(true);
+    expect(c.read(simpleShowingProvider), SimpleModeScreen.preview);
+    expect(c.read(nightSetupProvider), isNull);
   });
 
   test('picking Night Setup starts it on Plan, and Plan is what shows; the pick itself never shows', () async {
