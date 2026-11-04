@@ -2474,7 +2474,7 @@ class _GearRow<T extends EquipmentDeviceStatus> extends ConsumerWidget {
     final notifier = ref.read(provider.notifier);
     final l10n = context.l10n;
     // The dot is the top bar chip's, so the two always agree.
-    final dot = equipmentStatusLevel(status).color;
+    final dot = equipmentStatusLevel(status);
     final word = switch (status.connectionState) {
       EquipmentConnectionState.connected => l10n.shellConnected,
       EquipmentConnectionState.connecting => l10n.shellConnecting,
@@ -2528,7 +2528,7 @@ class _GuiderGearRow extends ConsumerWidget {
     final camera = ref.watch(deviceDriverProvider('guidecamera')).value?.name;
     final l10n = context.l10n;
     // The dot is the top bar chip's, so the two always agree.
-    final dot = guiderStatusLevel(status).color;
+    final dot = guiderStatusLevel(status);
     final (word, verb, label, action) = switch (status?.connectionState) {
       GuiderConnectionState.connected => (
         l10n.shellConnected,
@@ -2573,7 +2573,7 @@ class _GuiderGearRow extends ConsumerWidget {
 Widget _gearTile({
   required String id,
   required String title,
-  required Color dot,
+  required StatusLevel dot,
   required String word,
   // The button's English verb, for its key; [label] is what it shows.
   required String? verb,
@@ -2594,7 +2594,7 @@ Widget _gearTile({
     child: Row(
       spacing: AraSpace.s12,
       children: [
-        StatusDot(color: dot),
+        StatusDot.of(dot),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,

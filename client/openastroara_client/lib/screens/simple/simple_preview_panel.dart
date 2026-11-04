@@ -830,6 +830,7 @@ class _PillData {
     this.label,
     this.detail,
     this.dot, {
+    this.ring = false,
     this.working = false,
     this.shotProgress,
     this.footProgress,
@@ -839,6 +840,9 @@ class _PillData {
   final SimpleStatusOrigin origin;
   final String label;
   final String? detail;
+
+  /// Changing: the dot is a ring (DESIGN.md status rule).
+  final bool ring;
   final Color dot;
 
   /// Working normally: the dot blinks (DESIGN.md status rule).
@@ -922,7 +926,7 @@ class _StatusPillState extends State<_StatusPill> {
                     children: [
                       StatusBlink(
                         on: d.working,
-                        child: StatusDot(color: d.dot),
+                        child: StatusDot(color: d.dot, ring: d.ring),
                       ),
                       const SizedBox(width: AraSpace.s8),
                       // One text, so the label keeps its room and only the
@@ -1098,6 +1102,7 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
             l10n.previewDownloading,
             null,
             AraColors.accentInfo,
+            ring: true,
           ),
           CapturePhase.done => _PillData(
             SimpleStatusOrigin.preview,
@@ -1135,6 +1140,7 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
               : paused
               ? AraColors.accentInfo
               : AraColors.accentConnected,
+          ring: paused && run.state != SequenceRunState.pausedAwaitingUser,
           working: !paused,
           footProgress: run.currentInstructionProgress,
         ),
@@ -1144,6 +1150,7 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
           parking ? l10n.previewParking : l10n.previewUnparking,
           null,
           AraColors.accentInfo,
+          ring: true,
         ),
       // A cooler turned on by hand (a plan's own cooling shows as its step).
       if (cooling && !planActive)
@@ -1152,6 +1159,7 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
           l10n.previewCooling,
           '${simpleCelsius(ccd)} → ${simpleCelsius(target)}',
           AraColors.accentInfo,
+          ring: true,
           footProgress: (_coolStart! - target) <= 0
               ? 0.0
               : ((_coolStart! - ccd) / (_coolStart! - target)).clamp(0.0, 1.0),
@@ -1165,6 +1173,7 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
           l10n.shellModeFocus,
           MainFocusCard.phaseText(l10n, af),
           AraColors.accentInfo,
+          ring: true,
           spoken: l10n.shellModeFocus,
         )
       else if (bahtinov)
@@ -1189,6 +1198,7 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
           l10n.shellModePolarAlign,
           simplePolarPhase(polar, l10n),
           AraColors.accentInfo,
+          ring: true,
         ),
       if (guiderAsk != null)
         _PillData(
@@ -1196,6 +1206,7 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
           l10n.deviceGuider,
           guiderAsk ? l10n.guideStarting : l10n.guideStopping,
           AraColors.accentInfo,
+          ring: true,
         )
       else if (guiding)
         _PillData(
@@ -1206,6 +1217,7 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
             null => null,
           },
           simpleGuiderColour(guider),
+          ring: guiderStatusLevel(guider) == StatusLevel.changing,
           working: guiderStatusLevel(guider) == StatusLevel.active,
           spoken: l10n.shellGuiding,
         )

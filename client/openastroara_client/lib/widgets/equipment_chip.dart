@@ -145,6 +145,6 @@ class _StatusDot extends StatelessWidget {
   Widget build(BuildContext context) => StatusBlink(
     key: const ValueKey('equipment-chip-dot'),
     on: status == StatusLevel.active,
-    child: StatusDot(color: status.color, outline: AraColors.bgPanel),
+    child: StatusDot.of(status, outline: AraColors.bgPanel),
   );
 }

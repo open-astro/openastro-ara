@@ -39,8 +39,9 @@ class AraColors {
   static const linkText = Color(0xFF64B5F6);
 
   /// The tile fill behind Simple Mode's fields, presets and mode tiles
-  /// (DESIGN.md `tile-fill`): dark enough that [textSecondary] on it reads
-  /// at 4.5:1 over a white frame.
+  /// (DESIGN.md `tile-fill`). Tiles always sit on a panel's 90 % scrim
+  /// ([overlayScrim]), and that is what makes [textSecondary] on them read at
+  /// 4.5:1 over a white frame (4.7:1); the tile alone over white is 1.2:1.
   static const tileFill = Color(0x8C383838);
 
   /// Simple Mode's full-screen safety alarm: a deep red over everything, so it

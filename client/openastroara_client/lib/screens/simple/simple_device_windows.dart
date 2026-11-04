@@ -57,7 +57,10 @@ class SimpleDeviceHeader extends StatelessWidget {
     return Row(
       spacing: AraSpace.s8,
       children: [
-        StatusDot(color: color),
+        StatusDot(
+          color: color,
+          ring: s?.connectionState == EquipmentConnectionState.connecting,
+        ),
         Expanded(
           child: Text(
             s == null || s.name.isEmpty ? type : '$type · ${s.name}',
@@ -1370,7 +1373,10 @@ class _SimpleGuiderWindowState extends ConsumerState<SimpleGuiderWindow> {
       Row(
         spacing: AraSpace.s8,
         children: [
-          StatusDot(color: colour),
+          StatusDot(
+            color: colour,
+            ring: g?.connectionState == GuiderConnectionState.connecting,
+          ),
           Expanded(
             child: Text(
               camera?.name == null

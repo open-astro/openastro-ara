@@ -30,7 +30,7 @@ class StatusIndicator extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              StatusDot(color: level.color),
+              StatusDot.of(level),
               const SizedBox(width: 8),
               // Flexible so a long label ("1 issue — critical") shrinks with
               // ellipsis in a tight row instead of overflowing it.
@@ -48,20 +48,33 @@ class StatusIndicator extends StatelessWidget {
   }
 }
 
-/// A status dot. A changing one (blue) is a ring, every other a filled dot:
-/// in Night mode only brightness is left, and blue and green land close
-/// (DESIGN.md status rule; `design/preview/night-status-cue-mock.html` B).
-/// [outline] rims a filled dot in the surface colour (the top-bar chips).
+/// A status dot. A changing one (blue, [ring]) is a ring, every other a
+/// filled dot: in Night mode only brightness is left, and blue and green
+/// land close (DESIGN.md status rule; `design/preview/night-status-cue-mock.html`
+/// B). The ring is the level's, not the colour's: [StatusLevel.info] shares
+/// the blue and stays filled. [outline] rims a filled dot in the surface
+/// colour (the top-bar chips).
 class StatusDot extends StatelessWidget {
-  const StatusDot({super.key, required this.color, this.size = 10, this.outline});
+  const StatusDot({
+    super.key,
+    required this.color,
+    this.ring = false,
+    this.size = 10,
+    this.outline,
+  });
+
+  StatusDot.of(StatusLevel level, {super.key, this.size = 10, this.outline})
+    : color = level.color,
+      ring = level == StatusLevel.changing;
 
   final Color color;
+  final bool ring;
   final double size;
   final Color? outline;
 
   @override
   Widget build(BuildContext context) {
-    final changing = color == StatusLevel.changing.color;
+    final changing = ring;
     return Container(
       width: size,
       height: size,
