@@ -85,6 +85,14 @@ public interface IProfileStore {
     Phd2SettingsDto GetPhd2Settings();
     void PutPhd2Settings(Phd2SettingsDto value);
 
+    /// <summary>
+    /// Atomically read-modify-write the guider section — same contract as
+    /// <see cref="UpdateOpticsSettings"/> (null from <paramref name="update"/> = no write, no change
+    /// event; the transform runs under the store lock so keep it pure and fast). The guide-optics fill
+    /// and the guide-camera reconcile write through it, so a concurrent save isn't lost (ALP-4982).
+    /// </summary>
+    Phd2SettingsDto UpdatePhd2Settings(Func<Phd2SettingsDto, Phd2SettingsDto?> update);
+
     OpticsSettingsDto GetOpticsSettings();
     void PutOpticsSettings(OpticsSettingsDto value);
 

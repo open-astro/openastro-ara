@@ -285,6 +285,43 @@ namespace OpenAstroAra.Test {
             Assert.That(rig.Log.Reconcile(), Is.Empty);
         }
 
+        // ALP-4982: the fill and the camera update write through one locked read-modify-write, so a PHD2
+        // save from another thread between their read and their write isn't lost.
+        [Test]
+        public void UpdatePhd2Settings_applies_a_change_under_the_lock_keeping_the_other_fields() {
+            var store = new InMemoryProfileStore();
+            store.PutPhd2Settings(store.GetPhd2Settings() with { GuideFocalLength = 240 });
+            var result = store.UpdatePhd2Settings(cur => cur with { GuidePixelSize = 2.9 });
+            Assert.That(result.GuidePixelSize, Is.EqualTo(2.9));
+            Assert.That(store.GetPhd2Settings().GuideFocalLength, Is.EqualTo(240), "untouched fields kept");
+        }
+
+        [Test]
+        public void UpdatePhd2Settings_returning_null_writes_nothing() {
+            var store = new InMemoryProfileStore();
+            var changed = false;
+            store.Changed += (_, _) => changed = true;
+            store.UpdatePhd2Settings(_ => null);
+            Assert.That(changed, Is.False, "no write means no change event");
+        }
+
+        [Test]
+        public void FileProfileStore_UpdatePhd2Settings_persists_to_disk() {
+            var dir = Path.Combine(Path.GetTempPath(), "ara-phd2-" + Path.GetRandomFileName());
+            Directory.CreateDirectory(dir);
+            try {
+                var store = new FileProfileStore(dir);
+                store.PutPhd2Settings(store.GetPhd2Settings() with { GuideFocalLength = 240 });
+                store.UpdatePhd2Settings(cur => cur with { GuidePixelSize = 2.9 });
+                var reopened = new FileProfileStore(dir);
+                Assert.That(reopened.GetPhd2Settings().GuidePixelSize, Is.EqualTo(2.9), "persisted to disk");
+                Assert.That(reopened.GetPhd2Settings().GuideFocalLength, Is.EqualTo(240));
+                Assert.That(store.UpdatePhd2Settings(_ => null).GuidePixelSize, Is.EqualTo(2.9));
+            } finally {
+                Directory.Delete(dir, recursive: true);
+            }
+        }
+
         // ALP-4982 (#1486 review): the guide-optics fill ran before the pin checks, so a guider holding the
         // main imaging camera (a renumber) had that camera's pixel size kept as the guide camera's.
         private static Action<FakeGuider> GuiderOpens(string selection) => f => {

@@ -168,13 +168,21 @@ public sealed partial class GuiderService {
         if (await TryGetGuideOpticsAsync(ct).ConfigureAwait(false) is not { } optics) {
             return;
         }
-        var now = _profileStore.GetPhd2Settings();
-        var pixel = now.GuidePixelSize > 0 ? now.GuidePixelSize : optics.PixelSizeUm;
-        var focal = now.GuideFocalLength > 0
-            ? now.GuideFocalLength
-            : (int)Math.Round(206.265 * pixel / optics.PixelScaleArcsec); // whole mm, as the profile keeps it
-        _profileStore.PutPhd2Settings(now with { GuidePixelSize = pixel, GuideFocalLength = focal });
-        LogGuideOpticsFilled(pixel, focal);
+        // Only what is still unset, in one locked read-modify-write: a save since the read above stays.
+        Phd2SettingsDto? filled = null;
+        _profileStore.UpdatePhd2Settings(now => {
+            if (now.GuidePixelSize > 0 && now.GuideFocalLength > 0) {
+                return null;
+            }
+            var pixel = now.GuidePixelSize > 0 ? now.GuidePixelSize : optics.PixelSizeUm;
+            var focal = now.GuideFocalLength > 0
+                ? now.GuideFocalLength
+                : (int)Math.Round(206.265 * pixel / optics.PixelScaleArcsec); // whole mm, as the profile keeps it
+            return filled = now with { GuidePixelSize = pixel, GuideFocalLength = focal };
+        });
+        if (filled is not null) {
+            LogGuideOpticsFilled(filled.GuidePixelSize, filled.GuideFocalLength);
+        }
     }
 
     [LoggerMessage(Level = LogLevel.Information,
@@ -194,15 +202,18 @@ public sealed partial class GuiderService {
             if (decision.NewUniqueId is { } id) live.GuiderCameraAlpacaUniqueId = id;
             return true;
         }
-        var now = _profileStore.GetPhd2Settings();
-        if (now.GuiderCamera.Trim() != camera || now.GuiderCameraAlpacaUniqueId.Trim() != pinnedId) {
-            return false;
-        }
-        _profileStore.PutPhd2Settings(now with {
-            GuidePixelSize = decision.NewPixelSize ?? now.GuidePixelSize,
-            GuiderCameraAlpacaUniqueId = decision.NewUniqueId ?? now.GuiderCameraAlpacaUniqueId,
+        var applied = false;
+        _profileStore.UpdatePhd2Settings(now => {
+            if (now.GuiderCamera.Trim() != camera || now.GuiderCameraAlpacaUniqueId.Trim() != pinnedId) {
+                return null;
+            }
+            applied = true;
+            return now with {
+                GuidePixelSize = decision.NewPixelSize ?? now.GuidePixelSize,
+                GuiderCameraAlpacaUniqueId = decision.NewUniqueId ?? now.GuiderCameraAlpacaUniqueId,
+            };
         });
-        return true;
+        return applied;
     }
 
     [LoggerMessage(Level = LogLevel.Information,
