@@ -3512,6 +3512,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Connect a focuser to autofocus, or focus by hand on Manual.'**
   String get focusNeedsFocuser;
+
+  /// Why a greyed shutter can't start autofocus, the Bahtinov readout or polar alignment
+  ///
+  /// In en, this message translates to:
+  /// **'The main camera is busy: wait for its frame, or stop it.'**
+  String get shellMainCameraBusy;
 }
 
 class _AppLocalizationsDelegate

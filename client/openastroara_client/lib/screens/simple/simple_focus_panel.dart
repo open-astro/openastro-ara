@@ -22,7 +22,8 @@ import '../../widgets/focus/v_curve_chart.dart';
 import '../../state/setup/setup_readiness.dart';
 import 'simple_autopilot.dart'
     show AutopilotStep, autopilotProvider, simpleAutopilotNext;
-import 'simple_preview_panel.dart' show SimpleShutterButton, kSimpleText;
+import 'simple_preview_panel.dart'
+    show SimpleShutterButton, kSimpleText, simpleMainCameraBusy;
 import 'simple_device_windows.dart' show simpleCelsius;
 import 'simple_shell.dart'
     show SimplePanel, SimpleSegments, kSimpleGoStyle, simpleStackText;
@@ -122,6 +123,7 @@ class SimpleFocusShutter extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final cameraBusy = simpleMainCameraBusy(ref);
     if (ref.watch(simpleFocusScopeProvider) == SimpleFocusScope.guide) {
       // The guide camera: starts and stops its live focus, once it can.
       final guide = ref.watch(guideFocusProvider);
@@ -174,7 +176,8 @@ class SimpleFocusShutter extends ConsumerWidget {
         label: active
             ? context.l10n.focusStopBahtinov
             : context.l10n.focusStartBahtinov,
-        onPressed: bahtinov.busy
+        whyOff: bahtinov.busy ? null : context.l10n.shellMainCameraBusy,
+        onPressed: bahtinov.busy || (!active && cameraBusy)
             ? null
             : active
             ? notifier.stop
@@ -195,12 +198,16 @@ class SimpleFocusShutter extends ConsumerWidget {
       label: running
           ? context.l10n.focusCancelAutofocus
           : context.l10n.focusAutofocus,
-      onPressed: live.busy || !(running || connected)
+      onPressed: live.busy || !(running || connected) || (!running && cameraBusy)
           ? null
           : running
           ? notifier.cancel
           : notifier.start,
-      whyOff: live.busy ? null : context.l10n.focusNeedsFocuser,
+      whyOff: live.busy
+          ? null
+          : !connected
+          ? context.l10n.focusNeedsFocuser
+          : context.l10n.shellMainCameraBusy,
     );
   }
 }

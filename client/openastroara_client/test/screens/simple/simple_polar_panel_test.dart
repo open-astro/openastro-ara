@@ -8,6 +8,7 @@ import 'package:openastroara/l10n/l10n.dart';
 import 'package:openastroara/models/polar_align.dart';
 import 'package:openastroara/screens/simple/simple_polar_panel.dart';
 import 'package:openastroara/services/polar_align_api.dart';
+import 'package:openastroara/state/imaging/capture_progress_state.dart';
 import 'package:openastroara/state/polar_align/polar_align_state.dart';
 import 'package:openastroara/theme/ara_colors.dart';
 import 'package:openastroara/services/simple_mode_prefs_service.dart';
@@ -271,6 +272,19 @@ void main() {
               .color,
           AraColors.textPrimary);
     });
+    testWidgets('the main camera busy: off, and a tap says why (user, 2026-11-04: it turns the mount)', (tester) async {
+      final api = await shutter(tester, const PolarAlignLive());
+      final c = ProviderScope.containerOf(tester.element(find.byKey(const Key('simple-shutter'))));
+      c.read(captureProgressProvider.notifier).beginExposing(const Duration(seconds: 30));
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('simple-shutter')));
+      await tester.pump();
+      expect(api!.calls, isEmpty, reason: 'no start under a frame');
+      expect(c.read(simpleMessagesProvider).single.title, 'The main camera is busy: wait for its frame, or stop it.');
+      c.read(captureProgressProvider.notifier).reset();
+      await tester.pump(const Duration(seconds: 11));
+    });
+
     testWidgets('no server: off, and a tap says why (user, 2026-11-04)', (tester) async {
       await shutter(tester, const PolarAlignLive(), server: false);
       final c = ProviderScope.containerOf(tester.element(find.byKey(const Key('simple-shutter'))));

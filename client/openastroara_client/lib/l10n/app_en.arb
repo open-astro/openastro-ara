@@ -2793,5 +2793,9 @@
   "focusNeedsFocuser": "Connect a focuser to autofocus, or focus by hand on Manual.",
   "@focusNeedsFocuser": {
     "description": "Why Focus's shutter is greyed out on Auto with no focuser"
+  },
+  "shellMainCameraBusy": "The main camera is busy: wait for its frame, or stop it.",
+  "@shellMainCameraBusy": {
+    "description": "Why a greyed shutter can't start autofocus, the Bahtinov readout or polar alignment"
   }
 }

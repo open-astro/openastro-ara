@@ -20,7 +20,8 @@ import 'simple_preview_panel.dart'
         SimpleShutterButton,
         exposurePresets,
         formatExposure,
-        kSimpleText;
+        kSimpleText,
+        simpleMainCameraBusy;
 import 'simple_shell.dart'
     show SimplePanel, SimpleSegments, kSimpleGoStyle, simpleStackText;
 import '../../state/simple_messages_state.dart';
@@ -104,8 +105,9 @@ class SimplePolarShutter extends ConsumerWidget {
       start: true,
       running: active,
       label: active ? l10n.polarStop : l10n.polarStart,
-      whyOff: l10n.shellRigNotConnected,
-      onPressed: api == null
+      whyOff: api == null ? l10n.shellRigNotConnected : l10n.shellMainCameraBusy,
+      // It turns the mount: never under the main camera's frame.
+      onPressed: api == null || (!active && simpleMainCameraBusy(ref))
           ? null
           : active
           ? () => run(l10n.polarActionStop, api.stop)

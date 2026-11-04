@@ -1983,4 +1983,8 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get focusNeedsFocuser =>
       'Connect a focuser to autofocus, or focus by hand on Manual.';
+
+  @override
+  String get shellMainCameraBusy =>
+      'The main camera is busy: wait for its frame, or stop it.';
 }

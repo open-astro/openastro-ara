@@ -9,6 +9,7 @@ import 'package:openastroara/models/focuser_status.dart';
 import 'package:openastroara/screens/simple/simple_autopilot.dart';
 import 'package:openastroara/state/setup/setup_readiness.dart';
 import 'package:openastroara/state/simple_mode_state.dart';
+import 'package:openastroara/state/imaging/capture_progress_state.dart';
 import 'package:openastroara/state/simple_messages_state.dart';
 import 'package:openastroara/services/simple_mode_prefs_service.dart';
 import 'package:openastroara/screens/simple/simple_focus_panel.dart';
@@ -313,6 +314,22 @@ void main() {
       expect(find.bySemanticsLabel('Cancel autofocus'), findsOneWidget);
       await tester.tap(find.byKey(const Key('simple-shutter')));
       expect(l.cancels, 1);
+    });
+
+    testWidgets('Auto or Manual with the main camera busy: off, and a tap says why (user, 2026-11-04)', (tester) async {
+      for (final pick in [MainFocusMethod.autofocus, MainFocusMethod.bahtinov]) {
+        final l = await shutter(tester, pick, focuser: _focuser());
+        final c = ProviderScope.containerOf(tester.element(find.byType(SimpleFocusShutter)));
+        c.read(captureProgressProvider.notifier).beginExposing(const Duration(seconds: 30));
+        await tester.pump();
+        await tester.tap(find.byKey(const Key('simple-shutter')));
+        await tester.pump();
+        expect(l.starts, 0, reason: '$pick');
+        expect(c.read(simpleMessagesProvider).single.title, 'The main camera is busy: wait for its frame, or stop it.',
+            reason: '$pick');
+        c.read(captureProgressProvider.notifier).reset();
+        await tester.pump(const Duration(seconds: 11));
+      }
     });
 
     testWidgets('Auto with no focuser: the shutter is off, and a tap says why (user, 2026-11-04)', (tester) async {

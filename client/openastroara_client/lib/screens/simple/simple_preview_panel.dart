@@ -720,6 +720,16 @@ class SimpleShutterButton extends StatelessWidget {
   }
 }
 
+/// The main camera is taking frames: a shot, Preview's loop or a running
+/// plan. Routines that need it, or that move the mount under it (autofocus,
+/// the Bahtinov readout, polar alignment), wait (user, 2026-11-04).
+bool simpleMainCameraBusy(WidgetRef ref) =>
+    ref.watch(captureProgressProvider.select((p) => p.isCapturing)) ||
+    ref.watch(liveViewControllerProvider) ||
+    ref.watch(
+      sequenceRunStateProvider.select((s) => s.value?.state?.isActive ?? false),
+    );
+
 /// A greyed shutter's reason, as a pill: once at a time, fading like a result.
 void simpleSayWhy(BuildContext context, String why) {
   final container = ProviderScope.containerOf(context, listen: false);
