@@ -1418,16 +1418,21 @@ Future<void> simpleSaveGuider(
   void Function(Phd2SettingsNotifier) change, {
   bool live = false,
 }) async {
-  final p = ref.read(phd2SettingsProvider.notifier);
+  // The container, not ref: a mode change can unmount the panel while the
+  // save is out, and a disposed ref would turn a saved setting into
+  // "Couldn't save that" (review, #1490).
+  final container = ProviderScope.containerOf(context, listen: false);
+  final p = container.read(phd2SettingsProvider.notifier);
   change(p);
-  final api = ref.read(profileApiProvider);
+  final api = container.read(profileApiProvider);
   if (api == null) return;
   final notify = userNotifier(context);
   final l10n = context.l10n;
   try {
     await p.persistToServer(api);
-    if (live && ref.read(guiderStatusProvider).value?.isConnected == true) {
-      await ref
+    if (live &&
+        container.read(guiderStatusProvider).value?.isConnected == true) {
+      await container
           .read(guiderEquipmentProvider.notifier)
           .pushProfile(tuningOnly: true);
     }

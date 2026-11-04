@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/guider_status.dart';
 import 'package:openastroara/screens/simple/simple_guide_panel.dart';
@@ -7,6 +8,12 @@ import 'package:openastroara/services/guider_api.dart' show GuiderClient;
 import 'package:openastroara/state/guider/guider_state.dart';
 import 'package:openastroara/state/imaging/capture_progress_state.dart';
 import 'package:openastroara/state/settings/phd2_settings_state.dart';
+import 'package:openastroara/services/guider_equipment_api.dart' show GuiderEquipmentClient;
+import 'package:openastroara/services/profile_api.dart' show ProfileApi;
+import 'package:openastroara/state/guider/guider_equipment_state.dart' show guiderEquipmentApiProvider;
+import 'package:openastroara/state/profile_management_state.dart' show profileApiProvider;
+import 'package:openastroara/screens/simple/simple_device_windows.dart' show SimpleGuideGainSlider;
+import 'package:openastroara/screens/simple/simple_preview_panel.dart' show SimplePresetTile;
 import 'package:openastroara/state/simple_messages_state.dart';
 import 'package:openastroara/widgets/equipment/guider_chip.dart' show guiderStatusLevel;
 import 'package:openastroara/theme/ara_colors.dart';
@@ -54,10 +61,27 @@ Map<String, dynamic> _wire({String state = 'connected', String runtime = 'guidin
 
 late _Guider _g;
 
+/// The rig's profile store: a PUT answers with what was sent.
+class _Profile implements ProfileApi {
+  @override
+  Future<Phd2Settings> putPhd2Settings(Phd2Settings s) async => s;
+  @override
+  dynamic noSuchMethod(Invocation i) => throw UnimplementedError('${i.memberName}');
+}
+
+/// The guider's equipment API: records every tuning push.
+class _GuiderEquipment implements GuiderEquipmentClient {
+  final pushes = <bool>[];
+  @override
+  Future<void> pushProfile({bool tuningOnly = false}) async => pushes.add(tuningOnly);
+  @override
+  dynamic noSuchMethod(Invocation i) => throw UnimplementedError('${i.memberName}');
+}
+
 Future<ProviderContainer> _pump(WidgetTester tester, Map<String, dynamic> wire,
-    {Widget child = const SimpleGuidePanel(), bool lag = false}) async {
+    {Widget child = const SimpleGuidePanel(), bool lag = false, List<Override> rig = const []}) async {
   _g = _Guider(wire, lag: lag);
-  final c = ProviderContainer(overrides: [guiderStatusProvider.overrideWith(() => _g)]);
+  final c = ProviderContainer(overrides: [guiderStatusProvider.overrideWith(() => _g), ...rig]);
   addTearDown(c.dispose);
   await tester.pumpWidget(UncontrolledProviderScope(
     container: c,
@@ -193,6 +217,28 @@ void main() {
     slider.onChangeEnd!(70);
     await tester.pump();
     expect(c.read(phd2SettingsProvider).guideCameraGain, 70);
+  });
+
+  testWidgets("a guide exposure pick and a gain change reach the guider live (tuning only, so guiding goes on); "
+      "not with the guider disconnected (review, #1490)", (tester) async {
+    final eq = _GuiderEquipment();
+    final rig = [profileApiProvider.overrideWithValue(_Profile()), guiderEquipmentApiProvider.overrideWithValue(eq)];
+    await _pump(tester, _wire(), rig: rig);
+    tester.widget<SimplePresetTile<int>>(find.byKey(const Key('simple-guide-exposure'))).onSelected(2000);
+    await tester.pump();
+    await tester.pump();
+    expect(eq.pushes, [true], reason: 'the exposure, tuning only');
+    tester.widget<Slider>(find.byKey(const Key('simple-guider-gain'))).onChangeEnd!(70);
+    await tester.pump();
+    await tester.pump();
+    expect(eq.pushes, [true, true], reason: 'the gain too');
+    final off = _GuiderEquipment();
+    await _pump(tester, _wire(state: 'disconnected', runtime: 'stopped'), child: const SimpleGuideGainSlider(),
+        rig: [profileApiProvider.overrideWithValue(_Profile()), guiderEquipmentApiProvider.overrideWithValue(off)]);
+    tester.widget<Slider>(find.byKey(const Key('simple-guider-gain'))).onChangeEnd!(50);
+    await tester.pump();
+    await tester.pump();
+    expect(off.pushes, isEmpty, reason: 'saved to the profile only: nothing to push to');
   });
 
   testWidgets('no guider: the greyed shutter says why when tapped (user, 2026-11-04)', (tester) async {
