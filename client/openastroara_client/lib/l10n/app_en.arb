@@ -1432,10 +1432,6 @@
   "@planTonightsBest": {
     "description": "Plan sheet caption above tonight's suggested targets (uppercase)"
   },
-  "planTonightsPlan": "Tonight's plan",
-  "@planTonightsPlan": {
-    "description": "Plan sheet heading"
-  },
   "planEditTarget": "Edit {name}",
   "@planEditTarget": {
     "description": "Plan sheet heading when editing a queued target",

@@ -1026,9 +1026,6 @@ class AppLocalizationsPt extends AppLocalizations {
   String get planTonightsBest => 'TONIGHT\'S BEST';
 
   @override
-  String get planTonightsPlan => 'Tonight\'s plan';
-
-  @override
   String planEditTarget(String name) {
     return 'Edit $name';
   }
@@ -3009,9 +3006,6 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get planTonightsBest => 'MELHORES DA NOITE';
-
-  @override
-  String get planTonightsPlan => 'Plano da noite';
 
   @override
   String planEditTarget(String name) {

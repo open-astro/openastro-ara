@@ -801,6 +801,18 @@ void main() {
     expect(find.descendant(of: strip, matching: find.byTooltip('Main Camera')), findsOneWidget);
   });
 
+  testWidgets("Plan's sheet has no title (user, 2026-11-04: the chip already says Plan)", (tester) async {
+    await _pump(tester, const Size(1024, 768));
+    await tester.tap(find.byKey(const Key('simple-mode')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('simple-mode-plan')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('simple-settings')));
+    await tester.pump();
+    expect(find.byType(SimpleRunSheet), findsOneWidget);
+    expect(find.text("Tonight's plan"), findsNothing);
+  });
+
   testWidgets("Plan's sheet and the mode panels (Guided Run's steps) start on one line, 8 pt under the status pill",
       (tester) async {
     // User, 2026-11-04: they should align at the same top, a little higher than Plan's was (16 pt under).

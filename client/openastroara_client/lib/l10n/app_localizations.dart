@@ -1929,12 +1929,6 @@ abstract class AppLocalizations {
   /// **'TONIGHT\'S BEST'**
   String get planTonightsBest;
 
-  /// Plan sheet heading
-  ///
-  /// In en, this message translates to:
-  /// **'Tonight\'s plan'**
-  String get planTonightsPlan;
-
   /// Plan sheet heading when editing a queued target
   ///
   /// In en, this message translates to:

@@ -1026,9 +1026,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get planTonightsBest => 'TONIGHT\'S BEST';
 
   @override
-  String get planTonightsPlan => 'Tonight\'s plan';
-
-  @override
   String planEditTarget(String name) {
     return 'Edit $name';
   }

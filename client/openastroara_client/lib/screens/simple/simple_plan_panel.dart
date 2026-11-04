@@ -1799,12 +1799,11 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       spacing: AraSpace.s8,
       children: [
-        // Guided Run's step strip already names the step (user, 2026-11-04).
-        if (!guided || editing != null)
+        // No title: the chip (or Guided Run's step strip) already says Plan
+        // (user, 2026-11-04); editing names the target.
+        if (editing != null)
           Text(
-            editing == null
-                ? context.l10n.planTonightsPlan
-                : context.l10n.planEditTarget(run.targets[editing].name),
+            context.l10n.planEditTarget(run.targets[editing].name),
             style: _head,
           ),
         if (!wide && editing == null) ...lists,
