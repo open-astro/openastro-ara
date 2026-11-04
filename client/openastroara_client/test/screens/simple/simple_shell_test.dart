@@ -801,6 +801,27 @@ void main() {
     expect(find.descendant(of: strip, matching: find.byTooltip('Main Camera')), findsOneWidget);
   });
 
+  testWidgets("Plan's sheet and the mode panels (Guided Run's steps) start on one line, 8 pt under the status pill",
+      (tester) async {
+    // User, 2026-11-04: they should align at the same top, a little higher than Plan's was (16 pt under).
+    const top = kSimpleInset * 2 + kSimpleBarHeight + kSimpleStatusHeight + 8;
+    await _pump(tester, const Size(1024, 768), gear: [guiderStatusProvider.overrideWith(_GuiderUp.new)]);
+    await tester.tap(find.byKey(const Key('simple-mode')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('simple-mode-guide')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('simple-settings')));
+    await tester.pump();
+    expect(tester.getRect(find.byKey(const Key('simple-guide-panel'))).top, top);
+    await tester.tap(find.byKey(const Key('simple-mode')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('simple-mode-plan')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('simple-settings')));
+    await tester.pump();
+    expect(tester.getRect(find.byType(SimpleRunSheet)).top, top);
+  });
+
   testWidgets('with the histogram showing, a mode panel still fits without scrolling (iPad, 2026-11-04)', (tester) async {
     // It was cut off: it started level with the centred rail and stopped above the bottom row. The test font
     // draws the panel shorter than the iPad's, so 1.3x text stands in for it.
@@ -823,7 +844,7 @@ void main() {
         find.ancestor(of: find.byKey(const Key('simple-guide-panel')), matching: find.byType(Scrollable)).first);
     expect(scroll.position.maxScrollExtent, 0, reason: 'everything fits: no scrolling');
     expect(panel.bottom, lessThanOrEqualTo(768 - kSimpleInset));
-    expect(panel.top, greaterThanOrEqualTo(kSimpleInset * 3 + kSimpleBarHeight + kSimpleStatusHeight),
+    expect(panel.top, greaterThanOrEqualTo(kSimpleInset * 2 + kSimpleBarHeight + kSimpleStatusHeight),
         reason: 'under the status pill');
   });
 
@@ -861,7 +882,7 @@ void main() {
     final rail = _panelOf(tester, find.byKey(const Key('simple-shutter')));
     final panel = _panelOf(tester, find.text('Fit the mask, then Start'));
     expect(panel.right, rail.left - kSimpleInset, reason: 'left of the rail');
-    expect(panel.top, rail.top, reason: 'level with its top');
+    expect(panel.top, kSimpleInset * 2 + kSimpleBarHeight + kSimpleStatusHeight + 8, reason: 'on the rail panels\' line, 8 pt under the status pill (user, 2026-11-04)');
 
     // The chip speaks for the mode: Focus's summary, not Preview's exposure.
     final chip = find.byKey(const Key('simple-settings'));
@@ -901,7 +922,7 @@ void main() {
     final rail = _panelOf(tester, find.byKey(const Key('simple-shutter')));
     final panel = _panelOf(tester, find.byKey(const Key('simple-polar-exposure')));
     expect(panel.right, rail.left - kSimpleInset);
-    expect(panel.top, rail.top);
+    expect(panel.top, kSimpleInset * 2 + kSimpleBarHeight + kSimpleStatusHeight + 8);
     await tester.tap(chip);
     await tester.pump();
     expect(find.byKey(const Key('simple-polar-exposure')), findsNothing);
@@ -1018,7 +1039,7 @@ void main() {
     await tester.pump();
     expect(rail(), before, reason: 'settings open');
     final popover = tester.getRect(find.byType(SimpleSettingsPopover));
-    expect(popover.top, before.top, reason: 'level with the rail top');
+    expect(popover.top, kSimpleInset * 2 + kSimpleBarHeight + kSimpleStatusHeight + 8, reason: 'on the rail panels\' line, 8 pt under the status pill (user, 2026-11-04)');
     expect(popover.right, before.left - kSimpleInset, reason: 'beside it');
     await tester.tap(find.byKey(const Key('simple-mode')));
     await tester.pump();
@@ -1337,8 +1358,8 @@ void main() {
       await tester.tap(find.byKey(const Key('simple-settings')));
       await tester.pump();
       final sheet = tester.getRect(find.byType(SimpleRunSheet));
-      expect(sheet.top, greaterThanOrEqualTo(kSimpleInset * 3 + kSimpleBarHeight + kSimpleStatusHeight),
-          reason: 'under the status pill');
+      expect(sheet.top, kSimpleInset * 2 + kSimpleBarHeight + kSimpleStatusHeight + 8,
+          reason: 'on the rail panels\' line, 8 pt under the status pill (user, 2026-11-04)');
       expect(sheet.bottom, lessThanOrEqualTo(size.height - kSimpleInset),
           reason: 'no guiding or histogram: down to the inset (ALP-4935)');
       expect(find.byKey(const Key('simple-run-tracker')), findsNothing, reason: 'the squares step aside');

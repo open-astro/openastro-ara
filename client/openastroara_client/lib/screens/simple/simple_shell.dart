@@ -670,17 +670,11 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     final leftRailTop = _leftRailHeight == 0
         ? height
         : railTop + (height - railTop * 2 - _leftRailHeight) / 2;
-    // The right rail's panels run from its top down to the plan squares (or
-    // the bottom row), scrolling inside when taller.
-    final rightRailTop =
-        railTop +
-        (height - railTop - kSimpleInset * 2 - stopSize - _rightRailHeight) / 2;
-    // The rail's popovers (a mode's panel, the modes, the queue) take the room
-    // from under the status pill down to the screen's inset, over the bottom
-    // row while open (they sit left of the rail, clear of Stop), and above
-    // the plan squares; level with the rail's top when they fit, higher when
-    // they don't, so they don't scroll (iPad, 2026-11-04).
-    final popoverTop = railTop + kSimpleStatusHeight + kSimpleInset;
+    // The rail's popovers (a mode's panel, the modes, the queue) and Plan's
+    // sheet start on one line, 8 pt under the status pill (user, 2026-11-04),
+    // and take the room down to the screen's inset, over the bottom row while
+    // open (they sit left of the rail, clear of Stop), above the plan squares.
+    final popoverTop = railTop + kSimpleStatusHeight + AraSpace.s8;
     final popoverBottom = planSquares
         ? aboveStop +
               kSimplePlanSquareHeight * simpleRailScale(context) +
@@ -948,15 +942,12 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                   // it was centred over the image).
                                   left: kSimpleInset,
                                   right: kSimpleInset * 2 + railWidth,
-                                  top:
-                                      railTop +
-                                      kSimpleStatusHeight +
-                                      kSimpleInset,
-                                  // Down to the inset, over the bottom row
-                                  // while it's open (iPad, 2026-11-04).
+                                  // The rail panels' line; down to the inset,
+                                  // over the bottom row while it's open.
+                                  top: popoverTop,
                                   bottom: kSimpleInset,
                                   child: Align(
-                                    alignment: Alignment.centerRight,
+                                    alignment: Alignment.topRight,
                                     child: sheet,
                                   ),
                                 )
@@ -973,12 +964,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                   top: popoverTop,
                                   bottom: popoverBottom,
                                   child: CustomSingleChildLayout(
-                                    delegate: _BesideRail(
-                                      preferredTop: math.max(
-                                        0,
-                                        rightRailTop - popoverTop,
-                                      ),
-                                    ),
+                                    delegate: const _BesideRail(),
                                     child: SingleChildScrollView(
                                         child: _popover == _Popover.queue
                                             ? queuePanel
@@ -1304,12 +1290,9 @@ Widget simpleFrost(Widget child) => ClipRRect(
 );
 
 /// Device dots (connected gear only), then Night mode and the Settings menu.
-/// A rail popover in its room: right-aligned, at [preferredTop] (level with
-/// the rail) when it fits below, moved up as much as it needs when it doesn't.
+/// A rail popover in its room: right-aligned, at its top.
 class _BesideRail extends SingleChildLayoutDelegate {
-  const _BesideRail({required this.preferredTop});
-
-  final double preferredTop;
+  const _BesideRail();
 
   // Height only: a panel wider than a phone-width window runs off its left
   // edge, as before (phone layout: ALP-4865).
@@ -1318,13 +1301,11 @@ class _BesideRail extends SingleChildLayoutDelegate {
       BoxConstraints(maxHeight: constraints.maxHeight);
 
   @override
-  Offset getPositionForChild(Size size, Size childSize) => Offset(
-    size.width - childSize.width,
-    preferredTop.clamp(0, math.max(0, size.height - childSize.height)),
-  );
+  Offset getPositionForChild(Size size, Size childSize) =>
+      Offset(size.width - childSize.width, 0);
 
   @override
-  bool shouldRelayout(_BesideRail old) => old.preferredTop != preferredTop;
+  bool shouldRelayout(_BesideRail old) => false;
 }
 
 /// Whether any top-bar chip shows: a device not disconnected, or a standing
