@@ -565,11 +565,11 @@ void main() {
     expect(tester.getSemantics(find.byKey(const Key('simple-sky'))), isSemantics(hasEnabledState: true, isEnabled: false));
   });
 
-  testWidgets('the mode name opens the modes in order, Autopilot first; picking one closes them', (tester) async {
+  testWidgets('the mode name opens the modes in order, Night Setup first; picking one closes them', (tester) async {
     final container = await _pump(tester, const Size(1024, 768));
     await tester.tap(find.byKey(const Key('simple-mode')));
     await tester.pump();
-    final modes = ['Guided Run', 'Preview', 'Focus', 'Polar align', 'Plan'];
+    final modes = ['Night Setup', 'Preview', 'Focus', 'Polar align', 'Plan'];
     // The grid's tile, not the rail's label (which also reads Preview): the leftmost match.
     // The tile's corner, not the text's: a name on two lines sits higher in its tile.
     Offset tile(String m) => (find.text(m).evaluate().map((e) => tester.getTopLeft(
@@ -851,30 +851,30 @@ void main() {
     expect(rail(), before, reason: 'modes open');
   });
 
-  testWidgets('with nothing done tonight Preview offers Autopilot; it walks Plan first, the rail reads Guided',
+  testWidgets('with nothing done tonight Preview offers Night Setup; it walks Plan first, the rail reads Setup',
       (tester) async {
     await _pump(tester, const Size(1024, 768));
-    expect(find.byKey(const Key('autopilot-offer')), findsOneWidget);
-    await tester.tap(find.byKey(const Key('autopilot-start')));
+    expect(find.byKey(const Key('night-setup-offer')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('night-setup-start')));
     await tester.pump();
-    expect(find.byKey(const Key('autopilot-offer')), findsNothing);
-    expect(find.byKey(const Key('autopilot-strip')), findsOneWidget);
-    // "Guided Run" doesn't fit the 60 px rail: it reads Guided, as Polar align reads P.A.
-    expect(find.descendant(of: find.byKey(const Key('simple-mode')), matching: find.text('Guided')), findsOneWidget);
-    expect(find.bySemanticsLabel(RegExp(r'^Mode: Guided Run')), findsOneWidget, reason: 'the screen reader says it whole');
+    expect(find.byKey(const Key('night-setup-offer')), findsNothing);
+    expect(find.byKey(const Key('night-setup-strip')), findsOneWidget);
+    // "Night Setup" doesn't fit the 60 px rail: it reads Setup, as Polar align reads P.A.
+    expect(find.descendant(of: find.byKey(const Key('simple-mode')), matching: find.text('Setup')), findsOneWidget);
+    expect(find.bySemanticsLabel(RegExp(r'^Mode: Night Setup')), findsOneWidget, reason: 'the screen reader says it whole');
     expect(find.byType(SimpleRunSheet), findsOneWidget, reason: "the plan's sheet first");
-    await tester.tap(find.byKey(const Key('autopilot-skip')));
+    await tester.tap(find.byKey(const Key('night-setup-skip')));
     await tester.pump();
     expect(find.byType(SimpleFocusPanel), findsOneWidget, reason: "then Focus's panel");
-    await tester.tap(find.byKey(const Key('autopilot-skip')));
+    await tester.tap(find.byKey(const Key('night-setup-skip')));
     await tester.pump();
     expect(find.byType(SimplePolarPanel), findsOneWidget, reason: "then polar align's panel");
-    // Picking a mode leaves Autopilot.
+    // Picking a mode leaves Night Setup.
     await tester.tap(find.byKey(const Key('simple-mode')));
     await tester.pump();
     await tester.tap(find.text('Preview').first);
     await tester.pump();
-    expect(find.byKey(const Key('autopilot-strip')), findsNothing);
+    expect(find.byKey(const Key('night-setup-strip')), findsNothing);
   });
 
   for (final (size, scale, queued) in const [
@@ -885,7 +885,7 @@ void main() {
     (Size(1024, 768), 1.0, 10),
     (Size(768, 1024), 1.0, 10),
   ]) {
-    testWidgets('at $size, text ${scale}x, in Autopilot\'s Plan step ($queued queued) the settings '
+    testWidgets('at $size, text ${scale}x, in Night Setup\'s Plan step ($queued queued) the settings '
         'chip, a tap on the image and the mode button all put the sheet away', (tester) async {
       tester.platformDispatcher.textScaleFactorTestValue = scale;
       addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
@@ -897,7 +897,7 @@ void main() {
                     SimpleTarget(name: 'M$i', steps: const [FilterPlanStep(filterName: 'L', exposureSeconds: 120, frameCount: 30)]),
                 ]));
       await _frame(tester, container);
-      await tester.tap(find.byKey(const Key('autopilot-start')));
+      await tester.tap(find.byKey(const Key('night-setup-start')));
       await tester.pump();
       final sheet = find.byType(SimpleRunSheet);
       expect(sheet, findsOneWidget);
@@ -922,17 +922,17 @@ void main() {
       await tap(find.byKey(const Key('simple-settings')));
       await tap(find.byKey(const Key('simple-mode')));
       expect(sheet, findsNothing, reason: 'the modes replace it');
-      expect(find.text('Guided Run'), findsOneWidget, reason: 'the modes are open');
+      expect(find.text('Night Setup'), findsOneWidget, reason: 'the modes are open');
       await tap(find.ancestor(of: find.text('Focus'), matching: find.byType(InkWell)).first);
-      expect(find.byKey(const Key('autopilot-strip')), findsNothing, reason: 'Focus picked: Autopilot left');
+      expect(find.byKey(const Key('night-setup-strip')), findsNothing, reason: 'Focus picked: Night Setup left');
       expect(find.byType(SimpleFocusPanel), findsNothing, reason: 'picking a mode opens nothing');
     });
   }
 
-  testWidgets('in Autopilot\'s Plan step over the sky, after Add to queue ten times, the chip and the modes still '
+  testWidgets('in Night Setup\'s Plan step over the sky, after Add to queue ten times, the chip and the modes still '
       'put the sheet away', (tester) async {
     await _pump(tester, const Size(1024, 768), plan: const SimpleRun(), queueing: true);
-    await tester.tap(find.byKey(const Key('autopilot-start')));
+    await tester.tap(find.byKey(const Key('night-setup-start')));
     await tester.pump();
     final c = ProviderScope.containerOf(tester.element(find.byType(SimpleShell)));
     for (var i = 1; i <= 10; i++) {
@@ -960,7 +960,7 @@ void main() {
     await tap(find.byKey(const Key('simple-mode')));
     expect(sheet, findsNothing, reason: 'the modes replace it');
     await tap(find.ancestor(of: find.text('Focus'), matching: find.byType(InkWell)).first);
-    expect(find.byKey(const Key('autopilot-strip')), findsNothing, reason: 'Focus picked: Autopilot left');
+    expect(find.byKey(const Key('night-setup-strip')), findsNothing, reason: 'Focus picked: Night Setup left');
   });
 
   for (final size in const [Size(1024, 768), Size(768, 1024)]) {
@@ -985,23 +985,23 @@ void main() {
     });
   }
 
-  testWidgets('Autopilot picked from the modes stays in Simple Mode and starts, as the offer does', (tester) async {
+  testWidgets('Night Setup picked from the modes stays in Simple Mode and starts, as the offer does', (tester) async {
     final container = await _pump(tester, const Size(1024, 768));
     await tester.tap(find.byKey(const Key('simple-mode')));
     await tester.pump();
-    await tester.tap(find.text('Guided Run'));
+    await tester.tap(find.text('Night Setup'));
     await tester.pump();
     expect(container.read(simpleModeProvider).value, isTrue, reason: 'no jump to the full UI');
-    expect(find.byKey(const Key('autopilot-strip')), findsOneWidget);
+    expect(find.byKey(const Key('night-setup-strip')), findsOneWidget);
     expect(find.byType(SimpleRunSheet), findsOneWidget, reason: "the plan's sheet, open: Plan comes first");
   });
 
-  testWidgets("Guided Run's plan step only queues: its green button reads Next: Focus and goes there", (tester) async {
+  testWidgets("Night Setup's plan step only queues: its green button reads Next: Focus and goes there", (tester) async {
     await _pump(tester, const Size(1024, 768),
         plan: const SimpleRun(sequenceId: 'seq-1', targets: [
           SimpleTarget(name: 'M 42', steps: [FilterPlanStep(filterName: 'L', exposureSeconds: 120, frameCount: 30)]),
         ]));
-    await tester.tap(find.byKey(const Key('autopilot-start')));
+    await tester.tap(find.byKey(const Key('night-setup-start')));
     await tester.pump();
     final next = find.byKey(const Key('simple-run-start'));
     expect(find.descendant(of: next, matching: find.text('Next: Focus')), findsOneWidget);
@@ -1011,23 +1011,23 @@ void main() {
     expect(find.byType(SimpleFocusPanel), findsOneWidget);
   });
 
-  testWidgets('in Autopilot the chip names the step whose settings it shows', (tester) async {
+  testWidgets('in Night Setup the chip names the step whose settings it shows', (tester) async {
     await _pump(tester, const Size(1024, 768));
-    await tester.tap(find.byKey(const Key('autopilot-start')));
+    await tester.tap(find.byKey(const Key('night-setup-start')));
     await tester.pump();
     final chip = find.byKey(const Key('simple-settings'));
     expect(find.descendant(of: chip, matching: find.text('Plan\n5 min')), findsOneWidget);
-    await tester.tap(find.byKey(const Key('autopilot-skip')));
+    await tester.tap(find.byKey(const Key('night-setup-skip')));
     await tester.pump();
     expect(find.descendant(of: chip, matching: find.text('Focus\nManual')), findsOneWidget);
-    await tester.tap(find.byKey(const Key('autopilot-skip')));
+    await tester.tap(find.byKey(const Key('night-setup-skip')));
     await tester.pump();
     expect(find.descendant(of: chip, matching: find.text('P.A.\n1 s')), findsOneWidget);
   });
 
   for (final size in const [Size(1024, 768), Size(768, 1024), Size(507, 768)]) {
     testWidgets('at $size: message pills sit top-left, beside the status pill, above the left rail, '
-        'the Guided Run offer at the bottom', (tester) async {
+        'the Night Setup offer at the bottom', (tester) async {
       final container = await _pump(tester, size);
       await _frame(tester, container);
       container.read(captureProgressProvider.notifier).beginExposing(const Duration(seconds: 5));
@@ -1040,7 +1040,7 @@ void main() {
       final pills = tester.getRect(find.byType(SimpleMessagePills));
       final status = _panelOf(tester, find.textContaining('Taking a frame'));
       final rail = _panelOf(tester, find.text('Library'));
-      final offer = tester.getRect(find.byKey(const Key('autopilot-offer')));
+      final offer = tester.getRect(find.byKey(const Key('night-setup-offer')));
       expect(pills.left, kSimpleInset, reason: 'the top-left corner');
       expect(pills.top, lessThan(offer.top), reason: 'the offer moved to the bottom (user, 2026-11-03)');
       expect(offer.bottom, size.height - kSimpleInset * 2 - kSimpleBarHeight, reason: 'just above the bottom row');
@@ -1053,11 +1053,11 @@ void main() {
     });
   }
 
-  testWidgets('the Autopilot offer can be dismissed', (tester) async {
+  testWidgets('the Night Setup offer can be dismissed', (tester) async {
     await _pump(tester, const Size(1024, 768));
     await tester.tap(find.byTooltip('Not now'));
     await tester.pump();
-    expect(find.byKey(const Key('autopilot-offer')), findsNothing);
+    expect(find.byKey(const Key('night-setup-offer')), findsNothing);
   });
 
   testWidgets('⌘. stops a running plan only when pressed twice within 3 s, like the keyboard\'s Stop', (tester) async {
@@ -1189,17 +1189,17 @@ void main() {
   }
 
   for (final size in const [Size(1024, 768), Size(768, 1024)]) {
-    testWidgets('at $size: in Autopilot the plan squares stay clear of the step strip', (tester) async {
+    testWidgets('at $size: in Night Setup the plan squares stay clear of the step strip', (tester) async {
       await _pump(tester, size,
           plan: SimpleRun(sequenceId: 'seq-1', targets: [
             for (var i = 1; i <= 6; i++)
               SimpleTarget(name: 'M$i', steps: const [FilterPlanStep(filterName: 'L', exposureSeconds: 120, frameCount: 30)]),
           ]));
-      await tester.tap(find.byKey(const Key('autopilot-start')));
+      await tester.tap(find.byKey(const Key('night-setup-start')));
       await tester.pump();
       await tester.tap(find.byKey(const Key('simple-settings')));
       await tester.pump();
-      final strip = tester.getRect(find.byKey(const Key('autopilot-strip')));
+      final strip = tester.getRect(find.byKey(const Key('night-setup-strip')));
       final squares = tester.getRect(find.byKey(const Key('simple-run-tracker')));
       expect(squares.overlaps(strip), isFalse, reason: 'strip $strip, squares $squares');
     });
@@ -1749,12 +1749,12 @@ void main() {
     await tester.pump(kSimpleResultLife + const Duration(seconds: 1)); // the result fades
   });
 
-  testWidgets("Guided Run's plan step hugs the rail like every mode's panel, with no title (the strip names the step)",
+  testWidgets("Night Setup's plan step hugs the rail like every mode's panel, with no title (the strip names the step)",
       (tester) async {
     await _pump(tester, const Size(1024, 768));
     await tester.tap(find.byKey(const Key('simple-mode')));
     await tester.pump();
-    await tester.tap(find.text('Guided Run').first);
+    await tester.tap(find.text('Night Setup').first);
     await tester.pump();
     await tester.pump(const Duration(seconds: 1));
     final sheet = tester.getRect(find.byType(SimpleRunSheet));

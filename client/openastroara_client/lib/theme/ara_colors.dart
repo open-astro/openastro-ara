@@ -72,7 +72,7 @@ class AraColors {
   static const selectionBg = Color(0xFF1976D2);
 
   /// [selectionBg] at 25 %: a selected or current item on a translucent
-  /// panel (Simple Mode's rail buttons, Autopilot's step in hand).
+  /// panel (Simple Mode's rail buttons, Night Setup's step in hand).
   static const selectionTint = Color(0x401976D2);
   static const selectionFg = Color(0xFFFFFFFF);
   static const buttonPrimary = Color(0xFF1565C0);

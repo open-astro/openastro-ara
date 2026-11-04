@@ -75,7 +75,7 @@ import '../../widgets/sky_atlas/stellarium_view.dart';
 import '../library/image_library_screen.dart';
 import '../settings/settings_shell.dart';
 import '../shell_listeners.dart';
-import 'simple_autopilot.dart';
+import 'simple_night_setup.dart';
 import 'simple_device_windows.dart';
 import 'simple_focus_panel.dart';
 import '../../state/focus/autofocus_live_state.dart' show autofocusLiveProvider;
@@ -110,18 +110,18 @@ const double kSimpleStatusMaxWidth = 300;
 /// The message pills' widest (they share the top row with the status pill).
 const double kSimpleMessagesMaxWidth = 420;
 
-/// The Autopilot strip's or offer's row before it is measured.
-const double kSimpleAutopilotRowHeight = 56;
+/// The Night Setup strip's or offer's row before it is measured.
+const double kSimpleNightSetupRowHeight = 56;
 
 /// Side of the compact Stop at the bottom right.
 const double kSimpleStopSize = 60;
 
 /// The modes, in the decided order.
-enum SimpleModeScreen { autopilot, preview, focus, polarAlign, plan }
+enum SimpleModeScreen { nightSetup, preview, focus, polarAlign, plan }
 
 extension SimpleModeScreenLabels on SimpleModeScreen {
   String labelOf(AppLocalizations l10n) => switch (this) {
-    SimpleModeScreen.autopilot => l10n.shellModeAutopilot,
+    SimpleModeScreen.nightSetup => l10n.shellModeNightSetup,
     SimpleModeScreen.preview => l10n.shellModePreview,
     SimpleModeScreen.polarAlign => l10n.shellModePolarAlign,
     SimpleModeScreen.focus => l10n.shellModeFocus,
@@ -131,12 +131,12 @@ extension SimpleModeScreenLabels on SimpleModeScreen {
   /// The name on the 60 px rail, where "Polar align" doesn't fit.
   String railLabelOf(AppLocalizations l10n) => switch (this) {
     SimpleModeScreen.polarAlign => l10n.shellRailPolarAlign,
-    SimpleModeScreen.autopilot => l10n.shellRailAutopilot,
+    SimpleModeScreen.nightSetup => l10n.shellRailNightSetup,
     _ => labelOf(l10n),
   };
 
   IconData get icon => switch (this) {
-    SimpleModeScreen.autopilot => Icons.rocket_launch_outlined,
+    SimpleModeScreen.nightSetup => Icons.rocket_launch_outlined,
     SimpleModeScreen.preview => Icons.visibility_outlined,
     SimpleModeScreen.focus => Icons.center_focus_strong,
     SimpleModeScreen.polarAlign => Icons.explore_outlined,
@@ -207,53 +207,53 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     _adding = false;
   }
 
-  /// The rails' and the Autopilot row's heights, measured after each frame:
-  /// the message pills start under the Autopilot row (its words wrap on a
+  /// The rails' and the Night Setup row's heights, measured after each frame:
+  /// the message pills start under the Night Setup row (its words wrap on a
   /// narrow window) and stop above the left rail; the right rail's panels
   /// hang from its top and stop above the plan squares.
   double _leftRailHeight = 0;
   double _rightRailHeight = 0;
-  double _autopilotRowHeight = kSimpleAutopilotRowHeight;
+  double _nightSetupRowHeight = kSimpleNightSetupRowHeight;
   final _leftRailKey = GlobalKey();
   final _rightRailKey = GlobalKey();
-  final _autopilotRowKey = GlobalKey();
+  final _nightSetupRowKey = GlobalKey();
 
   void _measure() => WidgetsBinding.instance.addPostFrameCallback((_) {
     final rail = _leftRailKey.currentContext?.size?.height;
     final right = _rightRailKey.currentContext?.size?.height;
-    final row = _autopilotRowKey.currentContext?.size?.height;
+    final row = _nightSetupRowKey.currentContext?.size?.height;
     if (!mounted) return;
     if ((rail != null && rail != _leftRailHeight) ||
         (right != null && right != _rightRailHeight) ||
-        (row != null && row != _autopilotRowHeight)) {
+        (row != null && row != _nightSetupRowHeight)) {
       setState(() {
         _leftRailHeight = rail ?? _leftRailHeight;
         _rightRailHeight = right ?? _rightRailHeight;
-        _autopilotRowHeight = row ?? _autopilotRowHeight;
+        _nightSetupRowHeight = row ?? _nightSetupRowHeight;
       });
     }
   });
 
-  /// The Autopilot offer was dismissed (until Simple Mode opens again).
+  /// The Night Setup offer was dismissed (until Simple Mode opens again).
   bool _offerDismissed = false;
 
-  /// What shows: the picked mode, or Autopilot's current step.
-  SimpleModeScreen _shown(AutopilotStep? step) =>
-      _mode != SimpleModeScreen.autopilot
+  /// What shows: the picked mode, or Night Setup's current step.
+  SimpleModeScreen _shown(NightSetupStep? step) =>
+      _mode != SimpleModeScreen.nightSetup
       ? _mode
       : switch (step) {
-          AutopilotStep.focus => SimpleModeScreen.focus,
-          AutopilotStep.polarAlign => SimpleModeScreen.polarAlign,
-          AutopilotStep.plan => SimpleModeScreen.plan,
+          NightSetupStep.focus => SimpleModeScreen.focus,
+          NightSetupStep.polarAlign => SimpleModeScreen.polarAlign,
+          NightSetupStep.plan => SimpleModeScreen.plan,
           null => SimpleModeScreen.preview,
         };
 
-  void _startAutopilot() {
+  void _startNightSetup() {
     setState(() {
-      _mode = SimpleModeScreen.autopilot;
+      _mode = SimpleModeScreen.nightSetup;
       _popover = _Popover.settings;
     });
-    ref.read(autopilotProvider.notifier).start();
+    ref.read(nightSetupProvider.notifier).start();
   }
 
   /// Ties the popovers to the right rail's top-left corner.
@@ -365,7 +365,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
   Timer? _stopDisarm;
 
   void _stopRun() {
-    if (_shown(ref.read(autopilotProvider)) != SimpleModeScreen.plan) return;
+    if (_shown(ref.read(nightSetupProvider)) != SimpleModeScreen.plan) return;
     final phase = simpleRunPhase(
       ref.read(simpleRunProvider),
       ref.read(sequenceRunStateProvider).value,
@@ -398,13 +398,13 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
   }
 
   void _pickMode(SimpleModeScreen m) {
-    if (m == SimpleModeScreen.autopilot) return _startAutopilot();
+    if (m == SimpleModeScreen.nightSetup) return _startNightSetup();
     setState(() {
       _mode = m;
       _popover = _Popover.none;
     });
-    // Picking a mode leaves Autopilot.
-    ref.read(autopilotProvider.notifier).stop();
+    // Picking a mode leaves Night Setup.
+    ref.read(nightSetupProvider.notifier).stop();
   }
 
   /// The Settings sheet's section to open on (a search hit names one).
@@ -507,15 +507,15 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
       }
       ref.read(simpleModeProvider.notifier).set(false);
     });
-    // Autopilot opens each step on its panel, and ends on the plan.
-    ref.listen(autopilotProvider, (previous, next) {
-      if (_mode != SimpleModeScreen.autopilot) return;
+    // Night Setup opens each step on its panel, and ends on the plan.
+    ref.listen(nightSetupProvider, (previous, next) {
+      if (_mode != SimpleModeScreen.nightSetup) return;
       setState(() {
         if (next == null) _mode = SimpleModeScreen.plan;
         _popover = next == null ? _Popover.none : _Popover.settings;
       });
     });
-    final pilot = ref.watch(autopilotProvider);
+    final pilot = ref.watch(nightSetupProvider);
     final shown = _shown(pilot);
     // Polar align shows its own camera's frames while the routine runs.
     final polarFrame =
@@ -564,15 +564,15 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     // rails, so its two lines of labels fit at the user's size.
     final bottomRow = kSimpleBarHeight * simpleRailScale(context);
     final width = MediaQuery.sizeOf(context).width;
-    // Guided Run's step strip, under the status strip; its offer sits at the
+    // Night Setup's step strip, under the status strip; its offer sits at the
     // bottom (user, 2026-11-03).
-    final autopilotRow = _mode == SimpleModeScreen.autopilot;
-    final autopilotOffer =
+    final nightSetupRow = _mode == SimpleModeScreen.nightSetup;
+    final nightSetupOffer =
         !_offerDismissed &&
         _mode == SimpleModeScreen.preview &&
-        autopilotOffered(ref);
+        nightSetupOffered(ref);
     // Messages share the top row with the status pill, which keeps at most
-    // half of it; they start under the Guided Run strip when it shows.
+    // half of it; they start under the Night Setup strip when it shows.
     final statusRoom = math.min(
       kSimpleStatusMaxWidth,
       (width - kSimpleInset * 3) / 2,
@@ -581,8 +581,8 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
       kSimpleMessagesMaxWidth,
       width - kSimpleInset * 3 - statusRoom,
     );
-    final messagesTop = autopilotRow
-        ? railTop + _autopilotRowHeight + AraSpace.s12
+    final messagesTop = nightSetupRow
+        ? railTop + _nightSetupRowHeight + AraSpace.s12
         : railTop;
     _measure();
     final height =
@@ -739,7 +739,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                             ),
                           ),
                         // The message pills, top-left under the strip (under the
-                        // Autopilot strip when it shows), down to the left rail;
+                        // Night Setup strip when it shows), down to the left rail;
                         // they stay in the immersive view.
                         AnimatedPositioned(
                           left: kSimpleInset,
@@ -838,8 +838,8 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                     child: _RightRail(
                                       key: _rightRailKey,
                                       mode: shown,
-                                      named: _mode == SimpleModeScreen.autopilot
-                                          ? SimpleModeScreen.autopilot
+                                      named: _mode == SimpleModeScreen.nightSetup
+                                          ? SimpleModeScreen.nightSetup
                                           : null,
                                       popover: _popover,
                                       onModes: () => _toggle(_Popover.modes),
@@ -918,31 +918,31 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                     ),
                                   ),
                                 ),
-                              // Autopilot's steps, or the offer to start it, centred
+                              // Night Setup's steps, or the offer to start it, centred
                               // under the strip.
-                              if (autopilotRow)
+                              if (nightSetupRow)
                                 Positioned(
                                   left: 0,
                                   right: 0,
                                   top: railTop,
                                   child: Center(
                                     child: KeyedSubtree(
-                                      key: _autopilotRowKey,
-                                      child: const AutopilotStrip(),
+                                      key: _nightSetupRowKey,
+                                      child: const NightSetupStrip(),
                                     ),
                                   ),
                                 ),
                               // The offer, centred just above the bottom row,
                               // under the rails (centred higher up); it wraps on
                               // a narrow window.
-                              if (autopilotOffer)
+                              if (nightSetupOffer)
                                 Positioned(
                                   left: kSimpleInset,
                                   right: kSimpleInset,
                                   bottom: kSimpleInset * 2 + kSimpleBarHeight,
                                   child: Center(
-                                    child: AutopilotOffer(
-                                      onStart: _startAutopilot,
+                                    child: NightSetupOffer(
+                                      onStart: _startNightSetup,
                                       onDismiss: () => setState(
                                         () => _offerDismissed = true,
                                       ),
@@ -1425,7 +1425,7 @@ class _RightRail extends ConsumerWidget {
 
   final SimpleModeScreen mode;
 
-  /// Overrides the mode named on the rail (Autopilot shows its own).
+  /// Overrides the mode named on the rail (Night Setup shows its own).
   final SimpleModeScreen? named;
   final _Popover popover;
   final VoidCallback onModes;
@@ -1496,7 +1496,7 @@ class _RightRail extends ConsumerWidget {
     );
   }
 
-  // In Autopilot the chip names the step whose settings it shows ("Focus"
+  // In Night Setup the chip names the step whose settings it shows ("Focus"
   // over "Auto"), so they don't read as random.
   String _chipLabel(BuildContext context, WidgetRef ref) {
     final label = switch (mode) {
@@ -1929,7 +1929,7 @@ class SimpleSegments<T> extends StatelessWidget {
 /// Simple Mode's density (DESIGN.md "Two Densities"): 10 px corners on
 /// buttons and fields instead of Material's pills, 44 px minimum targets,
 /// fields as borderless tiles.
-/// Simple Mode's green go buttons (Start Autopilot, Done, Create and start):
+/// Simple Mode's green go buttons (Start Night Setup, Done, Create and start):
 /// dark text on the green, 6.3:1 (white is 2.8:1).
 final kSimpleGoStyle = FilledButton.styleFrom(
   backgroundColor: AraColors.accentConnected,

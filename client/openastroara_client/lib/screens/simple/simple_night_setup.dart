@@ -21,60 +21,60 @@ import 'simple_polar_panel.dart' show simplePolarActive;
 import 'simple_preview_panel.dart' show kSimpleText;
 import 'simple_shell.dart' show SimplePanel, kSimpleGoStyle, simpleFrost;
 
-/// Guided Run's steps, in the night's order: tonight's targets first, then
+/// Night Setup's steps, in the night's order: tonight's targets first, then
 /// focus (polar alignment plate-solves and fails on a soft focus), then polar
 /// align; the last one's Done starts imaging.
-enum AutopilotStep { plan, focus, polarAlign }
+enum NightSetupStep { plan, focus, polarAlign }
 
-extension AutopilotStepLabel on AutopilotStep {
+extension NightSetupStepLabel on NightSetupStep {
   String label(AppLocalizations l10n) => switch (this) {
-    AutopilotStep.focus => l10n.autopilotStepFocus,
-    AutopilotStep.polarAlign => l10n.autopilotStepPolarAlign,
-    AutopilotStep.plan => l10n.autopilotStepPlan,
+    NightSetupStep.focus => l10n.nightSetupStepFocus,
+    NightSetupStep.polarAlign => l10n.nightSetupStepPolarAlign,
+    NightSetupStep.plan => l10n.nightSetupStepPlan,
   };
 }
 
 /// The step to start on (always the plan), or go to next from [after]: the
 /// first setup step not done tonight, polar align skipped on a permanent
 /// pier; null when none is left, which starts imaging. Pure — unit-tested.
-AutopilotStep? autopilotNext({
-  AutopilotStep? after,
+NightSetupStep? nightSetupNext({
+  NightSetupStep? after,
   required bool focused,
   required bool aligned,
   required bool permanentPier,
 }) {
-  for (final s in AutopilotStep.values) {
+  for (final s in NightSetupStep.values) {
     if (after != null && s.index <= after.index) continue;
-    if (s == AutopilotStep.focus && focused) continue;
-    if (s == AutopilotStep.polarAlign && (aligned || permanentPier)) continue;
+    if (s == NightSetupStep.focus && focused) continue;
+    if (s == NightSetupStep.polarAlign && (aligned || permanentPier)) continue;
     return s;
   }
   return null;
 }
 
-/// Simple Mode's Guided Run: the night's steps in order, each handing over to
+/// Simple Mode's Night Setup: the night's steps in order, each handing over to
 /// the next. Null while it isn't running. The plan queues tonight's targets;
 /// a finished autofocus moves on to polar align, which starts its routine on
-/// entry; the last step's Done starts imaging, which ends Guided Run.
-class AutopilotNotifier extends Notifier<AutopilotStep?> {
+/// entry; the last step's Done starts imaging, which ends Night Setup.
+class NightSetupNotifier extends Notifier<NightSetupStep?> {
   @override
-  AutopilotStep? build() {
+  NightSetupStep? build() {
     ref.listen(setupFocusStateProvider, (prev, next) {
-      if (state == AutopilotStep.focus &&
+      if (state == NightSetupStep.focus &&
           prev != SetupStepState.done &&
           next == SetupStepState.done) {
         // The last step waits for its Done: imaging never starts on its own.
-        if (_next(AutopilotStep.focus) case final n?) _go(n);
+        if (_next(NightSetupStep.focus) case final n?) _go(n);
       }
     });
     ref.listen(simpleRunProvider, (prev, next) {
-      // Imaging started (the last Done, or by hand): Guided Run is done.
+      // Imaging started (the last Done, or by hand): Night Setup is done.
       if (state != null && next.started) state = null;
     });
     return null;
   }
 
-  AutopilotStep? _next(AutopilotStep? after) => autopilotNext(
+  NightSetupStep? _next(NightSetupStep? after) => nightSetupNext(
     after: after,
     focused: ref.read(setupFocusStateProvider) == SetupStepState.done,
     aligned: ref.read(setupPolarAlignStateProvider) == SetupStepState.done,
@@ -84,15 +84,15 @@ class AutopilotNotifier extends Notifier<AutopilotStep?> {
   /// The polar step's Done completed its routine: leaving stops nothing.
   bool _polarFinished = false;
 
-  void _go(AutopilotStep step) {
-    if (state == AutopilotStep.polarAlign && step != AutopilotStep.polarAlign) {
+  void _go(NightSetupStep step) {
+    if (state == NightSetupStep.polarAlign && step != NightSetupStep.polarAlign) {
       _endPolar();
     }
-    if (step == AutopilotStep.polarAlign) _polarFinished = false;
+    if (step == NightSetupStep.polarAlign) _polarFinished = false;
     state = step;
-    // Entering polar align starts the routine (an Autopilot-only exception
+    // Entering polar align starts the routine (an Night Setup-only exception
     // to the shutter starting things; its red square still stops it).
-    if (step == AutopilotStep.polarAlign &&
+    if (step == NightSetupStep.polarAlign &&
         !simplePolarActive(ref.read(polarAlignLiveProvider))) {
       final api = ref.read(polarAlignApiProvider);
       if (api != null) unawaited(_polar(api.start, (l) => l.polarActionStart));
@@ -120,7 +120,7 @@ class AutopilotNotifier extends Notifier<AutopilotStep?> {
   }
 
   // The plan always comes first; the fallback keeps a reordered list safe.
-  void start() => _go(_next(null) ?? AutopilotStep.plan);
+  void start() => _go(_next(null) ?? NightSetupStep.plan);
 
   /// The plan's Next, a Done, or Skip: on to the next step; from the last one,
   /// imaging starts (at dark when it is before dark, as the plan sheet's
@@ -133,10 +133,10 @@ class AutopilotNotifier extends Notifier<AutopilotStep?> {
       return;
     }
     if (ref.read(simpleRunProvider).sequenceId == null) {
-      _go(AutopilotStep.plan); // the plan was skipped: nothing to start yet
+      _go(NightSetupStep.plan); // the plan was skipped: nothing to start yet
       return;
     }
-    if (s == AutopilotStep.polarAlign) _endPolar();
+    if (s == NightSetupStep.polarAlign) _endPolar();
     final startAt = ref.read(simpleScheduleAllowedProvider)
         ? ref.read(simpleDarkStartProvider)
         : null;
@@ -153,11 +153,11 @@ class AutopilotNotifier extends Notifier<AutopilotStep?> {
 
   void back() {
     final s = state;
-    if (s != null && s.index > 0) _go(AutopilotStep.values[s.index - 1]);
+    if (s != null && s.index > 0) _go(NightSetupStep.values[s.index - 1]);
   }
 
   void stop() {
-    if (state == AutopilotStep.polarAlign) _endPolar();
+    if (state == NightSetupStep.polarAlign) _endPolar();
     state = null;
   }
 
@@ -174,21 +174,21 @@ class AutopilotNotifier extends Notifier<AutopilotStep?> {
   }
 }
 
-final autopilotProvider = NotifierProvider<AutopilotNotifier, AutopilotStep?>(
-  AutopilotNotifier.new,
+final nightSetupProvider = NotifierProvider<NightSetupNotifier, NightSetupStep?>(
+  NightSetupNotifier.new,
 );
 
-/// Autopilot's step strip, centred under the status strip: the steps behind
+/// Night Setup's step strip, centred under the status strip: the steps behind
 /// ticked green when done tonight and amber when skipped, the current one
 /// lit, then Back and Skip.
-class AutopilotStrip extends ConsumerWidget {
-  const AutopilotStrip({super.key});
+class NightSetupStrip extends ConsumerWidget {
+  const NightSetupStrip({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final step = ref.watch(autopilotProvider);
+    final step = ref.watch(nightSetupProvider);
     if (step == null) return const SizedBox.shrink();
-    final pilot = ref.read(autopilotProvider.notifier);
+    final pilot = ref.read(nightSetupProvider.notifier);
     final focused = ref.watch(setupFocusStateProvider) == SetupStepState.done;
     final aligned =
         ref.watch(setupPolarAlignStateProvider) == SetupStepState.done ||
@@ -199,14 +199,14 @@ class AutopilotStrip extends ConsumerWidget {
     return FittedBox(
       fit: BoxFit.scaleDown,
       child: SimplePanel(
-        key: const Key('autopilot-strip'),
+        key: const Key('night-setup-strip'),
         padding: const EdgeInsets.symmetric(horizontal: AraSpace.s8),
         child: SizedBox(
           height: 48,
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              for (final s in AutopilotStep.values) ...[
+              for (final s in NightSetupStep.values) ...[
                 if (s.index > 0)
                   const Padding(
                     padding: EdgeInsets.symmetric(horizontal: 2),
@@ -220,23 +220,23 @@ class AutopilotStrip extends ConsumerWidget {
                   step: s,
                   current: step,
                   done: switch (s) {
-                    AutopilotStep.focus => focused,
-                    AutopilotStep.polarAlign => aligned,
-                    AutopilotStep.plan =>
+                    NightSetupStep.focus => focused,
+                    NightSetupStep.polarAlign => aligned,
+                    NightSetupStep.plan =>
                       ref.watch(simpleRunProvider).sequenceId != null,
                   },
                 ),
               ],
               const SizedBox(width: AraSpace.s8),
               TextButton(
-                key: const Key('autopilot-back'),
+                key: const Key('night-setup-back'),
                 onPressed: step.index > 0 ? pilot.back : null,
-                child: Text(context.l10n.autopilotBack),
+                child: Text(context.l10n.nightSetupBack),
               ),
               TextButton(
-                key: const Key('autopilot-skip'),
+                key: const Key('night-setup-skip'),
                 onPressed: pilot.next,
-                child: Text(context.l10n.autopilotSkip),
+                child: Text(context.l10n.nightSetupSkip),
               ),
             ],
           ),
@@ -249,8 +249,8 @@ class AutopilotStrip extends ConsumerWidget {
 class _Step extends StatelessWidget {
   const _Step({required this.step, required this.current, required this.done});
 
-  final AutopilotStep step;
-  final AutopilotStep current;
+  final NightSetupStep step;
+  final NightSetupStep current;
 
   /// Done tonight; a step behind the current one that isn't was skipped.
   final bool done;
@@ -264,12 +264,12 @@ class _Step extends StatelessWidget {
     // The tick and skip mark are icons: screen readers get the state in words.
     return Semantics(
       label: behind && done
-          ? l10n.autopilotStepDone(label)
+          ? l10n.nightSetupStepDone(label)
           : behind
-          ? l10n.autopilotStepSkipped(label)
+          ? l10n.nightSetupStepSkipped(label)
           : on
-          ? l10n.autopilotStepCurrent(label)
-          : l10n.autopilotStepNext(label),
+          ? l10n.nightSetupStepCurrent(label)
+          : l10n.nightSetupStepNext(label),
       excludeSemantics: true,
       child: Container(
         height: 36,
@@ -330,20 +330,20 @@ class _Step extends StatelessWidget {
   }
 }
 
-/// Whether to offer Autopilot: nothing done yet tonight (no focus, no polar
+/// Whether to offer Night Setup: nothing done yet tonight (no focus, no polar
 /// alignment unless the pier is permanent, no plan started).
 // shortcut: doesn't check that it's night; gate on the site's twilight once
 // the client has it at hand.
-bool autopilotOffered(WidgetRef ref) =>
-    ref.watch(autopilotProvider) == null &&
+bool nightSetupOffered(WidgetRef ref) =>
+    ref.watch(nightSetupProvider) == null &&
     ref.watch(setupFocusStateProvider) != SetupStepState.done &&
     ref.watch(setupPolarAlignStateProvider) != SetupStepState.done &&
     !ref.watch(simpleRunProvider).started;
 
 /// The offer under the status strip: "Nothing done yet tonight", Start
-/// Autopilot, and × to dismiss it.
-class AutopilotOffer extends StatelessWidget {
-  const AutopilotOffer({
+/// Night Setup, and × to dismiss it.
+class NightSetupOffer extends StatelessWidget {
+  const NightSetupOffer({
     super.key,
     required this.onStart,
     required this.onDismiss,
@@ -355,7 +355,7 @@ class AutopilotOffer extends StatelessWidget {
   @override
   Widget build(BuildContext context) => simpleFrost(
     Container(
-      key: const Key('autopilot-offer'),
+      key: const Key('night-setup-offer'),
       padding: const EdgeInsets.fromLTRB(16, 6, 4, 6),
       decoration: BoxDecoration(
         color: AraColors.overlayScrim,
@@ -368,15 +368,15 @@ class AutopilotOffer extends StatelessWidget {
         spacing: AraSpace.s12,
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
-          Text(context.l10n.autopilotNothingDone, style: kSimpleText),
+          Text(context.l10n.nightSetupNothingDone, style: kSimpleText),
           FilledButton(
-            key: const Key('autopilot-start'),
+            key: const Key('night-setup-start'),
             style: kSimpleGoStyle,
             onPressed: onStart,
-            child: Text(context.l10n.autopilotStart),
+            child: Text(context.l10n.nightSetupStart),
           ),
           IconButton(
-            tooltip: context.l10n.autopilotNotNow,
+            tooltip: context.l10n.nightSetupNotNow,
             icon: const Icon(Icons.close, size: 18),
             onPressed: onDismiss,
           ),

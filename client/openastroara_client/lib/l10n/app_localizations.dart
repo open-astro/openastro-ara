@@ -1209,83 +1209,83 @@ abstract class AppLocalizations {
   /// **'guiding dithering'**
   String get searchWordsDither;
 
-  /// Simple Mode Guided Run strip: step name: autofocus
+  /// Simple Mode Night Setup strip: step name: autofocus
   ///
   /// In en, this message translates to:
   /// **'Focus'**
-  String get autopilotStepFocus;
+  String get nightSetupStepFocus;
 
-  /// Simple Mode Guided Run strip: step name: polar alignment
+  /// Simple Mode Night Setup strip: step name: polar alignment
   ///
   /// In en, this message translates to:
   /// **'Polar align'**
-  String get autopilotStepPolarAlign;
+  String get nightSetupStepPolarAlign;
 
-  /// Simple Mode Guided Run strip: step name: the imaging plan
+  /// Simple Mode Night Setup strip: step name: the imaging plan
   ///
   /// In en, this message translates to:
   /// **'Plan'**
-  String get autopilotStepPlan;
+  String get nightSetupStepPlan;
 
-  /// Simple Mode Guided Run strip: screen-reader label of a step done tonight
+  /// Simple Mode Night Setup strip: screen-reader label of a step done tonight
   ///
   /// In en, this message translates to:
   /// **'{step}, done'**
-  String autopilotStepDone(String step);
+  String nightSetupStepDone(String step);
 
-  /// Simple Mode Guided Run strip: screen-reader label of a skipped step
+  /// Simple Mode Night Setup strip: screen-reader label of a skipped step
   ///
   /// In en, this message translates to:
   /// **'{step}, skipped'**
-  String autopilotStepSkipped(String step);
+  String nightSetupStepSkipped(String step);
 
-  /// Simple Mode Guided Run strip: screen-reader label of the current step
+  /// Simple Mode Night Setup strip: screen-reader label of the current step
   ///
   /// In en, this message translates to:
   /// **'{step}, current step'**
-  String autopilotStepCurrent(String step);
+  String nightSetupStepCurrent(String step);
 
-  /// Simple Mode Guided Run strip: screen-reader label of a step still ahead
+  /// Simple Mode Night Setup strip: screen-reader label of a step still ahead
   ///
   /// In en, this message translates to:
   /// **'{step}, next'**
-  String autopilotStepNext(String step);
+  String nightSetupStepNext(String step);
 
-  /// Simple Mode Guided Run strip: button that goes back one step
+  /// Simple Mode Night Setup strip: button that goes back one step
   ///
   /// In en, this message translates to:
   /// **'Back'**
-  String get autopilotBack;
+  String get nightSetupBack;
 
-  /// Simple Mode Guided Run strip: button that skips the current step
+  /// Simple Mode Night Setup strip: button that skips the current step
   ///
   /// In en, this message translates to:
   /// **'Skip'**
-  String get autopilotSkip;
+  String get nightSetupSkip;
 
-  /// Simple Mode Guided Run offer under the status strip: why Guided Run is offered
+  /// Simple Mode Night Setup offer under the status strip: why Night Setup is offered
   ///
   /// In en, this message translates to:
   /// **'Nothing done yet tonight'**
-  String get autopilotNothingDone;
+  String get nightSetupNothingDone;
 
-  /// Simple Mode Guided Run offer: button that starts Guided Run
+  /// Simple Mode Night Setup offer: button that starts Night Setup
   ///
   /// In en, this message translates to:
-  /// **'Start Guided Run'**
-  String get autopilotStart;
+  /// **'Start Night Setup'**
+  String get nightSetupStart;
 
-  /// Simple Mode Guided Run offer: tooltip of the × that dismisses it
+  /// Simple Mode Night Setup offer: tooltip of the × that dismisses it
   ///
   /// In en, this message translates to:
   /// **'Not now'**
-  String get autopilotNotNow;
+  String get nightSetupNotNow;
 
   /// Simple Mode mode name (mode grid, Mode: label for screen readers)
   ///
   /// In en, this message translates to:
-  /// **'Guided Run'**
-  String get shellModeAutopilot;
+  /// **'Night Setup'**
+  String get shellModeNightSetup;
 
   /// Simple Mode mode name
   ///
@@ -1317,11 +1317,11 @@ abstract class AppLocalizations {
   /// **'P.A.'**
   String get shellRailPolarAlign;
 
-  /// Simple Mode right rail: short name of Guided Run (60 px wide rail, keep very short)
+  /// Simple Mode right rail: short name of Night Setup (60 px wide rail, keep very short)
   ///
   /// In en, this message translates to:
-  /// **'Guided'**
-  String get shellRailAutopilot;
+  /// **'Setup'**
+  String get shellRailNightSetup;
 
   /// Simple Mode message after the stop keyboard shortcut once; shortcut is the key combo (⌘. or Ctrl+.)
   ///
@@ -2295,7 +2295,7 @@ abstract class AppLocalizations {
   /// **'The run is ending; this target can\'t join it.'**
   String get planRunEnding;
 
-  /// Message pill: Start (Guided Run's last Done) while an edit or reorder of the queue is still on its way
+  /// Message pill: Start (Night Setup's last Done) while an edit or reorder of the queue is still on its way
   ///
   /// In en, this message translates to:
   /// **'The queue is still updating on the rig. Try again in a moment.'**
@@ -3423,31 +3423,31 @@ abstract class AppLocalizations {
   /// **'Guide'**
   String get focusScopeGuide;
 
-  /// Guided Run plan step: green button, on to focusing
+  /// Night Setup plan step: green button, on to focusing
   ///
   /// In en, this message translates to:
   /// **'Next: Focus'**
   String get guidedNextFocus;
 
-  /// Guided Run plan step: green button, on to polar alignment
+  /// Night Setup plan step: green button, on to polar alignment
   ///
   /// In en, this message translates to:
   /// **'Next: Polar align'**
   String get guidedNextPolarAlign;
 
-  /// Guided Run plan step: green button when focus and polar alignment are done already
+  /// Night Setup plan step: green button when focus and polar alignment are done already
   ///
   /// In en, this message translates to:
   /// **'Start imaging'**
   String get guidedStartImaging;
 
-  /// Guided Run plan step: line above the buttons
+  /// Night Setup plan step: line above the buttons
   ///
   /// In en, this message translates to:
   /// **'Imaging starts after focus and polar alignment.'**
   String get guidedImagingStartsAfter;
 
-  /// Guided Run: the last setup step's green Done, which starts imaging
+  /// Night Setup: the last setup step's green Done, which starts imaging
   ///
   /// In en, this message translates to:
   /// **'Done · Start imaging'**

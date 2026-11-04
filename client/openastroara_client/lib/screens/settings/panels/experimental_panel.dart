@@ -42,7 +42,7 @@ class ExperimentalPanel extends ConsumerWidget {
             contentPadding: EdgeInsets.zero,
             title: const Text('Permanent pier'),
             subtitle: const Text(
-              'The mount stays polar aligned, so Autopilot skips polar '
+              'The mount stays polar aligned, so Night Setup skips polar '
               'alignment.',
             ),
             value: ref.watch(simplePermanentPierProvider).value ?? false,

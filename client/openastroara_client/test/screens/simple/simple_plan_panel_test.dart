@@ -1073,7 +1073,7 @@ void main() {
         [(SimpleMessageKind.error, 'The run is between targets.')]);
   });
 
-  testWidgets("a scheduled start the rig refuses says so in a pill too (Guided Run's last Done has no sheet open)",
+  testWidgets("a scheduled start the rig refuses says so in a pill too (Night Setup's last Done has no sheet open)",
       (tester) async {
     final (c, seq) = await run(tester);
     await create(tester);
@@ -1084,7 +1084,7 @@ void main() {
     expect(seq.calls.where((call) => call.startsWith('start ')), isEmpty);
   });
 
-  testWidgets("Guided Run's last Done while the queue is still updating says so instead of doing nothing",
+  testWidgets("Night Setup's last Done while the queue is still updating says so instead of doing nothing",
       (tester) async {
     // Review of #1486: _op returned quietly while busy, so startQueue reported true and nothing started.
     final (c, seq) = await run(tester);
