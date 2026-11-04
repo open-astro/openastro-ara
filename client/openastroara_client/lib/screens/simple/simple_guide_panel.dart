@@ -15,8 +15,8 @@ import '../../widgets/equipment/guider_chip.dart' show guiderStatusLevel;
 import '../../widgets/status_indicator.dart'
     show StatusBlink, StatusDot, StatusLevel;
 import '../../util/friendly_error.dart';
-import 'simple_autopilot.dart'
-    show AutopilotStep, autopilotProvider, simpleAutopilotNext;
+import 'simple_night_setup.dart'
+    show NightSetupStep, nightSetupProvider, simpleNightSetupNext;
 import 'simple_device_windows.dart'
     show
         SimpleGuideGainSlider,
@@ -186,8 +186,8 @@ class SimpleGuidePanel extends ConsumerWidget {
     // Guided Run's Guide step, the last before imaging: its Done starts it.
     final guidedDone =
         guiding &&
-        ref.watch(autopilotProvider) == AutopilotStep.guide &&
-        simpleAutopilotNext(ref, after: AutopilotStep.guide) == null;
+        ref.watch(nightSetupProvider) == NightSetupStep.guide &&
+        simpleNightSetupNext(ref, after: NightSetupStep.guide) == null;
     return SimplePanel(
       key: const Key('simple-guide-panel'),
       padding: const EdgeInsets.symmetric(
@@ -257,7 +257,7 @@ class SimpleGuidePanel extends ConsumerWidget {
               FilledButton(
                 key: const Key('simple-guide-guided-done'),
                 style: kSimpleGoStyle,
-                onPressed: ref.read(autopilotProvider.notifier).next,
+                onPressed: ref.read(nightSetupProvider.notifier).next,
                 child: Text(l10n.guidedDoneStartImaging),
               ),
             const Divider(height: AraSpace.s16),

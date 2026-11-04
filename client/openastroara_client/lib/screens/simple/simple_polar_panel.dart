@@ -12,8 +12,8 @@ import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
 import '../../util/friendly_error.dart';
 import '../../widgets/imaging/polar_align_panel.dart';
-import 'simple_autopilot.dart'
-    show AutopilotStep, autopilotProvider, simpleAutopilotNext;
+import 'simple_night_setup.dart'
+    show NightSetupStep, nightSetupProvider, simpleNightSetupNext;
 import 'simple_preview_panel.dart'
     show
         SimplePresetTile,
@@ -211,7 +211,7 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
-    final autopilot = ref.watch(autopilotProvider) == AutopilotStep.polarAlign;
+    final inNightSetup = ref.watch(nightSetupProvider) == NightSetupStep.polarAlign;
     final live = ref.watch(polarAlignLiveProvider);
     ref.listen(
       polarAlignLiveProvider,
@@ -446,25 +446,25 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
                               // Read before the await: the panel may have
                               // closed by the time the rig answers.
                               final pilot = ref.read(
-                                autopilotProvider.notifier,
+                                nightSetupProvider.notifier,
                               );
                               final done = await _run(
                                 l10n.polarActionComplete,
                                 (api) => api.complete(),
                               );
-                              // In Guided Run, Done moves on (the routine
+                              // In Night Setup, Done moves on (the routine
                               // is complete: nothing to stop).
-                              if (autopilot && done) pilot.polarDone();
+                              if (inNightSetup && done) pilot.polarDone();
                             }
                           : null,
                       child: Text(
-                        !autopilot
+                        !inNightSetup
                             ? l10n.polarDone
-                            : simpleAutopilotNext(
+                            : simpleNightSetupNext(
                                     ref,
-                                    after: AutopilotStep.polarAlign,
+                                    after: NightSetupStep.polarAlign,
                                   ) ==
-                                  AutopilotStep.guide
+                                  NightSetupStep.guide
                             ? l10n.guidedNextGuide
                             : l10n.guidedDoneStartImaging,
                       ),

@@ -46,8 +46,8 @@ import '../../widgets/emergency_stop_button.dart' show kEmergencyStopHold;
 import '../../widgets/stop_mount_overlay.dart' show SlewWsEvents;
 import '../../widgets/sequencer/run_completion_sheet.dart'
     show runFramesPerFilter;
-import 'simple_autopilot.dart'
-    show AutopilotStep, autopilotProvider, simpleAutopilotNext;
+import 'simple_night_setup.dart'
+    show NightSetupStep, nightSetupProvider, simpleNightSetupNext;
 import 'simple_device_windows.dart' show SimpleGainSlider;
 import 'simple_preview_panel.dart'
     show
@@ -875,7 +875,7 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
     return startQueue(startAt: startAt);
   }
 
-  /// Starts the queue as it stands (Guided Run's last Done). With [startAt]
+  /// Starts the queue as it stands (Night Setup's last Done). With [startAt]
   /// the run starts at once but waits on the rig until then.
   Future<bool> startQueue({DateTime? startAt}) async {
     // An edit or reorder still on its way: _op would skip the start quietly
@@ -1718,11 +1718,11 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
     final imaging =
         ref.watch(sequenceRunStateProvider).value?.state?.isActive ?? false;
     final off = sel == null || sel.belowHorizon || run.busy || imaging;
-    // Guided Run's plan step only queues; its green button moves on (or, with
+    // Night Setup's plan step only queues; its green button moves on (or, with
     // focus and polar alignment done, starts imaging).
-    final guided = ref.watch(autopilotProvider) == AutopilotStep.plan;
+    final guided = ref.watch(nightSetupProvider) == NightSetupStep.plan;
     final guidedNext = guided
-        ? simpleAutopilotNext(ref, after: AutopilotStep.plan)
+        ? simpleNightSetupNext(ref, after: NightSetupStep.plan)
         : null;
     final now = ref.watch(clockProvider)();
     final dark = ref.watch(simpleDarkStartProvider);
@@ -1815,7 +1815,7 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       spacing: AraSpace.s8,
       children: [
-        // No title: the chip (or Guided Run's step strip) already says Plan
+        // No title: the chip (or Night Setup's step strip) already says Plan
         // (user, 2026-11-04); editing names the target.
         if (editing != null)
           Text(
@@ -2160,7 +2160,7 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
                   onPressed: guided
                       ? (run.sequenceId == null || run.busy
                             ? null
-                            : ref.read(autopilotProvider.notifier).next)
+                            : ref.read(nightSetupProvider.notifier).next)
                       : off
                       ? null
                       : () async {
@@ -2174,10 +2174,10 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
                   child: Text(
                     guided
                         ? switch (guidedNext) {
-                            AutopilotStep.focus => context.l10n.guidedNextFocus,
-                            AutopilotStep.polarAlign =>
+                            NightSetupStep.focus => context.l10n.guidedNextFocus,
+                            NightSetupStep.polarAlign =>
                               context.l10n.guidedNextPolarAlign,
-                            AutopilotStep.guide => context.l10n.guidedNextGuide,
+                            NightSetupStep.guide => context.l10n.guidedNextGuide,
                             _ => context.l10n.guidedStartImaging,
                           }
                         : run.busy

@@ -20,8 +20,8 @@ import '../../widgets/focus/guide_focus_card.dart'
     show GuideFocusCard, TurnAdvice, guideFocusBlocker, guideFocusHint;
 import '../../widgets/focus/v_curve_chart.dart';
 import '../../state/setup/setup_readiness.dart';
-import 'simple_autopilot.dart'
-    show AutopilotStep, autopilotProvider, simpleAutopilotNext;
+import 'simple_night_setup.dart'
+    show NightSetupStep, nightSetupProvider, simpleNightSetupNext;
 import 'simple_preview_panel.dart'
     show SimpleShutterButton, kSimpleText, simpleMainCameraBusy;
 import 'simple_device_windows.dart' show simpleCelsius;
@@ -284,13 +284,13 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
     // already): its Done starts imaging, never the run's end on its own.
     // Auto or Manual, whichever focused.
     final guidedDone =
-        ref.watch(autopilotProvider) == AutopilotStep.focus &&
+        ref.watch(nightSetupProvider) == NightSetupStep.focus &&
             ref.watch(setupFocusStateProvider) == SetupStepState.done &&
-            simpleAutopilotNext(ref, after: AutopilotStep.focus) == null
+            simpleNightSetupNext(ref, after: NightSetupStep.focus) == null
         ? FilledButton(
             key: const Key('simple-focus-guided-done'),
             style: kSimpleGoStyle,
-            onPressed: ref.read(autopilotProvider.notifier).next,
+            onPressed: ref.read(nightSetupProvider.notifier).next,
             child: Text(l10n.guidedDoneStartImaging),
           )
         : null;

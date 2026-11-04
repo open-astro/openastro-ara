@@ -3,7 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:openastroara/screens/simple/simple_autopilot.dart';
+import 'package:openastroara/screens/simple/simple_night_setup.dart';
 import 'package:openastroara/l10n/l10n.dart';
 import 'package:openastroara/models/polar_align.dart';
 import 'package:openastroara/screens/simple/simple_polar_panel.dart';
@@ -155,7 +155,7 @@ void main() {
     expect(api!.calls, ['complete']);
   });
 
-  testWidgets('in Guided Run, polar align is the last step: Done reads Done · Start imaging', (tester) async {
+  testWidgets('in Night Setup, polar align is the last step: Done reads Done · Start imaging', (tester) async {
     final api = _Api()..settings = PolarAlignSettings();
     final c = ProviderContainer(overrides: [
       polarAlignApiProvider.overrideWithValue(api),
@@ -163,18 +163,18 @@ void main() {
           phase: PolarAlignStates.adjusting, altErrorArcmin: 0.3, azErrorArcmin: -0.5, totalErrorArcmin: 0.6))),
     ]);
     addTearDown(c.dispose);
-    c.read(autopilotProvider.notifier).back(); // no-op outside Autopilot
+    c.read(nightSetupProvider.notifier).back(); // no-op outside Night Setup
     await tester.pumpWidget(UncontrolledProviderScope(
       container: c,
       child: const MaterialApp(home: Scaffold(body: Center(child: SimplePolarPanel()))),
     ));
     await tester.pumpAndSettle();
-    expect(find.text('Done'), findsOneWidget, reason: 'outside Autopilot');
-    c.read(autopilotProvider.notifier).start();
-    c.read(autopilotProvider.notifier).next(); // past the plan, to Focus
-    c.read(autopilotProvider.notifier).next(); // past Focus, to polar align
+    expect(find.text('Done'), findsOneWidget, reason: 'outside Night Setup');
+    c.read(nightSetupProvider.notifier).start();
+    c.read(nightSetupProvider.notifier).next(); // past the plan, to Focus
+    c.read(nightSetupProvider.notifier).next(); // past Focus, to polar align
     await tester.pumpAndSettle();
-    expect(c.read(autopilotProvider), AutopilotStep.polarAlign);
+    expect(c.read(nightSetupProvider), NightSetupStep.polarAlign);
     expect(find.text('Done · Start imaging'), findsOneWidget);
     await tester.tap(find.byKey(const Key('simple-polar-done')));
     await tester.pumpAndSettle();
