@@ -275,7 +275,7 @@ class _TrackingProbeStrip extends ConsumerWidget {
                 : 'Tracking probe · ${live.rungs.length}${live.ladder.isEmpty ? '' : '/${live.ladder.length}'} rungs'
                     '${live.priorSeconds != null ? ' · prior ${formatExposureSeconds(live.priorSeconds!)}' : ''}',
             style: AraText.caption.copyWith(
-              color: live.done ? AraColors.textPrimary : AraColors.accentBusy,
+              color: live.done ? AraColors.textPrimary : AraColors.accentInfo,
             ),
             overflow: TextOverflow.ellipsis,
           ),
@@ -425,9 +425,11 @@ class _RunGuiderLineState extends ConsumerState<RunGuiderLine> {
     if (status == null || !status.isConnected) return const SizedBox.shrink();
     final color = switch (status.runtimeState) {
       GuiderRuntimeState.guiding => AraColors.accentConnected,
-      GuiderRuntimeState.starLost => AraColors.accentError,
-      GuiderRuntimeState.stopped || GuiderRuntimeState.paused || GuiderRuntimeState.unknown => AraColors.textSecondary,
-      _ => AraColors.accentBusy,
+      // DESIGN.md status rule: a lost star is a warning; idle is healthy.
+      GuiderRuntimeState.starLost => AraColors.accentBusy,
+      GuiderRuntimeState.stopped => AraColors.accentConnected,
+      GuiderRuntimeState.unknown => AraColors.textSecondary,
+      _ => AraColors.accentInfo,
     };
     return Padding(
       padding: const EdgeInsets.only(top: AraSpace.s4),

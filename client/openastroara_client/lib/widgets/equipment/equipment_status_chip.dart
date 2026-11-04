@@ -202,7 +202,7 @@ StatusLevel switchChipLevel(AsyncValue<List<SwitchDevice>> async,
         {bool acting = false}) =>
     async.when(
       data: (list) => acting
-          ? StatusLevel.busy
+          ? StatusLevel.changing
           : list.any((s) => s.isConnected)
               ? StatusLevel.connected
               : list.any((s) => s.connectionState == SwitchConnectionState.error)

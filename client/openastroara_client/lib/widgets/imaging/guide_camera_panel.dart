@@ -192,9 +192,10 @@ class GuideCameraPanel extends ConsumerWidget {
   static Color _stateColor(GuiderLive live) {
     if (!live.connected) return AraColors.accentDisconnected;
     return switch (live.appState) {
-      'Guiding' => AraColors.accentConnected,
-      'LostLock' => AraColors.accentError,
-      'Calibrating' || 'Looping' || 'Selected' => AraColors.accentBusy,
+      // DESIGN.md status rule: idle is healthy, a lost star a warning.
+      'Guiding' || 'Stopped' => AraColors.accentConnected,
+      'LostLock' => AraColors.accentBusy,
+      'Calibrating' || 'Looping' || 'Selected' || 'Paused' => AraColors.accentInfo,
       _ => AraColors.textSecondary,
     };
   }

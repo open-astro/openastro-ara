@@ -96,7 +96,7 @@ class _CameraBodyState extends ConsumerState<_CameraBody> {
               s.exposureProgressPct == null
                   ? 'Exposing…'
                   : 'Exposing… ${s.exposureProgressPct!.toStringAsFixed(0)}%',
-              style: const TextStyle(color: AraColors.accentBusy),
+              style: const TextStyle(color: AraColors.accentConnected),
             ),
           ),
         // §25.5.5 — cooler on/off + target presets (−10/−5/0/+5 °C) + custom

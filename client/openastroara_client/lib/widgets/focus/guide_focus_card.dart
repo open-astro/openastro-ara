@@ -34,7 +34,7 @@ class GuideFocusCard extends ConsumerStatefulWidget {
   static (String, Color?) headlineFor(AppLocalizations l, GuideFocusStatus status, {required bool gated, required bool blocked}) {
     final latest = status.latest;
     if (status.active) {
-      if (latest == null) return (l.guideFocusStarting, AraColors.accentBusy);
+      if (latest == null) return (l.guideFocusStarting, AraColors.accentInfo);
       if (latest.stars == 0) return (l.guideFocusNoStarsMeasured, AraColors.accentBusy);
       final best = status.bestHfr;
       final atBest = best != null && latest.hfr > 0 && latest.hfr <= best + 1e-9;

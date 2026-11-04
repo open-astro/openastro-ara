@@ -60,6 +60,11 @@ enum StatusLevel {
   /// Connected and working (exposing, slewing, moving): green, shown blinking
   /// on the top-bar chips. Amber ([busy]) is kept for states that need a look.
   active(AraColors.accentConnected),
+  /// Changing: on its way between two states (connecting, starting,
+  /// calibrating, settling, cooling, parking). Blue (DESIGN.md status rule).
+  changing(AraColors.accentInfo),
+  /// A warning: needs a look, nothing has failed. Amber; an in-between state
+  /// is [changing], never this (DESIGN.md status rule, 2026-11-04).
   busy(AraColors.accentBusy),
   error(AraColors.accentError),
   info(AraColors.accentInfo),

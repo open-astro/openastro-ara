@@ -17,9 +17,10 @@ class RunStateBadge extends StatelessWidget {
   /// new SequenceRunState forces a compile error rather than silently
   /// defaulting — matching SequenceRunState.isActive.
   static Color colorFor(SequenceRunState s) => switch (s) {
-        SequenceRunState.running ||
-        SequenceRunState.starting =>
-          AraColors.accentBusy,
+        // DESIGN.md status rule: running is working (green), starting is on
+        // its way (blue).
+        SequenceRunState.running => AraColors.accentConnected,
+        SequenceRunState.starting => AraColors.accentInfo,
         SequenceRunState.paused => AraColors.accentInfo,
         // §58.12 awaiting-user reads as urgent (the rig needs a human), not as
         // a leisurely operator pause — error red, though the run is resumable.

@@ -159,10 +159,21 @@ A near-black neutral ramp carries everything; saturated status accents carry mea
 - **Sky Info Blue** (`accent-info`): informational state, links and the active Night-mode toggle. Also the theme's `secondary`.
 
 ### Status
-- **Connected Green** (`accent-connected`): device connected, step done, healthy readout. A device that is connected and working (exposing, slewing, moving) blinks its dot in this green (the `active` status).
-- **Dew Amber** (`accent-busy`, `accent-warning`): busy, working, needs a look. The two tokens share a value but stay separate roles. Busy is a state dot; warning is an inline icon + colour + text surface.
-- **Fault Red** (`accent-error`): faults, failures, destructive actions and Emergency Stop. The theme's `error`.
-- **Unplugged Grey** (`accent-disconnected`): disconnected or off. The same value as `text-disabled`, deliberately: "not there" reads as absent, not as an alarm.
+**The status rule** (decided 2026-11-04, the same everywhere in the app: every status dot, chip, pill, tile and inline status, Simple Mode and the full UI alike; `design/preview/simple-status-colours-mock.html`). One colour, one meaning:
+
+| Colour | Means | Examples |
+| --- | --- | --- |
+| Green | Good: connected and healthy, done. **Blinks** while a device works normally | Idle guider, connected camera, step done; exposing, slewing, guiding (blinking) |
+| Blue | Changing: on its way between two states | Connecting, starting, stopping, calibrating, settling, cooling to target, parking, downloading, paused on purpose by Ara |
+| Amber | Warning: needs a look, nothing has failed | A lost guide star still being searched for, a weak fit, low disk, a stale reading, a refused action |
+| Red | Error: something failed or a fault stands | A device that dropped, a failed capture, a crashed guider; also destructive actions and Emergency Stop |
+| Grey | Off: not connected or not there | A disconnected device |
+
+- **Connected Green** (`accent-connected`): the Green row. A device that is connected and working blinks its dot in this green (the `active` status).
+- **Sky Info Blue** (`accent-info`): the Blue row (the `changing` status), as well as informational text and links.
+- **Dew Amber** (`accent-warning`, `accent-busy`): the Amber row only. The two tokens share a value; `accent-busy` is kept for the `busy` status dot, which now means warning: an in-between state is Blue, never amber.
+- **Fault Red** (`accent-error`): the Red row. The theme's `error`.
+- **Unplugged Grey** (`accent-disconnected`): the Grey row. The same value as `text-disabled`, deliberately: "not there" reads as absent, not as an alarm.
 
 ### Neutral
 - **Night Floor** (`bg-primary`): the app background and scaffold.

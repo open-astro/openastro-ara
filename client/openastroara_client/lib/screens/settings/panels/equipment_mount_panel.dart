@@ -141,7 +141,13 @@ class _MountBody extends ConsumerWidget {
             padding: const EdgeInsets.symmetric(vertical: 4),
             child: Text(
               s.runtimeState == 'unparking' ? 'Unparking…' : 'Slewing…',
-              style: const TextStyle(color: AraColors.accentBusy),
+              // DESIGN.md status rule: slewing is working (green), unparking
+              // is on its way between two states (blue).
+              style: TextStyle(
+                color: s.runtimeState == 'unparking'
+                    ? AraColors.accentInfo
+                    : AraColors.accentConnected,
+              ),
             ),
           ),
         if (caps?.canSetTracking ?? false)

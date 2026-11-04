@@ -110,7 +110,7 @@ class _RotatorBodyState extends ConsumerState<_RotatorBody> {
             padding: EdgeInsets.symmetric(vertical: 4),
             child: Text(
               'Moving…',
-              style: TextStyle(color: AraColors.accentBusy),
+              style: TextStyle(color: AraColors.accentConnected),
             ),
           ),
         if (caps?.canReverse ?? false)

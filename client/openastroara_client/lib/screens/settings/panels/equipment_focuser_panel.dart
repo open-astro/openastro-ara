@@ -136,7 +136,7 @@ class _FocuserBodyState extends ConsumerState<_FocuserBody> {
             padding: EdgeInsets.symmetric(vertical: 4),
             child: Text(
               'Moving…',
-              style: TextStyle(color: AraColors.accentBusy),
+              style: TextStyle(color: AraColors.accentConnected),
             ),
           ),
         const SizedBox(height: 8),

@@ -73,7 +73,7 @@ class _ExposureTimerBannerState extends ConsumerState<ExposureTimerBanner> {
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
               else
-                const Icon(Icons.camera, size: 16, color: AraColors.accentBusy),
+                const Icon(Icons.camera, size: 16, color: AraColors.accentConnected),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(

@@ -276,7 +276,7 @@ class _GuidingAssistantPanelState extends ConsumerState<GuidingAssistantPanel> {
   }) {
     final s = state.status;
     if (!s.connected) return AraColors.accentDisconnected;
-    if (s.isRunning) return AraColors.accentBusy;
+    if (s.isRunning) return AraColors.accentInfo;
     if (guiding && !s.isDone && !s.isFailed) return AraColors.accentBusy;
     if (s.isDone) return AraColors.accentConnected;
     if (s.isFailed) return AraColors.accentError;

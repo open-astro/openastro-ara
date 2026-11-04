@@ -251,6 +251,9 @@ class _GuiderUp extends GuiderStatusNotifier {
   @override
   Future<GuiderStatus?> build() async =>
       GuiderStatus.fromJson(const {'device_id': 'g', 'name': 'PHD2', 'state': 'connected', 'runtime': {'state': 'guiding'}});
+  // No server here: Simple Mode's 2 s re-read keeps what the rig last said.
+  @override
+  Future<void> refresh([GuiderClient? client]) async {}
 }
 
 /// A connected guider in [runtime], with a calibration leg and an RMS; [at] moves it on.
@@ -2041,7 +2044,10 @@ void main() {
     await tester.pump();
     expect(guider.calls, ['disconnect']);
     await tester.tap(find.descendant(of: page, matching: find.text('Guider Camera · ZWO ASI120MM Mini')));
-    await tester.pumpAndSettle();
+    // A guiding guider's dot blinks (working): pump a while, never settles.
+    for (var n = 0; n < 5; n++) {
+      await tester.pump(const Duration(milliseconds: 200));
+    }
     expect(find.byKey(const Key('simple-gear')), findsNothing, reason: 'the Guider section is open');
   });
 
@@ -2242,7 +2248,10 @@ void main() {
     ]);
     c.read(selectedSettingsPanelProvider.notifier).select('eq.guider');
     c.read(selectedTabIndexProvider.notifier).select(kOptionsTabIndex);
-    await tester.pumpAndSettle();
+    // A guiding guider's dot blinks (working): pump a while, never settles.
+    for (var i = 0; i < 5; i++) {
+      await tester.pump(const Duration(milliseconds: 200));
+    }
     expect(find.byKey(const Key('simple-device-guider')), findsOneWidget);
     expect(find.byType(SettingsShell), findsNothing);
     await _openSection(tester, 'Guider');

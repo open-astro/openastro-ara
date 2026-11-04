@@ -30,7 +30,9 @@ StatusLevel guiderStatusLevel(GuiderStatus? status) {
     case GuiderConnectionState.connected:
       switch (status.runtimeState) {
         case GuiderRuntimeState.starLost:
-          return StatusLevel.error;
+          // A warning: the guider is still looking, and a cloud passing often
+          // brings the star back (DESIGN.md status rule).
+          return StatusLevel.busy;
         case GuiderRuntimeState.calibrating:
         case GuiderRuntimeState.dithering:
         case GuiderRuntimeState.settling:
@@ -38,10 +40,12 @@ StatusLevel guiderStatusLevel(GuiderStatus? status) {
         case GuiderRuntimeState.starSelected:
         case GuiderRuntimeState.assistant:
         case GuiderRuntimeState.paused:
-          // Not actively correcting — amber so a paused guider (e.g. during a
-          // plate-solve/flip) is visually distinct from a healthy green guide.
-          return StatusLevel.busy;
+          // On its way, or paused by Ara (a solve, a flip): blue, distinct
+          // from a healthy green guide (DESIGN.md status rule).
+          return StatusLevel.changing;
         case GuiderRuntimeState.guiding:
+          // Working normally: blinking green.
+          return StatusLevel.active;
         case GuiderRuntimeState.stopped:
           return StatusLevel.connected;
         case GuiderRuntimeState.unknown:

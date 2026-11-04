@@ -155,7 +155,7 @@ class SimpleGuidePanel extends ConsumerWidget {
     final guiding = simpleGuiding(g);
     final pending = ref.watch(simpleGuiderPendingProvider);
     final colour = pending != null
-        ? AraColors.accentBusy
+        ? AraColors.accentInfo
         : simpleGuiderColour(g);
     final phd2 = ref.watch(phd2SettingsProvider);
     final every = phd2.ditherEnabled ? math.max(1, phd2.ditherEveryNFrames) : 0;

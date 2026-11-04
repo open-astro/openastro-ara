@@ -7,6 +7,7 @@ import 'package:openastroara/services/guider_api.dart' show GuiderClient;
 import 'package:openastroara/state/guider/guider_state.dart';
 import 'package:openastroara/state/settings/phd2_settings_state.dart';
 import 'package:openastroara/widgets/equipment/guider_chip.dart' show guiderStatusLevel;
+import 'package:openastroara/theme/ara_colors.dart';
 import 'package:openastroara/widgets/status_indicator.dart' show StatusLevel;
 
 class _Guider extends GuiderStatusNotifier {
@@ -83,6 +84,22 @@ void main() {
     });
   });
 
+  test('the guider follows the DESIGN.md status rule: green good (blinking while guiding), blue changing, '
+      'amber warning, red error, grey off', () {
+    GuiderStatus at(String state, String runtime) =>
+        GuiderStatus.fromJson({'device_id': 'g', 'name': 'PHD2', 'state': state, 'runtime': {'state': runtime}});
+    expect(guiderStatusLevel(at('connected', 'stopped')), StatusLevel.connected, reason: 'idle: good');
+    expect(guiderStatusLevel(at('connected', 'guiding')), StatusLevel.active, reason: 'working: blinking green');
+    for (final r in ['looping', 'calibrating', 'settling', 'paused']) {
+      expect(guiderStatusLevel(at('connected', r)), StatusLevel.changing, reason: r);
+    }
+    expect(guiderStatusLevel(at('connected', 'star_lost')), StatusLevel.busy, reason: 'a warning');
+    expect(guiderStatusLevel(at('error', 'stopped')), StatusLevel.error);
+    expect(guiderStatusLevel(at('disconnected', 'stopped')), StatusLevel.disconnected);
+    expect(StatusLevel.changing.color, AraColors.accentInfo);
+    expect(StatusLevel.busy.color, AraColors.accentWarning);
+  });
+
   testWidgets('the Guide panel: what it is doing and its RMS, in arcseconds', (tester) async {
     await _pump(tester, _wire());
     expect(find.text('Guiding'), findsOneWidget);
@@ -118,7 +135,7 @@ void main() {
     expect(_g.calls, ['stop']);
   });
 
-  testWidgets('a lost star is red in the panel, as in the top bar and the pill (iPad, 2026-11-04: it was amber)',
+  testWidgets('a lost star is the same colour in the panel as in the top bar and the pill: amber, a warning',
       (tester) async {
     await _pump(tester, _wire(runtime: 'star_lost'));
     final dot = find.descendant(of: find.byKey(const Key('simple-guide-panel')), matching: find.byType(Container)).evaluate()
@@ -127,7 +144,7 @@ void main() {
         .where((d) => d.shape == BoxShape.circle)
         .single;
     expect(dot.color, guiderStatusLevel(GuiderStatus.fromJson(_wire(runtime: 'star_lost'))).color);
-    expect(dot.color, StatusLevel.error.color);
+    expect(dot.color, StatusLevel.busy.color, reason: 'DESIGN.md status rule: a lost star still searching is a warning');
   });
 
   testWidgets('a tap says Starting… at once, before the guider answers (iPad, 2026-11-04: feedback was slow)',

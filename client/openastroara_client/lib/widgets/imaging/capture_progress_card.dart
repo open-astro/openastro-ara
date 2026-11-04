@@ -223,7 +223,7 @@ class _Row extends StatelessWidget {
             child: CircularProgressIndicator(strokeWidth: 2),
           )
         else
-          Icon(icon, size: 18, color: iconColor ?? AraColors.accentBusy),
+          Icon(icon, size: 18, color: iconColor ?? AraColors.accentConnected),
         const SizedBox(width: 8),
         Expanded(
           child: Column(

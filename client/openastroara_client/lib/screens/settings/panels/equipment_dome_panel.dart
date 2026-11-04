@@ -116,7 +116,13 @@ class _DomeBodyState extends ConsumerState<_DomeBody> {
             padding: const EdgeInsets.symmetric(vertical: 4),
             child: Text(
               s.runtimeState == 'slewing' ? 'Slewing…' : 'Shutter moving…',
-              style: const TextStyle(color: AraColors.accentBusy),
+              // DESIGN.md status rule: slewing is working (green), the shutter
+              // is on its way between open and closed (blue).
+              style: TextStyle(
+                color: s.runtimeState == 'slewing'
+                    ? AraColors.accentConnected
+                    : AraColors.accentInfo,
+              ),
             ),
           ),
         const SizedBox(height: 8),

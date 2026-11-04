@@ -96,24 +96,24 @@ void main() {
             dev(SwitchConnectionState.connected),
           ])),
           StatusLevel.connected);
-      // An in-flight action still outranks the error state (amber).
+      // An in-flight action still outranks the error state (blue, changing).
       expect(
           switchChipLevel(AsyncData([dev(SwitchConnectionState.error)]),
               acting: true),
-          StatusLevel.busy);
+          StatusLevel.changing);
     });
 
-    test('§25.3 amber while an action is in flight, whatever the list says', () {
+    test('§25.3 blue (changing) while an action is in flight, whatever the list says (DESIGN.md status rule)', () {
       // A port write on a connected switch...
       expect(
           switchChipLevel(AsyncData([dev(SwitchConnectionState.connected)]),
               acting: true),
-          StatusLevel.busy);
+          StatusLevel.changing);
       // ...and a connect still in flight (nothing connected yet) both read busy.
       expect(
           switchChipLevel(AsyncData([dev(SwitchConnectionState.disconnected)]),
               acting: true),
-          StatusLevel.busy);
+          StatusLevel.changing);
       // Loading/error outrank the acting signal (an unreadable list is the
       // stronger fact — same precedence as the other chips).
       expect(switchChipLevel(const AsyncLoading(), acting: true), StatusLevel.info);

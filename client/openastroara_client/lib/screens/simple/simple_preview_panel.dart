@@ -869,7 +869,7 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
                   ? (
                       parking ? l10n.previewParking : l10n.previewUnparking,
                       null,
-                      AraColors.accentBusy,
+                      AraColors.accentInfo,
                     )
                   : cooling
                   ? (
@@ -881,7 +881,7 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
                   ? (
                       l10n.deviceGuider,
                       guiderAsk ? l10n.guideStarting : l10n.guideStopping,
-                      AraColors.accentBusy,
+                      AraColors.accentInfo,
                     )
                   : guiding
                   ? (

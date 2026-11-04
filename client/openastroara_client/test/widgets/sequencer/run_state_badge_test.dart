@@ -6,8 +6,8 @@ import 'package:openastroara/widgets/sequencer/run_state_badge.dart';
 
 void main() {
   test('state→color mapping is the canonical run palette', () {
-    expect(RunStateBadge.colorFor(SequenceRunState.running), AraColors.accentBusy);
-    expect(RunStateBadge.colorFor(SequenceRunState.starting), AraColors.accentBusy);
+    expect(RunStateBadge.colorFor(SequenceRunState.running), AraColors.accentConnected); // working: green (DESIGN.md status rule)
+    expect(RunStateBadge.colorFor(SequenceRunState.starting), AraColors.accentInfo); // on its way: blue
     expect(RunStateBadge.colorFor(SequenceRunState.paused), AraColors.accentInfo);
     expect(RunStateBadge.colorFor(SequenceRunState.pausedAwaitingUser),
         AraColors.accentError);

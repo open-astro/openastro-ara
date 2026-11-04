@@ -49,7 +49,7 @@ class SimpleDeviceHeader extends StatelessWidget {
     final s = status;
     final color = switch (s?.connectionState) {
       EquipmentConnectionState.connected => AraColors.accentConnected,
-      EquipmentConnectionState.connecting => AraColors.accentBusy,
+      EquipmentConnectionState.connecting => AraColors.accentInfo,
       EquipmentConnectionState.error => AraColors.accentError,
       _ => AraColors.textDisabled,
     };
@@ -631,7 +631,7 @@ class _SimpleMountWindowState extends ConsumerState<SimpleMountWindow> {
                       (parking ?? !m.parked)
                           ? context.l10n.deviceParking
                           : context.l10n.deviceUnparking,
-                      style: kSimpleText.copyWith(color: AraColors.accentBusy),
+                      style: kSimpleText.copyWith(color: AraColors.accentInfo),
                     ),
                   ),
                 )
@@ -989,7 +989,7 @@ class _SimpleFocuserWindowState extends ConsumerState<SimpleFocuserWindow> {
                       : context.l10n.deviceMoving)
                 : '',
             textAlign: TextAlign.center,
-            style: AraText.caption.copyWith(color: AraColors.accentBusy),
+            style: AraText.caption.copyWith(color: AraColors.accentConnected),
           ),
         ),
         LayoutBuilder(
@@ -1360,7 +1360,7 @@ class _SimpleGuiderWindowState extends ConsumerState<SimpleGuiderWindow> {
     final camera = ref.watch(deviceDriverProvider('guidecamera')).value;
     final colour = switch (g?.connectionState) {
       GuiderConnectionState.connected => AraColors.accentConnected,
-      GuiderConnectionState.connecting => AraColors.accentBusy,
+      GuiderConnectionState.connecting => AraColors.accentInfo,
       GuiderConnectionState.error => AraColors.accentError,
       _ => AraColors.textDisabled,
     };
