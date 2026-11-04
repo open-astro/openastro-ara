@@ -18,6 +18,7 @@ import 'screens/offline_launch_screen.dart';
 import 'widgets/plan_offline_button.dart';
 import 'services/client_error_handlers.dart';
 import 'services/client_error_log.dart';
+import 'util/perf_log.dart';
 import 'services/window_mode.dart';
 import 'state/client_gps_state.dart';
 import 'state/backup/backup_stream_state.dart';
@@ -32,6 +33,7 @@ import 'widgets/sky_atlas/linux_planetarium_overlay.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  startPerfLog();
   // #1111 — the client's own error log. Installed before runApp so the very
   // first build failure is on record; a debug app launched via `open` has
   // no stderr, and a release build would otherwise leave no trace at all.
@@ -90,6 +92,7 @@ class OpenAstroAraApp extends StatelessWidget {
       // The diagonal DEBUG ribbon overlaps top-right app-bar actions (e.g. the
       // first-run Rescan button); it adds nothing for users, so hide it.
       debugShowCheckedModeBanner: false,
+      showPerformanceOverlay: kAraPerf,
       // The Linux planetarium overlay subscribes to this so the native GTK
       // webview hides when a route is pushed over the shell (no-op elsewhere).
       navigatorObservers: [planetariumRouteObserver],

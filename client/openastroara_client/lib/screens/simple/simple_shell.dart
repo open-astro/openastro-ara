@@ -806,6 +806,10 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                 child: Focus(
                   focusNode: _focus,
                   child: SafeArea(
+                    // One shared blur for every frosted panel over the image
+                    // (iPad 6, 2026-11-05: one filter each cost ~30 ms a frame
+                    // against 4 ms with none; see simpleFrost).
+                    child: BackdropGroup(
                     child: Stack(
                       children: [
                         Positioned.fill(
@@ -1221,6 +1225,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                         ),
                       ],
                     ),
+                    ),
                   ),
                 ),
               ),
@@ -1331,12 +1336,18 @@ class SimplePanel extends StatelessWidget {
 
 /// The panel blur under [child], clipped to the panels' 10 px corners: for
 /// the surfaces that draw their own scrim (pills, tiles, plan squares).
+/// Grouped: the shell's [BackdropGroup] blurs the image once for all of them.
 Widget simpleFrost(Widget child) => ClipRRect(
   borderRadius: BorderRadius.circular(10),
-  child: BackdropFilter(
-    filter: ImageFilter.blur(sigmaX: AraBlur.panel, sigmaY: AraBlur.panel),
-    child: child,
-  ),
+  child: AraBlur.panel == 0
+      ? child
+      : BackdropFilter.grouped(
+          filter: ImageFilter.blur(
+            sigmaX: AraBlur.panel,
+            sigmaY: AraBlur.panel,
+          ),
+          child: child,
+        ),
 );
 
 /// Device dots (connected gear only), then Night mode and the Settings menu.
