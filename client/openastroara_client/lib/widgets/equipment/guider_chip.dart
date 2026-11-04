@@ -5,6 +5,7 @@ import '../../models/guider_status.dart';
 import '../../state/guider/guider_state.dart';
 import '../../state/settings/settings_nav.dart';
 import '../../state/ws/ws_providers.dart';
+import '../../l10n/l10n.dart';
 import '../equipment_chip.dart';
 import '../status_indicator.dart';
 
@@ -68,9 +69,11 @@ class GuiderChip extends ConsumerWidget {
     final level = ref.watch(serverLinkUpProvider)
         ? guiderChipLevel(ref.watch(guiderStatusProvider))
         : StatusLevel.disconnected;
+    // Simple Mode's strip names the guide camera (its Guide mode has the target).
+    final simple = EquipmentChipHideDisconnected.of(context);
     return EquipmentChip(
-      icon: EquipmentChipHideDisconnected.of(context) ? Icons.track_changes : Icons.gps_fixed,
-      label: 'Guider',
+      icon: simple ? Icons.videocam_outlined : Icons.gps_fixed,
+      label: simple ? context.l10n.deviceGuiderCamera : 'Guider',
       status: level,
       onTap: () => openSettingsPanel(ref, 'eq.guider'),
     );

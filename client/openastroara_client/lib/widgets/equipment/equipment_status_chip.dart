@@ -17,6 +17,7 @@ import '../../state/faults/faults_state.dart';
 import '../../state/settings/settings_nav.dart';
 import '../../state/ws/ws_providers.dart';
 import '../../theme/ara_colors.dart';
+import '../../l10n/l10n.dart';
 import '../equipment_chip.dart';
 import 'equipment_glyphs.dart';
 import '../status_indicator.dart';
@@ -75,7 +76,7 @@ class TopEquipmentChips extends StatelessWidget {
       children: [
         EquipmentStatusChip(
             icon: Icons.camera_alt,
-            label: 'Camera',
+            label: simple ? context.l10n.deviceCamera : 'Camera',
             panelId: 'eq.camera',
             faultTypes: const {'camera'},
             watchLevel: (ref) => equipmentChipLevel(ref.watch(cameraStatusProvider))),

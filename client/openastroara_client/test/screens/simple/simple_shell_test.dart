@@ -29,6 +29,7 @@ import 'package:openastroara/state/focus/guide_focus_state.dart';
 import 'package:openastroara/state/settings/phd2_settings_state.dart';
 import 'package:openastroara/models/guider_status.dart';
 import 'package:openastroara/widgets/status_indicator.dart' show StatusLevel;
+import 'package:openastroara/widgets/equipment/equipment_status_chip.dart' show TopEquipmentChips;
 import 'package:openastroara/widgets/equipment/guider_chip.dart' show guiderStatusLevel;
 import 'package:openastroara/state/app_locale_state.dart';
 import 'package:openastroara/services/equipment_driver_api.dart';
@@ -729,6 +730,21 @@ void main() {
     expect((pill.kind, pill.title), (SimpleMessageKind.question, 'Take the Bahtinov mask off'));
     pill.actions.last.onPressed(); // Mask removed
     expect(b.finishes, 1);
+  });
+
+  testWidgets("the top bar names Main Camera and Guider Camera, the guide camera's icon a video camera",
+      (tester) async {
+    // iPad, 2026-11-04: the top bar still showed the guider's target icon after the rename.
+    await _pump(tester, const Size(1024, 768), linkUp: true, gear: [
+      cameraStatusProvider.overrideWith(() => _Camera(EquipmentConnectionState.connected)),
+      guiderStatusProvider.overrideWith(_GuiderUp.new),
+    ]);
+    final strip = find.byType(TopEquipmentChips);
+    expect(find.descendant(of: strip, matching: find.byIcon(Icons.videocam_outlined)), findsOneWidget);
+    expect(find.descendant(of: strip, matching: find.byIcon(Icons.track_changes)), findsNothing,
+        reason: 'the target is the Guide mode now');
+    expect(find.descendant(of: strip, matching: find.byTooltip('Guider Camera')), findsOneWidget);
+    expect(find.descendant(of: strip, matching: find.byTooltip('Main Camera')), findsOneWidget);
   });
 
   testWidgets('Guide is a mode: its shutter starts guiding, its chip shows the RMS and opens the Guide panel',
