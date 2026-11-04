@@ -604,6 +604,25 @@ void main() {
       expect(c.read(simpleRunProvider).targets, isEmpty);
     });
 
+    test('Start now on a queued target whose move to the front fails: refused, nothing starts', () async {
+      // Review of #1494: create(first:) returned state.error == null after reorder, and _fail
+      // clears error, so a failed move reported success and started the run with the wrong
+      // target first.
+      final (c, seq) = await queue();
+      final run = c.read(simpleRunProvider.notifier);
+      await run.create();
+      c.read(planetariumSelectionProvider.notifier).set(_m42);
+      await run.create();
+      c.read(planetariumSelectionProvider.notifier).set(_m31);
+      expect(c.read(simpleRunProvider).targets.map((t) => t.name), ['M31', 'M42']);
+      c.read(planetariumSelectionProvider.notifier).set(_m42);
+      seq.updatesBeforeFail = 0; // the move is a body update; the link drops
+      expect(await run.createAndStart(), isFalse);
+      expect(c.read(simpleMessagesProvider).single.title, startsWith(_en.errorCouldnt(_en.planActionReorder)));
+      expect(seq.calls.where((call) => call.startsWith('start ')), isEmpty, reason: 'nothing starts');
+      expect(c.read(simpleRunProvider).targets.map((t) => t.name), ['M31', 'M42'], reason: 'as the rig has it');
+    });
+
     test('a failure reads whole in the app locale: pt-BR prefix and pt-BR action', () async {
       final (c, seq) = await queue(locale: const Locale('pt', 'BR'));
       await c.read(simpleRunProvider.notifier).create();

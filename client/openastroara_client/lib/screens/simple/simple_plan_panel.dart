@@ -569,8 +569,7 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
         );
         return false;
       }
-      if (queued > 0) await reorder(queued, 0);
-      return state.error == null;
+      return queued == 0 || await reorder(queued, 0);
     }
     final queue = state.sequenceId;
     state = state.copyWith(busy: true);
@@ -796,7 +795,8 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
   /// Move queued target [from] to position [to] (drag to reorder), on the
   /// rig too. Only moves earlier exist there, so the new order is built
   /// front to back, each target moved before the one in its place.
-  Future<void> reorder(int from, int to) async {
+  /// True once the rig has the new order.
+  Future<bool> reorder(int from, int to) async {
     final id = state.sequenceId;
     final n = state.targets.length;
     if (id == null ||
@@ -806,7 +806,7 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
         to < 0 ||
         from >= n ||
         to >= n) {
-      return;
+      return false;
     }
     final wanted = [...state.targets];
     wanted.insert(to, wanted.removeAt(from));
@@ -819,6 +819,7 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
         now.insert(k, now.removeAt(now.indexOf(wanted[k].name)));
       }
       state = state.copyWith(targets: wanted, busy: false);
+      return true;
     } catch (e) {
       final api = ref.read(sequenceApiProvider);
       _fail(
@@ -827,6 +828,7 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
             ? null
             : state.copyWith(targets: await _asOnRig(api, id)),
       );
+      return false;
     }
   }
 
@@ -939,8 +941,6 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
     try {
       await op(api, id);
       state = state.copyWith(busy: false);
-      await ref.read(sequenceRunStateProvider.notifier).refresh();
-      return true;
     } catch (e) {
       _fail(
         _why(e, action),
@@ -953,6 +953,8 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
       await ref.read(sequenceRunStateProvider.notifier).refresh();
       return false;
     }
+    await ref.read(sequenceRunStateProvider.notifier).refresh();
+    return true;
   }
 
   /// A failure after a rig round-trip: one pill, and the inline error stays
