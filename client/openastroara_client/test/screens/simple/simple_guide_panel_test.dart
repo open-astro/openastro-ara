@@ -12,10 +12,17 @@ class _Guider extends GuiderStatusNotifier {
   final calls = <String>[];
   @override
   Future<GuiderStatus?> build() async => GuiderStatus.fromJson(json);
+  // As the rig: the routine starts (or stops) and the next read shows it.
   @override
-  Future<void> startGuiding() async => calls.add('start');
+  Future<void> startGuiding() async {
+    calls.add('start');
+    state = AsyncData(GuiderStatus.fromJson({...json, 'runtime': <String, dynamic>{...json['runtime'] as Map<String, dynamic>, 'state': 'looping'}}));
+  }
   @override
-  Future<void> stopGuiding() async => calls.add('stop');
+  Future<void> stopGuiding() async {
+    calls.add('stop');
+    state = AsyncData(GuiderStatus.fromJson({...json, 'runtime': <String, dynamic>{...json['runtime'] as Map<String, dynamic>, 'state': 'stopped'}}));
+  }
 }
 
 Map<String, dynamic> _wire({String state = 'connected', String runtime = 'guiding'}) => {

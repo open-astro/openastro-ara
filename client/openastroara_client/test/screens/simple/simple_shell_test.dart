@@ -33,6 +33,7 @@ import 'package:openastroara/widgets/equipment/equipment_status_chip.dart' show 
 import 'package:openastroara/widgets/equipment/guider_chip.dart' show guiderStatusLevel;
 import 'package:openastroara/state/app_locale_state.dart';
 import 'package:openastroara/services/equipment_driver_api.dart';
+import 'package:openastroara/services/guider_api.dart' show GuiderClient;
 import 'package:openastroara/state/guider/guider_state.dart';
 import 'package:openastroara/services/dso_catalog_service.dart';
 import 'package:openastroara/state/sky_atlas/dso_catalog_state.dart';
@@ -263,6 +264,15 @@ class _GuiderAt extends GuiderStatusNotifier {
   @override
   Future<GuiderStatus?> build() async => _wire(runtime);
   void at(String r) => state = AsyncData(_wire(r));
+
+  /// What the rig answers on the next read.
+  late String rig = runtime;
+  int refreshes = 0;
+  @override
+  Future<void> refresh([GuiderClient? client]) async {
+    refreshes++;
+    state = AsyncData(_wire(rig));
+  }
 }
 
 class _GuiderCalls extends _GuiderUp {
@@ -2395,6 +2405,23 @@ void main() {
     expect(find.byType(EmergencyStopButton).hitTestable(), findsOneWidget);
     container.read(captureProgressProvider.notifier).reset();
     await tester.pump(const Duration(seconds: 1));
+  });
+
+  testWidgets('while the guider runs, Simple Mode re-reads it, so a stop that lands later shows (rig, 2026-11-04)',
+      (tester) async {
+    // Nothing else polls the guider in Simple Mode: Stop's one read came before the guider had stopped.
+    final guider = _GuiderAt('star_lost');
+    await _pump(tester, const Size(1024, 768), gear: [guiderStatusProvider.overrideWith(() => guider)]);
+    await tester.pump();
+    expect(find.descendant(of: find.byType(SimpleStatusPill), matching: find.textContaining('Star lost')), findsOneWidget);
+    guider.rig = 'stopped'; // the guider stopped; nothing pushes it
+    await tester.pump(const Duration(seconds: 3));
+    expect(guider.refreshes, greaterThan(0));
+    expect(find.descendant(of: find.byType(SimpleStatusPill), matching: find.textContaining('Star lost')), findsNothing);
+    await tester.pump(const Duration(seconds: 5));
+    final idle = guider.refreshes;
+    await tester.pump(const Duration(seconds: 5));
+    expect(guider.refreshes, idle, reason: 'idle: no more polling');
   });
 
   testWidgets('the status pill reports the guider: its routine, then Guiding with the RMS; a frame comes first',

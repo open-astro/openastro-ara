@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -45,6 +46,7 @@ bool simpleGuiding(GuiderStatus? g) =>
 
 String _arcsec(double v) => '${v.toStringAsFixed(2)}″';
 
+
 /// The rail chip in Guide mode: the RMS while it guides, else Off.
 String simpleGuideSummary(WidgetRef ref) {
   final g = ref.watch(guiderStatusProvider).value;
@@ -84,6 +86,16 @@ Future<void> simpleGuideRun(
   final guider = ref.read(guiderStatusProvider.notifier);
   try {
     await (start ? guider.startGuiding() : guider.stopGuiding());
+    // The guider answers the ask at once and acts a moment later: read again
+    // until it shows (a start from idle isn't running yet at the first read).
+    for (var i = 0; i < 10; i++) {
+      if (simpleGuideActive(ref.read(guiderStatusProvider).value) == start) {
+        break;
+      }
+      await Future<void>.delayed(const Duration(seconds: 1));
+      if (!context.mounted) return;
+      await guider.refresh();
+    }
   } catch (e) {
     notify(
       friendlyError(

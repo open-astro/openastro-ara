@@ -91,7 +91,11 @@ import '../../state/focus/bahtinov_focus_state.dart'
     show MainFocusMethod, bahtinovFocusProvider;
 import 'simple_message_pills.dart';
 import 'simple_guide_panel.dart'
-    show SimpleGuidePanel, SimpleGuideShutter, simpleGuideSummary;
+    show
+        SimpleGuidePanel,
+        SimpleGuideShutter,
+        simpleGuideActive,
+        simpleGuideSummary;
 import 'simple_polar_panel.dart';
 import 'simple_plan_panel.dart';
 import 'simple_preview_panel.dart';
@@ -326,6 +330,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     _stopDisarm?.cancel();
     _focus.dispose();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    _guiderPoll?.cancel();
     super.dispose();
   }
 
@@ -408,6 +413,23 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
   }
 
   SimpleModeScreen? _lastShown;
+
+  // Simple Mode re-reads the guider every 2 s while it is doing anything:
+  // nothing else polls it here, and some changes (a stop that lands seconds
+  // after the ask) push nothing (rig, 2026-11-04).
+  Timer? _guiderPoll;
+
+  void _syncGuiderPoll(bool active) {
+    if (active) {
+      _guiderPoll ??= Timer.periodic(
+        const Duration(seconds: 2),
+        (_) => ref.read(guiderStatusProvider.notifier).refresh(),
+      );
+    } else {
+      _guiderPoll?.cancel();
+      _guiderPoll = null;
+    }
+  }
 
   /// Leaving Manual before Finish asks for the mask to come off (DESIGN.md
   /// Focus; ALP-4982), here once Focus has gone.
@@ -553,6 +575,11 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     });
     final pilot = ref.watch(autopilotProvider);
     final shown = _shown(pilot);
+    _syncGuiderPoll(
+      ref.watch(
+        guiderStatusProvider.select((s) => simpleGuideActive(s.value)),
+      ),
+    );
     // Leaving Focus takes its panel's mask question away: a pill asks.
     if (_lastShown == SimpleModeScreen.focus &&
         shown != SimpleModeScreen.focus) {
