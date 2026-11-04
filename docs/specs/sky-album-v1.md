@@ -24,7 +24,7 @@ Out of scope, by decision of the map: a full UI entry point, difficulty or globa
 
 - A frame **contains** an object when the great-circle separation between the object's catalog position and the frame's pointing is at most half the frame's short side. FOV per axis is `width x pixel_scale_arcsec` and `height x pixel_scale_arcsec`. This is the inscribed circle: conservative, rotation independent, no sky position angle needed. Frame corners are never credited.
 - Every object a frame contains is collected by it (M81 and M82 from one field), each with full exposure credit.
-- A frame with no stored pointing, or no pixel scale, falls back to **alias matching**: its `target_name` compared case-insensitively against the object's id, name and `PlanningDso.aliases`.
+- A frame with no stored pointing, or no pixel scale, falls back to **alias matching**: its `target_name` compared against the object's id, name and `PlanningDso.aliases` after normalising both sides: lower-case, whitespace removed, and the words `messier` / `caldwell` folded to `m` / `c`, so `M31`, `M 31` and `Messier 31` all match.
 - Pointing is stored only when the daemon's `FramePointing` is J2000. JNOW (SOFA missing), B1950 and J2050 frames store nothing and use the alias fallback.
 - **Provenance ([#1502](https://github.com/open-astro/openastro-ara/issues/1502)):** only frames Ara captured fill a card. Ara writes `SWCREATE = 'OpenAstro Ara'` into every header; the drive scan also catalogs foreign frames (NINA archives) into recovered rows, and those never count. No signing in v1: nothing leaves the device, so a forged frame only fools its owner, and a key on an open-source SBC is the owner's anyway. Signed provenance is out of scope until sharing exists.
 
@@ -38,10 +38,10 @@ Added with `AddColumnIfMissingAsync` next to the existing additive columns in `S
 |---|---|---|
 | `ra_deg` | REAL NULL | capture when J2000; backfill |
 | `dec_deg` | REAL NULL | capture when J2000; backfill |
-| `pixel_scale_arcsec` | REAL NULL | capture from the effective focal length and binned pixel size the header writer already computes; backfill from `FOCALLEN` / `XPIXSZ` |
+| `pixel_scale_arcsec` | REAL NULL | arcsec per stored pixel: `206.265 x XPIXSZ_um / FOCALLEN_mm`. `XPIXSZ` as the header writer computes it is already multiplied by bin, and `width`/`height` are the binned image size, so no further bin factor anywhere. Backfill reads the same two cards |
 | `updated_utc` | TEXT NULL | insert and every backfill write |
 | `pointing_probed_utc` | TEXT NULL | backfill, whether or not the file had the cards |
-| `captured_by_ara` | INTEGER NULL | 1 at capture; backfill sets 1 when `SWCREATE` is `OpenAstro Ara`, else 0 |
+| `captured_by_ara` | INTEGER NULL | 1 at capture; backfill sets 1 when `SWCREATE` starts with `OpenAstro Ara` (the XISF writer appends a version), else 0 |
 
 `CameraService.RegisterFrameAsync` receives `job.Pointing` and the pixel scale; `FrameDto` gains the matching optional fields. `CaptureScanService.TryRecoverAsync` parses `OBJCTRA`/`OBJCTDEC` (via `ParseTargetCoordinates`), `EQUINOX`, `FOCALLEN` and `XPIXSZ` so a drive rescan fills the same columns for recovered rows.
 
@@ -51,7 +51,7 @@ One idempotent pass at startup, after the orphan scan, under the same guard as t
 
 1. `SELECT id, file_path FROM frames WHERE frame_type = 'light' AND pointing_probed_utc IS NULL`.
 2. For each row, `FrameFileReader.ReadHeaderInfo`; take RA/Dec only when `EQUINOX` is `2000.0`; take pixel scale from `FOCALLEN` and `XPIXSZ` when both are present and positive; set `captured_by_ara` from `SWCREATE`.
-3. Write what was found, set `pointing_probed_utc` always, bump `updated_utc` only when a value changed.
+3. Write what was found, set `pointing_probed_utc` when the header was read (whether or not it had the cards), bump `updated_utc` only when a value changed. If the read throws (file missing, drive not mounted), leave `pointing_probed_utc` unset so the row is probed again next boot.
 
 Never routed through `POST /api/v1/stats/rebuild-catalog`: that endpoint deletes `frames` and `sessions` and re-inserts under new ids.
 
@@ -87,7 +87,7 @@ Never routed through `POST /api/v1/stats/rebuild-catalog`: that endpoint deletes
 
 ### State
 
-A provider family keyed by the active connection caches the album rows. On album open it fetches with the last `updated_utc` it holds as `since`; if cached count plus new rows does not equal `totalLights`, it refetches without `since` (covers deletions). Rows are matched against `bundledCatalogProvider` (not the culled planning catalog, so every Book object is present), producing per-object aggregates:
+A provider family keyed by the active connection caches the album rows. On album open it fetches with the last `updated_utc` it holds as `since`, merges the returned rows into the cache by `frameId` (a `since` response also carries already-cached rows whose `updated_utc` moved, for example after the backfill), and refetches without `since` when the merged count does not equal `totalLights` (covers deletions). Rows are matched against `bundledCatalogProvider` (not the culled planning catalog, so every Book object is present), producing per-object aggregates:
 
 | Field | Rule |
 |---|---|
@@ -139,7 +139,7 @@ Search and Tonight's Sky gain these objects as a side effect. Positions and size
 ## Tests
 
 - Daemon: `RegisterFrameAsync` stores pointing only for J2000 and sets `captured_by_ara`; the backfill pass fills from a FITS header fixture, marks a NINA-style header (no Ara `SWCREATE`) as not Ara, sets `pointing_probed_utc` on a file without cards, and is a no-op on the second run; `album-frames` honours `since`, excludes foreign frames and reports `totalLights`.
-- Client (pure Dart): containment on a synthetic frame (object at centre, at half the short side, just outside it, at a corner); alias fallback; tier thresholds at the boundaries; aggregate fields; the `since` + count reload rule.
+- Client (pure Dart): containment on a synthetic frame (object at centre, at half the short side, just outside it, at a corner); alias fallback with `M31`, `M 31`, `Messier 31`; tier thresholds at the boundaries; aggregate fields; the merge-by-id + count reload rule, including a `since` response that only re-delivers cached rows.
 - Album screen widget test with a fake callback and neither shell: a tap on a missing card's action calls the callback with that `PlanningDso`.
 - Catalog: after the data fix, the Messier Book has 110 cards and the Caldwell Book 109.
 
