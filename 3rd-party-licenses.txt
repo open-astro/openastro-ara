@@ -538,7 +538,7 @@ License source: https://licenses.nuget.org/MIT
 Project:        https://dot.net/
 
 ------------------------------------------------------------------------
-Package:        Scalar.AspNetCore 2.18.3
+Package:        Scalar.AspNetCore 2.18.7
 Authors:        Scalar
 License:        MIT
 License source: https://licenses.nuget.org/MIT
