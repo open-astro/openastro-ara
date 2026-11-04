@@ -252,6 +252,19 @@ class _GuiderUp extends GuiderStatusNotifier {
       GuiderStatus.fromJson(const {'device_id': 'g', 'name': 'PHD2', 'state': 'connected', 'runtime': {'state': 'guiding'}});
 }
 
+/// A connected guider in [runtime], with a calibration leg and an RMS; [at] moves it on.
+class _GuiderAt extends GuiderStatusNotifier {
+  _GuiderAt(this.runtime);
+  final String runtime;
+  static GuiderStatus _wire(String r) => GuiderStatus.fromJson({
+        'device_id': 'g', 'name': 'PHD2', 'state': 'connected',
+        'runtime': {'state': r, 'calibration_direction': 'West', 'calibration_step': 3, 'rms_total_arcsec': 0.62},
+      });
+  @override
+  Future<GuiderStatus?> build() async => _wire(runtime);
+  void at(String r) => state = AsyncData(_wire(r));
+}
+
 class _GuiderCalls extends _GuiderUp {
   final calls = <String>[];
   @override
@@ -2356,6 +2369,29 @@ void main() {
     await tester.tapAt(const Offset(400, 400));
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.byType(EmergencyStopButton).hitTestable(), findsOneWidget);
+    container.read(captureProgressProvider.notifier).reset();
+    await tester.pump(const Duration(seconds: 1));
+  });
+
+  testWidgets('the status pill reports the guider: its routine, then Guiding with the RMS; a frame comes first',
+      (tester) async {
+    // User, 2026-11-04: nothing on screen said the guider was calibrating.
+    final guider = _GuiderAt('calibrating');
+    final container = await _pump(tester, const Size(1024, 768), gear: [guiderStatusProvider.overrideWith(() => guider)]);
+    await tester.pump();
+    String pill() => tester
+        .widgetList<RichText>(find.descendant(of: find.byType(SimpleStatusPill), matching: find.byType(RichText)))
+        .map((t) => t.text.toPlainText())
+        .join(' ');
+    expect(pill(), allOf(contains('Guider'), contains('Calibrating'), contains('West step 3')));
+    expect(tester.getSemantics(find.byType(SimpleStatusPill)), matchesSemantics(label: 'Guider, Calibrating', isLiveRegion: true),
+        reason: 'each step is not read out');
+    guider.at('guiding');
+    await tester.pump();
+    expect(pill(), allOf(contains('Guiding'), contains('0.62″')));
+    container.read(captureProgressProvider.notifier).beginExposing(const Duration(seconds: 5));
+    await tester.pump();
+    expect(pill(), contains('Taking a frame'), reason: 'a frame takes the pill first; the graph shows guiding');
     container.read(captureProgressProvider.notifier).reset();
     await tester.pump(const Duration(seconds: 1));
   });

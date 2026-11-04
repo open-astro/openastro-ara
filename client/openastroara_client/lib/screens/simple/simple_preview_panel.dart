@@ -8,7 +8,9 @@ import 'package:flutter/services.dart' show LogicalKeyboardKey;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../l10n/l10n.dart';
+import '../../models/guider_status.dart';
 import '../../services/storage_space_api.dart';
+import '../../state/guider/guider_state.dart';
 import '../../state/imaging/capture_progress_state.dart';
 import '../../state/imaging/exposure_state.dart';
 import '../../state/imaging/last_frame_state.dart';
@@ -22,6 +24,7 @@ import '../../state/equipment/camera_state.dart';
 import '../../widgets/imaging/exposure_controls_panel.dart' show FilterDropdown;
 import '../../widgets/imaging/histogram_strip.dart' show frameHistogramProvider;
 import '../imaging_actions.dart';
+import 'simple_guide_panel.dart' show simpleGuideActive, simpleGuiding;
 import 'simple_plan_panel.dart' show simpleRunProvider;
 import 'simple_device_windows.dart'
     show SimpleGainSlider, simpleCelsius, simpleMountMotionProvider;
@@ -809,6 +812,10 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
     _coolStart = cooling ? (_coolStart ?? ccd) : null;
     // A park or unpark asked for in Simple Mode, until the mount gets there.
     final parking = ref.watch(simpleMountMotionProvider);
+    // The guider's routine, or Guiding with its RMS, when nothing else is on.
+    final guider = ref.watch(guiderStatusProvider).value;
+    final guiding = simpleGuiding(guider);
+    final guiderOn = simpleGuideActive(guider);
     final planActive = run?.state?.isActive ?? false;
     final exposing = !stopping && p.phase == CapturePhase.exposing;
     final (String? label, String? detail, Color dot) = stopping
@@ -864,6 +871,23 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
                       '${simpleCelsius(ccd)} → ${simpleCelsius(target)}',
                       AraColors.accentInfo,
                     )
+                  : guiding
+                  ? (
+                      l10n.shellGuiding,
+                      switch (guider!.rmsTotalArcsec) {
+                        final r? => '${r.toStringAsFixed(2)}″',
+                        null => null,
+                      },
+                      AraColors.accentConnected,
+                    )
+                  : guiderOn
+                  ? (
+                      l10n.deviceGuider,
+                      guider!.runtimeSummary(l10n),
+                      guider.runtimeState == GuiderRuntimeState.starLost
+                          ? AraColors.accentError
+                          : AraColors.accentBusy,
+                    )
                   : (null, null, AraColors.textSecondary),
           };
     if (label == null) return const SizedBox.shrink();
@@ -887,8 +911,14 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
     return Semantics(
       container: true,
       liveRegion: true,
-      label: exposing || detail == null
+      label: exposing || guiding || detail == null
           ? label
+          // The guider's state, not each calibration step or RMS change.
+          : guiderOn && label == l10n.deviceGuider
+          ? l10n.previewStatusSpoken(
+              label,
+              guiderRuntimeText(l10n, guider!.runtimeState),
+            )
           : l10n.previewStatusSpoken(label, detail),
       excludeSemantics: true,
       child: ConstrainedBox(
