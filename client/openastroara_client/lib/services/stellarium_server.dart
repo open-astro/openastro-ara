@@ -343,6 +343,13 @@ class StellariumServer {
   // woken per release (review on #1296: a shared Future.any woke every
   // waiter at once and the cap was soft). Coalesced joiners of an in-flight
   // fetch never take a slot.
+  //
+  // A waiter has no deadline of its own. Every fetch is bounded (connect,
+  // first byte, body) and every holder releases in a finally, so the queue
+  // always drains, and once the origin is offline the waiters shed on the
+  // backoff as soon as they get a slot. A per-waiter timeout that then
+  // fetched anyway made the cap soft again: with a deep queue on a slow link
+  // the waiters at the back all passed it together and started at once.
   int _dssSlotsHeld = 0;
   final Queue<Completer<void>> _dssSlotWaiters = Queue();
 
@@ -353,16 +360,7 @@ class StellariumServer {
     }
     final c = Completer<void>();
     _dssSlotWaiters.add(c);
-    // Every fetch is bounded (connect + first byte + body), so a slot always
-    // comes back; the deadline is a backstop against a bug, never the plan.
-    try {
-      await c.future.timeout(dssHeadersTimeout + dssBodyTimeout);
-    } on TimeoutException {
-      // A release in the same turn as the timer already handed us the slot.
-      if (c.isCompleted) return;
-      _dssSlotWaiters.remove(c);
-      _dssSlotsHeld++; // proceed anyway, counted
-    }
+    await c.future;
   }
 
   void _releaseFetchSlot() {
