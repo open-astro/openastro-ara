@@ -563,6 +563,11 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     // The bottom row (guiding, histogram) grows with the text like the
     // rails, so its two lines of labels fit at the user's size.
     final bottomRow = kSimpleBarHeight * simpleRailScale(context);
+    // What sits above the bottom row drops to the inset while it is empty
+    // (ALP-4935).
+    final aboveRow = _statsShown(ref)
+        ? kSimpleInset * 2 + bottomRow
+        : kSimpleInset;
     final width = MediaQuery.sizeOf(context).width;
     // Guided Run's step strip, under the status strip; its offer sits at the
     // bottom (user, 2026-11-03).
@@ -599,8 +604,8 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     final popoverMaxHeight = _rightRailHeight == 0
         ? double.infinity
         : height -
-              kSimpleInset * 3 -
-              bottomRow -
+              kSimpleInset -
+              aboveRow -
               (planSquares
                   ? kSimplePlanSquareHeight * simpleRailScale(context) +
                         kSimpleInset
@@ -785,9 +790,11 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                               // Info: fact tiles hugging the bottom-left corner,
                               // above the bottom row.
                               if (_info)
-                                Positioned(
+                                AnimatedPositioned(
                                   left: kSimpleInset,
-                                  bottom: kSimpleInset * 2 + bottomRow,
+                                  bottom: aboveRow,
+                                  duration: motion,
+                                  curve: Curves.easeOut,
                                   child: const SimpleInfoPanel(),
                                 ),
                               // Guiding and the histogram along the bottom, each
@@ -866,7 +873,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                       railTop +
                                       kSimpleStatusHeight +
                                       kSimpleInset,
-                                  bottom: kSimpleInset * 2 + bottomRow,
+                                  bottom: aboveRow,
                                   child: Align(
                                     alignment: Alignment.centerRight,
                                     child: sheet,
@@ -936,10 +943,12 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                               // under the rails (centred higher up); it wraps on
                               // a narrow window.
                               if (autopilotOffer)
-                                Positioned(
+                                AnimatedPositioned(
                                   left: kSimpleInset,
                                   right: kSimpleInset,
-                                  bottom: kSimpleInset * 2 + kSimpleBarHeight,
+                                  bottom: aboveRow,
+                                  duration: motion,
+                                  curve: Curves.easeOut,
                                   child: Center(
                                     child: AutopilotOffer(
                                       onStart: _startAutopilot,
@@ -953,10 +962,12 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                               // above the bottom row, growing left over the right
                               // half (the Info tiles have the left).
                               if (shown == SimpleModeScreen.plan && !runSheet)
-                                Positioned(
+                                AnimatedPositioned(
                                   left: width / 2,
                                   right: kSimpleInset,
-                                  bottom: kSimpleInset * 2 + bottomRow,
+                                  bottom: aboveRow,
+                                  duration: motion,
+                                  curve: Curves.easeOut,
                                   child: Align(
                                     alignment: Alignment.bottomRight,
                                     child: SimpleRunTracker(
@@ -1007,7 +1018,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                   top: railTop,
                                   left: 0,
                                   right: 0,
-                                  bottom: kSimpleInset * 2 + bottomRow,
+                                  bottom: aboveRow,
                                   child: Align(
                                     alignment: Alignment.topCenter,
                                     child: SizedBox(
@@ -1042,7 +1053,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                   left: kSimpleInset,
                                   right: kSimpleInset,
                                   top: railTop,
-                                  bottom: kSimpleInset * 2 + bottomRow,
+                                  bottom: aboveRow,
                                   // Under the gear, as wide as its content
                                   // needs (user, 2026-11-04: window-wide was
                                   // mostly empty space).
@@ -1715,6 +1726,29 @@ class _TracePainter extends CustomPainter {
   bool shouldRepaint(_TracePainter old) => old._steps != _steps;
 }
 
+bool _guidingShown(WidgetRef ref) =>
+    ref.watch(
+      guiderStatusProvider.select(
+        (s) => s.asData?.value?.runtimeState == GuiderRuntimeState.guiding,
+      ),
+    ) ||
+    ref.watch(guideStepsProvider.select((s) => s.isNotEmpty));
+
+// The histogram is for saved frames (the daemon analyses those).
+String? _histogramFrame(WidgetRef ref) => ref.watch(liveViewControllerProvider)
+    ? null
+    : ref.watch(lastCapturedFrameIdProvider);
+
+/// Whether the bottom row has anything to show.
+bool _statsShown(WidgetRef ref) {
+  if (_guidingShown(ref)) return true;
+  final id = _histogramFrame(ref);
+  return id != null &&
+      ref.watch(
+        frameHistogramProvider(id).select((h) => h.asData?.value != null),
+      );
+}
+
 /// Guiding and the histogram along the bottom. Each panel waits for data, and
 /// whichever shows takes the row (both: guiding gets the larger share).
 class _StatsRow extends ConsumerWidget {
@@ -1722,14 +1756,8 @@ class _StatsRow extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final status = ref.watch(guiderStatusProvider).asData?.value;
-    final guiding =
-        status?.runtimeState == GuiderRuntimeState.guiding ||
-        ref.watch(guideStepsProvider).isNotEmpty;
-    // The histogram is for saved frames (the daemon analyses those).
-    final id = ref.watch(liveViewControllerProvider)
-        ? null
-        : ref.watch(lastCapturedFrameIdProvider);
+    final guiding = _guidingShown(ref);
+    final id = _histogramFrame(ref);
     final histogram = id == null
         ? null
         : ref.watch(frameHistogramProvider(id)).asData?.value;

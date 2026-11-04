@@ -1043,7 +1043,7 @@ void main() {
       final offer = tester.getRect(find.byKey(const Key('autopilot-offer')));
       expect(pills.left, kSimpleInset, reason: 'the top-left corner');
       expect(pills.top, lessThan(offer.top), reason: 'the offer moved to the bottom (user, 2026-11-03)');
-      expect(offer.bottom, size.height - kSimpleInset * 2 - kSimpleBarHeight, reason: 'just above the bottom row');
+      expect(offer.bottom, size.height - kSimpleInset, reason: 'the bottom row is empty: at the inset (ALP-4935)');
       expect(offer.center.dx, closeTo(size.width / 2, 1), reason: 'centred');
       expect(pills.right, lessThanOrEqualTo(status.left), reason: 'beside the status pill, never under it');
       expect(pills.bottom, lessThanOrEqualTo(rail.top), reason: 'above the left rail');
@@ -1127,7 +1127,7 @@ void main() {
     expect(find.byType(SimpleRunSheet), findsNothing, reason: 'the chip closes the sheet it would open');
   });
 
-  testWidgets('the plan square hugs the bottom-right corner, above the bottom row', (tester) async {
+  testWidgets('the plan square hugs the bottom-right corner (no bottom row: at the inset)', (tester) async {
     await _pump(tester, const Size(1024, 768),
         plan: const SimpleRun(sequenceId: 'seq-1', targets: [
           SimpleTarget(name: 'M31', steps: [FilterPlanStep(filterName: 'L', exposureSeconds: 120, frameCount: 30)]),
@@ -1138,14 +1138,14 @@ void main() {
     await tester.pump();
     final square = tester.getRect(find.byKey(const Key('simple-run-tracker')));
     expect(square.right, 1024 - kSimpleInset, reason: 'in the corner');
-    expect(square.bottom, 768 - (kSimpleInset * 2 + kSimpleBarHeight), reason: 'just above the bottom row');
+    expect(square.bottom, 768 - kSimpleInset, reason: 'the bottom row is empty: down at the inset (ALP-4935)');
     final rail = _panelOf(tester, find.byKey(const Key('simple-shutter')));
     expect(square.top, greaterThan(rail.bottom), reason: 'below the right rail');
     expect(find.descendant(of: find.byKey(const Key('simple-run-tracker')), matching: find.text('0 / 30')), findsOneWidget);
   });
 
   for (final size in const [Size(1024, 768), Size(768, 1024)]) {
-    testWidgets('at $size: Plan\'s sheet runs from the status pill to the bottom row while the plan squares '
+    testWidgets('at $size: Plan\'s sheet runs from the status pill to the bottom row (the inset while it is empty) while the plan squares '
         'step aside; a plan square opens the queue panel', (tester) async {
       // A long queue: taller than the room, so the sheet must scroll inside its slot.
       await _pump(tester, size,
@@ -1162,8 +1162,8 @@ void main() {
       final sheet = tester.getRect(find.byType(SimpleRunSheet));
       expect(sheet.top, greaterThanOrEqualTo(kSimpleInset * 3 + kSimpleBarHeight + kSimpleStatusHeight),
           reason: 'under the status pill');
-      expect(sheet.bottom, lessThanOrEqualTo(size.height - kSimpleInset * 2 - kSimpleBarHeight),
-          reason: 'above the bottom row');
+      expect(sheet.bottom, lessThanOrEqualTo(size.height - kSimpleInset),
+          reason: 'no guiding or histogram: down to the inset (ALP-4935)');
       expect(find.byKey(const Key('simple-run-tracker')), findsNothing, reason: 'the squares step aside');
       // The chip puts the sheet away: the squares come back.
       await tester.tap(find.byKey(const Key('simple-settings')));
@@ -1205,10 +1205,10 @@ void main() {
     });
   }
 
-  // Info and System: a tile per fact in the bottom-left corner, above the guiding and histogram row, growing
-  // right; System's row sits above Info's.
+  // Info and System: a tile per fact in the bottom-left corner, above the guiding and histogram row (at the
+  // inset while that row is empty), growing right; System's row sits above Info's.
   const tileLeft = kSimpleInset;
-  const tileBottom = kSimpleInset * 2 + kSimpleBarHeight;
+  const tileBottom = kSimpleInset;
 
   testWidgets('at 2x text the rails widen with their labels and the facts turn into a list (WCAG 1.4.4)',
       (tester) async {
@@ -1238,7 +1238,7 @@ void main() {
     await tester.pump();
     final row = tester.getRect(find.byType(SimpleInfoPanel));
     expect(row.left, tileLeft, reason: 'hugs the corner');
-    expect(row.bottom, 768 - tileBottom, reason: 'just above the bottom row');
+    expect(row.bottom, 768 - tileBottom, reason: 'no guiding or histogram: down at the inset (ALP-4935)');
     expect(row.height, 56, reason: 'one row of tiles');
     for (final fact in ['HFR', 'Stars', 'Exposure', 'Gain · offset', 'Clipped']) {
       expect(find.descendant(of: find.byType(SimpleInfoPanel), matching: find.text(fact)), findsOneWidget, reason: fact);
@@ -1937,7 +1937,7 @@ void main() {
     expect(tester.widget<BackdropFilter>(window).filter, ImageFilter.blur(sigmaX: 5, sigmaY: 5));
     final surface = find.descendant(of: window, matching: find.byKey(const Key('simple-frosted-surface')));
     expect((tester.widget<Container>(surface).decoration! as BoxDecoration).color, AraColors.overlayScrim);
-    await tester.tapAt(const Offset(512, 700)); // the image closes it
+    await tester.tapAt(const Offset(512, 400)); // the image closes it (the Guided Run offer sits lower down)
     await tester.pump();
     expect(find.byKey(const Key('simple-device-camera')), findsNothing);
   });
@@ -2179,6 +2179,22 @@ void main() {
       expect(h.left - g.right, kSimpleInset);
       expect(g.width, closeTo(h.width, 0.5));
     });
+  });
+
+  testWidgets('the Info tiles and the offer sit above guiding while it shows, at the inset without it (ALP-4935)',
+      (tester) async {
+    final container = await _pump(tester, const Size(1024, 768), steps: _someSteps);
+    await _frame(tester, container);
+    await tester.tap(find.byKey(const Key('simple-info')));
+    await tester.pump(const Duration(milliseconds: 300));
+    const above = 768 - kSimpleInset * 2 - kSimpleBarHeight;
+    expect(tester.getRect(find.byType(SimpleInfoPanel)).bottom, above, reason: 'just above the guiding row');
+    expect(tester.getRect(find.byKey(const Key('autopilot-offer'))).bottom, above);
+    container.read(guideStepsProvider.notifier).clear();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(tester.getRect(find.byType(SimpleInfoPanel)).bottom, 768 - kSimpleInset, reason: 'the row went: down');
+    expect(tester.getRect(find.byKey(const Key('autopilot-offer'))).bottom, 768 - kSimpleInset);
   });
 
   testWidgets('screen readers can hide and show the controls over a frame', (tester) async {
