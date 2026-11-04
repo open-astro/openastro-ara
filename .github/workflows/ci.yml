@@ -557,26 +557,31 @@ jobs:
           sudo apt-get install -y -qq --no-install-recommends fpc > /dev/null
           scripts/build-astap-cli.sh "$RUNNER_TEMP/astap"
 
-      # The same package Settings → Sky data installs (DataManagerService.CatalogSha256).
+      # The same package Settings → Sky data installs (DataManagerService.CatalogSha256). The
+      # cache holds the downloaded archive, not the unpacked tiles, so the checksum is checked
+      # on every run, cache hit or not.
       - name: Cache D05 star database
         id: d05
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
         with:
-          path: ~/astap-d05
-          key: astap-d05-7936db10c8478612d952620b7f368f1a3cb261e1750ba9f082fba657fd53a977  # the package checksum below: a new sky-data release is a new cache entry
+          path: ~/astap-d05.tar.gz
+          key: astap-d05-7936db10c8478612d952620b7f368f1a3cb261e1750ba9f082fba657fd53a977-tgz  # the package checksum below: a new sky-data release is a new cache entry
 
       - name: Download D05 star database
         if: steps.d05.outputs.cache-hit != 'true'
         run: |
-          set -euo pipefail
-          curl -sSfL --retry 3 -o "$RUNNER_TEMP/d05.tar.gz" \
+          curl -sSfL --retry 3 -o ~/astap-d05.tar.gz \
             https://github.com/open-astro/sky-data/releases/download/astap-2026.10/astap-d05.tar.gz
-          echo "7936db10c8478612d952620b7f368f1a3cb261e1750ba9f082fba657fd53a977  $RUNNER_TEMP/d05.tar.gz" | sha256sum -c -
-          mkdir -p ~/astap-d05
-          tar -xzf "$RUNNER_TEMP/d05.tar.gz" -C ~/astap-d05
+
+      - name: Verify and unpack D05 star database
+        run: |
+          set -euo pipefail
+          echo "7936db10c8478612d952620b7f368f1a3cb261e1750ba9f082fba657fd53a977  $HOME/astap-d05.tar.gz" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/astap-d05"
+          tar -xzf ~/astap-d05.tar.gz -C "$RUNNER_TEMP/astap-d05"
 
       - name: Solve the fixture frame
-        run: scripts/ci-astap-solve.sh "$RUNNER_TEMP/astap/astap_cli" ~/astap-d05
+        run: scripts/ci-astap-solve.sh "$RUNNER_TEMP/astap/astap_cli" "$RUNNER_TEMP/astap-d05"
 
   server-build:
     name: Server (build + cross-publish + Docker)

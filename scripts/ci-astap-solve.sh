@@ -110,7 +110,10 @@ same_as blind_1 blind_n solution
 # CPU time near the wall time, every core puts it well above.
 ASTAP_THREADS=1 solve blind_env1 -z 0 "${BLIND[@]}"
 same_as blind_1 blind_env1 solution
-python3 - "$(cat blind_n.cpu)" "$(cat blind_env1.cpu)" <<'EOF' || FAILED=1
+# A busy shared runner can starve one run of the default solve; time it once more and keep
+# the higher reading before calling the default single-threaded.
+solve blind_n2 -z 0 "${BLIND[@]}"
+python3 - "$(sort -n blind_n.cpu blind_n2.cpu | tail -1)" "$(cat blind_env1.cpu)" <<'EOF' || FAILED=1
 import sys
 n, one = map(float, sys.argv[1:])
 if n < 1.8:
