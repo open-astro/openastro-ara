@@ -561,17 +561,27 @@ void main() {
       server.resetDssState();
       originPeak = 0;
       final before = originHits;
-      // Twelve distinct misses, cap 2, against tiles that ANSWER after 300 ms:
+      // Twenty distinct misses, cap 2, against tiles that ANSWER after 300 ms:
       // each success frees a slot, and a soft cap that woke every waiter on
       // a release could let several start at once; the peak must stay at 2.
-      final burst = [
-        for (var i = 10; i < 22; i++)
-          get('${server.dssPathPrefix}Norder7/Dir0/Npix$i.jpg'),
-      ];
-      for (final r in await Future.wait(burst)) {
-        expect(r.status, HttpStatus.ok);
+      // The queue drains in ten rounds (about 3 s), longer than the headers
+      // plus body deadline below (2.25 s): a waiter that gave up at that
+      // deadline and fetched anyway broke the cap at the back of the queue,
+      // which only a slow CI runner used to reach.
+      final savedBody = StellariumServer.dssBodyTimeout;
+      StellariumServer.dssBodyTimeout = const Duration(milliseconds: 250);
+      try {
+        final burst = [
+          for (var i = 10; i < 30; i++)
+            get('${server.dssPathPrefix}Norder7/Dir0/Npix$i.jpg'),
+        ];
+        for (final r in await Future.wait(burst)) {
+          expect(r.status, HttpStatus.ok);
+        }
+      } finally {
+        StellariumServer.dssBodyTimeout = savedBody;
       }
-      expect(originHits - before, 12, reason: 'every miss was fetched once');
+      expect(originHits - before, 20, reason: 'every miss was fetched once');
       expect(originPeak, 2, reason: 'never more than the cap in flight');
     });
 
