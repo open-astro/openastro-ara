@@ -34,6 +34,17 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String statusMoreSemantics(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count more statuses',
+      one: '1 more status',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get pillsDismiss => 'Dismiss';
 
   @override
@@ -2004,6 +2015,17 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
       locale: localeName,
       other: 'Mais $count mensagens',
       one: 'Mais 1 mensagem',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String statusMoreSemantics(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Mais $count status',
+      one: 'Mais 1 status',
     );
     return '$_temp0';
   }

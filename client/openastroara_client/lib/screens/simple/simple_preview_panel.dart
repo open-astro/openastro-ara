@@ -509,6 +509,51 @@ class _SimpleWheelKeysState extends State<SimpleWheelKeys> {
   );
 }
 
+/// A pill's tap that a keyboard reaches too: Tab focuses it, with the
+/// [SimpleWheelKeys] ring, and Enter or Space taps it (DESIGN.md: keyboard
+/// reach with visible focus).
+class SimpleTapTarget extends StatefulWidget {
+  const SimpleTapTarget({super.key, required this.onTap, required this.child});
+
+  final VoidCallback? onTap;
+  final Widget child;
+
+  @override
+  State<SimpleTapTarget> createState() => _SimpleTapTargetState();
+}
+
+class _SimpleTapTargetState extends State<SimpleTapTarget> {
+  bool _ring = false;
+
+  @override
+  Widget build(BuildContext context) => FocusableActionDetector(
+    enabled: widget.onTap != null,
+    onShowFocusHighlight: (v) => setState(() => _ring = v),
+    mouseCursor: widget.onTap == null
+        ? MouseCursor.defer
+        : SystemMouseCursors.click,
+    actions: {
+      ActivateIntent: CallbackAction<ActivateIntent>(
+        onInvoke: (_) => widget.onTap?.call(),
+      ),
+    },
+    child: GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: widget.onTap,
+      child: DecoratedBox(
+        position: DecorationPosition.foreground,
+        decoration: BoxDecoration(
+          border: _ring
+              ? Border.all(color: AraColors.accentInfo, width: 2)
+              : null,
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: widget.child,
+      ),
+    ),
+  );
+}
+
 class _WheelStep extends Intent {
   const _WheelStep(this.dir);
   final int dir;
@@ -852,9 +897,8 @@ class _StatusPillState extends State<_StatusPill> {
       excludeSemantics: true,
       button: open != null,
       onTap: open,
-      child: GestureDetector(
+      child: SimpleTapTarget(
         key: const Key('simple-status-pill'),
-        behavior: HitTestBehavior.opaque,
         onTap: open,
         child: ConstrainedBox(
           constraints: BoxConstraints(
@@ -1194,16 +1238,24 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
         if (more > 0)
           Semantics(
             button: widget.onOpen != null,
-            child: GestureDetector(
+            child: SimpleTapTarget(
               onTap: widget.onOpen == null
                   ? null
                   : () => widget.onOpen!(pills[3].origin),
               child: SimplePanel(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AraSpace.s12,
-                  vertical: AraSpace.s4,
+                padding: const EdgeInsets.symmetric(horizontal: AraSpace.s12),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(minHeight: 44, minWidth: 44),
+                  child: Center(
+                    widthFactor: 1,
+                    heightFactor: 1,
+                    child: Text(
+                      '+$more',
+                      semanticsLabel: l10n.statusMoreSemantics(more),
+                      style: kSimpleText,
+                    ),
+                  ),
                 ),
-                child: Text('+$more', style: kSimpleText),
               ),
             ),
           ),

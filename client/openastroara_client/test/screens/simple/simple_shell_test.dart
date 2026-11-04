@@ -2591,6 +2591,67 @@ void main() {
     await tester.pump(const Duration(seconds: 1));
   });
 
+  testWidgets('past three pills, the "+n" fold: 44 pt tall, read as how many more, and Tab + Enter opens it '
+      '(impeccable audit, 2026-11-04)', (tester) async {
+    final mount = _ParkingMount();
+    final c = await _pump(tester, const Size(1024, 768), gear: [
+      mountProvider.overrideWith(() => mount),
+      polarAlignLiveProvider.overrideWith(() => _PolarRun()),
+      guiderStatusProvider.overrideWith(() => _GuiderAt('calibrating')),
+    ]);
+    await tester.pump();
+    c.read(captureProgressProvider.notifier).beginExposing(const Duration(seconds: 5));
+    await c.read(simpleMountMotionProvider.notifier).park(true);
+    await tester.pump();
+    final fold = find.text('+1');
+    expect(fold, findsOneWidget, reason: 'frame, park, polar align shown; the guider folded');
+    final box = find.ancestor(of: fold, matching: find.byType(SimplePanel)).first;
+    expect(tester.getSize(box).height, greaterThanOrEqualTo(44), reason: 'DESIGN.md: 44 pt targets');
+    expect(tester.getSemantics(fold), matchesSemantics(label: '1 more status', isButton: true, hasTapAction: true,
+        isFocusable: true, hasFocusAction: true));
+    FocusManager.instance.highlightStrategy = FocusHighlightStrategy.alwaysTraditional;
+    addTearDown(() => FocusManager.instance.highlightStrategy = FocusHighlightStrategy.automatic);
+    Focus.of(tester.element(fold)).requestFocus();
+    await tester.pump();
+    expect(find.ancestor(of: fold, matching: find.byWidgetPredicate((w) =>
+        w is DecoratedBox && (w.decoration as BoxDecoration).border != null)), findsOneWidget,
+        reason: 'a visible focus ring');
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pump();
+    expect(find.byType(SimpleGuidePanel), findsOneWidget, reason: 'the first one folded: the guider');
+    c.read(captureProgressProvider.notifier).reset();
+    await tester.pump(const Duration(seconds: 1));
+  });
+
+  testWidgets('a status pill takes Tab and Enter like a tap (impeccable audit, 2026-11-04)', (tester) async {
+    await _pump(tester, const Size(1024, 768), gear: [guiderStatusProvider.overrideWith(() => _GuiderAt('calibrating'))]);
+    await tester.pump();
+    Focus.of(tester.element(find.descendant(of: find.byKey(const Key('simple-status-pill')), matching: find.byType(Row)).first))
+        .requestFocus();
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pump();
+    expect(find.byType(SimpleGuidePanel), findsOneWidget);
+  });
+
+  testWidgets('a message that opens its origin is a button and takes Tab and Enter (impeccable audit, 2026-11-04)',
+      (tester) async {
+    final polar = _PolarRun();
+    await _pump(tester, const Size(1024, 768), gear: [polarAlignLiveProvider.overrideWith(() => polar)]);
+    await tester.pump();
+    polar.fail('no stars found');
+    await tester.pump();
+    final msg = find.textContaining('Polar alignment failed');
+    expect(tester.getSemantics(find.ancestor(of: msg, matching: find.byType(SimpleTapTarget))).flagsCollection.isButton,
+        isTrue);
+    Focus.of(tester.element(msg)).requestFocus();
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pump();
+    expect(find.byType(SimplePolarPanel), findsOneWidget);
+    await tester.pump(kSimpleErrorLife + const Duration(seconds: 1));
+  });
+
   testWidgets('the status pill reports the guider: its routine, then Guiding with the RMS; a frame comes first',
       (tester) async {
     // User, 2026-11-04: nothing on screen said the guider was calibrating.

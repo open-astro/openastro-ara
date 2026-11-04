@@ -31,6 +31,15 @@
       }
     }
   },
+  "statusMoreSemantics": "{count, plural, =1{1 more status} other{{count} more statuses}}",
+  "@statusMoreSemantics": {
+    "description": "Simple Mode status pills: screen reader label for the +N fold past three pills; a tap opens the first one folded",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "pillsDismiss": "Dismiss",
   "@pillsDismiss": {
     "description": "Simple Mode message pills: tooltip of the close button on an error message"

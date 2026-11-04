@@ -123,6 +123,12 @@ abstract class AppLocalizations {
   /// **'{count, plural, =1{1 more message} other{{count} more messages}}'**
   String pillsMoreSemantics(int count);
 
+  /// Simple Mode status pills: screen reader label for the +N fold past three pills; a tap opens the first one folded
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 more status} other{{count} more statuses}}'**
+  String statusMoreSemantics(int count);
+
   /// Simple Mode message pills: tooltip of the close button on an error message
   ///
   /// In en, this message translates to:

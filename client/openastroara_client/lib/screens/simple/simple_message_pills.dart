@@ -7,7 +7,7 @@ import '../../l10n/l10n.dart';
 import '../../state/simple_messages_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
-import 'simple_preview_panel.dart' show kSimpleText;
+import 'simple_preview_panel.dart' show SimpleTapTarget, kSimpleText;
 import 'simple_shell.dart' show kSimpleInset, simpleFrost;
 
 /// A pill's height when its words take one line (two lines grow it).
@@ -168,9 +168,9 @@ class _Pill extends ConsumerWidget {
       // Read out as it appears.
       liveRegion: true,
       container: true,
+      button: onOpen != null,
       onTap: onOpen,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
+      child: SimpleTapTarget(
         onTap: onOpen,
         child: simpleFrost(
         Container(

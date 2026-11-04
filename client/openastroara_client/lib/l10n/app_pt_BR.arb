@@ -4,6 +4,7 @@
   "pillsShowFewer": "Mostrar menos",
   "pillsMoreShort": "+{count}",
   "pillsMoreSemantics": "{count, plural, =1{Mais 1 mensagem} other{Mais {count} mensagens}}",
+  "statusMoreSemantics": "{count, plural, =1{Mais 1 status} other{Mais {count} status}}",
   "pillsDismiss": "Dispensar",
   "safetyAlertSemantics": "Alerta de segurança",
   "safetyAlertTitle": "ALERTA DE SEGURANÇA",
