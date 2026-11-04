@@ -263,6 +263,9 @@ void main() {
       expect(findCatalogObject(bundle, 'M45')!.messierNum, 45);
       expect(findCatalogObject(bundle, 'Pleiades')!.messierNum, 45);
       expect(findCatalogObject(bundle, 'C14')!.caldwellNum, 14);
+      // The Double Cluster is one Card: NGC 884 folds into NGC 869's row.
+      expect(findCatalogObject(bundle, 'NGC 884')!.caldwellNum, 14);
+      expect(findCatalogObject(bundle, 'Double Cluster')!.caldwellNum, 14);
       expect(searchSuggestions(bundle, 'M45').first.dso.messierNum, 45);
       expect(searchSuggestions(bundle, 'C14').first.dso.caldwellNum, 14);
     });
