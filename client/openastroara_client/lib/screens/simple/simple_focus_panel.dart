@@ -208,9 +208,22 @@ class SimpleFocusPanel extends ConsumerStatefulWidget {
 
 class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
   // The mask-off question, asked in the panel (Simple Mode has no popups):
-  // by Finish, or by leaving Manual before finishing ([_thenAuto]).
+  // by Finish, or by leaving Manual before finishing ([_then] switches once
+  // the mask is off).
   bool _askMask = false;
-  bool _thenAuto = false;
+  VoidCallback? _then;
+
+  /// Leaving Manual with a measurement not finished asks first.
+  void _leaveManual(BahtinovFocusLive bahtinov, VoidCallback leave) {
+    if (bahtinov.status.hasMeasurement && !bahtinov.finished) {
+      setState(() {
+        _askMask = true;
+        _then = leave;
+      });
+    } else {
+      leave();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -303,8 +316,15 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
                   selected: scope,
                   onPick: anyRunning
                       ? null
-                      : (sc) =>
-                            ref.read(simpleFocusScopeProvider.notifier).set(sc),
+                      : (sc) {
+                          void pick() => ref
+                              .read(simpleFocusScopeProvider.notifier)
+                              .set(sc);
+                          sc == SimpleFocusScope.guide &&
+                                  method == MainFocusMethod.bahtinov
+                              ? _leaveManual(bahtinov, pick)
+                              : pick();
+                        },
                 ),
                 // The method: Smart Focus with the focuser, or by hand with a
                 // Bahtinov mask. Locked while a run goes.
@@ -319,13 +339,12 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
                     onPick: locked
                         ? null
                         : (m) {
-                            if (m == MainFocusMethod.autofocus &&
-                                bahtinov.status.hasMeasurement &&
-                                !bahtinov.finished) {
-                              setState(() => _askMask = _thenAuto = true);
-                              return;
-                            }
-                            ref.read(mainFocusMethodProvider.notifier).pick(m);
+                            void pick() => ref
+                                .read(mainFocusMethodProvider.notifier)
+                                .pick(m);
+                            m == MainFocusMethod.autofocus
+                                ? _leaveManual(bahtinov, pick)
+                                : pick();
                           },
                   ),
               ],
@@ -475,7 +494,10 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
       children: [
         Expanded(
           child: OutlinedButton(
-            onPressed: () => setState(() => _askMask = _thenAuto = false),
+            onPressed: () => setState(() {
+              _askMask = false;
+              _then = null;
+            }),
             child: Text(l10n.bahtinovNotYet),
           ),
         ),
@@ -483,14 +505,13 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
           child: FilledButton(
             style: kSimpleGoStyle,
             onPressed: () async {
-              final thenAuto = _thenAuto;
-              setState(() => _askMask = _thenAuto = false);
+              final then = _then;
+              setState(() {
+                _askMask = false;
+                _then = null;
+              });
               await ref.read(bahtinovFocusProvider.notifier).finish();
-              if (thenAuto && mounted) {
-                ref
-                    .read(mainFocusMethodProvider.notifier)
-                    .pick(MainFocusMethod.autofocus);
-              }
+              if (mounted) then?.call();
             },
             child: Text(l10n.bahtinovMaskRemoved),
           ),

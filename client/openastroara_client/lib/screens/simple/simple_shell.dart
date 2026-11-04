@@ -397,6 +397,32 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     });
   }
 
+  SimpleModeScreen? _lastShown;
+
+  /// Leaving Manual before Finish asks for the mask to come off (DESIGN.md
+  /// Focus; ALP-4982), here once Focus has gone.
+  void _askMaskOff() {
+    if (!mounted) return;
+    final bahtinov = ref.read(bahtinovFocusProvider);
+    if (!bahtinov.status.hasMeasurement || bahtinov.finished) return;
+    final l10n = context.l10n;
+    ref
+        .read(simpleMessagesProvider.notifier)
+        .show(
+          SimpleMessageKind.question,
+          l10n.bahtinovMaskQuestion,
+          detail: l10n.bahtinovMaskQuestionDetail,
+          actions: [
+            SimpleMessageAction(l10n.bahtinovNotYet, () {}),
+            SimpleMessageAction(
+              l10n.bahtinovMaskRemoved,
+              () =>
+                  unawaited(ref.read(bahtinovFocusProvider.notifier).finish()),
+            ),
+          ],
+        );
+  }
+
   void _pickMode(SimpleModeScreen m) {
     if (m == SimpleModeScreen.autopilot) return _startAutopilot();
     setState(() {
@@ -517,6 +543,12 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     });
     final pilot = ref.watch(autopilotProvider);
     final shown = _shown(pilot);
+    // Leaving Focus takes its panel's mask question away: a pill asks.
+    if (_lastShown == SimpleModeScreen.focus &&
+        shown != SimpleModeScreen.focus) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _askMaskOff());
+    }
+    _lastShown = shown;
     // Polar align shows its own camera's frames while the routine runs.
     final polarFrame =
         shown == SimpleModeScreen.polarAlign &&

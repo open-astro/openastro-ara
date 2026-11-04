@@ -352,6 +352,25 @@ class _BahtinovReading extends BahtinovFocusNotifier {
   }
 }
 
+/// A Bahtinov readout stopped with a measurement, not finished.
+class _BahtinovMeasured extends BahtinovFocusNotifier {
+  int finishes = 0;
+  @override
+  BahtinovFocusLive build() {
+    const sample = BahtinovSample(seq: 1, detected: true, offsetPx: 1.0, withinZone: false);
+    return const BahtinovFocusLive(
+      status: BahtinovFocusStatus(
+          active: false, state: BahtinovFocusStates.stopped, exposureSec: 2, seq: 1, latest: sample,
+          recent: [sample], zonePx: 0.3, zoneFromOptics: false, hasFrame: false),
+    );
+  }
+  @override
+  Future<void> finish() async {
+    finishes++;
+    state = state.copyWith(finished: true);
+  }
+}
+
 class _GuideFrame extends GuideFocusNotifier {
   @override
   GuideFocusLive build() => GuideFocusLive(frame: Uint8List.fromList(_png), frameSeq: 1);
@@ -685,6 +704,30 @@ void main() {
     container.read(simpleFocusScopeProvider.notifier).set(SimpleFocusScope.guide);
     await tester.pump();
     expect(find.byKey(const Key('simple-focus-frame')), findsOneWidget);
+  });
+
+  testWidgets('leaving Focus with a Bahtinov measurement not finished asks for the mask in a pill (ALP-4982)',
+      (tester) async {
+    // #1486 review: DESIGN.md says leaving Manual before Finish asks; leaving the mode didn't.
+    final b = _BahtinovMeasured();
+    final container = await _pump(tester, const Size(1024, 768), gear: [
+      mainFocusMethodProvider.overrideWith(_ManualPick.new),
+      bahtinovFocusProvider.overrideWith(() => b),
+    ]);
+    await tester.tap(find.byKey(const Key('simple-mode')));
+    await tester.pump();
+    await tester.tap(find.text('Focus'));
+    await tester.pump();
+    expect(find.text('Take the Bahtinov mask off'), findsNothing);
+    await tester.tap(find.byKey(const Key('simple-mode')));
+    await tester.pump();
+    await tester.tap(find.text('Preview').first);
+    await tester.pump();
+    await tester.pump();
+    final pill = container.read(simpleMessagesProvider).single;
+    expect((pill.kind, pill.title), (SimpleMessageKind.question, 'Take the Bahtinov mask off'));
+    pill.actions.last.onPressed(); // Mask removed
+    expect(b.finishes, 1);
   });
 
   testWidgets('Focus stays in Simple Mode: the rail reads Focus, its panel opens left of the rail; the chip is the Focus chip',
