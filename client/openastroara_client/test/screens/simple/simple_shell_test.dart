@@ -2541,6 +2541,18 @@ void main() {
     await tester.pump(const Duration(seconds: 1));
   });
 
+  testWidgets('a tap on a message opens what it came from, as the status pills do (user, 2026-11-04)', (tester) async {
+    final polar = _PolarRun();
+    await _pump(tester, const Size(1024, 768), gear: [polarAlignLiveProvider.overrideWith(() => polar)]);
+    await tester.pump();
+    polar.fail('no stars found');
+    await tester.pump();
+    await tester.tap(find.textContaining('Polar alignment failed'));
+    await tester.pump();
+    expect(find.byType(SimplePolarPanel), findsOneWidget, reason: "Polar align's panel");
+    await tester.pump(kSimpleErrorLife + const Duration(seconds: 1));
+  });
+
   testWidgets('a failed polar alignment says so, with why, as a message on the left that fades (user, 2026-11-04)',
       (tester) async {
     final polar = _PolarRun();

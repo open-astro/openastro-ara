@@ -87,7 +87,7 @@ class SimplePolarShutter extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final api = ref.watch(polarAlignApiProvider);
     final active = simplePolarActive(ref.watch(polarAlignLiveProvider));
-    final notify = userNotifier(context);
+    final notify = userNotifier(context, origin: SimpleStatusOrigin.polar);
     final l10n = context.l10n;
     Future<void> run(String action, Future<void> Function() op) async {
       try {

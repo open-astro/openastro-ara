@@ -945,8 +945,6 @@ class _StatusPillState extends State<_StatusPill> {
   }
 }
 
-/// What the status pill is about: a tap opens it (user, 2026-11-04).
-enum SimpleStatusOrigin { preview, plan, mount, camera, focus, polar, guide }
 
 class SimpleStatusPill extends ConsumerStatefulWidget {
   const SimpleStatusPill({super.key, this.onOpen});

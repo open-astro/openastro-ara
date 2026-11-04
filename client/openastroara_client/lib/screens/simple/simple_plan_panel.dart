@@ -887,6 +887,7 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
           .show(
             SimpleMessageKind.error,
             l10nFor(ref.read(appLocaleProvider)).planQueueBusy,
+            origin: SimpleStatusOrigin.plan,
           );
       return false;
     }
@@ -910,7 +911,9 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
         final why = _why(e, 'schedule the start');
         state = state.copyWith(error: why);
         // A pill too, as _op's: Guided Run's last Done starts it with no sheet open.
-        ref.read(simpleMessagesProvider.notifier).show(SimpleMessageKind.error, why);
+        ref
+            .read(simpleMessagesProvider.notifier)
+            .show(SimpleMessageKind.error, why, origin: SimpleStatusOrigin.plan);
         return false;
       }
     }
@@ -973,7 +976,7 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
       // closed (a failed Stop from the shutter, with the rig still imaging).
       ref
           .read(simpleMessagesProvider.notifier)
-          .show(SimpleMessageKind.error, why);
+          .show(SimpleMessageKind.error, why, origin: SimpleStatusOrigin.plan);
     }
     await ref.read(sequenceRunStateProvider.notifier).refresh();
   }

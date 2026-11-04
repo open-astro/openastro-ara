@@ -30,6 +30,20 @@ const kSimpleResultLife = Duration(seconds: 10); // 6 until 2026-11-04 (user: to
 /// (user, 2026-11-04: not a sticky pill); × closes it sooner.
 const kSimpleErrorLife = Duration(seconds: 20);
 
+/// Where something on screen came from: a tap on its status pill or its
+/// message opens it (user, 2026-11-04).
+enum SimpleStatusOrigin {
+  preview,
+  plan,
+  mount,
+  camera,
+  focuser,
+  guiderCamera,
+  focus,
+  polar,
+  guide,
+}
+
 class SimpleMessageAction {
   const SimpleMessageAction(this.label, this.onPressed);
   final String label;
@@ -43,6 +57,7 @@ class SimpleMessage {
     required this.title,
     this.detail,
     this.actions = const [],
+    this.origin,
   });
 
   final int id;
@@ -52,6 +67,9 @@ class SimpleMessage {
 
   /// A question's buttons, the last one the main answer.
   final List<SimpleMessageAction> actions;
+
+  /// What a tap on the pill opens, when known.
+  final SimpleStatusOrigin? origin;
 }
 
 /// The pills showing, newest first.
@@ -74,6 +92,7 @@ class SimpleMessagesNotifier extends Notifier<List<SimpleMessage>> {
     String title, {
     String? detail,
     List<SimpleMessageAction> actions = const [],
+    SimpleStatusOrigin? origin,
   }) {
     final id = _next++;
     state = [
@@ -83,6 +102,7 @@ class SimpleMessagesNotifier extends Notifier<List<SimpleMessage>> {
         title: title,
         detail: detail,
         actions: actions,
+        origin: origin,
       ),
       ...state,
     ];
@@ -119,8 +139,8 @@ typedef UserNotify = void Function(
 });
 
 /// A [UserNotify] for [context], captured before any await (the context may
-/// be gone when the answer arrives).
-UserNotify userNotifier(BuildContext context) {
+/// be gone when the answer arrives); its pills open [origin] when tapped.
+UserNotify userNotifier(BuildContext context, {SimpleStatusOrigin? origin}) {
   final container = ProviderScope.containerOf(context, listen: false);
   final messenger = ScaffoldMessenger.maybeOf(context);
   return (
@@ -144,6 +164,7 @@ UserNotify userNotifier(BuildContext context) {
                 : SimpleMessageKind.result,
             title,
             detail: detail,
+            origin: origin,
           );
       return;
     }

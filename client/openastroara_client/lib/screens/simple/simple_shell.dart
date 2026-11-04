@@ -457,13 +457,17 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
 
   /// A tap on the status pill: what it is about, open (user, 2026-11-04).
   void _openFromPill(SimpleStatusOrigin origin) {
-    if (origin == SimpleStatusOrigin.mount ||
-        origin == SimpleStatusOrigin.camera) {
+    final window = switch (origin) {
+      SimpleStatusOrigin.mount => 'eq.mount',
+      SimpleStatusOrigin.camera => 'eq.camera',
+      SimpleStatusOrigin.focuser => 'eq.focuser',
+      SimpleStatusOrigin.guiderCamera => 'eq.guider',
+      _ => null,
+    };
+    if (window != null) {
       setState(() {
         _clean = false;
-        _device = origin == SimpleStatusOrigin.mount
-            ? 'eq.mount'
-            : 'eq.camera';
+        _device = window;
         if (!_sideBySide(context)) _popover = _Popover.none;
       });
       return;
@@ -614,6 +618,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
             SimpleMessageKind.error,
             context.l10n.polarPhaseFailed,
             detail: next.errorMessage ?? next.errorReason,
+            origin: SimpleStatusOrigin.polar,
           );
     });
     ref.listen(autofocusLiveProvider.select((l) => l.run), (prev, next) {
@@ -624,6 +629,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
             SimpleMessageKind.error,
             context.l10n.focusCardFailed,
             detail: MainFocusCard.failureText(context.l10n, next),
+            origin: SimpleStatusOrigin.focus,
           );
     });
     final pilot = ref.watch(autopilotProvider);
@@ -880,6 +886,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                           duration: motion,
                           curve: Curves.easeOut,
                           child: SimpleMessagePills(
+                            onOpen: _openFromPill,
                             maxHeight: panels
                                 ? leftRailTop - messagesTop - kSimpleInset
                                 : double.infinity,

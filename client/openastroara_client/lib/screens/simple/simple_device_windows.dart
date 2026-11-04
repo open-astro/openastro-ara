@@ -219,7 +219,7 @@ class _SimpleCameraWindowState extends ConsumerState<SimpleCameraWindow> {
     final before = ref.read(imagingDefaultsProvider).coolerTargetC;
     defaults.setCoolerTargetC(celsius);
     if (ref.read(imagingDefaultsProvider).coolerTargetC == before) return;
-    final notify = userNotifier(context);
+    final notify = userNotifier(context, origin: SimpleStatusOrigin.camera);
     final l10n = context.l10n;
     final api = ref.read(profileApiProvider);
     if (api != null) {
@@ -248,7 +248,7 @@ class _SimpleCameraWindowState extends ConsumerState<SimpleCameraWindow> {
       ref.read(exposureControllerProvider.notifier).setGain(gain);
 
   Future<void> _run(Future<bool> Function() action) async {
-    final notify = userNotifier(context);
+    final notify = userNotifier(context, origin: SimpleStatusOrigin.camera);
     final l10n = context.l10n;
     try {
       if (!await action()) _sayBusy(ref, l10n);
@@ -482,6 +482,7 @@ class SimpleMountMotionNotifier extends Notifier<bool?> {
         .show(
           SimpleMessageKind.error,
           asked ? l10n.deviceParkUnfinished : l10n.deviceUnparkUnfinished,
+          origin: SimpleStatusOrigin.mount,
         );
   }
 
@@ -721,7 +722,7 @@ class _SimpleMountWindowState extends ConsumerState<SimpleMountWindow> {
   Future<void> _setFlip(BuildContext context, bool on) async {
     final policies = ref.read(safetyPoliciesProvider.notifier);
     policies.setMeridianFlipAuto(on);
-    final notify = userNotifier(context);
+    final notify = userNotifier(context, origin: SimpleStatusOrigin.mount);
     final l10n = context.l10n;
     final api = ref.read(profileApiProvider);
     if (api == null) return;
@@ -741,7 +742,7 @@ class _SimpleMountWindowState extends ConsumerState<SimpleMountWindow> {
     BuildContext context,
     Future<bool> Function() action,
   ) async {
-    final notify = userNotifier(context);
+    final notify = userNotifier(context, origin: SimpleStatusOrigin.mount);
     final l10n = context.l10n;
     try {
       final performed = await action();
@@ -881,7 +882,7 @@ class _SimpleFocuserWindowState extends ConsumerState<SimpleFocuserWindow> {
     setState(() => _sent = target);
     // A relative focuser takes the change, not a position.
     final absolute = s.capabilities?.absoluteFocuser ?? true;
-    final notify = userNotifier(context);
+    final notify = userNotifier(context, origin: SimpleStatusOrigin.focuser);
     final l10n = context.l10n;
     try {
       final performed = await ref
@@ -936,7 +937,7 @@ class _SimpleFocuserWindowState extends ConsumerState<SimpleFocuserWindow> {
     af.setTriggerTempDeltaC(c.clamp(0, 10).toDouble());
     final api = ref.read(profileApiProvider);
     if (api == null) return;
-    final notify = userNotifier(context);
+    final notify = userNotifier(context, origin: SimpleStatusOrigin.focuser);
     final l10n = context.l10n;
     try {
       await af.persistToServer(api);

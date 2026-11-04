@@ -111,7 +111,7 @@ Future<void> simpleGuideRun(
   WidgetRef ref, {
   required bool start,
 }) async {
-  final notify = userNotifier(context);
+  final notify = userNotifier(context, origin: SimpleStatusOrigin.guide);
   final l10n = context.l10n;
   final guider = ref.read(guiderStatusProvider.notifier);
   final pending = ref.read(simpleGuiderPendingProvider.notifier);

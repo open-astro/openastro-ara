@@ -27,7 +27,7 @@ Future<void> toggleLiveView(
   WidgetRef ref,
   bool on,
 ) async {
-  final notify = userNotifier(context);
+  final notify = userNotifier(context, origin: SimpleStatusOrigin.preview);
   final controller = ref.read(liveViewControllerProvider.notifier);
   controller.set(on); // optimistic — reflect the tap immediately
   final lv = ref.read(liveViewFrameProvider.notifier);
@@ -66,7 +66,7 @@ Future<void> toggleLiveView(
 /// daemon runs the capture in the background and registers the frame; we
 /// just surface accepted/failed to the user.
 Future<void> takeOne(BuildContext context, WidgetRef ref) async {
-  final notify = userNotifier(context);
+  final notify = userNotifier(context, origin: SimpleStatusOrigin.preview);
   final l10n = context.l10n;
   // Commit any half-typed control edit (the fields commit on focus loss)
   // before reading the exposure params this shot will use. The zero delay
@@ -160,7 +160,7 @@ Future<void> takeOne(BuildContext context, WidgetRef ref) async {
 /// Cancel the in-flight capture — abort the exposure on the daemon, then
 /// drop the capture state back to idle.
 Future<void> cancelCapture(BuildContext context, WidgetRef ref) async {
-  final notify = userNotifier(context);
+  final notify = userNotifier(context, origin: SimpleStatusOrigin.preview);
   final progress = ref.read(captureProgressProvider.notifier);
   final server = ref.read(activeServerProvider);
   if (server == null) {

@@ -138,6 +138,7 @@ class AutopilotNotifier extends Notifier<AutopilotStep?> {
         _stepAction(
           ref.read(guiderStatusProvider.notifier).startGuiding,
           (l) => l.guideActionStart,
+          origin: SimpleStatusOrigin.guide,
         ),
       );
     }
@@ -147,8 +148,9 @@ class AutopilotNotifier extends Notifier<AutopilotStep?> {
   /// in a pill (a step whose routine never started, or a mount still moving).
   Future<void> _stepAction(
     Future<void> Function() op,
-    String Function(AppLocalizations l10n) action,
-  ) async {
+    String Function(AppLocalizations l10n) action, {
+    SimpleStatusOrigin origin = SimpleStatusOrigin.polar,
+  }) async {
     try {
       await op();
     } catch (e) {
@@ -159,6 +161,7 @@ class AutopilotNotifier extends Notifier<AutopilotStep?> {
           .show(
             SimpleMessageKind.error,
             friendlyError(l10n, e, action: action(l10n)),
+            origin: origin,
           );
     }
   }

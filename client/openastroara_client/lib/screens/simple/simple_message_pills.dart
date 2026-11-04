@@ -17,9 +17,12 @@ const double kSimpleMessageHeight = 48;
 /// many as fit [maxHeight] (above the left rail), the rest folded into one
 /// "+N more" pill that shows them all.
 class SimpleMessagePills extends ConsumerStatefulWidget {
-  const SimpleMessagePills({super.key, required this.maxHeight});
+  const SimpleMessagePills({super.key, required this.maxHeight, this.onOpen});
 
   final double maxHeight;
+
+  /// Opens what a message came from, on a tap (user, 2026-11-04).
+  final ValueChanged<SimpleStatusOrigin>? onOpen;
 
   @override
   ConsumerState<SimpleMessagePills> createState() => _SimpleMessagePillsState();
@@ -90,6 +93,9 @@ class _SimpleMessagePillsState extends ConsumerState<SimpleMessagePills> {
             message: m,
             more: inline && m == shown.first ? more : null,
             onMore: toggle,
+            onOpen: m.origin == null || widget.onOpen == null
+                ? null
+                : () => widget.onOpen!(m.origin!),
           ),
         if ((folded && !inline) || (_all && messages.length > fit))
           Semantics(
@@ -128,9 +134,13 @@ class _Pill extends ConsumerWidget {
     required this.message,
     this.more,
     required this.onMore,
+    this.onOpen,
   });
 
   final SimpleMessage message;
+
+  /// Opens what it came from.
+  final VoidCallback? onOpen;
 
   /// Messages folded behind this one, shown as "+N" at its end when there is
   /// no room for the fold below it.
@@ -158,7 +168,11 @@ class _Pill extends ConsumerWidget {
       // Read out as it appears.
       liveRegion: true,
       container: true,
-      child: simpleFrost(
+      onTap: onOpen,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onOpen,
+        child: simpleFrost(
         Container(
         key: Key('simple-message-${m.id}'),
         constraints: const BoxConstraints(minHeight: kSimpleMessageHeight),
@@ -277,6 +291,7 @@ class _Pill extends ConsumerWidget {
               ),
           ],
         ),
+      ),
       ),
       ),
     );
