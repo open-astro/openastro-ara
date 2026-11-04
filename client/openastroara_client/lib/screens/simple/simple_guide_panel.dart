@@ -115,32 +115,34 @@ class SimpleGuideShutter extends ConsumerWidget {
               pending != null ||
               (!active && cameraBusy)
           ? null
-          : () => simpleGuideRun(context, ref, start: !active),
+          : () => simpleGuideRun(context, start: !active),
     );
   }
 }
 
 /// Starts (the whole routine) or stops guiding; a refusal says why in a pill.
 Future<void> simpleGuideRun(
-  BuildContext context,
-  WidgetRef ref, {
+  BuildContext context, {
   required bool start,
 }) async {
   final notify = userNotifier(context, origin: SimpleStatusOrigin.guide);
   final l10n = context.l10n;
-  final guider = ref.read(guiderStatusProvider.notifier);
-  final pending = ref.read(simpleGuiderPendingProvider.notifier);
+  // The container, not ref or context: a mode change unmounts the shutter
+  // mid-ask, and the pending state must still clear.
+  final container = ProviderScope.containerOf(context, listen: false);
+  final guider = container.read(guiderStatusProvider.notifier);
+  final pending = container.read(simpleGuiderPendingProvider.notifier);
   pending.set(start);
   try {
     await (start ? guider.startGuiding() : guider.stopGuiding());
     // The guider answers the ask at once and acts a moment later: read again
     // every half second until it shows, 10 s at most.
     for (var i = 0; i < 20; i++) {
-      if (simpleGuideActive(ref.read(guiderStatusProvider).value) == start) {
+      if (simpleGuideActive(container.read(guiderStatusProvider).value) ==
+          start) {
         break;
       }
       await Future<void>.delayed(const Duration(milliseconds: 500));
-      if (!context.mounted) return;
       await guider.refresh();
     }
   } catch (e) {
@@ -154,7 +156,7 @@ Future<void> simpleGuideRun(
       snackBarRed: false,
     );
   } finally {
-    if (context.mounted) pending.set(null);
+    pending.set(null);
   }
 }
 

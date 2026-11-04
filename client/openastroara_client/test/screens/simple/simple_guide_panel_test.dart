@@ -167,6 +167,20 @@ void main() {
     expect(find.text('Idle'), findsOneWidget);
   });
 
+  testWidgets('a mode change mid-ask: the shutter leaves, and Starting… still clears (review, #1490)',
+      (tester) async {
+    final c = await _pump(tester, _wire(runtime: 'stopped'), lag: true, child: const SimpleGuideShutter());
+    await tester.tap(find.byType(SimpleGuideShutter));
+    await tester.pump();
+    expect(c.read(simpleGuiderPendingProvider), isTrue);
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: c,
+      child: const MaterialApp(home: Scaffold(body: SizedBox())),
+    ));
+    await tester.pump(const Duration(seconds: 11));
+    expect(c.read(simpleGuiderPendingProvider), isNull, reason: 'else the shutter stays greyed on Starting…');
+  });
+
   testWidgets("the guide camera's exposure, a tile like Preview's, and its gain slider (user, 2026-11-04)",
       (tester) async {
     final c = await _pump(tester, _wire());
