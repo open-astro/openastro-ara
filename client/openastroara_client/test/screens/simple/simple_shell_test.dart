@@ -802,6 +802,31 @@ void main() {
     expect(find.byKey(const Key('sky')), findsNothing);
   });
 
+  // Falsified by: simple_shell.dart _SkyPick onImage, guard on `pilot == null` instead of what shows.
+  testWidgets("Image this over the sky in Night Setup's Focus step goes to Plan and leaves Night Setup, as before",
+      (tester) async {
+    final container = await _pump(tester, const Size(1024, 768));
+    await _frame(tester, container);
+    await tester.tap(find.byKey(const Key('night-setup-start')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('night-setup-skip')));
+    await tester.pump();
+    expect(container.read(nightSetupProvider), NightSetupStep.focus);
+    await tester.tap(find.text('Sky'));
+    await tester.pump();
+    container.read(planetariumSelectionProvider.notifier).set(const PlanetariumSelection(
+        name: 'M31', kind: 'Galaxy', raHours: 0.73, decDeg: 41.4, raJ2000Hours: 0.71, decJ2000Deg: 41.27,
+        altDeg: 62.4, maxAltDeg: 74.2));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('simple-sky-image-this')));
+    await tester.pump();
+    expect(container.read(simpleShowingProvider), SimpleModeScreen.plan);
+    expect(container.read(nightSetupProvider), isNull, reason: 'picking Plan leaves Night Setup');
+    expect(find.byKey(const Key('night-setup-strip')), findsNothing);
+    expect(find.byType(SimpleRunSheet), findsOneWidget, reason: "Plan's sheet, not Focus's panel");
+    expect(find.byType(SimpleFocusPanel), findsNothing);
+  });
+
   testWidgets('the settings chip opens Exposure from a list, the Gain slider under it, Filter and Loop/Single',
       (tester) async {
     final container = await _pump(tester, const Size(1024, 768));
@@ -902,7 +927,7 @@ void main() {
   // Falsified by: simple_night_setup_state.dart SimpleShowingNotifier.build, drop the simpleModeProvider listen.
   testWidgets('Simple Mode opens on Preview again: a reopen ends a Night Setup left running and offers it anew',
       (tester) async {
-    final container = await _pump(tester, const Size(1024, 768));
+    final container = await _pump(tester, const Size(1024, 768), feature: true);
     await tester.tap(find.byKey(const Key('night-setup-start')));
     await tester.pump();
     expect(find.byKey(const Key('night-setup-strip')), findsOneWidget);

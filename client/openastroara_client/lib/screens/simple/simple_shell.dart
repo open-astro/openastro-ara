@@ -933,8 +933,9 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                     child: _SkyPick(
                                       selection: sel,
                                       onImage: () => setState(() {
-                                        // In Night Setup's plan step it shows already.
-                                        if (pilot == null) {
+                                        // Plan shows already in Night Setup's plan step; from any
+                                        // other screen the pick goes to Plan and leaves Night Setup.
+                                        if (shown != SimpleModeScreen.plan) {
                                           ref
                                               .read(simpleShowingProvider.notifier)
                                               .pick(SimpleModeScreen.plan);

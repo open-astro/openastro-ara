@@ -66,6 +66,7 @@ Future<ProviderContainer> _container() async {
     polarAlignApiProvider.overrideWithValue(_PolarApi()),
     simplePermanentPierPrefsProvider.overrideWithValue(_Prefs(false)),
     simpleModePrefsProvider.overrideWithValue(_Prefs(true)),
+    simpleModeFeaturePrefsProvider.overrideWithValue(_Prefs(true)),
     simpleRunProvider.overrideWith(_Plan.new),
   ]);
   addTearDown(c.dispose);
@@ -84,16 +85,23 @@ void main() {
   });
 
   // Falsified by: simple_night_setup_state.dart SimpleShowingNotifier.build, drop the simpleModeProvider listen.
-  test('Simple Mode opening again shows Preview and ends a Night Setup left running', () async {
-    final c = await _container();
-    await c.read(simpleModeProvider.future);
-    c.read(simpleShowingProvider.notifier).pick(SimpleModeScreen.nightSetup);
-    await c.read(simpleModeProvider.notifier).set(false);
-    expect(c.read(nightSetupProvider), NightSetupStep.plan, reason: 'leaving changes nothing');
-    await c.read(simpleModeProvider.notifier).set(true);
-    expect(c.read(simpleShowingProvider), SimpleModeScreen.preview);
-    expect(c.read(nightSetupProvider), isNull);
-  });
+  for (final (name, toggle) in [
+    ('the mode', (ProviderContainer c, bool on) => c.read(simpleModeProvider.notifier).set(on)),
+    ('the feature', (ProviderContainer c, bool on) => c.read(simpleModeFeatureProvider.notifier).set(on)),
+  ]) {
+    test('Simple Mode opening again ($name toggled) shows Preview and ends a Night Setup left running', () async {
+      final c = await _container();
+      await c.read(simpleModeProvider.future);
+      await c.read(simpleModeFeatureProvider.future);
+      expect(c.read(simpleModeActiveProvider), isTrue);
+      c.read(simpleShowingProvider.notifier).pick(SimpleModeScreen.nightSetup);
+      await toggle(c, false);
+      expect(c.read(nightSetupProvider), NightSetupStep.plan, reason: 'leaving changes nothing');
+      await toggle(c, true);
+      expect(c.read(simpleShowingProvider), SimpleModeScreen.preview);
+      expect(c.read(nightSetupProvider), isNull);
+    });
+  }
 
   test('picking Night Setup starts it on Plan, and Plan is what shows; the pick itself never shows', () async {
     final c = await _container();

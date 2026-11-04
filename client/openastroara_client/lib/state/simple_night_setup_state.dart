@@ -50,11 +50,21 @@ class SimpleShowingNotifier extends Notifier<SimpleModeScreen> {
   SimpleModeScreen build() {
     // Simple Mode opens on Preview, as when the shell held what shows; the
     // pick also ends a Night Setup left running (its strip was hidden before).
-    ref.listen(simpleModeProvider, (prev, next) {
-      if (prev?.value == false && next.value == true) {
-        pick(SimpleModeScreen.preview);
-      }
-    });
+    // The shell mounts on the feature AND the mode (simpleModeActiveProvider),
+    // so both toggles count; the two sources are listened to, as a derived
+    // Provider with no reader is not recomputed.
+    bool active() =>
+        (ref.read(simpleModeFeatureProvider).value ?? false) &&
+        (ref.read(simpleModeProvider).value ?? false);
+    var was = active();
+    void opened(Object? prev, Object? next) {
+      final now = active();
+      if (!was && now) pick(SimpleModeScreen.preview);
+      was = now;
+    }
+
+    ref.listen(simpleModeProvider, opened);
+    ref.listen(simpleModeFeatureProvider, opened);
     return SimpleModeScreen.preview;
   }
 
