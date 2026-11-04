@@ -1225,6 +1225,36 @@ class AppLocalizationsPt extends AppLocalizations {
       'Couldn\'t reach the rig. Check the connection and try again.';
 
   @override
+  String get planActionCreate => 'create the plan';
+
+  @override
+  String get planActionSaveEdit => 'save the edit';
+
+  @override
+  String get planActionPutBack => 'put it back';
+
+  @override
+  String get planActionReorder => 'reorder the queue';
+
+  @override
+  String get planActionRemove => 'remove it from the queue';
+
+  @override
+  String get planActionSchedule => 'schedule the start';
+
+  @override
+  String get planActionStart => 'start imaging';
+
+  @override
+  String get planActionPause => 'pause';
+
+  @override
+  String get planActionResume => 'resume';
+
+  @override
+  String get planActionStop => 'stop the run';
+
+  @override
   String get planRunEnding => 'The run is ending; this target can\'t join it.';
 
   @override
@@ -3157,6 +3187,36 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get planRigUnreachable =>
       'Não foi possível falar com o setup. Verifique a conexão e tente de novo.';
+
+  @override
+  String get planActionCreate => 'criar o plano';
+
+  @override
+  String get planActionSaveEdit => 'salvar a edição';
+
+  @override
+  String get planActionPutBack => 'colocá-lo de volta';
+
+  @override
+  String get planActionReorder => 'reordenar a fila';
+
+  @override
+  String get planActionRemove => 'removê-lo da fila';
+
+  @override
+  String get planActionSchedule => 'agendar o início';
+
+  @override
+  String get planActionStart => 'iniciar a captura';
+
+  @override
+  String get planActionPause => 'pausar';
+
+  @override
+  String get planActionResume => 'retomar';
+
+  @override
+  String get planActionStop => 'parar a sessão';
 
   @override
   String get planRunEnding =>

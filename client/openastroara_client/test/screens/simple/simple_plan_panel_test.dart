@@ -37,6 +37,10 @@ import 'package:openastroara/services/simple_mode_prefs_service.dart';
 import 'package:openastroara/state/simple_mode_state.dart';
 import 'package:openastroara/state/settings/settings_nav.dart';
 import 'package:openastroara/state/app_shell_state.dart';
+import 'package:openastroara/state/app_locale_state.dart';
+import 'package:openastroara/models/sequence/draft_sequence.dart';
+import 'package:openastroara/services/draft_sequence_service.dart';
+import 'package:openastroara/state/sequencer/draft_sequences_state.dart';
 import 'package:openastroara/models/ws_event.dart';
 import 'package:openastroara/state/ws/ws_providers.dart';
 import 'package:openastroara/widgets/stop_mount_overlay.dart' show SlewWsEvents;
@@ -65,6 +69,27 @@ const _lrgb = [
 class _Gain150 extends ExposureController {
   @override
   ExposureParams build() => super.build().copyWith(gain: 150);
+}
+
+/// The offline-draft store, in memory: a transport failure on create lands here.
+class _MemDraftService extends DraftSequenceService {
+  final Map<String, DraftSequence> store = {};
+  int _n = 0;
+  @override
+  String newId() => '${draftIdPrefix}mem-${_n++}';
+  @override
+  Future<List<DraftSequence>> loadAll() async => store.values.toList();
+  @override
+  Future<void> save(DraftSequence draft) async => store[draft.id] = draft;
+  @override
+  Future<void> delete(String id) async => store.remove(id);
+}
+
+class _Locale extends AppLocaleController {
+  _Locale(this.picked);
+  final Locale picked;
+  @override
+  Locale? build() => picked;
 }
 
 class _Seq implements SequenceClient {
@@ -534,12 +559,14 @@ void main() {
   }
 
   group('the Queue, through its own interface (no sheet)', () {
-    Future<(ProviderContainer, _Seq)> queue({bool createFails = false}) async {
+    Future<(ProviderContainer, _Seq)> queue({bool createFails = false, bool api = true, Locale? locale}) async {
       final seq = _Seq()..createFails = createFails;
       final c = ProviderContainer(overrides: [
         ..._rig.cast(),
+        if (locale != null) appLocaleProvider.overrideWith(() => _Locale(locale)),
+        draftSequenceServiceProvider.overrideWithValue(_MemDraftService()),
         tonightSkyProvider.overrideWith((ref) async => const <TonightSkyObject>[]),
-        sequenceApiProvider.overrideWith((ref) => seq),
+        sequenceApiProvider.overrideWith((ref) => api ? seq : null),
         planetariumSelectionProvider.overrideWith(() => _Sel(_m31)),
         filterSetProvider.overrideWith(() => _Filters()),
       ]);
@@ -559,12 +586,33 @@ void main() {
       expect(c.read(simpleMessagesProvider), isEmpty);
     });
 
-    test('a rig failure on Add is one pill, not an inline error too', () async {
+    test('the link drops on Add: the create falls back to a local draft, refused with one pill', () async {
       final (c, _) = await queue(createFails: true);
       expect(await c.read(simpleRunProvider.notifier).create(), isFalse);
-      expect(c.read(simpleMessagesProvider).map((m) => m.kind), [SimpleMessageKind.error]);
+      expect(c.read(simpleMessagesProvider).map((m) => (m.kind, m.title)),
+          [(SimpleMessageKind.error, _en.planRigUnreachable)]);
       expect(c.read(simpleRunProvider).error, isNull, reason: 'the pill is the one surface');
       expect(c.read(simpleRunProvider).targets, isEmpty);
+    });
+
+    test('no daemon at all: the create is only a local draft, refused with the same one pill', () async {
+      final (c, _) = await queue(api: false);
+      expect(await c.read(simpleRunProvider.notifier).create(), isFalse);
+      expect(c.read(simpleMessagesProvider).map((m) => (m.kind, m.title)),
+          [(SimpleMessageKind.error, _en.planRigUnreachable)]);
+      expect(c.read(simpleRunProvider).error, isNull);
+      expect(c.read(simpleRunProvider).targets, isEmpty);
+    });
+
+    test('a failure reads whole in the app locale: pt-BR prefix and pt-BR action', () async {
+      final (c, seq) = await queue(locale: const Locale('pt', 'BR'));
+      await c.read(simpleRunProvider.notifier).create();
+      seq.updatesBeforeFail = 0; // writing the start time fails, with no words from the daemon
+      expect(
+          await c.read(simpleRunProvider.notifier).startQueue(startAt: DateTime.now().add(const Duration(hours: 2))),
+          isFalse);
+      final pt = lookupAppLocalizations(const Locale('pt', 'BR'));
+      expect(c.read(simpleMessagesProvider).single.title, startsWith(pt.errorCouldnt(pt.planActionSchedule)));
     });
 
     test('a pre-flight refusal (already queued) stays inline, no pill', () async {

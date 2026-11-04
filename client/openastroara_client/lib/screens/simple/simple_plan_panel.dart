@@ -636,7 +636,7 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
       }
       return true;
     } catch (e) {
-      _fail(_why(e, 'create the plan'));
+      _fail(_why(e, (l) => l.planActionCreate));
       return false;
     }
   }
@@ -714,7 +714,7 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
       return true;
     } catch (e) {
       _fail(
-        _why(e, 'save the edit'),
+        _why(e, (l) => l.planActionSaveEdit),
         undo: state.copyWith(targets: await _asOnRig(api, id)),
       );
       return false;
@@ -788,7 +788,7 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
       );
       return true;
     } catch (e) {
-      _fail(_why(e, 'put it back'));
+      _fail(_why(e, (l) => l.planActionPutBack));
       return false;
     }
   }
@@ -822,7 +822,7 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
     } catch (e) {
       final api = ref.read(sequenceApiProvider);
       _fail(
-        _why(e, 'reorder the queue'),
+        _why(e, (l) => l.planActionReorder),
         undo: api == null
             ? null
             : state.copyWith(targets: await _asOnRig(api, id)),
@@ -848,7 +848,7 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
         state = state.copyWith(targets: left);
       }
     } catch (e) {
-      _fail(_why(e, 'remove it from the queue'));
+      _fail(_why(e, (l) => l.planActionRemove));
     }
   }
 
@@ -891,7 +891,7 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
           ),
         );
       } catch (e) {
-        _fail(_why(e, 'schedule the start'));
+        _fail(_why(e, (l) => l.planActionSchedule));
         return false;
       }
     }
@@ -902,28 +902,28 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
   /// The shutter's actions.
   Future<bool> start() => _op(
     (api, id) => api.start(id),
-    'start imaging',
+    (l) => l.planActionStart,
     before: state.copyWith(started: true),
   );
   Future<void> pause() => _op(
     (api, id) => api.pause(id),
-    'pause',
+    (l) => l.planActionPause,
     before: state.copyWith(pausing: true),
   );
   // The shutter's resume re-centers (pointing may have drifted while
   // paused); the progress panel offers the other two.
   Future<void> resume({bool recenter = true, bool refocus = false}) => _op(
     (api, id) => api.resume(id, recenter: recenter, refocus: refocus),
-    'resume',
+    (l) => l.planActionResume,
   );
-  Future<void> stop() => _op((api, id) => api.stop(id), 'stop the run');
+  Future<void> stop() => _op((api, id) => api.stop(id), (l) => l.planActionStop);
 
   /// Night done's New plan: back to the sheet.
   void newPlan() => state = const SimpleRun();
 
   Future<bool> _op(
     Future<String> Function(SequenceClient api, String id) op,
-    String action, {
+    String Function(AppLocalizations l) action, {
     SimpleRun? before,
   }) async {
     final api = ref.read(sequenceApiProvider);
@@ -965,13 +965,15 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
   }
 
   // The daemon's own words when it sent them.
-  String _why(Object e, String action) {
+  // [action] is picked from the app's locale, so the whole line reads in it.
+  String _why(Object e, String Function(AppLocalizations l) action) {
     if (e is DioException) {
       final data = e.response?.data;
       final detail = data is Map ? data['detail'] : null;
       if (detail is String && detail.trim().isNotEmpty) return detail.trim();
     }
-    return friendlyError(l10nFor(ref.read(appLocaleProvider)), e, action: action);
+    final l = l10nFor(ref.read(appLocaleProvider));
+    return friendlyError(l, e, action: action(l));
   }
 }
 

@@ -1225,6 +1225,36 @@ class AppLocalizationsEn extends AppLocalizations {
       'Couldn\'t reach the rig. Check the connection and try again.';
 
   @override
+  String get planActionCreate => 'create the plan';
+
+  @override
+  String get planActionSaveEdit => 'save the edit';
+
+  @override
+  String get planActionPutBack => 'put it back';
+
+  @override
+  String get planActionReorder => 'reorder the queue';
+
+  @override
+  String get planActionRemove => 'remove it from the queue';
+
+  @override
+  String get planActionSchedule => 'schedule the start';
+
+  @override
+  String get planActionStart => 'start imaging';
+
+  @override
+  String get planActionPause => 'pause';
+
+  @override
+  String get planActionResume => 'resume';
+
+  @override
+  String get planActionStop => 'stop the run';
+
+  @override
   String get planRunEnding => 'The run is ending; this target can\'t join it.';
 
   @override
