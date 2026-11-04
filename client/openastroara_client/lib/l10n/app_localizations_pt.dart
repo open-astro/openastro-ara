@@ -73,7 +73,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get deviceNotConnected => 'Not connected';
 
   @override
-  String get deviceCurrentTemperature => 'Temperature';
+  String get deviceCurrentTemperature => 'Sensor temperature';
 
   @override
   String get deviceCooler => 'Cooler';
@@ -2049,7 +2049,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get deviceNotConnected => 'Não conectado';
 
   @override
-  String get deviceCurrentTemperature => 'Temperatura';
+  String get deviceCurrentTemperature => 'Temperatura do sensor';
 
   @override
   String get deviceCooler => 'Refrigeração';

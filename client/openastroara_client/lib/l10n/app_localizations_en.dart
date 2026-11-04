@@ -73,7 +73,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get deviceNotConnected => 'Not connected';
 
   @override
-  String get deviceCurrentTemperature => 'Temperature';
+  String get deviceCurrentTemperature => 'Sensor temperature';
 
   @override
   String get deviceCooler => 'Cooler';

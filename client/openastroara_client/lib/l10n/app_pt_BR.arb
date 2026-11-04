@@ -17,7 +17,7 @@
   "deviceGuider": "Guia",
   "deviceConnecting": "Conectando…",
   "deviceNotConnected": "Não conectado",
-  "deviceCurrentTemperature": "Temperatura",
+  "deviceCurrentTemperature": "Temperatura do sensor",
   "deviceCooler": "Refrigeração",
   "deviceNoCooler": "Sem refrigeração",
   "deviceTarget": "Temperatura alvo",

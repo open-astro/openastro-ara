@@ -83,7 +83,7 @@
   "@deviceNotConnected": {
     "description": "Device window caption when the device is not connected"
   },
-  "deviceCurrentTemperature": "Temperature",
+  "deviceCurrentTemperature": "Sensor temperature",
   "@deviceCurrentTemperature": {
     "description": "Camera window row: what the sensor reads now"
   },

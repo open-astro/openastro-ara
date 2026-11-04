@@ -204,7 +204,7 @@ abstract class AppLocalizations {
   /// Camera window row: what the sensor reads now
   ///
   /// In en, this message translates to:
-  /// **'Temperature'**
+  /// **'Sensor temperature'**
   String get deviceCurrentTemperature;
 
   /// Camera window row: the cooler's On / Off

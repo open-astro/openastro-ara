@@ -92,7 +92,7 @@ void main() {
       await _pump(tester, _wire());
       expect(find.text('Main Camera · ASI2600MM'), findsOneWidget);
       expect(find.text('Cooler'), findsOneWidget);
-      expect(find.text('Temperature'), findsOneWidget, reason: 'what the sensor reads');
+      expect(find.text('Sensor temperature'), findsOneWidget, reason: 'what the sensor reads (user, 2026-11-04)');
       expect(find.text('Target temperature'), findsOneWidget);
       expect(find.text('Current temperature'), findsNothing);
       expect(find.text('−10 °C'), findsOneWidget, reason: 'the target');
