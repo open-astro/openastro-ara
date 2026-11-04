@@ -158,7 +158,8 @@ PUB_LICENSES: dict[str, dict[str, str]] = {
         "copyright": "Copyright 2013 Google Inc.",
     },
     "crypto": {
-        "version": "3.0.7",
+        # 3.0.8 verified 2026-11-04: LICENSE byte-identical to 3.0.7 (BSD-3-Clause, Dart project authors).
+        "version": "3.0.8",
         "license": "BSD-3-Clause",
         "copyright": "Copyright 2015, the Dart project authors",
     },

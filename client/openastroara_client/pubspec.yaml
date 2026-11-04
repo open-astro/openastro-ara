@@ -39,7 +39,7 @@ dependencies:
   url_launcher: ^6.3.3
   path_provider: ^2.1.6
   # §44 backup stream — sha-256 verification of pulled frames.
-  crypto: ^3.0.6
+  crypto: ^3.0.8
   # §35.5 audible safety alarm — loops the bundled tone on safety.unsafe /
   # safety.emergency_stop until silenced.
   audioplayers: ^6.1.0
