@@ -43,7 +43,9 @@ class _SimpleMessagePillsState extends ConsumerState<SimpleMessagePills> {
       return true;
     });
     for (final m in messages) {
-      if (m.kind != SimpleMessageKind.error || _fades.containsKey(m.id)) {
+      if (m.kind != SimpleMessageKind.error ||
+          m.sticky ||
+          _fades.containsKey(m.id)) {
         continue;
       }
       _fades[m.id] = Timer(

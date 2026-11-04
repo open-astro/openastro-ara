@@ -58,6 +58,7 @@ class SimpleMessage {
     this.detail,
     this.actions = const [],
     this.origin,
+    this.sticky = false,
   });
 
   final int id;
@@ -70,6 +71,10 @@ class SimpleMessage {
 
   /// What a tap on the pill opens, when known.
   final SimpleStatusOrigin? origin;
+
+  /// An error that waits to be read (an Emergency Stop's failed rung):
+  /// it never fades, only × closes it.
+  final bool sticky;
 }
 
 /// The pills showing, newest first.
@@ -93,6 +98,7 @@ class SimpleMessagesNotifier extends Notifier<List<SimpleMessage>> {
     String? detail,
     List<SimpleMessageAction> actions = const [],
     SimpleStatusOrigin? origin,
+    bool sticky = false,
   }) {
     final id = _next++;
     state = [
@@ -103,6 +109,7 @@ class SimpleMessagesNotifier extends Notifier<List<SimpleMessage>> {
         detail: detail,
         actions: actions,
         origin: origin,
+        sticky: sticky,
       ),
       ...state,
     ];
@@ -136,6 +143,7 @@ typedef UserNotify = void Function(
   bool? snackBarRed,
   Duration? snackBarDuration,
   bool warning,
+  bool sticky,
 });
 
 /// A [UserNotify] for [context], captured before any await (the context may
@@ -150,6 +158,7 @@ UserNotify userNotifier(BuildContext context, {SimpleStatusOrigin? origin}) {
     bool? snackBarRed,
     Duration? snackBarDuration,
     bool warning = false,
+    bool sticky = false,
   }) {
     // Active, not just chosen: with the Experimental switch off the full UI
     // shows, and a pill there would reach nobody.
@@ -165,6 +174,7 @@ UserNotify userNotifier(BuildContext context, {SimpleStatusOrigin? origin}) {
             title,
             detail: detail,
             origin: origin,
+            sticky: sticky,
           );
       return;
     }

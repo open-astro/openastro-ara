@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/scheduler.dart';
 
-/// `--dart-define=ARA_PERF=1`: the performance overlay on, and raster and
+/// `--dart-define=ARA_PERF=true`: the performance overlay on, and raster and
 /// build frame times logged every 5 s (p50, p95, worst, frames over the
 /// 60 Hz budget). For profiling on a device; off in every normal build.
 const bool kAraPerf = bool.fromEnvironment('ARA_PERF');
