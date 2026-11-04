@@ -833,21 +833,21 @@
   "@searchWordsDither": {
     "description": "Simple Mode search panel: never shown: space-separated lower-case words that also find this setting; translate as search words people might type"
   },
-  "autopilotStepFocus": "Focus",
-  "@autopilotStepFocus": {
-    "description": "Simple Mode Guided Run strip: step name: autofocus"
+  "nightSetupStepFocus": "Focus",
+  "@nightSetupStepFocus": {
+    "description": "Simple Mode Night Setup strip: step name: autofocus"
   },
-  "autopilotStepPolarAlign": "Polar align",
-  "@autopilotStepPolarAlign": {
-    "description": "Simple Mode Guided Run strip: step name: polar alignment"
+  "nightSetupStepPolarAlign": "Polar align",
+  "@nightSetupStepPolarAlign": {
+    "description": "Simple Mode Night Setup strip: step name: polar alignment"
   },
-  "autopilotStepPlan": "Plan",
-  "@autopilotStepPlan": {
-    "description": "Simple Mode Guided Run strip: step name: the imaging plan"
+  "nightSetupStepPlan": "Plan",
+  "@nightSetupStepPlan": {
+    "description": "Simple Mode Night Setup strip: step name: the imaging plan"
   },
-  "autopilotStepDone": "{step}, done",
-  "@autopilotStepDone": {
-    "description": "Simple Mode Guided Run strip: screen-reader label of a step done tonight",
+  "nightSetupStepDone": "{step}, done",
+  "@nightSetupStepDone": {
+    "description": "Simple Mode Night Setup strip: screen-reader label of a step done tonight",
     "placeholders": {
       "step": {
         "type": "String",
@@ -855,9 +855,9 @@
       }
     }
   },
-  "autopilotStepSkipped": "{step}, skipped",
-  "@autopilotStepSkipped": {
-    "description": "Simple Mode Guided Run strip: screen-reader label of a skipped step",
+  "nightSetupStepSkipped": "{step}, skipped",
+  "@nightSetupStepSkipped": {
+    "description": "Simple Mode Night Setup strip: screen-reader label of a skipped step",
     "placeholders": {
       "step": {
         "type": "String",
@@ -865,9 +865,9 @@
       }
     }
   },
-  "autopilotStepCurrent": "{step}, current step",
-  "@autopilotStepCurrent": {
-    "description": "Simple Mode Guided Run strip: screen-reader label of the current step",
+  "nightSetupStepCurrent": "{step}, current step",
+  "@nightSetupStepCurrent": {
+    "description": "Simple Mode Night Setup strip: screen-reader label of the current step",
     "placeholders": {
       "step": {
         "type": "String",
@@ -875,9 +875,9 @@
       }
     }
   },
-  "autopilotStepNext": "{step}, next",
-  "@autopilotStepNext": {
-    "description": "Simple Mode Guided Run strip: screen-reader label of a step still ahead",
+  "nightSetupStepNext": "{step}, next",
+  "@nightSetupStepNext": {
+    "description": "Simple Mode Night Setup strip: screen-reader label of a step still ahead",
     "placeholders": {
       "step": {
         "type": "String",
@@ -885,28 +885,28 @@
       }
     }
   },
-  "autopilotBack": "Back",
-  "@autopilotBack": {
-    "description": "Simple Mode Guided Run strip: button that goes back one step"
+  "nightSetupBack": "Back",
+  "@nightSetupBack": {
+    "description": "Simple Mode Night Setup strip: button that goes back one step"
   },
-  "autopilotSkip": "Skip",
-  "@autopilotSkip": {
-    "description": "Simple Mode Guided Run strip: button that skips the current step"
+  "nightSetupSkip": "Skip",
+  "@nightSetupSkip": {
+    "description": "Simple Mode Night Setup strip: button that skips the current step"
   },
-  "autopilotNothingDone": "Nothing done yet tonight",
-  "@autopilotNothingDone": {
-    "description": "Simple Mode Guided Run offer under the status strip: why Guided Run is offered"
+  "nightSetupNothingDone": "Nothing done yet tonight",
+  "@nightSetupNothingDone": {
+    "description": "Simple Mode Night Setup offer under the status strip: why Night Setup is offered"
   },
-  "autopilotStart": "Start Guided Run",
-  "@autopilotStart": {
-    "description": "Simple Mode Guided Run offer: button that starts Guided Run"
+  "nightSetupStart": "Start Night Setup",
+  "@nightSetupStart": {
+    "description": "Simple Mode Night Setup offer: button that starts Night Setup"
   },
-  "autopilotNotNow": "Not now",
-  "@autopilotNotNow": {
-    "description": "Simple Mode Guided Run offer: tooltip of the × that dismisses it"
+  "nightSetupNotNow": "Not now",
+  "@nightSetupNotNow": {
+    "description": "Simple Mode Night Setup offer: tooltip of the × that dismisses it"
   },
-  "shellModeAutopilot": "Guided Run",
-  "@shellModeAutopilot": {
+  "shellModeNightSetup": "Night Setup",
+  "@shellModeNightSetup": {
     "description": "Simple Mode mode name (mode grid, Mode: label for screen readers)"
   },
   "shellModePreview": "Preview",
@@ -929,9 +929,9 @@
   "@shellRailPolarAlign": {
     "description": "Simple Mode right rail: short name of Polar align (60 px wide rail, keep very short)"
   },
-  "shellRailAutopilot": "Guided",
-  "@shellRailAutopilot": {
-    "description": "Simple Mode right rail: short name of Guided Run (60 px wide rail, keep very short)"
+  "shellRailNightSetup": "Setup",
+  "@shellRailNightSetup": {
+    "description": "Simple Mode right rail: short name of Night Setup (60 px wide rail, keep very short)"
   },
   "shellStopAgain": "Press {shortcut} again to stop the run",
   "@shellStopAgain": {
@@ -1777,7 +1777,7 @@
   },
   "planQueueBusy": "The queue is still updating on the rig. Try again in a moment.",
   "@planQueueBusy": {
-    "description": "Message pill: Start (Guided Run's last Done) while an edit or reorder of the queue is still on its way"
+    "description": "Message pill: Start (Night Setup's last Done) while an edit or reorder of the queue is still on its way"
   },
   "shellLanguage": "Language",
   "shellLanguageSystem": "System",
@@ -2736,23 +2736,23 @@
   },
   "guidedNextFocus": "Next: Focus",
   "@guidedNextFocus": {
-    "description": "Guided Run plan step: green button, on to focusing"
+    "description": "Night Setup plan step: green button, on to focusing"
   },
   "guidedNextPolarAlign": "Next: Polar align",
   "@guidedNextPolarAlign": {
-    "description": "Guided Run plan step: green button, on to polar alignment"
+    "description": "Night Setup plan step: green button, on to polar alignment"
   },
   "guidedStartImaging": "Start imaging",
   "@guidedStartImaging": {
-    "description": "Guided Run plan step: green button when focus and polar alignment are done already"
+    "description": "Night Setup plan step: green button when focus and polar alignment are done already"
   },
   "guidedImagingStartsAfter": "Imaging starts after focus and polar alignment.",
   "@guidedImagingStartsAfter": {
-    "description": "Guided Run plan step: line above the buttons"
+    "description": "Night Setup plan step: line above the buttons"
   },
   "guidedDoneStartImaging": "Done · Start imaging",
   "@guidedDoneStartImaging": {
-    "description": "Guided Run: the last setup step's green Done, which starts imaging"
+    "description": "Night Setup: the last setup step's green Done, which starts imaging"
   },
   "shellGuideFocalLength": "Guide scope focal length",
   "shellGuidePixelSize": "Guide camera pixel size",

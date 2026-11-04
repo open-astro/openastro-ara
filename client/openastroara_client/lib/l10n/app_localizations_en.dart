@@ -619,51 +619,51 @@ class AppLocalizationsEn extends AppLocalizations {
   String get searchWordsDither => 'guiding dithering';
 
   @override
-  String get autopilotStepFocus => 'Focus';
+  String get nightSetupStepFocus => 'Focus';
 
   @override
-  String get autopilotStepPolarAlign => 'Polar align';
+  String get nightSetupStepPolarAlign => 'Polar align';
 
   @override
-  String get autopilotStepPlan => 'Plan';
+  String get nightSetupStepPlan => 'Plan';
 
   @override
-  String autopilotStepDone(String step) {
+  String nightSetupStepDone(String step) {
     return '$step, done';
   }
 
   @override
-  String autopilotStepSkipped(String step) {
+  String nightSetupStepSkipped(String step) {
     return '$step, skipped';
   }
 
   @override
-  String autopilotStepCurrent(String step) {
+  String nightSetupStepCurrent(String step) {
     return '$step, current step';
   }
 
   @override
-  String autopilotStepNext(String step) {
+  String nightSetupStepNext(String step) {
     return '$step, next';
   }
 
   @override
-  String get autopilotBack => 'Back';
+  String get nightSetupBack => 'Back';
 
   @override
-  String get autopilotSkip => 'Skip';
+  String get nightSetupSkip => 'Skip';
 
   @override
-  String get autopilotNothingDone => 'Nothing done yet tonight';
+  String get nightSetupNothingDone => 'Nothing done yet tonight';
 
   @override
-  String get autopilotStart => 'Start Guided Run';
+  String get nightSetupStart => 'Start Night Setup';
 
   @override
-  String get autopilotNotNow => 'Not now';
+  String get nightSetupNotNow => 'Not now';
 
   @override
-  String get shellModeAutopilot => 'Guided Run';
+  String get shellModeNightSetup => 'Night Setup';
 
   @override
   String get shellModePreview => 'Preview';
@@ -681,7 +681,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get shellRailPolarAlign => 'P.A.';
 
   @override
-  String get shellRailAutopilot => 'Guided';
+  String get shellRailNightSetup => 'Setup';
 
   @override
   String shellStopAgain(String shortcut) {

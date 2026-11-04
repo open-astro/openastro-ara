@@ -21,8 +21,8 @@ import '../../widgets/focus/guide_focus_card.dart'
 import '../../widgets/focus/v_curve_chart.dart';
 import '../../state/setup/setup_readiness.dart';
 import '../../state/simple_mode_state.dart';
-import 'simple_autopilot.dart'
-    show AutopilotStep, autopilotNext, autopilotProvider;
+import 'simple_night_setup.dart'
+    show NightSetupStep, nightSetupNext, nightSetupProvider;
 import 'simple_preview_panel.dart' show SimpleShutterButton, kSimpleText;
 import 'simple_device_windows.dart' show simpleCelsius;
 import 'simple_shell.dart'
@@ -358,13 +358,13 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
                     fontWeight: FontWeight.w300,
                   ),
                 ),
-              // Guided Run with focus the last step (a permanent pier, or
+              // Night Setup with focus the last step (a permanent pier, or
               // aligned already): its Done starts imaging, never the run's
               // end on its own.
-              if (ref.watch(autopilotProvider) == AutopilotStep.focus &&
+              if (ref.watch(nightSetupProvider) == NightSetupStep.focus &&
                   ref.watch(setupFocusStateProvider) == SetupStepState.done &&
-                  autopilotNext(
-                        after: AutopilotStep.focus,
+                  nightSetupNext(
+                        after: NightSetupStep.focus,
                         focused: true,
                         aligned:
                             ref.watch(setupPolarAlignStateProvider) ==
@@ -377,7 +377,7 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
                 FilledButton(
                   key: const Key('simple-focus-guided-done'),
                   style: kSimpleGoStyle,
-                  onPressed: ref.read(autopilotProvider.notifier).next,
+                  onPressed: ref.read(nightSetupProvider.notifier).next,
                   child: Text(l10n.guidedDoneStartImaging),
                 ),
               // A finished run's figures, all on view (Simple Mode folds

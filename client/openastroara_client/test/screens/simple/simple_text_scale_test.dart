@@ -138,7 +138,7 @@ void main() {
   final lang = locale.toLanguageTag();
   final l = lookupAppLocalizations(locale);
   for (final (scale, size) in cases) {
-    for (final open in ['Preview settings', 'Plan', 'Stop armed', 'Modes', 'Settings', 'Rig', 'Camera', 'Settings Focuser', 'Search', 'Wheels lat', 'Wheels lng', 'Wheels aperture', 'Wheels focal', 'Settings Guider', 'Guiding', 'Focus Auto', 'Focus Manual', 'Focus Guide', 'Polar adjusting', 'Guided Run']) {
+    for (final open in ['Preview settings', 'Plan', 'Stop armed', 'Modes', 'Settings', 'Rig', 'Camera', 'Settings Focuser', 'Search', 'Wheels lat', 'Wheels lng', 'Wheels aperture', 'Wheels focal', 'Settings Guider', 'Guiding', 'Focus Auto', 'Focus Manual', 'Focus Guide', 'Polar adjusting', 'Night Setup']) {
       testWidgets('$lang text ${scale}x at ${size.width.toInt()}x${size.height.toInt()}, $open: nothing overflows',
           skip: !hasFonts, (tester) async {
         tester.view.physicalSize = size;
@@ -203,7 +203,7 @@ void main() {
           await tester.tap(find.byKey(const Key('simple-mode')), warnIfMissed: false);
           await tester.pump();
           // Every mode name whole, on the rail and in the grid: no "Previ…".
-          for (final name in [l.shellModeAutopilot, l.shellModePreview, l.shellModeFocus, l.shellModePolarAlign, l.shellModePlan]) {
+          for (final name in [l.shellModeNightSetup, l.shellModePreview, l.shellModeFocus, l.shellModePolarAlign, l.shellModePlan]) {
             for (final p in tester.renderObjectList<RenderParagraph>(find.text(name))) {
               expect(p.didExceedMaxLines, isFalse, reason: '"$name" is cut off');
             }
@@ -274,18 +274,18 @@ void main() {
           await tester.pump();
           await tester.pump();
           expect(find.byKey(const Key('simple-search-image-0')), findsOneWidget);
-        } else if (open == 'Guided Run') {
+        } else if (open == 'Night Setup') {
           // The offer first (nothing done tonight), then the step strip once it runs.
           void whole(Finder of) {
             for (final p in tester.renderObjectList<RenderParagraph>(find.descendant(of: of, matching: find.byType(RichText)))) {
               expect(p.didExceedMaxLines, isFalse, reason: '"${p.text.toPlainText()}" is cut off');
             }
           }
-          final offer = find.byKey(const Key('autopilot-offer'));
+          final offer = find.byKey(const Key('night-setup-offer'));
           if (offer.evaluate().isNotEmpty) whole(offer);
-          await tester.tap(find.byKey(const Key('autopilot-start')), warnIfMissed: false);
+          await tester.tap(find.byKey(const Key('night-setup-start')), warnIfMissed: false);
           await tester.pump();
-          final strip = find.byKey(const Key('autopilot-strip'));
+          final strip = find.byKey(const Key('night-setup-strip'));
           if (size.width >= 768) expect(strip, findsOneWidget);
           whole(strip);
         } else if (open.startsWith('Focus') || open == 'Polar adjusting') {
