@@ -707,6 +707,7 @@ namespace OpenAstroAra.Test {
 
         [TestCase("Looping")]
         [TestCase("Selected")]
+        [TestCase("Paused")] // ALP-5018: a paused guider refused Stop and Emergency Stop too
         public async Task Stop_stops_a_guider_still_looping_or_on_a_star_not_only_one_guiding(string appState) {
             // iPad, 2026-11-04: Stop in Guide mode (and Emergency Stop, which calls the same stop) did nothing
             // while the guide routine was still looping or had picked its star: StopGuiding skips every state
