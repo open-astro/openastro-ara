@@ -59,13 +59,19 @@
   .graph { left: 16px; right: 104px; bottom: 16px; height: 56px; padding: 6px 14px; display: flex; align-items: center; gap: 14px; font-size: 12px; color: var(--text2); }
   .graph svg { flex: 1; height: 40px; }
   .proposed { outline: 1.5px dashed var(--busy); outline-offset: 3px; border-radius: 8px; }
+  .head.proposed { padding: 0 8px; }
   .gone { text-decoration: line-through; color: var(--text2); }
   .hide { display: none !important; }
+  .pillbox { display: flex; flex-direction: column; gap: 6px; width: 250px; }
+  .pillbox small { color: var(--text2); }
+  .pill { display: inline-flex; align-items: center; gap: 8px; height: 48px; padding: 0 16px; border-radius: 10px; background: rgba(26,26,26,.9); border: 1px dashed var(--busy); width: max-content; }
+  .pill i { width: 10px; height: 10px; border-radius: 50%; }
+  .pill .pd { color: var(--text2); }
   .icard { width: 250px; background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 6px; }
   .icard small { color: var(--text2); }
   .ipair { display: flex; align-items: center; gap: 10px; min-height: 32px; } .ipair i { font-size: 22px; width: 24px; } .ipair span { font-size: 13px; }
   .modes { right: 104px; top: 214px; width: 300px; padding: 12px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-  .modes div { min-height: 64px; border-radius: 8px; background: var(--tile); display: grid; place-items: center; font-size: 13px; text-align: center; }
+  .modes div { min-height: 64px; border-radius: 8px; background: var(--tile); display: grid; place-items: center; font-size: 13px; text-align: center; padding: 8px; }
   .modes .cur { background: rgba(66,165,245,.16); color: var(--link); }
   table.inv { border-collapse: collapse; width: 100%; font-size: 13px; margin-top: 18px; }
   table.inv th, table.inv td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
@@ -147,6 +153,15 @@
 
     <!-- guiding graph, as today -->
     <div class="p graph" id="graph"><span>RA</span><svg viewBox="0 0 400 40" preserveAspectRatio="none"><polyline id="trace" fill="none" stroke="#42A5F5" stroke-width="1.5" points="0,20 400,20"/><polyline id="trace2" fill="none" stroke="#EF5350" stroke-width="1.5" points="0,20 400,20"/></svg><span>Dec</span></div>
+  </div>
+
+  <h2 style="margin:28px 0 6px;font-size:16px">Guiding in the status pill <span class="tag">proposed</span></h2>
+  <p class="note">Today the status pill (top right) never mentions guiding: you see it only in the guiding graph along the bottom (once corrections arrive), the Guide panel when it's open, and the guider's dot colour. During calibration nothing on screen says it's happening. Proposed: the pill reports the guider's routine, and when nothing else is going on it says "Guiding" with the RMS. A frame, a plan step, cooling or a park still take the pill first.</p>
+  <div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:8px">
+    <div class="pillbox"><span class="pill"><i style="background:var(--busy)"></i>Guider<span class="pd">Calibrating · west 3/12</span></span><small>While it calibrates (with its bar along the foot, as cooling has)</small></div>
+    <div class="pillbox"><span class="pill"><i style="background:var(--busy)"></i>Guider<span class="pd">Settling</span></span><small>After a start or a dither</small></div>
+    <div class="pillbox"><span class="pill"><i style="background:var(--ok)"></i>Guiding<span class="pd">0.62″</span></span><small>Guiding, nothing else going on</small></div>
+    <div class="pillbox"><span class="pill"><i style="background:var(--ok)"></i>Taking a frame<span class="pd">42 s left</span></span><small>A frame (or a plan step) still comes first; the graph shows guiding</small></div>
   </div>
 
   <h2 style="margin:28px 0 6px;font-size:16px">Icons <span class="tag">proposed</span></h2>
