@@ -332,7 +332,7 @@ jobs:
     # != 'true', so this runs. `!cancelled()` is what lets it run at all when a
     # need failed; the explicit sanity check keeps the original gating.
     if: ${{ !cancelled() && needs.sanity.result == 'success' && needs.changes.outputs.docs_only != 'true' && needs.changes.outputs.dotnet != 'false' }}
-    timeout-minutes: 15
+    timeout-minutes: 15  # fpc install + a ~10 s build + a cached D05; a cache miss adds one 103 MB download
     permissions:
       contents: read  # checkout + download a public release artifact; no write scope
     steps:
@@ -528,6 +528,53 @@ jobs:
       # same filter the Docker lane's ENTRYPOINT uses.
       - name: dotnet test (bench category, native arm64)
         run: dotnet test OpenAstroAra.Test/OpenAstroAra.Test.csproj -c Release --no-build --verbosity normal --filter "TestCategory=bench"
+
+  # The bundled ASTAP solver really solves: build astap_cli from the submodule natively on
+  # arm64 (the Pi's architecture), solve a real frame with the D05 database hinted and blind,
+  # and check the thread count does not change the answer. server-build only proves the binary
+  # starts (`-h`); a sync of open-astro/astap `ara` with Han's main, or a Dependabot bump of
+  # the submodule, could still break solving.
+  astap-solve:
+    name: ASTAP plate solve (linux-arm64, native)
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 15  # fpc install + a ~10 s build + a cached D05; a cache miss adds one 103 MB download
+    needs: [sanity, changes]
+    if: ${{ !cancelled() && needs.sanity.result == 'success' && needs.changes.outputs.docs_only != 'true' }}
+    steps:
+      - name: Checkout (no LFS)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4.x — pinned per zizmor + CodeRabbit security finding on PR #12
+        with:
+          submodules: true  # third_party/astap is the solver source
+          lfs: false
+          persist-credentials: false
+
+      - name: Build astap_cli
+        run: |
+          set -e
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends fpc > /dev/null
+          scripts/build-astap-cli.sh "$RUNNER_TEMP/astap"
+
+      # The same package Settings → Sky data installs (DataManagerService.CatalogSha256).
+      - name: Cache D05 star database
+        id: d05
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: ~/astap-d05
+          key: astap-d05-2026.10
+
+      - name: Download D05 star database
+        if: steps.d05.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          curl -sSfL --retry 3 -o "$RUNNER_TEMP/d05.tar.gz" \
+            https://github.com/open-astro/sky-data/releases/download/astap-2026.10/astap-d05.tar.gz
+          echo "7936db10c8478612d952620b7f368f1a3cb261e1750ba9f082fba657fd53a977  $RUNNER_TEMP/d05.tar.gz" | sha256sum -c -
+          mkdir -p ~/astap-d05
+          tar -xzf "$RUNNER_TEMP/d05.tar.gz" -C ~/astap-d05
+
+      - name: Solve the fixture frame
+        run: scripts/ci-astap-solve.sh "$RUNNER_TEMP/astap/astap_cli" ~/astap-d05
 
   server-build:
     name: Server (build + cross-publish + Docker)
