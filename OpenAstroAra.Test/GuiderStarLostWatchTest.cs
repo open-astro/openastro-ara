@@ -40,6 +40,10 @@ namespace OpenAstroAra.Test {
     public class GuiderStarLostWatchTest {
 
         private static readonly TimeSpan Grace = TimeSpan.FromMilliseconds(300);
+        // For the tests whose guide step must land INSIDE a window (the grace, or the wait before the
+        // recovery): with 300 ms a loaded CI runner sometimes delivered the step after the timer fired
+        // (2026-11-04, PR #1491). Two seconds leaves the loopback hop all the room it needs.
+        private static readonly TimeSpan RoomyWindow = TimeSpan.FromSeconds(2);
 
         private sealed class Rig : IDisposable {
             public readonly Mock<ISequencerService> Sequencer = new();
@@ -55,7 +59,7 @@ namespace OpenAstroAra.Test {
             public Func<Task>? OnRestart; // the fake's side of a restart: app state Guiding, StartGuiding, a guide step
             public GuiderService Service = null!;
 
-            public Rig(bool runActive) {
+            public Rig(bool runActive, TimeSpan? grace = null, TimeSpan? recoverAfter = null) {
                 var profiles = Profiles;
                 profiles.Setup(p => p.GetSafetyPolicies()).Returns(new SafetyPoliciesDto(
                     OnUnsafe: "pause_and_park", AutoResumeWhenSafe: true, ResumeDelayMin: 10,
@@ -93,8 +97,8 @@ namespace OpenAstroAra.Test {
                         Mock.Of<IDiagnosticsService>(), NullLogger<GuiderRecoveryCoordinator>.Instance),
                     NullLogger<GuiderService>.Instance, Mock.Of<IGuiderProcessSupervisor>(), ws.Object,
                     profiles.Object, () => Sequencer.Object, notifications.Object, faultLog.Object) {
-                    StarLostGrace = Grace,
-                    StarLostRecoverAfter = Grace,
+                    StarLostGrace = grace ?? Grace,
+                    StarLostRecoverAfter = recoverAfter ?? Grace,
                     StarLostProbeInterval = Grace / 2,
                     StarLostRetryBackoff = new[] { Grace / 2 },
                     StarLostRecenterTimeout = TimeSpan.FromSeconds(5),
@@ -222,13 +226,14 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public async Task A_star_that_comes_back_inside_the_grace_does_nothing() {
-            using var rig = new Rig(runActive: true);
+            using var rig = new Rig(runActive: true, grace: RoomyWindow);
             await using var fake = await GuidingFakeAsync(rig).ConfigureAwait(false);
 
             await fake.BroadcastAsync(PhdEvents.StarLost(status: "low SNR")).ConfigureAwait(false);
             await Task.Delay(Grace / 3).ConfigureAwait(false);
             await fake.BroadcastAsync(PhdEvents.GuideStep(0.1, -0.1)).ConfigureAwait(false);
-            await Task.Delay(Grace * 3).ConfigureAwait(false);
+            // Past the grace, so a timer the guide step failed to disarm would have fired.
+            await Task.Delay(RoomyWindow + Grace).ConfigureAwait(false);
 
             Assert.That(rig.Paused(), Is.Zero, "a brief loss is PHD2's business");
             Assert.That(rig.Resumed(), Is.Zero);
@@ -333,13 +338,14 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public async Task A_star_back_before_the_recovery_wait_resumes_the_old_way_without_a_re_center() {
-            using var rig = new Rig(runActive: true);
+            using var rig = new Rig(runActive: true, recoverAfter: RoomyWindow);
             await using var fake = await LostStarPastTheGraceAsync(rig).ConfigureAwait(false);
             fake.OnRpc("get_star_centroids", _ => Stars());
 
             await fake.BroadcastAsync(PhdEvents.GuideStep(0.1, -0.1)).ConfigureAwait(false);
             Assert.That(await WaitUntilAsync(() => rig.Resumed() == 1).ConfigureAwait(false), Is.True);
-            await Task.Delay(Grace * 3).ConfigureAwait(false);
+            // Past the recovery wait, so a recovery the relock failed to disarm would have probed.
+            await Task.Delay(RoomyWindow + Grace).ConfigureAwait(false);
 
             Assert.That(rig.Centered(), Is.Zero);
             Assert.That(rig.Restarts, Is.Zero);
