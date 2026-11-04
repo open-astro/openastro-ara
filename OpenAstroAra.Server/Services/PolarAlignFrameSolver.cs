@@ -65,11 +65,34 @@ public sealed class PolarAlignFrameSolver : IPolarAlignFrameSolver {
     /// guider) and its working pixel scale, for a profile that leaves the guide optics unset; null when the
     /// guider can't say.</param>
     public PolarAlignFrameSolver(IProfileService profileService, IProfileStore store, IPlateSolverFactory solverFactory,
-            Func<CancellationToken, Task<(double PixelSizeUm, double PixelScaleArcsec)?>>? guiderOptics = null) {
+            Func<CancellationToken, Task<(double PixelSizeUm, double PixelScaleArcsec)?>>? guiderOptics = null,
+            TimeProvider? clock = null) {
         _profileService = profileService;
         _store = store;
         _solverFactory = solverFactory;
         _guiderOptics = guiderOptics;
+        _clock = clock ?? TimeProvider.System;
+    }
+
+    private readonly TimeProvider _clock;
+
+    // The guider's last answer, reused for a minute: frames come about once a second and each ask is three
+    // guider RPCs (ALP-4982). A minute still picks up a swapped guide camera within a routine.
+    private static readonly TimeSpan GuiderOpticsLife = TimeSpan.FromMinutes(1);
+    private (double PixelSizeUm, double PixelScaleArcsec)? _lastGuiderOptics;
+    private DateTimeOffset _lastGuiderOpticsAt;
+
+    private async Task<(double PixelSizeUm, double PixelScaleArcsec)?> GuiderOpticsAsync(CancellationToken ct) {
+        var now = _clock.GetUtcNow();
+        if (_lastGuiderOptics is { } last && now - _lastGuiderOpticsAt < GuiderOpticsLife) {
+            return last;
+        }
+        var read = await _guiderOptics!(ct).ConfigureAwait(false);
+        if (read is not null) {
+            _lastGuiderOptics = read;
+            _lastGuiderOpticsAt = now;
+        }
+        return read;
     }
 
     public async Task<PolarAlignSolveOutcome> SolveAsync(
@@ -92,7 +115,7 @@ public sealed class PolarAlignFrameSolver : IPolarAlignFrameSolver {
         // Unset in the profile: read them, as the main camera's are read, from the guider's camera
         // (AlpacaBridge) and the guider's own pixel scale, which fixes the focal length.
         if ((!(focalLength > 0) || !(pixelSize > 0)) && _guiderOptics is not null
-            && await _guiderOptics(ct).ConfigureAwait(false) is { } optics) {
+            && await GuiderOpticsAsync(ct).ConfigureAwait(false) is { } optics) {
             if (!(pixelSize > 0)) {
                 pixelSize = optics.PixelSizeUm;
             }

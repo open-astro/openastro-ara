@@ -137,6 +137,38 @@ namespace OpenAstroAra.Test {
             Assert.That(seen.FocalLength, Is.EqualTo(128).Within(0.1));
         }
 
+        private sealed class Clock : TimeProvider {
+            public DateTimeOffset Now = new(2026, 11, 4, 10, 0, 0, TimeSpan.Zero);
+            public override DateTimeOffset GetUtcNow() => Now;
+        }
+
+        [Test]
+        public async Task The_guiders_optics_are_asked_once_a_minute_not_on_every_frame() {
+            // ALP-4982 (#1486 review): each ~1 s frame asked the guider again (camera name, pixel size,
+            // binning: three RPCs) while the profile left the guide optics unset.
+            var asks = 0;
+            var clock = new Clock();
+            var factory = new Mock<IPlateSolverFactory>();
+            var imageSolver = new Mock<IImageSolver>();
+            imageSolver.Setup(s => s.Solve(It.IsAny<IImageData>(), It.IsAny<PlateSolveParameter>(),
+                    It.IsAny<IProgress<ApplicationStatus>?>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new PlateSolveResult { Success = false });
+            factory.Setup(f => f.GetPlateSolver(It.IsAny<IPlateSolveSettings>())).Returns(Mock.Of<IPlateSolver>());
+            factory.Setup(f => f.GetImageSolver(It.IsAny<IPlateSolver>(), It.IsAny<IPlateSolver>())).Returns(imageSolver.Object);
+            var sut = new PolarAlignFrameSolver(new HeadlessProfileService(), new InMemoryProfileStore(), factory.Object,
+                _ => { asks++; return Task.FromResult<(double, double)?>((3.75, 6.04292)); }, clock);
+            var frame = WriteFrame();
+
+            await sut.SolveAsync(frame, 1, null, null, CancellationToken.None).ConfigureAwait(false);
+            clock.Now += TimeSpan.FromSeconds(1);
+            await sut.SolveAsync(frame, 1, null, null, CancellationToken.None).ConfigureAwait(false);
+            Assert.That(asks, Is.EqualTo(1), "the next frame reuses the answer");
+
+            clock.Now += TimeSpan.FromSeconds(60);
+            await sut.SolveAsync(frame, 1, null, null, CancellationToken.None).ConfigureAwait(false);
+            Assert.That(asks, Is.EqualTo(2), "a minute on it asks again (a swapped guide camera shows)");
+        }
+
         [Test]
         public async Task With_no_optics_anywhere_it_still_says_what_is_missing() {
             var store = new InMemoryProfileStore();
