@@ -2319,6 +2319,26 @@ void main() {
     await tester.pump(const Duration(seconds: 1));
   });
 
+  testWidgets("the status pill keeps its width while its numbers change (ALP-4937)", (tester) async {
+    // On the iPad (2026-11-03) the pill jittered narrower as '10 s left' became '9 s left'. The test font's
+    // glyphs are a full em wide, so at 1x the pill sits at its 300 pt cap; at half size it hugs its words.
+    tester.platformDispatcher.textScaleFactorTestValue = 0.5;
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    final container = await _pump(tester, const Size(1024, 768));
+    container.read(captureProgressProvider.notifier).beginExposing(const Duration(seconds: 12));
+    await tester.pump();
+    await tester.pump();
+    double width() => tester.getSize(find.descendant(of: find.byType(SimpleStatusPill), matching: find.byType(SimplePanel))).width;
+    final wide = width();
+    await tester.pump(const Duration(seconds: 3)); // 12 s left → 9 s left: one digit fewer
+    await tester.pump();
+    expect(find.textContaining('9 s left'), findsOneWidget, reason: 'precondition: one digit');
+    expect(width(), lessThan(kSimpleStatusMaxWidth), reason: 'precondition: below the cap');
+    expect(width(), wide, reason: 'it never narrows within a state');
+    container.read(captureProgressProvider.notifier).reset();
+    await tester.pump(const Duration(seconds: 1));
+  });
+
   testWidgets('the shot status counts down in whole seconds with a smooth bar', (tester) async {
     final container = await _pump(tester, const Size(1024, 768));
     container.read(captureProgressProvider.notifier).beginExposing(const Duration(seconds: 5));

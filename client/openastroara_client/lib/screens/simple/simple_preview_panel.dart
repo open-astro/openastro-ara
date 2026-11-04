@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -745,6 +746,17 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
   /// Where the sensor was when the pill first saw it cooling: the bar's 0.
   double? _coolStart;
 
+  // Within one state (its label) the pill keeps the widest it has been, so a
+  // countdown or a falling temperature doesn't make it jitter (ALP-4937).
+  final _panelKey = GlobalKey();
+  String? _widthLabel;
+  double _width = 0;
+
+  void _keepWidth() {
+    final w = _panelKey.currentContext?.size?.width ?? 0;
+    if (mounted && w > _width) setState(() => _width = w);
+  }
+
   @override
   void dispose() {
     _ticker.dispose();
@@ -855,6 +867,11 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
                   : (null, null, AraColors.textSecondary),
           };
     if (label == null) return const SizedBox.shrink();
+    if (label != _widthLabel) {
+      _widthLabel = label;
+      _width = 0;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) => _keepWidth());
     // The plan's step shows how far it has got (cooling, a wait, autofocus)
     // as a line along the pill's foot.
     final idle = !stopping && !looping && p.phase == CapturePhase.idle;
@@ -875,8 +892,12 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
           : l10n.previewStatusSpoken(label, detail),
       excludeSemantics: true,
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: kSimpleStatusMaxWidth),
+        constraints: BoxConstraints(
+          minWidth: math.min(_width, kSimpleStatusMaxWidth),
+          maxWidth: kSimpleStatusMaxWidth,
+        ),
         child: SimplePanel(
+          key: _panelKey,
           padding: const EdgeInsets.symmetric(horizontal: AraSpace.s16),
           child: Stack(
             children: [
