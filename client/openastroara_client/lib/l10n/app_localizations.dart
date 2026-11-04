@@ -2217,6 +2217,72 @@ abstract class AppLocalizations {
   /// **'{name} is already in the queue.'**
   String planAlreadyQueued(String name);
 
+  /// Plan sheet / Night Setup: Add to queue got no answer from the rig (saved nothing); shown as a pill
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t reach the rig. Check the connection and try again.'**
+  String get planRigUnreachable;
+
+  /// Simple Mode queue, after Couldn't: Add to queue failed
+  ///
+  /// In en, this message translates to:
+  /// **'create the plan'**
+  String get planActionCreate;
+
+  /// Simple Mode queue, after Couldn't: saving an edited target failed
+  ///
+  /// In en, this message translates to:
+  /// **'save the edit'**
+  String get planActionSaveEdit;
+
+  /// Simple Mode queue, after Couldn't: Undo of a removed target failed
+  ///
+  /// In en, this message translates to:
+  /// **'put it back'**
+  String get planActionPutBack;
+
+  /// Simple Mode queue, after Couldn't
+  ///
+  /// In en, this message translates to:
+  /// **'reorder the queue'**
+  String get planActionReorder;
+
+  /// Simple Mode queue, after Couldn't
+  ///
+  /// In en, this message translates to:
+  /// **'remove it from the queue'**
+  String get planActionRemove;
+
+  /// Simple Mode queue, after Couldn't: writing the start time failed
+  ///
+  /// In en, this message translates to:
+  /// **'schedule the start'**
+  String get planActionSchedule;
+
+  /// Simple Mode shutter, after Couldn't
+  ///
+  /// In en, this message translates to:
+  /// **'start imaging'**
+  String get planActionStart;
+
+  /// Simple Mode shutter, after Couldn't
+  ///
+  /// In en, this message translates to:
+  /// **'pause'**
+  String get planActionPause;
+
+  /// Simple Mode shutter, after Couldn't
+  ///
+  /// In en, this message translates to:
+  /// **'resume'**
+  String get planActionResume;
+
+  /// Simple Mode shutter, after Couldn't
+  ///
+  /// In en, this message translates to:
+  /// **'stop the run'**
+  String get planActionStop;
+
   /// Plan sheet: Add to queue while the run is winding down (the rig refused the append)
   ///
   /// In en, this message translates to:

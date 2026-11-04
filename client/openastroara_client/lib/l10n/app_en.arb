@@ -1728,6 +1728,50 @@
       }
     }
   },
+  "planRigUnreachable": "Couldn't reach the rig. Check the connection and try again.",
+  "@planRigUnreachable": {
+    "description": "Plan sheet / Night Setup: Add to queue got no answer from the rig (saved nothing); shown as a pill"
+  },
+  "planActionCreate": "create the plan",
+  "@planActionCreate": {
+    "description": "Simple Mode queue, after Couldn't: Add to queue failed"
+  },
+  "planActionSaveEdit": "save the edit",
+  "@planActionSaveEdit": {
+    "description": "Simple Mode queue, after Couldn't: saving an edited target failed"
+  },
+  "planActionPutBack": "put it back",
+  "@planActionPutBack": {
+    "description": "Simple Mode queue, after Couldn't: Undo of a removed target failed"
+  },
+  "planActionReorder": "reorder the queue",
+  "@planActionReorder": {
+    "description": "Simple Mode queue, after Couldn't"
+  },
+  "planActionRemove": "remove it from the queue",
+  "@planActionRemove": {
+    "description": "Simple Mode queue, after Couldn't"
+  },
+  "planActionSchedule": "schedule the start",
+  "@planActionSchedule": {
+    "description": "Simple Mode queue, after Couldn't: writing the start time failed"
+  },
+  "planActionStart": "start imaging",
+  "@planActionStart": {
+    "description": "Simple Mode shutter, after Couldn't"
+  },
+  "planActionPause": "pause",
+  "@planActionPause": {
+    "description": "Simple Mode shutter, after Couldn't"
+  },
+  "planActionResume": "resume",
+  "@planActionResume": {
+    "description": "Simple Mode shutter, after Couldn't"
+  },
+  "planActionStop": "stop the run",
+  "@planActionStop": {
+    "description": "Simple Mode shutter, after Couldn't"
+  },
   "planRunEnding": "The run is ending; this target can't join it.",
   "@planRunEnding": {
     "description": "Plan sheet: Add to queue while the run is winding down (the rig refused the append)"
