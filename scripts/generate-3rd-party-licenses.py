@@ -302,7 +302,7 @@ here so this file's --check gate flags any drift):
     from SOFA under license; ARA does NOT itself constitute software provided
     by and/or endorsed by SOFA; and no ARA routine uses the "iau"/"sofa" name
     prefix. Unmodified upstream release, compiled into liberfa on every build.
-  * SuperNOVAS — v1.8.0-rc2+, git submodule third_party/supernovas,
+  * SuperNOVAS — v1.8.0, git submodule third_party/supernovas,
     https://github.com/Smithsonian/SuperNOVAS. Smithsonian Astrophysical
     Observatory's maintained fork of USNO NOVAS C 3.1. PUBLIC DOMAIN (The
     Unlicense). Compiled unmodified into libsupernovas with its legacy JPL
