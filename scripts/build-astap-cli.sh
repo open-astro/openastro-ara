@@ -36,8 +36,7 @@ echo "fpc $("$FPC" -iV) for $("$FPC" -iTP)-$("$FPC" -iTO)"
 
 # Per-arch tuning mirrors the project's astap_command_line_linux_<arch>.lpi files: -O3 everywhere,
 # ARMv8 code generation on aarch64. Everything else is what lazbuild derives from the .lpi
-# (Delphi syntax mode, long strings, smart linking). The program links cthreads on Unix itself;
-# -dUseCThreads is kept for older trees of the submodule.
+# (Delphi syntax mode, long strings, smart linking). The program links cthreads on Unix itself.
 ARCH_OPTS=()
 case "$("$FPC" -iTP)" in
     aarch64) ARCH_OPTS=(-CpARMV8 -OpARMV8) ;;
@@ -49,7 +48,7 @@ BUILD="$(mktemp -d)"
 trap 'rm -rf "$BUILD"' EXIT
 (
     cd "$SRC"
-    "$FPC" -Mdelphi -Sh -Si -O3 "${ARCH_OPTS[@]}" -XX -Xs -dUseCThreads -vewn \
+    "$FPC" -Mdelphi -Sh -Si -O3 "${ARCH_OPTS[@]}" -XX -Xs -vewn \
         -FU"$BUILD" -FE"$BUILD" -B astap_command_line.lpr -oastap_cli
 )
 install -m 0755 "$BUILD/astap_cli" "$OUT/astap_cli"
