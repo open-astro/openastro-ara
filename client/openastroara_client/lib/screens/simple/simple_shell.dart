@@ -455,6 +455,32 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
         );
   }
 
+  /// A tap on the status pill: what it is about, open (user, 2026-11-04).
+  void _openFromPill(SimpleStatusOrigin origin) {
+    if (origin == SimpleStatusOrigin.mount ||
+        origin == SimpleStatusOrigin.camera) {
+      setState(() {
+        _clean = false;
+        _device = origin == SimpleStatusOrigin.mount
+            ? 'eq.mount'
+            : 'eq.camera';
+        if (!_sideBySide(context)) _popover = _Popover.none;
+      });
+      return;
+    }
+    final mode = switch (origin) {
+      SimpleStatusOrigin.plan => SimpleModeScreen.plan,
+      SimpleStatusOrigin.guide => SimpleModeScreen.guide,
+      _ => SimpleModeScreen.preview,
+    };
+    // A Guided Run on that step keeps going; anything else switches mode.
+    if (_shown(ref.read(autopilotProvider)) != mode) _pickMode(mode);
+    setState(() {
+      _clean = false;
+      _popover = _Popover.settings;
+    });
+  }
+
   void _pickMode(SimpleModeScreen m) {
     if (m == SimpleModeScreen.autopilot) return _startAutopilot();
     setState(() {
@@ -850,7 +876,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                             constraints: BoxConstraints(
                               maxWidth: (width - kSimpleInset * 3) / 2,
                             ),
-                            child: const SimpleStatusPill(),
+                            child: SimpleStatusPill(onOpen: _openFromPill),
                           ),
                         ),
                         _Fade(

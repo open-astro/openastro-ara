@@ -760,8 +760,14 @@ class SimpleStopSquare extends StatelessWidget {
 /// The status pill's height (Plan's sheet starts below it).
 const double kSimpleStatusHeight = 48;
 
+/// What the status pill is about: a tap opens it (user, 2026-11-04).
+enum SimpleStatusOrigin { preview, plan, mount, camera, guide }
+
 class SimpleStatusPill extends ConsumerStatefulWidget {
-  const SimpleStatusPill({super.key});
+  const SimpleStatusPill({super.key, this.onOpen});
+
+  /// Opens what the pill is about (its mode's panel, or a device window).
+  final ValueChanged<SimpleStatusOrigin>? onOpen;
 
   @override
   ConsumerState<SimpleStatusPill> createState() => _SimpleStatusPillState();
@@ -929,6 +935,16 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
                   : (null, null, AraColors.textSecondary),
           };
     if (label == null) return const SizedBox.shrink();
+    // Where a tap leads: the same order as the words above.
+    final origin = stopping || p.phase != CapturePhase.idle || looping
+        ? SimpleStatusOrigin.preview
+        : planActive && step != null && step.isNotEmpty
+        ? SimpleStatusOrigin.plan
+        : parking != null
+        ? SimpleStatusOrigin.mount
+        : cooling
+        ? SimpleStatusOrigin.camera
+        : SimpleStatusOrigin.guide;
     // Working normally (a frame, a loop, a running plan, guiding): the dot
     // blinks (DESIGN.md status rule).
     final working =
@@ -967,86 +983,92 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
             )
           : l10n.previewStatusSpoken(label, detail),
       excludeSemantics: true,
-      child: ConstrainedBox(
-        constraints: BoxConstraints(
-          minWidth: math.min(_width, kSimpleStatusMaxWidth),
-          maxWidth: kSimpleStatusMaxWidth,
-        ),
-        child: SimplePanel(
-          key: _panelKey,
-          padding: const EdgeInsets.symmetric(horizontal: AraSpace.s16),
-          child: Stack(
-            children: [
-              Container(
-                height: kSimpleStatusHeight,
-                // With the bar, the words move up so the two sit together.
-                padding: EdgeInsets.only(bottom: stepProgress == null ? 0 : 9),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // A device working normally blinks its green dot.
-                    StatusBlink(
-                      on: working,
-                      child: Icon(Icons.circle, size: 10, color: dot),
-                    ),
-                    const SizedBox(width: AraSpace.s8),
-                    // One text, so the label keeps its room and only the detail's
-                    // tail is cut (two Flexibles halved the space: "Taking a fr…").
-                    Flexible(
-                      child: Text.rich(
-                        TextSpan(
-                          text: label,
-                          children: [
-                            if (detail != null) ...[
-                              const WidgetSpan(
-                                child: SizedBox(width: AraSpace.s8),
-                              ),
-                              TextSpan(
-                                text: detail,
-                                style: const TextStyle(
-                                  color: AraColors.textSecondary,
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                        style: kSimpleText,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+      button: widget.onOpen != null,
+      onTap: widget.onOpen == null ? null : () => widget.onOpen!(origin),
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: widget.onOpen == null ? null : () => widget.onOpen!(origin),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            minWidth: math.min(_width, kSimpleStatusMaxWidth),
+            maxWidth: kSimpleStatusMaxWidth,
+          ),
+          child: SimplePanel(
+            key: _panelKey,
+            padding: const EdgeInsets.symmetric(horizontal: AraSpace.s16),
+            child: Stack(
+              children: [
+                Container(
+                  height: kSimpleStatusHeight,
+                  // With the bar, the words move up so the two sit together.
+                  padding: EdgeInsets.only(bottom: stepProgress == null ? 0 : 9),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // A device working normally blinks its green dot.
+                      StatusBlink(
+                        on: working,
+                        child: Icon(Icons.circle, size: 10, color: dot),
                       ),
-                    ),
-                    if (exposing) ...[
-                      const SizedBox(width: AraSpace.s12),
-                      SizedBox(
-                        width: 60,
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(2),
-                          child: LinearProgressIndicator(
-                            value: (p.displayProgressPct ?? 0) / 100,
-                            minHeight: 4,
-                            backgroundColor: AraColors.tileFill,
+                      const SizedBox(width: AraSpace.s8),
+                      // One text, so the label keeps its room and only the detail's
+                      // tail is cut (two Flexibles halved the space: "Taking a fr…").
+                      Flexible(
+                        child: Text.rich(
+                          TextSpan(
+                            text: label,
+                            children: [
+                              if (detail != null) ...[
+                                const WidgetSpan(
+                                  child: SizedBox(width: AraSpace.s8),
+                                ),
+                                TextSpan(
+                                  text: detail,
+                                  style: const TextStyle(
+                                    color: AraColors.textSecondary,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                          style: kSimpleText,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      if (exposing) ...[
+                        const SizedBox(width: AraSpace.s12),
+                        SizedBox(
+                          width: 60,
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(2),
+                            child: LinearProgressIndicator(
+                              value: (p.displayProgressPct ?? 0) / 100,
+                              minHeight: 4,
+                              backgroundColor: AraColors.tileFill,
+                            ),
                           ),
                         ),
-                      ),
+                      ],
                     ],
-                  ],
-                ),
-              ),
-              if (stepProgress != null)
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: 10,
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(2),
-                    child: LinearProgressIndicator(
-                      value: stepProgress,
-                      minHeight: 3,
-                      backgroundColor: AraColors.tileFill,
-                    ),
                   ),
                 ),
-            ],
+                if (stepProgress != null)
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 10,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(2),
+                      child: LinearProgressIndicator(
+                        value: stepProgress,
+                        minHeight: 3,
+                        backgroundColor: AraColors.tileFill,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
           ),
         ),
       ),

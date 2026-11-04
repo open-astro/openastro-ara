@@ -2531,6 +2531,28 @@ void main() {
     expect(guider.refreshes, idle, reason: 'idle: no more polling');
   });
 
+  testWidgets('a tap on the status pill opens what it is about (user, 2026-11-04)', (tester) async {
+    final guider = _GuiderAt('calibrating');
+    final c = await _pump(tester, const Size(1024, 768), gear: [guiderStatusProvider.overrideWith(() => guider)]);
+    await tester.tap(find.byKey(const Key('simple-mode')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('simple-mode-focus')));
+    await tester.pump();
+    // The guider's routine: Guide mode, its panel open.
+    await tester.tap(find.byType(SimpleStatusPill));
+    await tester.pump();
+    expect(find.byType(SimpleGuidePanel), findsOneWidget);
+    // A frame: Preview, its panel open.
+    c.read(captureProgressProvider.notifier).beginExposing(const Duration(seconds: 5));
+    await tester.pump();
+    await tester.tap(find.byType(SimpleStatusPill));
+    await tester.pump();
+    expect(find.byKey(const Key('simple-exposure')), findsOneWidget, reason: "Preview's panel");
+    expect(find.descendant(of: find.byKey(const Key('simple-mode')), matching: find.text('Preview')), findsOneWidget);
+    c.read(captureProgressProvider.notifier).reset();
+    await tester.pump(const Duration(seconds: 1));
+  });
+
   testWidgets('the status pill reports the guider: its routine, then Guiding with the RMS; a frame comes first',
       (tester) async {
     // User, 2026-11-04: nothing on screen said the guider was calibrating.
@@ -2542,7 +2564,7 @@ void main() {
         .map((t) => t.text.toPlainText())
         .join(' ');
     expect(pill(), allOf(contains('Guider'), contains('Calibrating'), contains('West step 3')));
-    expect(tester.getSemantics(find.byType(SimpleStatusPill)), matchesSemantics(label: 'Guider, Calibrating', isLiveRegion: true),
+    expect(tester.getSemantics(find.byType(SimpleStatusPill)), matchesSemantics(label: 'Guider, Calibrating', isLiveRegion: true, isButton: true, hasTapAction: true),
         reason: 'each step is not read out');
     guider.at('guiding');
     await tester.pump();
@@ -2611,7 +2633,8 @@ void main() {
     expect(pill(), contains('Cooling camera to -10 °C'));
     // Screen readers hear the step when it changes.
     expect(tester.getSemantics(find.byType(SimpleStatusPill)), matchesSemantics(
-        label: 'Plan, Cooling camera to -10 °C', isLiveRegion: true));
+        label: 'Plan, Cooling camera to -10 °C', isLiveRegion: true, isButton: true, hasTapAction: true),
+        reason: 'and a tap opens Plan (user, 2026-11-04)');
     // A frame in hand: the camera's own countdown wins.
     container.read(captureProgressProvider.notifier).beginExposing(const Duration(seconds: 5));
     await tester.pump();
