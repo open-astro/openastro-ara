@@ -1221,6 +1221,10 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String get planRigUnreachable =>
+      'Couldn\'t reach the rig. Check the connection and try again.';
+
+  @override
   String get planRunEnding => 'The run is ending; this target can\'t join it.';
 
   @override
@@ -3149,6 +3153,10 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String planAlreadyQueued(String name) {
     return '$name já está na fila.';
   }
+
+  @override
+  String get planRigUnreachable =>
+      'Não foi possível falar com o setup. Verifique a conexão e tente de novo.';
 
   @override
   String get planRunEnding =>

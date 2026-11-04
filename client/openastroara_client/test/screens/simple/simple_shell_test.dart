@@ -434,7 +434,7 @@ class _Plan extends SimpleRunNotifier {
 class _Queueing extends _Plan {
   _Queueing(super.value);
   @override
-  Future<bool> create(WidgetRef ref, {bool first = false}) async {
+  Future<bool> create({bool first = false}) async {
     final sel = ref.read(planetariumSelectionProvider)!;
     state = SimpleRun(sequenceId: 'seq-1', targets: [
       ...state.targets,

@@ -552,9 +552,8 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
 
   /// Add to queue: the picked target joins the end of the queue (the one
   /// sequence; live when it is imaging), or makes it. [first] puts it at the
-  /// front instead (Start now). [ref] is the caller's widget's (the create
-  /// reads the widget tree). True once on the rig.
-  Future<bool> create(WidgetRef ref, {bool first = false}) async {
+  /// front instead (Start now). True once on the rig.
+  Future<bool> create({bool first = false}) async {
     final sel = ref.read(planetariumSelectionProvider);
     final steps = ref.read(simpleRunPlanProvider);
     final gain = ref.read(simpleRunGainProvider);
@@ -565,7 +564,7 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
     if (queued >= 0) {
       if (!first) {
         state = state.copyWith(
-          error: l10nFor(this.ref.read(appLocaleProvider))
+          error: l10nFor(ref.read(appLocaleProvider))
               .planAlreadyQueued(sel.name),
         );
         return false;
@@ -578,10 +577,11 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
     try {
       // The append goes to the selected sequence.
       if (queue != null) {
-        this.ref.read(selectedSequenceIdProvider.notifier).select(queue);
+        ref.read(selectedSequenceIdProvider.notifier).select(queue);
       }
       final r = await createImagingRun(
-        ref,
+        null,
+        container: ref.container,
         raDeg: sel.raJ2000Hours * 15,
         decDeg: sel.decJ2000Deg,
         targetName: sel.name,
@@ -594,23 +594,20 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
         gain: gain,
       );
       if (r == null || r.draft) {
-        state = state.copyWith(
-          busy: false,
-          error: "Couldn't reach the rig. Check the connection and try again.",
-        );
+        _fail(l10nFor(ref.read(appLocaleProvider)).planRigUnreachable);
         return false;
       }
       if (queue != null && r.sequenceId != queue) {
         // The daemon refused the append (the run is winding down) and a
         // second sequence was made: don't leave it behind.
         try {
-          await this.ref
+          await ref
               .read(sequenceApiProvider)
               ?.deleteSequence(r.sequenceId);
         } catch (_) {}
         state = state.copyWith(
           busy: false,
-          error: l10nFor(this.ref.read(appLocaleProvider)).planRunEnding,
+          error: l10nFor(ref.read(appLocaleProvider)).planRunEnding,
         );
         return false;
       }
@@ -639,7 +636,7 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
       }
       return true;
     } catch (e) {
-      state = state.copyWith(busy: false, error: _why(e, 'create the plan'));
+      _fail(_why(e, 'create the plan'));
       return false;
     }
   }
@@ -666,12 +663,11 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
   /// the rig (removed, added again with [steps], moved back into place), live
   /// while imaging. True once saved.
   Future<bool> edit(
-    WidgetRef ref,
     int i,
     List<FilterPlanStep> steps, {
     int? gain,
   }) async {
-    final api = this.ref.read(sequenceApiProvider);
+    final api = ref.read(sequenceApiProvider);
     final id = state.sequenceId;
     if (api == null || id == null || i >= state.targets.length || state.busy) {
       return false;
@@ -683,9 +679,10 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
     state = state.copyWith(busy: true);
     try {
       await _removeBlock(api, id, t.name);
-      this.ref.read(selectedSequenceIdProvider.notifier).select(id);
+      ref.read(selectedSequenceIdProvider.notifier).select(id);
       final r = await createImagingRun(
-        ref,
+        null,
+        container: ref.container,
         raDeg: t.raDeg,
         decDeg: t.decDeg,
         targetName: t.name,
@@ -716,10 +713,9 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
       );
       return true;
     } catch (e) {
-      state = state.copyWith(
-        busy: false,
-        error: _why(e, 'save the edit'),
-        targets: await _asOnRig(api, id),
+      _fail(
+        _why(e, 'save the edit'),
+        undo: state.copyWith(targets: await _asOnRig(api, id)),
       );
       return false;
     }
@@ -792,7 +788,7 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
       );
       return true;
     } catch (e) {
-      state = state.copyWith(busy: false, error: _why(e, 'put it back'));
+      _fail(_why(e, 'put it back'));
       return false;
     }
   }
@@ -825,10 +821,11 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
       state = state.copyWith(targets: wanted, busy: false);
     } catch (e) {
       final api = ref.read(sequenceApiProvider);
-      state = state.copyWith(
-        busy: false,
-        error: _why(e, 'reorder the queue'),
-        targets: api == null ? null : await _asOnRig(api, id),
+      _fail(
+        _why(e, 'reorder the queue'),
+        undo: api == null
+            ? null
+            : state.copyWith(targets: await _asOnRig(api, id)),
       );
     }
   }
@@ -851,15 +848,15 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
         state = state.copyWith(targets: left);
       }
     } catch (e) {
-      state = state.copyWith(error: _why(e, 'remove it from the queue'));
+      _fail(_why(e, 'remove it from the queue'));
     }
   }
 
   /// Create and start (or ▶ with a target picked and no plan yet); with a
   /// queue, Start now: the target goes first. With [startAt] the run starts
   /// at once but waits on the rig until then (cooling 15 min before).
-  Future<bool> createAndStart(WidgetRef ref, {DateTime? startAt}) async {
-    if (!await create(ref, first: state.sequenceId != null)) return false;
+  Future<bool> createAndStart({DateTime? startAt}) async {
+    if (!await create(first: state.sequenceId != null)) return false;
     return startQueue(startAt: startAt);
   }
 
@@ -894,20 +891,16 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
           ),
         );
       } catch (e) {
-        final why = _why(e, 'schedule the start');
-        state = state.copyWith(error: why);
-        // A pill too, as _op's: Guided Run's last Done starts it with no sheet open.
-        ref.read(simpleMessagesProvider.notifier).show(SimpleMessageKind.error, why);
+        _fail(_why(e, 'schedule the start'));
         return false;
       }
     }
     state = state.copyWith(startAt: startAt, startNow: startAt == null);
-    await start();
-    return state.error == null;
+    return start();
   }
 
   /// The shutter's actions.
-  Future<void> start() => _op(
+  Future<bool> start() => _op(
     (api, id) => api.start(id),
     'start imaging',
     before: state.copyWith(started: true),
@@ -928,7 +921,7 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
   /// Night done's New plan: back to the sheet.
   void newPlan() => state = const SimpleRun();
 
-  Future<void> _op(
+  Future<bool> _op(
     Future<String> Function(SequenceClient api, String id) op,
     String action, {
     SimpleRun? before,
@@ -940,43 +933,45 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
         ? info!.sequenceId
         : state.sequenceId;
     // One at a time: a second tap while the first is on its way isn't sent.
-    if (api == null || id == null || id.isEmpty || state.busy) return;
+    if (api == null || id == null || id.isEmpty || state.busy) return false;
     final undo = state;
     state = (before ?? state).copyWith(busy: true);
     try {
       await op(api, id);
       state = state.copyWith(busy: false);
+      await ref.read(sequenceRunStateProvider.notifier).refresh();
+      return true;
     } catch (e) {
-      final why = _why(e, action);
-      state = undo.copyWith(
-        busy: false,
-        error: why,
+      _fail(
+        _why(e, action),
+        undo: undo,
         noStorage:
             e is DioException &&
             e.response?.data is Map &&
             e.response!.data['title'] == 'store_unavailable',
       );
-      // Also as a pill: the sheet and queue panel that show the error may be
-      // closed (a failed Stop from the shutter, with the rig still imaging).
-      ref
-          .read(simpleMessagesProvider.notifier)
-          .show(SimpleMessageKind.error, why);
+      await ref.read(sequenceRunStateProvider.notifier).refresh();
+      return false;
     }
-    await ref.read(sequenceRunStateProvider.notifier).refresh();
+  }
+
+  /// A failure after a rig round-trip: one pill, and the inline error stays
+  /// clear. The sheet that would show it may be closed (Night Setup's last
+  /// Done, a Stop from the shutter); pre-flight refusals a sheet can show
+  /// (already queued, run ending) set [SimpleRun.error] instead.
+  void _fail(String why, {SimpleRun? undo, bool noStorage = false}) {
+    state = (undo ?? state).copyWith(busy: false, noStorage: noStorage);
+    ref.read(simpleMessagesProvider.notifier).show(SimpleMessageKind.error, why);
   }
 
   // The daemon's own words when it sent them.
-  static String _why(Object e, String action) {
+  String _why(Object e, String action) {
     if (e is DioException) {
       final data = e.response?.data;
       final detail = data is Map ? data['detail'] : null;
       if (detail is String && detail.trim().isNotEmpty) return detail.trim();
     }
-    return friendlyError(
-      lookupAppLocalizations(const Locale('en')),
-      e,
-      action: action,
-    );
+    return friendlyError(l10nFor(ref.read(appLocaleProvider)), e, action: action);
   }
 }
 
@@ -1338,7 +1333,7 @@ class _SimpleRunShutterState extends ConsumerState<SimpleRunShutter>
   VoidCallback? _tap(SimpleRunPhase p) {
     final run = ref.read(simpleRunProvider.notifier);
     return switch (p) {
-      SimpleRunPhase.none when _pickable() => () => run.createAndStart(ref),
+      SimpleRunPhase.none when _pickable() => () => run.createAndStart(),
       SimpleRunPhase.ready
           when !ref.read(simpleRunProvider).waiting(DateTime.now()) =>
         run.start,
@@ -1998,7 +1993,7 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
             _added!,
             style: kSimpleText.copyWith(color: AraColors.accentConnected),
           ),
-        if (run.error != null) _RunError(run),
+        if (run.error != null || run.noStorage) _RunError(run),
         if (guided && editing == null)
           Text(context.l10n.guidedImagingStartsAfter, style: _dim)
         else if (editing == null && !imaging) ...[
@@ -2086,7 +2081,6 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
                           final ok = await ref
                               .read(simpleRunProvider.notifier)
                               .edit(
-                                ref,
                                 editing,
                                 steps,
                                 gain: ref.read(simpleRunGainProvider),
@@ -2120,7 +2114,7 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
                           final l10n = context.l10n;
                           final ok = await ref
                               .read(simpleRunProvider.notifier)
-                              .create(ref);
+                              .create();
                           if (!ok || !mounted) return;
                           // The sheet stays up for the next pick.
                           final n = ref.read(simpleRunProvider).targets.length;
@@ -2148,7 +2142,6 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
                           final ok = await ref
                               .read(simpleRunProvider.notifier)
                               .createAndStart(
-                                ref,
                                 startAt: imaging ? null : startAt,
                               );
                           if (ok) widget.onCreated();
@@ -2386,12 +2379,15 @@ class _RunError extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      Text(
-        run.error!,
-        style: kSimpleText.copyWith(color: AraColors.errorText),
-        maxLines: 4,
-        overflow: TextOverflow.ellipsis,
-      ),
+      // A pre-flight refusal; a rig failure went out as a pill, and only the
+      // storage hint stays here.
+      if (run.error case final error?)
+        Text(
+          error,
+          style: kSimpleText.copyWith(color: AraColors.errorText),
+          maxLines: 4,
+          overflow: TextOverflow.ellipsis,
+        ),
       if (run.noStorage)
         TextButton(
           onPressed: () {
@@ -2618,7 +2614,7 @@ class SimpleRunPanel extends ConsumerWidget {
                 ),
             ],
             if (run.targets.isNotEmpty) _QueueList(run: run, onEdit: onEdit),
-            if (run.error != null) _RunError(run),
+            if (run.error != null || run.noStorage) _RunError(run),
             if (imaging && paused) ...[
               Text(
                 context.l10n.planHintResume,

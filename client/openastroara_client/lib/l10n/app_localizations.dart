@@ -2223,6 +2223,12 @@ abstract class AppLocalizations {
   /// **'{name} is already in the queue.'**
   String planAlreadyQueued(String name);
 
+  /// Plan sheet / Night Setup: Add to queue got no answer from the rig (saved nothing); shown as a pill
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t reach the rig. Check the connection and try again.'**
+  String get planRigUnreachable;
+
   /// Plan sheet: Add to queue while the run is winding down (the rig refused the append)
   ///
   /// In en, this message translates to:

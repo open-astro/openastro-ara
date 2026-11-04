@@ -73,9 +73,12 @@ class _Seq implements SequenceClient {
   var _n = 0;
   /// The bodies the daemon keeps, by id.
   final bodies = <String, Map<String, dynamic>>{};
+  /// The rig is unreachable for the next create (the link drops).
+  bool createFails = false;
   @override
   Future<String> create(String name, Map<String, dynamic> body,
       {String? description, String? idempotencyKey}) async {
+    if (createFails) throw DioException(requestOptions: RequestOptions(), message: 'link dropped');
     calls.add('create $name');
     final id = 'seq-${++_n}';
     bodies[id] = body;
@@ -529,6 +532,49 @@ void main() {
     await c.read(sequenceRunStateProvider.notifier).refresh();
     await tester.pumpAndSettle();
   }
+
+  group('the Queue, through its own interface (no sheet)', () {
+    Future<(ProviderContainer, _Seq)> queue({bool createFails = false}) async {
+      final seq = _Seq()..createFails = createFails;
+      final c = ProviderContainer(overrides: [
+        ..._rig.cast(),
+        tonightSkyProvider.overrideWith((ref) async => const <TonightSkyObject>[]),
+        sequenceApiProvider.overrideWith((ref) => seq),
+        planetariumSelectionProvider.overrideWith(() => _Sel(_m31)),
+        filterSetProvider.overrideWith(() => _Filters()),
+      ]);
+      addTearDown(c.dispose);
+      c.listen(simpleRunProvider, (_, _) {});
+      await c.read(tonightSkyProvider.future);
+      await Future<void>.delayed(Duration.zero);
+      return (c, seq);
+    }
+
+    test('Add to queue reads the picked target itself: one block on the rig, one Target queued', () async {
+      final (c, seq) = await queue();
+      expect(await c.read(simpleRunProvider.notifier).create(), isTrue);
+      expect(seq.calls, ['create M31']);
+      expect(c.read(simpleRunProvider).targets.map((t) => t.name), ['M31']);
+      expect(c.read(simpleRunProvider).error, isNull);
+      expect(c.read(simpleMessagesProvider), isEmpty);
+    });
+
+    test('a rig failure on Add is one pill, not an inline error too', () async {
+      final (c, _) = await queue(createFails: true);
+      expect(await c.read(simpleRunProvider.notifier).create(), isFalse);
+      expect(c.read(simpleMessagesProvider).map((m) => m.kind), [SimpleMessageKind.error]);
+      expect(c.read(simpleRunProvider).error, isNull, reason: 'the pill is the one surface');
+      expect(c.read(simpleRunProvider).targets, isEmpty);
+    });
+
+    test('a pre-flight refusal (already queued) stays inline, no pill', () async {
+      final (c, _) = await queue();
+      await c.read(simpleRunProvider.notifier).create();
+      expect(await c.read(simpleRunProvider.notifier).create(), isFalse);
+      expect(c.read(simpleRunProvider).error, _en.planAlreadyQueued('M31'));
+      expect(c.read(simpleMessagesProvider), isEmpty);
+    });
+  });
 
   group('the sheet', () {
     testWidgets('with nothing picked: search or Pick in Sky; both buttons are off', (tester) async {
@@ -1018,7 +1064,9 @@ void main() {
         overrides: [simpleModePrefsProvider.overrideWithValue(prefs)]);
     await tester.tap(find.byKey(const Key('simple-run-start')));
     await tester.pumpAndSettle();
-    expect(find.text('There is no disk to save frames to.'), findsOneWidget);
+    expect(c.read(simpleMessagesProvider).single.title, 'There is no disk to save frames to.',
+        reason: "the daemon's words, as a pill (the sheet may be closed)");
+    expect(c.read(simpleRunProvider).error, isNull);
     await tester.tap(find.text('Open Storage'));
     await tester.pumpAndSettle();
     expect(c.read(selectedSettingsPanelProvider), 'session.storage');
@@ -1276,7 +1324,8 @@ void main() {
       await tester.pumpAndSettle();
       expect(seq.targets('seq-1'), ['M31']);
       expect(c.read(simpleRunProvider).targets.map((t) => t.name), ['M31'], reason: 'what the rig will image');
-      expect(c.read(simpleRunProvider).error, isNotNull);
+      expect(c.read(simpleMessagesProvider).map((m) => m.kind), [SimpleMessageKind.error], reason: 'says so, as a pill');
+      expect(c.read(simpleRunProvider).error, isNull);
     });
 
     testWidgets('while imaging: the panel offers Add to queue; the sheet only adds', (tester) async {

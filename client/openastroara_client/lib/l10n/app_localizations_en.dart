@@ -1221,6 +1221,10 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get planRigUnreachable =>
+      'Couldn\'t reach the rig. Check the connection and try again.';
+
+  @override
   String get planRunEnding => 'The run is ending; this target can\'t join it.';
 
   @override

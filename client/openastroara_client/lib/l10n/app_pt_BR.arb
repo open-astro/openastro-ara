@@ -354,6 +354,7 @@
   "planAddTarget": "Adicionar alvo",
   "planMagnitude": "mag {value}",
   "planAlreadyQueued": "{name} já está na fila.",
+  "planRigUnreachable": "Não foi possível falar com o setup. Verifique a conexão e tente de novo.",
   "planRunEnding": "A sessão está terminando; este alvo não pode entrar nela.",
   "planQueueBusy": "A fila ainda está sendo atualizada no setup. Tente de novo em instantes.",
   "shellLanguage": "Idioma",
