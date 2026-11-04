@@ -9,6 +9,7 @@ import 'package:openastroara/models/focuser_status.dart';
 import 'package:openastroara/screens/simple/simple_autopilot.dart';
 import 'package:openastroara/state/setup/setup_readiness.dart';
 import 'package:openastroara/state/simple_mode_state.dart';
+import 'package:openastroara/state/simple_messages_state.dart';
 import 'package:openastroara/services/simple_mode_prefs_service.dart';
 import 'package:openastroara/screens/simple/simple_focus_panel.dart';
 import 'package:openastroara/theme/ara_colors.dart';
@@ -314,10 +315,19 @@ void main() {
       expect(l.cancels, 1);
     });
 
-    testWidgets('Auto with no focuser: the shutter is off', (tester) async {
+    testWidgets('Auto with no focuser: the shutter is off, and a tap says why (user, 2026-11-04)', (tester) async {
       final l = await shutter(tester, MainFocusMethod.autofocus);
+      final c = ProviderScope.containerOf(tester.element(find.byType(SimpleFocusShutter)));
       await tester.tap(find.byKey(const Key('simple-shutter')));
+      await tester.pump();
       expect(l.starts, 0);
+      expect(c.read(simpleMessagesProvider).single.title, 'Connect a focuser to autofocus, or focus by hand on Manual.');
+      await tester.tap(find.byKey(const Key('simple-shutter')));
+      await tester.pump();
+      expect(c.read(simpleMessagesProvider), hasLength(1), reason: 'once, not a pill per tap');
+      expect(tester.getSemantics(find.byKey(const Key('simple-shutter'))),
+          containsSemantics(hint: 'Connect a focuser to autofocus, or focus by hand on Manual.'));
+      await tester.pump(const Duration(seconds: 11));
     });
 
     testWidgets('Manual: the shutter starts the Bahtinov readout (no longer Preview\'s frames)', (tester) async {

@@ -145,6 +145,15 @@ class SimpleFocusShutter extends ConsumerWidget {
         label: active
             ? context.l10n.focusStopGuide
             : context.l10n.focusStartGuide,
+        whyOff: guide.busy
+            ? null
+            : gated
+            ? context.l10n.guideFocusWaitingMain
+            : guideFocusBlocker(
+                context.l10n,
+                ref.watch(guiderStatusProvider).asData?.value,
+                active: active,
+              ),
         onPressed: guide.busy || (!active && (blocked || gated))
             ? null
             : active
@@ -191,6 +200,7 @@ class SimpleFocusShutter extends ConsumerWidget {
           : running
           ? notifier.cancel
           : notifier.start,
+      whyOff: live.busy ? null : context.l10n.focusNeedsFocuser,
     );
   }
 }

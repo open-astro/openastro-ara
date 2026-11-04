@@ -55,6 +55,7 @@ import 'simple_preview_panel.dart'
         SimpleWheelKeys,
         exposurePresets,
         formatExposure,
+        simpleSayWhy,
         kSimpleText;
 import 'simple_shell.dart'
     show
@@ -1437,7 +1438,19 @@ class _SimpleRunShutterState extends ConsumerState<SimpleRunShutter>
           // cancels the hold.
           final quick = _hold.value < 0.4;
           _hold.value = 0;
-          if (!_held && (quick || !holdable)) tap?.call();
+          if (!_held && (quick || !holdable)) {
+            // Greyed out: a tap says why (user, 2026-11-04).
+            tap == null && (idle || waiting)
+                ? simpleSayWhy(
+                    context,
+                    waiting
+                        ? context.l10n.planRisesAtCap(
+                            _hhmm(run.targets.first.rise!.toLocal()),
+                          )
+                        : context.l10n.planPickTargetFirst,
+                  )
+                : tap?.call();
+          }
         },
         onPointerCancel: (_) {
           scheduleMicrotask(() => _viaPointer = false);

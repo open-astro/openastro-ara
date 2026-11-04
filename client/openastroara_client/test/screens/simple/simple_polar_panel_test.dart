@@ -271,10 +271,13 @@ void main() {
               .color,
           AraColors.textPrimary);
     });
-    testWidgets('no server: off', (tester) async {
+    testWidgets('no server: off, and a tap says why (user, 2026-11-04)', (tester) async {
       await shutter(tester, const PolarAlignLive(), server: false);
-      final ink = tester.widget<InkResponse>(find.byKey(const Key('simple-shutter')));
-      expect(ink.onTap, isNull);
+      final c = ProviderScope.containerOf(tester.element(find.byKey(const Key('simple-shutter'))));
+      await tester.tap(find.byKey(const Key('simple-shutter')));
+      await tester.pump();
+      expect(c.read(simpleMessagesProvider).single.title, 'Rig not connected');
+      await tester.pump(const Duration(seconds: 11));
     });
   });
 }

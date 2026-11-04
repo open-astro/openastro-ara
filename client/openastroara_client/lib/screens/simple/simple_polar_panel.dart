@@ -104,6 +104,7 @@ class SimplePolarShutter extends ConsumerWidget {
       start: true,
       running: active,
       label: active ? l10n.polarStop : l10n.polarStart,
+      whyOff: l10n.shellRigNotConnected,
       onPressed: api == null
           ? null
           : active

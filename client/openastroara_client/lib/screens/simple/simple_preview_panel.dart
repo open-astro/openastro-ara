@@ -16,6 +16,7 @@ import '../../state/imaging/exposure_state.dart';
 import '../../state/imaging/last_frame_state.dart';
 import '../../state/imaging/live_view_state.dart';
 import '../../state/sequencer/sequence_list_state.dart';
+import '../../state/simple_messages_state.dart';
 import '../../models/sequence/sequence_summary.dart';
 import '../../state/stats/server_internal_state_state.dart';
 import '../../theme/ara_colors.dart';
@@ -664,9 +665,14 @@ class SimpleShutterButton extends StatelessWidget {
     required this.onPressed,
     this.label,
     this.start = false,
+    this.whyOff,
   });
 
   final bool running;
+
+  /// Why the shutter is greyed out, when it is: said in a pill on a tap
+  /// and to screen readers as a hint (user, 2026-11-04).
+  final String? whyOff;
 
   /// A play triangle at rest instead of the filled circle: only Preview's
   /// shutter takes a picture; every other mode's starts its routine.
@@ -680,14 +686,16 @@ class SimpleShutterButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final enabled = onPressed != null;
     final fg = enabled ? AraColors.textPrimary : AraColors.textDisabled;
+    final why = enabled ? null : whyOff;
     return Semantics(
       button: true,
       label:
           label ??
           (running ? context.l10n.previewStop : context.l10n.previewTakeFrame),
+      hint: why,
       child: InkResponse(
         key: const Key('simple-shutter'),
-        onTap: onPressed,
+        onTap: onPressed ?? (why == null ? null : () => simpleSayWhy(context, why)),
         radius: 36,
         child: Container(
           width: 60,
@@ -710,6 +718,17 @@ class SimpleShutterButton extends StatelessWidget {
       ),
     );
   }
+}
+
+/// A greyed shutter's reason, as a pill: once at a time, fading like a result.
+void simpleSayWhy(BuildContext context, String why) {
+  final container = ProviderScope.containerOf(context, listen: false);
+  final messages = container.read(simpleMessagesProvider.notifier);
+  if (container.read(simpleMessagesProvider).any((m) => m.title == why)) {
+    return;
+  }
+  final id = messages.show(SimpleMessageKind.warning, why);
+  Timer(kSimpleResultLife, () => messages.dismiss(id));
 }
 
 /// What the camera is doing, as a small pill on the image (like a camera's

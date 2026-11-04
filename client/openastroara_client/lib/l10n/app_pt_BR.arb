@@ -567,5 +567,6 @@
   "shellNoDevices": "Nenhum dispositivo conectado",
   "guideStarting": "Iniciando…",
   "guideStopping": "Parando…",
-  "guideExposureOwn": "O do guia"
+  "guideExposureOwn": "O do guia",
+  "focusNeedsFocuser": "Conecte um focalizador para o foco automático, ou foque à mão no Manual."
 }

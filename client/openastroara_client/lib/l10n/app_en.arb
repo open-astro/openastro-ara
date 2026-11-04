@@ -2789,5 +2789,9 @@
   "guideExposureOwn": "The guider's own",
   "@guideExposureOwn": {
     "description": "Guide exposure picker value when the profile leaves it to the guider"
+  },
+  "focusNeedsFocuser": "Connect a focuser to autofocus, or focus by hand on Manual.",
+  "@focusNeedsFocuser": {
+    "description": "Why Focus's shutter is greyed out on Auto with no focuser"
   }
 }

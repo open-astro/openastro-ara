@@ -3506,6 +3506,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The guider\'s own'**
   String get guideExposureOwn;
+
+  /// Why Focus's shutter is greyed out on Auto with no focuser
+  ///
+  /// In en, this message translates to:
+  /// **'Connect a focuser to autofocus, or focus by hand on Manual.'**
+  String get focusNeedsFocuser;
 }
 
 class _AppLocalizationsDelegate

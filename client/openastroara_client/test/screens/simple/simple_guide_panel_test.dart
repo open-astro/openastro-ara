@@ -6,6 +6,7 @@ import 'package:openastroara/screens/simple/simple_guide_panel.dart';
 import 'package:openastroara/services/guider_api.dart' show GuiderClient;
 import 'package:openastroara/state/guider/guider_state.dart';
 import 'package:openastroara/state/settings/phd2_settings_state.dart';
+import 'package:openastroara/state/simple_messages_state.dart';
 import 'package:openastroara/widgets/equipment/guider_chip.dart' show guiderStatusLevel;
 import 'package:openastroara/theme/ara_colors.dart';
 import 'package:openastroara/widgets/status_indicator.dart' show StatusLevel;
@@ -172,6 +173,15 @@ void main() {
     slider.onChangeEnd!(70);
     await tester.pump();
     expect(c.read(phd2SettingsProvider).guideCameraGain, 70);
+  });
+
+  testWidgets('no guider: the greyed shutter says why when tapped (user, 2026-11-04)', (tester) async {
+    final c = await _pump(tester, _wire(state: 'disconnected', runtime: 'stopped'), child: const SimpleGuideShutter());
+    await tester.tap(find.byKey(const Key('simple-shutter')));
+    await tester.pump();
+    expect(_g.calls, isEmpty);
+    expect(c.read(simpleMessagesProvider).single.title, 'Connect the guider in Settings › Devices.');
+    await tester.pump(const Duration(seconds: 11));
   });
 
   testWidgets('Dither every: frames up and down, Off below 1, kept in the profile', (tester) async {

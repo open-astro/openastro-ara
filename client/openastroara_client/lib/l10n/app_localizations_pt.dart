@@ -1979,6 +1979,10 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get guideExposureOwn => 'The guider\'s own';
+
+  @override
+  String get focusNeedsFocuser =>
+      'Connect a focuser to autofocus, or focus by hand on Manual.';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -3968,4 +3972,8 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get guideExposureOwn => 'O do guia';
+
+  @override
+  String get focusNeedsFocuser =>
+      'Conecte um focalizador para o foco automático, ou foque à mão no Manual.';
 }

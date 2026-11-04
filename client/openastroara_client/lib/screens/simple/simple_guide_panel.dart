@@ -97,6 +97,7 @@ class SimpleGuideShutter extends ConsumerWidget {
           : active
           ? l10n.guideStop
           : l10n.guideStart,
+      whyOff: pending != null ? null : l10n.guideConnectFirst,
       onPressed: g == null || !g.isConnected || pending != null
           ? null
           : () => simpleGuideRun(context, ref, start: !active),

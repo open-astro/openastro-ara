@@ -1979,4 +1979,8 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get guideExposureOwn => 'The guider\'s own';
+
+  @override
+  String get focusNeedsFocuser =>
+      'Connect a focuser to autofocus, or focus by hand on Manual.';
 }
