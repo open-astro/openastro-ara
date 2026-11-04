@@ -68,8 +68,8 @@ updates:
   #   AstrometryNativeTransformTest).
   # - ASTAP (open-astro/astap branch `ara`, built into astap_cli): the branch only
   #   moves when we merge Han Kleijn's updates into it (OPENASTRO.md there), so a bump
-  #   PR follows a sync that was already checked against Han's build; CI builds it and
-  #   smoke-tests -h.
+  #   PR follows a sync that was already checked against Han's build; CI builds it,
+  #   smoke-tests -h in the image and solves a fixture frame (astap-solve job).
   - package-ecosystem: gitsubmodule
     directory: /
     schedule:

@@ -112,6 +112,7 @@ class CiSolveCheck(unittest.TestCase):
         self.assertIsNotNone(sha, "DataManagerService: D05 CatalogSha256 not found")
         job = CI_YML.read_text().split("\n  astap-solve:\n", 1)
         self.assertEqual(len(job), 2, "ci.yml has no astap-solve job")
+        job[1] = re.split(r"\n  [A-Za-z0-9_-]+:\n", job[1], maxsplit=1)[0]  # this job only
         self.assertIn(url[1], job[1], "astap-solve must download the daemon's D05 package")
         self.assertIn(f"echo \"{sha[1]}  ", job[1], "astap-solve must verify the daemon's D05 checksum")
         self.assertIn("scripts/ci-astap-solve.sh", job[1])

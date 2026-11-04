@@ -68,6 +68,9 @@ sys.exit(1 if bad else 0)
 EOF
 }
 
+# Exact match on purpose: `ara` claims the same answer as Han's build at any thread count. If a
+# later Han release threads something that jitters the last digits, loosen this to the
+# check_answer tolerances rather than drop it.
 same_as() { # reference, name, what is compared
     if [ "$(solution "$1")" != "$(solution "$2")" ] || [ "$(stars "$1")" != "$(stars "$2")" ]; then
         fail "$2: $3 differs from $1"

@@ -332,7 +332,7 @@ jobs:
     # != 'true', so this runs. `!cancelled()` is what lets it run at all when a
     # need failed; the explicit sanity check keeps the original gating.
     if: ${{ !cancelled() && needs.sanity.result == 'success' && needs.changes.outputs.docs_only != 'true' && needs.changes.outputs.dotnet != 'false' }}
-    timeout-minutes: 15  # fpc install + a ~10 s build + a cached D05; a cache miss adds one 103 MB download
+    timeout-minutes: 15
     permissions:
       contents: read  # checkout + download a public release artifact; no write scope
     steps:
@@ -538,6 +538,8 @@ jobs:
     name: ASTAP plate solve (linux-arm64, native)
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 15  # fpc install + a ~10 s build + a cached D05; a cache miss adds one 103 MB download
+    permissions:
+      contents: read  # checkout + download the public D05 release asset; no write scope
     needs: [sanity, changes]
     if: ${{ !cancelled() && needs.sanity.result == 'success' && needs.changes.outputs.docs_only != 'true' }}
     steps:
