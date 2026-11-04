@@ -37,6 +37,10 @@ import 'package:openastroara/services/simple_mode_prefs_service.dart';
 import 'package:openastroara/state/simple_mode_state.dart';
 import 'package:openastroara/state/settings/settings_nav.dart';
 import 'package:openastroara/state/app_shell_state.dart';
+import 'package:openastroara/state/app_locale_state.dart';
+import 'package:openastroara/models/sequence/draft_sequence.dart';
+import 'package:openastroara/services/draft_sequence_service.dart';
+import 'package:openastroara/state/sequencer/draft_sequences_state.dart';
 import 'package:openastroara/models/ws_event.dart';
 import 'package:openastroara/state/ws/ws_providers.dart';
 import 'package:openastroara/widgets/stop_mount_overlay.dart' show SlewWsEvents;
@@ -67,15 +71,39 @@ class _Gain150 extends ExposureController {
   ExposureParams build() => super.build().copyWith(gain: 150);
 }
 
+/// The offline-draft store, in memory: a transport failure on create lands here.
+class _MemDraftService extends DraftSequenceService {
+  final Map<String, DraftSequence> store = {};
+  int _n = 0;
+  @override
+  String newId() => '${draftIdPrefix}mem-${_n++}';
+  @override
+  Future<List<DraftSequence>> loadAll() async => store.values.toList();
+  @override
+  Future<void> save(DraftSequence draft) async => store[draft.id] = draft;
+  @override
+  Future<void> delete(String id) async => store.remove(id);
+}
+
+class _Locale extends AppLocaleController {
+  _Locale(this.picked);
+  final Locale picked;
+  @override
+  Locale? build() => picked;
+}
+
 class _Seq implements SequenceClient {
   final calls = <String>[];
   SequenceRunStateInfo? runState;
   var _n = 0;
   /// The bodies the daemon keeps, by id.
   final bodies = <String, Map<String, dynamic>>{};
+  /// The rig is unreachable for the next create (the link drops).
+  bool createFails = false;
   @override
   Future<String> create(String name, Map<String, dynamic> body,
       {String? description, String? idempotencyKey}) async {
+    if (createFails) throw DioException(requestOptions: RequestOptions(), message: 'link dropped');
     calls.add('create $name');
     final id = 'seq-${++_n}';
     bodies[id] = body;
@@ -529,6 +557,91 @@ void main() {
     await c.read(sequenceRunStateProvider.notifier).refresh();
     await tester.pumpAndSettle();
   }
+
+  group('the Queue, through its own interface (no sheet)', () {
+    Future<(ProviderContainer, _Seq)> queue({bool createFails = false, bool api = true, Locale? locale}) async {
+      final seq = _Seq()..createFails = createFails;
+      final c = ProviderContainer(overrides: [
+        ..._rig.cast(),
+        if (locale != null) appLocaleProvider.overrideWith(() => _Locale(locale)),
+        draftSequenceServiceProvider.overrideWithValue(_MemDraftService()),
+        tonightSkyProvider.overrideWith((ref) async => const <TonightSkyObject>[]),
+        sequenceApiProvider.overrideWith((ref) => api ? seq : null),
+        planetariumSelectionProvider.overrideWith(() => _Sel(_m31)),
+        filterSetProvider.overrideWith(() => _Filters()),
+      ]);
+      addTearDown(c.dispose);
+      c.listen(simpleRunProvider, (_, _) {});
+      await c.read(tonightSkyProvider.future);
+      await Future<void>.delayed(Duration.zero);
+      return (c, seq);
+    }
+
+    test('Add to queue reads the picked target itself: one block on the rig, one Target queued', () async {
+      final (c, seq) = await queue();
+      expect(await c.read(simpleRunProvider.notifier).create(), isTrue);
+      expect(seq.calls, ['create M31']);
+      expect(c.read(simpleRunProvider).targets.map((t) => t.name), ['M31']);
+      expect(c.read(simpleRunProvider).error, isNull);
+      expect(c.read(simpleMessagesProvider), isEmpty);
+    });
+
+    test('the link drops on Add: the create falls back to a local draft, refused with one pill', () async {
+      final (c, _) = await queue(createFails: true);
+      expect(await c.read(simpleRunProvider.notifier).create(), isFalse);
+      expect(c.read(simpleMessagesProvider).map((m) => (m.kind, m.title)),
+          [(SimpleMessageKind.error, _en.planRigUnreachable)]);
+      expect(c.read(simpleRunProvider).error, isNull, reason: 'the pill is the one surface');
+      expect(c.read(simpleRunProvider).targets, isEmpty);
+    });
+
+    test('no daemon at all: the create is only a local draft, refused with the same one pill', () async {
+      final (c, _) = await queue(api: false);
+      expect(await c.read(simpleRunProvider.notifier).create(), isFalse);
+      expect(c.read(simpleMessagesProvider).map((m) => (m.kind, m.title)),
+          [(SimpleMessageKind.error, _en.planRigUnreachable)]);
+      expect(c.read(simpleRunProvider).error, isNull);
+      expect(c.read(simpleRunProvider).targets, isEmpty);
+    });
+
+    test('Start now on a queued target whose move to the front fails: refused, nothing starts', () async {
+      // Review of #1494: create(first:) returned state.error == null after reorder, and _fail
+      // clears error, so a failed move reported success and started the run with the wrong
+      // target first.
+      final (c, seq) = await queue();
+      final run = c.read(simpleRunProvider.notifier);
+      await run.create();
+      c.read(planetariumSelectionProvider.notifier).set(_m42);
+      await run.create();
+      c.read(planetariumSelectionProvider.notifier).set(_m31);
+      expect(c.read(simpleRunProvider).targets.map((t) => t.name), ['M31', 'M42']);
+      c.read(planetariumSelectionProvider.notifier).set(_m42);
+      seq.updatesBeforeFail = 0; // the move is a body update; the link drops
+      expect(await run.createAndStart(), isFalse);
+      expect(c.read(simpleMessagesProvider).single.title, startsWith(_en.errorCouldnt(_en.planActionReorder)));
+      expect(seq.calls.where((call) => call.startsWith('start ')), isEmpty, reason: 'nothing starts');
+      expect(c.read(simpleRunProvider).targets.map((t) => t.name), ['M31', 'M42'], reason: 'as the rig has it');
+    });
+
+    test('a failure reads whole in the app locale: pt-BR prefix and pt-BR action', () async {
+      final (c, seq) = await queue(locale: const Locale('pt', 'BR'));
+      await c.read(simpleRunProvider.notifier).create();
+      seq.updatesBeforeFail = 0; // writing the start time fails, with no words from the daemon
+      expect(
+          await c.read(simpleRunProvider.notifier).startQueue(startAt: DateTime.now().add(const Duration(hours: 2))),
+          isFalse);
+      final pt = lookupAppLocalizations(const Locale('pt', 'BR'));
+      expect(c.read(simpleMessagesProvider).single.title, startsWith(pt.errorCouldnt(pt.planActionSchedule)));
+    });
+
+    test('a pre-flight refusal (already queued) stays inline, no pill', () async {
+      final (c, _) = await queue();
+      await c.read(simpleRunProvider.notifier).create();
+      expect(await c.read(simpleRunProvider.notifier).create(), isFalse);
+      expect(c.read(simpleRunProvider).error, _en.planAlreadyQueued('M31'));
+      expect(c.read(simpleMessagesProvider), isEmpty);
+    });
+  });
 
   group('the sheet', () {
     testWidgets('with nothing picked: search or Pick in Sky; both buttons are off', (tester) async {
@@ -1018,7 +1131,9 @@ void main() {
         overrides: [simpleModePrefsProvider.overrideWithValue(prefs)]);
     await tester.tap(find.byKey(const Key('simple-run-start')));
     await tester.pumpAndSettle();
-    expect(find.text('There is no disk to save frames to.'), findsOneWidget);
+    expect(c.read(simpleMessagesProvider).single.title, 'There is no disk to save frames to.',
+        reason: "the daemon's words, as a pill (the sheet may be closed)");
+    expect(c.read(simpleRunProvider).error, isNull);
     await tester.tap(find.text('Open Storage'));
     await tester.pumpAndSettle();
     expect(c.read(selectedSettingsPanelProvider), 'session.storage');
@@ -1276,7 +1391,8 @@ void main() {
       await tester.pumpAndSettle();
       expect(seq.targets('seq-1'), ['M31']);
       expect(c.read(simpleRunProvider).targets.map((t) => t.name), ['M31'], reason: 'what the rig will image');
-      expect(c.read(simpleRunProvider).error, isNotNull);
+      expect(c.read(simpleMessagesProvider).map((m) => m.kind), [SimpleMessageKind.error], reason: 'says so, as a pill');
+      expect(c.read(simpleRunProvider).error, isNull);
     });
 
     testWidgets('while imaging: the panel offers Add to queue; the sheet only adds', (tester) async {
