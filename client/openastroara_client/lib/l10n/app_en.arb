@@ -2758,9 +2758,9 @@
   "@guideActionStop": {
     "description": "Action named in an error: the guider refused to stop"
   },
-  "guideNotGuiding": "Not guiding",
-  "@guideNotGuiding": {
-    "description": "Guide panel headline while the guider is idle"
+  "guideIdle": "Idle",
+  "@guideIdle": {
+    "description": "Guide panel headline while the guider is connected and not running (not \"Not guiding\": it read as a failure)"
   },
   "guideNoGuider": "Guider not connected",
   "@guideNoGuider": {

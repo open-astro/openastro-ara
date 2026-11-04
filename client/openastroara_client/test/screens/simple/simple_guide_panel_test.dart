@@ -90,9 +90,11 @@ void main() {
     expect(find.text('RA 0.41″ · Dec 0.47″'), findsOneWidget);
   });
 
-  testWidgets('idle: Not guiding, not Stopped, and how to start', (tester) async {
+  testWidgets('idle: Idle, not Not guiding or Stopped (both read as a failure, user 2026-11-04), and how to start',
+      (tester) async {
     await _pump(tester, _wire(runtime: 'stopped'));
-    expect(find.text('Not guiding'), findsOneWidget);
+    expect(find.text('Idle'), findsOneWidget);
+    expect(find.text('Not guiding'), findsNothing);
     expect(find.text('Stopped'), findsNothing);
     expect(find.textContaining('Tap the shutter to start guiding'), findsOneWidget);
     expect(find.text('—'), findsOneWidget, reason: 'no RMS while idle');
@@ -138,7 +140,7 @@ void main() {
     expect(find.bySemanticsLabel('Stop guiding'), findsNothing, reason: 'no second tap while the ask is out');
     await tester.pump(const Duration(seconds: 11)); // the guider never answered: back to what it says
     expect(find.text('Starting…'), findsNothing);
-    expect(find.text('Not guiding'), findsOneWidget);
+    expect(find.text('Idle'), findsOneWidget);
   });
 
   testWidgets("the guide camera's exposure, a tile like Preview's, and its gain slider (user, 2026-11-04)",

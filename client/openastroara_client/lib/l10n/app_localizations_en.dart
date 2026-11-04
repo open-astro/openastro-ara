@@ -1956,7 +1956,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get guideActionStop => 'stop guiding';
 
   @override
-  String get guideNotGuiding => 'Not guiding';
+  String get guideIdle => 'Idle';
 
   @override
   String get guideNoGuider => 'Guider not connected';

@@ -560,7 +560,7 @@
   "guideStop": "Parar guiagem",
   "guideActionStart": "iniciar a guiagem",
   "guideActionStop": "parar a guiagem",
-  "guideNotGuiding": "Sem guiagem",
+  "guideIdle": "Parado",
   "guideNoGuider": "Guia não conectado",
   "guideTapShutter": "Toque no obturador para iniciar a guiagem. Ele calibra antes, quando preciso.",
   "guideConnectFirst": "Conecte o guia em Configurações › Dispositivos.",

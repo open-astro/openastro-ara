@@ -200,7 +200,7 @@ class SimpleGuidePanel extends ConsumerWidget {
                         ? (pending ? l10n.guideStarting : l10n.guideStopping)
                         : active
                         ? g.runtimeSummary(l10n)
-                        : l10n.guideNotGuiding,
+                        : l10n.guideIdle,
                     style: kSimpleText.copyWith(fontWeight: FontWeight.w600),
                   ),
                 ),

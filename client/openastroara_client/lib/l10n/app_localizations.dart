@@ -3459,11 +3459,11 @@ abstract class AppLocalizations {
   /// **'stop guiding'**
   String get guideActionStop;
 
-  /// Guide panel headline while the guider is idle
+  /// Guide panel headline while the guider is connected and not running (not "Not guiding": it read as a failure)
   ///
   /// In en, this message translates to:
-  /// **'Not guiding'**
-  String get guideNotGuiding;
+  /// **'Idle'**
+  String get guideIdle;
 
   /// Guide panel headline with no guider
   ///

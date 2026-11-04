@@ -1956,7 +1956,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get guideActionStop => 'stop guiding';
 
   @override
-  String get guideNotGuiding => 'Not guiding';
+  String get guideIdle => 'Idle';
 
   @override
   String get guideNoGuider => 'Guider not connected';
@@ -3947,7 +3947,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get guideActionStop => 'parar a guiagem';
 
   @override
-  String get guideNotGuiding => 'Sem guiagem';
+  String get guideIdle => 'Parado';
 
   @override
   String get guideNoGuider => 'Guia não conectado';
