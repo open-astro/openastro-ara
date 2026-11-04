@@ -35,6 +35,8 @@ import '../../state/sky_atlas/planetarium_selection_state.dart';
 import '../../state/settings/settings_nav.dart';
 import '../../state/simple_messages_state.dart';
 import '../../state/simple_mode_state.dart';
+import '../../state/simple_night_setup_state.dart';
+export '../../state/simple_night_setup_state.dart' show SimpleModeScreen, SimpleModeScreenLabels;
 
 import 'dart:ui' show ImageFilter;
 
@@ -117,32 +119,6 @@ const double kSimpleNightSetupRowHeight = 56;
 const double kSimpleStopSize = 60;
 
 /// The modes, in the decided order.
-enum SimpleModeScreen { nightSetup, preview, focus, polarAlign, plan }
-
-extension SimpleModeScreenLabels on SimpleModeScreen {
-  String labelOf(AppLocalizations l10n) => switch (this) {
-    SimpleModeScreen.nightSetup => l10n.shellModeNightSetup,
-    SimpleModeScreen.preview => l10n.shellModePreview,
-    SimpleModeScreen.polarAlign => l10n.shellModePolarAlign,
-    SimpleModeScreen.focus => l10n.shellModeFocus,
-    SimpleModeScreen.plan => l10n.shellModePlan,
-  };
-
-  /// The name on the 60 px rail, where "Polar align" doesn't fit.
-  String railLabelOf(AppLocalizations l10n) => switch (this) {
-    SimpleModeScreen.polarAlign => l10n.shellRailPolarAlign,
-    SimpleModeScreen.nightSetup => l10n.shellRailNightSetup,
-    _ => labelOf(l10n),
-  };
-
-  IconData get icon => switch (this) {
-    SimpleModeScreen.nightSetup => Icons.rocket_launch_outlined,
-    SimpleModeScreen.preview => Icons.visibility_outlined,
-    SimpleModeScreen.focus => Icons.center_focus_strong,
-    SimpleModeScreen.polarAlign => Icons.explore_outlined,
-    SimpleModeScreen.plan => Icons.playlist_play,
-  };
-}
 
 /// The one popover open beside a rail, if any. [settings] is the chip's: the
 /// current mode's options (Preview's exposure, Focus's panel).
@@ -181,7 +157,6 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
   /// The planetarium on demand (the left rail's Sky), over any frame.
   bool _sky = false;
   _Popover _popover = _Popover.none;
-  SimpleModeScreen _mode = SimpleModeScreen.preview;
 
   /// Plan's sheet open from the queue panel: to add a target (also over a
   /// run in progress), or on queued target [_editing]'s rows.
@@ -237,23 +212,9 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
   /// The Night Setup offer was dismissed (until Simple Mode opens again).
   bool _offerDismissed = false;
 
-  /// What shows: the picked mode, or Night Setup's current step.
-  SimpleModeScreen _shown(NightSetupStep? step) =>
-      _mode != SimpleModeScreen.nightSetup
-      ? _mode
-      : switch (step) {
-          NightSetupStep.focus => SimpleModeScreen.focus,
-          NightSetupStep.polarAlign => SimpleModeScreen.polarAlign,
-          NightSetupStep.plan => SimpleModeScreen.plan,
-          null => SimpleModeScreen.preview,
-        };
-
   void _startNightSetup() {
-    setState(() {
-      _mode = SimpleModeScreen.nightSetup;
-      _popover = _Popover.settings;
-    });
-    ref.read(nightSetupProvider.notifier).start();
+    setState(() => _popover = _Popover.settings);
+    ref.read(simpleShowingProvider.notifier).pick(SimpleModeScreen.nightSetup);
   }
 
   /// Ties the popovers to the right rail's top-left corner.
@@ -365,7 +326,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
   Timer? _stopDisarm;
 
   void _stopRun() {
-    if (_shown(ref.read(nightSetupProvider)) != SimpleModeScreen.plan) return;
+    if (ref.read(simpleShowingProvider) != SimpleModeScreen.plan) return;
     final phase = simpleRunPhase(
       ref.read(simpleRunProvider),
       ref.read(sequenceRunStateProvider).value,
@@ -399,12 +360,9 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
 
   void _pickMode(SimpleModeScreen m) {
     if (m == SimpleModeScreen.nightSetup) return _startNightSetup();
-    setState(() {
-      _mode = m;
-      _popover = _Popover.none;
-    });
+    setState(() => _popover = _Popover.none);
     // Picking a mode leaves Night Setup.
-    ref.read(nightSetupProvider.notifier).stop();
+    ref.read(simpleShowingProvider.notifier).pick(m);
   }
 
   /// The Settings sheet's section to open on (a search hit names one).
@@ -509,14 +467,13 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     });
     // Night Setup opens each step on its panel, and ends on the plan.
     ref.listen(nightSetupProvider, (previous, next) {
-      if (_mode != SimpleModeScreen.nightSetup) return;
+      if (previous == null && next == null) return;
       setState(() {
-        if (next == null) _mode = SimpleModeScreen.plan;
         _popover = next == null ? _Popover.none : _Popover.settings;
       });
     });
     final pilot = ref.watch(nightSetupProvider);
-    final shown = _shown(pilot);
+    final shown = ref.watch(simpleShowingProvider);
     // Polar align shows its own camera's frames while the routine runs.
     final polarFrame =
         shown == SimpleModeScreen.polarAlign &&
@@ -566,10 +523,10 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     final width = MediaQuery.sizeOf(context).width;
     // Night Setup's step strip, under the status strip; its offer sits at the
     // bottom (user, 2026-11-03).
-    final nightSetupRow = _mode == SimpleModeScreen.nightSetup;
+    final nightSetupRow = pilot != null;
     final nightSetupOffer =
         !_offerDismissed &&
-        _mode == SimpleModeScreen.preview &&
+        shown == SimpleModeScreen.preview &&
         nightSetupOffered(ref);
     // Messages share the top row with the status pill, which keeps at most
     // half of it; they start under the Night Setup strip when it shows.
@@ -838,7 +795,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                     child: _RightRail(
                                       key: _rightRailKey,
                                       mode: shown,
-                                      named: _mode == SimpleModeScreen.nightSetup
+                                      named: pilot != null
                                           ? SimpleModeScreen.nightSetup
                                           : null,
                                       popover: _popover,
@@ -896,7 +853,9 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                             ? queuePanel
                                             : _popover == _Popover.modes
                                             ? _ModeGrid(
-                                                current: _mode,
+                                                current: pilot != null
+                                                    ? SimpleModeScreen.nightSetup
+                                                    : shown,
                                                 // Picking a mode only switches it; the
                                                 // chip opens its panel (user, 2026-11-02).
                                                 onPicked: _pickMode,
@@ -974,7 +933,12 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                     child: _SkyPick(
                                       selection: sel,
                                       onImage: () => setState(() {
-                                        _mode = SimpleModeScreen.plan;
+                                        // In Night Setup's plan step it shows already.
+                                        if (pilot == null) {
+                                          ref
+                                              .read(simpleShowingProvider.notifier)
+                                              .pick(SimpleModeScreen.plan);
+                                        }
                                         // Over a run, the sheet adds to its queue.
                                         _popover = runActive
                                             ? _Popover.none
