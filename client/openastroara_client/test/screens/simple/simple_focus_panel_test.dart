@@ -343,7 +343,7 @@ void main() {
       await tester.pump();
       expect(c.read(simpleMessagesProvider), hasLength(1), reason: 'once, not a pill per tap');
       expect(tester.getSemantics(find.byKey(const Key('simple-shutter'))),
-          containsSemantics(hint: 'Connect a focuser to autofocus, or focus by hand on Manual.'));
+          isSemantics(hint: 'Connect a focuser to autofocus, or focus by hand on Manual.'));
       await tester.pump(const Duration(seconds: 11));
     });
 
