@@ -363,6 +363,10 @@ namespace OpenAstroAra.Test {
                         // unguarded throw here kills the loop task and fails the
                         // test at DisposeAsync's await — a shutdown race must
                         // never fail the bench.
+                    } catch (InvalidOperationException) {
+                        // The third face of the same race: the listener closed under a
+                        // pending response and Linux's managed listener marks it submitted,
+                        // so the next header write throws (as in ScriptedAlpacaDevice, #1269).
                     }
                 }
             }
