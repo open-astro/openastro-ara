@@ -87,7 +87,7 @@ disclosure fresh):
   an unmodified upstream release; `scripts/build-astrometry-natives.sh` compiles
   it into `liberfa` on every build.
 
-- **SuperNOVAS** (**v1.8.0-rc2+**; git submodule `third_party/supernovas`, upstream
+- **SuperNOVAS** (**v1.8.0**; git submodule `third_party/supernovas`, upstream
   https://github.com/Smithsonian/SuperNOVAS) — the Smithsonian Astrophysical
   Observatory's maintained fork of the U.S. Naval Observatory's NOVAS C 3.1
   positional-astronomy library. Released into the **public domain** (The
