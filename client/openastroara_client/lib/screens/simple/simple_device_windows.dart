@@ -29,7 +29,7 @@ import '../../state/app_locale_state.dart';
 import '../../state/simple_messages_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
-import '../../widgets/status_indicator.dart' show StatusBlink;
+import '../../widgets/status_indicator.dart' show StatusBlink, StatusDot;
 import 'simple_preview_panel.dart' show SimpleStopSquare, kSimpleText;
 import 'simple_shell.dart' show SimpleSegment, simpleRailScale;
 
@@ -57,11 +57,7 @@ class SimpleDeviceHeader extends StatelessWidget {
     return Row(
       spacing: AraSpace.s8,
       children: [
-        Container(
-          width: 10,
-          height: 10,
-          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-        ),
+        StatusDot(color: color),
         Expanded(
           child: Text(
             s == null || s.name.isEmpty ? type : '$type · ${s.name}',
@@ -1374,11 +1370,7 @@ class _SimpleGuiderWindowState extends ConsumerState<SimpleGuiderWindow> {
       Row(
         spacing: AraSpace.s8,
         children: [
-          Container(
-            width: 10,
-            height: 10,
-            decoration: BoxDecoration(color: colour, shape: BoxShape.circle),
-          ),
+          StatusDot(color: colour),
           Expanded(
             child: Text(
               camera?.name == null

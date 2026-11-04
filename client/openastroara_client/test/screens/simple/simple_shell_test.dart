@@ -28,7 +28,7 @@ import 'package:openastroara/models/bahtinov_focus.dart';
 import 'package:openastroara/state/focus/guide_focus_state.dart';
 import 'package:openastroara/state/settings/phd2_settings_state.dart';
 import 'package:openastroara/models/guider_status.dart';
-import 'package:openastroara/widgets/status_indicator.dart' show StatusLevel;
+import 'package:openastroara/widgets/status_indicator.dart' show StatusDot, StatusLevel;
 import 'package:openastroara/widgets/equipment/equipment_status_chip.dart' show TopEquipmentChips;
 import 'package:openastroara/widgets/equipment/guider_chip.dart' show guiderStatusLevel;
 import 'package:openastroara/state/app_locale_state.dart';
@@ -2141,17 +2141,15 @@ void main() {
       cameraStatusProvider.overrideWith(() => _Camera(EquipmentConnectionState.connecting)),
     ]);
     await _openSection(tester, 'Devices');
-    Color dot(String type) => ((tester
-                .widget<Container>(find.descendant(
-                    of: find.ancestor(
-                            of: find.descendant(of: find.byKey(const Key('simple-gear')), matching: find.textContaining(type)),
-                            matching: find.byType(Row))
-                        .first,
-                    matching: find.byWidgetPredicate((w) =>
-                        w is Container && w.decoration is BoxDecoration &&
-                        (w.decoration as BoxDecoration).shape == BoxShape.circle)))
-                .decoration) as BoxDecoration)
-            .color!;
+    // The dot's status colour (a changing one draws as a ring, so read the dot, not its fill).
+    Color dot(String type) => tester
+        .widget<StatusDot>(find.descendant(
+            of: find.ancestor(
+                    of: find.descendant(of: find.byKey(const Key('simple-gear')), matching: find.textContaining(type)),
+                    matching: find.byType(Row))
+                .first,
+            matching: find.byType(StatusDot)))
+        .color;
     expect(dot('Guider'), guiderStatusLevel(await guider.future).color);
     expect(dot('Camera'), StatusLevel.info.color, reason: 'connecting is info on the chips');
   });

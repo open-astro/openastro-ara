@@ -67,7 +67,7 @@ import '../../widgets/equipment/equipment_glyphs.dart';
 import '../../state/equipment/safety_monitor_state.dart';
 import '../../state/equipment/switch_state.dart';
 import '../../state/faults/faults_state.dart';
-import '../../widgets/status_indicator.dart' show StatusLevel;
+import '../../widgets/status_indicator.dart' show StatusDot, StatusLevel;
 import '../../widgets/equipment/equipment_status_chip.dart';
 import '../../widgets/equipment/guider_chip.dart'
     show guiderChipLevel, guiderStatusLevel;
@@ -2594,11 +2594,7 @@ Widget _gearTile({
     child: Row(
       spacing: AraSpace.s12,
       children: [
-        Container(
-          width: 10,
-          height: 10,
-          decoration: BoxDecoration(color: dot, shape: BoxShape.circle),
-        ),
+        StatusDot(color: dot),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,

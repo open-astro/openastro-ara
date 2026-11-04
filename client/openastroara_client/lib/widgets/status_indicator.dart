@@ -30,14 +30,7 @@ class StatusIndicator extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Container(
-                width: 10,
-                height: 10,
-                decoration: BoxDecoration(
-                  color: level.color,
-                  shape: BoxShape.circle,
-                ),
-              ),
+              StatusDot(color: level.color),
               const SizedBox(width: 8),
               // Flexible so a long label ("1 issue — critical") shrinks with
               // ellipsis in a tight row instead of overflowing it.
@@ -50,6 +43,36 @@ class StatusIndicator extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// A status dot. A changing one (blue) is a ring, every other a filled dot:
+/// in Night mode only brightness is left, and blue and green land close
+/// (DESIGN.md status rule; `design/preview/night-status-cue-mock.html` B).
+/// [outline] rims a filled dot in the surface colour (the top-bar chips).
+class StatusDot extends StatelessWidget {
+  const StatusDot({super.key, required this.color, this.size = 10, this.outline});
+
+  final Color color;
+  final double size;
+  final Color? outline;
+
+  @override
+  Widget build(BuildContext context) {
+    final changing = color == StatusLevel.changing.color;
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: changing ? null : color,
+        shape: BoxShape.circle,
+        border: changing
+            ? Border.all(color: color, width: 2.5)
+            : outline == null
+            ? null
+            : Border.all(color: outline!, width: 2),
       ),
     );
   }

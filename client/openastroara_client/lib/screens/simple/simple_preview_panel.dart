@@ -27,7 +27,8 @@ import '../../state/focus/guide_focus_state.dart';
 import '../../state/polar_align/polar_align_state.dart';
 import '../../widgets/equipment/guider_chip.dart' show guiderStatusLevel;
 import '../../widgets/focus/focusing_pane.dart' show MainFocusCard;
-import '../../widgets/status_indicator.dart' show StatusBlink, StatusLevel;
+import '../../widgets/status_indicator.dart'
+    show StatusBlink, StatusDot, StatusLevel;
 import '../../state/equipment/camera_state.dart';
 import '../../widgets/imaging/exposure_controls_panel.dart' show FilterDropdown;
 import '../../widgets/imaging/histogram_strip.dart' show frameHistogramProvider;
@@ -921,7 +922,7 @@ class _StatusPillState extends State<_StatusPill> {
                     children: [
                       StatusBlink(
                         on: d.working,
-                        child: Icon(Icons.circle, size: 10, color: d.dot),
+                        child: StatusDot(color: d.dot),
                       ),
                       const SizedBox(width: AraSpace.s8),
                       // One text, so the label keeps its room and only the

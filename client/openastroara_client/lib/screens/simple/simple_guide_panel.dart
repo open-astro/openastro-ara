@@ -12,7 +12,7 @@ import '../../state/simple_messages_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
 import '../../widgets/equipment/guider_chip.dart' show guiderStatusLevel;
-import '../../widgets/status_indicator.dart' show StatusBlink;
+import '../../widgets/status_indicator.dart' show StatusBlink, StatusDot;
 import '../../util/friendly_error.dart';
 import 'simple_autopilot.dart'
     show AutopilotStep, autopilotProvider, simpleAutopilotNext;
@@ -205,14 +205,7 @@ class SimpleGuidePanel extends ConsumerWidget {
               children: [
                 StatusBlink(
                   on: pending == null && guiding,
-                  child: Container(
-                    width: 10,
-                    height: 10,
-                    decoration: BoxDecoration(
-                      color: colour,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
+                  child: StatusDot(color: colour),
                 ),
                 Expanded(
                   child: Text(

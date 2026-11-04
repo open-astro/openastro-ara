@@ -164,13 +164,13 @@ A near-black neutral ramp carries everything; saturated status accents carry mea
 | Colour | Means | Examples |
 | --- | --- | --- |
 | Green | Good: connected and healthy, done. **Blinks** while a device works normally | Idle guider, connected camera, step done; exposing, slewing, moving, guiding, a plan running, a LIVE feed (blinking) |
-| Blue | Changing (in progress): on its way between two states | Connecting, starting, stopping, calibrating, settling, cooling to target, parking, downloading, a target not up yet, a plan paused by Ara (it resumes on its own) |
+| Blue | Changing (in progress): on its way between two states. Its dot is a **ring**, not filled (decided 2026-11-04, `design/preview/night-status-cue-mock.html` B): in Night mode blue and green land at nearly the same brightness, so shape tells them apart | Connecting, starting, stopping, calibrating, settling, cooling to target, parking, downloading, a target not up yet, a plan paused by Ara (it resumes on its own) |
 | Amber | Warning or not ideal: needs a look, nothing has failed | A lost guide star still being searched for, a weak fit, focus not at best yet, low disk, a stale reading, a refused action, a plan paused waiting for you |
 | Red | Error: something failed or a fault stands | A device that dropped, a failed capture, a crashed guider; also destructive actions and Emergency Stop |
 | Grey | Off: not connected or not there | A disconnected device |
 
 - **Connected Green** (`accent-connected`): the Green row. A device that is connected and working blinks its dot in this green (the `active` status).
-- **Sky Info Blue** (`accent-info`): the Blue row (the `changing` status), as well as informational text and links.
+- **Sky Info Blue** (`accent-info`): the Blue row (the `changing` status, drawn as a ring by the shared `StatusDot`), as well as informational text and links.
 - **Dew Amber** (`accent-warning`, `accent-busy`): the Amber row only. The two tokens share a value; `accent-busy` is kept for the `busy` status dot, which now means warning: an in-between state is Blue, never amber.
 - **Fault Red** (`accent-error`): the Red row. The theme's `error`.
 - **Unplugged Grey** (`accent-disconnected`): the Grey row. The same value as `text-disabled`, deliberately: "not there" reads as absent, not as an alarm.
