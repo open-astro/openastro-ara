@@ -248,8 +248,6 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     }
   });
 
-  /// The Autopilot offer was dismissed (until Simple Mode opens again).
-
   /// What shows: the picked mode, or Autopilot's current step.
   SimpleModeScreen _shown(AutopilotStep? step) =>
       _mode != SimpleModeScreen.autopilot

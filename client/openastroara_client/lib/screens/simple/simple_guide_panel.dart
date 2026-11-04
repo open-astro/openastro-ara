@@ -69,7 +69,7 @@ class SimpleGuiderPending extends Notifier<bool?> {
 final simpleGuiderPendingProvider =
     NotifierProvider<SimpleGuiderPending, bool?>(SimpleGuiderPending.new);
 
-/// The guider's dot: the top bar's colour (a lost star red, settling amber),
+/// The guider's dot: the top bar's colour (a lost star amber, settling blue),
 /// grey without a guider.
 Color simpleGuiderColour(GuiderStatus? g) => g == null || !g.isConnected
     ? AraColors.textDisabled
