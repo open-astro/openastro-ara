@@ -64,8 +64,13 @@ import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
 import '../../widgets/emergency_stop_button.dart';
 import '../../widgets/equipment/equipment_glyphs.dart';
+import '../../state/equipment/safety_monitor_state.dart';
+import '../../state/equipment/switch_state.dart';
+import '../../state/faults/faults_state.dart';
+import '../../widgets/status_indicator.dart' show StatusLevel;
 import '../../widgets/equipment/equipment_status_chip.dart';
-import '../../widgets/equipment/guider_chip.dart' show guiderStatusLevel;
+import '../../widgets/equipment/guider_chip.dart'
+    show guiderChipLevel, guiderStatusLevel;
 import '../../widgets/equipment_chip.dart'
     show EquipmentChipCompact, EquipmentChipHideDisconnected;
 import '../../widgets/imaging/frame_viewer.dart';
@@ -827,6 +832,8 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                 child: _StatusStrip(
                                   onSearch: () => _toggle(_Popover.search),
                                   onSettings: () => _openMenu(),
+                                  onDevices: () =>
+                                      _openMenu(section: 'Devices'),
                                 ),
                               ),
                               // Info: fact tiles hugging the bottom-left corner,
@@ -1268,8 +1275,38 @@ Widget simpleFrost(Widget child) => ClipRRect(
 );
 
 /// Device dots (connected gear only), then Night mode and the Settings menu.
+/// Whether any top-bar chip shows: a device not disconnected, or a standing
+/// fault (the chips' own rule).
+bool _anyDeviceShown(WidgetRef ref) {
+  if (!ref.watch(serverLinkUpProvider)) return false;
+  if (ref.watch(activeFaultsProvider).byDeviceType.isNotEmpty) return true;
+  return [
+    equipmentChipLevel(ref.watch(cameraStatusProvider)),
+    equipmentChipLevel(ref.watch(mountProvider)),
+    equipmentChipLevel(ref.watch(focuserProvider)),
+    equipmentChipLevel(ref.watch(filterWheelProvider)),
+    equipmentChipLevel(ref.watch(rotatorProvider)),
+    equipmentChipLevel(ref.watch(flatPanelProvider)),
+    equipmentChipLevel(ref.watch(weatherProvider)),
+    equipmentChipLevel(ref.watch(safetyMonitorProvider)),
+    equipmentChipLevel(ref.watch(domeProvider)),
+    guiderChipLevel(ref.watch(guiderStatusProvider)),
+    switchChipLevel(
+      ref.watch(switchListProvider),
+      acting: ref.watch(switchActingProvider),
+    ),
+  ].any((l) => l != StatusLevel.disconnected);
+}
+
 class _StatusStrip extends ConsumerWidget {
-  const _StatusStrip({required this.onSearch, required this.onSettings});
+  const _StatusStrip({
+    required this.onSearch,
+    required this.onSettings,
+    required this.onDevices,
+  });
+
+  /// Opens Settings › Devices (the no-devices note).
+  final VoidCallback onDevices;
 
   final VoidCallback onSearch;
   final VoidCallback onSettings;
@@ -1284,19 +1321,30 @@ class _StatusStrip extends ConsumerWidget {
       padding: const EdgeInsets.only(left: 8, right: 4),
       child: Row(
         children: [
-          // Only gear that's connected; a fault still shows.
-          const Expanded(
+          // Only gear that's connected; a fault still shows. With none of it
+          // showing, a note says so and opens Devices.
+          Expanded(
             child: Align(
               alignment: Alignment.centerLeft,
-              child: EquipmentChipCompact(
-                compact: true,
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: EquipmentChipHideDisconnected(
-                    child: TopEquipmentChips(),
-                  ),
-                ),
-              ),
+              child: _anyDeviceShown(ref)
+                  ? const EquipmentChipCompact(
+                      compact: true,
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: EquipmentChipHideDisconnected(
+                          child: TopEquipmentChips(),
+                        ),
+                      ),
+                    )
+                  : TextButton(
+                      key: const Key('simple-no-devices'),
+                      onPressed: onDevices,
+                      child: Text(
+                        ref.watch(serverLinkUpProvider)
+                            ? context.l10n.shellNoDevices
+                            : context.l10n.shellRigNotConnected,
+                      ),
+                    ),
             ),
           ),
           // Simple Mode's own search: the sky, its settings, its modes and

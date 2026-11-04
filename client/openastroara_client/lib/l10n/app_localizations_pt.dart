@@ -1970,6 +1970,9 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get deviceGuiderCamera => 'Guider Camera';
+
+  @override
+  String get shellNoDevices => 'No devices connected';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -3950,4 +3953,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get deviceGuiderCamera => 'Câmera de guiagem';
+
+  @override
+  String get shellNoDevices => 'Nenhum dispositivo conectado';
 }

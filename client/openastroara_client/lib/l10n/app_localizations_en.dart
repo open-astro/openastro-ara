@@ -1970,4 +1970,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get deviceGuiderCamera => 'Guider Camera';
+
+  @override
+  String get shellNoDevices => 'No devices connected';
 }

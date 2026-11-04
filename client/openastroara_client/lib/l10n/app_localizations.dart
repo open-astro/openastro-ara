@@ -3488,6 +3488,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Guider Camera'**
   String get deviceGuiderCamera;
+
+  /// Top bar note when no device is connected; opens Settings › Devices
+  ///
+  /// In en, this message translates to:
+  /// **'No devices connected'**
+  String get shellNoDevices;
 }
 
 class _AppLocalizationsDelegate

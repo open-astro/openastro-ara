@@ -745,6 +745,28 @@ void main() {
     expect(b.finishes, 1);
   });
 
+  testWidgets('with no device connected the top bar says so, and a tap opens Settings › Devices', (tester) async {
+    // iPad, 2026-11-04: an empty top bar said nothing.
+    await _pump(tester, const Size(1024, 768), linkUp: true);
+    final note = find.byKey(const Key('simple-no-devices'));
+    expect(find.descendant(of: note, matching: find.text('No devices connected')), findsOneWidget);
+    await tester.tap(note);
+    await tester.pump();
+    expect(find.byKey(const Key('simple-gear')), findsOneWidget, reason: 'Settings opens on Devices');
+  });
+
+  testWidgets('the rig offline: the top bar says Rig not connected', (tester) async {
+    await _pump(tester, const Size(1024, 768));
+    expect(find.descendant(of: find.byKey(const Key('simple-no-devices')), matching: find.text('Rig not connected')),
+        findsOneWidget);
+  });
+
+  testWidgets('a connected device hides the no-devices note', (tester) async {
+    await _pump(tester, const Size(1024, 768), linkUp: true,
+        gear: [cameraStatusProvider.overrideWith(() => _Camera(EquipmentConnectionState.connected))]);
+    expect(find.byKey(const Key('simple-no-devices')), findsNothing);
+  });
+
   testWidgets("the top bar names Main Camera and Guider Camera, the guide camera's icon a video camera",
       (tester) async {
     // iPad, 2026-11-04: the top bar still showed the guider's target icon after the rename.
@@ -2236,7 +2258,9 @@ void main() {
       cameraStatusProvider.overrideWith(() => _Camera(EquipmentConnectionState.connected)),
     ]);
     await _openSection(tester, 'Devices');
-    expect(find.text('Rig not connected'), findsOneWidget);
+    // (The top bar says it too.)
+    expect(find.descendant(of: find.byKey(const Key('simple-gear')), matching: find.text('Rig not connected')),
+        findsOneWidget);
     expect(find.byKey(const Key('simple-gear-camera-disconnect')), findsNothing);
   });
 

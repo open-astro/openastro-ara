@@ -2777,5 +2777,9 @@
   "deviceGuiderCamera": "Guider Camera",
   "@deviceGuiderCamera": {
     "description": "The guide camera's device window title"
+  },
+  "shellNoDevices": "No devices connected",
+  "@shellNoDevices": {
+    "description": "Top bar note when no device is connected; opens Settings › Devices"
   }
 }
