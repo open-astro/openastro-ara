@@ -763,7 +763,7 @@ License:        BSD-3-Clause
 License source: https://pub.dev/packages/collection/license
 
 ------------------------------------------------------------------------
-Package:        crypto 3.0.7
+Package:        crypto 3.0.8
 Copyright:      Copyright 2015, the Dart project authors
 License:        BSD-3-Clause
 License source: https://pub.dev/packages/crypto/license
